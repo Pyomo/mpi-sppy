@@ -124,32 +124,6 @@ jobs:
           if-no-files-found: ignore
           include-hidden-files: true
 
-  runall_persistent:
-    name: run_all.py persistent solver
-    runs-on: ubuntu-latest
-    needs: [runall_persistent_part1, runall_persistent_part2]
-    if: always()
-    steps:
-      - name: Aggregate persistent run_all parts
-        run: |
-          if [[ "${{ needs.runall_persistent_part1.result }}" != "success" || "${{ needs.runall_persistent_part2.result }}" != "success" ]]; then
-            echo "part1=${{ needs.runall_persistent_part1.result }} part2=${{ needs.runall_persistent_part2.result }}"
-            exit 1
-          fi
-
-  runall:
-    name: run_all.py direct solver
-    runs-on: ubuntu-latest
-    needs: [runall_part1, runall_part2]
-    if: always()
-    steps:
-      - name: Aggregate direct run_all parts
-        run: |
-          if [[ "${{ needs.runall_part1.result }}" != "success" || "${{ needs.runall_part2.result }}" != "success" ]]; then
-            echo "part1=${{ needs.runall_part1.result }} part2=${{ needs.runall_part2.result }}"
-            exit 1
-          fi
-
   runall_persistent_part1:
     name: run_all.py persistent solver (part 1)
     runs-on: ubuntu-latest
