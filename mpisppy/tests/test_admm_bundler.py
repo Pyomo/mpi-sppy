@@ -304,5 +304,37 @@ class TestMultistageXhatShuffleWarning(unittest.TestCase):
         )
 
 
+class TestEfOptionsNameCheckForwarding(unittest.TestCase):
+    """Guard that cfg.turn_off_names_check reaches the EF options dict.
+
+    generic_cylinders auto-sets this for --admm/--stoch-admm runs (the
+    wrappers synthesize dummy nonants with different names), but the
+    flag only helps if ef_options forwards it into ef_dict['options'].
+    """
+
+    def _base_cfg(self):
+        from mpisppy.utils import config
+        cfg = config.Config()
+        cfg.popular_args()
+        cfg.EF_base()
+        cfg.quick_assign("EF_solver_name", str, "cplex")
+        return cfg
+
+    def test_forwarded_when_true(self):
+        from mpisppy.utils.cfg_vanilla import ef_options
+        cfg = self._base_cfg()
+        cfg.quick_assign("turn_off_names_check", bool, True)
+        d = ef_options(cfg, lambda *a, **k: None, lambda *a, **k: None,
+                       ["Scen1"], scenario_creator_kwargs={})
+        self.assertTrue(d["options"]["turn_off_names_check"])
+
+    def test_false_by_default(self):
+        from mpisppy.utils.cfg_vanilla import ef_options
+        cfg = self._base_cfg()
+        d = ef_options(cfg, lambda *a, **k: None, lambda *a, **k: None,
+                       ["Scen1"], scenario_creator_kwargs={})
+        self.assertFalse(d["options"]["turn_off_names_check"])
+
+
 if __name__ == '__main__':
     unittest.main()
