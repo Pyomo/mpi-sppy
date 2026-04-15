@@ -259,6 +259,50 @@ class TestNameListsAdmmPath(unittest.TestCase):
         self.assertEqual(result_nodes, nodenames)
 
 
+class TestMultistageXhatShuffleWarning(unittest.TestCase):
+    """Guard the warning emitted when multistage xhatshuffle is used
+    without --stage2-ef-solver-name (relaxed from assert in PR #651)."""
+
+    def _make_multistage_cfg(self, stage2=None):
+        import types
+        cfg = config.Config()
+        cfg.multistage()
+        cfg.xhatshuffle_args()
+        cfg.proper_bundle_config()
+        cfg.quick_assign("branching_factors", list, [2, 2])
+        cfg.quick_assign("xhatshuffle", bool, True)
+        if stage2 is not None:
+            cfg.quick_assign("stage2_ef_solver_name", str, stage2)
+        module = types.SimpleNamespace(
+            scenario_names_creator=lambda n: [f"Scen{i+1}" for i in range(n)]
+        )
+        return cfg, module
+
+    def test_warn_when_stage2_missing(self):
+        import warnings
+        from mpisppy.generic.parsing import name_lists
+        cfg, module = self._make_multistage_cfg(stage2=None)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            name_lists(module, cfg)
+        msgs = [str(w.message) for w in caught]
+        self.assertTrue(
+            any("stage2_ef_solver_name" in m for m in msgs),
+            f"Expected a stage2_ef_solver_name warning, got: {msgs}",
+        )
+
+    def test_no_warn_when_stage2_set(self):
+        import warnings
+        from mpisppy.generic.parsing import name_lists
+        cfg, module = self._make_multistage_cfg(stage2="gurobi")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            name_lists(module, cfg)
+        self.assertFalse(
+            any("stage2_ef_solver_name" in str(w.message) for w in caught),
+            "Did not expect a stage2_ef_solver_name warning when set",
+        )
+
 
 if __name__ == '__main__':
     unittest.main()
