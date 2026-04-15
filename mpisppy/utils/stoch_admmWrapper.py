@@ -27,7 +27,7 @@ def _consensus_vars_number_creator(consensus_vars):
     for subproblem in consensus_vars:
         for var_stage_tuple in consensus_vars[subproblem]:
             var = var_stage_tuple[0]
-            if var not in consensus_vars_number: # instanciates consensus_vars_number[var]
+            if var not in consensus_vars_number: # instantiates consensus_vars_number[var]
                 consensus_vars_number[var] = 0
             consensus_vars_number[var] += 1
     return consensus_vars_number
@@ -130,7 +130,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
     def assign_variable_probs(self, verbose=False):
         self.varprob_dict = {}
 
-        #we collect the consensus variables
+        # we collect the consensus variables
         all_consensus_vars = {var_stage_tuple[0]: var_stage_tuple[1] for admm_subproblem_names in self.consensus_vars for var_stage_tuple in self.consensus_vars[admm_subproblem_names]}
         error_list1 = []
         error_list2 = []
@@ -151,7 +151,13 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                 stage = all_consensus_vars[vstr]
                 v = s.find_component(vstr)
                 var_stage_tuple = vstr, stage
-                if var_stage_tuple in self.consensus_vars[admm_subproblem_name]:
+                if var_stage_tuple in self.consensus_vars[admm_subproblem_name]: # consensus variable appears in admm subproblem
+                    if v is None:
+                        # try quote wrap around variable name
+                        vvstr = vstr[:vstr.find('[')]
+                        tvstr = vstr[vstr.find('[')+1:vstr.find(']')]
+                        v = s.find_component(vvstr+'["'+tvstr+'"]')
+
                     if v is not None:
                         # variables that should be on the model
                         if stage == depth: 
@@ -178,8 +184,9 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                         s.add_component(v2str, v) 
                         #is the consensus variable should be earlier, then its not added in the good place, or is it?
 
-                        v.fix(0)
+                        v.fix(0) # they should have 0 probability so it shouldn't matter
                         self.varprob_dict[s].append((id(v),0))
+                        # continue
                     else:
                         error_list2.append((sname,vstr))
                 varlist[stage-1].append(v)

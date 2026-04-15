@@ -77,8 +77,8 @@ with stochastic scenarios (random production losses). From that directory:
 Here:
 
 - ``--stoch-admm`` enables stochastic ADMM.
-- ``--num-admm-subproblems 3`` specifies three ADMM subproblems (regions).
-- ``--num-stoch-scens 3`` specifies three stochastic scenarios per region.
+- ``--num-admm-subproblems 3`` specifies three ADMM subproblems (regions). These are loaded into the ``admm_subproblem_names_creator`` via the config object.
+- ``--num-stoch-scens 3`` specifies three stochastic scenarios per region. These are loaded into the ``stoch_scenario_names_creator`` via the config object.
 - The total number of "scenarios" seen by mpi-sppy is
   ``num_admm_subproblems * num_stoch_scens = 9``.
 
@@ -136,14 +136,14 @@ Additional functions for ``--stoch-admm``
    :returns: dict mapping subproblem names to lists of
        ``(variable_name, stage)`` tuples
 
-.. py:function:: admm_subproblem_names_creator(num_admm_subproblems)
+.. py:function:: admm_subproblem_names_creator(cfg)
 
-   :param int num_admm_subproblems: number of ADMM subproblems
+   :param cfg: config object
    :returns: list of ADMM subproblem name strings
 
-.. py:function:: stoch_scenario_names_creator(num_stoch_scens)
+.. py:function:: stoch_scenario_names_creator(cfg)
 
-   :param int num_stoch_scens: number of stochastic scenarios
+   :param cfg: config object
    :returns: list of stochastic scenario name strings
 
 .. py:function:: admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names, stoch_scenario_names)
@@ -323,8 +323,8 @@ Extending to Stochastic ADMM
 
 To support ``--stoch-admm``, additionally implement:
 
-1. ``admm_subproblem_names_creator(num_admm_subproblems)``
-2. ``stoch_scenario_names_creator(num_stoch_scens)``
+1. ``admm_subproblem_names_creator(cfg)``
+2. ``stoch_scenario_names_creator(cfg)``
 3. ``admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names, stoch_scenario_names)``
 4. ``split_admm_stoch_subproblem_scenario_name(name)``
 
@@ -335,9 +335,6 @@ Your ``scenario_creator`` will receive composite names and must split them
 to determine both which ADMM subproblem and which stochastic scenario to build.
 Your ``consensus_vars_creator`` returns ``(variable_name, stage)`` tuples
 instead of plain strings.
-
-Register ``num_admm_subproblems`` and ``num_stoch_scens`` in your
-``inparser_adder`` so users can specify them on the command line.
 
 
 .. _admm_bundling:
@@ -361,7 +358,7 @@ Currently, full bundling is required: ``--scenarios-per-bundle`` must equal
        --module-name stoch_distr --stoch-admm \
        --num-admm-subproblems 2 --num-stoch-scens 4 \
        --default-rho 10 --max-iterations 50 --solver-name cplex \
-       --lagrangian --scenarios-per-bundle 4
+       --lagrangian --scenarios-per-bundle 4 --xhatxbar
 
 With ``--num-admm-subproblems 2`` and ``--scenarios-per-bundle 4``, PH sees
 only 2 bundles (one per subproblem) instead of 8 virtual scenarios.
@@ -432,14 +429,9 @@ Argument                                    Domain       Description
 ==========================================  ===========  ============================================
 ``--admm``                                  bool         Enable deterministic ADMM decomposition
 ``--stoch-admm``                            bool         Enable stochastic ADMM decomposition
-``--num-admm-subproblems``                  int          Number of ADMM subproblems (stoch-admm)
-``--num-stoch-scens``                       int          Number of stochastic scenarios (stoch-admm)
 ``--scenarios-per-bundle``                  int          Bundle stochastic scenarios (stoch-admm only)
 ==========================================  ===========  ============================================
 
 .. Note::
    For deterministic ADMM, the number of subproblems is given by ``--num-scens``,
    which should be registered by the model's ``inparser_adder``.
-   For stochastic ADMM, ``--num-admm-subproblems`` and ``--num-stoch-scens``
-   may be registered by either the model's ``inparser_adder`` or automatically
-   by the generic framework (if not already present).
