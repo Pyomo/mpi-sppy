@@ -144,6 +144,8 @@ def _cylinder_xhat_generator(scenario_names, solver_name=None,
     if not os.path.exists(tmp_path):
         raise RuntimeError("Cylinder xhat generator: no feasible solution found")
     xhat = ciutils.read_xhat(tmp_path)
+    # Sync before rank 0 removes the file so peer ranks finish reading it.
+    global_comm.Barrier()
     if global_rank == 0:
         try:
             os.remove(tmp_path)
