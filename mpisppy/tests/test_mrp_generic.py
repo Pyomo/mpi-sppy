@@ -203,7 +203,9 @@ class Test_cylinder_xhat_generator(unittest.TestCase):
         self.assertIn("ROOT", result)
         self.assertEqual(len(result["ROOT"]), 3)
         mock_wheel.write_first_stage_solution.assert_called_once()
-        mock_comm.Barrier.assert_called_once()
+        # Two barriers: one after write_first_stage_solution, one after
+        # read_xhat (so rank 0 can't remove the tmp file before peers finish).
+        self.assertEqual(mock_comm.Barrier.call_count, 2)
         # tmp_path should have been removed by the function (rank 0)
         self.assertFalse(os.path.exists(tmp_path))
 
