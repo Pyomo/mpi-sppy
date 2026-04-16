@@ -174,18 +174,25 @@ def scenario_denouement(rank, scenario_name, scenario, eps=10**(-6)):
     pass
 
 
-def consensus_vars_creator(num_scens, inter_region_dict, all_scenario_names):
+def consensus_vars_creator(num_scens, all_scenario_names, inter_region_dict=None, **kwargs):
     """The following function creates the consensus_vars dictionary thanks to the inter-region dictionary. \n
     This dictionary has redundant information, but is useful for admmWrapper.
 
     Args:
         num_scens (int): select the number of scenarios (regions) wanted
-    
+        all_scenario_names (list of str): scenario names
+        inter_region_dict (dict): inter-region arcs/costs/capacities; if None,
+            derived from kwargs via _get_inter_region_dict
+        **kwargs: additional keyword args from kw_creator (for generic interface)
+
     Returns:
-        dict: dictionary which keys are the regions and values are the list of consensus variables 
+        dict: dictionary which keys are the regions and values are the list of consensus variables
         present in the region
     """
-    # Due to the small size of inter_region_dict, it is not given as argument but rather created. 
+    if inter_region_dict is None:
+        inter_region_dict = kwargs.get("inter_region_dict")
+        if inter_region_dict is None:
+            inter_region_dict = _get_inter_region_dict(kwargs.get("cfg"), num_scens)
     consensus_vars = {}
     for inter_arc in inter_region_dict["arcs"]:
         source,target = inter_arc
@@ -222,14 +229,45 @@ def scenario_names_creator(num_scens):
     return [f"Region{i+1}" for i in range(num_scens)]
 
 
-def kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params):
+def _get_inter_region_dict(cfg, num_scens=None):
+    """Compute inter_region_dict from cfg, creating data as needed."""
+    if num_scens is None:
+        num_scens = cfg.num_scens
+    if cfg.scalable:
+        import json
+        json_file_path = "data_params.json"
+        with open(json_file_path, 'r') as file:
+            data_params = json.load(file)
+        all_nodes_dict = distr_data.all_nodes_dict_creator(cfg, data_params)
+        all_DC_nodes = [DC_node for region in all_nodes_dict
+                        for DC_node in all_nodes_dict[region]["distribution center nodes"]]
+        return distr_data.scalable_inter_region_dict_creator(all_DC_nodes, cfg, data_params)
+    else:
+        return distr_data.inter_region_dict_creator(num_scens=num_scens)
+
+
+def kw_creator(cfg):
     """
     Args:
-        cfg (config): specifications for the problem. We only look at the number of scenarios
+        cfg (config): specifications for the problem
 
     Returns:
-        dict (str): the kwargs that are used in distr.scenario_creator, here {"num_scens": num_scens}
+        dict (str): the kwargs that are used in distr.scenario_creator
     """
+    if cfg.scalable:
+        import json
+        json_file_path = "data_params.json"
+        with open(json_file_path, 'r') as file:
+            data_params = json.load(file)
+        all_nodes_dict = distr_data.all_nodes_dict_creator(cfg, data_params)
+        all_DC_nodes = [DC_node for region in all_nodes_dict
+                        for DC_node in all_nodes_dict[region]["distribution center nodes"]]
+        inter_region_dict = distr_data.scalable_inter_region_dict_creator(all_DC_nodes, cfg, data_params)
+    else:
+        inter_region_dict = distr_data.inter_region_dict_creator(num_scens=cfg.num_scens)
+        all_nodes_dict = None
+        data_params = {"max revenue": 1200}
+
     kwargs = {
         "all_nodes_dict" : all_nodes_dict,
         "inter_region_dict" : inter_region_dict,

@@ -12,7 +12,6 @@
 
 import mpisppy.utils.admmWrapper as admmWrapper
 import distr
-import distr_data
 import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils
@@ -56,26 +55,11 @@ def solve_EF_directly(admm,solver_name):
 def main():
 
     cfg = _parse_args()
-    if cfg.scalable:
-        import json
-        json_file_path = "data_params.json"
-
-        # Read the JSON file
-        with open(json_file_path, 'r') as file:
-            data_params = json.load(file)
-            all_nodes_dict = distr_data.all_nodes_dict_creator(cfg, data_params)
-            all_DC_nodes = [DC_node for region in all_nodes_dict for DC_node in all_nodes_dict[region]["distribution center nodes"]]
-            inter_region_dict = distr_data.scalable_inter_region_dict_creator(all_DC_nodes, cfg, data_params)
-    else:
-        inter_region_dict = distr_data.inter_region_dict_creator(num_scens=cfg.num_scens)
-        all_nodes_dict = None
-        data_params = {"max revenue": 1200}
-
     options = {}
     all_scenario_names = distr.scenario_names_creator(num_scens=cfg.num_scens)
     scenario_creator = distr.scenario_creator
-    scenario_creator_kwargs = distr.kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params)  
-    consensus_vars = distr.consensus_vars_creator(cfg.num_scens, inter_region_dict, all_scenario_names)
+    scenario_creator_kwargs = distr.kw_creator(cfg)
+    consensus_vars = distr.consensus_vars_creator(cfg.num_scens, all_scenario_names, **scenario_creator_kwargs)
 
     n_cylinders = 1
     admm = admmWrapper.AdmmWrapper(options,

@@ -76,6 +76,9 @@ run_phase "test_admmWrapper (serial, spawns mpiexec)" \
 run_phase "test_stoch_admmWrapper (serial, spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_stoch_admmWrapper.py
 
+run_phase "test_admm_bundler (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_admm_bundler.py -v
+
 run_phase "test_aph (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_aph.py
 

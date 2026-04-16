@@ -122,8 +122,8 @@ jobs:
           if-no-files-found: ignore
           include-hidden-files: true
 
-  runall_persistent:
-    name: run_all.py persistent solver
+  runall_persistent_part1:
+    name: run_all.py persistent solver (part 1)
     runs-on: ubuntu-latest
     needs: [ruff]
     timeout-minutes: 15
@@ -148,23 +148,65 @@ jobs:
         run: |
           pip install -e .
 
-      - name: Test run_all nouc
+      - name: Test run_all nouc (first part)
         run: |
           PYARGS="-m coverage run $COV_ARGS"
           cd examples
-          coverage run $EX_COV_ARGS run_all.py xpress_persistent "" nouc --python-args="$PYARGS"
+          coverage run $EX_COV_ARGS run_all.py xpress_persistent "" nouc --first-part-only --python-args="$PYARGS"
 
       - name: Upload coverage data
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-runall-persistent
+          name: coverage-runall-persistent-part1
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
           include-hidden-files: true
 
-  runall:
-    name: run_all.py direct solver
+  runall_persistent_part2:
+    name: run_all.py persistent solver (part 2)
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
+          pip install xpress coverage
+
+      - name: Build pyomo extensions
+        run: |
+          # we don't need it all; just APPSI's extensions
+          pyomo build-extensions || python -c "from pyomo.contrib.appsi.cmodel import cmodel_available; exit(0) if bool(cmodel_available) else exit(1)"
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: Test run_all nouc (second part)
+        run: |
+          PYARGS="-m coverage run $COV_ARGS"
+          cd examples
+          coverage run $EX_COV_ARGS run_all.py xpress_persistent "" nouc --second-part-only --python-args="$PYARGS"
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-runall-persistent-part2
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
+  runall_part1:
+    name: run_all.py direct solver (part 1)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -188,17 +230,58 @@ jobs:
         run: |
           pip install -e .
 
-      - name: Test run_all nouc
+      - name: Test run_all nouc (first part)
         run: |
           PYARGS="-m coverage run $COV_ARGS"
           cd examples
-          coverage run $EX_COV_ARGS run_all.py xpress_direct "" nouc --python-args="$PYARGS"
+          coverage run $EX_COV_ARGS run_all.py xpress_direct "" nouc --first-part-only --python-args="$PYARGS"
 
       - name: Upload coverage data
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-runall-direct
+          name: coverage-runall-direct-part1
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
+  runall_part2:
+    name: run_all.py direct solver (part 2)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
+          pip install xpress coverage
+
+      - name: Build pyomo extensions
+        run: |
+          # we don't need it all; just APPSI's extensions
+          pyomo build-extensions || python -c "from pyomo.contrib.appsi.cmodel import cmodel_available; exit(0) if bool(cmodel_available) else exit(1)"
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: Test run_all nouc (second part)
+        run: |
+          PYARGS="-m coverage run $COV_ARGS"
+          cd examples
+          coverage run $EX_COV_ARGS run_all.py xpress_direct "" nouc --second-part-only --python-args="$PYARGS"
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-runall-direct-part2
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
           include-hidden-files: true
@@ -269,7 +352,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo xpress cplex dill matplotlib coverage
+          pip install pyomo xpress cplex dill matplotlib scipy coverage
 
       - name: setup the program
         run: |
@@ -317,6 +400,7 @@ jobs:
           cd mpisppy/tests
           coverage run $COV_ARGS test_admmWrapper.py --python-args="$PYARGS"
           coverage run $COV_ARGS test_stoch_admmWrapper.py --python-args="$PYARGS"
+          coverage run $COV_ARGS test_admm_bundler.py
 
       - name: Upload coverage data
         if: always()
@@ -859,8 +943,10 @@ jobs:
     needs:
       - nompi4py
       - regression
-      - runall_persistent
-      - runall
+      - runall_persistent_part1
+      - runall_persistent_part2
+      - runall_part1
+      - runall_part2
       - schur-complement
       - straight-tests
       - admm-wrapper
