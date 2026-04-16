@@ -12,6 +12,8 @@
 import sys
 import numpy as np
 
+import pyomo.common.config as pyofig
+
 from mpisppy import MPI
 from mpisppy.generic.parsing import model_fname, load_module
 from mpisppy.generic.mrp import mrp_args, do_mrp
@@ -30,6 +32,11 @@ def parse_mrp_args(m):
     """
     cfg = config.Config()
 
+    # Bundling / pickling args (needed when --xhat-method=cylinders reaches
+    # name_lists, which reads cfg.unpickle_bundles_dir / scenarios_per_bundle).
+    cfg.proper_bundle_config()
+    cfg.pickle_scenarios_config()
+
     cfg.add_to_config(name="module_name",
                       description="Name of the file that has the scenario creator, etc.",
                       domain=str,
@@ -44,6 +51,10 @@ def parse_mrp_args(m):
                       description="Base name for solution output files (default None)",
                       domain=str,
                       default=None)
+    cfg.add_to_config(name="write_scenario_lp_mps_files_dir",
+                      description="Directory for LP/MPS files (default None)",
+                      domain=str,
+                      default=None)
 
     # EF solver specs (always needed, since gap estimation uses EF)
     cfg.EF_base()
@@ -51,19 +62,44 @@ def parse_mrp_args(m):
     # Sequential sampling args
     mrp_args(cfg)
 
-    # We peek at the partial args to see if cylinders are requested.
-    # If so, we need to register the decomposition args too.
-    # For now, always register popular_args and common cylinder args so that
-    # the user can use --xhat-method=cylinders without a second pass.
+    # Always register the full set of decomposition args so that
+    # --xhat-method=cylinders works end-to-end.  This mirrors parse_args in
+    # mpisppy/generic/parsing.py (minus admm_args, which MRP does not use).
     cfg.popular_args()
     cfg.two_sided_args()
     cfg.ph_args()
     cfg.aph_args()
+    cfg.subgradient_args()
+    cfg.fixer_args()
+    cfg.relaxed_ph_fixer_args()
+    cfg.integer_relax_then_enforce_args()
+    cfg.gapper_args()
+    cfg.gapper_args(name="lagrangian")
+    cfg.ph_primal_args()
+    cfg.ph_dual_args()
+    cfg.relaxed_ph_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
+    cfg.subgradient_bounder_args()
     cfg.xhatshuffle_args()
+    cfg.xhatxbar_args()
     cfg.norm_rho_args()
+    cfg.primal_dual_rho_args()
     cfg.converger_args()
+    cfg.wxbar_read_write_args()
+    cfg.tracking_args()
+    cfg.gradient_args()
+    cfg.dynamic_rho_args()
+    cfg.reduced_costs_args()
+    cfg.sep_rho_args()
+    cfg.coeff_rho_args()
+    cfg.sensi_rho_args()
+    cfg.reduced_costs_rho_args()
+
+    cfg.add_to_config("user_defined_extensions",
+                      description="Space-delimited module names for user extensions",
+                      domain=pyofig.ListOf(str),
+                      default=None)
 
     cfg.parse_command_line(f"mpi-sppy MRP for {cfg.module_name}")
 

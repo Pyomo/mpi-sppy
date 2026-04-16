@@ -1,8 +1,12 @@
 #!/bin/bash
 # Example: sequential sampling using mrp_generic with the farmer model.
 # This is the generic-driver equivalent of farmer_sequential.bash.
+#
+# Solver can be overridden via the first CLI arg or the SOLVERNAME env var.
+# Defaults to xpress because that is what the CI images have a usable
+# license for; a developer can pass "cplex" or "gurobi" locally.
 
-SOLVERNAME="cplex"
+SOLVERNAME="${1:-${SOLVERNAME:-xpress}}"
 CL="0.95"
 # Path to the farmer module (relative to this directory)
 FARMER="farmer"
