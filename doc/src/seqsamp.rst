@@ -97,6 +97,10 @@ the same as for ``generic_cylinders``.
    ``--xhat-method EF`` does not require MPI.
    ``--xhat-method cylinders`` requires ``mpiexec``.
 
+A runnable example covering the BM-EF, BPL-EF, and BM-cylinders
+invocations on the farmer model is provided in
+``examples/farmer/CI/farmer_mrp_generic.bash``.
+
 Command-line reference
 -----------------------
 
