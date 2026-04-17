@@ -1122,6 +1122,54 @@ class Config(pyofig.ConfigDict):
                             domain=str,
                             default=None)
 
+    def pre_pickle_args(self):
+        """Options for the pre-pickle preprocessing pipeline.
+
+        See doc/src/pickling.rst for the full description. The pipeline runs
+        in this order before each scenario or bundle is pickled:
+            1. SPPresolve (if presolve_before_pickle)
+            2. user callback (if pre_pickle_function is set)
+            3. iteration-0 solve (if iter0_before_pickle)
+        """
+        self.add_to_config("presolve_before_pickle",
+                           description="Run the distributed presolver (FBBT, "
+                           "and OBBT if --obbt is also set) once at pickle "
+                           "time so the tightened bounds are baked into the "
+                           "pickle. (default False)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("pre_pickle_function",
+                           description="Dotted name of a callable with "
+                           "signature fn(model, cfg) to invoke on each "
+                           "scenario or bundle between presolve and the "
+                           "iter0 solve. (default None, no callback)",
+                           domain=str,
+                           default=None)
+
+        self.add_to_config("iter0_before_pickle",
+                           description="Solve each scenario or bundle once "
+                           "at pickle time with its original objective "
+                           "(no W, no prox -- a PH iteration 0 solve) and "
+                           "store variable values plus duals/reduced costs "
+                           "inside the pickle. (default False)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("pickle_solver_name",
+                           description="Solver to use for the pickle-time "
+                           "iter0 solve. If None, falls back to "
+                           "cfg.solver_name. (default None)",
+                           domain=str,
+                           default=None)
+
+        self.add_to_config("pickle_solver_options",
+                           description="Solver options string for the "
+                           "pickle-time iter0 solve. If None, falls back to "
+                           "cfg.solver_options. (default None)",
+                           domain=str,
+                           default=None)
+
     def mmw_args(self):
         self.add_to_config(
             "mmw_xhat_input_file_name",
