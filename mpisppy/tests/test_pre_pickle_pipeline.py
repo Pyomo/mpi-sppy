@@ -329,9 +329,9 @@ class TestADMMBundlePipeline(unittest.TestCase):
         admm_cfg.num_admm_subproblems = 2
 
         admm_subproblem_names = stoch_distr.admm_subproblem_names_creator(
-            admm_cfg.num_admm_subproblems)
+            admm_cfg)
         stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(
-            admm_cfg.num_stoch_scens)
+            admm_cfg)
         scenario_creator_kwargs = stoch_distr.kw_creator(admm_cfg)
         consensus_vars = stoch_distr.consensus_vars_creator(
             admm_subproblem_names, stoch_scenario_names[0],
