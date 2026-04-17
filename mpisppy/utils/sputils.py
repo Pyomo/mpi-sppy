@@ -398,6 +398,20 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
                 elif (nonant_for_fixed_vars) or (not v.is_fixed()):
                     if v in node.surrogate_vardatas:
                         continue
+                    if (ndn, i) in ref_surrogate_vars:
+                        # An earlier scenario installed a surrogate as the
+                        # ref for this (node, index). This happens with
+                        # Stoch_AdmmWrapper partial consensus: subproblems
+                        # that don't own a consensus var contribute a
+                        # fixed-to-0 dummy tagged surrogate, and iteration
+                        # order determines which scenario hits this index
+                        # first. Upgrade the ref to the real v and drop the
+                        # surrogate tag so subsequent real scenarios tie to
+                        # it instead of to the 0-fixed dummy (which would
+                        # force the real owners to 0).
+                        ref_vars[(ndn, i)] = v
+                        del ref_surrogate_vars[(ndn, i)]
+                        continue
                     expr = LinearExpression(linear_coefs=[1,-1],
                                             linear_vars=[v,ref_vars[(ndn,i)]],
                                             constant=0.)

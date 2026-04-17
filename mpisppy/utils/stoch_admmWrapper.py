@@ -12,6 +12,34 @@ import pyomo.environ as pyo
 import mpisppy.scenario_tree as scenario_tree
 import numpy as np
 
+
+def _tag_dummies_as_surrogate(node, dummies):
+    """Mark fixed-to-0 dummy consensus vars as surrogate on an existing node.
+
+    Each admm subproblem contains a different subset of the global consensus
+    vars; for vars it does not own we inject a scalar pyo.Var fixed to 0 so
+    that every scenario's nonant_vardata_list has the same length and the
+    same index -> conceptual-nonant correspondence at each shared tree node.
+    Marking these dummies surrogate tells EF to skip the nonant equality
+    constraints on them (see sputils._create_EF_from_scen_dict) and tells
+    fixers/incumbent finders to ignore them. PH is unaffected because
+    var_prob_list already weights them at probability 0.
+
+    DO NOT refactor to pass surrogate_nonant_list= to ScenarioNode. That
+    API appends the surrogates to the end of nonant_vardata_list
+    (scenario_tree.py), but the per-subproblem partial patterns differ, so
+    "real-first then surrogate" orderings would disagree across scenarios
+    sharing a tree node — EF pairs nonants by position and would tie the
+    wrong variables together. Keeping dummies inline in varlist at the
+    iteration order of all_consensus_vars.keys() is what preserves the
+    cross-scenario positional invariant; this function just tags them after
+    the fact.
+    """
+    if not dummies:
+        return
+    node.surrogate_vardatas.update(dummies)
+
+
 def _consensus_vars_number_creator(consensus_vars):
     """associates to each consensus vars the number of time it appears
 
@@ -138,9 +166,15 @@ class Stoch_AdmmWrapper(): #add scenario_tree
             if verbose:
                 print(f"stoch_admmWrapper.assign_variable_probs is processing scenario: {sname}")
             admm_subproblem_name = self.split_admm_stoch_subproblem_scenario_name(sname)[0]
-            # varlist[stage] will contain the variables at each stage
+            # varlist[stage] collects all consensus vars at that stage;
+            # dummy_varlist[stage] is the subset that are fixed-to-0
+            # stand-ins because this admm subproblem does not own them.
+            # Dummies are kept in varlist at their iteration position (see
+            # _tag_dummies_as_surrogate for why) and tagged surrogate on
+            # the node after construction so EF skips their nonant equality.
             depth = len(s._mpisppy_node_list)+1
             varlist = [[] for _ in range(depth)]
+            dummy_varlist = [[] for _ in range(depth)]
 
             assert hasattr(s,"_mpisppy_probability"), f"the scenario {sname} doesn't have any _mpisppy_probability attribute"
             if s._mpisppy_probability == "uniform": #if there is a two-stage scenario defined by sputils.attach_root_node
@@ -186,7 +220,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
 
                         v.fix(0) # they should have 0 probability so it shouldn't matter
                         self.varprob_dict[s].append((id(v),0))
-                        # continue
+                        dummy_varlist[stage-1].append(v)
                     else:
                         error_list2.append((sname,vstr))
                 varlist[stage-1].append(v)
@@ -203,27 +237,42 @@ class Stoch_AdmmWrapper(): #add scenario_tree
             node_name = parent.name + '_' + str(node_num) 
 
             #could be more efficient with a dictionary rather than index
-            s._mpisppy_node_list.append(scenario_tree.ScenarioNode(
+            admm_consensus_node = scenario_tree.ScenarioNode(
                 node_name,
                 1/self.number_admm_subproblems, #branching probability at this node
                 parent.stage + 1, # The stage is the stage of the previous leaves
                 pyo.Expression(expr=0), # The cost is spread on the branches which are the subproblems
                 varlist[depth-1],
                 s)
-            )
+            _tag_dummies_as_surrogate(admm_consensus_node, dummy_varlist[depth-1])
+            s._mpisppy_node_list.append(admm_consensus_node)
             s._mpisppy_probability /= self.number_admm_subproblems
 
             # underscores have a special signification in the tree
             for stage in range(1, depth):
                 #print(f"{stage, varlist[stage-1], sname=}")
                 old_node = s._mpisppy_node_list[stage-1]
-                s._mpisppy_node_list[stage-1] = scenario_tree.ScenarioNode(
-                old_node.name,
-                old_node.cond_prob,
-                old_node.stage,
-                old_node.cost_expression * self.number_admm_subproblems,
-                varlist[stage-1],
-                s)
+                # Preserve user-supplied surrogate and EF-supplemental
+                # nonants across the rewrite; we only own the consensus +
+                # admm-dummy contributions at this node. User surrogates
+                # are consistent across admm subproblems (they come from
+                # the original scenario, not consensus_vars), so passing
+                # them via surrogate_nonant_list — which appends them at
+                # the end of nonant_vardata_list — preserves positional
+                # alignment at the shared tree node across subproblems.
+                user_surrogates = list(old_node.surrogate_vardatas) or None
+                user_ef_suppl = old_node.nonant_ef_suppl_vardata_list or None
+                new_node = scenario_tree.ScenarioNode(
+                    old_node.name,
+                    old_node.cond_prob,
+                    old_node.stage,
+                    old_node.cost_expression * self.number_admm_subproblems,
+                    varlist[stage-1],
+                    s,
+                    nonant_ef_suppl_list=user_ef_suppl,
+                    surrogate_nonant_list=user_surrogates)
+                _tag_dummies_as_surrogate(new_node, dummy_varlist[stage-1])
+                s._mpisppy_node_list[stage-1] = new_node
 
             self.local_admm_stoch_subproblem_scenarios[sname] = s # I don't know whether this changes anything
 
