@@ -885,7 +885,7 @@ class FWPH(mpisppy.phbase.PHBase):
             in Boland et al., if t_max / FW_iter_limit == 1
         """
 
-        stage2EFsolvern = self.options.get("stage2EFsolvern", None)
+        stage2_ef_solver_name = self.options.get("stage2_ef_solver_name", None)
         branching_factors = self.options.get("branching_factors", None)  # for stage2ef
 
         number_points = 0
@@ -899,7 +899,7 @@ class FWPH(mpisppy.phbase.PHBase):
                                    solver_options = self.options["iter0_solver_options"],
                                    verbose=False,
                                    restore_nonants=False,
-                                   stage2EFsolvern=stage2EFsolvern,
+                                   stage2_ef_solver_name=stage2_ef_solver_name,
                                    branching_factors=branching_factors)
             if obj is not None:
                 for model_name in self.local_scenarios:

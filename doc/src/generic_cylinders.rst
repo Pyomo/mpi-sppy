@@ -127,6 +127,29 @@ Spokes provide bounds and heuristic solutions. Enable them with flags:
 
 See :ref:`Spokes` for details on each spoke type.
 
+Multistage Options
+-------------------
+
+For multistage problems (three or more stages), the model's
+``inparser_adder`` should register ``branching_factors`` via
+``cfg.multistage()`` or ``cfg.add_branching_factors()``.
+
+``--stage2-ef-solver-name``
+  Solver to use for forming second-stage EFs during xhat evaluation.
+  When set, the ``xhatshuffle`` spoke forms an EF for each second-stage
+  node, fixes the first-stage nonants, and solves.  The number of ranks
+  allocated to the xhatshuffle spoke must be an integer multiple of the
+  number of second-stage nodes.
+
+Example for the hydro model (three stages, branching factors 3 3):
+
+.. code-block:: bash
+
+    mpiexec -np 3 python -m mpi4py mpisppy/generic_cylinders.py \
+        --module-name hydro --solver-name cplex --max-iterations 100 \
+        --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.001 \
+        --branching-factors "3 3" --stage2-ef-solver-name cplex
+
 ADMM Decomposition
 -------------------
 

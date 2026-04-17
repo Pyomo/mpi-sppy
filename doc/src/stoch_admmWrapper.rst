@@ -262,6 +262,17 @@ problem without decomposition.
 
 * ``stoch_distr_ef.py``
 
-    As presented previously solves the extensive form. 
+    As presented previously solves the extensive form.
     The arguments are the same as ``stoch_distr_admm_cylinders.py``, the method doesn't need to be adapted with the model.
+
+Pickling
+++++++++
+
+The pre-pickle pipeline (see :ref:`pickling`) runs correctly against
+``Stoch_AdmmWrapper``-wrapped scenarios at the programmatic level:
+every piece of ADMM state needed later — dummy Vars, surrogate
+tags, scaled objectives, probability arrays — is captured in the
+pickle. Driving the same workflow through ``generic_cylinders``
+(``--stoch-admm --pickle-scenarios-dir``) is not yet wired up; see
+:ref:`pickling_admm` and :ref:`generic_admm_pickling` for details.
 

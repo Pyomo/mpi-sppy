@@ -222,17 +222,35 @@ the pickled model.
 How Downstream Runs Use the Iter0 Solution
 """""""""""""""""""""""""""""""""""""""""""
 
-There are two tiers of consumption:
+There are two ways to consume the pickled iter0 solution:
 
 1. **Warm start (default).** PH still runs iter0 on the unpickled
    models, but each subproblem solve now starts from pre-populated
    variable values. For MIPs this becomes a MIP start and is usually a
    significant speedup; for LPs it is less useful without a basis.
-2. **Skip iter0 entirely.** A follow-up flag ``--iter0-from-pickle``
-   tells PH to read the variable values from the unpickled scenarios,
-   compute ``xbar`` directly, perform the first ``W`` update, and go
-   straight to iter1. The PH side detects this case via a flag stored
-   inside ``_mpisppy_data`` on the model when the pickle was written.
+2. **Skip iter0 entirely** with ``--iter0-from-pickle``. PH reads the
+   variable values from the unpickled scenarios, treats them as the
+   iter0 result, and goes straight to the first ``W`` update and
+   iter1. ``PHBase.Iter0`` skips its solver loop entirely. The
+   downstream run validates that every local scenario actually carries
+   ``_mpisppy_data.pickle_metadata['iter0_before_pickle'] == True``;
+   if any does not, the run hard-fails rather than fabricating solver
+   state. So the contract is: pickle with ``--iter0-before-pickle``,
+   run with ``--iter0-from-pickle``, or get an error.
+
+.. code-block:: bash
+
+   # 1. Pay iter0 once at pickle time
+   python -m mpisppy.generic_cylinders --module-name farmer --num-scens 12 \
+       --pickle-bundles-dir farmer_pickles --scenarios-per-bundle 3 \
+       --solver-name gurobi --iter0-before-pickle
+
+   # 2. Every later run skips iter0 entirely
+   mpiexec -np 3 python -m mpi4py mpisppy/generic_cylinders.py \
+       --module-name farmer --num-scens 12 \
+       --unpickle-bundles-dir farmer_pickles --scenarios-per-bundle 3 \
+       --solver-name gurobi --default-rho 1 --max-iterations 50 \
+       --lagrangian --xhatshuffle --iter0-from-pickle
 
 Pickle Metadata
 ^^^^^^^^^^^^^^^
@@ -311,3 +329,52 @@ This is not universal — for small models or small node counts the
 overhead of the extra serialization round trip dominates. But on
 larger HPC allocations with many bundles, it is a real option worth
 measuring.
+
+.. _pickling_admm:
+
+ADMM Models
+-----------
+
+Stochastic ADMM (``--stoch-admm``) and deterministic ADMM (``--admm``)
+both wrap the user's scenarios into a larger model that adds
+consensus variables, fixed-to-zero dummy stand-ins for consensus
+variables that a given subproblem does not own, and a per-subproblem
+variable-probability list used by PH to weight the dummies at zero.
+See :ref:`generic_admm` and :ref:`stoch_admmWrapper` for the full design.
+
+**Programmatic pipeline supports ADMM.** The pre-pickle pipeline
+(``_run_pre_pickle_pipeline`` in ``mpisppy.generic.scenario_io``)
+runs correctly against an ADMM-wrapped ``SPBase`` — consensus
+variables, dummy stand-ins, scaled objectives, and surrogate
+tagging all survive the pipeline. The regression test
+``TestADMMBundlePipeline.test_pipeline_runs_on_admm_bundles`` in
+``mpisppy/tests/test_pre_pickle_pipeline.py`` exercises this path
+against an ``AdmmBundler`` over ``stoch_distr``.
+
+**CLI end-to-end is not yet supported.** Driving pickling of
+``--stoch-admm`` / ``--admm`` through ``generic_cylinders`` (i.e.,
+``--stoch-admm --pickle-scenarios-dir`` or
+``--unpickle-scenarios-dir``) is still blocked at compatibility
+check. The pieces that remain to be wired up are:
+
+1. ``write_scenarios`` / ``write_bundles`` enumerate scenario names
+   from ``module.scenario_names_creator`` and assume a single
+   ``cfg.num_scens``. For ADMM the authoritative name list is already
+   cached on ``cfg._admm_scenario_names`` and the count is
+   ``num_stoch_scens * num_admm_subproblems``.
+2. ``_build_pickle_pipeline_spbase`` does not pass
+   ``variable_probability`` to ``SPBase``. Without it, the wrapped
+   scenarios' ``_mpisppy_data.prob_coeff`` arrays are never populated
+   with the zero-prob entries for dummies, and the pickle cannot be
+   read back without re-running the wrapper.
+3. The unpickle side needs a way to discover the combined ADMM names
+   in the pickle directory (a manifest file, or listing ``*.pkl``).
+   ``module.scenario_names_creator`` does not know about ADMM's
+   combined naming scheme.
+
+Once those three pieces land, the intended end-user flow is:
+*pickle under ``--stoch-admm`` / ``--admm`` (ADMM state bakes into
+each scenario), read back without those flags* — the wrapped
+scenarios already contain everything PH or EF needs. See
+:ref:`generic_admm_pickling` for the currently-supported
+programmatic recipe.

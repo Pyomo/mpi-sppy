@@ -64,8 +64,8 @@ def _make_admm(cfg, n_cylinders,verbose=None):
     
     BFs = stoch_distr.branching_factors_creator(cfg.num_stoch_scens, cfg.num_stages)
 
-    admm_subproblem_names = stoch_distr.admm_subproblem_names_creator(cfg.num_admm_subproblems)
-    stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(num_stoch_scens=cfg.num_stoch_scens, num_stages=cfg.num_stages)
+    admm_subproblem_names = stoch_distr.admm_subproblem_names_creator(cfg)
+    stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(cfg)
     all_admm_stoch_subproblem_scenario_names = stoch_distr.admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names,stoch_scenario_names)
     split_admm_stoch_subproblem_scenario_name = stoch_distr.split_admm_stoch_subproblem_scenario_name
     
