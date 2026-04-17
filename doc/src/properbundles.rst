@@ -26,34 +26,19 @@ Proper bundles result in faster execution.
 
 See ``mpisppy.generic_cylinders.py`` for an example of their use in
 code and see ``examples.generic_cylinders.bash`` for a few proper
-bundle command lines.  In addition to being created on the fly and
-used, they can be written (but not used in the same run) with
-``--pickle-bundles-dir`` (note the the directory specified will be
-overwritten), and read before use with ``--unpickle-bundles-dir``.  In
-all uses of bundles in ``mpisppy.generic_cylinders.py`` the
-``--scenarios-per-bundle`` option must be specified (even when
-reading).
+bundle command lines. Bundles can be created on the fly and used in
+the same run, or they can be pickled to disk and reused on subsequent
+runs. The ``--scenarios-per-bundle`` option must be specified for
+every run that uses bundles (including runs that read pickled bundles).
 
-.. Note::
-   When writing bundles in ``mpisppy.generic_cylinders.py``, all
-   ranks are used for forming and writing bundles. Command line
-   options related to anything other than proper bundles are ignored.
+Pickling and unpickling proper bundles — including pre-pickle
+preprocessing (presolve, user callback, iter0 solve) and the tuning
+workflow — is documented in :ref:`pickling`.
 
 .. Note::
    If you do pseudo random number generation on-the-fly during scenario creation,
    very careful management of random seeds is required if you want to
    get the same scenarios with proper  bundles that you get without them.
-
-.. Note::
-   Unpickled scenarios in proper bundles are not supported in generic_cyliners.
-   (The wrappers would need to be more sophisticated.)
-
-.. Note::
-   The `scenario_denouement` function might not be called when pickling bundles.
-
-.. Warning::
-   Helper functions are *not* pickled, so there is a loose linkage with the
-   helper functions in the module.
 
 
 Modules

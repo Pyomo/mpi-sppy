@@ -51,11 +51,11 @@ def configure_extensions(hub_dict, module, cfg):
         raise RuntimeError("write_scenario_lp_mps_files_dir is not currently supported in _do_decomp")
 
     if cfg.W_and_xbar_reader:
-        from mpisppy.utils.wxbarreader import WXBarReader
+        from mpisppy.utils.w_utils.wxbarreader import WXBarReader
         ext_classes.append(WXBarReader)
 
     if cfg.W_and_xbar_writer:
-        from mpisppy.utils.wxbarwriter import WXBarWriter
+        from mpisppy.utils.w_utils.wxbarwriter import WXBarWriter
         ext_classes.append(WXBarWriter)
 
     if cfg.user_defined_extensions is not None:

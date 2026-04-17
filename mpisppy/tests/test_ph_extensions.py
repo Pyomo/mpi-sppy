@@ -239,7 +239,7 @@ class TestWtrackerExtension(unittest.TestCase):
                      "%s solver is not available" % (solver_name,))
     def test_wtracker_direct(self):
         """WTracker used directly should compute moving stats."""
-        from mpisppy.utils.wtracker import WTracker
+        from mpisppy.utils.w_utils.wtracker import WTracker
         options = self._copy_options()
         options["PHIterLimit"] = 8
         ph = mpisppy.opt.ph.PH(
