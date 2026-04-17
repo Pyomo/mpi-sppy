@@ -92,8 +92,8 @@ class SensiRho(_SensiRhoBase):
     def get_nonant_sensitivites(self):
         # dict of dicts [s][ndn_i]
         nonant_sensis = {}
-        for k, s in self.ph.local_subproblems.items():
-            nonant_sensis[s] = nonant_sensitivies(s, self.ph)
+        for k, s in self.ph.local_scenarios.items():
+            nonant_sensis[s] = nonant_sensitivies(s)
         return nonant_sensis
 
     def post_iter0(self):

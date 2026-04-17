@@ -15,6 +15,30 @@ from mpisppy.tests.utils import get_solver
 from mpisppy import MPI
 import subprocess
 import os
+import sys
+
+# Parse --python-args (extra args inserted after "python" in subcommands, e.g. for coverage)
+python_args = ""
+_remaining = []
+_i = 1
+while _i < len(sys.argv):
+    if sys.argv[_i].startswith("--python-args="):
+        python_args = sys.argv[_i].split("=", 1)[1]
+    elif sys.argv[_i] == "--python-args" and _i + 1 < len(sys.argv):
+        _i += 1
+        python_args = sys.argv[_i]
+    else:
+        _remaining.append(sys.argv[_i])
+    _i += 1
+sys.argv = [sys.argv[0]] + _remaining
+
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.normpath(os.path.join(_THIS_DIR, "..", ".."))
+_DISTR_DIR = os.path.join(_PROJECT_ROOT, "examples", "distr")
+
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.normpath(os.path.join(_THIS_DIR, "..", ".."))
+_DISTR_DIR = os.path.join(_PROJECT_ROOT, "examples", "distr")
 
 solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
 
@@ -74,6 +98,12 @@ class TestAdmmWrapper(unittest.TestCase):
     def _slack_name(self, dummy_node):
         return f"y[{dummy_node}]"
 
+    def test_get_scenario_unscaled(self):
+        admm = self._make_admm(3)
+        sname = "Region1"
+        scenario = admm.get_scenario_unscaled(sname)
+        self.assertIs(scenario, admm.local_scenarios[sname])
+
     def test_assign_variable_probs_error1(self):
         admm = self._make_admm(3)
         admm.consensus_vars["Region1"].append(self._slack_name("DC2DC3"))
@@ -100,19 +130,22 @@ class TestAdmmWrapper(unittest.TestCase):
                                f" in this output {line=}")
 
     def test_values(self):
-        command_line_pairs = [(f"mpiexec -np 3 python -u -m mpi4py distr_admm_cylinders.py --num-scens 3 --default-rho 10 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.01 --ensure-xhat-feas" \
-                         , f"python distr_ef.py --solver-name {solver_name} --num-scens 3 --ensure-xhat-feas"), \
-                         (f"mpiexec -np 6 python -u -m mpi4py distr_admm_cylinders.py --num-scens 5 --default-rho 10 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --mnpr 6 --rel-gap 0.05 --scalable --ensure-xhat-feas" \
-                         , f"python distr_ef.py --solver-name {solver_name} --num-scens 5 --ensure-xhat-feas --mnpr 6 --scalable")]
+        command_line_pairs = [(f"mpiexec -np 3 python -u {python_args} -m mpi4py distr_admm_cylinders.py --num-scens 3 --default-rho 10 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.01 --ensure-xhat-feas" \
+                         , f"python {python_args} distr_ef.py --solver-name {solver_name} --num-scens 3 --ensure-xhat-feas"), \
+                         (f"mpiexec -np 6 python -u {python_args} -m mpi4py distr_admm_cylinders.py --num-scens 5 --default-rho 10 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --mnpr 6 --rel-gap 0.05 --scalable --ensure-xhat-feas" \
+                         , f"python {python_args} distr_ef.py --solver-name {solver_name} --num-scens 5 --ensure-xhat-feas --mnpr 6 --scalable")]
         original_dir = os.getcwd()
         for command_line_pair in command_line_pairs:
-            target_directory = '../../examples/distr'
-            os.chdir(target_directory)
+            os.chdir(_DISTR_DIR)
             objectives = {}
             command = command_line_pair[0].split()
             
             result = subprocess.run(command, capture_output=True, text=True)
-            if result.stderr:
+            # Filter out harmless MPI warnings from stderr
+            stderr_lines = [line for line in result.stderr.splitlines()
+                            if line.strip() and "btl_tcp" not in line
+                            and "osc_ucx" not in line] if result.stderr else []
+            if stderr_lines:
                 print("Error output:")
                 raise RuntimeError(result.stderr)
                 

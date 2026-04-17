@@ -118,6 +118,21 @@ class Test_sizes(unittest.TestCase):
         )
         assert ph is not None
 
+    def test_bundles_per_rank_raises(self):
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 0
+        options["bundles_per_rank"] = 1
+
+        with self.assertRaises(RuntimeError) as cm:
+            mpisppy.opt.ph.PH(
+                options,
+                self.all3_scenario_names,
+                scenario_creator,
+                scenario_denouement,
+                scenario_creator_kwargs={"scenario_count": 3},
+            )
+        self.assertIn("--scenarios-per-bundle", str(cm.exception))
+
     def test_ef_constructor(self):
         ScenCount = 3
         ef = mpisppy.utils.sputils.create_EF(
@@ -294,21 +309,6 @@ class Test_sizes(unittest.TestCase):
         self.assertEqual(len(rholist), rholen)  # not a deep test...
 
         
-    @unittest.skipIf(not solver_available,
-                     "no solver is available")
-    def test_bundles(self):
-        options = self._copy_of_base_options()
-        options["PHIterLimit"] = 2
-        options["bundles_per_rank"] = 2
-        ph = mpisppy.opt.ph.PH(
-            options,
-            self.all10_scenario_names,
-            scenario_creator,
-            scenario_denouement,
-            scenario_creator_kwargs={"scenario_count": 10},
-        )
-        conv, obj, tbound = ph.ph_main()
-
     @unittest.skipIf(not persistent_available,
                      "%s solver is not available" % (persistent_solver_name,))
     def test_persistent_basic(self):
@@ -339,40 +339,6 @@ class Test_sizes(unittest.TestCase):
         sig2pobj = round_pos_sig(pobj,2)
         self.assertEqual(sig2basic, sig2pobj)
         
-    @unittest.skipIf(not persistent_available,
-                     "%s solver is not available" % (persistent_solver_name,))
-    def test_persistent_bundles(self):
-        """ This excercises complicated code.
-        """
-        options = self._copy_of_base_options()
-        options["PHIterLimit"] = 2
-        options["bundles_per_rank"] = 2
-        ph = mpisppy.opt.ph.PH(
-            options,
-            self.all10_scenario_names,
-            scenario_creator,
-            scenario_denouement,
-            scenario_creator_kwargs={"scenario_count": 10},
-        )
-        conv, basic_obj, tbound = ph.ph_main()
-
-        options = self._copy_of_base_options()
-        options["PHIterLimit"] = 2
-        options["bundles_per_rank"] = 2
-        options["solver_name"] = persistent_solver_name
-        ph = mpisppy.opt.ph.PH(
-            options,
-            self.all10_scenario_names,
-            scenario_creator,
-            scenario_denouement,
-            scenario_creator_kwargs={"scenario_count": 10},
-        )
-        conv, pbobj, tbound = ph.ph_main()
-
-        sig2basic = round_pos_sig(basic_obj,2)
-        sig2pbobj = round_pos_sig(pbobj,2)
-        self.assertEqual(sig2basic, sig2pbobj)
-
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_xhat_extension(self):

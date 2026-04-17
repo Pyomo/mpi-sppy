@@ -109,8 +109,7 @@ Aside: you can run PH with `quicky.bash`.
 ranks
 -----
 
-The mpi-sspy software wants to know how many bundles per rank (0 means
-no bundles).  Meanwhile, mpiexec needs to know how many total
+The mpiexec command needs to know how many total
 ranks. For the farmer example, the only spoke is for xhat, so you need
 twice as many ranks for mpiexec in total as will be allocated to APH.
 

@@ -46,7 +46,7 @@ class Scenario_lp_mps_files(mpisppy.extensions.extension.Extension):
 
     def pre_iter0(self):
         dn = self.dirname  # typing aid
-        for k, s in self.ph.local_subproblems.items():
+        for k, s in self.ph.local_scenarios.items():
             s.write(os.path.join(dn, f"{k}.lp"), io_options={'symbolic_solver_labels': True})
             s.write(os.path.join(dn, f"{k}.mps"), io_options={'symbolic_solver_labels': True})
             scenData = {"name": s.name, "scenProb": s._mpisppy_probability} 
@@ -74,7 +74,7 @@ class Scenario_lp_mps_files(mpisppy.extensions.extension.Extension):
                         rho_val = s._mpisppy_model.rho[(nd.name, i)]._value
                     else:
                         rho_val = default_rho
-                        rhoList.append((lpize(var.name), rho_val))
+                    rhoList.append((lpize(var.name), rho_val))
 
 
             scenDict["treeData"] = treeData

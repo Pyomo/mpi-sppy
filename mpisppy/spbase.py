@@ -10,6 +10,7 @@
 
 import os
 import time
+import hashlib
 import logging
 import weakref
 import numpy as np
@@ -71,7 +72,6 @@ class SPBase:
         self.local_scenarios = dict()
         self.local_scenario_names = list()
         self.E1_tolerance = E1_tolerance  # probs must sum to almost 1
-        self.names_in_bundles = None
         self.scenarios_constructed = False
         if all_nodenames is None:
             self.all_nodenames = ["ROOT"]
@@ -109,17 +109,13 @@ class SPBase:
                                f" ({len(self.all_scenario_names)})")
 
         self._calculate_scenario_ranks()
-        # Put the deprecation message in the init so they should only see it once per rank
         if "bundles_per_rank" in self.options and self.options["bundles_per_rank"] > 0:
-            self._assign_bundles()
-            self.bundling = True
-            print("WARNING: The bundles-per-rank is now called `loose bundling' and\n"
-                  "loose bundling will be deprecated in the next release\n."
-                  "You should switch to the use of 'proper bundles'.\n"
-                  " See the documentation and also misppy.generic_cylinders.py"
-                  )
-        else:
-            self.bundling = False
+            raise RuntimeError(
+                "Loose bundling (bundles_per_rank > 0) was removed in 2026.\n"
+                "Use 'proper bundles' instead (--scenarios-per-bundle).\n"
+                "See doc/src/properbundles.rst and mpisppy/generic_cylinders.py."
+            )
+        self.bundling = False
         self._create_scenarios(scenario_creator_kwargs)
         self._look_and_leap()
         self._compute_unconditional_node_probabilities()
@@ -128,6 +124,8 @@ class SPBase:
         self._attach_varid_to_nonant_index()
         self._create_communicators()
         self._verify_nonant_lengths()
+        if not self.options.get("turn_off_names_check", False):
+            self._verify_nonant_names()
         self._set_sense()
         self._use_variable_probability_setter()
         self._set_solution_cache()
@@ -190,7 +188,58 @@ class SPBase:
             if val != int(max_val[0]):
                 raise RuntimeError(f"Tree node {ndn} has scenarios with different numbers of non-anticipative "
                         f"variables: {val} vs. max {max_val[0]}")
-                
+
+    def _verify_nonant_names(self):
+        """Verify that nonant variable names match across scenarios.
+
+        For each tree node, all scenarios must list the same nonant
+        variables in the same order.  A local (same-rank) check compares
+        names directly; a cross-rank check uses a deterministic hash
+        with MPI allreduce (MAX vs MIN) to detect mismatches.
+        """
+        # --- local check (within this rank) ---
+        local_node_names = {}  # ndn -> list of var names (from first seen scenario)
+        for k, s in self.local_scenarios.items():
+            for node in s._mpisppy_node_list:
+                ndn = node.name
+                names = [var.name for var in node.nonant_vardata_list]
+                if ndn not in local_node_names:
+                    local_node_names[ndn] = (names, k)
+                else:
+                    ref_names, ref_scen = local_node_names[ndn]
+                    if names != ref_names:
+                        # Find the first mismatch for a helpful message
+                        for i, (a, b) in enumerate(zip(ref_names, names)):
+                            if a != b:
+                                raise RuntimeError(
+                                    f"Tree node {ndn}: nonant variable name "
+                                    f"mismatch at position {i}. "
+                                    f"Scenario {ref_scen} has '{a}', "
+                                    f"scenario {k} has '{b}'.")
+                        # Length mismatch (should be caught by _verify_nonant_lengths)
+                        raise RuntimeError(
+                            f"Tree node {ndn}: nonant variable list length "
+                            f"mismatch between scenarios {ref_scen} and {k}.")
+
+        # --- cross-rank check (via deterministic hash) ---
+        for ndn, (names, _) in local_node_names.items():
+            name_str = ",".join(names)
+            h = hashlib.sha256(name_str.encode()).digest()[:4]
+            local_hash = np.frombuffer(h, dtype=np.int32).copy()
+            max_hash = np.zeros(1, dtype=np.int32)
+            min_hash = np.zeros(1, dtype=np.int32)
+            self.comms[ndn].Allreduce([local_hash, MPI.INT],
+                                      [max_hash, MPI.INT],
+                                      op=MPI.MAX)
+            self.comms[ndn].Allreduce([local_hash, MPI.INT],
+                                      [min_hash, MPI.INT],
+                                      op=MPI.MIN)
+            if max_hash[0] != min_hash[0]:
+                raise RuntimeError(
+                    f"Tree node {ndn}: nonant variable names do not "
+                    f"match across ranks. Check that all scenarios "
+                    f"list nonant variables in the same order.")
+
     def _check_nodenames(self):
         for ndn in self.all_nodenames:
             if ndn != 'ROOT' and sputils.parent_ndn(ndn) not in self.all_nodenames:
@@ -232,42 +281,6 @@ class SPBase:
             self.all_scenario_names[i] for i in self._rank_slices[self.cylinder_rank]
         ]
 
-
-    def _assign_bundles(self):
-        """ Create self.names_in_bundles, a dict of dicts
-            
-            self.names_in_bundles[rank number][bundle number] = 
-                    list of scenarios in that bundle
-
-        """
-        scen_count = len(self.all_scenario_names)
-
-        if self.options["verbose"] and self.cylinder_rank == 0:
-            print("(rank0)", self.options["bundles_per_rank"], "bundles per rank")
-        if self.n_proc * self.options["bundles_per_rank"] > scen_count:
-            raise RuntimeError(
-                "Not enough scenarios to satisfy the bundles_per_rank requirement"
-            )
-
-        # dict: rank number --> list of scenario names owned by rank
-        names_at_rank = {
-            curr_rank: [self.all_scenario_names[i] for i in slc]
-            for (curr_rank, slc) in enumerate(self._rank_slices)
-        }
-
-        self.names_in_bundles = dict()
-        num_bundles = self.options["bundles_per_rank"]
-
-        for curr_rank in range(self.n_proc):
-            scen_count = len(names_at_rank[curr_rank])
-            avg = scen_count / num_bundles
-            slices = [
-                range(int(i * avg), int((i + 1) * avg)) for i in range(num_bundles)
-            ]
-            self.names_in_bundles[curr_rank] = {
-                curr_bundle: [names_at_rank[curr_rank][i] for i in slc]
-                for (curr_bundle, slc) in enumerate(slices)
-            }
 
     def _create_scenarios(self, scenario_creator_kwargs):
         """ Call the scenario_creator for every local scenario, and store the

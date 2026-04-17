@@ -7,6 +7,7 @@
 # full copyright and license information.
 ###############################################################################
 # straight smoke tests (with no unittest, which is a bummer but we need mpiexec)
+# For coverage: python straight_tests.py --python-args="-m coverage run --parallel-mode --source=mpisppy"
 
 import os
 import shlex
@@ -14,6 +15,21 @@ import subprocess
 import sys
 
 from mpisppy.tests.utils import get_solver
+
+# Parse --python-args (extra args inserted after "python" in subcommands, e.g. for coverage)
+python_args = ""
+_remaining = []
+_i = 1
+while _i < len(sys.argv):
+    if sys.argv[_i].startswith("--python-args="):
+        python_args = sys.argv[_i].split("=", 1)[1]
+    elif sys.argv[_i] == "--python-args" and _i + 1 < len(sys.argv):
+        _i += 1
+        python_args = sys.argv[_i]
+    else:
+        _remaining.append(sys.argv[_i])
+    _i += 1
+sys.argv = [sys.argv[0]] + _remaining
 
 solver_available, solver_name, persistent_available, persistent_solver_name = get_solver()
 
@@ -84,7 +100,7 @@ fwphSaveFile = os.path.join(_tests_dir, "fwph_trace.txt")
 pyexe = shlex.quote(sys.executable)
 
 cmdstr = (
-    f"mpiexec -np 4 {pyexe} -m mpi4py {shlex.quote(fpath)} "
+    f"mpiexec -np 4 {pyexe} {python_args} -m mpi4py {shlex.quote(fpath)} "
     f"--bundles-per-rank=0 --max-iterations=5 --default-rho=1 "
     f"--solver-name={shlex.quote(solver_name)} "
     f'--branching-factors "4 3 2" '
@@ -106,6 +122,27 @@ if ok:
             badguys.append(f"Test wrote {fwphSaveFile} but could not delete it: {e}\n{cmdstr}")
     else:
         badguys.append(f"Test failed to write {fwphSaveFile}:\n{cmdstr}")
+
+
+#####################################################
+# generic_cylinders with MMW CI (farmer, wheel-based xhat)
+gc_path = os.path.abspath(os.path.join(_tests_dir, "..", "..", "mpisppy", "generic_cylinders.py"))
+farmer_module = os.path.abspath(os.path.join(_tests_dir, "..", "..", "examples", "farmer", "farmer"))
+
+cmdstr = (
+    f"mpiexec -np 2 {pyexe} {python_args} -m mpi4py {shlex.quote(gc_path)} "
+    f"--module-name {shlex.quote(farmer_module)} "
+    f"--num-scens 3 "
+    f"--solver-name {shlex.quote(solver_name)} "
+    f"--default-rho 1 "
+    f"--max-iterations 3 "
+    f"--xhatshuffle "
+    f"--mmw-num-batches 2 "
+    f"--mmw-batch-size 3 "
+    f"--mmw-start 4"
+)
+
+_doone(cmdstr)
 
 
 #######################################################

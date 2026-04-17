@@ -486,7 +486,6 @@ class CGBase(mpisppy.spopt.SPOpt):
 
     
     def solve_loop(self, solver_options=None,
-                   use_scenarios_not_subproblems=False,
                    dtiming=False,
                    gripe=False,
                    disable_pyomo_signal_handling=False,
@@ -504,9 +503,7 @@ class CGBase(mpisppy.spopt.SPOpt):
         Args:
             solver_options (dict, optional):
                 The scenario solver options.
-            use_scenarios_not_subproblems (boolean, optional):
-                If True, solves individual scenario problems, not subproblems.
-                This distinction matters when using bundling. Default is False.
+
             dtiming (boolean, optional):
                 If True, reports solve timing information. Default is False.
             gripe (boolean, optional):
@@ -529,7 +526,7 @@ class CGBase(mpisppy.spopt.SPOpt):
 
         This function assumes that every scenario already has a
         `_solver_plugin` attached.
-        The arguments `use_scenarios_not_subproblems` and `disable_pyomo_signal_handling`
+        The arguments `disable_pyomo_signal_handling`
         are not tested in this implementation and should be left as False.
 
         """
@@ -537,7 +534,6 @@ class CGBase(mpisppy.spopt.SPOpt):
         
         super().solve_loop(
             solver_options,
-            use_scenarios_not_subproblems,
             dtiming,
             gripe,
             disable_pyomo_signal_handling,

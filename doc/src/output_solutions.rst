@@ -4,17 +4,19 @@ Output Solutions
 ================
 
 The mechanisms for outputting and accessing solutions depends on how the solutions
-were obtained. We will describe some of the possibilities here.
+were obtained. We will describe some of the possibilities here. This section is
+primarily written for programmers.
 
 EF (and Mid-level)
 ------------------
 
-If you are not using a ``WheelSpinner`` object, but rather creating an
-``EF`` object directly (or ``PH``, ``APH`` or ``L-shaped`` directly),
-you can use the function ``mpisppy.spbase.SPBase.write_tree_solution``
-to output the entire solution tree; the function takes a directory
-name (string) as positional argument (and optionally a customized
-writer function).  You can output just the first stage solution using
+If you are writing your own driver, and if you are not using a
+``WheelSpinner`` object, but rather creating an ``EF`` object directly
+(or ``PH``, ``APH`` or ``L-shaped`` directly), you can use the
+function ``mpisppy.spbase.SPBase.write_tree_solution`` to output the
+entire solution tree; the function takes a directory name (string) as
+positional argument (and optionally a customized writer function).
+You can output just the first stage solution using
 ``mpisppy.spbase.SPBase.write_tree_solution``; the function takes a
 file name (string) as positional argument (and optionally a customized
 writer function).

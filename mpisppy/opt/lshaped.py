@@ -650,14 +650,15 @@ class LShapedMethod(spbase.SPBase):
                 for c in cuts_added:
                     if is_persistent:
                         opt.add_constraint(c)
-                if verbose and len(cuts_added) == 0:
-                    print(
-                        f"Converged in {self.iter+1} iterations.\n"
-                        f"Total Time Elapsed: {time.time()-t:7.2f} "
-                        f"Time Spent on Last Master: {t1:7.2f} "
-                        f"Time spent verifying second stage: {t2:7.2f} "
-                        f"Final Objective: {m.obj.expr():7.2f}"
-                    )
+                if len(cuts_added) == 0:
+                    if verbose:
+                        print(
+                            f"Converged in {self.iter+1} iterations.\n"
+                            f"Total Time Elapsed: {time.time()-t:7.2f} "
+                            f"Time Spent on Last Master: {t1:7.2f} "
+                            f"Time spent verifying second stage: {t2:7.2f} "
+                            f"Final Objective: {m.obj.expr():7.2f}"
+                        )
                     self.first_stage_solution_available = True
                     self.tree_solution_available = True
                     break
@@ -683,6 +684,7 @@ class LShapedMethod(spbase.SPBase):
                             f"Final Objective: {m.obj.expr():7.2f}"
                         )
                     break
+        
         return res
 
 def _del_con(c):

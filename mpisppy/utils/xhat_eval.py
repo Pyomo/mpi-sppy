@@ -106,7 +106,6 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
 
 
     def solve_loop(self, solver_options=None,
-                   use_scenarios_not_subproblems=False,
                    dtiming=False,
                    gripe=False,
                    disable_pyomo_signal_handling=False,
@@ -115,8 +114,8 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                    compute_val_at_nonant=False,
                    warmstart=sputils.WarmstartStatus.USER_SOLUTION,  # 1 Sep 2025,
                    need_solution=False,):
-        """ Loop over self.local_subproblems and solve them in a manner 
-            dicated by the arguments. In addition to changing the Var
+        """ Loop over self.local_scenarios and solve them in a manner
+            dictated by the arguments. In addition to changing the Var
             values in the scenarios, update _PySP_feas_indictor for each.
 
         ASSUMES:
@@ -124,16 +123,15 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
 
         Args:
             solver_options (dict or None): the scenario solver options
-            use_scenarios_not_subproblems (boolean): for use by bounds
             dtiming (boolean): indicates that timing should be reported
             gripe (boolean): output a message if a solve fails
-            disable_pyomo_signal_handling (boolean): set to true for asynch, 
+            disable_pyomo_signal_handling (boolean): set to true for asynch,
                                                      ignored for persistent solvers.
             tee (boolean): show solver output to screen if possible
             verbose (boolean): indicates verbose output
             compute_val_at_nonant (boolean): indicate that self.objs_dict should
                                             be created and computed.
-                                            
+
             warmstart (boolean): indicates a warmstart
 
         NOTE: I am not sure what happens with solver_options None for
@@ -142,21 +140,15 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         NOTE: set_objective takes care of W and prox changes.
         """
         self._lazy_create_solvers()
-        def _vb(msg): 
+        def _vb(msg):
             if verbose and self.cylinder_rank == 0:
                 print ("(rank0) " + msg)
         logger.debug("  early solve_loop for rank={}".format(self.cylinder_rank))
 
-        # note that when there is no bundling, scenarios are subproblems
-        if use_scenarios_not_subproblems:
-            s_source = self.local_scenarios
-        else:
-            s_source = self.local_subproblems
-            
         if compute_val_at_nonant:
             self.objs_dict={}
-        
-        for k,s in s_source.items():
+
+        for k,s in self.local_scenarios.items():
             if tee:
                 print(f"Tee solve for {k} on global rank {self.global_rank}")
             logger.debug("  in loop solve_loop k={}, rank={}".format(k, self.cylinder_rank))
@@ -282,8 +274,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         solver_options = self.options["solver_options"] if "solver_options" in self.options else None
         
         self.solve_loop(solver_options=solver_options,
-                        use_scenarios_not_subproblems=True,
-                        gripe=True, 
+                        gripe=True,
                         tee=False,
                         verbose=self.verbose,
                         compute_val_at_nonant=True
@@ -345,16 +336,14 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
     #======================================================================
     def _fix_nonants_at_value(self):
         """ Fix the Vars subject to non-anticipativity at their current values.
-            Loop over the scenarios to restore, but loop over subproblems
-            to alert persistent solvers.
+            Loop over the scenarios to restore and alert persistent solvers.
         """
         rounding_bias = self.options.get("rounding_bias", 0.0)
         for k,s in self.local_scenarios.items():
 
             persistent_solver = None
-            if not self.bundling:
-                if (sputils.is_persistent(s._solver_plugin)):
-                    persistent_solver = s._solver_plugin
+            if sputils.is_persistent(s._solver_plugin):
+                persistent_solver = s._solver_plugin
 
             for var in s._mpisppy_data.nonant_indices.values():
                 if var in s._mpisppy_data.all_surrogate_nonants:
@@ -362,27 +351,8 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                 if var.is_binary() or var.is_integer():
                     var._value = round(var._value + rounding_bias)
                 var.fix()
-                if not self.bundling and persistent_solver is not None:
+                if persistent_solver is not None:
                     persistent_solver.update_var(var)
-
-        if self.bundling:  # we might need to update persistent solvers
-            rank_local = self.cylinder_rank
-            for k,s in self.local_subproblems.items():
-                if (sputils.is_persistent(s._solver_plugin)):
-                    persistent_solver = s._solver_plugin
-                else:
-                    break  # all solvers should be the same
-
-                # the bundle number is the last number in the name
-                bunnum = sputils.extract_num(k)
-                # for the scenarios in this bundle, update Vars
-                for sname, scen in self.local_scenarios.items():
-                    if sname not in self.names_in_bundles[rank_local][bunnum]:
-                        break
-                    for var in scen._mpisppy_data.nonant_indices.values():
-                        if var in scen._mpisppy_data.all_surrogate_nonants:
-                            continue
-                        persistent_solver.update_var(var)
 
     def calculate_incumbent(self, fix_nonants=True, verbose=False):
         """

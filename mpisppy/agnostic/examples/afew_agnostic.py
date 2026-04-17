@@ -7,12 +7,30 @@
 # full copyright and license information.
 ###############################################################################
 # Run a few examples; dlw Nov 2024; user-unfriendly
-# Assumes you run from the agnostic/examples directory.
-# python run_agnostic.py
-# python run_agnostic.py --oversubscribe
+# python afew_agnostic.py
+# python afew_agnostic.py --oversubscribe
+# For coverage: python afew_agnostic.py --python-args="-m coverage run --parallel-mode --source=mpisppy"
 
 import os
 import sys
+
+# Parse --python-args (extra args inserted after "python" in subcommands, e.g. for coverage)
+python_args = ""
+_remaining = []
+_i = 1
+while _i < len(sys.argv):
+    if sys.argv[_i].startswith("--python-args="):
+        python_args = sys.argv[_i].split("=", 1)[1]
+    elif sys.argv[_i] == "--python-args" and _i + 1 < len(sys.argv):
+        _i += 1
+        python_args = sys.argv[_i]
+    else:
+        _remaining.append(sys.argv[_i])
+    _i += 1
+sys.argv = [sys.argv[0]] + _remaining
+
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_AGNOSTIC_CYLINDERS = os.path.join(_THIS_DIR, "..", "agnostic_cylinders.py")
 
 pyomo_solver_name = "cplex_direct"
 ampl_solver_name = "gurobi"
@@ -28,7 +46,7 @@ if len(sys.argv) == 2:
 badguys = list()
 
 def do_one(np, argstring):
-    runstring = f"mpiexec -np {np} {mpiexec_arg} python -m mpi4py ../agnostic_cylinders.py {argstring}"
+    runstring = f"mpiexec -np {np} {mpiexec_arg} python {python_args} -m mpi4py {_AGNOSTIC_CYLINDERS} {argstring}"
     print(runstring)
     code = os.system(runstring)
     if code != 0:

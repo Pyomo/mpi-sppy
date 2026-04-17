@@ -191,7 +191,6 @@ class InnerBoundSpoke(_BoundSpoke):
 
     def send_best_xhat(self):
         best_xhat_buf = self.send_buffers[Field.BEST_XHAT]
-        # NOTE: this does not work with "loose" bundles
         ci = 0
         for s in self.opt.local_scenarios.values():
             solution_cache = s._mpisppy_data.best_solution_cache._dict

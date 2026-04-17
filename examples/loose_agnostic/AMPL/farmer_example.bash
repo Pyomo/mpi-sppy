@@ -35,11 +35,10 @@ echo "Create the files"
 python farmer_writer.py --output-directory=$ODIR
 
 echo "Use the files (just an interface demo)"
-# This is perhaps too clever by about half: the module is the mps_module and its scenario_creator
-#  function assumes that mps-files-directory has been set on the command line.
+# --mps-files-directory as the first arg infers the module automatically.
 # You can have any generic cylinders commands you like.
 # Note that we don't use a lower bound (so only the trivial bound will be there)
-mpiexec -np 2 python -m mpi4py ../../../mpisppy/generic_cylinders.py --module-name ../../../mpisppy/utils/mps_module --mps-files-directory $ODIR --solver-name ${SOLVER} --max-iterations 2 --default-rho 1 --solution-base-name $SOLBASE --xhatshuffle
+mpiexec -np 2 python -m mpi4py ../../../mpisppy/generic_cylinders.py --mps-files-directory $ODIR --solver-name ${SOLVER} --max-iterations 2 --default-rho 1 --solution-base-name $SOLBASE --xhatshuffle
 
 echo "write the nonant values with AMPL names to nonant_output.csv"
 python colmap.py ${ODIR}/scen0.col ${SOLBASE}.csv nonant_output.csv --strict

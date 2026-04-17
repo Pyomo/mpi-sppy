@@ -29,8 +29,7 @@ your installation, cd to the directory where you installed mpi-sppy
 If you don't see any error messages, you might have an MPI
 installation that will work well. Note that even if there is
 an error message, mpi-sppy may still execute and return correct
-results. Per the comment below, the run-times may just be 
-unnecessarily inflated.
+results. 
 
 no MPI?
 ^^^^^^^

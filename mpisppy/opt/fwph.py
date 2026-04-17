@@ -13,7 +13,7 @@
     to compute Lagrangian dual bounds in stochastic mixed-integer programming".
     SIAM J. Optim. 28(2):1312--1336, 2018.
 
-    Current implementation supports parallelism and bundling.
+    Current implementation supports parallelism.
 '''
 
 import mpisppy.phbase
@@ -21,7 +21,6 @@ import mpisppy.utils.sputils as sputils
 import numpy as np
 import pyomo.environ as pyo
 import time
-import re # For manipulating scenario names
 import random
 import math
 
@@ -120,7 +119,7 @@ class FWPH(mpisppy.phbase.PHBase):
             total_iterations = self.options["PHIterLimit"]
             self.options["PHIterLimit"] = lp_iterations
             integer_relaxer = pyo.TransformationFactory('core.relax_integer_vars')
-            for s in self.local_subproblems.values():
+            for s in self.local_scenarios.values():
                 integer_relaxer.apply_to(s)
                 if sputils.is_persistent(s._solver_plugin):
                     for v,_ in s._relaxed_integer_vars[None].values():
@@ -129,7 +128,7 @@ class FWPH(mpisppy.phbase.PHBase):
             self._reenable_prox()
             super().iterk_loop()
             self._disable_prox()
-            for s in self.local_subproblems.values():
+            for s in self.local_scenarios.values():
                 for v, d in s._relaxed_integer_vars[None].values():
                     v.domain = d
                     if sputils.is_persistent(s._solver_plugin):
@@ -303,14 +302,14 @@ class FWPH(mpisppy.phbase.PHBase):
             _sdm_generators = {}
             stop = False
             best_bound_update = self._can_update_best_bound()
-            for name in self.local_subproblems:
+            for name in self.local_scenarios:
                 _sdm_generators[name] = self.SDM(name, mip_solver_options, dtiming, tee, verbose, sdm_iter_limit, FW_conv_thresh, best_bound_update)
                 try:
                     dual_bound = next(_sdm_generators[name])
                 except StopIteration as e:
                     dual_bound = e.value
                     stop = True
-                self._local_bound += self.local_subproblems[name]._mpisppy_probability * \
+                self._local_bound += self.local_scenarios[name]._mpisppy_probability * \
                                      dual_bound
             self._update_dual_bounds()
             self._PHIter += 1
@@ -337,14 +336,12 @@ class FWPH(mpisppy.phbase.PHBase):
 
             # Re-set the mip._mpisppy_model.W so that the QP objective
             # is correct in the next major iteration
-            for model_name, mip in self.local_subproblems.items():
+            for model_name, mip in self.local_scenarios.items():
                 qp  = self.local_QP_subproblems[model_name]
-                mip_source = mip.scen_list if self.bundling else [model_name]
-                for scenario_name in mip_source:
-                    scen_mip = self.local_scenarios[scenario_name]
-                    for (node_name, ix) in scen_mip._mpisppy_data.nonant_indices:
-                        scen_mip._mpisppy_model.W[node_name, ix]._value = \
-                            qp._mpisppy_model.W[node_name, ix]._value
+                scen_mip = self.local_scenarios[model_name]
+                for (node_name, ix) in scen_mip._mpisppy_data.nonant_indices:
+                    scen_mip._mpisppy_model.W[node_name, ix]._value = \
+                        qp._mpisppy_model.W[node_name, ix]._value
 
             self._swap_nonant_vars_back()
 
@@ -370,17 +367,11 @@ class FWPH(mpisppy.phbase.PHBase):
     def SDM(self, model_name, mip_solver_options, dtiming, tee, verbose, sdm_iter_limit, FW_conv_thresh, best_bound_update):
         '''  Algorithm 2 in Boland et al. (with small tweaks)
         '''
-        mip = self.local_subproblems[model_name]
+        mip = self.local_scenarios[model_name]
         qp  = self.local_QP_subproblems[model_name]
     
-        # Set the QP dual weights to the correct values If we are bundling, we
-        # initialize the QP dual weights to be the dual weights associated with
-        # the first scenario in the bundle (this should be okay, because each
-        # scenario in the bundle has the same dual weights, analytically--maybe
-        # a numerical problem).
-        mip_source = mip.scen_list if self.bundling else [model_name]
-
-        arb_scen_mip = self.local_scenarios[mip_source[0]]
+        # Set the QP dual weights to the correct values.
+        arb_scen_mip = self.local_scenarios[model_name]
 
         for (node_name, ix) in arb_scen_mip._mpisppy_data.nonant_indices:
             qp._mpisppy_model.W[node_name, ix]._value = \
@@ -397,14 +388,13 @@ class FWPH(mpisppy.phbase.PHBase):
         for itr in range(sdm_iter_limit):
             # loop_start = time.perf_counter()
             # Algorithm 2 line 4
-            for scenario_name in mip_source:
-                scen_mip = self.local_scenarios[scenario_name]
-                for ndn_i in scen_mip._mpisppy_data.nonant_indices:
-                    scen_mip._mpisppy_model.W[ndn_i]._value = (
-                        qp._mpisppy_model.W[ndn_i]._value
-                        + scen_mip._mpisppy_model.rho[ndn_i]._value
-                        * (xt[ndn_i]
-                        -  scen_mip._mpisppy_model.xbars[ndn_i]._value))
+            scen_mip = self.local_scenarios[model_name]
+            for ndn_i in scen_mip._mpisppy_data.nonant_indices:
+                scen_mip._mpisppy_model.W[ndn_i]._value = (
+                    qp._mpisppy_model.W[ndn_i]._value
+                    + scen_mip._mpisppy_model.rho[ndn_i]._value
+                    * (xt[ndn_i]
+                    -  scen_mip._mpisppy_model.xbars[ndn_i]._value))
 
             self._fix_fixings(model_name, mip, qp)
             cutoff = self._add_objective_cutoff(mip, qp, model_name, best_bound_update, FW_conv_thresh)
@@ -451,8 +441,6 @@ class FWPH(mpisppy.phbase.PHBase):
                 self._swap_nonant_vars()
 
             # tbqpsol = time.perf_counter()
-            # QPs are weird if bundled
-            _bundling = self.bundling
             self.solve_one(
                 self.options["qp_solver_options"],
                 model_name,
@@ -461,7 +449,6 @@ class FWPH(mpisppy.phbase.PHBase):
                 tee=tee,
                 verbose=verbose,
             )
-            self.bundling = _bundling
             # tqpsol = time.perf_counter() - tbqpsol
 
             # print(f"{model_name}, solve + add_col time: {tmipsolve + tcol + tqpsol}")
@@ -487,7 +474,7 @@ class FWPH(mpisppy.phbase.PHBase):
     def _add_shared_columns(self, shared_columns):
         self.mpicomm.Barrier()
         self._disable_W()
-        for s in self.local_subproblems.values():
+        for s in self.local_scenarios.values():
             if sputils.is_persistent(s._solver_plugin):
                 active_objective_datas = list(s.component_data_objects(
                      pyo.Objective, active=True, descend_into=True))
@@ -505,7 +492,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 raise RuntimeError(f"var {var.name} is fixed in QP!!")
         solver = mip._solver_plugin
         unfixed = 0
-        target = mip.ref_vars if self.bundling else mip._mpisppy_data.nonant_vars
+        target = mip._mpisppy_data.nonant_vars
         mip_to_qp = mip._mpisppy_data.mip_to_qp
         for ndn_i, var in target.items():
             if var.fixed:
@@ -521,7 +508,7 @@ class FWPH(mpisppy.phbase.PHBase):
         ''' Add a column to the QP, with values taken from the most recent MIP
             solve. Assumes the inner_bound is up-to-date in the MIP model.
         '''
-        mip = self.local_subproblems[model_name]
+        mip = self.local_scenarios[model_name]
         qp  = self.local_QP_subproblems[model_name]
         solver = qp._solver_plugin
         persistent = sputils.is_persistent(solver)
@@ -536,9 +523,8 @@ class FWPH(mpisppy.phbase.PHBase):
             new_var = qp.a.add()
             coef_list = [1.]
             constr_list = [qp.sum_one]
-            target = mip.ref_vars if self.bundling else mip._mpisppy_data.nonant_vars
             for (node, ix) in qp.eqx.index_set():
-                coef_list.append(target[node, ix].value)
+                coef_list.append(mip._mpisppy_data.nonant_vars[node, ix].value)
                 constr_list.append(qp.eqx[node, ix])
             coef_list.append(total_recourse_cost)
             constr_list.append(qp.eq_recourse_cost)
@@ -555,10 +541,9 @@ class FWPH(mpisppy.phbase.PHBase):
             solver.remove_constraint(qp.sum_one)
             solver.add_constraint(qp.sum_one)
 
-        target = mip.ref_vars if self.bundling else mip._mpisppy_data.nonant_vars
         for (node, ix) in qp.eqx.index_set():
             lb, body, ub = qp.eqx[node, ix].to_bounded_expression()
-            body += new_var * target[node, ix].value
+            body += new_var * mip._mpisppy_data.nonant_vars[node, ix].value
             qp.eqx[node, ix].set_value((lb, body, ub))
             if (persistent):
                 solver.remove_constraint(qp.eqx[node, ix])
@@ -632,23 +617,15 @@ class FWPH(mpisppy.phbase.PHBase):
 
     def _attach_indices(self):
         ''' Attach the fields x_indices to the model objects in
-            self.local_subproblems (not self.local_scenarios, nor
-            self.local_QP_subproblems).
+            self.local_scenarios (not self.local_QP_subproblems).
 
             x_indices is a list of tuples of the form...
-                (scenario name, node name, variable index) <-- bundling
-                (node name, variable index)                <-- no bundling
+                (node name, variable index)
             
             Must be called after the subproblems (MIPs AND QPs) are created.
         '''
-        for mip in self.local_subproblems.values():
-            if (self.bundling):
-                x_indices = [(scenario_name, node_name, ix)
-                    for scenario_name in mip.scen_list
-                    for (node_name, ix) in 
-                        self.local_scenarios[scenario_name]._mpisppy_data.nonant_indices]
-            else:
-                x_indices = mip._mpisppy_data.nonant_indices.keys()
+        for mip in self.local_scenarios.values():
+            x_indices = mip._mpisppy_data.nonant_indices.keys()
 
             x_indices = pyo.Set(initialize=x_indices)
             x_indices.construct()
@@ -658,8 +635,8 @@ class FWPH(mpisppy.phbase.PHBase):
         ''' Create dictionaries that map MIP variable ids to their QP
             counterparts, and vice versa.
         '''
-        for name in self.local_subproblems.keys():
-            mip = self.local_subproblems[name]
+        for name in self.local_scenarios.keys():
+            mip = self.local_scenarios[name]
             qp  = self.local_QP_subproblems[name]
 
             mip._mpisppy_data.mip_to_qp = {id(mip._mpisppy_data.nonant_vars[key]): qp.x[key]
@@ -672,22 +649,9 @@ class FWPH(mpisppy.phbase.PHBase):
             non-anticipative and leaf variables, so that they can be easily
             accessed when adding columns to the QP.
         '''
-        if (self.bundling):
-            for (bundle_name, EF) in self.local_subproblems.items():
-                EF._mpisppy_data.nonant_vars = dict()
-                for scenario_name in EF.scen_list:
-                    mip = self.local_scenarios[scenario_name]
-                    # Non-anticipative variables
-                    nonant_dict = {(scenario_name, ndn, ix): nonant
-                        for (ndn,ix), nonant in mip._mpisppy_data.nonant_indices.items()}
-                    EF._mpisppy_data.nonant_vars.update(nonant_dict)
-                    # Reference variables are already attached: EF.ref_vars
-                    # indexed by (node_name, index)
-                self._attach_nonant_objective(mip)
-        else:
-            for (name, mip) in self.local_scenarios.items():
-                mip._mpisppy_data.nonant_vars = mip._mpisppy_data.nonant_indices
-                self._attach_nonant_objective(mip)
+        for (name, mip) in self.local_scenarios.items():
+            mip._mpisppy_data.nonant_vars = mip._mpisppy_data.nonant_indices
+            self._attach_nonant_objective(mip)
 
     def _update_dual_bounds(self):
         ''' Compute the FWPH dual bound using self._local_bound from each rank
@@ -710,15 +674,12 @@ class FWPH(mpisppy.phbase.PHBase):
     def fwph_convergence_diff(self):
         ''' Perform the convergence check of Algorithm 3 in Boland et al. '''
         diff = 0.
-        for name in self.local_subproblems.keys():
-            mip = self.local_subproblems[name]
-            arb_mip = self.local_scenarios[mip.scen_list[0]] \
-                        if self.bundling else mip
+        for name in self.local_scenarios.keys():
+            mip = self.local_scenarios[name]
             qp  = self.local_QP_subproblems[name]
-            qpx = qp.xr if self.bundling else qp.x
-            xbars = arb_mip._mpisppy_model.xbars
-            diff_s = mip._mpisppy_probability * sum((qpx[idx]._value - xbars[idx]._value)**2
-                                                    for idx in arb_mip._mpisppy_data.nonant_indices)
+            xbars = mip._mpisppy_model.xbars
+            diff_s = mip._mpisppy_probability * sum((qp.x[idx]._value - xbars[idx]._value)**2
+                                                    for idx in mip._mpisppy_data.nonant_indices)
             diff += diff_s
         diff = np.array(diff)
         recv = np.array(0.)
@@ -731,7 +692,7 @@ class FWPH(mpisppy.phbase.PHBase):
             Adds to mip._mpisppy_model.nonant_obj_part
 
             Args:
-                mip (Pyomo ConcreteModel): MIP model for a scenario or bundle.
+                mip (Pyomo ConcreteModel): MIP model for a scenario.
         """
         obj = find_active_objective(mip)
         repn = generate_standard_repn(obj.expr, compute_values=False, quadratic=False)
@@ -760,7 +721,7 @@ class FWPH(mpisppy.phbase.PHBase):
             variables in place of the MIP variables.
 
             Args:
-                mip (Pyomo ConcreteModel): MIP model for a scenario or bundle.
+                mip (Pyomo ConcreteModel): MIP model for a scenario.
 
             Returns:
                 obj (Pyomo Objective): objective function extracted
@@ -768,9 +729,6 @@ class FWPH(mpisppy.phbase.PHBase):
                 new (Pyomo Expression): expression from the MIP model
                     objective with the MIP variables replaced by QP variables.
                     Does not inculde dual or prox terms.
-
-            Notes:
-                Acts on either a single-scenario model or a bundle
         '''
         obj = mip._mpisppy_model.nonant_obj_part
         mip_to_qp = mip._mpisppy_data.mip_to_qp
@@ -781,45 +739,34 @@ class FWPH(mpisppy.phbase.PHBase):
         )
         return obj, new
 
-    def _gather_weight_dict(self, strip_bundle_names=False):
+    def _gather_weight_dict(self):
         ''' Compute a double nested dictionary of the form
 
                 weights[scenario name][variable name] = weight value
 
             for FWPH to return to the user.
-        
+
             Notes:
                 Must be called after the variables are swapped back.
         '''
         local_weights = dict()
         for (name, scenario) in self.local_scenarios.items():
-            if (self.bundling and strip_bundle_names):
-                scenario_weights = dict()
-                for ndn_ix, var in scenario._mpisppy_data.nonant_indices.items():
-                    rexp = r'^' + scenario.name + r'\.'
-                    var_name = re.sub(rexp, '', var.name)
-                    scenario_weights[var_name] = \
-                                        scenario._mpisppy_model.W[ndn_ix].value
-            else:
-                scenario_weights = {nonant.name: scenario._mpisppy_model.W[ndn_ix].value
-                        for ndn_ix, nonant in scenario._mpisppy_data.nonant_indices.items()}
+            scenario_weights = {nonant.name: scenario._mpisppy_model.W[ndn_ix].value
+                    for ndn_ix, nonant in scenario._mpisppy_data.nonant_indices.items()}
             local_weights[name] = scenario_weights
 
         weights = self.comms['ROOT'].gather(local_weights, root=0)
         return weights
 
-    def _get_xbars(self, strip_bundle_names=False):
+    def _get_xbars(self):
         ''' Return the xbar vector if rank = 0 and None, otherwise
             (Consistent with _gather_weight_dict).
 
-            Args:
-                TODO
-                
             Notes:
                 Paralellism is not necessary since each rank already has an
                 identical copy of xbar, provided by Compute_Xbar().
 
-                Returned dictionary is indexed by variable name 
+                Returned dictionary is indexed by variable name
                 (as provided by the user).
 
                 Must be called after variables are swapped back (I think).
@@ -833,9 +780,6 @@ class FWPH(mpisppy.phbase.PHBase):
             for node in scenario._mpisppy_node_list:
                 for (ix, var) in enumerate(node.nonant_vardata_list):
                     var_name = var.name
-                    if (self.bundling and strip_bundle_names):
-                        rexp = r'^' + random_scenario_name + r'\.'
-                        var_name = re.sub(rexp, '', var_name)
                     xbar_dict[var_name] = scenario._mpisppy_model.xbars[node.name, ix].value
             return xbar_dict
 
@@ -844,7 +788,7 @@ class FWPH(mpisppy.phbase.PHBase):
             paper) for each scenario. Does not create/attach an objective.
 
             Attachs a local_QP_subproblems dict to self. Keys are scenario
-            names (or bundle names), values are Pyomo ConcreteModel objects
+            names, values are Pyomo ConcreteModel objects
             corresponding to the QP subproblems. 
 
             QP subproblems are in their original form, without the x and y
@@ -853,12 +797,8 @@ class FWPH(mpisppy.phbase.PHBase):
             iteration this way).
         '''
         self.local_QP_subproblems = dict()
-        for (name, model) in self.local_subproblems.items():
-            if (self.bundling):
-                xr_indices = model.ref_vars.keys()
-                nonant_indices = model._mpisppy_data.nonant_vars.keys()
-            else:
-                nonant_indices = model._mpisppy_data.nonant_indices.keys()
+        for (name, model) in self.local_scenarios.items():
+            nonant_indices = model._mpisppy_data.nonant_indices.keys()
 
             ''' Convex comb. coefficients '''
             QP = pyo.ConcreteModel()
@@ -870,31 +810,13 @@ class FWPH(mpisppy.phbase.PHBase):
             mip_recourse_cost = model._mpisppy_data.inner_bound - pyo.value(model._mpisppy_model.nonant_obj_part)
             QP.recourse_cost = pyo.Var(within=pyo.Reals, initialize=mip_recourse_cost)
 
-            if (self.bundling):
-                QP.xr = pyo.Var(xr_indices, within=pyo.Reals)
-
-            ''' Non-anticipativity constraint '''
-            if (self.bundling):
-                def nonant_rule(m, scenario_name, node_name, ix):
-                    return m.x[scenario_name, node_name, ix] == \
-                            m.xr[node_name, ix]
-                QP.na = pyo.Constraint(nonant_indices, rule=nonant_rule)
-            
             ''' (x,y) constraints '''
-            if (self.bundling):
-                def x_rule(m, node_name, ix):
-                    return -m.xr[node_name, ix] + m.a[1] * \
-                            model.ref_vars[node_name, ix].value == 0
-                def rc_rule(m):
-                    return -m.recourse_cost + m.a[1] * mip_recourse_cost == 0
-                QP.eqx = pyo.Constraint(xr_indices, rule=x_rule)
-            else:
-                def x_rule(m, node_name, ix):
-                    return -m.x[node_name, ix] + m.a[1] * \
-                            model._mpisppy_data.nonant_vars[node_name, ix].value == 0
-                def rc_rule(m):
-                    return -m.recourse_cost + m.a[1] * mip_recourse_cost == 0
-                QP.eqx = pyo.Constraint(nonant_indices, rule=x_rule)
+            def x_rule(m, node_name, ix):
+                return -m.x[node_name, ix] + m.a[1] * \
+                        model._mpisppy_data.nonant_vars[node_name, ix].value == 0
+            def rc_rule(m):
+                return -m.recourse_cost + m.a[1] * mip_recourse_cost == 0
+            QP.eqx = pyo.Constraint(nonant_indices, rule=x_rule)
 
             QP.eq_recourse_cost = pyo.Constraint(rule=rc_rule)
             QP.sum_one = pyo.Constraint(expr=pyo.quicksum(QP.a.values())==1)
@@ -914,26 +836,13 @@ class FWPH(mpisppy.phbase.PHBase):
 
                 Must be called after Iter0().
         '''
-        for name in self.local_subproblems.keys():
-            mip = self.local_subproblems[name]
+        for name in self.local_scenarios.keys():
+            mip = self.local_scenarios[name]
             qp  = self.local_QP_subproblems[name]
 
             for key in mip._mpisppy_model.x_indices:
                 qp.x[key]._value = mip._mpisppy_data.nonant_vars[key].value
             qp.recourse_cost._value = mip._mpisppy_data.inner_bound - pyo.value(mip._mpisppy_model.nonant_obj_part)
-
-            # Set the non-anticipative reference variables if we're bundling
-            if (self.bundling):
-                arb_scenario = mip.scen_list[0]
-                naix = self.local_scenarios[arb_scenario]._mpisppy_data.nonant_indices
-                for (node_name, ix) in naix:
-                    # Check that non-anticipativity is satisfied
-                    # within the bundle (for debugging)
-                    vals = [mip._mpisppy_data.nonant_vars[scenario_name, node_name, ix].value
-                            for scenario_name in mip.scen_list]
-                    assert(max(vals) - min(vals) < 1e-7)
-                    qp.xr[node_name, ix].set_value(
-                        mip._mpisppy_data.nonant_vars[arb_scenario, node_name, ix].value)
 
     def _setup_shared_column_generation(self):
         """ helper for shared column generation """
@@ -993,7 +902,7 @@ class FWPH(mpisppy.phbase.PHBase):
                                    stage2EFsolvern=stage2EFsolvern,
                                    branching_factors=branching_factors)
             if obj is not None:
-                for model_name in self.local_subproblems:
+                for model_name in self.local_scenarios:
                     self._add_QP_column(model_name)
                 # self._restore_nonants()
                 number_points += 1
@@ -1070,7 +979,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 Rather "fast-and-loose", in that it doesn't enforce _when_ this
                 function can be called.
         '''
-        weights = self._gather_weight_dict(strip_bundle_names=self.bundling) # None if rank != 0
+        weights = self._gather_weight_dict() # None if rank != 0
         if (self.cylinder_rank != 0):
             return
         with open(fname, 'w') as f:
@@ -1092,7 +1001,7 @@ class FWPH(mpisppy.phbase.PHBase):
         '''
         if (self.cylinder_rank != 0):
             return
-        xbars = self._get_xbars(strip_bundle_names=self.bundling) # None if rank != 0
+        xbars = self._get_xbars() # None if rank != 0
         with open(fname, 'w') as f:
             for (var_name, xbs) in xbars.items():
                 row = '{vn},{vv:.16f}\n'.format(vn=var_name, vv=xbs)
@@ -1104,28 +1013,20 @@ class FWPH(mpisppy.phbase.PHBase):
             QP dual weights are initialized to the MIP dual weights.
         '''
 
-        for name, mip in self.local_subproblems.items():
+        for name, mip in self.local_scenarios.items():
             QP = self.local_QP_subproblems[name]
 
             obj, new = self._extract_nonant_objective(mip)
 
             new += QP.recourse_cost
             ## Finish setting up objective for QP
-            if self.bundling:
-                m_source = self.local_scenarios[mip.scen_list[0]]
-                x_source = QP.xr
-            else:
-                m_source = mip
-                x_source = QP.x
-
             QP._mpisppy_model.W = pyo.Param(
-                m_source._mpisppy_data.nonant_indices.keys(), mutable=True, initialize=m_source._mpisppy_model.W
+                mip._mpisppy_data.nonant_indices.keys(), mutable=True, initialize=mip._mpisppy_model.W
             )
-            # rhos are attached to each scenario, not each bundle (should they be?)
             ph_term = pyo.quicksum((
-                QP._mpisppy_model.W[nni] * x_source[nni] +
-                (m_source._mpisppy_model.rho[nni] / 2.) * (x_source[nni] - m_source._mpisppy_model.xbars[nni]) * (x_source[nni] - m_source._mpisppy_model.xbars[nni])
-                for nni in m_source._mpisppy_data.nonant_indices
+                QP._mpisppy_model.W[nni] * QP.x[nni] +
+                (mip._mpisppy_model.rho[nni] / 2.) * (QP.x[nni] - mip._mpisppy_model.xbars[nni]) * (QP.x[nni] - mip._mpisppy_model.xbars[nni])
+                for nni in mip._mpisppy_data.nonant_indices
             ))
 
             if self.is_minimizing:
@@ -1166,18 +1067,14 @@ class FWPH(mpisppy.phbase.PHBase):
     def _cache_nonant_var_swap_qp(self):
         """ cache the lists used for the nonant var swap """
 
-        for (name, model) in self.local_subproblems.items():
-            scens = model.scen_list if self.bundling else [name]
-            for scenario_name in scens:
-                scenario = self.local_scenarios[scenario_name]
-                num_nonant_vars = scenario._mpisppy_data.nlens
-                node_list = scenario._mpisppy_node_list
-                for node in node_list:
-                    node.nonant_vardata_list = [
-                        self.local_QP_subproblems[name].xr[node.name,i]
-                        if self.bundling else
-                        self.local_QP_subproblems[name].x[node.name,i]
-                        for i in range(num_nonant_vars[node.name])]
+        for (name, model) in self.local_scenarios.items():
+            scenario = self.local_scenarios[name]
+            num_nonant_vars = scenario._mpisppy_data.nlens
+            node_list = scenario._mpisppy_node_list
+            for node in node_list:
+                node.nonant_vardata_list = [
+                    self.local_QP_subproblems[name].x[node.name,i]
+                    for i in range(num_nonant_vars[node.name])]
         self._attach_nonant_indices()
 
         self._QP_nonants = {}

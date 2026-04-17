@@ -110,7 +110,6 @@ class Hub(SPCommunicator):
 
         # If we are still here, there is some option for termination
         abs_gap, rel_gap = self.compute_gaps()
-
         abs_gap_satisfied = False
         rel_gap_satisfied = False
         max_stalled_satisfied = False
@@ -129,7 +128,6 @@ class Hub(SPCommunicator):
                 self.stalled_iter_cnt += 1
                 if self.stalled_iter_cnt >= self.options["max_stalled_iters"]:
                     max_stalled_satisfied = True
-
         if screen_trace:
             if abs_gap_satisfied:
                 global_toc(f"Terminating based on inter-cylinder absolute gap {abs_gap:12.4f}")
@@ -391,7 +389,6 @@ class LShapedHub(Hub):
 
     def send_nonants(self):
         """ Gather nonants and send them to the appropriate spokes
-            TODO: Will likely fail with bundling
         """
         ci = 0  ## index to self.nonant_send_buffer
         nonant_send_buffer = self.send_buffers[Field.NONANT]
@@ -441,22 +438,26 @@ class CGHub(Hub):
             self.opt.extobject.sync_with_spokes()
 
     def is_converged(self, screen_trace=True):
-        ## log some output
-        if self.global_rank == 0 and screen_trace:
-            self.screen_trace()
+
         """ Returns a boolean. If True, then CG will terminate
         """
         if self.opt.best_bound_obj_val is not None:
             self.BestOuterBound = self.OuterBoundUpdate(self.opt.best_bound_obj_val)
         if self.opt.best_solution_obj_val is not None:
             self.BestInnerBound = self.InnerBoundUpdate(self.opt.best_solution_obj_val)
+
+        ## log some output
+        if self.global_rank == 0 and screen_trace:
+            self.screen_trace()
         terminate = self.determine_termination(screen_trace)
+
         if terminate:
             return terminate
         else: 
             LPgap_satisfied = False
             if self.opt.conv < self.opt.options["convthresh"]:
-                LPgap_satisfied = True 
+                LPgap_satisfied = True
+                global_toc(f"Terminating based on LP gap {self.opt.conv * 100:12.3f}%")
             return LPgap_satisfied
 
     def current_iteration(self):

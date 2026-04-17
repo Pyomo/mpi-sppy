@@ -181,84 +181,81 @@ class ReducedCostsFixer(Extension):
 
         raw_fixed_this_iter = 0
 
-        for sub in self.opt.local_subproblems.values():
+        for sub in self.opt.local_scenarios.values():
             persistent_solver = is_persistent(sub._solver_plugin)
-            for sn in sub.scen_list:
-                s = self.opt.local_scenarios[sn]
-                for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
-                    if ndn_i in self._modeler_fixed_nonants:
-                        continue
-                    if xvar in s._mpisppy_data.all_surrogate_nonants:
-                        continue
-                    this_expected_rc = abs_reduced_costs[ci]
-                    update_var = False
-                    if np.isnan(this_expected_rc):
-                        # is nan, variable is not converged in LP-LR
-                        if xvar.fixed:
+            for ci, (ndn_i, xvar) in enumerate(sub._mpisppy_data.nonant_indices.items()):
+                if ndn_i in self._modeler_fixed_nonants:
+                    continue
+                if xvar in sub._mpisppy_data.all_surrogate_nonants:
+                    continue
+                this_expected_rc = abs_reduced_costs[ci]
+                update_var = False
+                if np.isnan(this_expected_rc):
+                    # is nan, variable is not converged in LP-LR
+                    if xvar.fixed:
+                        xvar.unfix()
+                        update_var = True
+                        raw_fixed_this_iter -= 1
+                        if self.debug and self.opt.cylinder_rank == 0:
+                            print(f"unfixing var {xvar.name}; not converged in LP-LR")
+                else: # not nan, variable is converged in LP-LR
+                    if xvar.fixed:
+                        xb = sub._mpisppy_model.xbars[ndn_i].value
+                        if (this_expected_rc < target):
                             xvar.unfix()
                             update_var = True
                             raw_fixed_this_iter -= 1
                             if self.debug and self.opt.cylinder_rank == 0:
-                                print(f"unfixing var {xvar.name}; not converged in LP-LR")
-                    else: # not nan, variable is converged in LP-LR
-                        if xvar.fixed:
-                            xb = s._mpisppy_model.xbars[ndn_i].value
-                            if (this_expected_rc < target):
-                                xvar.unfix()
-                                update_var = True
-                                raw_fixed_this_iter -= 1
-                                if self.debug and self.opt.cylinder_rank == 0:
-                                    print(f"unfixing var {xvar.name}; reduced cost is zero/below target in LP-LR")
-                            # in case somebody else unfixs a variable in another rank...
-                            if abs(xb - xvar.value) > self.bound_tol:
-                                xvar.unfix()
-                                update_var = True
-                                raw_fixed_this_iter -= 1
-                                if self.debug and self.opt.cylinder_rank == 0:
-                                    print(f"unfixing var {xvar.name}; xbar differs from the fixed value")
-                        else:
-                            xb = s._mpisppy_model.xbars[ndn_i].value
-                            if (this_expected_rc >= target):
-                                if self.opt.is_minimizing:
-                                    # TODO: First check can be simplified as abs(rc) is already checked above
-                                    if (reduced_costs[ci] > 0 + self.zero_rc_tol) and (pre_iter0 or (xb - xvar.lb <= self.bound_tol)):
-                                        xvar.fix(xvar.lb)
-                                        if self.debug and self.opt.cylinder_rank == 0:
-                                            print(f"fixing var {xvar.name} to lb {xvar.lb}; reduced cost is {reduced_costs[ci]} LP-LR")
-                                        update_var = True
-                                        raw_fixed_this_iter += 1
-                                    elif (reduced_costs[ci] < 0 - self.zero_rc_tol) and (pre_iter0 or (xvar.ub - xb <= self.bound_tol)):
-                                        xvar.fix(xvar.ub)
-                                        if self.debug and self.opt.cylinder_rank == 0:
-                                            print(f"fixing var {xvar.name} to ub {xvar.ub}; reduced cost is {reduced_costs[ci]} LP-LR")
-                                        update_var = True
-                                        raw_fixed_this_iter += 1
-                                    else:
-                                        # rc is near 0 or
-                                        # xbar from MIP might differ from rc from relaxation
-                                        pass
+                                print(f"unfixing var {xvar.name}; reduced cost is zero/below target in LP-LR")
+                        # in case somebody else unfixs a variable in another rank...
+                        if abs(xb - xvar.value) > self.bound_tol:
+                            xvar.unfix()
+                            update_var = True
+                            raw_fixed_this_iter -= 1
+                            if self.debug and self.opt.cylinder_rank == 0:
+                                print(f"unfixing var {xvar.name}; xbar differs from the fixed value")
+                    else:
+                        xb = sub._mpisppy_model.xbars[ndn_i].value
+                        if (this_expected_rc >= target):
+                            if self.opt.is_minimizing:
+                                # TODO: First check can be simplified as abs(rc) is already checked above
+                                if (reduced_costs[ci] > 0 + self.zero_rc_tol) and (pre_iter0 or (xb - xvar.lb <= self.bound_tol)):
+                                    xvar.fix(xvar.lb)
+                                    if self.debug and self.opt.cylinder_rank == 0:
+                                        print(f"fixing var {xvar.name} to lb {xvar.lb}; reduced cost is {reduced_costs[ci]} LP-LR")
+                                    update_var = True
+                                    raw_fixed_this_iter += 1
+                                elif (reduced_costs[ci] < 0 - self.zero_rc_tol) and (pre_iter0 or (xvar.ub - xb <= self.bound_tol)):
+                                    xvar.fix(xvar.ub)
+                                    if self.debug and self.opt.cylinder_rank == 0:
+                                        print(f"fixing var {xvar.name} to ub {xvar.ub}; reduced cost is {reduced_costs[ci]} LP-LR")
+                                    update_var = True
+                                    raw_fixed_this_iter += 1
                                 else:
-                                    if (reduced_costs[ci] < 0 - self.zero_rc_tol) and (xb - xvar.lb <= self.bound_tol):
-                                        xvar.fix(xvar.lb)
-                                        if self.debug and self.opt.cylinder_rank == 0:
-                                            print(f"fixing var {xvar.name} to lb {xvar.lb}; reduced cost is {reduced_costs[ci]} LP-LR")
-                                        update_var = True
-                                        raw_fixed_this_iter += 1
-                                    elif (reduced_costs[ci] > 0 + self.zero_rc_tol) and (xvar.ub - xb <= self.bound_tol):
-                                        xvar.fix(xvar.ub)
-                                        if self.debug and self.opt.cylinder_rank == 0:
-                                            print(f"fixing var {xvar.name} to ub {xvar.ub}; reduced cost is {reduced_costs[ci]} LP-LR")
-                                        update_var = True
-                                        raw_fixed_this_iter += 1
-                                    else:
-                                        # rc is near 0 or
-                                        # xbar from MIP might differ from rc from relaxation
-                                        pass
+                                    # rc is near 0 or
+                                    # xbar from MIP might differ from rc from relaxation
+                                    pass
+                            else:
+                                if (reduced_costs[ci] < 0 - self.zero_rc_tol) and (xb - xvar.lb <= self.bound_tol):
+                                    xvar.fix(xvar.lb)
+                                    if self.debug and self.opt.cylinder_rank == 0:
+                                        print(f"fixing var {xvar.name} to lb {xvar.lb}; reduced cost is {reduced_costs[ci]} LP-LR")
+                                    update_var = True
+                                    raw_fixed_this_iter += 1
+                                elif (reduced_costs[ci] > 0 + self.zero_rc_tol) and (xvar.ub - xb <= self.bound_tol):
+                                    xvar.fix(xvar.ub)
+                                    if self.debug and self.opt.cylinder_rank == 0:
+                                        print(f"fixing var {xvar.name} to ub {xvar.ub}; reduced cost is {reduced_costs[ci]} LP-LR")
+                                    update_var = True
+                                    raw_fixed_this_iter += 1
+                                else:
+                                    # rc is near 0 or
+                                    # xbar from MIP might differ from rc from relaxation
+                                    pass
 
-                    if update_var and persistent_solver:
-                        sub._solver_plugin.update_var(xvar)
+                if update_var and persistent_solver:
+                    sub._solver_plugin.update_var(xvar)
 
-        # Note: might count incorrectly with bundling?
         self._heuristic_fixed_vars += raw_fixed_this_iter / len(self.opt.local_scenarios)
         if self.opt.cylinder_rank == 0 and self.verbose:
             print(f"Total unique vars fixed by heuristic: {int(round(self._heuristic_fixed_vars))}/{self.nonant_length}")

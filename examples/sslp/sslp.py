@@ -6,6 +6,7 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+# NOTE: This example used loose bundles, which are no longer supported. See doc/src/properbundles.rst for proper bundles.
 # update April 2020: BUT this really needs upper and lower bound spokes
 # dlw February 2019: PySP 2 for the sslp example
 

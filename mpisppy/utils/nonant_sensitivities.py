@@ -14,11 +14,10 @@ from pyomo.contrib.pynumero.linalg.scipy_interface import ScipyLU
 
 from mpisppy.utils.kkt.interface import InteriorPointInterface
 
-def nonant_sensitivies(s, ph):
+def nonant_sensitivies(s):
     """ Compute the sensitivities of noants (w.r.t. the Lagrangian for s)
         Args:
             s: (Pyomo ConcreteModel): the scenario
-           ph: (PHBase Object): to deal with bundles (that are not proper)
         Returns:
             nonant_sensis (dict): [ndn_i]: sensitivity for the Var
     """
@@ -65,28 +64,23 @@ def nonant_sensitivies(s, ph):
     grad_vec_kkt_inv = kkt_lu._lu.solve(grad_vec, "T")
 
     nonant_sensis = dict()
-    # bundles?
-    for scenario_name in s.scen_list:
-        for ndn_i, v in ph.local_scenarios[scenario_name]._mpisppy_data.nonant_indices.items():
-            if v.fixed:
-                # Modeler fixed  -- reporting 0.
-                # +infy probably makes more conceptual sense, but 0 seems safer.
-                nonant_sensis[ndn_i] = 0.0
-                continue
-            var_idx = kkt_builder._nlp._vardata_to_idx[v]
+    for ndn_i, v in s._mpisppy_data.nonant_indices.items():
+        if v.fixed:
+            # Modeler fixed  -- reporting 0.
+            # +infy probably makes more conceptual sense, but 0 seems safer.
+            nonant_sensis[ndn_i] = 0.0
+            continue
+        var_idx = kkt_builder._nlp._vardata_to_idx[v]
 
-            y_vec = np.zeros(kkt.shape[0])
-            y_vec[var_idx] = 1.0
+        y_vec = np.zeros(kkt.shape[0])
+        y_vec[var_idx] = 1.0
 
-            x_denom = y_vec.T @ kkt_lu._lu.solve(y_vec)
-            x = (-1 / x_denom)
-            e_x = x * y_vec
+        x_denom = y_vec.T @ kkt_lu._lu.solve(y_vec)
+        x = (-1 / x_denom)
+        e_x = x * y_vec
 
-            sensitivity = grad_vec_kkt_inv @ -e_x
-            #rho[ndn_i]._value = abs(sensitivity)
-            nonant_sensis[ndn_i] = sensitivity
-        # the sensitivity should be the same for nonants in every scenario in a bundle
-        break
+        sensitivity = grad_vec_kkt_inv @ -e_x
+        nonant_sensis[ndn_i] = sensitivity
 
     relax_int.apply_to(s, options={"undo":True})
     assert not hasattr(s, "_relaxed_integer_vars")

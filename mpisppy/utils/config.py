@@ -156,9 +156,6 @@ class Config(pyofig.ConfigDict):
                 or self.get("reduced_costs_rho")):
             if self.get("dynamic_rho_primal_crit") or self.get("dynamic_rho_dual_crit"):
                 _bad_options("dynamic rho only works with an automated rho setter")
-        if self.get("grad_rho") and self.get("bundles_per_rank") != 0:
-            _bad_options("Grad rho does not work with loose bundling (--bundles-per-rank).\n "
-                         "Also note that loose bundling is being deprecated in favor of proper bundles.")
 
         if self.get("ph_primal_hub")\
            and not (self.get("ph_dual") or self.get("relaxed_ph")):
@@ -169,15 +166,31 @@ class Config(pyofig.ConfigDict):
             _bad_options("--rc-fixer requires --reduced-costs")
 
     def add_solver_specs(self, prefix=""):
-        sstr = f"{prefix}_solver" if prefix != "" else "solver"
+        sstr = f"{prefix}_solver" if prefix else "solver"
+        if prefix:
+            prefix += " "
         self.add_to_config(f"{sstr}_name",
-                            description= "solver name (default None)",
+                            description= f"{prefix}solver name (default None)",
                             domain = str,
                             default=None)
 
         self.add_to_config(f"{sstr}_options",
-                            description= "solver options; space delimited with = for values (default None)",
+                            description= f"{prefix}solver options; space delimited with = for values (default None)",
                             domain = str,
+                            default=None)
+
+    def add_mipgap_specs(self, prefix=""):
+        sstr = f"{prefix}_" if prefix else ""
+        if prefix:
+            prefix += " "
+        self.add_to_config(f"{sstr}iter0_mipgap",
+                            description=f"{prefix}mip gap option for iteration 0 (default None)",
+                            domain=float,
+                            default=None)
+
+        self.add_to_config(f"{sstr}iterk_mipgap",
+                            description=f"{prefix}mip gap option non-zero iterations (default None)",
+                            domain=float,
                             default=None)
 
     def _common_args(self):
@@ -205,13 +218,19 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config("turn_off_names_check",
+                           description="Turn off the check that nonant variable names "
+                           "match across scenarios (automatically turned off for proper bundles).",
+                           domain=bool,
+                           default=False)
+
         self.add_to_config("user_warmstart",
                            description="Will pass the user provided solution as a warmstart for "
                            "each initial subproblem solve.",
                            domain=bool,
                            default=False)
 
-        self.add_solver_specs(prefix="")
+        self.add_solver_specs()
 
         self.add_to_config("seed",
                             description="Seed for random numbers (default is 1134)",
@@ -224,7 +243,7 @@ class Config(pyofig.ConfigDict):
                             default=None)
 
         self.add_to_config("bundles_per_rank",
-                            description="Loose bundles per rank (default 0 (no bundles)) WILL BE DEPRECATED",
+                            description="REMOVED: loose bundles no longer supported. Use --scenarios-per-bundle.",
                             domain=int,
                             default=0)
 
@@ -456,16 +475,7 @@ class Config(pyofig.ConfigDict):
                            default="0.05:600")
 
     def mip_options(self):
-
-        self.add_to_config("iter0_mipgap",
-                            description="mip gap option for iteration 0 (default None)",
-                            domain=float,
-                            default=None)
-
-        self.add_to_config("iterk_mipgap",
-                            description="mip gap option non-zero iterations (default None)",
-                            domain=float,
-                            default=None)
+        self.add_mipgap_specs()
 
     def aph_args(self):
         
@@ -651,7 +661,7 @@ class Config(pyofig.ConfigDict):
                            description="If provided, passed to FWPH as options['save_file'] (cylinder rank 0 writes).",
                            domain=str,
                            default=None)
-        
+
     def cg_args(self):
 
         self.add_to_config(name="cg_hub",
@@ -665,18 +675,18 @@ class Config(pyofig.ConfigDict):
         self.add_to_config(name="mp_solver_options",
                            description="master problem solver options",
                            domain=str,
-                           default=None)    
+                           default=None)
         self.add_to_config(name="relaxed_nonant",
                            description="solve master problem with relaxed nonanticipativity constraint",
                            domain=bool,
-                           default=False)      
-        
+                           default=False)
+
     def dualcg_args(self):
 
         self.add_to_config(name="dualcg_hub",
                            description="Use DCG hub instead of PH (default False)",
                            domain=bool,
-                           default=False)    
+                           default=False)
 
     def lagrangian_args(self):
 
@@ -685,15 +695,8 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
-        self.add_to_config("lagrangian_iter0_mipgap",
-                            description="lgr. iter0 solver option mipgap (default None)",
-                            domain=float,
-                            default=None)
-
-        self.add_to_config("lagrangian_iterk_mipgap",
-                            description="lgr. iterk solver option mipgap (default None)",
-                            domain=float,
-                            default=None)
+        self.add_solver_specs("lagrangian")
+        self.add_mipgap_specs("lagrangian")
 
 
     def reduced_costs_args(self):
@@ -702,7 +705,9 @@ class Config(pyofig.ConfigDict):
                               description="have a reduced costs spoke",
                               domain=bool,
                               default=False)
-        
+
+        self.add_solver_specs("reduced_costs")
+
         self.add_to_config('rc_verbose',
                             description="verbose output for reduced costs",
                             domain=bool,
@@ -756,16 +761,7 @@ class Config(pyofig.ConfigDict):
                             description="have a special lagranger spoke",
                               domain=bool,
                               default=False)
-
-        self.add_to_config("lagranger_iter0_mipgap",
-                            description="lagranger iter0 mipgap (default None)",
-                            domain=float,
-                            default=None)
-
-        self.add_to_config("lagranger_iterk_mipgap",
-                            description="lagranger iterk mipgap (default None)",
-                            domain=float,
-                            default=None)
+        self.add_mipgap_specs("lagranger")
 
         self.add_to_config("lagranger_rho_rescale_factors_json",
                             description="json file: rho rescale factors (default None)",
@@ -780,15 +776,8 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
-        self.add_to_config("subgradient_iter0_mipgap",
-                            description="lgr. iter0 solver option mipgap (default None)",
-                            domain=float,
-                            default=None)
-
-        self.add_to_config("subgradient_iterk_mipgap",
-                            description="lgr. iterk solver option mipgap (default None)",
-                            domain=float,
-                            default=None)
+        self.add_solver_specs("subgradient")
+        self.add_mipgap_specs("subgradient")
 
         self.add_to_config("subgradient_rho_multiplier",
                            description="rescale rho (update step size) by this factor",
@@ -810,6 +799,8 @@ class Config(pyofig.ConfigDict):
                             description="Used to rescale rho initially (default=1.0)",
                             domain=float,
                             default=1.0)
+        self.add_solver_specs("relaxed_ph")
+
     def ph_spoke_args(self):
 
         self.add_to_config("ph_spoke",
@@ -837,6 +828,9 @@ class Config(pyofig.ConfigDict):
                             description="have a dual PH spoke",
                             domain=bool,
                             default=False)
+
+        self.add_solver_specs("ph_dual")
+
         self.add_to_config("ph_dual_rescale_rho_factor",
                             description="Used to rescale rho initially (default=0.1)",
                             domain=float,
@@ -1172,6 +1166,34 @@ class Config(pyofig.ConfigDict):
                             description="Read individual scenarios_per_bundle from a dill pickle files in this dir; (default None)",
                             domain=str,
                             default=None)
+
+    def mmw_args(self):
+        self.add_to_config(
+            "mmw_xhat_input_file_name",
+            description="Path to .npy file with xhat for MMW confidence interval"
+            " (default None; if absent and the other mmw options are given,"
+            " the best xhat from the main algorithm is used)",
+            domain=str,
+            default=None,
+        )
+        self.add_to_config(
+            "mmw_num_batches",
+            description="Number of batches for MMW confidence interval (default None)",
+            domain=int,
+            default=None,
+        )
+        self.add_to_config(
+            "mmw_batch_size",
+            description="Batch size for MMW confidence interval (default None)",
+            domain=int,
+            default=None,
+        )
+        self.add_to_config(
+            "mmw_start",
+            description="First scenario number used by MMW (default None)",
+            domain=int,
+            default=None,
+        )
 
     #================
     def create_parser(self,progname=None):

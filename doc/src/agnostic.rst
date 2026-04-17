@@ -5,21 +5,24 @@ The mpi-sppy package provides callouts so that algebraic modeling languages
 (AMLs) other than Pyomo can be used. A growing number of AMLs are supported
 as `guest` languages (we refer to mpi-sppy as the `host`). This code is
 in an alpha-release state; use with extreme caution.  This is referred to
-as `tight` integration with the guest. It is also possible to simply read
+as `tight` integration with the guest.
+
+It is also possible to simply read
 scenario data from an mps file and the mps file (and the associated json
-nonant file) that can be created however you like. 
+nonant file) that can be created however you like. This is refered to as
+`loose` integration and seems to be fairly robust.
+
+.. _loose_integration:
 
 Loose integration
 ^^^^^^^^^^^^^^^^^
 
-Code for creating a
-Pyomo model from an mps file is in ``mpisppy.utils.mps_reader.py``,
-but you can also just use ``generic_cylinders.py`` and give
-it the module ``mpisppy.utils.mps_module`` (you will need to specify
-the path to this module) and the ``--mps-files-directory``
-option.  Note
-that at the time of this writing, the number of scenarios is obtained
-by counting the mps files in the directory given.
+You can use ``generic_cylinders.py`` with ``--mps-files-directory``
+as the first argument (the module ``mpisppy.problem_io.mps_module`` is
+inferred automatically, so ``--module-name`` is not needed).  Note that at
+the time of this writing, the number of scenarios is obtained by
+counting the mps files in the directory given. (It would require
+only a small amount of programming to support lp files.)
 
 The file ``examples.loose_agnostic.AMPL.farmer_example.bash`` has three
 commands.  The second illustrates how to instruct ``MPI-SPPY`` to read
@@ -48,6 +51,8 @@ to be used by users of other AMLs or other scenario-based stochastic
 programming applications.
 
 There is low-level support for `.lp` files instead of `.mps` files.
+Code for creating a
+Pyomo model from an mps file is in ``mpisppy.problem_io.mps_reader.py``,
 
 JSON file format
 ----------------

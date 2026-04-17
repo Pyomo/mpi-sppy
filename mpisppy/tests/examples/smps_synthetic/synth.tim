@@ -1,0 +1,5 @@
+TIME          SYNTH
+PERIODS
+    X         C1            ROOT
+    Y         C2            STAGE-2
+ENDATA

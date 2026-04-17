@@ -154,6 +154,17 @@ class AdmmWrapper():
                                 f"in the model, but not in consensus var: \n {error_list2}")
 
 
+    def get_scenario_unscaled(self, sname):
+        """Return pre-created scenario without objective scaling (for bundling).
+
+        Args:
+            sname (str): scenario name
+
+        Returns:
+            Pyomo ConcreteModel: the scenario model (not objective-scaled)
+        """
+        return self.local_scenarios[sname]
+
     def admmWrapper_scenario_creator(self, sname):
         #this is the function the user will supply for all cylinders 
         assert sname in self.local_scenario_names, f"{global_rank=} {sname=} \n {self.local_scenario_names=}"
