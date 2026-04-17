@@ -315,14 +315,19 @@ helpers; keep the public API identical.
 def _scenario_data(scenario_name, crops_multiplier=1, num_scens=None,
                    seedoffset=0):
     """Pure-Python random data for one scenario. No Pyomo.
-    Deterministic given (scenario_name, seedoffset)."""
+    Deterministic given (scenario_name, seedoffset).
+
+    Uses a LOCAL RandomState (not the module-level global). Byte-for-byte
+    identical to the old farmerstream.seed(s); farmerstream.rand()
+    pattern, and thread-safe — callers may parallelize across scenarios.
+    """
     scennum  = sputils.extract_num(scenario_name)
     basenum  = scennum % 3
     groupnum = scennum // 3
     basename = ['BelowAverageScenario', 'AverageScenario',
                 'AboveAverageScenario'][basenum]
 
-    farmerstream.seed(scennum + seedoffset)
+    rng = np.random.RandomState(scennum + seedoffset)
 
     base_yield = {
         'BelowAverageScenario': {'WHEAT': 2.0, 'CORN': 2.4, 'SUGAR_BEETS': 16.0},
@@ -333,7 +338,7 @@ def _scenario_data(scenario_name, crops_multiplier=1, num_scens=None,
     yields = {}
     for i in range(crops_multiplier):
         for crop in ['WHEAT', 'CORN', 'SUGAR_BEETS']:
-            jitter = farmerstream.rand() if groupnum != 0 else 0.0
+            jitter = rng.rand() if groupnum != 0 else 0.0
             yields[crop + str(i)] = base_yield[crop] + jitter
     return {"Yield": yields}
 
@@ -398,6 +403,10 @@ Notes:
 - `_build_model` takes `probability` as an explicit keyword so the build
   step never has to guess what kind of scenario it is producing.
 - Multi-threading comment is in the docstring, per user request.
+- **Module-level `farmerstream` is deleted.** Both `scenario_creator`
+  (via `_scenario_data`) and `expected_value_creator` now use a local
+  `RandomState` per call. One pattern to teach; thread-safe; byte-for-byte
+  identical to the old behavior for a given `(scennum, seedoffset)`.
 
 ---
 
@@ -553,3 +562,8 @@ All open questions resolved; implementation can proceed.
 4. Flag naming: **kebab-case on CLI, snake_case in `Config`** — matches
    existing conventions.
 5. `num_scens` required for farmer EV: **yes, keep the explicit require.**
+6. Farmer seed management: **option (a)** — delete the module-level
+   `farmerstream` global; both `scenario_creator` and
+   `expected_value_creator` use a local `np.random.RandomState(seed)`
+   per call. Byte-for-byte identical results; thread-safe; one pattern
+   for users to copy.
