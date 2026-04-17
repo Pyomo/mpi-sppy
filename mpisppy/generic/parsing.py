@@ -91,6 +91,7 @@ def parse_args(m):
     cfg = config.Config()
     cfg.proper_bundle_config()
     cfg.pickle_scenarios_config()
+    cfg.pre_pickle_args()
 
     cfg.add_to_config(name="module_name",
                       description="Name of the file that has the scenario creator, etc.",
