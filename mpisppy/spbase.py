@@ -435,7 +435,12 @@ class SPBase:
         """
         if self.variable_probability is None:
             for s in self.local_scenarios.values():
-                s._mpisppy_data.has_variable_probability = False
+                # Preserve a pre-existing True (e.g., from an unpickled
+                # scenario whose prob_coeff arrays were baked in by an
+                # earlier --stoch-admm / --admm pickling run). Only
+                # default to False for scenarios that never had it set.
+                if not getattr(s._mpisppy_data, "has_variable_probability", False):
+                    s._mpisppy_data.has_variable_probability = False
             return
         didit = 0
         skipped = 0
