@@ -185,7 +185,11 @@ def name_lists(module, cfg, bundle_wrapper=None):
         num_scens = np.prod(cfg.branching_factors)
         if cfg.xhatshuffle and cfg.get("stage2_ef_solver_name") is None:
             import warnings
-            warnings.warn("stage2_ef_solver_name is recommended for multistage xhatshuffle")
+            warnings.warn(
+                "stage2_ef_solver_name is recommended for multistage xhatshuffle",
+                UserWarning,
+                stacklevel=2,
+            )
     else:
         all_nodenames = None
         num_scens = cfg.get("num_scens")  # maybe None is OK

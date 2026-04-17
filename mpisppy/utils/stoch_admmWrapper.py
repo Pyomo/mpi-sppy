@@ -187,10 +187,14 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                 var_stage_tuple = vstr, stage
                 if var_stage_tuple in self.consensus_vars[admm_subproblem_name]: # consensus variable appears in admm subproblem
                     if v is None:
-                        # try quote wrap around variable name
-                        vvstr = vstr[:vstr.find('[')]
-                        tvstr = vstr[vstr.find('[')+1:vstr.find(']')]
-                        v = s.find_component(vvstr+'["'+tvstr+'"]')
+                        # try quote wrap around variable name when vstr has
+                        # a simple bracketed index (e.g., name[index])
+                        lbracket = vstr.find('[')
+                        rbracket = vstr.find(']')
+                        if lbracket != -1 and rbracket != -1 and lbracket < rbracket:
+                            vvstr = vstr[:lbracket]
+                            tvstr = vstr[lbracket+1:rbracket]
+                            v = s.find_component(vvstr+'["'+tvstr+'"]')
 
                     if v is not None:
                         # variables that should be on the model
@@ -254,14 +258,12 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                 old_node = s._mpisppy_node_list[stage-1]
                 # Preserve user-supplied surrogate and EF-supplemental
                 # nonants across the rewrite; we only own the consensus +
-                # admm-dummy contributions at this node. User surrogates
-                # are consistent across admm subproblems (they come from
-                # the original scenario, not consensus_vars), so passing
-                # them via surrogate_nonant_list — which appends them at
-                # the end of nonant_vardata_list — preserves positional
-                # alignment at the shared tree node across subproblems.
-                user_surrogates = list(old_node.surrogate_vardatas) or None
-                user_ef_suppl = old_node.nonant_ef_suppl_vardata_list or None
+                # admm-dummy contributions at this node. Re-use the raw
+                # user lists (not the rebuilt vardata sets/lists) so
+                # ordering stays deterministic and matches what the user
+                # originally passed in.
+                user_surrogates = old_node.surrogate_nonant_list
+                user_ef_suppl = old_node.nonant_ef_suppl_list
                 new_node = scenario_tree.ScenarioNode(
                     old_node.name,
                     old_node.cond_prob,

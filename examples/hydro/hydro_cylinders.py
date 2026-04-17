@@ -31,11 +31,6 @@ def _parse_args():
     cfg.lagrangian_args()
     cfg.xhatspecific_args()
 
-    cfg.add_to_config(name ="stage2_ef_solver_name",
-                         description="Solver to use for xhatlooper stage2ef option (default None)",
-                         domain = str,
-                         default=None)
-
     cfg.parse_command_line("hydro_cylinders")
     return cfg
 
