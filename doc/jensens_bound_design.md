@@ -1,6 +1,6 @@
 # Jensen's-bound design (two-stage only)
 
-Status: design draft. No code yet. Asking for sign-off before implementation.
+Status: design approved by DLW. Implementation pending.
 
 Related: upstream issue #594 (Jensen's bound). This design departs from the
 issue in several ways, noted inline.
@@ -21,7 +21,9 @@ issue in several ways, noted inline.
    Jensen's work happens inside the spoke that opts in.
 4. Two-stage only for this round. Multi-stage is explicitly out of scope.
 5. Teach users a clean module-authoring pattern via well-crafted farmer and
-   sizes examples.
+   sizes examples. Farmer is the pedagogical showcase in the RST docs;
+   sizes ships the same pattern for `.dat`-driven AbstractModel cases but
+   is only mentioned parenthetically in the docs.
 
 Non-goals:
 
@@ -36,16 +38,23 @@ Non-goals:
 Jensen's bound is valid **only when the recourse value function Q(x, ξ) is
 convex in the random parameters ξ.**
 
-Necessary conditions (not sufficient):
+Necessary conditions for an **outer bound** (not sufficient):
 
 1. The second-stage problem is an LP — no integer recourse.
 2. Random parameters appear only in objective coefficients and RHS, not in
    constraint-matrix coefficients in ways that break convexity.
 3. Two-stage structure.
 
-mpi-sppy checks (1) automatically and refuses to compute the bound when
-non-nonant integer/binary Vars exist in the EV model. (2) and (3) are the
-user's responsibility.
+mpi-sppy checks (1) automatically on the outer-bound path and refuses to
+compute an outer bound when non-nonant integer/binary Vars exist in the EV
+model. (2) and (3) are the user's responsibility.
+
+**Inner bounds (xhatters) are OK regardless of the above.** The xhat path
+uses the EV scenario only as a *source of a candidate first-stage
+solution*. That candidate is then honestly evaluated across the real
+scenarios via `Xhat_Eval.evaluate`, so Jensen's convexity assumption never
+enters the validity argument. Integer recourse, non-convex recourse, and
+constraint-matrix randomness are all fine for the xhat path.
 
 For `sense=minimize`:
   `E[Q(x, ξ)] >= Q(x, E[ξ])` → EV optimum is a valid **lower bound** on the
@@ -54,8 +63,8 @@ For `sense=minimize`:
 For `sense=maximize`: inequality flips; EV optimum is a valid **upper bound**
 on the true optimum → still a valid outer bound in the max-sense convention.
 
-This warning must appear at the top of `doc/src/jensens.rst` (new) and at the
-top of any docstring for `expected_value_creator` examples we ship.
+This warning must appear at the top of `doc/src/jensens.rst` (new) and at
+the top of any docstring for `expected_value_creator` examples we ship.
 
 ---
 
@@ -77,9 +86,9 @@ Discovered via the same `hasattr(module, ...)` pattern already used for
 `scenario_denouement` (`generic_cylinders.py:45,88`, `amalgamator.py:173`).
 
 Name rationale: `expected_value_creator`, **not** `jensens_creator` as the
-upstream issue suggested. The function computes the EV scenario; Jensen's is
-how the resulting bound is *interpreted*. The name should describe what is
-built, not what it will be used for.
+upstream issue suggested. The function computes the EV scenario; Jensen's
+is how the resulting bound is *interpreted*. The name should describe what
+is built, not what it will be used for.
 
 ### 2.1 Best-practice pattern: underscore helpers
 
@@ -153,17 +162,13 @@ CLI form (Pyomo's ConfigDict convention): `--lagrangian-try-jensens-first`.
 
 ## 4. Wiring through `cfg_vanilla`
 
-The flag-bearing spoke factories need access to the user module's
-`expected_value_creator`. Two choices:
+Decision: each affected factory gets a new `expected_value_creator=None`
+kwarg. Driver code (`generic_cylinders.py`, `farmer_cylinders.py`, etc.)
+does `getattr(module, "expected_value_creator", None)` once and threads
+it in. Consistent with how `scenario_creator` is already passed as a
+callable.
 
-- **(a, preferred)** Add `expected_value_creator=None` kwarg to each
-  affected factory. Driver code (`generic_cylinders.py`, `farmer_cylinders.py`,
-  etc.) does `getattr(module, "expected_value_creator", None)` once and
-  threads it in. Consistent with how `scenario_creator` is already passed.
-- (b) Let each factory take a `module` object. Bigger surface change; more
-  coupling.
-
-With choice (a), every affected factory gains a block like:
+Every affected factory gains a block like:
 
 ```python
 if cfg.get("<name>_try_jensens_first", False):
@@ -192,14 +197,21 @@ class _JensensMixin:
     def _jensens_enabled(self):
         return "jensens" in self.opt.options
 
-    def _jensens_build_and_check(self):
+    def _jensens_build_ev(self):
+        """Build the EV scenario model. Used by BOTH outer and inner paths."""
         j = self.opt.options["jensens"]
         ev_creator = j["expected_value_creator"]
         sname = self.opt.all_scenario_names[0]  # name only; data is averaged
         ev_model = ev_creator(sname, **(j["scenario_creator_kwargs"] or {}))
         _assert_two_stage(ev_model)              # len(_mpisppy_node_list) == 1
-        _assert_jensen_integer_safe(ev_model)    # see section 6
         return ev_model
+
+    def _jensens_assert_safe_for_outer_bound(self, ev_model):
+        """Lower-bounder path ONLY. Xhat spokes do not call this —
+        they tolerate integer recourse because the EV solution is only
+        used as a candidate xhat, then honestly evaluated across
+        real scenarios."""
+        _assert_jensen_integer_safe(ev_model)    # see section 6
 
     def _jensens_solve(self, ev_model):
         """Solve ev_model using this spoke's solver. Return (obj, nonants)."""
@@ -214,7 +226,8 @@ and **before** iter-0:
 
 ```python
 if self._jensens_enabled():
-    ev_model = self._jensens_build_and_check()
+    ev_model = self._jensens_build_ev()
+    self._jensens_assert_safe_for_outer_bound(ev_model)
     ev_obj, _ = self._jensens_solve(ev_model)
     self.send_bound(ev_obj)     # first outer bound — sent before iter-0
 ```
@@ -233,13 +246,15 @@ Hook points:
 Each xhat spoke's `main()` calls `self.xhat_prep()` first
 (`xhatbase.py:21`), which sets up `Xhat_Eval`. We insert the EV-heuristic
 try **after** `xhat_prep` and **before** the spoke's main scenario-cycling
-loop:
+loop. **No integer-safety check** on this path:
 
 ```python
 def main(self):
     self.xhat_prep()
     if self._jensens_enabled():
-        ev_model = self._jensens_build_and_check()
+        ev_model = self._jensens_build_ev()
+        # deliberately NO _jensens_assert_safe_for_outer_bound here —
+        # xhat evaluation is valid regardless of recourse convexity
         _, nonant_values = self._jensens_solve(ev_model)
         nonant_cache = _pack_nonant_cache(self.opt, nonant_values)
         Eobj = self.opt.evaluate(nonant_cache)   # xhat_eval.py:257
@@ -284,16 +299,17 @@ def assert_jensen_integer_safe(scenario):
             )
 ```
 
-Called once, on the EV model (not on scenario models — those are never
-built in the Jensen's path).
+Called **once, on the EV model, only on the outer-bound (lower-bounder)
+path.** The xhat (inner-bound) path deliberately skips this check — see
+§1 and §5.2.
 
 ---
 
 ## 7. Farmer rewrite (`examples/farmer/farmer.py`) — the showcase
 
 Current state: `scenario_creator` interleaves seeding, yield generation,
-and Pyomo model build across lines 56–211. Split into three named helpers;
-keep the public API identical.
+and Pyomo model build across lines 56–211. Split into three named
+helpers; keep the public API identical.
 
 ```python
 def _scenario_data(scenario_name, crops_multiplier=1, num_scens=None,
@@ -387,9 +403,10 @@ Notes:
 
 ## 8. Sizes rewrite (`examples/sizes/sizes.py`)
 
-Harder than farmer because data lives in `.dat` files read by
-`ref.model.create_instance(fname)`. The same split still works but needs a
-`.dat`-to-dict adapter so the two paths share a build step.
+Sizes ships with the feature too. It is a harder case than farmer because
+data lives in `.dat` files read by `ref.model.create_instance(fname)`; the
+same split still works but needs a `.dat`-to-dict adapter so the two
+paths share a build step.
 
 ```python
 def _scenario_data(scenario_name, scenario_count):
@@ -441,17 +458,10 @@ def expected_value_creator(scenario_name, scenario_count=None):
     return _build_model(scenario_name, avg, probability=1.0)
 ```
 
-Design tension: this grows a ConcreteModel path alongside the existing
-AbstractModel in `ReferenceModel.py`. I lean toward the full
-concretization because sizes is explicitly being used as a teaching
-example and the data-driven ConcreteModel pattern is exactly what users
-should copy.
-
-Lighter alternative: keep `ReferenceModel.py` and `scenario_creator`
-untouched, and only add `expected_value_creator` as a minimal adapter
-that builds a ConcreteModel alongside. Easier review; worse pedagogy.
-
-**Open question for DLW, section 11 below.**
+Decision: full ConcreteModel rewrite as shown above. Sizes does ship with
+a shared-build-path `scenario_creator` and `expected_value_creator`. The
+RST docs, however, do **not** emphasize sizes — farmer is the pedagogical
+showcase; sizes is only name-dropped parenthetically (see §10).
 
 ---
 
@@ -468,11 +478,15 @@ New test module `mpisppy/tests/test_jensens.py`:
    - Run with `--xhatshuffle-try-jensens-first`.
    - Assert the first inner bound equals
      `Xhat_Eval.evaluate(ev_nonant_cache)`.
-3. Negative (integer recourse):
+3. Negative (integer recourse on outer path):
    - Build a farmer variant with a non-nonant integer Var.
    - Flip `--lagrangian-try-jensens-first`. Expect `RuntimeError` from
      `assert_jensen_integer_safe`.
-4. Negative (missing callable):
+4. Positive (integer recourse on inner path is OK):
+   - Same farmer variant with a non-nonant integer Var.
+   - Flip `--xhatshuffle-try-jensens-first`. Expect no error — the xhat
+     path must not run the integer-safety guard.
+5. Negative (missing callable):
    - Module lacks `expected_value_creator`. Flip the flag. Expect the
      `cfg_vanilla`-level error.
 
@@ -482,26 +496,30 @@ New test module `mpisppy/tests/test_jensens.py`:
 
 - New `doc/src/jensens.rst` with the convexity warning at the top
   (section 1 of this doc).
+- Body of the RST works almost exclusively against
+  `examples/farmer/farmer.py` — code listings, before/after diffs for the
+  underscore-helper split, side-by-side of `scenario_creator` vs.
+  `expected_value_creator`.
+- Sizes is mentioned only parenthetically, e.g.:
+  *(see also `examples/sizes/sizes.py` for a variant with a Pyomo
+  AbstractModel that loads scenario data from `.dat` files).*
 - Link from `doc/src/pickling.rst` follow-up list (already a convention
   on this branch).
-- Link from the farmer and sizes example README/docstrings to the new
-  RST.
+- Link from the farmer example README/docstring to the new RST.
 
 ---
 
-## 11. Open questions
+## 11. Resolved decisions
 
-1. **Sizes refactor scope**: full ConcreteModel rewrite (preferred,
-   §8 main path) or minimal adapter (§8 alternative)?
-2. **`cfg_vanilla` factory signature**: OK to add
-   `expected_value_creator=None` kwarg to each affected factory and
-   update `generic_cylinders.py` / `farmer_cylinders.py` callers to pass
-   it via `getattr(module, "expected_value_creator", None)`?
-3. **Naming**: `expected_value_creator` — confirmed (not `jensens_creator`
-   from issue #594). OK?
-4. **Flag naming**: kebab-case on CLI
-   (`--lagrangian-try-jensens-first`), snake_case in `Config`
-   (`lagrangian_try_jensens_first`). Matches existing conventions. OK?
-5. **`num_scens` required for farmer EV**: consistent with user
-   guidance, but we could fall back to reading `all_scenario_names` if
-   that attribute is somehow visible. Confirm: keep the explicit require?
+All open questions resolved; implementation can proceed.
+
+1. Sizes refactor scope: **full ConcreteModel rewrite** (§8). Sizes ships
+   with the feature but is de-emphasized in the RST docs (only a
+   parenthetical mention).
+2. Factory signature: **add `expected_value_creator=None` kwarg** to each
+   affected factory; drivers pass it via
+   `getattr(module, "expected_value_creator", None)`.
+3. Naming: **`expected_value_creator`** (not `jensens_creator`).
+4. Flag naming: **kebab-case on CLI, snake_case in `Config`** — matches
+   existing conventions.
+5. `num_scens` required for farmer EV: **yes, keep the explicit require.**
