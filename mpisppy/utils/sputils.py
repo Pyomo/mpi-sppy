@@ -402,13 +402,13 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
                         # An earlier scenario installed a surrogate as the
                         # ref for this (node, index). This happens with
                         # Stoch_AdmmWrapper partial consensus: subproblems
-                        # that don't own a consensus var contribute a
-                        # fixed-to-0 dummy tagged surrogate, and iteration
-                        # order determines which scenario hits this index
-                        # first. Upgrade the ref to the real v and drop the
-                        # surrogate tag so subsequent real scenarios tie to
-                        # it instead of to the 0-fixed dummy (which would
-                        # force the real owners to 0).
+                        # that have a zero-probability consensus var tag that var
+                        # as a surrogate vardata (which will be fixed to 0). 
+                        # Upgrade the ref to a non-zero-probability v (i.e., non-dummy)
+                        # and remove the surrogate tag.
+                        # Subsequent scenarios with this variable as 
+                        # non-zero-probability (i.e., *not* as "surrogate")
+                        # are set equal to *this* non-zero-probability vardata.
                         ref_vars[(ndn, i)] = v
                         del ref_surrogate_vars[(ndn, i)]
                         continue
