@@ -478,7 +478,7 @@ def add_wxbar_read_write(hub_dict, cfg):
     but are 'loose' in the hub options dict
     """
     if _hasit(cfg, 'init_W_fname') or _hasit(cfg, 'init_Xbar_fname'):
-        from mpisppy.utils.wxbarreader import WXBarReader
+        from mpisppy.utils.w_utils.wxbarreader import WXBarReader
         hub_dict = extension_adder(hub_dict, WXBarReader)
         hub_dict["opt_kwargs"]["options"].update(
             {"init_W_fname" : cfg.init_W_fname,
@@ -486,7 +486,7 @@ def add_wxbar_read_write(hub_dict, cfg):
              "init_separate_W_files" : cfg.init_separate_W_files
             })
     if _hasit(cfg, 'W_fname') or _hasit(cfg, 'Xbar_fname'):
-        from mpisppy.utils.wxbarwriter import WXBarWriter
+        from mpisppy.utils.w_utils.wxbarwriter import WXBarWriter
         hub_dict = extension_adder(hub_dict, WXBarWriter)
         hub_dict["opt_kwargs"]["options"].update(
             {"W_fname" : cfg.W_fname,

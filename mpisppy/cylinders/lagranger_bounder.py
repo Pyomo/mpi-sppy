@@ -13,6 +13,7 @@ import json
 import csv
 import numpy as np
 import mpisppy.cylinders.spoke
+import mpisppy.utils.w_utils.wxbarutils
 from mpisppy.cylinders.lagrangian_bounder import _LagrangianMixin
 
 class LagrangerOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
@@ -53,14 +54,14 @@ class LagrangerOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNo
             with open(w_fname, 'a') as f:
                 writer = csv.writer(f)
                 writer.writerow(['#iteration number', iternum])
-            mpisppy.utils.wxbarutils.write_W_to_file(self.opt, w_fname,
+            mpisppy.utils.w_utils.wxbarutils.write_W_to_file(self.opt, w_fname,
                                                      sep_files=False)
         if self.opt.options.get("lagranger_write_xbar", False):
             xbar_fname = 'lagranger_xbar_vals.csv'
             with open(xbar_fname, 'a') as f:
                 writer = csv.writer(f)
                 writer.writerow(['#iteration number', iternum])
-            mpisppy.utils.wxbarutils.write_xbar_to_file(self.opt, xbar_fname)
+            mpisppy.utils.w_utils.wxbarutils.write_xbar_to_file(self.opt, xbar_fname)
 
     def _update_weights_and_solve(self, iternum):
         extensions = self.opt.extensions is not None
