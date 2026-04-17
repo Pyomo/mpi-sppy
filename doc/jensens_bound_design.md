@@ -507,6 +507,36 @@ New test module `mpisppy/tests/test_jensens.py`:
   on this branch).
 - Link from the farmer example README/docstring to the new RST.
 
+### 10.1 Seed-management subsection (required)
+
+The RST must dedicate a subsection to seed management. Users copying our
+examples will otherwise introduce subtle reproducibility and threading
+bugs. Cover, at minimum:
+
+1. **Use a local RNG per call, not a module-level global.** Show the
+   preferred pattern — `rng = np.random.RandomState(scennum + seedoffset)`
+   inside `_scenario_data` — and explain why the old `farmerstream`
+   module-level `RandomState` pattern is discouraged (thread-unsafe;
+   relies on every caller re-seeding before drawing).
+2. **Draw order must be deterministic and explicit.** Don't rely on
+   Pyomo's component-build order to sequence your random draws. Build
+   the data dict in a plain Python loop first; then construct the model.
+3. **`seedoffset` must be threaded through both `scenario_creator` and
+   `expected_value_creator`.** An inconsistent seedoffset between the
+   two creators (e.g. during a confidence-interval run with a non-zero
+   offset) yields a Jensen bound that does not match the scenario set
+   the run is actually solving.
+4. **EV is over the discrete scenario set actually used**, not over any
+   underlying continuous distribution. This is the right semantic
+   because mpi-sppy solves the SAA problem, not the true-distribution
+   problem. State this explicitly so users understand what "expected
+   value" means in this context.
+5. **Thread-safety of `expected_value_creator`.** The function builds
+   data for every scenario the run would produce. With a local RNG per
+   scenario (point 1), this step is safe to parallelize (e.g. via
+   `concurrent.futures.ThreadPoolExecutor`). With a shared module-level
+   RNG it is NOT safe — flag this explicitly.
+
 ---
 
 ## 11. Resolved decisions
