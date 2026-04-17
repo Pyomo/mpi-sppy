@@ -139,6 +139,6 @@ W-based Rho
 A rho based on W values is supported through ``mpisppy.utils.find_rho.py``,
 which can compute rho using a cost input file created by the gradient
 software. If you want to use W values as the cost, you would need to
-modify the code in ``wxbarwriter.py`` to write the final W values in the
+modify the code in ``mpisppy/utils/w_utils/wxbarwriter.py`` to write the final W values in the
 right format (i.e., matching the cost output format used by the gradient
 software).
