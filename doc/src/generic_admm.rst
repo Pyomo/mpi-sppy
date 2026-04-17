@@ -419,6 +419,36 @@ Limitations
   works correctly.
 
 
+.. _generic_admm_pickling:
+
+Pickling ADMM Scenarios
+-------------------------
+
+The pre-pickle pipeline (see :ref:`pickling`) runs correctly against
+ADMM-wrapped scenarios at the **programmatic** level. When the
+pipeline builds an ``SPBase`` from an ``AdmmBundler`` or
+``Stoch_AdmmWrapper`` and then pickles each ``local_scenario``, the
+pickle captures everything needed to replay later: the dummy Vars
+added by the wrapper, the surrogate tags on each ``ScenarioNode``,
+the scaled objective, the per-scenario probability, and the
+``_mpisppy_data.prob_coeff`` / ``prob0_mask`` arrays populated at
+SPBase init.
+
+The intended end-user model is: *pickle while ADMM is active, read
+back without it.* The wrapped scenarios are self-contained; PH/EF do
+not need to know they came from ADMM.
+
+**CLI path is not yet wired up.** Driving this through
+``generic_cylinders`` (i.e., ``--stoch-admm --pickle-scenarios-dir``)
+is currently blocked at the compatibility check. See
+:ref:`pickling_admm` for the list of plumbing items required to
+unblock the CLI end-to-end.
+
+For now, the supported way to exercise this path is programmatically,
+as in ``TestADMMBundlePipeline.test_pipeline_runs_on_admm_bundles``
+(``mpisppy/tests/test_pre_pickle_pipeline.py``).
+
+
 Reference: CLI Arguments
 --------------------------
 

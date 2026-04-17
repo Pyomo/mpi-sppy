@@ -329,3 +329,52 @@ This is not universal — for small models or small node counts the
 overhead of the extra serialization round trip dominates. But on
 larger HPC allocations with many bundles, it is a real option worth
 measuring.
+
+.. _pickling_admm:
+
+ADMM Models
+-----------
+
+Stochastic ADMM (``--stoch-admm``) and deterministic ADMM (``--admm``)
+both wrap the user's scenarios into a larger model that adds
+consensus variables, fixed-to-zero dummy stand-ins for consensus
+variables that a given subproblem does not own, and a per-subproblem
+variable-probability list used by PH to weight the dummies at zero.
+See :ref:`generic_admm` and :ref:`stoch_admmWrapper` for the full design.
+
+**Programmatic pipeline supports ADMM.** The pre-pickle pipeline
+(``_run_pre_pickle_pipeline`` in ``mpisppy.generic.scenario_io``)
+runs correctly against an ADMM-wrapped ``SPBase`` — consensus
+variables, dummy stand-ins, scaled objectives, and surrogate
+tagging all survive the pipeline. The regression test
+``TestADMMBundlePipeline.test_pipeline_runs_on_admm_bundles`` in
+``mpisppy/tests/test_pre_pickle_pipeline.py`` exercises this path
+against an ``AdmmBundler`` over ``stoch_distr``.
+
+**CLI end-to-end is not yet supported.** Driving pickling of
+``--stoch-admm`` / ``--admm`` through ``generic_cylinders`` (i.e.,
+``--stoch-admm --pickle-scenarios-dir`` or
+``--unpickle-scenarios-dir``) is still blocked at compatibility
+check. The pieces that remain to be wired up are:
+
+1. ``write_scenarios`` / ``write_bundles`` enumerate scenario names
+   from ``module.scenario_names_creator`` and assume a single
+   ``cfg.num_scens``. For ADMM the authoritative name list is already
+   cached on ``cfg._admm_scenario_names`` and the count is
+   ``num_stoch_scens * num_admm_subproblems``.
+2. ``_build_pickle_pipeline_spbase`` does not pass
+   ``variable_probability`` to ``SPBase``. Without it, the wrapped
+   scenarios' ``_mpisppy_data.prob_coeff`` arrays are never populated
+   with the zero-prob entries for dummies, and the pickle cannot be
+   read back without re-running the wrapper.
+3. The unpickle side needs a way to discover the combined ADMM names
+   in the pickle directory (a manifest file, or listing ``*.pkl``).
+   ``module.scenario_names_creator`` does not know about ADMM's
+   combined naming scheme.
+
+Once those three pieces land, the intended end-user flow is:
+*pickle under ``--stoch-admm`` / ``--admm`` (ADMM state bakes into
+each scenario), read back without those flags* — the wrapped
+scenarios already contain everything PH or EF needs. See
+:ref:`generic_admm_pickling` for the currently-supported
+programmatic recipe.
