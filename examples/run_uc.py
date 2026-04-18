@@ -7,13 +7,18 @@
 # full copyright and license information.
 ###############################################################################
 # Small UC regression suite sized for CI.
-# Same CLI as run_all.py but runs only a handful of short UC commands that
-# fit within the community edition of Xpress.
+# Same CLI as run_all.py but runs only a handful of short UC commands.
+# Defaults to HiGHS (appsi_highs) because it is fully open-source and has no
+# problem-size limit, unlike Xpress community edition which caps at 5000
+# rows/cols and cannot solve this UC. The cs_uc and generic_cylinders runs
+# pass --linearize-proximal-terms so HiGHS (a non-quadratic solver) can
+# handle the PH proximal term; this is harmless with quadratic-capable
+# solvers like gurobi/cplex/xpress-full.
 # Usage:
 #   python run_uc.py
-#   python run_uc.py xpress_persistent
-#   python run_uc.py xpress_persistent --oversubscribe
-#   python run_uc.py xpress_persistent "" --python-args="-m coverage run --parallel-mode --source=mpisppy"
+#   python run_uc.py appsi_highs
+#   python run_uc.py gurobi_persistent --oversubscribe
+#   python run_uc.py appsi_highs "" --python-args="-m coverage run --parallel-mode --source=mpisppy"
 # Assumes you run from the examples directory.
 
 import os
@@ -33,7 +38,7 @@ while _i < len(sys.argv):
     _i += 1
 sys.argv = [sys.argv[0]] + _remaining
 
-solver_name = "xpress_persistent"
+solver_name = "appsi_highs"
 if len(sys.argv) > 1:
     solver_name = sys.argv[1]
 
@@ -86,13 +91,14 @@ do_one_serial("uc", "uc_ef.py", solver_name + " 3")
 # Cross-scenario cuts demo: PH hub + xhatlooper + cross-scen cut spoke
 do_one("uc", "cs_uc.py", 3,
        "--max-iterations=2 --default-rho=1 --num-scens=3 "
-       "--max-solver-threads=2 "
+       "--linearize-proximal-terms "
        "--solver-name={}".format(solver_name))
 
 # Generic driver on uc_funcs: PH hub + xhatshuffle + lagrangian
 do_one("uc", "../../mpisppy/generic_cylinders.py", 3,
        "--module-name uc_funcs --max-iterations=3 --default-rho=1 "
-       "--xhatshuffle --lagrangian --num-scens=3 --max-solver-threads=2 "
+       "--xhatshuffle --lagrangian --num-scens=3 "
+       "--linearize-proximal-terms "
        "--rel-gap=0.01 --intra-hub-conv-thresh=-1 "
        "--solver-name={}".format(solver_name))
 
