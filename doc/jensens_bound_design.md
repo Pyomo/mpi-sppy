@@ -410,67 +410,69 @@ Notes:
 
 ---
 
-## 8. Sizes rewrite (`examples/sizes/sizes.py`)
+## 8. Sizes: minimal adapter (not a ConcreteModel rewrite)
 
-Sizes ships with the feature too. It is a harder case than farmer because
-data lives in `.dat` files read by `ref.model.create_instance(fname)`; the
-same split still works but needs a `.dat`-to-dict adapter so the two
-paths share a build step.
+Sizes ships with the feature but via a minimal adapter path, not a
+ConcreteModel rewrite. The ConcreteModel approach was considered
+(earlier draft of this section) and rejected — too much churn for an
+example that we are deliberately de-emphasizing in the docs.
+
+The shipped approach:
+
+1. In `examples/sizes/models/ReferenceModel.py`, change the sole
+   stochastic Param — `DemandsSecondStage` — from
+   `within=NonNegativeIntegers` to `within=NonNegativeReals, mutable=True`.
+   The Param is only used as a constraint RHS, so the change is
+   functionally transparent; it just lets us overwrite the Param with a
+   non-integer average at runtime.
+2. In `examples/sizes/sizes.py`, add:
 
 ```python
-def _scenario_data(scenario_name, scenario_count):
-    """Return {param_name -> {index -> value}} for one scenario.
-
-    Loaded from the .dat via the existing AbstractModel. First-stage params
-    are identical across scenarios and are included too; averaging them is
-    a no-op, which is fine.
-    """
-    fname = os.path.join(os.path.dirname(__file__),
-                         f"SIZES{scenario_count}", f"{scenario_name}.dat")
-    instance = ref.model.create_instance(fname)
-    data = {}
-    for p in instance.component_objects(pyo.Param, active=True):
-        data[p.name] = {idx: pyo.value(p[idx]) for idx in p}
-    data["_NumSizes"] = pyo.value(instance.NumSizes)
-    return data
-
-
-def _build_model(scenario_name, data, probability):
-    """Build a ConcreteModel directly from a data dict — no AbstractModel
-    roundtrip. Shared by scenario_creator and expected_value_creator."""
-    m = pyo.ConcreteModel(scenario_name)
-    m.NumSizes = pyo.Param(initialize=data["_NumSizes"],
-                           within=pyo.NonNegativeIntegers)
-    m.ProductSizes = pyo.Set(initialize=list(range(1, data["_NumSizes"] + 1)))
-    for pname in ("DemandsFirstStage", "DemandsSecondStage",
-                  "UnitProductionCosts", "StockingCost", "UnitReductionCost"):
-        setattr(m, pname, pyo.Param(m.ProductSizes, initialize=data[pname]))
-    # ... Vars, Constraints, Expressions, Objective lifted from
-    #     ReferenceModel.py but written as a ConcreteModel.
-    sputils.attach_root_node(
-        m, m.FirstStageCost,
-        [m.NumProducedFirstStage, m.NumUnitsCutFirstStage],
-    )
-    m._mpisppy_probability = probability
-    return m
-
-
-def scenario_creator(scenario_name, scenario_count=None):
-    data = _scenario_data(scenario_name, scenario_count)
-    return _build_model(scenario_name, data, probability=1.0 / scenario_count)
-
-
 def expected_value_creator(scenario_name, scenario_count=None):
+    """Expected-value scenario for --*-try-jensens-first.
+
+    The only stochastic Param in sizes is DemandsSecondStage. We build
+    an instance from the first scenario's .dat (for every deterministic
+    Param), then overwrite DemandsSecondStage with the mean across
+    all scenarios. Requires DemandsSecondStage to be declared mutable
+    and real in ReferenceModel.py.
+    """
+    if scenario_count not in (3, 10):
+        raise RuntimeError("scenario_count must be 3 or 10")
     snames = scenario_names_creator(scenario_count)
-    datas  = [_scenario_data(s, scenario_count) for s in snames]
-    avg    = _average_param_dicts(datas)
-    return _build_model(scenario_name, avg, probability=1.0)
+    sizes_dir = os.path.dirname(__file__)
+    datadir = os.sep.join((sizes_dir, f"SIZES{scenario_count}"))
+
+    demand_sums = {}
+    for s in snames:
+        inst = ref.model.create_instance(datadir + os.sep + s + ".dat")
+        for i in inst.ProductSizes:
+            demand_sums.setdefault(i, 0.0)
+            demand_sums[i] += pyo.value(inst.DemandsSecondStage[i])
+    avg_demand = {i: demand_sums[i] / len(snames) for i in demand_sums}
+
+    ev = ref.model.create_instance(datadir + os.sep + snames[0] + ".dat")
+    for i in ev.ProductSizes:
+        ev.DemandsSecondStage[i] = avg_demand[i]
+
+    varlist = [ev.NumProducedFirstStage, ev.NumUnitsCutFirstStage]
+    sputils.attach_root_node(ev, ev.FirstStageCost, varlist)
+    ev._mpisppy_probability = 1.0
+    return ev
 ```
 
-Decision: full ConcreteModel rewrite as shown above. Sizes does ship with
-a shared-build-path `scenario_creator` and `expected_value_creator`. The
-RST docs, however, do **not** emphasize sizes — farmer is the pedagogical
-showcase; sizes is only name-dropped parenthetically (see §10).
+`scenario_creator` is untouched. The `_scenario_data` / `_build_model`
+underscore-helper pattern (used by farmer, §7) is *not* introduced
+here on purpose — sizes is deliberately de-emphasized in the RST docs,
+so we do not want to hold it up as a teaching example for the pattern.
+
+Important caveat documented in the `expected_value_creator` docstring:
+sizes has integer recourse (second-stage `NumProducedSecondStage`,
+`ProduceSizeSecondStage`, etc.), so Jensen's *outer* bound is not
+valid — users who enable `--lagrangian-try-jensens-first` on sizes
+will hit `assert_jensen_integer_safe`. The `--xhat*-try-jensens-first`
+flags remain valid because the xhat path skips the integer-safety
+check and honestly re-evaluates the EV solution across real scenarios.
 
 ---
 
@@ -552,9 +554,12 @@ bugs. Cover, at minimum:
 
 All open questions resolved; implementation can proceed.
 
-1. Sizes refactor scope: **full ConcreteModel rewrite** (§8). Sizes ships
-   with the feature but is de-emphasized in the RST docs (only a
-   parenthetical mention).
+1. Sizes refactor scope: **minimal AbstractModel-path adapter** (§8).
+   No ConcreteModel rewrite — the earlier proposal was rolled back
+   because the churn is not justified for a de-emphasized example.
+   Sizes ships with `expected_value_creator` and a one-line tweak to
+   `DemandsSecondStage` (mutable, Real). RST mentions sizes only
+   parenthetically.
 2. Factory signature: **add `expected_value_creator=None` kwarg** to each
    affected factory; drivers pass it via
    `getattr(module, "expected_value_creator", None)`.

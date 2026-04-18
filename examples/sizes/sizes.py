@@ -7,6 +7,7 @@
 # full copyright and license information.
 ###############################################################################
 import os
+import pyomo.environ as pyo
 import models.ReferenceModel as ref
 import mpisppy.utils.sputils as sputils
 
@@ -30,6 +31,51 @@ def scenario_creator(scenario_name, scenario_count=None):
     sputils.attach_root_node(model, model.FirstStageCost, varlist)
 
     return model
+
+
+def expected_value_creator(scenario_name, scenario_count=None):
+    """Expected-value scenario for --*-try-jensens-first.
+
+    The only stochastic Param in sizes is DemandsSecondStage. We build an
+    instance from the first scenario's .dat (for every deterministic
+    Param), then overwrite DemandsSecondStage with the mean across all
+    scenarios. Requires DemandsSecondStage to be declared mutable and
+    real in ReferenceModel.py.
+
+    IMPORTANT: Jensen's outer-bound interpretation is not valid for
+    sizes as-is, because sizes has integer recourse (second-stage
+    NumProduced and ProduceSize Vars). Users enabling
+    --lagrangian-try-jensens-first (etc.) on sizes will hit
+    assert_jensen_integer_safe. The xhat flags remain valid — see the
+    convexity discussion in doc/src/jensens.rst.
+    """
+    if scenario_count not in (3, 10):
+        raise RuntimeError("scenario_count must be 3 or 10")
+
+    snames = scenario_names_creator(scenario_count)
+    sizes_dir = os.path.dirname(__file__)
+    datadir = os.sep.join((sizes_dir, f"SIZES{scenario_count}"))
+
+    # Average DemandsSecondStage across all scenarios.
+    demand_sums = {}
+    for s in snames:
+        fname = datadir + os.sep + s + ".dat"
+        inst = ref.model.create_instance(fname)
+        for i in inst.ProductSizes:
+            demand_sums.setdefault(i, 0.0)
+            demand_sums[i] += pyo.value(inst.DemandsSecondStage[i])
+    avg_demand = {i: demand_sums[i] / len(snames) for i in demand_sums}
+
+    # Build the EV instance from the first .dat (for deterministic
+    # Params) and overwrite the stochastic Param in-place.
+    ev = ref.model.create_instance(datadir + os.sep + snames[0] + ".dat")
+    for i in ev.ProductSizes:
+        ev.DemandsSecondStage[i] = avg_demand[i]
+
+    varlist = [ev.NumProducedFirstStage, ev.NumUnitsCutFirstStage]
+    sputils.attach_root_node(ev, ev.FirstStageCost, varlist)
+    ev._mpisppy_probability = 1.0
+    return ev
 
 
 def scenario_denouement(rank, scenario_name, scenario):
