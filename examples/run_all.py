@@ -312,7 +312,7 @@ if not nouc:
                "--module-name uc_funcs "
                "--max-iterations=100 --default-rho=1 "
                "--xhatshuffle --lagrangian --num-scens=5 --max-solver-threads=2 "
-               "--lagrangian-iter0-mipgap=1e-7 --ph-mipgaps-json=phmipgaps.json "
+               "--lagrangian-iter0-mipgap=1e-7 --mipgaps-json=phmipgaps.json "
                f"--solver-name={solver_name} "
                "--rel-gap 0.00001 --abs-gap=1 --intra-hub-conv-thresh=-1 "
                "--grad-rho --grad-order-stat 0.5 "
