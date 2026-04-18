@@ -24,12 +24,14 @@ import mpisppy.utils.sputils as sputils
 from mpisppy.cylinders._jensens_mixin import _JensensMixin
 from mpisppy.tests.utils import get_solver
 
-# make examples/farmer importable for the positive tests
-_FARMER_DIR = os.path.join(
+# make the examples importable for the positive/negative tests
+_EXAMPLES_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "examples", "farmer")
-sys.path.insert(0, _FARMER_DIR)
+    "examples")
+sys.path.insert(0, os.path.join(_EXAMPLES_DIR, "farmer"))
+sys.path.insert(0, os.path.join(_EXAMPLES_DIR, "sizes"))
 import farmer  # noqa: E402
+import sizes  # noqa: E402
 
 solver_available, solver_name, _, _ = get_solver()
 
@@ -165,6 +167,38 @@ class TestJensensMixinEndToEnd(unittest.TestCase):
         cache = sp._jensens_pack_nonant_cache([1.0, 2.0, 3.0])
         self.assertEqual(list(cache.keys()), ["ROOT"])
         self.assertEqual(list(cache["ROOT"]), [1.0, 2.0, 3.0])
+
+
+class TestSizesOuterBoundRejected(unittest.TestCase):
+    """Sizes has integer recourse. The outer-bound Jensen's path must
+    refuse it; the xhat path must still accept it (no integer guard)."""
+
+    def _spoke(self):
+        jdict = {
+            "expected_value_creator": sizes.expected_value_creator,
+            "scenario_creator_kwargs": {"scenario_count": 3},
+        }
+        return _FakeSpoke(jdict, sizes.scenario_names_creator(3), solver_name)
+
+    def test_ev_model_builds(self):
+        ev = self._spoke()._jensens_build_ev()
+        self.assertEqual(ev._mpisppy_probability, 1.0)
+        self.assertEqual(len(ev._mpisppy_node_list), 1)
+
+    def test_outer_bound_raises_on_integer_recourse(self):
+        sp = self._spoke()
+        ev = sp._jensens_build_ev()
+        with self.assertRaises(RuntimeError) as ctx:
+            sp._jensens_assert_safe_for_outer_bound(ev)
+        self.assertIn("integer/binary Var", str(ctx.exception))
+
+    def test_xhat_path_skips_integer_guard(self):
+        # The xhat path deliberately does NOT call
+        # _jensens_assert_safe_for_outer_bound. We mimic that here and
+        # assert that building the EV model itself is fine.
+        sp = self._spoke()
+        ev = sp._jensens_build_ev()
+        self.assertTrue(hasattr(ev, "NumProducedSecondStage"))
 
 
 class TestMissingExpectedValueCreator(unittest.TestCase):
