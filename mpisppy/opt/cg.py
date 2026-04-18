@@ -61,7 +61,6 @@ class CG(mpisppy.cgbase.CGBase):
         self.iterk_loop()
 
         if finalize:
-            print("Terminating CG on rank", self.cylinder_rank , "now computing Integer MP")
             Eobj = self.post_loops(self.extensions)
         else:
             Eobj = None

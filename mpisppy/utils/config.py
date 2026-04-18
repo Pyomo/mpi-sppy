@@ -671,11 +671,11 @@ class Config(pyofig.ConfigDict):
         self.add_to_config(name="sp_solver_options",
                            description="subproblem solver options",
                            domain=str,
-                           default=None)
+                           default="")
         self.add_to_config(name="mp_solver_options",
                            description="master problem solver options",
                            domain=str,
-                           default=None)
+                           default=" ")
         self.add_to_config(name="relaxed_nonant",
                            description="solve master problem with relaxed nonanticipativity constraint",
                            domain=bool,

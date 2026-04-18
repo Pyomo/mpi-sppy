@@ -116,9 +116,16 @@ class CGBase(mpisppy.spopt.SPOpt):
         self.conv=100 
         self.initial_columns_list=None
         self.options_check()
+        self.problem_is_lp = False
 
+    def _problem_is_lp(self):
 
-        
+        any_scen = next(iter(self.local_scenarios.values()))
+        for xvar in any_scen._mpisppy_data.nonant_indices.values():
+            if xvar.is_binary() or xvar.is_integer():
+                return False
+        return True
+
 
     def options_check(self):
         """
@@ -149,7 +156,9 @@ class CGBase(mpisppy.spopt.SPOpt):
                 
         self.compute_nonant_obj_coefs()
         if(self.cylinder_rank == 0):
-            self.mp=self.build_master_model()
+            self.mp = self.build_master_model()
+
+        self.problem_is_lp = self._problem_is_lp()
         
         self.attach_duals_for_subproblem()
     
@@ -204,7 +213,7 @@ class CGBase(mpisppy.spopt.SPOpt):
         # Assumes master problem is a minimization problem
         rmp.obj = pyo.Objective(
             expr=sum(
-                self.nonant_obj_coef[idx] * rmp.xbar[idx]
+                self.nonant_obj_coef.get(idx, 0.0) * rmp.xbar[idx]
                 for idx in self.nonant_indices
             ) + sum(
                 rmp.col_cost[s, c] * rmp.col_is_active[s, c] * rmp.w[s, c]
@@ -675,6 +684,9 @@ class CGBase(mpisppy.spopt.SPOpt):
                 self.LB_current = self.RUB + sum_redcosts
                 
                 # Update bounds and convergence metric
+                if self.problem_is_lp:
+                    self.best_solution_obj_val= self.RUB
+
                 if self.best_bound_obj_val is None:
                     self.best_bound_obj_val = self.LB_current
                 else:
@@ -732,18 +744,25 @@ class CGBase(mpisppy.spopt.SPOpt):
         self.master_solver.solve(self.mp)
         obj_value = pyo.value(self.mp.obj)
         return obj_value
-    
+
     def post_loops(self, extensions=None):
-        UB_value=None
-        if self.cylinder_rank == 0:
-            print("")
+        if self.cylinder_rank != 0:
+            return None
+
+        print("")
+        if not self.problem_is_lp:
             print("Solving integer master problem")
             print("")
-            UB_value=self.solve_ip_master_problem()
-            print('IP bounds', UB_value, self.best_bound_obj_val)
+            obj_value = self.solve_ip_master_problem()
+            print('IP bounds', obj_value, self.best_bound_obj_val)
+        else:
+            print("Using LP master problem as final solution")
+            print("")
+            obj_value = pyo.value(self.mp.obj)
+            print('LP bounds', obj_value, self.best_bound_obj_val)
 
-        return UB_value
-       
+        return obj_value
+
 if __name__ == "__main__":
     print ("No main for CGBase")
 
