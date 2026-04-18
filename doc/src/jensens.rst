@@ -1,12 +1,12 @@
 .. _jensens:
 
-Jensen's Bound as a Warm-Start Bound
-====================================
+Jensen's Bound as potential starting bound
+==========================================
 
 .. warning::
 
    **Jensen's bound is valid only when the recourse value function
-   Q(x, \xi) is convex in the random parameters \xi.**
+   is convex in the random parameters \xi.**
 
    Necessary conditions for a valid *outer* bound:
 
@@ -17,8 +17,8 @@ Jensen's Bound as a Warm-Start Bound
    3. Two-stage structure.
 
    ``mpi-sppy`` checks (1) automatically on the outer-bound path and
-   refuses to compute the bound when non-nonant integer/binary Vars
-   exist in the expected-value model. (2) and (3) are the user's
+   refuses to compute the outer bound when non-nonant integer/binary Vars
+   exist in the recourse variables while (2) and (3) are the user's
    responsibility.
 
    **Inner bounds (xhatters) are valid regardless of the above.** The
@@ -30,7 +30,7 @@ Jensen's Bound as a Warm-Start Bound
 What the options do
 -------------------
 
-Two-stage only. Each supported spoke gains one boolean flag:
+Two-stage only (for now). Each supported spoke gains one boolean flag:
 
 Outer-bound (lower-bounder) spokes
 
@@ -55,15 +55,15 @@ configured solver, and then:
   bound;
 * on the xhat path, takes the EV first-stage solution, evaluates it
   across all scenarios, and reports the expected cost as its first
-  inner bound.
+  inner bound if it is feasible for all scenarios.
 
 The spoke then continues its normal loop. There is **no** "iteration
 -1" in PH, APH, L-shaped, or any hub — the Jensen's work happens
-entirely inside the opting-in spoke.
+entirely inside a spoke.
 
 **What the expectation is taken over.** The EV data is the sample mean
-of the data for every scenario in the run, *not* the expectation of
-any underlying continuous distribution. This matches how ``mpi-sppy``
+of the data for every scenario in the run (*not* the expectation of
+any underlying continuous distribution). This matches how ``mpi-sppy``
 treats the outer problem: the sample-average approximation (SAA) is
 what is actually being solved, and Jensen's bound applies directly to
 that problem.
@@ -84,10 +84,13 @@ A scenario module that wants to participate must define:
        ensemble).
        """
 
-Discovery is via ``getattr(module, "expected_value_creator", None)``;
-no registration is required. If a flag is set but the module does not
-define the function, ``cfg_vanilla`` raises a clear error at spoke-
-setup time.
+.. admonition:: Under the Hood
+   :class: note
+
+   Discovery is via ``getattr(module, "expected_value_creator", None)``; 
+   if a flag is set but the module does not define the function, 
+   ``cfg_vanilla`` raises a clear error at spoke-setup time.
+   
 
 The recommended authoring pattern — which ``examples/farmer/farmer.py``
 now demonstrates — is to split the work into two underscore helpers
@@ -207,15 +210,19 @@ Interaction with each spoke's own iteration 0
 
 * **lagrangian**: its normal iteration 0 trivial bound (Lagrange
   multipliers :math:`W = 0`) is itself wait-and-see and therefore
-  already a valid Jensen-like outer bound. The value of this flag is
+  already a valid outer bound. The value of this flag is
   that the EV bound arrives *before* iteration 0 finishes, which can
   matter a lot when there are many scenarios and iteration 0 is slow.
-  The flag does not replace or disable iteration 0.
+  The flag does not replace or disable iteration 0. For some
+  problems Jensen's bound is tighter than the trivial iteration 0
+  bound.
 * **subgradient**: iteration 0 solves all scenarios. The EV bound
   arrives earlier.
 * **reduced_costs**: inherits the lagrangian behavior.
-* **lagranger**: does its own PH from scratch; the EV bound is
-  essentially free relative to its iteration 0.
+* **lagranger**: like lagrangian, but takes nonants from the hub and
+  computes its own W rather than receiving W. Iteration 0 is still
+  the trivial W=0 wait-and-see bound, so the same reasoning applies
+  as for lagrangian. (note that this bounder seldom works well)
 
 Convexity limitations, in more detail
 -------------------------------------
