@@ -81,7 +81,11 @@ class _JensensMixin:
         solver = pyo.SolverFactory(solver_name)
         for k, v in solver_options.items():
             solver.options[k] = v
-        results = solver.solve(ev_model, tee=False)
+        if sputils.is_persistent(solver):
+            solver.set_instance(ev_model)
+            results = solver.solve(tee=False)
+        else:
+            results = solver.solve(ev_model, tee=False)
         tc = results.solver.termination_condition
         if tc not in (TerminationCondition.optimal,
                       TerminationCondition.feasible):
