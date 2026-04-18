@@ -233,6 +233,69 @@ class TestMissingExpectedValueCreator(unittest.TestCase):
                               scenario_creator_kwargs={})
         self.assertNotIn("jensens", spoke_dict["opt_kwargs"]["options"])
 
+    def test_maybe_attach_jensens_installs_dict_when_flag_on(self):
+        import mpisppy.utils.config as cfg_mod
+        from mpisppy.utils.cfg_vanilla import _maybe_attach_jensens
+
+        cfg = cfg_mod.Config()
+        cfg.lagrangian_args()
+        cfg.lagrangian_try_jensens_first = True
+
+        spoke_dict = {"opt_kwargs": {"options": {}}}
+        kwargs = {"num_scens": 3}
+        _maybe_attach_jensens(spoke_dict, cfg, "lagrangian",
+                              expected_value_creator=farmer.expected_value_creator,
+                              scenario_creator_kwargs=kwargs)
+        j = spoke_dict["opt_kwargs"]["options"]["jensens"]
+        self.assertIs(j["expected_value_creator"], farmer.expected_value_creator)
+        self.assertIs(j["scenario_creator_kwargs"], kwargs)
+
+
+class TestJensensBuildEvErrors(unittest.TestCase):
+    """_jensens_build_ev rejects ill-shaped EV models."""
+
+    def _spoke_with_creator(self, creator):
+        jdict = {
+            "expected_value_creator": creator,
+            "scenario_creator_kwargs": {},
+        }
+        return _FakeSpoke(jdict, ["s0"], solver_name)
+
+    def test_raises_when_creator_is_none(self):
+        # bypass the cfg_vanilla guard; emulate the "should never happen"
+        # case where the spoke was built with creator=None
+        sp = self._spoke_with_creator(None)
+        with self.assertRaises(RuntimeError) as ctx:
+            sp._jensens_build_ev()
+        self.assertIn("expected_value_creator", str(ctx.exception))
+
+    def test_raises_when_model_has_no_node_list(self):
+        def bad_creator(scenario_name, **kwargs):
+            return pyo.ConcreteModel()
+        sp = self._spoke_with_creator(bad_creator)
+        with self.assertRaises(RuntimeError) as ctx:
+            sp._jensens_build_ev()
+        self.assertIn("_mpisppy_node_list", str(ctx.exception))
+
+    def test_raises_when_not_two_stage(self):
+        # Fake a two-node tree to trip the two-stage guard.
+        def multi_stage_creator(scenario_name, **kwargs):
+            m = pyo.ConcreteModel()
+            m.x = pyo.Var()
+            m.obj = pyo.Objective(expr=m.x)
+            m._mpisppy_node_list = ["fake_root", "fake_child"]
+            return m
+        sp = self._spoke_with_creator(multi_stage_creator)
+        with self.assertRaises(RuntimeError) as ctx:
+            sp._jensens_build_ev()
+        self.assertIn("two-stage", str(ctx.exception))
+
+
+class TestSizesInvalidScenarioCount(unittest.TestCase):
+    def test_scenario_count_must_be_3_or_10(self):
+        with self.assertRaises(RuntimeError):
+            sizes.expected_value_creator("EV", scenario_count=5)
+
 
 if __name__ == "__main__":
     unittest.main()

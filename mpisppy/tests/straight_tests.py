@@ -145,6 +145,24 @@ cmdstr = (
 _doone(cmdstr)
 
 
+#####################################################
+# generic_cylinders with both Jensen's flags (farmer)
+# Exercises the outer-bound and xhat Jensen's paths inside the
+# lagrangian and xhatshuffle spokes' main() bodies.
+cmdstr = (
+    f"mpiexec -np 3 {pyexe} {python_args} -m mpi4py {shlex.quote(gc_path)} "
+    f"--module-name {shlex.quote(farmer_module)} "
+    f"--num-scens 3 "
+    f"--solver-name {shlex.quote(solver_name)} "
+    f"--default-rho 1 "
+    f"--max-iterations 2 "
+    f"--lagrangian --xhatshuffle "
+    f"--lagrangian-try-jensens-first --xhatshuffle-try-jensens-first"
+)
+
+_doone(cmdstr)
+
+
 #######################################################
 if badguys:
     print("\nstraight_tests.py failed commands:")
