@@ -1089,6 +1089,40 @@ def nonant_cost_coeffs(s):
     return cost_coefs
 
 
+def assert_jensen_integer_safe(scenario):
+    """Raise if any integer/binary Var is outside the nonant set.
+
+    Necessary (not sufficient) check that recourse is convex in the
+    random parameters. Jensen's bound is only valid under that
+    assumption; convexity in the random parameters cannot be checked
+    statically, but the presence of integer recourse is a common
+    failure mode that is easy to detect.
+
+    Callers: only the lower-bounder (outer-bound) Jensen's path. Inner
+    bounds (xhatters) tolerate integer recourse because the EV solution
+    is only used as a candidate xhat, which is then honestly evaluated
+    across the real scenarios.
+
+    Reads nonants from scenario._mpisppy_node_list (set by
+    attach_root_node / attach_nodes), so this works on a model that has
+    NOT yet been processed by SPBase — which is exactly the state an EV
+    model is in when this check runs.
+    """
+    nonant_ids = set()
+    for node in scenario._mpisppy_node_list:
+        for v in node.nonant_vardata_list:
+            nonant_ids.add(id(v))
+    for v in scenario.component_data_objects(pyo.Var, descend_into=True):
+        if id(v) in nonant_ids:
+            continue
+        if v.is_integer() or v.is_binary():
+            raise RuntimeError(
+                f"Jensen's bound requires convex recourse, but non-nonant "
+                f"integer/binary Var found: {v.name}. Disable the "
+                f"--*-try-jensens-first flag, or reformulate."
+            )
+
+
 def create_nodenames_from_branching_factors(BFS):
     """
     This function creates the node names of a tree without creating the whole tree.
