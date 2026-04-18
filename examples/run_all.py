@@ -203,6 +203,13 @@ if run_first_part:
            "--rel-gap=0.0 "
            "--solver-name={}".format(solver_name))
 
+    # UC cross-scenario-cuts demo (requires egret)
+    if egret_avail():
+        do_one("uc", "cs_uc.py", 3,
+               "--max-iterations=2 --default-rho=1 --num-scens=3 "
+               "--max-solver-threads=2 "
+               "--solver-name={}".format(solver_name))
+
 # -------- Second part: netdes, sizes, sslp, hydro, aircond, MMW --------
 if run_second_part:
     # NOTE: Pyomo OBBT does not support persistent solvers as of Aug 2025
