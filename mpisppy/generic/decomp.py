@@ -61,9 +61,12 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs,
         from mpisppy.utils import cfg_vanilla as vanilla
         vanilla.add_reduced_costs_fixer(hub_dict, cfg)
 
+    expected_value_creator = getattr(module, "expected_value_creator", None)
+
     list_of_spoke_dict = build_spoke_list(cfg, beans, scenario_creator_kwargs,
                                           rho_setter, all_nodenames,
-                                          variable_probability=variable_probability)
+                                          variable_probability=variable_probability,
+                                          expected_value_creator=expected_value_creator)
 
     # if the user dares, let them mess with the hubdict prior to solve
     if hasattr(module, 'hub_and_spoke_dict_callback'):

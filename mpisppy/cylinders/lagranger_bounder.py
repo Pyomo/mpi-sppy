@@ -15,8 +15,9 @@ import numpy as np
 import mpisppy.cylinders.spoke
 import mpisppy.utils.w_utils.wxbarutils
 from mpisppy.cylinders.lagrangian_bounder import _LagrangianMixin
+from mpisppy.cylinders._jensens_mixin import _JensensMixin
 
-class LagrangerOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
+class LagrangerOuterBound(_JensensMixin, _LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
     """Indepedent Lagrangian that takes x values as input and updates its own W.
     """
     converger_spoke_char = 'A'
@@ -84,6 +85,12 @@ class LagrangerOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNo
         extensions = self.opt.extensions is not None
 
         self.lagrangian_prep()
+
+        if self._jensens_enabled():
+            ev_model = self._jensens_build_ev()
+            self._jensens_assert_safe_for_outer_bound(ev_model)
+            ev_obj, _ = self._jensens_solve(ev_model)
+            self.send_bound(ev_obj)
 
         if extensions:
             self.opt.extobject.pre_iter0()
