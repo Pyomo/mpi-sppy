@@ -12,6 +12,7 @@
 import pyomo.environ as pyo
 from mpisppy.extensions.xhatxbar import XhatXbar
 from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
+from mpisppy.cylinders._jensens_mixin import _JensensMixin
 
 import mpisppy.MPI as mpi
 import logging
@@ -33,7 +34,7 @@ def _attach_xbars(opt):
 
 
 ############################################################################
-class XhatXbarInnerBound(XhatInnerBoundBase):
+class XhatXbarInnerBound(_JensensMixin, XhatInnerBoundBase):
 
     converger_spoke_char = 'B'
 
@@ -60,6 +61,13 @@ class XhatXbarInnerBound(XhatInnerBoundBase):
         logging.debug("Enter xhatxbar main on rank {}".format(global_rank))
 
         xhatter = self.xhat_prep()
+
+        if self._jensens_enabled():
+            ev_model = self._jensens_build_ev()
+            _, nonant_values = self._jensens_solve(ev_model)
+            cache = self._jensens_pack_nonant_cache(nonant_values)
+            Eobj = self.opt.evaluate(cache)
+            self.update_if_improving(Eobj)
 
         ib_iter = 1  # ib is for inner bound
         while (not self.got_kill_signal()):
