@@ -239,7 +239,7 @@ def expected_value_creator(
                 snames))
 
     This is safe because _scenario_data uses a local RandomState. That
-    parallelization is deliberately left for a later pass.
+    parallelization is TBD.
 
     IMPORTANT: Jensen's lower-bound interpretation of this model is only
     valid when the recourse value function is convex in the random
@@ -317,9 +317,6 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
     sca["seedoffset"] = seed
     sca["num_scens"] = sample_branching_factors[0]  # two-stage problem
     return scenario_creator(sname, **sca)
-
-
-# end functions not needed by farmer_cylinders
 
 
 # ============================
