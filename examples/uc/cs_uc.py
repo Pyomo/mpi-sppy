@@ -47,9 +47,11 @@ def _parse_args():
                       domain=str,
                       default=None)
     cfg.parse_command_line("cs_uc")
-    # cs_uc's identity is cross-scenario cuts; default it on (user can turn off).
-    if not cfg.cross_scenario_cuts:
-        cfg.quick_assign("cross_scenario_cuts", bool, True)
+    # cs_uc's identity is cross-scenario cuts; default it on, but honor an
+    # explicit --no-cross-scenario-cuts. (Pyomo's bool flag default of False
+    # is indistinguishable from "user passed --no-...", so check argv.)
+    if "--no-cross-scenario-cuts" not in sys.argv:
+        cfg.cross_scenario_cuts = True
     return cfg
 
 
