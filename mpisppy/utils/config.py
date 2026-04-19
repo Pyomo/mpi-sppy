@@ -674,10 +674,10 @@ class Config(pyofig.ConfigDict):
         self.add_mipgap_specs("lagrangian")
 
         self.add_to_config('lagrangian_try_jensens_first',
-                           description="before iter 0, solve the expected-value "
+                           description="before iter 0, solve the average "
                                        "scenario and send its objective as an initial "
                                        "outer bound (two-stage only; requires the "
-                                       "scenario module to define expected_value_creator; "
+                                       "scenario module to define average_scenario_creator; "
                                        "requires convex recourse)",
                            domain=bool,
                            default=False)
@@ -739,10 +739,10 @@ class Config(pyofig.ConfigDict):
                             default=1e-6)
 
         self.add_to_config('reduced_costs_try_jensens_first',
-                           description="before iter 0, solve the expected-value "
+                           description="before iter 0, solve the average "
                                        "scenario and send its objective as an initial "
                                        "outer bound (two-stage only; requires the "
-                                       "scenario module to define expected_value_creator; "
+                                       "scenario module to define average_scenario_creator; "
                                        "requires convex recourse)",
                            domain=bool,
                            default=False)
@@ -762,10 +762,10 @@ class Config(pyofig.ConfigDict):
                             default=None)
 
         self.add_to_config('lagranger_try_jensens_first',
-                           description="before iter 0, solve the expected-value "
+                           description="before iter 0, solve the average "
                                        "scenario and send its objective as an initial "
                                        "outer bound (two-stage only; requires the "
-                                       "scenario module to define expected_value_creator; "
+                                       "scenario module to define average_scenario_creator; "
                                        "requires convex recourse)",
                            domain=bool,
                            default=False)
@@ -787,10 +787,10 @@ class Config(pyofig.ConfigDict):
                            default=None)
 
         self.add_to_config('subgradient_try_jensens_first',
-                           description="before iter 0, solve the expected-value "
+                           description="before iter 0, solve the average "
                                        "scenario and send its objective as an initial "
                                        "outer bound (two-stage only; requires the "
-                                       "scenario module to define expected_value_creator; "
+                                       "scenario module to define average_scenario_creator; "
                                        "requires convex recourse)",
                            domain=bool,
                            default=False)
@@ -852,10 +852,10 @@ class Config(pyofig.ConfigDict):
 
         self.add_to_config('xhatlooper_try_jensens_first',
                            description="before entering the xhatlooper main loop, solve "
-                                       "the expected-value scenario and try its first-stage "
+                                       "the average scenario and try its first-stage "
                                        "solution as a candidate xhat (two-stage only; "
                                        "requires the scenario module to define "
-                                       "expected_value_creator)",
+                                       "average_scenario_creator)",
                            domain=bool,
                            default=False)
 
@@ -878,10 +878,10 @@ class Config(pyofig.ConfigDict):
 
         self.add_to_config('xhatshuffle_try_jensens_first',
                            description="before entering the xhatshuffle main loop, solve "
-                                       "the expected-value scenario and try its first-stage "
+                                       "the average scenario and try its first-stage "
                                        "solution as a candidate xhat (two-stage only; "
                                        "requires the scenario module to define "
-                                       "expected_value_creator)",
+                                       "average_scenario_creator)",
                            domain=bool,
                            default=False)
 
@@ -928,10 +928,10 @@ class Config(pyofig.ConfigDict):
 
         self.add_to_config('xhatspecific_try_jensens_first',
                            description="before entering the xhatspecific main loop, solve "
-                                       "the expected-value scenario and try its first-stage "
+                                       "the average scenario and try its first-stage "
                                        "solution as a candidate xhat (two-stage only; "
                                        "requires the scenario module to define "
-                                       "expected_value_creator)",
+                                       "average_scenario_creator)",
                            domain=bool,
                            default=False)
 
@@ -945,10 +945,10 @@ class Config(pyofig.ConfigDict):
 
         self.add_to_config('xhatxbar_try_jensens_first',
                            description="before entering the xhatxbar main loop, solve "
-                                       "the expected-value scenario and try its first-stage "
+                                       "the average scenario and try its first-stage "
                                        "solution as a candidate xhat (two-stage only; "
                                        "requires the scenario module to define "
-                                       "expected_value_creator)",
+                                       "average_scenario_creator)",
                            domain=bool,
                            default=False)
 

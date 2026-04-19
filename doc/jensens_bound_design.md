@@ -11,12 +11,12 @@ issue in several ways, noted inline.
 
 1. Let any lower-bounder spoke (lagrangian, lagranger, subgradient,
    reduced_costs) optionally compute a Jensen's lower bound from a single
-   expected-value (EV) scenario before it starts its normal iterations, and
+   average scenario before it starts its normal iterations, and
    send that as its first outer bound.
 2. Let any xhat / upper-bounder spoke (xhatshuffle, xhatxbar, xhatlooper,
-   xhatspecific) optionally take the EV-problem's first-stage solution as an
-   xhat, evaluate it across all scenarios, and send that as its first inner
-   bound.
+   xhatspecific) optionally take the average scenario's first-stage
+   solution as an xhat, evaluate it across all scenarios, and send that
+   as its first inner bound.
 3. Do NOT introduce an "iteration -1" in PH, APH, L-shaped, or any hub. All
    Jensen's work happens inside the spoke that opts in.
 4. Two-stage only for this round. Multi-stage is explicitly out of scope.
@@ -27,9 +27,10 @@ issue in several ways, noted inline.
 
 Non-goals:
 
-- Sharing/caching the EV solve across spokes (each spoke solves its own).
+- Sharing/caching the average-scenario solve across spokes (each spoke
+  solves its own).
 - Any change to hub iteration logic.
-- Multi-stage EV-per-node computation.
+- Multi-stage average-per-node computation.
 
 ---
 
@@ -46,25 +47,27 @@ Necessary conditions for an **outer bound** (not sufficient):
 3. Two-stage structure.
 
 mpi-sppy checks (1) automatically on the outer-bound path and refuses to
-compute an outer bound when non-nonant integer/binary Vars exist in the EV
-model. (2) and (3) are the user's responsibility.
+compute an outer bound when non-nonant integer/binary Vars exist in the
+average scenario. (2) and (3) are the user's responsibility.
 
 **Inner bounds (xhatters) are OK regardless of the above.** The xhat path
-uses the EV scenario only as a *source of a candidate first-stage
+uses the average scenario only as a *source of a candidate first-stage
 solution*. That candidate is then honestly evaluated across the real
 scenarios via `Xhat_Eval.evaluate`, so Jensen's convexity assumption never
 enters the validity argument. Integer recourse, non-convex recourse, and
 constraint-matrix randomness are all fine for the xhat path.
 
 For `sense=minimize`:
-  `E[Q(x, ξ)] >= Q(x, E[ξ])` → EV optimum is a valid **lower bound** on the
-  true optimal expected cost → a valid outer bound for a minimization hub.
+  `E[Q(x, ξ)] >= Q(x, E[ξ])` → average-scenario optimum is a valid
+  **lower bound** on the true optimal expected cost → a valid outer
+  bound for a minimization hub.
 
-For `sense=maximize`: inequality flips; EV optimum is a valid **upper bound**
-on the true optimum → still a valid outer bound in the max-sense convention.
+For `sense=maximize`: inequality flips; average-scenario optimum is a
+valid **upper bound** on the true optimum → still a valid outer bound in
+the max-sense convention.
 
 This warning must appear at the top of `doc/src/jensens.rst` (new) and at
-the top of any docstring for `expected_value_creator` examples we ship.
+the top of any docstring for `average_scenario_creator` examples we ship.
 
 ---
 
@@ -73,9 +76,9 @@ the top of any docstring for `expected_value_creator` examples we ship.
 A scenario module that wants to participate must define:
 
 ```python
-def expected_value_creator(scenario_name, **kwargs):
+def average_scenario_creator(scenario_name, **kwargs):
     """Return a Pyomo model with the same shape as scenario_creator(...),
-    but built from expectation-valued random data.
+    but built from sample-averaged random data.
 
     Two-stage: _mpisppy_probability must be 1.0 (a single deterministic
     scenario, not a member of a probabilistic ensemble).
@@ -85,10 +88,14 @@ def expected_value_creator(scenario_name, **kwargs):
 Discovered via the same `hasattr(module, ...)` pattern already used for
 `scenario_denouement` (`generic_cylinders.py:45,88`, `amalgamator.py:173`).
 
-Name rationale: `expected_value_creator`, **not** `jensens_creator` as the
-upstream issue suggested. The function computes the EV scenario; Jensen's
-is how the resulting bound is *interpreted*. The name should describe what
-is built, not what it will be used for.
+Name rationale: `average_scenario_creator`, **not** `jensens_creator` as
+the upstream issue suggested or `expected_value_creator` as an earlier
+draft used. The function builds a single scenario from the *sample mean*
+of the per-scenario data; "expected value" implies the true expectation
+over an underlying distribution, but mpi-sppy works in the SAA world,
+where the right word is "average". Jensen's is how the resulting bound
+is *interpreted*; the name describes what is built, not what it will be
+used for.
 
 ### 2.1 Best-practice pattern: underscore helpers
 
@@ -108,7 +115,7 @@ def scenario_creator(scenario_name, **kwargs):
     prob = 1.0 / kwargs["num_scens"] if kwargs.get("num_scens") else "uniform"
     return _build_model(scenario_name, data, probability=prob, **kwargs)
 
-def expected_value_creator(scenario_name, **kwargs):
+def average_scenario_creator(scenario_name, **kwargs):
     # NOTE: could be multi-threaded for large num_scens.
     snames = scenario_names_creator(kwargs["num_scens"])
     datas  = [_scenario_data(s, **kwargs) for s in snames]
@@ -119,11 +126,11 @@ def expected_value_creator(scenario_name, **kwargs):
 Why this matters:
 
 - One source of truth for "what does the Pyomo model look like." If
-  `scenario_creator` and `expected_value_creator` each build the model
+  `scenario_creator` and `average_scenario_creator` each build the model
   inline, they drift.
 - Separating data from model makes averaging trivial: average the dict, not
   the Pyomo components.
-- Two-stage: every rank independently calls `expected_value_creator` and
+- Two-stage: every rank independently calls `average_scenario_creator` and
   gets an identical model. No collective communication needed.
 
 ---
@@ -150,21 +157,23 @@ CLI form (Pyomo's ConfigDict convention): `--lagrangian-try-jensens-first`.
 
 - `lagrangian`: its normal iter-0 trivial bound (W=0) is already
   wait-and-see and is itself a valid Jensen-like outer bound. The new
-  flag's actual value is getting a cheap EV bound out **before** iter-0
-  finishes — useful when the problem has many scenarios and iter-0 is
-  slow. Document this; do not disable or replace iter-0.
-- `subgradient`: iter-0 solves all scenarios. EV bound arrives earlier.
+  flag's actual value is getting a cheap average-scenario bound out
+  **before** iter-0 finishes — useful when the problem has many
+  scenarios and iter-0 is slow. Document this; do not disable or
+  replace iter-0.
+- `subgradient`: iter-0 solves all scenarios. Average-scenario bound
+  arrives earlier.
 - `reduced_costs`: inherits from lagrangian; same behavior.
-- `lagranger`: does its own PH from scratch; EV bound is essentially free
-  relative to its iter-0.
+- `lagranger`: does its own PH from scratch; average-scenario bound is
+  essentially free relative to its iter-0.
 
 ---
 
 ## 4. Wiring through `cfg_vanilla`
 
-Decision: each affected factory gets a new `expected_value_creator=None`
+Decision: each affected factory gets a new `average_scenario_creator=None`
 kwarg. Driver code (`generic_cylinders.py`, `farmer_cylinders.py`, etc.)
-does `getattr(module, "expected_value_creator", None)` once and threads
+does `getattr(module, "average_scenario_creator", None)` once and threads
 it in. Consistent with how `scenario_creator` is already passed as a
 callable.
 
@@ -172,13 +181,13 @@ Every affected factory gains a block like:
 
 ```python
 if cfg.get("<name>_try_jensens_first", False):
-    if expected_value_creator is None:
+    if average_scenario_creator is None:
         raise RuntimeError(
             "--<name>-try-jensens-first was requested but the scenario "
-            "module has no expected_value_creator function."
+            "module has no average_scenario_creator function."
         )
     spoke_dict["opt_kwargs"]["options"]["jensens"] = {
-        "expected_value_creator": expected_value_creator,
+        "average_scenario_creator": average_scenario_creator,
         "scenario_creator_kwargs": scenario_creator_kwargs,
     }
 ```
@@ -198,9 +207,9 @@ class _JensensMixin:
         return "jensens" in self.opt.options
 
     def _jensens_build_ev(self):
-        """Build the EV scenario model. Used by BOTH outer and inner paths."""
+        """Build the average scenario model. Used by BOTH outer and inner paths."""
         j = self.opt.options["jensens"]
-        ev_creator = j["expected_value_creator"]
+        ev_creator = j["average_scenario_creator"]
         sname = self.opt.all_scenario_names[0]  # name only; data is averaged
         ev_model = ev_creator(sname, **(j["scenario_creator_kwargs"] or {}))
         _assert_two_stage(ev_model)              # len(_mpisppy_node_list) == 1
@@ -299,7 +308,7 @@ def assert_jensen_integer_safe(scenario):
             )
 ```
 
-Called **once, on the EV model, only on the outer-bound (lower-bounder)
+Called **once, on the average scenario, only on the outer-bound (lower-bounder)
 path.** The xhat (inner-bound) path deliberately skips this check — see
 §1 and §5.2.
 
@@ -346,7 +355,7 @@ def _scenario_data(scenario_name, crops_multiplier=1, num_scens=None,
 def _build_model(scenario_name, data, *, use_integer=False, sense=pyo.minimize,
                  crops_multiplier=1, probability):
     """Build the Pyomo model from a data dict. Shared by scenario_creator
-    and expected_value_creator — that sharing is the whole point of the
+    and average_scenario_creator — that sharing is the whole point of the
     split."""
     # ... body is current lines 74-199, reading data["Yield"][crop]
     #     instead of computing the yield inline.
@@ -366,10 +375,10 @@ def scenario_creator(scenario_name, use_integer=False, sense=pyo.minimize,
                         crops_multiplier=crops_multiplier, probability=prob)
 
 
-def expected_value_creator(scenario_name, use_integer=False,
+def average_scenario_creator(scenario_name, use_integer=False,
                            sense=pyo.minimize, crops_multiplier=1,
                            num_scens=None, seedoffset=0):
-    """Deterministic EV scenario for the two-stage scalable farmer.
+    """Deterministic average scenario for the two-stage scalable farmer.
 
     Every rank independently constructs the same model. Not parallelized.
     For large num_scens this could be multi-threaded — for example,
@@ -381,7 +390,7 @@ def expected_value_creator(scenario_name, use_integer=False,
     but that is left for a later pass.
     """
     if num_scens is None:
-        raise ValueError("expected_value_creator requires num_scens")
+        raise ValueError("average_scenario_creator requires num_scens")
     snames = scenario_names_creator(num_scens)
     datas  = [_scenario_data(s, crops_multiplier, num_scens, seedoffset)
               for s in snames]
@@ -394,7 +403,7 @@ def expected_value_creator(scenario_name, use_integer=False,
 
 Notes:
 
-- `num_scens` is required for `expected_value_creator`. The expectation is
+- `num_scens` is required for `average_scenario_creator`. The expectation is
   taken over the explicit scenario set the run uses, per user guidance:
   "compute the scenario data for every scenario that would be called and
   then average the scenario data."
@@ -404,7 +413,7 @@ Notes:
   step never has to guess what kind of scenario it is producing.
 - Multi-threading comment is in the docstring, per user request.
 - **Module-level `farmerstream` is deleted.** Both `scenario_creator`
-  (via `_scenario_data`) and `expected_value_creator` now use a local
+  (via `_scenario_data`) and `average_scenario_creator` now use a local
   `RandomState` per call. One pattern to teach; thread-safe; byte-for-byte
   identical to the old behavior for a given `(scennum, seedoffset)`.
 
@@ -428,7 +437,7 @@ The shipped approach:
 2. In `examples/sizes/sizes.py`, add:
 
 ```python
-def expected_value_creator(scenario_name, scenario_count=None):
+def average_scenario_creator(scenario_name, scenario_count=None):
     """Expected-value scenario for --*-try-jensens-first.
 
     The only stochastic Param in sizes is DemandsSecondStage. We build
@@ -466,7 +475,7 @@ underscore-helper pattern (used by farmer, §7) is *not* introduced
 here on purpose — sizes is deliberately de-emphasized in the RST docs,
 so we do not want to hold it up as a teaching example for the pattern.
 
-Important caveat documented in the `expected_value_creator` docstring:
+Important caveat documented in the `average_scenario_creator` docstring:
 sizes has integer recourse (second-stage `NumProducedSecondStage`,
 `ProduceSizeSecondStage`, etc.), so Jensen's *outer* bound is not
 valid — users who enable `--lagrangian-try-jensens-first` on sizes
@@ -482,7 +491,7 @@ New test module `mpisppy/tests/test_jensens.py`:
 
 1. Positive (lower bound, farmer, 3 scenarios):
    - Run with `--lagrangian-try-jensens-first`.
-   - Assert the first `send_bound` value equals the EV problem's optimum
+   - Assert the first `send_bound` value equals the average-scenario problem's optimum
      (solve it independently in the test).
    - Assert this arrives before the iter-0 lagrangian bound.
 2. Positive (upper bound, farmer, 3 scenarios):
@@ -498,7 +507,7 @@ New test module `mpisppy/tests/test_jensens.py`:
    - Flip `--xhatshuffle-try-jensens-first`. Expect no error — the xhat
      path must not run the integer-safety guard.
 5. Negative (missing callable):
-   - Module lacks `expected_value_creator`. Flip the flag. Expect the
+   - Module lacks `average_scenario_creator`. Flip the flag. Expect the
      `cfg_vanilla`-level error.
 
 ---
@@ -510,7 +519,7 @@ New test module `mpisppy/tests/test_jensens.py`:
 - Body of the RST works almost exclusively against
   `examples/farmer/farmer.py` — code listings, before/after diffs for the
   underscore-helper split, side-by-side of `scenario_creator` vs.
-  `expected_value_creator`.
+  `average_scenario_creator`.
 - Sizes is mentioned only parenthetically, e.g.:
   *(see also `examples/sizes/sizes.py` for a variant with a Pyomo
   AbstractModel that loads scenario data from `.dat` files).*
@@ -533,7 +542,7 @@ bugs. Cover, at minimum:
    Pyomo's component-build order to sequence your random draws. Build
    the data dict in a plain Python loop first; then construct the model.
 3. **`seedoffset` must be threaded through both `scenario_creator` and
-   `expected_value_creator`.** An inconsistent seedoffset between the
+   `average_scenario_creator`.** An inconsistent seedoffset between the
    two creators (e.g. during a confidence-interval run with a non-zero
    offset) yields a Jensen bound that does not match the scenario set
    the run is actually solving.
@@ -542,7 +551,7 @@ bugs. Cover, at minimum:
    because mpi-sppy solves the SAA problem, not the true-distribution
    problem. State this explicitly so users understand what "expected
    value" means in this context.
-5. **Thread-safety of `expected_value_creator`.** The function builds
+5. **Thread-safety of `average_scenario_creator`.** The function builds
    data for every scenario the run would produce. With a local RNG per
    scenario (point 1), this step is safe to parallelize (e.g. via
    `concurrent.futures.ThreadPoolExecutor`). With a shared module-level
@@ -557,18 +566,18 @@ All open questions resolved; implementation can proceed.
 1. Sizes refactor scope: **minimal AbstractModel-path adapter** (§8).
    No ConcreteModel rewrite — the earlier proposal was rolled back
    because the churn is not justified for a de-emphasized example.
-   Sizes ships with `expected_value_creator` and a one-line tweak to
+   Sizes ships with `average_scenario_creator` and a one-line tweak to
    `DemandsSecondStage` (mutable, Real). RST mentions sizes only
    parenthetically.
-2. Factory signature: **add `expected_value_creator=None` kwarg** to each
+2. Factory signature: **add `average_scenario_creator=None` kwarg** to each
    affected factory; drivers pass it via
-   `getattr(module, "expected_value_creator", None)`.
-3. Naming: **`expected_value_creator`** (not `jensens_creator`).
+   `getattr(module, "average_scenario_creator", None)`.
+3. Naming: **`average_scenario_creator`** (not `jensens_creator`).
 4. Flag naming: **kebab-case on CLI, snake_case in `Config`** — matches
    existing conventions.
 5. `num_scens` required for farmer EV: **yes, keep the explicit require.**
 6. Farmer seed management: **option (a)** — delete the module-level
    `farmerstream` global; both `scenario_creator` and
-   `expected_value_creator` use a local `np.random.RandomState(seed)`
+   `average_scenario_creator` use a local `np.random.RandomState(seed)`
    per call. Byte-for-byte identical results; thread-safe; one pattern
    for users to copy.

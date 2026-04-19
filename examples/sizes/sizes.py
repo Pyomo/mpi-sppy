@@ -33,8 +33,8 @@ def scenario_creator(scenario_name, scenario_count=None):
     return model
 
 
-def expected_value_creator(scenario_name, scenario_count=None):
-    """Expected-value scenario for --*-try-jensens-first.
+def average_scenario_creator(scenario_name, scenario_count=None):
+    """Average scenario for --*-try-jensens-first.
 
     The only stochastic Param in sizes is DemandsSecondStage. We build an
     instance from the first scenario's .dat (for every deterministic
@@ -66,16 +66,16 @@ def expected_value_creator(scenario_name, scenario_count=None):
             demand_sums[i] += pyo.value(inst.DemandsSecondStage[i])
     avg_demand = {i: demand_sums[i] / len(snames) for i in demand_sums}
 
-    # Build the EV instance from the first .dat (for deterministic
-    # Params) and overwrite the stochastic Param in-place.
-    ev = ref.model.create_instance(datadir + os.sep + snames[0] + ".dat")
-    for i in ev.ProductSizes:
-        ev.DemandsSecondStage[i] = avg_demand[i]
+    # Build the average-scenario instance from the first .dat (for
+    # deterministic Params) and overwrite the stochastic Param in-place.
+    avg = ref.model.create_instance(datadir + os.sep + snames[0] + ".dat")
+    for i in avg.ProductSizes:
+        avg.DemandsSecondStage[i] = avg_demand[i]
 
-    varlist = [ev.NumProducedFirstStage, ev.NumUnitsCutFirstStage]
-    sputils.attach_root_node(ev, ev.FirstStageCost, varlist)
-    ev._mpisppy_probability = 1.0
-    return ev
+    varlist = [avg.NumProducedFirstStage, avg.NumUnitsCutFirstStage]
+    sputils.attach_root_node(avg, avg.FirstStageCost, varlist)
+    avg._mpisppy_probability = 1.0
+    return avg
 
 
 def scenario_denouement(rank, scenario_name, scenario):

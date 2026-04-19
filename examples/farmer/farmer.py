@@ -32,7 +32,7 @@ import mpisppy.utils.sputils as sputils
 #   _scenario_data : pure-Python random data as a dict, no Pyomo
 #   _build_model   : build the Pyomo model from a data dict
 #
-# scenario_creator and expected_value_creator both go through these
+# scenario_creator and average_scenario_creator both go through these
 # helpers so the model-build code lives in exactly one place. The
 # random data is generated with a LOCAL np.random.RandomState per call
 # (not a module-level global), which is thread-safe and does not rely
@@ -53,7 +53,7 @@ def _scenario_data(scenario_name, crops_multiplier=1, seedoffset=0):
 
     Deterministic given (scenario_name, seedoffset). Uses a local
     np.random.RandomState so the function is thread-safe and can be
-    called from multiple threads in expected_value_creator.
+    called from multiple threads in average_scenario_creator.
 
     Byte-for-byte identical to the previous pattern that seeded a
     module-level RandomState with (scennum + seedoffset) and then
@@ -76,7 +76,7 @@ def _scenario_data(scenario_name, crops_multiplier=1, seedoffset=0):
 def _build_model(scenario_name, data, *, use_integer=False, sense=pyo.minimize,
                  crops_multiplier=1, probability):
     """Build the Pyomo model for the (scalable) farmer example from a
-    data dict. Shared by scenario_creator and expected_value_creator."""
+    data dict. Shared by scenario_creator and average_scenario_creator."""
     if sense not in (pyo.minimize, pyo.maximize):
         raise ValueError("Model sense not recognized")
 
@@ -217,15 +217,15 @@ def scenario_creator(
                         probability=probability)
 
 
-def expected_value_creator(
+def average_scenario_creator(
     scenario_name, use_integer=False, sense=pyo.minimize, crops_multiplier=1,
     num_scens=None, seedoffset=0
 ):
-    """Build the expected-value (EV) scenario used by --*-try-jensens-first.
+    """Build the average scenario used by --*-try-jensens-first.
 
-    The EV scenario is a deterministic single-scenario model whose random
-    data is the sample mean of the data for every scenario in the run
-    (i.e. every name in scenario_names_creator(num_scens)). Its
+    This is a deterministic single-scenario model whose random data is
+    the sample mean of the data for every scenario in the run (i.e.
+    every name in scenario_names_creator(num_scens)). Its
     _mpisppy_probability is 1.0.
 
     Every rank constructs an identical model independently. The loop over
@@ -246,7 +246,7 @@ def expected_value_creator(
     parameters. See doc/src/jensens.rst for the precondition.
     """
     if num_scens is None:
-        raise ValueError("expected_value_creator requires num_scens")
+        raise ValueError("average_scenario_creator requires num_scens")
     snames = scenario_names_creator(num_scens)
     datas = [_scenario_data(s,
                             crops_multiplier=crops_multiplier,

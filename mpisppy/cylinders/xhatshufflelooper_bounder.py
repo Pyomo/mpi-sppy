@@ -69,10 +69,11 @@ class XhatShuffleInnerBound(_JensensMixin, XhatInnerBoundBase):
         self.xhat_prep()
 
         if self._jensens_enabled():
-            ev_model = self._jensens_build_ev()
+            avg_scenario = self._jensens_build_avg()
             # deliberately NO integer-safety check — xhat path tolerates
-            # integer recourse (the EV solution is only a candidate xhat).
-            _, nonant_values = self._jensens_solve(ev_model)
+            # integer recourse (the average-scenario solution is only a
+            # candidate xhat).
+            _, nonant_values = self._jensens_solve(avg_scenario)
             cache = self._jensens_pack_nonant_cache(nonant_values)
             Eobj = self.opt.evaluate(cache)
             self.update_if_improving(Eobj)

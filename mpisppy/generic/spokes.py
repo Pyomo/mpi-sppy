@@ -16,7 +16,7 @@ import mpisppy.utils.cfg_vanilla as vanilla
 def build_spoke_list(cfg, beans, scenario_creator_kwargs,
                      rho_setter, all_nodenames,
                      variable_probability=None,
-                     expected_value_creator=None):
+                     average_scenario_creator=None):
     """Build and return the list of spoke dicts for WheelSpinner.
 
     Args:
@@ -26,7 +26,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
         rho_setter: rho setter function or None
         all_nodenames: list of node names or None
         variable_probability: variable probability list or None (used by ADMM)
-        expected_value_creator: module's expected_value_creator (or None),
+        average_scenario_creator: module's average_scenario_creator (or None),
             needed by any spoke whose --*-try-jensens-first flag is set.
 
     Returns:
@@ -46,7 +46,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                                 rho_setter=rho_setter,
                                                 all_nodenames=all_nodenames,
-                                                expected_value_creator=expected_value_creator,
+                                                average_scenario_creator=average_scenario_creator,
                                                 )
         if cfg.lagrangian_starting_mipgap is not None:
             vanilla.add_gapper(lagrangian_spoke, cfg, "lagrangian")
@@ -93,7 +93,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
                                           scenario_creator_kwargs=scenario_creator_kwargs,
                                           rho_setter=rho_setter,
                                           all_nodenames=all_nodenames,
-                                          expected_value_creator=expected_value_creator,
+                                          average_scenario_creator=average_scenario_creator,
                                           )
         if cfg.sep_rho:
             vanilla.add_sep_rho(subgradient_spoke, cfg)
@@ -107,7 +107,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans,
                                                       scenario_creator_kwargs=scenario_creator_kwargs,
                                                       all_nodenames=all_nodenames,
-                                                      expected_value_creator=expected_value_creator)
+                                                      average_scenario_creator=average_scenario_creator)
         # special code for multi-stage (e.g., hydro)
         if cfg.get("stage2EFsolvern") is not None:
             xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = cfg["stage2EFsolvern"]
@@ -118,7 +118,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
                                                    scenario_creator_kwargs=scenario_creator_kwargs,
                                                    variable_probability=variable_probability,
                                                    all_nodenames=all_nodenames,
-                                                   expected_value_creator=expected_value_creator)
+                                                   average_scenario_creator=average_scenario_creator)
 
     # reduced cost fixer options setup
     if cfg.reduced_costs:
@@ -126,7 +126,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               all_nodenames=all_nodenames,
                                               rho_setter=None,
-                                              expected_value_creator=expected_value_creator)
+                                              average_scenario_creator=average_scenario_creator)
 
     list_of_spoke_dict = list()
     if cfg.fwph:

@@ -46,7 +46,7 @@ model.ProductSizes = Set(initialize=product_sizes_rule)
 # the deterministic demands for product at each size.
 model.DemandsFirstStage = Param(model.ProductSizes, within=NonNegativeIntegers)
 # DemandsSecondStage is declared mutable and real so that
-# expected_value_creator can overwrite it with an averaged value (which
+# average_scenario_creator can overwrite it with an averaged value (which
 # will generally be non-integer) for Jensen's-bound computation. See
 # doc/src/jensens.rst.
 model.DemandsSecondStage = Param(model.ProductSizes,

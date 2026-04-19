@@ -29,10 +29,10 @@ class SubgradientOuterBound(_JensensMixin, mpisppy.cylinders.spoke.OuterBoundSpo
         self.opt.PH_Prep(attach_prox=attach_prox, attach_smooth = 0)
 
         if self._jensens_enabled():
-            ev_model = self._jensens_build_ev()
-            self._jensens_assert_safe_for_outer_bound(ev_model)
-            ev_outer_bound, _ = self._jensens_solve(ev_model)
-            self.send_bound(ev_outer_bound)
+            avg_scenario = self._jensens_build_avg()
+            self._jensens_assert_safe_for_outer_bound(avg_scenario)
+            avg_outer_bound, _ = self._jensens_solve(avg_scenario)
+            self.send_bound(avg_outer_bound)
 
         trivial_bound = self.opt.Iter0()
 
