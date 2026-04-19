@@ -249,10 +249,13 @@ if run_second_part:
            "--default-rho=1 --xhatshuffle --lagrangian "
            "--solver-name={} --stage2EFsolvern={}".format(solver_name, solver_name))
 
-    do_one("hydro", "hydro_cylinders_pysp.py", 3,
-           "--max-iterations=100 "
-           "--default-rho=1 --xhatshuffle --lagrangian "
-           "--solver-name={}".format(solver_name))
+    # Same hydro run via the generic driver (replaces the archived PySP
+    # custom driver; hydro_cylinders.py above is kept for its rst references).
+    do_one("hydro", "../../mpisppy/generic_cylinders.py", 3,
+           "--module-name hydro --branching-factors \'3 3\' "
+           "--max-iterations=100 --default-rho=1 "
+           "--xhatshuffle --lagrangian "
+           "--stage2EFsolvern={} --solver-name={}".format(solver_name, solver_name))
 
     # the next might hang with 6 ranks
     do_one("aircond", "aircond_cylinders.py", 3,
