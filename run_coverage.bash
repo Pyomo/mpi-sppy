@@ -145,9 +145,12 @@ run_phase "examples/generic_tester.py ${SOLVER}_direct nouc" \
 if has_module egret; then
     run_phase "examples/run_uc.py $SOLVER_PERSISTENT" \
         bash -c "cd '$PROJ_DIR/examples' && $EX_COV run_uc.py '$SOLVER_PERSISTENT' '' --python-args='$PYARGS'"
+
+    run_phase "examples/run_uc_pr.py $SOLVER_PERSISTENT" \
+        bash -c "cd '$PROJ_DIR/examples' && $EX_COV run_uc_pr.py '$SOLVER_PERSISTENT' '' --python-args='$PYARGS'"
 else
     echo ""
-    echo "=== skipping run_uc.py: egret not importable ==="
+    echo "=== skipping run_uc.py and run_uc_pr.py: egret not importable ==="
 fi
 
 # ---------- Optional tests (skip if deps missing) ----------
