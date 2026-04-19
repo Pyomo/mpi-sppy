@@ -25,6 +25,40 @@ from pyomo.opt import TerminationCondition
 import mpisppy.utils.sputils as sputils
 
 
+def assert_jensen_integer_safe(scenario):
+    """Raise if any integer/binary Var is outside the nonant set.
+
+    Necessary (not sufficient) check that recourse is convex in the
+    random parameters. Jensen's bound is only valid under that
+    assumption; convexity in the random parameters cannot be checked
+    statically, but the presence of integer recourse is a common
+    failure mode that is easy to detect.
+
+    Callers: only the lower-bounder (outer-bound) Jensen's path. Inner
+    bounds (xhatters) tolerate integer recourse because the EV solution
+    is only used as a candidate xhat, which is then honestly evaluated
+    across the real scenarios.
+
+    Reads nonants from scenario._mpisppy_node_list (set by
+    attach_root_node / attach_nodes), so this works on a model that has
+    NOT yet been processed by SPBase — which is exactly the state an EV
+    model is in when this check runs.
+    """
+    nonant_ids = set()
+    for node in scenario._mpisppy_node_list:
+        for v in node.nonant_vardata_list:
+            nonant_ids.add(id(v))
+    for v in scenario.component_data_objects(pyo.Var, descend_into=True):
+        if id(v) in nonant_ids:
+            continue
+        if v.is_integer() or v.is_binary():
+            raise RuntimeError(
+                f"Jensen's bound requires convex recourse, but non-nonant "
+                f"integer/binary Var found: {v.name}. Disable the "
+                f"--*-try-jensens-first flag, or reformulate."
+            )
+
+
 class _JensensMixin:
 
     def _jensens_enabled(self):
@@ -67,17 +101,27 @@ class _JensensMixin:
         """Raise if the EV model has integer/binary Vars outside the
         nonant set. Outer-bound (lower-bounder) path only. The xhat
         (inner-bound) path does NOT call this — see design doc §1."""
-        sputils.assert_jensen_integer_safe(ev_model)
+        assert_jensen_integer_safe(ev_model)
 
     def _jensens_solve(self, ev_model):
         """Solve ev_model with the spoke's configured solver.
 
-        Returns (obj_value, nonant_values) where nonant_values is a list
-        in the order of ev_model._mpisppy_node_list[0].nonant_vardata_list
-        (i.e. ROOT).
+        Returns (outer_bound, nonant_values).
+
+        outer_bound is the solver's best dual bound (results.problem.lower_bound
+        for minimize, .upper_bound for maximize) — NOT the incumbent
+        objective value. With the dual bound, a non-zero MIP gap on this
+        solve does not invalidate Jensen's outer bound; with the incumbent
+        it would. For an LP the two coincide.
+
+        nonant_values is a list in the order of
+        ev_model._mpisppy_node_list[0].nonant_vardata_list (ROOT).
+
+        Uses iterk_solver_options because the EV solve plays the role of a
+        production-tolerance solve, not a first-iteration one.
         """
         solver_name = self.opt.options["solver_name"]
-        solver_options = self.opt.options.get("iter0_solver_options") or {}
+        solver_options = self.opt.options.get("iterk_solver_options") or {}
         solver = pyo.SolverFactory(solver_name)
         for k, v in solver_options.items():
             solver.options[k] = v
@@ -92,10 +136,20 @@ class _JensensMixin:
             raise RuntimeError(
                 f"Jensen's EV solve failed with termination_condition={tc}"
             )
-        obj = pyo.value(sputils.find_active_objective(ev_model))
+        sense = sputils.find_active_objective(ev_model).sense
+        if sense == pyo.minimize:
+            outer_bound = results.problem.lower_bound
+        else:
+            outer_bound = results.problem.upper_bound
+        if outer_bound is None or outer_bound != outer_bound:
+            raise RuntimeError(
+                "Jensen's EV solve did not report a finite dual bound "
+                f"(results.problem.{'lower' if sense == pyo.minimize else 'upper'}"
+                "_bound). Cannot send a valid outer bound."
+            )
         root = ev_model._mpisppy_node_list[0]
         nonant_values = [pyo.value(v) for v in root.nonant_vardata_list]
-        return obj, nonant_values
+        return outer_bound, nonant_values
 
     def _jensens_pack_nonant_cache(self, nonant_values):
         """Pack EV nonant values into the dict-by-nodename cache format

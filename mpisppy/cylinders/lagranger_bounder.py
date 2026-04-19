@@ -89,8 +89,8 @@ class LagrangerOuterBound(_JensensMixin, _LagrangianMixin, mpisppy.cylinders.spo
         if self._jensens_enabled():
             ev_model = self._jensens_build_ev()
             self._jensens_assert_safe_for_outer_bound(ev_model)
-            ev_obj, _ = self._jensens_solve(ev_model)
-            self.send_bound(ev_obj)
+            ev_outer_bound, _ = self._jensens_solve(ev_model)
+            self.send_bound(ev_outer_bound)
 
         if extensions:
             self.opt.extobject.pre_iter0()

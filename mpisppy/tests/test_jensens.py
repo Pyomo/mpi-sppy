@@ -21,7 +21,10 @@ import unittest
 import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils
-from mpisppy.cylinders._jensens_mixin import _JensensMixin
+from mpisppy.cylinders._jensens_mixin import (
+    _JensensMixin,
+    assert_jensen_integer_safe,
+)
 from mpisppy.tests.utils import get_solver
 
 # make the examples importable for the positive/negative tests
@@ -37,7 +40,7 @@ solver_available, solver_name, _, _ = get_solver()
 
 
 class TestAssertJensenIntegerSafe(unittest.TestCase):
-    """Unit tests for sputils.assert_jensen_integer_safe."""
+    """Unit tests for assert_jensen_integer_safe."""
 
     def _mk_model(self, nonant_is_int=False, recourse_is_int=False):
         m = pyo.ConcreteModel()
@@ -52,16 +55,16 @@ class TestAssertJensenIntegerSafe(unittest.TestCase):
 
     def test_continuous_recourse_passes(self):
         m = self._mk_model(nonant_is_int=False, recourse_is_int=False)
-        sputils.assert_jensen_integer_safe(m)
+        assert_jensen_integer_safe(m)
 
     def test_integer_nonant_passes(self):
         m = self._mk_model(nonant_is_int=True, recourse_is_int=False)
-        sputils.assert_jensen_integer_safe(m)
+        assert_jensen_integer_safe(m)
 
     def test_integer_recourse_raises(self):
         m = self._mk_model(nonant_is_int=False, recourse_is_int=True)
         with self.assertRaises(RuntimeError) as ctx:
-            sputils.assert_jensen_integer_safe(m)
+            assert_jensen_integer_safe(m)
         self.assertIn("integer/binary Var", str(ctx.exception))
 
     def test_binary_recourse_raises(self):
@@ -72,7 +75,7 @@ class TestAssertJensenIntegerSafe(unittest.TestCase):
         m.obj = pyo.Objective(expr=m.x + m.b)
         sputils.attach_root_node(m, m.fsc, [m.x])
         with self.assertRaises(RuntimeError):
-            sputils.assert_jensen_integer_safe(m)
+            assert_jensen_integer_safe(m)
 
 
 class TestFarmerExpectedValueCreator(unittest.TestCase):
@@ -125,6 +128,7 @@ class _FakeSpoke(_JensensMixin):
         self.opt.options = {
             "solver_name": solver_name,
             "iter0_solver_options": {},
+            "iterk_solver_options": {},
             "jensens": jensens_dict,
         }
         self.opt.all_scenario_names = all_scenario_names
@@ -154,11 +158,12 @@ class TestJensensMixinEndToEnd(unittest.TestCase):
         # farmer has continuous recourse — safe for outer bound
         sp._jensens_assert_safe_for_outer_bound(ev)
 
-    def test_solve_returns_finite_obj_and_root_nonants(self):
+    def test_solve_returns_finite_outer_bound_and_root_nonants(self):
         sp = self._spoke()
         ev = sp._jensens_build_ev()
-        obj, nonants = sp._jensens_solve(ev)
-        self.assertTrue(pyo.value(obj) == pyo.value(obj))  # not NaN
+        outer_bound, nonants = sp._jensens_solve(ev)
+        self.assertIsNotNone(outer_bound)
+        self.assertTrue(outer_bound == outer_bound)  # not NaN
         self.assertEqual(len(nonants),
                          len(ev._mpisppy_node_list[0].nonant_vardata_list))
 

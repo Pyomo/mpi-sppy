@@ -51,11 +51,36 @@ builds a single *expected-value (EV) scenario* (via the module's
 ``expected_value_creator``; see below), solves it with the spoke's
 configured solver, and then:
 
-* on the outer-bound path, sends the EV optimum as its first outer
-  bound;
+* on the outer-bound path, sends the solver's best dual bound on the EV
+  problem as its first outer bound;
 * on the xhat path, takes the EV first-stage solution, evaluates it
   across all scenarios, and reports the expected cost as its first
   inner bound if it is feasible for all scenarios.
+
+.. admonition:: Solver options and what is extracted as the bound
+   :class: note
+
+   The EV solve uses ``iterk_solver_options`` (the spoke's
+   "production" tolerances), not ``iter0_solver_options``. The EV
+   solve is a one-shot deterministic solve, not a first-iteration
+   subproblem solve.
+
+   On the outer-bound path the value sent to the hub is the **solver's
+   best dual bound** on the EV problem (Pyomo's
+   ``results.problem.lower_bound`` for minimize, ``upper_bound`` for
+   maximize), not the incumbent objective value. With the dual bound,
+   a non-zero MIP gap on the EV solve does **not** invalidate
+   Jensen's outer bound — the dual bound is a valid lower bound on
+   the EV optimum regardless of gap, and Jensen's inequality
+   transitively makes it a valid lower bound on the expected
+   recourse cost. (For an LP the dual bound and the incumbent
+   coincide, so this distinction collapses.)
+
+   On the xhat path the dual bound is ignored; only the first-stage
+   nonant values are used, and they are honestly re-evaluated across
+   the real scenarios via ``Xhat_Eval.evaluate``. A loose MIP gap on
+   the EV solve there just means a possibly-worse candidate xhat,
+   never an invalid bound.
 
 The spoke then continues its normal loop. There is **no** "iteration
 -1" in PH, APH, L-shaped, or any hub — the Jensen's work happens
