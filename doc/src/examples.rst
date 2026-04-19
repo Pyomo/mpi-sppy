@@ -309,15 +309,23 @@ This is fairly complicated example because it is multi-stage and the
 model itself offers a lot of flexibility.  The aircond example is
 unusual in that the model file, ``aircond.py``, lives in
 ``mpisppy.tests.examples`` directory. Scripts and bash files that use
-it live in ``examples.aircond``.  A good place to start is the
-``aircond_cylinders.py`` file that starts with some functions that
-support the main program. The main program makes use of the 
-``Config`` object called `cfg` that creates a parser and gets arguments.
+it live in ``examples.aircond``.  Because ``aircond.py`` provides
+``scenario_creator``, ``inparser_adder``, ``kw_creator``,
+``scenario_names_creator`` and ``sample_tree_scen_creator``, runs can
+go through ``mpisppy/generic_cylinders.py`` by pointing
+``--module-name`` at ``mpisppy/tests/examples/aircond``.
 
-The configuration data obtained by the parser are passed directly to the vanilla hub
-and spoke creator which knows how to use the arguments from a ``Config`` object.
-The arguments unique to aircond are processed by the ``create_kwargs`` function
-in the reference model file.
+A good place to start reading is the ``aircond_cylinders.py`` file,
+which is retained as a worked example of the hand-rolled cylinders
+pattern (and, together with ``bundle_pickler.py``, as the canonical
+proper-bundles demo). It starts with some functions that support the
+main program, and the main program makes use of the ``Config`` object
+called `cfg` that creates a parser and gets arguments. The
+configuration data obtained by the parser are passed directly to the
+vanilla hub and spoke creator which knows how to use the arguments
+from a ``Config`` object. The arguments unique to aircond are
+processed by the ``create_kwargs`` function in the reference model
+file.
 
 A simple example that uses a few of the options is shown in ``aircond_zhat.bash``, which
 also calls the ``xhat4xhat`` program to estimate confidence intervals for the solution
