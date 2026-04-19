@@ -314,7 +314,7 @@ jobs:
           git clone https://github.com/pyomo/pyomo.git
           cd pyomo/
           pip install -e .
-          pyomo download-extensions
+          pyomo download-extensions || echo "WARNING: pyomo download-extensions had failures (often a netlib.org timeout fetching gjh); not required by test_sc.py"
           pyomo build-extensions
           cd ../
           pip install git+https://github.com/parapint/parapint.git
