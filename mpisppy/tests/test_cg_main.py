@@ -10,16 +10,12 @@
 # This exercises the standalone CG code path
 
 
-import os
-import shutil
 import unittest
 
-import pyomo.environ as pyo
 import mpisppy.opt.cg
 import mpisppy.tests.examples.farmer as farmer
 from mpisppy.tests.examples.sizes.sizes import scenario_creator as sizes_creator, \
-                                               scenario_denouement as sizes_denouement, \
-                                               id_fix_list_fct
+                                               scenario_denouement as sizes_denouement
 from mpisppy.tests.utils import get_solver
 import mpisppy.MPI as mpi
 
