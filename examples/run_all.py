@@ -264,6 +264,16 @@ if run_second_part:
            "--default-rho=1 --lagrangian --xhatshuffle "
            "--solver-name={}".format(solver_name))
 
+    # aircondMulti: multi-product aircond, model module in
+    # mpisppy/tests/examples/aircondMulti.py. generic_cylinders needs
+    # --stage2EFsolvern for multistage --xhatshuffle and this module
+    # doesn't register it, so use --xhatxbar for the inner bound.
+    do_one("aircondMulti", "../../mpisppy/generic_cylinders.py", 3,
+           "--module-name ../../mpisppy/tests/examples/aircondMulti "
+           "--branching-factors \'3 3\' --max-iterations=5 "
+           "--default-rho=1 --lagrangian --xhatxbar "
+           "--solver-name={}".format(solver_name))
+
     #=========MMW TESTS==========
     # do_one_mmw is special
     do_one_mmw("farmer/CI", "farmer", f"python farmer_ef.py 1 3 0 {solver_name}", "farmer_root_nonants.npy", f"--MMW-num-batches=5 --confidence-level 0.95 --MMW-batch-size=10 --start-scen 4 --EF-solver-name={solver_name}")
