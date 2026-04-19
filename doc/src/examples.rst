@@ -366,9 +366,11 @@ so the use of that spoke is illustrated in ``netdes_cylinders.py``.
 sslp
 ----
 
-This is a classic problem from Ntaimo and Sen with data in PySP format
-so the driver code (e.g., ``sslp_cylinders.py`` that makes use of ``sslp.py``) is somewhat similar to the
-hydro example except sslp is simpler because it is just two stages.
+This is a classic problem from Ntaimo and Sen with data in PySP format.
+``sslp.py`` provides the model-module hooks so most runs go through
+``mpisppy/generic_cylinders.py``. ``sslp_cylinders.py`` is retained as
+a worked example of the hand-rolled cylinders driver; it is similar to
+the hydro example except sslp is simpler because it is just two stages.
 
 UC
 --
