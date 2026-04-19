@@ -26,6 +26,30 @@ def _hasit(cfg, argname):
         return val
     return val is not None
 
+
+def _maybe_attach_jensens(spoke_dict, cfg, spoke_prefix,
+                          average_scenario_creator, scenario_creator_kwargs):
+    """Attach Jensen's options to spoke_dict when the corresponding
+    --<spoke_prefix>-try-jensens-first flag is set.
+
+    The spoke reads these at runtime via self.opt.options["jensens"] and
+    drives _JensensMixin. See doc/jensens_bound_design.md.
+    """
+    flag = f"{spoke_prefix}_try_jensens_first"
+    if not cfg.get(flag, False):
+        return
+    if average_scenario_creator is None:
+        raise RuntimeError(
+            f"--{spoke_prefix.replace('_', '-')}-try-jensens-first was set, "
+            "but the scenario module does not define average_scenario_creator. "
+            "Either implement average_scenario_creator on the module, or turn "
+            "the flag off."
+        )
+    spoke_dict["opt_kwargs"]["options"]["jensens"] = {
+        "average_scenario_creator": average_scenario_creator,
+        "scenario_creator_kwargs": scenario_creator_kwargs,
+    }
+
 def shared_options(cfg):
     shoptions = {
         "solver_name": cfg.solver_name,
@@ -692,6 +716,7 @@ def lagrangian_spoke(
     all_nodenames=None,
     ph_extensions=None,
     extension_kwargs=None,
+    average_scenario_creator=None,
 ):
     from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
     lagrangian_spoke = _PHBase_spoke_foundation(
@@ -708,6 +733,8 @@ def lagrangian_spoke(
     )
     apply_solver_specs("lagrangian", lagrangian_spoke, cfg)
     add_ph_tracking(lagrangian_spoke, cfg, spoke=True)
+    _maybe_attach_jensens(lagrangian_spoke, cfg, "lagrangian",
+                          average_scenario_creator, scenario_creator_kwargs)
 
     return lagrangian_spoke
 
@@ -722,6 +749,7 @@ def reduced_costs_spoke(
     all_nodenames=None,
     ph_extensions=None,
     extension_kwargs=None,
+    average_scenario_creator=None,
 ):
     from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
     rc_spoke = _PHBase_spoke_foundation(
@@ -739,6 +767,8 @@ def reduced_costs_spoke(
 
     apply_solver_specs("reduced_costs", rc_spoke, cfg)
     add_ph_tracking(rc_spoke, cfg, spoke=True)
+    _maybe_attach_jensens(rc_spoke, cfg, "reduced_costs",
+                          average_scenario_creator, scenario_creator_kwargs)
 
     return rc_spoke
 
@@ -755,6 +785,7 @@ def lagranger_spoke(
     all_nodenames = None,
     ph_extensions=None,
     extension_kwargs=None,
+    average_scenario_creator=None,
 ):
     from mpisppy.cylinders.lagranger_bounder import LagrangerOuterBound
     lagranger_spoke = _PHBase_spoke_foundation(
@@ -780,6 +811,8 @@ def lagranger_spoke(
             ["lagranger_rho_rescale_factors_json"]\
             = cfg.lagranger_rho_rescale_factors_json
     add_ph_tracking(lagranger_spoke, cfg, spoke=True)
+    _maybe_attach_jensens(lagranger_spoke, cfg, "lagranger",
+                          average_scenario_creator, scenario_creator_kwargs)
     return lagranger_spoke
 
 
@@ -793,6 +826,7 @@ def subgradient_spoke(
     all_nodenames=None,
     ph_extensions=None,
     extension_kwargs=None,
+    average_scenario_creator=None,
 ):
     from mpisppy.opt.subgradient import Subgradient
     from mpisppy.cylinders.subgradient_bounder import SubgradientOuterBound
@@ -822,6 +856,8 @@ def subgradient_spoke(
     options["display_convergence_detail"] = False
 
     add_ph_tracking(subgradient_spoke, cfg, spoke=True)
+    _maybe_attach_jensens(subgradient_spoke, cfg, "subgradient",
+                          average_scenario_creator, scenario_creator_kwargs)
 
     return subgradient_spoke
 
@@ -914,11 +950,12 @@ def xhatlooper_spoke(
     scenario_creator_kwargs=None,
     ph_extensions=None,
     extension_kwargs=None,
+    average_scenario_creator=None,
 ):
 
     from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
     xhatlooper_dict = _Xhat_Eval_spoke_foundation(
-        XhatLooperInnerBound,        
+        XhatLooperInnerBound,
         cfg,
         scenario_creator,
         scenario_denouement,
@@ -934,7 +971,9 @@ def xhatlooper_spoke(
         "dump_prefix": "delme",
         "csvname": "looper.csv",
     }
-    
+    _maybe_attach_jensens(xhatlooper_dict, cfg, "xhatlooper",
+                          average_scenario_creator, scenario_creator_kwargs)
+
     return xhatlooper_dict
 
 
@@ -948,6 +987,7 @@ def xhatxbar_spoke(
         ph_extensions=None,
         extension_kwargs=None,
         all_nodenames=None,
+        average_scenario_creator=None,
 ):
     from mpisppy.cylinders.xhatxbar_bounder import XhatXbarInnerBound
     xhatxbar_dict = _Xhat_Eval_spoke_foundation(
@@ -969,6 +1009,8 @@ def xhatxbar_spoke(
     }
     
     xhatxbar_dict["opt_kwargs"]["variable_probability"] = variable_probability
+    _maybe_attach_jensens(xhatxbar_dict, cfg, "xhatxbar",
+                          average_scenario_creator, scenario_creator_kwargs)
 
     return xhatxbar_dict
 
@@ -982,6 +1024,7 @@ def xhatshuffle_spoke(
     scenario_creator_kwargs=None,
     ph_extensions=None,
     extension_kwargs=None,
+    average_scenario_creator=None,
 ):
 
     from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
@@ -1005,6 +1048,8 @@ def xhatshuffle_spoke(
         xhatshuffle_dict["opt_kwargs"]["options"]["xhat_looper_options"]["reverse"] = cfg.add_reversed_shuffle
     if _hasit(cfg, "add_reversed_shuffle"):
         xhatshuffle_dict["opt_kwargs"]["options"]["xhatshuffle_iter_step"] = cfg.xhatshuffle_iter_step
+    _maybe_attach_jensens(xhatshuffle_dict, cfg, "xhatshuffle",
+                          average_scenario_creator, scenario_creator_kwargs)
 
     return xhatshuffle_dict
 
@@ -1019,11 +1064,12 @@ def xhatspecific_spoke(
     scenario_creator_kwargs=None,
     ph_extensions=None,
     extension_kwargs=None,
+    average_scenario_creator=None,
 ):
 
     from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
     xhatspecific_dict = _Xhat_Eval_spoke_foundation(
-        XhatSpecificInnerBound,        
+        XhatSpecificInnerBound,
         cfg,
         scenario_creator,
         scenario_denouement,
@@ -1032,6 +1078,8 @@ def xhatspecific_spoke(
         ph_extensions=ph_extensions,
         extension_kwargs=extension_kwargs,
     )
+    _maybe_attach_jensens(xhatspecific_dict, cfg, "xhatspecific",
+                          average_scenario_creator, scenario_creator_kwargs)
     return xhatspecific_dict
 
 def xhatlshaped_spoke(
