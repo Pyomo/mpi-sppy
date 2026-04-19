@@ -326,7 +326,16 @@ obtained.
 aircondMulti
 ------------
 
-This is a multi-product version of aircond. It is also in the tests examples directory.
+This is a multi-product version of aircond. The model module lives in
+``mpisppy/tests/examples/aircondMulti.py``; runs go through
+``mpisppy/generic_cylinders.py`` with
+``--module-name ../../mpisppy/tests/examples/aircondMulti``. See
+``examples/aircondMulti/README`` for a pointer and
+``examples/run_all.py`` for the regression-test command line.
+
+Note: ``sample_tree_scen_creator`` is not implemented for aircondMulti,
+so MMW / sequential-sampling confidence intervals are not available
+for this example.
 
 hydro
 -----
