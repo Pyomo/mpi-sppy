@@ -127,5 +127,91 @@ class TestProperBundlerBundleSplit(unittest.TestCase):
         self.assertEqual(mod.captured, ["scen3", "scen4", "scen5"])
 
 
+def _scenario_with_fixed_nonants(sname, **kwargs):
+    """Two-stage scenario with three nonants; the middle one is fixed.
+
+    Mimics the structure that triggers issue #668: bundle.ref_vars (and
+    thus the bundle's nonant_indices) skips the fixed position, so
+    bundle nonant index k != per-scenario position k.
+    """
+    m = pyo.ConcreteModel(name=sname)
+    m.x = pyo.Var([0, 1, 2], bounds=(0, 10))
+    m.x[1].fix(5.0)  # the middle position is fixed
+    m.fsc = pyo.Expression(expr=m.x[0] + m.x[1] + m.x[2])
+    m.obj = pyo.Objective(expr=2.0 * m.x[0] + 3.0 * m.x[1] + 5.0 * m.x[2])
+    sputils.attach_root_node(m, m.fsc, [m.x[0], m.x[1], m.x[2]])
+    m._mpisppy_probability = "uniform"
+    return m
+
+
+class _ModuleWithFixedNonant:
+    @staticmethod
+    def scenario_names_creator(num_scens, start=None):
+        if start is None:
+            start = 0
+        return [f"scen{i}" for i in range(start, start + num_scens)]
+
+    @staticmethod
+    def kw_creator(cfg):
+        return {}
+
+    scenario_creator = staticmethod(_scenario_with_fixed_nonants)
+
+
+class TestNonantCostCoeffsBundleWithFixedNonants(unittest.TestCase):
+    """Regression for issue #668.
+
+    `sputils.nonant_cost_coeffs` used to enumerate per-scenario nonants
+    with sequential positions (0..N-1) and look those positions up in
+    cost_coefs (keyed by bundle nonant indices, 0..M-1 with M < N when
+    create_EF skips fixed-var positions). The lookup KeyError'd for any
+    per-scenario position whose bundle index didn't exist. Trips when
+    --linearize-proximal-terms is set with proper bundles on a model
+    with fixed first-stage vars.
+    """
+
+    def _build_bundle(self):
+        cfg = _make_cfg(num_scens=3, scenarios_per_bundle=3)
+        pb = ProperBundler(_ModuleWithFixedNonant)
+        pb.set_bunBFs(cfg)
+        kwargs = pb.kw_creator(cfg)
+        bundle = pb.scenario_creator("Bundle_0_2", **kwargs)
+        return bundle
+
+    def test_bundle_skips_fixed_var_in_nonantlist(self):
+        # Sanity: the bundle's nonant_vardata_list excludes the fixed var.
+        bundle = self._build_bundle()
+        node = bundle._mpisppy_node_list[0]
+        self.assertEqual(len(node.nonant_vardata_list), 2)
+        # Per-scenario list still has all three.
+        scen0 = bundle.component(bundle._ef_scenario_names[0])
+        self.assertEqual(len(scen0._mpisppy_node_list[0].nonant_vardata_list), 3)
+
+    def test_nonant_cost_coeffs_does_not_keyerror(self):
+        bundle = self._build_bundle()
+        # Mimic the SPBase setup that nonant_cost_coeffs needs (normally
+        # done by SPBase._attach_nonant_indices).
+        node = bundle._mpisppy_node_list[0]
+        bundle._mpisppy_data.nonant_indices = {
+            (node.name, i): v for i, v in enumerate(node.nonant_vardata_list)
+        }
+        bundle._mpisppy_data.varid_to_nonant_index = {
+            id(v): k for k, v in bundle._mpisppy_data.nonant_indices.items()
+        }
+        # Pre-fix this raised KeyError(("ROOT", j)) for any per-scenario
+        # position j that wasn't in the bundle's filtered nonantlist.
+        coefs = sputils.nonant_cost_coeffs(bundle)
+        # Bundle nonants are x[0] and x[2] (x[1] was fixed away).
+        # The bundle EF objective is sum_s prob_s * scen_obj_s, divided by
+        # total probability. With uniform probability over 3 scenarios,
+        # the coefficient on (ROOT, 0) is 3 * (1/3) * 2.0 = 2.0, and on
+        # (ROOT, 1) it is 3 * (1/3) * 5.0 = 5.0.
+        self.assertEqual(set(coefs.keys()),
+                         {(node.name, 0), (node.name, 1)})
+        self.assertAlmostEqual(coefs[(node.name, 0)], 2.0)
+        self.assertAlmostEqual(coefs[(node.name, 1)], 5.0)
+
+
+
 if __name__ == "__main__":
     unittest.main()

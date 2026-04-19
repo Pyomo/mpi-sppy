@@ -1061,13 +1061,30 @@ def nonant_cost_coeffs(s):
 
     # deal with proper bundles
     if hasattr(s, "_ef_scenario_names"):
+        # The bundle's nonant_indices are NOT keyed by per-scenario position:
+        # proper_bundler builds the bundle's nonantlist by iterating
+        # bundle.ref_vars in insertion order and skipping ref_surrogate_vars,
+        # and create_EF skips per-scenario positions whose var is fixed
+        # (nonant_for_fixed_vars=False). So bundle nonant index k is the
+        # k-th surviving (ndn, per_scen_i) entry. Map per-scenario var id ->
+        # bundle (ndn, k) using that ordering.
+        per_scen_to_bundle = {}
+        counters = {}
+        for (ndn, per_scen_i) in s.ref_vars.keys():
+            if (ndn, per_scen_i) in s.ref_surrogate_vars:
+                continue
+            counters.setdefault(ndn, 0)
+            per_scen_to_bundle[(ndn, per_scen_i)] = (ndn, counters[ndn])
+            counters[ndn] += 1
         nonant_varids = {}
         for scenario_name in s._ef_scenario_names:
             scenario = s.component(scenario_name)
             for node in scenario._mpisppy_node_list:
                 ndn = node.name
-                for i, v in enumerate(node.nonant_vardata_list):
-                    nonant_varids[id(v)] = (ndn, i)
+                for per_scen_i, v in enumerate(node.nonant_vardata_list):
+                    bundle_key = per_scen_to_bundle.get((ndn, per_scen_i))
+                    if bundle_key is not None:
+                        nonant_varids[id(v)] = bundle_key
     else:
         nonant_varids = s._mpisppy_data.varid_to_nonant_index
 
