@@ -91,11 +91,11 @@ do_one_serial("uc", "uc_ef.py", solver_name + " 3")
 # Cross-scenario cuts demo: PH hub + xhatlooper + cross-scen cut spoke.
 # --solver-options loosens the per-subproblem MIP gap (HiGHS option name
 # mip_rel_gap; also accepted by gurobi/cplex via their equivalents) so
-# individual solves return quickly on the 2-core GitHub runner. The 5%
+# individual solves return quickly on the 2-core GitHub runner. The 50%
 # gap is purely a CI budget choice — this is a smoke test, not a tuning run.
 do_one("uc", "cs_uc.py", 3,
        "--max-iterations=1 --default-rho=1 --num-scens=3 "
-       "--solver-options=\"mip_rel_gap=0.05\" "
+       "--solver-options=\"mip_rel_gap=0.5 threads=1\" "
        "--linearize-proximal-terms "
        "--solver-name={}".format(solver_name))
 
@@ -103,7 +103,7 @@ do_one("uc", "cs_uc.py", 3,
 do_one("uc", "../../mpisppy/generic_cylinders.py", 3,
        "--module-name uc_funcs --max-iterations=1 --default-rho=1 "
        "--xhatshuffle --lagrangian --num-scens=3 "
-       "--solver-options=\"mip_rel_gap=0.05\" "
+       "--solver-options=\"mip_rel_gap=0.5 threads=1\" "
        "--linearize-proximal-terms "
        "--rel-gap=0.01 --intra-hub-conv-thresh=-1 "
        "--solver-name={}".format(solver_name))
