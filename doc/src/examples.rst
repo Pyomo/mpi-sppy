@@ -360,8 +360,11 @@ netdes
 ------
 
 This is a very challenging network design problem, which has many instances each defined by a data file.
-For this problem, cross scenario cuts are helpful
-so the use of that spoke is illustrated in ``netdes_cylinders.py``.  
+``netdes.py`` provides the model-module hooks so most runs go through
+``mpisppy/generic_cylinders.py``. For this problem, cross scenario cuts
+are helpful; the use of that spoke (together with ``--slammax``) is
+illustrated in ``netdes_cylinders.py``, which is retained as a worked
+example of the hand-rolled cylinders pattern.
 
 sslp
 ----
