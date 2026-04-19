@@ -5,8 +5,8 @@ Jensen's Bound as potential starting bound
 
 .. warning::
 
-   **Jensen's bound is valid only when the recourse value function
-   is convex in the random parameters \xi.**
+   **Jensen's bound is a valid lower bound for a minimization problem when the recourse value function
+   is convex in the random parameters**
 
    Necessary conditions for a valid *outer* bound:
 
@@ -61,7 +61,7 @@ The spoke then continues its normal loop. There is **no** "iteration
 -1" in PH, APH, L-shaped, or any hub — the Jensen's work happens
 entirely inside a spoke.
 
-**What the expectation is taken over.** The EV data is the sample mean
+**What the expectation is taken over.** The EV data must be the sample mean
 of the data for every scenario in the run (*not* the expectation of
 any underlying continuous distribution). This matches how ``mpi-sppy``
 treats the outer problem: the sample-average approximation (SAA) is
