@@ -380,6 +380,9 @@ of numbers of scenarios are provided.
 sizes
 -----
 
-The sizes example (Jorjani et al, IJPR, 1999) is a two-stage problem with general integers in each stage. The file
-``sizes_cylinders.py`` is the usual cylinders driver. There are other examples in the directory, such
-as ``sizes_demo.py``, which provides an example of serial execution (no cylinders).
+The sizes example (Jorjani et al, IJPR, 1999) is a two-stage problem with general integers in each stage.
+``sizes.py`` provides the model-module hooks so most runs go through
+``mpisppy/generic_cylinders.py``. The file ``sizes_cylinders.py`` is retained
+as a worked example of the hand-rolled cylinders driver pattern, and
+``sizes_demo.py`` provides an example of serial execution (no cylinders)
+used by the extensions documentation.

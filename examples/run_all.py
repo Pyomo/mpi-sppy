@@ -220,6 +220,15 @@ if run_second_part:
            "--num-scens=10 "
            "--solver-name={}".format(solver_name))
 
+    # Same sizes run via the generic driver; the rst-documented
+    # sizes_cylinders.py above stays in the rotation for illustration.
+    do_one("sizes", "../../mpisppy/generic_cylinders.py", 3,
+           "--module-name sizes --num-scens=10 --max-iterations=5 "
+           "--default-rho=1 --lagrangian --xhatxbar "
+           "--linearize-proximal-terms "
+           "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
+           "--solver-name={}".format(solver_name))
+
     do_one("sizes",
            "sizes_cylinders.py",
            3,
@@ -229,7 +238,10 @@ if run_second_part:
            "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
            "--solver-name={}".format(solver_name))
 
-    do_one("sizes", "sizes_pysp.py", 1, "3 {}".format(solver_name))
+    # 3-scenario EF via the generic driver (replaces the archived sizes_pysp.py)
+    do_one("sizes", "../../mpisppy/generic_cylinders.py", 1,
+           "--module-name sizes --num-scens=3 --EF "
+           "--EF-solver-name={}".format(solver_name))
     do_one("sslp",
            "sslp_cylinders.py",
            4,
