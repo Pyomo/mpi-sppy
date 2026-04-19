@@ -10,6 +10,10 @@ defaults:
   run:
     shell: bash -l {0}
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   uc:
     name: run_uc.py (HiGHS, egret from git)
@@ -36,3 +40,28 @@ jobs:
         run: |
           cd examples
           python run_uc.py appsi_highs
+
+      - name: File/update failure issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Ensure the dedupe label exists (harmless if it already does).
+          gh label create weekly-uc-failure \
+            --color "d73a4a" \
+            --description "Weekly UC regression failing" 2>/dev/null || true
+
+          URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          EXISTING=$(gh issue list --label weekly-uc-failure --state open \
+                       --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" \
+              --body "Weekly UC regression failed again: $URL"
+          else
+            gh issue create \
+              --title "Weekly UC regression failing" \
+              --label weekly-uc-failure \
+              --body "The weekly UC regression workflow failed. Latest run: $URL
+
+          This issue will be updated with a comment each additional week the job fails. Close it once the underlying problem is fixed; a new issue will be opened on the next failure."
+          fi
