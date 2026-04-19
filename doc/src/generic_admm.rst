@@ -6,7 +6,7 @@ ADMM with ``generic_cylinders``
 The ``--admm`` and ``--stoch-admm`` flags allow ADMM-based decomposition
 to be used with any compatible model module through
 :ref:`generic_cylinders <generic_cylinders>`,
-eliminating the need for a bespoke driver script per problem.
+eliminating the need for a custom driver script per problem.
 
 There are two modes:
 
@@ -57,7 +57,7 @@ Here:
 - ``-np 3`` is one MPI rank per cylinder (1 hub + 2 spokes).
 
 The output will show PH iterations with bounds converging, just as with
-a bespoke ADMM driver.
+a custom ADMM driver.
 
 
 Running stochastic ADMM
