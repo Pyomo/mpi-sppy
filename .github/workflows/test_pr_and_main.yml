@@ -1003,7 +1003,8 @@ jobs:
             mpisppy/tests/test_scenario_tree.py \
             mpisppy/tests/test_nice_join.py \
             mpisppy/tests/test_solver_spec.py \
-            mpisppy/tests/test_extensions.py
+            mpisppy/tests/test_extensions.py \
+            mpisppy/tests/test_proper_bundler.py
 
       - name: Upload coverage data
         if: always()
