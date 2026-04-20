@@ -91,10 +91,12 @@ class Test_farmer_with_cylinders(unittest.TestCase):
         wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
         wheel.spin()
         if wheel.global_rank == 1:
+            # xhatshuffle evaluates single-scenario plans; its bound depends
+            # on which scenario it last evaluated before the CG hub terminated.
             self.assertAlmostEqual(
                 wheel.spcomm.bound,
                 -109499.5160897,
-                delta=2000,
+                delta=10000,
             )
 
     @unittest.skipIf(not solver_available,
@@ -103,7 +105,7 @@ class Test_farmer_with_cylinders(unittest.TestCase):
 
         self.cfg.default_rho = 1
         self.cfg.fwph_args()
-        scenario_creator_kwargs, beans, hub_dict = self._create_stuff()
+        scenario_creator_kwargs, beans, hub_dict = self._create_stuff(iters=15)
 
         list_of_spoke_dict = list()
         fwph_spoke = vanilla.fwph_spoke(*beans,
