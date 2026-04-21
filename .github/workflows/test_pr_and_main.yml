@@ -290,6 +290,43 @@ jobs:
           if-no-files-found: ignore
           include-hidden-files: true
 
+  uc-relaxed:
+    name: run_uc_pr.py (HiGHS, integer-relaxed PH)
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo dill pybind11 highspy coverage
+          pip install git+https://github.com/grid-parity-exchange/egret.git
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: Run run_uc_pr.py
+        run: |
+          PYARGS="-m coverage run $COV_ARGS"
+          cd examples
+          coverage run $EX_COV_ARGS run_uc_pr.py appsi_highs "" --python-args="$PYARGS"
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-uc-relaxed
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
   schur-complement:
     name: schur-complement
     runs-on: ubuntu-latest
@@ -318,7 +355,7 @@ jobs:
           git clone https://github.com/pyomo/pyomo.git
           cd pyomo/
           pip install -e .
-          pyomo download-extensions
+          pyomo download-extensions || echo "WARNING: pyomo download-extensions had failures (often a netlib.org timeout fetching gjh); not required by test_sc.py"
           pyomo build-extensions
           cd ../
           pip install git+https://github.com/parapint/parapint.git
@@ -970,7 +1007,8 @@ jobs:
             mpisppy/tests/test_scenario_tree.py \
             mpisppy/tests/test_nice_join.py \
             mpisppy/tests/test_solver_spec.py \
-            mpisppy/tests/test_extensions.py
+            mpisppy/tests/test_extensions.py \
+            mpisppy/tests/test_proper_bundler.py
 
       - name: Upload coverage data
         if: always()
@@ -991,6 +1029,7 @@ jobs:
       - runall_persistent_part2
       - runall_part1
       - runall_part2
+      - uc-relaxed
       - schur-complement
       - straight-tests
       - admm-wrapper
