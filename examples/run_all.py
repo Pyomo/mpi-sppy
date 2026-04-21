@@ -301,6 +301,16 @@ if run_second_part:
            "--branching-factors \'4 3 2\' --max-iterations=100 "
            "--default-rho=1 --lagrangian --xhatshuffle "
            "--solver-name={}".format(solver_name))
+
+    # Same aircond run via the generic driver. generic_cylinders requires
+    # --stage2EFsolvern with multistage xhatshuffle (aircond.py doesn't
+    # register that option), so this entry uses --xhatxbar instead to
+    # still exercise the lagrangian + xhat-inner-bound combo.
+    do_one("aircond", "../../mpisppy/generic_cylinders.py", 3,
+           "--module-name ../../mpisppy/tests/examples/aircond "
+           "--branching-factors \'4 3 2\' --max-iterations=100 "
+           "--default-rho=1 --lagrangian --xhatxbar "
+           "--solver-name={}".format(solver_name))
     do_one("aircond", "aircond_ama.py", 3,
            "--branching-factors \'3 3\' --max-iterations=100 "
            "--default-rho=1 --lagrangian --xhatshuffle "
