@@ -283,6 +283,21 @@ if run_second_part:
            "--rel-gap=0.0 --surrogate-nonant "
            "--use-primal-dual-rho-updater --primal-dual-rho-update-threshold=10 "
            "--solver-name={}".format(solver_name))
+
+    # Same sslp run via the generic driver (sslp.py exposes the same
+    # --instance-name, --sslp-data-path, --surrogate-nonant options).
+    do_one("sslp", "../../mpisppy/generic_cylinders.py", 4,
+           "--module-name sslp --instance-name=sslp_15_45_10 "
+           "--sslp-data-path=./data "
+           "--integer-relax-then-enforce "
+           "--integer-relax-then-enforce-ratio=0.8 "
+           "--lagrangian --reduced-costs-rho "
+           "--max-iterations=20 --default-rho=1e-6 "
+           "--reduced-costs --rc-fixer --xhatshuffle "
+           "--linearize-proximal-terms "
+           "--rel-gap=0.0 --surrogate-nonant "
+           "--use-primal-dual-rho-updater --primal-dual-rho-update-threshold=10 "
+           "--solver-name={}".format(solver_name))
     do_one("hydro", "hydro_cylinders.py", 3,
            "--branching-factors \'3 3\' --max-iterations=100 "
            "--default-rho=1 --xhatshuffle --lagrangian "
