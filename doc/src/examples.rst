@@ -383,3 +383,21 @@ sizes
 The sizes example (Jorjani et al, IJPR, 1999) is a two-stage problem with general integers in each stage. The file
 ``sizes_cylinders.py`` is the usual cylinders driver. There are other examples in the directory, such
 as ``sizes_demo.py``, which provides an example of serial execution (no cylinders).
+
+usar
+----
+
+Urban search and rescue. Assigns rescue teams from a set of depots to
+households over a discretized time horizon. The scenario randomness is
+in household-rescue requirements.
+
+Unlike the single-file examples, usar is split across several modules
+under ``examples/usar/``: ``abstract.py`` (Pyomo ``AbstractModel``),
+``scenario_creator.py``, ``scenario_denouement.py``, ``generate_data.py``,
+``config.py``, and ``write_solutions.py``. The two entry-point drivers
+are ``extensive_form.py`` (a single-rank EF solve) and ``wheel_spinner.py``
+(cylinders, Config-based, uses ``vanilla`` factories). Both use
+``matplotlib``; ``generate_data.py`` also uses ``scipy``.
+
+Run either driver with ``--help`` for the full argument list. Small
+examples of both invocations are wired into ``examples/run_all.py``.

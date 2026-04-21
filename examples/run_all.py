@@ -203,6 +203,21 @@ if run_first_part:
            "--rel-gap=0.0 "
            "--solver-name={}".format(solver_name))
 
+    # usar (urban search and rescue). Has its own extensive_form.py and
+    # wheel_spinner.py drivers (Config-based, use vanilla factories).
+    # Keep the instances small: 3 scenarios, short time horizon.
+    usar_problem_args = ("--time-horizon=5 --time-unit-minutes=15 "
+                        "--num-depots=3 --num-active-depots=2 --num-households=4 "
+                        "--constant-rescue-time=2 --travel-speed=0.1 "
+                        "--constant-depot-inflow=1")
+    do_one("usar", "extensive_form.py", 1,
+           f"--num-scens=3 --solver-name={solver_name} "
+           f"--output-dir=solutions_ef {usar_problem_args}")
+    do_one("usar", "wheel_spinner.py", 3,
+           f"--num-scens=3 --solver-name={solver_name} "
+           f"--max-iterations=3 --default-rho=1 --lagrangian --xhatshuffle "
+           f"--output-dir=solutions_ws {usar_problem_args}")
+
 # -------- Second part: netdes, sizes, sslp, hydro, aircond, MMW --------
 if run_second_part:
     # NOTE: Pyomo OBBT does not support persistent solvers as of Aug 2025
