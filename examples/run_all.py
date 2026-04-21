@@ -227,6 +227,18 @@ if run_second_part:
            "--solver-name={} --rel-gap=0.0 --default-rho=10000 --presolve --obbt --obbt-solver={} "
            "--slammax --subgradient-hub --xhatshuffle --cross-scenario-cuts --max-solver-threads=2".format(solver_name, direct_solver_name))
 
+    # Same netdes instance via the generic driver. --slammax,
+    # --cross-scenario-cuts, and the OBBT presolve flags are not wired
+    # into generic_cylinders, so they're only exercised via the
+    # netdes_cylinders.py entry above. Subgradient hub + xhatshuffle
+    # spoke = 2 cylinders, so -np 2.
+    do_one("netdes", "../../mpisppy/generic_cylinders.py", 2,
+           "--module-name netdes --max-iterations=3 "
+           "--instance-name=network-10-20-L-01 --netdes-data-path ./data "
+           "--rel-gap=0.0 --default-rho=10000 --presolve "
+           "--subgradient-hub --xhatshuffle --max-solver-threads=2 "
+           "--solver-name={}".format(solver_name))
+
     # sizes is slow for xpress so try linearizing the proximal term.
     do_one("sizes",
            "sizes_cylinders.py",
