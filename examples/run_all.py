@@ -203,6 +203,21 @@ if run_first_part:
            "--rel-gap=0.0 "
            "--solver-name={}".format(solver_name))
 
+    # usar (urban search and rescue). Has its own extensive_form.py and
+    # wheel_spinner.py drivers (Config-based, use vanilla factories).
+    # Keep the instances small: 3 scenarios, short time horizon.
+    usar_problem_args = ("--time-horizon=5 --time-unit-minutes=15 "
+                        "--num-depots=3 --num-active-depots=2 --num-households=4 "
+                        "--constant-rescue-time=2 --travel-speed=0.1 "
+                        "--constant-depot-inflow=1")
+    do_one("usar", "extensive_form.py", 1,
+           f"--num-scens=3 --solver-name={solver_name} "
+           f"--output-dir=solutions_ef {usar_problem_args}")
+    do_one("usar", "wheel_spinner.py", 3,
+           f"--num-scens=3 --solver-name={solver_name} "
+           f"--max-iterations=3 --default-rho=1 --lagrangian --xhatshuffle "
+           f"--output-dir=solutions_ws {usar_problem_args}")
+
 # -------- Second part: netdes, sizes, sslp, hydro, aircond, MMW --------
 if run_second_part:
     # NOTE: Pyomo OBBT does not support persistent solvers as of Aug 2025
@@ -261,10 +276,13 @@ if run_second_part:
            "--default-rho=1 --xhatshuffle --lagrangian "
            "--solver-name={} --stage2EFsolvern={}".format(solver_name, solver_name))
 
-    do_one("hydro", "hydro_cylinders_pysp.py", 3,
-           "--max-iterations=100 "
-           "--default-rho=1 --xhatshuffle --lagrangian "
-           "--solver-name={}".format(solver_name))
+    # Same hydro run via the generic driver (replaces the archived PySP
+    # custom driver; hydro_cylinders.py above is kept for its rst references).
+    do_one("hydro", "../../mpisppy/generic_cylinders.py", 3,
+           "--module-name hydro --branching-factors \'3 3\' "
+           "--max-iterations=100 --default-rho=1 "
+           "--xhatshuffle --lagrangian "
+           "--stage2EFsolvern={} --solver-name={}".format(solver_name, solver_name))
 
     # the next might hang with 6 ranks
     do_one("aircond", "aircond_cylinders.py", 3,
@@ -313,14 +331,15 @@ if not nouc:
         # 3-scenario UC
         do_one("uc", "uc_ef.py", 1, solver_name+" 3")
 
-        do_one("uc", "gradient_uc_cylinders.py", 15,
+        do_one("uc", "../../mpisppy/generic_cylinders.py", 15,
+               "--module-name uc_funcs "
                "--max-iterations=100 --default-rho=1 "
                "--xhatshuffle --lagrangian --num-scens=5 --max-solver-threads=2 "
-               "--lagrangian-iter0-mipgap=1e-7 --ph-mipgaps-json=phmipgaps.json "
-               f"--solver-name={solver_name} --xhatpath uc_cyl_nonants.npy "
+               "--lagrangian-iter0-mipgap=1e-7 --mipgaps-json=phmipgaps.json "
+               f"--solver-name={solver_name} "
                "--rel-gap 0.00001 --abs-gap=1 --intra-hub-conv-thresh=-1 "
-               "--grad-rho-setter --grad-order-stat 0.5 "
-               "--grad-dynamic-primal-crit")
+               "--grad-rho --grad-order-stat 0.5 "
+               "--dynamic-rho-primal-crit")
 
         do_one("uc", "uc_cylinders.py", 4,
                "--max-iterations=2 "

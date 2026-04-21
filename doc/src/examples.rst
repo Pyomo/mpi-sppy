@@ -335,25 +335,17 @@ Hydro is a three stage example that was originally coded in PySP and we make ext
 of the PySP files. Unlike farmer and aircond where the scenario data are created from distributions,
 for this problem the scenario data are provided in files.
 
-Using PySPModel
-^^^^^^^^^^^^^^^
-In the file ``hydro_cylinders_pysp.py`` the lines
+The model module ``hydro.py`` provides the ``scenario_creator`` and the
+other hooks expected by ``mpisppy/generic_cylinders.py``, so most runs
+are launched through the generic driver (see ``examples/run_all.py``
+or ``examples/generic_tester.py`` for exact invocations). The file
+``hydro_cylinders.py`` is retained alongside it as an illustration of
+the hand-rolled cylinder pattern for multistage problems; it reads
+``hydro.py`` and builds the hub/spoke dictionaries directly.
 
-::
-
-   from mpisppy.utils.pysp_model import PySPModel
-   ...
-   hydro = PySPModel("./PySP/models/", "./PySP/nodedata/")
-
-cause an object called ``hydro`` to be created that has the methods needed by vanilla and the hub and
-spoke creators as can be seen in the ``main`` function of ``hydro_cylinders_pysp.py``.
-
-
-Not using PySPModel
-^^^^^^^^^^^^^^^^^^^
-
-In the file ``hydro_cylinders.py`` the file ``hydro.py`` is imported because it provides the functions
-needed by vanilla hub and spoke creators.
+An older example using ``PySPModel`` is preserved under
+``examples/hydro/archive/hydro_cylinders_pysp.py`` for reference; new
+code should skip ``PySPModel`` and use ``generic_cylinders.py``.
 
 
 netdes

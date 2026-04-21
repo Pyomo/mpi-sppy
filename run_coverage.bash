@@ -79,6 +79,9 @@ run_phase "test_stoch_admmWrapper (serial, spawns mpiexec)" \
 run_phase "test_admm_bundler (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_admm_bundler.py -v
 
+run_phase "test_proper_bundler (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_proper_bundler.py -v
+
 run_phase "test_aph (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_aph.py
 
@@ -141,6 +144,17 @@ run_phase "examples/run_all.py $SOLVER_DIRECT nouc" \
 
 run_phase "examples/generic_tester.py ${SOLVER}_direct nouc" \
     bash -c "cd '$PROJ_DIR/examples' && $EX_COV generic_tester.py '${SOLVER}_direct' '' nouc --python-args='$PYARGS'"
+
+if has_module egret; then
+    run_phase "examples/run_uc.py $SOLVER_PERSISTENT" \
+        bash -c "cd '$PROJ_DIR/examples' && $EX_COV run_uc.py '$SOLVER_PERSISTENT' '' --python-args='$PYARGS'"
+
+    run_phase "examples/run_uc_pr.py $SOLVER_PERSISTENT" \
+        bash -c "cd '$PROJ_DIR/examples' && $EX_COV run_uc_pr.py '$SOLVER_PERSISTENT' '' --python-args='$PYARGS'"
+else
+    echo ""
+    echo "=== skipping run_uc.py and run_uc_pr.py: egret not importable ==="
+fi
 
 # ---------- Optional tests (skip if deps missing) ----------
 
