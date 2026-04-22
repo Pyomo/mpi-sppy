@@ -69,6 +69,28 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
             modified_cfg["grad_order_stat"] = cfg.ph_dual_grad_order_stat
             vanilla.add_grad_rho(ph_dual_spoke, modified_cfg)
 
+    # ph spoke
+    if cfg.ph_spoke:
+        ph_spoke = vanilla.ph_spoke(*beans,
+                                          scenario_creator_kwargs=scenario_creator_kwargs,
+                                          rho_setter = rho_setter,
+                                          all_nodenames = all_nodenames,
+                                          )
+        if cfg.sep_rho or cfg.coeff_rho or cfg.sensi_rho or cfg.grad_rho:
+            # Note that this deepcopy might be expensive if certain wrappers were used.
+            # (Could we do the modification to cfg in ph_dual to obviate the need?)
+            modified_cfg = copy.deepcopy(cfg)
+            modified_cfg["grad_rho_multiplier"] = cfg.ph_spoke_rho_multiplier
+        if cfg.sep_rho:
+            vanilla.add_sep_rho(ph_spoke, modified_cfg)
+        if cfg.coeff_rho:
+            vanilla.add_coeff_rho(ph_spoke, modified_cfg)
+        if cfg.sensi_rho:
+            vanilla.add_sensi_rho(ph_spoke, modified_cfg)
+        if cfg.grad_rho:
+            modified_cfg["grad_order_stat"] = cfg.ph_spoke_grad_order_stat
+            vanilla.add_grad_rho(ph_spoke, modified_cfg)
+
     # relaxed ph spoke
     if cfg.relaxed_ph:
         relaxed_ph_spoke = vanilla.relaxed_ph_spoke(*beans,
@@ -137,5 +159,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
         list_of_spoke_dict.append(xhatxbar_spoke)
     if cfg.reduced_costs:
         list_of_spoke_dict.append(reduced_costs_spoke)
+    if cfg.ph_spoke:
+        list_of_spoke_dict.append(ph_spoke)
 
     return list_of_spoke_dict
