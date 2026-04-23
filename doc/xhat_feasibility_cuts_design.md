@@ -133,12 +133,18 @@ sufficient. We need one of:
    bypassing pyomo Benders for the feasibility branch. Faster to land,
    but fragile across solver versions and adds a new solver-sniffing
    surface.
-3. **Scope-limited first version** — start with **no-good cuts for
-   0/1 first-stage variables only**. That needs no dual information at
-   all: the infeasible `xhat_bin` yields the cut
+3. **Scope-limited first version** — start with **no-good cuts,
+   valid only when every first-stage (nonant) variable is binary**.
+   That needs no dual information at all: the infeasible `xhat_bin`
+   yields the cut
    `sum_{i: xhat_i = 1} (1 - x_i) + sum_{i: xhat_i = 0} x_i >= 1`.
-   Trivial to code, covers UC / scheduling / lot-sizing. Punts the
-   continuous/integer case.
+   Trivial to code, covers UC / scheduling / lot-sizing. If any
+   first-stage nonant is integer or continuous, the no-good cut is
+   invalid — so enabling the feature on such a model is a hard
+   error, not a silent no-op (see "Startup check" below). The
+   integer case needs a different cut form (e.g. `|x - xhat| >= 1`
+   with auxiliary binaries) and the continuous case needs Farkas
+   duals; both are out of scope for the first milestone.
 
 **Recommendation:** pursue (1) as the north star but ship (3) as the
 first deliverable so the plumbing lands independently of the Pyomo
@@ -185,10 +191,11 @@ small path:
 2. On a `solve_loop` termination whose `termination_condition` is one
    of `infeasible` or `infeasibleOrUnbounded` for some scenario,
    build a cut row for that scenario:
-   - **Version 1 (0/1 no-good)**: check that every fixed nonant in
-     the infeasible scenario is binary; if so, produce the no-good
-     row directly from the `xhat` values. If not binary, skip and
-     log a warning.
+   - **Version 1 (binary no-good)**: produce the no-good row directly
+     from the `xhat` values. The "all nonants are binary" precondition
+     is enforced at setup time (see Startup check below), so by the
+     time we reach this path we can rely on it — no per-iteration
+     re-check, no silent skip.
    - **Version 2 (pyomo-upstream Farkas)**: call the (to-be-added)
      infeasibility branch of pyomo Benders to get Farkas duals and
      pack them into the same row format.
@@ -225,6 +232,35 @@ bookkeeping:
   cut has to land on each). This is the same class of gotcha PR #669
   is addressing on the `nonant_cost_coeffs` side — solve it once
   here, up front.
+
+### Startup check: first-stage must be fully binary
+
+The first-milestone no-good cut is only valid when **every** first-stage
+nonant is binary. A mix of binary and continuous nonants is not safe
+to treat as "no-good on the binary part only": the continuous part can
+be perturbed, so such a cut does not actually exclude the infeasible
+xhat — it would silently produce an invalid relaxation.
+
+To prevent misuse, `XhatFeasibilityCutExtension.setup_hub` scans
+`s._mpisppy_data.nonant_indices` on an arbitrary local scenario and
+confirms that every variable is binary (`v.is_binary()` or
+`v.domain in {Binary, BooleanSet}`). For multi-stage, the scan covers
+every node in `_mpisppy_node_list`. If any non-binary nonant is
+present, raise
+
+```
+RuntimeError(
+    "--xhat-feasibility-cuts-count > 0 requires every first-stage "
+    "(nonant) variable to be binary; found non-binary nonant "
+    f"{v.name!r} with domain {v.domain}. The first-milestone "
+    "feasibility-cut generator is no-good-only. Support for integer "
+    "and continuous first-stage variables is planned as a follow-up "
+    "milestone (pyomo Benders / Farkas extension)."
+)
+```
+
+Fail fast at setup time rather than at the first infeasibility — the
+user sees the error before any work is done.
 
 ### Plumbing touchpoints
 
@@ -290,8 +326,9 @@ bundling a behavior change with a refactor.
 
 1. CLI flag + buffer registration + send/receive field — wired end to
    end but with the emit path producing zero cuts.
-2. No-good-cut emission for 0/1-only problems, gated on a check that
-   every fixed nonant is binary.
+2. No-good-cut emission for problems whose first-stage (nonant)
+   variables are **all binary**. Setup-time check raises `RuntimeError`
+   otherwise, so the feature never silently produces an invalid cut.
 3. Hub-side install of cuts into every local scenario / bundle block,
    keyed by `(node_name, i)` so it works for two-stage and multi-stage
    alike.
@@ -300,9 +337,14 @@ bundling a behavior change with a refactor.
        xhat is infeasible — verify the cut is added and the infeasible
        xhat is not revisited;
    (b) a bundled version of the same;
-   (c) a small multi-stage model (hydro-like) to verify nothing in the
-       plumbing assumes `("ROOT", i)` keys.
-5. Documentation: user-facing `rst` page + mention in the xhatter docs.
+   (c) a small multi-stage model with binary nonants to verify nothing
+       in the plumbing assumes `("ROOT", i)` keys;
+   (d) a negative test: enabling the feature on a model with a
+       continuous nonant raises the expected `RuntimeError` at setup.
+5. Documentation: user-facing `rst` page + mention in the xhatter docs,
+   stating clearly that the first release supports binary first stages
+   only.
 
 That is a discrete, reviewable PR. The pyomo-Benders Farkas extension
-(two-stage-only) and the cross-scen refactor are natural follow-ups.
+(which lifts the binary-only restriction, two-stage-only) and the
+cross-scen refactor are natural follow-ups.
