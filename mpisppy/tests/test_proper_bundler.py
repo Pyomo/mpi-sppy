@@ -22,9 +22,13 @@ import unittest
 
 import pyomo.environ as pyo
 
+import mpisppy.opt.ph
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils import config
 from mpisppy.utils.proper_bundler import ProperBundler
+from mpisppy.tests.utils import get_solver
+
+solver_available, solver_name, _, _ = get_solver()
 
 
 def _trivial_scenario(sname):
@@ -211,6 +215,181 @@ class TestNonantCostCoeffsBundleWithFixedNonants(unittest.TestCase):
         self.assertAlmostEqual(coefs[(node.name, 0)], 2.0)
         self.assertAlmostEqual(coefs[(node.name, 1)], 5.0)
 
+
+
+# ---------------------------------------------------------------------------
+# End-to-end PH regression: bundled vs unbundled with a fixed first-stage
+# variable. This is the scenario from issue #668.
+#
+# Model choice matters: the bug only triggers when the EF objective's
+# standard_repn expands down to the raw per-scenario nonant vars. In
+# models where FirstStageCost is a Pyomo Var linked by a constraint
+# (e.g. sizes) the objective's linear vars are the cost-aggregation
+# Vars, not the per-scenario DevotedAcreage-style vars, so the buggy
+# code path is never reached. Models where FirstStageCost is a
+# pyo.Expression (e.g. farmer, uc) do expand, so those are what the
+# test needs.
+#
+# We fix DevotedAcreage["CORN0"] on purpose: it is position 0 in
+# farmer's per-scenario nonant_vardata_list ordering, which leaves
+# DevotedAcreage["WHEAT0"] unfixed at per-scenario position 2. With
+# only two surviving bundle nonants, the pre-fix code would look up
+# cost_coefs[('ROOT', 2)] against a dict keyed only {('ROOT', 0),
+# ('ROOT', 1)} and KeyError. Fixing a position near the end would
+# leave every unfixed var below M and silently pass.
+# ---------------------------------------------------------------------------
+
+
+def _farmer_fix_creator(scenario_name, **kwargs):
+    """Farmer scenario with DevotedAcreage['CORN0'] fixed to 80."""
+    from mpisppy.tests.examples.farmer import scenario_creator as base_sc
+    model = base_sc(scenario_name, num_scens=3, crops_multiplier=1)
+    model.DevotedAcreage["CORN0"].fix(80.0)
+    return model
+
+
+class _FarmerModuleWithFixedFirstStage:
+    """Minimal ProperBundler-compatible module wrapper around farmer."""
+
+    @staticmethod
+    def scenario_names_creator(num_scens, start=None):
+        if start is None:
+            start = 0
+        # farmer is zero-based (scen0..scen{N-1}).
+        return [f"scen{i}" for i in range(start, start + num_scens)]
+
+    @staticmethod
+    def kw_creator(cfg):
+        return {}
+
+    scenario_creator = staticmethod(_farmer_fix_creator)
+
+
+def _ph_options_for_farmer():
+    return {
+        "solver_name": solver_name,
+        "PHIterLimit": 3,
+        "defaultPHrho": 1,
+        "convthresh": 1e-3,
+        "verbose": False,
+        "display_timing": False,
+        "display_progress": False,
+        "asynchronousPH": False,
+        "smoothed": False,
+        "linearize_proximal_terms": True,
+        "proximal_linearization_tolerance": 1e-1,
+        "iter0_solver_options": None,
+        "iterk_solver_options": None,
+    }
+
+
+class TestPHWithFixedFirstStageBundledAndUnbundled(unittest.TestCase):
+    """End-to-end regression for issue #668.
+
+    Runs PH with ``linearize_proximal_terms=True`` on a farmer-3
+    instance whose ``DevotedAcreage['CORN0']`` is fixed. The bundle
+    branch of ``sputils.nonant_cost_coeffs`` is where the pre-fix
+    code raised ``KeyError(('ROOT', k))``: the per-scenario walker
+    assigned keys ``(ndn, 0..N-1)`` while the bundle's
+    ``nonant_indices`` was keyed ``0..M-1`` with ``M<N`` when
+    ``create_EF(nonant_for_fixed_vars=False)`` skipped the fixed
+    position.
+
+    ``TestNonantCostCoeffsBundleWithFixedNonants`` above exercises
+    ``nonant_cost_coeffs`` in isolation with a synthetic bundle.
+    *This* test drives the real PH engine on a real stochastic LP,
+    so it also catches any future regression in how the fix is
+    wired into ``attach_PH_to_objective``. Both the bundled and
+    unbundled PH runs must complete and produce an iter-0 trivial
+    bound in the same ballpark as the EF optimum.
+    """
+
+    @unittest.skipUnless(solver_available, "no solver available")
+    def test_bundled_matches_unbundled_with_fixed_first_stage(self):
+        # Ground truth: EF solution with the fixed var.
+        ef = sputils.create_EF(
+            _FarmerModuleWithFixedFirstStage.scenario_names_creator(3),
+            _farmer_fix_creator,
+            scenario_creator_kwargs={},
+        )
+        ef_solver = pyo.SolverFactory(solver_name)
+        ef_solver.solve(ef)
+        ef_obj = pyo.value(ef.EF_Obj)
+        self.assertTrue(_math_isfinite(ef_obj))
+
+        # --- Unbundled PH.
+        # Sanity path: without bundling, nonant_cost_coeffs uses
+        # s._mpisppy_data.varid_to_nonant_index directly and is not
+        # affected by the fix.
+        ph_unbundled = mpisppy.opt.ph.PH(
+            _ph_options_for_farmer(),
+            _FarmerModuleWithFixedFirstStage.scenario_names_creator(3),
+            _farmer_fix_creator,
+            None,
+            scenario_creator_kwargs={},
+        )
+        _, _, tbound_unbundled = ph_unbundled.ph_main()
+        self.assertTrue(_math_isfinite(tbound_unbundled))
+        for _, s in ph_unbundled.local_scenarios.items():
+            self.assertTrue(s.DevotedAcreage["CORN0"].is_fixed())
+            self.assertEqual(pyo.value(s.DevotedAcreage["CORN0"]), 80.0)
+
+        # --- Bundled PH (1 bundle of 3 scenarios).
+        # Pre-fix this branch crashed with KeyError(('ROOT', 2))
+        # inside nonant_cost_coeffs because bundle nonant_indices ==
+        # {('ROOT', 0), ('ROOT', 1)} while the per-scenario walker
+        # assigned position 2 to the unfixed WHEAT0 nonant.
+        cfg = config.Config()
+        cfg.popular_args()
+        cfg.num_scens_required()
+        cfg.proper_bundle_config()
+        cfg.num_scens = 3
+        cfg.scenarios_per_bundle = 3
+        pb = ProperBundler(_FarmerModuleWithFixedFirstStage)
+        pb.set_bunBFs(cfg)
+        bundle_names = pb.bundle_names_creator(num_buns=1, cfg=cfg)
+        self.assertEqual(bundle_names, ["Bundle_0_2"])
+
+        ph_bundled = mpisppy.opt.ph.PH(
+            _ph_options_for_farmer(),
+            bundle_names,
+            pb.scenario_creator,
+            None,
+            scenario_creator_kwargs=pb.kw_creator(cfg),
+        )
+        _, _, tbound_bundled = ph_bundled.ph_main()
+        self.assertTrue(_math_isfinite(tbound_bundled))
+        # The fix must still be present inside every scenario of every
+        # local bundle.
+        for _, bundle in ph_bundled.local_scenarios.items():
+            for sname in bundle._ef_scenario_names:
+                scen = bundle.component(sname)
+                v = scen.DevotedAcreage["CORN0"]
+                self.assertTrue(v.is_fixed(),
+                                f"{sname}: DevotedAcreage[CORN0] lost its fix")
+                self.assertEqual(pyo.value(v), 80.0)
+
+        # --- Compare objectives.
+        # With all 3 scenarios in one bundle the bundled iter-0
+        # trivial bound is effectively an EF solve, so it must match
+        # the EF ground truth to solver tolerance.
+        self.assertAlmostEqual(
+            tbound_bundled, ef_obj,
+            delta=1e-3 * max(1.0, abs(ef_obj)),
+            msg=f"bundled tbound {tbound_bundled} not near EF optimum {ef_obj}",
+        )
+        # For minimization the unbundled iter-0 trivial bound is a
+        # Jensen-style lower bound for the EF optimum (tolerate tiny
+        # solver overshoot).
+        self.assertLessEqual(
+            tbound_unbundled, ef_obj + 1e-3 * max(1.0, abs(ef_obj)),
+            msg=f"unbundled tbound {tbound_unbundled} exceeds EF optimum {ef_obj}",
+        )
+
+
+def _math_isfinite(x):
+    import math
+    return isinstance(x, (int, float)) and math.isfinite(x)
 
 
 if __name__ == "__main__":
