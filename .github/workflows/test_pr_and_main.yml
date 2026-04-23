@@ -138,6 +138,8 @@ jobs:
           conda install mpi4py pandas setuptools
           pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
           pip install xpress coverage
+          # usar runs in first-part and imports matplotlib + scipy at module load
+          pip install matplotlib scipy
 
       - name: Build pyomo extensions
         run: |
@@ -220,6 +222,8 @@ jobs:
           conda install mpi4py pandas setuptools
           pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
           pip install xpress coverage
+          # usar runs in first-part and imports matplotlib + scipy at module load
+          pip install matplotlib scipy
 
       - name: Build pyomo extensions
         run: |
