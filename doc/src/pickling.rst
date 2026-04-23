@@ -257,8 +257,13 @@ Pickle Metadata
 
 Each pre-processed pickle records which stages ran, which presolve
 options were used, and which solver was invoked, on
-``model._mpisppy_data.pickle_metadata``. The metadata travels inside
-the pickle automatically, so it survives file moves and is easy to
+``model._mpisppy_data.pickle_metadata``. When
+``--iter0-before-pickle`` runs, the metadata also stores the solver's
+reported ``outer_bound`` / ``inner_bound`` for that scenario so that
+``--iter0-from-pickle`` can restore the same split PH's own
+``solve_loop`` would have set -- important for MIPs solved with a
+nonzero gap, where the two differ. The metadata travels inside the
+pickle automatically, so it survives file moves and is easy to
 inspect after the fact.
 
 .. _pickling_tuning_workflow:

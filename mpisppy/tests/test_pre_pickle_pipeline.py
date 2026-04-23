@@ -22,9 +22,11 @@ import unittest
 import pyomo.environ as pyo
 
 import mpisppy.tests.examples.farmer as farmer
+import mpisppy.tests.examples.sizes.sizes as sizes
 from mpisppy.tests.utils import get_solver
 from mpisppy.spbase import SPBase
 from mpisppy.utils import config
+from mpisppy.utils import sputils
 from mpisppy.generic.scenario_io import _run_pre_pickle_pipeline
 
 import mpisppy.MPI as mpi
@@ -96,6 +98,26 @@ def _build_farmer_spbase(num_scens=3, comm=None):
         all_nodenames=None,
         mpicomm=comm if comm is not None else fullcomm,
         scenario_creator_kwargs={"num_scens": num_scens, "crops_multiplier": 1},
+    )
+
+
+def _build_sizes_spbase(num_scens=3, comm=None):
+    """Construct a small SPBase over the sizes MIP example for tests."""
+    all_scenario_names = [f"Scenario{i+1}" for i in range(num_scens)]
+    sp_options = {
+        "verbose": False,
+        "toc": False,
+    }
+    if solver_name is not None:
+        sp_options["solver_name"] = solver_name
+    return SPBase(
+        options=sp_options,
+        all_scenario_names=all_scenario_names,
+        scenario_creator=sizes.scenario_creator,
+        scenario_denouement=None,
+        all_nodenames=None,
+        mpicomm=comm if comm is not None else fullcomm,
+        scenario_creator_kwargs={"scenario_count": num_scens},
     )
 
 
@@ -175,6 +197,16 @@ class TestPipelineUnit(unittest.TestCase):
             md = m._mpisppy_data.pickle_metadata
             self.assertTrue(md["iter0_before_pickle"])
             self.assertEqual(md["pickle_solver_name"], solver_name)
+            # Bounds captured at solve time must land in the metadata so
+            # --iter0-from-pickle can restore them without guessing.
+            self.assertIn("iter0_outer_bound", md)
+            self.assertIn("iter0_inner_bound", md)
+            self.assertIsNotNone(md["iter0_outer_bound"])
+            self.assertIsNotNone(md["iter0_inner_bound"])
+            # Farmer is an LP so at optimality outer and inner coincide.
+            self.assertAlmostEqual(md["iter0_outer_bound"],
+                                   md["iter0_inner_bound"],
+                                   places=4)
 
     @unittest.skipUnless(solver_available, "no solver available")
     def test_iter0_failure_raises(self):
@@ -213,6 +245,67 @@ class TestPipelineUnit(unittest.TestCase):
             self.assertTrue(md["presolve_before_pickle"])
             self.assertTrue(md["iter0_before_pickle"])
             self.assertIsNotNone(md["pre_pickle_function"])
+
+
+# ---------------------------------------------------------------------------
+
+
+class TestPipelineMIPBounds(unittest.TestCase):
+    """Exercise the MIP-with-nonzero-gap case that motivated capturing
+    outer_bound / inner_bound separately at pickle time.
+
+    Farmer is an LP, so the other unit tests always see outer == inner and
+    can't catch a regression that collapses the two. Sizes is a pure IP
+    with a real LP-IP gap; forcing ``mipgap=0.5`` leaves the gap open and
+    lets us verify that the solver's ``Lower_bound`` and ``Upper_bound``
+    are round-tripped correctly through ``pickle_metadata``.
+    """
+
+    @unittest.skipUnless(solver_available and solver_name in ("gurobi", "cplex"),
+                         "sizes MIP bounds test needs gurobi or cplex for the "
+                         "'mipgap' solver option")
+    def test_iter0_captures_open_mip_bounds(self):
+        sp = _build_sizes_spbase(num_scens=3)
+        self.assertTrue(sp.is_minimizing,
+                        "sizes is expected to be a minimization problem")
+        cfg = _make_cfg(
+            iter0_before_pickle=True,
+            solver_options="mipgap=0.5",
+        )
+        _run_pre_pickle_pipeline(sp, cfg)
+
+        saw_open_gap = False
+        for sname, m in sp.local_scenarios.items():
+            md = m._mpisppy_data.pickle_metadata
+            outer = md["iter0_outer_bound"]
+            inner = md["iter0_inner_bound"]
+            self.assertIsNotNone(outer, f"{sname}: missing iter0_outer_bound")
+            self.assertIsNotNone(inner, f"{sname}: missing iter0_inner_bound")
+            # For a minimization problem the solver's Lower_bound must be
+            # <= Upper_bound; the fix's whole point is preserving this
+            # asymmetry instead of setting both to obj_value.
+            self.assertLessEqual(outer, inner + 1e-6,
+                                 f"{sname}: outer {outer} > inner {inner}")
+            # The incumbent objective is what the old code collapsed both
+            # bounds to, so it must match inner_bound (up to solver
+            # tolerance).
+            obj_value = pyo.value(sputils.find_active_objective(m))
+            self.assertAlmostEqual(
+                inner, obj_value, places=4,
+                msg=f"{sname}: inner_bound {inner} does not match "
+                    f"incumbent objective {obj_value}")
+            if outer < inner - 1e-3:
+                saw_open_gap = True
+        # With mipgap=0.5 on sizes scenarios we empirically see Lower_bound
+        # well below Upper_bound (e.g. Scenario1: 108831 vs 194764). If
+        # the old behavior regressed (outer=obj_value=inner always) this
+        # assertion catches it.
+        self.assertTrue(
+            saw_open_gap,
+            "Expected at least one sizes scenario to have an open MIP gap "
+            "with mipgap=0.5; if every scenario closed the gap, this test "
+            "no longer exercises the bug it was written for."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -484,6 +577,8 @@ class TestADMMBundlePipeline(unittest.TestCase):
             self.assertTrue(md["presolve_before_pickle"])
             self.assertTrue(md["iter0_before_pickle"])
             self.assertIsNotNone(md["pre_pickle_function"])
+            self.assertIsNotNone(md.get("iter0_outer_bound"))
+            self.assertIsNotNone(md.get("iter0_inner_bound"))
 
             any_value = False
             for nd in bundle._mpisppy_node_list:

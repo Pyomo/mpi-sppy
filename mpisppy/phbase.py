@@ -873,9 +873,13 @@ class PHBase(mpisppy.spopt.SPOpt):
           fabricate solver state.
         - Set the per-scenario bookkeeping that ``solve_loop`` would have
           set: ``solution_available``, ``outer_bound``, ``inner_bound``.
-          The variable values themselves are already in place from the
-          pickle, so PH's downstream logic (xbar, W update, etc.) just
-          works.
+          The bounds are the solver's reported ``Lower_bound`` /
+          ``Upper_bound`` captured at pickle time (see
+          ``generic/scenario_io.py::_solve_iter0_for_pickle``) -- that
+          preserves the outer/inner split for MIPs solved with a
+          nonzero gap. The variable values themselves are already in
+          place from the pickle, so PH's downstream logic (xbar, W
+          update, etc.) just works.
 
         See doc/src/pickling.rst for the user-facing description.
         """
@@ -883,10 +887,15 @@ class PHBase(mpisppy.spopt.SPOpt):
                    "(--iter0-from-pickle); using values from pickle")
 
         missing = []
+        missing_bounds = []
         for sname, s in self.local_scenarios.items():
             md = getattr(s._mpisppy_data, "pickle_metadata", None)
             if not md or not md.get("iter0_before_pickle", False):
                 missing.append(sname)
+                continue
+            if ("iter0_outer_bound" not in md
+                    or "iter0_inner_bound" not in md):
+                missing_bounds.append(sname)
         if missing:
             sample = ", ".join(missing[:3])
             more = "..." if len(missing) > 3 else ""
@@ -897,12 +906,23 @@ class PHBase(mpisppy.spopt.SPOpt):
                 f"Re-pickle with --iter0-before-pickle, or remove "
                 f"--iter0-from-pickle."
             )
+        if missing_bounds:
+            sample = ", ".join(missing_bounds[:3])
+            more = "..." if len(missing_bounds) > 3 else ""
+            raise RuntimeError(
+                f"--iter0-from-pickle was set, but {len(missing_bounds)} "
+                f"local scenario(s) on rank {self.cylinder_rank} have "
+                f"iter0 pickle metadata without captured outer/inner "
+                f"bounds ({sample}{more}). This pickle was written with "
+                f"an older metadata format; re-pickle with the current "
+                f"--iter0-before-pickle."
+            )
 
         for sname, s in self.local_scenarios.items():
-            obj_value = pyo.value(self.saved_objectives[sname])
+            md = s._mpisppy_data.pickle_metadata
             s._mpisppy_data.solution_available = True
-            s._mpisppy_data.outer_bound = obj_value
-            s._mpisppy_data.inner_bound = obj_value
+            s._mpisppy_data.outer_bound = md["iter0_outer_bound"]
+            s._mpisppy_data.inner_bound = md["iter0_inner_bound"]
 
     def Iter0(self):
         """ Create solvers and perform the initial PH solve (with no dual
