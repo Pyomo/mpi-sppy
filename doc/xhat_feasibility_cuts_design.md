@@ -341,9 +341,21 @@ bundling a behavior change with a refactor.
        in the plumbing assumes `("ROOT", i)` keys;
    (d) a negative test: enabling the feature on a model with a
        continuous nonant raises the expected `RuntimeError` at setup.
-5. Documentation: user-facing `rst` page + mention in the xhatter docs,
-   stating clearly that the first release supports binary first stages
-   only.
+5. Documentation: a **new** user-facing page at
+   `doc/src/xhat_feasibility_cuts.rst`, added to `doc/src/index.rst`'s
+   toctree next to the other cylinder / extension pages. The page
+   must cover:
+   - What the feature does and when to use it (non-complete-recourse
+     problems with binary first-stage).
+   - The CLI flag `--xhat-feasibility-cuts-count`.
+   - The binary-only restriction, with the exact `RuntimeError` text
+     users will see if they enable the feature on a non-binary model.
+   - A brief note on interaction with proper bundles.
+   - Forward pointer to issue #670 for cut-pool management.
+
+   Also add a one-sentence cross-reference from each of the xhatter
+   cylinder docs (wherever those live today) pointing at the new
+   page, so readers browsing xhatter options discover it.
 
 That is a discrete, reviewable PR. The pyomo-Benders Farkas extension
 (which lifts the binary-only restriction, two-stage-only) and the
