@@ -29,7 +29,17 @@ import mpisppy.confidence_intervals.confidence_config as confidence_config
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-print("\nTBD: check seqsampling for start vs start_seed")
+# Seed-management convention used below (and in mmw_ci.py):
+#   - Two-stage path:  self.ScenCount is the index offset passed as
+#     scenario_names_creator(..., start=ScenCount).  The scenario_creator
+#     is expected to derive its RNG seed from the scenario name (via
+#     sputils.extract_num or similar).  start_seed is not set.
+#   - Multi-stage path: self.SeedCount is passed via
+#     xhat_gen_kwargs["start_seed"] (for xhat) and sample_options["seed"]
+#     (for the gap estimator); sample_tree_scen_creator honors `seed=`.
+#     scenario names are regenerated from 0 each iteration.
+# Either way, SeqSampling advances its counter by exactly the number of
+# names / nodes it asked for, so successive iterations see disjoint draws.
 
 
 #==========
@@ -449,12 +459,12 @@ class SeqSampling():
                 assert mk>= mk_m1, "Our sample size should be increasing"
                 if (k%self.kf_xhat==0):
                     #We use only new scenarios to compute xhat
-                    xhat_scenario_names = refmodel.scenario_names_creator(int(mult*nk),
+                    xhat_scenario_names = refmodel.scenario_names_creator(mk,
                                                                           start=self.ScenCount)
                     self.ScenCount+= mk
                 else:
                     #We reuse the previous scenarios
-                    xhat_scenario_names+= refmodel.scenario_names_creator(mult*(nk-nk_m1),
+                    xhat_scenario_names+= refmodel.scenario_names_creator(mk-mk_m1,
                                                                           start=self.ScenCount)
                     self.ScenCount+= mk-mk_m1
             
