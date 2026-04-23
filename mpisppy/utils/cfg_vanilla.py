@@ -385,13 +385,22 @@ def add_gapper(hub_dict, cfg, name=None):
 
 def add_fixer(hub_dict,
               cfg,
-              module,
+              module=None,
               ):
     from mpisppy.extensions.fixer import Fixer
     hub_dict = extension_adder(hub_dict,Fixer)
+    id_fix_list_fct = cfg.get("id_fix_list_fct")
+    if id_fix_list_fct is None:
+        if module is None:
+            raise RuntimeError(
+                "add_fixer needs an id_fix_list_fct: set cfg.id_fix_list_fct "
+                "(e.g. uc_ama.py does) or pass a module that exposes "
+                "id_fix_list_fct as the third argument."
+            )
+        id_fix_list_fct = module.id_fix_list_fct
     hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {"verbose":cfg.verbose,
                                                          "boundtol": cfg.fixer_tol,
-                                                         "id_fix_list_fct": module.id_fix_list_fct}
+                                                         "id_fix_list_fct": id_fix_list_fct}
     return hub_dict
 
 def add_integer_relax_then_enforce(hub_dict,
@@ -479,7 +488,7 @@ def add_wxbar_read_write(hub_dict, cfg):
     but are 'loose' in the hub options dict
     """
     if _hasit(cfg, 'init_W_fname') or _hasit(cfg, 'init_Xbar_fname'):
-        from mpisppy.utils.wxbarreader import WXBarReader
+        from mpisppy.utils.w_utils.wxbarreader import WXBarReader
         hub_dict = extension_adder(hub_dict, WXBarReader)
         hub_dict["opt_kwargs"]["options"].update(
             {"init_W_fname" : cfg.init_W_fname,
@@ -487,7 +496,7 @@ def add_wxbar_read_write(hub_dict, cfg):
              "init_separate_W_files" : cfg.init_separate_W_files
             })
     if _hasit(cfg, 'W_fname') or _hasit(cfg, 'Xbar_fname'):
-        from mpisppy.utils.wxbarwriter import WXBarWriter
+        from mpisppy.utils.w_utils.wxbarwriter import WXBarWriter
         hub_dict = extension_adder(hub_dict, WXBarWriter)
         hub_dict["opt_kwargs"]["options"].update(
             {"W_fname" : cfg.W_fname,

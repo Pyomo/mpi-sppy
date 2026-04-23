@@ -12,7 +12,7 @@
 import mpisppy.tests.examples.uc.uc_funcs as uc_funcs
 # this version is locked to three scenarios
 
-from mpisppy.utils.wxbarreader import WXBarReader
+from mpisppy.utils.w_utils.wxbarreader import WXBarReader
 
 from mpisppy.opt.ph import PH
 

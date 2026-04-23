@@ -1,6 +1,11 @@
 # Design: Pre-Pickle Preprocessing for Scenarios and Bundles
 
-**Status:** Draft — design discussion, not yet implemented
+**Status:** Implemented — historical design notes. This document was
+written before the feature landed and is retained for context on the
+decisions made. For the user-facing reference, see
+``doc/src/pickling.rst``. The "Current state" section below describes
+the codebase *before* this design was implemented; it should be read as
+historical background, not a description of the current code.
 **Author:** dlw (captured with Claude Code assistance)
 **Last updated:** 2026-04-08
 

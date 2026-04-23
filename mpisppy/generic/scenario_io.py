@@ -170,11 +170,16 @@ def _attach_pickle_metadata(sp, cfg):
         "obbt": bool(cfg.get("obbt")) if cfg.get("presolve_before_pickle") else False,
         "pre_pickle_function": cfg.get("pre_pickle_function"),
         "iter0_before_pickle": bool(cfg.get("iter0_before_pickle")),
-        "pickle_solver_name": cfg.get("pickle_solver_name") or cfg.get("solver_name") if cfg.get("iter0_before_pickle") else None,
+        "pickle_solver_name": (
+            (cfg.get("pickle_solver_name") or cfg.get("solver_name"))
+            if cfg.get("iter0_before_pickle") else None
+        ),
     }
     for model in sp.local_scenarios.values():
-        # _mpisppy_data is attached by SPBase before this runs
-        model._mpisppy_data.pickle_metadata = metadata
+        # _mpisppy_data is attached by SPBase before this runs.
+        # Shallow-copy per model so downstream mutation on one scenario
+        # doesn't bleed into the others.
+        model._mpisppy_data.pickle_metadata = metadata.copy()
 
 
 def _run_pre_pickle_pipeline(sp, cfg):

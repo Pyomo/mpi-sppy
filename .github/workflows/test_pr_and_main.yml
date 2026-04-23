@@ -34,11 +34,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           pip install sphinx sphinx_rtd_theme cplex
@@ -68,11 +67,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -124,8 +122,51 @@ jobs:
           if-no-files-found: ignore
           include-hidden-files: true
 
-  runall_persistent:
-    name: run_all.py persistent solver
+  runall_persistent_part1:
+    name: run_all.py persistent solver (part 1)
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
+          pip install xpress coverage
+          # usar runs in first-part and imports matplotlib + scipy at module load
+          pip install matplotlib scipy
+
+      - name: Build pyomo extensions
+        run: |
+          # we don't need it all; just APPSI's extensions
+          pyomo build-extensions || python -c "from pyomo.contrib.appsi.cmodel import cmodel_available; exit(0) if bool(cmodel_available) else exit(1)"
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: Test run_all nouc (first part)
+        run: |
+          PYARGS="-m coverage run $COV_ARGS"
+          cd examples
+          coverage run $EX_COV_ARGS run_all.py xpress_persistent "" nouc --first-part-only --python-args="$PYARGS"
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-runall-persistent-part1
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
+  runall_persistent_part2:
+    name: run_all.py persistent solver (part 2)
     runs-on: ubuntu-latest
     needs: [ruff]
     timeout-minutes: 15
@@ -151,23 +192,65 @@ jobs:
         run: |
           pip install -e .
 
-      - name: Test run_all nouc
+      - name: Test run_all nouc (second part)
         run: |
           PYARGS="-m coverage run $COV_ARGS"
           cd examples
-          coverage run $EX_COV_ARGS run_all.py xpress_persistent "" nouc --python-args="$PYARGS"
+          coverage run $EX_COV_ARGS run_all.py xpress_persistent "" nouc --second-part-only --python-args="$PYARGS"
 
       - name: Upload coverage data
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-runall-persistent
+          name: coverage-runall-persistent-part2
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
           include-hidden-files: true
 
-  runall:
-    name: run_all.py direct solver
+  runall_part1:
+    name: run_all.py direct solver (part 1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
+          pip install xpress coverage
+          # usar runs in first-part and imports matplotlib + scipy at module load
+          pip install matplotlib scipy
+
+      - name: Build pyomo extensions
+        run: |
+          # we don't need it all; just APPSI's extensions
+          pyomo build-extensions || python -c "from pyomo.contrib.appsi.cmodel import cmodel_available; exit(0) if bool(cmodel_available) else exit(1)"
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: Test run_all nouc (first part)
+        run: |
+          PYARGS="-m coverage run $COV_ARGS"
+          cd examples
+          coverage run $EX_COV_ARGS run_all.py xpress_direct "" nouc --first-part-only --python-args="$PYARGS"
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-runall-direct-part1
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
+  runall_part2:
+    name: run_all.py direct solver (part 2)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -192,17 +275,54 @@ jobs:
         run: |
           pip install -e .
 
-      - name: Test run_all nouc
+      - name: Test run_all nouc (second part)
         run: |
           PYARGS="-m coverage run $COV_ARGS"
           cd examples
-          coverage run $EX_COV_ARGS run_all.py xpress_direct "" nouc --python-args="$PYARGS"
+          coverage run $EX_COV_ARGS run_all.py xpress_direct "" nouc --second-part-only --python-args="$PYARGS"
 
       - name: Upload coverage data
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-runall-direct
+          name: coverage-runall-direct-part2
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
+  uc-relaxed:
+    name: run_uc_pr.py (HiGHS, integer-relaxed PH)
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo dill pybind11 highspy coverage
+          pip install git+https://github.com/grid-parity-exchange/egret.git
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: Run run_uc_pr.py
+        run: |
+          PYARGS="-m coverage run $COV_ARGS"
+          cd examples
+          coverage run $EX_COV_ARGS run_uc_pr.py appsi_highs "" --python-args="$PYARGS"
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-uc-relaxed
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
           include-hidden-files: true
@@ -217,12 +337,11 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: setup conda
-        uses: conda-incubator/setup-miniconda@v2
+        uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: ${{ matrix.python-version }}
           channels: anaconda, conda-forge
           activate-environment: test_env
-          auto-activate-base: false
 
       - name: Install dependencies
         shell: bash -l {0}
@@ -236,7 +355,7 @@ jobs:
           git clone https://github.com/pyomo/pyomo.git
           cd pyomo/
           pip install -e .
-          pyomo download-extensions
+          pyomo download-extensions || echo "WARNING: pyomo download-extensions had failures (often a netlib.org timeout fetching gjh); not required by test_sc.py"
           pyomo build-extensions
           cd ../
           pip install git+https://github.com/parapint/parapint.git
@@ -267,11 +386,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -302,11 +420,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -341,11 +458,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -376,11 +492,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -411,11 +526,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -446,11 +560,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy" setuptools
@@ -522,11 +635,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -561,11 +673,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -600,11 +711,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy" setuptools
@@ -642,11 +752,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -687,7 +796,6 @@ jobs:
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
           channels: conda-forge, defaults
 
       - name: Install dependencies
@@ -721,11 +829,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy" setuptools
@@ -747,11 +854,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools pytest pyyaml networkx
@@ -788,11 +894,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy" setuptools
@@ -823,11 +928,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -881,11 +985,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -904,7 +1007,8 @@ jobs:
             mpisppy/tests/test_scenario_tree.py \
             mpisppy/tests/test_nice_join.py \
             mpisppy/tests/test_solver_spec.py \
-            mpisppy/tests/test_extensions.py
+            mpisppy/tests/test_extensions.py \
+            mpisppy/tests/test_proper_bundler.py
 
       - name: Upload coverage data
         if: always()
@@ -921,8 +1025,11 @@ jobs:
     needs:
       - nompi4py
       - regression
-      - runall_persistent
-      - runall
+      - runall_persistent_part1
+      - runall_persistent_part2
+      - runall_part1
+      - runall_part2
+      - uc-relaxed
       - schur-complement
       - straight-tests
       - admm-wrapper
@@ -943,11 +1050,10 @@ jobs:
     if: always()
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
 
       - name: Install coverage
         run: pip install coverage

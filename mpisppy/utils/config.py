@@ -1088,11 +1088,11 @@ class Config(pyofig.ConfigDict):
                             default=0)
 
     def wxbar_read_write_args(self):
-        import mpisppy.utils.wxbarreader as wxbarreader
+        import mpisppy.utils.w_utils.wxbarreader as wxbarreader
         wxbarreader.add_options_to_config(self)
 
-        import mpisppy.utils.wxbarwriter as wxbarwriter
-        wxbarwriter.add_options_to_config(self)        
+        import mpisppy.utils.w_utils.wxbarwriter as wxbarwriter
+        wxbarwriter.add_options_to_config(self)
 
     def proper_bundle_config(self):
         self.add_to_config('pickle_bundles_dir',

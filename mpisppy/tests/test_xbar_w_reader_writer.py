@@ -22,8 +22,8 @@ import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.tests.examples.farmer as farmer
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.tests.utils import get_solver
-import mpisppy.utils.wxbarreader as wxbarreader
-import mpisppy.utils.wxbarwriter as wxbarwriter
+import mpisppy.utils.w_utils.wxbarreader as wxbarreader
+import mpisppy.utils.w_utils.wxbarwriter as wxbarwriter
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _W_TEST_DATA_DIR = os.path.join(_THIS_DIR, "examples", "w_test_data")
