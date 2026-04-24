@@ -90,7 +90,7 @@ class XhatFeasibilityCutExtension(Extension):
                         "--xhat-feasibility-cuts-count > 0 requires every "
                         "first-stage (nonant) variable to be binary; found "
                         f"non-binary nonant {v.name!r} (key {ndn_i}) on "
-                        f"local scenario {sname!r} with domain {v.domain}. "
+                        f"scenario {sname!r} with domain {v.domain}. "
                         "The first-milestone feasibility-cut generator is "
                         "no-good-only. Support for integer and continuous "
                         "first-stage variables is planned as a follow-up "

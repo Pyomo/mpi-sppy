@@ -12,7 +12,7 @@ same ``xhat`` from being proposed again a few iterations later.
 
 When this feature is enabled, an xhatter that detects such an
 infeasibility emits a **no-good feasibility cut** on the first-stage
-variables, and the hub installs that cut into every local scenario's
+variables, and the hub installs that cut into every scenario's
 subproblem. The result is that the same ``xhat`` (and any other
 assignment with the same pattern on binaries) is excluded from future
 consideration.
@@ -80,7 +80,7 @@ invalid relaxations:
 
    RuntimeError: --xhat-feasibility-cuts-count > 0 requires every
    first-stage (nonant) variable to be binary; found non-binary nonant
-   '<var name>' (key (<node>, <i>)) on local scenario '<sname>' with
+   '<var name>' (key (<node>, <i>)) on scenario '<sname>' with
    domain <domain>. The first-milestone feasibility-cut generator is
    no-good-only. Support for integer and continuous first-stage
    variables is planned as a follow-up milestone (pyomo Benders /
@@ -106,13 +106,13 @@ across all nodes (``ROOT``, ``ROOT_0``, etc.).
 Interaction with Proper Bundles
 -------------------------------
 
-The hub installer appends cuts to each local scenario's
-``xhat_feasibility_cuts`` constraint container. For a local
-"scenario" that is actually a proper bundle, the cut is installed
-against the bundle's canonical nonant set
-(``s._mpisppy_data.nonant_indices``) exactly as the cross-scenario cut
-machinery does. Nonanticipativity inside the bundle ensures the cut
-takes effect on every per-scenario block.
+The hub installer appends cuts to each scenario's
+``xhat_feasibility_cuts`` constraint container. When a scenario
+object is actually a proper bundle, the cut is installed against the
+bundle's canonical nonant set (``s._mpisppy_data.nonant_indices``)
+exactly as the cross-scenario cut machinery does. Nonanticipativity
+inside the bundle ensures the cut takes effect on every per-scenario
+block.
 
 Follow-up Milestones
 --------------------
