@@ -208,5 +208,87 @@ class TestMathIsfinite(unittest.TestCase):
         self.assertFalse(math.isfinite(float("nan")))
 
 
+class TestConfigArgRegistration(unittest.TestCase):
+    def test_xhat_from_file_args_registers_with_default_none(self):
+        from mpisppy.utils import config as cfgmod
+        cfg = cfgmod.Config()
+        cfg.xhat_from_file_args()
+        self.assertIn("xhat_from_file", cfg)
+        self.assertIsNone(cfg.get("xhat_from_file"))
+
+    def test_generic_parsing_registers_the_flag(self):
+        """Covers the cfg.xhat_from_file_args() call inside
+        mpisppy.generic.parsing.parse_args."""
+        import sys
+        import types
+        import mpisppy.generic.parsing as parsing
+
+        stub = types.ModuleType("__stub_model_for_parse_args__")
+        def inparser_adder(cfg):
+            cfg.add_to_config("num_scens", "stub", int, default=1)
+        stub.inparser_adder = inparser_adder
+
+        saved_argv = sys.argv
+        sys.argv = ["prog"]
+        try:
+            cfg = parsing.parse_args(stub)
+        finally:
+            sys.argv = saved_argv
+
+        self.assertIn("xhat_from_file", cfg)
+
+
+class TestXhatPrepCallSite(unittest.TestCase):
+    """Covers the ``self._try_file_xhat()`` call inside ``xhat_prep``.
+
+    We stub ``self.opt`` with the minimum that xhat_prep touches and
+    leave ``options['xhat_from_file']`` unset, so the real
+    ``_try_file_xhat`` early-returns and the spoke's xhat_prep flow
+    exercises the call site without needing an npy file."""
+
+    def test_xhat_prep_invokes_try_file_xhat(self):
+        import mpisppy.cylinders.xhatbase as cxb
+        from mpisppy.utils.xhat_eval import Xhat_Eval
+
+        sp = _make_sp()
+
+        class _StubExt:
+            def pre_iter0(self): pass
+            def post_iter0(self): pass
+
+        class _StubXhatEval(Xhat_Eval):
+            def __init__(self2):
+                # Skip Xhat_Eval.__init__; set the attributes used by
+                # xhat_prep and _try_file_xhat's early-return branch.
+                self2.options = {"verbose": False, "xhat_from_file": None}
+                self2.local_scenarios = sp.local_scenarios
+                self2.extensions = None
+                self2.multistage = sp.multistage
+                self2.E1 = 1.0
+                self2.E1_tolerance = 1e-5
+            def _save_original_nonants(self2): pass
+            def _lazy_create_solvers(self2): pass
+            def _update_E1(self2): pass
+            def _save_nonants(self2): pass
+
+        spoke_obj = cxb.XhatInnerBoundBase.__new__(cxb.XhatInnerBoundBase)
+        spoke_obj.opt = _StubXhatEval()
+        spoke_obj.cylinder_rank = 0
+        spoke_obj.xhat_extension = lambda: _StubExt()
+
+        calls = {"n": 0}
+        original_try = cxb.XhatInnerBoundBase._try_file_xhat
+
+        def _spy(self):
+            calls["n"] += 1
+            original_try(self)  # exercises the "path is None → return" branch
+        cxb.XhatInnerBoundBase._try_file_xhat = _spy
+        try:
+            spoke_obj.xhat_prep()
+        finally:
+            cxb.XhatInnerBoundBase._try_file_xhat = original_try
+        self.assertEqual(calls["n"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
