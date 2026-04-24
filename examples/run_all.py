@@ -301,7 +301,7 @@ if run_second_part:
     do_one("hydro", "hydro_cylinders.py", 3,
            "--branching-factors \'3 3\' --max-iterations=100 "
            "--default-rho=1 --xhatshuffle --lagrangian "
-           "--solver-name={} --stage2EFsolvern={}".format(solver_name, solver_name))
+           "--solver-name={} --stage2-ef-solver-name={}".format(solver_name, solver_name))
 
     # Same hydro run via the generic driver (replaces the archived PySP
     # custom driver; hydro_cylinders.py above is kept for its rst references).
