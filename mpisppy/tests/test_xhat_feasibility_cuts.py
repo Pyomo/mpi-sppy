@@ -28,6 +28,7 @@ import unittest
 import numpy as np
 import pyomo.environ as pyo
 
+import mpisppy.cylinders.xhatbase as cylinder_xhatbase  # noqa: F401 — ensures class-level send_fields registration is covered
 import mpisppy.extensions.xhatbase as xhatbase_extension
 import mpisppy.scenario_tree as stree
 import mpisppy.utils.sputils as sputils
@@ -444,6 +445,502 @@ class TestMultiNodeStartupCheck(unittest.TestCase):
         with self.assertRaises(RuntimeError) as cm:
             ext._assert_all_nonants_binary()
         self.assertIn("ROOT_0", str(cm.exception))
+
+
+# ---------------------------------------------------------------------------
+# Extension plumbing: register / sync / persistent-solver branch
+# ---------------------------------------------------------------------------
+
+
+class _SpcommStub:
+    """Lightweight ``spcomm`` stand-in for register_receive_fields /
+    sync_with_spokes coverage."""
+
+    def __init__(self, fields_to_ranks=None, recv_buffer=None):
+        self.fields_to_ranks = fields_to_ranks or {}
+        self._recv_buffer_by_rank = {}
+        if recv_buffer is not None:
+            # Seed whichever rank shows up.
+            ranks = self.fields_to_ranks.get(Field.XHAT_FEASIBILITY_CUT, [0])
+            for r in ranks:
+                self._recv_buffer_by_rank[r] = recv_buffer
+
+    def register_recv_field(self, field, rank):
+        return self._recv_buffer_by_rank.setdefault(rank, _RecvBufferStub())
+
+
+class _RecvBufferStub:
+    def __init__(self, arr=None, is_new_result=True):
+        self._arr = arr if arr is not None else np.zeros(1)
+        self._is_new = is_new_result
+
+    def is_new(self):
+        return self._is_new
+
+    def array(self):
+        return self._arr
+
+
+class _PersistentSolverStub:
+    """Stub that passes ``sputils.is_persistent`` via isinstance.
+
+    ``sputils.is_persistent`` checks ``isinstance(p, PersistentSolver)``,
+    so we inherit from the real abstract base.
+    """
+    pass
+
+
+class TestExtensionRegistrationAndSync(unittest.TestCase):
+    def _make_ext(self, cuts_count=3):
+        sp = _make_sp(_binary_two_stage_scenario, num=2, cuts_count=cuts_count)
+        _attach_fake_solver_plugin(sp)
+        ext = XhatFeasibilityCutExtension(_Opt(sp))
+        ext.setup_hub()
+        return sp, ext
+
+    def test_register_send_fields_is_noop(self):
+        _, ext = self._make_ext()
+        # Should return without raising; exercise line 116.
+        ext.register_send_fields()
+
+    def test_register_receive_fields_no_emitting_spoke(self):
+        """If no rank advertises the cut field, recv_buffer stays None."""
+        sp, ext = self._make_ext()
+        ext.opt.spcomm = _SpcommStub(fields_to_ranks={})
+        ext.register_receive_fields()
+        self.assertIsNone(ext._recv_buffer)
+
+    def test_register_receive_fields_with_one_emitter(self):
+        sp, ext = self._make_ext()
+        recv = _RecvBufferStub()
+        ext.opt.spcomm = _SpcommStub(
+            fields_to_ranks={Field.XHAT_FEASIBILITY_CUT: [2]},
+            recv_buffer=recv,
+        )
+        ext.register_receive_fields()
+        self.assertIs(ext._recv_buffer, recv)
+
+    def test_register_receive_fields_multiple_emitters_asserts(self):
+        sp, ext = self._make_ext()
+        ext.opt.spcomm = _SpcommStub(
+            fields_to_ranks={Field.XHAT_FEASIBILITY_CUT: [1, 2]},
+        )
+        with self.assertRaises(AssertionError):
+            ext.register_receive_fields()
+
+    def test_sync_with_spokes_no_buffer(self):
+        sp, ext = self._make_ext()
+        ext._recv_buffer = None
+        # No side effects, no raise.
+        ext.sync_with_spokes()
+        for s in sp.local_scenarios.values():
+            self.assertEqual(len(s._mpisppy_model.xhat_feasibility_cuts), 0)
+
+    def test_sync_with_spokes_not_new_is_noop(self):
+        sp, ext = self._make_ext()
+        # A buffer that claims "not new" should be ignored.
+        nonant_len = 3
+        buf = np.zeros(3 * (nonant_len + 1) + 1)
+        buf[0] = -1.0
+        buf[1:4] = [1.0, 1.0, 1.0]
+        buf[-1] = 1.0
+        ext._recv_buffer = _RecvBufferStub(arr=buf, is_new_result=False)
+        ext.sync_with_spokes()
+        for s in sp.local_scenarios.values():
+            self.assertEqual(len(s._mpisppy_model.xhat_feasibility_cuts), 0)
+
+    def test_sync_with_spokes_new_installs_cut(self):
+        sp, ext = self._make_ext()
+        nonant_len = 3
+        buf = np.zeros(3 * (nonant_len + 1) + 1)
+        buf[0] = -1.0
+        buf[1:4] = [1.0, 1.0, 1.0]
+        buf[-1] = 1.0
+        ext._recv_buffer = _RecvBufferStub(arr=buf, is_new_result=True)
+        ext.sync_with_spokes()
+        for s in sp.local_scenarios.values():
+            self.assertEqual(len(s._mpisppy_model.xhat_feasibility_cuts), 1)
+
+
+class TestCutInstallPersistentSolverBranch(unittest.TestCase):
+    """Exercise the persistent-solver branch in ``_install_cuts``."""
+
+    def test_persistent_solver_gets_add_constraint(self):
+        # Build a PersistentSolver subclass so sputils.is_persistent says True.
+        from pyomo.solvers.plugins.solvers.persistent_solver import (
+            PersistentSolver,
+        )
+
+        class _PersistentPlugin(PersistentSolver):
+            def __init__(self):
+                # Bypass PersistentSolver.__init__ which wants a config; we
+                # only need an isinstance-compatible object with add_constraint.
+                self.added = []
+
+            def add_constraint(self, con):
+                self.added.append(con)
+
+            # Abstracts we don't actually exercise in this test.
+            def _presolve(self, *a, **kw): pass
+            def _postsolve(self, *a, **kw): pass
+            def _warm_start(self, *a, **kw): pass
+            def _apply_solver(self, *a, **kw): pass
+            def _get_dual_values(self, *a, **kw): return {}
+            def _load_vars(self, *a, **kw): pass
+            def _get_expr_from_pyomo_repn(self, *a, **kw): pass
+
+        sp = _make_sp(_binary_two_stage_scenario, num=2, cuts_count=3)
+        for s in sp.local_scenarios.values():
+            s._solver_plugin = _PersistentPlugin()
+        ext = XhatFeasibilityCutExtension(_Opt(sp))
+        ext.setup_hub()
+
+        nonant_len = 3
+        buf = np.zeros(3 * (nonant_len + 1) + 1)
+        buf[0] = -1.0
+        buf[1:4] = [1.0, 1.0, 1.0]
+        buf[-1] = 1.0
+        ext._install_cuts(buf)
+
+        # Each local scenario's persistent plugin should have been told
+        # about the new constraint.
+        for s in sp.local_scenarios.values():
+            self.assertEqual(len(s._solver_plugin.added), 1)
+
+
+# ---------------------------------------------------------------------------
+# _maybe_emit_feasibility_cut: early-return branches and buffer-size check
+# ---------------------------------------------------------------------------
+
+
+class TestEmitEarlyReturns(unittest.TestCase):
+    def _ext(self, sp, cuts_count=3, spcomm=None):
+        ext = xhatbase_extension.XhatBase.__new__(xhatbase_extension.XhatBase)
+        ext.opt = _FakeOpt(sp, cuts_count=cuts_count)
+        if spcomm is not None:
+            ext.opt.spcomm = spcomm
+        ext.cylinder_rank = 0
+        ext.n_proc = 1
+        ext.verbose = False
+        ext.scenario_name_to_rank = ext.opt.scenario_names_to_rank
+        return ext
+
+    def test_spcomm_is_none_silently_returns(self):
+        sp = _make_sp(_binary_two_stage_scenario, num=1)
+        ext = self._ext(sp, cuts_count=3, spcomm="replace")
+        ext.opt.spcomm = None   # override the _FakeSpcomm installed by _FakeOpt
+        _set_xhat(sp, [1, 0, 1])
+        # Must not raise.
+        ext._maybe_emit_feasibility_cut()
+
+    def test_send_field_not_registered_silently_returns(self):
+        sp = _make_sp(_binary_two_stage_scenario, num=1)
+        ext = self._ext(sp, cuts_count=3)
+        # Remove the pre-registered buffer so is_send_field_registered is False.
+        ext.opt.spcomm.send_buffers.pop(Field.XHAT_FEASIBILITY_CUT)
+        _set_xhat(sp, [1, 0, 1])
+        ext._maybe_emit_feasibility_cut()
+        self.assertEqual(ext.opt.spcomm.sent, [])
+
+    def test_buffer_size_mismatch_raises(self):
+        sp = _make_sp(_binary_two_stage_scenario, num=1)
+        # cuts_count=3 in options → emitter expects 3*(3+1)+1 = 13.
+        # Replace the buffer with a wrong size.
+        ext = self._ext(sp, cuts_count=3)
+        ext.opt.spcomm.send_buffers[Field.XHAT_FEASIBILITY_CUT] = \
+            _FakeSendArray(5)  # wrong size
+        _set_xhat(sp, [1, 0, 1])
+        with self.assertRaises(RuntimeError) as cm:
+            ext._maybe_emit_feasibility_cut()
+        self.assertIn("buffer has length 5", str(cm.exception))
+
+    def test_missing_nonant_value_silently_returns(self):
+        sp = _make_sp(_binary_two_stage_scenario, num=1)
+        ext = self._ext(sp, cuts_count=3)
+        # Clear one nonant's value to hit the `xv is None` guard.
+        for s in sp.local_scenarios.values():
+            first_v = next(iter(s._mpisppy_data.nonant_indices.values()))
+            first_v.set_value(None, skip_validation=True)
+            break
+        ext._maybe_emit_feasibility_cut()
+        self.assertEqual(ext.opt.spcomm.sent, [])
+
+
+# ---------------------------------------------------------------------------
+# Plumbing tests: config registration, cfg_vanilla helpers, FieldLengths,
+# and the _try_one exception wrapper.
+# ---------------------------------------------------------------------------
+
+
+class TestConfigArgRegistration(unittest.TestCase):
+    def test_xhat_feasibility_cut_args_registers_with_default_zero(self):
+        from mpisppy.utils import config as cfgmod
+        cfg = cfgmod.Config()
+        cfg.xhat_feasibility_cut_args()
+        self.assertIn("xhat_feasibility_cuts_count", cfg)
+        self.assertEqual(cfg.get("xhat_feasibility_cuts_count"), 0)
+
+    def test_generic_parsing_registers_the_flag(self):
+        """Covers the cfg.xhat_feasibility_cut_args() call inside
+        mpisppy.generic.parsing.parse_args."""
+        import sys
+        import types
+        import mpisppy.generic.parsing as parsing
+
+        stub = types.ModuleType("__stub_model_for_parse_args__")
+        def inparser_adder(cfg):
+            cfg.add_to_config("num_scens", "stub", int, default=1)
+        stub.inparser_adder = inparser_adder
+
+        saved_argv = sys.argv
+        sys.argv = ["prog"]   # no positional flags; defaults only
+        try:
+            cfg = parsing.parse_args(stub)
+        finally:
+            sys.argv = saved_argv
+
+        # The flag made it into the Config — which is the signal that
+        # parse_args actually ran cfg.xhat_feasibility_cut_args().
+        self.assertIn("xhat_feasibility_cuts_count", cfg)
+
+
+class TestCfgVanillaPlumbing(unittest.TestCase):
+    def _cfg(self, xhat_cap=0):
+        """Build a minimal Config with whatever fields shared_options needs."""
+        from mpisppy.utils import config as cfgmod
+        cfg = cfgmod.Config()
+        cfg.popular_args()
+        cfg.two_sided_args()
+        cfg.ph_args()
+        cfg.aph_args()
+        cfg.xhat_feasibility_cut_args()
+        if xhat_cap:
+            cfg.xhat_feasibility_cuts_count = xhat_cap
+        cfg.solver_name = "gurobi"
+        return cfg
+
+    def test_shared_options_propagates_cap(self):
+        from mpisppy.utils import cfg_vanilla as vanilla
+        cfg = self._cfg(xhat_cap=4)
+        shopts = vanilla.shared_options(cfg)
+        self.assertEqual(shopts["xhat_feasibility_cuts_count"], 4)
+
+    def test_shared_options_defaults_to_zero_when_off(self):
+        from mpisppy.utils import cfg_vanilla as vanilla
+        cfg = self._cfg(xhat_cap=0)
+        shopts = vanilla.shared_options(cfg)
+        self.assertEqual(shopts["xhat_feasibility_cuts_count"], 0)
+
+    def test_add_xhat_feasibility_cuts_noop_when_off(self):
+        from mpisppy.utils import cfg_vanilla as vanilla
+        cfg = self._cfg(xhat_cap=0)
+        hub_dict = {"opt_kwargs": {"options": {}}}
+        result = vanilla.add_xhat_feasibility_cuts(hub_dict, cfg)
+        # Same dict back; no extensions attached; no option injected.
+        self.assertIs(result, hub_dict)
+        self.assertNotIn("extensions", hub_dict["opt_kwargs"])
+        self.assertNotIn("xhat_feasibility_cuts_count",
+                         hub_dict["opt_kwargs"]["options"])
+
+    def test_add_xhat_feasibility_cuts_attaches_extension_when_on(self):
+        from mpisppy.utils import cfg_vanilla as vanilla
+        from mpisppy.extensions.xhat_feasibility_cut_extension import (
+            XhatFeasibilityCutExtension,
+        )
+        cfg = self._cfg(xhat_cap=7)
+        hub_dict = {"opt_kwargs": {"options": {}}}
+        vanilla.add_xhat_feasibility_cuts(hub_dict, cfg)
+        # extension_adder installs either a direct extension or a
+        # MultiExtension; confirm XhatFeasibilityCutExtension made it in.
+        exts = hub_dict["opt_kwargs"].get("extensions")
+        self.assertIsNotNone(exts)
+        ext_classes = (
+            [exts] if not isinstance(exts, type) or exts.__name__ != "MultiExtension"
+            else hub_dict["opt_kwargs"]["extension_kwargs"]["ext_classes"]
+        )
+        # extension_adder produces either a single class or a MultiExtension
+        # with ext_classes. Handle both.
+        mx_classes = hub_dict["opt_kwargs"].get("extension_kwargs", {}).get(
+            "ext_classes", [])
+        self.assertTrue(
+            XhatFeasibilityCutExtension in ext_classes
+            or XhatFeasibilityCutExtension in mx_classes,
+            f"Expected XhatFeasibilityCutExtension in hub extensions; got {exts!r}",
+        )
+        self.assertEqual(
+            hub_dict["opt_kwargs"]["options"]["xhat_feasibility_cuts_count"],
+            7,
+        )
+
+
+class TestFieldLengthsPicksUpCap(unittest.TestCase):
+    """Covers the FieldLengths setter line that reads
+    ``opt.options['xhat_feasibility_cuts_count']``."""
+
+    def test_field_length_reflects_cap(self):
+        from mpisppy.cylinders.spwindow import FieldLengths, Field
+        sp = _make_sp(_binary_two_stage_scenario, num=2, cuts_count=5)
+        # FieldLengths wants opt.nonant_length; SPBase sets that up.
+        fl = FieldLengths(sp)
+        # row_len = 1 + 3 nonants; cap=5 → 5*4 + 1 = 21.
+        self.assertEqual(fl[Field.XHAT_FEASIBILITY_CUT], 5 * 4 + 1)
+
+    def test_field_length_off_is_one(self):
+        from mpisppy.cylinders.spwindow import FieldLengths, Field
+        sp = _make_sp(_binary_two_stage_scenario, num=2, cuts_count=0)
+        fl = FieldLengths(sp)
+        # With cap=0 the buffer collapses to just the trailing count slot.
+        self.assertEqual(fl[Field.XHAT_FEASIBILITY_CUT], 1)
+
+
+class TestGenericExtensionsWiring(unittest.TestCase):
+    """Covers the one-line gate in mpisppy/generic/extensions.py that
+    defers to cfg_vanilla.add_xhat_feasibility_cuts when the flag is
+    positive. We minimally construct the cfg the function reads."""
+
+    def _make_configured_cfg(self, cuts_count):
+        from mpisppy.utils import config as cfgmod
+        cfg = cfgmod.Config()
+        # configure_extensions reads these; register them as no-ops.
+        cfg.popular_args()
+        cfg.ph_args()
+        cfg.aph_args()
+        cfg.two_sided_args()
+        cfg.fixer_args()
+        cfg.relaxed_ph_fixer_args()
+        cfg.integer_relax_then_enforce_args()
+        cfg.gapper_args()
+        cfg.gapper_args(name="lagrangian")
+        cfg.ph_primal_args()
+        cfg.ph_dual_args()
+        cfg.relaxed_ph_args()
+        cfg.gradient_args()
+        cfg.dynamic_rho_args()
+        cfg.reduced_costs_args()
+        cfg.sep_rho_args()
+        cfg.coeff_rho_args()
+        cfg.sensi_rho_args()
+        cfg.reduced_costs_rho_args()
+        cfg.norm_rho_args()
+        cfg.primal_dual_rho_args()
+        cfg.wxbar_read_write_args()
+        cfg.tracking_args()
+        cfg.converger_args()
+        cfg.xhat_feasibility_cut_args()
+        cfg.add_to_config("user_defined_extensions",
+                          description="list of user-defined extensions",
+                          domain=list, default=None)
+        cfg.add_to_config("write_scenario_lp_mps_files_dir",
+                          description="not used here",
+                          domain=str, default=None)
+        cfg.solver_name = "gurobi"
+        cfg.xhat_feasibility_cuts_count = cuts_count
+        return cfg
+
+    def _fake_hub_dict(self):
+        return {"opt_kwargs": {"options": {}}}
+
+    def test_configure_extensions_attaches_when_on(self):
+        from mpisppy.generic.extensions import configure_extensions
+        from mpisppy.extensions.xhat_feasibility_cut_extension import (
+            XhatFeasibilityCutExtension,
+        )
+        cfg = self._make_configured_cfg(cuts_count=3)
+        hub = self._fake_hub_dict()
+        configure_extensions(hub, module=None, cfg=cfg)
+        exts = hub["opt_kwargs"].get("extensions")
+        mx_classes = hub["opt_kwargs"].get("extension_kwargs", {}).get(
+            "ext_classes", [])
+        self.assertTrue(
+            exts is XhatFeasibilityCutExtension
+            or XhatFeasibilityCutExtension in mx_classes,
+            f"Expected XhatFeasibilityCutExtension in hub; got exts={exts!r}, "
+            f"ext_classes={mx_classes!r}",
+        )
+
+    def test_configure_extensions_skipped_when_off(self):
+        from mpisppy.generic.extensions import configure_extensions
+        from mpisppy.extensions.xhat_feasibility_cut_extension import (
+            XhatFeasibilityCutExtension,
+        )
+        cfg = self._make_configured_cfg(cuts_count=0)
+        hub = self._fake_hub_dict()
+        configure_extensions(hub, module=None, cfg=cfg)
+        exts = hub["opt_kwargs"].get("extensions")
+        mx_classes = hub["opt_kwargs"].get("extension_kwargs", {}).get(
+            "ext_classes", [])
+        self.assertFalse(
+            exts is XhatFeasibilityCutExtension
+            or XhatFeasibilityCutExtension in mx_classes,
+            "XhatFeasibilityCutExtension should NOT be attached when off",
+        )
+
+
+class TestTryOneExceptionWrapper(unittest.TestCase):
+    """Covers the ``try / except`` wrapper around
+    ``_maybe_emit_feasibility_cut`` inside ``XhatBase._try_one``.
+
+    We don't drive ``_try_one`` end-to-end (that would need the whole
+    Xhat_Eval machinery); we exercise the tiny wrapper by calling the
+    same snippet directly. The wrapper is intentionally simple: log on
+    rank 0 and swallow the exception so the xhatter keeps going.
+    """
+
+    def test_try_one_reaches_the_emit_wrapper_on_infeasibility(self):
+        """Drive ``_try_one`` just far enough to hit the emit wrapper.
+
+        Stubs ``self.opt`` with the minimum set of methods ``_try_one``
+        touches on the two-stage infeasibility path, and replaces
+        ``_maybe_emit_feasibility_cut`` with one that raises. The
+        wrapper must log-and-swallow (no re-raise) so the xhatter
+        keeps going.
+        """
+        import mpisppy.extensions.xhatbase as xb
+        sp = _make_sp(_binary_two_stage_scenario, num=1)
+        ext = xb.XhatBase.__new__(xb.XhatBase)
+        ext.cylinder_rank = 0
+        ext.n_proc = 1
+        ext.verbose = False
+        ext.scenario_name_to_rank = {"ROOT": {"scen0": 0}}
+
+        class _StubOpt:
+            def __init__(self, sp):
+                self.local_scenarios = sp.local_scenarios
+                self.options = {}
+                self._saved = 0
+                self._restored = 0
+                # inject a nonant_cache on the one local scenario to
+                # satisfy the two-stage branch in _try_one.
+                for s in sp.local_scenarios.values():
+                    s._mpisppy_data.nonant_cache = np.zeros(
+                        len(s._mpisppy_data.nonant_indices))
+            def _save_nonants(self): self._saved += 1
+            def _restore_nonants(self): self._restored += 1
+            def _fix_nonants(self, xhats): pass
+            def solve_loop(self, **kw): pass
+            def no_incumbent_prob(self): return 1.0  # force infeasibility
+            def Eobjective(self, **kw): return 0.0
+            def update_best_solution_if_improving(self, obj): return False
+
+        class _StubComm:
+            def bcast(self, data, root=0): return data
+        ext.opt = _StubOpt(sp)
+        ext.comms = {"ROOT": _StubComm()}
+
+        # Monkey-patch the emit helper to raise so the wrapper's except
+        # branch fires.
+        def _boom(self):
+            raise RuntimeError("synthetic emit failure")
+        ext._maybe_emit_feasibility_cut = _boom.__get__(ext, xb.XhatBase)
+
+        # Should NOT raise: _try_one catches and logs.
+        result = ext._try_one({"ROOT": "scen0"},
+                              solver_options=None,
+                              verbose=False,
+                              restore_nonants=True)
+        self.assertIsNone(result)
+        # nonants were restored despite the exception.
+        self.assertEqual(ext.opt._restored, 1)
 
 
 if __name__ == "__main__":
