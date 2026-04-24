@@ -35,6 +35,7 @@ class Field(enum.IntEnum):
     NONANT_UPPER_BOUNDS=501
     BEST_XHAT=600 # buffer having the best xhat and its total cost per scenario
     RECENT_XHATS=601 # buffer having some recent xhats and their total cost per scenario
+    XHAT_FEASIBILITY_CUT=700  # feasibility cuts emitted by xhat spokes
     WHOLE=1_000_000
 
 
@@ -46,6 +47,9 @@ field_length_components._total_number_scenarios = pyo.Param(mutable=True)
 
 # these could be modified by the user...
 field_length_components.total_number_recent_xhats = pyo.Param(mutable=True, initialize=10, within=pyo.NonNegativeIntegers)
+# max cuts an xhat spoke may emit per iteration (set by the xhatter
+# spoke from cfg.xhat_feasibility_cuts_count before field registration)
+field_length_components.xhat_feasibility_cuts_per_iter = pyo.Param(mutable=True, initialize=0, within=pyo.NonNegativeIntegers)
 
 _field_lengths = {
         Field.SHUTDOWN : 1,
@@ -63,6 +67,9 @@ _field_lengths = {
         Field.NONANT_UPPER_BOUNDS : field_length_components._total_number_nonants,
         Field.BEST_XHAT : field_length_components._local_nonant_length + field_length_components._local_scenario_length,
         Field.RECENT_XHATS : field_length_components.total_number_recent_xhats * (field_length_components._local_nonant_length + field_length_components._local_scenario_length),
+        # rows: [constant, nonant_coef_1, ..., nonant_coef_N]; trailing slot holds the
+        # actual number of cuts written this batch (0..per_iter).
+        Field.XHAT_FEASIBILITY_CUT : field_length_components.xhat_feasibility_cuts_per_iter * (field_length_components._total_number_nonants + 1) + 1,
 }
 
 
@@ -79,6 +86,10 @@ class FieldLengths:
         field_length_components._local_scenario_length.value = len(opt.local_scenarios)
         field_length_components._total_number_nonants.value = opt.nonant_length
         field_length_components._total_number_scenarios.value = len(opt.local_scenarios)
+        # user-tunable cap on feasibility cuts per iteration (0 = off)
+        field_length_components.xhat_feasibility_cuts_per_iter.value = int(
+            opt.options.get("xhat_feasibility_cuts_count", 0)
+        )
 
         self._field_lengths = {k : pyo.value(v) for k, v in _field_lengths.items()}
 

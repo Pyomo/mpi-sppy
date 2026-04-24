@@ -9,14 +9,22 @@
 
 import abc
 import mpisppy.cylinders.spoke as spoke
+from mpisppy.cylinders.spwindow import Field
 from mpisppy.utils.xhat_eval import Xhat_Eval
 
 class XhatInnerBoundBase(spoke.InnerBoundNonantSpoke):
 
+    # Advertise the optional feasibility-cut send buffer. When
+    # cfg.xhat_feasibility_cuts_count == 0 the buffer is size 1 (just the
+    # trailing count slot) and never written; see spwindow.FieldLengths
+    # and XhatBase._try_one.
+    send_fields = (*spoke.InnerBoundNonantSpoke.send_fields,
+                   Field.XHAT_FEASIBILITY_CUT,)
+
     @abc.abstractmethod
     def xhat_extension(self):
         raise NotImplementedError
-    
+
 
     def xhat_prep(self):
         ## for later
