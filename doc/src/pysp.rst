@@ -33,5 +33,8 @@ Here are few notes about these examples:
 
 * How to form the EF is shown in, e.g. ``abstract.py``
 
-A more advanced example utilizing the hub-and-spoke system
-is available in the file ``examples/hydro/hydro_cylinders_pysp.py``
+For new code, write a ``scenario_creator`` function (as in
+``examples/hydro/hydro.py``) and invoke
+``mpisppy/generic_cylinders.py`` rather than using ``PySPModel``.
+An older hub-and-spoke example that used ``PySPModel`` is preserved
+under ``examples/hydro/archive/hydro_cylinders_pysp.py``.
