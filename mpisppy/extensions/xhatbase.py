@@ -227,6 +227,18 @@ class XhatBase(mpisppy.extensions.extension.Extension):
 
         infeasP = self.opt.no_incumbent_prob()
         if infeasP != 0.:
+            # Optional: emit a no-good feasibility cut so the hub can
+            # prevent revisiting this xhat. Gated on
+            # cfg.xhat_feasibility_cuts_count > 0 and on the send field
+            # actually being registered (it will be for xhat spokes that
+            # descend from XhatInnerBoundBase). Binary-only cut; the hub
+            # extension's setup_hub verifies that precondition.
+            try:
+                self._maybe_emit_feasibility_cut()
+            except Exception as e:
+                # Emission must never break the xhatter. Log and move on.
+                if self.cylinder_rank == 0:
+                    print(f"[xhat feasibility cuts] emit failed: {e!r}")
             if restore_nonants:
                 self.opt._restore_nonants()
             return None
@@ -239,6 +251,71 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             if restore_nonants:
                 self.opt._restore_nonants()
             return obj
+
+    #**********
+    def _maybe_emit_feasibility_cut(self):
+        """Pack a no-good cut from the just-evaluated xhat and send it.
+
+        Precondition: called from ``_try_one`` right after infeasibility
+        was detected, while nonants are still fixed to the xhat. Cuts
+        are keyed against every local scenario's ``nonant_indices``
+        insertion order, so the packed coefficients match the hub's
+        ``XhatFeasibilityCutExtension._install_cuts`` unpacking.
+
+        Cut form (for binary xhat with x_i in {0,1}):
+            constant + sum_i coef_i * x_i >= 0
+            constant = (#{xhat_i = 1}) - 1
+            coef_i   = 1 - 2 * xhat_i   (= +1 if xhat=0, -1 if xhat=1)
+
+        Which is equivalent to the standard no-good inequality
+            sum_{xhat_i=1} (1 - x_i) + sum_{xhat_i=0} x_i >= 1
+        """
+        cuts_cap = int(self.opt.options.get("xhat_feasibility_cuts_count", 0))
+        if cuts_cap <= 0:
+            return
+        spcomm = self.opt.spcomm
+        if spcomm is None:
+            return
+        # Import here to avoid a cylinders->extensions import cycle.
+        from mpisppy.cylinders.spwindow import Field
+        if not spcomm.is_send_field_registered(Field.XHAT_FEASIBILITY_CUT):
+            return
+
+        send_array = spcomm.send_buffers[Field.XHAT_FEASIBILITY_CUT]
+        buf = send_array.value_array()
+        any_s = next(iter(self.opt.local_scenarios.values()))
+        nonant_len = len(any_s._mpisppy_data.nonant_indices)
+        row_len = 1 + nonant_len
+        expected = cuts_cap * row_len + 1
+        if buf.shape[0] != expected:
+            # Size mismatch means buffer/config got out of sync; don't
+            # silently write junk into the window.
+            raise RuntimeError(
+                f"XHAT_FEASIBILITY_CUT buffer has length {buf.shape[0]}, "
+                f"expected {expected} = {cuts_cap} * ({nonant_len}+1) + 1"
+            )
+
+        # Pack one row (row 0); later rows zeroed so the hub's zero-check
+        # skips them.
+        buf.fill(0.0)
+        xhat_sum_ones = 0
+        for idx, v in enumerate(any_s._mpisppy_data.nonant_indices.values()):
+            # v is fixed to its xhat value right now; read the integer.
+            xv = v.value
+            if xv is None:
+                # Cannot form a no-good cut with missing values; abort quietly.
+                return
+            # Binary coercion: the extension's startup check already
+            # verified every nonant is binary, so xv should be 0 or 1
+            # up to solver tolerance. Snap to the nearest.
+            xhat_i = 1 if xv > 0.5 else 0
+            if xhat_i == 1:
+                xhat_sum_ones += 1
+            buf[1 + idx] = 1 - 2 * xhat_i  # coef_i
+        buf[0] = xhat_sum_ones - 1          # constant
+        buf[-1] = 1.0                       # this batch contains 1 cut
+
+        spcomm.put_send_buffer(send_array, Field.XHAT_FEASIBILITY_CUT)
 
     #**********
     def csv_nonants(self, snamedict, fname):

@@ -217,6 +217,18 @@ if run_first_part:
            f"--num-scens=3 --solver-name={solver_name} "
            f"--max-iterations=3 --default-rho=1 --lagrangian --xhatshuffle "
            f"--output-dir=solutions_ws {usar_problem_args}")
+    # usar has a binary first-stage (is_active_depot), so it exercises
+    # --xhat-feasibility-cuts-count end-to-end: buffer registration on
+    # the xhatter spoke, the hub extension's binary-only startup check,
+    # and the sync loop. The xhatter may or may not actually hit an
+    # infeasibility on this small instance — the cut-emission path is
+    # unit-tested separately in test_xhat_feasibility_cuts.py — but this
+    # smoke entry guards the full-run plumbing from regressions.
+    do_one("usar", "wheel_spinner.py", 3,
+           f"--num-scens=3 --solver-name={solver_name} "
+           f"--max-iterations=3 --default-rho=1 --lagrangian --xhatshuffle "
+           f"--xhat-feasibility-cuts-count=3 "
+           f"--output-dir=solutions_ws_feas {usar_problem_args}")
 
 # -------- Second part: netdes, sizes, sslp, hydro, aircond, MMW --------
 if run_second_part:

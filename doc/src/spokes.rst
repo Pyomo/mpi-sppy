@@ -137,7 +137,15 @@ An example is shown in ``examples.hydro.hydro_cylinders.py`` (this particular ex
 is intended to show the coding, not normal behavior. It is sort of an edge case:
 including this option causes the upper bound to immediately be Z*)
 
- 
+Feasibility cuts from xhatters
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For problems without complete recourse, any xhatter can optionally
+emit a no-good feasibility cut when its candidate :math:`\hat{x}` is
+infeasible in some scenario; the hub then installs the cut into every
+scenario so the same :math:`\hat{x}` is not revisited. See
+:ref:`xhat_feasibility_cuts`.
+
 slam_heuristic
 ^^^^^^^^^^^^^^
 
