@@ -150,6 +150,30 @@ sufficient. We need one of:
 first deliverable so the plumbing lands independently of the Pyomo
 review cycle. (2) is a trap — avoid.
 
+### Scope across milestones
+
+It helps to be explicit about *which variables* each approach can
+handle. The Farkas cut (V2) is linear in the first-stage (complicating)
+variables, so their domain does not affect the cut's validity — only
+the outer solver's convergence behavior. The real restriction in V2
+is on the **second stage**: Farkas duality requires an LP recourse.
+Integer recourse needs a further generalization (integer L-shaped /
+Laporte-Louveaux / combinatorial Benders), which is a separate
+milestone on top of V2.
+
+| | V1: no-good | V2: Farkas (pyomo extension) | V3: integer L-shaped |
+|---|---|---|---|
+| 1st-stage **binary**     | ✓ | ✓ | ✓ |
+| 1st-stage **integer**    | ✗ | ✓ | ✓ |
+| 1st-stage **continuous** | ✗ | ✓ | ✓ |
+| 2nd-stage **LP**         | ✓ | ✓ | ✓ |
+| 2nd-stage **MIP**        | ✓ | ✗ | ✓ |
+
+V1 tolerates MIP recourse because the no-good cut depends only on the
+first-stage `xhat` values, not on any recourse dual. V2 lifts the
+first-stage restriction but requires LP recourse. V3 is out of scope
+for this design; it is mentioned only so the boundary is clear.
+
 ## Proposed architecture
 
 Match the cross-scen split: one new shared-memory field, spoke-side
