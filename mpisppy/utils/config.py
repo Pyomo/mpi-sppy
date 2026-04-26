@@ -906,6 +906,19 @@ class Config(pyofig.ConfigDict):
                            domain=str,
                            default=None)
 
+    def xhat_feasibility_cut_args(self):
+        # Optional feasibility cuts emitted by xhat spokes when a candidate
+        # xhat is infeasible in some scenario. Default 0 disables the
+        # feature; positive N caps cuts per iteration and sizes the send
+        # buffer. First release supports binary first-stage only; the
+        # hub extension hard-fails at setup if that precondition is not
+        # met. See doc/src/xhat_feasibility_cuts.rst.
+        self.add_to_config("xhat_feasibility_cuts_count",
+                            description="max feasibility cuts per xhat iteration "
+                                        "(0 disables; >0 requires binary first-stage)",
+                            domain=int,
+                            default=0)
+
     def wtracker_args(self):
 
         self.add_to_config('wtracker',

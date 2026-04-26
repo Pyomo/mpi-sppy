@@ -49,6 +49,11 @@ def shared_options(cfg):
         # Optional initial xhat candidate file (.npy); None disables.
         # Consumed by XhatInnerBoundBase._try_file_xhat.
         "xhat_from_file" : cfg.get("xhat_from_file", None),
+        # Cap for feasibility cuts emitted by xhat spokes. The hub
+        # extension reads this (when attached); each xhat spoke reads
+        # it to gate _maybe_emit_feasibility_cut; spwindow.FieldLengths
+        # reads it to size the shared-memory buffer. Default 0 disables.
+        "xhat_feasibility_cuts_count" : cfg.get("xhat_feasibility_cuts_count", 0) or 0,
     }
     if _hasit(cfg, "solver_options"):
         odict = sputils.option_string_to_dict(cfg.solver_options)
@@ -446,6 +451,26 @@ def add_cross_scenario_cuts(hub_dict,
     hub_dict = extension_adder(hub_dict, CrossScenarioExtension)
     hub_dict["opt_kwargs"]["options"]["cross_scen_options"]\
             = {"check_bound_improve_iterations" : cfg.cross_scenario_iter_cnt}
+    return hub_dict
+
+
+def add_xhat_feasibility_cuts(hub_dict, cfg):
+    """Wire the hub-side receiver for xhat feasibility cuts.
+
+    No-op if ``cfg.xhat_feasibility_cuts_count`` is zero. Otherwise
+    attaches ``XhatFeasibilityCutExtension`` to the hub; the hub
+    extension's ``setup_hub`` hard-fails if any first-stage nonant is
+    not binary. Propagates the cap into hub options so the extension
+    sees it. See ``doc/src/xhat_feasibility_cuts.rst``.
+    """
+    n = cfg.get("xhat_feasibility_cuts_count", 0) or 0
+    if n <= 0:
+        return hub_dict
+    from mpisppy.extensions.xhat_feasibility_cut_extension import (
+        XhatFeasibilityCutExtension,
+    )
+    hub_dict = extension_adder(hub_dict, XhatFeasibilityCutExtension)
+    hub_dict["opt_kwargs"]["options"]["xhat_feasibility_cuts_count"] = n
     return hub_dict
 
 def add_reduced_costs_fixer(hub_dict,
