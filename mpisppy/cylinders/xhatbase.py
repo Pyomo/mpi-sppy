@@ -106,7 +106,32 @@ class XhatInnerBoundBase(spoke.InnerBoundNonantSpoke):
         if self.cylinder_rank == 0:
             print(f"[xhat-from-file] evaluating {path!r} "
                   f"({expected} nonants)")
-        Eobj = self.opt.evaluate(nonant_cache)
+        try:
+            Eobj = self.opt.evaluate(nonant_cache)
+        except Exception:
+            Eobj = None
+        # Same predicate XhatBase._try_one uses to detect infeasibility
+        # in some scenario. When True and feasibility cuts are enabled,
+        # pack a no-good cut so the hub extension can install it on
+        # every scenario — same path the regular xhatter takes.
+        infeasP = 0.0
+        try:
+            infeasP = self.opt.no_incumbent_prob()
+        except Exception:
+            pass
+        if infeasP != 0.:
+            from mpisppy.extensions.xhatbase import pack_no_good_feasibility_cut
+            try:
+                emitted = pack_no_good_feasibility_cut(self.opt)
+            except Exception as e:
+                emitted = False
+                if self.cylinder_rank == 0:
+                    print(f"[xhat-from-file] feasibility-cut emit failed: {e!r}")
+            if self.cylinder_rank == 0:
+                tag = "emitted" if emitted else "skipped"
+                print(f"[xhat-from-file] candidate infeasible "
+                      f"(infeasP={infeasP}); feasibility cut {tag}")
+            Eobj = None
         # Restore nonants so the main loop starts from clean state.
         self.opt._restore_nonants()
         if Eobj is not None and math.isfinite(Eobj):
