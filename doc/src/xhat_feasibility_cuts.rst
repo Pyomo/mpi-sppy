@@ -3,7 +3,7 @@
 Xhat Feasibility Cuts
 =====================
 
-For two-stage and multi-stage problems **without complete recourse**, a
+For two-stage problems **without complete recourse**, a
 candidate first-stage solution ``xhat`` proposed by an xhatter spoke
 (``xhatlooper``, ``xhatshufflelooper``, ``xhatspecific``,
 ``xhatxbar``) can turn out to be infeasible in one or more scenarios.
@@ -17,9 +17,9 @@ subproblem. The result is that the same ``xhat`` (and any other
 assignment with the same pattern on binaries) is excluded from future
 consideration.
 
-This is a first-milestone implementation: it is **valid only when every
-first-stage (nonant) variable is binary**. See :ref:`xhat_feas_cuts_boundaries`
-below.
+This is a first-milestone implementation: it is **two-stage only**
+and **valid only when every first-stage (nonant) variable is binary**.
+See :ref:`xhat_feas_cuts_boundaries` below.
 
 Enabling the Feature
 --------------------
@@ -97,11 +97,25 @@ accepted** — semantically those are binary. Declaring a var as
 Multi-stage
 -----------
 
-The no-good cut is linear in whichever nonants the xhatter fixed, and
-does not depend on the recourse-cost formulation. It is therefore
-valid for multi-stage problems as well as two-stage, as long as every
-nonant at every node is binary. The same startup check is applied
-across all nodes (``ROOT``, ``ROOT_0``, etc.).
+V1 is two-stage only. Enabling
+``--xhat-feasibility-cuts-count`` on a multi-stage model raises at
+hub setup time:
+
+.. code-block:: text
+
+   RuntimeError: --xhat-feasibility-cuts-count > 0 is two-stage only
+   in V1. Multi-stage support is planned as a follow-up milestone
+   (the install side needs to group cuts by scenario branch). See
+   doc/xhat_feasibility_cuts_design.md.
+
+The cut row encodes coefficients positionally against each scenario's
+``nonant_indices``. In two-stage every scenario shares the same ROOT
+nonants under nonanticipativity, so applying the same row to every
+scenario is consistent. In multi-stage, scenarios on different
+branches have different per-stage-2+ variables at the deeper indices,
+so the same row applied positionally lands coefficients on unrelated
+variables. A multi-stage-correct installer needs to group cuts by
+branch; that work is deferred to a follow-up milestone.
 
 Interaction with Proper Bundles
 -------------------------------
@@ -117,6 +131,13 @@ block.
 Follow-up Milestones
 --------------------
 
+- **Multi-stage support.** A multi-stage-correct installer needs to
+  group each cut by the branch of the source scenario and install it
+  only on scenarios sharing that branch through the cut's deepest
+  node. The current installer applies one cut row uniformly to every
+  scenario, which is only valid in two-stage; that's why V1 hard-fails
+  at setup on a multi-stage model. Tracking as a follow-up alongside
+  V2.
 - Lifting the binary-only restriction requires generating **Farkas
   feasibility cuts** from the dual ray of an infeasible second-stage
   LP. The upstream

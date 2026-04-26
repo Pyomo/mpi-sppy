@@ -418,33 +418,36 @@ class _FakeData:
     pass
 
 
-class TestMultiNodeStartupCheck(unittest.TestCase):
+class TestMultiStageRejection(unittest.TestCase):
+    """V1 of the feature is two-stage only.
 
-    def test_passes_with_binary_nonants_in_all_nodes(self):
-        scen = _multi_node_binary_scenario("s0")
-        opt = _MultiNodeStub(scen, {"xhat_feasibility_cuts_count": 1})
-        ext = XhatFeasibilityCutExtension(opt)
-        # setup_hub also attaches the ConstraintList; for this lightweight
-        # stub we just run the scan directly.
-        ext._assert_all_nonants_binary()
+    The no-good cut row encodes coefficients positionally against each
+    scenario's ``nonant_indices``; in multi-stage, scenarios on
+    different branches have different per-stage-2+ variables at the
+    deeper indices, so installing the same row on every scenario lands
+    coefficients on unrelated variables. ``setup_hub`` must hard-fail
+    rather than silently install incorrect cuts. See
+    ``doc/xhat_feasibility_cuts_design.md``.
+    """
 
-    def test_raises_on_non_binary_in_non_root_node(self):
+    def test_assert_two_stage_raises_when_multistage(self):
         scen = _multi_node_binary_scenario("s0")
-        # Mutate the stage-2 var into a continuous one in place.
-        del scen.x_stage2
-        scen.x_stage2 = pyo.Var([0], bounds=(0, 1))  # continuous
-        # Rebuild the node list with the new var.
-        scen._mpisppy_node_list[1] = stree.ScenarioNode(
-            "ROOT_0", cond_prob=1.0, stage=2,
-            cost_expression=scen.x_stage2[0],
-            nonant_list=[scen.x_stage2],
-            parent_name="ROOT", scen_model=scen,
-        )
         opt = _MultiNodeStub(scen, {"xhat_feasibility_cuts_count": 1})
         ext = XhatFeasibilityCutExtension(opt)
         with self.assertRaises(RuntimeError) as cm:
+            ext._assert_two_stage()
+        self.assertIn("two-stage only", str(cm.exception))
+
+    def test_setup_hub_raises_before_binary_check(self):
+        """Two-stage gate runs before the binary check, so a multi-stage
+        model with all-binary nonants still hits the multi-stage error."""
+        scen = _multi_node_binary_scenario("s0")
+        opt = _MultiNodeStub(scen, {"xhat_feasibility_cuts_count": 1})
+        ext = XhatFeasibilityCutExtension(opt)
+        with self.assertRaises(RuntimeError) as cm:
+            ext._assert_two_stage()
             ext._assert_all_nonants_binary()
-        self.assertIn("ROOT_0", str(cm.exception))
+        self.assertIn("two-stage only", str(cm.exception))
 
 
 # ---------------------------------------------------------------------------

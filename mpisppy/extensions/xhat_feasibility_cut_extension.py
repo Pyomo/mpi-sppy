@@ -57,6 +57,31 @@ class XhatFeasibilityCutExtension(Extension):
         self._recv_buffer = None  # filled in at register_receive_fields
         self._install_counter = 0  # monotonic key for the ConstraintList
 
+    # ---- two-stage-only precondition (V1) --------------------------------
+
+    def _assert_two_stage(self):
+        """V1 ships two-stage only.
+
+        Why: the no-good cut row encodes coefficients positionally
+        against ``s._mpisppy_data.nonant_indices``. In two-stage every
+        scenario shares the same ROOT nonants (NAC), so the same
+        coefficient vector applied to every scenario's nonants is
+        consistent. In multi-stage, scenarios on different branches
+        have different per-stage-2+ variables at the deeper indices,
+        so the same row applied positionally to each scenario lands
+        coefficients on unrelated variables. A multi-stage-correct
+        installer needs to group cuts by branch; that is deferred to a
+        follow-up milestone.
+        """
+        if getattr(self.opt, "multistage", False):
+            raise RuntimeError(
+                "--xhat-feasibility-cuts-count > 0 is two-stage only in "
+                "V1. Multi-stage support is planned as a follow-up "
+                "milestone (the install side needs to group cuts by "
+                "scenario branch). See "
+                "doc/xhat_feasibility_cuts_design.md."
+            )
+
     # ---- binary-only precondition check ----------------------------------
 
     @staticmethod
@@ -100,6 +125,7 @@ class XhatFeasibilityCutExtension(Extension):
     # ---- Extension hooks -------------------------------------------------
 
     def setup_hub(self):
+        self._assert_two_stage()
         self._assert_all_nonants_binary()
         # Nonant count per local scenario; cuts come packed against this.
         # All local scenarios must have the same nonant count (that is

@@ -44,26 +44,33 @@ structure: it is just
 sum_{i: xhat_i = 1} (1 - x_i) + sum_{i: xhat_i = 0} x_i >= 1
 ```
 
-over whichever binary nonants the xhatter fixed. Nothing in it depends
-on the recourse-cost formulation, so it is valid for multi-stage as
-well as two-stage. Mechanically, multi-stage only changes three
-things:
+over whichever binary nonants the xhatter fixed. The *cut form* itself
+is valid in any number of stages and does not depend on the
+recourse-cost formulation. **The implementation in V1 is two-stage
+only**, however, because of how the cut is installed.
 
-- **Nonant keys** become `(node_name, i)` rather than `("ROOT", i)`.
-  Existing code that loops over `s._mpisppy_data.nonant_indices` already
-  handles this.
-- **Cut reach**. An xhatter in a multi-stage run proposes a value for
-  every non-leaf decision it touches, so the cut excludes the whole
-  tree-path xhat, not just the root. That is strictly stronger than
-  the two-stage case.
-- **Bundle structure**. Multi-stage proper bundles cover entire
-  second-stage nodes; the "install cut into every per-scenario block
-  inside the bundle EF" recipe is identical.
+The hub installer (`XhatFeasibilityCutExtension._install_cuts`) takes
+the flat coefficient row produced by the spoke and applies it
+positionally against every local scenario's
+`s._mpisppy_data.nonant_indices`. In two-stage every scenario shares
+the same ROOT nonants under nonanticipativity, so the same row applied
+to every scenario is mathematically consistent. In multi-stage,
+scenarios on different branches have different per-stage-2+ variables
+at the deeper indices, so the same row applied positionally lands
+coefficients on unrelated variables — the resulting "cut" on a
+divergent scenario is meaningless. A multi-stage-correct installer
+must group each cut by the source scenario's branch and install it
+only on scenarios sharing that branch through the cut's deepest node.
+That work is deferred to a follow-up milestone alongside V2.
 
-So: **no-good cuts work in multi-stage from day one.** The
-**Farkas / optimality-style feasibility-cut path** (follow-up
-milestone; see below) keeps the two-stage restriction because that is
-where the L-shaped formulation matters.
+V1 therefore hard-fails at hub setup time when
+`opt.multistage` is true:
+
+```
+RuntimeError: --xhat-feasibility-cuts-count > 0 is two-stage only
+in V1. Multi-stage support is planned as a follow-up milestone
+(the install side needs to group cuts by scenario branch).
+```
 
 ## Blueprint: cross-scenario cuts
 
@@ -168,11 +175,17 @@ milestone on top of V2.
 | 1st-stage **continuous** | ✗ | ✓ | ✓ |
 | 2nd-stage **LP**         | ✓ | ✓ | ✓ |
 | 2nd-stage **MIP**        | ✓ | ✗ | ✓ |
+| **Multi-stage**          | ✗ | ✗ | ? |
 
 V1 tolerates MIP recourse because the no-good cut depends only on the
 first-stage `xhat` values, not on any recourse dual. V2 lifts the
 first-stage restriction but requires LP recourse. V3 is out of scope
 for this design; it is mentioned only so the boundary is clear.
+**Multi-stage support is orthogonal to V1/V2/V3** — the cut form is
+fine but the installer must group cuts by branch (see "Stage support"
+above). Tracked as a separate follow-up; the V1 setup_hub gate makes
+sure no run silently produces invalid multi-stage cuts in the
+meantime.
 
 ## Proposed architecture
 
@@ -268,9 +281,11 @@ xhat — it would silently produce an invalid relaxation.
 To prevent misuse, `XhatFeasibilityCutExtension.setup_hub` scans
 `s._mpisppy_data.nonant_indices` on an arbitrary local scenario and
 confirms that every variable is binary (`v.is_binary()` or
-`v.domain in {Binary, BooleanSet}`). For multi-stage, the scan covers
-every node in `_mpisppy_node_list`. If any non-binary nonant is
-present, raise
+`v.domain in {Binary, BooleanSet}`). The scan covers every node in
+`_mpisppy_node_list` — though in V1 a separate prior check (see
+"Stage support" above) rejects multi-stage entirely, so the per-node
+scan is mostly defensive against a future V1 extension. If any
+non-binary nonant is present, raise
 
 ```
 RuntimeError(
@@ -353,16 +368,19 @@ bundling a behavior change with a refactor.
 2. No-good-cut emission for problems whose first-stage (nonant)
    variables are **all binary**. Setup-time check raises `RuntimeError`
    otherwise, so the feature never silently produces an invalid cut.
-3. Hub-side install of cuts into every local scenario / bundle block,
-   keyed by `(node_name, i)` so it works for two-stage and multi-stage
-   alike.
+3. Hub-side install of cuts into every local scenario / bundle block.
+   Two-stage only in V1; the install loop applies one row positionally
+   to every scenario's nonants, which is correct under
+   nonanticipativity for two-stage but not for multi-stage. A
+   multi-stage-correct installer (group cuts by branch) is a follow-up
+   milestone; in the meantime `setup_hub` raises if `opt.multistage`.
 4. Regression tests:
    (a) a two-stage model with a binary first-stage where one specific
        xhat is infeasible — verify the cut is added and the infeasible
        xhat is not revisited;
    (b) a bundled version of the same;
-   (c) a small multi-stage model with binary nonants to verify nothing
-       in the plumbing assumes `("ROOT", i)` keys;
+   (c) a negative test: enabling the feature on a multi-stage model
+       raises the expected `RuntimeError` at setup;
    (d) a negative test: enabling the feature on a model with a
        continuous nonant raises the expected `RuntimeError` at setup.
 5. Documentation: a **new** user-facing page at
