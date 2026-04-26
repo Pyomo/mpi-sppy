@@ -135,6 +135,7 @@ def parse_args(m):
     cfg.subgradient_bounder_args()
     cfg.xhatshuffle_args()
     cfg.xhatxbar_args()
+    cfg.xhat_from_file_args()
     cfg.xhat_feasibility_cut_args()
     cfg.norm_rho_args()
     cfg.primal_dual_rho_args()

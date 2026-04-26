@@ -53,6 +53,7 @@ MPI is used.
 
    properbundles.rst
    pickling.rst
+   xhat_from_file.rst
    xhat_feasibility_cuts.rst
    smps.rst
    agnostic.rst
