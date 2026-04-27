@@ -70,6 +70,10 @@ if __name__ == "__main__":
         from mpisppy.generic.admm import setup_admm, setup_stoch_admm, \
             setup_stoch_admm_with_bundles, _count_cylinders, _check_admm_compatibility
         _check_admm_compatibility(cfg)
+        # ADMM wrappers synthesize dummy nonants with renamed components
+        # (e.g. y[F1_1] -> y__F1_1__) for subproblems that don't own a
+        # given consensus variable, which trips the nonant name check.
+        cfg.quick_assign("turn_off_names_check", bool, True)
         n_cylinders = _count_cylinders(cfg)
         if cfg.admm:
             scenario_creator, scenario_creator_kwargs, _, _ = \
