@@ -46,7 +46,13 @@ def shared_options(cfg):
         "user_warmstart" : cfg.user_warmstart,
         "turn_off_names_check" : cfg.turn_off_names_check
                                 or cfg.get("scenarios_per_bundle") is not None,
+<<<<<<< iter0_from_pickle
         "iter0_from_pickle": cfg.get("iter0_from_pickle", False),
+=======
+        # Optional initial xhat candidate file (.npy); None disables.
+        # Consumed by XhatInnerBoundBase._try_file_xhat.
+        "xhat_from_file" : cfg.get("xhat_from_file", None),
+>>>>>>> main
     }
     if _hasit(cfg, "solver_options"):
         odict = sputils.option_string_to_dict(cfg.solver_options)
@@ -1173,7 +1179,11 @@ def ef_options(cfg,
         "scenario_denouement": scenario_denouement,
         "all_scenario_names": all_scenario_names,
         "all_nodenames": all_nodenames,
-        "options": {"solver": solver_name},
+        "options": {
+            "solver": solver_name,
+            "turn_off_names_check": cfg.get("turn_off_names_check", ifmissing=False)
+                or cfg.get("scenarios_per_bundle", ifmissing=None) is not None,
+        },
         "solver_options": solver_options,
         "extensions": extensions,
         "extension_kwargs": extension_kwargs,

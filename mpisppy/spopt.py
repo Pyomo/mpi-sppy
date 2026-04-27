@@ -341,7 +341,7 @@ class SPOpt(SPBase):
         logger.debug("  early solve_loop for rank={}".format(self.cylinder_rank))
 
         if self.extensions is not None:
-                self.extobject.pre_solve_loop()
+            self.extobject.pre_solve_loop()
 
         pyomo_solve_times = list()
         for k,s in self.local_scenarios.items():
@@ -364,7 +364,7 @@ class SPOpt(SPBase):
             )
 
         if self.extensions is not None:
-                self.extobject.post_solve_loop()
+            self.extobject.post_solve_loop()
 
         if dtiming:
             all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_times, root=0)
