@@ -903,6 +903,21 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
+    def xhat_from_file_args(self):
+        # Supply an initial xhat candidate from a .npy file. Every xhat
+        # spoke (xhatlooper, xhatshufflelooper, xhatspecific, xhatxbar)
+        # that descends from XhatInnerBoundBase will evaluate it once,
+        # before its normal exploration loop. Two-stage only today
+        # (matches ciutils.read_xhat). See
+        # doc/src/xhat_from_file.rst.
+        self.add_to_config("xhat_from_file",
+                           description="Path to a .npy file holding an initial "
+                                       "first-stage xhat vector to evaluate "
+                                       "before normal xhatter exploration. "
+                                       "Two-stage only. Default None (off).",
+                           domain=str,
+                           default=None)
+
     def wtracker_args(self):
 
         self.add_to_config('wtracker',

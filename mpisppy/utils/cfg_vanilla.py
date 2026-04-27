@@ -46,6 +46,9 @@ def shared_options(cfg):
         "user_warmstart" : cfg.user_warmstart,
         "turn_off_names_check" : cfg.turn_off_names_check
                                 or cfg.get("scenarios_per_bundle") is not None,
+        # Optional initial xhat candidate file (.npy); None disables.
+        # Consumed by XhatInnerBoundBase._try_file_xhat.
+        "xhat_from_file" : cfg.get("xhat_from_file", None),
     }
     if _hasit(cfg, "solver_options"):
         odict = sputils.option_string_to_dict(cfg.solver_options)
