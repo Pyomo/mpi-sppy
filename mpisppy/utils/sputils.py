@@ -1068,6 +1068,11 @@ def nonant_cost_coeffs(s):
         # (nonant_for_fixed_vars=False). So bundle nonant index k is the
         # k-th surviving (ndn, per_scen_i) entry. Map per-scenario var id ->
         # bundle (ndn, k) using that ordering.
+        # Counters are kept per-ndn for generality, but proper_bundler
+        # currently only attaches a ROOT node to bundles (see
+        # proper_bundler.attach_root_node), so in practice only ROOT keys
+        # appear here. The per-ndn form keeps this correct if that ever
+        # changes.
         per_scen_to_bundle = {}
         counters = {}
         for (ndn, per_scen_i) in s.ref_vars.keys():
