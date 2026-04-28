@@ -261,9 +261,10 @@ class TestPipelineMIPBounds(unittest.TestCase):
     are round-tripped correctly through ``pickle_metadata``.
     """
 
-    @unittest.skipUnless(solver_available and solver_name in ("gurobi", "cplex"),
-                         "sizes MIP bounds test needs gurobi or cplex for the "
-                         "'mipgap' solver option")
+    @unittest.skipUnless(
+        solver_available and solver_name.startswith(("gurobi", "cplex", "xpress")),
+        "sizes MIP bounds test needs gurobi/cplex/xpress for the "
+        "'mipgap' solver option")
     def test_iter0_captures_open_mip_bounds(self):
         sp = _build_sizes_spbase(num_scens=3)
         self.assertTrue(sp.is_minimizing,
