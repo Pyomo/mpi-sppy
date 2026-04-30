@@ -394,11 +394,20 @@ class Config(pyofig.ConfigDict):
         raise RuntimeError("_basic_multistage is no longer used. See comments at top of config.py")
 
     def add_branching_factors(self):
+        if "branching_factors" in self:
+            return
         self.add_to_config("branching_factors",
                             description="Spaces delimited branching factors (e.g., 2 2)",
                             domain=pyofig.ListOf(int, pyofig.PositiveInt),
                             default=None)
-
+    
+    def add_stage2_ef_solver_name_arg(self):
+        if "stage2_ef_solver_name" in self:
+            return
+        self.add_to_config("stage2_ef_solver_name",
+                           description="Solver for stage 2 EF in multistage xhat (default None)",
+                           domain=str,
+                           default=None)
 
     def make_multistage_parser(self, progname=None):
         raise RuntimeError("make_multistage_parser is no longer used. See comments at top of config.py")
@@ -406,6 +415,7 @@ class Config(pyofig.ConfigDict):
     def multistage(self):
         self.add_branching_factors()
         self.popular_args()
+        self.add_stage2_ef_solver_name_arg()
 
 
     #### EF ####
@@ -831,6 +841,8 @@ class Config(pyofig.ConfigDict):
                            domain=int,
                            default=None)
 
+        self.add_stage2_ef_solver_name_arg()
+
 
     def mult_rho_args(self):
 
@@ -890,6 +902,21 @@ class Config(pyofig.ConfigDict):
                               description="have an xhatlshaped spoke",
                               domain=bool,
                               default=False)
+
+    def xhat_from_file_args(self):
+        # Supply an initial xhat candidate from a .npy file. Every xhat
+        # spoke (xhatlooper, xhatshufflelooper, xhatspecific, xhatxbar)
+        # that descends from XhatInnerBoundBase will evaluate it once,
+        # before its normal exploration loop. Two-stage only today
+        # (matches ciutils.read_xhat). See
+        # doc/src/xhat_from_file.rst.
+        self.add_to_config("xhat_from_file",
+                           description="Path to a .npy file holding an initial "
+                                       "first-stage xhat vector to evaluate "
+                                       "before normal xhatter exploration. "
+                                       "Two-stage only. Default None (off).",
+                           domain=str,
+                           default=None)
 
     def wtracker_args(self):
 

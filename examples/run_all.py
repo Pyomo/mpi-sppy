@@ -301,7 +301,7 @@ if run_second_part:
     do_one("hydro", "hydro_cylinders.py", 3,
            "--branching-factors \'3 3\' --max-iterations=100 "
            "--default-rho=1 --xhatshuffle --lagrangian "
-           "--solver-name={} --stage2EFsolvern={}".format(solver_name, solver_name))
+           "--solver-name={} --stage2-ef-solver-name={}".format(solver_name, solver_name))
 
     # Same hydro run via the generic driver (replaces the archived PySP
     # custom driver; hydro_cylinders.py above is kept for its rst references).
@@ -309,7 +309,7 @@ if run_second_part:
            "--module-name hydro --branching-factors \'3 3\' "
            "--max-iterations=100 --default-rho=1 "
            "--xhatshuffle --lagrangian "
-           "--stage2EFsolvern={} --solver-name={}".format(solver_name, solver_name))
+           "--stage2-ef-solver-name={} --solver-name={}".format(solver_name, solver_name))
 
     # the next might hang with 6 ranks
     do_one("aircond", "aircond_cylinders.py", 3,
@@ -318,7 +318,7 @@ if run_second_part:
            "--solver-name={}".format(solver_name))
 
     # Same aircond run via the generic driver. generic_cylinders requires
-    # --stage2EFsolvern with multistage xhatshuffle (aircond.py doesn't
+    # --stage2-ef-solver-name with multistage xhatshuffle (aircond.py doesn't
     # register that option), so this entry uses --xhatxbar instead to
     # still exercise the lagrangian + xhat-inner-bound combo.
     do_one("aircond", "../../mpisppy/generic_cylinders.py", 3,
@@ -333,7 +333,7 @@ if run_second_part:
 
     # aircondMulti: multi-product aircond, model module in
     # mpisppy/tests/examples/aircondMulti.py. generic_cylinders needs
-    # --stage2EFsolvern for multistage --xhatshuffle and this module
+    # --stage2-ef-solver-name for multistage --xhatshuffle and this module
     # doesn't register it, so use --xhatxbar for the inner bound.
     do_one("aircondMulti", "../../mpisppy/generic_cylinders.py", 3,
            "--module-name ../../mpisppy/tests/examples/aircondMulti "
