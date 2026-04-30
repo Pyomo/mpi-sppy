@@ -68,11 +68,12 @@ do_one("farmer", "farmer_lshapedhub.py", 2,
        "--num-scens=3 --max-iterations=50 "
        "--solver-name={} --rel-gap=0.0 "
        " --xhatlshaped --max-solver-threads=1".format(solver_name))
-do_one("hydro", "hydro_cylinders_pysp.py", 3,
+do_one("hydro", "../../mpisppy/generic_cylinders.py", 3,
+       "--module-name hydro --branching-factors \'3 3\' "
        "--max-iterations=10000 "
        "--default-rho=1 --xhatshuffle --lagrangian "
        "--abs-gap=0 --rel-gap=0 --time-limit=2 "
-       "--solver-name={}".format(solver_name))
+       "--stage2-ef-solver-name={} --solver-name={}".format(solver_name, solver_name))
 
 if len(badguys) > 0:
     print("\nBad Guys:")

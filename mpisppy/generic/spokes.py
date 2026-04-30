@@ -109,8 +109,8 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
                                                       all_nodenames=all_nodenames,
                                                       average_scenario_creator=average_scenario_creator)
         # special code for multi-stage (e.g., hydro)
-        if cfg.get("stage2EFsolvern") is not None:
-            xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = cfg["stage2EFsolvern"]
+        if cfg.get("stage2_ef_solver_name") is not None:
+            xhatshuffle_spoke["opt_kwargs"]["options"]["stage2_ef_solver_name"] = cfg["stage2_ef_solver_name"]
             xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = cfg["branching_factors"]
 
     if cfg.xhatxbar:
