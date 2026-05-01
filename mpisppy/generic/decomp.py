@@ -84,7 +84,7 @@ def _get_rho_setter(module, cfg):
         if cfg.sep_rho or cfg.coeff_rho or cfg.sensi_rho:
             cfg.default_rho = 1
         else:
-            raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
+            print("Warning: No rho_setter so a default must be specified via --default-rho")
     return rho_setter
 
 
@@ -93,7 +93,7 @@ def _get_converger(cfg):
     if cfg.use_norm_rho_converger:
         from mpisppy.convergers.norm_rho_converger import NormRhoConverger
         if not cfg.use_norm_rho_updater:
-            raise RuntimeError("--use-norm-rho-converger requires --use-norm-rho-updater")
+            print("Warning:--use-norm-rho-converger requires --use-norm-rho-updater")
         return NormRhoConverger
     elif cfg.primal_dual_converger:
         from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
