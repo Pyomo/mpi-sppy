@@ -8,6 +8,7 @@
 ###############################################################################
 import mpisppy.cylinders.spoke
 import mpisppy.utils.sputils as sputils
+from mpisppy.cylinders._jensens_mixin import _JensensMixin
 
 class _LagrangianMixin:
 
@@ -54,7 +55,7 @@ class _LagrangianMixin:
             self.opt.extobject.post_everything()
         return self.final_bound
 
-class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundWSpoke):
+class LagrangianOuterBound(_JensensMixin, _LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundWSpoke):
 
     converger_spoke_char = 'L'
 
@@ -76,6 +77,12 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
         extensions = self.opt.extensions is not None
 
         self.lagrangian_prep()
+
+        if self._jensens_enabled():
+            avg_scenario = self._jensens_build_avg()
+            self._jensens_assert_safe_for_outer_bound(avg_scenario)
+            avg_outer_bound, _ = self._jensens_solve(avg_scenario)
+            self.send_bound(avg_outer_bound)
 
         if extensions:
             self.opt.extobject.pre_iter0()

@@ -97,6 +97,9 @@ run_phase "test_smps (serial)" \
 run_phase "test_generic_cylinders (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_generic_cylinders.py -v
 
+run_phase "test_jensens (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_jensens.py -v
+
 run_phase "test_xhat_from_file (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_xhat_from_file.py -v
 

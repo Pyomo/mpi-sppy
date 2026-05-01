@@ -9,6 +9,7 @@
 # updated April 2020
 from mpisppy.extensions.xhatlooper import XhatLooper
 from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
+from mpisppy.cylinders._jensens_mixin import _JensensMixin
 import logging
 import mpisppy.log
 
@@ -19,7 +20,7 @@ mpisppy.log.setup_logger("mpisppy.cylinders.xhatlooper_bounder",
 logger = logging.getLogger("mpisppy.cylinders.xhatlooper_bounder")
 
 
-class XhatLooperInnerBound(XhatInnerBoundBase):
+class XhatLooperInnerBound(_JensensMixin, XhatInnerBoundBase):
 
     converger_spoke_char = 'X'
 
@@ -30,6 +31,13 @@ class XhatLooperInnerBound(XhatInnerBoundBase):
         logger.debug(f"Entering main on xhatlooper spoke rank {self.global_rank}")
 
         xhatter = self.xhat_prep()
+
+        if self._jensens_enabled():
+            avg_scenario = self._jensens_build_avg()
+            _, nonant_values = self._jensens_solve(avg_scenario)
+            cache = self._jensens_pack_nonant_cache(nonant_values)
+            Eobj = self.opt.evaluate(cache)
+            self.update_if_improving(Eobj)
 
         scen_limit = self.opt.options['xhat_looper_options']['scen_limit']
 

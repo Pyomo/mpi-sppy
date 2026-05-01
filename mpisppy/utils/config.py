@@ -683,6 +683,15 @@ class Config(pyofig.ConfigDict):
         self.add_solver_specs("lagrangian")
         self.add_mipgap_specs("lagrangian")
 
+        self.add_to_config('lagrangian_try_jensens_first',
+                           description="before iter 0, solve the average "
+                                       "scenario and send its objective as an initial "
+                                       "outer bound (two-stage only; requires the "
+                                       "scenario module to define average_scenario_creator; "
+                                       "requires convex recourse)",
+                           domain=bool,
+                           default=False)
+
 
     def reduced_costs_args(self):
 
@@ -739,6 +748,15 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=1e-6)
 
+        self.add_to_config('reduced_costs_try_jensens_first',
+                           description="before iter 0, solve the average "
+                                       "scenario and send its objective as an initial "
+                                       "outer bound (two-stage only; requires the "
+                                       "scenario module to define average_scenario_creator; "
+                                       "requires convex recourse)",
+                           domain=bool,
+                           default=False)
+
 
     def lagranger_args(self):
 
@@ -752,6 +770,15 @@ class Config(pyofig.ConfigDict):
                             description="json file: rho rescale factors (default None)",
                             domain=str,
                             default=None)
+
+        self.add_to_config('lagranger_try_jensens_first',
+                           description="before iter 0, solve the average "
+                                       "scenario and send its objective as an initial "
+                                       "outer bound (two-stage only; requires the "
+                                       "scenario module to define average_scenario_creator; "
+                                       "requires convex recourse)",
+                           domain=bool,
+                           default=False)
 
 
     def subgradient_bounder_args(self):
@@ -768,6 +795,15 @@ class Config(pyofig.ConfigDict):
                            description="rescale rho (update step size) by this factor",
                            domain=float,
                            default=None)
+
+        self.add_to_config('subgradient_try_jensens_first',
+                           description="before iter 0, solve the average "
+                                       "scenario and send its objective as an initial "
+                                       "outer bound (two-stage only; requires the "
+                                       "scenario module to define average_scenario_creator; "
+                                       "requires convex recourse)",
+                           domain=bool,
+                           default=False)
 
 
     def ph_ob_args(self):
@@ -824,6 +860,15 @@ class Config(pyofig.ConfigDict):
                             domain=int,
                             default=3)
 
+        self.add_to_config('xhatlooper_try_jensens_first',
+                           description="before entering the xhatlooper main loop, solve "
+                                       "the average scenario and try its first-stage "
+                                       "solution as a candidate xhat (two-stage only; "
+                                       "requires the scenario module to define "
+                                       "average_scenario_creator)",
+                           domain=bool,
+                           default=False)
+
     def xhatshuffle_args(self):
 
         self.add_to_config('xhatshuffle',
@@ -840,6 +885,15 @@ class Config(pyofig.ConfigDict):
                            description="step in shuffled list between 2 scenarios to try (default None)",
                            domain=int,
                            default=None)
+
+        self.add_to_config('xhatshuffle_try_jensens_first',
+                           description="before entering the xhatshuffle main loop, solve "
+                                       "the average scenario and try its first-stage "
+                                       "solution as a candidate xhat (two-stage only; "
+                                       "requires the scenario module to define "
+                                       "average_scenario_creator)",
+                           domain=bool,
+                           default=False)
 
         self.add_stage2_ef_solver_name_arg()
 
@@ -884,6 +938,15 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
+        self.add_to_config('xhatspecific_try_jensens_first',
+                           description="before entering the xhatspecific main loop, solve "
+                                       "the average scenario and try its first-stage "
+                                       "solution as a candidate xhat (two-stage only; "
+                                       "requires the scenario module to define "
+                                       "average_scenario_creator)",
+                           domain=bool,
+                           default=False)
+
 
     def xhatxbar_args(self):
 
@@ -892,7 +955,14 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
-
+        self.add_to_config('xhatxbar_try_jensens_first',
+                           description="before entering the xhatxbar main loop, solve "
+                                       "the average scenario and try its first-stage "
+                                       "solution as a candidate xhat (two-stage only; "
+                                       "requires the scenario module to define "
+                                       "average_scenario_creator)",
+                           domain=bool,
+                           default=False)
 
 
     def xhatlshaped_args(self):
