@@ -302,5 +302,145 @@ class TestSizesInvalidScenarioCount(unittest.TestCase):
             sizes.average_scenario_creator("Average", scenario_count=5)
 
 
+class _StubXhatOpt:
+    """Stub stand-in for the Xhat_Eval that lives at spoke.opt.
+
+    Captures the calls _jensens_evaluate_xhat makes and returns
+    parameterized values for the feasibility check. Lets us exercise
+    both the feasible path (returns Eobj, caller updates the bound)
+    and the infeasible path (returns None, caller silently skips)
+    without standing up real MPI machinery.
+    """
+
+    def __init__(self, *, infeas_prob, eobj, options=None):
+        self._infeas_prob = infeas_prob
+        self._eobj = eobj
+        self.options = options if options is not None else {}
+        self.fix_calls = []
+        self.solve_loop_calls = []
+
+    def _fix_nonants(self, cache):
+        self.fix_calls.append(cache)
+
+    def solve_loop(self, **kwargs):
+        self.solve_loop_calls.append(kwargs)
+
+    def no_incumbent_prob(self):
+        return self._infeas_prob
+
+    def Eobjective(self, verbose=False):
+        return self._eobj
+
+
+class _StubXhatSpoke(_JensensMixin):
+    """Mixin host that records update_if_improving calls so we can
+    assert the helper's branching behavior."""
+
+    def __init__(self, opt):
+        self.opt = opt
+        self.bound_updates = []
+
+    def update_if_improving(self, Eobj):
+        self.bound_updates.append(Eobj)
+
+
+class TestJensensEvaluateXhat(unittest.TestCase):
+    """Unit tests for _JensensMixin._jensens_evaluate_xhat. The real
+    code path goes through Xhat_Eval; we stub it to isolate the
+    feasibility branching that fixes the crash on infeasible recourse.
+    """
+
+    def test_returns_eobj_when_all_scenarios_feasible(self):
+        opt = _StubXhatOpt(infeas_prob=0.0, eobj=42.5)
+        sp = _StubXhatSpoke(opt)
+        result = sp._jensens_evaluate_xhat({"ROOT": [1.0, 2.0]})
+        self.assertEqual(result, 42.5)
+
+    def test_returns_none_when_any_scenario_infeasible(self):
+        opt = _StubXhatOpt(infeas_prob=0.25, eobj=999.0)  # eobj should be ignored
+        sp = _StubXhatSpoke(opt)
+        result = sp._jensens_evaluate_xhat({"ROOT": [1.0, 2.0]})
+        self.assertIsNone(result)
+
+    def test_passes_cache_to_fix_nonants(self):
+        opt = _StubXhatOpt(infeas_prob=0.0, eobj=1.0)
+        sp = _StubXhatSpoke(opt)
+        cache = {"ROOT": [3.0, 4.0]}
+        sp._jensens_evaluate_xhat(cache)
+        self.assertEqual(opt.fix_calls, [cache])
+
+    def test_solve_loop_called_with_need_solution_false(self):
+        # critical: with need_solution=True (the buggy old path), an
+        # infeasible solve crashes downstream on pyo.value(objfct).
+        opt = _StubXhatOpt(infeas_prob=0.0, eobj=1.0)
+        sp = _StubXhatSpoke(opt)
+        sp._jensens_evaluate_xhat({"ROOT": [1.0]})
+        self.assertEqual(len(opt.solve_loop_calls), 1)
+        self.assertFalse(opt.solve_loop_calls[0]["need_solution"])
+
+    def test_solver_options_threaded_from_opt_options(self):
+        opt = _StubXhatOpt(infeas_prob=0.0, eobj=1.0,
+                           options={"solver_options": {"mipgap": 0.01}})
+        sp = _StubXhatSpoke(opt)
+        sp._jensens_evaluate_xhat({"ROOT": [1.0]})
+        self.assertEqual(opt.solve_loop_calls[0]["solver_options"],
+                         {"mipgap": 0.01})
+
+
+class TestTryAverageScenarioXhat(unittest.TestCase):
+    """Unit tests for _JensensMixin._try_average_scenario_xhat -- the
+    one-shot helper each xhat spoke calls instead of inlining a
+    four-line block. Covers the fast-return when the flag is off, the
+    feasible path that updates the bound, and the infeasible path that
+    silently skips.
+    """
+
+    def _opt_with_jensens(self, *, jensens_dict=None, **stub_kwargs):
+        opt = _StubXhatOpt(**stub_kwargs)
+        if jensens_dict is not None:
+            opt.options["jensens"] = jensens_dict
+            opt.options["solver_name"] = solver_name
+            opt.options["iterk_solver_options"] = {}
+        # all_scenario_names is read by _jensens_build_avg
+        opt.all_scenario_names = farmer.scenario_names_creator(3)
+        return opt
+
+    def test_noop_when_flag_off(self):
+        opt = self._opt_with_jensens(infeas_prob=0.0, eobj=1.0)  # no jensens key
+        sp = _StubXhatSpoke(opt)
+        sp._try_average_scenario_xhat()
+        self.assertEqual(sp.bound_updates, [])
+        self.assertEqual(opt.fix_calls, [])
+
+    @unittest.skipUnless(solver_available, "no Pyomo-compatible MIP solver")
+    def test_updates_bound_when_feasible(self):
+        # Stub no_incumbent_prob to 0 so the helper takes the feasible
+        # branch; Eobjective stub returns the value the bound update
+        # should receive.
+        opt = self._opt_with_jensens(
+            jensens_dict={
+                "average_scenario_creator": farmer.average_scenario_creator,
+                "scenario_creator_kwargs": {"num_scens": 3},
+            },
+            infeas_prob=0.0, eobj=123.4,
+        )
+        sp = _StubXhatSpoke(opt)
+        sp._try_average_scenario_xhat()
+        self.assertEqual(sp.bound_updates, [123.4])
+
+    @unittest.skipUnless(solver_available, "no Pyomo-compatible MIP solver")
+    def test_skips_silently_when_infeasible(self):
+        opt = self._opt_with_jensens(
+            jensens_dict={
+                "average_scenario_creator": farmer.average_scenario_creator,
+                "scenario_creator_kwargs": {"num_scens": 3},
+            },
+            infeas_prob=0.5, eobj=999.0,  # eobj ignored on infeasible path
+        )
+        sp = _StubXhatSpoke(opt)
+        sp._try_average_scenario_xhat()
+        self.assertEqual(sp.bound_updates, [])
+
+
 if __name__ == "__main__":
     unittest.main()
