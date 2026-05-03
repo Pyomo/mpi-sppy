@@ -21,23 +21,32 @@ import numpy as np
 from parse import parse
 
 
-def scenario_creator(scenario_name, path=None):
-    if path is None:
-        raise RuntimeError('Must provide the name of the .dat file '
-                           'containing the instance data via the '
-                           'path argument to scenario_creator')
-    
-    scenario_ix = _get_scenario_ix(scenario_name)
-    model = build_scenario_model(path, scenario_ix)
+# ===========================================================================
+# Underscore helpers (best-practice pattern -- see doc/src/jensens.rst):
+#
+#   _scenario_data : pure-Python data dict for one scenario, no Pyomo
+#   _build_model   : build the Pyomo model from a data dict
+#
+# scenario_creator and average_scenario_creator both go through these
+# helpers so the model-build code lives in exactly one place.
+# ===========================================================================
 
-    # now attach the one and only scenario tree node
-    sputils.attach_root_node(model, model.FirstStageCost, [model.x[:,:], ])
-    
-    return model
+def _scenario_data(scenario_ix, path):
+    """Return the full data dict for one scenario as plain Python.
+
+    Thin wrapper over parse(...) so scenario_creator and
+    average_scenario_creator share the same data-loading entry point.
+    """
+    return parse(path, scenario_ix=scenario_ix)
 
 
-def build_scenario_model(fname, scenario_ix):
-    data = parse(fname, scenario_ix=scenario_ix)
+def _build_model(data, probability):
+    """Build the network-design Pyomo model from a data dict.
+
+    Shared by scenario_creator and average_scenario_creator. The dict
+    must have keys N, A, el, c, d, u, b (the first four are
+    deterministic; d, u, b are the second-stage stochastic data).
+    """
     num_nodes = data['N']
     adj = data['A']    # Adjacency matrix
     edges = data['el'] # Edge list
@@ -45,14 +54,13 @@ def build_scenario_model(fname, scenario_ix):
     d = data['d']      # Second-stage cost matrix (per edge)
     u = data['u']      # Capacity of each arc
     b = data['b']      # Demand of each node
-    p = data['p']      # Probability of scenario
 
     model = pyo.ConcreteModel()
     model.x = pyo.Var(edges, domain=pyo.Binary)           # First stage vars
     model.y = pyo.Var(edges, domain=pyo.NonNegativeReals) # Second stage vars
 
     model.edges = edges
-    model._mpisppy_probability = p
+    model._mpisppy_probability = probability
 
     ''' Objective '''
     model.FirstStageCost  = pyo.quicksum(c[e] * model.x[e] for e in edges)
@@ -63,7 +71,7 @@ def build_scenario_model(fname, scenario_ix):
     ''' Variable upper bound constraints on each edge '''
     model.vubs = pyo.ConstraintList()
     for e in edges:
-        expr = model.y[e] - u[e] * model.x[e] 
+        expr = model.y[e] - u[e] * model.x[e]
         model.vubs.add(expr <= 0)
 
     ''' Flow balance constraints for each node '''
@@ -75,6 +83,84 @@ def build_scenario_model(fname, scenario_ix):
               pyo.quicksum(model.y[j,i] for j in in_nbs)
         model.bals.add(lhs == b[i])
 
+    return model
+
+
+def scenario_creator(scenario_name, path=None):
+    if path is None:
+        raise RuntimeError('Must provide the name of the .dat file '
+                           'containing the instance data via the '
+                           'path argument to scenario_creator')
+
+    scenario_ix = _get_scenario_ix(scenario_name)
+    data = _scenario_data(scenario_ix, path)
+    model = _build_model(data, probability=data['p'])
+
+    # now attach the one and only scenario tree node
+    sputils.attach_root_node(model, model.FirstStageCost, [model.x[:,:], ])
+
+    return model
+
+
+def average_scenario_creator(scenario_name, path=None):
+    """Build the average scenario for ``--*-try-jensens-first``.
+
+    Constructs a single deterministic model whose second-stage data
+    (d, u, b) is the probability-weighted mean of the per-scenario
+    data shipped in the instance file. The first-stage data (c) and
+    network topology (N, A, el) are deterministic and copied through.
+    ``_mpisppy_probability`` is 1.0.
+
+    Every rank constructs an identical model independently. The
+    instance file is parsed once.
+
+    Jensen's-bound validity (see doc/src/jensens.rst):
+
+      * netdes has continuous recourse (``model.y`` is
+        ``NonNegativeReals``), so the integer-recourse guard on the
+        outer-bound path will pass.
+      * Randomness lives in the second-stage objective coefficients
+        ``d``, the per-arc capacity ``u`` (which appears in
+        ``y[e] - u[e]*x[e] <= 0``, i.e. as an effective RHS once x
+        is fixed), and the node demand RHS ``b``. RHS-only randomness
+        gives a recourse value that is convex in those parameters,
+        so the Jensen's outer bound is valid for randomness in
+        ``u`` and ``b``. Cost-coefficient randomness (``d``) makes
+        the recourse value concave in ``d``; users who require a
+        provably valid Jensen's *outer* bound should be aware of
+        this and decide whether the bound is meaningful for their
+        instance.
+      * The xhat (inner-bound) path is unaffected by the convexity
+        question -- it uses the average scenario only as a source of
+        a candidate first-stage x, which is then honestly evaluated
+        across all real scenarios.
+    """
+    if path is None:
+        raise RuntimeError('Must provide the name of the .dat file '
+                           'containing the instance data via the '
+                           'path argument to average_scenario_creator')
+
+    full = parse(path, scenario_ix=None)
+    K = full['K']
+    p = full['p']
+    # Probability-weighted mean across all scenarios. Netdes ships
+    # non-uniform probabilities in general, so this is NOT a simple
+    # arithmetic mean.
+    avg_d = sum(p[k] * full['d'][k] for k in range(K))
+    avg_u = sum(p[k] * full['u'][k] for k in range(K))
+    avg_b = sum(p[k] * full['b'][k] for k in range(K))
+
+    avg_data = {
+        'N': full['N'],
+        'A': full['A'],
+        'el': full['el'],
+        'c': full['c'],
+        'd': avg_d,
+        'u': avg_u,
+        'b': avg_b,
+    }
+    model = _build_model(avg_data, probability=1.0)
+    sputils.attach_root_node(model, model.FirstStageCost, [model.x[:,:], ])
     return model
 
 
