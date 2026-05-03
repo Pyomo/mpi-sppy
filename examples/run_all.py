@@ -238,11 +238,16 @@ if run_first_part:
            "--subgradient-hub --xhatshuffle --max-solver-threads=2 "
            "--solver-name={}".format(solver_name))
 
-    # Smoke-test netdes's average_scenario_creator via --*-try-jensens-first.
-    # PH hub + lagrangian + xhatshuffle = 3 cylinders. The lagrangian spoke
-    # solves the average scenario before iter-0 and sends the result as its
-    # first outer bound; the xhatshuffle spoke uses the average scenario's
-    # first-stage solution as its first xhat candidate.
+    # Smoke-test netdes's average_scenario_creator end-to-end on both
+    # jensens paths. PH hub + lagrangian + xhatshuffle = 3 cylinders.
+    # Lagrangian sends the average-scenario dual bound as its first
+    # outer bound. Xhatshuffle takes the average-scenario primal x as
+    # its first xhat candidate and evaluates it across the real
+    # scenarios; that evaluation often fails (the average x can be
+    # infeasible for a real demand, and netdes has no penalty/dummy
+    # variable), so the xhat-jensens path is required to silently skip
+    # such candidates rather than crash. This run exercises that
+    # tolerance.
     do_one("netdes", "../../mpisppy/generic_cylinders.py", 3,
            "--module-name netdes --max-iterations=3 "
            "--instance-name=network-10-20-L-01 --netdes-data-path ./data "

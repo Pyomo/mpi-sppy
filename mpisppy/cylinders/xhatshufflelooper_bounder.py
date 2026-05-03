@@ -75,8 +75,9 @@ class XhatShuffleInnerBound(_JensensMixin, XhatInnerBoundBase):
             # candidate xhat).
             _, nonant_values = self._jensens_solve(avg_scenario)
             cache = self._jensens_pack_nonant_cache(nonant_values)
-            Eobj = self.opt.evaluate(cache)
-            self.update_if_improving(Eobj)
+            Eobj = self._jensens_evaluate_xhat(cache)
+            if Eobj is not None:
+                self.update_if_improving(Eobj)
 
         if "reverse" in self.opt.options["xhat_looper_options"]:
             self.reverse = self.opt.options["xhat_looper_options"]["reverse"]

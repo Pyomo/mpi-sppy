@@ -47,8 +47,9 @@ class XhatSpecificInnerBound(_JensensMixin, XhatInnerBoundBase):
             avg_scenario = self._jensens_build_avg()
             _, nonant_values = self._jensens_solve(avg_scenario)
             cache = self._jensens_pack_nonant_cache(nonant_values)
-            Eobj = self.opt.evaluate(cache)
-            self.update_if_improving(Eobj)
+            Eobj = self._jensens_evaluate_xhat(cache)
+            if Eobj is not None:
+                self.update_if_improving(Eobj)
 
         ib_iter = 1  # ib is for inner bound
         while (not self.got_kill_signal()):
