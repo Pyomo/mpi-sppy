@@ -116,6 +116,42 @@ A scenario module that wants to participate must define:
    if a flag is set but the module does not define the function,
    ``cfg_vanilla`` raises a clear error at spoke-setup time.
 
+The recommended authoring pattern — which ``examples/farmer/farmer.py``
+now demonstrates — is to split the work into two underscore helpers
+that are shared between ``scenario_creator`` and
+``average_scenario_creator``:
+
+.. code-block:: python
+
+   def _scenario_data(scenario_name, **kwargs):
+       """Pure-Python random data as a plain dict. No Pyomo."""
+       ...
+
+   def _build_model(scenario_name, data, *, probability, **kwargs):
+       """Build Pyomo model from the data dict. Shared build path."""
+       ...
+
+   def scenario_creator(scenario_name, **kwargs):
+       data = _scenario_data(scenario_name, **kwargs)
+       prob = 1.0 / kwargs["num_scens"] if kwargs.get("num_scens") else "uniform"
+       return _build_model(scenario_name, data, probability=prob, **kwargs)
+
+   def average_scenario_creator(scenario_name, **kwargs):
+       # NOTE: could be multi-threaded for large num_scens.
+       snames = scenario_names_creator(kwargs["num_scens"])
+       datas  = [_scenario_data(s, **kwargs) for s in snames]
+       avg    = _average_scenario_data(datas)
+       return _build_model(scenario_name, avg, probability=1.0, **kwargs)
+
+Benefits of this split:
+
+* One source of truth for "what does the Pyomo model look like." If
+  ``scenario_creator`` and ``average_scenario_creator`` each build the
+  model inline, they will eventually drift.
+* Separating data from model makes averaging trivial: average the
+  dict, not the Pyomo components.
+* Every rank independently calls ``average_scenario_creator`` and gets
+  an identical model. No collective communication needed.
 
 Data-only averaging: the model is the model
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -159,45 +195,9 @@ infeasible: ``Allocation`` is Binary in the model and cannot be
 fractional. Relaxing ``Allocation`` to continuous in the average
 scenario would make the LP feasible but would violate the
 data-only-averaging principle above, so sslp opts out. A user who
-flips ``--*-try-jensens-first`` against sslp will get a clear
-error from ``cfg_vanilla`` saying the function is missing.
-
-The recommended authoring pattern — which ``examples/farmer/farmer.py``
-now demonstrates — is to split the work into two underscore helpers
-that are shared between ``scenario_creator`` and
-``average_scenario_creator``:
-
-.. code-block:: python
-
-   def _scenario_data(scenario_name, **kwargs):
-       """Pure-Python random data as a plain dict. No Pyomo."""
-       ...
-
-   def _build_model(scenario_name, data, *, probability, **kwargs):
-       """Build Pyomo model from the data dict. Shared build path."""
-       ...
-
-   def scenario_creator(scenario_name, **kwargs):
-       data = _scenario_data(scenario_name, **kwargs)
-       prob = 1.0 / kwargs["num_scens"] if kwargs.get("num_scens") else "uniform"
-       return _build_model(scenario_name, data, probability=prob, **kwargs)
-
-   def average_scenario_creator(scenario_name, **kwargs):
-       # NOTE: could be multi-threaded for large num_scens.
-       snames = scenario_names_creator(kwargs["num_scens"])
-       datas  = [_scenario_data(s, **kwargs) for s in snames]
-       avg    = _average_scenario_data(datas)
-       return _build_model(scenario_name, avg, probability=1.0, **kwargs)
-
-Benefits of this split:
-
-* One source of truth for "what does the Pyomo model look like." If
-  ``scenario_creator`` and ``average_scenario_creator`` each build the
-  model inline, they will eventually drift.
-* Separating data from model makes averaging trivial: average the
-  dict, not the Pyomo components.
-* Every rank independently calls ``average_scenario_creator`` and gets
-  an identical model. No collective communication needed.
+flips ``--*-try-jensens-first`` against a model module with no
+``average_scenario_creator`` function will get a clear error from
+``cfg_vanilla`` saying the function is missing.
 
 Seed management
 ---------------
