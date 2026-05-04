@@ -27,6 +27,17 @@ Jensen's Bound as potential starting bound
    evaluated across the real scenarios, so Jensen's convexity
    assumption never enters the validity argument.
 
+.. note::
+
+   The Jensen's xhat path **silently skips** a candidate that is
+   infeasible to pin in some real scenario; that is the right behavior
+   for an opportunistic inner-bound spoke. Downstream consumers that
+   pin a candidate first-stage and solve a per-scenario subproblem
+   with no fallback (e.g. pin-dual rho-setting algorithms) need a
+   strictly stronger contract -- a candidate guaranteed to be feasible
+   to pin in *every* real scenario. See :ref:`feasible_xhat` for the
+   ``feasible_xhat_creator`` convention that provides this.
+
 What the options do
 -------------------
 

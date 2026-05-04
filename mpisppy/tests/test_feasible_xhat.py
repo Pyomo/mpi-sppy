@@ -37,6 +37,7 @@ sys.path.insert(0, os.path.join(_EXAMPLES_DIR, "netdes"))
 sys.path.insert(0, os.path.join(_EXAMPLES_DIR, "sslp"))
 
 import farmer  # noqa: E402
+import farmer_auxiliary  # noqa: E402
 import netdes  # noqa: E402
 import netdes_auxiliary  # noqa: E402
 import sslp_auxiliary  # noqa: E402
@@ -112,6 +113,32 @@ class TestAverageXhatNonantsOnFarmer(unittest.TestCase):
             relax_integrality=True,
         )
         np.testing.assert_allclose(a, b, atol=1e-6)
+
+
+@unittest.skipIf(not solver_available, "no solver available")
+class TestFarmerFeasibleXhatCreator(unittest.TestCase):
+    """Continuous first-stage: convention is satisfied by the
+    average-scenario optimum unchanged."""
+
+    def test_returns_root_array(self):
+        cache = farmer_auxiliary.feasible_xhat_creator(
+            solver_name=solver_name, num_scens=6,
+        )
+        self.assertIn("ROOT", cache)
+        arr = cache["ROOT"]
+        self.assertEqual(arr.shape, (3,))  # DEVOTED_ACRES over 3 crops
+        self.assertTrue(np.all(np.isfinite(arr)))
+        self.assertTrue(np.all(arr >= -1e-9))
+
+    def test_kwargs_thread_through(self):
+        a = farmer_auxiliary.feasible_xhat_creator(
+            solver_name=solver_name, num_scens=6, seedoffset=0,
+        )
+        b = farmer_auxiliary.feasible_xhat_creator(
+            solver_name=solver_name, num_scens=6, seedoffset=7,
+        )
+        self.assertFalse(np.allclose(a["ROOT"], b["ROOT"]),
+                         "seedoffset did not change the candidate")
 
 
 @unittest.skipIf(not solver_available, "no solver available")
