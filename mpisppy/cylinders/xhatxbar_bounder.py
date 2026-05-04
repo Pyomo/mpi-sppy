@@ -62,8 +62,10 @@ class XhatXbarInnerBound(_JensensMixin, XhatInnerBoundBase):
 
         xhatter = self.xhat_prep()
 
-        # No-op unless --xhatxbar-try-jensens-first is set.
+        # No-ops unless --xhatxbar-try-jensens-first /
+        # --xhatxbar-try-feasible-xhat-first are set (mutually exclusive).
         self._try_average_scenario_xhat()
+        self._try_feasible_xhat()
 
         ib_iter = 1  # ib is for inner bound
         while (not self.got_kill_signal()):

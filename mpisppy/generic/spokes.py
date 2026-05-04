@@ -16,7 +16,8 @@ import mpisppy.utils.cfg_vanilla as vanilla
 def build_spoke_list(cfg, beans, scenario_creator_kwargs,
                      rho_setter, all_nodenames,
                      variable_probability=None,
-                     average_scenario_creator=None):
+                     average_scenario_creator=None,
+                     feasible_xhat_creator=None):
     """Build and return the list of spoke dicts for WheelSpinner.
 
     Args:
@@ -28,6 +29,9 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
         variable_probability: variable probability list or None (used by ADMM)
         average_scenario_creator: module's average_scenario_creator (or None),
             needed by any spoke whose --*-try-jensens-first flag is set.
+        feasible_xhat_creator: module's feasible_xhat_creator (or None),
+            needed by any xhat spoke whose --*-try-feasible-xhat-first
+            flag is set.
 
     Returns:
         list: list of spoke dicts
@@ -107,7 +111,8 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans,
                                                       scenario_creator_kwargs=scenario_creator_kwargs,
                                                       all_nodenames=all_nodenames,
-                                                      average_scenario_creator=average_scenario_creator)
+                                                      average_scenario_creator=average_scenario_creator,
+                                                      feasible_xhat_creator=feasible_xhat_creator)
         # special code for multi-stage (e.g., hydro)
         if cfg.get("stage2_ef_solver_name") is not None:
             xhatshuffle_spoke["opt_kwargs"]["options"]["stage2_ef_solver_name"] = cfg["stage2_ef_solver_name"]
@@ -118,7 +123,8 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
                                                    scenario_creator_kwargs=scenario_creator_kwargs,
                                                    variable_probability=variable_probability,
                                                    all_nodenames=all_nodenames,
-                                                   average_scenario_creator=average_scenario_creator)
+                                                   average_scenario_creator=average_scenario_creator,
+                                                   feasible_xhat_creator=feasible_xhat_creator)
 
     # reduced cost fixer options setup
     if cfg.reduced_costs:

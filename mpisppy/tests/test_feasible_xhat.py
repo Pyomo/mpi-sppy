@@ -203,5 +203,234 @@ class TestSslpFeasibleXhatCreator(unittest.TestCase):
                         f"FacilityOpen out of [0,1]: {arr}")
 
 
+class TestMaybeAttachFeasibleXhat(unittest.TestCase):
+    """cfg_vanilla._maybe_attach_feasible_xhat behavior."""
+
+    def _cfg_with_flag(self, prefix, flag_on=False, jensens_on=False):
+        import mpisppy.utils.config as cfg_mod
+        cfg = cfg_mod.Config()
+        if prefix == "xhatshuffle":
+            cfg.xhatshuffle_args()
+        elif prefix == "xhatxbar":
+            cfg.xhatxbar_args()
+        elif prefix == "xhatlooper":
+            cfg.xhatlooper_args()
+        elif prefix == "xhatspecific":
+            cfg.xhatspecific_args()
+        if flag_on:
+            cfg[f"{prefix}_try_feasible_xhat_first"] = True
+        if jensens_on:
+            cfg[f"{prefix}_try_jensens_first"] = True
+        return cfg
+
+    def test_noop_when_flag_off(self):
+        from mpisppy.utils.cfg_vanilla import _maybe_attach_feasible_xhat
+        cfg = self._cfg_with_flag("xhatshuffle", flag_on=False)
+        spoke_dict = {"opt_kwargs": {"options": {}}}
+        _maybe_attach_feasible_xhat(spoke_dict, cfg, "xhatshuffle",
+                                    feasible_xhat_creator=None,
+                                    scenario_creator_kwargs={})
+        self.assertNotIn("feasible_xhat", spoke_dict["opt_kwargs"]["options"])
+
+    def test_raises_when_creator_is_none(self):
+        from mpisppy.utils.cfg_vanilla import _maybe_attach_feasible_xhat
+        cfg = self._cfg_with_flag("xhatshuffle", flag_on=True)
+        spoke_dict = {"opt_kwargs": {"options": {}}}
+        with self.assertRaises(RuntimeError) as ctx:
+            _maybe_attach_feasible_xhat(spoke_dict, cfg, "xhatshuffle",
+                                        feasible_xhat_creator=None,
+                                        scenario_creator_kwargs={})
+        self.assertIn("feasible_xhat_creator", str(ctx.exception))
+
+    def test_raises_when_both_first_flags_set(self):
+        from mpisppy.utils.cfg_vanilla import _maybe_attach_feasible_xhat
+        cfg = self._cfg_with_flag("xhatshuffle", flag_on=True, jensens_on=True)
+        spoke_dict = {"opt_kwargs": {"options": {}}}
+        with self.assertRaises(RuntimeError) as ctx:
+            _maybe_attach_feasible_xhat(spoke_dict, cfg, "xhatshuffle",
+                                        feasible_xhat_creator=lambda **k: None,
+                                        scenario_creator_kwargs={})
+        msg = str(ctx.exception)
+        self.assertIn("mutually exclusive", msg)
+        self.assertIn("try-jensens-first", msg)
+        self.assertIn("try-feasible-xhat-first", msg)
+
+    def test_installs_dict_when_flag_on(self):
+        from mpisppy.utils.cfg_vanilla import _maybe_attach_feasible_xhat
+        cfg = self._cfg_with_flag("xhatshuffle", flag_on=True)
+        spoke_dict = {"opt_kwargs": {"options": {}}}
+        kwargs = {"path": "/x"}
+        _maybe_attach_feasible_xhat(
+            spoke_dict, cfg, "xhatshuffle",
+            feasible_xhat_creator=netdes_auxiliary.feasible_xhat_creator,
+            scenario_creator_kwargs=kwargs,
+        )
+        f = spoke_dict["opt_kwargs"]["options"]["feasible_xhat"]
+        self.assertIs(f["feasible_xhat_creator"],
+                      netdes_auxiliary.feasible_xhat_creator)
+        self.assertIs(f["scenario_creator_kwargs"], kwargs)
+
+
+class TestFindFeasibleXhatCreator(unittest.TestCase):
+    """Discovery helper: tries main module, falls back to <name>_auxiliary."""
+
+    def _cfg(self, **flags):
+        import mpisppy.utils.config as cfg_mod
+        cfg = cfg_mod.Config()
+        cfg.xhatshuffle_args()
+        cfg.xhatxbar_args()
+        cfg.xhatlooper_args()
+        cfg.xhatspecific_args()
+        for name, val in flags.items():
+            cfg[name] = val
+        return cfg
+
+    def test_returns_none_when_no_flag_set(self):
+        from mpisppy.utils.cfg_vanilla import _find_feasible_xhat_creator
+        cfg = self._cfg()
+        # netdes is the test module; even though it has an _auxiliary,
+        # no flag is set so we never reach for it
+        result = _find_feasible_xhat_creator(netdes, cfg)
+        self.assertIsNone(result)
+
+    def test_falls_back_to_auxiliary(self):
+        from mpisppy.utils.cfg_vanilla import _find_feasible_xhat_creator
+        cfg = self._cfg(xhatshuffle_try_feasible_xhat_first=True)
+        # netdes does NOT export feasible_xhat_creator on the main
+        # module; only netdes_auxiliary does.
+        self.assertIsNone(getattr(netdes, "feasible_xhat_creator", None))
+        result = _find_feasible_xhat_creator(netdes, cfg)
+        self.assertIs(result, netdes_auxiliary.feasible_xhat_creator)
+
+    def test_finds_on_main_module_when_present(self):
+        # Synthesize a fake module that exposes feasible_xhat_creator
+        # directly, to confirm the main-module lookup wins.
+        import types
+        from mpisppy.utils.cfg_vanilla import _find_feasible_xhat_creator
+        marker = lambda **k: {"ROOT": np.array([0.0])}  # noqa: E731
+        fake = types.ModuleType("fake_module_with_feas")
+        fake.feasible_xhat_creator = marker
+        cfg = self._cfg(xhatxbar_try_feasible_xhat_first=True)
+        result = _find_feasible_xhat_creator(fake, cfg)
+        self.assertIs(result, marker)
+
+    def test_raises_when_neither_has_it(self):
+        # farmer's main module has no feasible_xhat_creator either,
+        # but farmer_auxiliary does -- so swap to a module without an
+        # auxiliary file at all.
+        import types
+        from mpisppy.utils.cfg_vanilla import _find_feasible_xhat_creator
+        bare = types.ModuleType("bare_module_for_feas_test")
+        cfg = self._cfg(xhatlooper_try_feasible_xhat_first=True)
+        with self.assertRaises(RuntimeError) as ctx:
+            _find_feasible_xhat_creator(bare, cfg)
+        self.assertIn("feasible_xhat_creator", str(ctx.exception))
+
+
+class _StubFeasOpt:
+    """Stand-in for self.opt that captures _fix_nonants / solve_loop /
+    Eobjective calls so we can exercise _try_feasible_xhat without MPI."""
+
+    def __init__(self, *, infeas_prob, eobj, options=None):
+        self._infeas_prob = infeas_prob
+        self._eobj = eobj
+        self.options = options if options is not None else {}
+        self.fix_calls = []
+        self.solve_loop_calls = []
+
+    def _fix_nonants(self, cache):
+        self.fix_calls.append(cache)
+
+    def solve_loop(self, **kwargs):
+        self.solve_loop_calls.append(kwargs)
+
+    def no_incumbent_prob(self):
+        return self._infeas_prob
+
+    def Eobjective(self, verbose=False):
+        return self._eobj
+
+
+class _StubFeasSpoke:
+    """Mixin host wired to capture update_if_improving calls."""
+
+    def __init__(self, opt):
+        from mpisppy.cylinders._jensens_mixin import _JensensMixin
+        self.opt = opt
+        self.bound_updates = []
+        # bind the mixin methods
+        self._feasible_xhat_enabled = lambda: _JensensMixin._feasible_xhat_enabled(self)
+        self._jensens_evaluate_xhat = lambda c: _JensensMixin._jensens_evaluate_xhat(self, c)
+        self._try_feasible_xhat = lambda: _JensensMixin._try_feasible_xhat(self)
+
+    def update_if_improving(self, Eobj):
+        self.bound_updates.append(Eobj)
+
+
+class TestTryFeasibleXhat(unittest.TestCase):
+    """Unit tests for _JensensMixin._try_feasible_xhat."""
+
+    def test_noop_when_flag_off(self):
+        opt = _StubFeasOpt(infeas_prob=0.0, eobj=1.0)  # no "feasible_xhat" key
+        sp = _StubFeasSpoke(opt)
+        sp._try_feasible_xhat()
+        self.assertEqual(sp.bound_updates, [])
+        self.assertEqual(opt.fix_calls, [])
+
+    def test_updates_bound_when_feasible(self):
+        creator = lambda **kw: {"ROOT": np.array([1.0, 2.0])}  # noqa: E731
+        opt = _StubFeasOpt(
+            infeas_prob=0.0, eobj=42.0,
+            options={
+                "feasible_xhat": {
+                    "feasible_xhat_creator": creator,
+                    "scenario_creator_kwargs": {},
+                },
+                "solver_name": "fake",
+                "iterk_solver_options": None,
+            },
+        )
+        sp = _StubFeasSpoke(opt)
+        sp._try_feasible_xhat()
+        self.assertEqual(sp.bound_updates, [42.0])
+        self.assertEqual(len(opt.fix_calls), 1)
+        np.testing.assert_array_equal(opt.fix_calls[0]["ROOT"],
+                                      np.array([1.0, 2.0]))
+
+    def test_skips_silently_when_infeasible(self):
+        creator = lambda **kw: {"ROOT": np.array([0.0])}  # noqa: E731
+        opt = _StubFeasOpt(
+            infeas_prob=0.5, eobj=999.0,  # ignored on infeasible path
+            options={
+                "feasible_xhat": {
+                    "feasible_xhat_creator": creator,
+                    "scenario_creator_kwargs": {},
+                },
+                "solver_name": "fake",
+            },
+        )
+        sp = _StubFeasSpoke(opt)
+        sp._try_feasible_xhat()
+        self.assertEqual(sp.bound_updates, [])
+
+    def test_raises_on_bad_return_shape(self):
+        # creator returns a bare array, not a dict
+        creator = lambda **kw: np.array([1.0])  # noqa: E731
+        opt = _StubFeasOpt(
+            infeas_prob=0.0, eobj=1.0,
+            options={
+                "feasible_xhat": {
+                    "feasible_xhat_creator": creator,
+                    "scenario_creator_kwargs": {},
+                },
+                "solver_name": "fake",
+            },
+        )
+        sp = _StubFeasSpoke(opt)
+        with self.assertRaises(RuntimeError) as ctx:
+            sp._try_feasible_xhat()
+        self.assertIn("ROOT", str(ctx.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

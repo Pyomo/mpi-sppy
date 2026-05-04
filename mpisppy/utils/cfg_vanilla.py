@@ -50,6 +50,83 @@ def _maybe_attach_jensens(spoke_dict, cfg, spoke_prefix,
         "scenario_creator_kwargs": scenario_creator_kwargs,
     }
 
+
+def _find_feasible_xhat_creator(module, cfg):
+    """Look up ``feasible_xhat_creator`` only when at least one
+    ``--<xhat>-try-feasible-xhat-first`` flag is set. Tries the main
+    scenario module first; falls back to importing
+    ``<module_name>_auxiliary`` and looking there.
+
+    Returns ``None`` when no flag is set; raises if any flag is set
+    but the function cannot be located on the module or in
+    ``<module>_auxiliary``.
+    """
+    xhat_prefixes = ("xhatshuffle", "xhatxbar", "xhatlooper", "xhatspecific")
+    flags_set = [
+        p for p in xhat_prefixes
+        if cfg.get(f"{p}_try_feasible_xhat_first", False)
+    ]
+    if not flags_set:
+        return None
+    fn = getattr(module, "feasible_xhat_creator", None)
+    if fn is not None:
+        return fn
+    import importlib
+    aux_name = f"{module.__name__}_auxiliary"
+    flag_cli = f"--{flags_set[0].replace('_', '-')}-try-feasible-xhat-first"
+    try:
+        aux = importlib.import_module(aux_name)
+    except ImportError:
+        raise RuntimeError(
+            f"{flag_cli} was set, but feasible_xhat_creator was not "
+            f"found on {module.__name__} and {aux_name} could not be "
+            f"imported. Define feasible_xhat_creator on the module or "
+            f"create {aux_name} with one, or turn the flag off."
+        )
+    fn = getattr(aux, "feasible_xhat_creator", None)
+    if fn is None:
+        raise RuntimeError(
+            f"{flag_cli} was set, but neither {module.__name__} nor "
+            f"{aux_name} defines feasible_xhat_creator."
+        )
+    return fn
+
+
+def _maybe_attach_feasible_xhat(spoke_dict, cfg, spoke_prefix,
+                                feasible_xhat_creator, scenario_creator_kwargs):
+    """Attach feasible_xhat options to spoke_dict when the corresponding
+    --<spoke_prefix>-try-feasible-xhat-first flag is set.
+
+    The spoke reads these at runtime via self.opt.options["feasible_xhat"]
+    and drives _JensensMixin._try_feasible_xhat. See doc/src/feasible_xhat.rst.
+
+    Raises if the user enabled both --<spoke_prefix>-try-jensens-first and
+    --<spoke_prefix>-try-feasible-xhat-first on the same xhat spoke; the
+    two pre-loop xhat candidates are mutually exclusive per spoke.
+    """
+    flag = f"{spoke_prefix}_try_feasible_xhat_first"
+    if not cfg.get(flag, False):
+        return
+    jensens_flag = f"{spoke_prefix}_try_jensens_first"
+    if cfg.get(jensens_flag, False):
+        raise RuntimeError(
+            f"--{spoke_prefix.replace('_', '-')}-try-jensens-first and "
+            f"--{spoke_prefix.replace('_', '-')}-try-feasible-xhat-first "
+            "were both set; they are mutually exclusive per xhat spoke."
+        )
+    if feasible_xhat_creator is None:
+        raise RuntimeError(
+            f"--{spoke_prefix.replace('_', '-')}-try-feasible-xhat-first "
+            "was set, but the scenario module does not define "
+            "feasible_xhat_creator (looked up on the module and in "
+            "<module>_auxiliary). Either implement feasible_xhat_creator, "
+            "or turn the flag off."
+        )
+    spoke_dict["opt_kwargs"]["options"]["feasible_xhat"] = {
+        "feasible_xhat_creator": feasible_xhat_creator,
+        "scenario_creator_kwargs": scenario_creator_kwargs,
+    }
+
 def shared_options(cfg):
     shoptions = {
         "solver_name": cfg.solver_name,
@@ -964,6 +1041,7 @@ def xhatlooper_spoke(
     ph_extensions=None,
     extension_kwargs=None,
     average_scenario_creator=None,
+    feasible_xhat_creator=None,
 ):
 
     from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
@@ -986,6 +1064,8 @@ def xhatlooper_spoke(
     }
     _maybe_attach_jensens(xhatlooper_dict, cfg, "xhatlooper",
                           average_scenario_creator, scenario_creator_kwargs)
+    _maybe_attach_feasible_xhat(xhatlooper_dict, cfg, "xhatlooper",
+                                feasible_xhat_creator, scenario_creator_kwargs)
 
     return xhatlooper_dict
 
@@ -1001,6 +1081,7 @@ def xhatxbar_spoke(
         extension_kwargs=None,
         all_nodenames=None,
         average_scenario_creator=None,
+        feasible_xhat_creator=None,
 ):
     from mpisppy.cylinders.xhatxbar_bounder import XhatXbarInnerBound
     xhatxbar_dict = _Xhat_Eval_spoke_foundation(
@@ -1020,10 +1101,12 @@ def xhatxbar_spoke(
         "dump_prefix": "delme",
         "csvname": "looper.csv",
     }
-    
+
     xhatxbar_dict["opt_kwargs"]["variable_probability"] = variable_probability
     _maybe_attach_jensens(xhatxbar_dict, cfg, "xhatxbar",
                           average_scenario_creator, scenario_creator_kwargs)
+    _maybe_attach_feasible_xhat(xhatxbar_dict, cfg, "xhatxbar",
+                                feasible_xhat_creator, scenario_creator_kwargs)
 
     return xhatxbar_dict
 
@@ -1038,11 +1121,12 @@ def xhatshuffle_spoke(
     ph_extensions=None,
     extension_kwargs=None,
     average_scenario_creator=None,
+    feasible_xhat_creator=None,
 ):
 
     from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
     xhatshuffle_dict = _Xhat_Eval_spoke_foundation(
-        XhatShuffleInnerBound,        
+        XhatShuffleInnerBound,
         cfg,
         scenario_creator,
         scenario_denouement,
@@ -1063,6 +1147,8 @@ def xhatshuffle_spoke(
         xhatshuffle_dict["opt_kwargs"]["options"]["xhatshuffle_iter_step"] = cfg.xhatshuffle_iter_step
     _maybe_attach_jensens(xhatshuffle_dict, cfg, "xhatshuffle",
                           average_scenario_creator, scenario_creator_kwargs)
+    _maybe_attach_feasible_xhat(xhatshuffle_dict, cfg, "xhatshuffle",
+                                feasible_xhat_creator, scenario_creator_kwargs)
 
     return xhatshuffle_dict
 
@@ -1078,6 +1164,7 @@ def xhatspecific_spoke(
     ph_extensions=None,
     extension_kwargs=None,
     average_scenario_creator=None,
+    feasible_xhat_creator=None,
 ):
 
     from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
@@ -1093,6 +1180,8 @@ def xhatspecific_spoke(
     )
     _maybe_attach_jensens(xhatspecific_dict, cfg, "xhatspecific",
                           average_scenario_creator, scenario_creator_kwargs)
+    _maybe_attach_feasible_xhat(xhatspecific_dict, cfg, "xhatspecific",
+                                feasible_xhat_creator, scenario_creator_kwargs)
     return xhatspecific_dict
 
 def xhatlshaped_spoke(

@@ -129,13 +129,58 @@ example file. The introductory example (``farmer.py``, ``netdes.py``,
 ``scenario_denouement``. Auxiliary functions used only by advanced
 machinery go in the ``_auxiliary`` sibling.
 
-.. admonition:: Under the Hood
+.. admonition:: Discovery
    :class: note
 
-   Discovery is via ``getattr(<model>_auxiliary, "feasible_xhat_creator", None)``
-   in callers that need it; ``mpi-sppy``'s own cylinder system does
-   not currently look up ``feasible_xhat_creator`` itself, since it is
-   a downstream-consumer convention rather than a hub/spoke option.
+   When one of the xhat-spoke flags below is set,
+   ``cfg_vanilla._find_feasible_xhat_creator`` first tries
+   ``getattr(scenario_module, "feasible_xhat_creator", None)`` on the
+   user's main scenario module; if that is ``None`` it imports
+   ``<module_name>_auxiliary`` and looks there. Discovery is gated on
+   the flag, so the auxiliary import does not happen unless requested.
+   Downstream consumers (e.g. findW) that bypass the cylinder system
+   import the auxiliary module directly and call
+   ``feasible_xhat_creator`` themselves.
+
+In-cylinder use: ``--<xhatter>-try-feasible-xhat-first`` flags
+--------------------------------------------------------------
+
+The four xhat spokes that ship with ``mpi-sppy`` accept a
+``feasible_xhat_creator`` candidate via a per-spoke flag, parallel to
+``--*-try-jensens-first``:
+
+* ``--xhatshuffle-try-feasible-xhat-first``
+* ``--xhatxbar-try-feasible-xhat-first``
+* ``--xhatlooper-try-feasible-xhat-first``
+* ``--xhatspecific-try-feasible-xhat-first``
+
+When set, the spoke calls the module's ``feasible_xhat_creator`` once
+before entering its main loop, fixes the candidate as the first-stage
+nonants, evaluates the expected objective across all real scenarios,
+and -- if the evaluation is feasible -- sends that as its first inner
+bound. Implementation lives in
+``_JensensMixin._try_feasible_xhat`` in
+``mpisppy/cylinders/_jensens_mixin.py``; the spoke ``main()`` methods
+call it once after ``_try_average_scenario_xhat``.
+
+.. admonition:: Mutually exclusive with ``--*-try-jensens-first``
+   :class: warning
+
+   ``--<xhatter>-try-jensens-first`` and
+   ``--<xhatter>-try-feasible-xhat-first`` are mutually exclusive on
+   the same spoke. ``cfg_vanilla._maybe_attach_feasible_xhat`` raises
+   at spoke-setup time if both are enabled, with a message naming the
+   conflicting CLI options.
+
+   The two pre-loop candidates serve overlapping purposes: Jensen's
+   often gives a tighter incumbent bound when its candidate happens to
+   be feasible everywhere, while ``feasible_xhat_creator`` is
+   guaranteed feasible by contract but can be a looser incumbent. Per
+   spoke, pick whichever fits the model's structure -- not both.
+
+   Across spokes, mixing is fine: one xhat spoke can be configured
+   with ``--xhatshuffle-try-jensens-first`` while another runs with
+   ``--xhatxbar-try-feasible-xhat-first``.
 
 Worked example: farmer (continuous first-stage)
 -----------------------------------------------

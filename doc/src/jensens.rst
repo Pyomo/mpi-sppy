@@ -36,7 +36,10 @@ Jensen's Bound as potential starting bound
    with no fallback (e.g. pin-dual rho-setting algorithms) need a
    strictly stronger contract -- a candidate guaranteed to be feasible
    to pin in *every* real scenario. See :ref:`feasible_xhat` for the
-   ``feasible_xhat_creator`` convention that provides this.
+   ``feasible_xhat_creator`` convention and the
+   ``--<xhatter>-try-feasible-xhat-first`` flags. Per xhat spoke,
+   ``--*-try-jensens-first`` and ``--*-try-feasible-xhat-first`` are
+   mutually exclusive.
 
 What the options do
 -------------------

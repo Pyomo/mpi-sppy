@@ -68,9 +68,11 @@ class XhatShuffleInnerBound(_JensensMixin, XhatInnerBoundBase):
 
         self.xhat_prep()
 
-        # No-op unless --xhatshuffle-try-jensens-first is set. Tolerates
-        # integer recourse and per-scenario infeasibility (silent skip).
+        # No-ops unless --xhatshuffle-try-jensens-first /
+        # --xhatshuffle-try-feasible-xhat-first are set (mutually exclusive).
+        # Both tolerate per-scenario infeasibility via silent skip.
         self._try_average_scenario_xhat()
+        self._try_feasible_xhat()
 
         if "reverse" in self.opt.options["xhat_looper_options"]:
             self.reverse = self.opt.options["xhat_looper_options"]["reverse"]

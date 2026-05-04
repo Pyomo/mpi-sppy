@@ -869,6 +869,16 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config('xhatlooper_try_feasible_xhat_first',
+                           description="before entering the xhatlooper main loop, take "
+                                       "the candidate first-stage from the scenario "
+                                       "module's feasible_xhat_creator (looked up on the "
+                                       "module or in <module>_auxiliary) and try it as "
+                                       "an xhat. Two-stage only. Mutually exclusive "
+                                       "with --xhatlooper-try-jensens-first.",
+                           domain=bool,
+                           default=False)
+
     def xhatshuffle_args(self):
 
         self.add_to_config('xhatshuffle',
@@ -892,6 +902,16 @@ class Config(pyofig.ConfigDict):
                                        "solution as a candidate xhat (two-stage only; "
                                        "requires the scenario module to define "
                                        "average_scenario_creator)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config('xhatshuffle_try_feasible_xhat_first',
+                           description="before entering the xhatshuffle main loop, take "
+                                       "the candidate first-stage from the scenario "
+                                       "module's feasible_xhat_creator (looked up on the "
+                                       "module or in <module>_auxiliary) and try it as "
+                                       "an xhat. Two-stage only. Mutually exclusive "
+                                       "with --xhatshuffle-try-jensens-first.",
                            domain=bool,
                            default=False)
 
@@ -947,6 +967,16 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config('xhatspecific_try_feasible_xhat_first',
+                           description="before entering the xhatspecific main loop, take "
+                                       "the candidate first-stage from the scenario "
+                                       "module's feasible_xhat_creator (looked up on the "
+                                       "module or in <module>_auxiliary) and try it as "
+                                       "an xhat. Two-stage only. Mutually exclusive "
+                                       "with --xhatspecific-try-jensens-first.",
+                           domain=bool,
+                           default=False)
+
 
     def xhatxbar_args(self):
 
@@ -961,6 +991,16 @@ class Config(pyofig.ConfigDict):
                                        "solution as a candidate xhat (two-stage only; "
                                        "requires the scenario module to define "
                                        "average_scenario_creator)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config('xhatxbar_try_feasible_xhat_first',
+                           description="before entering the xhatxbar main loop, take "
+                                       "the candidate first-stage from the scenario "
+                                       "module's feasible_xhat_creator (looked up on the "
+                                       "module or in <module>_auxiliary) and try it as "
+                                       "an xhat. Two-stage only. Mutually exclusive "
+                                       "with --xhatxbar-try-jensens-first.",
                            domain=bool,
                            default=False)
 
