@@ -126,10 +126,9 @@ A scenario module that wants to participate must define:
 .. admonition:: Under the Hood
    :class: note
 
-   Discovery is via ``getattr(module, "average_scenario_creator", None)``; 
-   if a flag is set but the module does not define the function, 
+   Discovery is via ``getattr(module, "average_scenario_creator", None)``;
+   if a flag is set but the module does not define the function,
    ``cfg_vanilla`` raises a clear error at spoke-setup time.
-   
 
 The recommended authoring pattern — which ``examples/farmer/farmer.py``
 now demonstrates — is to split the work into two underscore helpers
@@ -167,6 +166,52 @@ Benefits of this split:
   dict, not the Pyomo components.
 * Every rank independently calls ``average_scenario_creator`` and gets
   an identical model. No collective communication needed.
+
+Data-only averaging: the model is the model
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The model returned by ``average_scenario_creator`` must be the
+same model that ``scenario_creator`` returns; only the *data* that
+varies across scenarios may change. Variable domains — including
+integrality and bounds — are part of the model and must not be
+relaxed in the average scenario. Constraint forms must not be
+edited either. The only thing that legitimately moves between the
+two creators is the values of whatever data the original
+``scenario_creator`` would have read from disk or generated
+randomly.
+
+If averaging the per-scenario data produces a model that is
+infeasible — for example because averaging a binary stochastic
+parameter yields a fractional value that conflicts with an integer
+recourse constraint — then the problem is not amenable to
+Jensen-style averaging, and the right answer is **not** to ship
+an ``average_scenario_creator`` at all. Working around the
+infeasibility by relaxing a Var domain in the average scenario
+would produce a *different* model whose solution would be solving
+a different problem — at best an LP-relaxation heuristic that
+happens to share the same shape, not a Jensen's bound.
+
+When the model isn't amenable: sslp
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``examples/sslp/sslp.py`` deliberately does **not** ship an
+``average_scenario_creator``. Its only stochastic data is the
+binary indicator ``ClientPresent[i]`` (one per client, in
+:math:`\{0, 1\}` per scenario). The empirical mean across
+scenarios is a fraction in :math:`[0, 1]`, which makes the model
+constraint
+
+.. code-block:: python
+
+   sum(Allocation[i, j] for j in Servers) == ClientPresent[i]
+
+infeasible: ``Allocation`` is Binary in the model and cannot be
+fractional. Relaxing ``Allocation`` to continuous in the average
+scenario would make the LP feasible but would violate the
+data-only-averaging principle above, so sslp opts out. A user who
+flips ``--*-try-jensens-first`` against a model module with no
+``average_scenario_creator`` function will get a clear error from
+``cfg_vanilla`` saying the function is missing.
 
 Seed management
 ---------------
