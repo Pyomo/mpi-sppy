@@ -191,6 +191,17 @@ would produce a *different* model whose solution would be solving
 a different problem — at best an LP-relaxation heuristic that
 happens to share the same shape, not a Jensen's bound.
 
+Even when ``average_scenario_creator`` is not directly usable, the
+underscore helpers above (``_scenario_data``, ``_average_scenario_data``,
+``_build_model``) may still be worth shipping. A
+``feasible_xhat_creator`` (see :ref:`feasible_xhat`) is free to
+build an averaged-data model internally — even one with relaxed
+Var domains — to derive a starting first-stage point, because its
+output is then projected and verified feasible in every real
+scenario rather than handed off as a Jensen's bound. The
+data-only-averaging principle does not bind ``feasible_xhat_creator``;
+it only binds ``average_scenario_creator``.
+
 When the model isn't amenable: sslp
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
