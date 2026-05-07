@@ -33,7 +33,7 @@ def _maybe_attach_jensens(spoke_dict, cfg, spoke_prefix,
     --<spoke_prefix>-try-jensens-first flag is set.
 
     The spoke reads these at runtime via self.opt.options["jensens"] and
-    drives _JensensMixin. See doc/jensens_bound_design.md.
+    drives _JensensMixin. See doc/designs/jensens_bound_design.md.
     """
     flag = f"{spoke_prefix}_try_jensens_first"
     if not cfg.get(flag, False):

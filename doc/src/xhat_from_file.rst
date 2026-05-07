@@ -138,4 +138,4 @@ See Also
 - :ref:`Spokes` — overview of the xhat spokes.
 - the xhat feasibility-cuts feature (PR #671) — the companion feature for
   non-complete-recourse problems.
-- ``doc/xhat_from_file_design.md`` — the design document.
+- ``doc/designs/xhat_from_file_design.md`` — the design document.
