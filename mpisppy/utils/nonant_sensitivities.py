@@ -10,9 +10,12 @@
 import numpy as np
 
 import pyomo.environ as pyo
-from pyomo.contrib.pynumero.linalg.scipy_interface import ScipyLU
 
-from mpisppy.utils.kkt.interface import InteriorPointInterface
+# pynumero / KKT helpers pull in scipy at import time; defer them into
+# nonant_sensitivies() so importing this module — and re-using its
+# scipy-free helpers like _bundle_consensus_groups from other modules —
+# does not require scipy. The "unit tests (no solver required)" CI job
+# runs in an environment without scipy installed.
 
 
 def _bundle_consensus_groups(bundle):
@@ -60,6 +63,13 @@ def nonant_sensitivies(s):
         Returns:
             nonant_sensis (dict): [ndn_i]: sensitivity for the Var
     """
+
+    # Lazy import: scipy is required to actually compute sensitivities
+    # but not to import this module. Keeping these inside the function
+    # lets scipy-free environments import _bundle_consensus_groups and
+    # the rest of the module without failure.
+    from pyomo.contrib.pynumero.linalg.scipy_interface import ScipyLU
+    from mpisppy.utils.kkt.interface import InteriorPointInterface
 
     # first, solve the subproblems with Ipopt,
     # and gather sensitivity information
