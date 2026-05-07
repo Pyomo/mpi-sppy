@@ -1015,7 +1015,8 @@ jobs:
             mpisppy/tests/test_jensens.py \
             mpisppy/tests/test_proper_bundler.py \
             mpisppy/tests/test_grad_rho_bundles.py \
-            mpisppy/tests/test_sensi_rho_bundles.py
+            mpisppy/tests/test_sensi_rho_bundles.py \
+            mpisppy/tests/test_reduced_costs_rho_bundles.py
 
       - name: Upload coverage data
         if: always()
