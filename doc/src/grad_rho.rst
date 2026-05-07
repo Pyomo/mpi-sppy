@@ -1,6 +1,8 @@
+.. _grad_rho:
+
 Gradient-based Rho
 ==================
 
-Gradient-based rho documentation has been consolidated into
-:ref:`rho_setting`. See the "Gradient-based Rho" and "Dynamic Rho Updates"
-sections there.
+For the user-facing options that drive gradient-based rho, see the
+"Gradient-based Rho" and "Dynamic Rho Updates" sections of
+:ref:`rho_setting`.

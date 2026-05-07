@@ -41,6 +41,12 @@ Uses the separation between scenario solutions to set rho. Enabled with:
 
    --sep-rho
 
+.. note::
+   ``--sep-rho`` is scheduled for deprecation; its functionality is
+   expected to be subsumed into ``--grad-rho``. Instantiating ``SepRho``
+   now emits a ``DeprecationWarning``. See
+   `issue #673 <https://github.com/Pyomo/mpi-sppy/issues/673>`_.
+
 Coefficient-based Rho (``--coeff-rho``)
 ----------------------------------------
 
@@ -76,19 +82,45 @@ Sets rho based on reduced costs from LP relaxations. Enabled with:
 
 Like ``--sensi-rho``, this will use existing rho values if available.
 
+.. note::
+   ``--reduced-costs-rho`` is scheduled for deprecation; reduced-cost
+   rho has not been demonstrated to be effective in practice.
+   Instantiating ``ReducedCostsRho`` now emits a ``DeprecationWarning``.
+   See `issue #673 <https://github.com/Pyomo/mpi-sppy/issues/673>`_.
+
 Gradient-based Rho (``--grad-rho``)
 ------------------------------------
 
-Uses gradient information to set rho values. Enabled with:
+Uses per-variable gradient information from the scenario subproblems
+to set rho. Enabled with:
 
 .. code-block:: bash
 
    --grad-rho
 
 A detailed example is in ``examples.farmer.CI.farmer_rho_demo.py``.
+See :ref:`grad_rho` for the algorithmic description (forthcoming).
 
-The ``--grad-rho-multiplier`` option provides a cumulative multiplier
-applied when rho is set or updated.
+Options:
+
+- ``--grad-rho-multiplier`` (default ``1.0``): scalar multiplier
+  applied to every computed rho.
+- ``--grad-order-stat`` (default ``0.5``): order statistic across
+  scenarios used to combine per-scenario rho values into one. ``0``
+  selects the min, ``1`` the max, ``0.5`` the mean; values in
+  ``(0, 0.5)`` interpolate min-to-mean and values in ``(0.5, 1)``
+  interpolate mean-to-max.
+- ``--grad-rho-relative-bound`` (default ``100``): floor on the
+  primal-residual denominator relative to the consensus value (xbar).
+  Prevents tiny ``|x − xbar|`` from inflating rho when a variable is
+  near consensus.
+- ``--eval-at-xhat`` (default off): when an xhat-producing spoke is
+  present (e.g. ``--xhatshuffle``), evaluate the gradient at the best
+  xhat seen so far instead of at the latest subproblem iterate values.
+  Falls back to the iterate values until the first xhat arrives.
+- ``--indep-denom`` (default off): use a single
+  probability-weighted, MPI-Allreduced denominator across all
+  scenarios instead of a per-scenario denominator.
 
 Dynamic Rho Updates
 -------------------
