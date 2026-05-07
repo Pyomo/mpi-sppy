@@ -48,8 +48,27 @@ def _consensus_rc_sum(scenario, ndn_i, ref_var, consensus_groups):
     plus the NA constraint dual; summing the reduced costs of every
     per-sub-scenario nonant in the consensus group cancels the NA
     multipliers and gives the rate of bundle-objective change per unit
-    consensus shift — i.e. the correct "expected reduced cost" input to
+    consensus shift — the correct "expected reduced cost" input to
     rc-rho/rc-fixing. See issue #673.
+
+    Note on probability weighting (no explicit weighting needed):
+
+    ``sputils.create_EF`` builds the bundle objective as
+    ``(sum_s prob_s * obj_s) / EF_prob = sum_s cond_prob_s * obj_s``,
+    where ``cond_prob_s = prob_s / EF_prob``. Pyomo's reduced cost for
+    each per-sub-scenario nonant is therefore
+    ``bundle.rc[x_s,k] = cond_prob_s * unbundled_rc_s,k`` (the per-
+    sub-scenario constraint duals scale with ``cond_prob_s`` too because
+    the objective scaling carries through to the dual LP), modulo the NA
+    multipliers that cancel in the consensus sum. So the consensus sum
+    already equals
+    ``sum_s cond_prob_s * unbundled_rc_s,k = (1/EF_prob) * sum_s prob_s * unbundled_rc_s,k``
+    — the ``cond_prob_s`` is baked in by ``create_EF``.
+
+    The caller multiplies the result by ``sub._mpisppy_probability``
+    (= ``EF_prob`` for a bundle), recovering ``sum_s prob_s * unbundled_rc_s,k``
+    — exactly the unbundled formula. Adding an explicit ``prob_s``
+    weighting inside this sum would double-count.
     """
     if consensus_groups is None:
         return scenario.rc[ref_var]
