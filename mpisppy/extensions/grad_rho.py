@@ -129,31 +129,95 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         return scen_indep_denom
 
     def _get_grad_exprs(self):
-        """ Grabs and caches the gradient expressions for each scenario's objective (without proximal term). """ 
+        """ Grabs and caches the gradient expressions for each scenario's objective (without proximal term).
+
+        Proper bundles need special handling: ``s._mpisppy_data.nonant_indices``
+        holds the bundle's ref Vars, but those ref Vars *are* one specific
+        sub-scenario's nonant Vars (sputils.create_EF picks the first scenario's
+        Var as the ref); other sub-scenarios' nonants are tied to the ref by
+        equality constraints. Differentiating the bundle objective w.r.t. the
+        ref Vars therefore captures only that "representative" sub-scenario's
+        contribution. Instead, differentiate w.r.t. every per-sub-scenario
+        nonant Var and sum the resulting partials per bundle position
+        ``(ndn, k)``. This mirrors the bundle branch in
+        ``sputils.nonant_cost_coeffs``.
+        """
 
         self.grad_exprs = dict()
+        self._bundle_per_scen_vars = dict()
 
         for s in self.opt.local_scenarios.values():
-            self.grad_exprs[s] = differentiate(sputils.find_active_objective(s),
-                                wrt_list=s._mpisppy_data.nonant_indices.values(),
-                                mode=Modes.reverse_symbolic,
-                                )
+            active_obj = sputils.find_active_objective(s)
 
-            self.grad_exprs[s] = {ndn_i : self.grad_exprs[s][i] for i, ndn_i in enumerate(s._mpisppy_data.nonant_indices)}
-            
-        return 
+            if hasattr(s, "_ef_scenario_names"):
+                per_scen_to_bundle = {}
+                counters = {}
+                for (ndn, per_scen_i) in s.ref_vars.keys():
+                    if (ndn, per_scen_i) in s.ref_surrogate_vars:
+                        continue
+                    counters.setdefault(ndn, 0)
+                    per_scen_to_bundle[(ndn, per_scen_i)] = (ndn, counters[ndn])
+                    counters[ndn] += 1
+
+                wrt_vars = []
+                wrt_keys = []
+                per_scen_vars = {}
+                for scenario_name in s._ef_scenario_names:
+                    scenario = s.component(scenario_name)
+                    for node in scenario._mpisppy_node_list:
+                        ndn = node.name
+                        for per_scen_i, v in enumerate(node.nonant_vardata_list):
+                            bundle_key = per_scen_to_bundle.get((ndn, per_scen_i))
+                            if bundle_key is None:
+                                continue
+                            wrt_vars.append(v)
+                            wrt_keys.append(bundle_key)
+                            per_scen_vars.setdefault(bundle_key, []).append(v)
+
+                partials = differentiate(active_obj,
+                                         wrt_list=wrt_vars,
+                                         mode=Modes.reverse_symbolic,
+                                         )
+
+                grad_dict = {ndn_i: 0 for ndn_i in s._mpisppy_data.nonant_indices}
+                for bundle_key, partial in zip(wrt_keys, partials):
+                    grad_dict[bundle_key] = grad_dict[bundle_key] + partial
+                self.grad_exprs[s] = grad_dict
+                self._bundle_per_scen_vars[s] = per_scen_vars
+            else:
+                partials = differentiate(active_obj,
+                                         wrt_list=s._mpisppy_data.nonant_indices.values(),
+                                         mode=Modes.reverse_symbolic,
+                                         )
+                self.grad_exprs[s] = {ndn_i: partials[i]
+                                      for i, ndn_i in enumerate(s._mpisppy_data.nonant_indices)}
+
+        return
 
     def _eval_grad_exprs(self, s, xhat):
         """ Evaluates the gradient expressions of the objectives for scenario s at xhat (if available) or the current values. """
-        
-        ci = 0
+
         grads = {}
 
         if self.eval_at_xhat:
             if True not in np.isnan(self.best_xhat_buf.value_array()):
-                for ndn_i, var in s._mpisppy_data.nonant_indices.items():
-                    var.value = xhat[ci]
-                    ci += 1
+                ci = 0
+                if s in self._bundle_per_scen_vars:
+                    # Bundle: the cached gradient expressions reference
+                    # per-sub-scenario nonant Vars. All per-sub-scenario
+                    # nonants tied to a given bundle position are equal at
+                    # an NA-feasible xhat, so set every one of them to the
+                    # bundle's xhat value at that position.
+                    per_scen_vars = self._bundle_per_scen_vars[s]
+                    for ndn_i, var in s._mpisppy_data.nonant_indices.items():
+                        var.value = xhat[ci]
+                        for v in per_scen_vars.get(ndn_i, ()):
+                            v.value = xhat[ci]
+                        ci += 1
+                else:
+                    for ndn_i, var in s._mpisppy_data.nonant_indices.items():
+                        var.value = xhat[ci]
+                        ci += 1
 
         for ndn_i, var in s._mpisppy_data.nonant_indices.items():
             grads[ndn_i] = pyo.value(self.grad_exprs[s][ndn_i])
