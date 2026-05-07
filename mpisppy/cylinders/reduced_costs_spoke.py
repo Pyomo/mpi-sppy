@@ -16,6 +16,25 @@ from mpisppy.utils.nonant_sensitivities import _bundle_consensus_groups
 from mpisppy import MPI, global_toc
 
 
+def _assert_consensus_rc_loaded(scenario, consensus_groups):
+    """Pre-aggregation guard: every Var in every consensus group must have a
+    reduced cost on ``scenario.rc`` before _consensus_rc_sum reads it.
+
+    This catches a future regression where ``vars_to_load`` is restricted
+    back to bundle ref Vars (or any other path) that leaves per-sub-scenario
+    nonants without an rc entry — the consensus sum would then silently
+    read stale or zero values. No-op for unbundled scenarios.
+    """
+    if consensus_groups is None:
+        return
+    for ndn_i, group in consensus_groups.items():
+        for v in group:
+            assert v in scenario.rc, (
+                f"reduced cost not loaded for {v.name}; vars_to_load did "
+                f"not cover the consensus group at bundle position {ndn_i}"
+            )
+
+
 def _consensus_rc_sum(scenario, ndn_i, ref_var, consensus_groups):
     """Aggregated reduced cost at a nonant position.
 
@@ -213,6 +232,8 @@ class ReducedCostsSpoke(LagrangianOuterBound):
                             consensus_groups.get(ndn_i, (ref,))
                         )
                 sub._solver_plugin.load_rc(vars_to_load=vars_to_load)
+
+            _assert_consensus_rc_loaded(sub, consensus_groups)
 
             for ci, (ndn_i, xvar) in enumerate(sub._mpisppy_data.nonant_indices.items()):
                 # fixed by modeler
