@@ -219,6 +219,18 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                         var.value = xhat[ci]
                         ci += 1
 
+        # Current-values branch (the default path: cfg.eval_at_xhat is False,
+        # or eval_at_xhat is True but no best xhat has been received yet).
+        # Pyomo evaluates the cached gradient expressions against whatever
+        # values are currently on the Vars — the most recent post-solve
+        # state. For a bundle this is correct ONLY because the NA equality
+        # constraints leave every per-sub-scenario nonant at bundle
+        # position k equal to the bundle's consensus value at that
+        # position; the cached expression is a sum of partials over those
+        # Vars and therefore evaluates the consensus-direction gradient.
+        # If a future caller invokes _eval_grad_exprs while the bundle is
+        # in a non-NA-feasible intermediate state, this branch would
+        # silently return a non-consensus gradient.
         for ndn_i, var in s._mpisppy_data.nonant_indices.items():
             grads[ndn_i] = pyo.value(self.grad_exprs[s][ndn_i])
 
