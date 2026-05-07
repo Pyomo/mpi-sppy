@@ -106,7 +106,7 @@ hub setup time:
    RuntimeError: --xhat-feasibility-cuts-count > 0 is two-stage only
    in V1. Multi-stage support is planned as a follow-up milestone
    (the install side needs to group cuts by scenario branch). See
-   doc/xhat_feasibility_cuts_design.md.
+   doc/designs/xhat_feasibility_cuts_design.md.
 
 The cut row encodes coefficients positionally against each scenario's
 ``nonant_indices``. In two-stage every scenario shares the same ROOT
@@ -159,5 +159,5 @@ See Also
 
 - :ref:`Spokes` — overview of the xhat spokes.
 - :ref:`Extensions` — the broader extension mechanism.
-- ``doc/xhat_feasibility_cuts_design.md`` — the design document with
+- ``doc/designs/xhat_feasibility_cuts_design.md`` — the design document with
   the full milestone plan and the ``V1/V2/V3`` scope table.

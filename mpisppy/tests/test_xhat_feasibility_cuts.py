@@ -427,7 +427,7 @@ class TestMultiStageRejection(unittest.TestCase):
     deeper indices, so installing the same row on every scenario lands
     coefficients on unrelated variables. ``setup_hub`` must hard-fail
     rather than silently install incorrect cuts. See
-    ``doc/xhat_feasibility_cuts_design.md``.
+    ``doc/designs/xhat_feasibility_cuts_design.md``.
     """
 
     def test_assert_two_stage_raises_when_multistage(self):

@@ -10,7 +10,7 @@
 and installs them into every local scenario so an infeasible xhat is not
 revisited.
 
-See doc/xhat_feasibility_cuts_design.md (and the user-facing
+See doc/designs/xhat_feasibility_cuts_design.md (and the user-facing
 doc/src/xhat_feasibility_cuts.rst) for the design and usage.
 """
 
@@ -79,7 +79,7 @@ class XhatFeasibilityCutExtension(Extension):
                 "V1. Multi-stage support is planned as a follow-up "
                 "milestone (the install side needs to group cuts by "
                 "scenario branch). See "
-                "doc/xhat_feasibility_cuts_design.md."
+                "doc/designs/xhat_feasibility_cuts_design.md."
             )
 
     # ---- binary-only precondition check ----------------------------------
