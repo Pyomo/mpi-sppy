@@ -858,6 +858,72 @@ class PHBase(mpisppy.spopt.SPOpt):
             return False
         return super()._can_update_best_bound()
 
+    def _iter0_use_pickled_solution(self):
+        """Skip the iter0 solve loop and trust the values baked into the pickle.
+
+        Companion to ``--iter0-before-pickle`` (the pre-pickle pipeline that
+        solves each scenario / bundle once with its original objective and
+        stores variable values + duals inside the pickle). When the user
+        also passes ``--iter0-from-pickle``, this routine takes the place of
+        ``solve_loop`` for iteration 0:
+
+        - Validate that every local scenario actually carries the
+          ``pickle_metadata['iter0_before_pickle'] == True`` flag set by
+          the pre-pickle pipeline. Hard-fail otherwise; we will not
+          fabricate solver state.
+        - Set the per-scenario bookkeeping that ``solve_loop`` would have
+          set: ``solution_available``, ``outer_bound``, ``inner_bound``.
+          The bounds are the solver's reported ``Lower_bound`` /
+          ``Upper_bound`` captured at pickle time (see
+          ``generic/scenario_io.py::_solve_iter0_for_pickle``) -- that
+          preserves the outer/inner split for MIPs solved with a
+          nonzero gap. The variable values themselves are already in
+          place from the pickle, so PH's downstream logic (xbar, W
+          update, etc.) just works.
+
+        See doc/src/pickling.rst for the user-facing description.
+        """
+        global_toc("Skipping PHBase.Iter0 solve loop "
+                   "(--iter0-from-pickle); using values from pickle")
+
+        missing = []
+        missing_bounds = []
+        for sname, s in self.local_scenarios.items():
+            md = getattr(s._mpisppy_data, "pickle_metadata", None)
+            if not md or not md.get("iter0_before_pickle", False):
+                missing.append(sname)
+                continue
+            if ("iter0_outer_bound" not in md
+                    or "iter0_inner_bound" not in md):
+                missing_bounds.append(sname)
+        if missing:
+            sample = ", ".join(missing[:3])
+            more = "..." if len(missing) > 3 else ""
+            raise RuntimeError(
+                f"--iter0-from-pickle was set, but {len(missing)} local "
+                f"scenario(s) on rank {self.cylinder_rank} do not carry an "
+                f"iter0 solution from pickle time ({sample}{more}). "
+                f"Re-pickle with --iter0-before-pickle, or remove "
+                f"--iter0-from-pickle."
+            )
+        if missing_bounds:
+            sample = ", ".join(missing_bounds[:3])
+            more = "..." if len(missing_bounds) > 3 else ""
+            raise RuntimeError(
+                f"--iter0-from-pickle was set, but {len(missing_bounds)} "
+                f"local scenario(s) on rank {self.cylinder_rank} have "
+                f"iter0 pickle metadata without captured outer/inner "
+                f"bounds ({sample}{more}). This pickle was written with "
+                f"an older metadata format; re-pickle with the current "
+                f"--iter0-before-pickle."
+            )
+
+        for sname, s in self.local_scenarios.items():
+            md = s._mpisppy_data.pickle_metadata
+            s._mpisppy_data.solution_available = True
+            s._mpisppy_data.outer_bound = md["iter0_outer_bound"]
+            s._mpisppy_data.inner_bound = md["iter0_inner_bound"]
+
     def Iter0(self):
         """ Create solvers and perform the initial PH solve (with no dual
         weights or prox terms).
@@ -903,20 +969,23 @@ class PHBase(mpisppy.spopt.SPOpt):
                  and self.cylinder_rank == 0
                  )
 
-        if self.options["verbose"]:
-            print ("About to call PH Iter0 solve loop on rank={}".format(self.cylinder_rank))
-        global_toc("Entering solve loop in PHBase.Iter0")
+        if self.options.get("iter0_from_pickle", False):
+            self._iter0_use_pickled_solution()
+        else:
+            if self.options["verbose"]:
+                print ("About to call PH Iter0 solve loop on rank={}".format(self.cylinder_rank))
+            global_toc("Entering solve loop in PHBase.Iter0")
 
-        self.solve_loop(solver_options=self.current_solver_options,
-                        dtiming=dtiming,
-                        gripe=True,
-                        tee=teeme,
-                        verbose=verbose,
-                        warmstart=sputils.WarmstartStatus.USER_SOLUTION,
-                        )
+            self.solve_loop(solver_options=self.current_solver_options,
+                            dtiming=dtiming,
+                            gripe=True,
+                            tee=teeme,
+                            verbose=verbose,
+                            warmstart=sputils.WarmstartStatus.USER_SOLUTION,
+                            )
 
-        if self.options["verbose"]:
-            print ("PH Iter0 solve loop complete on rank={}".format(self.cylinder_rank))
+            if self.options["verbose"]:
+                print ("PH Iter0 solve loop complete on rank={}".format(self.cylinder_rank))
 
         self._update_E1()  # Apologies for doing this after the solves...
         if (abs(1 - self.E1) > self.E1_tolerance):

@@ -12,6 +12,7 @@ import mpisppy.log
 
 from mpisppy.extensions.xhatbase import XhatBase
 from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
+from mpisppy.cylinders._jensens_mixin import _JensensMixin
 
 
 # Could also pass, e.g., sys.stdout instead of a filename
@@ -20,7 +21,7 @@ mpisppy.log.setup_logger("mpisppy.cylinders.xhatshufflelooper_bounder",
                          level=logging.CRITICAL)
 logger = logging.getLogger("mpisppy.cylinders.xhatshufflelooper_bounder")
 
-class XhatShuffleInnerBound(XhatInnerBoundBase):
+class XhatShuffleInnerBound(_JensensMixin, XhatInnerBoundBase):
 
     converger_spoke_char = 'X'
 
@@ -40,13 +41,13 @@ class XhatShuffleInnerBound(XhatInnerBoundBase):
         """ wrapper for _try_one"""
         snamedict = xhat_scenario_dict
 
-        stage2EFsolvern = self.opt.options.get("stage2EFsolvern", None)
+        stage2_ef_solver_name = self.opt.options.get("stage2_ef_solver_name", None)
         branching_factors = self.opt.options.get("branching_factors", None)  # for stage2ef
         obj = self.xhatter._try_one(snamedict,
                                     solver_options = self.solver_options,
                                     verbose=False,
                                     restore_nonants=True,
-                                    stage2EFsolvern=stage2EFsolvern,
+                                    stage2_ef_solver_name=stage2_ef_solver_name,
                                     branching_factors=branching_factors)
         def _vb(msg):
             if self.verbose and self.opt.cylinder_rank == 0:
@@ -66,6 +67,11 @@ class XhatShuffleInnerBound(XhatInnerBoundBase):
         logger.debug(f"Entering main on xhatshuffle spoke rank {self.global_rank}")
 
         self.xhat_prep()
+
+        # No-op unless --xhatshuffle-try-jensens-first is set. Tolerates
+        # integer recourse and per-scenario infeasibility (silent skip).
+        self._try_average_scenario_xhat()
+
         if "reverse" in self.opt.options["xhat_looper_options"]:
             self.reverse = self.opt.options["xhat_looper_options"]["reverse"]
         else:

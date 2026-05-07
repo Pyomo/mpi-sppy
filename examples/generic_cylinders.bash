@@ -151,7 +151,7 @@ mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name far
 # try a simple Hydro
 pwd
 cd hydro
-mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name hydro --solver-name ${SOLVER} --max-iterations 100 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.001 --branching-factors "3 3" --stage2EFsolvern ${SOLVER}
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name hydro --solver-name ${SOLVER} --max-iterations 100 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.001 --branching-factors "3 3" --stage2-ef-solver-name ${SOLVER}
 cd ..
 
 

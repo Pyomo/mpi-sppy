@@ -368,5 +368,175 @@ class TestStochAdmmWrapper(unittest.TestCase):
             os.chdir(original_dir)
 
 
+    def test_preserves_user_surrogates_and_ef_suppl(self):
+        """User surrogate_nonant_list and nonant_ef_suppl_list attached to a
+        stoch scenario's root node must survive the stage-rewrite that
+        Stoch_AdmmWrapper performs.
+
+        The wrapper re-builds each existing stage node with only the
+        consensus vars in nonant_list; without preservation, anything the
+        user attached via attach_root_node's optional lists would silently
+        disappear.
+        """
+        import pyomo.environ as pyo
+        import mpisppy.utils.sputils as sputils
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
+        from mpisppy import MPI
+
+        def scenario_creator(sname, **kwargs):
+            parts = sname.split("_")
+            admm_part = parts[2]
+            m = pyo.ConcreteModel()
+            # consensus vars: subproblem A owns x, B owns y (partial)
+            if admm_part == "A":
+                m.x = pyo.Var(bounds=(0, 1))
+                own = m.x
+            else:
+                m.y = pyo.Var(bounds=(0, 1))
+                own = m.y
+            m.z = pyo.Var(bounds=(0, 1))  # user surrogate
+            m.e = pyo.Var(bounds=(0, 1))  # user EF-suppl nonant
+            m.cost = pyo.Expression(expr=0)
+            m.obj = pyo.Objective(expr=own, sense=pyo.minimize)
+            sputils.attach_root_node(
+                m, m.cost, [own],
+                nonant_ef_suppl_list=[m.e],
+                surrogate_nonant_list=[m.z])
+            m._mpisppy_probability = "uniform"
+            return m
+
+        admm_names = ["A", "B"]
+        stoch_names = ["S1", "S2"]
+        all_names = [f"ADMM_STOCH_{a}_{s}"
+                     for s in stoch_names for a in admm_names]
+
+        def split(sname):
+            parts = sname.split("_")
+            return parts[2], "_".join(parts[3:])
+
+        consensus_vars = {"A": [("x", 1)], "B": [("y", 1)]}
+
+        admm = Stoch_AdmmWrapper(
+            options={},
+            all_admm_stoch_subproblem_scenario_names=all_names,
+            split_admm_stoch_subproblem_scenario_name=split,
+            admm_subproblem_names=admm_names,
+            stoch_scenario_names=stoch_names,
+            scenario_creator=scenario_creator,
+            consensus_vars=consensus_vars,
+            n_cylinders=1,
+            mpicomm=MPI.COMM_WORLD,
+            scenario_creator_kwargs={},
+        )
+
+        for sname, s in admm.local_admm_stoch_subproblem_scenarios.items():
+            root = s._mpisppy_node_list[0]
+            self.assertIn(
+                s.z, root.surrogate_vardatas,
+                f"{sname}: user surrogate m.z was dropped by stage rewrite")
+            self.assertIn(
+                s.e, root.nonant_ef_suppl_vardata_list,
+                f"{sname}: user EF-suppl m.e was dropped by stage rewrite")
+            # Also: the admm dummy for the absent consensus var (x on B,
+            # y on A) must still be marked surrogate so EF doesn't force it.
+            admm_part = sname.split("_")[2]
+            absent_name = "x" if admm_part == "B" else "y"
+            self.assertTrue(
+                hasattr(s, absent_name),
+                f"{sname}: expected dummy attribute {absent_name}")
+            dummy = getattr(s, absent_name)
+            self.assertIn(
+                dummy, root.surrogate_vardatas,
+                f"{sname}: admm dummy {absent_name} missing from surrogates")
+
+    @unittest.skipUnless(solver_available, "no solver available")
+    def test_ef_partial_consensus(self):
+        """EF must not pin partial-consensus vars to zero.
+
+        With >2 admm subproblems, some consensus vars are owned only by a
+        subset of subproblems; dummy fixed-to-0 stand-ins are created for the
+        others. PH weights those dummies at 0, but EF with the default
+        nonant_for_fixed_vars=True had been enforcing hard nonant equalities
+        against them, forcing the real owners to 0 and producing worse
+        (higher-for-minimize) objectives than PH.
+
+        The examples/stoch_distr/stoch_distr_ef.py driver hides this by
+        passing nonant_for_fixed_vars=False to create_EF, so we drive the
+        EF through generic_cylinders --EF (ExtensiveForm's default).
+
+        Regression: with the fix, the EF objective should lie within the
+        PH Lagrangian outer / xhatxbar inner bound envelope.
+        """
+        generic_cyl = os.path.join(_REPO_ROOT, 'mpisppy', 'generic_cylinders.py')
+        target_dir = os.path.join(_REPO_ROOT, 'examples', 'stoch_distr')
+        original_dir = os.getcwd()
+        os.chdir(target_dir)
+        try:
+            clean_env = {k: v for k, v in os.environ.items()
+                         if not k.startswith(('OMPI_', 'PMIX_', 'PMI_'))}
+
+            ef_cmd = (
+                f"python {generic_cyl} --module-name stoch_distr "
+                f"--EF --EF-solver-name {solver_name} --stoch-admm "
+                f"--num-admm-subproblems 4 --num-stoch-scens 3"
+            ).split()
+            ef_result = subprocess.run(ef_cmd, capture_output=True, text=True,
+                                       env=clean_env, timeout=180)
+            if ef_result.returncode != 0:
+                raise RuntimeError(
+                    f"EF run failed (rc={ef_result.returncode})\n"
+                    f"STDOUT: {ef_result.stdout[-1000:]}\n"
+                    f"STDERR: {ef_result.stderr[-1000:]}")
+            ef_obj = None
+            for line in ef_result.stdout.strip().split('\n'):
+                if "EF objective" in line:
+                    ef_obj = float(line.split(': ')[1])
+            self.assertIsNotNone(ef_obj,
+                                 f"Could not extract EF objective:\n{ef_result.stdout[-1000:]}")
+
+            ph_cmd = (
+                f"mpiexec -np 3 python -u -m mpi4py {generic_cyl} "
+                f"--module-name stoch_distr --stoch-admm "
+                f"--num-admm-subproblems 4 --num-stoch-scens 3 "
+                f"--default-rho 10 --solver-name {solver_name} "
+                f"--max-iterations 50 --lagrangian --xhatxbar "
+                f"--rel-gap 0.01 --ensure-xhat-feas"
+            ).split()
+            ph_result = subprocess.run(ph_cmd, capture_output=True, text=True,
+                                       env=clean_env, timeout=180)
+            if ph_result.returncode != 0:
+                raise RuntimeError(
+                    f"PH run failed (rc={ph_result.returncode})\n"
+                    f"STDOUT: {ph_result.stdout[-1000:]}\n"
+                    f"STDERR: {ph_result.stderr[-1000:]}")
+
+            # Grab the final iteration line (after the last "Iter." header).
+            import re
+            outer_bound = None
+            inner_bound = None
+            pattern = re.compile(
+                r'\[\s*\d+\.\d+\]\s+\d+\s+(?:L\s*B?|B\s*L?)\s+([-.\d]+)\s+([-.\d]+)')
+            for line in ph_result.stdout.strip().split('\n'):
+                m = pattern.search(line)
+                if m:
+                    outer_bound = float(m.group(1))
+                    inner_bound = float(m.group(2))
+            self.assertIsNotNone(outer_bound,
+                                 f"Could not extract PH bounds:\n{ph_result.stdout[-1000:]}")
+
+            # For minimize, outer is the lower bound on opt, inner is the upper.
+            # EF's optimal should sit in between (with a small slack).
+            self.assertLessEqual(
+                outer_bound, ef_obj + 0.01,
+                msg=f"EF {ef_obj} below PH outer bound {outer_bound} "
+                    f"(inner={inner_bound}) — partial-consensus EF regression")
+            self.assertLessEqual(
+                ef_obj, inner_bound + 0.02,
+                msg=f"EF {ef_obj} above PH inner bound {inner_bound} "
+                    f"(outer={outer_bound}) — partial-consensus EF regression")
+        finally:
+            os.chdir(original_dir)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -31,7 +31,7 @@ from mpisppy.generic.parsing import name_lists
 #
 # See doc/src/pickling.rst for the user-facing documentation.
 
-_PICKLE_METADATA_VERSION = 1
+_PICKLE_METADATA_VERSION = 2
 
 
 def _any_pre_pickle_stage_enabled(cfg):
@@ -127,6 +127,14 @@ def _solve_iter0_for_pickle(sp, cfg):
     Hard-fail on any non-optimal termination -- producing pickles with
     silently bad state would be worse than the job stopping (resolved
     decision #5 in the design doc).
+
+    Also captures the solver's reported objective bounds
+    (``results.Problem[0].Lower_bound`` / ``Upper_bound``) into
+    ``model._mpisppy_data._iter0_outer_bound`` /
+    ``_iter0_inner_bound``. ``_attach_pickle_metadata`` then folds those
+    into ``pickle_metadata`` so downstream ``--iter0-from-pickle`` can
+    restore the same outer/inner split that ``solve_loop`` would have
+    set -- important for MIPs solved with a nonzero gap.
     """
     solver_name = cfg.get("pickle_solver_name") or cfg.get("solver_name")
     if not solver_name:
@@ -139,6 +147,7 @@ def _solve_iter0_for_pickle(sp, cfg):
     solver_options = (sputils.option_string_to_dict(options_str)
                       if options_str else None)
 
+    is_min = sp.is_minimizing
     for sname, model in sp.local_scenarios.items():
         _attach_dual_suffixes(model)
         # A fresh solver per scenario keeps persistent solver bookkeeping
@@ -160,11 +169,19 @@ def _solve_iter0_for_pickle(sp, cfg):
                 f"job is shutting down rather than producing a pickle with "
                 f"unsolved state. See doc/src/pickling.rst."
             )
+        lower = results.Problem[0].Lower_bound
+        upper = results.Problem[0].Upper_bound
+        if is_min:
+            outer, inner = lower, upper
+        else:
+            outer, inner = upper, lower
+        model._mpisppy_data._iter0_outer_bound = outer
+        model._mpisppy_data._iter0_inner_bound = inner
 
 
 def _attach_pickle_metadata(sp, cfg):
     """Stash metadata about which pre-pickle stages ran on _mpisppy_data."""
-    metadata = {
+    base = {
         "version": _PICKLE_METADATA_VERSION,
         "presolve_before_pickle": bool(cfg.get("presolve_before_pickle")),
         "obbt": bool(cfg.get("obbt")) if cfg.get("presolve_before_pickle") else False,
@@ -175,11 +192,18 @@ def _attach_pickle_metadata(sp, cfg):
             if cfg.get("iter0_before_pickle") else None
         ),
     }
+    ran_iter0 = bool(cfg.get("iter0_before_pickle"))
     for model in sp.local_scenarios.values():
         # _mpisppy_data is attached by SPBase before this runs.
         # Shallow-copy per model so downstream mutation on one scenario
         # doesn't bleed into the others.
-        model._mpisppy_data.pickle_metadata = metadata.copy()
+        md = base.copy()
+        if ran_iter0:
+            # _solve_iter0_for_pickle has already stashed these; they are
+            # per-scenario so they must go into the per-scenario dict.
+            md["iter0_outer_bound"] = model._mpisppy_data._iter0_outer_bound
+            md["iter0_inner_bound"] = model._mpisppy_data._iter0_inner_bound
+        model._mpisppy_data.pickle_metadata = md
 
 
 def _run_pre_pickle_pipeline(sp, cfg):

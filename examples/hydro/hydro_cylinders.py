@@ -31,11 +31,6 @@ def _parse_args():
     cfg.lagrangian_args()
     cfg.xhatspecific_args()
 
-    cfg.add_to_config(name ="stage2EFsolvern",
-                         description="Solver to use for xhatlooper stage2ef option (default None)",
-                         domain = str,
-                         default=None)
-
     cfg.parse_command_line("hydro_cylinders")
     return cfg
 
@@ -96,9 +91,9 @@ def main():
     if xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
 
-    if cfg.stage2EFsolvern is not None:
-        assert xhatshuffle is not None, "xhatshuffle is required for stage2EFsolvern"
-        xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = cfg["stage2EFsolvern"]
+    if cfg.stage2_ef_solver_name is not None:
+        assert xhatshuffle is not None, "xhatshuffle is required for stage2_ef_solver_name"
+        xhatshuffle_spoke["opt_kwargs"]["options"]["stage2_ef_solver_name"] = cfg["stage2_ef_solver_name"]
         xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = cfg["branching_factors"]
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)

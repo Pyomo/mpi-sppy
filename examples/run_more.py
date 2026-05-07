@@ -164,7 +164,7 @@ do_one("farmer/CI",
        f"--num-scens 3 --crops-multiplier=1  --EF-solver-name={solver_name} "
        "--BPL-c0 25 --BPL-eps 100 --confidence-level 0.95 --BM-vs-BPL BPL")
 
-# --- Hydro without stage2EFsolvern (also covered by generic_tester) ---
+# --- Hydro without stage2_ef_solver_name (also covered by generic_tester) ---
 
 do_one("hydro", "hydro_cylinders.py", 3,
        "--branching-factors \"3 3\" --max-iterations=100 "

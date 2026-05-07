@@ -121,16 +121,27 @@ for integer variables.
 stage2ef
 ~~~~~~~~
 
-An option for ``xhatshufflelooper_bounder`` is under development 
-for multistage problems that creates an EF for each second stage nodes by
-fixing the first stage nonanticipative variables.  This code requires
-that the number of ranks allocated to the ``xhatshufflelooper_bounder``
-is an integer multiple of the number of second stage nodes. Here is a 
-hint about how to to use it in a driver:
+An option for ``xhatshufflelooper_bounder`` for multistage problems that
+creates an EF for each second stage node by fixing the first stage
+nonanticipative variables.  This code requires that the number of ranks
+allocated to the ``xhatshufflelooper_bounder`` is an integer multiple of
+the number of second stage nodes.
+
+When using ``generic_cylinders.py``, this is enabled with the
+``--stage2-ef-solver-name`` flag:
+
+.. code-block:: bash
+
+    mpiexec -np 3 python -m mpi4py mpisppy/generic_cylinders.py \
+        --module-name hydro --solver-name cplex --max-iterations 100 \
+        --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.001 \
+        --branching-factors "3 3" --stage2-ef-solver-name cplex
+
+In a custom driver, set the spoke options directly:
 
 ::
 
-    xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = solver_name
+    xhatshuffle_spoke["opt_kwargs"]["options"]["stage2_ef_solver_name"] = solver_name
     xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = branching_factors
 
 An example is shown in ``examples.hydro.hydro_cylinders.py`` (this particular example

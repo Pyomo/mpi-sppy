@@ -7,8 +7,9 @@
 # full copyright and license information.
 ###############################################################################
 import mpisppy.cylinders.spoke
+from mpisppy.cylinders._jensens_mixin import _JensensMixin
 
-class SubgradientOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
+class SubgradientOuterBound(_JensensMixin, mpisppy.cylinders.spoke.OuterBoundSpoke):
 
     converger_spoke_char = 'G'
 
@@ -26,6 +27,13 @@ class SubgradientOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
             raise RuntimeError("Cannnot use smoothing with Subgradient algorithm")
         attach_prox = False
         self.opt.PH_Prep(attach_prox=attach_prox, attach_smooth = 0)
+
+        if self._jensens_enabled():
+            avg_scenario = self._jensens_build_avg()
+            self._jensens_assert_safe_for_outer_bound(avg_scenario)
+            avg_outer_bound, _ = self._jensens_solve(avg_scenario)
+            self.send_bound(avg_outer_bound)
+
         trivial_bound = self.opt.Iter0()
 
         # update the rho

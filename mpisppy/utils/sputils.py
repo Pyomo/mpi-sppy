@@ -398,6 +398,20 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
                 elif (nonant_for_fixed_vars) or (not v.is_fixed()):
                     if v in node.surrogate_vardatas:
                         continue
+                    if (ndn, i) in ref_surrogate_vars:
+                        # An earlier scenario installed a surrogate as the
+                        # ref for this (node, index). This happens with
+                        # Stoch_AdmmWrapper partial consensus: subproblems
+                        # that have a zero-probability consensus var tag that var
+                        # as a surrogate vardata (which will be fixed to 0). 
+                        # Upgrade the ref to a non-zero-probability v (i.e., non-dummy)
+                        # and remove the surrogate tag.
+                        # Subsequent scenarios with this variable as 
+                        # non-zero-probability (i.e., *not* as "surrogate")
+                        # are set equal to *this* non-zero-probability vardata.
+                        ref_vars[(ndn, i)] = v
+                        del ref_surrogate_vars[(ndn, i)]
+                        continue
                     expr = LinearExpression(linear_coefs=[1,-1],
                                             linear_vars=[v,ref_vars[(ndn,i)]],
                                             constant=0.)
@@ -1061,13 +1075,35 @@ def nonant_cost_coeffs(s):
 
     # deal with proper bundles
     if hasattr(s, "_ef_scenario_names"):
+        # The bundle's nonant_indices are NOT keyed by per-scenario position:
+        # proper_bundler builds the bundle's nonantlist by iterating
+        # bundle.ref_vars in insertion order and skipping ref_surrogate_vars,
+        # and create_EF skips per-scenario positions whose var is fixed
+        # (nonant_for_fixed_vars=False). So bundle nonant index k is the
+        # k-th surviving (ndn, per_scen_i) entry. Map per-scenario var id ->
+        # bundle (ndn, k) using that ordering.
+        # Counters are kept per-ndn for generality, but proper_bundler
+        # currently only attaches a ROOT node to bundles (see
+        # proper_bundler.attach_root_node), so in practice only ROOT keys
+        # appear here. The per-ndn form keeps this correct if that ever
+        # changes.
+        per_scen_to_bundle = {}
+        counters = {}
+        for (ndn, per_scen_i) in s.ref_vars.keys():
+            if (ndn, per_scen_i) in s.ref_surrogate_vars:
+                continue
+            counters.setdefault(ndn, 0)
+            per_scen_to_bundle[(ndn, per_scen_i)] = (ndn, counters[ndn])
+            counters[ndn] += 1
         nonant_varids = {}
         for scenario_name in s._ef_scenario_names:
             scenario = s.component(scenario_name)
             for node in scenario._mpisppy_node_list:
                 ndn = node.name
-                for i, v in enumerate(node.nonant_vardata_list):
-                    nonant_varids[id(v)] = (ndn, i)
+                for per_scen_i, v in enumerate(node.nonant_vardata_list):
+                    bundle_key = per_scen_to_bundle.get((ndn, per_scen_i))
+                    if bundle_key is not None:
+                        nonant_varids[id(v)] = bundle_key
     else:
         nonant_varids = s._mpisppy_data.varid_to_nonant_index
 

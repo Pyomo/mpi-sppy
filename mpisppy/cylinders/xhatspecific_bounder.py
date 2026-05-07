@@ -11,6 +11,7 @@
 
 from mpisppy.extensions.xhatspecific import XhatSpecific
 from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
+from mpisppy.cylinders._jensens_mixin import _JensensMixin
 
 import mpisppy.MPI as mpi
 import logging
@@ -21,7 +22,7 @@ fullcom_n_proc = fullcomm.Get_size()
 
 
 ############################################################################
-class XhatSpecificInnerBound(XhatInnerBoundBase):
+class XhatSpecificInnerBound(_JensensMixin, XhatInnerBoundBase):
 
     converger_spoke_char = 'S'
 
@@ -41,6 +42,9 @@ class XhatSpecificInnerBound(XhatInnerBoundBase):
                                              ["xhat_scenario_dict"]
 
         xhatter = self.xhat_prep()
+
+        # No-op unless --xhatspecific-try-jensens-first is set.
+        self._try_average_scenario_xhat()
 
         ib_iter = 1  # ib is for inner bound
         while (not self.got_kill_signal()):
