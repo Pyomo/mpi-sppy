@@ -29,10 +29,14 @@ def _assert_consensus_rc_loaded(scenario, consensus_groups):
         return
     for ndn_i, group in consensus_groups.items():
         for v in group:
-            assert v in scenario.rc, (
-                f"reduced cost not loaded for {v.name}; vars_to_load did "
-                f"not cover the consensus group at bundle position {ndn_i}"
-            )
+            # Plain `assert` would be stripped under `python -O`, disabling
+            # the guard exactly where silent stale-rc reads would do real
+            # damage. Raise unconditionally instead.
+            if v not in scenario.rc:
+                raise RuntimeError(
+                    f"reduced cost not loaded for {v.name}; vars_to_load did "
+                    f"not cover the consensus group at bundle position {ndn_i}"
+                )
 
 
 def _consensus_rc_sum(scenario, ndn_i, ref_var, consensus_groups):
@@ -223,12 +227,20 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         # would probably need additional info about where scenarios disagree
         rc = np.zeros(self.nonant_length)
 
-        for sub in self.opt.local_scenarios.values():
-            consensus_groups = (
+        # _bundle_consensus_groups walks every sub-scenario/node/var in the
+        # bundle; cache once per `sub` and reuse below in the second pass that
+        # populates _scenario_rc_buffer.
+        consensus_groups_by_sub = {
+            sub: (
                 _bundle_consensus_groups(sub)
                 if hasattr(sub, "_ef_scenario_names")
                 else None
             )
+            for sub in self.opt.local_scenarios.values()
+        }
+
+        for sub in self.opt.local_scenarios.values():
+            consensus_groups = consensus_groups_by_sub[sub]
             if is_persistent(sub._solver_plugin):
                 # Note: what happens with non-persistent solvers?
                 # - if rc is accepted as a model suffix by the solver (e.g. gurobi shell), it is loaded in postsolve
@@ -281,11 +293,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         assert self._scenario_rc_buffer.size == self.send_buffers[Field.SCENARIO_REDUCED_COST].data_len()
         ci = 0 # buffer index
         for sub in self.opt.local_scenarios.values():
-            consensus_groups = (
-                _bundle_consensus_groups(sub)
-                if hasattr(sub, "_ef_scenario_names")
-                else None
-            )
+            consensus_groups = consensus_groups_by_sub[sub]
             for ndn_i, xvar in sub._mpisppy_data.nonant_indices.items():
                 # fixed by modeler
                 if ndn_i in self._modeler_fixed_nonants[sub]:

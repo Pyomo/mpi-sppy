@@ -15,6 +15,7 @@ import pyomo.environ as pyo
 import mpisppy.MPI as MPI
 from mpisppy import global_toc
 import mpisppy.utils.sputils as sputils
+from mpisppy.utils.nonant_sensitivities import _bundle_consensus_groups
 from mpisppy.cylinders.spwindow import Field
 
 class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
@@ -150,29 +151,18 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             active_obj = sputils.find_active_objective(s)
 
             if hasattr(s, "_ef_scenario_names"):
-                per_scen_to_bundle = {}
-                counters = {}
-                for (ndn, per_scen_i) in s.ref_vars.keys():
-                    if (ndn, per_scen_i) in s.ref_surrogate_vars:
-                        continue
-                    counters.setdefault(ndn, 0)
-                    per_scen_to_bundle[(ndn, per_scen_i)] = (ndn, counters[ndn])
-                    counters[ndn] += 1
+                # Shared helper builds the bundle position -> per-sub-scenario
+                # Vars mapping (see mpisppy/utils/nonant_sensitivities.py); we
+                # then flatten it into parallel wrt_vars/wrt_keys so we can
+                # differentiate once and re-aggregate the partials by key.
+                per_scen_vars = _bundle_consensus_groups(s)
 
                 wrt_vars = []
                 wrt_keys = []
-                per_scen_vars = {}
-                for scenario_name in s._ef_scenario_names:
-                    scenario = s.component(scenario_name)
-                    for node in scenario._mpisppy_node_list:
-                        ndn = node.name
-                        for per_scen_i, v in enumerate(node.nonant_vardata_list):
-                            bundle_key = per_scen_to_bundle.get((ndn, per_scen_i))
-                            if bundle_key is None:
-                                continue
-                            wrt_vars.append(v)
-                            wrt_keys.append(bundle_key)
-                            per_scen_vars.setdefault(bundle_key, []).append(v)
+                for bundle_key, vars_at_pos in per_scen_vars.items():
+                    for v in vars_at_pos:
+                        wrt_vars.append(v)
+                        wrt_keys.append(bundle_key)
 
                 partials = differentiate(active_obj,
                                          wrt_list=wrt_vars,

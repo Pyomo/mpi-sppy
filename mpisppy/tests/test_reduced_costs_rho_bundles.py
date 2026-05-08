@@ -191,7 +191,9 @@ class TestAssertConsensusRcLoaded(unittest.TestCase):
         # must catch this.
         ref_vars = list(self.bundle._mpisppy_data.nonant_indices.values())
         self._populate_rc(ref_vars)
-        with self.assertRaises(AssertionError) as ctx:
+        # RuntimeError, not AssertionError: the guard must survive `python -O`
+        # (which strips `assert` statements).
+        with self.assertRaises(RuntimeError) as ctx:
             _assert_consensus_rc_loaded(self.bundle, self.consensus_groups)
         # Error message should name a Var and the bundle position so the
         # failure is actionable.
@@ -208,7 +210,7 @@ class TestAssertConsensusRcLoaded(unittest.TestCase):
         # Skip the first sub-scenario's first-position Var.
         first_skip = self.bundle.component(self.scen_names[0]).x[0]
         self._populate_rc([v for v in all_vars if v is not first_skip])
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(RuntimeError):
             _assert_consensus_rc_loaded(self.bundle, self.consensus_groups)
 
 
