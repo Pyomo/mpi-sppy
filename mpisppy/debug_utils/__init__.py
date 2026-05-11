@@ -6,3 +6,11 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+
+from mpisppy.debug_utils.buffer_inspect import (
+    InspectContext,
+    Report,
+    inspect_buffer,
+)
+
+__all__ = ["InspectContext", "Report", "inspect_buffer"]

@@ -172,15 +172,16 @@ if not rep.ok:
     print(rep)
 ```
 
-**Env-gated hot path on the SHUTDOWN poll.** `_BoundSpoke.got_kill_signal`
+**CLI-gated check at the shutdown moment.** `_BoundSpoke.got_kill_signal`
 in `mpisppy/cylinders/spoke.py:24-30` is the most likely place to catch
-the motivating bug. The hook reads `MPISPPY_INSPECT_BUFFERS` once per
-poll; when set to `"1"`, it inspects the shutdown buffer with
-`verbose=True` and prints findings (with rank info) only when `rep.ok`
-is False:
+the motivating bug. A new flag `inspect_buffers_on_shutdown` is added
+in `Config.popular_args` and propagated through `cfg_vanilla.shared_options`
+into `opt.options`. The hook runs the inspector only when the kill
+fires *and* the flag is set:
 
 ```python
-if os.environ.get("MPISPPY_INSPECT_BUFFERS") == "1":
+fired = bool(shutdown_buf[0] == 1.0)
+if fired and self.opt.options.get("inspect_buffers_on_shutdown"):
     rep = inspect_buffer(shutdown_buf, Field.SHUTDOWN, send=False, verbose=True)
     if not rep.ok:
         print(f"[buffer_inspect] {self.cylinder_rank=} "
@@ -188,8 +189,10 @@ if os.environ.get("MPISPPY_INSPECT_BUFFERS") == "1":
               flush=True)
 ```
 
-When the env var is unset, the only added cost is one `os.environ.get`
-per shutdown poll.
+When the flag is unset (default), the inspector is not called. We fire
+at the moment of detection rather than every poll because a spurious
+shutdown is most diagnostic when the buffer state has just arrived and
+not yet been overwritten by later activity.
 
 Other hot paths (`update_nonants`, `sync_bounds`, etc.) can be wired
 the same way later. They are intentionally not wired in this round so

@@ -28,14 +28,15 @@ class Spoke(SPCommunicator):
         """
         shutdown_buf = self.receive_buffers[self._make_key(Field.SHUTDOWN, 0)]
         self.get_receive_buffer(shutdown_buf, Field.SHUTDOWN, 0, synchronize=False)
-        if os.environ.get("MPISPPY_INSPECT_BUFFERS") == "1":
+        fired = bool(shutdown_buf[0] == 1.0)
+        if fired and self.opt.options.get("inspect_buffers_on_shutdown"):
             rep = inspect_buffer(shutdown_buf, Field.SHUTDOWN,
                                  send=False, verbose=True)
             if not rep.ok:
                 print(f"[buffer_inspect] {self.cylinder_rank=} "
                       f"{self.strata_rank=} {self.global_rank=}\n{rep}",
                       flush=True)
-        return self.allreduce_or(shutdown_buf[0] == 1.0)
+        return self.allreduce_or(fired)
 
     def is_converged(self, screen_trace=False):
         """ Alias for got_kill_signal; useful for algorithms working as both
