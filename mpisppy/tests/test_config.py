@@ -445,6 +445,64 @@ class TestConfigChecker(unittest.TestCase):
         cfg = self._make_rho_cfg(rc_fixer=True, reduced_costs=True)
         cfg.checker()
 
+    def _add_log_dir_keys(self, cfg, hub_only=False, log_dir=None):
+        cfg.add_to_config("hub_only_solver_logs", description="x",
+                          domain=bool, default=hub_only, argparse=False)
+        cfg.add_to_config("solver_log_dir", description="x",
+                          domain=str, default=log_dir, argparse=False)
+
+    def test_hub_only_solver_logs_without_log_dir_raises(self):
+        cfg = self._make_rho_cfg()
+        self._add_log_dir_keys(cfg, hub_only=True, log_dir=None)
+        with self.assertRaises(ValueError):
+            cfg.checker()
+
+    def test_hub_only_solver_logs_with_log_dir_does_not_raise(self):
+        cfg = self._make_rho_cfg()
+        self._add_log_dir_keys(cfg, hub_only=True, log_dir="/tmp/logs")
+        cfg.checker()
+
+    def test_hub_only_solver_logs_default_off_does_not_raise(self):
+        cfg = self._make_rho_cfg()
+        self._add_log_dir_keys(cfg, hub_only=False, log_dir=None)
+        cfg.checker()
+
+
+class TestSharedOptionsLogDir(unittest.TestCase):
+    """Tests for solver_log_dir propagation through cfg_vanilla.shared_options."""
+
+    def _make_cfg(self, log_dir=None, hub_only=False):
+        cfg = Config()
+        cfg.popular_args()
+        cfg.solver_name = "gurobi"
+        cfg.solver_log_dir = log_dir
+        cfg.hub_only_solver_logs = hub_only
+        return cfg
+
+    def test_log_dir_propagates_to_hub_and_spoke_by_default(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(log_dir="/tmp/logs", hub_only=False)
+        self.assertEqual(vanilla.shared_options(cfg, is_hub=True)["solver_log_dir"],
+                         "/tmp/logs")
+        self.assertEqual(vanilla.shared_options(cfg, is_hub=False)["solver_log_dir"],
+                         "/tmp/logs")
+
+    def test_hub_only_suppresses_spoke_but_keeps_hub(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(log_dir="/tmp/logs", hub_only=True)
+        self.assertEqual(vanilla.shared_options(cfg, is_hub=True)["solver_log_dir"],
+                         "/tmp/logs")
+        self.assertNotIn("solver_log_dir",
+                         vanilla.shared_options(cfg, is_hub=False))
+
+    def test_no_log_dir_no_key_anywhere(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(log_dir=None, hub_only=False)
+        self.assertNotIn("solver_log_dir",
+                         vanilla.shared_options(cfg, is_hub=True))
+        self.assertNotIn("solver_log_dir",
+                         vanilla.shared_options(cfg, is_hub=False))
+
 
 class TestConfigFixerArgs(unittest.TestCase):
     """Tests for Config.fixer_args() and related extension args."""
