@@ -9,10 +9,13 @@
 """Tests for mpisppy.debug_utils.buffer_inspect."""
 
 import unittest
+import warnings
+from types import SimpleNamespace
 
 import numpy as np
 
 from mpisppy.cylinders.spcommunicator import RecvArray, SendArray
+from mpisppy.cylinders.spoke import Spoke
 from mpisppy.cylinders.spwindow import Field
 from mpisppy.debug_utils import InspectContext, Report, inspect_buffer
 
@@ -352,6 +355,64 @@ class TestConfigFlagWiring(unittest.TestCase):
         cfg.solver_name = "gurobi"
         opts = vanilla.shared_options(cfg, is_hub=True)
         self.assertFalse(opts.get("inspect_buffers_on_shutdown"))
+
+
+# ---- integration with Spoke.got_kill_signal --------------------------------
+
+
+def _make_spoke_stub(shutdown_buf, *, inspect_on=True):
+    """Build a duck-typed stub sufficient to drive Spoke.got_kill_signal."""
+    stub = SimpleNamespace()
+    stub.receive_buffers = {(Field.SHUTDOWN, 0): shutdown_buf}
+    stub._make_key = lambda field, origin: (field, origin)
+    # The real method copies from the MPI window into the buffer; for the
+    # stub the buffer is already populated, so this is a no-op.
+    stub.get_receive_buffer = lambda buf, field, origin, synchronize=True: True
+    stub.opt = SimpleNamespace(options={"inspect_buffers_on_shutdown": inspect_on})
+    stub.cylinder_rank = 0
+    stub.strata_rank = 1
+    stub.global_rank = 1
+    stub.allreduce_or = lambda v: v
+    return stub
+
+
+class TestSpokeGotKillSignalWarning(unittest.TestCase):
+    """The print -> warnings.warn switch in Spoke.got_kill_signal."""
+
+    def test_stomped_shutdown_emits_runtime_warning(self):
+        # data=1.0 but write_id stayed at 0: the suspected stomp signature
+        buf = RecvArray(1)
+        buf._array[0] = 1.0
+        stub = _make_spoke_stub(buf, inspect_on=True)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", RuntimeWarning)
+            fired = Spoke.got_kill_signal(stub)
+        self.assertTrue(fired)
+        runtime_warnings = [w for w in caught if issubclass(w.category, RuntimeWarning)]
+        self.assertEqual(len(runtime_warnings), 1, msg=[str(w.message) for w in caught])
+        self.assertIn("buffer_inspect", str(runtime_warnings[0].message))
+
+    def test_legit_shutdown_emits_no_warning(self):
+        # Properly published shutdown signal: data=1.0 with write_id>=1
+        buf = RecvArray(1)
+        buf._array[0] = 1.0
+        buf._array[-1] = 1.0      # write_id slot
+        buf._id = 1
+        stub = _make_spoke_stub(buf, inspect_on=True)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            fired = Spoke.got_kill_signal(stub)
+        self.assertTrue(fired)
+
+    def test_flag_off_suppresses_warning_on_stomped_buffer(self):
+        # Inspector must not run when the flag is off, even with a bad buffer.
+        buf = RecvArray(1)
+        buf._array[0] = 1.0
+        stub = _make_spoke_stub(buf, inspect_on=False)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            fired = Spoke.got_kill_signal(stub)
+        self.assertTrue(fired)
 
 
 if __name__ == "__main__":

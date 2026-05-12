@@ -11,6 +11,7 @@ import abc
 import time
 import os
 import math
+import warnings
 
 from mpisppy.cylinders.spcommunicator import SPCommunicator, SendCircularBuffer
 from mpisppy.cylinders.spwindow import Field
@@ -33,9 +34,12 @@ class Spoke(SPCommunicator):
             rep = inspect_buffer(shutdown_buf, Field.SHUTDOWN,
                                  send=False, verbose=True)
             if not rep.ok:
-                print(f"[buffer_inspect] {self.cylinder_rank=} "
-                      f"{self.strata_rank=} {self.global_rank=}\n{rep}",
-                      flush=True)
+                warnings.warn(
+                    f"[buffer_inspect] {self.cylinder_rank=} "
+                    f"{self.strata_rank=} {self.global_rank=}\n{rep}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
         return self.allreduce_or(fired)
 
     def is_converged(self, screen_trace=False):

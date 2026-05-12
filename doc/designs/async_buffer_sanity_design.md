@@ -184,15 +184,37 @@ fired = bool(shutdown_buf[0] == 1.0)
 if fired and self.opt.options.get("inspect_buffers_on_shutdown"):
     rep = inspect_buffer(shutdown_buf, Field.SHUTDOWN, send=False, verbose=True)
     if not rep.ok:
-        print(f"[buffer_inspect] {self.cylinder_rank=} "
-              f"{self.strata_rank=} {self.global_rank=}\n{rep}",
-              flush=True)
+        warnings.warn(
+            f"[buffer_inspect] {self.cylinder_rank=} "
+            f"{self.strata_rank=} {self.global_rank=}\n{rep}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
 ```
+
+A failed inspection emits a `RuntimeWarning` (not a `print`) so the signal
+is filterable, capturable in tests via `warnings.catch_warnings(record=True)`,
+and escalatable to a hard error via `python -W error::RuntimeWarning:mpisppy.cylinders.spoke`.
+We do not `raise` here: `got_kill_signal` runs during the collective shutdown
+path, and aborting on one rank would leave peers blocked on the next barrier;
+the inspector's job at this site is to observe the suspect shutdown, not
+abort it. Hot-path call sites added later (e.g. `update_nonants`) may
+choose to raise on `rep.severity == "error"`.
 
 When the flag is unset (default), the inspector is not called. We fire
 at the moment of detection rather than every poll because a spurious
 shutdown is most diagnostic when the buffer state has just arrived and
 not yet been overwritten by later activity.
+
+**Smoke coverage.** `mpisppy/tests/straight_tests.py` runs the existing
+multi-stage Aircond cylinder invocation (PH hub + lagranger + fwph +
+xhatshuffle on 4 ranks) with `--inspect-buffers-on-shutdown` and
+`python -W error::RuntimeWarning:mpisppy.cylinders.spoke`. In a healthy
+run no inspector warning fires; a regression that produces one trips the
+escalation and the subprocess exits non-zero. The unit-level test
+`TestSpokeGotKillSignalWarning` in `mpisppy/tests/test_buffer_inspect.py`
+drives `Spoke.got_kill_signal` with a hand-stomped buffer and asserts the
+`RuntimeWarning` fires (and that the flag-off path stays silent).
 
 Other hot paths (`update_nonants`, `sync_bounds`, etc.) can be wired
 the same way later. They are intentionally not wired in this round so
