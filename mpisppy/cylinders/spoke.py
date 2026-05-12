@@ -15,7 +15,7 @@ import warnings
 
 from mpisppy.cylinders.spcommunicator import SPCommunicator, SendCircularBuffer
 from mpisppy.cylinders.spwindow import Field
-from mpisppy.debug_utils.buffer_inspect import inspect_buffer
+from mpisppy.debug_utils.buffer_inspect import InspectContext, inspect_buffer
 
 
 class Spoke(SPCommunicator):
@@ -31,16 +31,45 @@ class Spoke(SPCommunicator):
         self.get_receive_buffer(shutdown_buf, Field.SHUTDOWN, 0, synchronize=False)
         fired = bool(shutdown_buf[0] == 1.0)
         if fired and self.opt.options.get("inspect_buffers_on_shutdown"):
-            rep = inspect_buffer(shutdown_buf, Field.SHUTDOWN,
-                                 send=False, verbose=True)
-            if not rep.ok:
-                warnings.warn(
-                    f"[buffer_inspect] {self.cylinder_rank=} "
-                    f"{self.strata_rank=} {self.global_rank=}\n{rep}",
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
+            self._inspect_buffers_on_shutdown(shutdown_buf)
         return self.allreduce_or(fired)
+
+    def _inspect_buffers_on_shutdown(self, shutdown_buf):
+        """Sweep every registered receive and send buffer through the
+        inspector and emit a RuntimeWarning for each non-OK report.
+
+        The SHUTDOWN recv buffer is inspected first and verbose so the
+        diagnostic dump is in the warning text. All other buffers are
+        inspected non-verbose. InspectContext.spbase is set so checkers
+        that need nonant length pick it up via the fallback.
+        """
+        ctx = InspectContext(spbase=self.opt)
+        shutdown_key = self._make_key(Field.SHUTDOWN, 0)
+
+        rep = inspect_buffer(shutdown_buf, Field.SHUTDOWN, ctx,
+                             send=False, verbose=True)
+        self._warn_if_buffer_bad(rep, Field.SHUTDOWN, direction="recv")
+
+        for key, buf in self.receive_buffers.items():
+            if key == shutdown_key:
+                continue
+            fld, _origin = self._split_key(key)
+            rep = inspect_buffer(buf, fld, ctx, send=False, verbose=False)
+            self._warn_if_buffer_bad(rep, fld, direction="recv")
+
+        for fld, buf in self.send_buffers.items():
+            rep = inspect_buffer(buf, fld, ctx, send=True, verbose=False)
+            self._warn_if_buffer_bad(rep, fld, direction="send")
+
+    def _warn_if_buffer_bad(self, rep, fld, *, direction):
+        if rep.ok:
+            return
+        warnings.warn(
+            f"[buffer_inspect] field={fld.name} ({direction}) "
+            f"{self.cylinder_rank=} {self.strata_rank=} {self.global_rank=}\n{rep}",
+            RuntimeWarning,
+            stacklevel=3,
+        )
 
     def is_converged(self, screen_trace=False):
         """ Alias for got_kill_signal; useful for algorithms working as both

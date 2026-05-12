@@ -182,15 +182,16 @@ fires *and* the flag is set:
 ```python
 fired = bool(shutdown_buf[0] == 1.0)
 if fired and self.opt.options.get("inspect_buffers_on_shutdown"):
-    rep = inspect_buffer(shutdown_buf, Field.SHUTDOWN, send=False, verbose=True)
-    if not rep.ok:
-        warnings.warn(
-            f"[buffer_inspect] {self.cylinder_rank=} "
-            f"{self.strata_rank=} {self.global_rank=}\n{rep}",
-            RuntimeWarning,
-            stacklevel=2,
-        )
+    self._inspect_buffers_on_shutdown(shutdown_buf)
 ```
+
+`_inspect_buffers_on_shutdown` sweeps every registered receive and send
+buffer through `inspect_buffer`, not just SHUTDOWN. SHUTDOWN goes first
+and verbose (the diagnostic dump lands in the warning); the rest run
+non-verbose. `InspectContext(spbase=self.opt)` is threaded through so the
+per-field checkers that need nonant length pick it up via the spbase
+fallback. The sweep is what gives us real-buffer false-positive coverage
+for every checker (not just SHUTDOWN) once the smoke runs.
 
 A failed inspection emits a `RuntimeWarning` (not a `print`) so the signal
 is filterable, capturable in tests via `warnings.catch_warnings(record=True)`,
@@ -209,12 +210,23 @@ not yet been overwritten by later activity.
 **Smoke coverage.** `mpisppy/tests/straight_tests.py` runs the existing
 multi-stage Aircond cylinder invocation (PH hub + lagranger + fwph +
 xhatshuffle on 4 ranks) with `--inspect-buffers-on-shutdown` and
-`python -W error::RuntimeWarning:mpisppy.cylinders.spoke`. In a healthy
-run no inspector warning fires; a regression that produces one trips the
-escalation and the subprocess exits non-zero. The unit-level test
-`TestSpokeGotKillSignalWarning` in `mpisppy/tests/test_buffer_inspect.py`
-drives `Spoke.got_kill_signal` with a hand-stomped buffer and asserts the
-`RuntimeWarning` fires (and that the flag-off path stays silent).
+`python -W error::RuntimeWarning:mpisppy.cylinders.spoke`. The shutdown
+sweep visits every buffer used by that run -- SHUTDOWN, NONANT,
+OBJECTIVE_INNER_BOUND, OBJECTIVE_OUTER_BOUND, BEST_XHAT, plus any
+others these cylinders register -- so a healthy run is also a
+no-false-positives guard for the corresponding checkers. A regression
+that produces a warning trips the escalation and the subprocess exits
+non-zero. `NONANT_LOWER_BOUNDS` / `NONANT_UPPER_BOUNDS` remain uncovered
+by smoke because the cylinders in this run don't produce them; a separate
+smoke with a reduced-costs or nonant-bounds spoke would close that gap.
+
+The unit-level test `TestSpokeGotKillSignalWarning` in
+`mpisppy/tests/test_buffer_inspect.py` drives `Spoke.got_kill_signal` on
+a stub: with a hand-stomped SHUTDOWN buffer (warning fires); with a legit
+SHUTDOWN (silent); with the flag off (sweep not invoked); and with a
+multi-buffer sweep that mixes healthy NONANT recv/send buffers with a
+stomped OBJECTIVE_INNER_BOUND recv (exactly one warning, naming the bad
+field).
 
 Other hot paths (`update_nonants`, `sync_bounds`, etc.) can be wired
 the same way later. They are intentionally not wired in this round so

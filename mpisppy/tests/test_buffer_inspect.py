@@ -8,6 +8,7 @@
 ###############################################################################
 """Tests for mpisppy.debug_utils.buffer_inspect."""
 
+import types
 import unittest
 import warnings
 from types import SimpleNamespace
@@ -360,19 +361,42 @@ class TestConfigFlagWiring(unittest.TestCase):
 # ---- integration with Spoke.got_kill_signal --------------------------------
 
 
-def _make_spoke_stub(shutdown_buf, *, inspect_on=True):
-    """Build a duck-typed stub sufficient to drive Spoke.got_kill_signal."""
+def _make_spoke_stub(shutdown_buf, *, inspect_on=True,
+                     extra_recv=None, send=None, nonant_length=None):
+    """Build a duck-typed stub sufficient to drive Spoke.got_kill_signal.
+
+    extra_recv: optional dict mapping (Field, origin) -> RecvArray that the
+        sweep will visit in addition to the SHUTDOWN entry.
+    send: optional dict mapping Field -> SendArray for the send-side sweep.
+    nonant_length: if set, exposed via stub.opt.nonant_length so checkers
+        that fall back to spbase pick it up.
+    """
     stub = SimpleNamespace()
-    stub.receive_buffers = {(Field.SHUTDOWN, 0): shutdown_buf}
+    recv = {(Field.SHUTDOWN, 0): shutdown_buf}
+    if extra_recv:
+        recv.update(extra_recv)
+    stub.receive_buffers = recv
+    stub.send_buffers = dict(send) if send else {}
     stub._make_key = lambda field, origin: (field, origin)
+    stub._split_key = lambda key: key
     # The real method copies from the MPI window into the buffer; for the
     # stub the buffer is already populated, so this is a no-op.
     stub.get_receive_buffer = lambda buf, field, origin, synchronize=True: True
-    stub.opt = SimpleNamespace(options={"inspect_buffers_on_shutdown": inspect_on})
+    stub.opt = SimpleNamespace(
+        options={"inspect_buffers_on_shutdown": inspect_on},
+    )
+    if nonant_length is not None:
+        stub.opt.nonant_length = nonant_length
     stub.cylinder_rank = 0
     stub.strata_rank = 1
     stub.global_rank = 1
     stub.allreduce_or = lambda v: v
+    # Bind the sweep helpers from the real class onto the stub so that
+    # got_kill_signal can call self._inspect_buffers_on_shutdown(...).
+    stub._inspect_buffers_on_shutdown = types.MethodType(
+        Spoke._inspect_buffers_on_shutdown, stub)
+    stub._warn_if_buffer_bad = types.MethodType(
+        Spoke._warn_if_buffer_bad, stub)
     return stub
 
 
@@ -409,6 +433,97 @@ class TestSpokeGotKillSignalWarning(unittest.TestCase):
         buf = RecvArray(1)
         buf._array[0] = 1.0
         stub = _make_spoke_stub(buf, inspect_on=False)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            fired = Spoke.got_kill_signal(stub)
+        self.assertTrue(fired)
+
+    def test_sweep_inspects_every_buffer(self):
+        # SHUTDOWN legit + healthy NONANT recv + healthy NONANT send: no warnings.
+        # Then add a stomped OBJECTIVE_INNER_BOUND recv: exactly one warning,
+        # naming that field.
+        good_shutdown = RecvArray(1)
+        good_shutdown._array[0] = 1.0
+        good_shutdown._array[-1] = 1.0
+        good_shutdown._id = 1
+
+        good_nonant_recv = RecvArray(3)
+        for i, v in enumerate([0.0, 1.0, 2.0]):
+            good_nonant_recv._array[i] = v
+        good_nonant_recv._array[-1] = 1.0
+        good_nonant_recv._id = 1
+
+        good_nonant_send = SendArray(3)
+        _publish(good_nonant_send, [0.0, 1.0, 2.0])
+
+        bad_inner = RecvArray(1)
+        bad_inner._array[0] = 0.5
+        bad_inner._full_array[3] = 7.0  # write into padding region
+
+        extra_recv = {
+            (Field.NONANT, 1): good_nonant_recv,
+            (Field.OBJECTIVE_INNER_BOUND, 1): bad_inner,
+        }
+        send = {Field.NONANT: good_nonant_send}
+        stub = _make_spoke_stub(
+            good_shutdown,
+            inspect_on=True,
+            extra_recv=extra_recv,
+            send=send,
+            nonant_length=3,
+        )
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", RuntimeWarning)
+            fired = Spoke.got_kill_signal(stub)
+        self.assertTrue(fired)
+        runtime_warnings = [w for w in caught if issubclass(w.category, RuntimeWarning)]
+        self.assertEqual(
+            len(runtime_warnings), 1,
+            msg=[str(w.message) for w in runtime_warnings],
+        )
+        msg = str(runtime_warnings[0].message)
+        self.assertIn("OBJECTIVE_INNER_BOUND", msg)
+        self.assertIn("(recv)", msg)
+
+    def test_sweep_healthy_run_emits_no_warnings(self):
+        # Multiple healthy buffers (the false-positive regression guard).
+        good_shutdown = RecvArray(1)
+        good_shutdown._array[0] = 1.0
+        good_shutdown._array[-1] = 1.0
+        good_shutdown._id = 1
+
+        good_nonant_recv = RecvArray(3)
+        for i, v in enumerate([0.0, 1.0, 2.0]):
+            good_nonant_recv._array[i] = v
+        good_nonant_recv._array[-1] = 1.0
+        good_nonant_recv._id = 1
+
+        good_inner_recv = RecvArray(1)
+        good_inner_recv._array[0] = 12.5
+        good_inner_recv._array[-1] = 1.0
+        good_inner_recv._id = 1
+
+        good_nonant_send = SendArray(3)
+        _publish(good_nonant_send, [0.0, 1.0, 2.0])
+
+        good_outer_send = SendArray(1)
+        _publish(good_outer_send, [10.0])
+
+        stub = _make_spoke_stub(
+            good_shutdown,
+            inspect_on=True,
+            extra_recv={
+                (Field.NONANT, 1): good_nonant_recv,
+                (Field.OBJECTIVE_INNER_BOUND, 1): good_inner_recv,
+            },
+            send={
+                Field.NONANT: good_nonant_send,
+                Field.OBJECTIVE_OUTER_BOUND: good_outer_send,
+            },
+            nonant_length=3,
+        )
+
         with warnings.catch_warnings():
             warnings.simplefilter("error", RuntimeWarning)
             fired = Spoke.got_kill_signal(stub)
