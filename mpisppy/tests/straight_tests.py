@@ -102,9 +102,11 @@ pyexe = shlex.quote(sys.executable)
 # -W: escalate any RuntimeWarning from the buffer inspector to a hard error,
 # so a healthy run with --inspect-buffers-on-shutdown is also a buffer health
 # check. (Doubles as a general multi-stage cylinder health check.)
+# Must come before python_args -- when python_args is "-m coverage run ...",
+# -W after it gets parsed by coverage instead of by Python.
 warning_filter = "-W error::RuntimeWarning:mpisppy.cylinders.spoke"
 cmdstr = (
-    f"mpiexec -np 4 {pyexe} {python_args} {warning_filter} -m mpi4py {shlex.quote(fpath)} "
+    f"mpiexec -np 4 {pyexe} {warning_filter} {python_args} -m mpi4py {shlex.quote(fpath)} "
     f"--bundles-per-rank=0 --max-iterations=5 --default-rho=1 "
     f"--solver-name={shlex.quote(solver_name)} "
     f'--branching-factors "4 3 2" '
