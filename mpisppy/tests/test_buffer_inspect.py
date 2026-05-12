@@ -193,6 +193,23 @@ class TestNonantChecks(unittest.TestCase):
         rep = inspect_buffer(buf, Field.NONANT, ctx=ctx, send=True)
         self.assertTrue(rep.ok, msg=str(rep))
 
+    def test_multi_scenario_buffer_passes(self):
+        # Publisher with K scenarios publishes a NONANT buffer of length
+        # nonant_count * K. The checker must accept any positive multiple.
+        buf = SendArray(24)  # e.g., 4 scenarios * 6 nonants
+        _publish(buf, [0.0] * 24)
+        rep = inspect_buffer(buf, Field.NONANT,
+                             ctx=InspectContext(nonant_count=6), send=True)
+        self.assertTrue(rep.ok, msg=str(rep))
+
+    def test_non_multiple_length_caught(self):
+        buf = SendArray(10)  # 10 is not a multiple of 6
+        _publish(buf, [0.0] * 10)
+        rep = inspect_buffer(buf, Field.NONANT,
+                             ctx=InspectContext(nonant_count=6), send=True)
+        self.assertFalse(rep.ok)
+        self.assertTrue(any("not a positive multiple" in f for f in rep.findings))
+
     def test_out_of_bounds_componentwise(self):
         buf = SendArray(4)
         _publish(buf, [0.5, 7.0, 2.0, -1.0])

@@ -236,11 +236,22 @@ def _check_shutdown(buf, report: Report, ctx: InspectContext) -> None:
 
 
 def _check_nonant(buf, report: Report, ctx: InspectContext) -> None:
+    # NONANT buffers are sized to the *publisher's* sum of per-scenario
+    # nonant counts across that publisher's local scenarios:
+    #     len(data) == nonant_count * len(publisher.local_scenarios).
+    # When the publisher holds many scenarios (e.g. all 24 leaves of a
+    # multi-stage Aircond on one hub rank), len(data) >> nonant_count.
+    # The buffer's logical length is already enforced at registration
+    # by _validate_recv_field, so here we only insist that the size
+    # be a positive multiple of nonant_count, and that the componentwise
+    # bounds compare runs only when the buffer happens to be a single
+    # scenario wide.
     data = buf.value_array()
     n = ctx.get_nonant_count()
-    if n is not None and len(data) != n:
+    if n is not None and n > 0 and (len(data) == 0 or len(data) % n != 0):
         report.add(
-            f"NONANT data length {len(data)} != expected nonant_count {n}",
+            f"NONANT data length {len(data)} is not a positive multiple "
+            f"of nonant_count {n}",
             severity="error",
         )
     lo, hi = ctx.nonant_lower, ctx.nonant_upper
