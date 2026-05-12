@@ -134,10 +134,18 @@ fields; for large fields the caller decides.
 
 `CHECKERS: dict[Field, Callable]`. Entries currently implemented:
 
-- `SHUTDOWN`: data[0] in {0.0, 1.0}; if 1.0 then write_id >= 1. The
-  initial state (data NaN, write_id 0) is allowed.
-- `NONANT`: length == `ctx.get_nonant_count()`; data in
-  `[ctx.nonant_lower, ctx.nonant_upper]` componentwise (when supplied).
+- `SHUTDOWN`: only two states are legitimate -- (a) data[0] == 1.0
+  with write_id >= 1 (post `Hub.send_terminate`), or (b) data[0] is
+  NaN with write_id == 0 (the initial state from `communicator_array`).
+  `send_terminate` is the only producer and writes nothing but 1.0,
+  so any other value (0.0, fractional, negative, +/-inf, NaN with
+  write_id >= 1) can only come from a stomp, an RMA race, or a
+  producer bug. The checker rejects all such values as an error.
+- `NONANT`: length must be a positive multiple of `ctx.get_nonant_count()`
+  (the publisher's local nonant length is `nonant_count * len(local_scenarios)`,
+  so multi-scenario hubs publish wider buffers); data in
+  `[ctx.nonant_lower, ctx.nonant_upper]` componentwise (when supplied
+  and the buffer is single-scenario wide).
 - `NONANT_LOWER_BOUNDS` / `NONANT_UPPER_BOUNDS`: length check; if the
   caller passes the *other* bound (via `ctx.nonant_upper` /
   `ctx.nonant_lower`), check componentwise consistency.

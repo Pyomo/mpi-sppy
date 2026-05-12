@@ -159,7 +159,17 @@ class TestShutdownChecks(unittest.TestCase):
         buf._next_write_id()
         rep = inspect_buffer(buf, Field.SHUTDOWN, send=True)
         self.assertFalse(rep.ok)
-        self.assertTrue(any("expected 0.0 or 1.0" in f for f in rep.findings))
+        self.assertTrue(any("only 1.0 is ever published" in f for f in rep.findings))
+
+    def test_shutdown_zero_is_rejected(self):
+        # No producer ever writes 0.0 -- it would only appear via a stomp,
+        # an RMA race, or a producer bug. Must be flagged.
+        buf = SendArray(1)
+        buf[0] = 0.0
+        buf._next_write_id()
+        rep = inspect_buffer(buf, Field.SHUTDOWN, send=True)
+        self.assertFalse(rep.ok)
+        self.assertTrue(any("data[0]=0.0" in f for f in rep.findings))
 
     def test_initial_state_passes(self):
         # data=NaN, write_id=0: canonical initial state; allowed

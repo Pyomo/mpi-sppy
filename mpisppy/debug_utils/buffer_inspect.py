@@ -212,19 +212,24 @@ def _check_data_nan_consistency(buf, write_id: int, report: Report) -> None:
 
 
 def _check_shutdown(buf, report: Report, ctx: InspectContext) -> None:
+    # Only two legitimate states exist:
+    #   - NaN with write_id == 0: initial state from communicator_array,
+    #     no publish has happened yet.
+    #   - 1.0 with write_id >= 1: Hub.send_terminate has fired.
+    # No producer ever writes 0.0 or any other value, so anything else
+    # is a stomp, an RMA race, or a producer bug.
     data = buf.value_array()
     val = data[0]
     raw_id = buf.array()[-1]
     write_id = int(round(raw_id)) if np.isfinite(raw_id) else None
 
-    # Canonical initial state: no publish yet, data still NaN from
-    # communicator_array. Skip the value check.
     if write_id == 0 and np.isnan(val):
         return
 
-    if not (val == 0.0 or val == 1.0):
+    if val != 1.0:
         report.add(
-            f"SHUTDOWN data[0]={val!r}; expected 0.0 or 1.0",
+            f"SHUTDOWN data[0]={val!r}; only 1.0 is ever published "
+            "(or NaN with write_id==0 for the initial state)",
             severity="error",
         )
     if val == 1.0 and write_id is not None and write_id < 1:
