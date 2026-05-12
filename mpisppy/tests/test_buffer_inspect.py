@@ -169,7 +169,9 @@ class TestShutdownChecks(unittest.TestCase):
         buf._next_write_id()
         rep = inspect_buffer(buf, Field.SHUTDOWN, send=True)
         self.assertFalse(rep.ok)
-        self.assertTrue(any("data[0]=0.0" in f for f in rep.findings))
+        # Match on the stable part of the message; the numeric repr varies
+        # between numpy 1.x (0.0) and 2.x (np.float64(0.0)).
+        self.assertTrue(any("only 1.0 is ever published" in f for f in rep.findings))
 
     def test_initial_state_passes(self):
         # data=NaN, write_id=0: canonical initial state; allowed
