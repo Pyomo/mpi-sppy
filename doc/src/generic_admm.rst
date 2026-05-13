@@ -173,6 +173,7 @@ Additional functions for ``--stoch-admm``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. py:function:: consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, **scenario_creator_kwargs)
+   :no-index:
 
    Creates the consensus variables dictionary for stochastic ADMM.
 
