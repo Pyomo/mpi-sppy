@@ -404,7 +404,7 @@ def inparser_adder(cfg):
     
     ### For the scalable example
     cfg.add_to_config("scalable",
-                      description="decides whether a scalable model is used",
+                      description="generate pseudo-random data parameterized by --mnpr instead of using the hardwired 2/3/4-region datasets",
                       domain=bool,
                       default=False)
 
