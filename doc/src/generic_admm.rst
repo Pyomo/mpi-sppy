@@ -83,6 +83,43 @@ Here:
   ``num_admm_subproblems * num_stoch_scens = 9``.
 
 
+.. _stoch_admm_branching_factors:
+
+Branching factors with ``--stoch-admm``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. important::
+
+   When using ``--stoch-admm``, the value passed to ``--branching-factors``
+   describes the **original** problem's tree (i.e., the branching factors
+   **before** the ADMM-stage augmentation).  The stochastic ADMM wrapper
+   appends ``num_admm_subproblems`` as the final stage, then republishes
+   the augmented branching factors back to the config so that downstream
+   consumers (notably xhatshuffle's stage2ef path) see the correct tree
+   shape automatically.
+
+   - For a 2-stage-origin problem (e.g., ``stoch_distr``): ``--branching-factors``
+     may be omitted entirely.  The wrapper infers ``[num_stoch_scens]`` from
+     ``--num-stoch-scens`` and produces the augmented tree
+     ``[num_stoch_scens, num_admm_subproblems]``.
+   - For an N-stage-origin problem: pass the N-1 original branching factors.
+     The wrapper appends ``num_admm_subproblems`` to produce an
+     N-level augmented tree.
+
+   **Semantics change (post mpi-sppy 0.13.2):** earlier versions of
+   ``setup_stoch_admm`` ignored ``--branching-factors`` entirely and hard-coded
+   ``BFs=None`` into ``Stoch_AdmmWrapper``.  As a result, anyone using
+   ``--stoch-admm`` together with ``--xhatshuffle --stage2-ef-solver-name``
+   had to hand-encode the augmented tree as
+   ``--branching-factors "<num_stoch_scens> <num_admm_subproblems>"``.
+   **That workaround now produces an incorrect (too deep) tree** and must be
+   removed: pass only the original problem's branching factors (or omit the
+   flag for 2-stage-origin problems).
+
+A worked example using stage2ef is provided in
+``examples/stoch_distr/stoch_admm_stage2ef.bash``.
+
+
 Model Module Interface
 -----------------------
 

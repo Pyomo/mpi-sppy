@@ -158,13 +158,19 @@ def setup_stoch_admm(module, cfg, n_cylinders):
         n_cylinders=n_cylinders,
         mpicomm=MPI.COMM_WORLD,
         scenario_creator_kwargs=scenario_creator_kwargs,
-        BFs=None,
+        BFs=cfg.get("branching_factors"),
     )
 
     # Store on cfg as plain attributes (Pyomo Config can't handle these types)
     object.__setattr__(cfg, "_admm_variable_probability", admm.var_prob_list)
     object.__setattr__(cfg, "_admm_scenario_names", all_names)
     object.__setattr__(cfg, "_admm_nodenames", admm.all_nodenames)
+
+    # Publish the augmented branching factors so downstream consumers
+    # (notably xhatshuffle's stage2ef path in extensions/xhatbase.py) see
+    # the wrapper's true tree shape without the user having to hand-encode
+    # the wrapper's append convention.
+    cfg.quick_assign("branching_factors", list, list(admm.BFs))
 
     return (admm.admmWrapper_scenario_creator, {},
             all_names, admm.all_nodenames)
