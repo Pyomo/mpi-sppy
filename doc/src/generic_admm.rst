@@ -384,18 +384,19 @@ These functions define the naming convention for composite scenarios. See
    deterministic case in one way:
 
    **It receives a composite name.**  The argument is e.g.
-   ``"ADMM_STOCH_Region1_StochasticScenario3"``; the function must
-   split it (using ``split_admm_stoch_subproblem_scenario_name``) to
-   determine both which ADMM subproblem and which stochastic scenario
-   to build.
+   ``"ADMM_STOCH_Region1_StochasticScenario3"``; ``scenario_creator``
+   must call ``split_admm_stoch_subproblem_scenario_name`` on it to
+   recover the ADMM subproblem name and the stochastic scenario name,
+   then build the corresponding model.
 
 First-stage attachment via module hooks (recommended)
 """"""""""""""""""""""""""""""""""""""""""""""""""""""
 
-``Stoch_AdmmWrapper`` reads the user-supplied ``_mpisppy_node_list``
-and *appends* an ADMM-consensus stage to it (whereas ``AdmmWrapper``
-overwrites the node list).  The wrapper can attach the root node for
-you if you provide two module-level hook functions:
+Under the hood, ``Stoch_AdmmWrapper`` reads the user-supplied
+``_mpisppy_node_list`` and *appends* an ADMM-consensus stage to it
+(whereas ``AdmmWrapper`` overwrites the node list).  The wrapper can
+attach the root node for you if you provide two module-level hook
+functions:
 
 .. code-block:: python
 
@@ -407,7 +408,8 @@ you if you provide two module-level hook functions:
        """Original problem's first-stage variables (NOT ADMM consensus vars)."""
        return scenario._first_stage_vars   # stashed in scenario_creator
 
-When both hooks are defined on the module, the wrapper calls
+When both hooks (``first_stage_cost`` and ``first_stage_varlist``) are
+defined on the module, the wrapper calls
 ``sputils.attach_root_node(scenario, first_stage_cost(scenario),
 first_stage_varlist(scenario))`` itself for each scenario before
 running its consensus-stage logic.  ``scenario_creator`` no longer
@@ -421,9 +423,7 @@ inside ``scenario_creator`` so the hook can find it.
 .. Note::
    The hooks are **both-or-neither**: defining only one raises
    ``RuntimeError`` at ``setup_stoch_admm`` time.  Mixing the hooks
-   with a manual ``attach_root_node`` call also raises (the strict
-   contract teaches users that the hooks obviate the manual call,
-   rather than silently overwriting it).
+   with a manual ``attach_root_node`` call also raises.
 
 First-stage attachment via manual ``attach_root_node`` (legacy)
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
