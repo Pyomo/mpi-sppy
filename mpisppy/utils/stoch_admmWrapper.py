@@ -92,20 +92,33 @@ class Stoch_AdmmWrapper(): #add scenario_tree
             scenario_creator_kwargs=None,
             verbose=None,
             BFs=None,
+            first_stage_cost=None,
+            first_stage_varlist=None,
     ):
         assert len(options) == 0, "no options supported by stoch_admmWrapper"
+        # Phase A: first_stage_cost / first_stage_varlist must be defined
+        # together or omitted together.  Defensive check; setup_stoch_admm
+        # also enforces this, but the wrapper is callable directly.
+        if (first_stage_cost is None) != (first_stage_varlist is None):
+            present = "first_stage_cost" if first_stage_cost is not None else "first_stage_varlist"
+            missing = "first_stage_varlist" if first_stage_cost is not None else "first_stage_cost"
+            raise RuntimeError(
+                f"Stoch_AdmmWrapper was given {present} but not {missing}. "
+                f"These hooks must be defined together (or both omitted)."
+            )
+        has_first_stage_hooks = first_stage_cost is not None
         # We need local_scenarios
         self.local_admm_stoch_subproblem_scenarios = {}
         scen_tree = sputils._ScenTree(["ROOT"], all_admm_stoch_subproblem_scenario_names)
         assert mpicomm.Get_size() % n_cylinders == 0, \
             f"{mpicomm.Get_size()=} and {n_cylinders=}, but {mpicomm.Get_size() % n_cylinders=} should be 0"
         ranks_per_cylinder = mpicomm.Get_size() // n_cylinders
-        
+
         scenario_names_to_rank, _rank_slices, _scenario_slices =\
                 scen_tree.scen_names_to_ranks(ranks_per_cylinder)
 
         cylinder_rank = mpicomm.Get_rank() // n_cylinders
-        
+
         # taken from spbase
         self.local_admm_stoch_subproblem_scenarios_names = [
             all_admm_stoch_subproblem_scenario_names[i] for i in _rank_slices[cylinder_rank]
@@ -113,6 +126,31 @@ class Stoch_AdmmWrapper(): #add scenario_tree
         for sname in self.local_admm_stoch_subproblem_scenarios_names:
             s = scenario_creator(sname, **scenario_creator_kwargs)
             self.local_admm_stoch_subproblem_scenarios[sname] = s
+            # Phase A error matrix (hooks defined? x _mpisppy_node_list set?).
+            # Catch half-migrations at scenario-construction time before
+            # the deep assertion in assign_variable_probs.
+            already_attached = hasattr(s, "_mpisppy_node_list")
+            if has_first_stage_hooks:
+                if already_attached:
+                    raise RuntimeError(
+                        f"scenario {sname!r}: first_stage_cost and "
+                        f"first_stage_varlist hooks are defined, so "
+                        f"scenario_creator must NOT call "
+                        f"sputils.attach_root_node.  Remove the "
+                        f"attach_root_node call from scenario_creator."
+                    )
+                sputils.attach_root_node(
+                    s, first_stage_cost(s), first_stage_varlist(s))
+            else:
+                if not already_attached:
+                    raise RuntimeError(
+                        f"scenario {sname!r}: no _mpisppy_node_list is "
+                        f"set.  Either call sputils.attach_root_node in "
+                        f"scenario_creator (legacy), or define "
+                        f"first_stage_cost(scenario) and "
+                        f"first_stage_varlist(scenario) module functions "
+                        f"(recommended).  See doc/src/generic_admm.rst."
+                    )
         # we are not collecting instantiation time
 
         self.split_admm_stoch_subproblem_scenario_name = split_admm_stoch_subproblem_scenario_name
