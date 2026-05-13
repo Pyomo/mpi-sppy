@@ -118,22 +118,24 @@ def min_cost_distr_problem(local_dict, cfg, sense=pyo.minimize, max_revenue=None
 
 
 ###Creates the scenario
-def scenario_creator(scenario_name, inter_region_dict=None, cfg=None, data_params=None, all_nodes_dict=None):
+def scenario_creator(scenario_name, inter_region_dict, cfg, data_params=None, all_nodes_dict=None):
     """Creates the model, which should include the consensus variables. \n
     However, this function shouldn't attach the consensus variables to root nodes, as it is done in admmWrapper.
 
     Args:
-        scenario_name (str): the name of the scenario that will be created. Here is of the shape f"Region{i}" with 1<=i<=num_scens \n
-        num_scens (int): number of scenarios (regions). Useful to create the corresponding inter-region dictionary
+        scenario_name (str): the name of the scenario that will be created.
+            Of the shape f"Region{i}" with 1<=i<=num_scens. \n
+        inter_region_dict (dict): inter-region arcs/costs/capacities; from kw_creator(cfg). \n
+        cfg (Config): mpi-sppy config object. \n
+        data_params (dict, optional): pseudo-random data params; required when cfg.scalable. \n
+        all_nodes_dict (dict, optional): per-region node lists; required when cfg.scalable.
 
     Returns:
         Pyomo ConcreteModel: the instantiated model
-    """        
-    assert (inter_region_dict is not None)
-    assert (cfg is not None)
+    """
     if cfg.scalable:
-        assert (data_params is not None)
-        assert (all_nodes_dict is not None)
+        assert data_params is not None, "data_params is required when cfg.scalable"
+        assert all_nodes_dict is not None, "all_nodes_dict is required when cfg.scalable"
         region_creation_starting_time = time.time()
         region_dict = distr_data.scalable_region_dict_creator(scenario_name, all_nodes_dict=all_nodes_dict, cfg=cfg, data_params=data_params)
         region_creation_end_time = time.time()
@@ -166,12 +168,6 @@ def scenario_denouement(rank, scenario_name, scenario, eps=10**(-6)):
         if 'DC' in var:
             if (abs(scenario.y[var].value) > eps):
                 print(f"The penalty slack {scenario.y[var].name} is too big, its absolute value is {abs(scenario.y[var].value)}")
-    return
-    print(f"flow values for {scenario_name}")
-    scenario.flow.pprint()
-    print(f"slack values for {scenario_name}")
-    scenario.y.pprint()
-    pass
 
 
 def consensus_vars_creator(num_scens, all_scenario_names, inter_region_dict=None, **kwargs):
@@ -282,7 +278,7 @@ def inparser_adder(cfg):
     cfg.num_scens_required()
 
     cfg.add_to_config("scalable",
-                      description="decides whether a sclale model is used",
+                      description="generate pseudo-random data parameterized by --mnpr instead of using the hardwired 2/3/4-region datasets",
                       domain=bool,
                       default=False)
 
