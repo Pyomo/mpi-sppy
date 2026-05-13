@@ -113,18 +113,14 @@ user called `attach_root_node` inside `scenario_creator`.
   the new hooks) and asserts the resulting `_mpisppy_node_list` is
   identical.
 
-### Open questions
+### Resolved
 
-- Should the hook be `first_stage_varlist(scenario)` (takes a
-  constructed scenario and pokes at its attributes) or
-  `first_stage_var_names(cfg) -> list[str]` (returns variable name
-  strings, resolved per scenario via `find_component`)?  The scenario
-  form is more Pythonic; the cfg form is closer to how
-  `consensus_vars_creator` works.  **Tentative: scenario form**, with
-  phase B fixing the parallel issue in `consensus_vars_creator`.
-- Naming: `first_stage_cost` / `first_stage_varlist` vs
-  `first_stage_objective` / `first_stage_vars`.  Match `attach_root_node`'s
-  parameter names (`firstobj`, `varlist`) — i.e., the former.
+- **Hook signature: scenario form** (`first_stage_cost(scenario)` /
+  `first_stage_varlist(scenario)`).  The function gets the constructed
+  scenario and reads attributes directly.  Phase B will fix the
+  parallel string-vs-Var issue in `consensus_vars_creator`.
+- Naming: `first_stage_cost` / `first_stage_varlist`, matching
+  `attach_root_node`'s parameter names (`firstobj`, `varlist`).
 
 ---
 
@@ -196,7 +192,8 @@ contains an underscore (today's doc has a Warning about this).
 Provide a default pair in `mpisppy.utils.stoch_admmWrapper`:
 
 ```python
-_DEFAULT_DELIM = "|"   # unlikely to appear in user-chosen names
+_DEFAULT_DELIM = "__ADMM__"   # verbose but unambiguous; safe for shells,
+                              # filenames, and CSV writers
 
 def default_combining_names(admm_sub, stoch_scen):
     return f"ADMM_STOCH{_DEFAULT_DELIM}{admm_sub}{_DEFAULT_DELIM}{stoch_scen}"
@@ -224,12 +221,10 @@ or vice versa).
 - Test: unit test that with no module-defined pair, the wrapper builds
   the same scenarios via the default pair as via the explicit pair.
 
-### Open questions
+### Resolved
 
-- Default delimiter: `|` is shell-meaningful; some downstream tools
-  (CSV writers, filename builders) may choke on it.  Alternatives:
-  `\x1f` (ASCII unit separator), `::`, or `__ADMM__`.  Recommend
-  `__ADMM__` — verbose but safe.  Open for discussion.
+- Default delimiter: `__ADMM__` (verbose but unambiguous; safe for
+  shells, filenames, and CSV writers).
 
 ---
 
