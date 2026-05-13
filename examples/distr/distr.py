@@ -145,9 +145,9 @@ def scenario_creator(scenario_name, inter_region_dict=None, cfg=None, data_param
     # Generating the model
     model = min_cost_distr_problem(local_dict, cfg, max_revenue=data_params["max revenue"])
 
-    #varlist = list()
-    #sputils.attach_root_node(model, model.MinCost, varlist)    
-    
+    # No attach_root_node call here: AdmmWrapper builds the scenario tree
+    # itself (with the consensus variables as the non-anticipative list)
+    # and would overwrite any node list set here.  See doc/src/generic_admm.rst.
     return model
 
 

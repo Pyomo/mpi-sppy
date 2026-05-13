@@ -295,15 +295,15 @@ constraints.
    def scenario_creator(scenario_name, **kwargs):
        cfg = kwargs["cfg"]
        model = build_my_model(scenario_name, cfg)
-       # Attach a trivial root node (ADMM wrapper will handle consensus)
-       varlist = list()
-       sputils.attach_root_node(model, model.Obj, varlist)
        return model
 
 .. Note::
-   Pass an empty ``varlist`` to ``attach_root_node``. The ADMM wrapper
-   automatically manages which variables are non-anticipative (the consensus
-   variables).
+   For ``--admm``, **do not** call ``sputils.attach_root_node`` in your
+   ``scenario_creator``.  ``AdmmWrapper`` builds the scenario tree itself
+   (calling ``attach_root_node`` internally with the consensus variables as
+   the non-anticipative list); any user-supplied node list would be
+   overwritten.  For ``--stoch-admm`` the contract is different — see the
+   note in "Extending to Stochastic ADMM" below.
 
 Step 4: Implement ``consensus_vars_creator``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -366,7 +366,7 @@ Step 7: Run
 
 
 Extending to Stochastic ADMM
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 To support ``--stoch-admm``, additionally implement:
 
@@ -378,10 +378,27 @@ To support ``--stoch-admm``, additionally implement:
 These functions define the naming convention for composite scenarios. See
 ``examples/stoch_distr/stoch_distr.py`` for a complete working example.
 
-Your ``scenario_creator`` will receive composite names and must split them
-to determine both which ADMM subproblem and which stochastic scenario to build.
 Your ``consensus_vars_creator`` returns ``(variable_name, stage)`` tuples
 instead of plain strings.
+
+.. Note::
+
+   ``scenario_creator`` differs from the deterministic case in two ways:
+
+   1. **Receives a composite name.**  The argument is e.g.
+      ``"ADMM_STOCH_Region1_StochasticScenario3"``; the function must split
+      it (using ``split_admm_stoch_subproblem_scenario_name``) to determine
+      both which ADMM subproblem and which stochastic scenario to build.
+
+   2. **Must call** ``sputils.attach_root_node`` with the *original*
+      problem's first-stage variables (i.e., not the ADMM consensus vars).
+      Unlike ``AdmmWrapper`` (which overwrites the node list),
+      ``Stoch_AdmmWrapper`` *reads* the user-supplied node list and
+      *appends* an ADMM-consensus stage to it.  Skipping the call will
+      assertion-fail inside the wrapper.
+
+   See ``stoch_distr.scenario_creator`` for the canonical pattern:
+   ``sputils.attach_root_node(model, model.FirstStageCost, [...factory vars...])``.
 
 
 .. _admm_bundling:
