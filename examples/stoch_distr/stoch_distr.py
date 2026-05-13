@@ -271,7 +271,7 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, inter_reg
     
     # Now add the original problem's first-stage variables (factory
     # production decisions) to each subproblem's consensus list.
-    # Phase A: read them directly from the first_stage_varlist hook —
+    # Read them directly from the first_stage_varlist hook —
     # scenario_creator no longer attaches the root node, so
     # model._mpisppy_node_list does not exist at this point.
     # The original first stage is stage 1 in the augmented tree.

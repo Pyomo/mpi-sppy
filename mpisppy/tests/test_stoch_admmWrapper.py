@@ -538,8 +538,8 @@ class TestStochAdmmWrapper(unittest.TestCase):
             os.chdir(original_dir)
 
 
-class TestStochAdmmWrapperPhaseAHooks(unittest.TestCase):
-    """Phase A: first_stage_cost / first_stage_varlist hooks on the
+class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
+    """first_stage_cost / first_stage_varlist hooks on the
     Stoch_AdmmWrapper API.
 
     When the hooks are supplied, the wrapper calls

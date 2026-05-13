@@ -165,9 +165,9 @@ def setup_stoch_admm(module, cfg, n_cylinders):
     consensus_vars = module.consensus_vars_creator(
         admm_subproblem_names, stoch_scenario_name, **scenario_creator_kwargs)
 
-    # Phase A: discover optional first-stage hooks on the module.  Both
-    # must be defined together or both omitted; mixing produces a clear
-    # error here (rather than half-migrating silently).
+    # Discover optional first-stage hooks on the module.  Both must be
+    # defined together or both omitted; mixing produces a clear error
+    # here (rather than half-migrating silently).
     first_stage_cost = getattr(module, "first_stage_cost", None)
     first_stage_varlist = getattr(module, "first_stage_varlist", None)
     if (first_stage_cost is None) != (first_stage_varlist is None):
@@ -232,8 +232,8 @@ def setup_stoch_admm_with_bundles(module, cfg, n_cylinders):
     consensus_vars = module.consensus_vars_creator(
         admm_subproblem_names, stoch_scenario_name, **scenario_creator_kwargs)
 
-    # Phase A: discover optional first-stage hooks on the module.
-    # Same both-or-neither contract as the non-bundled path.
+    # Discover optional first-stage hooks on the module.  Same
+    # both-or-neither contract as the non-bundled path.
     first_stage_cost = getattr(module, "first_stage_cost", None)
     first_stage_varlist = getattr(module, "first_stage_varlist", None)
     if (first_stage_cost is None) != (first_stage_varlist is None):

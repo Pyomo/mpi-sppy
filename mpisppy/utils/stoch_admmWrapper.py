@@ -96,9 +96,9 @@ class Stoch_AdmmWrapper(): #add scenario_tree
             first_stage_varlist=None,
     ):
         assert len(options) == 0, "no options supported by stoch_admmWrapper"
-        # Phase A: first_stage_cost / first_stage_varlist must be defined
-        # together or omitted together.  Defensive check; setup_stoch_admm
-        # also enforces this, but the wrapper is callable directly.
+        # first_stage_cost / first_stage_varlist must be defined together
+        # or omitted together.  Defensive check; setup_stoch_admm also
+        # enforces this, but the wrapper is callable directly.
         if (first_stage_cost is None) != (first_stage_varlist is None):
             present = "first_stage_cost" if first_stage_cost is not None else "first_stage_varlist"
             missing = "first_stage_varlist" if first_stage_cost is not None else "first_stage_cost"
@@ -126,7 +126,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
         for sname in self.local_admm_stoch_subproblem_scenarios_names:
             s = scenario_creator(sname, **scenario_creator_kwargs)
             self.local_admm_stoch_subproblem_scenarios[sname] = s
-            # Phase A error matrix (hooks defined? x _mpisppy_node_list set?).
+            # Error matrix (hooks defined? x _mpisppy_node_list set?).
             # Catch half-migrations at scenario-construction time before
             # the deep assertion in assign_variable_probs.
             already_attached = hasattr(s, "_mpisppy_node_list")

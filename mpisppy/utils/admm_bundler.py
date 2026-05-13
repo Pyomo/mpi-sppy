@@ -56,7 +56,7 @@ class AdmmBundler:
                  consensus_vars, combining_fn, split_fn,
                  scenario_creator_kwargs=None,
                  first_stage_cost=None, first_stage_varlist=None):
-        # Phase A: same both-or-neither contract as Stoch_AdmmWrapper.
+        # Same both-or-neither contract as Stoch_AdmmWrapper.
         if (first_stage_cost is None) != (first_stage_varlist is None):
             present = "first_stage_cost" if first_stage_cost is not None else "first_stage_varlist"
             missing = "first_stage_varlist" if first_stage_cost is not None else "first_stage_cost"
@@ -224,7 +224,7 @@ class AdmmBundler:
         for sub_name, stoch_name in constituents:
             vsname = self.combining_fn(sub_name, stoch_name)
             s = self.module.scenario_creator(vsname, **self.scenario_creator_kwargs)
-            # Phase A error matrix, same as Stoch_AdmmWrapper.  See
+            # Error matrix, same as Stoch_AdmmWrapper.  See
             # doc/src/generic_admm.rst.
             already_attached = hasattr(s, "_mpisppy_node_list")
             if has_first_stage_hooks:
