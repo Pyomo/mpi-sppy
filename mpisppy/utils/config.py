@@ -165,6 +165,9 @@ class Config(pyofig.ConfigDict):
         if self.get("rc_fixer") and not self.get("reduced_costs"):
             _bad_options("--rc-fixer requires --reduced-costs")
 
+        if self.get("hub_only_solver_logs") and not self.get("solver_log_dir"):
+            _bad_options("--hub-only-solver-logs requires --solver-log-dir")
+
     def add_solver_specs(self, prefix=""):
         sstr = f"{prefix}_solver" if prefix else "solver"
         if prefix:
@@ -212,6 +215,12 @@ class Config(pyofig.ConfigDict):
                            "WARNING: This will create a file for every single subproblem solve.",
                            domain=str,
                            default=None)
+
+        self.add_to_config("hub_only_solver_logs",
+                           description="When set with --solver-log-dir, only the hub writes "
+                           "solver logs; spokes do not. Requires --solver-log-dir.",
+                           domain=bool,
+                           default=False)
 
         self.add_to_config("warmstart_subproblems",
                            description="Warmstart subproblems from prior solution.",
