@@ -93,6 +93,24 @@ def _check_admm_compatibility(cfg):
             raise RuntimeError(
                 f"--{opt.replace('_', '-')} is not supported with ADMM"
             )
+    # xhatshuffle without stage2_ef_solver_name is invalid for stoch-admm:
+    # the picked scenario's xhats only fix nonants along its own tree path,
+    # leaving ADMM consensus variables in other stochastic outcomes
+    # unconstrained.  The resulting "inner bound" violates the problem's
+    # ADMM consensus constraints and has no valid interpretation as a
+    # relaxation, so it must not be silently produced.
+    if (cfg.get("stoch_admm", ifmissing=False)
+            and cfg.get("xhatshuffle", ifmissing=False)
+            and cfg.get("stage2_ef_solver_name") is None):
+        raise RuntimeError(
+            "--xhatshuffle with --stoch-admm requires --stage2-ef-solver-name. "
+            "Without it, xhatshuffle fixes nonants only along one scenario's "
+            "tree path, leaving the ADMM consensus variables in other "
+            "stochastic outcomes unconstrained and producing an invalid "
+            "(over-optimistic) inner bound.  Pass --stage2-ef-solver-name "
+            "(typically the same solver as --solver-name), or use "
+            "--xhatxbar instead."
+        )
 
 
 def setup_admm(module, cfg, n_cylinders):

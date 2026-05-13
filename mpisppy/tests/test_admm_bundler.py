@@ -241,6 +241,62 @@ class TestAdmmArgs(unittest.TestCase):
         # Should not raise
         _check_admm_compatibility(cfg)
 
+    def test_check_stoch_admm_xhatshuffle_without_stage2ef_errors(self):
+        """stoch_admm + xhatshuffle without stage2_ef_solver_name is an
+        invalid configuration: xhatshuffle fixes nonants only along one
+        scenario's tree path, leaving ADMM consensus variables in other
+        stochastic outcomes unconstrained.  This must error, not silently
+        produce an invalid inner bound."""
+        from mpisppy.generic.admm import _check_admm_compatibility
+        cfg = config.Config()
+        cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
+        cfg.add_to_config("xhatshuffle", description="", domain=bool, default=True)
+        cfg.add_to_config("stage2_ef_solver_name", description="",
+                          domain=str, default=None)
+        with self.assertRaises(RuntimeError) as cm:
+            _check_admm_compatibility(cfg)
+        self.assertIn("stage2-ef-solver-name", str(cm.exception))
+
+    def test_check_stoch_admm_xhatshuffle_with_stage2ef_ok(self):
+        """stoch_admm + xhatshuffle + stage2_ef_solver_name is valid."""
+        from mpisppy.generic.admm import _check_admm_compatibility
+        cfg = config.Config()
+        cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
+        cfg.add_to_config("xhatshuffle", description="", domain=bool, default=True)
+        cfg.add_to_config("stage2_ef_solver_name", description="",
+                          domain=str, default="gurobi")
+        # Should not raise
+        _check_admm_compatibility(cfg)
+
+    def test_check_stoch_admm_xhatxbar_without_stage2ef_ok(self):
+        """stoch_admm + xhatxbar (without xhatshuffle) does not need
+        stage2_ef_solver_name: xhatxbar fixes nonants to the PH xbar, which
+        IS the consensus value, so ADMM consensus is preserved without an
+        EF resolve."""
+        from mpisppy.generic.admm import _check_admm_compatibility
+        cfg = config.Config()
+        cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
+        cfg.add_to_config("xhatxbar", description="", domain=bool, default=True)
+        cfg.add_to_config("stage2_ef_solver_name", description="",
+                          domain=str, default=None)
+        # Should not raise
+        _check_admm_compatibility(cfg)
+
+    def test_check_admm_xhatshuffle_without_stage2ef_ok(self):
+        """Deterministic --admm + xhatshuffle without stage2_ef_solver_name
+        is allowed: deterministic ADMM treats subproblems as a flat 2-stage
+        tree (all consensus at ROOT), so xhatshuffle's single-path fix
+        reaches every consensus variable.  The stage2ef error is specific
+        to --stoch-admm where the tree is genuinely multistage."""
+        from mpisppy.generic.admm import _check_admm_compatibility
+        cfg = config.Config()
+        cfg.add_to_config("admm", description="", domain=bool, default=True)
+        cfg.add_to_config("xhatshuffle", description="", domain=bool, default=True)
+        cfg.add_to_config("stage2_ef_solver_name", description="",
+                          domain=str, default=None)
+        # Should not raise
+        _check_admm_compatibility(cfg)
+
 
 class TestNameListsAdmmPath(unittest.TestCase):
     """Test the ADMM early-return path in parsing.name_lists."""

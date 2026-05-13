@@ -25,6 +25,16 @@ There are two modes:
    ADMM (``--admm``), but are supported with stochastic ADMM
    (``--stoch-admm``); see :ref:`admm_bundling` below.
 
+.. Note::
+   With ``--stoch-admm``, the ``--xhatshuffle`` spoke requires
+   ``--stage2-ef-solver-name`` and an error is raised otherwise.  Without
+   it, xhatshuffle would fix nonants only along the picked scenario's tree
+   path, leaving the ADMM consensus variables in other stochastic outcomes
+   unconstrained and producing an invalid (over-optimistic) inner bound.
+   Use ``--xhatxbar`` if you want an inner bound without solving a stage-2
+   EF; xhatxbar fixes nonants to the PH ``xbar``, which is itself the
+   consensus value.
+
 
 Tutorial: Running the ``distr`` Example
 -----------------------------------------
