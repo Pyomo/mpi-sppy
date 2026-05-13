@@ -784,6 +784,38 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
         self.assertIn("first_stage_cost", msg)
         self.assertIn("first_stage_varlist", msg)
 
+    def test_setup_stoch_admm_with_bundles_half_hooks_errors(self):
+        """The bundled path enforces the same both-or-neither contract."""
+        import types
+        from mpisppy.generic.admm import setup_stoch_admm_with_bundles
+
+        fs_cost, _ = self._hooks()
+
+        module = types.SimpleNamespace(
+            __name__="fake_module",
+            admm_subproblem_names_creator=lambda cfg: ["A", "B"],
+            stoch_scenario_names_creator=lambda cfg: ["S1", "S2"],
+            split_admm_stoch_subproblem_scenario_name=(
+                lambda name: (name.split("_")[2],
+                              "_".join(name.split("_")[3:]))),
+            kw_creator=lambda cfg: {},
+            consensus_vars_creator=(
+                lambda an, sn, **kw: {"A": [("x", 1)], "B": [("y", 1)]}),
+            combining_names=lambda a, s: f"ADMM_STOCH_{a}_{s}",
+            scenario_creator=self._minimal_scenario_creator(call_attach=False),
+            first_stage_cost=fs_cost,
+            # first_stage_varlist intentionally missing
+        )
+        cfg = config.Config()
+        cfg.add_to_config("scenarios_per_bundle", description="",
+                          domain=int, default=2)
+        with self.assertRaises(RuntimeError) as cm:
+            setup_stoch_admm_with_bundles(module, cfg, n_cylinders=1)
+        msg = str(cm.exception)
+        self.assertIn("fake_module", msg)
+        self.assertIn("first_stage_cost", msg)
+        self.assertIn("first_stage_varlist", msg)
+
 
 if __name__ == '__main__':
     unittest.main()
