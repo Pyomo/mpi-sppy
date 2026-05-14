@@ -58,6 +58,16 @@ def configure_extensions(hub_dict, module, cfg):
         from mpisppy.utils.w_utils.wxbarwriter import WXBarWriter
         ext_classes.append(WXBarWriter)
 
+    if cfg.get("wtracker", ifmissing=False):
+        from mpisppy.extensions.wtracker_extension import Wtracker_extension
+        ext_classes.append(Wtracker_extension)
+        hub_dict["opt_kwargs"]["options"]["wtracker_options"] = {
+            "wlen": cfg.wtracker_wlen,
+            "reportlen": cfg.wtracker_reportlen,
+            "stdevthresh": cfg.wtracker_stdevthresh,
+            "file_prefix": cfg.wtracker_file_prefix,
+        }
+
     if cfg.user_defined_extensions is not None:
         import json
         for ext_name in cfg.user_defined_extensions:
