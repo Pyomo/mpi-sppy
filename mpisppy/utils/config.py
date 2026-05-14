@@ -726,9 +726,26 @@ class Config(pyofig.ConfigDict):
                             domain=bool,
                             default=False)
         
+        self.add_to_config('rc_fixer_converger',
+                            description="use the reduced cost fixer converger",
+                            domain=bool,
+                            default=False)
+        
         self.add_to_config('rc_fixer_require_improving_lagrangian',
                             description="Only consider fixing / unfixing variables after the lagrangian "
                                         "bound computed by the reduced cost spoke has improved. (default False)",
+                            domain=bool,
+                            default=False)
+
+        self.add_to_config('rc_fixer_require_improving_inner_bound',
+                            description="This option for reduced cost fixer converger. "
+                                        "Only consider fixing / unfixing variables after the inner bound is improved",
+                            domain=bool,
+                            default=False)
+        
+        self.add_to_config('rc_fixer_require_improving_outer_bound',
+                            description="This option for reduced cost fixer converger. "
+                                        "Only consider fixing / unfixing variables after the outer bound is improved",
                             domain=bool,
                             default=False)
 
@@ -756,6 +773,11 @@ class Config(pyofig.ConfigDict):
                             description="tol to consider vars at bound",
                             domain=float,
                             default=1e-6)
+        
+        self.add_to_config('rc_converger_tol',
+                            description="tolerance for the reduced cost converger",
+                            domain=float,
+                            default=1e-2)
 
         self.add_to_config('reduced_costs_try_jensens_first',
                            description="before iter 0, solve the average "

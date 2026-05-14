@@ -59,7 +59,7 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs,
     # reduced cost fixer options setup (needs hub_dict before building spokes)
     if cfg.reduced_costs:
         from mpisppy.utils import cfg_vanilla as vanilla
-        vanilla.add_reduced_costs_fixer(hub_dict, cfg)
+        vanilla.add_reduced_costs(hub_dict, cfg)
 
     average_scenario_creator = getattr(module, "average_scenario_creator", None)
 
