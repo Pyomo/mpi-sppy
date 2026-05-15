@@ -12,5 +12,6 @@ from mpisppy.debug_utils.buffer_inspect import (
     Report,
     inspect_buffer,
 )
+from mpisppy.debug_utils.comm_lor_check import comm_lor_check
 
-__all__ = ["InspectContext", "Report", "inspect_buffer"]
+__all__ = ["InspectContext", "Report", "inspect_buffer", "comm_lor_check"]

@@ -1014,7 +1014,8 @@ jobs:
             mpisppy/tests/test_extensions.py \
             mpisppy/tests/test_jensens.py \
             mpisppy/tests/test_proper_bundler.py \
-            mpisppy/tests/test_buffer_inspect.py
+            mpisppy/tests/test_buffer_inspect.py \
+            mpisppy/tests/test_comm_lor_check.py
 
       - name: Upload coverage data
         if: always()
