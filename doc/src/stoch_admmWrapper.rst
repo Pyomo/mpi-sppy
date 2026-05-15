@@ -3,6 +3,21 @@
 StochAdmmWrapper
 ================
 
+.. important::
+
+   **Most users should use** :ref:`generic_cylinders <generic_cylinders>`
+   **with the** ``--stoch-admm`` **flag rather than writing a custom driver.**
+   See :ref:`generic_admm` for the recommended workflow, including a
+   tutorial that uses the same ``stoch_distr`` example described on this
+   page and a section on :ref:`bundling <admm_bundling>` stochastic
+   scenarios within each ADMM subproblem.  The deterministic counterpart
+   is :ref:`admmWrapper` (run via ``--admm``).
+
+   This page documents the underlying ``Stoch_AdmmWrapper`` class and the
+   custom-driver pattern.  It is primarily useful if you are writing your
+   own driver, extending the wrapper, or trying to understand how
+   ``generic_cylinders --stoch-admm`` works under the hood.
+
 .. automodule:: stoch_distr
    :noindex:
    :show-inheritance:

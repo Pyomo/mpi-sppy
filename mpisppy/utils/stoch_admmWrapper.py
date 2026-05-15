@@ -128,17 +128,19 @@ class Stoch_AdmmWrapper(): #add scenario_tree
     
 
     def create_node_names(self, num_admm_subproblems, num_stoch_scens):
-        if self.BFs is not None: # already multi-stage problem initially
-            self.BFs.append(num_admm_subproblems) # Adds the last stage with admm_subproblems
-            all_nodenames = sputils.create_nodenames_from_branching_factors(self.BFs)
-        else: # 2-stage problem initially
-            all_node_names_0 = ["ROOT"]
-            all_node_names_1 = ["ROOT_" + str(i) for i in range(num_stoch_scens)]
-            all_node_names_2 = [parent + "_" + str(j) \
-                                for parent in all_node_names_1 \
-                                    for j in range(num_admm_subproblems)]
-            all_nodenames = all_node_names_0 + all_node_names_1 + all_node_names_2
-        return all_nodenames
+        # Normalize self.BFs to the original problem's branching factors.
+        # For a 2-stage-origin problem the caller passes BFs=None (or empty);
+        # the original tree's only branching factor is then num_stoch_scens.
+        # Defensive copy: we mutate self.BFs in place below, so we must not
+        # alias a caller-owned list (e.g. cfg.branching_factors).
+        if not self.BFs:
+            self.BFs = [num_stoch_scens]
+        else:
+            self.BFs = list(self.BFs)
+        # The wrapper augments the original tree with an ADMM stage that
+        # branches each leaf into num_admm_subproblems consensus subproblems.
+        self.BFs.append(num_admm_subproblems)
+        return sputils.create_nodenames_from_branching_factors(self.BFs)
 
 
     def var_prob_list(self, s):

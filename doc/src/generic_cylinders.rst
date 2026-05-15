@@ -173,6 +173,9 @@ Some extensions can be activated directly from the command line:
 - ``--fixer`` -- Fix variables that have converged
 - ``--mipgaps-json <file>`` -- MIP gap schedule from a JSON file
 - ``--user-defined-extensions <module>`` -- Load a custom extension module
+- ``--wtracker`` -- Track W (Lagrange-multiplier) values per iteration
+  and write a convergence report at the end of the run
+  (see :ref:`wtracker_extension`)
 
 See :ref:`Extensions` for details on available extensions.
 
