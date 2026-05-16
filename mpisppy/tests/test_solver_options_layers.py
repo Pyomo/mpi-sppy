@@ -6,13 +6,11 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-# Tests for solver_options_layers — see
-# doc/designs/solver_options_redesign.md §5.2, §5.4. The contract
-# this file pins is: the layered representation folds (per-iteration)
-# to dicts identical to the legacy iter0_solver_options /
-# iterk_solver_options dicts produced by shared_options and
-# apply_solver_specs. Later changes to merge precedence (§5.5) lean
-# on this equivalence.
+# Tests for solver_options_layers. The contract this file pins is:
+# the layered representation folds (per-iteration) to dicts
+# identical to the legacy iter0_solver_options / iterk_solver_options
+# dicts produced by shared_options and apply_solver_specs. Later
+# changes to per-spoke merge semantics will lean on this equivalence.
 
 import copy
 import unittest
@@ -119,8 +117,10 @@ class TestApplySolverSpecsLayers(unittest.TestCase):
 
     def test_per_spoke_solver_options_replace_layers(self):
         # Today's per-spoke semantics are replace-not-overlay in
-        # apply_solver_specs (cfg_vanilla.py:119-120); these tests pin
-        # the legacy contract. §5.5 will change this to overlay later.
+        # apply_solver_specs: each --{name}-solver-options call
+        # discards the global --solver-options dict. A later phase
+        # will change this to overlay; this test pins the legacy
+        # contract until then.
         cfg = _spoke_cfg("lagrangian")
         cfg.solver_options = "logfile=run.log"
         cfg.lagrangian_solver_options = "mipgap=0.001"
@@ -218,7 +218,8 @@ class TestEffectiveSolverOptions(unittest.TestCase):
     """The PHBase consumption contract.
 
     Pins three properties of PHBase._effective_solver_options(k):
-      1. It folds solver_options_layers per the predicates in §5.4.
+      1. It folds solver_options_layers in list order, picking layers
+         whose "when" predicate matches k and last-write-wins per key.
       2. current_solver_options is overlaid last (so Gapper auto-mode
          writes to current_solver_options surface in the solve).
       3. after_iter layers fire on iterations >= N, matching the
@@ -278,9 +279,12 @@ class TestEffectiveSolverOptions(unittest.TestCase):
 
 
 class TestAddGapperMipgapsJsonLayers(unittest.TestCase):
-    """add_gapper's static-schedule path now appends layers and skips
-    the Gapper extension. See doc/designs/solver_options_redesign.md
-    §5.7 and the test_effective_solver_options assertions above.
+    """add_gapper's static-schedule path now appends after_iter
+    layers and skips the Gapper extension. The resulting per-iter
+    mipgap behavior is pinned by
+    TestEffectiveSolverOptions.test_after_iter_layers_match_mipgaps_json_semantics
+    above; this class pins the cfg_vanilla wiring that produces
+    those layers from the JSON file.
     """
 
     def _hub_dict(self):

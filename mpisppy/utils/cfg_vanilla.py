@@ -62,11 +62,10 @@ def shared_options(cfg, is_hub=False):
         "display_convergence_detail": cfg.display_convergence_detail,
         "iter0_solver_options": dict(),
         "iterk_solver_options": dict(),
-        # Layered representation of solver options (see
-        # doc/designs/solver_options_redesign.md §5.2). Built in
-        # parallel with the legacy iter0/iterk dicts above and folds
-        # to the same values; PHBase consumes via
-        # _effective_solver_options(k).
+        # Layered representation of solver options. Built in parallel
+        # with the legacy iter0/iterk dicts above and folds to the
+        # same values; PHBase consumes via _effective_solver_options.
+        # Each layer is {"when": <predicate>, "options": <dict>}.
         "solver_options_layers": [],
         "tee-rank0-solves": cfg.tee_rank0_solves,
         "trace_prefix" : cfg.trace_prefix,
@@ -131,10 +130,10 @@ def shared_options(cfg, is_hub=False):
 def apply_solver_specs(name, spoke, cfg):
     options = spoke["opt_kwargs"]["options"]
     # Mirror the legacy iter0/iterk dict mutations onto
-    # solver_options_layers (see
-    # doc/designs/solver_options_redesign.md §5.2). The current
-    # behavior of per-spoke options is replace-style; §5.5 will change
-    # this to overlay later.
+    # solver_options_layers. Per-spoke option specs are currently
+    # replace-style (each --{name}-solver-options call overwrites
+    # rather than overlays the global --solver-options); a later
+    # phase will change this to overlay semantics.
     options.setdefault("solver_options_layers", [])
     if _hasit(cfg, name+"_solver_name"):
         options["solver_name"] = cfg.get(name+"_solver_name")
@@ -435,8 +434,7 @@ def add_gapper(hub_dict, cfg, name=None):
         parsed into ``after_iter`` solver-options layers appended to
         ``solver_options_layers`` on the cylinder dict. No Gapper
         extension is registered; the layer fold drives the per-iter
-        mipgap directly. See
-        doc/designs/solver_options_redesign.md §5.7.
+        mipgap directly.
       * auto mipgap (``--starting-mipgap`` + ``--mipgap-ratio``, also
         per-spoke as e.g. ``--lagrangian-starting-mipgap``): the
         Gapper extension is registered and observes inner/outer bound

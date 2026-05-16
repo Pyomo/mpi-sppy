@@ -95,10 +95,10 @@ class LagrangerOuterBound(_JensensMixin, _LagrangianMixin, mpisppy.cylinders.spo
         if extensions:
             self.opt.extobject.pre_iter0()
         self.A_iter = 1
-        # _PHIter drives the per-iteration fold inside
-        # PHBase._effective_solver_options (see
-        # doc/designs/solver_options_redesign.md §5.4); lagranger
-        # doesn't otherwise track it.
+        # _PHIter drives the per-iteration solver-options fold inside
+        # PHBase._effective_solver_options; lagranger doesn't
+        # otherwise track it, so we flip it manually across the
+        # iter0→iterk boundary.
         self.opt._PHIter = 0
         self.trivial_bound = self._lagrangian(0)
         if extensions:

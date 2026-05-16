@@ -287,8 +287,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         # "dynamic overrides" layer (used by Gapper auto-mode and the
         # spoke iter0→iterk handoff). iter0_solver_options /
         # iterk_solver_options below are read-only properties derived
-        # from the layer fold. See
-        # doc/designs/solver_options_redesign.md §5.2, §5.4.
+        # from the layer fold.
         self.solver_options_layers = list(options.get("solver_options_layers") or [])
         if not self.solver_options_layers:
             # Caller bypassed cfg_vanilla and supplied only the legacy
@@ -316,11 +315,12 @@ class PHBase(mpisppy.spopt.SPOpt):
     def _effective_solver_options(self, k):
         """Effective solver options for iteration *k*.
 
-        Folds solver_options_layers per
-        doc/designs/solver_options_redesign.md §5.4, then overlays
-        self.current_solver_options as a final "dynamic overrides"
-        layer so Gapper auto-mode mutations and the spoke iter0→iterk
-        handoff continue to surface in the solve.
+        Folds solver_options_layers (each layer's "when" predicate
+        decides whether it applies at iteration k; last write wins
+        per key), then overlays self.current_solver_options as a
+        final "dynamic overrides" layer so Gapper auto-mode
+        mutations and the spoke iter0→iterk handoff continue to
+        surface in the solve.
 
         Args:
             k (int): iteration number (0 for iter0).
