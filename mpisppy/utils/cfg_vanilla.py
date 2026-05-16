@@ -130,10 +130,9 @@ def shared_options(cfg, is_hub=False):
 def apply_solver_specs(name, spoke, cfg):
     options = spoke["opt_kwargs"]["options"]
     # Mirror the legacy iter0/iterk dict mutations onto
-    # solver_options_layers. Per-spoke option specs are currently
-    # replace-style (each --{name}-solver-options call overwrites
-    # rather than overlays the global --solver-options); a later
-    # phase will change this to overlay semantics.
+    # solver_options_layers. Per-spoke option specs are replace-
+    # style: each --{name}-solver-options call overwrites rather
+    # than overlays the global --solver-options dict.
     options.setdefault("solver_options_layers", [])
     if _hasit(cfg, name+"_solver_name"):
         options["solver_name"] = cfg.get(name+"_solver_name")

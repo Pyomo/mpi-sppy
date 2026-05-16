@@ -767,7 +767,7 @@ def fold_solver_options_layers(layers, k):
 
     Walks layers in list order, picks layers whose predicate matches k,
     and flat-dict-unions their options into a running dict (last write
-    wins per key). See doc/designs/solver_options_redesign.md §5.4.
+    wins per key).
 
     Args:
         layers (list): list of layers as built by solver_options_layer.
@@ -781,6 +781,76 @@ def fold_solver_options_layers(layers, k):
         if _layer_matches(layer["when"], k):
             folded.update(layer["options"])
     return folded
+
+
+# Solver-name-aware translation for the two canonical option keys
+# mpi-sppy stores internally. Keys not in this table are passed
+# through unchanged by translate_solver_options.
+#
+# Entries map (canonical_key, solver_name) → solver-native key when
+# the solver names the option differently. Solver names not listed
+# under a canonical key use the canonical name itself (no rename).
+# Persistent variants (e.g. gurobi_persistent) are normalized to the
+# base name before lookup.
+_SOLVER_OPTION_TRANSLATIONS = {
+    "mipgap": {
+        # HiGHS uses its native option name.
+        "highs": "mip_rel_gap",
+        "appsi_highs": "mip_rel_gap",
+    },
+    "threads": {
+        # Gurobi parameter is conventionally capitalized.
+        "gurobi": "Threads",
+        "appsi_gurobi": "Threads",
+    },
+}
+
+
+def translate_solver_options(opts, solver_name):
+    """Return a copy of *opts* with canonical option keys renamed to
+    the solver's native key, where they differ.
+
+    Currently translates only ``mipgap`` and ``threads``; all other
+    keys pass through unchanged. If the user already supplied the
+    solver-native key alongside the canonical key, the
+    solver-native key wins and the canonical key is dropped (so the
+    solver does not receive both forms).
+
+    Args:
+        opts (dict | None): solver options. ``None`` returns ``None``;
+            other inputs return a new dict (the input is not mutated).
+        solver_name (str | None): name of the target Pyomo solver
+            plugin (e.g. ``'gurobi'``, ``'gurobi_persistent'``,
+            ``'appsi_highs'``). ``None`` or empty returns a copy of
+            *opts* unchanged.
+
+    Returns:
+        dict | None: translated copy of *opts*, or ``None`` if *opts*
+        was ``None``.
+    """
+    if opts is None:
+        return None
+    out = dict(opts)
+    if not solver_name:
+        return out
+    # gurobi_persistent → gurobi; appsi_highs stays as appsi_highs;
+    # cplex_persistent → cplex; xpress_persistent → xpress.
+    base_name = solver_name
+    if base_name.endswith("_persistent"):
+        base_name = base_name[:-len("_persistent")]
+    for canonical, mapping in _SOLVER_OPTION_TRANSLATIONS.items():
+        if canonical not in out:
+            continue
+        target = mapping.get(solver_name) or mapping.get(base_name)
+        if target is None or target == canonical:
+            continue
+        if target in out:
+            # User explicitly supplied the solver-native key; respect
+            # it and drop the canonical to avoid sending duplicates.
+            del out[canonical]
+        else:
+            out[target] = out.pop(canonical)
+    return out
 
 
 ################################################################################

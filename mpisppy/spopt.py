@@ -181,9 +181,14 @@ class SPOpt(SPBase):
 
         solve_start_time = time.time()
         if (solver_options):
+            # Translate canonical option keys to the solver's native
+            # spelling at the latest moment, so stored options on
+            # PHBase / spokes remain solver-agnostic.
+            translated_options = sputils.translate_solver_options(
+                solver_options, self.options.get("solver_name"))
             _vb("Using sub-problem solver options="
-                + str(solver_options))
-            for option_key,option_value in solver_options.items():
+                + str(translated_options))
+            for option_key,option_value in translated_options.items():
                 s._solver_plugin.options[option_key] = option_value
 
         solve_keyword_args = dict()

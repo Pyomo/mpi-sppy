@@ -116,11 +116,11 @@ class TestApplySolverSpecsLayers(unittest.TestCase):
         return {"opt_kwargs": {"options": copy.deepcopy(sh)}}
 
     def test_per_spoke_solver_options_replace_layers(self):
-        # Today's per-spoke semantics are replace-not-overlay in
+        # Per-spoke semantics are replace-not-overlay in
         # apply_solver_specs: each --{name}-solver-options call
-        # discards the global --solver-options dict. A later phase
-        # will change this to overlay; this test pins the legacy
-        # contract until then.
+        # discards the global --solver-options dict. This test pins
+        # that contract; if the semantics change to overlay later,
+        # this test should be updated alongside that change.
         cfg = _spoke_cfg("lagrangian")
         cfg.solver_options = "logfile=run.log"
         cfg.lagrangian_solver_options = "mipgap=0.001"
@@ -333,6 +333,97 @@ class TestAddGapperMipgapsJsonLayers(unittest.TestCase):
                 "gapperoptions", hub_dict["opt_kwargs"]["options"])
         finally:
             os.unlink(path)
+
+
+class TestTranslateSolverOptions(unittest.TestCase):
+    """translate_solver_options renames mpi-sppy's canonical option
+    keys (currently mipgap and threads) to the target solver's
+    native key, and passes everything else through unchanged.
+    Stored options remain solver-agnostic; translation is the very
+    last step before the keys hit the Pyomo solver plugin.
+    """
+
+    def _t(self, opts, solver_name):
+        from mpisppy.utils.sputils import translate_solver_options
+        return translate_solver_options(opts, solver_name)
+
+    # --- edge cases ---
+
+    def test_none_opts_returns_none(self):
+        self.assertIsNone(self._t(None, "highs"))
+
+    def test_empty_opts_returns_empty(self):
+        self.assertEqual(self._t({}, "highs"), {})
+
+    def test_none_solver_name_is_passthrough(self):
+        opts = {"mipgap": 0.01, "threads": 4}
+        self.assertEqual(self._t(opts, None), opts)
+
+    def test_empty_solver_name_is_passthrough(self):
+        opts = {"mipgap": 0.01, "threads": 4}
+        self.assertEqual(self._t(opts, ""), opts)
+
+    def test_no_canonical_keys_is_passthrough(self):
+        opts = {"presolve": 2, "logfile": "run.log"}
+        self.assertEqual(self._t(opts, "highs"), opts)
+        self.assertEqual(self._t(opts, "gurobi"), opts)
+
+    def test_input_dict_not_mutated(self):
+        opts = {"mipgap": 0.01}
+        _ = self._t(opts, "highs")
+        self.assertEqual(opts, {"mipgap": 0.01})
+
+    # --- per-solver translation correctness ---
+
+    def test_cplex_needs_no_rename(self):
+        for name in ("cplex", "cplex_persistent"):
+            self.assertEqual(
+                self._t({"mipgap": 0.01, "threads": 4}, name),
+                {"mipgap": 0.01, "threads": 4})
+
+    def test_xpress_needs_no_rename(self):
+        for name in ("xpress", "xpress_persistent"):
+            self.assertEqual(
+                self._t({"mipgap": 0.01, "threads": 4}, name),
+                {"mipgap": 0.01, "threads": 4})
+
+    def test_gurobi_renames_threads(self):
+        for name in ("gurobi", "gurobi_persistent", "appsi_gurobi"):
+            self.assertEqual(
+                self._t({"mipgap": 0.01, "threads": 4}, name),
+                {"mipgap": 0.01, "Threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_highs_renames_mipgap(self):
+        for name in ("highs", "appsi_highs"):
+            self.assertEqual(
+                self._t({"mipgap": 0.01, "threads": 4}, name),
+                {"mip_rel_gap": 0.01, "threads": 4},
+                f"failed for solver_name={name!r}")
+
+    # --- collision rule ---
+
+    def test_highs_collision_keeps_native_drops_canonical(self):
+        # User passed mip_rel_gap directly *and* --iter0-mipgap turned
+        # into a layer with mipgap; the native key wins and the
+        # canonical one is dropped (so the solver doesn't see both).
+        result = self._t(
+            {"mipgap": 0.01, "mip_rel_gap": 0.0001}, "highs")
+        self.assertEqual(result, {"mip_rel_gap": 0.0001})
+
+    def test_gurobi_collision_keeps_native_drops_canonical(self):
+        result = self._t(
+            {"threads": 4, "Threads": 1}, "gurobi")
+        self.assertEqual(result, {"Threads": 1})
+
+    # --- pass-through of non-canonical solver-specific keys ---
+
+    def test_solver_specific_unknown_keys_passthrough(self):
+        # e.g. mip_tolerances_mipgap (CPLEX-native) — translation
+        # doesn't touch non-canonical keys regardless of solver.
+        opts = {"mip_tolerances_mipgap": 0.001, "Cuts": 2}
+        self.assertEqual(self._t(opts, "cplex"), opts)
+        self.assertEqual(self._t(opts, "gurobi"), opts)
 
 
 if __name__ == "__main__":
