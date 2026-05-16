@@ -129,21 +129,20 @@ def shared_options(cfg, is_hub=False):
 
 def apply_solver_specs(name, spoke, cfg):
     options = spoke["opt_kwargs"]["options"]
-    # Mirror the legacy iter0/iterk dict mutations onto
-    # solver_options_layers. Per-spoke option specs are replace-
-    # style: each --{name}-solver-options call overwrites rather
-    # than overlays the global --solver-options dict.
+    # Per-spoke option specs (--{name}-solver-options,
+    # --{name}-iter0-mipgap, etc.) overlay on top of the global
+    # --solver-options dict already populated by shared_options:
+    # the global options remain in place; the spoke options take
+    # priority on the keys they name and add any new keys.
     options.setdefault("solver_options_layers", [])
     if _hasit(cfg, name+"_solver_name"):
         options["solver_name"] = cfg.get(name+"_solver_name")
     if _hasit(cfg, name+"_solver_options"):
         odict = sputils.option_string_to_dict(cfg.get(name+"_solver_options"))
-        options["iter0_solver_options"] = odict
-        options["iterk_solver_options"] = copy.deepcopy(odict)
-        # Mirror replace semantics for layers.
-        options["solver_options_layers"] = [
-            sputils.solver_options_layer("default", odict)
-        ]
+        options["iter0_solver_options"].update(odict)
+        options["iterk_solver_options"].update(odict)
+        options["solver_options_layers"].append(
+            sputils.solver_options_layer("default", odict))
     if _hasit(cfg, name+"_iter0_mipgap"):
         options["iter0_solver_options"]["mipgap"] = cfg.get(name+"_iter0_mipgap")
         options["solver_options_layers"].append(
@@ -154,8 +153,9 @@ def apply_solver_specs(name, spoke, cfg):
         options["solver_options_layers"].append(
             sputils.solver_options_layer(
                 "iterk", {"mipgap": cfg.get(name+"_iterk_mipgap")}))
-    # re-apply max_solver_threads since we may have over-written the
-    # iter*_solver_options above.
+    # Re-apply max_solver_threads so the global thread cap wins
+    # even when --{name}-solver-options explicitly sets a different
+    # threads value (system-level cap beats user preference).
     if _hasit(cfg, "max_solver_threads"):
         options["iter0_solver_options"]["threads"] = cfg.max_solver_threads
         options["iterk_solver_options"]["threads"] = cfg.max_solver_threads

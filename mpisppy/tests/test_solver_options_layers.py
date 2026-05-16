@@ -115,12 +115,12 @@ class TestApplySolverSpecsLayers(unittest.TestCase):
         # it expects a deepcopy of shared_options output.
         return {"opt_kwargs": {"options": copy.deepcopy(sh)}}
 
-    def test_per_spoke_solver_options_replace_layers(self):
-        # Per-spoke semantics are replace-not-overlay in
-        # apply_solver_specs: each --{name}-solver-options call
-        # discards the global --solver-options dict. This test pins
-        # that contract; if the semantics change to overlay later,
-        # this test should be updated alongside that change.
+    def test_per_spoke_solver_options_overlay_layers(self):
+        # Per-spoke option specs overlay on top of the global
+        # --solver-options dict: keys named by the spoke flag win,
+        # keys it doesn't mention survive from the global flag. A
+        # spoke's logfile, presolve flag, etc. set globally should
+        # still be in the spoke's effective dict.
         cfg = _spoke_cfg("lagrangian")
         cfg.solver_options = "logfile=run.log"
         cfg.lagrangian_solver_options = "mipgap=0.001"
@@ -136,7 +136,47 @@ class TestApplySolverSpecsLayers(unittest.TestCase):
             fold_solver_options_layers(opts["solver_options_layers"], 1),
             opts["iterk_solver_options"],
         )
-        self.assertEqual(opts["iter0_solver_options"], {"mipgap": 0.001})
+        self.assertEqual(
+            opts["iter0_solver_options"],
+            {"logfile": "run.log", "mipgap": 0.001},
+        )
+
+    def test_per_spoke_overlay_combines_global_and_spoke_keys(self):
+        # The worked example from the design doc: global supplies
+        # presolve+threads, the spoke flag supplies mipgap, and the
+        # lagrangian-spoke effective dict is the union of all three.
+        cfg = _spoke_cfg("lagrangian")
+        cfg.solver_options = "presolve=2 threads=4"
+        cfg.lagrangian_solver_options = "mipgap=0.01"
+        sh = shared_options(cfg)
+        spoke = self._spoke_dict_from(sh)
+        apply_solver_specs("lagrangian", spoke, cfg)
+        opts = spoke["opt_kwargs"]["options"]
+        expected = {"presolve": 2, "threads": 4, "mipgap": 0.01}
+        self.assertEqual(
+            fold_solver_options_layers(opts["solver_options_layers"], 0),
+            expected,
+        )
+        self.assertEqual(
+            fold_solver_options_layers(opts["solver_options_layers"], 1),
+            expected,
+        )
+
+    def test_per_spoke_overlay_overrides_shared_key(self):
+        # When the spoke flag overrides a key the global flag already
+        # set, the spoke's value wins (last write in the fold) but the
+        # other global keys survive.
+        cfg = _spoke_cfg("lagrangian")
+        cfg.solver_options = "mipgap=0.01 logfile=run.log"
+        cfg.lagrangian_solver_options = "mipgap=0.001"
+        sh = shared_options(cfg)
+        spoke = self._spoke_dict_from(sh)
+        apply_solver_specs("lagrangian", spoke, cfg)
+        opts = spoke["opt_kwargs"]["options"]
+        self.assertEqual(
+            fold_solver_options_layers(opts["solver_options_layers"], 0),
+            {"logfile": "run.log", "mipgap": 0.001},
+        )
 
     def test_per_spoke_iter0_iterk_mipgap_layer_predicate(self):
         cfg = _spoke_cfg("lagrangian")
