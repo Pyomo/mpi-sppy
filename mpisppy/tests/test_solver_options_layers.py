@@ -345,6 +345,7 @@ class TestAddGapperMipgapsJsonLayers(unittest.TestCase):
 
     def test_mipgaps_json_appends_after_iter_layers(self):
         import os
+        import warnings
         from mpisppy.utils.cfg_vanilla import add_gapper
         cfg = _bare_cfg()
         cfg.add_to_config(
@@ -357,7 +358,15 @@ class TestAddGapperMipgapsJsonLayers(unittest.TestCase):
         try:
             cfg.mipgaps_json = path
             hub_dict = self._hub_dict()
-            add_gapper(hub_dict, cfg)
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                add_gapper(hub_dict, cfg)
+            self.assertTrue(
+                any(issubclass(w.category, DeprecationWarning)
+                    and "--mipgaps-json" in str(w.message) for w in caught),
+                f"Expected DeprecationWarning naming --mipgaps-json; "
+                f"got {[(w.category.__name__, str(w.message)) for w in caught]}",
+            )
             layers = hub_dict["opt_kwargs"]["options"]["solver_options_layers"]
             # 3 after_iter layers in ascending-N order
             self.assertEqual(len(layers), 3)
@@ -606,6 +615,7 @@ class TestPerSpokeMipgapsJsonLayers(unittest.TestCase):
 
     def test_per_spoke_mipgaps_json_appends_layers(self):
         import os
+        import warnings
         from mpisppy.utils.cfg_vanilla import add_gapper
         cfg = _bare_cfg()
         cfg.gapper_args(name="lagrangian")
@@ -613,7 +623,17 @@ class TestPerSpokeMipgapsJsonLayers(unittest.TestCase):
         try:
             cfg.lagrangian_mipgaps_json = path
             spoke = self._spoke_dict()
-            add_gapper(spoke, cfg, "lagrangian")
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                add_gapper(spoke, cfg, "lagrangian")
+            self.assertTrue(
+                any(issubclass(w.category, DeprecationWarning)
+                    and "--lagrangian-mipgaps-json" in str(w.message)
+                    for w in caught),
+                f"Expected DeprecationWarning naming "
+                f"--lagrangian-mipgaps-json; got "
+                f"{[(w.category.__name__, str(w.message)) for w in caught]}",
+            )
             layers = spoke["opt_kwargs"]["options"]["solver_options_layers"]
             self.assertEqual(len(layers), 2)
             self.assertEqual(layers[0]["when"], ("after_iter", 0))

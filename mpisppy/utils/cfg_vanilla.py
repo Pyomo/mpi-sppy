@@ -13,6 +13,7 @@
 
 import copy
 import json
+import warnings
 
 # Hub and spoke SPBase classes
 import mpisppy.utils.sputils as sputils
@@ -460,6 +461,14 @@ def add_gapper(hub_dict, cfg, name=None):
         )
 
     if mipgaps_json is not None:
+        flag = "--mipgaps-json" if name is None else f"--{name}-mipgaps-json"
+        warnings.warn(
+            f"{flag} is planned for deprecation in a future release. "
+            "Your schedule is still being applied to the per-iteration "
+            "solver options.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         with open(mipgaps_json) as fin:
             din = json.load(fin)
         mipgapdict = {int(i): din[i] for i in din}
