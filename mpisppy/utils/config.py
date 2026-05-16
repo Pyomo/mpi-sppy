@@ -623,7 +623,8 @@ class Config(pyofig.ConfigDict):
             name = name+"_"
 
         self.add_to_config(f'{name}mipgaps_json',
-                           description="path to json file with a mipgap schedule for PH iterations",
+                           description="path to json file with a mipgap schedule for PH iterations "
+                                       "(planned for deprecation in a future release)",
                            domain=str,
                            default=None)
 
