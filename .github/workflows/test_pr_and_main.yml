@@ -350,6 +350,7 @@ jobs:
       - name: Install dependencies
         shell: bash -l {0}
         run: |
+          conda install -y pip
           python -m pip install --upgrade pip
           pip install pytest pytest-cov pybind11 coverage
           conda install -y conda-forge::libstdcxx-ng
