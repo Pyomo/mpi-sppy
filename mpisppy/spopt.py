@@ -15,6 +15,7 @@ import math
 import inspect
 import random
 import pathlib
+import warnings
 
 import numpy as np
 from mpisppy import MPI
@@ -70,7 +71,52 @@ class SPOpt(SPBase):
             #       free the memory the C++ model uses.
             SPPresolve(self, options.get("presolve_options",None)).presolve()
         self._create_fixed_nonant_cache()
-        self.current_solver_options = None
+
+        # solver_options_layers is the source of truth for
+        # per-iteration solver options; _effective_solver_options(k)
+        # folds them and overlays current_solver_options as a final
+        # "dynamic overrides" layer (back-compat path for external
+        # mutators).
+        self.solver_options_layers = list(options.get("solver_options_layers") or [])
+        if not self.solver_options_layers:
+            # Caller bypassed cfg_vanilla and supplied only the legacy
+            # iter0/iterk dicts (tests, ciutils, examples/hydro
+            # fixtures). Synthesize the equivalent layers so the fold
+            # matches what the legacy dicts described.
+            _iter0_dict = options.get("iter0_solver_options") or {}
+            _iterk_dict = options.get("iterk_solver_options") or {}
+            if (_iter0_dict or _iterk_dict) and self.cylinder_rank == 0:
+                # One print per cylinder (hub plus each spoke);
+                # without the gate every MPI rank would emit its own
+                # first-occurrence copy, flooding HPC runs.
+                warnings.warn(
+                    "Constructing PHBase with options['iter0_solver_options'] "
+                    "and/or options['iterk_solver_options'] is deprecated. "
+                    "Build options['solver_options_layers'] instead "
+                    "(typically via mpisppy.utils.cfg_vanilla.shared_options "
+                    "or sputils.solver_options_layer). The legacy dicts are "
+                    "still honored for now.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+            if _iter0_dict:
+                self.solver_options_layers.append(
+                    sputils.solver_options_layer("iter0", _iter0_dict))
+            if _iterk_dict:
+                self.solver_options_layers.append(
+                    sputils.solver_options_layer("iterk", _iterk_dict))
+        # Reserved layer for runtime-adaptive extensions (Gapper
+        # auto-mode writes its mipgap into this layer's options
+        # dict). Appended last so the fold of solver_options_layers
+        # picks it up after every CLI-configured layer.
+        self._dynamic_solver_options_layer = sputils.solver_options_layer(
+            "default", {})
+        self.solver_options_layers.append(
+            self._dynamic_solver_options_layer)
+        # Back-compat dynamic-overrides dict. New code should write
+        # into _dynamic_solver_options_layer["options"] instead.
+        self.current_solver_options = {}
+
         self.extensions = extensions
         self.extension_kwargs = extension_kwargs
 
@@ -114,6 +160,28 @@ class SPOpt(SPBase):
                             "reported as stale. This usually means this variable "
                             "did not appear in any (active) components, and hence "
                             "was not communicated to the subproblem solver. ")
+
+
+    def _effective_solver_options(self, k):
+        """Effective solver options for iteration *k*.
+
+        Folds solver_options_layers (each layer's "when" predicate
+        decides whether it applies at iteration k; last write wins
+        per key), then overlays self.current_solver_options as a
+        final "dynamic overrides" layer so Gapper auto-mode mutations
+        (legacy path) continue to surface in the solve.
+
+        Args:
+            k (int): iteration number (0 for iter0).
+
+        Returns:
+            dict: merged options for the solver.
+        """
+        folded = sputils.fold_solver_options_layers(
+            self.solver_options_layers, k)
+        if self.current_solver_options:
+            folded.update(self.current_solver_options)
+        return folded
 
 
     def solve_one(self, solver_options, k, s,
