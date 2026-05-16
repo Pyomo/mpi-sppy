@@ -1036,5 +1036,36 @@ class TestSolverOptionsFilePerSpoke(unittest.TestCase):
             os.unlink(path)
 
 
+class TestLagrangerDeprecation(unittest.TestCase):
+    """lagranger_spoke() emits a DeprecationWarning at setup naming
+    alternative outer-bound options. The internal wiring is not
+    refactored; the warning is the migration cue.
+    """
+
+    def test_lagranger_spoke_emits_deprecation_warning(self):
+        import warnings
+        from unittest.mock import patch
+        from mpisppy.utils import cfg_vanilla
+        # The warning fires before _PHBase_spoke_foundation is
+        # called, so a side_effect on the foundation lets us exit
+        # the function early without needing a full cfg.
+        sentinel = RuntimeError("stop after the warning")
+        with patch.object(cfg_vanilla, "_PHBase_spoke_foundation",
+                           side_effect=sentinel):
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                with self.assertRaises(RuntimeError):
+                    cfg_vanilla.lagranger_spoke(None, None, None, [])
+        self.assertTrue(
+            any(issubclass(w.category, DeprecationWarning)
+                and "lagranger" in str(w.message)
+                and "future release" in str(w.message)
+                for w in caught),
+            f"Expected DeprecationWarning naming lagranger and 'future "
+            f"release'; got "
+            f"{[(w.category.__name__, str(w.message)) for w in caught]}",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

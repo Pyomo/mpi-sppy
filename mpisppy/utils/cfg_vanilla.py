@@ -934,6 +934,15 @@ def lagranger_spoke(
     extension_kwargs=None,
     average_scenario_creator=None,
 ):
+    warnings.warn(
+        "The lagranger spoke is slated for removal in a future "
+        "release: it does not seem to perform as well as the other "
+        "outer-bound options (--lagrangian, --ph-dual, --subgradient, "
+        "--fwph). No removal timeline is committed yet; this warning "
+        "is the heads-up.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     from mpisppy.cylinders.lagranger_bounder import LagrangerOuterBound
     lagranger_spoke = _PHBase_spoke_foundation(
         LagrangerOuterBound,

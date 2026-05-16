@@ -718,13 +718,12 @@ spoke's section of `solver_options_layers`.
 
 ### 5.8 Lagranger deprecation
 
-Per §4 q4: emit a `DeprecationWarning` at `lagranger_spoke()` setup
-saying lagranger is slated for removal in a future release because it
-does not seem to perform as well as the other outer-bound options.
-No removal timeline committed in this redesign. Internal wiring is
-*not* refactored to fold into `apply_solver_specs` in this round —
-that's tracked separately and is conditional on whether lagranger
-survives at all.
+**Shipped.** `lagranger_spoke()` emits a `DeprecationWarning` at
+setup naming the other outer-bound options as alternatives. No
+removal timeline is committed. Internal wiring is *not* refactored
+to fold into `apply_solver_specs` in this round — that's tracked
+separately and is conditional on whether lagranger survives at
+all.
 
 ### 5.9 Component-level changes
 
