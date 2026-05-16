@@ -794,6 +794,9 @@ jobs:
     name: gradient and rho tests
     runs-on: ubuntu-latest
     needs: [ruff]
+    defaults:
+      run:
+        shell: bash -l {0}
     steps:
       - uses: actions/checkout@v3
 
