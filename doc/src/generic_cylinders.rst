@@ -360,9 +360,13 @@ Sub-blocks behave per their names:
 * ``default``    — applies to every iteration.
 * ``iter0``      — only at iteration 0.
 * ``iterk``      — at iteration 1 and beyond.
-* ``starting_at_iter`` — keyed by iteration number ``N``; applies from
-  iteration ``N`` onward (so ``"5"`` first fires at ``k = 5`` and
-  persists until a later ``starting_at_iter`` entry overrides it).
+* ``starting_at_iter`` — keyed by iteration number ``N`` (with
+  ``N >= 1``); applies from iteration ``N`` onward (so ``"5"``
+  first fires at ``k = 5`` and persists until a later
+  ``starting_at_iter`` entry overrides it). For options that
+  should apply at every iteration, use the ``default`` sub-block
+  instead — ``starting_at_iter`` with ``N = 0`` is rejected
+  because it would silently outrank ``iter0`` and ``iterk``.
 * ``spokes``     — per-spoke overrides keyed by spoke name. Each
   spoke sub-block has the same shape minus ``spokes``.
 

@@ -715,10 +715,16 @@ def option_dict_to_string(odict):
 #
 # A layer is a plain dict {"when": <predicate>, "options": <dict>}.
 # Predicates:
-#   "default"             — applies at every iteration
-#   "iter0"               — only at iteration 0
-#   "iterk"               — iterations k >= 1
-#   ("starting_at_iter", N)     — iterations k >= N (N is int)
+#   "default"               — applies at every iteration
+#   "iter0"                 — only at iteration 0
+#   "iterk"                 — iterations k >= 1
+#   ("starting_at_iter", N) — iterations k >= N (N >= 1)
+#
+# N = 0 is rejected explicitly. A "matches every iteration" layer
+# should use the `default` predicate; using
+# ("starting_at_iter", 0) instead would silently rank the layer
+# above `iter0` / `iterk` in axis-1 specificity, which is rarely
+# what callers intend.
 
 
 def _validate_when(when):
@@ -728,9 +734,12 @@ def _validate_when(when):
     if isinstance(when, tuple) and len(when) == 2 and when[0] == "starting_at_iter":
         N = when[1]
         # bool is a subclass of int; reject it explicitly
-        if isinstance(N, bool) or not isinstance(N, int) or N < 0:
+        if isinstance(N, bool) or not isinstance(N, int) or N < 1:
             raise ValueError(
-                f"starting_at_iter predicate requires a non-negative int, got {N!r}")
+                f"starting_at_iter predicate requires an int >= 1; got "
+                f"{N!r}. Use the 'default' predicate for options that "
+                "apply at every iteration."
+            )
         return
     raise ValueError(f"Unknown solver-options layer predicate: {when!r}")
 
@@ -740,7 +749,8 @@ def solver_options_layer(when, options):
 
     Args:
         when: predicate, one of "default", "iter0", "iterk", or
-            ("starting_at_iter", N) with N a non-negative int.
+            ("starting_at_iter", N) with N an int >= 1. (N = 0 is
+            rejected; use ``"default"`` instead.)
         options (dict): the options to fold in when the predicate matches.
 
     Returns:
@@ -891,9 +901,16 @@ def _parse_options_file_section(section, source, *, allow_spokes):
         except (TypeError, ValueError):
             raise ValueError(
                 f"{source}.starting_at_iter: key {k!r} is not an integer") from None
-        if N < 0:
+        if N < 1:
+            if N == 0:
+                raise ValueError(
+                    f"{source}.starting_at_iter: iteration index 0 is "
+                    "not allowed. Move these options into the 'default' "
+                    "sub-block if they should apply at every iteration."
+                )
             raise ValueError(
-                f"{source}.starting_at_iter: iteration index must be >= 0; got {N}")
+                f"{source}.starting_at_iter: iteration index must be >= 1; "
+                f"got {N}")
         if not isinstance(v, dict):
             raise ValueError(
                 f"{source}.starting_at_iter[{k}]: expected an options object, "

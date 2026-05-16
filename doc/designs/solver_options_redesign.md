@@ -527,7 +527,7 @@ last, so most-specific wins):**
    default
       ≺  iter0       (only at k = 0)
       ≺  iterk       (k ≥ 1)
-              ≺  starting_at_iter:N₁    (k ≥ N₁)
+              ≺  starting_at_iter:N₁    (k ≥ N₁, N₁ ≥ 1)
               ≺  starting_at_iter:N₂    (k ≥ N₂, N₁ < N₂)
               ≺  ...              (sorted by ascending N)
 ```
@@ -535,7 +535,9 @@ last, so most-specific wins):**
 `iter0` and `iterk` are disjoint, so the comparison only matters for
 predicates that all match the current `k`. `starting_at_iter:N` is strictly
 more specific than `iterk` whenever it matches, because the user
-named a precise N.
+named a precise N. `N = 0` is not allowed: it would silently outrank
+`iter0` / `iterk` for every iteration; a layer that should apply
+universally must use the `default` predicate instead.
 
 **Axis 2 — Source order, within a single predicate:**
 

@@ -224,8 +224,14 @@ class TestPredicateValidation(unittest.TestCase):
 
     def test_valid_predicates_accepted(self):
         for when in ("default", "iter0", "iterk",
-                     ("starting_at_iter", 0), ("starting_at_iter", 5)):
+                     ("starting_at_iter", 1), ("starting_at_iter", 5)):
             solver_options_layer(when, {"mipgap": 0.01})
+
+    def test_starting_at_iter_zero_rejected(self):
+        # N=0 would silently outrank iter0/iterk in axis-1
+        # specificity; reject with a hint pointing at `default`.
+        with self.assertRaisesRegex(ValueError, "default"):
+            solver_options_layer(("starting_at_iter", 0), {"mipgap": 0.01})
 
     def test_unknown_string_predicate_rejected(self):
         with self.assertRaises(ValueError):
@@ -304,10 +310,12 @@ class TestEffectiveSolverOptions(unittest.TestCase):
 
     def test_starting_at_iter_layers_match_mipgaps_json_semantics(self):
         # cfg_vanilla.add_gapper turns --mipgaps-json {0: G0, 5: G5,
-        # 10: G10} into a list of starting_at_iter layers; assert the fold
-        # gives the expected per-iter mipgap.
+        # 10: G10} into a list of layers; the N=0 entry is rendered
+        # as a `default` layer (since `starting_at_iter:0` is
+        # rejected by the validator), the rest as starting_at_iter:N.
+        # Assert the fold gives the expected per-iter mipgap.
         layers = [
-            solver_options_layer(("starting_at_iter", 0), {"mipgap": 0.10}),
+            solver_options_layer("default", {"mipgap": 0.10}),
             solver_options_layer(("starting_at_iter", 5), {"mipgap": 0.01}),
             solver_options_layer(("starting_at_iter", 10), {"mipgap": 0.005}),
         ]
@@ -368,9 +376,10 @@ class TestAddGapperMipgapsJsonLayers(unittest.TestCase):
                 f"got {[(w.category.__name__, str(w.message)) for w in caught]}",
             )
             layers = hub_dict["opt_kwargs"]["options"]["solver_options_layers"]
-            # 3 starting_at_iter layers in ascending-N order
+            # 3 layers: the N=0 entry is rendered as `default`,
+            # subsequent entries as starting_at_iter:N.
             self.assertEqual(len(layers), 3)
-            self.assertEqual(layers[0]["when"], ("starting_at_iter", 0))
+            self.assertEqual(layers[0]["when"], "default")
             self.assertEqual(layers[1]["when"], ("starting_at_iter", 5))
             self.assertEqual(layers[2]["when"], ("starting_at_iter", 10))
             self.assertEqual(
@@ -571,12 +580,15 @@ class TestDynamicGapperLayer(unittest.TestCase):
             f"Expected DeprecationWarning naming mipgapdict; "
             f"got {[(w.category.__name__, str(w.message)) for w in caught]}",
         )
-        # Two starting_at_iter layers, inserted before the dynamic layer.
-        # solver_options_layers starts as [_dynamic]; after the
-        # shim runs it should be [starting_at_iter 0, starting_at_iter 5, _dynamic].
+        # Two layers, inserted before the dynamic layer. The N=0
+        # entry becomes a `default` layer (since starting_at_iter:0
+        # is rejected by the validator); N=5 becomes
+        # starting_at_iter:5. solver_options_layers starts as
+        # [_dynamic]; after the shim runs it should be
+        # [default, starting_at_iter:5, _dynamic].
         layers = fake.solver_options_layers
         self.assertEqual(len(layers), 3)
-        self.assertEqual(layers[0]["when"], ("starting_at_iter", 0))
+        self.assertEqual(layers[0]["when"], "default")
         self.assertEqual(layers[0]["options"], {"mipgap": 0.10})
         self.assertEqual(layers[1]["when"], ("starting_at_iter", 5))
         self.assertEqual(layers[1]["options"], {"mipgap": 0.005})
@@ -636,7 +648,7 @@ class TestPerSpokeMipgapsJsonLayers(unittest.TestCase):
             )
             layers = spoke["opt_kwargs"]["options"]["solver_options_layers"]
             self.assertEqual(len(layers), 2)
-            self.assertEqual(layers[0]["when"], ("starting_at_iter", 0))
+            self.assertEqual(layers[0]["when"], "default")
             self.assertEqual(layers[1]["when"], ("starting_at_iter", 3))
             self.assertEqual(
                 [layer["options"] for layer in layers],
@@ -743,7 +755,20 @@ class TestLoadSolverOptionsFile(unittest.TestCase):
         from mpisppy.utils.sputils import load_solver_options_file
         path = self._write({"starting_at_iter": {"-3": {"mipgap": 1e-5}}})
         try:
-            with self.assertRaisesRegex(ValueError, ">= 0"):
+            with self.assertRaisesRegex(ValueError, ">= 1"):
+                load_solver_options_file(path)
+        finally:
+            os.unlink(path)
+
+    def test_starting_at_iter_zero_key_rejected_with_hint(self):
+        # N=0 in the file should fail with a message that points the
+        # caller at the `default` sub-block (since "starting at iter 0"
+        # really means "applies always", which is what `default` is for).
+        import os
+        from mpisppy.utils.sputils import load_solver_options_file
+        path = self._write({"starting_at_iter": {"0": {"mipgap": 1e-5}}})
+        try:
+            with self.assertRaisesRegex(ValueError, "default"):
                 load_solver_options_file(path)
         finally:
             os.unlink(path)
@@ -864,8 +889,12 @@ class TestSolverOptionsFileWiredIntoSharedOptions(unittest.TestCase):
     def test_file_starting_at_iter_persists_until_next_starting_at_iter(self):
         import os
         cfg = _bare_cfg()
+        # `default` sets the always-applies base; starting_at_iter:5
+        # kicks in at k>=5 and overrides for the rest of the run.
         path = self._write({
-            "starting_at_iter": {"0": {"mipgap": 0.1}, "5": {"mipgap": 0.01}}})
+            "default": {"mipgap": 0.1},
+            "starting_at_iter": {"5": {"mipgap": 0.01}},
+        })
         try:
             cfg.solver_options_file = path
             sh = shared_options(cfg)

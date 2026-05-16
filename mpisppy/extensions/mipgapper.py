@@ -55,10 +55,14 @@ class Gapper(mpisppy.extensions.extension.Extension):
             # so it remains last (and so wins over these for any
             # adaptive writes).
             for N in sorted(mipgapdict):
+                # N == 0 in the legacy mipgapdict means "from iter 0
+                # onward" — which is the `default` predicate. The
+                # validator rejects ("starting_at_iter", 0).
+                when = "default" if int(N) == 0 else ("starting_at_iter", int(N))
                 self.ph.solver_options_layers.insert(
                     -1,
                     sputils.solver_options_layer(
-                        ("starting_at_iter", int(N)),
+                        when,
                         {"mipgap": mipgapdict[N]},
                     ),
                 )

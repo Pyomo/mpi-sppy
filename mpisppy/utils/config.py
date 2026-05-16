@@ -185,7 +185,7 @@ class Config(pyofig.ConfigDict):
         self.add_to_config(f"{sstr}_options_file",
                             description= f"{prefix}path to a JSON solver-options file with sections "
                                          "default/iter0/iterk/starting_at_iter (and a 'spokes' sub-block at the "
-                                         "top level, naming each spoke's overrides). Inline CLI flags "
+                                         "top level, naming each spoke's overrides). CLI flags "
                                          "override file entries at the same predicate.",
                             domain = str,
                             default=None)

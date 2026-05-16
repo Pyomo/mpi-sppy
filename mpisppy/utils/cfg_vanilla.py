@@ -82,9 +82,9 @@ def shared_options(cfg, is_hub=False):
         "xhat_from_file" : cfg.get("xhat_from_file", None),
     }
     # The options-file (--solver-options-file) sits at the bottom of
-    # axis 2: any inline CLI flags below override file entries at the
-    # same predicate. Load and apply it first so the rest of the
-    # axis-2 chain can overlay on top.
+    # axis 2: any CLI flags below override file entries at the same
+    # predicate. Load and apply it first so the rest of the axis-2
+    # chain can overlay on top.
     if _hasit(cfg, "solver_options_file"):
         file_data = sputils.load_solver_options_file(cfg.solver_options_file)
         shoptions["iter0_solver_options"].update(file_data["default"])
@@ -523,9 +523,14 @@ def add_gapper(hub_dict, cfg, name=None):
         layers = hub_dict["opt_kwargs"]["options"].setdefault(
             "solver_options_layers", [])
         for N in sorted(mipgapdict.keys()):
+            # N == 0 in --mipgaps-json means "from iteration 0 onward"
+            # — which is the `default` predicate. Don't build
+            # ("starting_at_iter", 0); the validator rejects N=0 (it
+            # would silently outrank iter0/iterk in axis 1).
+            when = "default" if N == 0 else ("starting_at_iter", N)
             layers.append(
                 sputils.solver_options_layer(
-                    ("starting_at_iter", N), {"mipgap": mipgapdict[N]}))
+                    when, {"mipgap": mipgapdict[N]}))
         return
 
     # Auto-mipgap mode: Gapper observes bound cylinders and tightens
