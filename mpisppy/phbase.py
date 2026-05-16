@@ -296,7 +296,12 @@ class PHBase(mpisppy.spopt.SPOpt):
             # matches what the legacy dicts described.
             _iter0_dict = options.get("iter0_solver_options") or {}
             _iterk_dict = options.get("iterk_solver_options") or {}
-            if _iter0_dict or _iterk_dict:
+            if (_iter0_dict or _iterk_dict) and self.cylinder_rank == 0:
+                # One print per cylinder (hub and each spoke), not one
+                # per MPI rank. global_rank == 0 would only catch the
+                # hub; a spoke with deprecated input would silently
+                # skip the warning. cylinder_rank == 0 ensures every
+                # cylinder that uses the deprecated API surfaces it.
                 warnings.warn(
                     "Constructing PHBase with options['iter0_solver_options'] "
                     "and/or options['iterk_solver_options'] is deprecated. "
@@ -362,13 +367,14 @@ class PHBase(mpisppy.spopt.SPOpt):
         ``_effective_solver_options(0)`` for the iter-0 fold, which is
         the same value but doesn't go through the deprecation path.
         """
-        warnings.warn(
-            "PHBase.iter0_solver_options is deprecated; call "
-            "_effective_solver_options(0) instead. Both return the "
-            "same fold of solver_options_layers.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+        if self.cylinder_rank == 0:
+            warnings.warn(
+                "PHBase.iter0_solver_options is deprecated; call "
+                "_effective_solver_options(0) instead. Both return the "
+                "same fold of solver_options_layers.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         return sputils.fold_solver_options_layers(
             self.solver_options_layers, 0)
 
@@ -381,13 +387,14 @@ class PHBase(mpisppy.spopt.SPOpt):
         fold (which can differ from k=1 when starting_at_iter layers
         are present).
         """
-        warnings.warn(
-            "PHBase.iterk_solver_options is deprecated; call "
-            "_effective_solver_options(k) for the exact fold at "
-            "iteration k. The property returns the fold at k=1 only.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+        if self.cylinder_rank == 0:
+            warnings.warn(
+                "PHBase.iterk_solver_options is deprecated; call "
+                "_effective_solver_options(k) for the exact fold at "
+                "iteration k. The property returns the fold at k=1 only.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         return sputils.fold_solver_options_layers(
             self.solver_options_layers, 1)
 
