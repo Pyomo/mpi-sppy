@@ -322,7 +322,7 @@ invocation works whether the configured solver is CPLEX, Gurobi,
 Xpress, or HiGHS. Other option keys pass through to the solver
 unchanged. If you supply a solver-native key directly (e.g.
 ``--solver-options "mip_rel_gap=0.01"`` for HiGHS), it wins over
-any ``mipgap`` set elsewhere (e.g. ``--iter0-mipgap``).
+any ``mipgap`` set elsewhere.
 
 For iteration-aware mipgap, use ``--iter0-mipgap`` and
 ``--iterk-mipgap`` (plus their per-spoke variants), or
