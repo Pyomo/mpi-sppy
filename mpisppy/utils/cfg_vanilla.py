@@ -429,33 +429,38 @@ def add_gapper(hub_dict, cfg, name=None):
     """Wire mipgap schedule / auto mipgap into a hub or spoke dict.
 
     Two modes:
-      * static schedule (``--mipgaps-json``, global only): the JSON is
-        parsed into ``after_iter`` solver-options layers appended to
+      * static schedule (``--mipgaps-json`` or, per-spoke,
+        ``--{name}-mipgaps-json``): the JSON is parsed into
+        ``after_iter`` solver-options layers appended to
         ``solver_options_layers`` on the cylinder dict. No Gapper
         extension is registered; the layer fold drives the per-iter
         mipgap directly.
-      * auto mipgap (``--starting-mipgap`` + ``--mipgap-ratio``, also
-        per-spoke as e.g. ``--lagrangian-starting-mipgap``): the
-        Gapper extension is registered and observes inner/outer bound
-        cylinders at runtime to tighten mipgap.
+      * auto mipgap (``--starting-mipgap`` + ``--mipgap-ratio``,
+        also per-spoke as e.g. ``--lagrangian-starting-mipgap``):
+        the Gapper extension is registered and observes inner/outer
+        bound cylinders at runtime to tighten mipgap.
 
-    The two modes are mutually exclusive at the global level (Gapper
-    historically raised this; the check now lives here since the
-    static path no longer goes through Gapper).
+    The two modes are mutually exclusive at the same scope; the
+    static path no longer goes through Gapper.
     """
     prefix = "" if name is None else name + "_"
     starting_mipgap = getattr(cfg, f"{prefix}starting_mipgap", None)
     mipgap_ratio = getattr(cfg, f"{prefix}mipgap_ratio", None)
-    static_schedule = (name is None and cfg.mipgaps_json is not None)
+    mipgaps_json = getattr(cfg, f"{prefix}mipgaps_json", None)
 
-    if static_schedule and starting_mipgap is not None:
+    if mipgaps_json is not None and starting_mipgap is not None:
+        flag = "--mipgaps-json" if name is None else f"--{name}-mipgaps-json"
+        sm_flag = (
+            "--starting-mipgap" if name is None
+            else f"--{name}-starting-mipgap"
+        )
         raise RuntimeError(
-            "--mipgaps-json (static schedule) and --starting-mipgap "
-            "(auto mipgap) are mutually exclusive; pick one."
+            f"{flag} (static schedule) and {sm_flag} (auto mipgap) "
+            "are mutually exclusive; pick one."
         )
 
-    if static_schedule:
-        with open(cfg.mipgaps_json) as fin:
+    if mipgaps_json is not None:
+        with open(mipgaps_json) as fin:
             din = json.load(fin)
         mipgapdict = {int(i): din[i] for i in din}
         layers = hub_dict["opt_kwargs"]["options"].setdefault(
@@ -473,7 +478,6 @@ def add_gapper(hub_dict, cfg, name=None):
     hub_dict = extension_adder(hub_dict, Gapper)
     hub_dict["opt_kwargs"]["options"]["gapperoptions"] = {
         "verbose": cfg.verbose,
-        "mipgapdict": None,
         "starting_mipgap": starting_mipgap,
         "mipgap_ratio": mipgap_ratio,
     }

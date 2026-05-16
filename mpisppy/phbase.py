@@ -284,10 +284,9 @@ class PHBase(mpisppy.spopt.SPOpt):
         # solver_options_layers is the source of truth for
         # per-iteration solver options; _effective_solver_options(k)
         # folds them and overlays current_solver_options as a final
-        # "dynamic overrides" layer (used by Gapper auto-mode and the
-        # spoke iter0→iterk handoff). iter0_solver_options /
-        # iterk_solver_options below are read-only properties derived
-        # from the layer fold.
+        # "dynamic overrides" layer (back-compat path for external
+        # mutators). iter0_solver_options / iterk_solver_options below
+        # are read-only properties derived from the layer fold.
         self.solver_options_layers = list(options.get("solver_options_layers") or [])
         if not self.solver_options_layers:
             # Caller bypassed cfg_vanilla and supplied only the legacy
@@ -302,9 +301,18 @@ class PHBase(mpisppy.spopt.SPOpt):
             if _iterk_dict:
                 self.solver_options_layers.append(
                     sputils.solver_options_layer("iterk", _iterk_dict))
-        # Dynamic-overrides overlay: Gapper auto-mode mutates
-        # ["mipgap"] here; spokes clear it at iter0→iterk transition.
-        # _effective_solver_options reads it as the last fold step.
+        # Reserved layer for runtime-adaptive extensions (Gapper
+        # auto-mode writes its mipgap into this layer's options
+        # dict). Appended last so the fold of solver_options_layers
+        # picks it up after every CLI-configured layer; the adaptive
+        # value then wins over everything the user configured at
+        # setup, matching the prior runtime-overwrite semantics.
+        self._dynamic_solver_options_layer = sputils.solver_options_layer(
+            "default", {})
+        self.solver_options_layers.append(
+            self._dynamic_solver_options_layer)
+        # Back-compat dynamic-overrides dict. New code should write
+        # into _dynamic_solver_options_layer["options"] instead.
         self.current_solver_options = {}
 
         # flags to complete the invariant

@@ -466,5 +466,182 @@ class TestTranslateSolverOptions(unittest.TestCase):
         self.assertEqual(self._t(opts, "gurobi"), opts)
 
 
+class TestDynamicGapperLayer(unittest.TestCase):
+    """Gapper.set_mipgap writes to PHBase's reserved dynamic_gapper
+    layer; subsequent _effective_solver_options(k) folds pick up the
+    new mipgap and it overrides any CLI-configured value.
+    """
+
+    def _fake_ph(self, layers=None, current=None):
+        """Minimal PHBase-shaped object with the layer state Gapper
+        and _effective_solver_options need. Avoids MPI/scenario
+        boilerplate.
+        """
+        from mpisppy.utils.sputils import solver_options_layer
+        fake = type("FakePH", (), {})()
+        fake.solver_options_layers = list(layers) if layers else []
+        # Reserved dynamic layer (mirrors PHBase.__init__).
+        fake._dynamic_solver_options_layer = solver_options_layer(
+            "default", {})
+        fake.solver_options_layers.append(
+            fake._dynamic_solver_options_layer)
+        fake.current_solver_options = current or {}
+        return fake
+
+    def _effective(self, fake, k):
+        from mpisppy.phbase import PHBase
+        return PHBase._effective_solver_options(fake, k)
+
+    def test_set_mipgap_writes_to_dynamic_layer(self):
+        # Direct unit test of the new contract: writing to the
+        # dynamic layer shows up immediately in the effective dict.
+        fake = self._fake_ph()
+        fake._dynamic_solver_options_layer["options"]["mipgap"] = 0.001
+        self.assertEqual(self._effective(fake, 0), {"mipgap": 0.001})
+        self.assertEqual(self._effective(fake, 5), {"mipgap": 0.001})
+
+    def test_dynamic_layer_overrides_cli_layers(self):
+        # CLI-configured iter0/iterk layers + a dynamic write should
+        # produce the dynamic value at every k, since the dynamic
+        # layer is appended last.
+        from mpisppy.utils.sputils import solver_options_layer
+        cli = [
+            solver_options_layer("iter0", {"mipgap": 0.1}),
+            solver_options_layer("iterk", {"mipgap": 0.02}),
+        ]
+        fake = self._fake_ph(layers=cli)
+        fake._dynamic_solver_options_layer["options"]["mipgap"] = 0.005
+        self.assertEqual(
+            self._effective(fake, 0)["mipgap"], 0.005)
+        self.assertEqual(
+            self._effective(fake, 1)["mipgap"], 0.005)
+        self.assertEqual(
+            self._effective(fake, 9)["mipgap"], 0.005)
+
+    def test_gapper_set_mipgap_routes_to_dynamic_layer(self):
+        # End-to-end: instantiate Gapper, call set_mipgap, assert
+        # the dynamic layer reflects it and current_solver_options
+        # is untouched (the old back-channel is now unused).
+        from mpisppy.extensions.mipgapper import Gapper
+        fake = self._fake_ph()
+        fake.cylinder_rank = 0
+        fake.options = {"gapperoptions": {
+            "starting_mipgap": 0.1, "mipgap_ratio": 0.1,
+        }}
+        fake._get_cylinder_name = lambda: "TestCylinder"
+        gapper = Gapper(fake)
+        gapper.set_mipgap(0.01)
+        self.assertEqual(
+            fake._dynamic_solver_options_layer["options"]["mipgap"],
+            0.01)
+        # The back-compat dict was not mutated (only the layer was).
+        self.assertNotIn("mipgap", fake.current_solver_options)
+
+    def test_gapper_legacy_mipgapdict_translates_to_layers(self):
+        # Compatibility shim: programmatic callers that still pass
+        # mipgapdict in gapperoptions get a DeprecationWarning and
+        # the schedule is translated into after_iter layers on the
+        # host PHBase (so their existing scripts keep producing the
+        # same per-iteration mipgap). The Gapper extension itself
+        # becomes a runtime no-op in this mode.
+        import warnings
+        from mpisppy.extensions.mipgapper import Gapper
+        fake = self._fake_ph()
+        fake.cylinder_rank = 0
+        fake.options = {"gapperoptions": {
+            "mipgapdict": {0: 0.10, 5: 0.005},
+            "starting_mipgap": None,
+        }}
+        fake._get_cylinder_name = lambda: "TestCylinder"
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            gapper = Gapper(fake)
+        self.assertTrue(
+            any(issubclass(w.category, DeprecationWarning)
+                and "mipgapdict" in str(w.message) for w in caught),
+            f"Expected DeprecationWarning naming mipgapdict; "
+            f"got {[(w.category.__name__, str(w.message)) for w in caught]}",
+        )
+        # Two after_iter layers, inserted before the dynamic layer.
+        # solver_options_layers starts as [_dynamic]; after the
+        # shim runs it should be [after_iter 0, after_iter 5, _dynamic].
+        layers = fake.solver_options_layers
+        self.assertEqual(len(layers), 3)
+        self.assertEqual(layers[0]["when"], ("after_iter", 0))
+        self.assertEqual(layers[0]["options"], {"mipgap": 0.10})
+        self.assertEqual(layers[1]["when"], ("after_iter", 5))
+        self.assertEqual(layers[1]["options"], {"mipgap": 0.005})
+        self.assertIs(
+            layers[2], fake._dynamic_solver_options_layer)
+        # Gapper's runtime hooks are no-ops in compat mode.
+        self.assertTrue(gapper._static_compat)
+        # pre_iter0 / miditer must not touch the dynamic layer.
+        gapper.pre_iter0()
+        gapper.miditer()
+        self.assertEqual(
+            fake._dynamic_solver_options_layer["options"], {})
+
+
+class TestPerSpokeMipgapsJsonLayers(unittest.TestCase):
+    """cfg_vanilla.add_gapper handles --{name}-mipgaps-json the same
+    way as the global flag: per-spoke after_iter layers are appended
+    to the spoke dict's solver_options_layers.
+    """
+
+    def _write_mipgaps_json(self, schedule):
+        import json
+        import tempfile
+        path = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False).name
+        with open(path, "w") as f:
+            json.dump({str(k): v for k, v in schedule.items()}, f)
+        return path
+
+    def _spoke_dict(self):
+        return {
+            "opt_kwargs": {
+                "options": {"solver_options_layers": []},
+            },
+        }
+
+    def test_per_spoke_mipgaps_json_appends_layers(self):
+        import os
+        from mpisppy.utils.cfg_vanilla import add_gapper
+        cfg = _bare_cfg()
+        cfg.gapper_args(name="lagrangian")
+        path = self._write_mipgaps_json({0: 0.05, 3: 0.005})
+        try:
+            cfg.lagrangian_mipgaps_json = path
+            spoke = self._spoke_dict()
+            add_gapper(spoke, cfg, "lagrangian")
+            layers = spoke["opt_kwargs"]["options"]["solver_options_layers"]
+            self.assertEqual(len(layers), 2)
+            self.assertEqual(layers[0]["when"], ("after_iter", 0))
+            self.assertEqual(layers[1]["when"], ("after_iter", 3))
+            self.assertEqual(
+                [layer["options"] for layer in layers],
+                [{"mipgap": 0.05}, {"mipgap": 0.005}],
+            )
+            self.assertNotIn(
+                "gapperoptions", spoke["opt_kwargs"]["options"])
+        finally:
+            os.unlink(path)
+
+    def test_per_spoke_static_and_auto_modes_exclusive(self):
+        import os
+        from mpisppy.utils.cfg_vanilla import add_gapper
+        cfg = _bare_cfg()
+        cfg.gapper_args(name="lagrangian")
+        path = self._write_mipgaps_json({0: 0.05})
+        try:
+            cfg.lagrangian_mipgaps_json = path
+            cfg.lagrangian_starting_mipgap = 0.1
+            with self.assertRaisesRegex(
+                    RuntimeError, "lagrangian-mipgaps-json"):
+                add_gapper(self._spoke_dict(), cfg, "lagrangian")
+        finally:
+            os.unlink(path)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -20,7 +20,6 @@ from mpisppy.spin_the_wheel import WheelSpinner
 
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
-from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.xhatclosest import XhatClosest
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
@@ -73,7 +72,6 @@ def main():
     xhatlooper = cfg.xhatlooper
     xhatshuffle = cfg.xhatshuffle
     lagrangian = cfg.lagrangian
-    gapper = cfg.ph_mipgaps_json is not None
     fixer = cfg.fixer
     fixer_tol = cfg.fixer_tol
     cross_scenario_cuts = cfg.cross_scenario_cuts
@@ -110,8 +108,6 @@ def main():
 
     # Extend and/or correct the vanilla dictionary
     ext_classes =  []
-    if gapper:
-        ext_classes.append(Gapper)
     if fixer:
         ext_classes.append(Fixer)
     if cross_scenario_cuts:
@@ -136,17 +132,21 @@ def main():
             "keep_solution" : True
         }
 
+    # Per-iteration mipgap schedule: route the example's
+    # --ph-mipgaps-json into hub solver_options_layers as
+    # after_iter layers so the layer fold drives mipgap at each
+    # PH iteration. No Gapper extension is required for static
+    # schedules.
     if cfg.ph_mipgaps_json is not None:
         with open(cfg.ph_mipgaps_json) as fin:
             din = json.load(fin)
-        mipgapdict = {int(i): din[i] for i in din}
-    else:
-        mipgapdict = None
-
-    hub_dict["opt_kwargs"]["options"]["gapperoptions"] = {
-        "verbose": cfg.verbose,
-        "mipgapdict": mipgapdict
-        }
+        mipgap_schedule = {int(i): din[i] for i in din}
+        hub_options = hub_dict["opt_kwargs"]["options"]
+        hub_options.setdefault("solver_options_layers", [])
+        for _N in sorted(mipgap_schedule):
+            hub_options["solver_options_layers"].append(
+                sputils.solver_options_layer(
+                    ("after_iter", _N), {"mipgap": mipgap_schedule[_N]}))
 
     if cfg.default_rho is None:
         # since we are using a rho_setter anyway

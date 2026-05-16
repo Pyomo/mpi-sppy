@@ -48,7 +48,8 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
                                                 all_nodenames=all_nodenames,
                                                 average_scenario_creator=average_scenario_creator,
                                                 )
-        if cfg.lagrangian_starting_mipgap is not None:
+        if (cfg.lagrangian_starting_mipgap is not None
+                or cfg.lagrangian_mipgaps_json is not None):
             vanilla.add_gapper(lagrangian_spoke, cfg, "lagrangian")
 
     # dual ph spoke

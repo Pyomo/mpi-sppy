@@ -7,14 +7,12 @@
 # full copyright and license information.
 ###############################################################################
 # Test PH extensions that are otherwise untested:
-#   - Gapper (mipgapper.py, 0% coverage)
 #   - MultRhoUpdater (mult_rho_updater.py, 24% coverage)
 #   - Wtracker_extension (wtracker_extension.py, 0%) + WTracker (wtracker.py, 27%)
 
 import glob
 import os
 import unittest
-import warnings
 
 import mpisppy.opt.ph
 import mpisppy.tests.examples.farmer as farmer
@@ -27,99 +25,6 @@ solver_available, solver_name, persistent_available, persistent_solver_name = ge
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
-
-
-class TestGapper(unittest.TestCase):
-    """Test the Gapper (mipgapper) extension with sizes."""
-
-    def setUp(self):
-        self.options = {
-            "solver_name": solver_name,
-            "PHIterLimit": 5,
-            "defaultPHrho": 1,
-            "convthresh": 0.001,
-            "verbose": False,
-            "display_timing": False,
-            "display_progress": False,
-            "iter0_solver_options": {"mipgap": 0.1},
-            "iterk_solver_options": {"mipgap": 0.02},
-            "smoothed": 0,
-            "asynchronousPH": False,
-            "subsolvedirectives": None,
-            "toc": False,
-        }
-        self.scenario_names = [f"Scenario{i+1}" for i in range(3)]
-        self.creator_kwargs = {"scenario_count": 3}
-
-    def _copy_options(self):
-        return dict(self.options)
-
-    @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
-    def test_gapper_dict_mode(self):
-        """Gapper's static mipgapdict path runs end-to-end and warns.
-
-        Constructing gapperoptions['mipgapdict'] is the deprecated
-        static-schedule path (the supported path is --mipgaps-json,
-        which cfg_vanilla.add_gapper routes through
-        solver_options_layers). This test exercises the legacy code
-        path and asserts the DeprecationWarning fires. The sizes
-        3-scenario fixture trivially converges at iter0, so this
-        fixture cannot verify later-iteration mipgap values — that
-        regression lives in test_solver_options_layers.py instead.
-        """
-        from mpisppy.extensions.mipgapper import Gapper
-        options = self._copy_options()
-        options["gapperoptions"] = {
-            "mipgapdict": {0: 0.10, 2: 0.05, 4: 0.01},
-        }
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            ph = mpisppy.opt.ph.PH(
-                options,
-                self.scenario_names,
-                sizes_creator,
-                sizes_denouement,
-                scenario_creator_kwargs=self.creator_kwargs,
-                extensions=Gapper,
-            )
-        self.assertTrue(
-            any(issubclass(w.category, DeprecationWarning)
-                and "Gapper" in str(w.message) for w in caught),
-            f"Expected DeprecationWarning from Gapper static-dict mode; "
-            f"got {[(w.category.__name__, str(w.message)) for w in caught]}",
-        )
-        conv, obj, tbound = ph.ph_main()
-        self.assertIsNotNone(obj)
-
-    @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
-    def test_gapper_changes_gap(self):
-        """Verify Gapper's mipgapdict path runs end-to-end and warns."""
-        from mpisppy.extensions.mipgapper import Gapper
-        options = self._copy_options()
-        options["PHIterLimit"] = 3
-        options["gapperoptions"] = {
-            "mipgapdict": {0: 0.50, 2: 0.001},
-        }
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            ph = mpisppy.opt.ph.PH(
-                options,
-                self.scenario_names,
-                sizes_creator,
-                sizes_denouement,
-                scenario_creator_kwargs=self.creator_kwargs,
-                extensions=Gapper,
-            )
-        self.assertTrue(
-            any(issubclass(w.category, DeprecationWarning)
-                and "Gapper" in str(w.message) for w in caught),
-            f"Expected DeprecationWarning from Gapper static-dict mode; "
-            f"got {[(w.category.__name__, str(w.message)) for w in caught]}",
-        )
-        conv, obj, tbound = ph.ph_main()
-        self.assertIsNotNone(obj)
 
 
 class TestMultRhoUpdater(unittest.TestCase):
