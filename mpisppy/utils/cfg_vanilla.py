@@ -480,7 +480,7 @@ def add_gapper(hub_dict, cfg, name=None):
     Two modes:
       * static schedule (``--mipgaps-json`` or, per-spoke,
         ``--{name}-mipgaps-json``): the JSON is parsed into
-        ``after_iter`` solver-options layers appended to
+        ``starting_at_iter`` solver-options layers appended to
         ``solver_options_layers`` on the cylinder dict. No Gapper
         extension is registered; the layer fold drives the per-iter
         mipgap directly.
@@ -525,7 +525,7 @@ def add_gapper(hub_dict, cfg, name=None):
         for N in sorted(mipgapdict.keys()):
             layers.append(
                 sputils.solver_options_layer(
-                    ("after_iter", N), {"mipgap": mipgapdict[N]}))
+                    ("starting_at_iter", N), {"mipgap": mipgapdict[N]}))
         return
 
     # Auto-mipgap mode: Gapper observes bound cylinders and tightens

@@ -34,7 +34,7 @@ class Gapper(mpisppy.extensions.extension.Extension):
         # That role is now filled by solver_options_layers
         # (cfg_vanilla.add_gapper does this for --mipgaps-json
         # automatically). Translate any legacy mipgapdict into
-        # after_iter layers on the host PHBase so existing user
+        # starting_at_iter layers on the host PHBase so existing user
         # scripts keep producing the same per-iteration mipgap, and
         # warn so callers migrate over time.
         mipgapdict = self.gapperoptions.get("mipgapdict")
@@ -46,7 +46,7 @@ class Gapper(mpisppy.extensions.extension.Extension):
                 "solver_options_layers automatically; remove the "
                 "Gapper extension and instead pass --mipgaps-json "
                 "on the CLI, or append solver_options_layer("
-                "('after_iter', N), {'mipgap': v}) entries to "
+                "('starting_at_iter', N), {'mipgap': v}) entries to "
                 "options['solver_options_layers'] directly.",
                 DeprecationWarning,
                 stacklevel=2,
@@ -58,7 +58,7 @@ class Gapper(mpisppy.extensions.extension.Extension):
                 self.ph.solver_options_layers.insert(
                     -1,
                     sputils.solver_options_layer(
-                        ("after_iter", int(N)),
+                        ("starting_at_iter", int(N)),
                         {"mipgap": mipgapdict[N]},
                     ),
                 )

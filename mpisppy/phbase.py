@@ -358,7 +358,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         """Read-only fold of solver_options_layers for iteration k>=1.
 
         Returns the fold at k=1; later iterations may differ when
-        after_iter layers are present (callers wanting an exact
+        starting_at_iter layers are present (callers wanting an exact
         per-iteration view should call _effective_solver_options(k)).
         """
         return sputils.fold_solver_options_layers(

@@ -224,27 +224,27 @@ class TestPredicateValidation(unittest.TestCase):
 
     def test_valid_predicates_accepted(self):
         for when in ("default", "iter0", "iterk",
-                     ("after_iter", 0), ("after_iter", 5)):
+                     ("starting_at_iter", 0), ("starting_at_iter", 5)):
             solver_options_layer(when, {"mipgap": 0.01})
 
     def test_unknown_string_predicate_rejected(self):
         with self.assertRaises(ValueError):
             solver_options_layer("sometimes", {})
 
-    def test_after_iter_negative_rejected(self):
+    def test_starting_at_iter_negative_rejected(self):
         with self.assertRaises(ValueError):
-            solver_options_layer(("after_iter", -1), {})
+            solver_options_layer(("starting_at_iter", -1), {})
 
-    def test_after_iter_non_int_rejected(self):
+    def test_starting_at_iter_non_int_rejected(self):
         with self.assertRaises(ValueError):
-            solver_options_layer(("after_iter", 1.5), {})
+            solver_options_layer(("starting_at_iter", 1.5), {})
         with self.assertRaises(ValueError):
-            solver_options_layer(("after_iter", "5"), {})
+            solver_options_layer(("starting_at_iter", "5"), {})
 
-    def test_after_iter_bool_rejected(self):
-        # bool is an int subclass — guard against (after_iter, True)
+    def test_starting_at_iter_bool_rejected(self):
+        # bool is an int subclass — guard against (starting_at_iter, True)
         with self.assertRaises(ValueError):
-            solver_options_layer(("after_iter", True), {})
+            solver_options_layer(("starting_at_iter", True), {})
 
     def test_fold_rejects_invalid_predicate(self):
         # Hand-built layer (bypasses solver_options_layer) is still validated
@@ -262,7 +262,7 @@ class TestEffectiveSolverOptions(unittest.TestCase):
          whose "when" predicate matches k and last-write-wins per key.
       2. current_solver_options is overlaid last (so Gapper auto-mode
          writes to current_solver_options surface in the solve).
-      3. after_iter layers fire on iterations >= N, matching the
+      3. starting_at_iter layers fire on iterations >= N, matching the
          per-iter mipgap semantics --mipgaps-json now produces via
          add_gapper.
     """
@@ -302,14 +302,14 @@ class TestEffectiveSolverOptions(unittest.TestCase):
         self.assertEqual(
             self._effective(layers, current, 5), {"mipgap": 0.001})
 
-    def test_after_iter_layers_match_mipgaps_json_semantics(self):
+    def test_starting_at_iter_layers_match_mipgaps_json_semantics(self):
         # cfg_vanilla.add_gapper turns --mipgaps-json {0: G0, 5: G5,
-        # 10: G10} into a list of after_iter layers; assert the fold
+        # 10: G10} into a list of starting_at_iter layers; assert the fold
         # gives the expected per-iter mipgap.
         layers = [
-            solver_options_layer(("after_iter", 0), {"mipgap": 0.10}),
-            solver_options_layer(("after_iter", 5), {"mipgap": 0.01}),
-            solver_options_layer(("after_iter", 10), {"mipgap": 0.005}),
+            solver_options_layer(("starting_at_iter", 0), {"mipgap": 0.10}),
+            solver_options_layer(("starting_at_iter", 5), {"mipgap": 0.01}),
+            solver_options_layer(("starting_at_iter", 10), {"mipgap": 0.005}),
         ]
         self.assertEqual(self._effective(layers, {}, 0)["mipgap"], 0.10)
         self.assertEqual(self._effective(layers, {}, 4)["mipgap"], 0.10)
@@ -319,10 +319,10 @@ class TestEffectiveSolverOptions(unittest.TestCase):
 
 
 class TestAddGapperMipgapsJsonLayers(unittest.TestCase):
-    """add_gapper's static-schedule path now appends after_iter
+    """add_gapper's static-schedule path now appends starting_at_iter
     layers and skips the Gapper extension. The resulting per-iter
     mipgap behavior is pinned by
-    TestEffectiveSolverOptions.test_after_iter_layers_match_mipgaps_json_semantics
+    TestEffectiveSolverOptions.test_starting_at_iter_layers_match_mipgaps_json_semantics
     above; this class pins the cfg_vanilla wiring that produces
     those layers from the JSON file.
     """
@@ -343,7 +343,7 @@ class TestAddGapperMipgapsJsonLayers(unittest.TestCase):
             json.dump({str(k): v for k, v in schedule.items()}, f)
         return path
 
-    def test_mipgaps_json_appends_after_iter_layers(self):
+    def test_mipgaps_json_appends_starting_at_iter_layers(self):
         import os
         import warnings
         from mpisppy.utils.cfg_vanilla import add_gapper
@@ -368,11 +368,11 @@ class TestAddGapperMipgapsJsonLayers(unittest.TestCase):
                 f"got {[(w.category.__name__, str(w.message)) for w in caught]}",
             )
             layers = hub_dict["opt_kwargs"]["options"]["solver_options_layers"]
-            # 3 after_iter layers in ascending-N order
+            # 3 starting_at_iter layers in ascending-N order
             self.assertEqual(len(layers), 3)
-            self.assertEqual(layers[0]["when"], ("after_iter", 0))
-            self.assertEqual(layers[1]["when"], ("after_iter", 5))
-            self.assertEqual(layers[2]["when"], ("after_iter", 10))
+            self.assertEqual(layers[0]["when"], ("starting_at_iter", 0))
+            self.assertEqual(layers[1]["when"], ("starting_at_iter", 5))
+            self.assertEqual(layers[2]["when"], ("starting_at_iter", 10))
             self.assertEqual(
                 [layer["options"] for layer in layers],
                 [{"mipgap": 0.10}, {"mipgap": 0.01}, {"mipgap": 0.005}],
@@ -549,7 +549,7 @@ class TestDynamicGapperLayer(unittest.TestCase):
     def test_gapper_legacy_mipgapdict_translates_to_layers(self):
         # Compatibility shim: programmatic callers that still pass
         # mipgapdict in gapperoptions get a DeprecationWarning and
-        # the schedule is translated into after_iter layers on the
+        # the schedule is translated into starting_at_iter layers on the
         # host PHBase (so their existing scripts keep producing the
         # same per-iteration mipgap). The Gapper extension itself
         # becomes a runtime no-op in this mode.
@@ -571,14 +571,14 @@ class TestDynamicGapperLayer(unittest.TestCase):
             f"Expected DeprecationWarning naming mipgapdict; "
             f"got {[(w.category.__name__, str(w.message)) for w in caught]}",
         )
-        # Two after_iter layers, inserted before the dynamic layer.
+        # Two starting_at_iter layers, inserted before the dynamic layer.
         # solver_options_layers starts as [_dynamic]; after the
-        # shim runs it should be [after_iter 0, after_iter 5, _dynamic].
+        # shim runs it should be [starting_at_iter 0, starting_at_iter 5, _dynamic].
         layers = fake.solver_options_layers
         self.assertEqual(len(layers), 3)
-        self.assertEqual(layers[0]["when"], ("after_iter", 0))
+        self.assertEqual(layers[0]["when"], ("starting_at_iter", 0))
         self.assertEqual(layers[0]["options"], {"mipgap": 0.10})
-        self.assertEqual(layers[1]["when"], ("after_iter", 5))
+        self.assertEqual(layers[1]["when"], ("starting_at_iter", 5))
         self.assertEqual(layers[1]["options"], {"mipgap": 0.005})
         self.assertIs(
             layers[2], fake._dynamic_solver_options_layer)
@@ -593,7 +593,7 @@ class TestDynamicGapperLayer(unittest.TestCase):
 
 class TestPerSpokeMipgapsJsonLayers(unittest.TestCase):
     """cfg_vanilla.add_gapper handles --{name}-mipgaps-json the same
-    way as the global flag: per-spoke after_iter layers are appended
+    way as the global flag: per-spoke starting_at_iter layers are appended
     to the spoke dict's solver_options_layers.
     """
 
@@ -636,8 +636,8 @@ class TestPerSpokeMipgapsJsonLayers(unittest.TestCase):
             )
             layers = spoke["opt_kwargs"]["options"]["solver_options_layers"]
             self.assertEqual(len(layers), 2)
-            self.assertEqual(layers[0]["when"], ("after_iter", 0))
-            self.assertEqual(layers[1]["when"], ("after_iter", 3))
+            self.assertEqual(layers[0]["when"], ("starting_at_iter", 0))
+            self.assertEqual(layers[1]["when"], ("starting_at_iter", 3))
             self.assertEqual(
                 [layer["options"] for layer in layers],
                 [{"mipgap": 0.05}, {"mipgap": 0.005}],
@@ -665,7 +665,7 @@ class TestPerSpokeMipgapsJsonLayers(unittest.TestCase):
 
 class TestLoadSolverOptionsFile(unittest.TestCase):
     """sputils.load_solver_options_file: schema validation, sub-block
-    defaults, after_iter int-coercion, error messages.
+    defaults, starting_at_iter int-coercion, error messages.
     """
 
     def _write(self, payload):
@@ -684,7 +684,7 @@ class TestLoadSolverOptionsFile(unittest.TestCase):
             "default": {"threads": 4},
             "iter0": {"mipgap": 1e-4},
             "iterk": {"mipgap": 1e-3},
-            "after_iter": {"5": {"mipgap": 1e-5}, "10": {"mipgap": 1e-6}},
+            "starting_at_iter": {"5": {"mipgap": 1e-5}, "10": {"mipgap": 1e-6}},
             "spokes": {
                 "lagrangian": {"default": {"mipgap": 0.01}},
                 "reduced_costs": {"iter0": {"mipgap": 0.001}},
@@ -696,7 +696,7 @@ class TestLoadSolverOptionsFile(unittest.TestCase):
             self.assertEqual(data["iter0"], {"mipgap": 1e-4})
             self.assertEqual(data["iterk"], {"mipgap": 1e-3})
             self.assertEqual(
-                data["after_iter"], {5: {"mipgap": 1e-5}, 10: {"mipgap": 1e-6}})
+                data["starting_at_iter"], {5: {"mipgap": 1e-5}, 10: {"mipgap": 1e-6}})
             self.assertEqual(
                 data["spokes"]["lagrangian"]["default"], {"mipgap": 0.01})
             self.assertEqual(
@@ -713,7 +713,7 @@ class TestLoadSolverOptionsFile(unittest.TestCase):
             self.assertEqual(data["default"], {})
             self.assertEqual(data["iter0"], {"mipgap": 0.01})
             self.assertEqual(data["iterk"], {})
-            self.assertEqual(data["after_iter"], {})
+            self.assertEqual(data["starting_at_iter"], {})
             self.assertEqual(data["spokes"], {})
         finally:
             os.unlink(path)
@@ -728,20 +728,20 @@ class TestLoadSolverOptionsFile(unittest.TestCase):
         finally:
             os.unlink(path)
 
-    def test_after_iter_non_integer_key_rejected(self):
+    def test_starting_at_iter_non_integer_key_rejected(self):
         import os
         from mpisppy.utils.sputils import load_solver_options_file
-        path = self._write({"after_iter": {"five": {"mipgap": 1e-5}}})
+        path = self._write({"starting_at_iter": {"five": {"mipgap": 1e-5}}})
         try:
             with self.assertRaisesRegex(ValueError, "five"):
                 load_solver_options_file(path)
         finally:
             os.unlink(path)
 
-    def test_after_iter_negative_key_rejected(self):
+    def test_starting_at_iter_negative_key_rejected(self):
         import os
         from mpisppy.utils.sputils import load_solver_options_file
-        path = self._write({"after_iter": {"-3": {"mipgap": 1e-5}}})
+        path = self._write({"starting_at_iter": {"-3": {"mipgap": 1e-5}}})
         try:
             with self.assertRaisesRegex(ValueError, ">= 0"):
                 load_solver_options_file(path)
@@ -799,7 +799,7 @@ class TestSolverOptionsFileWiredIntoSharedOptions(unittest.TestCase):
             "default": {"threads": 2, "presolve": 1},
             "iter0": {"mipgap": 1e-4},
             "iterk": {"mipgap": 1e-3},
-            "after_iter": {"5": {"mipgap": 1e-5}},
+            "starting_at_iter": {"5": {"mipgap": 1e-5}},
         })
         try:
             cfg.solver_options_file = path
@@ -861,11 +861,11 @@ class TestSolverOptionsFileWiredIntoSharedOptions(unittest.TestCase):
         finally:
             os.unlink(path)
 
-    def test_file_after_iter_persists_until_next_after_iter(self):
+    def test_file_starting_at_iter_persists_until_next_starting_at_iter(self):
         import os
         cfg = _bare_cfg()
         path = self._write({
-            "after_iter": {"0": {"mipgap": 0.1}, "5": {"mipgap": 0.01}}})
+            "starting_at_iter": {"0": {"mipgap": 0.1}, "5": {"mipgap": 0.01}}})
         try:
             cfg.solver_options_file = path
             sh = shared_options(cfg)
@@ -945,9 +945,9 @@ class TestSolverOptionsFilePerSpoke(unittest.TestCase):
         finally:
             os.unlink(path)
 
-    def test_spoke_after_iter_subblock_honored(self):
+    def test_spoke_starting_at_iter_subblock_honored(self):
         # Spoke sub-blocks support every predicate the top-level
-        # supports, including after_iter. Verify the schema example
+        # supports, including starting_at_iter. Verify the schema example
         # in the docs holds at runtime.
         import os
         cfg = _spoke_cfg("lagrangian")
@@ -955,7 +955,7 @@ class TestSolverOptionsFilePerSpoke(unittest.TestCase):
             "spokes": {
                 "lagrangian": {
                     "default":    {"mipgap": 0.01},
-                    "after_iter": {"5": {"mipgap": 0.001}},
+                    "starting_at_iter": {"5": {"mipgap": 0.001}},
                 },
             },
         })

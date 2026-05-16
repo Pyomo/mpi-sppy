@@ -401,7 +401,7 @@ DLW: flat union makes sense
    - Generalize the current pattern: a flag `--after-iter-N-mipgap`
      where `N` is literal (probably awkward).
    - Express it only in the options-file: a top-level section like
-     `{"after_iter": {"5": {"mipgap": 1e-3}}}`.
+     `{"starting_at_iter": {"5": {"mipgap": 1e-3}}}`.
    File-only keeps the CLI surface flat and avoids inventing many new
    flags. Probably the right call if the file format lands first.
 DLW: File only. But the file will have to override iterk values or it won't make sense, right?
@@ -455,13 +455,13 @@ SolverOptionsLayer = TypedDict("SolverOptionsLayer", {
 #   "default"                — always
 #   "iter0"                  — iteration 0 only
 #   "iterk"                  — iterations k >= 1
-#   ("after_iter", N: int)   — iterations k >= N
+#   ("starting_at_iter", N: int)   — iterations k >= N
 ```
 
-`iterk` is sugar for `("after_iter", 1)` and is kept as a separate
+`iterk` is sugar for `("starting_at_iter", 1)` and is kept as a separate
 predicate solely for compatibility with `--iterk-mipgap`. EF and other
 non-iterating solves treat every layer with `when in {"default",
-"iter0"}` as applying, and ignore `iterk` / `after_iter` layers.
+"iter0"}` as applying, and ignore `iterk` / `starting_at_iter` layers.
 
 A method `PHBase._effective_solver_options(k: int) -> dict` walks
 `self.solver_options_layers` in order, picking layers whose predicate
@@ -471,7 +471,7 @@ matches `k`, and returns the merged dict. This replaces the
 The existing `--mipgaps-json` schedule (§1.1, §5.7) folds naturally
 into this model: each `{"<N>": gap}` entry becomes a layer with the
 same predicates the layered system already has — `iter0` for `N=0`,
-`iterk` for `N=1`, `("after_iter", N)` for `N >= 2`. So the static
+`iterk` for `N=1`, `("starting_at_iter", N)` for `N >= 2`. So the static
 schedule needs no new predicate; only the integration is new (§5.7).
 
 ### 5.3 New options-file
@@ -489,14 +489,14 @@ Schema (by example):
   "default":   {"threads": 4, "presolve": 2},
   "iter0":     {"mipgap": 1e-4},
   "iterk":     {"mipgap": 1e-3},
-  "after_iter": {
+  "starting_at_iter": {
     "5":  {"mipgap": 1e-5},
     "10": {"mipgap": 1e-6}
   },
   "spokes": {
     "lagrangian": {
       "default":    {"mipgap": 0.01},
-      "after_iter": {"5": {"mipgap": 0.001}}
+      "starting_at_iter": {"5": {"mipgap": 0.001}}
     },
     "reduced_costs": {
       "iter0": {"mipgap": 0.001}
@@ -505,7 +505,7 @@ Schema (by example):
 }
 ```
 
-`after_iter` keys are JSON strings (since JSON object keys must be
+`starting_at_iter` keys are JSON strings (since JSON object keys must be
 strings); they are coerced to ints at load time. Per-spoke sub-blocks
 mirror the top-level shape.
 
@@ -527,13 +527,13 @@ last, so most-specific wins):**
    default
       ≺  iter0       (only at k = 0)
       ≺  iterk       (k ≥ 1)
-              ≺  after_iter:N₁    (k ≥ N₁)
-              ≺  after_iter:N₂    (k ≥ N₂, N₁ < N₂)
+              ≺  starting_at_iter:N₁    (k ≥ N₁)
+              ≺  starting_at_iter:N₂    (k ≥ N₂, N₁ < N₂)
               ≺  ...              (sorted by ascending N)
 ```
 
 `iter0` and `iterk` are disjoint, so the comparison only matters for
-predicates that all match the current `k`. `after_iter:N` is strictly
+predicates that all match the current `k`. `starting_at_iter:N` is strictly
 more specific than `iterk` whenever it matches, because the user
 named a precise N.
 
@@ -577,24 +577,24 @@ Worked example — the case that motivated this rule:
 
 ```
 CLI:  --iterk-mipgap=0.001
-file: { "after_iter": { "5": { "mipgap": 1e-5 } } }
+file: { "starting_at_iter": { "5": { "mipgap": 1e-5 } } }
 ```
 
 | k | predicates that match    | folded order (axis 1, then 2)                  | result mipgap |
 |---|--------------------------|------------------------------------------------|---------------|
 | 0 | `iter0`                  | (no `iter0` writer here) → unset               | unset         |
 | 3 | `iterk`                  | CLI `--iterk-mipgap`                           | `0.001`       |
-| 7 | `iterk`, `after_iter:5`  | CLI `--iterk-mipgap`, then file `after_iter:5` | `1e-5`        |
+| 7 | `iterk`, `starting_at_iter:5`  | CLI `--iterk-mipgap`, then file `starting_at_iter:5` | `1e-5`        |
 
 The CLI's `--iterk-mipgap` writes first (axis 1 puts `iterk` before
-`after_iter:N`), then the file's `after_iter:5` overwrites it because
+`starting_at_iter:N`), then the file's `starting_at_iter:5` overwrites it because
 it is strictly more specific. CLI does not "win" against a more
 specific predicate — only against a same-predicate file entry.
 
 A natural consequence: if both file and CLI set the *same* key with
 the *same* predicate, CLI wins (axis 2). If file sets a key with a
 *more specific* predicate that matches, file wins (axis 1). This
-matches the §4 q3 follow-up — yes, file's `after_iter:N` overrides
+matches the §4 q3 follow-up — yes, file's `starting_at_iter:N` overrides
 both file `iterk` and CLI `--iterk-mipgap` for `k ≥ N`.
 
 Solver-name-aware translation (§5.6) is applied to the final folded
@@ -668,7 +668,7 @@ the JSON file and append one layer per entry to
 |----------|-------------------------|------------------|
 | `"0"`    | `iter0`                 | `{"mipgap": v}`  |
 | `"1"`    | `iterk`                 | `{"mipgap": v}`  |
-| `"N"` (N≥2) | `("after_iter", N)`  | `{"mipgap": v}`  |
+| `"N"` (N≥2) | `("starting_at_iter", N)`  | `{"mipgap": v}`  |
 
 These layers enter axis 2 at the `--mipgaps-json` source level (§5.4),
 so they overlay any `mipgap` set in the general options-file, while
@@ -696,7 +696,7 @@ Treatment: keep `Gapper` as a runtime extension, but rework
 - At setup, PHBase reserves a layer slot at the very top of axis 2
   (above all CLI sugar) tagged `dynamic_gapper`.
 - Gapper's `set_mipgap(g)` writes `{"mipgap": g}` into that layer's
-  options dict, scoped to predicate `("after_iter", k_now)` (or
+  options dict, scoped to predicate `("starting_at_iter", k_now)` (or
   simpler: `default`, since the dynamic value is meant to apply
   immediately and persist until the next dynamic write).
 - `_effective_solver_options(k)` picks up the dynamic layer last, so
@@ -906,7 +906,7 @@ New unit tests:
 - `test_solver_options_translation.py`: round-trip mipgap/threads
   across each known `solver_name` in the canonical table.
 - `test_solver_options_file.py`: schema acceptance, malformed JSON,
-  per-spoke nesting, `after_iter` int-coercion.
+  per-spoke nesting, `starting_at_iter` int-coercion.
 
 New integration tests (added to existing test files where natural):
 

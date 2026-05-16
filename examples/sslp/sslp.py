@@ -233,15 +233,15 @@ if __name__ == "__main__":
 
     options["fixeroptions"] = fixoptions
 
-    # Per-iteration mipgap schedule: a list of after_iter layers in
+    # Per-iteration mipgap schedule: a list of starting_at_iter layers in
     # solver_options_layers. Layer N (with N >= 0) takes effect at PH
-    # iteration N and persists until a later after_iter layer wins.
+    # iteration N and persists until a later starting_at_iter layer wins.
     _mipgap_schedule = {0: 0.02, 1: 0.02, 5: 0.01, 10: 0.005}
     options.setdefault("solver_options_layers", [])
     for _N in sorted(_mipgap_schedule):
         options["solver_options_layers"].append(
             sputils.solver_options_layer(
-                ("after_iter", _N), {"mipgap": _mipgap_schedule[_N]}))
+                ("starting_at_iter", _N), {"mipgap": _mipgap_schedule[_N]}))
 
     all_scenario_names = list()
     for sn in range(ScenCount):

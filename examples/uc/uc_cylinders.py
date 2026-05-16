@@ -134,7 +134,7 @@ def main():
 
     # Per-iteration mipgap schedule: route the example's
     # --ph-mipgaps-json into hub solver_options_layers as
-    # after_iter layers so the layer fold drives mipgap at each
+    # starting_at_iter layers so the layer fold drives mipgap at each
     # PH iteration. No Gapper extension is required for static
     # schedules.
     if cfg.ph_mipgaps_json is not None:
@@ -146,7 +146,7 @@ def main():
         for _N in sorted(mipgap_schedule):
             hub_options["solver_options_layers"].append(
                 sputils.solver_options_layer(
-                    ("after_iter", _N), {"mipgap": mipgap_schedule[_N]}))
+                    ("starting_at_iter", _N), {"mipgap": mipgap_schedule[_N]}))
 
     if cfg.default_rho is None:
         # since we are using a rho_setter anyway

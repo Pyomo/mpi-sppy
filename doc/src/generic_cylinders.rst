@@ -345,11 +345,11 @@ a JSON file with per-iteration and per-spoke sub-blocks. Schema:
       "default":    {"threads": 4, "presolve": 2},
       "iter0":      {"mipgap": 1e-4},
       "iterk":      {"mipgap": 1e-3},
-      "after_iter": {"5": {"mipgap": 1e-5}, "10": {"mipgap": 1e-6}},
+      "starting_at_iter": {"5": {"mipgap": 1e-5}, "10": {"mipgap": 1e-6}},
       "spokes": {
         "lagrangian": {
           "default":    {"mipgap": 0.01},
-          "after_iter": {"5": {"mipgap": 0.001}}
+          "starting_at_iter": {"5": {"mipgap": 0.001}}
         },
         "reduced_costs": {"iter0": {"mipgap": 0.001}}
       }
@@ -360,9 +360,9 @@ Sub-blocks behave per their names:
 * ``default``    — applies to every iteration.
 * ``iter0``      — only at iteration 0.
 * ``iterk``      — at iteration 1 and beyond.
-* ``after_iter`` — keyed by iteration number ``N``; applies from
+* ``starting_at_iter`` — keyed by iteration number ``N``; applies from
   iteration ``N`` onward (so ``"5"`` first fires at ``k = 5`` and
-  persists until a later ``after_iter`` entry overrides it).
+  persists until a later ``starting_at_iter`` entry overrides it).
 * ``spokes``     — per-spoke overrides keyed by spoke name. Each
   spoke sub-block has the same shape minus ``spokes``.
 
@@ -375,13 +375,13 @@ Precedence at the same iteration / predicate, lowest to highest:
 
 1. ``--solver-options-file`` entries.
 2. Inline ``--solver-options`` (``default`` predicate only).
-3. ``--mipgaps-json`` (``after_iter`` only — planned for
+3. ``--mipgaps-json`` (``starting_at_iter`` only — planned for
    deprecation; superseded by ``--solver-options-file``).
 4. ``--iter0-mipgap`` / ``--iterk-mipgap`` / ``--max-solver-threads``
    (CLI sugar).
 
 More specific predicates always win for any iteration that matches
-both: at ``k = 7``, an ``after_iter: {"5": …}`` entry overrides
+both: at ``k = 7``, an ``starting_at_iter: {"5": …}`` entry overrides
 any ``iterk`` entry, even though both apply.
 
 ``solver-log-dir``
