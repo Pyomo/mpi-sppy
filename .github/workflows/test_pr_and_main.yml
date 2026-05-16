@@ -344,7 +344,7 @@ jobs:
         uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: ${{ matrix.python-version }}
-          channels: anaconda, conda-forge
+          channels: conda-forge, anaconda
           activate-environment: test_env
 
       - name: Install dependencies
