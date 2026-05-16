@@ -809,7 +809,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install -y conda-forge::libstdcxx-ng
-          conda install -y -c conda-forge openmpi mpi4py "numpy" setuptools cmake
+          conda install -y -c conda-forge openmpi mpi4py "numpy" setuptools cmake pip
           conda run -n test_env --no-capture-output pip install pyomo pandas xpress cplex scipy sympy dill packaging coverage
 
       - name: setup the program
