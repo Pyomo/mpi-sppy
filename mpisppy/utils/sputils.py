@@ -853,6 +853,140 @@ def translate_solver_options(opts, solver_name):
     return out
 
 
+# Recognized keys in a solver-options-file's per-section sub-block
+# (the top-level dict and each per-spoke sub-block share this shape).
+_OPTIONS_FILE_PREDICATES = ("default", "iter0", "iterk", "after_iter")
+_OPTIONS_FILE_TOP_KEYS = _OPTIONS_FILE_PREDICATES + ("spokes",)
+_OPTIONS_FILE_SPOKE_KEYS = _OPTIONS_FILE_PREDICATES
+
+
+def _parse_options_file_section(section, source, *, allow_spokes):
+    """Validate one block of a solver-options file and normalize it.
+
+    Used both for the top-level (allow_spokes=True) and each per-spoke
+    sub-block (allow_spokes=False). Returns a dict with keys
+    "default", "iter0", "iterk" (each a dict, possibly empty),
+    "after_iter" (dict[int, dict], possibly empty), and "spokes"
+    (dict[str, dict] when allowed; absent in spoke sub-blocks).
+    """
+    if not isinstance(section, dict):
+        raise ValueError(
+            f"{source}: expected a JSON object, got {type(section).__name__}")
+    allowed = _OPTIONS_FILE_TOP_KEYS if allow_spokes else _OPTIONS_FILE_SPOKE_KEYS
+    extra = set(section) - set(allowed)
+    if extra:
+        raise ValueError(
+            f"{source}: unknown key(s) {sorted(extra)}; allowed: "
+            f"{sorted(allowed)}")
+    out = {p: dict(section.get(p) or {}) for p in ("default", "iter0", "iterk")}
+    raw_after = section.get("after_iter") or {}
+    if not isinstance(raw_after, dict):
+        raise ValueError(
+            f"{source}.after_iter: expected an object mapping iteration "
+            f"numbers to options dicts, got {type(raw_after).__name__}")
+    coerced_after = {}
+    for k, v in raw_after.items():
+        try:
+            N = int(k)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"{source}.after_iter: key {k!r} is not an integer") from None
+        if N < 0:
+            raise ValueError(
+                f"{source}.after_iter: iteration index must be >= 0; got {N}")
+        if not isinstance(v, dict):
+            raise ValueError(
+                f"{source}.after_iter[{k}]: expected an options object, "
+                f"got {type(v).__name__}")
+        coerced_after[N] = dict(v)
+    out["after_iter"] = coerced_after
+    if allow_spokes:
+        raw_spokes = section.get("spokes") or {}
+        if not isinstance(raw_spokes, dict):
+            raise ValueError(
+                f"{source}.spokes: expected an object mapping spoke "
+                f"names to sub-blocks, got {type(raw_spokes).__name__}")
+        out["spokes"] = {
+            spoke_name: _parse_options_file_section(
+                spoke_block,
+                f"{source}.spokes.{spoke_name}",
+                allow_spokes=False,
+            )
+            for spoke_name, spoke_block in raw_spokes.items()
+        }
+    return out
+
+
+def load_solver_options_file(path):
+    """Read a JSON solver-options file and return its parsed structure.
+
+    The file's shape (see doc/designs/solver_options_redesign.md §5.3):
+
+        {
+          "default":   {...},
+          "iter0":     {...},
+          "iterk":     {...},
+          "after_iter": {"5": {...}, "10": {...}},
+          "spokes": {
+            "lagrangian": {"default": {...}, "iter0": {...}, ...},
+            "reduced_costs": {...}
+          }
+        }
+
+    All sub-blocks are optional; absent ones default to empty dicts so
+    callers can iterate uniformly. ``after_iter`` keys are JSON strings
+    (JSON object keys must be strings) and are coerced to ints here.
+
+    Args:
+        path (str): path to a JSON file.
+
+    Returns:
+        dict: parsed structure with keys "default", "iter0", "iterk",
+        "after_iter" (dict[int, dict]), and "spokes" (dict[str, sub-block]).
+
+    Raises:
+        ValueError: on unknown keys, malformed sub-blocks, or
+            non-integer ``after_iter`` keys. The exception message
+            names the offending source path inside the file.
+    """
+    import json
+    with open(path) as fin:
+        try:
+            raw = json.load(fin)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"{path}: invalid JSON ({e})") from None
+    return _parse_options_file_section(raw, path, allow_spokes=True)
+
+
+def options_file_section_to_layers(section):
+    """Build the layer list for one parsed sub-block in axis-1 order.
+
+    The returned list folds (via fold_solver_options_layers) in the
+    order most-general → most-specific so that more-specific
+    predicates naturally win for any iteration that matches both.
+
+    Args:
+        section (dict): output of ``_parse_options_file_section`` (or
+            one of the per-spoke sub-blocks).
+
+    Returns:
+        list[dict]: layers in order [default, iter0, iterk,
+        after_iter:N₁, after_iter:N₂, ...] (after_iter sorted by
+        ascending N). Sub-blocks that are empty contribute nothing.
+    """
+    layers = []
+    if section["default"]:
+        layers.append(solver_options_layer("default", section["default"]))
+    if section["iter0"]:
+        layers.append(solver_options_layer("iter0", section["iter0"]))
+    if section["iterk"]:
+        layers.append(solver_options_layer("iterk", section["iterk"]))
+    for N in sorted(section["after_iter"]):
+        layers.append(
+            solver_options_layer(("after_iter", N), section["after_iter"][N]))
+    return layers
+
+
 ################################################################################
 # Various utilities related to scenario rank maps (some may not be in use)
 

@@ -476,11 +476,11 @@ schedule needs no new predicate; only the integration is new (§5.7).
 
 ### 5.3 New options-file
 
-CLI: `--solver-options-file <path>` — registered alongside
-`--solver-options` in `Config.add_solver_specs()`, so each per-spoke
-prefix automatically gets `--{name}-solver-options-file` too. Format
-is JSON for v1 (stdlib only — no `pyyaml` dependency to add). YAML can
-be added later as an alias if there's demand; this is not a v1 commit.
+**Shipped.** `--solver-options-file <path>` is registered in
+`Config.add_solver_specs()`, so each per-spoke prefix
+automatically gets `--{name}-solver-options-file` too. Format is
+JSON (stdlib only). YAML can be added later as an alias if there's
+demand.
 
 Schema (by example):
 

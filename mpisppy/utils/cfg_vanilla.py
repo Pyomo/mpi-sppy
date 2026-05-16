@@ -81,10 +81,26 @@ def shared_options(cfg, is_hub=False):
         # Consumed by XhatInnerBoundBase._try_file_xhat.
         "xhat_from_file" : cfg.get("xhat_from_file", None),
     }
+    # The options-file (--solver-options-file) sits at the bottom of
+    # axis 2: any inline CLI flags below override file entries at the
+    # same predicate. Load and apply it first so the rest of the
+    # axis-2 chain can overlay on top.
+    if _hasit(cfg, "solver_options_file"):
+        file_data = sputils.load_solver_options_file(cfg.solver_options_file)
+        shoptions["iter0_solver_options"].update(file_data["default"])
+        shoptions["iter0_solver_options"].update(file_data["iter0"])
+        shoptions["iterk_solver_options"].update(file_data["default"])
+        shoptions["iterk_solver_options"].update(file_data["iterk"])
+        shoptions["solver_options_layers"].extend(
+            sputils.options_file_section_to_layers(file_data))
+        # Stash the per-spoke sub-block so apply_solver_specs can pull
+        # spoke-specific layers from the same file on a per-spoke
+        # call (without re-reading the file).
+        shoptions["_solver_options_file_spokes"] = file_data["spokes"]
     if _hasit(cfg, "solver_options"):
         odict = sputils.option_string_to_dict(cfg.solver_options)
-        shoptions["iter0_solver_options"] = odict
-        shoptions["iterk_solver_options"] = copy.deepcopy(odict)
+        shoptions["iter0_solver_options"].update(odict)
+        shoptions["iterk_solver_options"].update(odict)
         shoptions["solver_options_layers"].append(
             sputils.solver_options_layer("default", odict))
     # note that specific options such as mipgap will override
@@ -138,6 +154,38 @@ def apply_solver_specs(name, spoke, cfg):
     options.setdefault("solver_options_layers", [])
     if _hasit(cfg, name+"_solver_name"):
         options["solver_name"] = cfg.get(name+"_solver_name")
+    # Per-spoke sources, in axis-2 order (lowest priority first):
+    #   1. global options-file's "spokes.<name>" sub-block
+    #   2. --{name}-solver-options-file (dedicated per-spoke file)
+    #   3. --{name}-solver-options (inline)
+    #   4. --{name}-iter0-mipgap / --{name}-iterk-mipgap (sugar)
+    #   5. --max-solver-threads re-apply (system-level cap)
+    spoke_file_blocks = options.get(
+        "_solver_options_file_spokes", {}).get(name)
+    if spoke_file_blocks:
+        options["iter0_solver_options"].update(spoke_file_blocks["default"])
+        options["iter0_solver_options"].update(spoke_file_blocks["iter0"])
+        options["iterk_solver_options"].update(spoke_file_blocks["default"])
+        options["iterk_solver_options"].update(spoke_file_blocks["iterk"])
+        options["solver_options_layers"].extend(
+            sputils.options_file_section_to_layers(spoke_file_blocks))
+    if _hasit(cfg, name+"_solver_options_file"):
+        spoke_file_data = sputils.load_solver_options_file(
+            cfg.get(name+"_solver_options_file"))
+        # Per-spoke files only consume their own predicates; the
+        # nested "spokes" sub-block at this level is meaningless and
+        # rejected by load_solver_options_file's validator when it
+        # appears under "spokes.<name>" -- but a dedicated per-spoke
+        # file is parsed with allow_spokes=True (since that's what
+        # the loader provides). Any nested "spokes" sub-block here
+        # is silently ignored: a spoke's own file applies only to
+        # that spoke.
+        options["iter0_solver_options"].update(spoke_file_data["default"])
+        options["iter0_solver_options"].update(spoke_file_data["iter0"])
+        options["iterk_solver_options"].update(spoke_file_data["default"])
+        options["iterk_solver_options"].update(spoke_file_data["iterk"])
+        options["solver_options_layers"].extend(
+            sputils.options_file_section_to_layers(spoke_file_data))
     if _hasit(cfg, name+"_solver_options"):
         odict = sputils.option_string_to_dict(cfg.get(name+"_solver_options"))
         options["iter0_solver_options"].update(odict)

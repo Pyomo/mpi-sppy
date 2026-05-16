@@ -182,6 +182,14 @@ class Config(pyofig.ConfigDict):
                             domain = str,
                             default=None)
 
+        self.add_to_config(f"{sstr}_options_file",
+                            description= f"{prefix}path to a JSON solver-options file with sections "
+                                         "default/iter0/iterk/after_iter (and a 'spokes' sub-block at the "
+                                         "top level, naming each spoke's overrides). Inline CLI flags "
+                                         "override file entries at the same predicate.",
+                            domain = str,
+                            default=None)
+
     def add_mipgap_specs(self, prefix=""):
         sstr = f"{prefix}_" if prefix else ""
         if prefix:

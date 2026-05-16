@@ -663,5 +663,310 @@ class TestPerSpokeMipgapsJsonLayers(unittest.TestCase):
             os.unlink(path)
 
 
+class TestLoadSolverOptionsFile(unittest.TestCase):
+    """sputils.load_solver_options_file: schema validation, sub-block
+    defaults, after_iter int-coercion, error messages.
+    """
+
+    def _write(self, payload):
+        import json
+        import tempfile
+        path = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False).name
+        with open(path, "w") as f:
+            json.dump(payload, f)
+        return path
+
+    def test_happy_path_full_schema(self):
+        import os
+        from mpisppy.utils.sputils import load_solver_options_file
+        path = self._write({
+            "default": {"threads": 4},
+            "iter0": {"mipgap": 1e-4},
+            "iterk": {"mipgap": 1e-3},
+            "after_iter": {"5": {"mipgap": 1e-5}, "10": {"mipgap": 1e-6}},
+            "spokes": {
+                "lagrangian": {"default": {"mipgap": 0.01}},
+                "reduced_costs": {"iter0": {"mipgap": 0.001}},
+            },
+        })
+        try:
+            data = load_solver_options_file(path)
+            self.assertEqual(data["default"], {"threads": 4})
+            self.assertEqual(data["iter0"], {"mipgap": 1e-4})
+            self.assertEqual(data["iterk"], {"mipgap": 1e-3})
+            self.assertEqual(
+                data["after_iter"], {5: {"mipgap": 1e-5}, 10: {"mipgap": 1e-6}})
+            self.assertEqual(
+                data["spokes"]["lagrangian"]["default"], {"mipgap": 0.01})
+            self.assertEqual(
+                data["spokes"]["reduced_costs"]["iter0"], {"mipgap": 0.001})
+        finally:
+            os.unlink(path)
+
+    def test_missing_sub_blocks_default_to_empty(self):
+        import os
+        from mpisppy.utils.sputils import load_solver_options_file
+        path = self._write({"iter0": {"mipgap": 0.01}})
+        try:
+            data = load_solver_options_file(path)
+            self.assertEqual(data["default"], {})
+            self.assertEqual(data["iter0"], {"mipgap": 0.01})
+            self.assertEqual(data["iterk"], {})
+            self.assertEqual(data["after_iter"], {})
+            self.assertEqual(data["spokes"], {})
+        finally:
+            os.unlink(path)
+
+    def test_unknown_top_level_key_rejected(self):
+        import os
+        from mpisppy.utils.sputils import load_solver_options_file
+        path = self._write({"defualt": {"mipgap": 0.01}})  # typo
+        try:
+            with self.assertRaisesRegex(ValueError, "defualt"):
+                load_solver_options_file(path)
+        finally:
+            os.unlink(path)
+
+    def test_after_iter_non_integer_key_rejected(self):
+        import os
+        from mpisppy.utils.sputils import load_solver_options_file
+        path = self._write({"after_iter": {"five": {"mipgap": 1e-5}}})
+        try:
+            with self.assertRaisesRegex(ValueError, "five"):
+                load_solver_options_file(path)
+        finally:
+            os.unlink(path)
+
+    def test_after_iter_negative_key_rejected(self):
+        import os
+        from mpisppy.utils.sputils import load_solver_options_file
+        path = self._write({"after_iter": {"-3": {"mipgap": 1e-5}}})
+        try:
+            with self.assertRaisesRegex(ValueError, ">= 0"):
+                load_solver_options_file(path)
+        finally:
+            os.unlink(path)
+
+    def test_unknown_key_in_spoke_subblock_rejected(self):
+        import os
+        from mpisppy.utils.sputils import load_solver_options_file
+        path = self._write({
+            "spokes": {"lagrangian": {"spokes": {"x": {}}}}
+        })
+        try:
+            # Nested "spokes" inside a spoke sub-block is not allowed.
+            with self.assertRaisesRegex(
+                    ValueError, "spokes.lagrangian.*spokes"):
+                load_solver_options_file(path)
+        finally:
+            os.unlink(path)
+
+    def test_malformed_json_raises_valueerror(self):
+        import os
+        import tempfile
+        from mpisppy.utils.sputils import load_solver_options_file
+        path = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False).name
+        try:
+            with open(path, "w") as f:
+                f.write("not json {")
+            with self.assertRaisesRegex(ValueError, "invalid JSON"):
+                load_solver_options_file(path)
+        finally:
+            os.unlink(path)
+
+
+class TestSolverOptionsFileWiredIntoSharedOptions(unittest.TestCase):
+    """End-to-end: --solver-options-file plumbing through
+    cfg_vanilla.shared_options into solver_options_layers + the legacy
+    iter0/iterk dicts.
+    """
+
+    def _write(self, payload):
+        import json
+        import tempfile
+        path = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False).name
+        with open(path, "w") as f:
+            json.dump(payload, f)
+        return path
+
+    def test_file_default_iter0_iterk_appear_as_layers(self):
+        import os
+        cfg = _bare_cfg()
+        path = self._write({
+            "default": {"threads": 2, "presolve": 1},
+            "iter0": {"mipgap": 1e-4},
+            "iterk": {"mipgap": 1e-3},
+            "after_iter": {"5": {"mipgap": 1e-5}},
+        })
+        try:
+            cfg.solver_options_file = path
+            sh = shared_options(cfg)
+            self.assertEqual(
+                fold_solver_options_layers(sh["solver_options_layers"], 0),
+                {"threads": 2, "presolve": 1, "mipgap": 1e-4},
+            )
+            self.assertEqual(
+                fold_solver_options_layers(sh["solver_options_layers"], 3),
+                {"threads": 2, "presolve": 1, "mipgap": 1e-3},
+            )
+            self.assertEqual(
+                fold_solver_options_layers(sh["solver_options_layers"], 7),
+                {"threads": 2, "presolve": 1, "mipgap": 1e-5},
+            )
+        finally:
+            os.unlink(path)
+
+    def test_inline_solver_options_overrides_file_default(self):
+        # Axis 2: --solver-options is above --solver-options-file in
+        # the default predicate, so inline keys win.
+        import os
+        cfg = _bare_cfg()
+        path = self._write({"default": {"mipgap": 0.5, "threads": 2}})
+        try:
+            cfg.solver_options_file = path
+            cfg.solver_options = "mipgap=0.001"
+            sh = shared_options(cfg)
+            folded = fold_solver_options_layers(sh["solver_options_layers"], 0)
+            self.assertEqual(folded["mipgap"], 0.001)  # inline wins
+            self.assertEqual(folded["threads"], 2)     # file survives
+        finally:
+            os.unlink(path)
+
+    def test_iter0_mipgap_sugar_overrides_file_iter0(self):
+        import os
+        cfg = _bare_cfg()
+        path = self._write({"iter0": {"mipgap": 0.5}})
+        try:
+            cfg.solver_options_file = path
+            cfg.iter0_mipgap = 0.001
+            sh = shared_options(cfg)
+            folded = fold_solver_options_layers(sh["solver_options_layers"], 0)
+            self.assertEqual(folded["mipgap"], 0.001)
+        finally:
+            os.unlink(path)
+
+    def test_iterk_mipgap_sugar_overrides_file_iterk(self):
+        import os
+        cfg = _bare_cfg()
+        path = self._write({"iterk": {"mipgap": 0.5}})
+        try:
+            cfg.solver_options_file = path
+            cfg.iterk_mipgap = 0.001
+            sh = shared_options(cfg)
+            folded = fold_solver_options_layers(sh["solver_options_layers"], 3)
+            self.assertEqual(folded["mipgap"], 0.001)
+        finally:
+            os.unlink(path)
+
+    def test_file_after_iter_persists_until_next_after_iter(self):
+        import os
+        cfg = _bare_cfg()
+        path = self._write({
+            "after_iter": {"0": {"mipgap": 0.1}, "5": {"mipgap": 0.01}}})
+        try:
+            cfg.solver_options_file = path
+            sh = shared_options(cfg)
+            self.assertEqual(
+                fold_solver_options_layers(sh["solver_options_layers"], 0)["mipgap"],
+                0.1)
+            self.assertEqual(
+                fold_solver_options_layers(sh["solver_options_layers"], 4)["mipgap"],
+                0.1)
+            self.assertEqual(
+                fold_solver_options_layers(sh["solver_options_layers"], 5)["mipgap"],
+                0.01)
+        finally:
+            os.unlink(path)
+
+
+class TestSolverOptionsFilePerSpoke(unittest.TestCase):
+    """Per-spoke layers from (a) the global file's "spokes" sub-block
+    and (b) a dedicated --{name}-solver-options-file flag.
+    """
+
+    def _write(self, payload):
+        import json
+        import tempfile
+        path = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False).name
+        with open(path, "w") as f:
+            json.dump(payload, f)
+        return path
+
+    def _spoke_dict_from(self, sh):
+        return {"opt_kwargs": {"options": copy.deepcopy(sh)}}
+
+    def test_global_files_spokes_subblock_adds_spoke_layers(self):
+        import os
+        cfg = _spoke_cfg("lagrangian")
+        path = self._write({
+            "default": {"threads": 2},
+            "spokes": {
+                "lagrangian": {
+                    "default": {"mipgap": 0.01},
+                    "iter0": {"mipgap": 0.001},
+                },
+            },
+        })
+        try:
+            cfg.solver_options_file = path
+            sh = shared_options(cfg)
+            spoke = self._spoke_dict_from(sh)
+            apply_solver_specs("lagrangian", spoke, cfg)
+            opts = spoke["opt_kwargs"]["options"]
+            self.assertEqual(
+                fold_solver_options_layers(opts["solver_options_layers"], 0),
+                {"threads": 2, "mipgap": 0.001},
+            )
+            self.assertEqual(
+                fold_solver_options_layers(opts["solver_options_layers"], 1),
+                {"threads": 2, "mipgap": 0.01},
+            )
+        finally:
+            os.unlink(path)
+
+    def test_dedicated_spoke_file_adds_spoke_layers(self):
+        import os
+        cfg = _spoke_cfg("lagrangian")
+        path = self._write({"default": {"mipgap": 0.005}})
+        try:
+            cfg.lagrangian_solver_options_file = path
+            sh = shared_options(cfg)
+            spoke = self._spoke_dict_from(sh)
+            apply_solver_specs("lagrangian", spoke, cfg)
+            opts = spoke["opt_kwargs"]["options"]
+            self.assertEqual(
+                fold_solver_options_layers(
+                    opts["solver_options_layers"], 0)["mipgap"],
+                0.005)
+        finally:
+            os.unlink(path)
+
+    def test_spoke_inline_overrides_spoke_file(self):
+        # Axis 2 within a spoke: --{name}-solver-options is above the
+        # spoke's file contribution.
+        import os
+        cfg = _spoke_cfg("lagrangian")
+        path = self._write({"default": {"mipgap": 0.5, "presolve": 1}})
+        try:
+            cfg.lagrangian_solver_options_file = path
+            cfg.lagrangian_solver_options = "mipgap=0.001"
+            sh = shared_options(cfg)
+            spoke = self._spoke_dict_from(sh)
+            apply_solver_specs("lagrangian", spoke, cfg)
+            opts = spoke["opt_kwargs"]["options"]
+            folded = fold_solver_options_layers(
+                opts["solver_options_layers"], 0)
+            self.assertEqual(folded["mipgap"], 0.001)  # inline wins
+            self.assertEqual(folded["presolve"], 1)    # file survives
+
+
+        finally:
+            os.unlink(path)
+
+
 if __name__ == "__main__":
     unittest.main()
