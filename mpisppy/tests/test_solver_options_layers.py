@@ -945,6 +945,45 @@ class TestSolverOptionsFilePerSpoke(unittest.TestCase):
         finally:
             os.unlink(path)
 
+    def test_spoke_after_iter_subblock_honored(self):
+        # Spoke sub-blocks support every predicate the top-level
+        # supports, including after_iter. Verify the schema example
+        # in the docs holds at runtime.
+        import os
+        cfg = _spoke_cfg("lagrangian")
+        path = self._write({
+            "spokes": {
+                "lagrangian": {
+                    "default":    {"mipgap": 0.01},
+                    "after_iter": {"5": {"mipgap": 0.001}},
+                },
+            },
+        })
+        try:
+            cfg.solver_options_file = path
+            sh = shared_options(cfg)
+            spoke = self._spoke_dict_from(sh)
+            apply_solver_specs("lagrangian", spoke, cfg)
+            opts = spoke["opt_kwargs"]["options"]
+            self.assertEqual(
+                fold_solver_options_layers(
+                    opts["solver_options_layers"], 0)["mipgap"],
+                0.01)
+            self.assertEqual(
+                fold_solver_options_layers(
+                    opts["solver_options_layers"], 4)["mipgap"],
+                0.01)
+            self.assertEqual(
+                fold_solver_options_layers(
+                    opts["solver_options_layers"], 5)["mipgap"],
+                0.001)
+            self.assertEqual(
+                fold_solver_options_layers(
+                    opts["solver_options_layers"], 9)["mipgap"],
+                0.001)
+        finally:
+            os.unlink(path)
+
     def test_spoke_inline_overrides_spoke_file(self):
         # Axis 2 within a spoke: --{name}-solver-options is above the
         # spoke's file contribution.

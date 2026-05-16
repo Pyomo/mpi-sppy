@@ -347,8 +347,11 @@ a JSON file with per-iteration and per-spoke sub-blocks. Schema:
       "iterk":      {"mipgap": 1e-3},
       "after_iter": {"5": {"mipgap": 1e-5}, "10": {"mipgap": 1e-6}},
       "spokes": {
-        "lagrangian":    {"default": {"mipgap": 0.01}},
-        "reduced_costs": {"iter0":   {"mipgap": 0.001}}
+        "lagrangian": {
+          "default":    {"mipgap": 0.01},
+          "after_iter": {"5": {"mipgap": 0.001}}
+        },
+        "reduced_costs": {"iter0": {"mipgap": 0.001}}
       }
     }
 

@@ -495,7 +495,8 @@ Schema (by example):
   },
   "spokes": {
     "lagrangian": {
-      "default": {"mipgap": 0.01}
+      "default":    {"mipgap": 0.01},
+      "after_iter": {"5": {"mipgap": 0.001}}
     },
     "reduced_costs": {
       "iter0": {"mipgap": 0.001}
