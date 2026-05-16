@@ -14,6 +14,7 @@
 import glob
 import os
 import unittest
+import warnings
 
 import mpisppy.opt.ph
 import mpisppy.tests.examples.farmer as farmer
@@ -56,49 +57,69 @@ class TestGapper(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "%s solver is not available" % (solver_name,))
     def test_gapper_dict_mode(self):
-        """Gapper with mipgapdict should set mipgap per iteration."""
+        """Gapper's static mipgapdict path runs end-to-end and warns.
+
+        Constructing gapperoptions['mipgapdict'] is the deprecated
+        static-schedule path (the supported path is --mipgaps-json,
+        which cfg_vanilla.add_gapper routes through
+        solver_options_layers). This test exercises the legacy code
+        path and asserts the DeprecationWarning fires. The sizes
+        3-scenario fixture trivially converges at iter0, so this
+        fixture cannot verify later-iteration mipgap values — that
+        regression lives in test_solver_options_layers.py instead.
+        """
         from mpisppy.extensions.mipgapper import Gapper
         options = self._copy_options()
         options["gapperoptions"] = {
             "mipgapdict": {0: 0.10, 2: 0.05, 4: 0.01},
         }
-        ph = mpisppy.opt.ph.PH(
-            options,
-            self.scenario_names,
-            sizes_creator,
-            sizes_denouement,
-            scenario_creator_kwargs=self.creator_kwargs,
-            extensions=Gapper,
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            ph = mpisppy.opt.ph.PH(
+                options,
+                self.scenario_names,
+                sizes_creator,
+                sizes_denouement,
+                scenario_creator_kwargs=self.creator_kwargs,
+                extensions=Gapper,
+            )
+        self.assertTrue(
+            any(issubclass(w.category, DeprecationWarning)
+                and "Gapper" in str(w.message) for w in caught),
+            f"Expected DeprecationWarning from Gapper static-dict mode; "
+            f"got {[(w.category.__name__, str(w.message)) for w in caught]}",
         )
         conv, obj, tbound = ph.ph_main()
         self.assertIsNotNone(obj)
-        # After iteration 4, mipgap should have been set to 0.01
-        self.assertAlmostEqual(
-            ph.current_solver_options["mipgap"], 0.01, places=5)
 
     @unittest.skipIf(not solver_available,
                      "%s solver is not available" % (solver_name,))
     def test_gapper_changes_gap(self):
-        """Verify Gapper actually changes the gap across iterations."""
+        """Verify Gapper's mipgapdict path runs end-to-end and warns."""
         from mpisppy.extensions.mipgapper import Gapper
         options = self._copy_options()
         options["PHIterLimit"] = 3
         options["gapperoptions"] = {
             "mipgapdict": {0: 0.50, 2: 0.001},
         }
-        ph = mpisppy.opt.ph.PH(
-            options,
-            self.scenario_names,
-            sizes_creator,
-            sizes_denouement,
-            scenario_creator_kwargs=self.creator_kwargs,
-            extensions=Gapper,
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            ph = mpisppy.opt.ph.PH(
+                options,
+                self.scenario_names,
+                sizes_creator,
+                sizes_denouement,
+                scenario_creator_kwargs=self.creator_kwargs,
+                extensions=Gapper,
+            )
+        self.assertTrue(
+            any(issubclass(w.category, DeprecationWarning)
+                and "Gapper" in str(w.message) for w in caught),
+            f"Expected DeprecationWarning from Gapper static-dict mode; "
+            f"got {[(w.category.__name__, str(w.message)) for w in caught]}",
         )
         conv, obj, tbound = ph.ph_main()
         self.assertIsNotNone(obj)
-        # Verify the final gap was applied
-        self.assertAlmostEqual(
-            ph.current_solver_options["mipgap"], 0.001, places=5)
 
 
 class TestMultRhoUpdater(unittest.TestCase):

@@ -281,17 +281,80 @@ class PHBase(mpisppy.spopt.SPOpt):
         self.ph_converger = ph_converger
         self.rho_setter = rho_setter
 
-        self.iter0_solver_options = options["iter0_solver_options"]
-        self.iterk_solver_options = options["iterk_solver_options"]
-        self.current_solver_options = self.iter0_solver_options
-        # Phase-1 groundwork (doc/designs/solver_options_redesign.md
-        # §6.4 phase 1). Layer list is stored but not yet read by the
-        # solve path; iter0/iterk dicts above continue to drive solves.
-        self.solver_options_layers = options.get("solver_options_layers", [])
+        # solver_options_layers is the source of truth for
+        # per-iteration solver options; _effective_solver_options(k)
+        # folds them and overlays current_solver_options as a final
+        # "dynamic overrides" layer (used by Gapper auto-mode and the
+        # spoke iter0→iterk handoff). iter0_solver_options /
+        # iterk_solver_options below are read-only properties derived
+        # from the layer fold. See
+        # doc/designs/solver_options_redesign.md §5.2, §5.4.
+        self.solver_options_layers = list(options.get("solver_options_layers") or [])
+        if not self.solver_options_layers:
+            # Caller bypassed cfg_vanilla and supplied only the legacy
+            # iter0/iterk dicts (tests, ciutils, examples/hydro
+            # fixtures). Synthesize the equivalent layers so the fold
+            # matches what the legacy dicts described.
+            _iter0_dict = options.get("iter0_solver_options") or {}
+            _iterk_dict = options.get("iterk_solver_options") or {}
+            if _iter0_dict:
+                self.solver_options_layers.append(
+                    sputils.solver_options_layer("iter0", _iter0_dict))
+            if _iterk_dict:
+                self.solver_options_layers.append(
+                    sputils.solver_options_layer("iterk", _iterk_dict))
+        # Dynamic-overrides overlay: Gapper auto-mode mutates
+        # ["mipgap"] here; spokes clear it at iter0→iterk transition.
+        # _effective_solver_options reads it as the last fold step.
+        self.current_solver_options = {}
 
         # flags to complete the invariant
         self.convobject = None  # PH converger
         self.attach_xbars()
+
+
+    def _effective_solver_options(self, k):
+        """Effective solver options for iteration *k*.
+
+        Folds solver_options_layers per
+        doc/designs/solver_options_redesign.md §5.4, then overlays
+        self.current_solver_options as a final "dynamic overrides"
+        layer so Gapper auto-mode mutations and the spoke iter0→iterk
+        handoff continue to surface in the solve.
+
+        Args:
+            k (int): iteration number (0 for iter0).
+
+        Returns:
+            dict: merged options for the solver.
+        """
+        folded = sputils.fold_solver_options_layers(
+            self.solver_options_layers, k)
+        if self.current_solver_options:
+            folded.update(self.current_solver_options)
+        return folded
+
+    @property
+    def iter0_solver_options(self):
+        """Read-only fold of solver_options_layers for iteration 0.
+
+        Derived from solver_options_layers (the source of truth);
+        retained for back-compat with callers that read this attr
+        directly. Solve sites should use _effective_solver_options(k).
+        """
+        return sputils.fold_solver_options_layers(
+            self.solver_options_layers, 0)
+
+    @property
+    def iterk_solver_options(self):
+        """Read-only fold of solver_options_layers for iteration k>=1.
+
+        Returns the fold at k=1; later iterations may differ when
+        after_iter layers are present (callers wanting an exact
+        per-iteration view should call _effective_solver_options(k)).
+        """
+        return sputils.fold_solver_options_layers(
+            self.solver_options_layers, 1)
 
 
     def Compute_Xbar(self, verbose=False):
@@ -980,7 +1043,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                 print ("About to call PH Iter0 solve loop on rank={}".format(self.cylinder_rank))
             global_toc("Entering solve loop in PHBase.Iter0")
 
-            self.solve_loop(solver_options=self.current_solver_options,
+            self.solve_loop(solver_options=self._effective_solver_options(self._PHIter),
                             dtiming=dtiming,
                             gripe=True,
                             tee=teeme,
@@ -1053,7 +1116,11 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         self.reenable_W_and_prox()
 
-        self.current_solver_options = self.options["iterk_solver_options"]
+        # Clear the dynamic-overrides overlay at the iter0→iterk
+        # transition: static iterk options come from the layer fold,
+        # and dropping any Gapper auto-mode mipgap accumulated during
+        # iter0 lets iterk start from the static fold + fresh updates.
+        self.current_solver_options = {}
 
         return self.trivial_bound
 
@@ -1141,7 +1208,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             )
 
             self.solve_loop(
-                solver_options=self.current_solver_options,
+                solver_options=self._effective_solver_options(self._PHIter),
                 dtiming=dtiming,
                 gripe=True,
                 disable_pyomo_signal_handling=False,

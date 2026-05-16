@@ -62,10 +62,11 @@ def shared_options(cfg, is_hub=False):
         "display_convergence_detail": cfg.display_convergence_detail,
         "iter0_solver_options": dict(),
         "iterk_solver_options": dict(),
-        # Phase-1 groundwork (see doc/designs/solver_options_redesign.md
-        # §5.2 / §6.4). The layer list is built in parallel with the
-        # legacy iter0/iterk dicts and folds to the same values; no
-        # consumer reads from it yet.
+        # Layered representation of solver options (see
+        # doc/designs/solver_options_redesign.md §5.2). Built in
+        # parallel with the legacy iter0/iterk dicts above and folds
+        # to the same values; PHBase consumes via
+        # _effective_solver_options(k).
         "solver_options_layers": [],
         "tee-rank0-solves": cfg.tee_rank0_solves,
         "trace_prefix" : cfg.trace_prefix,
@@ -129,10 +130,11 @@ def shared_options(cfg, is_hub=False):
 
 def apply_solver_specs(name, spoke, cfg):
     options = spoke["opt_kwargs"]["options"]
-    # Phase-1 groundwork: keep the legacy iter0/iterk dict mutations and
-    # mirror them onto solver_options_layers (§5.2 / §6.4 phase 1).
-    # Layer list is dormant; no consumer reads it yet. Phase 5 will
-    # change replace-style to overlay; phase 1 keeps the legacy contract.
+    # Mirror the legacy iter0/iterk dict mutations onto
+    # solver_options_layers (see
+    # doc/designs/solver_options_redesign.md §5.2). The current
+    # behavior of per-spoke options is replace-style; §5.5 will change
+    # this to overlay later.
     options.setdefault("solver_options_layers", [])
     if _hasit(cfg, name+"_solver_name"):
         options["solver_name"] = cfg.get(name+"_solver_name")
@@ -426,23 +428,57 @@ def extension_adder(hub_dict,ext_class):
     return hub_dict
 
 def add_gapper(hub_dict, cfg, name=None):
-    from mpisppy.extensions.mipgapper import Gapper
-    hub_dict = extension_adder(hub_dict, Gapper)
-    if name is None and cfg.mipgaps_json is not None:
+    """Wire mipgap schedule / auto mipgap into a hub or spoke dict.
+
+    Two modes:
+      * static schedule (``--mipgaps-json``, global only): the JSON is
+        parsed into ``after_iter`` solver-options layers appended to
+        ``solver_options_layers`` on the cylinder dict. No Gapper
+        extension is registered; the layer fold drives the per-iter
+        mipgap directly. See
+        doc/designs/solver_options_redesign.md §5.7.
+      * auto mipgap (``--starting-mipgap`` + ``--mipgap-ratio``, also
+        per-spoke as e.g. ``--lagrangian-starting-mipgap``): the
+        Gapper extension is registered and observes inner/outer bound
+        cylinders at runtime to tighten mipgap.
+
+    The two modes are mutually exclusive at the global level (Gapper
+    historically raised this; the check now lives here since the
+    static path no longer goes through Gapper).
+    """
+    prefix = "" if name is None else name + "_"
+    starting_mipgap = getattr(cfg, f"{prefix}starting_mipgap", None)
+    mipgap_ratio = getattr(cfg, f"{prefix}mipgap_ratio", None)
+    static_schedule = (name is None and cfg.mipgaps_json is not None)
+
+    if static_schedule and starting_mipgap is not None:
+        raise RuntimeError(
+            "--mipgaps-json (static schedule) and --starting-mipgap "
+            "(auto mipgap) are mutually exclusive; pick one."
+        )
+
+    if static_schedule:
         with open(cfg.mipgaps_json) as fin:
             din = json.load(fin)
         mipgapdict = {int(i): din[i] for i in din}
-    else:
-        mipgapdict = None
-    if name is None:
-        name = ""
-    else:
-        name = name + "_"
+        layers = hub_dict["opt_kwargs"]["options"].setdefault(
+            "solver_options_layers", [])
+        for N in sorted(mipgapdict.keys()):
+            layers.append(
+                sputils.solver_options_layer(
+                    ("after_iter", N), {"mipgap": mipgapdict[N]}))
+        return
+
+    # Auto-mipgap mode: Gapper observes bound cylinders and tightens
+    # mipgap at runtime. starting_mipgap (and the per-spoke variants)
+    # must be set; the caller gates on this.
+    from mpisppy.extensions.mipgapper import Gapper
+    hub_dict = extension_adder(hub_dict, Gapper)
     hub_dict["opt_kwargs"]["options"]["gapperoptions"] = {
         "verbose": cfg.verbose,
-        "mipgapdict": mipgapdict,
-        "starting_mipgap": getattr(cfg, f"{name}starting_mipgap"),
-        "mipgap_ratio" : getattr(cfg, f"{name}mipgap_ratio"),
+        "mipgapdict": None,
+        "starting_mipgap": starting_mipgap,
+        "mipgap_ratio": mipgap_ratio,
     }
 
 def add_fixer(hub_dict,

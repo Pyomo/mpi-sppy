@@ -11,6 +11,8 @@
     extension.
 """
 
+import warnings
+
 from mpisppy import global_toc
 import mpisppy.extensions.extension
 
@@ -23,6 +25,25 @@ class Gapper(mpisppy.extensions.extension.Extension):
         self.mipgapdict = self.gapperoptions.get("mipgapdict", None)
         self.starting_mipgap = self.gapperoptions.get("starting_mipgap", None)
         self.mipgap_ratio = self.gapperoptions.get("mipgap_ratio", None)
+        if self.mipgapdict is not None:
+            # The static-schedule mode is subsumed by the
+            # solver_options_layers system: --mipgaps-json is now
+            # routed straight to after_iter layers in
+            # cfg_vanilla.add_gapper, and arbitrary per-iteration
+            # mipgap settings will be expressible via
+            # --solver-options-file (see
+            # doc/designs/solver_options_redesign.md §5.3, §5.7).
+            # Auto mode (starting_mipgap / mipgap_ratio) is not
+            # deprecated.
+            warnings.warn(
+                "Gapper's static mipgap-dictionary mode is deprecated; "
+                "use --mipgaps-json (now routed through "
+                "solver_options_layers) or --solver-options-file. "
+                "Automatic mipgap mode (starting_mipgap / "
+                "mipgap_ratio) is not affected.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self._check_options()
 
     def _check_options(self):
