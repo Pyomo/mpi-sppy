@@ -15,6 +15,7 @@ import copy
 import json
 import warnings
 
+import mpisppy.MPI as MPI
 # Hub and spoke SPBase classes
 import mpisppy.utils.sputils as sputils
 
@@ -510,13 +511,16 @@ def add_gapper(hub_dict, cfg, name=None):
 
     if mipgaps_json is not None:
         flag = "--mipgaps-json" if name is None else f"--{name}-mipgaps-json"
-        warnings.warn(
-            f"{flag} is planned for deprecation in a future release. "
-            "Your schedule is still being applied to the per-iteration "
-            "solver options.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+        if MPI.COMM_WORLD.Get_rank() == 0:
+            # Setup-time function called on every rank; gate so only
+            # one rank prints (avoids flooding HPC runs).
+            warnings.warn(
+                f"{flag} is planned for deprecation in a future release. "
+                "Your schedule is still being applied to the per-iteration "
+                "solver options.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         with open(mipgaps_json) as fin:
             din = json.load(fin)
         mipgapdict = {int(i): din[i] for i in din}
@@ -934,15 +938,18 @@ def lagranger_spoke(
     extension_kwargs=None,
     average_scenario_creator=None,
 ):
-    warnings.warn(
-        "The lagranger spoke is slated for removal in a future "
-        "release: it does not seem to perform as well as the other "
-        "outer-bound options (--lagrangian, --ph-dual, --subgradient, "
-        "--fwph). No removal timeline is committed yet; this warning "
-        "is the heads-up.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
+    if MPI.COMM_WORLD.Get_rank() == 0:
+        # Setup-time function called on every rank; gate so only
+        # one rank prints (avoids flooding HPC runs).
+        warnings.warn(
+            "The lagranger spoke is slated for removal in a future "
+            "release: it does not seem to perform as well as the other "
+            "outer-bound options (--lagrangian, --ph-dual, --subgradient, "
+            "--fwph). No removal timeline is committed yet; this warning "
+            "is the heads-up.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
     from mpisppy.cylinders.lagranger_bounder import LagrangerOuterBound
     lagranger_spoke = _PHBase_spoke_foundation(
         LagrangerOuterBound,

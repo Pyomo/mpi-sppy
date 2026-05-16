@@ -40,17 +40,20 @@ class Gapper(mpisppy.extensions.extension.Extension):
         mipgapdict = self.gapperoptions.get("mipgapdict")
         self._static_compat = False
         if mipgapdict is not None:
-            warnings.warn(
-                "Gapper's static mipgapdict is deprecated. The "
-                "schedule is being translated to "
-                "solver_options_layers automatically; remove the "
-                "Gapper extension and instead pass --mipgaps-json "
-                "on the CLI, or append solver_options_layer("
-                "('starting_at_iter', N), {'mipgap': v}) entries to "
-                "options['solver_options_layers'] directly.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
+            if self.cylinder_rank == 0:
+                # One print per cylinder; without the gate every rank
+                # would emit its own first-occurrence copy.
+                warnings.warn(
+                    "Gapper's static mipgapdict is deprecated. The "
+                    "schedule is being translated to "
+                    "solver_options_layers automatically; remove the "
+                    "Gapper extension and instead pass --mipgaps-json "
+                    "on the CLI, or append solver_options_layer("
+                    "('starting_at_iter', N), {'mipgap': v}) entries to "
+                    "options['solver_options_layers'] directly.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
             # Insert just before the reserved dynamic_gapper layer
             # so it remains last (and so wins over these for any
             # adaptive writes).
