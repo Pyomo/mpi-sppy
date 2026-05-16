@@ -452,6 +452,10 @@ jobs:
           cd mpisppy/tests
           coverage run $COV_ARGS straight_tests.py --python-args="$PYARGS"
 
+      - name: Options-reach-solver end-to-end tests
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_options_reach_solver.py -v
+
       - name: Upload coverage data
         if: always()
         uses: actions/upload-artifact@v4
