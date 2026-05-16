@@ -795,7 +795,10 @@ solver behavior.
 
 ### 6.2 The one user-visible behavior change
 
-`apply_solver_specs` switches from replace to overlay (§5.5).
+**Shipped:** `apply_solver_specs` now overlays per-spoke
+solver-options on top of the global dict (replace-style was the
+prior behavior, kept through phases 1–3 to minimize churn).
+
 Concretely:
 
 ```
@@ -816,15 +819,19 @@ mipgap, leaves the rest alone). Users who relied on the spoke flag
 *dropping* a global key recover that by re-spelling the spoke options
 to include the keys they want, or by leaving the global flag unset.
 
-Action items:
+Action items (all complete):
 
-- Release notes call-out under "Behavior changes."
-- Add an integration test asserting the new merge semantics (so a
-  future regression to replace-style would fail CI).
-- Audit `examples/` for any harness whose semantics actually depend
-  on replace-style. (Quick grep so far: no obvious cases — the
-  examples that pass `--{name}-solver-options` use it for tightening
-  mipgap.)
+- ✔ Release notes call-out under "Behavior changes" — README.md
+  has a 2026 NOTICE section pointing at the user docs;
+  `doc/src/generic_cylinders.rst` has a `solver-options` section
+  with a `.. warning::` directive carrying the migration recipe.
+- ✔ Integration test asserting the new merge semantics — see
+  `test_per_spoke_overlay_combines_global_and_spoke_keys` in
+  `mpisppy/tests/test_solver_options_layers.py` (covers the
+  worked example above directly).
+- ✔ Audit `examples/` for any harness whose semantics depend on
+  replace-style — no example uses per-spoke solver-options
+  flags, so nothing needed updating.
 
 ### 6.3 Programmatic-API migration
 
