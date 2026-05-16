@@ -180,6 +180,30 @@ class SPOpt(SPBase):
             results = self.extobject.pre_solve(s)
 
         solve_start_time = time.time()
+
+        # Switch the solver's log destination BEFORE writing other
+        # solver options. For persistent Gurobi, setParam writes a
+        # "Set parameter X to value Y" line at parameter-set time to
+        # whatever LogFile is currently active. If we set MIPGap and
+        # other options first and then redirect LogFile, the
+        # parameter-set lines for THIS iteration land in the PREVIOUS
+        # iteration's still-open log file — which mis-attributes
+        # parameters to the wrong iteration and breaks log-driven
+        # debugging of per-iteration options.
+        solve_keyword_args = dict()
+        if self.options.get("solver_log_dir", None):
+            if k not in self._subproblem_solve_index:
+                self._subproblem_solve_index[k] = 0
+            dir_name = self.options["solver_log_dir"]
+            file_name = f"{self._get_cylinder_name()}_{k}_{self._subproblem_solve_index[k]}.log"
+            # Workaround for Pyomo/pyomo#3589: Setting 'keepfiles' to True is required
+            # for proper functionality when using the GurobiDirect / GurobiPersistent solver.
+            if isinstance(s._solver_plugin, GurobiDirect):
+                s._solver_plugin.options["LogFile"] = os.path.join(dir_name, file_name)
+            else:
+                solve_keyword_args["logfile"] = os.path.join(dir_name, file_name)
+            self._subproblem_solve_index[k] += 1
+
         if (solver_options):
             # Translate canonical option keys to the solver's native
             # spelling at the latest moment, so stored options on
@@ -191,7 +215,6 @@ class SPOpt(SPBase):
             for option_key,option_value in translated_options.items():
                 s._solver_plugin.options[option_key] = option_value
 
-        solve_keyword_args = dict()
         if self.cylinder_rank == 0:
             if tee is not None and tee is True:
                 solve_keyword_args["tee"] = True
@@ -209,19 +232,6 @@ class SPOpt(SPBase):
         if disable_pyomo_signal_handling:
             # solve_keyword_args["use_signal_handling"] = False
             pass
-
-        if self.options.get("solver_log_dir", None):
-            if k not in self._subproblem_solve_index:
-                self._subproblem_solve_index[k] = 0
-            dir_name = self.options["solver_log_dir"]
-            file_name = f"{self._get_cylinder_name()}_{k}_{self._subproblem_solve_index[k]}.log"
-            # Workaround for Pyomo/pyomo#3589: Setting 'keepfiles' to True is required
-            # for proper functionality when using the GurobiDirect / GurobiPersistent solver.
-            if isinstance(s._solver_plugin, GurobiDirect):
-                s._solver_plugin.options["LogFile"] = os.path.join(dir_name, file_name)
-            else:
-                solve_keyword_args["logfile"] = os.path.join(dir_name, file_name)
-            self._subproblem_solve_index[k] += 1
 
         Ag = getattr(self, "Ag", None)  # agnostic
         if Ag is not None:

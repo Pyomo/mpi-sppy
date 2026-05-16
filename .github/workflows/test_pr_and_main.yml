@@ -436,7 +436,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo gurobipy dill matplotlib scipy coverage
+          pip install pyomo gurobipy dill matplotlib scipy coverage pytest
 
       - name: setup the program
         run: |
@@ -451,6 +451,10 @@ jobs:
           PYARGS="-m coverage run $COV_ARGS"
           cd mpisppy/tests
           coverage run $COV_ARGS straight_tests.py --python-args="$PYARGS"
+
+      - name: Options-reach-solver end-to-end tests
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_options_reach_solver.py -v
 
       - name: Upload coverage data
         if: always()
