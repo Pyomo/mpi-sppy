@@ -145,7 +145,7 @@ class FWPH(mpisppy.phbase.PHBase):
             )
             # teeme = True
             self.fwph_solve_loop(
-                mip_solver_options=self.current_solver_options,
+                mip_solver_options=self._effective_solver_options(self._PHIter),
                 dtiming=self.options["display_timing"],
                 tee=teeme,
                 verbose=self.options["verbose"],
@@ -238,7 +238,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 break
 
             self.fwph_solve_loop(
-                mip_solver_options=self.current_solver_options,
+                mip_solver_options=self._effective_solver_options(self._PHIter),
                 dtiming=dtiming,
                 tee=teeme,
                 verbose=verbose

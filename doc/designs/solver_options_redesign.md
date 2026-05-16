@@ -841,7 +841,7 @@ Action items (all complete):
 |----------------------------------------------------------|-------------------------------------|----------------------------------------------------------------------------------|---------------|
 | `options["iter0_solver_options"]`, `options["iterk_solver_options"]` (input to PHBase) | **DeprecationWarning fires when non-empty; legacy dicts still folded into `solver_options_layers`** | unchanged target (`solver_options_layers`) | future, TBD   |
 | `PHBase.iter0_solver_options`, `iterk_solver_options` (attribute reads) | **DeprecationWarning fires on every read; both are property shims returning `fold_solver_options_layers(layers, 0|1)`** | use `_effective_solver_options(k)` | future, TBD |
-| `PHBase.current_solver_options` (attribute reads / writes) | active; still used internally as the back-compat dynamic-overrides overlay by several spokes (fwph, aph, xhat_eval, cross_scen, lshaped) | not deprecated in phase 8 — pending those spokes migrating to the layer system | future, TBD |
+| `PHBase.current_solver_options` (attribute reads / writes) | active; fwph, aph, cross_scen_extension now use `_effective_solver_options(k)`; xhat_eval and lshaped_bounder (both SPOpt-based, not PHBase-based) still read `current_solver_options` — pending `_effective_solver_options` being pushed up to SPOpt | future, TBD |
 | `option_string_to_dict`                                  | active                              | unchanged                                                                         | n/a           |
 | `option_dict_to_string`                                  | active                              | unchanged                                                                         | n/a           |
 
