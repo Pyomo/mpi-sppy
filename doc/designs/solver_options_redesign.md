@@ -839,8 +839,9 @@ Action items (all complete):
 
 | Surface                                                  | Today                              | New                                                                               | Removal       |
 |----------------------------------------------------------|-------------------------------------|----------------------------------------------------------------------------------|---------------|
-| `options["iter0_solver_options"]`, `options["iterk_solver_options"]` (input to PHBase) | active            | accepted; folded into `solver_options_layers`; one `DeprecationWarning` per run  | future, TBD   |
-| `PHBase.iter0_solver_options`, `iterk_solver_options`, `current_solver_options` (attribute reads) | active            | property shims that compute the merged dict for that predicate; warn on first access per run | future, TBD |
+| `options["iter0_solver_options"]`, `options["iterk_solver_options"]` (input to PHBase) | **DeprecationWarning fires when non-empty; legacy dicts still folded into `solver_options_layers`** | unchanged target (`solver_options_layers`) | future, TBD   |
+| `PHBase.iter0_solver_options`, `iterk_solver_options` (attribute reads) | **DeprecationWarning fires on every read; both are property shims returning `fold_solver_options_layers(layers, 0|1)`** | use `_effective_solver_options(k)` | future, TBD |
+| `PHBase.current_solver_options` (attribute reads / writes) | active; still used internally as the back-compat dynamic-overrides overlay by several spokes (fwph, aph, xhat_eval, cross_scen, lshaped) | not deprecated in phase 8 — pending those spokes migrating to the layer system | future, TBD |
 | `option_string_to_dict`                                  | active                              | unchanged                                                                         | n/a           |
 | `option_dict_to_string`                                  | active                              | unchanged                                                                         | n/a           |
 
@@ -883,9 +884,13 @@ green-on-its-own:
    spoke variants); add `load_solver_options_file`; plumb file layers
    in `shared_options` / `apply_solver_specs`.
 7. **Lagranger deprecation warning** (§5.8). Single-line addition.
-8. **Programmatic-API deprecation warnings** (§6.3). Final phase
-   because it touches user code paths and can be done cleanly only
-   once the new shape is stable.
+8. **Programmatic-API deprecation warnings** (§6.3). **Shipped.**
+   `options["iter0_solver_options"]` / `options["iterk_solver_options"]`
+   dict input and `PHBase.iter0_solver_options` /
+   `iterk_solver_options` attribute reads now emit
+   `DeprecationWarning`s. `current_solver_options` is held back
+   until the spokes that still read it migrate to the layer
+   system.
 
 Phases 1–2 land internally with no surface change. Phase 4 is the only
 phase with a release-notes-worthy behavior change. Phases 6 and 7 add

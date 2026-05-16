@@ -1067,5 +1067,123 @@ class TestLagrangerDeprecation(unittest.TestCase):
         )
 
 
+class TestProgrammaticAPIDeprecation(unittest.TestCase):
+    """Programmatic-API deprecation warnings landing in this phase:
+
+    1. options['iter0_solver_options'] / options['iterk_solver_options']
+       supplied (non-empty) at PHBase construction → warn.
+    2. PHBase.iter0_solver_options attribute read → warn.
+    3. PHBase.iterk_solver_options attribute read → warn.
+
+    Each warning is a DeprecationWarning that names the migration path.
+    """
+
+    def _options_with_legacy_dicts(self):
+        # Minimum options PHBase needs that AREN'T solver_options_layers,
+        # so the legacy-dict shim path fires.
+        return {
+            "solver_name": "gurobi_persistent",  # name only; never solved
+            "PHIterLimit": 1,
+            "defaultPHrho": 1.0,
+            "convthresh": 1e-8,
+            "verbose": False, "display_timing": False, "display_progress": False,
+            "smoothed": 0, "asynchronousPH": False,
+            "subsolvedirectives": None, "toc": False,
+            "iter0_solver_options": {"mipgap": 0.01},
+            "iterk_solver_options": {"mipgap": 0.001},
+        }
+
+    def _build_ph(self, options):
+        # Catch warnings during construction so the test class isn't
+        # itself the first thing to trigger them.
+        import mpisppy.opt.ph
+        import mpisppy.tests.examples.farmer as farmer
+        return mpisppy.opt.ph.PH(
+            options,
+            ["Scenario1", "Scenario2", "Scenario3"],
+            farmer.scenario_creator,
+            farmer.scenario_denouement,
+            scenario_creator_kwargs={"crops_multiplier": 1},
+        )
+
+    def test_legacy_dict_input_emits_deprecation_warning(self):
+        import warnings
+        opts = self._options_with_legacy_dicts()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            self._build_ph(opts)
+        self.assertTrue(
+            any(issubclass(w.category, DeprecationWarning)
+                and "iter0_solver_options" in str(w.message)
+                and "solver_options_layers" in str(w.message)
+                for w in caught),
+            "Expected DeprecationWarning naming the legacy dict input "
+            "and pointing at solver_options_layers; "
+            f"got {[(w.category.__name__, str(w.message)) for w in caught]}",
+        )
+
+    def test_empty_legacy_dicts_do_not_warn(self):
+        # An empty {} or None for the legacy keys is what cfg-built
+        # options dicts use; the warning should not fire for them.
+        import warnings
+        opts = self._options_with_legacy_dicts()
+        opts["iter0_solver_options"] = {}
+        opts["iterk_solver_options"] = {}
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            self._build_ph(opts)
+        legacy_warnings = [
+            w for w in caught
+            if issubclass(w.category, DeprecationWarning)
+            and "iter0_solver_options" in str(w.message)
+            and "solver_options_layers" in str(w.message)
+        ]
+        self.assertEqual(legacy_warnings, [])
+
+    def test_iter0_solver_options_property_read_warns(self):
+        import warnings
+        # Build via solver_options_layers so construction itself
+        # doesn't fire the dict-input warning.
+        layers = [solver_options_layer("iter0", {"mipgap": 0.005})]
+        opts = self._options_with_legacy_dicts()
+        opts.pop("iter0_solver_options")
+        opts.pop("iterk_solver_options")
+        opts["solver_options_layers"] = layers
+        ph = self._build_ph(opts)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            _ = ph.iter0_solver_options
+        self.assertTrue(
+            any(issubclass(w.category, DeprecationWarning)
+                and "iter0_solver_options" in str(w.message)
+                and "_effective_solver_options" in str(w.message)
+                for w in caught),
+            "Expected DeprecationWarning on PHBase.iter0_solver_options "
+            "read; got "
+            f"{[(w.category.__name__, str(w.message)) for w in caught]}",
+        )
+
+    def test_iterk_solver_options_property_read_warns(self):
+        import warnings
+        layers = [solver_options_layer("iterk", {"mipgap": 0.005})]
+        opts = self._options_with_legacy_dicts()
+        opts.pop("iter0_solver_options")
+        opts.pop("iterk_solver_options")
+        opts["solver_options_layers"] = layers
+        ph = self._build_ph(opts)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            _ = ph.iterk_solver_options
+        self.assertTrue(
+            any(issubclass(w.category, DeprecationWarning)
+                and "iterk_solver_options" in str(w.message)
+                and "_effective_solver_options" in str(w.message)
+                for w in caught),
+            "Expected DeprecationWarning on PHBase.iterk_solver_options "
+            "read; got "
+            f"{[(w.category.__name__, str(w.message)) for w in caught]}",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
