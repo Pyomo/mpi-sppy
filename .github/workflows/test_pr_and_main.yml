@@ -344,12 +344,13 @@ jobs:
         uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: ${{ matrix.python-version }}
-          channels: anaconda, conda-forge
+          channels: conda-forge, anaconda
           activate-environment: test_env
 
       - name: Install dependencies
         shell: bash -l {0}
         run: |
+          conda install -y pip
           python -m pip install --upgrade pip
           pip install pytest pytest-cov pybind11 coverage
           conda install -y conda-forge::libstdcxx-ng
@@ -831,6 +832,9 @@ jobs:
     name: gradient and rho tests
     runs-on: ubuntu-latest
     needs: [ruff]
+    defaults:
+      run:
+        shell: bash -l {0}
     steps:
       - uses: actions/checkout@v3
 
@@ -843,19 +847,19 @@ jobs:
       - name: Install dependencies
         run: |
           conda install -y conda-forge::libstdcxx-ng
-          conda install -y -c conda-forge openmpi mpi4py "numpy" setuptools cmake
-          pip install pyomo pandas xpress cplex scipy sympy dill packaging coverage
+          conda install -y -c conda-forge openmpi mpi4py "numpy" setuptools cmake pip
+          conda run -n test_env --no-capture-output pip install pyomo pandas xpress cplex scipy sympy dill packaging coverage
 
       - name: setup the program
         run: |
-          pip install -e .
+          conda run -n test_env --no-capture-output pip install -e .
 
       - name: run gradient/rho tests
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          coverage run $COV_ARGS test_gradient_rho.py
-          coverage run $COV_ARGS test_xbar_w_reader_writer.py
+          conda run -n test_env --no-capture-output coverage run $COV_ARGS test_gradient_rho.py
+          conda run -n test_env --no-capture-output coverage run $COV_ARGS test_xbar_w_reader_writer.py
 
       - name: Upload coverage data
         if: always()
