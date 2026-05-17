@@ -62,6 +62,7 @@ def shared_options(cfg, is_hub=False):
         "verbose": cfg.verbose,
         "display_progress": cfg.display_progress,
         "display_convergence_detail": cfg.display_convergence_detail,
+        "display_timing": cfg.display_timing,
         "iter0_solver_options": dict(),
         "iterk_solver_options": dict(),
         # Layered representation of solver options. Built in parallel
@@ -1017,6 +1018,7 @@ def subgradient_spoke(
     options["PHIterLimit"] = cfg.max_iterations * 1_000_000
     options["display_progress"] = False
     options["display_convergence_detail"] = False
+    options["display_timing"] = False
 
     add_ph_tracking(subgradient_spoke, cfg, spoke=True)
     _maybe_attach_jensens(subgradient_spoke, cfg, "subgradient",
@@ -1059,6 +1061,7 @@ def ph_dual_spoke(
     options["PHIterLimit"] = cfg.max_iterations * 1_000_000
     options["display_progress"] = False
     options["display_convergence_detail"] = False
+    options["display_timing"] = False
 
     add_ph_tracking(ph_dual_spoke, cfg, spoke=True)
 
@@ -1099,6 +1102,7 @@ def relaxed_ph_spoke(
     options["PHIterLimit"] = cfg.max_iterations * 1_000_000
     options["display_progress"] = False
     options["display_convergence_detail"] = False
+    options["display_timing"] = False
 
     add_ph_tracking(relaxed_ph_spoke, cfg, spoke=True)
 
