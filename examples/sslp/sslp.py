@@ -205,7 +205,6 @@ if __name__ == "__main__":
     options["PHIterLimit"] = maxit
     options["defaultPHrho"] = rho
     options["convthresh"] = -1
-    options["subsolvedirectives"] = None
     options["verbose"] = False
     options["display_timing"] = False
     options["display_progress"] = True

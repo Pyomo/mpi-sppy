@@ -44,7 +44,6 @@ def _get_ph_base_options():
     Baseoptions["PHIterLimit"] = 10
     Baseoptions["defaultPHrho"] = 1
     Baseoptions["convthresh"] = 0.001
-    Baseoptions["subsolvedirectives"] = None
     Baseoptions["verbose"] = False
     Baseoptions["display_timing"] = False
     Baseoptions["display_progress"] = False
