@@ -413,6 +413,14 @@ def fwph_hub(cfg,
 
     options.update(_fwph_options(cfg))
 
+    # Forward linearize_* options so FWPH._options_checks_fw can warn that
+    # FWPH cannot honor them. Without this forwarding, the user sets
+    # --linearize-proximal-terms, FWPH never sees it in self.options, and
+    # there is no warning when FWPH proceeds with its (intended) quadratic
+    # objective.
+    options["linearize_proximal_terms"] = cfg.linearize_proximal_terms
+    options["linearize_binary_proximal_terms"] = cfg.linearize_binary_proximal_terms
+
     hub_dict = {
         "hub_class": FWPHHub,
         "hub_kwargs": {"options": {"rel_gap": cfg.rel_gap,
@@ -776,6 +784,11 @@ def fwph_spoke(
     options = copy.deepcopy(shoptions)
 
     options.update(_fwph_options(cfg))
+
+    # Match fwph_hub: forward linearize_* so FWPH._options_checks_fw can
+    # warn that FWPH cannot honor them. See the comment in fwph_hub.
+    options["linearize_proximal_terms"] = cfg.linearize_proximal_terms
+    options["linearize_binary_proximal_terms"] = cfg.linearize_binary_proximal_terms
 
     fw_dict = {
         "spoke_class": FrankWolfeOuterBound,
