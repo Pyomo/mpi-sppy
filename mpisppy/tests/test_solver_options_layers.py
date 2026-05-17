@@ -1088,7 +1088,7 @@ class TestProgrammaticAPIDeprecation(unittest.TestCase):
             "convthresh": 1e-8,
             "verbose": False, "display_timing": False, "display_progress": False,
             "smoothed": 0, "asynchronousPH": False,
-            "subsolvedirectives": None, "toc": False,
+            "toc": False,
             "iter0_solver_options": {"mipgap": 0.01},
             "iterk_solver_options": {"mipgap": 0.001},
         }
