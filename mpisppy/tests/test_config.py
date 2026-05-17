@@ -548,5 +548,113 @@ class TestConfigFixerArgs(unittest.TestCase):
         self.assertIn("coeff_rho", cfg)
 
 
+class TestFWPHLinearizeForwarding(unittest.TestCase):
+    """The fwph_hub / fwph_spoke factories must forward
+    cfg.linearize_proximal_terms and cfg.linearize_binary_proximal_terms
+    into the options dict so FWPH._options_checks_fw can warn that
+    FWPH cannot honor them (issue #274)."""
+
+    def _make_cfg(self, lin_prox=True, lin_bin=True):
+        cfg = Config()
+        cfg.popular_args()
+        cfg.ph_args()
+        cfg.fwph_args()
+        cfg.two_sided_args()
+        cfg.solver_name = "gurobi"
+        cfg.linearize_proximal_terms = lin_prox
+        cfg.linearize_binary_proximal_terms = lin_bin
+        return cfg
+
+    def _beans(self, cfg):
+        # placeholder values for the positional args of the factories;
+        # nothing here is actually called because the factories just
+        # stuff them into the returned dict.
+        return dict(
+            scenario_creator=lambda *a, **kw: None,
+            scenario_denouement=None,
+            all_scenario_names=["Scenario1"],
+        )
+
+    def test_fwph_hub_forwards_linearize_options(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(lin_prox=True, lin_bin=True)
+        hub = vanilla.fwph_hub(cfg, **self._beans(cfg))
+        opts = hub["opt_kwargs"]["options"]
+        self.assertTrue(opts["linearize_proximal_terms"])
+        self.assertTrue(opts["linearize_binary_proximal_terms"])
+
+    def test_fwph_spoke_forwards_linearize_options(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(lin_prox=True, lin_bin=True)
+        spoke = vanilla.fwph_spoke(cfg, **self._beans(cfg))
+        opts = spoke["opt_kwargs"]["options"]
+        self.assertTrue(opts["linearize_proximal_terms"])
+        self.assertTrue(opts["linearize_binary_proximal_terms"])
+
+    def test_fwph_hub_forwards_false_when_off(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(lin_prox=False, lin_bin=False)
+        hub = vanilla.fwph_hub(cfg, **self._beans(cfg))
+        opts = hub["opt_kwargs"]["options"]
+        self.assertFalse(opts["linearize_proximal_terms"])
+        self.assertFalse(opts["linearize_binary_proximal_terms"])
+
+
+class TestFWPHOptionsChecksWarnings(unittest.TestCase):
+    """FWPH._options_checks_fw must print a warning (rank 0 only) when
+    linearize_proximal_terms or linearize_binary_proximal_terms is on,
+    and must clear the flag so the QP solve proceeds."""
+
+    def _stub(self, lin_prox=False, lin_bin=False, rank=0):
+        import types
+        stub = types.SimpleNamespace()
+        stub.cylinder_rank = rank
+        stub.options = {
+            "linearize_proximal_terms": lin_prox,
+            "linearize_binary_proximal_terms": lin_bin,
+        }
+        stub.FW_options = {
+            "FW_iter_limit": 1,
+            "FW_weight": 0.0,
+            "FW_conv_thresh": 1e-4,
+            "solver_name": "gurobi",
+        }
+        return stub
+
+    def _run(self, stub):
+        import io
+        import contextlib
+        from mpisppy.opt.fwph import FWPH
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            FWPH._options_checks_fw(stub)
+        return buf.getvalue()
+
+    def test_warn_and_clear_linearize_proximal_on_rank0(self):
+        stub = self._stub(lin_prox=True, rank=0)
+        out = self._run(stub)
+        self.assertIn("linearize_proximal_terms cannot be used", out)
+        self.assertFalse(stub.options["linearize_proximal_terms"])
+
+    def test_warn_and_clear_linearize_binary_proximal_on_rank0(self):
+        stub = self._stub(lin_bin=True, rank=0)
+        out = self._run(stub)
+        self.assertIn("linearize_binary_proximal_terms cannot be used", out)
+        self.assertFalse(stub.options["linearize_binary_proximal_terms"])
+
+    def test_no_warning_on_nonzero_rank(self):
+        stub = self._stub(lin_prox=True, lin_bin=True, rank=1)
+        out = self._run(stub)
+        self.assertEqual(out, "")
+        # flag is still cleared regardless of rank
+        self.assertFalse(stub.options["linearize_proximal_terms"])
+        self.assertFalse(stub.options["linearize_binary_proximal_terms"])
+
+    def test_no_warning_when_flags_off(self):
+        stub = self._stub(lin_prox=False, lin_bin=False, rank=0)
+        out = self._run(stub)
+        self.assertEqual(out, "")
+
+
 if __name__ == "__main__":
     unittest.main()

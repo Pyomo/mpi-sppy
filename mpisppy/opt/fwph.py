@@ -931,16 +931,18 @@ class FWPH(mpisppy.phbase.PHBase):
         #    proximal terms (no binary variables allowed in FWPH QPs)
         if ('linearize_binary_proximal_terms' in self.options
             and self.options['linearize_binary_proximal_terms']):
-            print('Warning: linearize_binary_proximal_terms cannot be used '
-                  'with the FWPH algorithm. Ignoring...')
+            if self.cylinder_rank == 0:
+                print('Warning: linearize_binary_proximal_terms cannot be used '
+                      'with the FWPH algorithm. Ignoring...')
             self.options['linearize_binary_proximal_terms'] = False
 
         # 3b. Check that the user did not specify the linearization of all
         #    proximal terms (FWPH QPs should be QPs)
         if ('linearize_proximal_terms' in self.options
             and self.options['linearize_proximal_terms']):
-            print('Warning: linearize_proximal_terms cannot be used '
-                  'with the FWPH algorithm. Ignoring...')
+            if self.cylinder_rank == 0:
+                print('Warning: linearize_proximal_terms cannot be used '
+                      'with the FWPH algorithm. Ignoring...')
             self.options['linearize_proximal_terms'] = False
 
         # 4. Provide a time limit of inf if the user did not specify
