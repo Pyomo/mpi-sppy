@@ -42,7 +42,6 @@ class Test_aph_sizes(unittest.TestCase):
         self.Baseoptions["PHIterLimit"] = 10
         self.Baseoptions["defaultPHrho"] = 1
         self.Baseoptions["convthresh"] = 0.001
-        self.Baseoptions["subsolvedirectives"] = None
         self.Baseoptions["verbose"] = False
         self.Baseoptions["display_timing"] = False
         self.Baseoptions["display_progress"] = False
@@ -172,7 +171,6 @@ class Test_aph_farmer(unittest.TestCase):
         self.Baseoptions["PHIterLimit"] = 10
         self.Baseoptions["defaultPHrho"] = 1
         self.Baseoptions["convthresh"] = 0.001
-        self.Baseoptions["subsolvedirectives"] = None
         self.Baseoptions["verbose"] = False
         self.Baseoptions["display_timing"] = False
         self.Baseoptions["display_progress"] = False

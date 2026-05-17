@@ -283,7 +283,6 @@ if __name__ == "__main__":
     options["PHIterLimit"] = 200
     options["defaultPHrho"] = 1
     options["convthresh"] = 0.0001
-    options["subsolvedirectives"] = None
     options["verbose"] = False
     options["display_timing"] = True
     options["display_progress"] = True
