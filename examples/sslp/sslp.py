@@ -64,12 +64,16 @@ def scenario_denouement(rank, scenario_name, scenario):
 ########## helper functions ########
 
 #=========
-def scenario_names_creator(num_scens,start=None):
-    # one-based scenarios
-    # if start!=None, the list starts with the 'start' labeled scenario
-    if (start is None) :
-        start=1
-    return [f"Scenario{i}" for i in range(start, start+num_scens)]
+def scenario_names_creator(num_scens, start=None):
+    # one-based scenario labels (Scenario1, Scenario2, ...) -- the on-disk
+    # data dir is 1-indexed (Scenario1.dat ... ScenarioN.dat).
+    # `start` follows the mpi-sppy convention used by farmer/aircond/uc:
+    # 0-based offset = count of already-used scenarios. proper_bundler
+    # calls this with start=firstnum-inum (== 0 for the first bundle),
+    # so the offset must be 0-based even though the *labels* are 1-based.
+    if start is None:
+        start = 0
+    return [f"Scenario{i+1}" for i in range(start, start+num_scens)]
 
 
 #=========
