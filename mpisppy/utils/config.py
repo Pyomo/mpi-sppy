@@ -295,6 +295,16 @@ class Config(pyofig.ConfigDict):
                             domain=str,
                             default=None)
 
+        self.add_to_config("incumbent_on_improvement_filename_prefix",
+                            description="If set, incumbent (xhat) bound spokes "
+                                 "write the first-stage solution to "
+                                 "<prefix>_<NNNN>.csv and <prefix>_<NNNN>.npy "
+                                 "each time they find a new best inner bound. "
+                                 "<NNNN> is a zero-padded counter starting at "
+                                 "0000. Default None disables.",
+                            domain=str,
+                            default=None)
+
         self.add_to_config("tee_rank0_solves",
                               description="Some cylinders support tee of rank 0 solves."
                               "(With multiple cylinders this could be confusing.)",
