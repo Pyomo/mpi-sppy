@@ -87,6 +87,46 @@ That is a strictly stronger contract than "Jensen's xhat plus luck,"
 and it is the contract that ``feasible_xhat_creator`` aims to
 provide.
 
+In-cylinder use: ``--<xhatter>-try-feasible-xhat-first`` flags
+--------------------------------------------------------------
+
+The four xhat spokes that ship with ``mpi-sppy`` accept a
+``feasible_xhat_creator`` candidate via a per-spoke flag, parallel to
+``--*-try-jensens-first``:
+
+* ``--xhatshuffle-try-feasible-xhat-first``
+* ``--xhatxbar-try-feasible-xhat-first``
+* ``--xhatlooper-try-feasible-xhat-first``
+* ``--xhatspecific-try-feasible-xhat-first``
+
+When set, the spoke calls the module's ``feasible_xhat_creator`` once
+before entering its main loop, fixes the candidate as the first-stage
+nonants, evaluates the expected objective across all real scenarios,
+and -- if the evaluation is feasible -- sends that as its first inner
+bound. Implementation lives in
+``_JensensMixin._try_feasible_xhat`` in
+``mpisppy/cylinders/_jensens_mixin.py``; the spoke ``main()`` methods
+call it once after ``_try_average_scenario_xhat``.
+
+.. admonition:: Mutually exclusive with ``--*-try-jensens-first``
+   :class: warning
+
+   ``--<xhatter>-try-jensens-first`` and
+   ``--<xhatter>-try-feasible-xhat-first`` are mutually exclusive on
+   the same spoke. ``cfg_vanilla._maybe_attach_feasible_xhat`` raises
+   at spoke-setup time if both are enabled, with a message naming the
+   conflicting CLI options.
+
+   The two pre-loop candidates serve overlapping purposes: Jensen's
+   often gives a tighter incumbent bound when its candidate happens to
+   be feasible everywhere, while ``feasible_xhat_creator`` is
+   guaranteed feasible by contract but can be a looser incumbent. Per
+   spoke, pick whichever fits the model's structure -- not both.
+
+   Across spokes, mixing is fine: one xhat spoke can be configured
+   with ``--xhatshuffle-try-jensens-first`` while another runs with
+   ``--xhatxbar-try-feasible-xhat-first``.
+
 Average-data-based Methods
 --------------------------
 
@@ -148,46 +188,6 @@ rules; per-component try-and-check degenerates into solving an
 MIP-feasibility problem in itself. The repair belongs in the
 ``feasible_xhat_creator``, where the model author has the domain
 knowledge.
-
-In-cylinder use: ``--<xhatter>-try-feasible-xhat-first`` flags
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The four xhat spokes that ship with ``mpi-sppy`` accept a
-``feasible_xhat_creator`` candidate via a per-spoke flag, parallel to
-``--*-try-jensens-first``:
-
-* ``--xhatshuffle-try-feasible-xhat-first``
-* ``--xhatxbar-try-feasible-xhat-first``
-* ``--xhatlooper-try-feasible-xhat-first``
-* ``--xhatspecific-try-feasible-xhat-first``
-
-When set, the spoke calls the module's ``feasible_xhat_creator`` once
-before entering its main loop, fixes the candidate as the first-stage
-nonants, evaluates the expected objective across all real scenarios,
-and -- if the evaluation is feasible -- sends that as its first inner
-bound. Implementation lives in
-``_JensensMixin._try_feasible_xhat`` in
-``mpisppy/cylinders/_jensens_mixin.py``; the spoke ``main()`` methods
-call it once after ``_try_average_scenario_xhat``.
-
-.. admonition:: Mutually exclusive with ``--*-try-jensens-first``
-   :class: warning
-
-   ``--<xhatter>-try-jensens-first`` and
-   ``--<xhatter>-try-feasible-xhat-first`` are mutually exclusive on
-   the same spoke. ``cfg_vanilla._maybe_attach_feasible_xhat`` raises
-   at spoke-setup time if both are enabled, with a message naming the
-   conflicting CLI options.
-
-   The two pre-loop candidates serve overlapping purposes: Jensen's
-   often gives a tighter incumbent bound when its candidate happens to
-   be feasible everywhere, while ``feasible_xhat_creator`` is
-   guaranteed feasible by contract but can be a looser incumbent. Per
-   spoke, pick whichever fits the model's structure -- not both.
-
-   Across spokes, mixing is fine: one xhat spoke can be configured
-   with ``--xhatshuffle-try-jensens-first`` while another runs with
-   ``--xhatxbar-try-feasible-xhat-first``.
 
 Worked example: farmer (continuous first-stage)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
