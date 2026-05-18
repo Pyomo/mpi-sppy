@@ -404,7 +404,7 @@ if not nouc:
            "--num-scens=3 --max-iterations=5 "
            "--iter0-mipgap=0.01 --iterk-mipgap=0.005 "
            "--default-rho=1 --lagrangian --xhatshuffle --fwph "
-           "--solver-name={} --display-progress".format(solver_name))
+           "--solver-name={} --display-progress --display-timing".format(solver_name))
 
     if egret_avail():
         print("\nSlow runs ahead...\n")

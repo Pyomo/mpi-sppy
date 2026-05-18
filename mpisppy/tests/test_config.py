@@ -445,6 +445,64 @@ class TestConfigChecker(unittest.TestCase):
         cfg = self._make_rho_cfg(rc_fixer=True, reduced_costs=True)
         cfg.checker()
 
+    def _add_log_dir_keys(self, cfg, hub_only=False, log_dir=None):
+        cfg.add_to_config("hub_only_solver_logs", description="x",
+                          domain=bool, default=hub_only, argparse=False)
+        cfg.add_to_config("solver_log_dir", description="x",
+                          domain=str, default=log_dir, argparse=False)
+
+    def test_hub_only_solver_logs_without_log_dir_raises(self):
+        cfg = self._make_rho_cfg()
+        self._add_log_dir_keys(cfg, hub_only=True, log_dir=None)
+        with self.assertRaises(ValueError):
+            cfg.checker()
+
+    def test_hub_only_solver_logs_with_log_dir_does_not_raise(self):
+        cfg = self._make_rho_cfg()
+        self._add_log_dir_keys(cfg, hub_only=True, log_dir="/tmp/logs")
+        cfg.checker()
+
+    def test_hub_only_solver_logs_default_off_does_not_raise(self):
+        cfg = self._make_rho_cfg()
+        self._add_log_dir_keys(cfg, hub_only=False, log_dir=None)
+        cfg.checker()
+
+
+class TestSharedOptionsLogDir(unittest.TestCase):
+    """Tests for solver_log_dir propagation through cfg_vanilla.shared_options."""
+
+    def _make_cfg(self, log_dir=None, hub_only=False):
+        cfg = Config()
+        cfg.popular_args()
+        cfg.solver_name = "gurobi"
+        cfg.solver_log_dir = log_dir
+        cfg.hub_only_solver_logs = hub_only
+        return cfg
+
+    def test_log_dir_propagates_to_hub_and_spoke_by_default(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(log_dir="/tmp/logs", hub_only=False)
+        self.assertEqual(vanilla.shared_options(cfg, is_hub=True)["solver_log_dir"],
+                         "/tmp/logs")
+        self.assertEqual(vanilla.shared_options(cfg, is_hub=False)["solver_log_dir"],
+                         "/tmp/logs")
+
+    def test_hub_only_suppresses_spoke_but_keeps_hub(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(log_dir="/tmp/logs", hub_only=True)
+        self.assertEqual(vanilla.shared_options(cfg, is_hub=True)["solver_log_dir"],
+                         "/tmp/logs")
+        self.assertNotIn("solver_log_dir",
+                         vanilla.shared_options(cfg, is_hub=False))
+
+    def test_no_log_dir_no_key_anywhere(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(log_dir=None, hub_only=False)
+        self.assertNotIn("solver_log_dir",
+                         vanilla.shared_options(cfg, is_hub=True))
+        self.assertNotIn("solver_log_dir",
+                         vanilla.shared_options(cfg, is_hub=False))
+
 
 class TestConfigFixerArgs(unittest.TestCase):
     """Tests for Config.fixer_args() and related extension args."""
@@ -488,6 +546,114 @@ class TestConfigFixerArgs(unittest.TestCase):
         cfg = Config()
         cfg.coeff_rho_args()
         self.assertIn("coeff_rho", cfg)
+
+
+class TestFWPHLinearizeForwarding(unittest.TestCase):
+    """The fwph_hub / fwph_spoke factories must forward
+    cfg.linearize_proximal_terms and cfg.linearize_binary_proximal_terms
+    into the options dict so FWPH._options_checks_fw can warn that
+    FWPH cannot honor them (issue #274)."""
+
+    def _make_cfg(self, lin_prox=True, lin_bin=True):
+        cfg = Config()
+        cfg.popular_args()
+        cfg.ph_args()
+        cfg.fwph_args()
+        cfg.two_sided_args()
+        cfg.solver_name = "gurobi"
+        cfg.linearize_proximal_terms = lin_prox
+        cfg.linearize_binary_proximal_terms = lin_bin
+        return cfg
+
+    def _beans(self, cfg):
+        # placeholder values for the positional args of the factories;
+        # nothing here is actually called because the factories just
+        # stuff them into the returned dict.
+        return dict(
+            scenario_creator=lambda *a, **kw: None,
+            scenario_denouement=None,
+            all_scenario_names=["Scenario1"],
+        )
+
+    def test_fwph_hub_forwards_linearize_options(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(lin_prox=True, lin_bin=True)
+        hub = vanilla.fwph_hub(cfg, **self._beans(cfg))
+        opts = hub["opt_kwargs"]["options"]
+        self.assertTrue(opts["linearize_proximal_terms"])
+        self.assertTrue(opts["linearize_binary_proximal_terms"])
+
+    def test_fwph_spoke_forwards_linearize_options(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(lin_prox=True, lin_bin=True)
+        spoke = vanilla.fwph_spoke(cfg, **self._beans(cfg))
+        opts = spoke["opt_kwargs"]["options"]
+        self.assertTrue(opts["linearize_proximal_terms"])
+        self.assertTrue(opts["linearize_binary_proximal_terms"])
+
+    def test_fwph_hub_forwards_false_when_off(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(lin_prox=False, lin_bin=False)
+        hub = vanilla.fwph_hub(cfg, **self._beans(cfg))
+        opts = hub["opt_kwargs"]["options"]
+        self.assertFalse(opts["linearize_proximal_terms"])
+        self.assertFalse(opts["linearize_binary_proximal_terms"])
+
+
+class TestFWPHOptionsChecksWarnings(unittest.TestCase):
+    """FWPH._options_checks_fw must print a warning (rank 0 only) when
+    linearize_proximal_terms or linearize_binary_proximal_terms is on,
+    and must clear the flag so the QP solve proceeds."""
+
+    def _stub(self, lin_prox=False, lin_bin=False, rank=0):
+        import types
+        stub = types.SimpleNamespace()
+        stub.cylinder_rank = rank
+        stub.options = {
+            "linearize_proximal_terms": lin_prox,
+            "linearize_binary_proximal_terms": lin_bin,
+        }
+        stub.FW_options = {
+            "FW_iter_limit": 1,
+            "FW_weight": 0.0,
+            "FW_conv_thresh": 1e-4,
+            "solver_name": "gurobi",
+        }
+        return stub
+
+    def _run(self, stub):
+        import io
+        import contextlib
+        from mpisppy.opt.fwph import FWPH
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            FWPH._options_checks_fw(stub)
+        return buf.getvalue()
+
+    def test_warn_and_clear_linearize_proximal_on_rank0(self):
+        stub = self._stub(lin_prox=True, rank=0)
+        out = self._run(stub)
+        self.assertIn("linearize_proximal_terms cannot be used", out)
+        self.assertFalse(stub.options["linearize_proximal_terms"])
+
+    def test_warn_and_clear_linearize_binary_proximal_on_rank0(self):
+        stub = self._stub(lin_bin=True, rank=0)
+        out = self._run(stub)
+        self.assertIn("linearize_binary_proximal_terms cannot be used", out)
+        self.assertFalse(stub.options["linearize_binary_proximal_terms"])
+
+    def test_no_warning_on_nonzero_rank(self):
+        stub = self._stub(lin_prox=True, lin_bin=True, rank=1)
+        out = self._run(stub)
+        self.assertEqual(out, "")
+        # flag is still cleared regardless of rank
+        self.assertFalse(stub.options["linearize_proximal_terms"])
+        self.assertFalse(stub.options["linearize_binary_proximal_terms"])
+
+    def test_no_warning_when_flags_off(self):
+        stub = self._stub(lin_prox=False, lin_bin=False, rank=0)
+        out = self._run(stub)
+        self.assertEqual(out, "")
 
 
 if __name__ == "__main__":

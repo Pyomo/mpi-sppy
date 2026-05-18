@@ -11,9 +11,11 @@ import abc
 import time
 import os
 import math
+import warnings
 
 from mpisppy.cylinders.spcommunicator import SPCommunicator, SendCircularBuffer
 from mpisppy.cylinders.spwindow import Field
+from mpisppy.utils import sputils
 
 
 class Spoke(SPCommunicator):
@@ -161,6 +163,8 @@ class InnerBoundSpoke(_BoundSpoke):
         self.is_minimizing = self.opt.is_minimizing
         self.best_inner_bound = math.inf if self.is_minimizing else -math.inf
         self.solver_options = None # can be overwritten by derived classes
+        self._incumbent_write_counter = 0
+        self._incumbent_write_disabled = False
 
     def register_send_fields(self):
         super().register_send_fields()
@@ -186,8 +190,37 @@ class InnerBoundSpoke(_BoundSpoke):
             # send to hub
             self.send_bound(candidate_inner_bound)
             self.send_best_xhat()
+            self._maybe_write_incumbent_on_improvement()
             return True
         return False
+
+    def _maybe_write_incumbent_on_improvement(self):
+        """ If --incumbent-on-improvement-filename-prefix is set, write the
+            current first-stage solution to <prefix>_<NNNN>.csv and
+            <prefix>_<NNNN>.npy. Fails soft: if no first-stage solution is
+            available (e.g. an xhatter spoke that bypasses the best-solution
+            cache), warn once on rank 0 and stop trying.
+        """
+        prefix = self.opt.options.get("incumbent_on_improvement_filename_prefix")
+        if prefix is None or self._incumbent_write_disabled:
+            return
+        counter = self._incumbent_write_counter
+        try:
+            self.opt.write_first_stage_solution(f"{prefix}_{counter:04d}.csv")
+            self.opt.write_first_stage_solution(
+                f"{prefix}_{counter:04d}.npy",
+                first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer,
+            )
+        except RuntimeError as exc:
+            if self.cylinder_rank == 0:
+                warnings.warn(
+                    f"incumbent_on_improvement_filename_prefix is set but no "
+                    f"first-stage solution was available on this update: {exc}. "
+                    f"Disabling further per-improvement writes from this spoke."
+                )
+            self._incumbent_write_disabled = True
+            return
+        self._incumbent_write_counter = counter + 1
 
     def send_best_xhat(self):
         best_xhat_buf = self.send_buffers[Field.BEST_XHAT]

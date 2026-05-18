@@ -75,7 +75,7 @@ class XhatInnerBoundBase(spoke.InnerBoundNonantSpoke):
             raise RuntimeError(
                 "--xhat-from-file is two-stage only; multi-stage support "
                 "is planned as a follow-up. See "
-                "doc/xhat_from_file_design.md."
+                "doc/designs/xhat_from_file_design.md."
             )
         if not os.path.exists(path):
             raise RuntimeError(

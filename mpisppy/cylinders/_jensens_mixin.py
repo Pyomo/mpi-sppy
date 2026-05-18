@@ -8,7 +8,7 @@
 ###############################################################################
 """Mixin used by spokes that support --*-try-jensens-first.
 
-Two-stage only. See doc/jensens_bound_design.md for the full design,
+Two-stage only. See doc/designs/jensens_bound_design.md for the full design,
 including the convexity precondition that governs when the outer-bound
 path is valid.
 

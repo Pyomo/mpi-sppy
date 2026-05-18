@@ -13,7 +13,9 @@
 
 import copy
 import json
+import warnings
 
+import mpisppy.MPI as MPI
 # Hub and spoke SPBase classes
 import mpisppy.utils.sputils as sputils
 
@@ -33,7 +35,7 @@ def _maybe_attach_jensens(spoke_dict, cfg, spoke_prefix,
     --<spoke_prefix>-try-jensens-first flag is set.
 
     The spoke reads these at runtime via self.opt.options["jensens"] and
-    drives _JensensMixin. See doc/jensens_bound_design.md.
+    drives _JensensMixin. See doc/designs/jensens_bound_design.md.
     """
     flag = f"{spoke_prefix}_try_jensens_first"
     if not cfg.get(flag, False):
@@ -49,7 +51,6 @@ def _maybe_attach_jensens(spoke_dict, cfg, spoke_prefix,
         "average_scenario_creator": average_scenario_creator,
         "scenario_creator_kwargs": scenario_creator_kwargs,
     }
-
 
 def _find_feasible_xhat_creator(module, cfg):
     """Look up ``feasible_xhat_creator`` only when at least one
@@ -127,7 +128,7 @@ def _maybe_attach_feasible_xhat(spoke_dict, cfg, spoke_prefix,
         "scenario_creator_kwargs": scenario_creator_kwargs,
     }
 
-def shared_options(cfg):
+def shared_options(cfg, is_hub=False):
     shoptions = {
         "solver_name": cfg.solver_name,
         "defaultPHrho": cfg.default_rho,
@@ -137,8 +138,14 @@ def shared_options(cfg):
         "verbose": cfg.verbose,
         "display_progress": cfg.display_progress,
         "display_convergence_detail": cfg.display_convergence_detail,
+        "display_timing": cfg.display_timing,
         "iter0_solver_options": dict(),
         "iterk_solver_options": dict(),
+        # Layered representation of solver options. Built in parallel
+        # with the legacy iter0/iterk dicts above and folds to the
+        # same values; PHBase consumes via _effective_solver_options.
+        # Each layer is {"when": <predicate>, "options": <dict>}.
+        "solver_options_layers": [],
         "tee-rank0-solves": cfg.tee_rank0_solves,
         "trace_prefix" : cfg.trace_prefix,
         "presolve" : cfg.presolve,
@@ -151,23 +158,55 @@ def shared_options(cfg):
         # Optional initial xhat candidate file (.npy); None disables.
         # Consumed by XhatInnerBoundBase._try_file_xhat.
         "xhat_from_file" : cfg.get("xhat_from_file", None),
+        # Optional filename prefix; if set, _BoundSpoke.update_if_improving
+        # writes a first-stage solution snapshot on each new best incumbent.
+        "incumbent_on_improvement_filename_prefix" : cfg.get(
+            "incumbent_on_improvement_filename_prefix", None),
     }
+    # The options-file (--solver-options-file) sits at the bottom of
+    # axis 2: any CLI flags below override file entries at the same
+    # predicate. Load and apply it first so the rest of the axis-2
+    # chain can overlay on top.
+    if _hasit(cfg, "solver_options_file"):
+        file_data = sputils.load_solver_options_file(cfg.solver_options_file)
+        shoptions["iter0_solver_options"].update(file_data["default"])
+        shoptions["iter0_solver_options"].update(file_data["iter0"])
+        shoptions["iterk_solver_options"].update(file_data["default"])
+        shoptions["iterk_solver_options"].update(file_data["iterk"])
+        shoptions["solver_options_layers"].extend(
+            sputils.options_file_section_to_layers(file_data))
+        # Stash the per-spoke sub-block so apply_solver_specs can pull
+        # spoke-specific layers from the same file on a per-spoke
+        # call (without re-reading the file).
+        shoptions["_solver_options_file_spokes"] = file_data["spokes"]
     if _hasit(cfg, "solver_options"):
         odict = sputils.option_string_to_dict(cfg.solver_options)
-        shoptions["iter0_solver_options"] = odict
-        shoptions["iterk_solver_options"] = copy.deepcopy(odict)
-    # note that specific options usch as mipgap will override        
+        shoptions["iter0_solver_options"].update(odict)
+        shoptions["iterk_solver_options"].update(odict)
+        shoptions["solver_options_layers"].append(
+            sputils.solver_options_layer("default", odict))
+    # note that specific options such as mipgap will override
     if _hasit(cfg, "max_solver_threads"):
         shoptions["iter0_solver_options"]["threads"] = cfg.max_solver_threads
         shoptions["iterk_solver_options"]["threads"] = cfg.max_solver_threads
+        shoptions["solver_options_layers"].append(
+            sputils.solver_options_layer(
+                "default", {"threads": cfg.max_solver_threads}))
     if _hasit(cfg, "iter0_mipgap"):
         shoptions["iter0_solver_options"]["mipgap"] = cfg.iter0_mipgap
+        shoptions["solver_options_layers"].append(
+            sputils.solver_options_layer(
+                "iter0", {"mipgap": cfg.iter0_mipgap}))
     if _hasit(cfg, "iterk_mipgap"):
         shoptions["iterk_solver_options"]["mipgap"] = cfg.iterk_mipgap
+        shoptions["solver_options_layers"].append(
+            sputils.solver_options_layer(
+                "iterk", {"mipgap": cfg.iterk_mipgap}))
     if _hasit(cfg, "reduced_costs"):
         shoptions["rc_bound_tol"] = cfg.rc_bound_tol
     if _hasit(cfg, "solver_log_dir"):
-        shoptions["solver_log_dir"] = cfg.solver_log_dir
+        if is_hub or not cfg.get("hub_only_solver_logs", False):
+            shoptions["solver_log_dir"] = cfg.solver_log_dir
     if _hasit(cfg, "obbt"):
         shoptions["presolve_options"] = {
             "obbt" : cfg.obbt,
@@ -189,21 +228,71 @@ def shared_options(cfg):
 
 def apply_solver_specs(name, spoke, cfg):
     options = spoke["opt_kwargs"]["options"]
+    # Per-spoke option specs (--{name}-solver-options,
+    # --{name}-iter0-mipgap, etc.) overlay on top of the global
+    # --solver-options dict already populated by shared_options:
+    # the global options remain in place; the spoke options take
+    # priority on the keys they name and add any new keys.
+    options.setdefault("solver_options_layers", [])
     if _hasit(cfg, name+"_solver_name"):
         options["solver_name"] = cfg.get(name+"_solver_name")
+    # Per-spoke sources, in axis-2 order (lowest priority first):
+    #   1. global options-file's "spokes.<name>" sub-block
+    #   2. --{name}-solver-options-file (dedicated per-spoke file)
+    #   3. --{name}-solver-options (inline)
+    #   4. --{name}-iter0-mipgap / --{name}-iterk-mipgap (sugar)
+    #   5. --max-solver-threads re-apply (system-level cap)
+    spoke_file_blocks = options.get(
+        "_solver_options_file_spokes", {}).get(name)
+    if spoke_file_blocks:
+        options["iter0_solver_options"].update(spoke_file_blocks["default"])
+        options["iter0_solver_options"].update(spoke_file_blocks["iter0"])
+        options["iterk_solver_options"].update(spoke_file_blocks["default"])
+        options["iterk_solver_options"].update(spoke_file_blocks["iterk"])
+        options["solver_options_layers"].extend(
+            sputils.options_file_section_to_layers(spoke_file_blocks))
+    if _hasit(cfg, name+"_solver_options_file"):
+        spoke_file_data = sputils.load_solver_options_file(
+            cfg.get(name+"_solver_options_file"))
+        # Per-spoke files only consume their own predicates; the
+        # nested "spokes" sub-block at this level is meaningless and
+        # rejected by load_solver_options_file's validator when it
+        # appears under "spokes.<name>" -- but a dedicated per-spoke
+        # file is parsed with allow_spokes=True (since that's what
+        # the loader provides). Any nested "spokes" sub-block here
+        # is silently ignored: a spoke's own file applies only to
+        # that spoke.
+        options["iter0_solver_options"].update(spoke_file_data["default"])
+        options["iter0_solver_options"].update(spoke_file_data["iter0"])
+        options["iterk_solver_options"].update(spoke_file_data["default"])
+        options["iterk_solver_options"].update(spoke_file_data["iterk"])
+        options["solver_options_layers"].extend(
+            sputils.options_file_section_to_layers(spoke_file_data))
     if _hasit(cfg, name+"_solver_options"):
         odict = sputils.option_string_to_dict(cfg.get(name+"_solver_options"))
-        options["iter0_solver_options"] = odict
-        options["iterk_solver_options"] = copy.deepcopy(odict)
+        options["iter0_solver_options"].update(odict)
+        options["iterk_solver_options"].update(odict)
+        options["solver_options_layers"].append(
+            sputils.solver_options_layer("default", odict))
     if _hasit(cfg, name+"_iter0_mipgap"):
         options["iter0_solver_options"]["mipgap"] = cfg.get(name+"_iter0_mipgap")
+        options["solver_options_layers"].append(
+            sputils.solver_options_layer(
+                "iter0", {"mipgap": cfg.get(name+"_iter0_mipgap")}))
     if _hasit(cfg, name+"_iterk_mipgap"):
         options["iterk_solver_options"]["mipgap"] = cfg.get(name+"_iterk_mipgap")
-    # re-apply max_solver_threads since we may have over-written the
-    # iter*_solver_options above.
+        options["solver_options_layers"].append(
+            sputils.solver_options_layer(
+                "iterk", {"mipgap": cfg.get(name+"_iterk_mipgap")}))
+    # Re-apply max_solver_threads so the global thread cap wins
+    # even when --{name}-solver-options explicitly sets a different
+    # threads value (system-level cap beats user preference).
     if _hasit(cfg, "max_solver_threads"):
         options["iter0_solver_options"]["threads"] = cfg.max_solver_threads
         options["iterk_solver_options"]["threads"] = cfg.max_solver_threads
+        options["solver_options_layers"].append(
+            sputils.solver_options_layer(
+                "default", {"threads": cfg.max_solver_threads}))
 
 def add_multistage_options(cylinder_dict,all_nodenames,branching_factors):
     cylinder_dict = copy.deepcopy(cylinder_dict)
@@ -231,7 +320,7 @@ def ph_hub(
 ):
     from mpisppy.opt.ph import PH
     from mpisppy.cylinders.hub import PHHub
-    shoptions = shared_options(cfg)
+    shoptions = shared_options(cfg, is_hub=True)
     options = copy.deepcopy(shoptions)
     options["convthresh"] = cfg.intra_hub_conv_thresh
 
@@ -349,7 +438,7 @@ def subgradient_hub(cfg,
 ):
     from mpisppy.opt.subgradient import Subgradient
     from mpisppy.cylinders.hub import SubgradientHub
-    shoptions = shared_options(cfg)
+    shoptions = shared_options(cfg, is_hub=True)
     options = copy.deepcopy(shoptions)
     options["convthresh"] = cfg.intra_hub_conv_thresh
 
@@ -393,13 +482,21 @@ def fwph_hub(cfg,
 ):
     from mpisppy.opt.fwph import FWPH
     from mpisppy.cylinders.hub import FWPHHub
-    shoptions = shared_options(cfg)
+    shoptions = shared_options(cfg, is_hub=True)
     options = copy.deepcopy(shoptions)
     options["convthresh"] = cfg.intra_hub_conv_thresh
 
     options["smoothed"] = 0
 
     options.update(_fwph_options(cfg))
+
+    # Forward linearize_* options so FWPH._options_checks_fw can warn that
+    # FWPH cannot honor them. Without this forwarding, the user sets
+    # --linearize-proximal-terms, FWPH never sees it in self.options, and
+    # there is no warning when FWPH proceeds with its (intended) quadratic
+    # objective.
+    options["linearize_proximal_terms"] = cfg.linearize_proximal_terms
+    options["linearize_binary_proximal_terms"] = cfg.linearize_binary_proximal_terms
 
     hub_dict = {
         "hub_class": FWPHHub,
@@ -468,23 +565,76 @@ def extension_adder(hub_dict,ext_class):
     return hub_dict
 
 def add_gapper(hub_dict, cfg, name=None):
-    from mpisppy.extensions.mipgapper import Gapper
-    hub_dict = extension_adder(hub_dict, Gapper)
-    if name is None and cfg.mipgaps_json is not None:
-        with open(cfg.mipgaps_json) as fin:
+    """Wire mipgap schedule / auto mipgap into a hub or spoke dict.
+
+    Two modes:
+      * static schedule (``--mipgaps-json`` or, per-spoke,
+        ``--{name}-mipgaps-json``): the JSON is parsed into
+        ``starting_at_iter`` solver-options layers appended to
+        ``solver_options_layers`` on the cylinder dict. No Gapper
+        extension is registered; the layer fold drives the per-iter
+        mipgap directly.
+      * auto mipgap (``--starting-mipgap`` + ``--mipgap-ratio``,
+        also per-spoke as e.g. ``--lagrangian-starting-mipgap``):
+        the Gapper extension is registered and observes inner/outer
+        bound cylinders at runtime to tighten mipgap.
+
+    The two modes are mutually exclusive at the same scope; the
+    static path no longer goes through Gapper.
+    """
+    prefix = "" if name is None else name + "_"
+    starting_mipgap = getattr(cfg, f"{prefix}starting_mipgap", None)
+    mipgap_ratio = getattr(cfg, f"{prefix}mipgap_ratio", None)
+    mipgaps_json = getattr(cfg, f"{prefix}mipgaps_json", None)
+
+    if mipgaps_json is not None and starting_mipgap is not None:
+        flag = "--mipgaps-json" if name is None else f"--{name}-mipgaps-json"
+        sm_flag = (
+            "--starting-mipgap" if name is None
+            else f"--{name}-starting-mipgap"
+        )
+        raise RuntimeError(
+            f"{flag} (static schedule) and {sm_flag} (auto mipgap) "
+            "are mutually exclusive; pick one."
+        )
+
+    if mipgaps_json is not None:
+        flag = "--mipgaps-json" if name is None else f"--{name}-mipgaps-json"
+        if MPI.COMM_WORLD.Get_rank() == 0:
+            # Setup-time function called on every rank; gate so only
+            # one rank prints (avoids flooding HPC runs).
+            warnings.warn(
+                f"{flag} is planned for deprecation in a future release. "
+                "Your schedule is still being applied to the per-iteration "
+                "solver options.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        with open(mipgaps_json) as fin:
             din = json.load(fin)
         mipgapdict = {int(i): din[i] for i in din}
-    else:
-        mipgapdict = None
-    if name is None:
-        name = ""
-    else:
-        name = name + "_"
+        layers = hub_dict["opt_kwargs"]["options"].setdefault(
+            "solver_options_layers", [])
+        for N in sorted(mipgapdict.keys()):
+            # N == 0 in --mipgaps-json means "from iteration 0 onward"
+            # — which is the `default` predicate. Don't build
+            # ("starting_at_iter", 0); the validator rejects N=0 (it
+            # would silently outrank iter0/iterk in axis 1).
+            when = "default" if N == 0 else ("starting_at_iter", N)
+            layers.append(
+                sputils.solver_options_layer(
+                    when, {"mipgap": mipgapdict[N]}))
+        return
+
+    # Auto-mipgap mode: Gapper observes bound cylinders and tightens
+    # mipgap at runtime. starting_mipgap (and the per-spoke variants)
+    # must be set; the caller gates on this.
+    from mpisppy.extensions.mipgapper import Gapper
+    hub_dict = extension_adder(hub_dict, Gapper)
     hub_dict["opt_kwargs"]["options"]["gapperoptions"] = {
         "verbose": cfg.verbose,
-        "mipgapdict": mipgapdict,
-        "starting_mipgap": getattr(cfg, f"{name}starting_mipgap"),
-        "mipgap_ratio" : getattr(cfg, f"{name}mipgap_ratio"),
+        "starting_mipgap": starting_mipgap,
+        "mipgap_ratio": mipgap_ratio,
     }
 
 def add_fixer(hub_dict,
@@ -712,6 +862,11 @@ def fwph_spoke(
 
     options.update(_fwph_options(cfg))
 
+    # Match fwph_hub: forward linearize_* so FWPH._options_checks_fw can
+    # warn that FWPH cannot honor them. See the comment in fwph_hub.
+    options["linearize_proximal_terms"] = cfg.linearize_proximal_terms
+    options["linearize_binary_proximal_terms"] = cfg.linearize_binary_proximal_terms
+
     fw_dict = {
         "spoke_class": FrankWolfeOuterBound,
         "opt_class": FWPH,
@@ -877,6 +1032,18 @@ def lagranger_spoke(
     extension_kwargs=None,
     average_scenario_creator=None,
 ):
+    if MPI.COMM_WORLD.Get_rank() == 0:
+        # Setup-time function called on every rank; gate so only
+        # one rank prints (avoids flooding HPC runs).
+        warnings.warn(
+            "The lagranger spoke is slated for removal in a future "
+            "release: it does not seem to perform as well as the other "
+            "outer-bound options (--lagrangian, --ph-dual, --subgradient, "
+            "--fwph). No removal timeline is committed yet; this warning "
+            "is the heads-up.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
     from mpisppy.cylinders.lagranger_bounder import LagrangerOuterBound
     lagranger_spoke = _PHBase_spoke_foundation(
         LagrangerOuterBound,
@@ -944,6 +1111,7 @@ def subgradient_spoke(
     options["PHIterLimit"] = cfg.max_iterations * 1_000_000
     options["display_progress"] = False
     options["display_convergence_detail"] = False
+    options["display_timing"] = False
 
     add_ph_tracking(subgradient_spoke, cfg, spoke=True)
     _maybe_attach_jensens(subgradient_spoke, cfg, "subgradient",
@@ -986,6 +1154,7 @@ def ph_dual_spoke(
     options["PHIterLimit"] = cfg.max_iterations * 1_000_000
     options["display_progress"] = False
     options["display_convergence_detail"] = False
+    options["display_timing"] = False
 
     add_ph_tracking(ph_dual_spoke, cfg, spoke=True)
 
@@ -1026,6 +1195,7 @@ def relaxed_ph_spoke(
     options["PHIterLimit"] = cfg.max_iterations * 1_000_000
     options["display_progress"] = False
     options["display_convergence_detail"] = False
+    options["display_timing"] = False
 
     add_ph_tracking(relaxed_ph_spoke, cfg, spoke=True)
 
@@ -1174,10 +1344,16 @@ def xhatspecific_spoke(
         scenario_creator,
         scenario_denouement,
         all_scenario_names,
+        all_nodenames=all_nodenames,
         scenario_creator_kwargs=scenario_creator_kwargs,
         ph_extensions=ph_extensions,
         extension_kwargs=extension_kwargs,
     )
+    xhatspecific_dict["opt_kwargs"]["options"]["xhat_specific_options"] = {
+        "xhat_solver_options": xhatspecific_dict["opt_kwargs"]["options"]["iterk_solver_options"],
+        "xhat_scenario_dict": scenario_dict,
+        "csvname": "specific.csv",
+    }
     _maybe_attach_jensens(xhatspecific_dict, cfg, "xhatspecific",
                           average_scenario_creator, scenario_creator_kwargs)
     _maybe_attach_feasible_xhat(xhatspecific_dict, cfg, "xhatspecific",
