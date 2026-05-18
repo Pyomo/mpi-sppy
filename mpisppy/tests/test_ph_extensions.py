@@ -43,7 +43,6 @@ class TestMultRhoUpdater(unittest.TestCase):
             "iterk_solver_options": {"mipgap": 0.02},
             "smoothed": 0,
             "asynchronousPH": False,
-            "subsolvedirectives": None,
             "toc": False,
         }
         self.scenario_names = [f"Scenario{i+1}" for i in range(3)]
@@ -113,7 +112,6 @@ class TestWtrackerExtension(unittest.TestCase):
             "iterk_solver_options": None,
             "smoothed": 0,
             "asynchronousPH": False,
-            "subsolvedirectives": None,
             "toc": False,
         }
         self.scenario_names = [f"Scenario{i+1}" for i in range(3)]

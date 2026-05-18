@@ -116,7 +116,6 @@ class TestOptionsReachSolver(unittest.TestCase):
         shoptions["display_progress"] = False
         shoptions["smoothed"] = 0
         shoptions["asynchronousPH"] = False
-        shoptions["subsolvedirectives"] = None
         shoptions["toc"] = False
         if extra:
             shoptions.update(extra)
