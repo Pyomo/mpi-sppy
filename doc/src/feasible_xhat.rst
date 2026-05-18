@@ -6,13 +6,13 @@ Per-scenario-feasible candidate xhat
 .. warning::
 
    This is an advanced topic. Most ``mpi-sppy`` users do **not** need
-   ``feasible_xhat_creator``. Reach for it only when downstream code
-   pins a candidate first-stage point and solves a per-scenario
-   subproblem with **no fallback** — for example, the pin-dual
-   Lagrangian inner step in a rho-setting algorithm. Ordinary xhat
-   evaluation (including the Jensen's xhat path; see :ref:`jensens`)
-   tolerates per-scenario infeasibility by silently dropping the
-   candidate and continuing, and that is usually what you want.
+   ``feasible_xhat_creator`` to get started. However, if you know
+   of some way to get a good solution that is admissible and implementable,
+   this function could speed up the search for a good upper bound.
+   You can use any method to get this solution, but the documentation
+   here is biased toward a situation where you know how
+   to modify average scenario data so it will work as a way to get a good
+   xhat solution. There are some helper functions to facilitate that.
 
 The contract
 ------------
@@ -43,17 +43,18 @@ Why this convention exists
 
 The Jensen's xhat path (see :ref:`jensens`) already exposes the
 average-scenario solution as a candidate first-stage. It tolerates
-infeasibility: if the candidate cannot be pinned in some real
-scenario, ``_jensens_evaluate_xhat`` returns ``None`` and the spoke
+infeasibility: if the candidate xhat value, when fixed for one
+or more scenarios is infeasible, then
+``_jensens_evaluate_xhat`` returns ``None`` and the inner-bound spoke
 silently moves on. That is the right behavior for an inner-bound
 spoke whose only job is to opportunistically improve a bound.
 
-Pin-dual algorithms are different. They pin the candidate, solve a
-per-scenario MIP (or LP) at the pin, and use the resulting dual
-information to drive the outer algorithm. If the pin is infeasible in
-some scenario, the per-scenario subproblem has no solution and there
-is no graceful fallback at that step. The candidate **must** be
-feasible to pin in every real scenario.
+Fix-dual algorithms are different. They fix the candidate, solve a
+per-scenario MIP (or LP) at the fixed values, and use the resulting
+dual information to drive the outer algorithm. If the fixed candidate
+is infeasible in some scenario, the per-scenario subproblem has no
+solution and there is no graceful fallback at that step. The
+candidate **must** be feasible to fix in every real scenario.
 
 That is a strictly stronger contract than "Jensen's xhat plus luck,"
 and it is the contract that ``feasible_xhat_creator`` provides.
@@ -190,7 +191,7 @@ Farmer's first-stage variable ``DEVOTED_ACRES`` is bounded
 the buy/sell variables (``QuantityPurchased``,
 ``QuantitySubQuotaSold``, ``QuantitySuperQuotaSold``), so any feasible
 acreage allocation -- including the average-scenario optimum -- is
-feasible to pin in every real scenario. No rounding is needed.
+feasible to fix in every real scenario. No rounding is needed.
 
 ``examples/farmer/farmer_auxiliary.py``:
 
@@ -269,8 +270,8 @@ Sslp ``model.FacilityOpen[j]`` is ``Binary``. Opening more facilities
 never tightens ``DemandConstraint`` (more capacity available) or
 ``ClientConstraint`` (the LHS does not involve ``FacilityOpen``). The
 shipped model also carries a high-``Penalty`` ``Dummy`` slack, so any
-pin is technically feasible; the rounded LP-xbar is still a
-meaningful low-slack candidate for the pin-dual machinery.
+fixed candidate is technically feasible; the rounded LP-xbar is
+still a meaningful low-slack candidate for the fix-dual machinery.
 
 Sslp does not currently ship an ``average_scenario_creator``, so the
 auxiliary skips the ``average_xhat_nonants`` engine entirely and goes
