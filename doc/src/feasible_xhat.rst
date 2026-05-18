@@ -49,12 +49,13 @@ or more scenarios is infeasible, then
 silently moves on. That is the right behavior for an inner-bound
 spoke whose only job is to opportunistically improve a bound.
 
-Fix-dual algorithms are different. They fix the candidate, solve a
-per-scenario MIP (or LP) at the fixed values, and use the resulting
-dual information to drive the outer algorithm. If the fixed candidate
-is infeasible in some scenario, the per-scenario subproblem has no
-solution and there is no graceful fallback at that step. The
-candidate **must** be feasible to fix in every real scenario.
+Other classes of algorithm work differently. They fix the candidate
+first stage in every scenario, solve the resulting per-scenario MIP
+(or LP), and use dual information from that solve to drive the
+outer-bound algorithm. If the fixed candidate is infeasible in some
+scenario, the per-scenario subproblem has no solution and there is
+no graceful fallback at that step. The candidate **must** be
+feasible to fix in every real scenario.
 
 That is a strictly stronger contract than "Jensen's xhat plus luck,"
 and it is the contract that ``feasible_xhat_creator`` provides.
@@ -271,7 +272,9 @@ never tightens ``DemandConstraint`` (more capacity available) or
 ``ClientConstraint`` (the LHS does not involve ``FacilityOpen``). The
 shipped model also carries a high-``Penalty`` ``Dummy`` slack, so any
 fixed candidate is technically feasible; the rounded LP-xbar is
-still a meaningful low-slack candidate for the fix-dual machinery.
+still a meaningful low-slack candidate when the outer-bound
+algorithm needs to fix the first stage and read duals from the
+per-scenario subproblem.
 
 Sslp does not currently ship an ``average_scenario_creator``, so the
 auxiliary skips the ``average_xhat_nonants`` engine entirely and goes
