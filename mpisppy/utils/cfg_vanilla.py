@@ -1258,10 +1258,16 @@ def xhatspecific_spoke(
         scenario_creator,
         scenario_denouement,
         all_scenario_names,
+        all_nodenames=all_nodenames,
         scenario_creator_kwargs=scenario_creator_kwargs,
         ph_extensions=ph_extensions,
         extension_kwargs=extension_kwargs,
     )
+    xhatspecific_dict["opt_kwargs"]["options"]["xhat_specific_options"] = {
+        "xhat_solver_options": xhatspecific_dict["opt_kwargs"]["options"]["iterk_solver_options"],
+        "xhat_scenario_dict": scenario_dict,
+        "csvname": "specific.csv",
+    }
     _maybe_attach_jensens(xhatspecific_dict, cfg, "xhatspecific",
                           average_scenario_creator, scenario_creator_kwargs)
     return xhatspecific_dict
