@@ -54,18 +54,21 @@ xhat is opportunistic -- silently skipping any scenario in which the
 candidate is not feasible to fix -- ``feasible_xhat_creator`` tries
 to guarantee by construction that the candidate **is** feasible to
 fix in every real scenario. The inner-bound spoke that consumes it
-therefore produces a usable second-stage objective on each candidate
+therefore produces a usable objective on each candidate
 rather than potentially never updating the inner bound.
 
 That is a strictly stronger contract than "Jensen's xhat plus luck,"
 and it is the contract that ``feasible_xhat_creator`` aims to
 provide.
 
-The two helpers in ``mpisppy.utils.xhat_helpers``
--------------------------------------------------
+Average-data-based Methods
+--------------------------
 
-``feasible_xhat_creator`` implementations are short. ``mpi-sppy``
-ships two reusable engines that do the heavy lifting; the
+The two lp-based helpers in ``mpisppy.utils.xhat_helpers``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Some ``feasible_xhat_creator`` implementations are short. ``mpi-sppy``
+ships two reusable, lp-based engines that try to do the heavy lifting; the
 implementations call one of them and apply a model-specific repair.
 
 ``average_xhat_nonants(average_scenario_creator, *, solver_name, ...)``
@@ -95,7 +98,7 @@ cover per-scenario feasibility; the framework cannot detect that from
 the model.
 
 The rounding rule is also yours
--------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The output of either engine is a real-valued vector that has to be
 turned into a feasible candidate. Whether the right rule is
@@ -121,7 +124,7 @@ MIP-feasibility problem in itself. The repair belongs in the
 knowledge.
 
 File layout
------------
+^^^^^^^^^^^
 
 By convention these helpers live in
 ``examples/<model>/<model>_auxiliary.py``, **not** in the main
@@ -146,7 +149,7 @@ machinery go in the ``_auxiliary`` sibling.
    ``feasible_xhat_creator`` themselves.
 
 In-cylinder use: ``--<xhatter>-try-feasible-xhat-first`` flags
---------------------------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The four xhat spokes that ship with ``mpi-sppy`` accept a
 ``feasible_xhat_creator`` candidate via a per-spoke flag, parallel to
@@ -186,7 +189,7 @@ call it once after ``_try_average_scenario_xhat``.
    ``--xhatxbar-try-feasible-xhat-first``.
 
 Worked example: farmer (continuous first-stage)
------------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Farmer's first-stage variable ``DEVOTED_ACRES`` is bounded
 ``NonNegativeReals``, and farmer has relatively complete recourse via
@@ -221,7 +224,7 @@ farmer with a binary-first-stage model, only the auxiliary file has
 to change; the call site at the consumer (e.g., findW) is unchanged.
 
 Worked example: netdes (binary, arc-open monotonicity)
-------------------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Netdes ``model.x[e]`` is ``Binary`` for each candidate arc. The
 recourse constraint is :math:`y_e \le u_e \, x_e`; raising :math:`x_e`
@@ -266,7 +269,7 @@ The :math:`-10^{-9}` margin keeps integer-valued LP solutions from
 being inadvertently bumped up by floating-point dust.
 
 Worked example: sslp (binary, set-covering monotonicity)
---------------------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Sslp ``model.FacilityOpen[j]`` is ``Binary``. Opening more facilities
 never tightens ``DemandConstraint`` (more capacity available) or
@@ -302,7 +305,7 @@ chosen here is ``np.round``.
        return {"ROOT": np.round(arr)}
 
 See also
---------
+^^^^^^^^
 
 * :ref:`jensens` -- Jensen's bound and the
   ``--*-try-jensens-first`` flags. Shares the
