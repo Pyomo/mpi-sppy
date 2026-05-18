@@ -38,6 +38,32 @@ Two-stage only, for now. Multi-stage extensions would need a candidate
 per non-leaf node, plus a story for inter-stage feasibility coupling
 that does not exist in the two-stage case.
 
+File layout
+-----------
+
+By convention the model author's ``feasible_xhat_creator`` (and any
+``average_scenario_creator``) lives in
+``examples/<model>/<model>_auxiliary.py``, **not** in the main
+example file. The introductory example (``farmer.py``, ``netdes.py``,
+...) stays focused on what a first-time reader needs:
+``scenario_creator``, ``scenario_names_creator``, ``kw_creator``,
+``inparser_adder``, ``sample_tree_scen_creator``,
+``scenario_denouement``. Auxiliary functions used only by advanced
+machinery go in the ``_auxiliary`` sibling.
+
+.. admonition:: Discovery
+   :class: note
+
+   When one of the xhat-spoke flags below is set,
+   ``cfg_vanilla._find_feasible_xhat_creator`` first tries
+   ``getattr(scenario_module, "feasible_xhat_creator", None)`` on the
+   user's main scenario module; if that is ``None`` it imports
+   ``<module_name>_auxiliary`` and looks there. Discovery is gated on
+   the flag, so the auxiliary import does not happen unless requested.
+   Downstream consumers (e.g. findW) that bypass the cylinder system
+   import the auxiliary module directly and call
+   ``feasible_xhat_creator`` themselves.
+
 Why this convention exists
 --------------------------
 
@@ -122,31 +148,6 @@ rules; per-component try-and-check degenerates into solving an
 MIP-feasibility problem in itself. The repair belongs in the
 ``feasible_xhat_creator``, where the model author has the domain
 knowledge.
-
-File layout
-^^^^^^^^^^^
-
-By convention these helpers live in
-``examples/<model>/<model>_auxiliary.py``, **not** in the main
-example file. The introductory example (``farmer.py``, ``netdes.py``,
-...) stays focused on what a first-time reader needs:
-``scenario_creator``, ``scenario_names_creator``, ``kw_creator``,
-``inparser_adder``, ``sample_tree_scen_creator``,
-``scenario_denouement``. Auxiliary functions used only by advanced
-machinery go in the ``_auxiliary`` sibling.
-
-.. admonition:: Discovery
-   :class: note
-
-   When one of the xhat-spoke flags below is set,
-   ``cfg_vanilla._find_feasible_xhat_creator`` first tries
-   ``getattr(scenario_module, "feasible_xhat_creator", None)`` on the
-   user's main scenario module; if that is ``None`` it imports
-   ``<module_name>_auxiliary`` and looks there. Discovery is gated on
-   the flag, so the auxiliary import does not happen unless requested.
-   Downstream consumers (e.g. findW) that bypass the cylinder system
-   import the auxiliary module directly and call
-   ``feasible_xhat_creator`` themselves.
 
 In-cylinder use: ``--<xhatter>-try-feasible-xhat-first`` flags
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -305,7 +306,7 @@ chosen here is ``np.round``.
        return {"ROOT": np.round(arr)}
 
 See also
-^^^^^^^^
+--------
 
 * :ref:`jensens` -- Jensen's bound and the
   ``--*-try-jensens-first`` flags. Shares the
@@ -315,3 +316,11 @@ See also
 * :ref:`scenario_creator` -- the core scenario-module conventions
   (``scenario_creator``, ``scenario_names_creator``, ...) that are
   prerequisites for everything in this document.
+
+Heuristics fixing methods
+-------------------------
+
+For some problems, you might have heuristic ways to fix many of the
+nonanticipative variables. Once they are fixed, the resulting problem
+might solve fairly quickly, which can be the basis for a
+``feasible_xhat_creator`` function.
