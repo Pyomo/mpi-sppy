@@ -218,6 +218,10 @@ class _JensensMixin:
     def _feasible_xhat_enabled(self):
         return "feasible_xhat" in self.opt.options
 
+    # NOTE: this method is not Jensen's-specific despite living on
+    # _JensensMixin. The containing class will be renamed in a
+    # subsequent PR to reflect that it covers the generic pre-loop
+    # xhat candidate machinery, not just Jensen's xhat.
     def _try_feasible_xhat(self):
         """One-shot helper for xhat spokes that opt in via
         ``--*-try-feasible-xhat-first``. No-op when the flag is off.
