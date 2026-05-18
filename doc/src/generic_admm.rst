@@ -25,6 +25,16 @@ There are two modes:
    ADMM (``--admm``), but are supported with stochastic ADMM
    (``--stoch-admm``); see :ref:`admm_bundling` below.
 
+.. Note::
+   With ``--stoch-admm``, the ``--xhatshuffle`` spoke requires
+   ``--stage2-ef-solver-name`` and an error is raised otherwise.  Without
+   it, xhatshuffle would fix nonants only along the picked scenario's tree
+   path, leaving the ADMM consensus variables in other stochastic outcomes
+   unconstrained and producing an invalid (over-optimistic) inner bound.
+   Use ``--xhatxbar`` if you want an inner bound without solving a stage-2
+   EF; xhatxbar fixes nonants to the PH ``xbar``, which is itself the
+   consensus value.
+
 
 Tutorial: Running the ``distr`` Example
 -----------------------------------------
@@ -83,6 +93,43 @@ Here:
   ``num_admm_subproblems * num_stoch_scens = 9``.
 
 
+.. _stoch_admm_branching_factors:
+
+Branching factors with ``--stoch-admm``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. important::
+
+   When using ``--stoch-admm``, the value passed to ``--branching-factors``
+   describes the **original** problem's tree (i.e., the branching factors
+   **before** the ADMM-stage augmentation).  The stochastic ADMM wrapper
+   appends ``num_admm_subproblems`` as the final stage, then republishes
+   the augmented branching factors back to the config so that downstream
+   consumers (notably xhatshuffle's stage2ef path) see the correct tree
+   shape automatically.
+
+   - For a 2-stage-origin problem (e.g., ``stoch_distr``): ``--branching-factors``
+     may be omitted entirely.  The wrapper infers ``[num_stoch_scens]`` from
+     ``--num-stoch-scens`` and produces the augmented tree
+     ``[num_stoch_scens, num_admm_subproblems]``.
+   - For an N-stage-origin problem: pass the N-1 original branching factors.
+     The wrapper appends ``num_admm_subproblems`` to produce an
+     N-level augmented tree.
+
+   **Semantics change (post mpi-sppy 0.13.2):** earlier versions of
+   ``setup_stoch_admm`` ignored ``--branching-factors`` entirely and hard-coded
+   ``BFs=None`` into ``Stoch_AdmmWrapper``.  As a result, anyone using
+   ``--stoch-admm`` together with ``--xhatshuffle --stage2-ef-solver-name``
+   had to hand-encode the augmented tree as
+   ``--branching-factors "<num_stoch_scens> <num_admm_subproblems>"``.
+   **That workaround now produces an incorrect (too deep) tree** and must be
+   removed: pass only the original problem's branching factors (or omit the
+   flag for 2-stage-origin problems).
+
+A worked example using stage2ef is provided in
+``examples/stoch_distr/stoch_admm_stage2ef.bash``.
+
+
 Model Module Interface
 -----------------------
 
@@ -126,6 +173,7 @@ Additional functions for ``--stoch-admm``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. py:function:: consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, **scenario_creator_kwargs)
+   :no-index:
 
    Creates the consensus variables dictionary for stochastic ADMM.
 
@@ -248,15 +296,15 @@ constraints.
    def scenario_creator(scenario_name, **kwargs):
        cfg = kwargs["cfg"]
        model = build_my_model(scenario_name, cfg)
-       # Attach a trivial root node (ADMM wrapper will handle consensus)
-       varlist = list()
-       sputils.attach_root_node(model, model.Obj, varlist)
        return model
 
 .. Note::
-   Pass an empty ``varlist`` to ``attach_root_node``. The ADMM wrapper
-   automatically manages which variables are non-anticipative (the consensus
-   variables).
+   For ``--admm``, **do not** call ``sputils.attach_root_node`` in your
+   ``scenario_creator``.  ``AdmmWrapper`` builds the scenario tree itself
+   (calling ``attach_root_node`` internally with the consensus variables as
+   the non-anticipative list); any user-supplied node list would be
+   overwritten.  For ``--stoch-admm`` the contract is different — see the
+   note in "Extending to Stochastic ADMM" below.
 
 Step 4: Implement ``consensus_vars_creator``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -319,7 +367,7 @@ Step 7: Run
 
 
 Extending to Stochastic ADMM
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 To support ``--stoch-admm``, additionally implement:
 
@@ -331,10 +379,27 @@ To support ``--stoch-admm``, additionally implement:
 These functions define the naming convention for composite scenarios. See
 ``examples/stoch_distr/stoch_distr.py`` for a complete working example.
 
-Your ``scenario_creator`` will receive composite names and must split them
-to determine both which ADMM subproblem and which stochastic scenario to build.
 Your ``consensus_vars_creator`` returns ``(variable_name, stage)`` tuples
 instead of plain strings.
+
+.. Note::
+
+   ``scenario_creator`` differs from the deterministic case in two ways:
+
+   1. **Receives a composite name.**  The argument is e.g.
+      ``"ADMM_STOCH_Region1_StochasticScenario3"``; the function must split
+      it (using ``split_admm_stoch_subproblem_scenario_name``) to determine
+      both which ADMM subproblem and which stochastic scenario to build.
+
+   2. **Must call** ``sputils.attach_root_node`` with the *original*
+      problem's first-stage variables (i.e., not the ADMM consensus vars).
+      Unlike ``AdmmWrapper`` (which overwrites the node list),
+      ``Stoch_AdmmWrapper`` *reads* the user-supplied node list and
+      *appends* an ADMM-consensus stage to it.  Skipping the call will
+      assertion-fail inside the wrapper.
+
+   See ``stoch_distr.scenario_creator`` for the canonical pattern:
+   ``sputils.attach_root_node(model, model.FirstStageCost, [...factory vars...])``.
 
 
 .. _admm_bundling:

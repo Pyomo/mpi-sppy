@@ -93,6 +93,24 @@ def _check_admm_compatibility(cfg):
             raise RuntimeError(
                 f"--{opt.replace('_', '-')} is not supported with ADMM"
             )
+    # xhatshuffle without stage2_ef_solver_name is invalid for stoch-admm:
+    # the picked scenario's xhats only fix nonants along its own tree path,
+    # leaving ADMM consensus variables in other stochastic outcomes
+    # unconstrained.  The resulting "inner bound" violates the problem's
+    # ADMM consensus constraints and has no valid interpretation as a
+    # relaxation, so it must not be silently produced.
+    if (cfg.get("stoch_admm", ifmissing=False)
+            and cfg.get("xhatshuffle", ifmissing=False)
+            and cfg.get("stage2_ef_solver_name") is None):
+        raise RuntimeError(
+            "--xhatshuffle with --stoch-admm requires --stage2-ef-solver-name. "
+            "Without it, xhatshuffle fixes nonants only along one scenario's "
+            "tree path, leaving the ADMM consensus variables in other "
+            "stochastic outcomes unconstrained and producing an invalid "
+            "(over-optimistic) inner bound.  Pass --stage2-ef-solver-name "
+            "(typically the same solver as --solver-name), or use "
+            "--xhatxbar instead."
+        )
 
 
 def setup_admm(module, cfg, n_cylinders):
@@ -158,13 +176,19 @@ def setup_stoch_admm(module, cfg, n_cylinders):
         n_cylinders=n_cylinders,
         mpicomm=MPI.COMM_WORLD,
         scenario_creator_kwargs=scenario_creator_kwargs,
-        BFs=None,
+        BFs=cfg.get("branching_factors"),
     )
 
     # Store on cfg as plain attributes (Pyomo Config can't handle these types)
     object.__setattr__(cfg, "_admm_variable_probability", admm.var_prob_list)
     object.__setattr__(cfg, "_admm_scenario_names", all_names)
     object.__setattr__(cfg, "_admm_nodenames", admm.all_nodenames)
+
+    # Publish the augmented branching factors so downstream consumers
+    # (notably xhatshuffle's stage2ef path in extensions/xhatbase.py) see
+    # the wrapper's true tree shape without the user having to hand-encode
+    # the wrapper's append convention.
+    cfg.quick_assign("branching_factors", list, list(admm.BFs))
 
     return (admm.admmWrapper_scenario_creator, {},
             all_names, admm.all_nodenames)

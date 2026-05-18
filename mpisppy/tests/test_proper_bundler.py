@@ -313,6 +313,13 @@ class TestPHWithFixedFirstStageBundledAndUnbundled(unittest.TestCase):
             scenario_creator_kwargs={},
         )
         ef_solver = pyo.SolverFactory(solver_name)
+        if "_persistent" in solver_name:
+            # Persistent solvers require the model be attached
+            # before solve(); without this the call raises
+            # "Please use set_instance to set the instance before
+            # calling solve". See test_ef_ph.py:158-159 for the
+            # canonical pattern.
+            ef_solver.set_instance(ef)
         ef_solver.solve(ef)
         ef_obj = pyo.value(ef.EF_Obj)
         self.assertTrue(_math_isfinite(ef_obj))

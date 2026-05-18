@@ -61,6 +61,12 @@ run_phase "test_ef_ph (serial)" \
 run_phase "test_component_map_usage (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_component_map_usage.py -v
 
+run_phase "test_solver_options_layers (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_solver_options_layers.py -v
+
+run_phase "test_options_reach_solver (serial; gurobi-only)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_options_reach_solver.py -v
+
 run_phase "test_nonant_validation (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_nonant_validation.py -v
 
@@ -114,6 +120,9 @@ run_phase "test_rho_deprecations (serial)" \
 
 run_phase "test_xhat_from_file (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_xhat_from_file.py -v
+
+run_phase "test_incumbent_writing (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_incumbent_writing.py -v
 
 run_phase "test_conf_int_farmer (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_conf_int_farmer.py
