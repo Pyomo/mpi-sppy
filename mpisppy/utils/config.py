@@ -279,6 +279,11 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
+        self.add_to_config('display_timing',
+                              description="display subproblem solve timing (requires exactly one subproblem per rank)",
+                              domain=bool,
+                              default=False)
+
         self.add_to_config("max_solver_threads",
                             description="Limit on threads per solver (default None)",
                             domain=int,
