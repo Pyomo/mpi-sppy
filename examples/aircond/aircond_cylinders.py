@@ -315,7 +315,7 @@ def main():
             sd["opt_kwargs"]["options"]["iterk_solver_options"].update(soptions)
 
         if with_xhatspecific:
-            xhatspecific_spoke["opt_kwargs"]["options"]["xhat_looper_options"]["xhat_solver_options"].update(soptions)
+            xhatspecific_spoke["opt_kwargs"]["options"]["xhat_specific_options"]["xhat_solver_options"].update(soptions)
         if with_xhatshuffle:
             xhatshuffle_spoke["opt_kwargs"]["options"]["xhat_looper_options"]["xhat_solver_options"].update(soptions)
     # special code to get a trace for xhatshuffle

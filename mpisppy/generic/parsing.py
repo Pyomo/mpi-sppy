@@ -140,6 +140,7 @@ def parse_args(m):
     cfg.primal_dual_rho_args()
     cfg.converger_args()
     cfg.wxbar_read_write_args()
+    cfg.wtracker_args()
     cfg.tracking_args()
     cfg.gradient_args()
     cfg.dynamic_rho_args()

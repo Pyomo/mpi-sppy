@@ -182,6 +182,14 @@ class Config(pyofig.ConfigDict):
                             domain = str,
                             default=None)
 
+        self.add_to_config(f"{sstr}_options_file",
+                            description= f"{prefix}path to a JSON solver-options file with sections "
+                                         "default/iter0/iterk/starting_at_iter (and a 'spokes' sub-block at the "
+                                         "top level, naming each spoke's overrides). CLI flags "
+                                         "override file entries at the same predicate.",
+                            domain = str,
+                            default=None)
+
     def add_mipgap_specs(self, prefix=""):
         sstr = f"{prefix}_" if prefix else ""
         if prefix:
@@ -271,6 +279,11 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
+        self.add_to_config('display_timing',
+                              description="display subproblem solve timing (requires exactly one subproblem per rank)",
+                              domain=bool,
+                              default=False)
+
         self.add_to_config("max_solver_threads",
                             description="Limit on threads per solver (default None)",
                             domain=int,
@@ -284,6 +297,16 @@ class Config(pyofig.ConfigDict):
         self.add_to_config("trace_prefix",
                             description="Prefix for bound spoke trace files. If None "
                                  "bound spoke trace files are not written.",
+                            domain=str,
+                            default=None)
+
+        self.add_to_config("incumbent_on_improvement_filename_prefix",
+                            description="If set, incumbent (xhat) bound spokes "
+                                 "write the first-stage solution to "
+                                 "<prefix>_<NNNN>.csv and <prefix>_<NNNN>.npy "
+                                 "each time they find a new best inner bound. "
+                                 "<NNNN> is a zero-padded counter starting at "
+                                 "0000. Default None disables.",
                             domain=str,
                             default=None)
 
@@ -622,11 +645,11 @@ class Config(pyofig.ConfigDict):
         else:
             name = name+"_"
 
-        if name == "":
-            self.add_to_config('mipgaps_json',
-                               description="path to json file with a mipgap schedule for PH iterations",
-                               domain=str,
-                               default=None)
+        self.add_to_config(f'{name}mipgaps_json',
+                           description="path to json file with a mipgap schedule for PH iterations "
+                                       "(planned for deprecation in a future release)",
+                           domain=str,
+                           default=None)
 
         self.add_to_config(f'{name}starting_mipgap',
                            description="Sets automatic gapper mode and the starting and minimum mipgap",
