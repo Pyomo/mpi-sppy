@@ -144,7 +144,7 @@ class TestFarmerFeasibleXhatCreator(unittest.TestCase):
 @unittest.skipIf(not solver_available, "no solver available")
 class TestNetdesFeasibleXhatCreator(unittest.TestCase):
     """End-to-end check: netdes_auxiliary.feasible_xhat_creator returns
-    a candidate that is integer-valued and feasible to pin in every
+    a candidate that is integer-valued and feasible to fix in every
     real scenario."""
 
     def setUp(self):
@@ -164,7 +164,7 @@ class TestNetdesFeasibleXhatCreator(unittest.TestCase):
         self.assertTrue(np.allclose(arr, np.round(arr), atol=1e-9),
                         f"ceil output is not integer-valued: {arr}")
 
-    def test_pins_are_feasible_in_every_real_scenario(self):
+    def test_fixes_are_feasible_in_every_real_scenario(self):
         arr = self.cache["ROOT"]
         for k in range(self.K):
             sname = f"Scenario{k}"
@@ -181,7 +181,7 @@ class TestNetdesFeasibleXhatCreator(unittest.TestCase):
             tc = results.solver.termination_condition
             self.assertIn(
                 tc, (TerminationCondition.optimal, TerminationCondition.feasible),
-                f"netdes pin infeasible on {sname}: tc={tc}, xhat={arr}",
+                f"netdes fix infeasible on {sname}: tc={tc}, xhat={arr}",
             )
 
 
