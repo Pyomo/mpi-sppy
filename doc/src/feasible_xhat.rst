@@ -49,16 +49,17 @@ or more scenarios is infeasible, then
 silently moves on. That is the right behavior for an inner-bound
 spoke whose only job is to opportunistically improve a bound.
 
-Other classes of algorithm work differently. They fix the candidate
-first stage in every scenario, solve the resulting per-scenario MIP
-(or LP), and use dual information from that solve to drive the
-outer-bound algorithm. If the fixed candidate is infeasible in some
-scenario, the per-scenario subproblem has no solution and there is
-no graceful fallback at that step. The candidate **must** be
-feasible to fix in every real scenario.
+``feasible_xhat_creator`` strengthens the contract. Where Jensen's
+xhat is opportunistic -- silently skipping any scenario in which the
+candidate is not feasible to fix -- ``feasible_xhat_creator`` tries
+to guarantee by construction that the candidate **is** feasible to
+fix in every real scenario. The inner-bound spoke that consumes it
+therefore produces a usable second-stage objective on each candidate
+rather than potentially never updating the inner bound.
 
 That is a strictly stronger contract than "Jensen's xhat plus luck,"
-and it is the contract that ``feasible_xhat_creator`` provides.
+and it is the contract that ``feasible_xhat_creator`` aims to
+provide.
 
 The two helpers in ``mpisppy.utils.xhat_helpers``
 -------------------------------------------------
@@ -272,9 +273,8 @@ never tightens ``DemandConstraint`` (more capacity available) or
 ``ClientConstraint`` (the LHS does not involve ``FacilityOpen``). The
 shipped model also carries a high-``Penalty`` ``Dummy`` slack, so any
 fixed candidate is technically feasible; the rounded LP-xbar is
-still a meaningful low-slack candidate when the outer-bound
-algorithm needs to fix the first stage and read duals from the
-per-scenario subproblem.
+still a meaningful low-slack candidate for the inner-bound spoke
+that consumes it.
 
 Sslp does not currently ship an ``average_scenario_creator``, so the
 auxiliary skips the ``average_xhat_nonants`` engine entirely and goes
