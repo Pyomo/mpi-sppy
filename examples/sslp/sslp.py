@@ -64,12 +64,16 @@ def scenario_denouement(rank, scenario_name, scenario):
 ########## helper functions ########
 
 #=========
-def scenario_names_creator(num_scens,start=None):
-    # one-based scenarios
-    # if start!=None, the list starts with the 'start' labeled scenario
-    if (start is None) :
-        start=1
-    return [f"Scenario{i}" for i in range(start, start+num_scens)]
+def scenario_names_creator(num_scens, start=None):
+    # one-based scenario labels (Scenario1, Scenario2, ...) -- the on-disk
+    # data dir is 1-indexed (Scenario1.dat ... ScenarioN.dat).
+    # `start` follows the mpi-sppy convention used by farmer/aircond/uc:
+    # 0-based offset = count of already-used scenarios. proper_bundler
+    # calls this with start=firstnum-inum (== 0 for the first bundle),
+    # so the offset must be 0-based even though the *labels* are 1-based.
+    if start is None:
+        start = 0
+    return [f"Scenario{i+1}" for i in range(start, start+num_scens)]
 
 
 #=========
@@ -201,7 +205,6 @@ if __name__ == "__main__":
     options["PHIterLimit"] = maxit
     options["defaultPHrho"] = rho
     options["convthresh"] = -1
-    options["subsolvedirectives"] = None
     options["verbose"] = False
     options["display_timing"] = False
     options["display_progress"] = True
@@ -233,10 +236,15 @@ if __name__ == "__main__":
 
     options["fixeroptions"] = fixoptions
 
-    options["gapperoptions"] = {
-        "verbose": True,
-        "mipgapdict": {0: 0.02, 1: 0.02, 5: 0.01, 10: 0.005},
-    }
+    # Per-iteration mipgap schedule: a list of starting_at_iter layers in
+    # solver_options_layers. Layer N (with N >= 0) takes effect at PH
+    # iteration N and persists until a later starting_at_iter layer wins.
+    _mipgap_schedule = {0: 0.02, 1: 0.02, 5: 0.01, 10: 0.005}
+    options.setdefault("solver_options_layers", [])
+    for _N in sorted(_mipgap_schedule):
+        options["solver_options_layers"].append(
+            sputils.solver_options_layer(
+                ("starting_at_iter", _N), {"mipgap": _mipgap_schedule[_N]}))
 
     all_scenario_names = list()
     for sn in range(ScenCount):

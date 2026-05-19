@@ -934,7 +934,7 @@ class APH(ph_base.PHBase):
                 self.dispatch_frac = 1   # to get a decent w for everyone
             logging.debug('pre APH_solve_loop on rank {}'.format(self.cylinder_rank))
             dlist = self.APH_solve_loop(solver_options = \
-                                        self.current_solver_options,
+                                        self._effective_solver_options(self._PHIter),
                                         dtiming=dtiming,
                                         gripe=True,
                                         disable_pyomo_signal_handling=True,
