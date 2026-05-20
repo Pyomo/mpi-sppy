@@ -910,6 +910,15 @@ class TestSolverOptionsFileWiredIntoSharedOptions(unittest.TestCase):
         finally:
             os.unlink(path)
 
+    def test_empty_string_solver_options_file_is_treated_as_unset(self):
+        # Callers that default solver_options_file to "" (e.g. as a
+        # YAML/JSON sentinel for "no file") should not trigger a file
+        # load. Regression for FileNotFoundError on open("").
+        cfg = _bare_cfg()
+        cfg.solver_options_file = ""
+        sh = shared_options(cfg)
+        self.assertEqual(sh["solver_options_layers"], [])
+
 
 class TestSolverOptionsFilePerSpoke(unittest.TestCase):
     """Per-spoke layers from (a) the global file's "spokes" sub-block
@@ -1030,10 +1039,20 @@ class TestSolverOptionsFilePerSpoke(unittest.TestCase):
                 opts["solver_options_layers"], 0)
             self.assertEqual(folded["mipgap"], 0.001)  # inline wins
             self.assertEqual(folded["presolve"], 1)    # file survives
-
-
         finally:
             os.unlink(path)
+
+    def test_empty_string_spoke_solver_options_file_is_treated_as_unset(self):
+        # Mirrors the top-level empty-string regression: a caller that
+        # sets --{name}-solver-options-file to "" should not trigger
+        # a file load.
+        cfg = _spoke_cfg("lagrangian")
+        cfg.lagrangian_solver_options_file = ""
+        sh = shared_options(cfg)
+        spoke = self._spoke_dict_from(sh)
+        apply_solver_specs("lagrangian", spoke, cfg)  # must not raise
+        self.assertEqual(
+            spoke["opt_kwargs"]["options"]["solver_options_layers"], [])
 
 
 class TestLagrangerDeprecation(unittest.TestCase):
