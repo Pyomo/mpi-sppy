@@ -91,7 +91,7 @@ def shared_options(cfg, is_hub=False):
     # axis 2: any CLI flags below override file entries at the same
     # predicate. Load and apply it first so the rest of the axis-2
     # chain can overlay on top.
-    if _hasit(cfg, "solver_options_file"):
+    if cfg.get("solver_options_file"):  # treats None and "" as unset
         file_data = sputils.load_solver_options_file(cfg.solver_options_file)
         shoptions["iter0_solver_options"].update(file_data["default"])
         shoptions["iter0_solver_options"].update(file_data["iter0"])
@@ -175,7 +175,7 @@ def apply_solver_specs(name, spoke, cfg):
         options["iterk_solver_options"].update(spoke_file_blocks["iterk"])
         options["solver_options_layers"].extend(
             sputils.options_file_section_to_layers(spoke_file_blocks))
-    if _hasit(cfg, name+"_solver_options_file"):
+    if cfg.get(name+"_solver_options_file"):  # treats None and "" as unset
         spoke_file_data = sputils.load_solver_options_file(
             cfg.get(name+"_solver_options_file"))
         # Per-spoke files only consume their own predicates; the
