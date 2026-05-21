@@ -203,6 +203,8 @@ multi-stage problems (though for two-stage problems they are uniform).
 
 #### Window Topology Options
 
+Spoiler alert: we are going to recommend option D, which is similar to A.
+
 **Option A: Single global window on MPI_COMM_WORLD**
 
 Every rank publishes its buffers in one shared window.  Readers address
@@ -420,7 +422,8 @@ others are independent candidates that tolerate staleness.
   candidate first-stage point and inherits the same NAC problem
   when assembled from mixed iterations.
 
-There are two ways to address this; both are on the table:
+There are two ways to address this; both are on the table (but DLW
+favors BX-2, which has a very long description here):
 
 **Option BX-1: Require strict coherence on `BEST_XHAT` /
 `RECENT_XHATS` as well.**  Treat them the same as `NONANT` /
