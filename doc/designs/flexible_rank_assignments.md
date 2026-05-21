@@ -437,6 +437,41 @@ non-anticipative decision lives in exactly one place.**  Replace
 the per-scenario layout with one canonical vector per non-leaf
 node.
 
+*What the current layout looks like.*  `BEST_XHAT` on a given
+rank is a concatenation, one entry per local scenario, of that
+scenario's `nonant_indices` values (plus a per-scenario scalar
+total cost stored alongside).  Since `nonant_indices` contains
+exactly the NAC-bound variables — those at non-leaf nodes —
+every scenario passing through a given node carries its own copy
+of that node's values.  Two scenarios sharing the ROOT node, for
+example, each store the same stage-1 vector in their own slot;
+nothing in the layout enforces that the two copies agree, even
+though NAC requires they must.
+
+*What BX-2 changes it to.*  The layout becomes a concatenation,
+one entry per non-leaf node touched by the local scenarios, of
+that node's canonical nonant vector (size = the node's nonant
+count).  Scenarios no longer have private xhat slots; they share
+the per-node entries.  Per-scenario total cost, which is
+genuinely scenario-specific, remains per-scenario in a parallel
+small array.
+
+*Why non-leaf nodes specifically.*  NAC binds at non-leaf nodes:
+all scenarios sharing a non-leaf node must agree on that node's
+decisions.  Leaf nodes correspond one-to-one with scenarios, so
+their decisions are scenario-specific by construction and are
+not included in `nonant_indices` anyway — there is nothing to
+canonicalize at leaves.
+
+*Concrete example.*  A two-stage problem with 100 scenarios and
+20 stage-1 (root) variables.  The current per-scenario layout
+stores 100 × 20 = 2000 doubles for the nonant portion of
+`BEST_XHAT` (across all ranks combined), even though by NAC all
+100 copies must agree.  BX-2 stores 1 × 20 = 20 doubles for the
+ROOT node — a 100× reduction in this dimension.  Multistage gives
+the same kind of reduction per node, scaled by how many scenarios
+share that node.
+
 *Writer rule (uniform across stages and cylinders):* the writer for
 a non-leaf node is the lowest-rank holder, within the publishing
 cylinder, of any scenario passing through that node.  For two-stage
@@ -445,6 +480,39 @@ this collapses to a single writer per cylinder — rank 0, since rank
 node.  Hub-side rank-0-special-cases like `SHUTDOWN` and
 `BEST_OBJECTIVE_BOUNDS` are untouched; this rule applies only to
 `BEST_XHAT` / `RECENT_XHATS`.
+
+*Certification and publish.*  A natural question is how the
+elected writer knows that all other ranks in the cylinder have
+certified the candidate xhat as feasible before it publishes the
+canonical vector.  The answer is that certification is not done
+via the SPWindow; it goes through the existing cylinder-internal
+`cylinder_comm.Allreduce` that already runs in every xhat spoke
+today.  Sequence:
+
+1. The hub broadcasts a candidate xhat to the spoke via `NONANT`.
+2. Each spoke rank fixes the first stage to that candidate and
+   solves its locally-held scenarios' subproblems.
+3. The spoke does a `cylinder_comm.Allreduce` combining per-rank
+   feasibility flags and per-scenario costs into a single global
+   verdict plus total cost.  After this Allreduce returns, every
+   rank in the cylinder — including the elected writer — knows
+   whether the candidate is certified.
+4. If certified, the elected writer transcribes the canonical
+   node vector(s) from its in-memory model into its slab and bumps
+   `write_id`.  Other ranks do not write `BEST_XHAT` at all.
+5. Readers (hub, other spokes) Get from the writer's slab.
+
+So the writer never has to learn the certification result
+out-of-band: the Allreduce *is* the certification, and it is
+globally synchronous within the cylinder.  Step 4 is just the
+elected scribe transcribing the already-agreed answer.
+
+*Why the writer has the value to transcribe.*  By the writer
+rule, the elected writer for a node holds at least one scenario
+passing through that node, so the node's nonant values are in
+its local Pyomo model.  NAC guarantees that all scenarios through
+that node agree on those values, so it does not matter which
+local scenario's slot the writer reads from when transcribing.
 
 *Read side:*
 
