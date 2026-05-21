@@ -728,22 +728,18 @@ existing test suite with the new code and default ratios.
 
 ### Open Questions
 
-1. Should the minimum rank count for any cylinder be 1?  Some spoke
-   types may require at least 2 ranks for internal collective
-   operations.
-
-2. What is the interaction with proper bundles?  Bundles change the
+1. What is the interaction with proper bundles?  Bundles change the
    scenario structure, so rank ratios would apply to the bundled
    scenario count, not the original count.
 
-3. For the FWPH spoke-to-spoke case, the FWPH spoke reads
+2. For the FWPH spoke-to-spoke case, the FWPH spoke reads
    `RECENT_XHATS` which is a circular buffer of multiple xhat
    solutions.  Each entry is local-sized.  The multi-source read
    would need to be applied to each entry in the circular buffer.
    Is this feasible, or should FWPH be restricted to equal rank
    counts?
 
-4. Memory overhead: with Option D (global window on fullcomm), the
+3. Memory overhead: with Option D (global window on fullcomm), the
    window includes buffers from all ranks in all cylinders.  For
    large problems with many ranks, this could be significant.  Should
    we provide a way to limit which ranks participate in the window?
