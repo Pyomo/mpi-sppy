@@ -4,6 +4,18 @@ Status: Design Document (Draft)
 Date: 2026-03-16
 Branch: `flexible_rank_assignments`
 
+### Terminology
+
+- **Window:** An MPI one-sided ("RMA") addressing scope, created
+  collectively on a communicator via `MPI_Win_Allocate`.  The window
+  is a handle, not a contiguous block of memory — it makes each
+  participant's local buffer mutually addressable via `MPI_Get` /
+  `MPI_Put`.
+- **Buffer:** A rank's local memory region exposed through a window.
+  Holds that rank's published fields (`NONANT`, `DUALS`,
+  `BEST_XHAT`, ...) packed according to the `buffer_layout` in
+  `spwindow.py`.
+
 ### Motivation
 
 Currently, `WheelSpinner` enforces that every cylinder (hub and all
