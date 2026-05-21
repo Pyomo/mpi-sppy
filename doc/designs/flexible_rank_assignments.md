@@ -304,6 +304,21 @@ Cons:
   `cylinder_comm.allgather` followed by a small cross-cylinder gather
   over one anchor rank per cylinder — rather than a single
   `fullcomm.allgather`, which scales worse at N=thousands.
+- Inherits Option A's single-window lock granularity: `MPI_Win_lock`
+  is per-window, so concurrent accesses to unrelated cylinders'
+  data share the same lock and may contend.  In practice this is
+  not a deal-breaker: mpi-sppy uses passive-target RMA with
+  `MPI_LOCK_SHARED` for reads (`MPI_Get`), and shared locks do not
+  serialize against each other — many ranks can read from the same
+  window concurrently.  Contention only arises between a shared
+  read and an exclusive write (`MPI_LOCK_EXCLUSIVE`) on the same
+  target rank, and writes are issued only by that rank's owning
+  cylinder, not cross-cylinder.  So the "shared window" cost is
+  bookkeeping (one large window object, larger displacement table)
+  rather than serialized traffic.  If a workload ever did show
+  measurable contention, splitting hot cylinder pairs into their
+  own window (Option B for those pairs) is an incremental fix that
+  doesn't require abandoning Option D.
 
 **Recommendation:** Option D is the cleanest long-term solution.
 Option A is equivalent but Option D better describes the intent.  The
