@@ -724,13 +724,19 @@ class SPBase:
                 f"nonzero_reports={len(nonzero_rows)}",
                 flush=True,
             )
-            # If anything looks bad, dump the per-rank rows.
+            # "Bad" = invariant-violating, NOT just "nonzero result." A
+            # legitimate shutdown signal returns sum=lor=1 with
+            # gather_sum=1 (consistent), which is fine. The real bug
+            # signature is gather_sum disagreeing with the Allreduce SUM
+            # (the reducer lying), or the rank-sum sanity check failing
+            # (SUM broken on this comm), or duplicate world ranks
+            # (group membership corrupted), or some rank packing >1
+            # (non-boolean input — only possible under memory aliasing).
             bad = (
-                int(sum_out[0]) != 0
-                or int(lor_out[0]) != 0
-                or int(rank_out[0]) != expected_rank_sum
+                int(rank_out[0]) != expected_rank_sum
                 or int(sum_out[0]) != gather_sum
                 or len(set(wr)) != len(wr)
+                or int(max_out[0]) > 1
             )
             if bad:
                 limit = min(64, len(nonzero_rows))
