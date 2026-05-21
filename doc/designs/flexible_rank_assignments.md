@@ -311,8 +311,8 @@ Cons:
 
   *Lock granularity.*  `MPI_Win_lock(rank=target, ...)` is per-
   target-rank in the MPI spec, not per-window — a writer's
-  exclusive lock on its own slab does not block readers fetching
-  from a different rank's slab, regardless of cylinder.  Cross-
+  exclusive lock on its own buffer does not block readers fetching
+  from a different rank's buffer, regardless of cylinder.  Cross-
   cylinder serialization is therefore a non-issue at the spec
   level.  Implementation-dependent progress-engine state per
   window object can cause minor contention in practice, but
@@ -501,9 +501,9 @@ today.  Sequence:
    rank in the cylinder — including the elected writer — knows
    whether the candidate is certified.
 4. If certified, the elected writer transcribes the canonical
-   node vector(s) from its in-memory model into its slab and bumps
+   node vector(s) from its in-memory model into its buffer and bumps
    `write_id`.  Other ranks do not write `BEST_XHAT` at all.
-5. Readers (hub, other spokes) Get from the writer's slab.
+5. Readers (hub, other spokes) Get from the writer's buffer.
 
 So the writer never has to learn the certification result
 out-of-band: the Allreduce *is* the certification, and it is
