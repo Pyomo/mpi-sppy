@@ -735,11 +735,6 @@ existing test suite with the new code and default ratios.
    Is this feasible, or should FWPH be restricted to equal rank
    counts?
 
-2. Memory overhead: with Option D (global window on fullcomm), the
-   window includes buffers from all ranks in all cylinders.  For
-   large problems with many ranks, this could be significant.  Should
-   we provide a way to limit which ranks participate in the window?
-
 
 
 
