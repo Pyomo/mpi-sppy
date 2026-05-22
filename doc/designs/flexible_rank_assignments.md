@@ -15,6 +15,14 @@ Branch: `flexible_rank_assignments`
   Holds that rank's published fields (`NONANT`, `DUALS`,
   `BEST_XHAT`, ...) packed according to the `buffer_layout` in
   `spwindow.py`.
+- **`NONANT` field:** Carries `xbar` values from the hub.  The
+  name reflects the variable layout (values shaped like
+  `nonant_indices`), not the content — `xbar` is what's actually
+  in there.  This design proposes renaming the field to `XBAR`
+  and reframing it as a canonical per-non-leaf-node vector under
+  **Option BN-2** below, in parallel with **Option BX-2** for
+  `BEST_XHAT` / `RECENT_XHATS`.  The related
+  `Field.RELAXED_NONANT` becomes `Field.RELAXED_XBAR`.
 
 ### Motivation
 
@@ -133,19 +141,24 @@ All inter-cylinder communication uses one-sided MPI (RMA) through
     `CROSS_SCENARIO_COST` from a source
 
 The local-sized fields are the ones affected by unequal rank
-counts.  Of those, `NONANT` and `DUALS` get the multi-source
-assembly treatment described below; `BEST_XHAT` and `RECENT_XHATS`
-need different handling (see §Coherence options) because
-per-scenario assembly across iterations violates NAC.
+counts.  Of those, only `DUALS` (and per-scenario fields like
+`CROSS_SCENARIO_COST` that carry independent per-scenario data)
+get the multi-source assembly treatment described below.  `NONANT`
+joins `BEST_XHAT` and `RECENT_XHATS` in the NAC-canonicalized
+treatment, because xbar is fundamentally one value per non-leaf
+node, not per-scenario data.  See §Coherence options for the
+`BN-2` / `BX-2` layout reframing.
 
 
 ### Design: Multi-Rank Mapping
 
 This section describes the design for fields where multi-source
-assembly across scenarios is mathematically valid (`NONANT`,
-`DUALS`).  Fields where per-scenario assembly would violate
-non-anticipativity (`BEST_XHAT`, `RECENT_XHATS`) are handled
-separately — see §Coherence options.
+assembly across scenarios is mathematically valid: `DUALS` (each
+scenario carries its own W_s, genuinely independent per-scenario
+data) and per-scenario fields like `CROSS_SCENARIO_COST`.  Fields
+where per-scenario assembly would violate non-anticipativity
+(`NONANT`, `BEST_XHAT`, `RECENT_XHATS`) are handled separately —
+see §Coherence options.
 
 The core idea (for the applicable fields): when a rank in one
 cylinder needs data from another cylinder with a different rank
@@ -403,21 +416,34 @@ others are independent candidates that tolerate staleness.
 
 **Fields requiring strict coherence:**
 
-- `NONANT` (xbar values from the hub) and `DUALS` (W values from
-  the hub) are coupled: they define the Lagrangian subproblem at a
-  specific PH iteration.  If a spoke assembles xbar from iteration k
-  for some scenarios and iteration k+1 for others, the dual function
-  is evaluated at an inconsistent dual point and the resulting bound
-  is invalid.
+- `DUALS` (W values from the hub).  W is genuinely scenario-by-
+  scenario data: each scenario has its own multiplier W_s.  Multi-
+  source assembly across ranks is the correct primitive here, but
+  the dual normalization `sum_s p_s W_s = 0` only holds at a single
+  iteration — so mixing iterations gives `sum_s p_s W_s_mixed != 0`
+  and the resulting Lagrangian value is no longer a valid lower
+  bound on the primal.  Coherence is required for bound validity.
 
-  In practice this is manageable because the hub is synchronous PH:
-  all hub ranks complete the same iteration before writing their
-  buffers, so their `write_id` values naturally agree after each
-  PH iteration.  The receiver just needs to verify they match before
+  In practice this is cheap: the hub is synchronous PH, so all hub
+  ranks complete the same iteration before writing their `DUALS`
+  buffers and their `write_id` values naturally agree after each
+  PH iteration.  The receiver just verifies they match before
   accepting the assembled data.
 
 **Fields where multi-source assembly breaks non-anticipativity:**
 
+- `NONANT` (xbar from the hub) is per-scenario local-sized, but
+  xbar is fundamentally a node-by-node consensus value.  The hub
+  computes one xbar per non-leaf node via Allreduce in
+  `compute_xbar`, enforcing NAC by construction.  The per-scenario
+  layout then *redundantly* writes that one value into each
+  scenario's slot — 100 scenarios sharing ROOT each carry a copy
+  of ROOT's xbar.  Under multi-source assembly from mixed
+  iterations, those copies disagree, and consumers that need
+  NAC-consistent xbar (e.g., the xbar-based xhatter
+  `XhatXbarSpoke`, augmented-Lagrangian spokes, FWPH inner
+  iterations) see scenario-dependent first-stage values — same
+  failure mode as `BEST_XHAT`.
 - `BEST_XHAT` is per-scenario local-sized, but every scenario's
   first-stage slot must hold the same first-stage values (NAC).
   Assembling segments from iteration *k* for some scenarios and
@@ -554,6 +580,55 @@ scenarios can disagree.
 writer-assignment plumbing.  Probably the right long-term shape;
 arguably should be done first as a prerequisite refactor.
 
+**Option BN-1: Require strict coherence on `NONANT` (xbar) as
+well.**  Treat it like `DUALS`: at read time, fetch `write_id`
+from every contributing remote rank, check they all match, then
+issue the data Gets.  Mismatch → retry later.  The hub is
+synchronous PH so `write_id` values naturally agree after each
+iteration and the check is almost free.  Minimal layout change;
+keeps the redundant per-scenario layout (one xbar value
+duplicated into every local scenario's slot).
+
+**Option BN-2: Reframe `NONANT` as one canonical xbar vector
+per non-leaf node, and rename the field to `XBAR`.**  Apply the
+same canonicalization treatment as `BX-2` does for `BEST_XHAT` /
+`RECENT_XHATS`: identical writer rule, identical certification
+sequence, identical reader-expansion machinery (replace
+"BEST_XHAT" with "xbar" throughout the BX-2 walkthrough above).
+Specifics that differ for the xbar case:
+
+*Field rename.*  The current name describes the variable layout
+(`nonant_indices`-shaped), not the content.  Under BN-2 the
+layout becomes node-canonical, and the misnomer becomes actively
+misleading — the rename to `XBAR` lands as part of the BN-2 code
+change.  `Field.RELAXED_NONANT`, which is the relaxed-PH spoke's
+analogue of xbar, follows the same treatment and becomes
+`Field.RELAXED_XBAR`.
+
+*Hot path.*  Unlike `BEST_XHAT`, which updates rarely, xbar is
+broadcast on every PH iteration.  The bandwidth savings from
+eliminating the N-copies-of-one-value redundancy compound in
+steady state — every iteration writes O(non-leaf-nodes × node-len)
+instead of O(scenarios × all-nodes-len).
+
+*Consumers needing NAC-consistent xbar.*  The xbar-based xhatter
+(`XhatXbarSpoke` in `xhatxbar_bounder.py`) takes xbar as a
+candidate first-stage decision and evaluates it.  Under BN-2 that
+candidate is NAC-consistent by construction — no strict
+`write_id` check at read time, no retry logic, no possibility of
+a scenario-dependent "xhat."  Augmented-Lagrangian spokes (which
+use xbar in their proximal terms) and FWPH inner iterations are
+similar consumers and benefit identically.
+
+*Cost.*  Larger code touch than BX-2 because there are more
+`NONANT` consumers (the seven files identified in the rename
+scope analysis: `spwindow.py`, `spoke.py`, `hub.py`,
+`cross_scen_spoke.py`, `relaxed_ph_spoke.py`,
+`cross_scen_extension.py`, `relaxed_ph_fixer.py`).  Each reader
+needs an "expand from canonical to per-scenario view" step at
+use time — mechanically identical to what BX-2 already requires
+for FWPH on `RECENT_XHATS`.
+
 **Fields tolerating staleness (relaxed coherence):**
 
 - `NONANT_LOWER_BOUNDS`, `NONANT_UPPER_BOUNDS`.  Already
@@ -575,10 +650,11 @@ arguably should be done first as a prerequisite refactor.
 
 **Option 1: Per-field strict check**
 
-For fields that require coherence (`NONANT`, `DUALS`, and
-`BEST_XHAT` / `RECENT_XHATS` if Option BX-1 is chosen): read all
-`write_id` values first (cheap: one int per segment), check they
-match, then read the data.  If they don't match, retry later.
+For fields that require coherence (`DUALS`, plus `NONANT` if
+Option BN-1 is chosen, plus `BEST_XHAT` / `RECENT_XHATS` if
+Option BX-1 is chosen): read all `write_id` values first (cheap:
+one int per segment), check they match, then read the data.  If
+they don't match, retry later.
 
 For fields that tolerate staleness (the global-sized bound fields
 and the scalar objective bounds): accept data from each source
@@ -608,14 +684,19 @@ Pros: simplest implementation, no stalls.
 Cons: Lagrangian bounds may be invalid when assembled from mixed
 iterations.
 
-**Recommendation:** Option 1 (per-field strict check) for the
-multi-source-read mechanics, paired with either Option BX-1 or
-Option BX-2 to fix the NAC problem with `BEST_XHAT` / `RECENT_XHATS`.
-Option 1's check is almost free under synchronous PH: `write_id`
-values naturally agree after each iteration, so receivers verify
-and rarely retry.  Whether to land BX-1 (strict coherence, minimal field-layout
-change) or BX-2 (reframe as global-sized, prerequisite refactor)
-is still open.
+**Recommendation:** Option 1 (per-field strict check) covers
+the remaining per-scenario multi-source-read fields (`DUALS`,
+`CROSS_SCENARIO_COST`), paired with **BN-2 + BX-2** for the
+NAC-canonicalized fields (`NONANT` → `XBAR`, `BEST_XHAT`,
+`RECENT_XHATS`).  BN-2 and BX-2 share writer rule, certification,
+and reader-expansion machinery, so they are the same logic
+applied to two field families; landing them together avoids an
+awkward intermediate state where xhat is canonicalized but xbar
+is not (or vice versa).  Under BN-2 + BX-2 the strict `write_id`
+check is only needed for `DUALS` (and any other genuinely
+per-scenario field), since the canonicalized fields have exactly
+one writer per node and no multi-source coherence question to
+ask.
 
 
 ### Impact on Existing Components
@@ -641,8 +722,15 @@ is still open.
 
 #### `spwindow.py`
 
-- `FieldLengths` stays the same (it's per-rank, based on local
-  scenarios).
+- Rename `Field.NONANT` to `Field.XBAR` and `Field.RELAXED_NONANT`
+  to `Field.RELAXED_XBAR` (as part of the BN-2 layout change).
+- Add new field-length entries for `XBAR` / `RELAXED_XBAR` sized
+  by non-leaf-node nonant count rather than `_local_nonant_length`
+  (canonical per-non-leaf-node layout).
+- `BEST_XHAT` / `RECENT_XHATS` field-length entries change
+  similarly under BX-2.
+- `FieldLengths` mostly stays the same for the remaining
+  per-rank/local-sized fields (`DUALS`, `CROSS_SCENARIO_COST`).
 - `SPWindow` must support partial `get()` calls (offset + count).
 - The buffer layout exchange must use a communicator that spans all
   cylinders (not just `strata_comm`).
@@ -686,6 +774,26 @@ is still open.
 
 
 ### Phased Implementation Plan
+
+**Phase 0: Field canonicalization (BN-2 + BX-2 prerequisite refactor)**
+
+- Rename `Field.NONANT` → `Field.XBAR` and `Field.RELAXED_NONANT`
+  → `Field.RELAXED_XBAR` across the 7 affected files.
+- Change layout of `XBAR`, `RELAXED_XBAR`, `BEST_XHAT`, and
+  `RECENT_XHATS` from per-scenario to canonical-per-non-leaf-node.
+- Compute and persist the chosen-writer table at startup
+  (`scenario-to-rank map × scenario tree` → elected writer per
+  node per cylinder).
+- Update writers (hub for `XBAR` / `DUALS`; xhat spokes for
+  `BEST_XHAT` / `RECENT_XHATS`; relaxed-PH spoke for
+  `RELAXED_XBAR`) to write the canonical node vector(s) instead
+  of per-scenario.
+- Update readers (every consumer of these fields) with the
+  "expand from canonical to per-scenario view" step at use time.
+- Tests: existing functionality must still pass with default
+  (equal-rank) configuration.  This phase is self-contained: it
+  lands on `main` and yields immediate storage/bandwidth savings
+  even before flexible ranks ship.
 
 **Phase 1: Infrastructure**
 
@@ -732,20 +840,31 @@ is still open.
 ### Backward Compatibility
 
 When all rank ratios are 1.0 (the default), the system must behave
-identically to the current implementation.  The overlap maps degenerate
-to single-segment identity mappings, and multi-source reads become
-single-source reads.  This should be verified by running the full
-existing test suite with the new code and default ratios.
+identically to the current implementation *at the algorithm level*.
+The overlap maps degenerate to single-segment identity mappings, and
+multi-source reads become single-source reads.  This should be
+verified by running the full existing test suite with the new code
+and default ratios.
+
+Note that Phase 0 (BN-2 + BX-2 canonicalization) changes the
+on-the-wire field layouts even at equal rank counts: `XBAR`,
+`RELAXED_XBAR`, `BEST_XHAT`, and `RECENT_XHATS` move from
+per-scenario buffers to canonical per-non-leaf-node buffers.  Any
+external code that touches these buffers directly (rather than
+through `SPCommunicator` send/receive APIs) would break.  We
+believe no such external code exists in tree, but downstream users
+should be flagged in release notes.
 
 
 ### Open Questions
 
-1. For the FWPH spoke-to-spoke case, the FWPH spoke reads
-   `RECENT_XHATS` which is a circular buffer of multiple xhat
-   solutions.  Each entry is local-sized.  The multi-source read
-   would need to be applied to each entry in the circular buffer.
-   Is this feasible, or should FWPH be restricted to equal rank
-   counts?
+1. Under BX-2, the FWPH spoke-to-spoke read of `RECENT_XHATS`
+   becomes "one Get per (circular-buffer-slot × non-leaf-node)"
+   from each slot's elected writer — no within-slot cross-source
+   assembly.  This should work cleanly, but FWPH-specific testing
+   under unequal rank counts is still warranted.  (If BX-1 were
+   chosen instead, FWPH would face multi-source assembly per
+   circular-buffer entry, which is the harder case.)
 
 
 
