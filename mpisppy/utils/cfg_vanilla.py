@@ -82,6 +82,7 @@ def shared_options(cfg, is_hub=False):
         # Optional initial xhat candidate file (.npy); None disables.
         # Consumed by XhatInnerBoundBase._try_file_xhat.
         "xhat_from_file" : cfg.get("xhat_from_file", None),
+        "inspect_buffers_on_shutdown" : cfg.get("inspect_buffers_on_shutdown", False),
         # Optional filename prefix; if set, _BoundSpoke.update_if_improving
         # writes a first-stage solution snapshot on each new best incumbent.
         "incumbent_on_improvement_filename_prefix" : cfg.get(

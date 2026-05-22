@@ -230,6 +230,14 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config("inspect_buffers_on_shutdown",
+                           description="When a spoke detects a shutdown signal, run "
+                           "mpisppy.debug_utils.buffer_inspect on the SHUTDOWN receive "
+                           "buffer and emit a RuntimeWarning with any findings. "
+                           "Off by default.",
+                           domain=bool,
+                           default=False)
+
         self.add_to_config("warmstart_subproblems",
                            description="Warmstart subproblems from prior solution.",
                            domain=bool,
