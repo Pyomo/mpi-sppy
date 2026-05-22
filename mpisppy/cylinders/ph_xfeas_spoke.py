@@ -10,7 +10,7 @@
 from mpisppy.cylinders.spoke import Spoke, Field
 import pyomo.environ as pyo
 
-class PHSpoke(Spoke):
+class PHXFeasSpoke(Spoke):
     send_fields = (*Spoke.send_fields, Field.XFEAS)
     receive_fields = (*Spoke.receive_fields, )
 

@@ -1134,7 +1134,7 @@ def subgradient_spoke(
     return subgradient_spoke
 
 
-def ph_spoke(
+def ph_xfeas_spoke(
     cfg,
     scenario_creator,
     scenario_denouement,
@@ -1145,9 +1145,9 @@ def ph_spoke(
     ph_extensions=None,
     extension_kwargs=None,
 ):
-    from mpisppy.cylinders.ph_spoke import PHSpoke
-    ph_spoke = _PHBase_spoke_foundation(
-        PHSpoke,
+    from mpisppy.cylinders.ph_xfeas_spoke import PHXFeasSpoke
+    ph_xfeas_spoke = _PHBase_spoke_foundation(
+        PHXFeasSpoke,
         cfg,
         scenario_creator,
         scenario_denouement,
@@ -1158,9 +1158,9 @@ def ph_spoke(
         ph_extensions=ph_extensions,
         extension_kwargs=extension_kwargs,
     )
-    options = ph_spoke["opt_kwargs"]["options"]
-    if cfg.ph_spoke_rescale_rho_factor is not None:
-        options["rho_factor"] = cfg.ph_spoke_rescale_rho_factor
+    options = ph_xfeas_spoke["opt_kwargs"]["options"]
+    if cfg.ph_xfeas_spoke_rescale_rho_factor is not None:
+        options["rho_factor"] = cfg.ph_xfeas_spoke_rescale_rho_factor
 
     # make sure this spoke doesn't hit the time or iteration limit
     options["time_limit"] = None
@@ -1168,9 +1168,9 @@ def ph_spoke(
     options["display_progress"] = False
     options["display_convergence_detail"] = False
 
-    add_ph_tracking(ph_spoke, cfg, spoke=True)
+    add_ph_tracking(ph_xfeas_spoke, cfg, spoke=True)
 
-    return ph_spoke
+    return ph_xfeas_spoke
 
 
 def ph_dual_spoke(

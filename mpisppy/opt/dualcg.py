@@ -83,20 +83,20 @@ class DCG(mpisppy.cgbase.CGBase):
         # Dual variables for convexity constraints
         m.mu = pyo.Var(m.scen, domain=pyo.Reals)
 
-        # Initial Bundle center 
+        # Initial regularization center
         # It would be ideal to change it to the actual probability of the scenario
         scenario_probs_all = {sname: 1/len(self.all_scenario_names) for sname in self.all_scenario_names
         }
 
-        def _init_bundle_center_pi(m, scen_name, *idx):
+        def _init_dual_center_pi(m, scen_name, *idx):
             prob = scenario_probs_all[scen_name]             
             coef = self.nonant_obj_coef[idx]          
             return -prob * coef
 
-        m.bundle_center_pi = pyo.Param(
+        m.dual_center_pi = pyo.Param(
             m.scen,              
             m.nonant_indices,
-            initialize=_init_bundle_center_pi,
+            initialize=_init_dual_center_pi,
             mutable=True,
             )
         
@@ -112,30 +112,41 @@ class DCG(mpisppy.cgbase.CGBase):
         m.mu_sum = pyo.Expression(rule=mu_sum_expr_rule)
 
         # Objective
-        # Assumes master problem is a minimization problem
         def obj_rule(m):
             reg_term = m.epsilon * (
-            sum((m.pi[s, i] - m.bundle_center_pi[s, i])**2 for s in m.scen for i in m.nonant_indices)
+            sum((m.pi[s, i] - m.dual_center_pi[s, i])**2 for s in m.scen for i in m.nonant_indices)
             )   
-            return m.mu_sum - reg_term
-        m.obj = pyo.Objective(rule=obj_rule, sense=pyo.maximize)
+            if self.is_minimizing:
+                return m.mu_sum - reg_term
+            return m.mu_sum + reg_term
+        m.obj = pyo.Objective(
+            rule=obj_rule,
+            sense=pyo.maximize if self.is_minimizing else pyo.minimize,
+        )
         return m   
     
-    def update_bundle_center(self):
+    def update_dual_center(self):
         """
-        Update the bundle center with current duals if the lower bound has improved.
+        Update the regularization center if the outer bound candidate improved.
         """
-        
-        if self.LB_current < self.LB_past:
+
+        if self.dual_center_outer_bound is not None:
+            if self.is_minimizing:
+                improved = self.outer_bound_candidate >= self.dual_center_outer_bound
+            else:
+                improved = self.outer_bound_candidate <= self.dual_center_outer_bound
+            if not improved:
+                return
+        elif self.outer_bound_candidate is None:
             return  
 
         m = self.mp  
 
         for s in m.scen:
             for i in m.nonant_indices:
-                m.bundle_center_pi[s, i] = pyo.value(m.pi[s, i])
+                m.dual_center_pi[s, i] = pyo.value(m.pi[s, i])
 
-        self.LB_past = self.LB_current
+        self.dual_center_outer_bound = self.outer_bound_candidate
     
     def extract_duals_from_mp(self):
         """
@@ -172,7 +183,10 @@ class DCG(mpisppy.cgbase.CGBase):
         self.column_hashes[sname].add(key)
 
         expr = self.mp.mu[sname] + sum(x_vec[i] * self.mp.pi[sname, i] for i in self.nonant_indices)
-        self.mp.cuts.add(expr <= cost)
+        if self.is_minimizing:
+            self.mp.cuts.add(expr <= cost)
+        else:
+            self.mp.cuts.add(expr >= cost)
         return True
 
     def iterk_loop(self):
@@ -202,7 +216,7 @@ class DCG(mpisppy.cgbase.CGBase):
             # Solve master problem and extract duals on rank 0
             if self.cylinder_rank == 0:
                 self.solve_master_problem()
-                self.RUB=pyo.value(self.mp.mu_sum) 
+                self.rmp_obj_val=pyo.value(self.mp.mu_sum)
                 self.pi_values, self.mu_values = self.extract_duals_from_mp()
                 
             # Broadcast dual values to all ranks
@@ -227,24 +241,28 @@ class DCG(mpisppy.cgbase.CGBase):
                 sum_redcosts=self.add_columns_to_mp_from_results(all_results)
                 self.add_columns_to_mp_from_results(all_results_xhat_recent) 
                 self.add_columns_to_mp_from_results(all_results_xfeas) 
-                self.LB_current = self.RUB + sum_redcosts
-                if self.LB_past is None:
-                    self.LB_past = self.LB_current
+                self.outer_bound_candidate = self.rmp_obj_val + sum_redcosts
+                if not hasattr(self, "dual_center_outer_bound"):
+                    self.dual_center_outer_bound = None
+
+                self.update_dual_center()
                 
-                self.update_bundle_center()
-                
-                # Update bounds and convergence metric
+                # Update outer bound and convergence metric.
                 if self.best_bound_obj_val is None:
-                    self.best_bound_obj_val = self.LB_current
+                    self.best_bound_obj_val = self.outer_bound_candidate
+                elif self.is_minimizing:
+                    self.best_bound_obj_val = max(self.outer_bound_candidate, self.best_bound_obj_val)
                 else:
-                    self.best_bound_obj_val = max(self.LB_current, self.best_bound_obj_val)
-                
-                self.conv=(self.RUB-self.best_bound_obj_val)/abs(self.best_bound_obj_val)
+                    self.best_bound_obj_val = min(self.outer_bound_candidate, self.best_bound_obj_val)
+                if self.is_minimizing:
+                    self.conv=(self.rmp_obj_val-self.best_bound_obj_val)/abs(self.best_bound_obj_val)
+                else:
+                    self.conv=(self.best_bound_obj_val-self.rmp_obj_val)/abs(self.best_bound_obj_val)
                 
                 if dprogress:
                     print("")
                     print("After DCG Iteration",self._CGIter)
-                    print("Bounds: ",self.best_bound_obj_val,self.RUB)
+                    print("Bounds: ",self.best_bound_obj_val,self.rmp_obj_val)
                     print("Scaled DCG Convergence Metric=",self.conv)
                     print("Iteration time: %6.2f" % (time.time() - iteration_start_time))
                     print("Elapsed time:   %6.2f" % (time.perf_counter() - self.start_time))

@@ -12,8 +12,10 @@
 
 import unittest
 
+import pyomo.environ as pyo
 import mpisppy.opt.cg
 import mpisppy.tests.examples.farmer as farmer
+import mpisppy.utils.sputils as sputils
 from mpisppy.tests.examples.sizes.sizes import scenario_creator as sizes_creator, \
                                                scenario_denouement as sizes_denouement
 from mpisppy.tests.utils import get_solver
@@ -26,6 +28,17 @@ global_rank = fullcomm.Get_rank()
 
 # Known reference values (EF optimal for farmer with 3 scenarios, crops_multiplier=1)
 FARMER_EF_OBJ = -118361.33  # approximate
+
+
+def _solve_farmer_ef(scenario_names, creator_kwargs):
+    ef = sputils.create_EF(
+        scenario_names,
+        farmer.scenario_creator,
+        scenario_creator_kwargs=creator_kwargs,
+    )
+    solver = pyo.SolverFactory(solver_name)
+    solver.solve(ef)
+    return pyo.value(ef.EF_Obj)
 
 
 class TestCGMainFarmer(unittest.TestCase):
@@ -122,6 +135,25 @@ class TestCGMainFarmer(unittest.TestCase):
         if cg.cylinder_rank == 0:
             self.assertIsNotNone(obj)
             self.assertAlmostEqual(obj, FARMER_EF_OBJ, delta=abs(FARMER_EF_OBJ*0.01))
+
+    @unittest.skipIf(not solver_available,
+                     "%s solver is not available" % (solver_name,))
+    def test_farmer_maximize_obj(self):
+        """CG on a maximization farmer should approach the EF optimal."""
+        creator_kwargs = {"crops_multiplier": 1, "sense": pyo.maximize}
+        cg = mpisppy.opt.cg.CG(
+            self._copy_options(),
+            self.scenario_names,
+            farmer.scenario_creator,
+            farmer.scenario_denouement,
+            scenario_creator_kwargs=creator_kwargs,
+        )
+        conv, obj = cg.cg_main()
+
+        if cg.cylinder_rank == 0:
+            ef_obj = _solve_farmer_ef(self.scenario_names, creator_kwargs)
+            self.assertIsNotNone(obj)
+            self.assertAlmostEqual(obj, ef_obj, delta=abs(ef_obj*0.01))
 
     @unittest.skipIf(not solver_available,
                      "%s solver is not available" % (solver_name,))

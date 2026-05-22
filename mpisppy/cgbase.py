@@ -94,8 +94,8 @@ class CGBase(mpisppy.spopt.SPOpt):
         # Get indices of nonanticipative variables from any scenario
         any_scen = next(iter(self.local_scenarios.values()))
         self.nonant_indices = list(any_scen._mpisppy_data.nonant_indices.keys())
-        # Set up column slots for the master problem
-        self.cols = list(range(10*self.options["CGIterLimit"]))#TODO check this
+        # Columns are added to the master problem as they are generated.
+        self.cols = pyo.NonNegativeIntegers
         
         # Track next available column slot for each scenario
         self.next_col = {
@@ -104,9 +104,8 @@ class CGBase(mpisppy.spopt.SPOpt):
         # Track unique columns to avoid duplicates
         self.column_hashes = {sname: set() for sname in self.all_scenario_names}
         
-        self.RUB=None
-        self.LB_current=None
-        self.LB_past=None
+        self.rmp_obj_val=None
+        self.outer_bound_candidate=None
         self.best_bound_obj_val=None
         self.mp = None
         self.pi_values=None
@@ -185,20 +184,20 @@ class CGBase(mpisppy.spopt.SPOpt):
         rmp.nonant_indices = pyo.Set(initialize=self.nonant_indices)
         rmp.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT_EXPORT)
         rmp.scen = pyo.Set(initialize=list(self.all_scenario_names))
-        rmp.cols = pyo.Set(initialize=self.cols)  
-        rmp.col_cost = pyo.Param(rmp.scen, rmp.cols, initialize=0.0, mutable=True)
-        rmp.X_val = pyo.Param(rmp.nonant_indices,rmp.scen, rmp.cols, initialize=0.0, mutable=True)
-        rmp.col_is_active = pyo.Param(rmp.scen,rmp.cols, initialize=0, mutable=True)
+        rmp.cols = pyo.Set(within=self.cols, initialize=[])
+        rmp.col_cost = pyo.Param(rmp.scen, self.cols, default=0.0, mutable=True)
+        rmp.X_val = pyo.Param(rmp.nonant_indices, rmp.scen, self.cols, default=0.0, mutable=True)
 
-        rmp.w = pyo.Var(rmp.scen, rmp.cols, initialize=0, domain=pyo.NonNegativeReals)
+        rmp.w = pyo.Var(rmp.scen, self.cols, initialize=0, domain=pyo.NonNegativeReals, dense=False)
         rmp.xbar = pyo.Var(rmp.nonant_indices, domain=pyo.Reals)
-        
+        rmp.nonant_body = pyo.Expression(rmp.nonant_indices, rmp.scen, initialize=0.0)
+        rmp.convexity_body = pyo.Expression(rmp.scen, initialize=0.0)
 
         # Nonanticipativity constraint
         def _nonant_rule(m, r,i, s):
-            return sum( m.X_val[r, i, s, c] * m.col_is_active[s, c] * m.w[s, c] for c in m.cols)== m.xbar[r,i]
+            return m.nonant_body[r, i, s] == m.xbar[r,i]
         def _relaxed_nonant_rule(m, r,i, s):
-            return sum( m.X_val[r, i, s, c] * m.col_is_active[s, c] * m.w[s, c] for c in m.cols)<= m.xbar[r,i]
+            return m.nonant_body[r, i, s] <= m.xbar[r,i]
         if self.options["relaxed_nonant"]:
             rmp.NonAnt = pyo.Constraint(rmp.nonant_indices, rmp.scen, rule=_relaxed_nonant_rule)
         else:
@@ -206,21 +205,17 @@ class CGBase(mpisppy.spopt.SPOpt):
 
         # Convexity constraint
         def _convexity_rule(m, s):
-            return sum( m.col_is_active[s, c] * m.w[s, c] for c in m.cols) == 1.0
+            return m.convexity_body[s] == 1.0
         rmp.Convexity = pyo.Constraint(rmp.scen, rule=_convexity_rule)
 
         # Objective
-        # Assumes master problem is a minimization problem
+        # The restricted master is solved in the original model sense.
         rmp.obj = pyo.Objective(
             expr=sum(
                 self.nonant_obj_coef.get(idx, 0.0) * rmp.xbar[idx]
                 for idx in self.nonant_indices
-            ) + sum(
-                rmp.col_cost[s, c] * rmp.col_is_active[s, c] * rmp.w[s, c]
-                for s in rmp.scen
-                for c in rmp.cols
             ),
-            sense=pyo.minimize,
+            sense=pyo.minimize if self.is_minimizing else pyo.maximize,
         )
 
         return rmp
@@ -229,21 +224,8 @@ class CGBase(mpisppy.spopt.SPOpt):
         """
         Build a dictionary of coefficients for nonanticipative variables in the original objective.
         """
-        # Use any scenario (they all have the same nonant indices and objective structure)
-        sname = next(iter(self.local_scenarios))
-        scenario = self.local_scenarios[sname]
-        original_obj = self.saved_objectives[sname]
-        repn = generate_standard_repn(original_obj, quadratic=False)
-        linear_coefs = repn.linear_coefs
-        linear_vars  = repn.linear_vars
-
-        coef_dict = {}
-        for a, v in zip(linear_coefs, linear_vars):
-            vid = id(v)
-            if vid in scenario._mpisppy_data.varid_to_nonant_index:
-                ndn_i = scenario._mpisppy_data.varid_to_nonant_index[vid]
-                coef_dict[ndn_i] = a
-        self.nonant_obj_coef = coef_dict    
+        scenario = next(iter(self.local_scenarios.values()))
+        self.nonant_obj_coef = sputils.nonant_cost_coeffs(scenario)
 
     def set_subproblem_objective(self):
         """
@@ -255,11 +237,11 @@ class CGBase(mpisppy.spopt.SPOpt):
             model = scenario
             original_obj = self.saved_objectives[sname]
             prob=scenario._mpisppy_probability
-            model.base_obj_expr = pyo.Expression(expr=prob*original_obj.expr)
             is_min_problem = original_obj.is_minimizing()
 
             # Remove nonanticipative variable terms from base objective
-            repn = generate_standard_repn(model.base_obj_expr, quadratic=False)
+            base_expr = prob*original_obj.expr
+            repn = generate_standard_repn(base_expr, quadratic=False)
             const = repn.constant
             linear_coefs = repn.linear_coefs
             linear_vars  = repn.linear_vars
@@ -292,7 +274,7 @@ class CGBase(mpisppy.spopt.SPOpt):
                 )
             else:
                 model.obj = pyo.Objective(
-                    expr=model.base_obj_expr + redcost_term,
+                    expr=model.base_obj_expr - redcost_term,
                     sense=pyo.maximize
                 )
        
@@ -335,23 +317,18 @@ class CGBase(mpisppy.spopt.SPOpt):
 
   
         c = self.next_col[sname]
-
-        if c not in self.cols:
-            max_cols = len(self.cols)
-            raise RuntimeError(
-                f"No free column slots for scenario {sname}. "
-                f"Allocated column capacity per scenario: {max_cols}."
-            )
-
+        self.mp.cols.add(c)
  
         self.mp.col_cost[sname, c] = float(cost)
+        col_var = self.mp.w[sname, c]
 
         for i in self.nonant_indices:
             val = x_vec[i]
             self.mp.X_val[i, sname, c] = round(float(val), 8)
+            self.mp.nonant_body[i, sname].expr += self.mp.X_val[i, sname, c] * col_var
 
-        self.mp.col_is_active[sname, c] = 1
-
+        self.mp.convexity_body[sname].expr += col_var
+        self.mp.obj.expr += self.mp.col_cost[sname, c] * col_var
 
         self.next_col[sname] = c + 1
     
@@ -654,7 +631,7 @@ class CGBase(mpisppy.spopt.SPOpt):
             # Solve master problem and extract duals on rank 0
             if self.cylinder_rank == 0:
                 rmp_obj=self.solve_master_problem()
-                self.RUB=rmp_obj
+                self.rmp_obj_val=rmp_obj
                 self.pi_values, self.mu_values = self.extract_duals_from_mp()
                 
             # Broadcast dual values to all ranks
@@ -681,22 +658,27 @@ class CGBase(mpisppy.spopt.SPOpt):
                 sum_redcosts=self.add_columns_to_mp_from_results(all_results)
                 self.add_columns_to_mp_from_results(all_results_xhat_recent) 
                 self.add_columns_to_mp_from_results(all_results_xfeas) 
-                self.LB_current = self.RUB + sum_redcosts
+                self.outer_bound_candidate = self.rmp_obj_val + sum_redcosts
                 
                 # Update bounds and convergence metric
                 if self.problem_is_lp:
-                    self.best_solution_obj_val= self.RUB
+                    self.best_solution_obj_val= self.rmp_obj_val
 
                 if self.best_bound_obj_val is None:
-                    self.best_bound_obj_val = self.LB_current
+                    self.best_bound_obj_val = self.outer_bound_candidate
+                elif self.is_minimizing:
+                    self.best_bound_obj_val = max(self.outer_bound_candidate, self.best_bound_obj_val)
                 else:
-                    self.best_bound_obj_val = max(self.LB_current, self.best_bound_obj_val)
-                self.conv=(self.RUB-self.best_bound_obj_val)/abs(self.best_bound_obj_val)
+                    self.best_bound_obj_val = min(self.outer_bound_candidate, self.best_bound_obj_val)
+                if self.is_minimizing:
+                    self.conv=(self.rmp_obj_val-self.best_bound_obj_val)/abs(self.best_bound_obj_val)
+                else:
+                    self.conv=(self.best_bound_obj_val-self.rmp_obj_val)/abs(self.best_bound_obj_val)
                 
                 if dprogress:
                     print("")
                     print("After CG Iteration",self._CGIter)
-                    print("Bounds: ",self.best_bound_obj_val,self.RUB)
+                    print("Bounds: ",self.best_bound_obj_val,self.rmp_obj_val)
                     print("Scaled CG Convergence Metric=",self.conv)
                     print("Iteration time: %6.2f" % (time.time() - iteration_start_time))
                     print("Elapsed time:   %6.2f" % (time.perf_counter() - self.start_time))
@@ -737,8 +719,7 @@ class CGBase(mpisppy.spopt.SPOpt):
         Returns:
             float: The optimal objective value of the master problem.
         """
-        for (s, c) in self.mp.w.index_set():
-            var = self.mp.w[s, c]
+        for var in self.mp.w.values():
             var.domain = pyo.Binary 
         
         self.master_solver.solve(self.mp)

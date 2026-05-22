@@ -132,7 +132,7 @@ def parse_args(m):
     cfg.ph_primal_args()
     cfg.ph_dual_args()
     cfg.relaxed_ph_args()
-    cfg.ph_spoke_args()
+    cfg.ph_xfeas_spoke_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.subgradient_bounder_args()

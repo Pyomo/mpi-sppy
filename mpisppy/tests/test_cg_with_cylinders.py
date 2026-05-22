@@ -31,6 +31,7 @@ def _create_cfg():
     cfg = config.Config()
     cfg.num_scens_required()
     cfg.popular_args()
+    cfg.ph_args()
     cfg.two_sided_args()
     cfg.cg_args()
     cfg.solver_name = solver_name
@@ -120,16 +121,16 @@ class Test_farmer_with_cylinders(unittest.TestCase):
                 delta=2000,
             )
 
-    def test_ph_spoke(self):
+    def test_ph_xfeas_spoke(self):
 
         self.cfg.default_rho = 1
-        self.cfg.ph_spoke_args()
+        self.cfg.ph_xfeas_spoke_args()
         scenario_creator_kwargs, beans, hub_dict = self._create_stuff()
 
         list_of_spoke_dict = list()
-        ph_spoke = vanilla.ph_spoke(*beans,
+        ph_xfeas_spoke = vanilla.ph_xfeas_spoke(*beans,
                                                    scenario_creator_kwargs=scenario_creator_kwargs)
-        list_of_spoke_dict.append(ph_spoke)
+        list_of_spoke_dict.append(ph_xfeas_spoke)
         wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
         wheel.spin()
         if wheel.global_rank == 1:

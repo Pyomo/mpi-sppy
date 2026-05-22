@@ -879,23 +879,23 @@ class Config(pyofig.ConfigDict):
                             default=1.0)
         self.add_solver_specs("relaxed_ph")
 
-    def ph_spoke_args(self):
+    def ph_xfeas_spoke_args(self):
 
-        self.add_to_config("ph_spoke",
-                            description="have a PH spoke",
+        self.add_to_config("ph_xfeas_spoke",
+                            description="have a PH xhat-feasible spoke",
                             domain=bool,
                             default=False)
-        self.add_to_config("ph_spoke_rescale_rho_factor",
+        self.add_to_config("ph_xfeas_spoke_rescale_rho_factor",
                             description="Used to rescale rho initially (default=0.1)",
                             domain=float,
                             default=0.1)
-        self.add_to_config("ph_spoke_rho_multiplier",
-                            description="Rescale factor for dynamic updates in ph_dual if ph_dual and a rho setter are chosen;"
+        self.add_to_config("ph_xfeas_spoke_rho_multiplier",
+                            description="Rescale factor for dynamic updates in ph_xfeas_spoke if ph_xfeas_spoke and a rho setter are chosen;"
                             " note that it is not cummulative (default=1.0)",
                             domain=float,
                             default=1.0)
-        self.add_to_config("ph_spoke_grad_order_stat",
-                            description="Order stat for selecting rho if ph_dual and ph_dual_grad_rho are chosen;"
+        self.add_to_config("ph_xfeas_spoke_grad_order_stat",
+                            description="Order stat for selecting rho if ph_xfeas_spoke and grad_rho are chosen;"
                             " note that this is impacted by the multiplier (default=0.0)",
                             domain=float,
                             default=0.0)
