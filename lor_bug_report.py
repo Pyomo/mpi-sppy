@@ -19,7 +19,7 @@ tested:
   H4. Duplicate rank participation in self.mpicomm.
 
 Usage:
-    python lor_bug_report.py <log_file>
+    python lor_bug_report.py <stdout_file>
 """
 
 import re
@@ -213,7 +213,7 @@ def report(entries, path):
 
 def main(argv):
     if len(argv) != 2:
-        print(f"Usage: {argv[0]} <log_file>", file=sys.stderr)
+        print(f"Usage: {argv[0]} <stdout_file>", file=sys.stderr)
         return 2
     path = argv[1]
     entries = parse(path)
