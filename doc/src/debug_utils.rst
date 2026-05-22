@@ -44,11 +44,15 @@ Generic checks (run for every field):
 
 Per-``Field`` checks:
 
-- ``SHUTDOWN``: data[0] in ``{0.0, 1.0}``; if ``1.0`` then
-  ``write_id >= 1`` (only ``Hub.send_terminate`` writes ``1.0`` and it
-  bumps the id).
-- ``NONANT``: length equals ``ctx.get_nonant_count()``; data within
-  ``[ctx.nonant_lower, ctx.nonant_upper]`` componentwise.
+- ``SHUTDOWN``: only two legitimate states — ``NaN`` data with
+  ``write_id == 0`` (initial, no publish yet) or ``data[0] == 1.0``
+  with ``write_id >= 1`` (``Hub.send_terminate`` has fired). Anything
+  else, including ``data[0] == 0.0``, is treated as corruption.
+- ``NONANT``: data length is a positive multiple of
+  ``ctx.get_nonant_count()`` (the publisher may hold several local
+  scenarios, so the buffer can be wider than one scenario's worth);
+  componentwise bounds against ``[ctx.nonant_lower, ctx.nonant_upper]``
+  are only checked when the bound arrays match the buffer length.
 - ``NONANT_LOWER_BOUNDS`` / ``NONANT_UPPER_BOUNDS``: length check;
   consistency with the counterpart bound when supplied via ``ctx``.
 - ``OBJECTIVE_INNER_BOUND`` / ``OBJECTIVE_OUTER_BOUND``: length 1.

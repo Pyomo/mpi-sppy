@@ -15,8 +15,9 @@ the comm is broken, the missing STOP line is itself diagnostic.
 
 The non-zero branch is a defensive guard: if any rank somehow sees a non-zero
 reduced value, that rank prints the value, the comm name, and a stack trace.
-That branch cannot be exercised by the test (the contribution is hard-coded
-to 0), so only the success path is covered.
+Under real MPI it cannot fire (every contribution is hard-coded to 0); the
+test exercises it via a stub communicator whose Allreduce writes 1 into the
+recv buffer.
 """
 
 import traceback

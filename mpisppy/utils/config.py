@@ -233,7 +233,8 @@ class Config(pyofig.ConfigDict):
         self.add_to_config("inspect_buffers_on_shutdown",
                            description="When a spoke detects a shutdown signal, run "
                            "mpisppy.debug_utils.buffer_inspect on the SHUTDOWN receive "
-                           "buffer and print any findings. Off by default.",
+                           "buffer and emit a RuntimeWarning with any findings. "
+                           "Off by default.",
                            domain=bool,
                            default=False)
 
