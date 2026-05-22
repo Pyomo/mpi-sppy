@@ -165,6 +165,9 @@ class Config(pyofig.ConfigDict):
         if self.get("rc_fixer") and not self.get("reduced_costs"):
             _bad_options("--rc-fixer requires --reduced-costs")
 
+        if self.get("hub_only_solver_logs") and not self.get("solver_log_dir"):
+            _bad_options("--hub-only-solver-logs requires --solver-log-dir")
+
     def add_solver_specs(self, prefix=""):
         sstr = f"{prefix}_solver" if prefix else "solver"
         if prefix:
@@ -176,6 +179,14 @@ class Config(pyofig.ConfigDict):
 
         self.add_to_config(f"{sstr}_options",
                             description= f"{prefix}solver options; space delimited with = for values (default None)",
+                            domain = str,
+                            default=None)
+
+        self.add_to_config(f"{sstr}_options_file",
+                            description= f"{prefix}path to a JSON solver-options file with sections "
+                                         "default/iter0/iterk/starting_at_iter (and a 'spokes' sub-block at the "
+                                         "top level, naming each spoke's overrides). CLI flags "
+                                         "override file entries at the same predicate.",
                             domain = str,
                             default=None)
 
@@ -212,6 +223,12 @@ class Config(pyofig.ConfigDict):
                            "WARNING: This will create a file for every single subproblem solve.",
                            domain=str,
                            default=None)
+
+        self.add_to_config("hub_only_solver_logs",
+                           description="When set with --solver-log-dir, only the hub writes "
+                           "solver logs; spokes do not. Requires --solver-log-dir.",
+                           domain=bool,
+                           default=False)
 
         self.add_to_config("warmstart_subproblems",
                            description="Warmstart subproblems from prior solution.",
@@ -262,6 +279,11 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
+        self.add_to_config('display_timing',
+                              description="display subproblem solve timing (requires exactly one subproblem per rank)",
+                              domain=bool,
+                              default=False)
+
         self.add_to_config("max_solver_threads",
                             description="Limit on threads per solver (default None)",
                             domain=int,
@@ -275,6 +297,16 @@ class Config(pyofig.ConfigDict):
         self.add_to_config("trace_prefix",
                             description="Prefix for bound spoke trace files. If None "
                                  "bound spoke trace files are not written.",
+                            domain=str,
+                            default=None)
+
+        self.add_to_config("incumbent_on_improvement_filename_prefix",
+                            description="If set, incumbent (xhat) bound spokes "
+                                 "write the first-stage solution to "
+                                 "<prefix>_<NNNN>.csv and <prefix>_<NNNN>.npy "
+                                 "each time they find a new best inner bound. "
+                                 "<NNNN> is a zero-padded counter starting at "
+                                 "0000. Default None disables.",
                             domain=str,
                             default=None)
 
@@ -394,11 +426,20 @@ class Config(pyofig.ConfigDict):
         raise RuntimeError("_basic_multistage is no longer used. See comments at top of config.py")
 
     def add_branching_factors(self):
+        if "branching_factors" in self:
+            return
         self.add_to_config("branching_factors",
                             description="Spaces delimited branching factors (e.g., 2 2)",
                             domain=pyofig.ListOf(int, pyofig.PositiveInt),
                             default=None)
-
+    
+    def add_stage2_ef_solver_name_arg(self):
+        if "stage2_ef_solver_name" in self:
+            return
+        self.add_to_config("stage2_ef_solver_name",
+                           description="Solver for stage 2 EF in multistage xhat (default None)",
+                           domain=str,
+                           default=None)
 
     def make_multistage_parser(self, progname=None):
         raise RuntimeError("make_multistage_parser is no longer used. See comments at top of config.py")
@@ -406,6 +447,7 @@ class Config(pyofig.ConfigDict):
     def multistage(self):
         self.add_branching_factors()
         self.popular_args()
+        self.add_stage2_ef_solver_name_arg()
 
 
     #### EF ####
@@ -603,11 +645,11 @@ class Config(pyofig.ConfigDict):
         else:
             name = name+"_"
 
-        if name == "":
-            self.add_to_config('mipgaps_json',
-                               description="path to json file with a mipgap schedule for PH iterations",
-                               domain=str,
-                               default=None)
+        self.add_to_config(f'{name}mipgaps_json',
+                           description="path to json file with a mipgap schedule for PH iterations "
+                                       "(planned for deprecation in a future release)",
+                           domain=str,
+                           default=None)
 
         self.add_to_config(f'{name}starting_mipgap',
                            description="Sets automatic gapper mode and the starting and minimum mipgap",
@@ -698,6 +740,15 @@ class Config(pyofig.ConfigDict):
         self.add_solver_specs("lagrangian")
         self.add_mipgap_specs("lagrangian")
 
+        self.add_to_config('lagrangian_try_jensens_first',
+                           description="before iter 0, solve the average "
+                                       "scenario and send its objective as an initial "
+                                       "outer bound (two-stage only; requires the "
+                                       "scenario module to define average_scenario_creator; "
+                                       "requires convex recourse)",
+                           domain=bool,
+                           default=False)
+
 
     def reduced_costs_args(self):
 
@@ -754,6 +805,15 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=1e-6)
 
+        self.add_to_config('reduced_costs_try_jensens_first',
+                           description="before iter 0, solve the average "
+                                       "scenario and send its objective as an initial "
+                                       "outer bound (two-stage only; requires the "
+                                       "scenario module to define average_scenario_creator; "
+                                       "requires convex recourse)",
+                           domain=bool,
+                           default=False)
+
 
     def lagranger_args(self):
 
@@ -767,6 +827,15 @@ class Config(pyofig.ConfigDict):
                             description="json file: rho rescale factors (default None)",
                             domain=str,
                             default=None)
+
+        self.add_to_config('lagranger_try_jensens_first',
+                           description="before iter 0, solve the average "
+                                       "scenario and send its objective as an initial "
+                                       "outer bound (two-stage only; requires the "
+                                       "scenario module to define average_scenario_creator; "
+                                       "requires convex recourse)",
+                           domain=bool,
+                           default=False)
 
 
     def subgradient_bounder_args(self):
@@ -783,6 +852,15 @@ class Config(pyofig.ConfigDict):
                            description="rescale rho (update step size) by this factor",
                            domain=float,
                            default=None)
+
+        self.add_to_config('subgradient_try_jensens_first',
+                           description="before iter 0, solve the average "
+                                       "scenario and send its objective as an initial "
+                                       "outer bound (two-stage only; requires the "
+                                       "scenario module to define average_scenario_creator; "
+                                       "requires convex recourse)",
+                           domain=bool,
+                           default=False)
 
 
     def ph_ob_args(self):
@@ -859,6 +937,15 @@ class Config(pyofig.ConfigDict):
                             domain=int,
                             default=3)
 
+        self.add_to_config('xhatlooper_try_jensens_first',
+                           description="before entering the xhatlooper main loop, solve "
+                                       "the average scenario and try its first-stage "
+                                       "solution as a candidate xhat (two-stage only; "
+                                       "requires the scenario module to define "
+                                       "average_scenario_creator)",
+                           domain=bool,
+                           default=False)
+
     def xhatshuffle_args(self):
 
         self.add_to_config('xhatshuffle',
@@ -875,6 +962,17 @@ class Config(pyofig.ConfigDict):
                            description="step in shuffled list between 2 scenarios to try (default None)",
                            domain=int,
                            default=None)
+
+        self.add_to_config('xhatshuffle_try_jensens_first',
+                           description="before entering the xhatshuffle main loop, solve "
+                                       "the average scenario and try its first-stage "
+                                       "solution as a candidate xhat (two-stage only; "
+                                       "requires the scenario module to define "
+                                       "average_scenario_creator)",
+                           domain=bool,
+                           default=False)
+
+        self.add_stage2_ef_solver_name_arg()
 
 
     def mult_rho_args(self):
@@ -917,6 +1015,15 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
+        self.add_to_config('xhatspecific_try_jensens_first',
+                           description="before entering the xhatspecific main loop, solve "
+                                       "the average scenario and try its first-stage "
+                                       "solution as a candidate xhat (two-stage only; "
+                                       "requires the scenario module to define "
+                                       "average_scenario_creator)",
+                           domain=bool,
+                           default=False)
+
 
     def xhatxbar_args(self):
 
@@ -925,7 +1032,14 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
-
+        self.add_to_config('xhatxbar_try_jensens_first',
+                           description="before entering the xhatxbar main loop, solve "
+                                       "the average scenario and try its first-stage "
+                                       "solution as a candidate xhat (two-stage only; "
+                                       "requires the scenario module to define "
+                                       "average_scenario_creator)",
+                           domain=bool,
+                           default=False)
 
 
     def xhatlshaped_args(self):
@@ -935,6 +1049,21 @@ class Config(pyofig.ConfigDict):
                               description="have an xhatlshaped spoke",
                               domain=bool,
                               default=False)
+
+    def xhat_from_file_args(self):
+        # Supply an initial xhat candidate from a .npy file. Every xhat
+        # spoke (xhatlooper, xhatshufflelooper, xhatspecific, xhatxbar)
+        # that descends from XhatInnerBoundBase will evaluate it once,
+        # before its normal exploration loop. Two-stage only today
+        # (matches ciutils.read_xhat). See
+        # doc/src/xhat_from_file.rst.
+        self.add_to_config("xhat_from_file",
+                           description="Path to a .npy file holding an initial "
+                                       "first-stage xhat vector to evaluate "
+                                       "before normal xhatter exploration. "
+                                       "Two-stage only. Default None (off).",
+                           domain=str,
+                           default=None)
 
     def wtracker_args(self):
 
@@ -1214,6 +1343,17 @@ class Config(pyofig.ConfigDict):
                            "cfg.solver_options. (default None)",
                            domain=str,
                            default=None)
+
+        self.add_to_config("iter0_from_pickle",
+                           description="Trust the iter0 solution baked into "
+                           "the pickle by --iter0-before-pickle and skip "
+                           "PHBase.Iter0's solve loop entirely. Requires "
+                           "every local scenario / bundle to carry "
+                           "_mpisppy_data.pickle_metadata['iter0_before_pickle']"
+                           " == True; otherwise PHBase will hard-fail. "
+                           "(default False)",
+                           domain=bool,
+                           default=False)
 
     def mmw_args(self):
         self.add_to_config(

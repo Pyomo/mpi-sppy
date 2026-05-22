@@ -120,9 +120,15 @@ class ProperBundler():
             # If we are still here, we have to create the bundle.
             firstnum = int(sname.split("_")[1])  # sname is a bundle name
             lastnum = int(sname.split("_")[2])
+            # The module's scenario_names_creator uses "start = count of
+            # already-used scenarios" (as in farmer/aircond/uc). Bundle names
+            # embed the absolute scenario label, so subtract inum (the label
+            # of the module's first scenario: 0 for scen0-based, 1 for
+            # Scenario1-based) to recover the count.
+            inum = sputils.extract_num(self.module.scenario_names_creator(1)[0])
             # snames are scenario names
             snames = self.module.scenario_names_creator(lastnum-firstnum+1,
-                                                        firstnum)
+                                                        firstnum - inum)
             # Copy so we never mutate self.original_kwargs across calls.
             kws = dict(self.original_kwargs)
             if self.bunBFs is not None:

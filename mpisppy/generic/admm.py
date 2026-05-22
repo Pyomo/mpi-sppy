@@ -31,6 +31,9 @@ def admm_args(cfg):
         cfg.add_to_config("num_stoch_scens",
                           description="Number of stochastic scenarios (stoch-admm only)",
                           domain=int, default=None)
+    
+    cfg.add_branching_factors()
+    cfg.add_stage2_ef_solver_name_arg()
 
 
 def _count_cylinders(cfg):
@@ -90,6 +93,24 @@ def _check_admm_compatibility(cfg):
             raise RuntimeError(
                 f"--{opt.replace('_', '-')} is not supported with ADMM"
             )
+    # xhatshuffle without stage2_ef_solver_name is invalid for stoch-admm:
+    # the picked scenario's xhats only fix nonants along its own tree path,
+    # leaving ADMM consensus variables in other stochastic outcomes
+    # unconstrained.  The resulting "inner bound" violates the problem's
+    # ADMM consensus constraints and has no valid interpretation as a
+    # relaxation, so it must not be silently produced.
+    if (cfg.get("stoch_admm", ifmissing=False)
+            and cfg.get("xhatshuffle", ifmissing=False)
+            and cfg.get("stage2_ef_solver_name") is None):
+        raise RuntimeError(
+            "--xhatshuffle with --stoch-admm requires --stage2-ef-solver-name. "
+            "Without it, xhatshuffle fixes nonants only along one scenario's "
+            "tree path, leaving the ADMM consensus variables in other "
+            "stochastic outcomes unconstrained and producing an invalid "
+            "(over-optimistic) inner bound.  Pass --stage2-ef-solver-name "
+            "(typically the same solver as --solver-name), or use "
+            "--xhatxbar instead."
+        )
 
 
 def setup_admm(module, cfg, n_cylinders):
@@ -134,8 +155,8 @@ def setup_stoch_admm(module, cfg, n_cylinders):
         tuple: (scenario_creator, scenario_creator_kwargs,
                 all_scenario_names, all_nodenames)
     """
-    admm_subproblem_names = module.admm_subproblem_names_creator(cfg.num_admm_subproblems)
-    stoch_scenario_names = module.stoch_scenario_names_creator(cfg.num_stoch_scens)
+    admm_subproblem_names = module.admm_subproblem_names_creator(cfg)
+    stoch_scenario_names = module.stoch_scenario_names_creator(cfg)
     all_names = module.admm_stoch_subproblem_scenario_names_creator(
         admm_subproblem_names, stoch_scenario_names)
 
@@ -155,13 +176,19 @@ def setup_stoch_admm(module, cfg, n_cylinders):
         n_cylinders=n_cylinders,
         mpicomm=MPI.COMM_WORLD,
         scenario_creator_kwargs=scenario_creator_kwargs,
-        BFs=None,
+        BFs=cfg.get("branching_factors"),
     )
 
     # Store on cfg as plain attributes (Pyomo Config can't handle these types)
     object.__setattr__(cfg, "_admm_variable_probability", admm.var_prob_list)
     object.__setattr__(cfg, "_admm_scenario_names", all_names)
     object.__setattr__(cfg, "_admm_nodenames", admm.all_nodenames)
+
+    # Publish the augmented branching factors so downstream consumers
+    # (notably xhatshuffle's stage2ef path in extensions/xhatbase.py) see
+    # the wrapper's true tree shape without the user having to hand-encode
+    # the wrapper's append convention.
+    cfg.quick_assign("branching_factors", list, list(admm.BFs))
 
     return (admm.admmWrapper_scenario_creator, {},
             all_names, admm.all_nodenames)
@@ -181,8 +208,8 @@ def setup_stoch_admm_with_bundles(module, cfg, n_cylinders):
     """
     from mpisppy.utils.admm_bundler import AdmmBundler
 
-    admm_subproblem_names = module.admm_subproblem_names_creator(cfg.num_admm_subproblems)
-    stoch_scenario_names = module.stoch_scenario_names_creator(cfg.num_stoch_scens)
+    admm_subproblem_names = module.admm_subproblem_names_creator(cfg)
+    stoch_scenario_names = module.stoch_scenario_names_creator(cfg)
 
     scenario_creator_kwargs = module.kw_creator(cfg)
     stoch_scenario_name = stoch_scenario_names[0]

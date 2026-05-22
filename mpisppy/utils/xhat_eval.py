@@ -370,7 +370,13 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         if fix_nonants:
             self._fix_nonants_at_value()
 
-        self.solve_loop(solver_options=self.current_solver_options, 
+        # Xhat_Eval is a steady-state evaluator with no per-PH-iter
+        # distinction of its own; use the iterk fold (k=1) so any
+        # `iterk` / `starting_at_iter` layers fire as the user
+        # configured. The fold's final layer is still
+        # current_solver_options (back-compat overlay), so any
+        # spoke-style assignment a caller made still flows through.
+        self.solve_loop(solver_options=self._effective_solver_options(1),
                         verbose=verbose)
 
         infeasP = self.no_incumbent_prob()

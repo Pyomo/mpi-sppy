@@ -93,7 +93,7 @@ class CrossScenarioExtension(Extension):
              and opt.options["tee-rank0-solves"]
         )
         opt.solve_loop(
-                solver_options=opt.current_solver_options,
+                solver_options=opt._effective_solver_options(opt._PHIter),
                 dtiming=opt.options["display_timing"],
                 gripe=True,
                 disable_pyomo_signal_handling=False,

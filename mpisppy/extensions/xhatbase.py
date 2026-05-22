@@ -40,7 +40,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
         
      #**********
     def _try_one(self, snamedict, solver_options=None, verbose=False,
-                 restore_nonants=True, stage2EFsolvern=None, branching_factors=None):
+                 restore_nonants=True, stage2_ef_solver_name=None, branching_factors=None):
         """ try the scenario named sname in self.opt.local_scenarios
        Args:
             snamedict (dict): key: scenario tree non-leaf name, val: scen name
@@ -50,7 +50,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             restore_nonants (bool): if True, restores the nonants to their original
                                     values in all scenarios. If False, leaves the
                                     nonants as they are in the tried scenario
-            stage2EFsolvern: use this for EFs based on second stage nodes for multi-stage
+            stage2_ef_solver_name: use this for EFs based on second stage nodes for multi-stage
             branching_factors (list): list of branching factors for stage2ef
        NOTE: The solve loop is with fixed nonants so W and rho do not
              matter to the optimization. When we want to check the obj
@@ -88,7 +88,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                       .format(src_rank))
                 print("root comm size={}".format(self.comms["ROOT"].size))
                 raise
-        elif stage2EFsolvern is None:  # regular multi-stage
+        elif stage2_ef_solver_name is None:  # regular multi-stage
             # assemble parts and put it in xhats
             # send to ranks in the comm or receive ANY_SOURCE
             # (for closest do allreduce with loc operator) rank
@@ -180,8 +180,8 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             for ndn2, sdict in local_2ndns.items():  # ndn2 will be a the node name
                 wxbarutils.fix_ef_ROOT_nonants(self._EFs[ndn2], xhats["ROOT"])
                 # solve EF
-                solver = pyo.SolverFactory(stage2EFsolvern)
-                if 'persistent' in stage2EFsolvern:
+                solver = pyo.SolverFactory(stage2_ef_solver_name)
+                if 'persistent' in stage2_ef_solver_name:
                     solver.set_instance(self._EFs[ndn2], symbolic_solver_labels=True)
                     results = solver.solve(tee=Tee)
                 else:

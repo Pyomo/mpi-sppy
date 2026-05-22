@@ -533,7 +533,7 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, cfg=None,
     return consensus_vars
 
 
-def stoch_scenario_names_creator(num_stoch_scens, num_stages=2):
+def stoch_scenario_names_creator(cfg):
     """Creates the name of every stochastic scenario.
 
     Args:
@@ -542,13 +542,16 @@ def stoch_scenario_names_creator(num_stoch_scens, num_stages=2):
     Returns:
         list (str): the list of stochastic scenario names
     """
+    num_stoch_scens = cfg.num_stoch_scens
+    num_stages = cfg.num_stages
+
     if num_stages == 3:
         return [f"StochasticScenario{i+1}_{demand}" for i in range(num_stoch_scens//2) for demand in ["high","low"]]
     else:
         return [f"StochasticScenario{i+1}" for i in range(num_stoch_scens)]
 
 
-def admm_subproblem_names_creator(num_admm_subproblems):
+def admm_subproblem_names_creator(cfg):
     """Creates the name of every admm subproblem.
 
     Args:
@@ -557,7 +560,7 @@ def admm_subproblem_names_creator(num_admm_subproblems):
     Returns:
         list (str): the list of admm subproblem names
     """
-    return [f"Region{i+1}" for i in range(num_admm_subproblems)]
+    return [f"Region{i+1}" for i in range(cfg.num_admm_subproblems)]
 
 
 def combining_names(admm_subproblem_name,stoch_scenario_name):

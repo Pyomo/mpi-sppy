@@ -8,9 +8,11 @@
 ###############################################################################
 
 from mpisppy.cylinders.spoke import OuterBoundSpoke, Field
+from mpisppy.cylinders._jensens_mixin import _JensensMixin
 import pyomo.environ as pyo
 
-class SubgradientOuterBound(OuterBoundSpoke):
+
+class SubgradientOuterBound(_JensensMixin, OuterBoundSpoke):
     send_fields = (*OuterBoundSpoke.send_fields, Field.XFEAS)
     converger_spoke_char = 'G'
 
@@ -27,7 +29,14 @@ class SubgradientOuterBound(OuterBoundSpoke):
         if self.opt.options.get("smoothed", 0) != 0:
             raise RuntimeError("Cannnot use smoothing with Subgradient algorithm")
         attach_prox = False
-        self.opt.PH_Prep(attach_prox=attach_prox, attach_smooth = 0)
+        self.opt.PH_Prep(attach_prox=attach_prox, attach_smooth=0)
+
+        if self._jensens_enabled():
+            avg_scenario = self._jensens_build_avg()
+            self._jensens_assert_safe_for_outer_bound(avg_scenario)
+            avg_outer_bound, _ = self._jensens_solve(avg_scenario)
+            self.send_bound(avg_outer_bound)
+
         trivial_bound = self.opt.Iter0()
 
         # update the rho
@@ -58,7 +67,7 @@ class SubgradientOuterBound(OuterBoundSpoke):
             return
 
         # Tell the hub about the most recent bound
-        self.send_bound(self.opt.best_bound_obj_val)     
+        self.send_bound(self.opt.best_bound_obj_val)
         # Send feasible x
         self.send_xfeas()
         # Update the nonant bounds, if possible

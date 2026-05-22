@@ -3,6 +3,20 @@
 AdmmWrapper
 ===========
 
+.. important::
+
+   **Most users should use** :ref:`generic_cylinders <generic_cylinders>`
+   **with the** ``--admm`` **flag rather than writing a custom driver.**
+   See :ref:`generic_admm` for the recommended workflow, including the
+   model-module interface and a tutorial using the same ``distr`` example
+   described on this page.  The stochastic counterpart is
+   :ref:`stoch_admmWrapper` (run via ``--stoch-admm``).
+
+   This page documents the underlying ``AdmmWrapper`` class and the
+   custom-driver pattern.  It is primarily useful if you are writing your
+   own driver, extending the wrapper, or trying to understand how
+   ``generic_cylinders --admm`` works under the hood.
+
 .. automodule:: distr
    :noindex:
    :show-inheritance:
@@ -11,7 +25,7 @@ AdmmWrapper
    :noindex:
    :show-inheritance:
 
-**AdmmWrapper** uses progressive hedging implemented in mpi-sppy 
+**AdmmWrapper** uses progressive hedging implemented in mpi-sppy
 to solve a non-stochastic problem by breaking them into subproblems.
 
 An example of usage is given below.

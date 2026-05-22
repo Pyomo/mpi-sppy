@@ -127,6 +127,29 @@ Spokes provide bounds and heuristic solutions. Enable them with flags:
 
 See :ref:`Spokes` for details on each spoke type.
 
+Multistage Options
+-------------------
+
+For multistage problems (three or more stages), the model's
+``inparser_adder`` should register ``branching_factors`` via
+``cfg.multistage()`` or ``cfg.add_branching_factors()``.
+
+``--stage2-ef-solver-name``
+  Solver to use for forming second-stage EFs during xhat evaluation.
+  When set, the ``xhatshuffle`` spoke forms an EF for each second-stage
+  node, fixes the first-stage nonants, and solves.  The number of ranks
+  allocated to the xhatshuffle spoke must be an integer multiple of the
+  number of second-stage nodes.
+
+Example for the hydro model (three stages, branching factors 3 3):
+
+.. code-block:: bash
+
+    mpiexec -np 3 python -m mpi4py mpisppy/generic_cylinders.py \
+        --module-name hydro --solver-name cplex --max-iterations 100 \
+        --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.001 \
+        --branching-factors "3 3" --stage2-ef-solver-name cplex
+
 ADMM Decomposition
 -------------------
 
@@ -150,6 +173,9 @@ Some extensions can be activated directly from the command line:
 - ``--fixer`` -- Fix variables that have converged
 - ``--mipgaps-json <file>`` -- MIP gap schedule from a JSON file
 - ``--user-defined-extensions <module>`` -- Load a custom extension module
+- ``--wtracker`` -- Track W (Lagrange-multiplier) values per iteration
+  and write a convergence report at the end of the run
+  (see :ref:`wtracker_extension`)
 
 See :ref:`Extensions` for details on available extensions.
 
@@ -252,12 +278,139 @@ This option gets pulled in with ``cfg.popular_args`` and processed by
 Note that required arguments such as ``num_scens`` *must* be on the
 command line.
 
+``solver-options``
+------------------
+
+mpi-sppy passes solver-specific options to the underlying Pyomo
+solver plugin via a whitespace-separated string of ``key=value``
+pairs. The global flag is ``--solver-options``; every spoke also
+takes a per-spoke variant — ``--lagrangian-solver-options``,
+``--reduced-costs-solver-options``, ``--subgradient-solver-options``,
+and so on — that overlays on top of the global flag for that
+spoke's solves.
+
+Example:
+
+.. code-block:: bash
+
+    --solver-options "presolve=2 threads=4"
+    --lagrangian-solver-options "mipgap=0.01"
+
+With this invocation, the lagrangian spoke's effective solver
+options are ``{presolve=2, threads=4, mipgap=0.01}``: the spoke
+flag adds ``mipgap`` and leaves the global ``presolve`` and
+``threads`` in place. The hub and the other spokes see the
+global dict ``{presolve=2, threads=4}`` unchanged.
+
+.. warning::
+
+   Behavior change in 2026: per-spoke solver-options flags
+   **overlay** the global ``--solver-options`` dict; previously
+   they **replaced** it for that spoke. In the unlikely event
+   you relied on the spoke flag dropping a global key, the
+   recipe is to re-spell every key you want in the spoke
+   options, or to omit the global ``--solver-options`` flag
+   entirely. The new behavior
+   is a superset of the old in every case where the spoke flag's
+   keys are a subset of the global's, which is the common
+   pattern (spoke flag tightens ``mipgap``, leaves the rest
+   alone).
+
+Two option names — ``mipgap`` and ``threads`` — are translated
+to each solver's native spelling at solve time, so the same CLI
+invocation works whether the configured solver is CPLEX, Gurobi,
+Xpress, or HiGHS. Other option keys pass through to the solver
+unchanged. If you supply a solver-native key directly (e.g.
+``--solver-options "mip_rel_gap=0.01"`` for HiGHS), it wins over
+any ``mipgap`` set elsewhere.
+
+For iteration-aware mipgap, use ``--iter0-mipgap`` and
+``--iterk-mipgap`` (plus their per-spoke variants), or
+``--mipgaps-json <path>`` for a mipgap-only schedule.
+``--max-solver-threads`` sets a system-level thread cap that wins
+over any inline ``threads`` value; use it on shared HPC nodes.
+
+For solver logging, see ``--solver-log-dir`` below — do not try
+to enable solver logs through ``--solver-options``.
+
+Solver-options file
+^^^^^^^^^^^^^^^^^^^
+
+For richer configurations, ``--solver-options-file <path>`` reads
+a JSON file with per-iteration and per-spoke sub-blocks. Schema:
+
+.. code-block:: json
+
+    {
+      "default":    {"threads": 4, "presolve": 2},
+      "iter0":      {"mipgap": 1e-4},
+      "iterk":      {"mipgap": 1e-3},
+      "starting_at_iter": {"5": {"mipgap": 1e-5}, "10": {"mipgap": 1e-6}},
+      "spokes": {
+        "lagrangian": {
+          "default":    {"mipgap": 0.01},
+          "starting_at_iter": {"5": {"mipgap": 0.001}}
+        },
+        "reduced_costs": {"iter0": {"mipgap": 0.001}}
+      }
+    }
+
+Sub-blocks behave per their names:
+
+* ``default``    — applies to every iteration.
+* ``iter0``      — only at iteration 0.
+* ``iterk``      — at iteration 1 and beyond.
+* ``starting_at_iter`` — keyed by iteration number ``N`` (with
+  ``N >= 1``); applies from iteration ``N`` onward (so ``"5"``
+  first fires at ``k = 5`` and persists until a later
+  ``starting_at_iter`` entry overrides it). For options that
+  should apply at every iteration, use the ``default`` sub-block
+  instead — ``starting_at_iter`` with ``N = 0`` is rejected
+  because it would silently outrank ``iter0`` and ``iterk``.
+* ``spokes``     — per-spoke overrides keyed by spoke name. Each
+  spoke sub-block has the same shape minus ``spokes``.
+
+Per-spoke files (``--lagrangian-solver-options-file <path>``, etc.)
+are also accepted; they apply only to that spoke and have the same
+shape as a global file (the ``spokes`` sub-block, if present, is
+ignored).
+
+Precedence at the same iteration / predicate, lowest to highest:
+
+1. ``--solver-options-file`` entries.
+2. Inline ``--solver-options`` (``default`` predicate only).
+3. ``--mipgaps-json`` (``starting_at_iter`` only — planned for
+   deprecation; superseded by ``--solver-options-file``).
+4. ``--iter0-mipgap`` / ``--iterk-mipgap`` / ``--max-solver-threads``
+   (CLI sugar).
+
+More specific predicates always win for any iteration that matches
+both: at ``k = 7``, an ``starting_at_iter: {"5": …}`` entry overrides
+any ``iterk`` entry, even though both apply.
+
 ``solver-log-dir``
 ------------------
 
 This specifies a directory where solver log files for *every* subproblem
 solve will be written. This directory will be created for the user and
-must *not* exist in advance.
+must *not* exist in advance. File names disambiguate scenario and rank,
+so concurrent solves do not clobber one another.
+
+If the per-solve log volume is too high, add
+``--hub-only-solver-logs`` to write logs only for hub-side solves
+(spoke-side subproblem solves are skipped). ``--hub-only-solver-logs``
+requires ``--solver-log-dir`` to also be set.
+
+.. warning::
+
+   Do **not** try to enable solver logging by passing a solver-specific
+   log flag through ``--solver-options`` (e.g.
+   ``--solver-options "logfile=run.log"`` for CPLEX, or the equivalent
+   ``LogFile`` / ``log_file`` for Gurobi / HiGHS). Because every
+   subproblem solve across every rank would share that one path, the
+   file overwrites itself or interleaves output from concurrent solves;
+   the resulting log is rarely useful. Use ``--solver-log-dir`` (with
+   ``--hub-only-solver-logs`` if needed) instead.
 
 ``warmstart-subproblems``
 --------------------------

@@ -25,9 +25,9 @@ class TestAdmmBundler(unittest.TestCase):
         cfg.num_admm_subproblems = num_admm_subproblems
 
         admm_subproblem_names = stoch_distr.admm_subproblem_names_creator(
-            num_admm_subproblems)
+            cfg)
         stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(
-            num_stoch_scens)
+            cfg)
         scenario_creator_kwargs = stoch_distr.kw_creator(cfg)
         stoch_scenario_name = stoch_scenario_names[0]
         consensus_vars = stoch_distr.consensus_vars_creator(
@@ -241,6 +241,62 @@ class TestAdmmArgs(unittest.TestCase):
         # Should not raise
         _check_admm_compatibility(cfg)
 
+    def test_check_stoch_admm_xhatshuffle_without_stage2ef_errors(self):
+        """stoch_admm + xhatshuffle without stage2_ef_solver_name is an
+        invalid configuration: xhatshuffle fixes nonants only along one
+        scenario's tree path, leaving ADMM consensus variables in other
+        stochastic outcomes unconstrained.  This must error, not silently
+        produce an invalid inner bound."""
+        from mpisppy.generic.admm import _check_admm_compatibility
+        cfg = config.Config()
+        cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
+        cfg.add_to_config("xhatshuffle", description="", domain=bool, default=True)
+        cfg.add_to_config("stage2_ef_solver_name", description="",
+                          domain=str, default=None)
+        with self.assertRaises(RuntimeError) as cm:
+            _check_admm_compatibility(cfg)
+        self.assertIn("stage2-ef-solver-name", str(cm.exception))
+
+    def test_check_stoch_admm_xhatshuffle_with_stage2ef_ok(self):
+        """stoch_admm + xhatshuffle + stage2_ef_solver_name is valid."""
+        from mpisppy.generic.admm import _check_admm_compatibility
+        cfg = config.Config()
+        cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
+        cfg.add_to_config("xhatshuffle", description="", domain=bool, default=True)
+        cfg.add_to_config("stage2_ef_solver_name", description="",
+                          domain=str, default="gurobi")
+        # Should not raise
+        _check_admm_compatibility(cfg)
+
+    def test_check_stoch_admm_xhatxbar_without_stage2ef_ok(self):
+        """stoch_admm + xhatxbar (without xhatshuffle) does not need
+        stage2_ef_solver_name: xhatxbar fixes nonants to the PH xbar, which
+        IS the consensus value, so ADMM consensus is preserved without an
+        EF resolve."""
+        from mpisppy.generic.admm import _check_admm_compatibility
+        cfg = config.Config()
+        cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
+        cfg.add_to_config("xhatxbar", description="", domain=bool, default=True)
+        cfg.add_to_config("stage2_ef_solver_name", description="",
+                          domain=str, default=None)
+        # Should not raise
+        _check_admm_compatibility(cfg)
+
+    def test_check_admm_xhatshuffle_without_stage2ef_ok(self):
+        """Deterministic --admm + xhatshuffle without stage2_ef_solver_name
+        is allowed: deterministic ADMM treats subproblems as a flat 2-stage
+        tree (all consensus at ROOT), so xhatshuffle's single-path fix
+        reaches every consensus variable.  The stage2ef error is specific
+        to --stoch-admm where the tree is genuinely multistage."""
+        from mpisppy.generic.admm import _check_admm_compatibility
+        cfg = config.Config()
+        cfg.add_to_config("admm", description="", domain=bool, default=True)
+        cfg.add_to_config("xhatshuffle", description="", domain=bool, default=True)
+        cfg.add_to_config("stage2_ef_solver_name", description="",
+                          domain=str, default=None)
+        # Should not raise
+        _check_admm_compatibility(cfg)
+
 
 class TestNameListsAdmmPath(unittest.TestCase):
     """Test the ADMM early-return path in parsing.name_lists."""
@@ -258,6 +314,82 @@ class TestNameListsAdmmPath(unittest.TestCase):
         self.assertEqual(result_names, names)
         self.assertEqual(result_nodes, nodenames)
 
+
+class TestMultistageXhatShuffleWarning(unittest.TestCase):
+    """Guard the warning emitted when multistage xhatshuffle is used
+    without --stage2-ef-solver-name (relaxed from assert in PR #651)."""
+
+    def _make_multistage_cfg(self, stage2=None):
+        import types
+        cfg = config.Config()
+        cfg.multistage()
+        cfg.xhatshuffle_args()
+        cfg.proper_bundle_config()
+        cfg.quick_assign("branching_factors", list, [2, 2])
+        cfg.quick_assign("xhatshuffle", bool, True)
+        if stage2 is not None:
+            cfg.quick_assign("stage2_ef_solver_name", str, stage2)
+        module = types.SimpleNamespace(
+            scenario_names_creator=lambda n: [f"Scen{i+1}" for i in range(n)]
+        )
+        return cfg, module
+
+    def test_warn_when_stage2_missing(self):
+        import warnings
+        from mpisppy.generic.parsing import name_lists
+        cfg, module = self._make_multistage_cfg(stage2=None)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            name_lists(module, cfg)
+        msgs = [str(w.message) for w in caught]
+        self.assertTrue(
+            any("stage2_ef_solver_name" in m for m in msgs),
+            f"Expected a stage2_ef_solver_name warning, got: {msgs}",
+        )
+
+    def test_no_warn_when_stage2_set(self):
+        import warnings
+        from mpisppy.generic.parsing import name_lists
+        cfg, module = self._make_multistage_cfg(stage2="gurobi")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            name_lists(module, cfg)
+        self.assertFalse(
+            any("stage2_ef_solver_name" in str(w.message) for w in caught),
+            "Did not expect a stage2_ef_solver_name warning when set",
+        )
+
+
+class TestEfOptionsNameCheckForwarding(unittest.TestCase):
+    """Guard that cfg.turn_off_names_check reaches the EF options dict.
+
+    generic_cylinders auto-sets this for --admm/--stoch-admm runs (the
+    wrappers synthesize dummy nonants with different names), but the
+    flag only helps if ef_options forwards it into ef_dict['options'].
+    """
+
+    def _base_cfg(self):
+        from mpisppy.utils import config
+        cfg = config.Config()
+        cfg.popular_args()
+        cfg.EF_base()
+        cfg.quick_assign("EF_solver_name", str, "cplex")
+        return cfg
+
+    def test_forwarded_when_true(self):
+        from mpisppy.utils.cfg_vanilla import ef_options
+        cfg = self._base_cfg()
+        cfg.quick_assign("turn_off_names_check", bool, True)
+        d = ef_options(cfg, lambda *a, **k: None, lambda *a, **k: None,
+                       ["Scen1"], scenario_creator_kwargs={})
+        self.assertTrue(d["options"]["turn_off_names_check"])
+
+    def test_false_by_default(self):
+        from mpisppy.utils.cfg_vanilla import ef_options
+        cfg = self._base_cfg()
+        d = ef_options(cfg, lambda *a, **k: None, lambda *a, **k: None,
+                       ["Scen1"], scenario_creator_kwargs={})
+        self.assertFalse(d["options"]["turn_off_names_check"])
 
 
 if __name__ == '__main__':

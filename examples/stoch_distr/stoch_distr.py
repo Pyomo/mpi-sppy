@@ -262,28 +262,28 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, inter_reg
     return consensus_vars
 
 
-def stoch_scenario_names_creator(num_stoch_scens):
+def stoch_scenario_names_creator(cfg):
     """Creates the name of every stochastic scenario.
 
     Args:
-        num_stoch_scens (int): number of stochastic scenarios
+        cfg: config object
 
     Returns:
         list (str): the list of stochastic scenario names
     """
-    return [f"StochasticScenario{i+1}" for i in range(num_stoch_scens)]
+    return [f"StochasticScenario{i+1}" for i in range(cfg.num_stoch_scens)]
 
 
-def admm_subproblem_names_creator(num_admm_subproblems):
+def admm_subproblem_names_creator(cfg):
     """Creates the name of every admm subproblem.
 
     Args:
-        num_subproblems (int): number of admm subproblems
+        cfg: config object
 
     Returns:
         list (str): the list of admm subproblem names
     """
-    return [f"Region{i+1}" for i in range(num_admm_subproblems)]
+    return [f"Region{i+1}" for i in range(cfg.num_admm_subproblems)]
 
 
 def combining_names(admm_subproblem_name,stoch_scenario_name):
@@ -404,7 +404,7 @@ def inparser_adder(cfg):
     
     ### For the scalable example
     cfg.add_to_config("scalable",
-                      description="decides whether a scalable model is used",
+                      description="generate pseudo-random data parameterized by --mnpr instead of using the hardwired 2/3/4-region datasets",
                       domain=bool,
                       default=False)
 

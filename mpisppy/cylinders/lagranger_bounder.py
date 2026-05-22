@@ -15,8 +15,9 @@ import numpy as np
 import mpisppy.cylinders.spoke
 import mpisppy.utils.w_utils.wxbarutils
 from mpisppy.cylinders.lagrangian_bounder import _LagrangianMixin
+from mpisppy.cylinders._jensens_mixin import _JensensMixin
 
-class LagrangerOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
+class LagrangerOuterBound(_JensensMixin, _LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
     """Indepedent Lagrangian that takes x values as input and updates its own W.
     """
     converger_spoke_char = 'A'
@@ -85,18 +86,32 @@ class LagrangerOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNo
 
         self.lagrangian_prep()
 
+        if self._jensens_enabled():
+            avg_scenario = self._jensens_build_avg()
+            self._jensens_assert_safe_for_outer_bound(avg_scenario)
+            avg_outer_bound, _ = self._jensens_solve(avg_scenario)
+            self.send_bound(avg_outer_bound)
+
         if extensions:
             self.opt.extobject.pre_iter0()
         self.A_iter = 1
+        # _PHIter drives the per-iteration solver-options fold inside
+        # PHBase._effective_solver_options; lagranger doesn't
+        # otherwise track it, so we flip it manually across the
+        # iter0→iterk boundary.
+        self.opt._PHIter = 0
         self.trivial_bound = self._lagrangian(0)
         if extensions:
             self.opt.extobject.post_iter0()
+        self.opt._PHIter = 1
 
         self.send_bound(self.trivial_bound)
         if extensions:
             self.opt.extobject.post_iter0_after_sync()
 
-        self.opt.current_solver_options = self.opt.iterk_solver_options
+        # Clear the dynamic-overrides overlay at the iter0→iterk
+        # transition; static iterk options come from the layer fold.
+        self.opt.current_solver_options = {}
 
         while not self.got_kill_signal():
             # because of aph, do not check for new data, just go for it

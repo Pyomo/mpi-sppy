@@ -220,12 +220,41 @@ are believed to be "in balance", such that per-variable updates are not needed (
 hinder algorithmic progress when different nonanticipative variables play similar roles in
 the subproblem optimization problems).
 
+.. _wtracker_extension:
+
 wtracker_extension
 ^^^^^^^^^^^^^^^^^^
 
 The wtracker_extension outputs a report about the convergence (or really, lack thereof) of
 W values.
-An example of its use is shown in ``examples.sizes.sizes_demo.py``
+An example of programmatic use is shown in ``examples.sizes.sizes_demo.py``.
+
+From ``generic_cylinders.py``, enable it with ``--wtracker``. Related options:
+
+- ``--wtracker`` -- enable the extension (default off)
+- ``--wtracker-file-prefix <str>`` -- prefix for the rank-by-rank output
+  files (default: empty)
+- ``--wtracker-wlen <int>`` -- moving-window length, in iterations,
+  used by the convergence statistics (default 20)
+- ``--wtracker-reportlen <int>`` -- maximum number of rows in each
+  ranked report (default 100)
+- ``--wtracker-stdevthresh <float>`` -- ignore moving standard deviations
+  below this value when counting "converged" traces (default: use
+  ``E1_tolerance``)
+
+At the end of the run, each rank writes three files using its prefix:
+
+- ``<prefix>_summary_iter<N>_rank<r>.txt`` -- text summary with counts
+  and totals
+- ``<prefix>_stdev_iter<N>_rank<r>.csv`` -- top entries sorted by
+  moving standard deviation
+- ``<prefix>_cv_iter<N>_rank<r>.csv`` -- top entries sorted by moving
+  absolute coefficient of variation
+
+Each CSV row is indexed by ``(varname, scenario_name)`` and gives the
+windowed mean and stdev of W for that nonant/scenario pair. This is a
+diagnostic tool intended for tuning rho and convergence behavior; it
+adds time and memory and is not recommended for production runs.
 
 
 gradient_extension
