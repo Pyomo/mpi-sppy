@@ -59,16 +59,18 @@ With 14 total ranks and ratios hub:1.0, lagrangian:0.5, xhat:0.25,
 the system would allocate ranks proportionally: 8 for the hub, 4 for the
 Lagrangian spoke, 2 for the xhat spoke.
 
-Open questions on the interface:
+Interface decisions:
 
-- Should the ratio be per-spoke-type in `Config`, or specified in the
-  spoke dict as a numeric field?
-- Should there be a `--spoke-ranks` option that takes explicit counts
-  instead of ratios?  Ratios are more portable across different total
-  rank counts, but explicit counts give precise control.
-- What happens when the ratios don't divide evenly into the total rank
-  count?  Options: (a) round and warn, (b) error, (c) adjust ratios
-  to fit.
+- **Where the ratio lives:** per-spoke-type in `Config` (e.g.,
+  `--lagrangian-rank-ratio`, `--xhatshuffle-rank-ratio`).  Matches
+  mpi-sppy's modern Config style and gets CLI parsing for free.
+- **Ratios only, no explicit counts:** ratios are portable across
+  total rank counts; defer any `--spoke-ranks` count override
+  until a concrete need surfaces.
+- **Uneven division:** round each cylinder's rank count to the
+  nearest integer that satisfies the ratio.  Do not warn; just
+  `global_toc` the final per-cylinder rank allocation on rank 0
+  so the actual numbers used appear in the run log.
 
 
 ### Current Architecture
@@ -828,7 +830,12 @@ ask.
 
 - Extend multi-source reads for spoke-to-spoke fields (FWPH reading
   `BEST_XHAT` from an InnerBoundSpoke with different rank count).
-- Test FWPH + xhatshuffle with unequal ranks.
+- Test FWPH + xhatshuffle with unequal ranks.  Under BX-2 the FWPH
+  read of `RECENT_XHATS` becomes "one Get per (circular-buffer-slot
+  × non-leaf-node)" from each slot's elected writer, with no
+  within-slot cross-source assembly.  Expected to work cleanly, but
+  warrants targeted testing since RECENT_XHATS is the most complex
+  consumer of the canonicalized layout.
 
 **Phase 5: APH support**
 
@@ -856,15 +863,6 @@ believe no such external code exists in tree, but downstream users
 should be flagged in release notes.
 
 
-### Open Questions
-
-1. Under BX-2, the FWPH spoke-to-spoke read of `RECENT_XHATS`
-   becomes "one Get per (circular-buffer-slot × non-leaf-node)"
-   from each slot's elected writer — no within-slot cross-source
-   assembly.  This should work cleanly, but FWPH-specific testing
-   under unequal rank counts is still warranted.  (If BX-1 were
-   chosen instead, FWPH would face multi-source assembly per
-   circular-buffer entry, which is the harder case.)
 
 
 
