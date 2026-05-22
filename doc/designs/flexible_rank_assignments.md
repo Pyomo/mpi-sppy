@@ -217,12 +217,12 @@ multi-stage problems (though for two-stage problems they are uniform).
 
 Spoiler alert: we are going to recommend option D, which is similar to A.
 
-**Option A: Single global window on MPI_COMM_WORLD**
+**Option A: Single global window on `fullcomm`**
 
 Every rank publishes its buffers in one shared window.  Readers address
 remote ranks by their global rank.  The `strata_buffer_layouts`
 (currently exchanged via `strata_comm.allgather`) would instead be
-exchanged on `MPI_COMM_WORLD` or a dedicated intercommunicator.
+exchanged on `fullcomm` or a dedicated intercommunicator.
 
 Pros:
 
@@ -291,7 +291,7 @@ Cons:
 
 **Option D: Replace strata_comm with direct RMA addressing**
 
-Abandon `strata_comm` entirely.  Use `MPI_COMM_WORLD` for the
+Abandon `strata_comm` entirely.  Use `fullcomm` for the
 window, and have each rank directly address remote ranks by their
 global rank.  The overlap maps provide the addressing information.
 
