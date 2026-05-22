@@ -140,47 +140,40 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         ref Vars therefore captures only that "representative" sub-scenario's
         contribution. Instead, differentiate w.r.t. every per-sub-scenario
         nonant Var and sum the resulting partials per bundle position
-        ``(ndn, k)``. This mirrors the bundle branch in
-        ``sputils.nonant_cost_coeffs``.
+        ``(ndn, k)``. For unbundled scenarios the consensus group at each
+        position is a singleton, so the same loop produces one partial per
+        position — the previous unbundled behavior — without an extra branch.
         """
 
         self.grad_exprs = dict()
-        self._bundle_per_scen_vars = dict()
+        self._per_scen_vars = dict()
 
         for s in self.opt.local_scenarios.values():
             active_obj = sputils.find_active_objective(s)
 
-            if hasattr(s, "_ef_scenario_names"):
-                # Shared helper builds the bundle position -> per-sub-scenario
-                # Vars mapping (see mpisppy/utils/nonant_sensitivities.py); we
-                # then flatten it into parallel wrt_vars/wrt_keys so we can
-                # differentiate once and re-aggregate the partials by key.
-                per_scen_vars = _bundle_consensus_groups(s)
+            # Uniform across bundled and unbundled: real consensus groups for
+            # bundles, singleton groups for the unbundled case. create_EF
+            # stashes the bundle mapping at construction time, so this is an
+            # O(1) attribute read for bundles.
+            per_scen_vars = _bundle_consensus_groups(s)
 
-                wrt_vars = []
-                wrt_keys = []
-                for bundle_key, vars_at_pos in per_scen_vars.items():
-                    for v in vars_at_pos:
-                        wrt_vars.append(v)
-                        wrt_keys.append(bundle_key)
+            wrt_vars = []
+            wrt_keys = []
+            for bundle_key, vars_at_pos in per_scen_vars.items():
+                for v in vars_at_pos:
+                    wrt_vars.append(v)
+                    wrt_keys.append(bundle_key)
 
-                partials = differentiate(active_obj,
-                                         wrt_list=wrt_vars,
-                                         mode=Modes.reverse_symbolic,
-                                         )
+            partials = differentiate(active_obj,
+                                     wrt_list=wrt_vars,
+                                     mode=Modes.reverse_symbolic,
+                                     )
 
-                grad_dict = {ndn_i: 0 for ndn_i in s._mpisppy_data.nonant_indices}
-                for bundle_key, partial in zip(wrt_keys, partials):
-                    grad_dict[bundle_key] = grad_dict[bundle_key] + partial
-                self.grad_exprs[s] = grad_dict
-                self._bundle_per_scen_vars[s] = per_scen_vars
-            else:
-                partials = differentiate(active_obj,
-                                         wrt_list=s._mpisppy_data.nonant_indices.values(),
-                                         mode=Modes.reverse_symbolic,
-                                         )
-                self.grad_exprs[s] = {ndn_i: partials[i]
-                                      for i, ndn_i in enumerate(s._mpisppy_data.nonant_indices)}
+            grad_dict = {ndn_i: 0 for ndn_i in s._mpisppy_data.nonant_indices}
+            for bundle_key, partial in zip(wrt_keys, partials):
+                grad_dict[bundle_key] = grad_dict[bundle_key] + partial
+            self.grad_exprs[s] = grad_dict
+            self._per_scen_vars[s] = per_scen_vars
 
         return
 
@@ -191,23 +184,17 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
         if self.eval_at_xhat:
             if True not in np.isnan(self.best_xhat_buf.value_array()):
+                # The cached gradient expressions reference per-sub-scenario
+                # nonant Vars (singletons for unbundled scenarios). All Vars
+                # in a consensus group are equal at an NA-feasible xhat, so
+                # set every one of them to the bundle's xhat value at that
+                # position. Unbundled is the singleton case of the same loop.
+                per_scen_vars = self._per_scen_vars[s]
                 ci = 0
-                if s in self._bundle_per_scen_vars:
-                    # Bundle: the cached gradient expressions reference
-                    # per-sub-scenario nonant Vars. All per-sub-scenario
-                    # nonants tied to a given bundle position are equal at
-                    # an NA-feasible xhat, so set every one of them to the
-                    # bundle's xhat value at that position.
-                    per_scen_vars = self._bundle_per_scen_vars[s]
-                    for ndn_i, var in s._mpisppy_data.nonant_indices.items():
-                        var.value = xhat[ci]
-                        for v in per_scen_vars.get(ndn_i, ()):
-                            v.value = xhat[ci]
-                        ci += 1
-                else:
-                    for ndn_i, var in s._mpisppy_data.nonant_indices.items():
-                        var.value = xhat[ci]
-                        ci += 1
+                for ndn_i in s._mpisppy_data.nonant_indices:
+                    for v in per_scen_vars.get(ndn_i, ()):
+                        v.value = xhat[ci]
+                    ci += 1
 
         # Current-values branch (the default path: cfg.eval_at_xhat is False,
         # or eval_at_xhat is True but no best xhat has been received yet).

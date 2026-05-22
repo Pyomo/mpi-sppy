@@ -18,9 +18,9 @@ import pyomo.environ as pyo
 # runs in an environment without scipy installed.
 
 
-def _bundle_consensus_groups(bundle):
-    """Map each bundle nonant position to the per-sub-scenario nonant Vars
-    coupled to it by NA equality constraints.
+def _bundle_consensus_groups(scenario):
+    """Map each nonant position to the per-sub-scenario nonant Vars coupled
+    to it by NA equality constraints.
 
     For a proper bundle (a Pyomo EF model with ``_ef_scenario_names``),
     ``sputils.create_EF`` picks the first sub-scenario's nonant Var as the
@@ -31,29 +31,17 @@ def _bundle_consensus_groups(bundle):
     behavior is to perturb the consensus direction — every per-sub-scenario
     nonant Var at that bundle position together. See issue #673.
 
-    Returns ``{(ndn, k): [list of per-sub-scenario Var objects]}``. The
-    construction mirrors the bundle branch of ``sputils.nonant_cost_coeffs``
-    and the gradient aggregation in ``mpisppy.extensions.grad_rho``.
+    Returns ``{(ndn, k): [list of per-sub-scenario Var objects]}``. For a
+    proper bundle the mapping is read directly from ``scenario.consensus_groups``,
+    which ``sputils.create_EF`` builds and stashes at construction time. For
+    an unbundled scenario the mapping is synthesized as singleton groups from
+    ``_mpisppy_data.nonant_indices`` so callers can use one uniform loop
+    shape regardless of bundling.
     """
-    per_scen_to_bundle = {}
-    counters = {}
-    for (ndn, per_scen_i) in bundle.ref_vars.keys():
-        if (ndn, per_scen_i) in bundle.ref_surrogate_vars:
-            continue
-        counters.setdefault(ndn, 0)
-        per_scen_to_bundle[(ndn, per_scen_i)] = (ndn, counters[ndn])
-        counters[ndn] += 1
-
-    groups = {}
-    for scenario_name in bundle._ef_scenario_names:
-        scenario = bundle.component(scenario_name)
-        for node in scenario._mpisppy_node_list:
-            ndn = node.name
-            for per_scen_i, v in enumerate(node.nonant_vardata_list):
-                bundle_key = per_scen_to_bundle.get((ndn, per_scen_i))
-                if bundle_key is not None:
-                    groups.setdefault(bundle_key, []).append(v)
-    return groups
+    if hasattr(scenario, "_ef_scenario_names"):
+        return scenario.consensus_groups
+    return {ndn_i: [v]
+            for ndn_i, v in scenario._mpisppy_data.nonant_indices.items()}
 
 
 def nonant_sensitivies(s):
@@ -112,11 +100,11 @@ def nonant_sensitivies(s):
 
     grad_vec_kkt_inv = kkt_lu._lu.solve(grad_vec, "T")
 
-    consensus_groups = (
-        _bundle_consensus_groups(s)
-        if hasattr(s, "_ef_scenario_names")
-        else None
-    )
+    # Uniform across bundled and unbundled scenarios: real consensus groups
+    # for bundles (probing the consensus direction so the perturbation matches
+    # the NA equality constraints — issue #673), singleton groups for the
+    # unbundled case (one Var per position, same probe as before).
+    consensus_groups = _bundle_consensus_groups(s)
 
     nonant_sensis = dict()
     for ndn_i, v in s._mpisppy_data.nonant_indices.items():
@@ -127,22 +115,15 @@ def nonant_sensitivies(s):
             continue
 
         y_vec = np.zeros(kkt.shape[0])
-        if consensus_groups is None:
-            y_vec[kkt_builder._nlp._vardata_to_idx[v]] = 1.0
-        else:
-            # Bundle: probe the consensus direction so the perturbation
-            # matches the NA equality constraints that couple per-sub-scenario
-            # nonants at this bundle position. Without this, the formula
-            # would only see the representative ref Var (issue #673).
-            wrote_any = False
-            for sub_v in consensus_groups.get(ndn_i, ()):
-                if sub_v.fixed:
-                    continue
-                y_vec[kkt_builder._nlp._vardata_to_idx[sub_v]] = 1.0
-                wrote_any = True
-            if not wrote_any:
-                nonant_sensis[ndn_i] = 0.0
+        wrote_any = False
+        for sub_v in consensus_groups.get(ndn_i, ()):
+            if sub_v.fixed:
                 continue
+            y_vec[kkt_builder._nlp._vardata_to_idx[sub_v]] = 1.0
+            wrote_any = True
+        if not wrote_any:
+            nonant_sensis[ndn_i] = 0.0
+            continue
 
         x_denom = y_vec.T @ kkt_lu._lu.solve(y_vec)
         x = (-1 / x_denom)

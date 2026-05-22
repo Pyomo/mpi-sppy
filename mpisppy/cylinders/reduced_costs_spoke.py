@@ -227,20 +227,13 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         # would probably need additional info about where scenarios disagree
         rc = np.zeros(self.nonant_length)
 
-        # _bundle_consensus_groups walks every sub-scenario/node/var in the
-        # bundle; cache once per `sub` and reuse below in the second pass that
-        # populates _scenario_rc_buffer.
-        consensus_groups_by_sub = {
-            sub: (
-                _bundle_consensus_groups(sub)
-                if hasattr(sub, "_ef_scenario_names")
-                else None
-            )
-            for sub in self.opt.local_scenarios.values()
-        }
-
         for sub in self.opt.local_scenarios.values():
-            consensus_groups = consensus_groups_by_sub[sub]
+            # Real consensus groups for proper bundles (stashed at create_EF
+            # time), singleton groups for unbundled scenarios. The helper is
+            # an O(1) attribute read for bundles, so it's cheap to call once
+            # per sub per iteration without caching across the two passes
+            # below.
+            consensus_groups = _bundle_consensus_groups(sub)
             if is_persistent(sub._solver_plugin):
                 # Note: what happens with non-persistent solvers?
                 # - if rc is accepted as a model suffix by the solver (e.g. gurobi shell), it is loaded in postsolve
@@ -248,20 +241,14 @@ class ReducedCostsSpoke(LagrangianOuterBound):
                 # - direct solvers seem to behave the same as persistent solvers
                 # GurobiDirect needs vars_to_load argument
                 # XpressDirect loads for all vars by default - TODO: should notify someone of this inconsistency
-                if consensus_groups is None:
-                    vars_to_load = [
-                        x for _, x in sub._mpisppy_data.nonant_indices.items()
-                    ]
-                else:
-                    # Bundle: load rc for every per-sub-scenario nonant Var,
-                    # not only the ref. The consensus rc sums over the whole
-                    # group; loading just the ref would leave most entries
-                    # at their stale pre-solve values.
-                    vars_to_load = []
-                    for ndn_i, ref in sub._mpisppy_data.nonant_indices.items():
-                        vars_to_load.extend(
-                            consensus_groups.get(ndn_i, (ref,))
-                        )
+                # Load rc for every Var the consensus sum will read. For
+                # bundles this covers every per-sub-scenario nonant (not just
+                # the ref) so the sum doesn't fall back to stale pre-solve
+                # values. For unbundled scenarios the singleton groups
+                # collapse this to one Var per position — the previous
+                # nonant_indices.values() set.
+                vars_to_load = [v for group in consensus_groups.values()
+                                  for v in group]
                 sub._solver_plugin.load_rc(vars_to_load=vars_to_load)
 
             _assert_consensus_rc_loaded(sub, consensus_groups)
@@ -293,7 +280,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         assert self._scenario_rc_buffer.size == self.send_buffers[Field.SCENARIO_REDUCED_COST].data_len()
         ci = 0 # buffer index
         for sub in self.opt.local_scenarios.values():
-            consensus_groups = consensus_groups_by_sub[sub]
+            consensus_groups = _bundle_consensus_groups(sub)
             for ndn_i, xvar in sub._mpisppy_data.nonant_indices.items():
                 # fixed by modeler
                 if ndn_i in self._modeler_fixed_nonants[sub]:
