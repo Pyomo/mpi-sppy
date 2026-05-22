@@ -65,6 +65,18 @@ def build_hub_dict(cfg, beans, scenario_creator_kwargs,
                                   variable_probability=variable_probability,
                                   all_nodenames=all_nodenames,
                                   )
+    elif cfg.cg_hub:
+        #Vanilla CG Hub
+        hub_dict = vanilla.cg_hub(*beans,
+                                  scenario_creator_kwargs=scenario_creator_kwargs,
+                                  all_nodenames = all_nodenames,
+                                  )
+    elif cfg.dualcg_hub:
+        #Dual Stabilized CG Hub
+        hub_dict = vanilla.dualcg_hub(*beans,
+                                  scenario_creator_kwargs=scenario_creator_kwargs,
+                                  all_nodenames = all_nodenames,
+                                  )
     else:
         hub_dict = vanilla.ph_hub(*beans,
                                   scenario_creator_kwargs=scenario_creator_kwargs,
