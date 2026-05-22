@@ -67,10 +67,35 @@ Interface decisions:
 - **Ratios only, no explicit counts:** ratios are portable across
   total rank counts; defer any `--spoke-ranks` count override
   until a concrete need surfaces.
-- **Uneven division:** round each cylinder's rank count to the
-  nearest integer that satisfies the ratio.  Do not warn; just
+- **Uneven division:** apportion ranks by the largest-remainder
+  (Hare quota) method, then enforce a minimum of 1 rank per
+  cylinder.  This guarantees the per-cylinder counts sum to `np`
+  exactly and that every cylinder runs.  Do not warn; just
   `global_toc` the final per-cylinder rank allocation on rank 0
   so the actual numbers used appear in the run log.
+
+  *Algorithm.* Let `C` be the number of cylinders, `np` the
+  total rank count, and `r_i` the configured ratio for cylinder
+  `i` (hub has `r_hub = 1.0`).
+
+  1. Compute each cylinder's real-valued share:
+     `alloc_i = (r_i / sum_j r_j) * np`.
+  2. Floor each: `integer_i = floor(alloc_i)`.
+  3. Distribute the leftover `np - sum_i integer_i` ranks one at
+     a time to the cylinders with the largest fractional remainder
+     `(alloc_i - integer_i)`, breaking ties by cylinder
+     declaration order.  After this step
+     `sum_i integer_i == np` exactly.
+  4. Min-of-1 pass: while any cylinder has `integer_i == 0`,
+     decrement the cylinder with the largest current allocation
+     by 1 and increment the zero-cylinder by 1.  Repeat until
+     every cylinder has at least 1 rank.
+  5. If `C > np`, min-of-1 is infeasible — error out at startup
+     with a message listing the requested cylinders and `np`.
+
+  This preserves the requested ratio as closely as integer
+  arithmetic allows while guaranteeing every cylinder gets at
+  least one rank.
 
 
 ### Current Architecture
