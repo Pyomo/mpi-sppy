@@ -85,16 +85,25 @@ def parse(path):
     return entries
 
 
-def _examples(rows, n=5):
+def _examples(rows, fields, n=5):
+    """Format up to n example rows, showing call ID + the listed fields."""
     out = []
     for e in rows[:n]:
+        extras = " ".join(f"{f}={e.get(f, '?')}" for f in fields)
         out.append(
             f"      cls={e['cls']} call={e['call']} "
-            f"world_rk={e['world_rk']} host={e['host']}"
+            f"world_rk={e['world_rk']} host={e['host']} {extras}"
         )
     if len(rows) > n:
         out.append(f"      (... {len(rows) - n} more truncated ...)")
     return "\n".join(out)
+
+
+# MPI implementations often leave new communicators with an empty or
+# generic default name. When that happens, grouping by (cls, name) can
+# collapse distinct physical comms into one bucket and falsely trip H1.
+_DEFAULT_COMM_NAMES = {"''", '""', "'MPI_COMM_WORLD'", "'MPI_COMMUNICATOR'",
+                       "<unknown>", "'<unknown>'"}
 
 
 def report(entries, path):
@@ -135,6 +144,12 @@ def report(entries, path):
                   f"printer_world_rks={printers}")
     else:
         print("  OK: every comm has a stable size and stable rank-0 printer.")
+    defaulted = sorted({n for (_, n) in by_comm if n in _DEFAULT_COMM_NAMES})
+    if defaulted:
+        print(f"  NOTE: some comms have default/empty names ({defaulted}); "
+              "distinct physical comms may collapse into one bucket here "
+              "and produce spurious H1 hits. Check `printer_world_rk` "
+              "in the per-comm summary above.")
 
     # Also: if two different comms share the same printer world rank, that
     # rank straddles two cylinders -- possible cross-cylinder contamination.
@@ -159,7 +174,7 @@ def report(entries, path):
     if nonbool:
         print(f"  STRONG SIGNAL: {len(nonbool)} calls had max > 1 "
               f"(input was not boolean)")
-        print(_examples(nonbool))
+        print(_examples(nonbool, ["max", "gather_sum"]))
     else:
         print("  OK: every nonzero local_val was 1 (boolean).")
 
@@ -176,11 +191,11 @@ def report(entries, path):
     print(f"  sum != gather_sum (reducer disagreeing with gather): "
           f"{len(sum_mismatch)}")
     if sum_mismatch:
-        print(_examples(sum_mismatch))
+        print(_examples(sum_mismatch, ["sum", "gather_sum"]))
     print(f"  rank_sum sanity failures (SUM broken on this comm): "
           f"{len(rank_sum_fail)}")
     if rank_sum_fail:
-        print(_examples(rank_sum_fail))
+        print(_examples(rank_sum_fail, ["rank_sum", "expected_rank_sum"]))
 
     # ---------- H4: duplicate rank participation ----------
     print("\nH4 — duplicate rank participation in mpicomm:")
@@ -188,7 +203,7 @@ def report(entries, path):
             if "unique" in e and "count" in e and e["unique"] < e["count"]]
     print(f"  Calls with duplicate world ranks: {len(dups)}")
     if dups:
-        print(_examples(dups))
+        print(_examples(dups, ["count", "unique"]))
 
     # ---------- Verdict ----------
     print("\nVerdict:")
