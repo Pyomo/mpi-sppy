@@ -82,6 +82,7 @@ def shared_options(cfg, is_hub=False):
         # Optional initial xhat candidate file (.npy); None disables.
         # Consumed by XhatInnerBoundBase._try_file_xhat.
         "xhat_from_file" : cfg.get("xhat_from_file", None),
+        "inspect_buffers_on_shutdown" : cfg.get("inspect_buffers_on_shutdown", False),
         # Optional filename prefix; if set, _BoundSpoke.update_if_improving
         # writes a first-stage solution snapshot on each new best incumbent.
         "incumbent_on_improvement_filename_prefix" : cfg.get(
@@ -91,7 +92,7 @@ def shared_options(cfg, is_hub=False):
     # axis 2: any CLI flags below override file entries at the same
     # predicate. Load and apply it first so the rest of the axis-2
     # chain can overlay on top.
-    if _hasit(cfg, "solver_options_file"):
+    if cfg.get("solver_options_file"):  # treats None and "" as unset
         file_data = sputils.load_solver_options_file(cfg.solver_options_file)
         shoptions["iter0_solver_options"].update(file_data["default"])
         shoptions["iter0_solver_options"].update(file_data["iter0"])
@@ -175,7 +176,7 @@ def apply_solver_specs(name, spoke, cfg):
         options["iterk_solver_options"].update(spoke_file_blocks["iterk"])
         options["solver_options_layers"].extend(
             sputils.options_file_section_to_layers(spoke_file_blocks))
-    if _hasit(cfg, name+"_solver_options_file"):
+    if cfg.get(name+"_solver_options_file"):  # treats None and "" as unset
         spoke_file_data = sputils.load_solver_options_file(
             cfg.get(name+"_solver_options_file"))
         # Per-spoke files only consume their own predicates; the
