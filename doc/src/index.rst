@@ -71,6 +71,7 @@ MPI is used.
 
    drivers.rst
    internals.rst
+   debug_utils.rst
    contributors.rst
    amalgamator.rst
    code_coverage.rst

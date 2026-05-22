@@ -115,8 +115,12 @@ class XhatShuffleInnerBound(_JensensMixin, XhatInnerBoundBase):
                 continue
 
             if new_nonants:
-                # similar to above, not all ranks will agree on
-                # when there are new nonants (in the same loop)
+                # All cylinder_comm ranks agree on new_nonants because
+                # update_nonants -> get_receive_buffer(synchronize=True)
+                # gates on a cross-rank write_id Allreduce, so the
+                # collectives inside this branch (Eobjective Allreduce,
+                # comms["ROOT"].bcast in _try_one, the inner
+                # got_kill_signal) are entered in lockstep.
                 logger.debug(f'   *Xhatshuffle loop iter={xh_iter}')
                 logger.debug(f'   *got a new one! on rank {self.global_rank}')
                 logger.debug(f'   *localnonants={str(self.localnonants)}')
