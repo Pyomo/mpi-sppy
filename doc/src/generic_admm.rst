@@ -430,11 +430,13 @@ Advanced first-stage hooks (optional)
 """""""""""""""""""""""""""""""""""""""
 
 ``sputils.attach_root_node`` accepts two further optional parameters,
-``surrogate_nonant_list`` and ``nonant_ef_suppl_list``, for problems
-that need to mark some first-stage Vars as surrogates (EF skips their
-nonant equality) or as EF-supplemental nonants (extra Vars carried
-through the EF construction).  If your problem needs either, define
-the corresponding optional module-level hook:
+``surrogate_nonant_list`` and ``nonant_ef_suppl_list`` (see
+:ref:`surrogate_nonant_list` and :ref:`ef_supplement_list` for what
+each does), for problems that need to mark some first-stage Vars as
+surrogates (EF skips their nonant equality) or as EF-supplemental
+nonants (extra Vars carried through the EF construction).  If your
+problem needs either, define the corresponding optional module-level
+hook:
 
 .. code-block:: python
 
