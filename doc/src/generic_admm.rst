@@ -455,13 +455,20 @@ because there is nothing for the wrapper to attach the advanced lists
 onto otherwise.  Defining an advanced hook without the core hooks
 raises ``RuntimeError`` at ``setup_stoch_admm`` time.
 
+On the legacy path (no core hooks), pass ``surrogate_nonant_list`` and
+``nonant_ef_suppl_list`` directly to your own ``sputils.attach_root_node``
+call inside ``scenario_creator``; the wrapper inherits whatever you
+attached.
+
 First-stage attachment via manual ``attach_root_node`` (legacy)
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 If you omit both hooks, ``scenario_creator`` must itself call
 ``sputils.attach_root_node`` with the original problem's first-stage
-cost and varlist.  Skipping the call (when no hooks are defined)
-raises ``RuntimeError`` with a message pointing at both options.
+cost and varlist (and ``surrogate_nonant_list`` /
+``nonant_ef_suppl_list`` if you need them).  Skipping the call (when
+no hooks are defined) raises ``RuntimeError`` with a message pointing
+at both options.
 
 This path is preserved for backward compatibility with model modules
 written before the hooks existed (and for direct uses of
