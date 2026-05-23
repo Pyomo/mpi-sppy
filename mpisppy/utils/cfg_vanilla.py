@@ -163,6 +163,7 @@ def shared_options(cfg, is_hub=False):
         # Optional initial xhat candidate file (.npy); None disables.
         # Consumed by XhatInnerBoundBase._try_file_xhat.
         "xhat_from_file" : cfg.get("xhat_from_file", None),
+        "inspect_buffers_on_shutdown" : cfg.get("inspect_buffers_on_shutdown", False),
         # Optional filename prefix; if set, _BoundSpoke.update_if_improving
         # writes a first-stage solution snapshot on each new best incumbent.
         "incumbent_on_improvement_filename_prefix" : cfg.get(
@@ -172,7 +173,7 @@ def shared_options(cfg, is_hub=False):
     # axis 2: any CLI flags below override file entries at the same
     # predicate. Load and apply it first so the rest of the axis-2
     # chain can overlay on top.
-    if _hasit(cfg, "solver_options_file"):
+    if cfg.get("solver_options_file"):  # treats None and "" as unset
         file_data = sputils.load_solver_options_file(cfg.solver_options_file)
         shoptions["iter0_solver_options"].update(file_data["default"])
         shoptions["iter0_solver_options"].update(file_data["iter0"])
@@ -256,7 +257,7 @@ def apply_solver_specs(name, spoke, cfg):
         options["iterk_solver_options"].update(spoke_file_blocks["iterk"])
         options["solver_options_layers"].extend(
             sputils.options_file_section_to_layers(spoke_file_blocks))
-    if _hasit(cfg, name+"_solver_options_file"):
+    if cfg.get(name+"_solver_options_file"):  # treats None and "" as unset
         spoke_file_data = sputils.load_solver_options_file(
             cfg.get(name+"_solver_options_file"))
         # Per-spoke files only consume their own predicates; the
@@ -353,6 +354,96 @@ def ph_hub(
             "extensions": ph_extensions,
             "extension_kwargs": extension_kwargs,
             "ph_converger": ph_converger,
+            "all_nodenames": all_nodenames
+        }
+    }
+    add_wxbar_read_write(hub_dict, cfg)
+    add_ph_tracking(hub_dict, cfg)
+    add_timed_mipgap(hub_dict, cfg)
+    return hub_dict
+
+def cg_hub(
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=None,
+        extension_kwargs=None,
+        variable_probability=None,
+        all_nodenames=None,
+):
+    from mpisppy.opt.cg import CG
+    from mpisppy.cylinders.hub import CGHub
+
+    shoptions = shared_options(cfg)
+    options = copy.deepcopy(shoptions)# most of them are not needed but otherwise cep_cylinder crashes
+    if _hasit(cfg, "sp_solver_options"):
+        odictsp = sputils.option_string_to_dict(cfg.sp_solver_options)
+        options["sp_solver_options"] = odictsp
+    if _hasit(cfg, "mp_solver_options"):
+        odictmp = sputils.option_string_to_dict(cfg.mp_solver_options)
+        options["mp_solver_options"] = odictmp
+    options["convthresh"] = cfg.intra_hub_conv_thresh
+    options["bundles_per_rank"] = cfg.bundles_per_rank
+    options["CGIterLimit"]=cfg.max_iterations  
+    options["relaxed_nonant"]=cfg.relaxed_nonant    
+    hub_dict = {
+        "hub_class": CGHub,
+        "hub_kwargs": {"options": {"rel_gap": cfg.rel_gap,
+                                   "abs_gap": cfg.abs_gap,
+                                   "max_stalled_iters": cfg.max_stalled_iters}},
+        "opt_class": CG,
+        "opt_kwargs": {
+            "options": options,
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": scenario_creator,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
+            "scenario_denouement": scenario_denouement,
+            "variable_probability": variable_probability,
+            "extension_kwargs": extension_kwargs,
+            "all_nodenames": all_nodenames
+        }
+    }
+    add_wxbar_read_write(hub_dict, cfg)
+    add_ph_tracking(hub_dict, cfg)
+    add_timed_mipgap(hub_dict, cfg)
+    return hub_dict
+
+def dualcg_hub(
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=None,
+        extension_kwargs=None,
+        variable_probability=None,
+        all_nodenames=None,
+):
+    from mpisppy.opt.dualcg import DCG      # Your dual CG optimizer class
+    from mpisppy.cylinders.hub import DCGHub   # Your dual CG hub class
+    shoptions = shared_options(cfg)
+    options = copy.deepcopy(shoptions)# most of them are not needed but otherwise cep_cylinder crashes
+    odictsp = sputils.option_string_to_dict(cfg.sp_solver_options)
+    options["sp_solver_options"] = odictsp
+    odictmp = sputils.option_string_to_dict(cfg.mp_solver_options)
+    options["mp_solver_options"] = odictmp
+    options["convthresh"] = cfg.intra_hub_conv_thresh
+    options["bundles_per_rank"] = cfg.bundles_per_rank
+    options["CGIterLimit"]=cfg.max_iterations  
+    hub_dict = {
+        "hub_class": DCGHub,   # <-- Use your dual hub class here
+        "hub_kwargs": {"options": {"rel_gap": cfg.rel_gap,
+                                   "abs_gap": cfg.abs_gap,
+                                   "max_stalled_iters": cfg.max_stalled_iters}},
+        "opt_class": DCG,      # <-- Use your dual optimizer class here
+        "opt_kwargs": {
+            "options": options,
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": scenario_creator,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
+            "scenario_denouement": scenario_denouement,
+            "variable_probability": variable_probability,
+            "extension_kwargs": extension_kwargs,
             "all_nodenames": all_nodenames
         }
     }
@@ -816,7 +907,7 @@ def add_ph_tracking(cylinder_dict, cfg, spoke=False):
     return cylinder_dict
 
 def add_timed_mipgap(cylinder_dict, cfg):
-    if _hasit(cfg,'timed_mipgap'):
+    if getattr(cfg, "timed_mipgap", False):
         from mpisppy.extensions.timed_mipgap import TimedMIPGapCB
         cylinder_dict = extension_adder(cylinder_dict, TimedMIPGapCB)
         cylinder_dict['opt_kwargs']['options']['timed_mipgap']= {'timecurve':cfg.timed_mipgap_options}
@@ -1123,6 +1214,45 @@ def subgradient_spoke(
                           average_scenario_creator, scenario_creator_kwargs)
 
     return subgradient_spoke
+
+
+def ph_xfeas_spoke(
+    cfg,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+    rho_setter=None,
+    all_nodenames=None,
+    ph_extensions=None,
+    extension_kwargs=None,
+):
+    from mpisppy.cylinders.ph_xfeas_spoke import PHXFeasSpoke
+    ph_xfeas_spoke = _PHBase_spoke_foundation(
+        PHXFeasSpoke,
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        rho_setter=rho_setter,
+        all_nodenames=all_nodenames,
+        ph_extensions=ph_extensions,
+        extension_kwargs=extension_kwargs,
+    )
+    options = ph_xfeas_spoke["opt_kwargs"]["options"]
+    if cfg.ph_xfeas_spoke_rescale_rho_factor is not None:
+        options["rho_factor"] = cfg.ph_xfeas_spoke_rescale_rho_factor
+
+    # make sure this spoke doesn't hit the time or iteration limit
+    options["time_limit"] = None
+    options["PHIterLimit"] = cfg.max_iterations * 1_000_000
+    options["display_progress"] = False
+    options["display_convergence_detail"] = False
+
+    add_ph_tracking(ph_xfeas_spoke, cfg, spoke=True)
+
+    return ph_xfeas_spoke
 
 
 def ph_dual_spoke(

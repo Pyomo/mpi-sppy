@@ -7,6 +7,8 @@
 # full copyright and license information.
 ###############################################################################
 
+import warnings
+
 import mpisppy.extensions.dyn_rho_base
 import numpy as np
 import mpisppy.MPI as MPI
@@ -24,6 +26,13 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
     """
 
     def __init__(self, ph):
+        warnings.warn(
+            "SepRho is scheduled for deprecation; its functionality is "
+            "expected to be subsumed into GradRho. See "
+            "https://github.com/Pyomo/mpi-sppy/issues/673.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         cfg = ph.options["sep_rho_options"]["cfg"]
         super().__init__(ph, cfg)
         self.ph = ph
