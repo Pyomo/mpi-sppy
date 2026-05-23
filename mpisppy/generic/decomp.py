@@ -63,10 +63,14 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs,
 
     average_scenario_creator = getattr(module, "average_scenario_creator", None)
 
+    from mpisppy.utils import cfg_vanilla as vanilla
+    feasible_xhat_creator = vanilla._find_feasible_xhat_creator(module, cfg)
+
     list_of_spoke_dict = build_spoke_list(cfg, beans, scenario_creator_kwargs,
                                           rho_setter, all_nodenames,
                                           variable_probability=variable_probability,
-                                          average_scenario_creator=average_scenario_creator)
+                                          average_scenario_creator=average_scenario_creator,
+                                          feasible_xhat_creator=feasible_xhat_creator)
 
     # if the user dares, let them mess with the hubdict prior to solve
     if hasattr(module, 'hub_and_spoke_dict_callback'):

@@ -32,8 +32,10 @@ class XhatLooperInnerBound(_JensensMixin, XhatInnerBoundBase):
 
         xhatter = self.xhat_prep()
 
-        # No-op unless --xhatlooper-try-jensens-first is set.
+        # No-ops unless --xhatlooper-try-jensens-first /
+        # --xhatlooper-try-feasible-xhat-first are set (mutually exclusive).
         self._try_average_scenario_xhat()
+        self._try_feasible_xhat()
 
         scen_limit = self.opt.options['xhat_looper_options']['scen_limit']
 

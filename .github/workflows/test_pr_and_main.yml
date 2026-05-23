@@ -116,6 +116,10 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_xhat_from_file.py -v
 
+      - name: Test feasible_xhat
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_feasible_xhat.py -v
+
       - name: Test docs
         run: |
           cd ./doc/
@@ -1115,6 +1119,7 @@ jobs:
             mpisppy/tests/test_solver_spec.py \
             mpisppy/tests/test_extensions.py \
             mpisppy/tests/test_jensens.py \
+            mpisppy/tests/test_feasible_xhat.py \
             mpisppy/tests/test_proper_bundler.py \
             mpisppy/tests/test_incumbent_writing.py \
             mpisppy/tests/test_grad_rho_bundles.py \
