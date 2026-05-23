@@ -162,9 +162,24 @@ instead teaches the user that the hooks obviate manual attachment.
 
 ---
 
-## 3. Phase B — accept Pyomo Var/VarData in `consensus_vars_creator`
+## 3. Phase B — `consensus_vars_creator` ergonomics + first-stage hook extensions
 
-### Today's contract
+Three related items, all building on Phase A's `first_stage_*` hooks:
+
+- **B.1** Accept Pyomo Var/VarData in `consensus_vars_creator`
+  (originally Phase B as scoped).
+- **B.2** Auto-merge first-stage Vars into `consensus_vars` in the
+  wrapper, so the user no longer hand-merges them (and no longer
+  needs the throwaway-model trick in `stoch_distr.py`).
+- **B.3** Optional `first_stage_surrogate_nonant_list` /
+  `first_stage_nonant_ef_suppl_list` hooks, mirroring
+  `attach_root_node`'s advanced parameters so users with surrogate
+  or EF-supplemental nonants are not forced back to the legacy
+  `attach_root_node`-in-`scenario_creator` path.
+
+### B.1 Accept Pyomo Var/VarData in `consensus_vars_creator`
+
+#### Today's contract
 
 - `--admm`: `consensus_vars_creator` returns
   `{subproblem_name: [varname_str, ...]}`.  Wrapper calls
@@ -174,7 +189,7 @@ instead teaches the user that the hooks obviate manual attachment.
 Mismatches (e.g., `"flow[(DC1, DC2)]"` vs `"flow['DC1', 'DC2']"`) fail
 with a list-of-pairs RuntimeError deep in `assign_variable_probs`.
 
-### Proposed
+#### Proposed
 
 Accept Pyomo Var / VarData objects *or* strings in the lists.  At wrapper
 construction, normalize each item to a string via `obj.name` before the
@@ -186,18 +201,110 @@ scenario instance; the wrapper still has to look them up by name in
 the other scenarios via `find_component`.  The user benefit is "no
 manual name formatting", not "skip the find_component step".
 
-### Files
+#### Files
 
 - `mpisppy/utils/admmWrapper.py:assign_variable_probs`: pre-normalize
   the lists.
 - `mpisppy/utils/stoch_admmWrapper.py:assign_variable_probs`: same.
 - Examples: migrate `consensus_vars_creator` in `distr.py` and
   `stoch_distr.py` to return Vars.
-- Doc.
 - Test: a unit test in `test_admm_bundler.py` or a new file that
   constructs a small model and verifies a Var-based
   `consensus_vars_creator` produces the same `varprob_dict` as the
   string-based form.
+
+### B.2 Auto-merge first-stage Vars into `consensus_vars`
+
+#### Today's contract
+
+In Phase A's migrated `examples/stoch_distr/stoch_distr.py`,
+`consensus_vars_creator` must still hand-merge the original problem's
+first-stage Vars into the returned dict — and must do so *without*
+access to `_mpisppy_node_list`, because the wrapper has not yet
+attached the root at that call site.  The example works around this
+by instantiating a throwaway scenario solely to walk its first-stage
+vars (see the `scenario_creator(...)` call inside
+`consensus_vars_creator` in `stoch_distr.py`).  Wasted work and
+confusing boilerplate.
+
+#### Proposed
+
+Phase A makes `first_stage_varlist(scenario)` available to the
+wrapper at construction time, so the wrapper can append the
+first-stage Vars to every subproblem entry in `self.consensus_vars`
+itself.  The user's `consensus_vars_creator` returns only the
+*admm*-consensus vars; the wrapper does the union.
+
+#### Files
+
+- `mpisppy/utils/stoch_admmWrapper.py`: after running the Phase A
+  error matrix, for each local scenario append
+  `first_stage_varlist(s)` (tagged with the original-problem
+  root-stage name) to every subproblem entry in
+  `self.consensus_vars`.
+- `mpisppy/utils/admm_bundler.py`: same merge in the bundled path.
+- `examples/stoch_distr/stoch_distr.py`: drop the throwaway scenario
+  instantiation and the manual first-stage merge from
+  `consensus_vars_creator`.
+- Test: assert that with the new behavior, a `consensus_vars_creator`
+  returning only admm vars produces the same `varprob_dict` as the
+  legacy pre-merged form.
+
+#### Back-compat
+
+Strictly additive when paired with the hooks.  Without the hooks
+(legacy path) the wrapper has no first-stage info and behaves as
+today: the user is responsible for the merge.  We also need to
+detect the case where the user (mid-migration) returns the
+already-merged list *and* has the hooks defined, to avoid a
+double-merge — easiest is to de-duplicate the merged list by Var
+identity.
+
+### B.3 Optional surrogate / EF-supplemental hooks
+
+#### Today's contract
+
+`sputils.attach_root_node` accepts two advanced optional parameters:
+`surrogate_nonant_list` and `nonant_ef_suppl_list` (see
+`mpisppy/utils/sputils.py:1285`).  Phase A's new path calls
+`attach_root_node(s, first_stage_cost(s), first_stage_varlist(s))`
+positionally, so users who need either advanced list cannot use the
+new hooks — they have to fall back to the legacy
+`attach_root_node`-in-`scenario_creator` form.
+
+#### Proposed
+
+Add two more optional module-level hooks:
+
+```python
+def first_stage_surrogate_nonant_list(scenario):
+    """Optional. Returns surrogate-nonant Vars; forwarded to
+    sputils.attach_root_node's surrogate_nonant_list parameter."""
+
+def first_stage_nonant_ef_suppl_list(scenario):
+    """Optional. Returns EF-supplemental nonant Vars; forwarded to
+    sputils.attach_root_node's nonant_ef_suppl_list parameter."""
+```
+
+Validation: each is independent and may be defined alone, but only
+when the two core Phase A hooks are also defined (there is nothing
+for the wrapper to attach them onto otherwise — error with a clear
+message).
+
+#### Files
+
+- `mpisppy/utils/stoch_admmWrapper.py`: accept two more optional
+  parameters in `__init__`; forward to the existing
+  `attach_root_node` call.  Validation as above.
+- `mpisppy/utils/admm_bundler.py`: mirror.
+- `mpisppy/generic/admm.py`: `setup_stoch_admm` and
+  `setup_stoch_admm_with_bundles` discover and forward the new
+  hooks.
+- `doc/src/generic_admm.rst`: document the advanced hooks (and
+  drop the "surrogates require the legacy path" caveat that
+  Phase A's docs will carry until this lands).
+- Test: a synthetic scenario with a surrogate Var; verify the
+  attached node carries `surrogate_nonant_list` correctly.
 
 ### Open questions
 
