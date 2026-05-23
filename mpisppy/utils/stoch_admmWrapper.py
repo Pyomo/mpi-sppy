@@ -11,7 +11,10 @@ import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
 import mpisppy.scenario_tree as scenario_tree
 import numpy as np
-from mpisppy.utils.admmWrapper import _admm_normalize_consensus_vars
+from mpisppy.utils.admmWrapper import (
+    _admm_normalize_consensus_vars,
+    _merge_first_stage_into_consensus_vars,
+)
 
 
 def _tag_dummies_as_surrogate(node, dummies):
@@ -156,6 +159,37 @@ class Stoch_AdmmWrapper(): #add scenario_tree
 
         self.split_admm_stoch_subproblem_scenario_name = split_admm_stoch_subproblem_scenario_name
         self.consensus_vars = _admm_normalize_consensus_vars(consensus_vars, tuple_form=True)
+        # When first-stage hooks are defined, auto-merge each ADMM
+        # subproblem's first-stage Vars into its consensus list so
+        # consensus_vars_creator can return only the admm-consensus
+        # Vars and leave first-stage Vars to the wrapper.  Different
+        # ADMM subproblems may carry different first-stage Vars, so
+        # names are gathered per-subproblem: from already-built
+        # before-wrap scenarios where possible, falling back to a
+        # fresh probe before-wrap scenario for ADMM subproblems this
+        # rank does not host locally (every rank must end up with
+        # the same consensus_vars to keep _consensus_vars_number
+        # and assign_variable_probs consistent).  This is setup, not
+        # wrap.
+        if has_first_stage_hooks:
+            fs_names_per_sub = {}
+            for sname, s in self.local_admm_stoch_subproblem_scenarios.items():
+                sub = split_admm_stoch_subproblem_scenario_name(sname)[0]
+                if sub not in fs_names_per_sub:
+                    fs_names_per_sub[sub] = [v.name for v in first_stage_varlist(s)]
+            if len(fs_names_per_sub) < len(admm_subproblem_names):
+                name_for_sub = {}
+                for cand in all_admm_stoch_subproblem_scenario_names:
+                    cand_sub = split_admm_stoch_subproblem_scenario_name(cand)[0]
+                    name_for_sub.setdefault(cand_sub, cand)
+                for sub in admm_subproblem_names:
+                    if sub not in fs_names_per_sub:
+                        probe = scenario_creator(name_for_sub[sub],
+                                                 **(scenario_creator_kwargs or {}))
+                        fs_names_per_sub[sub] = [v.name for v in first_stage_varlist(probe)]
+                        del probe
+            self.consensus_vars = _merge_first_stage_into_consensus_vars(
+                self.consensus_vars, fs_names_per_sub, root_stage=1)
         self.verbose = verbose
         self.consensus_vars_number = _consensus_vars_number_creator(self.consensus_vars)
         self.admm_subproblem_names = admm_subproblem_names

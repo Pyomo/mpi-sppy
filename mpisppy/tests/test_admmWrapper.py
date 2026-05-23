@@ -7,10 +7,21 @@
 # full copyright and license information.
 ###############################################################################
 # TBD: make these tests less fragile
+"""Tests for AdmmWrapper.
+
+Phase references (A, B.1, B.2, ...) in this file's docstrings track the
+phased plan in doc/designs/admm_user_api_automation_design.md.
+For the ADMM vocabulary used below (before-wrap scenario, wrapped
+scenario, wrap, ADMM subproblem, ...), see the module docstring of
+mpisppy.utils.admmWrapper.
+"""
 import unittest
 import pyomo.environ as pyo
 import mpisppy.utils.admmWrapper as admmWrapper
-from mpisppy.utils.admmWrapper import _admm_normalize_consensus_vars
+from mpisppy.utils.admmWrapper import (
+    _admm_normalize_consensus_vars,
+    _merge_first_stage_into_consensus_vars,
+)
 import mpisppy.tests.examples.distr.distr as distr
 from mpisppy.utils import config
 from mpisppy.tests.utils import get_solver
@@ -243,8 +254,9 @@ class TestAdmmConsensusVarsNormalize(unittest.TestCase):
 
 
 class TestAdmmWrapperVarConsensusInputs(unittest.TestCase):
-    """B.1: AdmmWrapper accepts Pyomo Var objects in consensus_vars and
-    produces the same varprob_dict as the equivalent string form."""
+    """B.1: AdmmWrapper accepts Pyomo Var objects in consensus_vars
+    and produces the same varprob_dict as the equivalent string form
+    (no behavioral change other than the relaxed input type)."""
 
     def _cfg(self, num_scens):
         cfg = config.Config()
@@ -270,10 +282,11 @@ class TestAdmmWrapperVarConsensusInputs(unittest.TestCase):
         cfg = self._cfg(3)
         consensus_vars_str = distr.consensus_vars_creator(cfg.num_scens)
 
-        # Build a Var-flavored consensus_vars by resolving each name on the
-        # subproblem's own scenario.  Pyomo VarData holds its parent block
-        # via a weakref, so we must keep the source scenarios alive until
-        # the wrapper has snapshotted their .name attributes.
+        # Build a Var-flavored consensus_vars by resolving each name on
+        # the ADMM subproblem's own before-wrap scenario.  Pyomo
+        # VarData holds its parent block via a weakref, so we must
+        # keep the source before-wrap scenarios alive until the
+        # wrapper has snapshotted their .name attributes.
         kw = distr.kw_creator(cfg)
         live_scenarios = []
         consensus_vars_var = {}
@@ -298,6 +311,39 @@ class TestAdmmWrapperVarConsensusInputs(unittest.TestCase):
             probs_str = [p for (_, p) in admm_str.var_prob_list(admm_str.local_scenarios[sname])]
             probs_var = [p for (_, p) in admm_var.var_prob_list(admm_var.local_scenarios[sname])]
             self.assertEqual(probs_str, probs_var, f"mismatch for {sname}")
+
+
+class TestMergeFirstStageIntoConsensusVars(unittest.TestCase):
+    """B.2: helper that appends each ADMM subproblem's first-stage Var
+    names to its consensus_vars entry, with per-subproblem semantics
+    and de-dup."""
+
+    def test_merge_basic(self):
+        cv = {"A": [("x", 2)], "B": [("y", 2)]}
+        fs = {"A": ["fsA"], "B": ["fsB"]}
+        out = _merge_first_stage_into_consensus_vars(cv, fs, root_stage=1)
+        self.assertEqual(out["A"], [("x", 2), ("fsA", 1)])
+        self.assertEqual(out["B"], [("y", 2), ("fsB", 1)])
+
+    def test_merge_dedup(self):
+        cv = {"A": [("x", 2), ("fsA", 1)]}
+        fs = {"A": ["fsA"]}
+        out = _merge_first_stage_into_consensus_vars(cv, fs, root_stage=1)
+        self.assertEqual(out["A"], [("x", 2), ("fsA", 1)])
+
+    def test_merge_subs_with_different_first_stage(self):
+        cv = {"R1": [("z", 2)], "R2": [("z", 2)]}
+        fs = {"R1": ["y[F1_1]", "y[F1_2]"], "R2": ["y[F2_1]"]}
+        out = _merge_first_stage_into_consensus_vars(cv, fs, root_stage=1)
+        self.assertEqual(out["R1"], [("z", 2), ("y[F1_1]", 1), ("y[F1_2]", 1)])
+        self.assertEqual(out["R2"], [("z", 2), ("y[F2_1]", 1)])
+
+    def test_merge_missing_sub_is_noop(self):
+        cv = {"A": [("x", 2)], "B": [("y", 2)]}
+        fs = {"A": ["fsA"]}  # B absent
+        out = _merge_first_stage_into_consensus_vars(cv, fs, root_stage=1)
+        self.assertEqual(out["A"], [("x", 2), ("fsA", 1)])
+        self.assertEqual(out["B"], [("y", 2)])
 
 
 if __name__ == '__main__':

@@ -6,7 +6,17 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+"""Tests for AdmmBundler.
+
+Phase references (A, B.1, B.2, ...) in this file's docstrings track the
+phased plan in doc/designs/admm_user_api_automation_design.md.
+For the ADMM vocabulary used below (before-wrap scenario, wrapped
+scenario, wrap, ADMM subproblem, ...), see the module docstring of
+mpisppy.utils.admmWrapper.
+"""
+import types
 import unittest
+import pyomo.environ as pyo
 import mpisppy.tests.examples.stoch_distr.stoch_distr as stoch_distr
 from mpisppy.utils.admm_bundler import AdmmBundler
 from mpisppy.utils import config
@@ -188,6 +198,67 @@ class TestAdmmBundler(unittest.TestCase):
                 f"var_prob_list length ({len(vpl)}) != nonant count "
                 f"({len(root_node.nonant_vardata_list)}) for {bname}"
             )
+
+
+class TestAdmmBundlerB2AutoMerge(unittest.TestCase):
+    """B.2: AdmmBundler auto-merges each admm subproblem's own
+    first-stage Var names into its consensus_vars entry when the
+    first_stage_varlist hook is supplied."""
+
+    def _build_synthetic_module(self):
+        """A tiny module whose scenario_creator gives each admm sub its
+        own first-stage Var (fs_A or fs_B)."""
+
+        def scenario_creator(sname, **kwargs):
+            parts = sname.split("__ADMM__")
+            admm_part = parts[1]
+            m = pyo.ConcreteModel()
+            if admm_part == "A":
+                m.x = pyo.Var(bounds=(0, 1))
+                m.fs_A = pyo.Var(bounds=(0, 1))
+                m._fs_vars = [m.fs_A]
+                m.FirstStageCost = pyo.Expression(expr=m.fs_A)
+                m.obj = pyo.Objective(expr=m.x + m.fs_A, sense=pyo.minimize)
+            else:
+                m.y = pyo.Var(bounds=(0, 1))
+                m.fs_B = pyo.Var(bounds=(0, 1))
+                m._fs_vars = [m.fs_B]
+                m.FirstStageCost = pyo.Expression(expr=m.fs_B)
+                m.obj = pyo.Objective(expr=m.y + m.fs_B, sense=pyo.minimize)
+            return m
+
+        mod = types.SimpleNamespace()
+        mod.scenario_creator = scenario_creator
+        return mod
+
+    def test_per_subproblem_first_stage_merge(self):
+        mod = self._build_synthetic_module()
+        admm_subs = ["A", "B"]
+        stoch_names = ["S1", "S2"]
+        consensus_vars = {"A": [("x", 1)], "B": [("y", 1)]}
+
+        def combining(sub, stoch):
+            return f"ADMM__ADMM__{sub}__ADMM__{stoch}"
+
+        def split(name):
+            parts = name.split("__ADMM__")
+            return parts[1], parts[2]
+
+        bundler = AdmmBundler(
+            module=mod,
+            scenarios_per_bundle=len(stoch_names),
+            admm_subproblem_names=admm_subs,
+            stoch_scenario_names=stoch_names,
+            consensus_vars=consensus_vars,
+            combining_fn=combining,
+            split_fn=split,
+            first_stage_cost=lambda s: s.FirstStageCost,
+            first_stage_varlist=lambda s: s._fs_vars,
+        )
+        self.assertIn(("fs_A", 1), bundler.consensus_vars["A"])
+        self.assertNotIn(("fs_B", 1), bundler.consensus_vars["A"])
+        self.assertIn(("fs_B", 1), bundler.consensus_vars["B"])
+        self.assertNotIn(("fs_A", 1), bundler.consensus_vars["B"])
 
 
 class TestAdmmArgs(unittest.TestCase):

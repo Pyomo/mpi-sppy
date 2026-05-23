@@ -6,6 +6,14 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+"""Tests for Stoch_AdmmWrapper.
+
+Phase references (A, B.1, B.2, ...) in this file's docstrings track the
+phased plan in doc/designs/admm_user_api_automation_design.md.
+For the ADMM vocabulary used below (before-wrap scenario, wrapped
+scenario, wrap, ADMM subproblem, ...), see the module docstring of
+mpisppy.utils.admmWrapper.
+"""
 import unittest
 import subprocess
 import sys
@@ -651,9 +659,11 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
             self.assertEqual(s._mpisppy_node_list[0].name, "ROOT")
 
     def test_hooks_and_legacy_paths_produce_same_node_list(self):
-        """The new hooks path must produce the same final
-        _mpisppy_node_list as the legacy path (where scenario_creator
-        called attach_root_node itself)."""
+        """The first-stage-hooks path's B.2 auto-merge must produce
+        the same final _mpisppy_node_list as the legacy path with
+        first-stage entries pre-merged into consensus_vars by hand
+        (i.e. wrap operates on equivalent inputs and yields equivalent
+        wrapped scenarios)."""
         from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
         from mpisppy import MPI
 
@@ -666,11 +676,18 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
             first_stage_varlist=fs_varlist,
             **self._common_kwargs(),
         )
+        # Legacy path: pre-merge ("fs", 1) into both subproblems'
+        # consensus_vars so the comparison is apples-to-apples.
+        legacy_kwargs = self._common_kwargs()
+        legacy_kwargs["consensus_vars"] = {
+            sub: entries + [("fs", 1)]
+            for sub, entries in legacy_kwargs["consensus_vars"].items()
+        }
         admm_legacy = Stoch_AdmmWrapper(
             options={},
             scenario_creator=self._minimal_scenario_creator(call_attach=True),
             mpicomm=MPI.COMM_WORLD,
-            **self._common_kwargs(),
+            **legacy_kwargs,
         )
         for sname in admm_hooks.local_admm_stoch_subproblem_scenarios:
             s_h = admm_hooks.local_admm_stoch_subproblem_scenarios[sname]
@@ -683,6 +700,76 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
                 len(s_h._mpisppy_node_list[0].nonant_vardata_list),
                 len(s_l._mpisppy_node_list[0].nonant_vardata_list),
                 f"{sname}: root nonant count differs")
+
+    def test_b2_auto_merge_first_stage_into_consensus_vars(self):
+        """B.2: with first-stage hooks defined and a consensus_vars
+        that does NOT pre-merge first-stage Vars, the wrapper merges
+        them at construction time so the final self.consensus_vars
+        carries both admm-consensus and first-stage entries."""
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
+        from mpisppy import MPI
+
+        fs_cost, fs_varlist = self._hooks()
+        admm = Stoch_AdmmWrapper(
+            options={},
+            scenario_creator=self._minimal_scenario_creator(call_attach=False),
+            mpicomm=MPI.COMM_WORLD,
+            first_stage_cost=fs_cost,
+            first_stage_varlist=fs_varlist,
+            **self._common_kwargs(),
+        )
+        self.assertIn(("fs", 1), admm.consensus_vars["A"])
+        self.assertIn(("fs", 1), admm.consensus_vars["B"])
+        # Existing admm entry preserved.
+        self.assertIn(("x", 1), admm.consensus_vars["A"])
+        self.assertIn(("y", 1), admm.consensus_vars["B"])
+
+    def test_b2_per_subproblem_first_stage_vars(self):
+        """B.2: when different ADMM subproblems carry different
+        first-stage Vars (mirrors stoch_distr: each region has its
+        own factory production decisions), each ADMM subproblem's
+        consensus_vars must contain only ITS OWN first-stage Vars,
+        not the other ADMM subproblem's."""
+        import pyomo.environ as pyo
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
+        from mpisppy import MPI
+
+        def per_sub_scenario_creator(sname, **kwargs):
+            parts = sname.split("_")
+            admm_part = parts[2]
+            m = pyo.ConcreteModel()
+            if admm_part == "A":
+                m.x = pyo.Var(bounds=(0, 1))
+                m.fs_A = pyo.Var(bounds=(0, 1))
+                m._fs_vars = [m.fs_A]
+                m.FirstStageCost = pyo.Expression(expr=m.fs_A)
+                m.obj = pyo.Objective(expr=m.x + m.fs_A, sense=pyo.minimize)
+            else:
+                m.y = pyo.Var(bounds=(0, 1))
+                m.fs_B = pyo.Var(bounds=(0, 1))
+                m._fs_vars = [m.fs_B]
+                m.FirstStageCost = pyo.Expression(expr=m.fs_B)
+                m.obj = pyo.Objective(expr=m.y + m.fs_B, sense=pyo.minimize)
+            return m
+
+        def fs_cost(s):
+            return s.FirstStageCost
+
+        def fs_varlist(s):
+            return s._fs_vars
+
+        admm = Stoch_AdmmWrapper(
+            options={},
+            scenario_creator=per_sub_scenario_creator,
+            mpicomm=MPI.COMM_WORLD,
+            first_stage_cost=fs_cost,
+            first_stage_varlist=fs_varlist,
+            **self._common_kwargs(),
+        )
+        self.assertIn(("fs_A", 1), admm.consensus_vars["A"])
+        self.assertNotIn(("fs_B", 1), admm.consensus_vars["A"])
+        self.assertIn(("fs_B", 1), admm.consensus_vars["B"])
+        self.assertNotIn(("fs_A", 1), admm.consensus_vars["B"])
 
     def test_consensus_vars_accepts_var_objects(self):
         """B.1: consensus_vars may contain Pyomo Var/VarData objects in

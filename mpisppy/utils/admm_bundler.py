@@ -23,7 +23,10 @@ import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils
 import mpisppy.scenario_tree as scenario_tree
-from mpisppy.utils.admmWrapper import _admm_normalize_consensus_vars
+from mpisppy.utils.admmWrapper import (
+    _admm_normalize_consensus_vars,
+    _merge_first_stage_into_consensus_vars,
+)
 from mpisppy.utils.stoch_admmWrapper import _consensus_vars_number_creator
 
 
@@ -76,6 +79,25 @@ class AdmmBundler:
         self.first_stage_cost = first_stage_cost
         self.first_stage_varlist = first_stage_varlist
         self.number_admm_subproblems = len(admm_subproblem_names)
+
+        # Same first-stage auto-merge as Stoch_AdmmWrapper.
+        # AdmmBundler does not pre-build before-wrap scenarios in
+        # __init__, so to snapshot first-stage Var names we build one
+        # probe before-wrap scenario per ADMM subproblem (different
+        # ADMM subproblems may carry different first-stage Vars).
+        # scenario_creator is assumed side-effect-free.  This is
+        # setup, not wrap.
+        if first_stage_varlist is not None:
+            fs_names_per_sub = {}
+            for sub in admm_subproblem_names:
+                probe_sname = combining_fn(sub, stoch_scenario_names[0])
+                probe_scen = module.scenario_creator(probe_sname,
+                                                     **self.scenario_creator_kwargs)
+                fs_names_per_sub[sub] = [v.name for v in first_stage_varlist(probe_scen)]
+                del probe_scen
+            self.consensus_vars = _merge_first_stage_into_consensus_vars(
+                self.consensus_vars, fs_names_per_sub, root_stage=1)
+
         self.consensus_vars_number = _consensus_vars_number_creator(self.consensus_vars)
 
         # Collect all consensus vars with stages
