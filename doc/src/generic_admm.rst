@@ -379,27 +379,70 @@ To support ``--stoch-admm``, additionally implement:
 These functions define the naming convention for composite scenarios. See
 ``examples/stoch_distr/stoch_distr.py`` for a complete working example.
 
-Your ``consensus_vars_creator`` returns ``(variable_name, stage)`` tuples
-instead of plain strings.
-
 .. Note::
 
-   ``scenario_creator`` differs from the deterministic case in two ways:
+   ``scenario_creator`` for ``--stoch-admm`` differs from the
+   deterministic case in one way:
 
-   1. **Receives a composite name.**  The argument is e.g.
-      ``"ADMM_STOCH_Region1_StochasticScenario3"``; the function must split
-      it (using ``split_admm_stoch_subproblem_scenario_name``) to determine
-      both which ADMM subproblem and which stochastic scenario to build.
+   **It receives a composite name.**  The argument is e.g.
+   ``"ADMM_STOCH_Region1_StochasticScenario3"``; ``scenario_creator``
+   must call ``split_admm_stoch_subproblem_scenario_name`` on it to
+   recover the ADMM subproblem name and the stochastic scenario name,
+   then build the corresponding model.
 
-   2. **Must call** ``sputils.attach_root_node`` with the *original*
-      problem's first-stage variables (i.e., not the ADMM consensus vars).
-      Unlike ``AdmmWrapper`` (which overwrites the node list),
-      ``Stoch_AdmmWrapper`` *reads* the user-supplied node list and
-      *appends* an ADMM-consensus stage to it.  Skipping the call will
-      assertion-fail inside the wrapper.
+First-stage attachment via module hooks (recommended)
+""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-   See ``stoch_distr.scenario_creator`` for the canonical pattern:
-   ``sputils.attach_root_node(model, model.FirstStageCost, [...factory vars...])``.
+Under the hood, ``Stoch_AdmmWrapper`` reads the user-supplied
+``_mpisppy_node_list`` and *appends* an ADMM-consensus stage to it
+(whereas ``AdmmWrapper`` overwrites the node list).  The wrapper can
+attach the root node for you if you provide two module-level hook
+functions:
+
+.. code-block:: python
+
+   def first_stage_cost(scenario):
+       """Original problem's first-stage cost expression."""
+       return scenario.FirstStageCost
+
+   def first_stage_varlist(scenario):
+       """Original problem's first-stage variables (NOT ADMM consensus vars)."""
+       return scenario._first_stage_vars   # stashed in scenario_creator
+
+When both hooks (``first_stage_cost`` and ``first_stage_varlist``) are
+defined on the module, the wrapper calls
+``sputils.attach_root_node(scenario, first_stage_cost(scenario),
+first_stage_varlist(scenario))`` itself for each scenario before
+running its consensus-stage logic.  ``scenario_creator`` no longer
+needs to call ``attach_root_node`` (and must not — see error matrix
+below).
+
+See ``examples/stoch_distr/stoch_distr.py`` for the canonical
+pattern, including how to stash the varlist on the scenario from
+inside ``scenario_creator`` so the hook can find it.
+
+.. Note::
+   The hooks are **both-or-neither**: defining only one raises
+   ``RuntimeError`` at ``setup_stoch_admm`` time.  Mixing the hooks
+   with a manual ``attach_root_node`` call also raises.
+
+First-stage attachment via manual ``attach_root_node`` (legacy)
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+If you omit both hooks, ``scenario_creator`` must itself call
+``sputils.attach_root_node`` with the original problem's first-stage
+cost and varlist.  Skipping the call (when no hooks are defined)
+raises ``RuntimeError`` with a message pointing at both options.
+
+This path is preserved for backward compatibility with model modules
+written before the hooks existed (and for direct uses of
+``Stoch_AdmmWrapper`` that bypass ``setup_stoch_admm``).
+
+Consensus vars
+""""""""""""""
+
+Your ``consensus_vars_creator`` returns ``(variable_name, stage)``
+tuples instead of plain strings.
 
 
 .. _admm_bundling:

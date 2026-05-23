@@ -547,5 +547,275 @@ class TestStochAdmmWrapper(unittest.TestCase):
             os.chdir(original_dir)
 
 
+class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
+    """first_stage_cost / first_stage_varlist hooks on the
+    Stoch_AdmmWrapper API.
+
+    When the hooks are supplied, the wrapper calls
+    sputils.attach_root_node itself for each scenario, and
+    scenario_creator must NOT call it.  When the hooks are absent
+    (legacy path), scenario_creator must call attach_root_node
+    itself.  Mixing the two (hooks + manual call, or no hooks + no
+    call) raises with a clear message at scenario-construction time.
+    """
+
+    @staticmethod
+    def _minimal_scenario_creator(call_attach):
+        """Return a scenario_creator that either does or does not call
+        sputils.attach_root_node, otherwise identical."""
+        import pyomo.environ as pyo
+        import mpisppy.utils.sputils as sputils
+
+        def scenario_creator(sname, **kwargs):
+            parts = sname.split("_")
+            admm_part = parts[2]
+            m = pyo.ConcreteModel()
+            # consensus var owned per admm subproblem
+            if admm_part == "A":
+                m.x = pyo.Var(bounds=(0, 1))
+                own = m.x
+            else:
+                m.y = pyo.Var(bounds=(0, 1))
+                own = m.y
+            m.fs = pyo.Var(bounds=(0, 1))  # original first-stage var
+            m.FirstStageCost = pyo.Expression(expr=m.fs)
+            m.obj = pyo.Objective(expr=own + m.fs, sense=pyo.minimize)
+            # Stash for the hook to find (mirrors examples/stoch_distr
+            # pattern):
+            m._first_stage_vars = [m.fs]
+            if call_attach:
+                sputils.attach_root_node(m, m.FirstStageCost, [m.fs])
+                m._mpisppy_probability = "uniform"
+            return m
+
+        return scenario_creator
+
+    @staticmethod
+    def _hooks():
+        def first_stage_cost(s):
+            return s.FirstStageCost
+
+        def first_stage_varlist(s):
+            return s._first_stage_vars
+
+        return first_stage_cost, first_stage_varlist
+
+    @staticmethod
+    def _common_kwargs():
+        admm_names = ["A", "B"]
+        stoch_names = ["S1", "S2"]
+        all_names = [f"ADMM_STOCH_{a}_{s}"
+                     for s in stoch_names for a in admm_names]
+
+        def split(sname):
+            parts = sname.split("_")
+            return parts[2], "_".join(parts[3:])
+
+        consensus_vars = {"A": [("x", 1)], "B": [("y", 1)]}
+        return {
+            "all_admm_stoch_subproblem_scenario_names": all_names,
+            "split_admm_stoch_subproblem_scenario_name": split,
+            "admm_subproblem_names": admm_names,
+            "stoch_scenario_names": stoch_names,
+            "consensus_vars": consensus_vars,
+            "n_cylinders": 1,
+            "scenario_creator_kwargs": {},
+        }
+
+    def test_hooks_path_attaches_root_node(self):
+        """With hooks defined and scenario_creator NOT calling
+        attach_root_node, the wrapper must attach the root itself and
+        produce a valid _mpisppy_node_list with the consensus stage
+        appended."""
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
+        from mpisppy import MPI
+
+        fs_cost, fs_varlist = self._hooks()
+        admm = Stoch_AdmmWrapper(
+            options={},
+            scenario_creator=self._minimal_scenario_creator(call_attach=False),
+            mpicomm=MPI.COMM_WORLD,
+            first_stage_cost=fs_cost,
+            first_stage_varlist=fs_varlist,
+            **self._common_kwargs(),
+        )
+        for sname, s in admm.local_admm_stoch_subproblem_scenarios.items():
+            self.assertTrue(hasattr(s, "_mpisppy_node_list"),
+                            f"{sname}: node list missing")
+            # The wrapper appends an ADMM stage; expect 2 nodes for the
+            # 2-stage-origin case (root + admm-consensus).
+            self.assertEqual(
+                len(s._mpisppy_node_list), 2,
+                f"{sname}: expected 2-node list (root + admm), got "
+                f"{[n.name for n in s._mpisppy_node_list]}")
+            self.assertEqual(s._mpisppy_node_list[0].name, "ROOT")
+
+    def test_hooks_and_legacy_paths_produce_same_node_list(self):
+        """The new hooks path must produce the same final
+        _mpisppy_node_list as the legacy path (where scenario_creator
+        called attach_root_node itself)."""
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
+        from mpisppy import MPI
+
+        fs_cost, fs_varlist = self._hooks()
+        admm_hooks = Stoch_AdmmWrapper(
+            options={},
+            scenario_creator=self._minimal_scenario_creator(call_attach=False),
+            mpicomm=MPI.COMM_WORLD,
+            first_stage_cost=fs_cost,
+            first_stage_varlist=fs_varlist,
+            **self._common_kwargs(),
+        )
+        admm_legacy = Stoch_AdmmWrapper(
+            options={},
+            scenario_creator=self._minimal_scenario_creator(call_attach=True),
+            mpicomm=MPI.COMM_WORLD,
+            **self._common_kwargs(),
+        )
+        for sname in admm_hooks.local_admm_stoch_subproblem_scenarios:
+            s_h = admm_hooks.local_admm_stoch_subproblem_scenarios[sname]
+            s_l = admm_legacy.local_admm_stoch_subproblem_scenarios[sname]
+            self.assertEqual(
+                [n.name for n in s_h._mpisppy_node_list],
+                [n.name for n in s_l._mpisppy_node_list],
+                f"{sname}: node-name list differs between hooks and legacy")
+            self.assertEqual(
+                len(s_h._mpisppy_node_list[0].nonant_vardata_list),
+                len(s_l._mpisppy_node_list[0].nonant_vardata_list),
+                f"{sname}: root nonant count differs")
+
+    def test_hooks_plus_manual_attach_errors(self):
+        """Hooks defined AND scenario_creator also calls
+        attach_root_node — error so the user knows the hooks make the
+        manual call redundant (rather than silently overwriting it)."""
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
+        from mpisppy import MPI
+
+        fs_cost, fs_varlist = self._hooks()
+        with self.assertRaises(RuntimeError) as cm:
+            Stoch_AdmmWrapper(
+                options={},
+                scenario_creator=self._minimal_scenario_creator(call_attach=True),
+                mpicomm=MPI.COMM_WORLD,
+                first_stage_cost=fs_cost,
+                first_stage_varlist=fs_varlist,
+                **self._common_kwargs(),
+            )
+        self.assertIn("must NOT call", str(cm.exception))
+
+    def test_no_hooks_no_attach_errors(self):
+        """No hooks AND scenario_creator skips attach_root_node — error
+        with a message pointing at both remediation options."""
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
+        from mpisppy import MPI
+
+        with self.assertRaises(RuntimeError) as cm:
+            Stoch_AdmmWrapper(
+                options={},
+                scenario_creator=self._minimal_scenario_creator(call_attach=False),
+                mpicomm=MPI.COMM_WORLD,
+                **self._common_kwargs(),
+            )
+        msg = str(cm.exception)
+        self.assertIn("first_stage_cost", msg)
+        self.assertIn("attach_root_node", msg)
+
+    def test_wrapper_half_hooks_errors(self):
+        """Exactly one hook passed to the wrapper — both-or-neither
+        contract violated."""
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
+        from mpisppy import MPI
+
+        fs_cost, fs_varlist = self._hooks()
+        for kw in (
+            {"first_stage_cost": fs_cost},
+            {"first_stage_varlist": fs_varlist},
+        ):
+            with self.assertRaises(RuntimeError) as cm:
+                Stoch_AdmmWrapper(
+                    options={},
+                    scenario_creator=self._minimal_scenario_creator(call_attach=False),
+                    mpicomm=MPI.COMM_WORLD,
+                    **kw,
+                    **self._common_kwargs(),
+                )
+            self.assertIn("must be defined together", str(cm.exception))
+
+    def test_setup_stoch_admm_half_hooks_errors(self):
+        """The setup_stoch_admm-level check fires before the wrapper-level
+        check, naming the user's module in the error message."""
+        import types
+        from mpisppy.generic.admm import setup_stoch_admm
+
+        fs_cost, _ = self._hooks()
+
+        def admm_subproblem_names_creator(cfg):
+            return ["A", "B"]
+
+        def stoch_scenario_names_creator(cfg):
+            return ["S1", "S2"]
+
+        def admm_stoch_subproblem_scenario_names_creator(a_names, s_names):
+            return [f"ADMM_STOCH_{a}_{s}" for s in s_names for a in a_names]
+
+        def split_admm_stoch_subproblem_scenario_name(name):
+            parts = name.split("_")
+            return parts[2], "_".join(parts[3:])
+
+        module = types.SimpleNamespace(
+            __name__="fake_module",
+            admm_subproblem_names_creator=admm_subproblem_names_creator,
+            stoch_scenario_names_creator=stoch_scenario_names_creator,
+            admm_stoch_subproblem_scenario_names_creator=admm_stoch_subproblem_scenario_names_creator,
+            split_admm_stoch_subproblem_scenario_name=split_admm_stoch_subproblem_scenario_name,
+            kw_creator=lambda cfg: {},
+            consensus_vars_creator=lambda an, sn, **kw: {"A": [("x", 1)], "B": [("y", 1)]},
+            scenario_creator=self._minimal_scenario_creator(call_attach=False),
+            first_stage_cost=fs_cost,
+            # first_stage_varlist intentionally missing
+        )
+        cfg = config.Config()
+        cfg.add_to_config("branching_factors", description="",
+                          domain=list, default=None)
+        with self.assertRaises(RuntimeError) as cm:
+            setup_stoch_admm(module, cfg, n_cylinders=1)
+        msg = str(cm.exception)
+        self.assertIn("fake_module", msg)
+        self.assertIn("first_stage_cost", msg)
+        self.assertIn("first_stage_varlist", msg)
+
+    def test_setup_stoch_admm_with_bundles_half_hooks_errors(self):
+        """The bundled path enforces the same both-or-neither contract."""
+        import types
+        from mpisppy.generic.admm import setup_stoch_admm_with_bundles
+
+        fs_cost, _ = self._hooks()
+
+        module = types.SimpleNamespace(
+            __name__="fake_module",
+            admm_subproblem_names_creator=lambda cfg: ["A", "B"],
+            stoch_scenario_names_creator=lambda cfg: ["S1", "S2"],
+            split_admm_stoch_subproblem_scenario_name=(
+                lambda name: (name.split("_")[2],
+                              "_".join(name.split("_")[3:]))),
+            kw_creator=lambda cfg: {},
+            consensus_vars_creator=(
+                lambda an, sn, **kw: {"A": [("x", 1)], "B": [("y", 1)]}),
+            combining_names=lambda a, s: f"ADMM_STOCH_{a}_{s}",
+            scenario_creator=self._minimal_scenario_creator(call_attach=False),
+            first_stage_cost=fs_cost,
+            # first_stage_varlist intentionally missing
+        )
+        cfg = config.Config()
+        cfg.add_to_config("scenarios_per_bundle", description="",
+                          domain=int, default=2)
+        with self.assertRaises(RuntimeError) as cm:
+            setup_stoch_admm_with_bundles(module, cfg, n_cylinders=1)
+        msg = str(cm.exception)
+        self.assertIn("fake_module", msg)
+        self.assertIn("first_stage_cost", msg)
+        self.assertIn("first_stage_varlist", msg)
+
+
 if __name__ == '__main__':
     unittest.main()

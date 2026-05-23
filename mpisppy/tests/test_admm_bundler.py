@@ -68,6 +68,38 @@ class TestAdmmBundler(unittest.TestCase):
         # 3 subproblems × 1 bundle each = 3 bundles
         self.assertEqual(len(names), 3)
 
+    def test_half_hooks_errors(self):
+        """Exactly one of first_stage_cost / first_stage_varlist passed
+        to AdmmBundler — both-or-neither contract violated."""
+        cfg = config.Config()
+        stoch_distr.inparser_adder(cfg)
+        cfg.num_stoch_scens = 4
+        cfg.num_admm_subproblems = 2
+        admm_subproblem_names = stoch_distr.admm_subproblem_names_creator(cfg)
+        stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(cfg)
+        scenario_creator_kwargs = stoch_distr.kw_creator(cfg)
+        consensus_vars = stoch_distr.consensus_vars_creator(
+            admm_subproblem_names, stoch_scenario_names[0],
+            **scenario_creator_kwargs)
+
+        common = dict(
+            module=stoch_distr,
+            scenarios_per_bundle=4,
+            admm_subproblem_names=admm_subproblem_names,
+            stoch_scenario_names=stoch_scenario_names,
+            consensus_vars=consensus_vars,
+            combining_fn=stoch_distr.combining_names,
+            split_fn=stoch_distr.split_admm_stoch_subproblem_scenario_name,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+        )
+        for half in (
+            {"first_stage_cost": lambda s: 0},
+            {"first_stage_varlist": lambda s: []},
+        ):
+            with self.assertRaises(RuntimeError) as cm:
+                AdmmBundler(**common, **half)
+            self.assertIn("must be defined together", str(cm.exception))
+
     @unittest.skipUnless(solver_available, "no solver available")
     def test_bundle_creation(self):
         """Test that a bundle can be created and has correct structure."""

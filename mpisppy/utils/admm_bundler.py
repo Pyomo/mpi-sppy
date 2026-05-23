@@ -54,7 +54,16 @@ class AdmmBundler:
     def __init__(self, module, scenarios_per_bundle,
                  admm_subproblem_names, stoch_scenario_names,
                  consensus_vars, combining_fn, split_fn,
-                 scenario_creator_kwargs=None):
+                 scenario_creator_kwargs=None,
+                 first_stage_cost=None, first_stage_varlist=None):
+        # Same both-or-neither contract as Stoch_AdmmWrapper.
+        if (first_stage_cost is None) != (first_stage_varlist is None):
+            present = "first_stage_cost" if first_stage_cost is not None else "first_stage_varlist"
+            missing = "first_stage_varlist" if first_stage_cost is not None else "first_stage_cost"
+            raise RuntimeError(
+                f"AdmmBundler was given {present} but not {missing}. "
+                f"These hooks must be defined together (or both omitted)."
+            )
         self.module = module
         self.scenarios_per_bundle = scenarios_per_bundle
         self.admm_subproblem_names = admm_subproblem_names
@@ -63,6 +72,8 @@ class AdmmBundler:
         self.combining_fn = combining_fn
         self.split_fn = split_fn
         self.scenario_creator_kwargs = scenario_creator_kwargs or {}
+        self.first_stage_cost = first_stage_cost
+        self.first_stage_varlist = first_stage_varlist
         self.number_admm_subproblems = len(admm_subproblem_names)
         self.consensus_vars_number = _consensus_vars_number_creator(consensus_vars)
 
@@ -209,9 +220,34 @@ class AdmmBundler:
         scen_dict = {}
         varprob_by_scenario = {}
 
+        has_first_stage_hooks = self.first_stage_cost is not None
         for sub_name, stoch_name in constituents:
             vsname = self.combining_fn(sub_name, stoch_name)
             s = self.module.scenario_creator(vsname, **self.scenario_creator_kwargs)
+            # Error matrix, same as Stoch_AdmmWrapper.  See
+            # doc/src/generic_admm.rst.
+            already_attached = hasattr(s, "_mpisppy_node_list")
+            if has_first_stage_hooks:
+                if already_attached:
+                    raise RuntimeError(
+                        f"scenario {vsname!r}: first_stage_cost and "
+                        f"first_stage_varlist hooks are defined, so "
+                        f"scenario_creator must NOT call "
+                        f"sputils.attach_root_node.  Remove the "
+                        f"attach_root_node call from scenario_creator."
+                    )
+                sputils.attach_root_node(
+                    s, self.first_stage_cost(s), self.first_stage_varlist(s))
+            else:
+                if not already_attached:
+                    raise RuntimeError(
+                        f"scenario {vsname!r}: no _mpisppy_node_list is "
+                        f"set.  Either call sputils.attach_root_node in "
+                        f"scenario_creator (legacy), or define "
+                        f"first_stage_cost(scenario) and "
+                        f"first_stage_varlist(scenario) module functions "
+                        f"(recommended).  See doc/src/generic_admm.rst."
+                    )
             varprob = self._process_scenario(vsname, s, sub_name)
             scen_dict[vsname] = s
             varprob_by_scenario[vsname] = varprob
