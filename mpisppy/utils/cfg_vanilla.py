@@ -77,13 +77,18 @@ def _find_feasible_xhat_creator(module, cfg):
     flag_cli = f"--{flags_set[0].replace('_', '-')}-try-feasible-xhat-first"
     try:
         aux = importlib.import_module(aux_name)
-    except ImportError:
+    except ModuleNotFoundError as e:
+        # Narrow to "the aux module itself is missing." If the aux
+        # module exists but its own imports fail (e.name != aux_name),
+        # let that bubble up unmasked so the real cause is visible.
+        if e.name != aux_name:
+            raise
         raise RuntimeError(
             f"{flag_cli} was set, but feasible_xhat_creator was not "
             f"found on {module.__name__} and {aux_name} could not be "
             f"imported. Define feasible_xhat_creator on the module or "
             f"create {aux_name} with one, or turn the flag off."
-        )
+        ) from e
     fn = getattr(aux, "feasible_xhat_creator", None)
     if fn is None:
         raise RuntimeError(

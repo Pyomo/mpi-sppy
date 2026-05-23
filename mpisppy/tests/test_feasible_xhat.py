@@ -25,7 +25,7 @@ import pyomo.environ as pyo
 from pyomo.opt import TerminationCondition
 
 import mpisppy.utils.sputils as sputils
-from mpisppy.utils.xhat_helpers import average_xhat_nonants
+from mpisppy.utils.xhat_helpers import average_xhat_nonants, lp_xbar_nonants
 from mpisppy.tests.utils import get_solver
 
 _EXAMPLES_DIR = os.path.join(
@@ -85,6 +85,47 @@ class TestAverageXhatNonantsContract(unittest.TestCase):
         with self.assertRaises(RuntimeError) as ctx:
             average_xhat_nonants(two_node_creator, solver_name="cplex")
         self.assertIn("two-stage only", str(ctx.exception))
+
+
+class TestLpXbarNonantsContract(unittest.TestCase):
+    """Solver-free input-validation checks for the LP-xbar helper."""
+
+    def test_rejects_empty_scenario_names(self):
+        def never_called(name, **k):
+            raise AssertionError("scenario_creator should not be called")
+
+        with self.assertRaises(ValueError) as ctx:
+            lp_xbar_nonants(never_called, [], solver_name="cplex")
+        self.assertIn("empty", str(ctx.exception))
+
+    def test_rejects_all_zero_probabilities(self):
+        # Build a one-var two-stage scenario whose probability is 0.
+        def zero_prob_creator(name, **k):
+            m = pyo.ConcreteModel()
+            m.x = pyo.Var(bounds=(0, 1))
+            m.fsc = pyo.Expression(expr=m.x)
+            m.obj = pyo.Objective(expr=m.x)
+            sputils.attach_root_node(m, m.fsc, [m.x])
+            m._mpisppy_probability = 0.0
+            return m
+
+        # Stub out the solve so we never touch a real solver: monkey-patch
+        # the internal helper to return a dummy array. The validation is
+        # post-loop, so we only need every iteration to "succeed."
+        import mpisppy.utils.xhat_helpers as xh
+
+        original = xh._solve_and_extract_root
+        xh._solve_and_extract_root = lambda m, *a, **k: np.array([0.5])
+        try:
+            with self.assertRaises(ValueError) as ctx:
+                lp_xbar_nonants(
+                    zero_prob_creator,
+                    ["S1", "S2"],
+                    solver_name="cplex",
+                )
+        finally:
+            xh._solve_and_extract_root = original
+        self.assertIn("probabilities sum", str(ctx.exception))
 
 
 @unittest.skipIf(not solver_available, "no solver available")
@@ -325,6 +366,39 @@ class TestFindFeasibleXhatCreator(unittest.TestCase):
         with self.assertRaises(RuntimeError) as ctx:
             _find_feasible_xhat_creator(bare, cfg)
         self.assertIn("feasible_xhat_creator", str(ctx.exception))
+
+    def test_unrelated_importerror_in_aux_is_not_masked(self):
+        # If <module>_auxiliary itself exists but its own imports fail
+        # (e.g. missing optional dependency), the real ImportError must
+        # bubble up unchanged -- not be reframed as "could not be imported."
+        import importlib
+        import types
+        from mpisppy.utils import cfg_vanilla
+
+        main_name = "feas_aux_main_test_mod"
+        main = types.ModuleType(main_name)
+        sys.modules[main_name] = main
+        self.addCleanup(sys.modules.pop, main_name, None)
+
+        original_import = importlib.import_module
+
+        def fake_import(name, *a, **k):
+            if name == f"{main_name}_auxiliary":
+                # Simulate aux module raising on import of an unrelated dep.
+                raise ModuleNotFoundError(
+                    "No module named 'totally_unrelated_dep'",
+                    name="totally_unrelated_dep",
+                )
+            return original_import(name, *a, **k)
+
+        cfg = self._cfg(xhatshuffle_try_feasible_xhat_first=True)
+        importlib.import_module = fake_import
+        try:
+            with self.assertRaises(ModuleNotFoundError) as ctx:
+                cfg_vanilla._find_feasible_xhat_creator(main, cfg)
+        finally:
+            importlib.import_module = original_import
+        self.assertEqual(ctx.exception.name, "totally_unrelated_dep")
 
 
 class _StubFeasOpt:

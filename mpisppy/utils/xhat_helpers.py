@@ -123,9 +123,16 @@ def lp_xbar_nonants(
     a strict cover.
     """
     kwargs = scenario_creator_kwargs or {}
+    # Materialize once so a generator works and we can call len() / iterate.
+    scenario_names = list(scenario_names)
+    n = len(scenario_names)
+    if n == 0:
+        raise ValueError(
+            "lp_xbar_nonants: scenario_names is empty; need at least "
+            "one scenario to average."
+        )
     arr_sum = None
     weight_sum = 0.0
-    n = len(scenario_names)
     for sname in scenario_names:
         m = scenario_creator(sname, **kwargs)
         _check_two_stage(m, "lp_xbar_nonants")
@@ -137,4 +144,9 @@ def lp_xbar_nonants(
         contribution = prob * vals
         arr_sum = contribution if arr_sum is None else arr_sum + contribution
         weight_sum += prob
+    if weight_sum <= 0:
+        raise ValueError(
+            "lp_xbar_nonants: scenario probabilities sum to "
+            f"{weight_sum}; cannot form a weighted average."
+        )
     return arr_sum / weight_sum
