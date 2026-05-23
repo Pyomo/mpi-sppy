@@ -213,6 +213,24 @@ manual name formatting", not "skip the find_component step".
   `consensus_vars_creator` produces the same `varprob_dict` as the
   string-based form.
 
+#### Findings during implementation
+
+- **Pyomo VarData weakref**: a `VarData` holds its parent block via
+  a weakref, so the wrapper's `.name` lookup only resolves to a real
+  name if the before-wrap scenario the Var was taken from is still
+  alive at wrapper-construction time.  Callers that build a
+  throwaway before-wrap scenario inside a helper must keep it alive
+  across the wrapper call, or snapshot the names eagerly before
+  letting it go out of scope.  Documented in the helper docstring;
+  test_admmWrapper.py's integration test has to hold a
+  `live_scenarios` list across the wrapper call.
+- **Normalization location**: rather than pre-normalizing inside
+  `assign_variable_probs` (as originally sketched), implementation
+  normalizes once in `__init__` so `_consensus_vars_number_creator`
+  and the B.2 / B.3 plumbing all see canonical string identifiers.
+  Helper: `_admm_normalize_consensus_vars(consensus_vars, *,
+  tuple_form)` in `mpisppy/utils/admmWrapper.py`.
+
 ### B.2 Auto-merge first-stage Vars into `consensus_vars`
 
 #### Today's contract
@@ -260,6 +278,35 @@ already-merged list *and* has the hooks defined, to avoid a
 double-merge — easiest is to de-duplicate the merged list by Var
 identity.
 
+#### Findings during implementation
+
+- **First-stage Vars are per-ADMM-subproblem, not global**
+  (significant divergence from the original "append to every
+  subproblem entry" wording above).  In stoch_distr each region
+  owns its own factory production decisions, so `first_stage_varlist`
+  returns *different* Var names for different ADMM subproblems
+  even though they share Var-name conventions.  The implemented
+  helper takes a per-subproblem dict, not a flat list:
+  `_merge_first_stage_into_consensus_vars(consensus_vars,
+  first_stage_var_names_per_sub, root_stage=1)`.  De-dup is
+  string-name based (no Var-identity comparison needed once the
+  consensus_vars dict is normalized).
+- **Per-rank gathering**: every rank must end up with the same
+  `consensus_vars` so `_consensus_vars_number_creator` and
+  `assign_variable_probs` stay consistent.  `Stoch_AdmmWrapper`
+  pulls first-stage Var names from already-built local before-wrap
+  scenarios where possible, then builds one *probe* before-wrap
+  scenario per ADMM subproblem the local rank does not host.
+  `AdmmBundler` always builds one probe per ADMM subproblem in
+  `__init__` because it pre-builds no before-wrap scenarios there.
+- **Vocabulary glossary established**: the prose for B.2's
+  docstrings forced us to settle on consistent terms across the
+  ADMM family — before-wrap scenario, wrapped scenario, wrap (verb,
+  narrow scope), ADMM subproblem, first-stage Vars vs. root-node
+  Vars.  The full glossary now lives in the module docstring at the
+  top of `mpisppy/utils/admmWrapper.py` and is referenced by header
+  comments at the top of the three admm test files.
+
 ### B.3 Optional surrogate / EF-supplemental hooks
 
 #### Today's contract
@@ -305,6 +352,28 @@ message).
   Phase A's docs will carry until this lands).
 - Test: a synthetic scenario with a surrogate Var; verify the
   attached node carries `surrogate_nonant_list` correctly.
+
+#### Findings during implementation
+
+- **Bundle ROOT does not propagate constituent surrogates.**
+  `AdmmBundler` builds the bundle's own ROOT by flattening every
+  consensus Var into a fresh `attach_root_node(bundle, 0,
+  nonantlist)` call with no advanced kwargs.  The surrogate /
+  EF-supplemental Vars instead live on the *per-constituent*
+  before-wrap scenario root nodes — the EF construction reads them
+  from there when assembling the bundle.  The B.3 plumbing
+  therefore forwards the advanced lists only to the constituent
+  attach_root_node calls inside `_process_scenario`, not to the
+  bundle-level attach.  This is correct (EF reads from
+  constituents) but worth flagging because a reader might expect
+  the bundle ROOT to carry the surrogate annotation directly.
+  Bundler test verifies forwarding via a spy on
+  `sputils.attach_root_node`.
+- **Shared discovery helper**: discovery and validation moved into
+  `_discover_first_stage_hooks(module)` in `mpisppy/generic/admm.py`
+  so `setup_stoch_admm` and `setup_stoch_admm_with_bundles` no
+  longer duplicate the both-or-neither / advanced-needs-core
+  checks.
 
 ### Open questions
 
