@@ -12,7 +12,74 @@ import numpy as np
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.spwindow import Field
 from mpisppy.utils.sputils import is_persistent
+from mpisppy.utils.nonant_sensitivities import _bundle_consensus_groups
 from mpisppy import MPI, global_toc
+
+
+def _assert_consensus_rc_loaded(scenario, consensus_groups):
+    """Pre-aggregation guard: every Var in every consensus group must have a
+    reduced cost on ``scenario.rc`` before _consensus_rc_sum reads it.
+
+    This catches a future regression where ``vars_to_load`` is restricted
+    back to bundle ref Vars (or any other path) that leaves per-sub-scenario
+    nonants without an rc entry — the consensus sum would then silently
+    read stale or zero values. No-op for unbundled scenarios.
+    """
+    if consensus_groups is None:
+        return
+    for ndn_i, group in consensus_groups.items():
+        for v in group:
+            # Plain `assert` would be stripped under `python -O`, disabling
+            # the guard exactly where silent stale-rc reads would do real
+            # damage. Raise unconditionally instead.
+            if v not in scenario.rc:
+                raise RuntimeError(
+                    f"reduced cost not loaded for {v.name}; vars_to_load did "
+                    f"not cover the consensus group at bundle position {ndn_i}"
+                )
+
+
+def _consensus_rc_sum(scenario, ndn_i, ref_var, consensus_groups):
+    """Aggregated reduced cost at a nonant position.
+
+    For an unbundled scenario this is just ``scenario.rc[ref_var]`` — the
+    single nonant Var's reduced cost.
+
+    For a proper bundle the bundle objective references each sub-scenario's
+    *own* nonant Vars (the bundle ref is the first sub-scenario's Var; the
+    rest are tied by NA equality constraints). Probing only the ref Var's
+    reduced cost captures one representative sub-scenario's contribution
+    plus the NA constraint dual; summing the reduced costs of every
+    per-sub-scenario nonant in the consensus group cancels the NA
+    multipliers and gives the rate of bundle-objective change per unit
+    consensus shift — the correct "expected reduced cost" input to
+    rc-rho/rc-fixing. See issue #673.
+
+    Note on probability weighting (no explicit weighting needed):
+
+    ``sputils.create_EF`` builds the bundle objective as
+    ``(sum_s prob_s * obj_s) / EF_prob = sum_s cond_prob_s * obj_s``,
+    where ``cond_prob_s = prob_s / EF_prob``. Pyomo's reduced cost for
+    each per-sub-scenario nonant is therefore
+    ``bundle.rc[x_s,k] = cond_prob_s * unbundled_rc_s,k`` (the per-
+    sub-scenario constraint duals scale with ``cond_prob_s`` too because
+    the objective scaling carries through to the dual LP), modulo the NA
+    multipliers that cancel in the consensus sum. So the consensus sum
+    already equals
+    ``sum_s cond_prob_s * unbundled_rc_s,k = (1/EF_prob) * sum_s prob_s * unbundled_rc_s,k``
+    — the ``cond_prob_s`` is baked in by ``create_EF``.
+
+    The caller multiplies the result by ``sub._mpisppy_probability``
+    (= ``EF_prob`` for a bundle), recovering ``sum_s prob_s * unbundled_rc_s,k``
+    — exactly the unbundled formula. Adding an explicit ``prob_s``
+    weighting inside this sum would double-count.
+    """
+    if consensus_groups is None:
+        return scenario.rc[ref_var]
+    return sum(
+        scenario.rc[v]
+        for v in consensus_groups.get(ndn_i, (ref_var,))
+    )
 
 class ReducedCostsSpoke(LagrangianOuterBound):
 
@@ -161,6 +228,12 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         rc = np.zeros(self.nonant_length)
 
         for sub in self.opt.local_scenarios.values():
+            # Real consensus groups for proper bundles (stashed at create_EF
+            # time), singleton groups for unbundled scenarios. The helper is
+            # an O(1) attribute read for bundles, so it's cheap to call once
+            # per sub per iteration without caching across the two passes
+            # below.
+            consensus_groups = _bundle_consensus_groups(sub)
             if is_persistent(sub._solver_plugin):
                 # Note: what happens with non-persistent solvers?
                 # - if rc is accepted as a model suffix by the solver (e.g. gurobi shell), it is loaded in postsolve
@@ -168,8 +241,17 @@ class ReducedCostsSpoke(LagrangianOuterBound):
                 # - direct solvers seem to behave the same as persistent solvers
                 # GurobiDirect needs vars_to_load argument
                 # XpressDirect loads for all vars by default - TODO: should notify someone of this inconsistency
-                vars_to_load = [x for _, x in sub._mpisppy_data.nonant_indices.items()]
+                # Load rc for every Var the consensus sum will read. For
+                # bundles this covers every per-sub-scenario nonant (not just
+                # the ref) so the sum doesn't fall back to stale pre-solve
+                # values. For unbundled scenarios the singleton groups
+                # collapse this to one Var per position — the previous
+                # nonant_indices.values() set.
+                vars_to_load = [v for group in consensus_groups.values()
+                                  for v in group]
                 sub._solver_plugin.load_rc(vars_to_load=vars_to_load)
+
+            _assert_consensus_rc_loaded(sub, consensus_groups)
 
             for ci, (ndn_i, xvar) in enumerate(sub._mpisppy_data.nonant_indices.items()):
                 # fixed by modeler
@@ -187,7 +269,9 @@ class ReducedCostsSpoke(LagrangianOuterBound):
                 # solver takes care of sign of rc, based on lb, ub and max,min
                 # rc can be of wrong sign if numerically 0 - accepted here, checked in extension
                 if (xvar.lb is not None and xb - xvar.lb <= self.bound_tol) or (xvar.ub is not None and xvar.ub - xb <= self.bound_tol):
-                    rc[ci] += sub._mpisppy_probability * sub.rc[xvar]
+                    rc[ci] += sub._mpisppy_probability * _consensus_rc_sum(
+                        sub, ndn_i, xvar, consensus_groups,
+                    )
                 # not close to either bound -> rc = nan
                 else:
                     rc[ci] = np.nan
@@ -196,12 +280,15 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         assert self._scenario_rc_buffer.size == self.send_buffers[Field.SCENARIO_REDUCED_COST].data_len()
         ci = 0 # buffer index
         for sub in self.opt.local_scenarios.values():
+            consensus_groups = _bundle_consensus_groups(sub)
             for ndn_i, xvar in sub._mpisppy_data.nonant_indices.items():
                 # fixed by modeler
                 if ndn_i in self._modeler_fixed_nonants[sub]:
                     self._scenario_rc_buffer[ci] = np.nan
                 else:
-                    self._scenario_rc_buffer[ci] = sub.rc[xvar]
+                    self._scenario_rc_buffer[ci] = _consensus_rc_sum(
+                        sub, ndn_i, xvar, consensus_groups,
+                    )
                 ci += 1
         self.rc_scenario = self._scenario_rc_buffer
         # print(f"In ReducedCostsSpoke; {self.rc_scenario=}")
