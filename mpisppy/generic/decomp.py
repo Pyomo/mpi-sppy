@@ -86,9 +86,21 @@ def _get_rho_setter(module, cfg):
     if cfg.default_rho is None and rho_setter is None:
         if cfg.sep_rho or cfg.coeff_rho or cfg.sensi_rho:
             cfg.default_rho = 1
-        else:
-            print("Warning: No rho_setter so a default must be specified via --default-rho")
+        elif _needs_rho(cfg):
+            raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
     return rho_setter
+
+
+def _needs_rho(cfg):
+    """True if the chosen hub or any enabled spoke needs a rho value.
+
+    CG-based hubs (cg_hub, dualcg_hub) do not need rho on their own; the
+    requirement only kicks in when a PH-based spoke (currently ph_xfeas_spoke)
+    is attached.
+    """
+    if cfg.cg_hub or cfg.dualcg_hub:
+        return bool(cfg.ph_xfeas_spoke)
+    return True
 
 
 def _get_converger(cfg):

@@ -15,8 +15,10 @@ import sys
 import runpy
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
+from mpisppy.generic.decomp import _get_rho_setter
 from mpisppy.tests.utils import get_solver
 
 solver_available, solver_name, _, _ = get_solver()
@@ -86,6 +88,60 @@ class TestGenericCylindersWtracker(unittest.TestCase):
             # Sanity: farmer has 3 nonants; with 3 scens we have 9 traces,
             # reportlen=5 caps rows at 5
             self.assertLessEqual(len(rows) - 1, 5)
+
+
+def _make_rho_cfg(**overrides):
+    base = dict(
+        default_rho=None,
+        sep_rho=False,
+        coeff_rho=False,
+        sensi_rho=False,
+        cg_hub=False,
+        dualcg_hub=False,
+        ph_xfeas_spoke=False,
+    )
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+class _NoRhoSetterModule:
+    pass
+
+
+class TestGetRhoSetter(unittest.TestCase):
+    """The default_rho-required check should fire only for PH-based cylinders."""
+
+    def test_ph_hub_no_rho_raises(self):
+        cfg = _make_rho_cfg()
+        with self.assertRaises(RuntimeError):
+            _get_rho_setter(_NoRhoSetterModule(), cfg)
+
+    def test_cg_hub_alone_does_not_require_rho(self):
+        cfg = _make_rho_cfg(cg_hub=True)
+        self.assertIsNone(_get_rho_setter(_NoRhoSetterModule(), cfg))
+        self.assertIsNone(cfg.default_rho)
+
+    def test_dualcg_hub_alone_does_not_require_rho(self):
+        cfg = _make_rho_cfg(dualcg_hub=True)
+        self.assertIsNone(_get_rho_setter(_NoRhoSetterModule(), cfg))
+
+    def test_cg_hub_with_ph_spoke_requires_rho(self):
+        cfg = _make_rho_cfg(cg_hub=True, ph_xfeas_spoke=True)
+        with self.assertRaises(RuntimeError):
+            _get_rho_setter(_NoRhoSetterModule(), cfg)
+
+    def test_module_rho_setter_satisfies_check(self):
+        class M:
+            @staticmethod
+            def _rho_setter():
+                pass
+        cfg = _make_rho_cfg()
+        self.assertIsNotNone(_get_rho_setter(M(), cfg))
+
+    def test_sep_rho_sets_default(self):
+        cfg = _make_rho_cfg(sep_rho=True)
+        _get_rho_setter(_NoRhoSetterModule(), cfg)
+        self.assertEqual(cfg.default_rho, 1)
 
 
 if __name__ == "__main__":
