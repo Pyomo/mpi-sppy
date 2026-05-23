@@ -7,6 +7,8 @@
 # full copyright and license information.
 ###############################################################################
 
+import warnings
+
 import numpy as np
 from mpisppy import global_toc
 from mpisppy.extensions.sensi_rho import _SensiRhoBase
@@ -20,6 +22,13 @@ class ReducedCostsRho(_SensiRhoBase):
     """
 
     def __init__(self, ph):
+        warnings.warn(
+            "ReducedCostsRho is scheduled for deprecation; reduced-cost "
+            "rho has not been demonstrated to be effective in practice. "
+            "See https://github.com/Pyomo/mpi-sppy/issues/673.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         cfg = ph.options["reduced_costs_rho_options"]["cfg"]
         super().__init__(ph, cfg)
         self.ph = ph

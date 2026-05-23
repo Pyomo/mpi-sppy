@@ -214,3 +214,48 @@ class _JensensMixin:
         Eobj = self._jensens_evaluate_xhat(cache)
         if Eobj is not None:
             self.update_if_improving(Eobj)
+
+    def _feasible_xhat_enabled(self):
+        return "feasible_xhat" in self.opt.options
+
+    # NOTE: this method is not Jensen's-specific despite living on
+    # _JensensMixin. The containing class will be renamed in a
+    # subsequent PR to reflect that it covers the generic pre-loop
+    # xhat candidate machinery, not just Jensen's xhat.
+    def _try_feasible_xhat(self):
+        """One-shot helper for xhat spokes that opt in via
+        ``--*-try-feasible-xhat-first``. No-op when the flag is off.
+
+        Mutually exclusive with ``--*-try-jensens-first`` (cfg_vanilla
+        raises if both are set on the same spoke).
+
+        Unlike the Jensen's path, no average-scenario solve is needed:
+        the user's ``feasible_xhat_creator`` returns the candidate
+        directly, in the same dict-by-nodename cache form the rest of
+        the xhat path consumes. We pin it, evaluate it across all real
+        scenarios, and -- the contract of ``feasible_xhat_creator``
+        guarantees feasibility -- expect ``no_incumbent_prob() == 0``.
+        We still go through ``_jensens_evaluate_xhat`` so an
+        unexpected per-scenario infeasibility surfaces as a silent skip
+        rather than a crash.
+        """
+        if not self._feasible_xhat_enabled():
+            return
+        f = self.opt.options["feasible_xhat"]
+        creator = f["feasible_xhat_creator"]
+        kwargs = f.get("scenario_creator_kwargs") or {}
+        cache = creator(
+            solver_name=self.opt.options["solver_name"],
+            solver_options=self.opt.options.get("iterk_solver_options") or None,
+            **kwargs,
+        )
+        if not isinstance(cache, dict) or "ROOT" not in cache:
+            raise RuntimeError(
+                "feasible_xhat_creator must return a dict with at least "
+                "a 'ROOT' key; got "
+                f"{type(cache).__name__} with keys "
+                f"{list(cache.keys()) if isinstance(cache, dict) else 'n/a'}."
+            )
+        Eobj = self._jensens_evaluate_xhat(cache)
+        if Eobj is not None:
+            self.update_if_improving(Eobj)

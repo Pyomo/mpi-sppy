@@ -52,6 +52,87 @@ def _maybe_attach_jensens(spoke_dict, cfg, spoke_prefix,
         "scenario_creator_kwargs": scenario_creator_kwargs,
     }
 
+def _find_feasible_xhat_creator(module, cfg):
+    """Look up ``feasible_xhat_creator`` only when at least one
+    ``--<xhat>-try-feasible-xhat-first`` flag is set. Tries the main
+    scenario module first; falls back to importing
+    ``<module_name>_auxiliary`` and looking there.
+
+    Returns ``None`` when no flag is set; raises if any flag is set
+    but the function cannot be located on the module or in
+    ``<module>_auxiliary``.
+    """
+    xhat_prefixes = ("xhatshuffle", "xhatxbar", "xhatlooper", "xhatspecific")
+    flags_set = [
+        p for p in xhat_prefixes
+        if cfg.get(f"{p}_try_feasible_xhat_first", False)
+    ]
+    if not flags_set:
+        return None
+    fn = getattr(module, "feasible_xhat_creator", None)
+    if fn is not None:
+        return fn
+    import importlib
+    aux_name = f"{module.__name__}_auxiliary"
+    flag_cli = f"--{flags_set[0].replace('_', '-')}-try-feasible-xhat-first"
+    try:
+        aux = importlib.import_module(aux_name)
+    except ModuleNotFoundError as e:
+        # Narrow to "the aux module itself is missing." If the aux
+        # module exists but its own imports fail (e.name != aux_name),
+        # let that bubble up unmasked so the real cause is visible.
+        if e.name != aux_name:
+            raise
+        raise RuntimeError(
+            f"{flag_cli} was set, but feasible_xhat_creator was not "
+            f"found on {module.__name__} and {aux_name} could not be "
+            f"imported. Define feasible_xhat_creator on the module or "
+            f"create {aux_name} with one, or turn the flag off."
+        ) from e
+    fn = getattr(aux, "feasible_xhat_creator", None)
+    if fn is None:
+        raise RuntimeError(
+            f"{flag_cli} was set, but neither {module.__name__} nor "
+            f"{aux_name} defines feasible_xhat_creator."
+        )
+    return fn
+
+
+def _maybe_attach_feasible_xhat(spoke_dict, cfg, spoke_prefix,
+                                feasible_xhat_creator, scenario_creator_kwargs):
+    """Attach feasible_xhat options to spoke_dict when the corresponding
+    --<spoke_prefix>-try-feasible-xhat-first flag is set.
+
+    The spoke reads these at runtime via self.opt.options["feasible_xhat"]
+    and drives _JensensMixin._try_feasible_xhat. See doc/src/feasible_xhat.rst.
+
+    Raises if the user enabled both --<spoke_prefix>-try-jensens-first and
+    --<spoke_prefix>-try-feasible-xhat-first on the same xhat spoke; the
+    two pre-loop xhat candidates are mutually exclusive per spoke.
+    """
+    flag = f"{spoke_prefix}_try_feasible_xhat_first"
+    if not cfg.get(flag, False):
+        return
+    jensens_flag = f"{spoke_prefix}_try_jensens_first"
+    if cfg.get(jensens_flag, False):
+        raise RuntimeError(
+            f"--{spoke_prefix.replace('_', '-')}-try-jensens-first and "
+            f"--{spoke_prefix.replace('_', '-')}-try-feasible-xhat-first "
+            "were both set; they are mutually exclusive per xhat spoke."
+        )
+    if feasible_xhat_creator is None:
+        raise RuntimeError(
+            f"--{spoke_prefix.replace('_', '-')}-try-feasible-xhat-first "
+            "was set, but the scenario module does not define "
+            "feasible_xhat_creator (looked up on the module and in "
+            "<module>_auxiliary). Either implement feasible_xhat_creator, "
+            "or turn the flag off."
+        )
+    spoke_dict["opt_kwargs"]["options"]["feasible_xhat"] = {
+        "feasible_xhat_creator": feasible_xhat_creator,
+        "scenario_creator_kwargs": scenario_creator_kwargs,
+    }
+
 def shared_options(cfg, is_hub=False):
     shoptions = {
         "solver_name": cfg.solver_name,
@@ -82,6 +163,7 @@ def shared_options(cfg, is_hub=False):
         # Optional initial xhat candidate file (.npy); None disables.
         # Consumed by XhatInnerBoundBase._try_file_xhat.
         "xhat_from_file" : cfg.get("xhat_from_file", None),
+        "inspect_buffers_on_shutdown" : cfg.get("inspect_buffers_on_shutdown", False),
         # Optional filename prefix; if set, _BoundSpoke.update_if_improving
         # writes a first-stage solution snapshot on each new best incumbent.
         "incumbent_on_improvement_filename_prefix" : cfg.get(
@@ -91,7 +173,7 @@ def shared_options(cfg, is_hub=False):
     # axis 2: any CLI flags below override file entries at the same
     # predicate. Load and apply it first so the rest of the axis-2
     # chain can overlay on top.
-    if _hasit(cfg, "solver_options_file"):
+    if cfg.get("solver_options_file"):  # treats None and "" as unset
         file_data = sputils.load_solver_options_file(cfg.solver_options_file)
         shoptions["iter0_solver_options"].update(file_data["default"])
         shoptions["iter0_solver_options"].update(file_data["iter0"])
@@ -175,7 +257,7 @@ def apply_solver_specs(name, spoke, cfg):
         options["iterk_solver_options"].update(spoke_file_blocks["iterk"])
         options["solver_options_layers"].extend(
             sputils.options_file_section_to_layers(spoke_file_blocks))
-    if _hasit(cfg, name+"_solver_options_file"):
+    if cfg.get(name+"_solver_options_file"):  # treats None and "" as unset
         spoke_file_data = sputils.load_solver_options_file(
             cfg.get(name+"_solver_options_file"))
         # Per-spoke files only consume their own predicates; the
@@ -272,6 +354,96 @@ def ph_hub(
             "extensions": ph_extensions,
             "extension_kwargs": extension_kwargs,
             "ph_converger": ph_converger,
+            "all_nodenames": all_nodenames
+        }
+    }
+    add_wxbar_read_write(hub_dict, cfg)
+    add_ph_tracking(hub_dict, cfg)
+    add_timed_mipgap(hub_dict, cfg)
+    return hub_dict
+
+def cg_hub(
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=None,
+        extension_kwargs=None,
+        variable_probability=None,
+        all_nodenames=None,
+):
+    from mpisppy.opt.cg import CG
+    from mpisppy.cylinders.hub import CGHub
+
+    shoptions = shared_options(cfg)
+    options = copy.deepcopy(shoptions)# most of them are not needed but otherwise cep_cylinder crashes
+    if _hasit(cfg, "sp_solver_options"):
+        odictsp = sputils.option_string_to_dict(cfg.sp_solver_options)
+        options["sp_solver_options"] = odictsp
+    if _hasit(cfg, "mp_solver_options"):
+        odictmp = sputils.option_string_to_dict(cfg.mp_solver_options)
+        options["mp_solver_options"] = odictmp
+    options["convthresh"] = cfg.intra_hub_conv_thresh
+    options["bundles_per_rank"] = cfg.bundles_per_rank
+    options["CGIterLimit"]=cfg.max_iterations  
+    options["relaxed_nonant"]=cfg.relaxed_nonant    
+    hub_dict = {
+        "hub_class": CGHub,
+        "hub_kwargs": {"options": {"rel_gap": cfg.rel_gap,
+                                   "abs_gap": cfg.abs_gap,
+                                   "max_stalled_iters": cfg.max_stalled_iters}},
+        "opt_class": CG,
+        "opt_kwargs": {
+            "options": options,
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": scenario_creator,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
+            "scenario_denouement": scenario_denouement,
+            "variable_probability": variable_probability,
+            "extension_kwargs": extension_kwargs,
+            "all_nodenames": all_nodenames
+        }
+    }
+    add_wxbar_read_write(hub_dict, cfg)
+    add_ph_tracking(hub_dict, cfg)
+    add_timed_mipgap(hub_dict, cfg)
+    return hub_dict
+
+def dualcg_hub(
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=None,
+        extension_kwargs=None,
+        variable_probability=None,
+        all_nodenames=None,
+):
+    from mpisppy.opt.dualcg import DCG      # Your dual CG optimizer class
+    from mpisppy.cylinders.hub import DCGHub   # Your dual CG hub class
+    shoptions = shared_options(cfg)
+    options = copy.deepcopy(shoptions)# most of them are not needed but otherwise cep_cylinder crashes
+    odictsp = sputils.option_string_to_dict(cfg.sp_solver_options)
+    options["sp_solver_options"] = odictsp
+    odictmp = sputils.option_string_to_dict(cfg.mp_solver_options)
+    options["mp_solver_options"] = odictmp
+    options["convthresh"] = cfg.intra_hub_conv_thresh
+    options["bundles_per_rank"] = cfg.bundles_per_rank
+    options["CGIterLimit"]=cfg.max_iterations  
+    hub_dict = {
+        "hub_class": DCGHub,   # <-- Use your dual hub class here
+        "hub_kwargs": {"options": {"rel_gap": cfg.rel_gap,
+                                   "abs_gap": cfg.abs_gap,
+                                   "max_stalled_iters": cfg.max_stalled_iters}},
+        "opt_class": DCG,      # <-- Use your dual optimizer class here
+        "opt_kwargs": {
+            "options": options,
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": scenario_creator,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
+            "scenario_denouement": scenario_denouement,
+            "variable_probability": variable_probability,
+            "extension_kwargs": extension_kwargs,
             "all_nodenames": all_nodenames
         }
     }
@@ -735,7 +907,7 @@ def add_ph_tracking(cylinder_dict, cfg, spoke=False):
     return cylinder_dict
 
 def add_timed_mipgap(cylinder_dict, cfg):
-    if _hasit(cfg,'timed_mipgap'):
+    if getattr(cfg, "timed_mipgap", False):
         from mpisppy.extensions.timed_mipgap import TimedMIPGapCB
         cylinder_dict = extension_adder(cylinder_dict, TimedMIPGapCB)
         cylinder_dict['opt_kwargs']['options']['timed_mipgap']= {'timecurve':cfg.timed_mipgap_options}
@@ -1044,6 +1216,45 @@ def subgradient_spoke(
     return subgradient_spoke
 
 
+def ph_xfeas_spoke(
+    cfg,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+    rho_setter=None,
+    all_nodenames=None,
+    ph_extensions=None,
+    extension_kwargs=None,
+):
+    from mpisppy.cylinders.ph_xfeas_spoke import PHXFeasSpoke
+    ph_xfeas_spoke = _PHBase_spoke_foundation(
+        PHXFeasSpoke,
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        rho_setter=rho_setter,
+        all_nodenames=all_nodenames,
+        ph_extensions=ph_extensions,
+        extension_kwargs=extension_kwargs,
+    )
+    options = ph_xfeas_spoke["opt_kwargs"]["options"]
+    if cfg.ph_xfeas_spoke_rescale_rho_factor is not None:
+        options["rho_factor"] = cfg.ph_xfeas_spoke_rescale_rho_factor
+
+    # make sure this spoke doesn't hit the time or iteration limit
+    options["time_limit"] = None
+    options["PHIterLimit"] = cfg.max_iterations * 1_000_000
+    options["display_progress"] = False
+    options["display_convergence_detail"] = False
+
+    add_ph_tracking(ph_xfeas_spoke, cfg, spoke=True)
+
+    return ph_xfeas_spoke
+
+
 def ph_dual_spoke(
     cfg,
     scenario_creator,
@@ -1135,6 +1346,7 @@ def xhatlooper_spoke(
     ph_extensions=None,
     extension_kwargs=None,
     average_scenario_creator=None,
+    feasible_xhat_creator=None,
 ):
 
     from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
@@ -1157,6 +1369,8 @@ def xhatlooper_spoke(
     }
     _maybe_attach_jensens(xhatlooper_dict, cfg, "xhatlooper",
                           average_scenario_creator, scenario_creator_kwargs)
+    _maybe_attach_feasible_xhat(xhatlooper_dict, cfg, "xhatlooper",
+                                feasible_xhat_creator, scenario_creator_kwargs)
 
     return xhatlooper_dict
 
@@ -1172,6 +1386,7 @@ def xhatxbar_spoke(
         extension_kwargs=None,
         all_nodenames=None,
         average_scenario_creator=None,
+        feasible_xhat_creator=None,
 ):
     from mpisppy.cylinders.xhatxbar_bounder import XhatXbarInnerBound
     xhatxbar_dict = _Xhat_Eval_spoke_foundation(
@@ -1191,10 +1406,12 @@ def xhatxbar_spoke(
         "dump_prefix": "delme",
         "csvname": "looper.csv",
     }
-    
+
     xhatxbar_dict["opt_kwargs"]["variable_probability"] = variable_probability
     _maybe_attach_jensens(xhatxbar_dict, cfg, "xhatxbar",
                           average_scenario_creator, scenario_creator_kwargs)
+    _maybe_attach_feasible_xhat(xhatxbar_dict, cfg, "xhatxbar",
+                                feasible_xhat_creator, scenario_creator_kwargs)
 
     return xhatxbar_dict
 
@@ -1209,11 +1426,12 @@ def xhatshuffle_spoke(
     ph_extensions=None,
     extension_kwargs=None,
     average_scenario_creator=None,
+    feasible_xhat_creator=None,
 ):
 
     from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
     xhatshuffle_dict = _Xhat_Eval_spoke_foundation(
-        XhatShuffleInnerBound,        
+        XhatShuffleInnerBound,
         cfg,
         scenario_creator,
         scenario_denouement,
@@ -1234,6 +1452,8 @@ def xhatshuffle_spoke(
         xhatshuffle_dict["opt_kwargs"]["options"]["xhatshuffle_iter_step"] = cfg.xhatshuffle_iter_step
     _maybe_attach_jensens(xhatshuffle_dict, cfg, "xhatshuffle",
                           average_scenario_creator, scenario_creator_kwargs)
+    _maybe_attach_feasible_xhat(xhatshuffle_dict, cfg, "xhatshuffle",
+                                feasible_xhat_creator, scenario_creator_kwargs)
 
     return xhatshuffle_dict
 
@@ -1249,6 +1469,7 @@ def xhatspecific_spoke(
     ph_extensions=None,
     extension_kwargs=None,
     average_scenario_creator=None,
+    feasible_xhat_creator=None,
 ):
 
     from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
@@ -1270,6 +1491,8 @@ def xhatspecific_spoke(
     }
     _maybe_attach_jensens(xhatspecific_dict, cfg, "xhatspecific",
                           average_scenario_creator, scenario_creator_kwargs)
+    _maybe_attach_feasible_xhat(xhatspecific_dict, cfg, "xhatspecific",
+                                feasible_xhat_creator, scenario_creator_kwargs)
     return xhatspecific_dict
 
 def xhatlshaped_spoke(

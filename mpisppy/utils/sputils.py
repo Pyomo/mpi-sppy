@@ -241,7 +241,7 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
         scenario_instance.ref_vars = dict()
         scenario_instance.ref_suppl_vars = dict()
         scenario_instance.ref_surrogate_vars = dict()
-        scenario_instance._nlens = {node.name: len(node.nonant_vardata_list) 
+        scenario_instance._nlens = {node.name: len(node.nonant_vardata_list)
                                 for node in scenario_instance._mpisppy_node_list}
         for node in scenario_instance._mpisppy_node_list:
             ndn = node.name
@@ -255,11 +255,24 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
             for i, v in enumerate(node.nonant_ef_suppl_vardata_list):
                 if (ndn, i) not in scenario_instance.ref_suppl_vars:
                     scenario_instance.ref_suppl_vars[(ndn, i)] = v
-        # patch in EF_Obj        
-        scenario_objs = deact_objs(scenario_instance)        
-        obj = scenario_objs[0]            
+        # patch in EF_Obj
+        scenario_objs = deact_objs(scenario_instance)
+        obj = scenario_objs[0]
         sense = pyo.minimize if obj.is_minimizing() else pyo.maximize
         scenario_instance.EF_Obj = pyo.Objective(expr=obj.expr, sense=sense)
+
+        # Densified bundle position -> per-sub-scenario nonant Vars at that
+        # position. Trivial here (one sub-scenario => singleton groups), but
+        # the attribute is provided unconditionally so downstream consumers
+        # don't need to special-case the single-scenario EF. See issue #673
+        # and _bundle_consensus_groups in mpisppy/utils/nonant_sensitivities.py.
+        scenario_instance.consensus_groups = _build_consensus_groups(
+            scenario_instance.ref_vars,
+            scenario_instance.ref_surrogate_vars,
+            {(node.name, i): [node.nonant_vardata_list[i]]
+             for node in scenario_instance._mpisppy_node_list
+             for i in range(scenario_instance._nlens[node.name])},
+        )
 
         return scenario_instance  #### special return for single scenario
 
@@ -367,10 +380,17 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
     nonant_constr_suppl = pyo.Constraint(pyo.Any, name='_C_EF_suppl')
     EF_instance.add_component('_C_EF_suppl', nonant_constr_suppl)
 
+    # (ndn, i) -> [per-sub-scenario nonant Vars at that position], collected
+    # in scenario-iteration order during the loop below. Densified into
+    # EF_instance.consensus_groups after the loop completes (the densification
+    # depends on the *final* state of ref_surrogate_vars, which can shrink
+    # mid-loop via the Stoch_AdmmWrapper surrogate-upgrade path).
+    per_pos_vars = dict()
+
     for (sname, s) in scen_dict.items():
-        nlens = {node.name: len(node.nonant_vardata_list) 
+        nlens = {node.name: len(node.nonant_vardata_list)
                             for node in s._mpisppy_node_list}
-        
+
         for (node_name, num_nonant_vars) in nlens.items(): # copy nlens to EF
             if (node_name in EF_instance._nlens.keys() and
                 num_nonant_vars != EF_instance._nlens[node_name]):
@@ -386,6 +406,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
             ndn = node.name
             for i in range(nlens[ndn]):
                 v = node.nonant_vardata_list[i]
+                per_pos_vars.setdefault((ndn, i), []).append(v)
                 if (ndn, i) not in ref_vars:
                     # grab the reference variable
                     if (nonant_for_fixed_vars) or (not v.is_fixed()):
@@ -434,8 +455,33 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
     EF_instance.ref_vars = ref_vars
     EF_instance.ref_suppl_vars = ref_suppl_vars
     EF_instance.ref_surrogate_vars = ref_surrogate_vars
+    # Densified bundle position -> per-sub-scenario nonant Vars; stashed here
+    # at construction time so downstream rho setters / KKT-sensitivity probes
+    # don't re-walk the bundle to recover what create_EF already knew. See
+    # issue #673 and _bundle_consensus_groups in nonant_sensitivities.py.
+    EF_instance.consensus_groups = _build_consensus_groups(
+        ref_vars, ref_surrogate_vars, per_pos_vars,
+    )
 
     return EF_instance
+
+
+def _build_consensus_groups(ref_vars, ref_surrogate_vars, per_pos_vars):
+    """Densify {(ndn, per_scen_i): [Vars]} into {(ndn, bundle_k): [Vars]}
+    by skipping surrogate positions and renumbering per node. Iteration
+    order follows ``ref_vars.keys()`` (insertion order during create_EF),
+    so a bundle position ``k`` here matches what ``s._mpisppy_data.nonant_indices``
+    keys against downstream.
+    """
+    groups = dict()
+    counters = dict()
+    for (ndn, per_scen_i) in ref_vars.keys():
+        if (ndn, per_scen_i) in ref_surrogate_vars:
+            continue
+        k = counters.get(ndn, 0)
+        counters[ndn] = k + 1
+        groups[(ndn, k)] = per_pos_vars.get((ndn, per_scen_i), [])
+    return groups
 
 def _models_have_same_sense(models):
     ''' Check if every model in the provided dict has the same objective sense.
