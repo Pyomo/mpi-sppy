@@ -23,6 +23,7 @@ import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils
 import mpisppy.scenario_tree as scenario_tree
+from mpisppy.utils.admmWrapper import _admm_normalize_consensus_vars
 from mpisppy.utils.stoch_admmWrapper import _consensus_vars_number_creator
 
 
@@ -68,19 +69,19 @@ class AdmmBundler:
         self.scenarios_per_bundle = scenarios_per_bundle
         self.admm_subproblem_names = admm_subproblem_names
         self.stoch_scenario_names = stoch_scenario_names
-        self.consensus_vars = consensus_vars
+        self.consensus_vars = _admm_normalize_consensus_vars(consensus_vars, tuple_form=True)
         self.combining_fn = combining_fn
         self.split_fn = split_fn
         self.scenario_creator_kwargs = scenario_creator_kwargs or {}
         self.first_stage_cost = first_stage_cost
         self.first_stage_varlist = first_stage_varlist
         self.number_admm_subproblems = len(admm_subproblem_names)
-        self.consensus_vars_number = _consensus_vars_number_creator(consensus_vars)
+        self.consensus_vars_number = _consensus_vars_number_creator(self.consensus_vars)
 
         # Collect all consensus vars with stages
         self.all_consensus_vars = {}
-        for sub in consensus_vars:
-            for var_stage_tuple in consensus_vars[sub]:
+        for sub in self.consensus_vars:
+            for var_stage_tuple in self.consensus_vars[sub]:
                 self.all_consensus_vars[var_stage_tuple[0]] = var_stage_tuple[1]
 
         # Maps bundle model object → var_prob list

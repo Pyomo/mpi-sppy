@@ -684,6 +684,58 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
                 len(s_l._mpisppy_node_list[0].nonant_vardata_list),
                 f"{sname}: root nonant count differs")
 
+    def test_consensus_vars_accepts_var_objects(self):
+        """B.1: consensus_vars may contain Pyomo Var/VarData objects in
+        place of (or mixed with) name strings.  The wrapper's normalized
+        consensus_vars and the resulting nonant lists must match the
+        string-form result."""
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
+        from mpisppy import MPI
+
+        fs_cost, fs_varlist = self._hooks()
+        sc = self._minimal_scenario_creator(call_attach=False)
+
+        # Build a Var-flavored consensus_vars.  Each subproblem owns
+        # exactly one consensus var per _minimal_scenario_creator.
+        # Pyomo VarData holds its parent block via weakref, so we must
+        # keep these sample scenarios alive across the wrapper call.
+        sample_A = sc("ADMM_STOCH_A_S1")
+        sample_B = sc("ADMM_STOCH_B_S1")
+        cv_var = {"A": [(sample_A.x, 1)], "B": [(sample_B.y, 1)]}
+
+        kw_str = self._common_kwargs()
+        kw_var = dict(kw_str)
+        kw_var["consensus_vars"] = cv_var
+
+        admm_str = Stoch_AdmmWrapper(
+            options={},
+            scenario_creator=sc,
+            mpicomm=MPI.COMM_WORLD,
+            first_stage_cost=fs_cost,
+            first_stage_varlist=fs_varlist,
+            **kw_str,
+        )
+        admm_var = Stoch_AdmmWrapper(
+            options={},
+            scenario_creator=sc,
+            mpicomm=MPI.COMM_WORLD,
+            first_stage_cost=fs_cost,
+            first_stage_varlist=fs_varlist,
+            **kw_var,
+        )
+        # sample_{A,B} can be released now; the wrapper has snapshotted
+        # the names.
+        del sample_A, sample_B
+
+        self.assertEqual(admm_str.consensus_vars, admm_var.consensus_vars)
+        for sname in admm_str.local_admm_stoch_subproblem_scenarios:
+            s_s = admm_str.local_admm_stoch_subproblem_scenarios[sname]
+            s_v = admm_var.local_admm_stoch_subproblem_scenarios[sname]
+            self.assertEqual(
+                [n.name for n in s_s._mpisppy_node_list],
+                [n.name for n in s_v._mpisppy_node_list],
+                f"{sname}: node list differs between str and var consensus_vars")
+
     def test_hooks_plus_manual_attach_errors(self):
         """Hooks defined AND scenario_creator also calls
         attach_root_node — error so the user knows the hooks make the

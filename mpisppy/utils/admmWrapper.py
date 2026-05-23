@@ -12,6 +12,51 @@ import pyomo.environ as pyo
 from mpisppy import MPI
 global_rank = MPI.COMM_WORLD.Get_rank()
 
+def _admm_normalize_consensus_vars(consensus_vars, *, tuple_form):
+    """Coerce every variable identifier in consensus_vars to its .name string.
+
+    Each entry may be a string (legacy) or a Pyomo Var / VarData
+    (anything exposing a .name attribute).  Mixed lists are allowed so
+    callers can migrate one entry at a time.  For indexed Vars, pass
+    individual VarData objects (e.g., scenario.x[idx]) rather than the
+    container.
+
+    Caveat: Pyomo VarData holds its parent block via a weakref, so the
+    .name lookup here only works if the scenario the Var came from is
+    still alive at wrapper-construction time.  Callers building Vars
+    inside a helper function should either keep the source scenario(s)
+    alive across the wrapper call or pre-snapshot the names themselves.
+
+    Args:
+        consensus_vars (dict): {subproblem_name: list_of_entries}.
+            tuple_form=False (--admm): entries are var-identifiers.
+            tuple_form=True  (--stoch-admm): entries are (var-identifier, stage).
+        tuple_form (bool): which list shape consensus_vars uses.
+
+    Returns:
+        dict: a new dict with the same shape, all identifiers as strings.
+    """
+    def _to_name(v):
+        if isinstance(v, str):
+            return v
+        name = getattr(v, "name", None)
+        if name is None:
+            raise TypeError(
+                f"consensus_vars entry must be a string or a Pyomo "
+                f"Var/VarData (anything with a .name attribute), got "
+                f"{type(v).__name__}: {v!r}"
+            )
+        return name
+
+    out = {}
+    for sub, entries in consensus_vars.items():
+        if tuple_form:
+            out[sub] = [(_to_name(v), stage) for (v, stage) in entries]
+        else:
+            out[sub] = [_to_name(v) for v in entries]
+    return out
+
+
 def _consensus_vars_number_creator(consensus_vars):
     """associates to each consensus vars the number of time it appears
 
@@ -86,9 +131,9 @@ class AdmmWrapper():
             self.local_scenarios[sname] = s
         #we are not collecting instantiation time
 
-        self.consensus_vars = consensus_vars
+        self.consensus_vars = _admm_normalize_consensus_vars(consensus_vars, tuple_form=False)
         self.verbose = verbose
-        self.consensus_vars_number = _consensus_vars_number_creator(consensus_vars)
+        self.consensus_vars_number = _consensus_vars_number_creator(self.consensus_vars)
         #check_consensus_vars(consensus_vars)
         self.assign_variable_probs(verbose=self.verbose)
         self.number_of_scenario = len(all_scenario_names)

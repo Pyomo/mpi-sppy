@@ -11,6 +11,7 @@ import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
 import mpisppy.scenario_tree as scenario_tree
 import numpy as np
+from mpisppy.utils.admmWrapper import _admm_normalize_consensus_vars
 
 
 def _tag_dummies_as_surrogate(node, dummies):
@@ -154,9 +155,9 @@ class Stoch_AdmmWrapper(): #add scenario_tree
         # we are not collecting instantiation time
 
         self.split_admm_stoch_subproblem_scenario_name = split_admm_stoch_subproblem_scenario_name
-        self.consensus_vars = consensus_vars
+        self.consensus_vars = _admm_normalize_consensus_vars(consensus_vars, tuple_form=True)
         self.verbose = verbose
-        self.consensus_vars_number = _consensus_vars_number_creator(consensus_vars)
+        self.consensus_vars_number = _consensus_vars_number_creator(self.consensus_vars)
         self.admm_subproblem_names = admm_subproblem_names
         self.stoch_scenario_names = stoch_scenario_names
         self.BFs = BFs
