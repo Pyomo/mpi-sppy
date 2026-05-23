@@ -98,6 +98,8 @@ class Stoch_AdmmWrapper(): #add scenario_tree
             BFs=None,
             first_stage_cost=None,
             first_stage_varlist=None,
+            first_stage_surrogate_nonant_list=None,
+            first_stage_nonant_ef_suppl_list=None,
     ):
         assert len(options) == 0, "no options supported by stoch_admmWrapper"
         # first_stage_cost / first_stage_varlist must be defined together
@@ -111,6 +113,25 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                 f"These hooks must be defined together (or both omitted)."
             )
         has_first_stage_hooks = first_stage_cost is not None
+        # The advanced hooks forward to attach_root_node's
+        # surrogate_nonant_list / nonant_ef_suppl_list parameters.
+        # Each may be defined alone, but only when the two core hooks
+        # are also defined (there is nothing for the wrapper to attach
+        # them onto otherwise).
+        advanced_hooks = {
+            "first_stage_surrogate_nonant_list": first_stage_surrogate_nonant_list,
+            "first_stage_nonant_ef_suppl_list": first_stage_nonant_ef_suppl_list,
+        }
+        present_advanced = [n for n, h in advanced_hooks.items() if h is not None]
+        if present_advanced and not has_first_stage_hooks:
+            raise RuntimeError(
+                f"Stoch_AdmmWrapper was given the advanced hook(s) "
+                f"{present_advanced} but first_stage_cost / "
+                f"first_stage_varlist were not defined.  The advanced "
+                f"hooks forward to sputils.attach_root_node's optional "
+                f"parameters and only make sense when the core hooks "
+                f"are also driving attach_root_node."
+            )
         # We need local_scenarios
         self.local_admm_stoch_subproblem_scenarios = {}
         scen_tree = sputils._ScenTree(["ROOT"], all_admm_stoch_subproblem_scenario_names)
@@ -143,8 +164,16 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                         f"sputils.attach_root_node.  Remove the "
                         f"attach_root_node call from scenario_creator."
                     )
+                attach_kwargs = {}
+                if first_stage_surrogate_nonant_list is not None:
+                    attach_kwargs["surrogate_nonant_list"] = \
+                        first_stage_surrogate_nonant_list(s)
+                if first_stage_nonant_ef_suppl_list is not None:
+                    attach_kwargs["nonant_ef_suppl_list"] = \
+                        first_stage_nonant_ef_suppl_list(s)
                 sputils.attach_root_node(
-                    s, first_stage_cost(s), first_stage_varlist(s))
+                    s, first_stage_cost(s), first_stage_varlist(s),
+                    **attach_kwargs)
             else:
                 if not already_attached:
                     raise RuntimeError(

@@ -59,7 +59,9 @@ class AdmmBundler:
                  admm_subproblem_names, stoch_scenario_names,
                  consensus_vars, combining_fn, split_fn,
                  scenario_creator_kwargs=None,
-                 first_stage_cost=None, first_stage_varlist=None):
+                 first_stage_cost=None, first_stage_varlist=None,
+                 first_stage_surrogate_nonant_list=None,
+                 first_stage_nonant_ef_suppl_list=None):
         # Same both-or-neither contract as Stoch_AdmmWrapper.
         if (first_stage_cost is None) != (first_stage_varlist is None):
             present = "first_stage_cost" if first_stage_cost is not None else "first_stage_varlist"
@@ -67,6 +69,24 @@ class AdmmBundler:
             raise RuntimeError(
                 f"AdmmBundler was given {present} but not {missing}. "
                 f"These hooks must be defined together (or both omitted)."
+            )
+        # Advanced hooks forward to attach_root_node's
+        # surrogate_nonant_list / nonant_ef_suppl_list parameters.
+        # Each may be defined alone, but only when the two core hooks
+        # are also defined.
+        advanced_hooks = {
+            "first_stage_surrogate_nonant_list": first_stage_surrogate_nonant_list,
+            "first_stage_nonant_ef_suppl_list": first_stage_nonant_ef_suppl_list,
+        }
+        present_advanced = [n for n, h in advanced_hooks.items() if h is not None]
+        if present_advanced and first_stage_cost is None:
+            raise RuntimeError(
+                f"AdmmBundler was given the advanced hook(s) "
+                f"{present_advanced} but first_stage_cost / "
+                f"first_stage_varlist were not defined.  The advanced "
+                f"hooks forward to sputils.attach_root_node's optional "
+                f"parameters and only make sense when the core hooks "
+                f"are also driving attach_root_node."
             )
         self.module = module
         self.scenarios_per_bundle = scenarios_per_bundle
@@ -78,6 +98,8 @@ class AdmmBundler:
         self.scenario_creator_kwargs = scenario_creator_kwargs or {}
         self.first_stage_cost = first_stage_cost
         self.first_stage_varlist = first_stage_varlist
+        self.first_stage_surrogate_nonant_list = first_stage_surrogate_nonant_list
+        self.first_stage_nonant_ef_suppl_list = first_stage_nonant_ef_suppl_list
         self.number_admm_subproblems = len(admm_subproblem_names)
 
         # Same first-stage auto-merge as Stoch_AdmmWrapper.
@@ -259,8 +281,16 @@ class AdmmBundler:
                         f"sputils.attach_root_node.  Remove the "
                         f"attach_root_node call from scenario_creator."
                     )
+                attach_kwargs = {}
+                if self.first_stage_surrogate_nonant_list is not None:
+                    attach_kwargs["surrogate_nonant_list"] = \
+                        self.first_stage_surrogate_nonant_list(s)
+                if self.first_stage_nonant_ef_suppl_list is not None:
+                    attach_kwargs["nonant_ef_suppl_list"] = \
+                        self.first_stage_nonant_ef_suppl_list(s)
                 sputils.attach_root_node(
-                    s, self.first_stage_cost(s), self.first_stage_varlist(s))
+                    s, self.first_stage_cost(s), self.first_stage_varlist(s),
+                    **attach_kwargs)
             else:
                 if not already_attached:
                     raise RuntimeError(

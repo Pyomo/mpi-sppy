@@ -955,6 +955,147 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
         self.assertIn("first_stage_cost", msg)
         self.assertIn("first_stage_varlist", msg)
 
+    # ----- B.3: advanced hooks for surrogate / EF-supplemental nonants -----
+
+    @staticmethod
+    def _scenario_creator_with_surrogate_and_ef_suppl():
+        """Like _minimal_scenario_creator(call_attach=False), but each
+        before-wrap scenario carries extra Vars m.z (a surrogate) and
+        m.e (an EF-supplemental nonant) that B.3 forwards to
+        attach_root_node via the new advanced hooks."""
+        import pyomo.environ as pyo
+
+        def sc(sname, **kwargs):
+            parts = sname.split("_")
+            admm_part = parts[2]
+            m = pyo.ConcreteModel()
+            if admm_part == "A":
+                m.x = pyo.Var(bounds=(0, 1))
+                own = m.x
+            else:
+                m.y = pyo.Var(bounds=(0, 1))
+                own = m.y
+            m.fs = pyo.Var(bounds=(0, 1))
+            m.z = pyo.Var(bounds=(0, 1))   # surrogate nonant
+            m.e = pyo.Var(bounds=(0, 1))   # EF-supplemental nonant
+            m.FirstStageCost = pyo.Expression(expr=m.fs)
+            m.obj = pyo.Objective(expr=own + m.fs, sense=pyo.minimize)
+            m._first_stage_vars = [m.fs]
+            m._surrogate_vars = [m.z]
+            m._ef_suppl_vars = [m.e]
+            return m
+
+        return sc
+
+    def test_advanced_hooks_forwarded(self):
+        """B.3: when both advanced hooks are supplied, attach_root_node
+        receives surrogate_nonant_list and nonant_ef_suppl_list, and
+        the surrogate/EF-suppl Vars survive the wrapper's stage rewrite
+        on the resulting wrapped scenario's root node."""
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
+        from mpisppy import MPI
+
+        fs_cost, fs_varlist = self._hooks()
+        admm = Stoch_AdmmWrapper(
+            options={},
+            scenario_creator=self._scenario_creator_with_surrogate_and_ef_suppl(),
+            mpicomm=MPI.COMM_WORLD,
+            first_stage_cost=fs_cost,
+            first_stage_varlist=fs_varlist,
+            first_stage_surrogate_nonant_list=lambda s: s._surrogate_vars,
+            first_stage_nonant_ef_suppl_list=lambda s: s._ef_suppl_vars,
+            **self._common_kwargs(),
+        )
+        for sname, s in admm.local_admm_stoch_subproblem_scenarios.items():
+            root = s._mpisppy_node_list[0]
+            self.assertIn(
+                s.z, root.surrogate_vardatas,
+                f"{sname}: surrogate Var m.z missing from root node")
+            self.assertIn(
+                s.e, root.nonant_ef_suppl_vardata_list,
+                f"{sname}: EF-supplemental Var m.e missing from root node")
+
+    def test_advanced_hook_alone_ok(self):
+        """B.3: only one of the two advanced hooks supplied is fine
+        (they are independent of each other; each is independent of
+        the other but both depend on the two core hooks)."""
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
+        from mpisppy import MPI
+
+        fs_cost, fs_varlist = self._hooks()
+        admm = Stoch_AdmmWrapper(
+            options={},
+            scenario_creator=self._scenario_creator_with_surrogate_and_ef_suppl(),
+            mpicomm=MPI.COMM_WORLD,
+            first_stage_cost=fs_cost,
+            first_stage_varlist=fs_varlist,
+            first_stage_surrogate_nonant_list=lambda s: s._surrogate_vars,
+            # first_stage_nonant_ef_suppl_list NOT supplied
+            **self._common_kwargs(),
+        )
+        for sname, s in admm.local_admm_stoch_subproblem_scenarios.items():
+            root = s._mpisppy_node_list[0]
+            self.assertIn(s.z, root.surrogate_vardatas,
+                          f"{sname}: surrogate Var missing")
+            # No EF-suppl Vars attached.
+            self.assertNotIn(s.e, root.nonant_ef_suppl_vardata_list)
+
+    def test_advanced_hook_without_core_hooks_errors(self):
+        """B.3: passing an advanced hook to Stoch_AdmmWrapper without
+        also supplying first_stage_cost / first_stage_varlist is an
+        error -- there is nothing for the wrapper to attach the
+        advanced lists onto."""
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
+        from mpisppy import MPI
+
+        for kw in (
+            {"first_stage_surrogate_nonant_list": lambda s: []},
+            {"first_stage_nonant_ef_suppl_list": lambda s: []},
+        ):
+            with self.assertRaises(RuntimeError) as cm:
+                Stoch_AdmmWrapper(
+                    options={},
+                    scenario_creator=self._minimal_scenario_creator(call_attach=True),
+                    mpicomm=MPI.COMM_WORLD,
+                    **kw,
+                    **self._common_kwargs(),
+                )
+            msg = str(cm.exception)
+            self.assertIn("advanced hook", msg)
+            self.assertIn("first_stage_cost", msg)
+
+    def test_setup_stoch_admm_advanced_without_core_errors(self):
+        """B.3: the setup_stoch_admm-level discovery rejects a module
+        that defines an advanced hook without the two core hooks."""
+        import types
+        from mpisppy.generic.admm import setup_stoch_admm
+
+        module = types.SimpleNamespace(
+            __name__="fake_module",
+            admm_subproblem_names_creator=lambda cfg: ["A", "B"],
+            stoch_scenario_names_creator=lambda cfg: ["S1", "S2"],
+            admm_stoch_subproblem_scenario_names_creator=(
+                lambda an, sn: [f"ADMM_STOCH_{a}_{s}" for s in sn for a in an]),
+            split_admm_stoch_subproblem_scenario_name=(
+                lambda name: (name.split("_")[2],
+                              "_".join(name.split("_")[3:]))),
+            kw_creator=lambda cfg: {},
+            consensus_vars_creator=(
+                lambda an, sn, **kw: {"A": [("x", 1)], "B": [("y", 1)]}),
+            scenario_creator=self._minimal_scenario_creator(call_attach=False),
+            # No first_stage_cost / first_stage_varlist; only an advanced hook.
+            first_stage_surrogate_nonant_list=lambda s: [],
+        )
+        cfg = config.Config()
+        cfg.add_to_config("branching_factors", description="",
+                          domain=list, default=None)
+        with self.assertRaises(RuntimeError) as cm:
+            setup_stoch_admm(module, cfg, n_cylinders=1)
+        msg = str(cm.exception)
+        self.assertIn("fake_module", msg)
+        self.assertIn("first_stage_surrogate_nonant_list", msg)
+        self.assertIn("first_stage_cost", msg)
+
 
 if __name__ == '__main__':
     unittest.main()
