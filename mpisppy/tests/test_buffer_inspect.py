@@ -41,41 +41,41 @@ class TestGenericChecks(unittest.TestCase):
 
     def test_fresh_send_buffer_passes(self):
         buf = SendArray(5)
-        rep = inspect_buffer(buf, Field.NONANT,
+        rep = inspect_buffer(buf, Field.XBAR,
                              ctx=InspectContext(nonant_count=5), send=True)
         self.assertTrue(rep.ok, msg=str(rep))
 
     def test_fresh_recv_buffer_passes(self):
         buf = RecvArray(5)
-        rep = inspect_buffer(buf, Field.NONANT,
+        rep = inspect_buffer(buf, Field.XBAR,
                              ctx=InspectContext(nonant_count=5), send=False)
         self.assertTrue(rep.ok, msg=str(rep))
 
     def test_padding_overrun_detected(self):
         buf = RecvArray(2)
         buf._full_array[5] = 42.0   # write into padding region
-        rep = inspect_buffer(buf, Field.NONANT, send=False)
+        rep = inspect_buffer(buf, Field.XBAR, send=False)
         self.assertFalse(rep.ok)
         self.assertTrue(any("padding region modified" in f for f in rep.findings))
 
     def test_write_id_must_be_integer_valued(self):
         buf = RecvArray(1)
         buf._array[-1] = 3.5
-        rep = inspect_buffer(buf, Field.NONANT, send=False)
+        rep = inspect_buffer(buf, Field.XBAR, send=False)
         self.assertFalse(rep.ok)
         self.assertTrue(any("not integer-valued" in f for f in rep.findings))
 
     def test_write_id_must_be_finite(self):
         buf = RecvArray(1)
         buf._array[-1] = np.inf
-        rep = inspect_buffer(buf, Field.NONANT, send=False)
+        rep = inspect_buffer(buf, Field.XBAR, send=False)
         self.assertFalse(rep.ok)
         self.assertTrue(any("non-finite" in f for f in rep.findings))
 
     def test_write_id_must_be_non_negative(self):
         buf = RecvArray(1)
         buf._array[-1] = -2.0
-        rep = inspect_buffer(buf, Field.NONANT, send=False)
+        rep = inspect_buffer(buf, Field.XBAR, send=False)
         self.assertFalse(rep.ok)
         self.assertTrue(any("negative" in f for f in rep.findings))
 
@@ -84,7 +84,7 @@ class TestGenericChecks(unittest.TestCase):
         _publish(buf, [1.0, 2.0, 3.0])
         # Tamper with the trailing slot post-publish
         buf._array[-1] = 99.0
-        rep = inspect_buffer(buf, Field.NONANT, send=True)
+        rep = inspect_buffer(buf, Field.XBAR, send=True)
         self.assertFalse(rep.ok)
         self.assertTrue(any("!= buf.id()" in f for f in rep.findings))
 
@@ -117,7 +117,7 @@ class TestGenericChecks(unittest.TestCase):
     def test_nan_in_data_after_publish_is_finding(self):
         buf = SendArray(3)
         buf._next_write_id()    # publish without setting values: data stays NaN
-        rep = inspect_buffer(buf, Field.NONANT,
+        rep = inspect_buffer(buf, Field.XBAR,
                              ctx=InspectContext(nonant_count=3), send=True)
         self.assertFalse(rep.ok)
         self.assertTrue(any("contains NaN" in f for f in rep.findings))
@@ -128,7 +128,7 @@ class TestGenericChecks(unittest.TestCase):
         buf[1] = np.inf
         buf[2] = 3.0
         buf._next_write_id()
-        rep = inspect_buffer(buf, Field.NONANT,
+        rep = inspect_buffer(buf, Field.XBAR,
                              ctx=InspectContext(nonant_count=3), send=True)
         self.assertFalse(rep.ok)
         self.assertTrue(any("contains inf" in f for f in rep.findings))
@@ -185,7 +185,7 @@ class TestNonantChecks(unittest.TestCase):
     def test_length_mismatch_via_explicit_count(self):
         buf = SendArray(5)
         _publish(buf, [0.0] * 5)
-        rep = inspect_buffer(buf, Field.NONANT,
+        rep = inspect_buffer(buf, Field.XBAR,
                              ctx=InspectContext(nonant_count=7), send=True)
         self.assertFalse(rep.ok)
         self.assertTrue(any("data length 5" in f for f in rep.findings))
@@ -194,7 +194,7 @@ class TestNonantChecks(unittest.TestCase):
         buf = SendArray(5)
         _publish(buf, [0.0] * 5)
         ctx = InspectContext(spbase=_FakeSP(nonant_length=7))
-        rep = inspect_buffer(buf, Field.NONANT, ctx=ctx, send=True)
+        rep = inspect_buffer(buf, Field.XBAR, ctx=ctx, send=True)
         self.assertFalse(rep.ok)
         self.assertTrue(any("data length 5" in f for f in rep.findings))
 
@@ -202,22 +202,22 @@ class TestNonantChecks(unittest.TestCase):
         buf = SendArray(5)
         _publish(buf, [0.0] * 5)
         ctx = InspectContext(nonant_count=5, spbase=_FakeSP(nonant_length=7))
-        rep = inspect_buffer(buf, Field.NONANT, ctx=ctx, send=True)
+        rep = inspect_buffer(buf, Field.XBAR, ctx=ctx, send=True)
         self.assertTrue(rep.ok, msg=str(rep))
 
     def test_multi_scenario_buffer_passes(self):
-        # Publisher with K scenarios publishes a NONANT buffer of length
+        # Publisher with K scenarios publishes a XBAR buffer of length
         # nonant_count * K. The checker must accept any positive multiple.
         buf = SendArray(24)  # e.g., 4 scenarios * 6 nonants
         _publish(buf, [0.0] * 24)
-        rep = inspect_buffer(buf, Field.NONANT,
+        rep = inspect_buffer(buf, Field.XBAR,
                              ctx=InspectContext(nonant_count=6), send=True)
         self.assertTrue(rep.ok, msg=str(rep))
 
     def test_non_multiple_length_caught(self):
         buf = SendArray(10)  # 10 is not a multiple of 6
         _publish(buf, [0.0] * 10)
-        rep = inspect_buffer(buf, Field.NONANT,
+        rep = inspect_buffer(buf, Field.XBAR,
                              ctx=InspectContext(nonant_count=6), send=True)
         self.assertFalse(rep.ok)
         self.assertTrue(any("not a positive multiple" in f for f in rep.findings))
@@ -227,7 +227,7 @@ class TestNonantChecks(unittest.TestCase):
         _publish(buf, [0.5, 7.0, 2.0, -1.0])
         lo = np.array([0.0, 0.0, 0.0, 0.0])
         hi = np.array([5.0, 5.0, 5.0, 5.0])
-        rep = inspect_buffer(buf, Field.NONANT,
+        rep = inspect_buffer(buf, Field.XBAR,
                              ctx=InspectContext(nonant_count=4,
                                                 nonant_lower=lo,
                                                 nonant_upper=hi),
@@ -241,7 +241,7 @@ class TestNonantChecks(unittest.TestCase):
         buf = SendArray(3)
         lo = np.array([0.0, 0.0, 0.0])
         hi = np.array([1.0, 1.0, 1.0])
-        rep = inspect_buffer(buf, Field.NONANT,
+        rep = inspect_buffer(buf, Field.XBAR,
                              ctx=InspectContext(nonant_count=3,
                                                 nonant_lower=lo,
                                                 nonant_upper=hi),
@@ -468,7 +468,7 @@ class TestSpokeGotKillSignalWarning(unittest.TestCase):
         self.assertTrue(fired)
 
     def test_sweep_inspects_every_buffer(self):
-        # SHUTDOWN legit + healthy NONANT recv + healthy NONANT send: no warnings.
+        # SHUTDOWN legit + healthy XBAR recv + healthy XBAR send: no warnings.
         # Then add a stomped OBJECTIVE_INNER_BOUND recv: exactly one warning,
         # naming that field.
         good_shutdown = RecvArray(1)
@@ -490,10 +490,10 @@ class TestSpokeGotKillSignalWarning(unittest.TestCase):
         bad_inner._full_array[3] = 7.0  # write into padding region
 
         extra_recv = {
-            (Field.NONANT, 1): good_nonant_recv,
+            (Field.XBAR, 1): good_nonant_recv,
             (Field.OBJECTIVE_INNER_BOUND, 1): bad_inner,
         }
-        send = {Field.NONANT: good_nonant_send}
+        send = {Field.XBAR: good_nonant_send}
         stub = _make_spoke_stub(
             good_shutdown,
             inspect_on=True,
@@ -543,11 +543,11 @@ class TestSpokeGotKillSignalWarning(unittest.TestCase):
             good_shutdown,
             inspect_on=True,
             extra_recv={
-                (Field.NONANT, 1): good_nonant_recv,
+                (Field.XBAR, 1): good_nonant_recv,
                 (Field.OBJECTIVE_INNER_BOUND, 1): good_inner_recv,
             },
             send={
-                Field.NONANT: good_nonant_send,
+                Field.XBAR: good_nonant_send,
                 Field.OBJECTIVE_OUTER_BOUND: good_outer_send,
             },
             nonant_length=3,
