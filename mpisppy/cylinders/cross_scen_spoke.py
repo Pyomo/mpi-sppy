@@ -19,7 +19,7 @@ import pyomo.environ as pyo
 class CrossScenarioCutSpoke(Spoke):
 
     send_fields = (*Spoke.send_fields, Field.CROSS_SCENARIO_CUT)
-    receive_fields = (*Spoke.receive_fields, Field.NONANT, Field.CROSS_SCENARIO_COST)
+    receive_fields = (*Spoke.receive_fields, Field.XBAR, Field.CROSS_SCENARIO_COST)
 
     def register_send_fields(self) -> None:
 
@@ -49,7 +49,7 @@ class CrossScenarioCutSpoke(Spoke):
     def register_receive_fields(self):
         super().register_receive_fields()
 
-        nonant_ranks = self.opt.spcomm.fields_to_ranks[Field.NONANT]
+        nonant_ranks = self.opt.spcomm.fields_to_ranks[Field.XBAR]
         cs_cost_ranks = self.opt.spcomm.fields_to_ranks[Field.CROSS_SCENARIO_COST]
 
         assert len(nonant_ranks) == 1
@@ -57,7 +57,7 @@ class CrossScenarioCutSpoke(Spoke):
         assert nonant_ranks[0] == cs_cost_ranks[0]
         source_rank = nonant_ranks[0]
 
-        self.all_nonants = self.register_recv_field(Field.NONANT, source_rank)
+        self.all_nonants = self.register_recv_field(Field.XBAR, source_rank)
         self.all_etas = self.register_recv_field(Field.CROSS_SCENARIO_COST, source_rank)
 
     def prep_cs_cuts(self):

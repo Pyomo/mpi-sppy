@@ -150,7 +150,7 @@ class CrossScenarioExtension(Extension):
                 ## End for
             ## End for
 
-            self.opt.spcomm.put_send_buffer(all_nonants, Field.NONANT)
+            self.opt.spcomm.put_send_buffer(all_nonants, Field.XBAR)
 
         ## End if
 
@@ -229,11 +229,11 @@ class CrossScenarioExtension(Extension):
         spcomm = self.opt.spcomm
         nscen = len(self.opt.all_scenario_names)
         local_scen_count = len(self.opt.local_scenario_names)
-        if spcomm.is_send_field_registered(Field.NONANT):
+        if spcomm.is_send_field_registered(Field.XBAR):
             self.send_nonants = False
         else:
             self.all_nonants = spcomm.register_send_field(
-                Field.NONANT,
+                Field.XBAR,
                 local_scen_count * self.opt.nonant_length
             )
             self.send_nonants = True
