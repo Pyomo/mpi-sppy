@@ -616,6 +616,60 @@ the first pass bundled into "Phase 0" has already landed separately.
   they should compose with async senders; verify and add tests.
 
 
+### Development and rollout strategy
+
+These changes touch a low-level, implementation-sensitive corner of the
+stack -- MPI one-sided (RMA) communication through mpi4py -- where
+behavior varies across MPI implementations (OpenMPI, MPICH, vendor
+builds) and versions, and where passive-target RMA (`Lock` / `Get` /
+`Put`) is the flakiest part of the spec.  Reviews of this material are
+necessarily slow, and a regression in the communicator layer would
+affect *every* run, not just flexible-rank runs.  The phases above are
+therefore sequenced by *blast radius*:
+
+- **Inert phases** (the infrastructure phase) add only gated, unreachable
+  code: at equal rank ratios the existing code path is unchanged.  These
+  can land on `main` incrementally and safely -- each is small,
+  reviewable on its own, and cannot change behavior for current users.
+- **Live-path phases** (the communicator rework that replaces
+  `strata_comm`) rewrite code that every run exercises, equal-rank or
+  not.  This cannot hide behind the rank-ratio gate, and is where the
+  real risk concentrates.
+
+**Chosen workflow: stacked PRs.**  Because reviews of this material are
+slow, phases are developed as a *stack* of pull requests rather than
+waiting for each to merge before the next begins.  Each phase lives on
+its own short-lived branch whose PR targets the branch *below* it (phase
+N+1 onto phase N, phase 1 onto `main`); the stack is reviewed and merged
+bottom-up, each PR being retargeted to `main` as the one beneath it
+lands.  This keeps work moving while earlier PRs sit in review, yet --
+unlike a long-lived feature branch or a development fork -- every change
+stays small, individually reviewable, and revertible/bisectable, and
+`main` stays continuously shippable.  (A big-bang integration merge of an
+entire multi-phase feature is the opposite: a large, hard-to-review,
+hard-to-bisect surface, which is *more* dangerous for code whose failures
+are subtle.  If isolation is ever genuinely wanted, prefer a branch in
+the upstream repository over a separate fork -- same isolation, far less
+CI and merge friction.)
+
+**Live-path rework: branch by abstraction.**  Stacked PRs govern *how*
+phases are reviewed and merged; the communicator rework that replaces
+`strata_comm` additionally needs care in *how the code is structured*,
+because it changes the path every run exercises.  Implement the new
+fullcomm / Option-D path *alongside* the existing `strata_comm` path,
+selected by a flag, defaulting to the **old** path.  Land it with the old
+path still default, so current users are unaffected; exercise the new
+path opt-in; make it the default only once it is proven; remove the old
+path afterward.  This yields a **runtime fallback** a feature branch or
+fork does not: if a cluster's MPI has buggy RMA, users can switch back to
+the proven path.  For an unstable dependency we do not control, a toggle
+available in production is worth more than isolation during development.
+
+**Gate the default flip on an MPI CI matrix.**  Exercise the new path on
+at least two MPI implementations (e.g. OpenMPI and MPICH) and more than
+one mpi4py / MPI version before it becomes the default.
+
+
 ### Possible future optimization (out of scope)
 
 The first-stage portion of `BEST_XHAT` / `RECENT_XHATS` is genuinely
