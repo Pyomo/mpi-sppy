@@ -357,7 +357,7 @@ class _BoundNonantSpoke(_BoundNonantLenSpoke):
     """
 
     def nonant_len_type(self) -> Field:
-        return Field.XBAR
+        return Field.NONANTS_VALS
 
     @property
     def localnonants(self):
@@ -383,7 +383,7 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke, InnerBoundSpoke):
     """
 
     send_fields = (*InnerBoundSpoke.send_fields, )
-    receive_fields = (*InnerBoundSpoke.receive_fields, Field.XBAR)
+    receive_fields = (*InnerBoundSpoke.receive_fields, Field.NONANTS_VALS)
 
     converger_spoke_char = 'I'
 
@@ -396,7 +396,7 @@ class OuterBoundNonantSpoke(_BoundNonantSpoke):
     """
 
     send_fields = (*_BoundNonantSpoke.send_fields, Field.OBJECTIVE_OUTER_BOUND, )
-    receive_fields = (*_BoundNonantSpoke.receive_fields, Field.XBAR)
+    receive_fields = (*_BoundNonantSpoke.receive_fields, Field.NONANTS_VALS)
 
     converger_spoke_char = 'A'  # probably Lagrangian
 

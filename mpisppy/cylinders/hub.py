@@ -212,12 +212,12 @@ class PHPrimalHub(Hub):
     spokes like Lagrangian to a specific dual (W) buffer.
     """
 
-    send_fields = (*Hub.send_fields, Field.XBAR, )
+    send_fields = (*Hub.send_fields, Field.NONANTS_VALS, )
     receive_fields = (*Hub.receive_fields,)
 
     @property
     def nonant_field(self):
-        return Field.XBAR
+        return Field.NONANTS_VALS
 
     def setup_hub(self):
         ## Generate some warnings if nothing is giving bounds
@@ -341,7 +341,7 @@ class PHHub(PHPrimalHub):
 
 class LShapedHub(Hub):
 
-    send_fields = (*Hub.send_fields, Field.XBAR,)
+    send_fields = (*Hub.send_fields, Field.NONANTS_VALS,)
     receive_fields = (*Hub.receive_fields,)
 
     def setup_hub(self):
@@ -391,7 +391,7 @@ class LShapedHub(Hub):
         """ Gather nonants and send them to the appropriate spokes
         """
         ci = 0  ## index to self.nonant_send_buffer
-        nonant_send_buffer = self.send_buffers[Field.XBAR]
+        nonant_send_buffer = self.send_buffers[Field.NONANTS_VALS]
         for k, s in self.opt.local_scenarios.items():
             nonant_to_root_var_map = s._mpisppy_model.subproblem_to_root_vars_map
             for xvar in s._mpisppy_data.nonant_indices.values():
@@ -400,7 +400,7 @@ class LShapedHub(Hub):
                 ci += 1
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
 
-        self.put_send_buffer(nonant_send_buffer, Field.XBAR)
+        self.put_send_buffer(nonant_send_buffer, Field.NONANTS_VALS)
 
         return
     
@@ -408,7 +408,7 @@ class LShapedHub(Hub):
 
 class CGHub(Hub):
 
-    send_fields = (*Hub.send_fields, Field.XBAR,)
+    send_fields = (*Hub.send_fields, Field.NONANTS_VALS,)
     receive_fields = (*Hub.receive_fields,Field.RECENT_XHATS, Field.XFEAS )
 
     def register_receive_fields(self):
@@ -485,7 +485,7 @@ class CGHub(Hub):
      
     @property
     def nonant_field(self):
-        return Field.XBAR 
+        return Field.NONANTS_VALS 
     
 
 class DCGHub(CGHub):

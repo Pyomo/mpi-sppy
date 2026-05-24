@@ -39,20 +39,20 @@ class RelaxedPHFixer(Extension):
     def iter0_post_solver_creation(self):
         # wait for relaxed iter0:
         if self.relaxed_nonant_buf.id() == 0:
-            while not self.opt.spcomm.get_receive_buffer(self.relaxed_nonant_buf, Field.RELAXED_XBAR, self.relaxed_ph_spoke_index):
+            while not self.opt.spcomm.get_receive_buffer(self.relaxed_nonant_buf, Field.RELAXED_NONANTS_VALS, self.relaxed_ph_spoke_index):
                 continue
         self.relaxed_ph_fixing(self.relaxed_nonant_buf.value_array(), pre_iter0=True)
 
     def register_receive_fields(self):
         spcomm = self.opt.spcomm
-        relaxed_ph_ranks = spcomm.fields_to_ranks[Field.RELAXED_XBAR]
+        relaxed_ph_ranks = spcomm.fields_to_ranks[Field.RELAXED_NONANTS_VALS]
         assert len(relaxed_ph_ranks) == 1
         index = relaxed_ph_ranks[0]
 
         self.relaxed_ph_spoke_index = index
 
         self.relaxed_nonant_buf = spcomm.register_recv_field(
-            Field.RELAXED_XBAR,
+            Field.RELAXED_NONANTS_VALS,
             self.relaxed_ph_spoke_index,
         )
 
@@ -61,7 +61,7 @@ class RelaxedPHFixer(Extension):
     def miditer(self):
         self.opt.spcomm.get_receive_buffer(
             self.relaxed_nonant_buf,
-            Field.RELAXED_XBAR,
+            Field.RELAXED_NONANTS_VALS,
             self.relaxed_ph_spoke_index,
         )
         self.relaxed_ph_fixing(self.relaxed_nonant_buf.value_array(), pre_iter0=False)
