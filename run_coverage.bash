@@ -146,6 +146,9 @@ run_phase "test_flex_coherence_policy (serial)" \
 run_phase "test_flexible_rank_cli (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_flexible_rank_cli.py -v
 
+run_phase "test_flex_xhat_assembly (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_flex_xhat_assembly.py -v
+
 run_phase "test_xhat_from_file (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_xhat_from_file.py -v
 
@@ -203,6 +206,9 @@ run_phase "test_flexible_rank_cylinders (mpiexec -np 6)" \
 
 run_phase "test_flexible_rank_duals (mpiexec -np 6)" \
     mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_duals.py
+
+run_phase "test_flexible_rank_xhat (mpiexec -np 6)" \
+    mpiexec -np 6 -oversubscribe coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_xhat.py
 
 # ---------- Tests that spawn mpiexec internally ----------
 

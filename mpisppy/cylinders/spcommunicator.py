@@ -27,7 +27,7 @@ from math import inf
 
 from mpisppy import MPI, global_toc
 from mpisppy.cylinders.spwindow import Field, FieldLengths, SPWindow, padded_len_n_doubles
-from mpisppy.cylinders.overlap_map import compute_overlap_segments
+from mpisppy.cylinders.overlap_map import OverlapSegment, compute_overlap_segments
 from mpisppy.utils.rank_apportionment import (
     apportion_ranks,
     cylinder_bases,
@@ -61,6 +61,22 @@ _GLOBAL_OR_SCALAR_FIELDS = frozenset((
 # mix iterations; its consumers re-evaluate, so it is always honest).
 _STRICT_COHERENCE_FIELDS = frozenset((
     Field.DUALS,
+))
+
+# Category-2 xhat fields: per-scenario layout [first-stage nonants, cost] whose
+# nonant portion is an incumbent first-stage decision identical across all
+# scenarios by non-anticipativity (the candidate fixes the first stage when it
+# is evaluated). Multi-source assembly fills each scenario's block from the rank
+# that holds it; if those ranks sit at different write_ids the first-stage
+# values could end up inconsistent across scenarios. After assembly we restore
+# NAC by overwriting every scenario's first-stage portion with a single coherent
+# reference (see _enforce_first_stage_nac). The per-scenario cost slot is left
+# alone -- it is genuinely per-scenario (Category 1). XFEAS is *not* here: it
+# carries per-scenario *distinct* iterates (its consumer tries each scenario's x
+# as its own candidate), so it is assembled per-scenario with no NAC fix-up.
+_FIRST_STAGE_NAC_FIELDS = frozenset((
+    Field.BEST_XHAT,
+    Field.RECENT_XHATS,
 ))
 
 
@@ -668,14 +684,29 @@ class SPCommunicator:
 
         For the nonant-valued fields this is the per-scenario nonant count,
         which is uniform across scenarios in a two-stage problem
-        (``opt.nonant_length``). Other per-scenario fields (e.g. the xhat
-        circular buffers) have layouts whose multi-source assembly is deferred
-        to later phases; building an overlap map for them raises here rather
-        than silently mis-assembling.
+        (``opt.nonant_length``). For the xhat fields each scenario contributes a
+        ``[nonants, cost]`` block, so the count is ``nonant_length + 1``; the
+        circular ``RECENT_XHATS`` returns the same single-version block size and
+        is expanded across versions in ``_build_overlap_map``.
         """
         if field in (Field.NONANTS_VALS, Field.RELAXED_NONANTS_VALS, Field.DUALS):
             k = self.opt.nonant_length
             return [k] * len(self.opt.all_scenario_names)
+        if field in (Field.BEST_XHAT, Field.RECENT_XHATS, Field.XFEAS):
+            # Each scenario's block is [first-stage nonants, per-scenario cost].
+            # Two-stage only: under multistage the NAC-redundant portion is
+            # per-tree-node (not one global first stage), so the cost-vs-nonant
+            # split and the NAC fix-up need per-node sourcing -- a later phase.
+            if self.opt.multistage:
+                raise NotImplementedError(
+                    f"Flexible (unequal) rank assignments: {self.__class__.__name__} "
+                    f"reads {field.name} on a multistage problem, whose per-node "
+                    f"first-stage sourcing is not implemented yet (two-stage is). "
+                    f"Run the cylinders that exchange {field.name} at equal rank "
+                    f"counts (rank_ratio == 1.0), or wait for the multistage phase."
+                )
+            k = self.opt.nonant_length
+            return [k + 1] * len(self.opt.all_scenario_names)
         # Reached at startup (window creation), not mid-solve: this cylinder is
         # in a flexible-rank run and reads a per-scenario field whose
         # multi-source assembly across unequal rank counts is not implemented
@@ -683,11 +714,9 @@ class SPCommunicator:
         raise NotImplementedError(
             f"Flexible (unequal) rank assignments: {self.__class__.__name__} "
             f"reads {field.name}, whose multi-source assembly across cylinders "
-            f"with different rank counts is not supported yet (only "
-            f"{Field.NONANTS_VALS.name}, {Field.RELAXED_NONANTS_VALS.name}, and "
-            f"{Field.DUALS.name} are). Run the cylinders that exchange "
-            f"{field.name} at equal rank counts (rank_ratio == 1.0), or wait "
-            f"for the phase that adds {field.name} support."
+            f"with different rank counts is not supported yet. Run the cylinders "
+            f"that exchange {field.name} at equal rank counts (rank_ratio == 1.0), "
+            f"or wait for the phase that adds {field.name} support."
         )
 
     def _validate_segment(self, field: Field, remote_global_rank: int, seg) -> None:
@@ -730,10 +759,78 @@ class SPCommunicator:
         )
         for seg in segments:
             seg.remote_rank = base + seg.remote_rank  # peer-local -> global
+        if field == Field.RECENT_XHATS:
+            # The single-version segments computed above describe one xhat
+            # version's per-scenario layout; replicate them across all versions
+            # of the circular buffer (see _expand_to_circular_versions).
+            segments = self._expand_to_circular_versions(
+                segments, peer_slices, base, items_per_scen
+            )
+        for seg in segments:
             self._validate_segment(field, seg.remote_rank, seg)
         self.overlap_maps[(field, peer_cylinder)] = segments
         self._overlap_source_ranks[(field, peer_cylinder)] = \
             sorted({seg.remote_rank for seg in segments})
+
+    def _expand_to_circular_versions(self, base_segments, peer_slices, base,
+                                     items_per_scen):
+        """Replicate single-version overlap segments across the versions of the
+        ``RECENT_XHATS`` circular buffer.
+
+        ``RECENT_XHATS`` holds ``V`` versions, each a ``BEST_XHAT``-sized block
+        laid out per scenario. Within one version the per-scenario blocks are
+        contiguous, but version ``v``'s block for a given rank sits at
+        ``v * (that rank's version size)`` -- and the version size differs per
+        rank because it scales with the rank's local scenario count. So a
+        single-version segment is emitted once per version, shifting its remote
+        offset by the *source rank's* version size and its local offset by this
+        rank's version size. Reading every physical slot faithfully (just
+        re-partitioned across scenarios) lets the receiver's ``RecvCircularBuffer``
+        interpret the write_id exactly as on the equal-rank path.
+        """
+        nversions = (self._field_lengths[Field.RECENT_XHATS]
+                     // self._field_lengths[Field.BEST_XHAT])
+        local_version_size = self._field_lengths[Field.BEST_XHAT]
+        # global source rank -> its single-version (BEST_XHAT) block size, in items
+        remote_version_size = {
+            base + r: sum(items_per_scen[s] for s in scens)
+            for r, scens in enumerate(peer_slices)
+        }
+        expanded = []
+        for v in range(nversions):
+            for seg in base_segments:
+                expanded.append(OverlapSegment(
+                    remote_rank=seg.remote_rank,
+                    remote_offset=v * remote_version_size[seg.remote_rank] + seg.remote_offset,
+                    local_offset=v * local_version_size + seg.local_offset,
+                    count=seg.count,
+                ))
+        return expanded
+
+    def _enforce_first_stage_nac(self, data_view, field):
+        """Restore non-anticipativity of the first-stage portion of a Category-2
+        xhat field after multi-source assembly (two-stage case).
+
+        Each per-scenario block is ``[first-stage nonants, cost]``. The nonant
+        portion is identical across scenarios by construction, but the blocks
+        were assembled from possibly different ranks/write_ids, so overwrite
+        every scenario's nonants with a single coherent reference -- the first
+        scenario's, which came whole from one rank. The cost slots are left
+        untouched (genuinely per-scenario). For ``RECENT_XHATS`` this is applied
+        independently within each version block. Two-stage only; multistage
+        per-node sourcing is guarded in _items_per_scen_for_field.
+        """
+        k = self.opt.nonant_length            # first-stage nonants per scenario
+        block = k + 1                          # [nonants, cost]
+        nscen = len(self._local_scen_idxs)
+        version_size = nscen * block
+        nversions = len(data_view) // version_size  # 1 for BEST_XHAT, V for RECENT_XHATS
+        for v in range(nversions):
+            v0 = v * version_size
+            ref = data_view[v0:v0 + k].copy()  # this version's scenario-0 first stage
+            for i in range(1, nscen):
+                off = v0 + i * block
+                data_view[off:off + k] = ref
 
     def _flex_get_single_source(self, buf, field, peer_cylinder, synchronize):
         """Read a global/scalar field single-source from a peer cylinder's base
@@ -774,6 +871,11 @@ class SPCommunicator:
         breaks agreement and every reader rejects together (no early return, no
         deadlock). With a synchronous hub all sources share an id, so strict
         reads pass normally and a transient mixed-id read is retried.
+
+        For the Category-2 xhat fields (`_FIRST_STAGE_NAC_FIELDS`) the assembled
+        per-scenario blocks then pass through _enforce_first_stage_nac, which
+        restores the non-anticipativity of their first-stage portion (the cost
+        portion stays per-scenario).
         """
         if synchronize:
             self.cylinder_comm.Barrier()
@@ -812,6 +914,8 @@ class SPCommunicator:
                 snapshot = source_snapshots[seg.remote_rank]
                 data_view[seg.local_offset : seg.local_offset + seg.count] = \
                     snapshot[seg.remote_offset : seg.remote_offset + seg.count]
+            if field in _FIRST_STAGE_NAC_FIELDS:
+                self._enforce_first_stage_nac(data_view, field)
             return self._mark_new(buf, new_id)
         buf._is_new = False
         return False
