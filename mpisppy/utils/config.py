@@ -745,6 +745,13 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
+        self.add_to_config('lagrangian_rank_ratio',
+                              description="MPI ranks for the lagrangian spoke "
+                                          "relative to the hub (flexible rank "
+                                          "assignments; default 1.0 = equal)",
+                              domain=float,
+                              default=1.0)
+
         self.add_solver_specs("lagrangian")
         self.add_mipgap_specs("lagrangian")
 
@@ -971,6 +978,13 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config('xhatshuffle_rank_ratio',
+                           description="MPI ranks for the xhatshuffle spoke "
+                                       "relative to the hub (flexible rank "
+                                       "assignments; default 1.0 = equal)",
+                           domain=float,
+                           default=1.0)
+
         self.add_to_config('add_reversed_shuffle',
                            description="using also the reversed shuffling (multistage only, default True)",
                            domain=bool,
@@ -1069,6 +1083,13 @@ class Config(pyofig.ConfigDict):
                               description="have an xhatxbar spoke",
                               domain=bool,
                               default=False)
+
+        self.add_to_config('xhatxbar_rank_ratio',
+                              description="MPI ranks for the xhatxbar spoke "
+                                          "relative to the hub (flexible rank "
+                                          "assignments; default 1.0 = equal)",
+                              domain=float,
+                              default=1.0)
 
         self.add_to_config('xhatxbar_try_jensens_first',
                            description="before entering the xhatxbar main loop, solve "
