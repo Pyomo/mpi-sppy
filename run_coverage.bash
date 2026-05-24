@@ -121,6 +121,9 @@ run_phase "test_reduced_costs_rho_bundles (serial)" \
 run_phase "test_rho_deprecations (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_rho_deprecations.py -v
 
+run_phase "test_rank_apportionment (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_rank_apportionment.py -v
+
 run_phase "test_xhat_from_file (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_xhat_from_file.py -v
 
