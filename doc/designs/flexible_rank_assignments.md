@@ -373,8 +373,10 @@ window creation.  Cons:
   Because total rank counts in the thousands are a real operating
   regime here, the O(N) startup allgather and its O(N)-per-rank layout
   storage must be replaced by the two-level (or local-compute) scheme
-  **before flexible ranks are advertised as production-supported**.
-  That replacement is its own focused change — it touches only how
+  **before flexible ranks is documented or recommended for production
+  use** (it can land on `main` before then, since it is inert until a
+  non-default ratio).  That replacement is its own focused change — it
+  touches only how
   `strata_buffer_layouts` is populated at startup, not the multi-source
   reader — so it is tracked as a release-gate item rather than folded
   into the feature phases, letting it be reviewed and scale-tested on
@@ -770,19 +772,20 @@ are subtle.  If isolation is ever genuinely wanted, prefer a branch in
 the upstream repository over a separate fork -- same isolation, far less
 CI and merge friction.)
 
-**Gate reliance on the feature with an MPI CI matrix.**  There is no
-default to flip, but before the `fullcomm` path is advertised as
-supported, exercise it on at least two MPI implementations (e.g. OpenMPI
-and MPICH) and more than one mpi4py / MPI version, since that path is
-where the RMA-portability risk lives.
+**Prerequisites before the feature is recommended for production use.**
+There is no default to flip, but before the `fullcomm` path is
+documented or recommended for production use, exercise it on at least
+two MPI implementations (e.g. OpenMPI and MPICH) and more than one
+mpi4py / MPI version, since that path is where the RMA-portability risk
+lives.
 
-The same advertisement gate carries the **scalable layout exchange**:
-the interim `fullcomm.allgather` (see the Option D layout-exchange note)
-must be replaced by the two-level or local-compute scheme before the
-feature is advertised as production-supported, because total rank counts
-in the thousands are a real operating regime here.  Tracked as a
-release-gate item so it lands before scale use without gating the
-feature phases on it.
+The same "finish before recommending it" list carries the **scalable
+layout exchange**: the interim `fullcomm.allgather` (see the Option D
+layout-exchange note) must be replaced by the two-level or local-compute
+scheme before the feature is documented or recommended for production
+use, because total rank counts in the thousands are a real operating
+regime here.  Both are prerequisites for recommending the feature, not
+for landing the intervening phases on `main`.
 
 
 ### Possible future optimization (out of scope)
