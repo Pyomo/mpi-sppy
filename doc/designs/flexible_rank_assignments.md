@@ -3,34 +3,6 @@
 Status: Design Document (Draft — second pass)
 Date: 2026-05-24
 
-### Correction note (why this is a second pass)
-
-The first pass of this design was built on a wrong premise.  It
-asserted that the hub-published nonant field carries `xbar` (the
-consensus value), with one `xbar` value redundantly copied into every
-scenario's slot, and proposed collapsing it to one canonical vector
-per non-leaf node.
-
-Reading the code disproved this.  The field carries **per-scenario
-nonant variable values** — each scenario's own current iterate —
-and several consumers *depend* on those values being per-scenario
-distinct (see §Field Taxonomy).  `xbar` is a separate quantity,
-stored in the `xbars` Pyomo Param (`phbase.py`), equal to the
-transmitted values only at convergence.
-
-Consequences for this design:
-
-- The field-canonicalization refactor ("BN-2 / BX-2") is **gone**.
-  The hub nonant field cannot and should not be collapsed to one
-  value per node.
-- The misnamed field has already been renamed in tree:
-  `Field.NONANT` → (briefly `XBAR`) → `Field.NONANTS_VALS`, and
-  `Field.RELAXED_NONANT` → `Field.RELAXED_NONANTS_VALS`.  This
-  document uses the final names throughout.
-- The remaining design is **simpler**: one uniform mechanism
-  (overlap maps + multi-source assembly) for every local-sized
-  field, plus a per-field coherence policy.
-
 ### Terminology
 
 - **Window:** An MPI one-sided ("RMA") addressing scope, created
@@ -134,10 +106,9 @@ handled under unequal rank counts.
 
 #### Category 1 — genuinely per-scenario *distinct* data
 
-The buffer holds one independent value (or block) per local scenario,
-and consumers rely on the per-scenario differences.  Multi-source
-assembly across ranks is the correct primitive; there is nothing to
-canonicalize.
+Buffers in this category hold one independent value (or block) per
+local scenario, and consumers rely on the per-scenario differences.
+Multi-source assembly across ranks is the correct primitive.
 
 - **`NONANTS_VALS`** (hub → spokes).  `Hub.send_nonants`
   (`hub.py`) loops over `local_scenarios` and writes `xvar._value`
@@ -165,8 +136,8 @@ canonicalize.
 
 #### Category 2 — per-scenario *layout*, NAC-redundant first-stage
 
-The buffer is laid out per scenario, but its nonant portion is an
-incumbent first-stage decision that is **identical across all
+Buffers in this category are laid out per scenario, but the nonant
+portion is an incumbent first-stage decision that is **identical across all
 scenarios sharing a node** (non-anticipativity holds by construction
 because the first stage is *fixed* across scenarios when the candidate
 is evaluated).  A genuinely per-scenario scalar cost rides alongside.
@@ -661,3 +632,34 @@ satisfied trivially (one source per field).  Because this design makes
 equal ranks — there is no analogue of the first pass's "Phase 0 changes
 the wire format even at equal ranks" caveat.  Verify by running the
 full existing test suite with the new code and default ratios.
+
+
+---
+
+### Correction note (why this is a second pass)
+
+The first pass of this design was built on a wrong premise.  It
+asserted that the hub-published nonant field carries `xbar` (the
+consensus value), with one `xbar` value redundantly copied into every
+scenario's slot, and proposed collapsing it to one canonical vector
+per non-leaf node.
+
+Reading the code disproved this.  The field carries **per-scenario
+nonant variable values** — each scenario's own current iterate —
+and several consumers *depend* on those values being per-scenario
+distinct (see §Field Taxonomy).  `xbar` is a separate quantity,
+stored in the `xbars` Pyomo Param (`phbase.py`), equal to the
+transmitted values only at convergence.
+
+Consequences for this design:
+
+- The field-canonicalization refactor ("BN-2 / BX-2") is **gone**.
+  The hub nonant field cannot and should not be collapsed to one
+  value per node.
+- The misnamed field has already been renamed in tree:
+  `Field.NONANT` → (briefly `XBAR`) → `Field.NONANTS_VALS`, and
+  `Field.RELAXED_NONANT` → `Field.RELAXED_NONANTS_VALS`.  This
+  document uses the final names throughout.
+- The remaining design is **simpler**: one uniform mechanism
+  (overlap maps + multi-source assembly) for every local-sized
+  field, plus a per-field coherence policy.
