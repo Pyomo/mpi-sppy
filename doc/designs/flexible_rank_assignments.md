@@ -516,9 +516,13 @@ unnecessary given the per-field analysis).
 
 #### `spin_the_wheel.py`
 
-- Remove the `n_proc % n_spcomms == 0` check.
-- Replace the uniform `MPI_Comm_split` with the apportionment
-  algorithm (§User Interface) that respects per-cylinder rank counts.
+- Keep the `n_proc % n_spcomms == 0` check on the equal-rank path; the
+  unequal-rank path bypasses it, since apportionment (§User Interface)
+  removes the requirement that `n_proc` divide evenly by cylinder count.
+- On the unequal-rank path, replace the uniform `MPI_Comm_split` with
+  the apportionment algorithm (§User Interface) that respects
+  per-cylinder rank counts.  The equal-rank path keeps the uniform
+  split unchanged.
 - `cylinder_comm` creation still uses `MPI_Comm_split` (all ranks in
   the same cylinder get the same color).
 - `strata_comm` is **retained** for the equal-rank path.  When ranks
