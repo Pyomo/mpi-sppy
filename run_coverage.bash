@@ -127,6 +127,9 @@ run_phase "test_rank_apportionment (serial)" \
 run_phase "test_overlap_map (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_overlap_map.py -v
 
+run_phase "test_spwindow_partial_get (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_spwindow_partial_get.py -v
+
 run_phase "test_xhat_from_file (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_xhat_from_file.py -v
 

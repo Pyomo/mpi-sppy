@@ -178,18 +178,38 @@ class SPWindow:
         return
 
     #### Functions ####
-    def get(self, dest: nptyping.ArrayLike, strata_rank: int, field: Field):
+    def get(self, dest: nptyping.ArrayLike, strata_rank: int, field: Field,
+            item_offset: int = 0, item_count: int = None):
+        """Read a remote rank's buffer for ``field`` into ``dest``.
+
+        By default the whole padded field is transferred (``dest`` must be
+        ``padded_len`` long), preserving the original behavior.  When
+        ``item_count`` is given, only that many doubles are read, starting
+        ``item_offset`` doubles into the field -- a partial read used for
+        multi-source assembly across cylinders with different rank counts
+        (see ``overlap_map.py``).  ``dest`` must then be ``item_count`` long.
+        """
         assert (0 <= strata_rank < len(self.strata_buffer_layouts))
 
         that_layout = self.strata_buffer_layouts[strata_rank]
         assert field in that_layout
 
         (offset, logical_len, padded_len) = that_layout[field]
-        assert np.size(dest) == padded_len
+
+        if item_count is None:
+            count = padded_len
+            disp = offset
+        else:
+            assert item_offset >= 0 and item_count >= 0
+            assert item_offset + item_count <= padded_len, \
+                f"{field=} partial get {item_offset=}+{item_count=} exceeds {padded_len=}"
+            count = item_count
+            disp = offset + item_offset
+        assert np.size(dest) == count
 
         window = self.window
         window.Lock(strata_rank, MPI.LOCK_SHARED)
-        window.Get((dest, padded_len, MPI.DOUBLE), strata_rank, offset)
+        window.Get((dest, count, MPI.DOUBLE), strata_rank, disp)
         window.Unlock(strata_rank)
         return
 
