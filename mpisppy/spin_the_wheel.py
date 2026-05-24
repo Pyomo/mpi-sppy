@@ -12,6 +12,7 @@ from mpisppy import haveMPI, global_toc, MPI
 
 from mpisppy.utils import nice_join
 from mpisppy.utils.sputils import first_stage_nonant_writer, scenario_tree_solution_writer
+from mpisppy.utils.rank_apportionment import apportion_ranks
 
 class WheelSpinner:
 
@@ -103,6 +104,27 @@ class WheelSpinner:
 
         # Create the necessary communicators
         fullcomm = comm_world
+
+        # Flexible rank assignments: each cylinder may request a rank ratio
+        # relative to the hub (default 1.0) via a "rank_ratio" dict key. The
+        # uniform case (all ratios 1.0) is handled exactly as before. A
+        # non-uniform request is apportioned (largest-remainder, floor of one)
+        # and reported, but building the communicators for unequal per-cylinder
+        # counts is not yet wired into the communicator/window layer.
+        rank_ratios = [d.get("rank_ratio", 1.0) for d in communicator_list]
+        if any(r != 1.0 for r in rank_ratios):
+            rank_counts = apportion_ranks(rank_ratios, fullcomm.Get_size())
+            global_toc(
+                f"Requested per-cylinder rank ratios {rank_ratios} -> "
+                f"rank counts {rank_counts}",
+                fullcomm.Get_rank() == 0,
+            )
+            raise NotImplementedError(
+                "Per-cylinder rank counts (flexible rank assignments) are not "
+                f"yet wired into the communicator layer; computed allocation "
+                f"{rank_counts}. Run with all rank_ratio == 1.0 for now."
+            )
+
         strata_comm, cylinder_comm = _make_comms(n_spcomms, fullcomm=fullcomm)
         strata_rank = strata_comm.Get_rank()
         cylinder_rank = cylinder_comm.Get_rank()
