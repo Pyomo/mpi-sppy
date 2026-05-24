@@ -373,15 +373,29 @@ window creation.  Cons:
   Option D.
 
 **Recommendation:** Option D, *as the topology for the unequal-rank
-path only*.  When any rank ratio differs from 1.0, the window is on
-`fullcomm` (or a subset) and each rank knows which global ranks to read
-from via the overlap maps.  `strata_comm` is **not** removed: the
-equal-rank case keeps its existing per-`strata_comm` windows untouched,
-and the `fullcomm` topology is built additively, reached only when the
-feature is engaged (see §Development and rollout strategy).  "Abandon
-`strata_comm`" above describes Option D as a global replacement, which
-this design does *not* adopt; it borrows only Option D's addressing
-scheme for the new path.
+path only*.  A given run uses exactly one topology, chosen at startup
+from the rank ratios:
+
+- *Equal-rank run* (all ratios 1.0): create `strata_comm` and
+  `cylinder_comm`, and put the window on `strata_comm` -- exactly as
+  today.
+- *Unequal-rank run* (any ratio differs from 1.0): **`strata_comm` is
+  not created at all.**  The strata grouping (`color =
+  global_rank // n_spcomms`, "rank *i* of every cylinder") is undefined
+  when cylinders have different rank counts -- that is the whole reason
+  for Option D.  Create `cylinder_comm` only (each cylinder is a
+  contiguous block of apportioned ranks, so the intra-cylinder grouping
+  is still well-defined), put the window on `fullcomm`, and have each
+  rank address peers by global rank via the overlap maps.  Each rank
+  takes its cylinder index from the apportionment rather than from
+  `strata_rank`.
+
+So `strata_comm` is *retained in the codebase* -- the equal-rank path
+still uses it unchanged -- but it is *not created in an unequal-rank
+run*.  This is additive, not a replacement: the textbook "abandon
+`strata_comm`" framing in the Option D description above would remove it
+for *all* runs, which this design does not do.  See §Development and
+rollout strategy.
 
 
 #### Multi-Source Read Assembly
@@ -525,15 +539,19 @@ unnecessary given the per-field analysis).
   split unchanged.
 - `cylinder_comm` creation still uses `MPI_Comm_split` (all ranks in
   the same cylinder get the same color).
-- `strata_comm` is **retained** for the equal-rank path.  When ranks
-  are equal across cylinders, `strata_comm` and its per-strata windows
-  are used exactly as today.  When ratios differ, the window is built
-  on `fullcomm` instead (Option D's addressing), selected once at
-  startup; see §Development and rollout strategy.
+- `strata_comm` is **retained in the codebase** for the equal-rank
+  path: when ranks are equal across cylinders, `strata_comm` and its
+  per-strata windows are created and used exactly as today.  In an
+  unequal-rank run `strata_comm` is **not created** -- the strata
+  grouping is undefined for cylinders of different sizes -- and the
+  window is built on `fullcomm` instead (Option D's addressing).  The
+  choice is made once at startup; a run creates one or the other, never
+  both.  `cylinder_comm` is created in both cases.  See §Development and
+  rollout strategy.
 - In the unequal-rank path, indexing that assumes a fixed `strata_rank`
   meaning does not apply; each rank addresses peers by global rank via
-  the overlap maps.  The equal-rank path's `strata_rank` indexing is
-  unchanged.
+  the overlap maps, taking its cylinder index from the apportionment.
+  The equal-rank path's `strata_rank` indexing is unchanged.
 
 #### `spbase.py`
 
