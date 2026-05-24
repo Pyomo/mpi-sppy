@@ -486,17 +486,27 @@ source rank.
 - **Global-sized bounds and scalars** (Categories 3 and 4).  Monotone,
   idempotent application; staleness is safe.
 
-#### One field needs a decision: `cross_scen`
-
-`CrossScenarioCutSpoke` reads `NONANTS_VALS` and `CROSS_SCENARIO_COST`
-to build cross-scenario (Benders-like) cuts.  A cut assembled from
-mixed-iteration nonants/costs could in principle be invalid (cut off
-feasible points).  **Open item:** determine whether cross-scenario
-cut construction requires per-iteration coherence across the assembled
-scenarios.  If so, `NONANTS_VALS`/`CROSS_SCENARIO_COST` get strict
-coherence *for this consumer*; if the cut math tolerates per-scenario
-staleness, they stay relaxed.  This should be settled before Phase 3
-wires up `cross_scen` under asymmetric ranks.
+- **`CROSS_SCENARIO_COST`** (and `NONANTS_VALS` *as read by*
+  `CrossScenarioCutSpoke`).  These build cross-scenario (Benders /
+  L-shaped) cuts, and the relevant property is that **a Benders cut
+  built at any first-stage point `x̂` is a valid global underestimator
+  of the recourse value `Q(x)` for all `x`** — `x̂` only sets where the
+  cut is tight, never whether it is valid.  In the code, cut validity
+  comes entirely from `CrossScenarioCutSpoke.make_cut()` *re-solving
+  the real subproblems* inside `opt.root.bender.generate_cut()` (the
+  generator was handed `create_subproblem` callbacks); the received
+  `NONANTS_VALS` / `CROSS_SCENARIO_COST` only steer (1) *which* point
+  the cut is generated at (the "farthest `xhat`" heuristic and the
+  `global_xbar` average) and (2) *trigger conditions* (the `eta_lb`
+  violation test, and whether a generated cut is worth adding).  The
+  `eta_lb` cuts (`eta >= LB`) and feasibility cuts are valid by
+  construction too.  So assembling these fields from ranks at mixed
+  `write_id`s can only cause a cut to be generated at a stale or
+  blended candidate point — still a valid cut.  The cost is slower
+  convergence (less useful cut placement), never an invalid cut or a
+  wrong bound.  Hence: **relaxed coherence.**  (`CrossScenarioExtension`
+  is two-stage only, so there is no multistage cut interaction to
+  worry about.)
 
 #### Recommendation
 
@@ -605,7 +615,9 @@ the first pass bundled into "Phase 0" has already landed separately.
 - Add the strict `write_id` check for `DUALS`.
 - Add single-source first-stage sourcing for `BEST_XHAT` /
   `RECENT_XHATS` in the **two-stage** case; cost portion per-scenario.
-- Settle the `cross_scen` coherence question and wire it accordingly.
+- Wire `cross_scen` with relaxed coherence (resolved — see §Coherence)
+  and make `CrossScenarioCutSpoke` accept a multi-source `NONANTS_VALS`
+  / `CROSS_SCENARIO_COST` (it currently asserts a single source rank).
 - Wire up the rank-ratio CLI options end to end.
 - Test all spoke types with various ratios at two stages.
 - Performance check: does 8+4+2 beat 5+5+5 for a representative
