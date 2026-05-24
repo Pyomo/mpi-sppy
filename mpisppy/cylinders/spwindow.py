@@ -21,9 +21,9 @@ import pyomo.environ as pyo
 
 class Field(enum.IntEnum):
     SHUTDOWN=-1000
-    XBAR=1
+    NONANTS_VALS=1
     DUALS=2
-    RELAXED_XBAR=3
+    RELAXED_NONANTS_VALS=3
     BEST_OBJECTIVE_BOUNDS=100 # Both inner and outer bounds from the hub. Layout: [OUTER INNER ID]
     OBJECTIVE_INNER_BOUND=101
     OBJECTIVE_OUTER_BOUND=102
@@ -50,9 +50,9 @@ field_length_components.total_number_recent_xhats = pyo.Param(mutable=True, init
 
 _field_lengths = {
         Field.SHUTDOWN : 1,
-        Field.XBAR : field_length_components._local_nonant_length,
+        Field.NONANTS_VALS : field_length_components._local_nonant_length,
         Field.DUALS : field_length_components._local_nonant_length,
-        Field.RELAXED_XBAR : field_length_components._local_nonant_length,
+        Field.RELAXED_NONANTS_VALS : field_length_components._local_nonant_length,
         Field.BEST_OBJECTIVE_BOUNDS : 2,
         Field.OBJECTIVE_INNER_BOUND : 1,
         Field.OBJECTIVE_OUTER_BOUND : 1,

@@ -14,12 +14,12 @@ import pyomo.environ as pyo
 
 class RelaxedPHSpoke(_PHDualSpokeBase):
 
-    send_fields = (*_PHDualSpokeBase.send_fields, Field.RELAXED_XBAR, )
+    send_fields = (*_PHDualSpokeBase.send_fields, Field.RELAXED_NONANTS_VALS, )
     receive_fields = (*_PHDualSpokeBase.receive_fields, )
 
     @property
     def nonant_field(self):
-        return Field.RELAXED_XBAR
+        return Field.RELAXED_NONANTS_VALS
 
     def main(self):
         # relax the integers
