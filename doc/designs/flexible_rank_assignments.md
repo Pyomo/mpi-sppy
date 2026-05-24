@@ -243,7 +243,9 @@ count to get each cylinder's distribution, then compute pairwise
 overlaps.
 
 For example, with a 4-rank hub and a 2-rank spoke, both handling 10
-scenarios:
+scenarios (the per-rank split below is illustrative — the real split is
+whatever `scen_names_to_ranks` produces — and is chosen so that a hub
+rank straddles the spoke's boundary):
 
 ========  ==================  ==================
           Hub (4 ranks)       Spoke (2 ranks)
@@ -254,23 +256,28 @@ Rank 2    scen4, scen5
 Rank 3    scen6--scen9
 ========  ==================  ==================
 
-Hub rank 0 needs to read from spoke rank 0 (which has scen0--scen4),
-extracting only the portion for scen0--scen1.  Hub rank 2 also reads
-from spoke rank 0, extracting scen4--scen5.
+Hub rank 0 reads from spoke rank 0 (which holds scen0--scen4),
+extracting only the portion for scen0--scen1.  Hub rank 2 holds
+scen4--scen5, which *straddles* the spoke's split: scen4 lives in spoke
+rank 0 (at offset 4) and scen5 in spoke rank 1 (at offset 0), so hub
+rank 2 reads one segment from each.  Hub rank 3's scen6--scen9 sit at
+offsets 1--4 within spoke rank 1's buffer (which starts at scen5).
 
-The overlap map for hub rank 0 reading from the spoke would be:
+Taking one nonant per scenario for simplicity, the overlap map (in
+nonant units) for hub rank 0 reading from the spoke would be:
 ```
 [(spoke_rank=0, remote_offset=0, local_offset=0, count=2)]
 ```
 
-For hub rank 2:
+For hub rank 2 (the straddle — two segments):
 ```
-[(spoke_rank=0, remote_offset=4, local_offset=0, count=2)]
+[(spoke_rank=0, remote_offset=4, local_offset=0, count=1),
+ (spoke_rank=1, remote_offset=0, local_offset=1, count=1)]
 ```
 
 For hub rank 3:
 ```
-[(spoke_rank=1, remote_offset=0, local_offset=0, count=4)]
+[(spoke_rank=1, remote_offset=1, local_offset=0, count=4)]
 ```
 
 These maps are computed once at startup and reused for every
