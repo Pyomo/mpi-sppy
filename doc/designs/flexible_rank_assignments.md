@@ -363,6 +363,23 @@ window creation.  Cons:
   over one anchor rank per cylinder — rather than a single
   `fullcomm.allgather`, which scales worse at N=thousands.
 
+  *What the communication-layer cut actually ships, and the release
+  gate.*  The first cut uses a single `fullcomm.allgather` for the
+  unequal-rank layout exchange.  This is deliberate but interim: it is
+  effectively zero new code (the existing `SPWindow` exchange run on
+  `fullcomm` instead of `strata_comm`), it is a one-time *startup* cost
+  on a cold path — not the RMA hot path — and at development/test scale
+  (a handful of ranks) it is free.  It is **not** the end state.
+  Because total rank counts in the thousands are a real operating
+  regime here, the O(N) startup allgather and its O(N)-per-rank layout
+  storage must be replaced by the two-level (or local-compute) scheme
+  **before flexible ranks are advertised as production-supported**.
+  That replacement is its own focused change — it touches only how
+  `strata_buffer_layouts` is populated at startup, not the multi-source
+  reader — so it is tracked as a release-gate item rather than folded
+  into the feature phases, letting it be reviewed and scale-tested on
+  its own.  See §Gate reliance on the feature with an MPI CI matrix.
+
   *Lock granularity.*  `MPI_Win_lock(rank=target, ...)` is per-
   target-rank in the MPI spec, not per-window — a writer's exclusive
   lock on its own buffer does not block readers fetching from a
@@ -632,9 +649,12 @@ the first pass bundled into "Phase 0" has already landed separately.
 **Phase 2: Communication layer** (additive; reached only when a ratio
 differs from 1.0)
 
-- Add a `fullcomm`-based or locally-computed layout exchange for the
-  unequal-rank path (Option D's addressing), *alongside* the existing
+- Add the `fullcomm.allgather` layout exchange for the unequal-rank
+  path (Option D's addressing), *alongside* the existing
   `strata_comm`-based exchange, which the equal-rank path keeps using.
+  This is the interim exchange; the scalable replacement is a release
+  gate, not a feature phase (see the Option D layout-exchange note and
+  §Gate reliance on the feature with an MPI CI matrix).
 - Implement multi-source `get_receive_buffer()` using overlap maps, as
   a path taken only under non-default ratios; the single-source reader
   is unchanged for the equal-rank case.
@@ -755,6 +775,14 @@ default to flip, but before the `fullcomm` path is advertised as
 supported, exercise it on at least two MPI implementations (e.g. OpenMPI
 and MPICH) and more than one mpi4py / MPI version, since that path is
 where the RMA-portability risk lives.
+
+The same advertisement gate carries the **scalable layout exchange**:
+the interim `fullcomm.allgather` (see the Option D layout-exchange note)
+must be replaced by the two-level or local-compute scheme before the
+feature is advertised as production-supported, because total rank counts
+in the thousands are a real operating regime here.  Tracked as a
+release-gate item so it lands before scale use without gating the
+feature phases on it.
 
 
 ### Possible future optimization (out of scope)
