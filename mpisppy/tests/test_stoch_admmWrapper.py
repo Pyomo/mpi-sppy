@@ -1064,6 +1064,81 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
             self.assertIn("advanced hook", msg)
             self.assertIn("first_stage_cost", msg)
 
+    def test_b2_probes_for_admm_subproblems_not_local_to_rank(self):
+        """B.2 probe-fallback path: when this rank's slice of the
+        before-wrap scenarios does not cover every ADMM subproblem,
+        the wrapper must build a fresh probe before-wrap scenario for
+        each missing ADMM subproblem and gather its first-stage Var
+        names from there.  All ranks must end up with the same
+        self.consensus_vars regardless of slice.
+
+        Triggered with a synthetic 2-rank mpicomm (Get_size=2,
+        Get_rank=0) and admm-major scenario ordering so the local
+        slice covers only ADMM subproblem A; B's first-stage Var
+        must arrive via the probe block.
+        """
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
+
+        class FakeMpicomm:
+            def __init__(self, size, rank):
+                self._size, self._rank = size, rank
+            def Get_size(self):
+                return self._size
+            def Get_rank(self):
+                return self._rank
+
+        fs_cost, fs_varlist = self._hooks()
+        base_sc = self._minimal_scenario_creator(call_attach=False)
+        call_log = []
+        def spy(sname, **kwargs):
+            call_log.append(sname)
+            return base_sc(sname, **kwargs)
+
+        admm_names = ["A", "B"]
+        stoch_names = ["S1", "S2"]
+        # admm-major ordering: rank 0 will get the first two entries
+        # (A_S1, A_S2) and miss B entirely.
+        all_names = [f"ADMM_STOCH_{a}_{s}"
+                     for a in admm_names for s in stoch_names]
+
+        def split(sname):
+            parts = sname.split("_")
+            return parts[2], "_".join(parts[3:])
+
+        admm = Stoch_AdmmWrapper(
+            options={},
+            all_admm_stoch_subproblem_scenario_names=all_names,
+            split_admm_stoch_subproblem_scenario_name=split,
+            admm_subproblem_names=admm_names,
+            stoch_scenario_names=stoch_names,
+            scenario_creator=spy,
+            consensus_vars={"A": [("x", 1)], "B": [("y", 1)]},
+            n_cylinders=1,
+            mpicomm=FakeMpicomm(size=2, rank=0),
+            scenario_creator_kwargs={},
+            first_stage_cost=fs_cost,
+            first_stage_varlist=fs_varlist,
+        )
+
+        # Only A_S1 and A_S2 are local on rank 0.
+        local_names = list(admm.local_admm_stoch_subproblem_scenarios.keys())
+        self.assertEqual(sorted(local_names),
+                         ["ADMM_STOCH_A_S1", "ADMM_STOCH_A_S2"])
+
+        # B's first-stage Var must have arrived via the probe.
+        self.assertIn(("fs", 1), admm.consensus_vars["B"])
+        self.assertIn(("fs", 1), admm.consensus_vars["A"])
+
+        # scenario_creator was invoked 2x for local + 1x for B's
+        # probe = 3 total.  The probe targets the first B-flavored
+        # name in all_names, which is ADMM_STOCH_B_S1.
+        self.assertEqual(len(call_log), 3,
+                         f"expected 3 scenario_creator calls "
+                         f"(2 local + 1 probe), got {call_log}")
+        self.assertEqual(call_log[-1], "ADMM_STOCH_B_S1",
+                         f"probe should target the first B-flavored "
+                         f"name; got {call_log[-1]}")
+
     def test_setup_stoch_admm_advanced_without_core_errors(self):
         """B.3: the setup_stoch_admm-level discovery rejects a module
         that defines an advanced hook without the two core hooks."""
