@@ -1128,7 +1128,8 @@ jobs:
             mpisppy/tests/test_rho_deprecations.py \
             mpisppy/tests/test_buffer_inspect.py \
             mpisppy/tests/test_comm_lor_check.py \
-            mpisppy/tests/test_rank_apportionment.py
+            mpisppy/tests/test_rank_apportionment.py \
+            mpisppy/tests/test_overlap_map.py
 
       - name: Upload coverage data
         if: always()
