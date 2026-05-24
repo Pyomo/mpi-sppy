@@ -82,3 +82,50 @@ def apportion_ranks(ratios, n_proc):
         counts[zeros[0]] += 1
 
     return counts
+
+
+def cylinder_bases(rank_counts):
+    """First global rank of each cylinder's contiguous block.
+
+    The unequal-rank path lays cylinders out as contiguous global-rank
+    blocks in declaration order: cylinder ``i`` owns global ranks
+    ``[bases[i], bases[i] + rank_counts[i])``.
+
+    Args:
+        rank_counts: per-cylinder rank counts (e.g. from ``apportion_ranks``).
+
+    Returns:
+        list[int]: ``bases[i]`` is the lowest global rank in cylinder ``i``.
+    """
+    bases = []
+    base = 0
+    for rc in rank_counts:
+        bases.append(base)
+        base += rc
+    return bases
+
+
+def rank_to_cylinder(global_rank, rank_counts):
+    """Locate a global rank within the contiguous-block cylinder layout.
+
+    Args:
+        global_rank: a rank in ``[0, sum(rank_counts))``.
+        rank_counts: per-cylinder rank counts (e.g. from ``apportion_ranks``).
+
+    Returns:
+        tuple[int, int]: ``(cylinder_index, rank_within_cylinder)``, where
+        ``rank_within_cylinder`` is this rank's position in its cylinder's
+        ``cylinder_comm`` (i.e. its ``cylinder_rank``).
+
+    Raises:
+        ValueError: if ``global_rank`` is outside the apportioned range.
+    """
+    base = 0
+    for cyl, rc in enumerate(rank_counts):
+        if base <= global_rank < base + rc:
+            return cyl, global_rank - base
+        base += rc
+    raise ValueError(
+        f"rank_to_cylinder: global_rank {global_rank} is outside the "
+        f"apportioned range [0, {base}) for rank_counts {list(rank_counts)}"
+    )
