@@ -241,7 +241,7 @@ def _check_shutdown(buf, report: Report, ctx: InspectContext) -> None:
 
 
 def _check_nonant(buf, report: Report, ctx: InspectContext) -> None:
-    # NONANT buffers are sized to the *publisher's* sum of per-scenario
+    # NONANTS_VALS buffers are sized to the *publisher's* sum of per-scenario
     # nonant counts across that publisher's local scenarios:
     #     len(data) == nonant_count * len(publisher.local_scenarios).
     # When the publisher holds many scenarios (e.g. all 24 leaves of a
@@ -255,7 +255,7 @@ def _check_nonant(buf, report: Report, ctx: InspectContext) -> None:
     n = ctx.get_nonant_count()
     if n is not None and n > 0 and (len(data) == 0 or len(data) % n != 0):
         report.add(
-            f"NONANT data length {len(data)} is not a positive multiple "
+            f"NONANTS_VALS data length {len(data)} is not a positive multiple "
             f"of nonant_count {n}",
             severity="error",
         )
@@ -269,7 +269,7 @@ def _check_nonant(buf, report: Report, ctx: InspectContext) -> None:
         bad = np.where(data < lo)[0]
         if bad.size:
             report.add(
-                f"NONANT below lower bound at {bad.size} index(es); "
+                f"NONANTS_VALS below lower bound at {bad.size} index(es); "
                 f"first: idx {int(bad[0])} value {float(data[bad[0]])!r} "
                 f"< lo {float(lo[bad[0]])!r}"
             )
@@ -277,7 +277,7 @@ def _check_nonant(buf, report: Report, ctx: InspectContext) -> None:
         bad = np.where(data > hi)[0]
         if bad.size:
             report.add(
-                f"NONANT above upper bound at {bad.size} index(es); "
+                f"NONANTS_VALS above upper bound at {bad.size} index(es); "
                 f"first: idx {int(bad[0])} value {float(data[bad[0]])!r} "
                 f"> hi {float(hi[bad[0]])!r}"
             )
@@ -375,7 +375,7 @@ def _check_best_xhat(buf, report: Report, ctx: InspectContext) -> None:
 
 CHECKERS: dict[Field, Callable[[Any, Report, InspectContext], None]] = {
     Field.SHUTDOWN: _check_shutdown,
-    Field.NONANT: _check_nonant,
+    Field.NONANTS_VALS: _check_nonant,
     Field.NONANT_LOWER_BOUNDS: _check_lower_bounds,
     Field.NONANT_UPPER_BOUNDS: _check_upper_bounds,
     Field.OBJECTIVE_INNER_BOUND: _check_objective_scalar,
