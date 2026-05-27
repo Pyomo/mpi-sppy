@@ -1131,7 +1131,7 @@ jobs:
             mpisppy/tests/test_rank_apportionment.py \
             mpisppy/tests/test_overlap_map.py \
             mpisppy/tests/test_spwindow_partial_get.py \
-            mpisppy/tests/test_flexible_rank_gate.py
+            mpisppy/tests/test_flexible_rank_ratios.py
 
       - name: Upload coverage data
         if: always()
