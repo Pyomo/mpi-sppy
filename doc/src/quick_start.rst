@@ -389,8 +389,8 @@ Running the Farmer Example
 For more detail, see :ref:`generic_cylinders` and :ref:`Examples`.
 
 
-What You Need to Provide
--------------------------
+What You Need to Provide For Your Problem
+-----------------------------------------
 
 If your model is written in Pyomo, you create a Python module with the
 following functions:
