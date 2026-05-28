@@ -23,6 +23,11 @@ import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils
 import mpisppy.scenario_tree as scenario_tree
+from mpisppy.utils.admmWrapper import (
+    _admm_normalize_consensus_vars,
+    _first_stage_var_names,
+    _merge_first_stage_into_consensus_vars,
+)
 from mpisppy.utils.stoch_admmWrapper import _consensus_vars_number_creator
 
 
@@ -55,7 +60,9 @@ class AdmmBundler:
                  admm_subproblem_names, stoch_scenario_names,
                  consensus_vars, combining_fn, split_fn,
                  scenario_creator_kwargs=None,
-                 first_stage_cost=None, first_stage_varlist=None):
+                 first_stage_cost=None, first_stage_varlist=None,
+                 first_stage_surrogate_nonant_list=None,
+                 first_stage_nonant_ef_suppl_list=None):
         # Same both-or-neither contract as Stoch_AdmmWrapper.
         if (first_stage_cost is None) != (first_stage_varlist is None):
             present = "first_stage_cost" if first_stage_cost is not None else "first_stage_varlist"
@@ -64,23 +71,62 @@ class AdmmBundler:
                 f"AdmmBundler was given {present} but not {missing}. "
                 f"These hooks must be defined together (or both omitted)."
             )
+        # Advanced hooks forward to attach_root_node's
+        # surrogate_nonant_list / nonant_ef_suppl_list parameters.
+        # Each may be defined alone, but only when the two core hooks
+        # are also defined.
+        advanced_hooks = {
+            "first_stage_surrogate_nonant_list": first_stage_surrogate_nonant_list,
+            "first_stage_nonant_ef_suppl_list": first_stage_nonant_ef_suppl_list,
+        }
+        present_advanced = [n for n, h in advanced_hooks.items() if h is not None]
+        if present_advanced and first_stage_cost is None:
+            raise RuntimeError(
+                f"AdmmBundler was given the advanced hook(s) "
+                f"{present_advanced} but first_stage_cost / "
+                f"first_stage_varlist were not defined.  The advanced "
+                f"hooks forward to sputils.attach_root_node's optional "
+                f"parameters and only make sense when the core hooks "
+                f"are also driving attach_root_node."
+            )
         self.module = module
         self.scenarios_per_bundle = scenarios_per_bundle
         self.admm_subproblem_names = admm_subproblem_names
         self.stoch_scenario_names = stoch_scenario_names
-        self.consensus_vars = consensus_vars
+        self.consensus_vars = _admm_normalize_consensus_vars(consensus_vars, tuple_form=True)
         self.combining_fn = combining_fn
         self.split_fn = split_fn
         self.scenario_creator_kwargs = scenario_creator_kwargs or {}
         self.first_stage_cost = first_stage_cost
         self.first_stage_varlist = first_stage_varlist
+        self.first_stage_surrogate_nonant_list = first_stage_surrogate_nonant_list
+        self.first_stage_nonant_ef_suppl_list = first_stage_nonant_ef_suppl_list
         self.number_admm_subproblems = len(admm_subproblem_names)
-        self.consensus_vars_number = _consensus_vars_number_creator(consensus_vars)
+
+        # Same first-stage auto-merge as Stoch_AdmmWrapper.
+        # AdmmBundler does not pre-build before-wrap scenarios in
+        # __init__, so to snapshot first-stage Var names we build one
+        # probe before-wrap scenario per ADMM subproblem (different
+        # ADMM subproblems may carry different first-stage Vars).
+        # scenario_creator is assumed side-effect-free.  This is
+        # setup, not wrap.
+        if first_stage_varlist is not None:
+            fs_names_per_sub = {}
+            for sub in admm_subproblem_names:
+                probe_sname = combining_fn(sub, stoch_scenario_names[0])
+                probe_scen = module.scenario_creator(probe_sname,
+                                                     **self.scenario_creator_kwargs)
+                fs_names_per_sub[sub] = list(_first_stage_var_names(first_stage_varlist(probe_scen)))
+                del probe_scen
+            self.consensus_vars = _merge_first_stage_into_consensus_vars(
+                self.consensus_vars, fs_names_per_sub, root_stage=1)
+
+        self.consensus_vars_number = _consensus_vars_number_creator(self.consensus_vars)
 
         # Collect all consensus vars with stages
         self.all_consensus_vars = {}
-        for sub in consensus_vars:
-            for var_stage_tuple in consensus_vars[sub]:
+        for sub in self.consensus_vars:
+            for var_stage_tuple in self.consensus_vars[sub]:
                 self.all_consensus_vars[var_stage_tuple[0]] = var_stage_tuple[1]
 
         # Maps bundle model object → var_prob list
@@ -236,8 +282,16 @@ class AdmmBundler:
                         f"sputils.attach_root_node.  Remove the "
                         f"attach_root_node call from scenario_creator."
                     )
+                attach_kwargs = {}
+                if self.first_stage_surrogate_nonant_list is not None:
+                    attach_kwargs["surrogate_nonant_list"] = \
+                        self.first_stage_surrogate_nonant_list(s)
+                if self.first_stage_nonant_ef_suppl_list is not None:
+                    attach_kwargs["nonant_ef_suppl_list"] = \
+                        self.first_stage_nonant_ef_suppl_list(s)
                 sputils.attach_root_node(
-                    s, self.first_stage_cost(s), self.first_stage_varlist(s))
+                    s, self.first_stage_cost(s), self.first_stage_varlist(s),
+                    **attach_kwargs)
             else:
                 if not already_attached:
                     raise RuntimeError(
