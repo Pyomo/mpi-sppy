@@ -64,9 +64,11 @@ def _make_admm(cfg, n_cylinders, verbose=None):
 
     admm_subproblem_names = stoch_distr.admm_subproblem_names_creator(cfg)
     stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(cfg)
-    all_admm_stoch_subproblem_scenario_names = stoch_distr.admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names,stoch_scenario_names)
-
-    split_admm_stoch_subproblem_scenario_name = stoch_distr.split_admm_stoch_subproblem_scenario_name
+    # stoch_distr no longer ships custom naming helpers; use the
+    # package defaults from mpisppy.utils.stoch_admmWrapper.
+    all_admm_stoch_subproblem_scenario_names = (
+        stoch_admmWrapper.default_admm_stoch_subproblem_scenario_names_creator(
+            admm_subproblem_names, stoch_scenario_names))
 
     scenario_creator = stoch_distr.scenario_creator
     scenario_creator_kwargs = stoch_distr.kw_creator(cfg)
@@ -74,10 +76,11 @@ def _make_admm(cfg, n_cylinders, verbose=None):
     consensus_vars = stoch_distr.consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, **scenario_creator_kwargs)
     # stoch_distr exposes first_stage_cost / first_stage_varlist
     # module-level hooks so Stoch_AdmmWrapper attaches the root node
-    # itself; pass them through here too.
+    # itself; pass them through here too.  split=None opts in to the
+    # default split (paired with default_combining_names above).
     admm = stoch_admmWrapper.Stoch_AdmmWrapper(options,
                            all_admm_stoch_subproblem_scenario_names,
-                           split_admm_stoch_subproblem_scenario_name,
+                           None,  # split_admm_stoch_subproblem_scenario_name
                            admm_subproblem_names,
                            stoch_scenario_names,
                            scenario_creator,
