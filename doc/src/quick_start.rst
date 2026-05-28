@@ -16,20 +16,11 @@ Prerequisites (all platforms)
 
 * Python 3.9 or newer
 * ``git``
-* A Pyomo-compatible MIP solver (e.g., cplex, gurobi, or xpress) for most
-  algorithms. The free solver ``glpk`` works for some small examples.
+* A Pyomo-compatible solver (e.g., cplex, gurobi, or xpress) for most
+  algorithms.
 * For decomposition algorithms (PH, APH, L-shaped, …): a working MPI
   implementation and ``mpi4py``. If you only need to solve the extensive
   form, MPI is *not* required.
-
-The ``pip`` extras provided by mpi-sppy are:
-
-* ``mpi`` -- installs ``mpi4py`` (requires MPI headers/libraries already
-  present; see the platform-specific steps below)
-* ``doc`` -- installs Sphinx and the theme used to build these docs
-* ``scipy`` -- installs SciPy (needed by a few utilities)
-
-Combine extras with commas, e.g. ``pip install -e .[mpi,doc]``.
 
 
 Install from GitHub on Linux
@@ -318,34 +309,62 @@ install above for any active research use.
 Verify Installation
 -------------------
 
-Verify that mpi-sppy and a solver are installed by running:
+The following three checks confirm that mpi-sppy, your solver, and (if
+you installed it) MPI are all working. The commands below are
+shell-neutral: they work in bash, zsh, the WSL2 Ubuntu shell, and
+Windows PowerShell. On native Windows, if ``python`` is not on PATH but
+the Python launcher is, substitute ``py`` for ``python``. Run each
+command from the top of the cloned ``mpi-sppy`` repository.
 
-.. code-block:: bash
+1. **mpi-sppy is importable and the CLI works.** This confirms the
+   editable install succeeded and Python can import the package.
 
-   cd examples/farmer
-   python -m mpisppy.generic_cylinders --module-name farmer --help
+   .. code-block:: text
 
+      cd examples/farmer
+      python -m mpisppy.generic_cylinders --module-name farmer --help
 
-If you intend to use decomposition (PH, APH, etc.), you also need a
-working installation of MPI and ``mpi4py``; see :ref:`Install mpi4py`.
-If you only need to solve the extensive form directly, MPI is not required.
+   You should see a long help message listing all available
+   command-line options. If you see ``ModuleNotFoundError: No module
+   named 'mpisppy'``, the install did not take effect in this
+   environment (most often a virtual-environment issue).
 
+2. **Your solver works.** Solve the farmer extensive form with three
+   scenarios. Substitute the solver you installed (``gurobi``,
+   ``cplex``, ``xpress``, …):
 
-What You Need to Provide
--------------------------
+   .. code-block:: text
 
-To use mpi-sppy, you create a Python module with the following functions:
+      python -m mpisppy.generic_cylinders --module-name farmer \
+          --num-scens 3 --EF --EF-solver-name gurobi
 
-- ``scenario_creator`` -- builds a Pyomo model for one scenario (see :ref:`scenario_creator`)
-- ``scenario_names_creator`` -- returns the list of scenario names (see :ref:`helper_functions`)
-- ``kw_creator`` -- returns keyword arguments for the scenario creator (see :ref:`helper_functions`)
-- ``inparser_adder`` -- adds problem-specific command-line arguments (see :ref:`helper_functions`)
-- ``scenario_denouement`` -- called at termination (can be ``None``; see :ref:`helper_functions`)
+   You should see the solver print progress and the script print an
+   optimal objective value. This check does *not* use MPI.
 
-Once you have these functions, you can use ``generic_cylinders.py``
-(see :ref:`generic_cylinders`) to solve your problem using the EF or
-the hub-and-spoke system. See the ``farmer`` directory in ``examples``
-for a complete working example (``farmer.py`` and ``farmer_generic.bash``).
+3. **MPI works** (only if you installed MPI and ``mpi4py``). From the
+   repository root, run the bundled one-sided MPI test:
+
+   .. code-block:: text
+
+      mpiexec -n 2 python -m mpi4py mpi_one_sided_test.py
+
+   If you see no error messages, your MPI installation should be
+   suitable. Then confirm the full hub-and-spoke flow with a short PH
+   run on farmer:
+
+   .. code-block:: text
+
+      mpiexec -n 3 python -m mpi4py -m mpisppy.generic_cylinders \
+          --module-name farmer --num-scens 3 \
+          --solver-name gurobi --max-iterations 5 \
+          --default-rho 1 --lagrangian --xhatshuffle
+
+   You should see iteration output and the run should terminate
+   normally.
+
+If you only intend to solve the extensive form directly, you can skip
+step 3 -- MPI is not required for ``--EF``. For additional MPI install
+guidance and HPC-specific tips, see :ref:`Install mpi4py`.
 
 
 Running the Farmer Example
@@ -368,6 +387,28 @@ Running the Farmer Example
        --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01
 
 For more detail, see :ref:`generic_cylinders` and :ref:`Examples`.
+
+
+What You Need to Provide
+-------------------------
+
+If your model is written in Pyomo, you create a Python module with the
+following functions:
+
+- ``scenario_creator`` -- builds a Pyomo model for one scenario (see :ref:`scenario_creator`)
+- ``scenario_names_creator`` -- returns the list of scenario names (see :ref:`helper_functions`)
+- ``kw_creator`` -- returns keyword arguments for the scenario creator (see :ref:`helper_functions`)
+- ``inparser_adder`` -- adds problem-specific command-line arguments (see :ref:`helper_functions`)
+- ``scenario_denouement`` -- called at termination (can be ``None``; see :ref:`helper_functions`)
+
+Once you have these functions, you can use ``generic_cylinders.py``
+(see :ref:`generic_cylinders`) to solve your problem using the EF or
+the hub-and-spoke system. See the ``farmer`` directory in ``examples``
+for a complete working example (``farmer.py`` and ``farmer_generic.bash``).
+
+For models written in an algebraic modeling language other than Pyomo
+(e.g., AMPL or GAMS), see :doc:`agnostic`. For models supplied as
+SMPS-format files, see :doc:`smps`.
 
 
 Researchers Who Want to Compare with mpi-sppy
