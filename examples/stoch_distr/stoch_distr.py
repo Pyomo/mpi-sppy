@@ -344,28 +344,16 @@ def kw_creator(cfg):
 
 
 def inparser_adder(cfg):
-    """Adding to the config argument, specific elements to our problems. In this case the numbers of stochastic scenarios 
-    and admm subproblems which are required + elements used for random number generation + possibility to scale
+    """Adding to the config argument, specific elements to our problem:
+    elements used for random number generation + possibility to scale.
+
+    num_admm_subproblems / num_stoch_scens are registered by
+    mpisppy.generic.admm.admm_args; setup_stoch_admm checks that they
+    were actually set on the command line.
 
     Args:
         cfg (config): specifications for the problem given on the command line
     """
-    cfg.add_to_config(
-            "num_stoch_scens",
-            description="Number of stochastic scenarios (default None)",
-            domain=int,
-            default=None,
-            argparse_args = {"required": True}
-        )
-    
-    cfg.add_to_config(
-            "num_admm_subproblems",
-            description="Number of admm subproblems (regions)",
-            domain=int,
-            default=None,
-            argparse_args = {"required": True}
-        )
-
     ### For the pseudo-random scenarios
     cfg.add_to_config("spm",
                       description="mean percentage of scrap loss at the production",

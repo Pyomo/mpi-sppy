@@ -593,8 +593,19 @@ Argument                                    Domain       Description
 ==========================================  ===========  ============================================
 ``--admm``                                  bool         Enable deterministic ADMM decomposition
 ``--stoch-admm``                            bool         Enable stochastic ADMM decomposition
+``--num-admm-subproblems``                  int          Number of ADMM subproblems (stoch-admm only)
+``--num-stoch-scens``                       int          Number of stochastic scenarios (stoch-admm only)
 ``--scenarios-per-bundle``                  int          Bundle stochastic scenarios (stoch-admm only)
 ==========================================  ===========  ============================================
+
+.. Note::
+   ``--num-admm-subproblems`` and ``--num-stoch-scens`` are registered
+   automatically by ``mpisppy.generic.admm.admm_args`` under
+   ``generic_cylinders --stoch-admm``; the model module's
+   ``inparser_adder`` does not need to re-register them.  Passing
+   ``--stoch-admm`` without both flags raises a clear error from
+   ``_check_admm_compatibility`` instead of crashing inside the
+   model's ``admm_subproblem_names_creator``.
 
 .. Note::
    For deterministic ADMM, the number of subproblems is given by ``--num-scens``,

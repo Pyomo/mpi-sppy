@@ -21,8 +21,11 @@ from mpisppy.utils.stoch_admmWrapper import (
 def admm_args(cfg):
     """Register ADMM-specific config args.
 
-    Note: num_admm_subproblems and num_stoch_scens may already be registered
-    by the model's inparser_adder; we only add them if not already present.
+    Canonical source for num_admm_subproblems and num_stoch_scens under
+    generic_cylinders --stoch-admm; the guards below are defensive for
+    older model modules that may still register them in their own
+    inparser_adder.  _check_admm_compatibility validates the values
+    were actually set on the command line for stoch-admm runs.
     """
     cfg.add_to_config("admm", description="Use ADMM decomposition",
                       domain=bool, default=False)
@@ -36,7 +39,7 @@ def admm_args(cfg):
         cfg.add_to_config("num_stoch_scens",
                           description="Number of stochastic scenarios (stoch-admm only)",
                           domain=int, default=None)
-    
+
     cfg.add_branching_factors()
     cfg.add_stage2_ef_solver_name_arg()
 
@@ -104,6 +107,18 @@ def _check_admm_compatibility(cfg):
     # unconstrained.  The resulting "inner bound" violates the problem's
     # ADMM consensus constraints and has no valid interpretation as a
     # relaxation, so it must not be silently produced.
+    # admm_args registers num_admm_subproblems / num_stoch_scens with
+    # default=None; if the user neither passed the CLI flags nor
+    # registered them in their inparser_adder, fail clearly here
+    # instead of letting range(None) crash inside the model's
+    # admm_subproblem_names_creator.
+    if cfg.get("stoch_admm", ifmissing=False):
+        for opt in ("num_admm_subproblems", "num_stoch_scens"):
+            if cfg.get(opt) is None:
+                raise RuntimeError(
+                    f"--stoch-admm requires --{opt.replace('_', '-')}; "
+                    f"pass it on the command line."
+                )
     if (cfg.get("stoch_admm", ifmissing=False)
             and cfg.get("xhatshuffle", ifmissing=False)
             and cfg.get("stage2_ef_solver_name") is None):

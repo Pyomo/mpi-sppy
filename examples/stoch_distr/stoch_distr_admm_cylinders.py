@@ -28,6 +28,17 @@ def _parse_args():
     # create a config object and parse
     cfg = config.Config()
     stoch_distr.inparser_adder(cfg)
+    # admm subproblem / stochastic scenario counts: registered by
+    # mpisppy.generic.admm.admm_args under generic_cylinders --stoch-admm,
+    # but this deprecated driver bypasses that path, so register here.
+    cfg.add_to_config("num_admm_subproblems",
+                      description="Number of admm subproblems (regions)",
+                      domain=int, default=None,
+                      argparse_args={"required": True})
+    cfg.add_to_config("num_stoch_scens",
+                      description="Number of stochastic scenarios",
+                      domain=int, default=None,
+                      argparse_args={"required": True})
     cfg.popular_args()
     cfg.two_sided_args()
     cfg.ph_args()
