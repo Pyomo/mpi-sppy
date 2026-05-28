@@ -211,6 +211,44 @@ class Test_hydro_with_cylinders(unittest.TestCase):
             self.assertTrue(wheel.BestInnerBound is not None)
             self.assertTrue(wheel.BestOuterBound is not None)
 
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_xhatshuffle_stage2ef_asymmetric_bf(self):
+        """Regression test: asymmetric branching factors must use bf[0] as the
+        second-stage node count, not bf[1].
+
+        With branching_factors=[2,3] and 2 ranks, the count of second-stage
+        nodes is 2 (=bf[0]); the buggy code used bf[1]=3 and tripped the
+        `stage2cnt % rankcnt == 0` assertion (3 % 2 != 0)."""
+        branching_factors = [2, 3]
+        num_scens = branching_factors[0] * branching_factors[1]
+        all_scenario_names = [f"Scen{i+1}" for i in range(num_scens)]
+        all_nodenames = sputils.create_nodenames_from_branching_factors(
+            branching_factors)
+        self.cfg.branching_factors = branching_factors
+
+        scenario_creator_kwargs = {"branching_factors": branching_factors}
+        beans = (self.cfg, hydro.scenario_creator,
+                 hydro.scenario_denouement, all_scenario_names)
+
+        hub_dict = vanilla.ph_hub(*beans,
+                                  scenario_creator_kwargs=scenario_creator_kwargs,
+                                  all_nodenames=all_nodenames)
+
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(
+            *beans,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+            all_nodenames=all_nodenames)
+        xhatshuffle_spoke["opt_kwargs"]["options"]["stage2_ef_solver_name"] = solver_name
+        xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = branching_factors
+
+        wheel = WheelSpinner(hub_dict, [xhatshuffle_spoke])
+        wheel.spin()
+
+        if wheel.global_rank == 0:
+            self.assertTrue(wheel.BestInnerBound is not None)
+            self.assertTrue(wheel.BestOuterBound is not None)
+
 
 if __name__ == '__main__':
     unittest.main()
