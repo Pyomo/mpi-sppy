@@ -963,6 +963,7 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
             stoch_scenario_names_creator=stoch_scenario_names_creator,
             admm_stoch_subproblem_scenario_names_creator=admm_stoch_subproblem_scenario_names_creator,
             split_admm_stoch_subproblem_scenario_name=split_admm_stoch_subproblem_scenario_name,
+            combining_names=lambda a, s: f"ADMM_STOCH_{a}_{s}",
             kw_creator=lambda cfg: {},
             consensus_vars_creator=lambda an, sn, **kw: {"A": [("x", 1)], "B": [("y", 1)]},
             scenario_creator=self._minimal_scenario_creator(call_attach=False),
@@ -1210,6 +1211,7 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
             split_admm_stoch_subproblem_scenario_name=(
                 lambda name: (name.split("_")[2],
                               "_".join(name.split("_")[3:]))),
+            combining_names=lambda a, s: f"ADMM_STOCH_{a}_{s}",
             kw_creator=lambda cfg: {},
             consensus_vars_creator=(
                 lambda an, sn, **kw: {"A": [("x", 1)], "B": [("y", 1)]}),
@@ -1226,6 +1228,282 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
         self.assertIn("fake_module", msg)
         self.assertIn("first_stage_surrogate_nonant_list", msg)
         self.assertIn("first_stage_cost", msg)
+
+
+class TestStochAdmmDefaultNaming(unittest.TestCase):
+    """Phase C: default combining / split / scen-names creator.
+
+    Covers the three defaults in mpisppy.utils.stoch_admmWrapper that
+    let a user omit the boilerplate inverse-pair plus the wrapper-
+    and setup-level fallback paths that consume them.
+    """
+
+    def test_default_pair_round_trips(self):
+        from mpisppy.utils.stoch_admmWrapper import (
+            default_combining_names,
+            default_split_admm_stoch_subproblem_scenario_name,
+        )
+        # Subproblem and stochastic-scenario names with underscores
+        # exercise the delimiter; the legacy single-underscore
+        # convention would have collided here.
+        for admm_sub, stoch_scen in [
+                ("Region1", "StochasticScenario1"),
+                ("under_score_sub", "more_under_scores"),
+                ("A", "B"),
+        ]:
+            name = default_combining_names(admm_sub, stoch_scen)
+            a, s = default_split_admm_stoch_subproblem_scenario_name(name)
+            self.assertEqual((a, s), (admm_sub, stoch_scen),
+                             f"round-trip failed for {(admm_sub, stoch_scen)!r}")
+
+    def test_default_split_rejects_malformed(self):
+        from mpisppy.utils.stoch_admmWrapper import (
+            default_split_admm_stoch_subproblem_scenario_name as split,
+        )
+        # No delimiter at all.
+        with self.assertRaises(ValueError):
+            split("Region1_StochasticScenario1")
+        # Wrong leading sentinel.
+        with self.assertRaises(ValueError):
+            split("WRONG__ADMM__Region1__ADMM__S1")
+
+    def test_default_scen_names_creator_nesting_and_combiner(self):
+        """Default scen-names creator must use the same outer-stoch /
+        inner-admm nesting as the canonical pattern (MPI rank
+        assignment depends on it), and must honor a custom
+        combining_fn override."""
+        from mpisppy.utils.stoch_admmWrapper import (
+            default_admm_stoch_subproblem_scenario_names_creator,
+            default_combining_names,
+        )
+        admm = ["A", "B"]
+        stoch = ["S1", "S2"]
+        names = default_admm_stoch_subproblem_scenario_names_creator(
+            admm, stoch)
+        self.assertEqual(names, [
+            default_combining_names("A", "S1"),
+            default_combining_names("B", "S1"),
+            default_combining_names("A", "S2"),
+            default_combining_names("B", "S2"),
+        ])
+        # Custom combiner override.
+        custom = default_admm_stoch_subproblem_scenario_names_creator(
+            admm, stoch, combining_fn=lambda a, s: f"{a}|{s}")
+        self.assertEqual(custom, ["A|S1", "B|S1", "A|S2", "B|S2"])
+
+    def _hooks(self):
+        # Reuse the minimal scenario fixture from
+        # TestStochAdmmWrapperFirstStageHooks via a fresh instance
+        # to keep this class self-contained.
+        return TestStochAdmmWrapperFirstStageHooks._hooks()
+
+    def _scenario_creator_using_default_split(self):
+        """A scenario_creator that decodes its composite name via the
+        package default split — what a user would write after the
+        phase-D example migration."""
+        import pyomo.environ as pyo
+        from mpisppy.utils.stoch_admmWrapper import (
+            default_split_admm_stoch_subproblem_scenario_name as split,
+        )
+
+        def sc(sname, **kwargs):
+            admm_part, _ = split(sname)
+            m = pyo.ConcreteModel()
+            if admm_part == "A":
+                m.x = pyo.Var(bounds=(0, 1))
+                own = m.x
+            else:
+                m.y = pyo.Var(bounds=(0, 1))
+                own = m.y
+            m.fs = pyo.Var(bounds=(0, 1))
+            m.FirstStageCost = pyo.Expression(expr=m.fs)
+            m.obj = pyo.Objective(expr=own + m.fs, sense=pyo.minimize)
+            m._first_stage_vars = [m.fs]
+            return m
+
+        return sc
+
+    def test_wrapper_split_none_uses_default(self):
+        """Stoch_AdmmWrapper(split=None, ...) must resolve to the
+        package default split function."""
+        from mpisppy.utils.stoch_admmWrapper import (
+            Stoch_AdmmWrapper,
+            default_combining_names,
+        )
+        from mpisppy import MPI
+
+        admm_names = ["A", "B"]
+        stoch_names = ["S1", "S2"]
+        all_names = [default_combining_names(a, s)
+                     for s in stoch_names for a in admm_names]
+        fs_cost, fs_varlist = self._hooks()
+        admm = Stoch_AdmmWrapper(
+            options={},
+            all_admm_stoch_subproblem_scenario_names=all_names,
+            split_admm_stoch_subproblem_scenario_name=None,  # explicit opt-in
+            admm_subproblem_names=admm_names,
+            stoch_scenario_names=stoch_names,
+            scenario_creator=self._scenario_creator_using_default_split(),
+            consensus_vars={"A": [("x", 1)], "B": [("y", 1)]},
+            n_cylinders=1,
+            mpicomm=MPI.COMM_WORLD,
+            scenario_creator_kwargs={},
+            first_stage_cost=fs_cost,
+            first_stage_varlist=fs_varlist,
+        )
+        # Every wrapped scenario decoded; node lists wired.
+        self.assertEqual(
+            sorted(admm.local_admm_stoch_subproblem_scenarios.keys()),
+            sorted(all_names))
+        for sname, s in admm.local_admm_stoch_subproblem_scenarios.items():
+            self.assertTrue(hasattr(s, "_mpisppy_node_list"))
+
+    def _module_omitting_naming(self):
+        """A model module that omits combining_names, split, and
+        admm_stoch_subproblem_scenario_names_creator — the phase-C
+        target user shape."""
+        import types
+        fs_cost, fs_varlist = self._hooks()
+        return types.SimpleNamespace(
+            __name__="defaults_module",
+            admm_subproblem_names_creator=lambda cfg: ["A", "B"],
+            stoch_scenario_names_creator=lambda cfg: ["S1", "S2"],
+            # NO combining_names, NO split, NO names_creator.
+            kw_creator=lambda cfg: {},
+            consensus_vars_creator=(
+                lambda an, sn, **kw: {"A": [("x", 1)], "B": [("y", 1)]}),
+            scenario_creator=self._scenario_creator_using_default_split(),
+            first_stage_cost=fs_cost,
+            first_stage_varlist=fs_varlist,
+        )
+
+    def test_setup_stoch_admm_uses_defaults(self):
+        """setup_stoch_admm with a module that defines none of the
+        three naming helpers builds wrapped names via the package
+        defaults."""
+        from mpisppy.generic.admm import setup_stoch_admm
+        from mpisppy.utils.stoch_admmWrapper import default_combining_names
+
+        module = self._module_omitting_naming()
+        cfg = config.Config()
+        cfg.add_to_config("branching_factors", description="",
+                          domain=list, default=None)
+        scen_creator, _, all_names, _ = setup_stoch_admm(
+            module, cfg, n_cylinders=1)
+        # Wrapped names follow the default delimiter convention.
+        expected = [default_combining_names(a, s)
+                    for s in ["S1", "S2"] for a in ["A", "B"]]
+        self.assertEqual(all_names, expected)
+
+    def test_discover_naming_half_pair_errors(self):
+        """combining_names without split (or vice versa) violates the
+        inverse-pair contract; _discover_naming_helpers must raise
+        before the wrapper or downstream code runs."""
+        import types
+        from mpisppy.generic.admm import _discover_naming_helpers
+
+        only_combining = types.SimpleNamespace(
+            __name__="m_only_combining",
+            combining_names=lambda a, s: f"{a}_{s}",
+        )
+        with self.assertRaises(RuntimeError) as cm:
+            _discover_naming_helpers(only_combining)
+        msg = str(cm.exception)
+        self.assertIn("combining_names", msg)
+        self.assertIn("split_admm_stoch_subproblem_scenario_name", msg)
+
+        only_split = types.SimpleNamespace(
+            __name__="m_only_split",
+            split_admm_stoch_subproblem_scenario_name=lambda n: ("", ""),
+        )
+        with self.assertRaises(RuntimeError) as cm:
+            _discover_naming_helpers(only_split)
+        msg = str(cm.exception)
+        self.assertIn("combining_names", msg)
+
+    def test_setup_stoch_admm_custom_names_creator_without_split_errors(self):
+        """A module that ships custom names via
+        admm_stoch_subproblem_scenario_names_creator but omits the
+        inverse pair would decode names through the default split at
+        runtime and ValueError; catch the inconsistency at setup."""
+        import types
+        from mpisppy.generic.admm import setup_stoch_admm
+
+        module = types.SimpleNamespace(
+            __name__="m_names_no_split",
+            admm_subproblem_names_creator=lambda cfg: ["A", "B"],
+            stoch_scenario_names_creator=lambda cfg: ["S1", "S2"],
+            admm_stoch_subproblem_scenario_names_creator=(
+                lambda an, sn: [f"custom_{a}_{s}" for s in sn for a in an]),
+            # NO combining_names, NO split.
+            kw_creator=lambda cfg: {},
+            consensus_vars_creator=(
+                lambda an, sn, **kw: {"A": [("x", 1)], "B": [("y", 1)]}),
+            scenario_creator=lambda *a, **kw: None,
+        )
+        cfg = config.Config()
+        cfg.add_to_config("branching_factors", description="",
+                          domain=list, default=None)
+        with self.assertRaises(RuntimeError) as cm:
+            setup_stoch_admm(module, cfg, n_cylinders=1)
+        msg = str(cm.exception)
+        self.assertIn("m_names_no_split", msg)
+        self.assertIn("admm_stoch_subproblem_scenario_names_creator", msg)
+        self.assertIn("split_admm_stoch_subproblem_scenario_name", msg)
+
+    def test_setup_stoch_admm_custom_combining_drives_default_creator(self):
+        """A module that defines a custom combining_names / split pair
+        but no scen-names creator: the default scen-names creator
+        composes with the user's combining_names (not the package
+        default combiner)."""
+        import types
+        from mpisppy.generic.admm import setup_stoch_admm
+
+        def combining(a, s):
+            return f"my|{a}|{s}"
+
+        def split(name):
+            _, a, s = name.split("|")
+            return a, s
+
+        def scenario_creator(sname, **kwargs):
+            import pyomo.environ as pyo
+            a, _ = split(sname)
+            m = pyo.ConcreteModel()
+            if a == "A":
+                m.x = pyo.Var(bounds=(0, 1))
+                own = m.x
+            else:
+                m.y = pyo.Var(bounds=(0, 1))
+                own = m.y
+            m.fs = pyo.Var(bounds=(0, 1))
+            m.FirstStageCost = pyo.Expression(expr=m.fs)
+            m.obj = pyo.Objective(expr=own + m.fs, sense=pyo.minimize)
+            m._first_stage_vars = [m.fs]
+            return m
+
+        fs_cost, fs_varlist = self._hooks()
+        module = types.SimpleNamespace(
+            __name__="m_custom_combining",
+            admm_subproblem_names_creator=lambda cfg: ["A", "B"],
+            stoch_scenario_names_creator=lambda cfg: ["S1", "S2"],
+            combining_names=combining,
+            split_admm_stoch_subproblem_scenario_name=split,
+            kw_creator=lambda cfg: {},
+            consensus_vars_creator=(
+                lambda an, sn, **kw: {"A": [("x", 1)], "B": [("y", 1)]}),
+            scenario_creator=scenario_creator,
+            first_stage_cost=fs_cost,
+            first_stage_varlist=fs_varlist,
+        )
+        cfg = config.Config()
+        cfg.add_to_config("branching_factors", description="",
+                          domain=list, default=None)
+        _, _, all_names, _ = setup_stoch_admm(module, cfg, n_cylinders=1)
+        # Outer stoch, inner admm; combining is the user's.
+        self.assertEqual(all_names, [
+            "my|A|S1", "my|B|S1", "my|A|S2", "my|B|S2",
+        ])
 
 
 if __name__ == '__main__':
