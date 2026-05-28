@@ -409,12 +409,3 @@ for a complete working example (``farmer.py`` and ``farmer_generic.bash``).
 For models written in an algebraic modeling language other than Pyomo
 (e.g., AMPL or GAMS), see :doc:`agnostic`. For models supplied as
 SMPS-format files, see :doc:`smps`.
-
-
-Researchers Who Want to Compare with mpi-sppy
-----------------------------------------------
-
-The quickest approach is to run one of the canned examples in
-subdirectories of ``examples``. Sample commands can be found in
-``examples.runall.py``. The mpi-sppy paper in MPC provides references
-for many of the examples.
