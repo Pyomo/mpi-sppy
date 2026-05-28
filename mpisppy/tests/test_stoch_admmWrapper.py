@@ -771,6 +771,62 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
         self.assertIn(("fs_B", 1), admm.consensus_vars["B"])
         self.assertNotIn(("fs_A", 1), admm.consensus_vars["B"])
 
+    def test_b2_first_stage_varlist_accepts_indexed_var(self):
+        """B.2: a first_stage_varlist hook that returns an indexed Var
+        container (rather than its individual VarData objects) must be
+        expanded to per-index VarData names by the wrapper.  Without
+        expansion the container name ('fs_idx') would land in
+        varprob_dict but ScenarioNode would expand the container into
+        VarData IDs that miss varprob_dict, tripping a KeyError in
+        variable_probability."""
+        import pyomo.environ as pyo
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
+        from mpisppy import MPI
+
+        def indexed_fs_scenario_creator(sname, **kwargs):
+            parts = sname.split("_")
+            admm_part = parts[2]
+            m = pyo.ConcreteModel()
+            if admm_part == "A":
+                m.x = pyo.Var(bounds=(0, 1))
+                own = m.x
+            else:
+                m.y = pyo.Var(bounds=(0, 1))
+                own = m.y
+            m.fs_idx = pyo.Var([2025, 2026], bounds=(0, 1))
+            m.FirstStageCost = pyo.Expression(
+                expr=sum(m.fs_idx[t] for t in m.fs_idx))
+            m.obj = pyo.Objective(
+                expr=own + m.FirstStageCost, sense=pyo.minimize)
+            # The hook returns the indexed container, not the VarDatas:
+            m._first_stage_vars = [m.fs_idx]
+            return m
+
+        def fs_cost(s):
+            return s.FirstStageCost
+
+        def fs_varlist(s):
+            return s._first_stage_vars
+
+        admm = Stoch_AdmmWrapper(
+            options={},
+            scenario_creator=indexed_fs_scenario_creator,
+            mpicomm=MPI.COMM_WORLD,
+            first_stage_cost=fs_cost,
+            first_stage_varlist=fs_varlist,
+            **self._common_kwargs(),
+        )
+        # Per-VarData names should be merged in, not the container name.
+        for sub in ("A", "B"):
+            self.assertIn(("fs_idx[2025]", 1), admm.consensus_vars[sub])
+            self.assertIn(("fs_idx[2026]", 1), admm.consensus_vars[sub])
+            self.assertNotIn(("fs_idx", 1), admm.consensus_vars[sub])
+        # assign_variable_probs runs in __init__; reaching this point
+        # means it did not KeyError on the indexed first-stage Var.
+        for sname, s in admm.local_admm_stoch_subproblem_scenarios.items():
+            self.assertTrue(hasattr(s, "_mpisppy_node_list"),
+                            f"{sname}: node list missing")
+
     def test_consensus_vars_accepts_var_objects(self):
         """B.1: consensus_vars may contain Pyomo Var/VarData objects in
         place of (or mixed with) name strings.  The wrapper's normalized

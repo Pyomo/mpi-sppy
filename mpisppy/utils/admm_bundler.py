@@ -25,6 +25,7 @@ import mpisppy.utils.sputils as sputils
 import mpisppy.scenario_tree as scenario_tree
 from mpisppy.utils.admmWrapper import (
     _admm_normalize_consensus_vars,
+    _first_stage_var_names,
     _merge_first_stage_into_consensus_vars,
 )
 from mpisppy.utils.stoch_admmWrapper import _consensus_vars_number_creator
@@ -115,7 +116,7 @@ class AdmmBundler:
                 probe_sname = combining_fn(sub, stoch_scenario_names[0])
                 probe_scen = module.scenario_creator(probe_sname,
                                                      **self.scenario_creator_kwargs)
-                fs_names_per_sub[sub] = [v.name for v in first_stage_varlist(probe_scen)]
+                fs_names_per_sub[sub] = list(_first_stage_var_names(first_stage_varlist(probe_scen)))
                 del probe_scen
             self.consensus_vars = _merge_first_stage_into_consensus_vars(
                 self.consensus_vars, fs_names_per_sub, root_stage=1)

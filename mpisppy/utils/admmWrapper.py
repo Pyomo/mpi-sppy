@@ -122,6 +122,35 @@ def _admm_normalize_consensus_vars(consensus_vars, *, tuple_form):
     return out
 
 
+def _first_stage_var_names(varlist):
+    """Yield VarData-level names from a first_stage_varlist return value.
+
+    Accepts a mixed iterable of strings, Pyomo VarData, scalar Vars,
+    and indexed Var containers; indexed containers are expanded to one
+    name per VarData (e.g. NumBuilt -> NumBuilt[2025], NumBuilt[2026]).
+
+    Without this expansion the wrapper would record the container name
+    in varprob_dict, but ScenarioNode and varid_to_nonant_index work in
+    terms of VarData IDs, so variable_probability() would later raise
+    a KeyError for every indexed first-stage Var.
+    """
+    for v in varlist:
+        if isinstance(v, str):
+            yield v
+        elif hasattr(v, "is_indexed") and v.is_indexed():
+            for vdata in v.values():
+                yield vdata.name
+        else:
+            name = getattr(v, "name", None)
+            if name is None:
+                raise TypeError(
+                    f"first_stage_varlist entry must be a string, a "
+                    f"Pyomo Var/VarData, or an indexed Var container, "
+                    f"got {type(v).__name__}: {v!r}"
+                )
+            yield name
+
+
 def _merge_first_stage_into_consensus_vars(consensus_vars, first_stage_var_names_per_sub, root_stage=1):
     """Add each ADMM subproblem's first-stage Var names to its
     consensus_vars entry, tagged at root_stage.

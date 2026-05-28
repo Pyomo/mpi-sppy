@@ -13,6 +13,7 @@ import mpisppy.scenario_tree as scenario_tree
 import numpy as np
 from mpisppy.utils.admmWrapper import (
     _admm_normalize_consensus_vars,
+    _first_stage_var_names,
     _merge_first_stage_into_consensus_vars,
 )
 
@@ -205,7 +206,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
             for sname, s in self.local_admm_stoch_subproblem_scenarios.items():
                 sub = split_admm_stoch_subproblem_scenario_name(sname)[0]
                 if sub not in fs_names_per_sub:
-                    fs_names_per_sub[sub] = [v.name for v in first_stage_varlist(s)]
+                    fs_names_per_sub[sub] = list(_first_stage_var_names(first_stage_varlist(s)))
             if len(fs_names_per_sub) < len(admm_subproblem_names):
                 name_for_sub = {}
                 for cand in all_admm_stoch_subproblem_scenario_names:
@@ -215,7 +216,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                     if sub not in fs_names_per_sub:
                         probe = scenario_creator(name_for_sub[sub],
                                                  **(scenario_creator_kwargs or {}))
-                        fs_names_per_sub[sub] = [v.name for v in first_stage_varlist(probe)]
+                        fs_names_per_sub[sub] = list(_first_stage_var_names(first_stage_varlist(probe)))
                         del probe
             self.consensus_vars = _merge_first_stage_into_consensus_vars(
                 self.consensus_vars, fs_names_per_sub, root_stage=1)

@@ -426,6 +426,13 @@ inside ``scenario_creator`` so the hook can find it.
    ``RuntimeError`` at ``setup_stoch_admm`` time.  Mixing the hooks
    with a manual ``attach_root_node`` call also raises.
 
+.. Note::
+   ``first_stage_varlist`` may return a mix of scalar ``Var``,
+   ``VarData``, and indexed ``Var`` containers.  Indexed containers are
+   expanded internally to one consensus entry per ``VarData`` (e.g.
+   ``NumBuilt`` becomes ``NumBuilt[2025]``, ``NumBuilt[2026]``, ...),
+   so you do not need to unpack indexed Vars before returning them.
+
 Advanced first-stage hooks (optional)
 """""""""""""""""""""""""""""""""""""""
 

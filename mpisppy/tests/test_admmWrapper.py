@@ -20,6 +20,7 @@ import pyomo.environ as pyo
 import mpisppy.utils.admmWrapper as admmWrapper
 from mpisppy.utils.admmWrapper import (
     _admm_normalize_consensus_vars,
+    _first_stage_var_names,
     _merge_first_stage_into_consensus_vars,
 )
 import mpisppy.tests.examples.distr.distr as distr
@@ -344,6 +345,41 @@ class TestMergeFirstStageIntoConsensusVars(unittest.TestCase):
         out = _merge_first_stage_into_consensus_vars(cv, fs, root_stage=1)
         self.assertEqual(out["A"], [("x", 2), ("fsA", 1)])
         self.assertEqual(out["B"], [("y", 2)])
+
+
+class TestFirstStageVarNames(unittest.TestCase):
+    """B.2 helper: expand a first_stage_varlist return value to per-VarData
+    names, so indexed Var containers don't end up in varprob_dict by their
+    container name (which would later KeyError in variable_probability)."""
+
+    def test_scalar_var(self):
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var()
+        self.assertEqual(list(_first_stage_var_names([m.x])), ["x"])
+
+    def test_indexed_var_expands(self):
+        m = pyo.ConcreteModel()
+        m.fs = pyo.Var([2025, 2026])
+        self.assertEqual(list(_first_stage_var_names([m.fs])),
+                         ["fs[2025]", "fs[2026]"])
+
+    def test_vardata_passthrough(self):
+        m = pyo.ConcreteModel()
+        m.fs = pyo.Var([2025, 2026])
+        self.assertEqual(list(_first_stage_var_names([m.fs[2025]])),
+                         ["fs[2025]"])
+
+    def test_mixed_inputs(self):
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var()
+        m.fs = pyo.Var(["a", "b"])
+        self.assertEqual(
+            list(_first_stage_var_names([m.x, m.fs, "explicit_name"])),
+            ["x", "fs[a]", "fs[b]", "explicit_name"])
+
+    def test_unsupported_type_raises(self):
+        with self.assertRaises(TypeError):
+            list(_first_stage_var_names([42]))
 
 
 if __name__ == '__main__':
