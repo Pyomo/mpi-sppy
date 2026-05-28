@@ -20,7 +20,7 @@ Prerequisites (all platforms)
   algorithms.
 * For decomposition algorithms (PH, APH, L-shaped, …): a working MPI
   implementation and ``mpi4py``. If you only need to solve the extensive
-  form, MPI is *not* required.
+  form directly, MPI is *not* required.
 
 
 Install from GitHub on Linux
@@ -329,9 +329,9 @@ command from the top of the cloned ``mpi-sppy`` repository.
    named 'mpisppy'``, the install did not take effect in this
    environment (most often a virtual-environment issue).
 
-2. **Your solver works.** Solve the farmer extensive form with three
-   scenarios. Substitute the solver you installed (``gurobi``,
-   ``cplex``, ``xpress``, …):
+2. **Your solver works.** Solve the farmer extensive form directly
+   with three scenarios. Substitute the solver you installed
+   (``gurobi``, ``cplex``, ``xpress``, …):
 
    .. code-block:: text
 
