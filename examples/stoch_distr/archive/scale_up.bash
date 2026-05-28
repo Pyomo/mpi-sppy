@@ -1,5 +1,6 @@
 #!/bin/bash
-### This code is used for a paper
+### This code is used for a paper.  Deprecated: invokes the archived
+### stoch_distr_ef.py and stoch_distr_admm_cylinders.py drivers.
 
 SOLVERNAME=gurobi_persistent
 ITERS=100

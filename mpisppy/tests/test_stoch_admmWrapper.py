@@ -143,17 +143,20 @@ class TestStochAdmmWrapper(unittest.TestCase):
         "same command works when run from a bare Python script or a shell. "
         "Likely a pytest stdio-capture / file-descriptor interaction with "
         "Open MPI's I/O forwarding.  Run manually via "
-        "examples/stoch_distr/go.bash to exercise this path until the root "
-        "cause is diagnosed."
+        "examples/stoch_distr/archive/go.bash to exercise this path until "
+        "the root cause is diagnosed."
     )
     def test_values(self):
+        # j==0 runs from the test fork (mpisppy/tests/examples/stoch_distr/)
+        # where the drivers are still at the top level; j>0 runs from the
+        # canonical example where the drivers have moved under archive/.
         command_line_pairs = [(f"mpiexec -np 3 python -u {python_args} -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 10 --num-admm-subproblems 2 --default-rho 10 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.001 --num-stages 3" \
                          , f"python {python_args} stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 10 --num-admm-subproblems 2 --num-stages 3"), \
-                         (f"mpiexec -np 3 python -u {python_args} -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 5 --num-admm-subproblems 3 --default-rho 5 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.01 --ensure-xhat-feas" \
-                         , f"python {python_args} stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 5 --num-admm-subproblems 3 --ensure-xhat-feas"), \
-                              (f"mpiexec -np 6 python -u {python_args} -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 4 --num-admm-subproblems 5 --default-rho 15 --solver-name {solver_name} --max-iterations 30 --xhatxbar --lagrangian --mnpr 5 --scalable --ensure-xhat-feas" \
-                         , f"python {python_args} stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 4 --num-admm-subproblems 5 --mnpr 5 --scalable --ensure-xhat-feas")  ]
-        #command_line = f"mpiexec -np 6 python -m mpi4py examples/stoch_distr/stoch_distr_admm_cylinders.py --num-admm-subproblems 2 --num-stoch-scens 4 --default-rho 10 --solver-name {solver_name} --max-iterations 100 --xhatxbar --lagrangian"
+                         (f"mpiexec -np 3 python -u {python_args} -m mpi4py archive/stoch_distr_admm_cylinders.py --num-stoch-scens 5 --num-admm-subproblems 3 --default-rho 5 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.01 --ensure-xhat-feas" \
+                         , f"python {python_args} archive/stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 5 --num-admm-subproblems 3 --ensure-xhat-feas"), \
+                              (f"mpiexec -np 6 python -u {python_args} -m mpi4py archive/stoch_distr_admm_cylinders.py --num-stoch-scens 4 --num-admm-subproblems 5 --default-rho 15 --solver-name {solver_name} --max-iterations 30 --xhatxbar --lagrangian --mnpr 5 --scalable --ensure-xhat-feas" \
+                         , f"python {python_args} archive/stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 4 --num-admm-subproblems 5 --mnpr 5 --scalable --ensure-xhat-feas")  ]
+        #command_line = f"mpiexec -np 6 python -m mpi4py examples/stoch_distr/archive/stoch_distr_admm_cylinders.py --num-admm-subproblems 2 --num-stoch-scens 4 --default-rho 10 --solver-name {solver_name} --max-iterations 100 --xhatxbar --lagrangian"
         original_dir = os.getcwd()
         for j in range(len(command_line_pairs)):
             if j == 0: # The first line is executed in the test directory because it has a 3-stage problem. This one does not insure xhatfeasibility but luckily works
@@ -271,12 +274,15 @@ class TestStochAdmmWrapper(unittest.TestCase):
             outer_bound = self._extracting_outer_bound(result.stdout)
             self.assertIsNotNone(outer_bound, "Could not extract outer bound from output")
 
-            # Run EF for comparison
+            # Run EF for comparison via generic_cylinders (the legacy
+            # stoch_distr_ef.py driver moved to examples/stoch_distr/archive/).
             ef_command = (
-                f"python stoch_distr_ef.py --solver-name {solver_name} "
+                f"python {generic_cyl} --module-name stoch_distr "
+                f"--EF --EF-solver-name {solver_name} --stoch-admm "
                 f"--num-stoch-scens 4 --num-admm-subproblems 2"
             ).split()
-            ef_result = subprocess.run(ef_command, capture_output=True, text=True)
+            ef_result = subprocess.run(ef_command, capture_output=True, text=True,
+                                       env=clean_env)
             ef_obj = None
             for line in ef_result.stdout.strip().split('\n'):
                 if "EF objective" in line:
@@ -355,11 +361,13 @@ class TestStochAdmmWrapper(unittest.TestCase):
 
             # --- EF reference ---
             ef_cmd = (
-                f"python stoch_distr_ef.py --solver-name {solver_name} "
+                f"python {generic_cyl} --module-name stoch_distr "
+                f"--EF --EF-solver-name {solver_name} --stoch-admm "
                 f"--num-stoch-scens {num_stoch_scens} "
                 f"--num-admm-subproblems {num_admm}"
             ).split()
-            ef_result = subprocess.run(ef_cmd, capture_output=True, text=True)
+            ef_result = subprocess.run(ef_cmd, capture_output=True, text=True,
+                                       env=clean_env)
             ef_obj = None
             for line in ef_result.stdout.strip().split('\n'):
                 if "EF objective" in line:
@@ -477,9 +485,10 @@ class TestStochAdmmWrapper(unittest.TestCase):
         against them, forcing the real owners to 0 and producing worse
         (higher-for-minimize) objectives than PH.
 
-        The examples/stoch_distr/stoch_distr_ef.py driver hides this by
-        passing nonant_for_fixed_vars=False to create_EF, so we drive the
-        EF through generic_cylinders --EF (ExtensiveForm's default).
+        The examples/stoch_distr/archive/stoch_distr_ef.py driver hides
+        this by passing nonant_for_fixed_vars=False to create_EF, so we
+        drive the EF through generic_cylinders --EF (ExtensiveForm's
+        default).
 
         Regression: with the fix, the EF objective should lie within the
         PH Lagrangian outer / xhatxbar inner bound envelope.

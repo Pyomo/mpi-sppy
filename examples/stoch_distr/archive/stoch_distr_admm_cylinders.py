@@ -6,10 +6,16 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-# general example driver for stoch_distr with cylinders
-# Consider using generic_cylinders.py with --stoch-admm instead.
+# Deprecated standalone driver for stoch_distr.  Use
+# `python ../../../mpisppy/generic_cylinders.py --module-name stoch_distr
+# --stoch-admm` from examples/stoch_distr/ instead.  Kept here for
+# reference and so tests can compare the wrapper path against the
+# generic driver.
+import os
+import sys
+# stoch_distr.py lives one directory up (examples/stoch_distr/).
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Driver file for stochastic admm
 import mpisppy.utils.stoch_admmWrapper as stoch_admmWrapper
 
 import stoch_distr
