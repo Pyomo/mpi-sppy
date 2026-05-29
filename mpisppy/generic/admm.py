@@ -146,6 +146,64 @@ def setup_admm(module, cfg, n_cylinders):
             all_scenario_names, None)
 
 
+def _discover_first_stage_hooks(module):
+    """Discover the four optional first-stage hooks on a stoch-admm
+    model module and validate the both-or-neither contract.
+
+    The two core hooks (first_stage_cost, first_stage_varlist) must
+    be defined together or both omitted; mixing them is an error.
+
+    The two advanced hooks (first_stage_surrogate_nonant_list,
+    first_stage_nonant_ef_suppl_list) are each independent of the
+    other; defining either alone is fine, but only when the two
+    core hooks are also defined -- they forward to
+    sputils.attach_root_node's optional surrogate_nonant_list /
+    nonant_ef_suppl_list parameters and have nothing to attach to
+    otherwise.
+
+    Returns:
+        dict: keyword arguments suitable for forwarding to
+        Stoch_AdmmWrapper / AdmmBundler.  Hooks that the module did
+        not define are passed as None.
+    """
+    first_stage_cost = getattr(module, "first_stage_cost", None)
+    first_stage_varlist = getattr(module, "first_stage_varlist", None)
+    if (first_stage_cost is None) != (first_stage_varlist is None):
+        present = "first_stage_cost" if first_stage_cost is not None else "first_stage_varlist"
+        missing = "first_stage_varlist" if first_stage_cost is not None else "first_stage_cost"
+        raise RuntimeError(
+            f"Module {module.__name__!r} defines {present} but not "
+            f"{missing}.  These hooks must be defined together "
+            f"(or both omitted).  See doc/src/generic_admm.rst."
+        )
+
+    first_stage_surrogate_nonant_list = getattr(
+        module, "first_stage_surrogate_nonant_list", None)
+    first_stage_nonant_ef_suppl_list = getattr(
+        module, "first_stage_nonant_ef_suppl_list", None)
+    advanced = {
+        "first_stage_surrogate_nonant_list": first_stage_surrogate_nonant_list,
+        "first_stage_nonant_ef_suppl_list": first_stage_nonant_ef_suppl_list,
+    }
+    present_advanced = [n for n, h in advanced.items() if h is not None]
+    if present_advanced and first_stage_cost is None:
+        raise RuntimeError(
+            f"Module {module.__name__!r} defines the advanced hook(s) "
+            f"{present_advanced} but not first_stage_cost / "
+            f"first_stage_varlist.  Advanced hooks forward to "
+            f"sputils.attach_root_node's optional parameters and only "
+            f"make sense when the core hooks are also defined.  See "
+            f"doc/src/generic_admm.rst."
+        )
+
+    return {
+        "first_stage_cost": first_stage_cost,
+        "first_stage_varlist": first_stage_varlist,
+        "first_stage_surrogate_nonant_list": first_stage_surrogate_nonant_list,
+        "first_stage_nonant_ef_suppl_list": first_stage_nonant_ef_suppl_list,
+    }
+
+
 def setup_stoch_admm(module, cfg, n_cylinders):
     """Create Stoch_AdmmWrapper for stochastic ADMM.
 
@@ -165,6 +223,8 @@ def setup_stoch_admm(module, cfg, n_cylinders):
     consensus_vars = module.consensus_vars_creator(
         admm_subproblem_names, stoch_scenario_name, **scenario_creator_kwargs)
 
+    first_stage_hooks = _discover_first_stage_hooks(module)
+
     admm = Stoch_AdmmWrapper(
         options={},
         all_admm_stoch_subproblem_scenario_names=all_names,
@@ -177,6 +237,7 @@ def setup_stoch_admm(module, cfg, n_cylinders):
         mpicomm=MPI.COMM_WORLD,
         scenario_creator_kwargs=scenario_creator_kwargs,
         BFs=cfg.get("branching_factors"),
+        **first_stage_hooks,
     )
 
     # Store on cfg as plain attributes (Pyomo Config can't handle these types)
@@ -216,6 +277,8 @@ def setup_stoch_admm_with_bundles(module, cfg, n_cylinders):
     consensus_vars = module.consensus_vars_creator(
         admm_subproblem_names, stoch_scenario_name, **scenario_creator_kwargs)
 
+    first_stage_hooks = _discover_first_stage_hooks(module)
+
     bundler = AdmmBundler(
         module=module,
         scenarios_per_bundle=cfg.scenarios_per_bundle,
@@ -225,6 +288,7 @@ def setup_stoch_admm_with_bundles(module, cfg, n_cylinders):
         combining_fn=module.combining_names,
         split_fn=module.split_admm_stoch_subproblem_scenario_name,
         scenario_creator_kwargs=scenario_creator_kwargs,
+        **first_stage_hooks,
     )
     bundle_names = bundler.bundle_names_creator()
 

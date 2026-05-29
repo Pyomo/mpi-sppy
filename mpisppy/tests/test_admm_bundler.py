@@ -6,7 +6,17 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+"""Tests for AdmmBundler.
+
+Phase references (A, B.1, B.2, ...) in this file's docstrings track the
+phased plan in doc/designs/admm_user_api_automation_design.md.
+For the ADMM vocabulary used below (before-wrap scenario, wrapped
+scenario, wrap, ADMM subproblem, ...), see the module docstring of
+mpisppy.utils.admmWrapper.
+"""
+import types
 import unittest
+import pyomo.environ as pyo
 import mpisppy.tests.examples.stoch_distr.stoch_distr as stoch_distr
 from mpisppy.utils.admm_bundler import AdmmBundler
 from mpisppy.utils import config
@@ -67,6 +77,38 @@ class TestAdmmBundler(unittest.TestCase):
         names = bundler.bundle_names_creator()
         # 3 subproblems × 1 bundle each = 3 bundles
         self.assertEqual(len(names), 3)
+
+    def test_half_hooks_errors(self):
+        """Exactly one of first_stage_cost / first_stage_varlist passed
+        to AdmmBundler — both-or-neither contract violated."""
+        cfg = config.Config()
+        stoch_distr.inparser_adder(cfg)
+        cfg.num_stoch_scens = 4
+        cfg.num_admm_subproblems = 2
+        admm_subproblem_names = stoch_distr.admm_subproblem_names_creator(cfg)
+        stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(cfg)
+        scenario_creator_kwargs = stoch_distr.kw_creator(cfg)
+        consensus_vars = stoch_distr.consensus_vars_creator(
+            admm_subproblem_names, stoch_scenario_names[0],
+            **scenario_creator_kwargs)
+
+        common = dict(
+            module=stoch_distr,
+            scenarios_per_bundle=4,
+            admm_subproblem_names=admm_subproblem_names,
+            stoch_scenario_names=stoch_scenario_names,
+            consensus_vars=consensus_vars,
+            combining_fn=stoch_distr.combining_names,
+            split_fn=stoch_distr.split_admm_stoch_subproblem_scenario_name,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+        )
+        for half in (
+            {"first_stage_cost": lambda s: 0},
+            {"first_stage_varlist": lambda s: []},
+        ):
+            with self.assertRaises(RuntimeError) as cm:
+                AdmmBundler(**common, **half)
+            self.assertIn("must be defined together", str(cm.exception))
 
     @unittest.skipUnless(solver_available, "no solver available")
     def test_bundle_creation(self):
@@ -156,6 +198,172 @@ class TestAdmmBundler(unittest.TestCase):
                 f"var_prob_list length ({len(vpl)}) != nonant count "
                 f"({len(root_node.nonant_vardata_list)}) for {bname}"
             )
+
+
+class TestAdmmBundlerB2AutoMerge(unittest.TestCase):
+    """B.2: AdmmBundler auto-merges each admm subproblem's own
+    first-stage Var names into its consensus_vars entry when the
+    first_stage_varlist hook is supplied."""
+
+    def _build_synthetic_module(self):
+        """A tiny module whose scenario_creator gives each admm sub its
+        own first-stage Var (fs_A or fs_B)."""
+
+        def scenario_creator(sname, **kwargs):
+            parts = sname.split("__ADMM__")
+            admm_part = parts[1]
+            m = pyo.ConcreteModel()
+            if admm_part == "A":
+                m.x = pyo.Var(bounds=(0, 1))
+                m.fs_A = pyo.Var(bounds=(0, 1))
+                m._fs_vars = [m.fs_A]
+                m.FirstStageCost = pyo.Expression(expr=m.fs_A)
+                m.obj = pyo.Objective(expr=m.x + m.fs_A, sense=pyo.minimize)
+            else:
+                m.y = pyo.Var(bounds=(0, 1))
+                m.fs_B = pyo.Var(bounds=(0, 1))
+                m._fs_vars = [m.fs_B]
+                m.FirstStageCost = pyo.Expression(expr=m.fs_B)
+                m.obj = pyo.Objective(expr=m.y + m.fs_B, sense=pyo.minimize)
+            return m
+
+        mod = types.SimpleNamespace()
+        mod.scenario_creator = scenario_creator
+        return mod
+
+    def test_per_subproblem_first_stage_merge(self):
+        mod = self._build_synthetic_module()
+        admm_subs = ["A", "B"]
+        stoch_names = ["S1", "S2"]
+        consensus_vars = {"A": [("x", 1)], "B": [("y", 1)]}
+
+        def combining(sub, stoch):
+            return f"ADMM__ADMM__{sub}__ADMM__{stoch}"
+
+        def split(name):
+            parts = name.split("__ADMM__")
+            return parts[1], parts[2]
+
+        bundler = AdmmBundler(
+            module=mod,
+            scenarios_per_bundle=len(stoch_names),
+            admm_subproblem_names=admm_subs,
+            stoch_scenario_names=stoch_names,
+            consensus_vars=consensus_vars,
+            combining_fn=combining,
+            split_fn=split,
+            first_stage_cost=lambda s: s.FirstStageCost,
+            first_stage_varlist=lambda s: s._fs_vars,
+        )
+        self.assertIn(("fs_A", 1), bundler.consensus_vars["A"])
+        self.assertNotIn(("fs_B", 1), bundler.consensus_vars["A"])
+        self.assertIn(("fs_B", 1), bundler.consensus_vars["B"])
+        self.assertNotIn(("fs_A", 1), bundler.consensus_vars["B"])
+
+
+class TestAdmmBundlerB3AdvancedHooks(unittest.TestCase):
+    """B.3: AdmmBundler accepts first_stage_surrogate_nonant_list /
+    first_stage_nonant_ef_suppl_list and forwards them to
+    sputils.attach_root_node when wrap builds each bundle's
+    constituent before-wrap scenarios."""
+
+    def _build_module_with_surrogate(self):
+        def scenario_creator(sname, **kwargs):
+            parts = sname.split("__ADMM__")
+            admm_part = parts[1]
+            m = pyo.ConcreteModel()
+            if admm_part == "A":
+                m.x = pyo.Var(bounds=(0, 1))
+                own = m.x
+            else:
+                m.y = pyo.Var(bounds=(0, 1))
+                own = m.y
+            m.fs = pyo.Var(bounds=(0, 1))
+            m.z = pyo.Var(bounds=(0, 1))   # surrogate
+            m.e = pyo.Var(bounds=(0, 1))   # EF-supplemental
+            m.FirstStageCost = pyo.Expression(expr=m.fs)
+            m.obj = pyo.Objective(expr=own + m.fs, sense=pyo.minimize)
+            m._fs_vars = [m.fs]
+            m._surrogate_vars = [m.z]
+            m._ef_suppl_vars = [m.e]
+            return m
+
+        mod = types.SimpleNamespace(scenario_creator=scenario_creator)
+        return mod
+
+    def _common_kwargs(self):
+        admm_subs = ["A", "B"]
+        stoch_names = ["S1", "S2"]
+        consensus_vars = {"A": [("x", 1)], "B": [("y", 1)]}
+
+        def combining(sub, stoch):
+            return f"ADMM__ADMM__{sub}__ADMM__{stoch}"
+
+        def split(name):
+            parts = name.split("__ADMM__")
+            return parts[1], parts[2]
+
+        return {
+            "scenarios_per_bundle": len(stoch_names),
+            "admm_subproblem_names": admm_subs,
+            "stoch_scenario_names": stoch_names,
+            "consensus_vars": consensus_vars,
+            "combining_fn": combining,
+            "split_fn": split,
+        }
+
+    def test_advanced_hooks_forwarded_to_attach_root_node(self):
+        """When the bundler wraps each constituent before-wrap scenario
+        it should call sputils.attach_root_node with the advanced
+        kwargs supplied by the hooks.  (The bundle then builds a
+        separate ROOT for PH consumption that flattens all consensus
+        Vars; surrogates/ef_suppl live on the per-constituent roots
+        the EF reads from when assembling.)"""
+        from unittest import mock
+        mod = self._build_module_with_surrogate()
+        bundler = AdmmBundler(
+            module=mod,
+            first_stage_cost=lambda s: s.FirstStageCost,
+            first_stage_varlist=lambda s: s._fs_vars,
+            first_stage_surrogate_nonant_list=lambda s: s._surrogate_vars,
+            first_stage_nonant_ef_suppl_list=lambda s: s._ef_suppl_vars,
+            **self._common_kwargs(),
+        )
+        bundle_names = bundler.bundle_names_creator()
+
+        import mpisppy.utils.sputils as sputils
+        real_attach = sputils.attach_root_node
+        calls_with_advanced = []
+        def spy(*args, **kwargs):
+            if "surrogate_nonant_list" in kwargs or "nonant_ef_suppl_list" in kwargs:
+                calls_with_advanced.append(kwargs)
+            return real_attach(*args, **kwargs)
+        with mock.patch.object(sputils, "attach_root_node", side_effect=spy):
+            bundler.scenario_creator(bundle_names[0])
+
+        # Expect one such call per constituent before-wrap scenario in
+        # the bundle (one ADMM subproblem * num stoch scens).
+        self.assertEqual(
+            len(calls_with_advanced),
+            len(self._common_kwargs()["stoch_scenario_names"]),
+            f"expected one advanced-kwarg attach_root_node call per "
+            f"constituent; got {calls_with_advanced}")
+        for kwargs in calls_with_advanced:
+            self.assertIn("surrogate_nonant_list", kwargs)
+            self.assertIn("nonant_ef_suppl_list", kwargs)
+
+    def test_advanced_hook_without_core_errors(self):
+        mod = self._build_module_with_surrogate()
+        with self.assertRaises(RuntimeError) as cm:
+            AdmmBundler(
+                module=mod,
+                # no first_stage_cost / first_stage_varlist
+                first_stage_surrogate_nonant_list=lambda s: s._surrogate_vars,
+                **self._common_kwargs(),
+            )
+        msg = str(cm.exception)
+        self.assertIn("advanced hook", msg)
+        self.assertIn("first_stage_cost", msg)
 
 
 class TestAdmmArgs(unittest.TestCase):

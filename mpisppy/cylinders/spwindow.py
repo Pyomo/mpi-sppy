@@ -21,9 +21,9 @@ import pyomo.environ as pyo
 
 class Field(enum.IntEnum):
     SHUTDOWN=-1000
-    NONANT=1
+    NONANTS_VALS=1
     DUALS=2
-    RELAXED_NONANT=3
+    RELAXED_NONANTS_VALS=3
     BEST_OBJECTIVE_BOUNDS=100 # Both inner and outer bounds from the hub. Layout: [OUTER INNER ID]
     OBJECTIVE_INNER_BOUND=101
     OBJECTIVE_OUTER_BOUND=102
@@ -50,9 +50,9 @@ field_length_components.total_number_recent_xhats = pyo.Param(mutable=True, init
 
 _field_lengths = {
         Field.SHUTDOWN : 1,
-        Field.NONANT : field_length_components._local_nonant_length,
+        Field.NONANTS_VALS : field_length_components._local_nonant_length,
         Field.DUALS : field_length_components._local_nonant_length,
-        Field.RELAXED_NONANT : field_length_components._local_nonant_length,
+        Field.RELAXED_NONANTS_VALS : field_length_components._local_nonant_length,
         Field.BEST_OBJECTIVE_BOUNDS : 2,
         Field.OBJECTIVE_INNER_BOUND : 1,
         Field.OBJECTIVE_OUTER_BOUND : 1,
@@ -178,18 +178,38 @@ class SPWindow:
         return
 
     #### Functions ####
-    def get(self, dest: nptyping.ArrayLike, strata_rank: int, field: Field):
+    def get(self, dest: nptyping.ArrayLike, strata_rank: int, field: Field,
+            item_offset: int = 0, item_count: int = None):
+        """Read a remote rank's buffer for ``field`` into ``dest``.
+
+        By default the whole padded field is transferred (``dest`` must be
+        ``padded_len`` long), preserving the original behavior.  When
+        ``item_count`` is given, only that many doubles are read, starting
+        ``item_offset`` doubles into the field -- a partial read used for
+        multi-source assembly across cylinders with different rank counts
+        (see ``overlap_map.py``).  ``dest`` must then be ``item_count`` long.
+        """
         assert (0 <= strata_rank < len(self.strata_buffer_layouts))
 
         that_layout = self.strata_buffer_layouts[strata_rank]
         assert field in that_layout
 
         (offset, logical_len, padded_len) = that_layout[field]
-        assert np.size(dest) == padded_len
+
+        if item_count is None:
+            count = padded_len
+            disp = offset
+        else:
+            assert item_offset >= 0 and item_count >= 0
+            assert item_offset + item_count <= padded_len, \
+                f"{field=} partial get {item_offset=}+{item_count=} exceeds {padded_len=}"
+            count = item_count
+            disp = offset + item_offset
+        assert np.size(dest) == count
 
         window = self.window
         window.Lock(strata_rank, MPI.LOCK_SHARED)
-        window.Get((dest, padded_len, MPI.DOUBLE), strata_rank, offset)
+        window.Get((dest, count, MPI.DOUBLE), strata_rank, disp)
         window.Unlock(strata_rank)
         return
 
