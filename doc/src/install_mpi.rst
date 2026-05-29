@@ -57,7 +57,7 @@ Other pip extras
 
 In addition to ``[mpi]``, mpi-sppy declares a couple of other ``pip``
 extras that can be combined with it (with commas, e.g.
-``pip install -e .[mpi,doc]``):
+``pip install -e ".[mpi,doc]"``):
 
 * ``doc`` -- installs Sphinx and the theme used to build the documentation.
 * ``scipy`` -- installs SciPy, used by a few utilities.

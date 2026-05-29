@@ -59,11 +59,12 @@ Install from GitHub on Linux
       git clone https://github.com/Pyomo/mpi-sppy.git
       cd mpi-sppy
 
-3. Install in editable mode with the ``mpi`` extra:
+3. Install in editable mode with the ``mpi`` extra (quote ``".[mpi]"`` so
+   shells that glob brackets, such as zsh, do not mangle it):
 
    .. code-block:: bash
 
-      pip install -e .[mpi]
+      pip install -e ".[mpi]"
 
 4. Install a solver of your choice (e.g. ``pip install gurobipy``; commercial
    solvers also need a license).
@@ -104,11 +105,13 @@ Install from GitHub on macOS
       git clone https://github.com/Pyomo/mpi-sppy.git
       cd mpi-sppy
 
-4. Install in editable mode with the ``mpi`` extra:
+4. Install in editable mode with the ``mpi`` extra (quote ``".[mpi]"`` so
+   shells that glob brackets, such as zsh -- the macOS default -- do not
+   mangle it):
 
    .. code-block:: bash
 
-      pip install -e .[mpi]
+      pip install -e ".[mpi]"
 
 5. Install a solver of your choice.
 
@@ -211,7 +214,7 @@ WSL2 (Windows Subsystem for Linux)
 
       git clone https://github.com/Pyomo/mpi-sppy.git
       cd mpi-sppy
-      pip install -e .[mpi]
+      pip install -e ".[mpi]"
 
 5. Install your solver inside the WSL environment (e.g.
    ``pip install gurobipy``). Commercial solver licenses generally work
@@ -250,27 +253,31 @@ Windows.
 
       mpiexec -help
 
-4. (Recommended) Create and activate a virtual environment:
+4. (Recommended) Create and activate an isolated environment and install
+   ``mpi4py`` into it. Pick **one** of the following paths; do not mix
+   them, because ``conda install`` puts packages in the active conda
+   environment rather than a ``venv``.
 
-   .. code-block:: powershell
+   * **conda-forge (simplest).** Installs a prebuilt ``mpi4py``, so you do
+     not need the MS-MPI SDK or a C++ compiler:
 
-      py -m venv mpisppy-env
-      mpisppy-env\Scripts\Activate.ps1
+     .. code-block:: powershell
 
-5. Install ``mpi4py``. The simplest path is conda-forge:
+        conda create -n mpisppy-env python=3.12
+        conda activate mpisppy-env
+        conda install -c conda-forge mpi4py
 
-   .. code-block:: powershell
+   * **venv + pip.** Use this only if you have the Microsoft C++ Build
+     Tools and the MS-MPI SDK installed, since pip builds ``mpi4py`` from
+     source:
 
-      conda install -c conda-forge mpi4py
+     .. code-block:: powershell
 
-   If you prefer pip, you must also have the Microsoft C++ Build Tools and
-   the MS-MPI SDK installed; then:
+        py -m venv mpisppy-env
+        mpisppy-env\Scripts\Activate.ps1
+        pip install mpi4py
 
-   .. code-block:: powershell
-
-      pip install mpi4py
-
-6. Clone the repository and install mpi-sppy. Note that in PowerShell the
+5. Clone the repository and install mpi-sppy. Note that in PowerShell the
    square brackets in ``[mpi]`` must be quoted:
 
    .. code-block:: powershell
@@ -279,10 +286,10 @@ Windows.
       cd mpi-sppy
       pip install -e ".[mpi]"
 
-7. Install your solver. The Python bindings for gurobi and cplex are
+6. Install your solver. The Python bindings for gurobi and cplex are
    available natively on Windows.
 
-8. Verify the installation (see :ref:`Verify Installation` below). On
+7. Verify the installation (see :ref:`Verify Installation` below). On
    native Windows, use MS-MPI's ``mpiexec`` form, for example:
 
    .. code-block:: powershell
@@ -313,8 +320,9 @@ The following three checks confirm that mpi-sppy, your solver, and (if
 you installed it) MPI are all working. The commands below are
 shell-neutral: they work in bash, zsh, the WSL2 Ubuntu shell, and
 Windows PowerShell. On native Windows, if ``python`` is not on PATH but
-the Python launcher is, substitute ``py`` for ``python``. Run each
-command from the top of the cloned ``mpi-sppy`` repository.
+the Python launcher is, substitute ``py`` for ``python``. Start from the
+top of the cloned ``mpi-sppy`` repository; step 1 changes into
+``examples/farmer`` and the remaining commands are run from there.
 
 1. **mpi-sppy is importable and the CLI works.** This confirms the
    editable install succeeded and Python can import the package.
@@ -335,18 +343,18 @@ command from the top of the cloned ``mpi-sppy`` repository.
 
    .. code-block:: text
 
-      python -m mpisppy.generic_cylinders --module-name farmer \
-          --num-scens 3 --EF --EF-solver-name gurobi
+      python -m mpisppy.generic_cylinders --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi
 
    You should see the solver print progress and the script print an
    optimal objective value. This check does *not* use MPI.
 
-3. **MPI works** (only if you installed MPI and ``mpi4py``). From the
-   repository root, run the bundled one-sided MPI test:
+3. **MPI works** (only if you installed MPI and ``mpi4py``). Still in
+   ``examples/farmer``, run the bundled one-sided MPI test (its path is
+   given relative to ``examples/farmer``):
 
    .. code-block:: text
 
-      mpiexec -n 2 python -m mpi4py mpi_one_sided_test.py
+      mpiexec -n 2 python -m mpi4py ../../mpi_one_sided_test.py
 
    If you see no error messages, your MPI installation should be
    suitable. Then confirm the full hub-and-spoke flow with a short PH
@@ -354,10 +362,7 @@ command from the top of the cloned ``mpi-sppy`` repository.
 
    .. code-block:: text
 
-      mpiexec -n 3 python -m mpi4py -m mpisppy.generic_cylinders \
-          --module-name farmer --num-scens 3 \
-          --solver-name gurobi --max-iterations 5 \
-          --default-rho 1 --lagrangian --xhatshuffle
+      mpiexec -n 3 python -m mpi4py -m mpisppy.generic_cylinders --module-name farmer --num-scens 3 --solver-name gurobi --max-iterations 5 --default-rho 1 --lagrangian --xhatshuffle
 
    You should see iteration output and the run should terminate
    normally.

@@ -97,7 +97,7 @@ This extension provides methods for fixing nonanticipative variables (usually in
 which all scenarios have agreed for some number of iterations. There
 is an example of its use in ``examples.sizes.sizes_demo.py`` also
 in ``examples.uc.uc_ama.py``. The ``uc_ama`` example illustrates
-that when ``amgalgamator`` is used ``"id_fix_list_fct"`` needs
+that when ``amalgamator`` is used ``"id_fix_list_fct"`` needs
 to be on the ``Config`` object so the amalgamator can find it.
 
 .. note::
