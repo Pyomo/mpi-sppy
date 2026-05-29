@@ -268,19 +268,9 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, inter_reg
         if admm_subproblem_name not in consensus_vars:
             print(f"WARNING: {admm_subproblem_name} has no consensus_vars")
             consensus_vars[admm_subproblem_name] = list()
-    
-    # Now add the original problem's first-stage variables (factory
-    # production decisions) to each subproblem's consensus list.
-    # Read them directly from the first_stage_varlist hook —
-    # scenario_creator no longer attaches the root node, so
-    # model._mpisppy_node_list does not exist at this point.
-    # The original first stage is stage 1 in the augmented tree.
-    for admm_subproblem_name in admm_subproblem_names:
-        admm_stoch_subproblem_scenario_name = combining_names(admm_subproblem_name,stoch_scenario_name)
-        model = scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=inter_region_dict, cfg=cfg, data_params=data_params, all_nodes_dict=all_nodes_dict)
-        for var in first_stage_varlist(model):
-            if (var.name, 1) not in consensus_vars[admm_subproblem_name]:
-                consensus_vars[admm_subproblem_name].append((var.name, 1))
+    # Each ADMM subproblem's first-stage Vars are added to its
+    # consensus list by the wrapper (Stoch_AdmmWrapper / AdmmBundler)
+    # at construction time, driven by the first_stage_varlist hook.
     return consensus_vars
 
 

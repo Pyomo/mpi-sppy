@@ -426,13 +426,56 @@ inside ``scenario_creator`` so the hook can find it.
    ``RuntimeError`` at ``setup_stoch_admm`` time.  Mixing the hooks
    with a manual ``attach_root_node`` call also raises.
 
+.. Note::
+   ``first_stage_varlist`` may return a mix of scalar ``Var``,
+   ``VarData``, and indexed ``Var`` containers.  Indexed containers are
+   expanded internally to one consensus entry per ``VarData`` (e.g.
+   ``NumBuilt`` becomes ``NumBuilt[2025]``, ``NumBuilt[2026]``, ...),
+   so you do not need to unpack indexed Vars before returning them.
+
+Advanced first-stage hooks (optional)
+"""""""""""""""""""""""""""""""""""""""
+
+``sputils.attach_root_node`` accepts two further optional parameters,
+``surrogate_nonant_list`` and ``nonant_ef_suppl_list`` (see
+:ref:`surrogate_nonant_list` and :ref:`ef_supplement_list` for what
+each does), for problems that need to mark some first-stage Vars as
+surrogates (EF skips their nonant equality) or as EF-supplemental
+nonants (extra Vars carried through the EF construction).  If your
+problem needs either, define the corresponding optional module-level
+hook:
+
+.. code-block:: python
+
+   def first_stage_surrogate_nonant_list(scenario):
+       """Optional. Forwarded to attach_root_node's surrogate_nonant_list."""
+       return scenario._surrogate_nonants   # stashed in scenario_creator
+
+   def first_stage_nonant_ef_suppl_list(scenario):
+       """Optional. Forwarded to attach_root_node's nonant_ef_suppl_list."""
+       return scenario._ef_suppl_nonants
+
+Each advanced hook is independent of the other — defining either one
+alone is fine — but both depend on the two core hooks
+(``first_stage_cost`` and ``first_stage_varlist``) also being defined,
+because there is nothing for the wrapper to attach the advanced lists
+onto otherwise.  Defining an advanced hook without the core hooks
+raises ``RuntimeError`` at ``setup_stoch_admm`` time.
+
+On the legacy path (no core hooks), pass ``surrogate_nonant_list`` and
+``nonant_ef_suppl_list`` directly to your own ``sputils.attach_root_node``
+call inside ``scenario_creator``; the wrapper inherits whatever you
+attached.
+
 First-stage attachment via manual ``attach_root_node`` (legacy)
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 If you omit both hooks, ``scenario_creator`` must itself call
 ``sputils.attach_root_node`` with the original problem's first-stage
-cost and varlist.  Skipping the call (when no hooks are defined)
-raises ``RuntimeError`` with a message pointing at both options.
+cost and varlist (and ``surrogate_nonant_list`` /
+``nonant_ef_suppl_list`` if you need them).  Skipping the call (when
+no hooks are defined) raises ``RuntimeError`` with a message pointing
+at both options.
 
 This path is preserved for backward compatibility with model modules
 written before the hooks existed (and for direct uses of

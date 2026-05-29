@@ -192,7 +192,13 @@ def MakeNodesforScen(model, BFs, scennum):
         Args:
             BFs (list of int): branching factors
     """
-    ndn = "ROOT_"+str((scennum-1) // BFs[0]) # scennum is one-based
+    # Divide by the product of the branching factors that come after the node;
+    # for a 3-stage tree that's BFs[1]. This must agree with
+    # sputils.create_nodenames_from_branching_factors, which builds BFs[0]
+    # second-stage nodes (ROOT_0 .. ROOT_{BFs[0]-1}). Using BFs[0] as the
+    # divisor here happens to give the same answer when BFs[0]==BFs[1] but
+    # disagrees with the canonical convention for asymmetric trees.
+    ndn = "ROOT_"+str((scennum-1) // BFs[1]) # scennum is one-based
     retval = [scenario_tree.ScenarioNode("ROOT",
                                          1.0,
                                          1,
