@@ -971,6 +971,13 @@ jobs:
           cd mpisppy/tests
           mpiexec -np 2 coverage run $COV_ARGS -m mpi4py test_with_cylinders.py
 
+      - name: run flexible (unequal) rank tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_spwindow_multisource.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_cylinders.py
+
       - name: Upload coverage data
         if: always()
         uses: actions/upload-artifact@v4

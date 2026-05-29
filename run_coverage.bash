@@ -53,6 +53,13 @@ has_module() {
     python -c "import $1" 2>/dev/null
 }
 
+# -oversubscribe is OpenMPI-only (MPICH rejects it). Some flexible-rank tests
+# need more ranks than the host has cores, so add the flag only under OpenMPI.
+OVERSUBSCRIBE=""
+if mpiexec --version 2>&1 | grep -qiE "open[ -]?mpi|open ?rte"; then
+    OVERSUBSCRIBE="-oversubscribe"
+fi
+
 # ---------- Serial pytest / unittest tests ----------
 
 run_phase "test_ef_ph (serial)" \
@@ -173,6 +180,15 @@ run_phase "test_dualcg_main (serial)" \
 
 run_phase "test_dualcg_with_cylinders (mpiexec -np 2)" \
     mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_dualcg_with_cylinders.py
+
+# Flexible (unequal) rank assignments: both need 6 ranks (4-rank + 2-rank
+# cylinders); $OVERSUBSCRIBE (set above, OpenMPI only) lets them run on hosts
+# with fewer than 6 cores.
+run_phase "test_spwindow_multisource (mpiexec -np 6)" \
+    mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_spwindow_multisource.py
+
+run_phase "test_flexible_rank_cylinders (mpiexec -np 6)" \
+    mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_cylinders.py
 
 # ---------- Tests that spawn mpiexec internally ----------
 

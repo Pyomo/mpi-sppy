@@ -6,11 +6,16 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-"""Unit tests for mpisppy.utils.rank_apportionment.apportion_ranks."""
+"""Unit tests for mpisppy.utils.rank_apportionment: apportion_ranks plus the
+contiguous-block layout helpers cylinder_bases and rank_to_cylinder."""
 
 import unittest
 
-from mpisppy.utils.rank_apportionment import apportion_ranks
+from mpisppy.utils.rank_apportionment import (
+    apportion_ranks,
+    cylinder_bases,
+    rank_to_cylinder,
+)
 
 
 class TestApportionRanks(unittest.TestCase):
@@ -104,6 +109,49 @@ class TestApportionRanks(unittest.TestCase):
         a = apportion_ranks([1.0, 0.5, 0.25], 14)
         b = apportion_ranks([0.25, 0.5, 1.0], 14)
         self.assertEqual(a, list(reversed(b)))
+
+
+class TestContiguousBlockLayout(unittest.TestCase):
+    """cylinder_bases / rank_to_cylinder define the contiguous global-rank
+    block layout used by the unequal-rank path."""
+
+    def test_bases_doc_example(self):
+        # 8 / 4 / 2 -> blocks start at 0, 8, 12.
+        self.assertEqual(cylinder_bases([8, 4, 2]), [0, 8, 12])
+
+    def test_bases_single_cylinder(self):
+        self.assertEqual(cylinder_bases([5]), [0])
+
+    def test_rank_to_cylinder_doc_example(self):
+        counts = [8, 4, 2]
+        # hub block 0..7
+        self.assertEqual(rank_to_cylinder(0, counts), (0, 0))
+        self.assertEqual(rank_to_cylinder(7, counts), (0, 7))
+        # lagrangian block 8..11
+        self.assertEqual(rank_to_cylinder(8, counts), (1, 0))
+        self.assertEqual(rank_to_cylinder(11, counts), (1, 3))
+        # xhat block 12..13
+        self.assertEqual(rank_to_cylinder(12, counts), (2, 0))
+        self.assertEqual(rank_to_cylinder(13, counts), (2, 1))
+
+    def test_rank_to_cylinder_covers_every_rank(self):
+        # Every global rank maps to exactly one (cylinder, local rank), and
+        # the local ranks within a cylinder are 0..count-1 in order.
+        counts = [3, 1, 2, 4]
+        bases = cylinder_bases(counts)
+        seen = {c: [] for c in range(len(counts))}
+        for gr in range(sum(counts)):
+            cyl, local = rank_to_cylinder(gr, counts)
+            self.assertEqual(gr, bases[cyl] + local)
+            seen[cyl].append(local)
+        for cyl, count in enumerate(counts):
+            self.assertEqual(seen[cyl], list(range(count)))
+
+    def test_rank_to_cylinder_out_of_range_raises(self):
+        with self.assertRaises(ValueError):
+            rank_to_cylinder(14, [8, 4, 2])
+        with self.assertRaises(ValueError):
+            rank_to_cylinder(-1, [8, 4, 2])
 
 
 if __name__ == "__main__":
