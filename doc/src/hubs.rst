@@ -103,8 +103,11 @@ based on convergence within the hub; furthermore, convergence metrics within
 the hub can be helpful for tuning algorithms.
 
 The scenario decomposition methods (PH and APH) allow for optional
-metrics to be used as plug-ins. A pattern that can be followed is shown
-in the farmer example. The ``farmer_cylinders.py`` file has::
+metrics to be used as plug-ins. From ``generic_cylinders.py`` the
+``NormRhoConverger`` is wired in automatically when the
+``--use-norm-rho-updater`` flag is set. The underlying hand-wired
+pattern is preserved in the archived
+``examples/farmer/archive/farmer_cylinders.py``, which contains::
 
    from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 
