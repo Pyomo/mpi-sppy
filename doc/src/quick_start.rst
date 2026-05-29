@@ -1,6 +1,8 @@
 Quick Start
 ===========
 
+.. _Installation:
+
 Installation
 ------------
 

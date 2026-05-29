@@ -43,7 +43,7 @@ The ``examples/distr/`` directory contains a distribution network problem
 that is naturally decomposed by region. Each region is an ADMM subproblem
 with consensus variables on the inter-region flows.
 
-Prerequisite: mpi-sppy must be installed (``pip install -e .[mpi]``) with
+Prerequisite: mpi-sppy must be installed (see :ref:`Installation`) with
 a working MPI installation and a solver (e.g., cplex, gurobi, or xpress).
 
 Running deterministic ADMM
@@ -101,8 +101,8 @@ Branching factors with ``--stoch-admm``
 .. important::
 
    When using ``--stoch-admm``, the value passed to ``--branching-factors``
-   describes the **original** problem's tree (i.e., the branching factors
-   **before** the ADMM-stage augmentation).  The stochastic ADMM wrapper
+   describes the **original** problem's scenario tree (i.e., the branching factors
+   **before** the ADMM-stage augmentation, which is done under the hood).  The stochastic ADMM wrapper
    appends ``num_admm_subproblems`` as the final stage, then republishes
    the augmented branching factors back to the config so that downstream
    consumers (notably xhatshuffle's stage2ef path) see the correct tree
@@ -298,10 +298,11 @@ ordering.
 Creating Your Own ADMM Model
 ------------------------------
 
+We begin by describing how to create a deterministic ADMM model and then show
+how to extend it in the stochastic case.
+
 The easiest way to create an ADMM model for use with ``generic_cylinders`` is
-to start from one of the ``distr`` examples and adapt it. The steps below
-use deterministic ADMM as the starting point; stochastic ADMM follows the
-same pattern with additional functions.
+to start from one of the ``distr`` examples and adapt it.
 
 Step 1: Copy the template
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -535,7 +536,7 @@ Stochastic ADMM creates one "virtual scenario" per (subproblem, stochastic
 scenario) pair.  For problems with many stochastic scenarios, this can mean
 a large number of PH scenarios.  **Bundling** groups all stochastic scenarios
 within the same subproblem into a single EF bundle, reducing the number of
-PH scenarios to one per subproblem.  
+PH scenarios to one per ADMM subproblem.
 
 To enable bundling, add ``--scenarios-per-bundle`` to a ``--stoch-admm`` run.
 Currently, full bundling is required: ``--scenarios-per-bundle`` must equal
@@ -552,11 +553,11 @@ Currently, full bundling is required: ``--scenarios-per-bundle`` must equal
 With ``--num-admm-subproblems 2`` and ``--scenarios-per-bundle 4``, PH sees
 only 2 bundles (one per subproblem) instead of 8 virtual scenarios.
 
-How it works
-^^^^^^^^^^^^^
+How it works under the hood
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The ``AdmmBundler`` (in ``mpisppy/utils/admm_bundler.py``) creates scenarios
-on-the-fly inside its ``scenario_creator``, following the same pattern as
+on-the-fly inside its own, internal ``scenario_creator``, following the same pattern as
 ``ProperBundler``.  For each bundle it:
 
 1. Creates the constituent stochastic scenarios via the module's
