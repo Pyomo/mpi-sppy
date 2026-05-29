@@ -197,27 +197,45 @@ Additional functions for ``--stoch-admm``
 Naming the composite ADMM-stochastic scenarios
 """"""""""""""""""""""""""""""""""""""""""""""""
 
-The wrapper treats each (ADMM subproblem, stochastic scenario) pair as
-one "scenario" with a composite name.  By default, mpi-sppy combines
-the two into a single string using the delimiter ``__ADMM__`` --
-``"ADMM_STOCH__ADMM__Region1__ADMM__StochasticScenario1"`` and so on
--- and decodes it back when the wrapper needs to know which ADMM
-subproblem a scenario belongs to.  The defaults live in
-``mpisppy.utils.stoch_admmWrapper`` as ``default_combining_names``,
-``default_split_admm_stoch_subproblem_scenario_name``, and
-``default_admm_stoch_subproblem_scenario_names_creator``.
+**Recommended: do not define any naming helpers on your module.**
+The wrapper builds, distributes, and decodes the composite
+``(ADMM subproblem, stochastic scenario)`` names for you, using the
+defaults from ``mpisppy.utils.stoch_admmWrapper``.
 
-If your subproblem and stochastic-scenario names do not contain the
-sentinel ``__ADMM__`` substring, omit all three helpers and the
-wrapper uses the defaults automatically.  Otherwise see
-"Customizing the naming convention" below.
+The only thing this affects in your code is ``scenario_creator``: it
+receives a composite name (e.g.
+``"ADMM_STOCH__ADMM__Region1__ADMM__StochasticScenario1"``) rather
+than a subproblem name and a scenario name separately.  Decode it
+inside ``scenario_creator`` with:
 
-Customizing the naming convention
-"""""""""""""""""""""""""""""""""
+.. code-block:: python
 
-To override the defaults, provide ``combining_names`` and
+   from mpisppy.utils.stoch_admmWrapper import (
+       default_split_admm_stoch_subproblem_scenario_name as split_name,
+   )
+
+   def scenario_creator(admm_stoch_subproblem_scenario_name, **kwargs):
+       admm_subproblem_name, stoch_scenario_name = split_name(
+           admm_stoch_subproblem_scenario_name)
+       # ... build the model for this (subproblem, stoch scenario) pair
+
+See ``examples/stoch_distr/stoch_distr.py`` for the canonical
+pattern.
+
+The default convention uses ``__ADMM__`` as the delimiter
+(``"ADMM_STOCH__ADMM__<sub>__ADMM__<stoch>"``).  You only need to
+read the "Customizing" subsection below if **either** of your ADMM
+subproblem names or your stochastic scenario names already contains
+the literal substring ``__ADMM__`` (extremely unusual), **or** you
+have an external reason to control the wrapped-scenario name format
+(e.g. matching legacy log filenames).  Otherwise leave naming alone.
+
+Customizing the naming convention (rare)
+""""""""""""""""""""""""""""""""""""""""
+
+Override the defaults by defining ``combining_names`` and
 ``split_admm_stoch_subproblem_scenario_name`` (both, since they form
-an inverse pair) on the module.  Optionally also provide
+an inverse pair) on your module.  Optionally also define
 ``admm_stoch_subproblem_scenario_names_creator`` to control the list
 ordering.
 
@@ -389,29 +407,26 @@ Extending to Stochastic ADMM
 
 To support ``--stoch-admm``, additionally implement:
 
-1. ``admm_subproblem_names_creator(cfg)``
-2. ``stoch_scenario_names_creator(cfg)``
+1. ``admm_subproblem_names_creator(cfg)`` — returns the list of ADMM
+   subproblem names.
+2. ``stoch_scenario_names_creator(cfg)`` — returns the list of
+   stochastic scenario names.
 
-The composite ADMM-stochastic scenario names are built by the wrapper
-itself unless you want to customize them; see "Naming the composite
-ADMM-stochastic scenarios" above for the defaults and "Customizing
-the naming convention" if you need to override.  See
-``examples/stoch_distr/stoch_distr.py`` for a complete working
+That is the only new boilerplate.  The wrapper handles composite
+naming -- see "Naming the composite ADMM-stochastic scenarios" above.
+``examples/stoch_distr/stoch_distr.py`` is a complete working
 example.
 
 .. Note::
 
    ``scenario_creator`` for ``--stoch-admm`` differs from the
-   deterministic case in one way:
-
-   **It receives a composite name.**  The argument is e.g.
-   ``"ADMM_STOCH__ADMM__Region1__ADMM__StochasticScenario3"`` (default
-   naming) or whatever your custom ``combining_names`` produces;
-   ``scenario_creator`` must decode it -- either by calling
+   deterministic case in one way: **it receives a composite name**
+   (e.g. ``"ADMM_STOCH__ADMM__Region1__ADMM__StochasticScenario3"``)
+   instead of a separate ADMM subproblem name and stochastic scenario
+   name.  Decode it with
    ``mpisppy.utils.stoch_admmWrapper.default_split_admm_stoch_subproblem_scenario_name``
-   or by calling your own ``split_admm_stoch_subproblem_scenario_name``
-   -- to recover the ADMM subproblem name and the stochastic scenario
-   name, then build the corresponding model.
+   (see the code snippet under "Naming the composite ADMM-stochastic
+   scenarios" above).
 
 First-stage attachment via module hooks (recommended)
 """"""""""""""""""""""""""""""""""""""""""""""""""""""
