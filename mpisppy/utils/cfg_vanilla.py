@@ -35,7 +35,7 @@ def _maybe_attach_jensens(spoke_dict, cfg, spoke_prefix,
     --<spoke_prefix>-try-jensens-first flag is set.
 
     The spoke reads these at runtime via self.opt.options["jensens"] and
-    drives _JensensMixin. See doc/designs/jensens_bound_design.md.
+    drives _PreLoopXhatMixin. See doc/designs/jensens_bound_design.md.
     """
     flag = f"{spoke_prefix}_try_jensens_first"
     if not cfg.get(flag, False):
@@ -104,7 +104,7 @@ def _maybe_attach_feasible_xhat(spoke_dict, cfg, spoke_prefix,
     --<spoke_prefix>-try-feasible-xhat-first flag is set.
 
     The spoke reads these at runtime via self.opt.options["feasible_xhat"]
-    and drives _JensensMixin._try_feasible_xhat. See doc/src/feasible_xhat.rst.
+    and drives _PreLoopXhatMixin._try_feasible_xhat. See doc/src/feasible_xhat.rst.
 
     Raises if the user enabled both --<spoke_prefix>-try-jensens-first and
     --<spoke_prefix>-try-feasible-xhat-first on the same xhat spoke; the
