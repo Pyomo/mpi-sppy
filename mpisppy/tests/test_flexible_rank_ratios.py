@@ -71,9 +71,10 @@ class TestFlexibleRankBranch(unittest.TestCase):
         hub = _min_dict("hub", rank_ratio=1.0)
         spoke = _min_dict("spoke", rank_ratio=0.5)
         ws = WheelSpinner(hub, [spoke])
-        with self.assertRaises(Exception) as ctx:
+        # Reaching communicator construction (past the removed gate) fails on
+        # the stub's missing Split with AttributeError, not NotImplementedError.
+        with self.assertRaises(AttributeError):
             ws.run(comm_world=_StubComm(size=4))
-        self.assertNotIsInstance(ctx.exception, NotImplementedError)
 
     def test_uniform_ratios_use_equal_path(self):
         # All ratios 1.0 -> equal path; reaches _make_comms and fails on the
@@ -82,9 +83,11 @@ class TestFlexibleRankBranch(unittest.TestCase):
         hub = _min_dict("hub", rank_ratio=1.0)
         spoke = _min_dict("spoke", rank_ratio=1.0)
         ws = WheelSpinner(hub, [spoke])
-        with self.assertRaises(Exception) as ctx:
+        # Equal path reaches _make_comms and fails on the stub's missing Split
+        # with AttributeError; reaching it confirms the unequal branch was not
+        # taken and nothing raised NotImplementedError.
+        with self.assertRaises(AttributeError):
             ws.run(comm_world=_StubComm(size=2))
-        self.assertNotIsInstance(ctx.exception, NotImplementedError)
 
 
 if __name__ == "__main__":

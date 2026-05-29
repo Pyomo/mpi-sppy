@@ -536,6 +536,42 @@ class SPCommunicator:
         self.window.put(buf.window_array(), field)
         return
 
+    def _write_ids_agree(self, new_id: int, synchronize: bool) -> bool:
+        """Cross-rank write_id agreement on ``cylinder_comm`` (shared by every
+        reader: the equal-rank path and both unequal-rank helpers).
+
+        Consumers that run collectives on freshly-received data (Eobjective
+        Allreduce, ROOT bcast, ...) must enter them in lockstep, so every reader
+        rank has to agree on whether a read is "new". A synchronous writer
+        stamps all of its ranks at one write_id, so when ids agree every rank
+        computes the same answer; a transient mixed-id read (the writer Put
+        between two readers' Gets) fails here and is rejected, to be retried,
+        rather than accepted out of lockstep.
+
+        Returns True if not synchronizing, or if all ranks read the same id.
+        """
+        if not synchronize:
+            return True
+        local_val = np.array((new_id,), 'i')
+        sum_ids = np.zeros(1, 'i')
+        self.cylinder_comm.Allreduce((local_val, MPI.INT),
+                                     (sum_ids, MPI.INT),
+                                     op=MPI.SUM)
+        return new_id * self.cylinder_comm.size == sum_ids[0]
+
+    def _mark_new(self, buf: RecvArray, new_id: int) -> bool:
+        """Commit an accepted read: stamp ``new_id`` into the buffer's id slot
+        and mark it new. The data itself must already be in ``buf`` (placed by
+        the caller's single Get, or by overlap-map assembly for a multi-source
+        read). Writing the id slot before ``_pull_id`` lets the multi-source
+        path -- whose assembly fills only the data region -- reuse the same
+        commit as the single-source/equal-rank paths.
+        """
+        buf._is_new = True
+        buf._array[-1] = new_id
+        buf._pull_id()
+        return True
+
     def get_receive_buffer(self,
                            buf: RecvArray,
                            field: Field,
@@ -576,23 +612,15 @@ class SPCommunicator:
 
         new_id = int(buf.array()[-1])  # logical view
 
-        if synchronize:
-            local_val = np.array((new_id,), 'i')
-            sum_ids = np.zeros(1, 'i')
-            self.cylinder_comm.Allreduce((local_val, MPI.INT),
-                                         (sum_ids, MPI.INT),
-                                         op=MPI.SUM)
-            if new_id * self.cylinder_comm.size != sum_ids[0]:
-                buf._is_new = False
-                return False
-
-        if new_id > last_id:
-            buf._is_new = True
-            buf._pull_id()
-            return True
-        else:
+        if not self._write_ids_agree(new_id, synchronize):
             buf._is_new = False
             return False
+
+        if new_id > last_id:
+            # data is already in buf from the Get above
+            return self._mark_new(buf, new_id)
+        buf._is_new = False
+        return False
 
     # ------------------------------------------------------------------
     # Unequal-rank (Option D) helpers. These are reached only when
@@ -632,6 +660,12 @@ class SPCommunicator:
             )
         _, logical_len, _ = layout[field]
         remote_data_len = logical_len - 1  # exclude the trailing write_id slot
+        # The segment occupies the half-open remote range
+        # [remote_offset, remote_offset + count); the guard is an overrun
+        # check on its exclusive end, so '>' (ending exactly at remote_data_len
+        # is legal) and remote_offset belongs in the LHS (a segment may start
+        # mid-buffer). A reader needing only a subset of a source's scenarios
+        # legitimately ends before remote_data_len, so this is not '!='.
         if seg.remote_offset + seg.count > remote_data_len:
             raise RuntimeError(
                 f"{self.__class__.__name__}: overlap segment for {field} reads "
@@ -670,19 +704,12 @@ class SPCommunicator:
         last_id = buf.id()
         self.window.get(buf.window_array(), window_rank, field)
         new_id = int(buf.array()[-1])
-        if synchronize:
-            local_val = np.array((new_id,), 'i')
-            sum_ids = np.zeros(1, 'i')
-            self.cylinder_comm.Allreduce((local_val, MPI.INT),
-                                         (sum_ids, MPI.INT),
-                                         op=MPI.SUM)
-            if new_id * self.cylinder_comm.size != sum_ids[0]:
-                buf._is_new = False
-                return False
+        if not self._write_ids_agree(new_id, synchronize):
+            buf._is_new = False
+            return False
         if new_id > last_id:
-            buf._is_new = True
-            buf._pull_id()
-            return True
+            # data is already in buf from the Get above
+            return self._mark_new(buf, new_id)
         buf._is_new = False
         return False
 
@@ -690,19 +717,13 @@ class SPCommunicator:
         """Assemble a per-scenario field from several of a peer cylinder's
         global ranks using the precomputed overlap map.
 
-        Coherence note. Consumers that read a per-scenario field across a
-        cylinder (e.g. xhatshufflelooper_bounder) require every reader rank to
-        agree on whether the data is "new", because the collectives they run on
-        the new data (Eobjective Allreduce, ROOT bcast, ...) must be entered in
-        lockstep on cylinder_comm. So this mirrors the equal-rank reader's
-        cross-rank write_id agreement rather than accepting each source
-        independently: this rank's id is the coherent floor over its sources
-        (a synchronous hub writes all its ranks at one id, so every reader
-        computes the same value and they proceed together); a transient
-        mixed-id read fails the agreement check and is retried, never accepted
-        out of lockstep. (Per-source relaxed acceptance, which would need
-        consumer cooperation, and strict per-field policies such as DUALS are
-        later phases.)
+        Coherence note. This rank's id is the coherent floor (min) over its
+        sources rather than per-source independent acceptance: a synchronous
+        hub writes all its ranks at one id, so every reader computes the same
+        value and then clears the shared _write_ids_agree check together; a
+        transient mixed-id read floors low, fails agreement, and is retried.
+        (Per-source relaxed acceptance, which would need consumer cooperation,
+        and strict per-field policies such as DUALS are later phases.)
         """
         if synchronize:
             self.cylinder_comm.Barrier()
@@ -728,26 +749,19 @@ class SPCommunicator:
         if new_id is None:
             new_id = 0
 
-        if synchronize:
-            local_val = np.array((new_id,), 'i')
-            sum_ids = np.zeros(1, 'i')
-            self.cylinder_comm.Allreduce((local_val, MPI.INT),
-                                         (sum_ids, MPI.INT),
-                                         op=MPI.SUM)
-            if new_id * self.cylinder_comm.size != sum_ids[0]:
-                buf._is_new = False
-                return False
+        if not self._write_ids_agree(new_id, synchronize):
+            buf._is_new = False
+            return False
 
         if new_id > last_id:
+            # assemble the accepted data into buf, then commit via the shared
+            # _mark_new (which stamps the id slot the assembly does not touch)
             data_view = buf.value_array()
             for seg in self.overlap_maps[(field, peer_cylinder)]:
                 snapshot = source_snapshots[seg.remote_rank]
                 data_view[seg.local_offset : seg.local_offset + seg.count] = \
                     snapshot[seg.remote_offset : seg.remote_offset + seg.count]
-            buf._is_new = True
-            buf._id = new_id
-            buf._array[-1] = new_id
-            return True
+            return self._mark_new(buf, new_id)
         buf._is_new = False
         return False
 

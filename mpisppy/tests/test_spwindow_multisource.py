@@ -71,7 +71,11 @@ class TestMultiSourceAssembly(unittest.TestCase):
         if is_writer:
             my_scen = writer_slices[global_rank]
             data_len = k * len(my_scen)
-            logical_len = data_len  # data only; no id slot needed for this test
+            # Mirror the production layout: every field reserves a trailing
+            # write_id slot. The overlap segments below address only the data
+            # region [0, data_len), so this also guards that assembly never
+            # reads into the id slot.
+            logical_len = data_len + 1
             padded = padded_len_n_doubles(logical_len)
             my_fields = {Field.NONANTS_VALS: (logical_len, padded)}
         else:
