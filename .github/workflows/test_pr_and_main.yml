@@ -1018,6 +1018,12 @@ jobs:
           cd mpisppy/tests
           mpiexec -np 2 coverage run $COV_ARGS -m mpi4py test_cg_with_cylinders.py
 
+      - name: run multi-rank CG hub test
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          mpiexec -np 4 coverage run $COV_ARGS -m mpi4py test_cg_multirank_hub.py
+
       - name: run DCG serial tests
         timeout-minutes: 10
         run: |

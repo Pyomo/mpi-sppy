@@ -267,7 +267,10 @@ class DCG(mpisppy.cgbase.CGBase):
                     print("Iteration time: %6.2f" % (time.time() - iteration_start_time))
                     print("Elapsed time:   %6.2f" % (time.perf_counter() - self.start_time))
                 
+            # Broadcast both bounds and the convergence metric so is_converged()
+            # reaches the same verdict on every hub rank (see CGBase.iterk_loop).
             self.best_bound_obj_val = self.mpicomm.bcast(self.best_bound_obj_val, root=0)
+            self.best_solution_obj_val = self.mpicomm.bcast(self.best_solution_obj_val, root=0)
             self.conv = self.mpicomm.bcast(self.conv, root=0)
             if self.spcomm and self.spcomm.is_converged():
                 global_toc("Cylinder convergence", self.cylinder_rank == 0)
