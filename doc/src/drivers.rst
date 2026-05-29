@@ -49,7 +49,15 @@ Extending Examples
 Many developers
 will need to add extensions. Here are few examples:
 
-* In the ``examples.farmer.archive.farmer_cylinders.py`` example, there is a block of code to add a ``--crops-mult`` argument that is passed to the scenario creator in the ``scenario_creator_kwargs`` dictionary.
+* The model file ``examples.farmer.farmer.py`` defines an
+  ``inparser_adder`` function that registers a ``--crops-multiplier``
+  option on the ``Config``, and a ``kw_creator`` function that
+  forwards that value to the scenario creator via the
+  ``scenario_creator_kwargs`` dictionary. This is the recommended
+  pattern for adding problem-specific command-line arguments when
+  driving a model through ``generic_cylinders.py``. (For comparison,
+  the older hand-wired equivalent is preserved in
+  ``examples.farmer.archive.farmer_cylinders.py``.)
 
 * In the ``hydro_cylinders.py`` example (which has three stages). The branching factors are obtained from the command line and passed to the scenario constructor via ``scenario_creator_kwargs`` and also passed to ``sputils.create_nodenames_from_BFs`` to create a node list.
 
