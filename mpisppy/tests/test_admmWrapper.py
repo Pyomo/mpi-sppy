@@ -152,9 +152,9 @@ class TestAdmmWrapper(unittest.TestCase):
         "to exercise this path until the root cause is diagnosed."
     )
     def test_values(self):
-        command_line_pairs = [(f"mpiexec -np 3 python -u {python_args} -m mpi4py distr_admm_cylinders.py --num-scens 3 --default-rho 10 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.01 --ensure-xhat-feas" \
+        command_line_pairs = [(f"mpiexec -np 3 python -u {python_args} -m mpi4py distr_admm_cylinders.py --num-scens 3 --default-rho 10 --solver-name {solver_name} --max-solver-threads 1 --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.01 --ensure-xhat-feas" \
                          , f"python {python_args} distr_ef.py --solver-name {solver_name} --num-scens 3 --ensure-xhat-feas"), \
-                         (f"mpiexec -np 6 python -u {python_args} -m mpi4py distr_admm_cylinders.py --num-scens 5 --default-rho 10 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --mnpr 6 --rel-gap 0.05 --scalable --ensure-xhat-feas" \
+                         (f"mpiexec -np 6 python -u {python_args} -m mpi4py distr_admm_cylinders.py --num-scens 5 --default-rho 10 --solver-name {solver_name} --max-solver-threads 1 --max-iterations 50 --xhatxbar --lagrangian --mnpr 6 --rel-gap 0.05 --scalable --ensure-xhat-feas" \
                          , f"python {python_args} distr_ef.py --solver-name {solver_name} --num-scens 5 --ensure-xhat-feas --mnpr 6 --scalable")]
         original_dir = os.getcwd()
         for command_line_pair in command_line_pairs:

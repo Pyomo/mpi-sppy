@@ -45,8 +45,8 @@ class Test_aph_sizes(unittest.TestCase):
         self.Baseoptions["verbose"] = False
         self.Baseoptions["display_timing"] = False
         self.Baseoptions["display_progress"] = False
-        self.Baseoptions["iter0_solver_options"] = {"mipgap": 0.1}
-        self.Baseoptions["iterk_solver_options"] = {"mipgap": 0.02}
+        self.Baseoptions["iter0_solver_options"] = {"mipgap": 0.1, "threads": 1}
+        self.Baseoptions["iterk_solver_options"] = {"mipgap": 0.02, "threads": 1}
 
         self.Baseoptions["display_progress"] = False
 
@@ -174,8 +174,8 @@ class Test_aph_farmer(unittest.TestCase):
         self.Baseoptions["verbose"] = False
         self.Baseoptions["display_timing"] = False
         self.Baseoptions["display_progress"] = False
-        self.Baseoptions["iter0_solver_options"] = None
-        self.Baseoptions["iterk_solver_options"] = None
+        self.Baseoptions["iter0_solver_options"] = {"threads": 1}
+        self.Baseoptions["iterk_solver_options"] = {"threads": 1}
 
         self.Baseoptions["display_progress"] = False
 
