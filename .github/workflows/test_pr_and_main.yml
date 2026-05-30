@@ -977,6 +977,7 @@ jobs:
           cd mpisppy/tests
           mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_spwindow_multisource.py
           mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_cylinders.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_duals.py
 
       - name: Upload coverage data
         if: always()
@@ -1138,7 +1139,8 @@ jobs:
             mpisppy/tests/test_rank_apportionment.py \
             mpisppy/tests/test_overlap_map.py \
             mpisppy/tests/test_spwindow_partial_get.py \
-            mpisppy/tests/test_flexible_rank_ratios.py
+            mpisppy/tests/test_flexible_rank_ratios.py \
+            mpisppy/tests/test_flex_coherence_policy.py
 
       - name: Upload coverage data
         if: always()
