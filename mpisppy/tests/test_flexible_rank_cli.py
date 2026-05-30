@@ -51,6 +51,7 @@ class TestFlexibleRankCLI(unittest.TestCase):
         self.assertEqual(cfg.lagrangian_rank_ratio, 1.0)
         self.assertEqual(cfg.xhatshuffle_rank_ratio, 1.0)
         self.assertEqual(cfg.xhatxbar_rank_ratio, 1.0)
+        self.assertEqual(cfg.ph_xfeas_spoke_rank_ratio, 1.0)
 
     def test_build_spoke_list_injects_rank_ratio(self):
         cfg = _full_cfg()
@@ -61,6 +62,8 @@ class TestFlexibleRankCLI(unittest.TestCase):
         cfg.xhatshuffle_rank_ratio = 0.25
         cfg.xhatxbar = True
         cfg.xhatxbar_rank_ratio = 2.0
+        cfg.ph_xfeas_spoke = True
+        cfg.ph_xfeas_spoke_rank_ratio = 4.0
 
         scenario_creator = farmer.scenario_creator
         scenario_denouement = farmer.scenario_denouement
@@ -73,9 +76,9 @@ class TestFlexibleRankCLI(unittest.TestCase):
             rho_setter=None, all_nodenames=None,
         )
 
-        # exactly the three enabled spokes, each carrying its requested ratio
+        # exactly the four enabled spokes, each carrying its requested ratio
         ratios = sorted(d["rank_ratio"] for d in spokes)
-        self.assertEqual(ratios, sorted([0.5, 0.25, 2.0]))
+        self.assertEqual(ratios, sorted([0.5, 0.25, 2.0, 4.0]))
         # and every spoke dict got an explicit rank_ratio
         self.assertTrue(all("rank_ratio" in d for d in spokes))
 

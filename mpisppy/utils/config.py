@@ -900,6 +900,12 @@ class Config(pyofig.ConfigDict):
                             description="have a PH xhat-feasible spoke",
                             domain=bool,
                             default=False)
+        self.add_to_config("ph_xfeas_spoke_rank_ratio",
+                            description="MPI ranks for the ph_xfeas spoke "
+                                        "relative to the hub (flexible rank "
+                                        "assignments; default 1.0 = equal)",
+                            domain=float,
+                            default=1.0)
         self.add_to_config("ph_xfeas_spoke_rescale_rho_factor",
                             description="Used to rescale rho initially (default=0.1)",
                             domain=float,
