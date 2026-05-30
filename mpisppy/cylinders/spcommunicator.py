@@ -676,11 +676,18 @@ class SPCommunicator:
         if field in (Field.NONANTS_VALS, Field.RELAXED_NONANTS_VALS, Field.DUALS):
             k = self.opt.nonant_length
             return [k] * len(self.opt.all_scenario_names)
+        # Reached at startup (window creation), not mid-solve: this cylinder is
+        # in a flexible-rank run and reads a per-scenario field whose
+        # multi-source assembly across unequal rank counts is not implemented
+        # yet. Fail here with an actionable message rather than mis-assembling.
         raise NotImplementedError(
-            f"multi-source assembly of {field} under unequal rank counts is "
-            f"not implemented in the communication-layer cut; only the "
-            f"per-scenario nonant fields (NONANTS_VALS, RELAXED_NONANTS_VALS, "
-            f"DUALS) are supported so far."
+            f"Flexible (unequal) rank assignments: {self.__class__.__name__} "
+            f"reads {field.name}, whose multi-source assembly across cylinders "
+            f"with different rank counts is not supported yet (only "
+            f"{Field.NONANTS_VALS.name}, {Field.RELAXED_NONANTS_VALS.name}, and "
+            f"{Field.DUALS.name} are). Run the cylinders that exchange "
+            f"{field.name} at equal rank counts (rank_ratio == 1.0), or wait "
+            f"for the phase that adds {field.name} support."
         )
 
     def _validate_segment(self, field: Field, remote_global_rank: int, seg) -> None:

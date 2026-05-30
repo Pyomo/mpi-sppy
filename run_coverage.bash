@@ -143,6 +143,9 @@ run_phase "test_flexible_rank_ratios (serial)" \
 run_phase "test_flex_coherence_policy (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_flex_coherence_policy.py -v
 
+run_phase "test_flexible_rank_cli (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_flexible_rank_cli.py -v
+
 run_phase "test_xhat_from_file (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_xhat_from_file.py -v
 
