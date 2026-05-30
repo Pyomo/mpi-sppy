@@ -17,7 +17,11 @@ the floor."""
 
 import unittest
 
-from mpisppy.cylinders.spcommunicator import reduce_source_write_ids
+from mpisppy.cylinders.spcommunicator import (
+    reduce_source_write_ids,
+    _STRICT_COHERENCE_FIELDS,
+)
+from mpisppy.cylinders.spwindow import Field
 
 
 class TestReduceSourceWriteIds(unittest.TestCase):
@@ -50,6 +54,32 @@ class TestReduceSourceWriteIds(unittest.TestCase):
         # The reject sentinel must be < the initial buffer id (0) so a rejected
         # strict read is never reported new.
         self.assertLess(reduce_source_write_ids([2, 3], strict=True), 0)
+
+
+class TestStrictCoherenceFields(unittest.TestCase):
+    """Pin which per-scenario fields require strict coherence (all sources at
+    one write_id) vs relaxed."""
+
+    def test_xhat_objval_fields_are_strict(self):
+        # BEST_XHAT / RECENT_XHATS carry per-scenario [first-stage nonants,
+        # obj_val] blocks. The first-stage NAC fix-up, under a mixed-iteration
+        # assembly, would leave a block's obj_val paired with another
+        # iteration's nonants -- and FWPH derives a Frank-Wolfe column's
+        # recourse cost from that obj_val. Strict coherence rejects the mixed
+        # read so each obj_val stays paired with its own nonants.
+        self.assertIn(Field.BEST_XHAT, _STRICT_COHERENCE_FIELDS)
+        self.assertIn(Field.RECENT_XHATS, _STRICT_COHERENCE_FIELDS)
+
+    def test_duals_is_strict(self):
+        self.assertIn(Field.DUALS, _STRICT_COHERENCE_FIELDS)
+
+    def test_xfeas_is_relaxed(self):
+        # XFEAS has no NAC fix-up (genuinely distinct per-scenario iterates), so
+        # its obj_val is never desynced from its nonants -- relaxed is correct.
+        self.assertNotIn(Field.XFEAS, _STRICT_COHERENCE_FIELDS)
+
+    def test_nonants_vals_is_relaxed(self):
+        self.assertNotIn(Field.NONANTS_VALS, _STRICT_COHERENCE_FIELDS)
 
 
 if __name__ == "__main__":

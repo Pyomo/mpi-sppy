@@ -54,26 +54,47 @@ _GLOBAL_OR_SCALAR_FIELDS = frozenset((
 
 # Per-scenario fields that require *strict* coherence when assembled across
 # ranks: every contributing source must be at the same write_id, or the read
-# is rejected and retried. DUALS carries the PH multipliers W_s, whose
-# normalization sum_s p_s W_s = 0 holds only within a single iteration --
-# stitching W from mixed iterations yields an invalid Lagrangian bound. Every
-# other per-scenario field uses *relaxed* coherence (the assembled value may
-# mix iterations; its consumers re-evaluate, so it is always honest).
+# is rejected and retried.
+#
+#   - DUALS carries the PH multipliers W_s, whose normalization
+#     sum_s p_s W_s = 0 holds only within a single iteration -- stitching W from
+#     mixed iterations yields an invalid Lagrangian bound.
+#
+#   - BEST_XHAT / RECENT_XHATS carry per-scenario [first-stage nonants, obj_val]
+#     blocks. The first-stage portion is NAC-redundant and is made coherent
+#     after assembly (see _enforce_first_stage_nac), but the per-scenario
+#     obj_val is not. Under a *mixed*-iteration assembly that fix-up would
+#     overwrite one scenario's first stage with another's while leaving its
+#     obj_val -- a block holding iteration t's nonants next to iteration t''s
+#     objective. The FWPH consumer derives a Frank-Wolfe column's recourse cost
+#     as obj_val - first_stage_cost(nonants), so a desynced obj_val builds an
+#     inconsistent column and can invalidate the bound. Strict coherence rejects
+#     the mixed read instead: the accepted first stage is already NAC-consistent
+#     and every obj_val stays paired with its own nonants. (Single-sourcing the
+#     first stage would also pair them, but does not generalize to multistage,
+#     where a scenario's nonant path spans several nodes held by different ranks.)
+#
+# Every other per-scenario field uses *relaxed* coherence (the assembled value
+# may mix iterations; its consumers re-evaluate, so it is always honest). XFEAS
+# stays relaxed: it carries per-scenario *distinct* iterates with no NAC fix-up,
+# so each block's obj_val is never desynced from its nonants.
 _STRICT_COHERENCE_FIELDS = frozenset((
     Field.DUALS,
+    Field.BEST_XHAT,
+    Field.RECENT_XHATS,
 ))
 
-# Category-2 xhat fields: per-scenario layout [first-stage nonants, cost] whose
-# nonant portion is an incumbent first-stage decision identical across all
+# Category-2 xhat fields: per-scenario layout [first-stage nonants, obj_val]
+# whose nonant portion is an incumbent first-stage decision identical across all
 # scenarios by non-anticipativity (the candidate fixes the first stage when it
-# is evaluated). Multi-source assembly fills each scenario's block from the rank
-# that holds it; if those ranks sit at different write_ids the first-stage
-# values could end up inconsistent across scenarios. After assembly we restore
-# NAC by overwriting every scenario's first-stage portion with a single coherent
-# reference (see _enforce_first_stage_nac). The per-scenario cost slot is left
-# alone -- it is genuinely per-scenario (Category 1). XFEAS is *not* here: it
-# carries per-scenario *distinct* iterates (its consumer tries each scenario's x
-# as its own candidate), so it is assembled per-scenario with no NAC fix-up.
+# is evaluated). These fields use strict coherence (above), so an accepted
+# multi-source read has every source at one write_id and the first-stage portion
+# is already NAC-consistent across scenarios; _enforce_first_stage_nac is then a
+# defensive no-op. The per-scenario obj_val slot is left alone -- it is
+# genuinely per-scenario and, under strict coherence, stays paired with its own
+# nonants. XFEAS is *not* here: it carries per-scenario *distinct* iterates (its
+# consumer tries each scenario's x as its own candidate), so it is assembled
+# per-scenario with no NAC fix-up.
 _FIRST_STAGE_NAC_FIELDS = frozenset((
     Field.BEST_XHAT,
     Field.RECENT_XHATS,
