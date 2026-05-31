@@ -806,16 +806,27 @@ regime here.  Both are prerequisites for recommending the feature, not
 for landing the intervening phases on `main`.
 
 
-### Possible future optimization (out of scope)
+### Possible future work (out of scope)
 
-The first-stage portion of `BEST_XHAT` / `RECENT_XHATS` is genuinely
-NAC-redundant (the same node value copied into every scenario's slot).
-A future optimization could store it once per non-leaf node instead of
-once per scenario, saving storage and bandwidth on those fields.  This
-is *only* valid for the Category-2 fields — never for the Category-1
-per-scenario fields — and is explicitly **not** required for flexible
-ranks.  It is recorded here so the idea is not lost, not as planned
-work.
+Recorded here so the ideas are not lost, not as planned work.
+
+**Per-node storage of the NAC-redundant first stage.**  The first-stage
+portion of `BEST_XHAT` / `RECENT_XHATS` is genuinely NAC-redundant (the
+same node value copied into every scenario's slot).  A future
+optimization could store it once per non-leaf node instead of once per
+scenario, saving storage and bandwidth on those fields.  This is *only*
+valid for the Category-2 fields — never for the Category-1 per-scenario
+fields — and is explicitly **not** required for flexible ranks.
+
+**Coherence read-outcome diagnostic** (Pyomo/mpi-sppy#742).  An
+always-on, per-field counter at the multi-source reader breaking each
+read into `not_new` / `new_accepted` / `rejected_incoherent` /
+`accepted_mixed`.  This lets an infrequently-reporting bounds cylinder be
+diagnosed as a coherence problem (reads rejected because sources disagree
+on `write_id`) vs. a slow upstream sender (no new data), and measures how
+often a multi-source read straddles a publish — the empirical basis for
+the strict-vs-relaxed choices above, especially under an asynchronous APH
+sender.
 
 
 ### Backward Compatibility
