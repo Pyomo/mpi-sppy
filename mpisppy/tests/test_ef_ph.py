@@ -15,6 +15,9 @@ version matter a lot, so we often just do smoke tests.
 
 import os
 import glob
+import io
+import contextlib
+import re
 import json
 import shutil
 import unittest
@@ -31,7 +34,7 @@ import mpisppy.tests.examples.hydro.hydro as hydro
 from mpisppy.extensions.mult_rho_updater import MultRhoUpdater
 from mpisppy.extensions.xhatspecific import XhatSpecific
 from mpisppy.extensions.xhatxbar import XhatXbar
-from mpisppy.tests.utils import get_solver,round_pos_sig
+from mpisppy.tests.utils import get_solver,round_pos_sig,limit_solver_threads
 
 __version__ = 0.56
 
@@ -44,16 +47,15 @@ def _get_ph_base_options():
     Baseoptions["PHIterLimit"] = 10
     Baseoptions["defaultPHrho"] = 1
     Baseoptions["convthresh"] = 0.001
-    Baseoptions["subsolvedirectives"] = None
     Baseoptions["verbose"] = False
     Baseoptions["display_timing"] = False
     Baseoptions["display_progress"] = False
     if "cplex" in solver_name:
-        Baseoptions["iter0_solver_options"] = {"mip_tolerances_mipgap": 0.001}
-        Baseoptions["iterk_solver_options"] = {"mip_tolerances_mipgap": 0.00001}
+        Baseoptions["iter0_solver_options"] = {"mip_tolerances_mipgap": 0.001, "threads": 1}
+        Baseoptions["iterk_solver_options"] = {"mip_tolerances_mipgap": 0.00001, "threads": 1}
     else:
-        Baseoptions["iter0_solver_options"] = {"mipgap": 0.001}
-        Baseoptions["iterk_solver_options"] = {"mipgap": 0.00001}
+        Baseoptions["iter0_solver_options"] = {"mipgap": 0.001, "threads": 1}
+        Baseoptions["iterk_solver_options"] = {"mipgap": 0.00001, "threads": 1}
 
     Baseoptions["display_progress"] = False
 
@@ -148,6 +150,7 @@ class Test_sizes(unittest.TestCase):
     def test_ef_solve(self):
         options = self._copy_of_base_options()
         solver = pyo.SolverFactory(options["solver_name"])
+        limit_solver_threads(solver, options["solver_name"])
         ScenCount = 3
         ef = mpisppy.utils.sputils.create_EF(
             self.all3_scenario_names,
@@ -167,6 +170,7 @@ class Test_sizes(unittest.TestCase):
     def test_fix_ef_solve(self):
         options = self._copy_of_base_options()
         solver = pyo.SolverFactory(options["solver_name"])
+        limit_solver_threads(solver, options["solver_name"])
         ScenCount = 3
         ef = mpisppy.utils.sputils.create_EF(
             self.all3_scenario_names,
@@ -193,8 +197,75 @@ class Test_sizes(unittest.TestCase):
             scenario_denouement,
             scenario_creator_kwargs={"scenario_count": 3},
         )
-    
+
         conv, obj, tbound = ph.ph_main()
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_display_timing_emits_nonzero_solve_times(self):
+        # End-to-end check that display_timing actually reaches the PH
+        # solve loop and produces a non-zero solve-time report. Guards
+        # the user-facing CLI flag (issue #290): if a future refactor
+        # quietly drops the option from self.options or the print path,
+        # this test fails.
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 0
+        options["display_timing"] = True
+
+        ph = mpisppy.opt.ph.PH(
+            options,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+        )
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            ph.ph_main()
+        out = buf.getvalue()
+
+        self.assertIn("Pyomo solve times (seconds):", out,
+                      msg=f"display_timing=True but timing header not in output:\n{out}")
+        m = re.search(
+            r"min=([0-9.]+)@\d+ mean=([0-9.]+) max=([0-9.]+)@\d+",
+            out,
+        )
+        self.assertIsNotNone(
+            m,
+            msg=f"display_timing stats line not found in output:\n{out}",
+        )
+        mn, me, mx = float(m.group(1)), float(m.group(2)), float(m.group(3))
+        # max across scenarios must be strictly positive — any real
+        # subproblem solve takes measurable wallclock time. min/mean
+        # could round to 0.00 under %4.2f if subproblems are tiny.
+        self.assertGreater(
+            mx, 0.0,
+            msg=f"max solve time reported as zero: min={mn} mean={me} max={mx}",
+        )
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_display_timing_off_suppresses_solve_times(self):
+        # Companion: confirm the timing report is NOT printed when the
+        # flag is False, so we know the assertion above isn't picking up
+        # output emitted unconditionally somewhere.
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 0
+        options["display_timing"] = False
+
+        ph = mpisppy.opt.ph.PH(
+            options,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+        )
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            ph.ph_main()
+        self.assertNotIn("Pyomo solve times (seconds):", buf.getvalue())
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
@@ -618,6 +689,7 @@ class Test_hydro(unittest.TestCase):
     def test_ef_solve(self):
         options = self._copy_of_base_options()
         solver = pyo.SolverFactory(options["solver_name"])
+        limit_solver_threads(solver, options["solver_name"])
         ef = mpisppy.utils.sputils.create_EF(
             self.all_scenario_names,
             hydro.scenario_creator,
@@ -640,6 +712,7 @@ class Test_hydro(unittest.TestCase):
     def test_ef_csv(self):
         options = self._copy_of_base_options()
         solver = pyo.SolverFactory(options["solver_name"])
+        limit_solver_threads(solver, options["solver_name"])
         ef = mpisppy.utils.sputils.create_EF(
             self.all_scenario_names,
             hydro.scenario_creator,

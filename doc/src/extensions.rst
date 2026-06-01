@@ -41,7 +41,7 @@ Multiple Extensions
 To employ multiple PH extensions, use ``mpisppy.extensions.extension import MultiExtension``
 that allows you to give a list of extensions that will fire in order
 at each callout point. See, e.g. ``examples.sizes.sizes_demo.py`` or
-``examples.farmer.farmer_rho_demo.py`` for an
+``examples.farmer.CI.farmer_rho_demo.py`` for an
 example of use.
 
 .. note::
@@ -99,8 +99,8 @@ fixer.py
 This extension provides methods for fixing nonanticipative variables (usually integers) for
 which all scenarios have agreed for some number of iterations. There
 is an example of its use in ``examples.sizes.sizes_demo.py`` also
-in ``examples.sizes.uc_ama.py``. The ``uc_ama`` example illustrates
-that when ``amgalgamator`` is used ``"id_fix_list_fct"`` needs
+in ``examples.uc.uc_ama.py``. The ``uc_ama`` example illustrates
+that when ``amalgamator`` is used ``"id_fix_list_fct"`` needs
 to be on the ``Config`` object so the amalgamator can find it.
 
 .. note::
@@ -172,9 +172,11 @@ norm_rho_updater
 ^^^^^^^^^^^^^^^^
 
 This extension adjust rho dynamically. The code is in ``mpisppy.extensions.norm_rho_updater.py``
-and there is an accompanying converger in ``mpisppy.convergers.norm_rho_converger``. An
-example of use is shown in ``examples.farmer.farmer_cylinders.py``. This is
-the original Gabe H. dynamic rho.
+and there is an accompanying converger in ``mpisppy.convergers.norm_rho_converger``. From
+``generic_cylinders.py``, enable it with ``--use-norm-rho-updater``; a
+hand-wired example using the underlying classes directly is preserved in
+``examples.farmer.archive.farmer_cylinders.py``. This is the original
+Gabe H. dynamic rho.
 
 
 rho_setter
@@ -223,19 +225,49 @@ are believed to be "in balance", such that per-variable updates are not needed (
 hinder algorithmic progress when different nonanticipative variables play similar roles in
 the subproblem optimization problems).
 
+.. _wtracker_extension:
+
 wtracker_extension
 ^^^^^^^^^^^^^^^^^^
 
 The wtracker_extension outputs a report about the convergence (or really, lack thereof) of
 W values.
-An example of its use is shown in ``examples.sizes.sizes_demo.py``
+An example of programmatic use is shown in ``examples.sizes.sizes_demo.py``.
+
+From ``generic_cylinders.py``, enable it with ``--wtracker``. Related options:
+
+- ``--wtracker`` -- enable the extension (default off)
+- ``--wtracker-file-prefix <str>`` -- prefix for the rank-by-rank output
+  files (default: empty)
+- ``--wtracker-wlen <int>`` -- moving-window length, in iterations,
+  used by the convergence statistics (default 20)
+- ``--wtracker-reportlen <int>`` -- maximum number of rows in each
+  ranked report (default 100)
+- ``--wtracker-stdevthresh <float>`` -- ignore moving standard deviations
+  below this value when counting "converged" traces (default: use
+  ``E1_tolerance``)
+
+At the end of the run, each rank writes three files using its prefix:
+
+- ``<prefix>_summary_iter<N>_rank<r>.txt`` -- text summary with counts
+  and totals
+- ``<prefix>_stdev_iter<N>_rank<r>.csv`` -- top entries sorted by
+  moving standard deviation
+- ``<prefix>_cv_iter<N>_rank<r>.csv`` -- top entries sorted by moving
+  absolute coefficient of variation
+
+Each CSV row is indexed by ``(varname, scenario_name)`` and gives the
+windowed mean and stdev of W for that nonant/scenario pair. This is a
+diagnostic tool intended for tuning rho and convergence behavior; it
+adds time and memory and is not recommended for production runs.
 
 
 gradient_extension
 ^^^^^^^^^^^^^^^^^^
-The gradient_extension sets gradient-based rho for PH.
-An example of its use is shown in  ``examples.farmer.farmer_rho_demo.py``
-There are options in ``cfg`` to control dynamic updates.
+The gradient_extension sets gradient-based rho for PH. From
+``generic_cylinders.py``, enable it with ``--grad-rho``; a standalone
+demo is in ``examples.farmer.CI.farmer_rho_demo.py``. There are options
+in ``cfg`` to control dynamic updates.
 
 mult_rho_updater
 ^^^^^^^^^^^^^^^^
@@ -246,7 +278,8 @@ cross-scenario cuts
 ^^^^^^^^^^^^^^^^^^^
 Two-stage models only. This extension adds cross scenario cuts as calculated
 by the cross-scenario cut spoke. See the implementation paper for details.
-An example of its use is shown in ``examples/farmer/cs_farmer.py``.
+A hand-wired example using the underlying classes is preserved in
+``examples/farmer/archive/cs_farmer.py``.
 
 
 Distributed Subproblem Presolve

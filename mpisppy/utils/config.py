@@ -165,6 +165,9 @@ class Config(pyofig.ConfigDict):
         if self.get("rc_fixer") and not self.get("reduced_costs"):
             _bad_options("--rc-fixer requires --reduced-costs")
 
+        if self.get("hub_only_solver_logs") and not self.get("solver_log_dir"):
+            _bad_options("--hub-only-solver-logs requires --solver-log-dir")
+
     def add_solver_specs(self, prefix=""):
         sstr = f"{prefix}_solver" if prefix else "solver"
         if prefix:
@@ -176,6 +179,14 @@ class Config(pyofig.ConfigDict):
 
         self.add_to_config(f"{sstr}_options",
                             description= f"{prefix}solver options; space delimited with = for values (default None)",
+                            domain = str,
+                            default=None)
+
+        self.add_to_config(f"{sstr}_options_file",
+                            description= f"{prefix}path to a JSON solver-options file with sections "
+                                         "default/iter0/iterk/starting_at_iter (and a 'spokes' sub-block at the "
+                                         "top level, naming each spoke's overrides). CLI flags "
+                                         "override file entries at the same predicate.",
                             domain = str,
                             default=None)
 
@@ -212,6 +223,20 @@ class Config(pyofig.ConfigDict):
                            "WARNING: This will create a file for every single subproblem solve.",
                            domain=str,
                            default=None)
+
+        self.add_to_config("hub_only_solver_logs",
+                           description="When set with --solver-log-dir, only the hub writes "
+                           "solver logs; spokes do not. Requires --solver-log-dir.",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("inspect_buffers_on_shutdown",
+                           description="When a spoke detects a shutdown signal, run "
+                           "mpisppy.debug_utils.buffer_inspect on the SHUTDOWN receive "
+                           "buffer and emit a RuntimeWarning with any findings. "
+                           "Off by default.",
+                           domain=bool,
+                           default=False)
 
         self.add_to_config("warmstart_subproblems",
                            description="Warmstart subproblems from prior solution.",
@@ -262,6 +287,11 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
+        self.add_to_config('display_timing',
+                              description="display subproblem solve timing (requires exactly one subproblem per rank)",
+                              domain=bool,
+                              default=False)
+
         self.add_to_config("max_solver_threads",
                             description="Limit on threads per solver (default None)",
                             domain=int,
@@ -275,6 +305,16 @@ class Config(pyofig.ConfigDict):
         self.add_to_config("trace_prefix",
                             description="Prefix for bound spoke trace files. If None "
                                  "bound spoke trace files are not written.",
+                            domain=str,
+                            default=None)
+
+        self.add_to_config("incumbent_on_improvement_filename_prefix",
+                            description="If set, incumbent (xhat) bound spokes "
+                                 "write the first-stage solution to "
+                                 "<prefix>_<NNNN>.csv and <prefix>_<NNNN>.npy "
+                                 "each time they find a new best inner bound. "
+                                 "<NNNN> is a zero-padded counter starting at "
+                                 "0000. Default None disables.",
                             domain=str,
                             default=None)
 
@@ -613,11 +653,11 @@ class Config(pyofig.ConfigDict):
         else:
             name = name+"_"
 
-        if name == "":
-            self.add_to_config('mipgaps_json',
-                               description="path to json file with a mipgap schedule for PH iterations",
-                               domain=str,
-                               default=None)
+        self.add_to_config(f'{name}mipgaps_json',
+                           description="path to json file with a mipgap schedule for PH iterations "
+                                       "(planned for deprecation in a future release)",
+                           domain=str,
+                           default=None)
 
         self.add_to_config(f'{name}starting_mipgap',
                            description="Sets automatic gapper mode and the starting and minimum mipgap",
@@ -672,6 +712,31 @@ class Config(pyofig.ConfigDict):
                            domain=str,
                            default=None)
 
+    def cg_args(self):
+
+        self.add_to_config(name="cg_hub",
+                           description="Use CG hub instead of PH (default False)",
+                           domain=bool,
+                           default=False)
+        self.add_to_config(name="sp_solver_options",
+                           description="subproblem solver options",
+                           domain=str,
+                           default="")
+        self.add_to_config(name="mp_solver_options",
+                           description="master problem solver options",
+                           domain=str,
+                           default=" ")
+        self.add_to_config(name="relaxed_nonant",
+                           description="solve master problem with relaxed nonanticipativity constraint",
+                           domain=bool,
+                           default=False)
+
+    def dualcg_args(self):
+
+        self.add_to_config(name="dualcg_hub",
+                           description="Use DCG hub instead of PH (default False)",
+                           domain=bool,
+                           default=False)
 
     def lagrangian_args(self):
 
@@ -679,6 +744,13 @@ class Config(pyofig.ConfigDict):
                               description="have a lagrangian spoke",
                               domain=bool,
                               default=False)
+
+        self.add_to_config('lagrangian_rank_ratio',
+                              description="MPI ranks for the lagrangian spoke "
+                                          "relative to the hub (flexible rank "
+                                          "assignments; default 1.0 = equal)",
+                              domain=float,
+                              default=1.0)
 
         self.add_solver_specs("lagrangian")
         self.add_mipgap_specs("lagrangian")
@@ -701,7 +773,7 @@ class Config(pyofig.ConfigDict):
                               default=False)
 
         self.add_solver_specs("reduced_costs")
-        
+
         self.add_to_config('rc_verbose',
                             description="verbose output for reduced costs",
                             domain=bool,
@@ -822,6 +894,26 @@ class Config(pyofig.ConfigDict):
                             default=1.0)
         self.add_solver_specs("relaxed_ph")
 
+    def ph_xfeas_spoke_args(self):
+
+        self.add_to_config("ph_xfeas_spoke",
+                            description="have a PH xhat-feasible spoke",
+                            domain=bool,
+                            default=False)
+        self.add_to_config("ph_xfeas_spoke_rescale_rho_factor",
+                            description="Used to rescale rho initially (default=0.1)",
+                            domain=float,
+                            default=0.1)
+        self.add_to_config("ph_xfeas_spoke_rho_multiplier",
+                            description="Rescale factor for dynamic updates in ph_xfeas_spoke if ph_xfeas_spoke and a rho setter are chosen;"
+                            " note that it is not cummulative (default=1.0)",
+                            domain=float,
+                            default=1.0)
+        self.add_to_config("ph_xfeas_spoke_grad_order_stat",
+                            description="Order stat for selecting rho if ph_xfeas_spoke and grad_rho are chosen;"
+                            " note that this is impacted by the multiplier (default=0.0)",
+                            domain=float,
+                            default=0.0)
 
     def ph_dual_args(self):
 
@@ -869,12 +961,29 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config('xhatlooper_try_feasible_xhat_first',
+                           description="before entering the xhatlooper main loop, take "
+                                       "the candidate first-stage from the scenario "
+                                       "module's feasible_xhat_creator (looked up on the "
+                                       "module or in <module>_auxiliary) and try it as "
+                                       "an xhat. Two-stage only. Mutually exclusive "
+                                       "with --xhatlooper-try-jensens-first.",
+                           domain=bool,
+                           default=False)
+
     def xhatshuffle_args(self):
 
         self.add_to_config('xhatshuffle',
                            description="have an xhatshuffle spoke",
                            domain=bool,
                            default=False)
+
+        self.add_to_config('xhatshuffle_rank_ratio',
+                           description="MPI ranks for the xhatshuffle spoke "
+                                       "relative to the hub (flexible rank "
+                                       "assignments; default 1.0 = equal)",
+                           domain=float,
+                           default=1.0)
 
         self.add_to_config('add_reversed_shuffle',
                            description="using also the reversed shuffling (multistage only, default True)",
@@ -892,6 +1001,16 @@ class Config(pyofig.ConfigDict):
                                        "solution as a candidate xhat (two-stage only; "
                                        "requires the scenario module to define "
                                        "average_scenario_creator)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config('xhatshuffle_try_feasible_xhat_first',
+                           description="before entering the xhatshuffle main loop, take "
+                                       "the candidate first-stage from the scenario "
+                                       "module's feasible_xhat_creator (looked up on the "
+                                       "module or in <module>_auxiliary) and try it as "
+                                       "an xhat. Two-stage only. Mutually exclusive "
+                                       "with --xhatshuffle-try-jensens-first.",
                            domain=bool,
                            default=False)
 
@@ -947,6 +1066,16 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config('xhatspecific_try_feasible_xhat_first',
+                           description="before entering the xhatspecific main loop, take "
+                                       "the candidate first-stage from the scenario "
+                                       "module's feasible_xhat_creator (looked up on the "
+                                       "module or in <module>_auxiliary) and try it as "
+                                       "an xhat. Two-stage only. Mutually exclusive "
+                                       "with --xhatspecific-try-jensens-first.",
+                           domain=bool,
+                           default=False)
+
 
     def xhatxbar_args(self):
 
@@ -955,12 +1084,29 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
+        self.add_to_config('xhatxbar_rank_ratio',
+                              description="MPI ranks for the xhatxbar spoke "
+                                          "relative to the hub (flexible rank "
+                                          "assignments; default 1.0 = equal)",
+                              domain=float,
+                              default=1.0)
+
         self.add_to_config('xhatxbar_try_jensens_first',
                            description="before entering the xhatxbar main loop, solve "
                                        "the average scenario and try its first-stage "
                                        "solution as a candidate xhat (two-stage only; "
                                        "requires the scenario module to define "
                                        "average_scenario_creator)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config('xhatxbar_try_feasible_xhat_first',
+                           description="before entering the xhatxbar main loop, take "
+                                       "the candidate first-stage from the scenario "
+                                       "module's feasible_xhat_creator (looked up on the "
+                                       "module or in <module>_auxiliary) and try it as "
+                                       "an xhat. Two-stage only. Mutually exclusive "
+                                       "with --xhatxbar-try-jensens-first.",
                            domain=bool,
                            default=False)
 

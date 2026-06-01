@@ -241,7 +241,7 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
         scenario_instance.ref_vars = dict()
         scenario_instance.ref_suppl_vars = dict()
         scenario_instance.ref_surrogate_vars = dict()
-        scenario_instance._nlens = {node.name: len(node.nonant_vardata_list) 
+        scenario_instance._nlens = {node.name: len(node.nonant_vardata_list)
                                 for node in scenario_instance._mpisppy_node_list}
         for node in scenario_instance._mpisppy_node_list:
             ndn = node.name
@@ -255,11 +255,24 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
             for i, v in enumerate(node.nonant_ef_suppl_vardata_list):
                 if (ndn, i) not in scenario_instance.ref_suppl_vars:
                     scenario_instance.ref_suppl_vars[(ndn, i)] = v
-        # patch in EF_Obj        
-        scenario_objs = deact_objs(scenario_instance)        
-        obj = scenario_objs[0]            
+        # patch in EF_Obj
+        scenario_objs = deact_objs(scenario_instance)
+        obj = scenario_objs[0]
         sense = pyo.minimize if obj.is_minimizing() else pyo.maximize
         scenario_instance.EF_Obj = pyo.Objective(expr=obj.expr, sense=sense)
+
+        # Densified bundle position -> per-sub-scenario nonant Vars at that
+        # position. Trivial here (one sub-scenario => singleton groups), but
+        # the attribute is provided unconditionally so downstream consumers
+        # don't need to special-case the single-scenario EF. See issue #673
+        # and _bundle_consensus_groups in mpisppy/utils/nonant_sensitivities.py.
+        scenario_instance.consensus_groups = _build_consensus_groups(
+            scenario_instance.ref_vars,
+            scenario_instance.ref_surrogate_vars,
+            {(node.name, i): [node.nonant_vardata_list[i]]
+             for node in scenario_instance._mpisppy_node_list
+             for i in range(scenario_instance._nlens[node.name])},
+        )
 
         return scenario_instance  #### special return for single scenario
 
@@ -367,10 +380,17 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
     nonant_constr_suppl = pyo.Constraint(pyo.Any, name='_C_EF_suppl')
     EF_instance.add_component('_C_EF_suppl', nonant_constr_suppl)
 
+    # (ndn, i) -> [per-sub-scenario nonant Vars at that position], collected
+    # in scenario-iteration order during the loop below. Densified into
+    # EF_instance.consensus_groups after the loop completes (the densification
+    # depends on the *final* state of ref_surrogate_vars, which can shrink
+    # mid-loop via the Stoch_AdmmWrapper surrogate-upgrade path).
+    per_pos_vars = dict()
+
     for (sname, s) in scen_dict.items():
-        nlens = {node.name: len(node.nonant_vardata_list) 
+        nlens = {node.name: len(node.nonant_vardata_list)
                             for node in s._mpisppy_node_list}
-        
+
         for (node_name, num_nonant_vars) in nlens.items(): # copy nlens to EF
             if (node_name in EF_instance._nlens.keys() and
                 num_nonant_vars != EF_instance._nlens[node_name]):
@@ -386,6 +406,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
             ndn = node.name
             for i in range(nlens[ndn]):
                 v = node.nonant_vardata_list[i]
+                per_pos_vars.setdefault((ndn, i), []).append(v)
                 if (ndn, i) not in ref_vars:
                     # grab the reference variable
                     if (nonant_for_fixed_vars) or (not v.is_fixed()):
@@ -434,8 +455,33 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
     EF_instance.ref_vars = ref_vars
     EF_instance.ref_suppl_vars = ref_suppl_vars
     EF_instance.ref_surrogate_vars = ref_surrogate_vars
+    # Densified bundle position -> per-sub-scenario nonant Vars; stashed here
+    # at construction time so downstream rho setters / KKT-sensitivity probes
+    # don't re-walk the bundle to recover what create_EF already knew. See
+    # issue #673 and _bundle_consensus_groups in nonant_sensitivities.py.
+    EF_instance.consensus_groups = _build_consensus_groups(
+        ref_vars, ref_surrogate_vars, per_pos_vars,
+    )
 
     return EF_instance
+
+
+def _build_consensus_groups(ref_vars, ref_surrogate_vars, per_pos_vars):
+    """Densify {(ndn, per_scen_i): [Vars]} into {(ndn, bundle_k): [Vars]}
+    by skipping surrogate positions and renumbering per node. Iteration
+    order follows ``ref_vars.keys()`` (insertion order during create_EF),
+    so a bundle position ``k`` here matches what ``s._mpisppy_data.nonant_indices``
+    keys against downstream.
+    """
+    groups = dict()
+    counters = dict()
+    for (ndn, per_scen_i) in ref_vars.keys():
+        if (ndn, per_scen_i) in ref_surrogate_vars:
+            continue
+        k = counters.get(ndn, 0)
+        counters[ndn] = k + 1
+        groups[(ndn, k)] = per_pos_vars.get((ndn, per_scen_i), [])
+    return groups
 
 def _models_have_same_sense(models):
     ''' Check if every model in the provided dict has the same objective sense.
@@ -708,6 +754,300 @@ def option_dict_to_string(odict):
         else:
             ostr += f"{i}={v} "
     return ostr
+
+
+# Solver-options layered representation. See
+# doc/designs/solver_options_redesign.md §5.2.
+#
+# A layer is a plain dict {"when": <predicate>, "options": <dict>}.
+# Predicates:
+#   "default"               — applies at every iteration
+#   "iter0"                 — only at iteration 0
+#   "iterk"                 — iterations k >= 1
+#   ("starting_at_iter", N) — iterations k >= N (N >= 1)
+#
+# N = 0 is rejected explicitly. A "matches every iteration" layer
+# should use the `default` predicate; using
+# ("starting_at_iter", 0) instead would silently rank the layer
+# above `iter0` / `iterk` in axis-1 specificity, which is rarely
+# what callers intend.
+
+
+def _validate_when(when):
+    """Raise ValueError if *when* is not a recognized layer predicate."""
+    if when in ("default", "iter0", "iterk"):
+        return
+    if isinstance(when, tuple) and len(when) == 2 and when[0] == "starting_at_iter":
+        N = when[1]
+        # bool is a subclass of int; reject it explicitly
+        if isinstance(N, bool) or not isinstance(N, int) or N < 1:
+            raise ValueError(
+                f"starting_at_iter predicate requires an int >= 1; got "
+                f"{N!r}. Use the 'default' predicate for options that "
+                "apply at every iteration."
+            )
+        return
+    raise ValueError(f"Unknown solver-options layer predicate: {when!r}")
+
+
+def solver_options_layer(when, options):
+    """Build a single solver-options layer.
+
+    Args:
+        when: predicate, one of "default", "iter0", "iterk", or
+            ("starting_at_iter", N) with N an int >= 1. (N = 0 is
+            rejected; use ``"default"`` instead.)
+        options (dict): the options to fold in when the predicate matches.
+
+    Returns:
+        dict with keys "when" and "options".
+    """
+    _validate_when(when)
+    return {"when": when, "options": dict(options)}
+
+
+def _layer_matches(when, k):
+    _validate_when(when)
+    if when == "default":
+        return True
+    if when == "iter0":
+        return k == 0
+    if when == "iterk":
+        return k >= 1
+    # only ("starting_at_iter", N) remains, validated above
+    return k >= when[1]
+
+
+def fold_solver_options_layers(layers, k):
+    """Fold a list of solver-options layers into one dict for iteration k.
+
+    Walks layers in list order, picks layers whose predicate matches k,
+    and flat-dict-unions their options into a running dict (last write
+    wins per key).
+
+    Args:
+        layers (list): list of layers as built by solver_options_layer.
+        k (int): iteration number (0 for iter0).
+
+    Returns:
+        dict: the merged options for iteration k.
+    """
+    folded = {}
+    for layer in layers:
+        if _layer_matches(layer["when"], k):
+            folded.update(layer["options"])
+    return folded
+
+
+# Solver-name-aware translation for the two canonical option keys
+# mpi-sppy stores internally. Keys not in this table are passed
+# through unchanged by translate_solver_options.
+#
+# Entries map (canonical_key, solver_name) → solver-native key when
+# the solver names the option differently. Solver names not listed
+# under a canonical key use the canonical name itself (no rename).
+# Persistent variants (e.g. gurobi_persistent) are normalized to the
+# base name before lookup.
+_SOLVER_OPTION_TRANSLATIONS = {
+    "mipgap": {
+        # HiGHS uses its native option name.
+        "highs": "mip_rel_gap",
+        "appsi_highs": "mip_rel_gap",
+    },
+    "threads": {
+        # Gurobi parameter is conventionally capitalized.
+        "gurobi": "Threads",
+        "appsi_gurobi": "Threads",
+    },
+}
+
+
+def translate_solver_options(opts, solver_name):
+    """Return a copy of *opts* with canonical option keys renamed to
+    the solver's native key, where they differ.
+
+    Currently translates only ``mipgap`` and ``threads``; all other
+    keys pass through unchanged. If the user already supplied the
+    solver-native key alongside the canonical key, the
+    solver-native key wins and the canonical key is dropped (so the
+    solver does not receive both forms).
+
+    Args:
+        opts (dict | None): solver options. ``None`` returns ``None``;
+            other inputs return a new dict (the input is not mutated).
+        solver_name (str | None): name of the target Pyomo solver
+            plugin (e.g. ``'gurobi'``, ``'gurobi_persistent'``,
+            ``'appsi_highs'``). ``None`` or empty returns a copy of
+            *opts* unchanged.
+
+    Returns:
+        dict | None: translated copy of *opts*, or ``None`` if *opts*
+        was ``None``.
+    """
+    if opts is None:
+        return None
+    out = dict(opts)
+    if not solver_name:
+        return out
+    # gurobi_persistent → gurobi; appsi_highs stays as appsi_highs;
+    # cplex_persistent → cplex; xpress_persistent → xpress.
+    base_name = solver_name
+    if base_name.endswith("_persistent"):
+        base_name = base_name[:-len("_persistent")]
+    for canonical, mapping in _SOLVER_OPTION_TRANSLATIONS.items():
+        if canonical not in out:
+            continue
+        target = mapping.get(solver_name) or mapping.get(base_name)
+        if target is None or target == canonical:
+            continue
+        if target in out:
+            # User explicitly supplied the solver-native key; respect
+            # it and drop the canonical to avoid sending duplicates.
+            del out[canonical]
+        else:
+            out[target] = out.pop(canonical)
+    return out
+
+
+# Recognized keys in a solver-options-file's per-section sub-block
+# (the top-level dict and each per-spoke sub-block share this shape).
+_OPTIONS_FILE_PREDICATES = ("default", "iter0", "iterk", "starting_at_iter")
+_OPTIONS_FILE_TOP_KEYS = _OPTIONS_FILE_PREDICATES + ("spokes",)
+_OPTIONS_FILE_SPOKE_KEYS = _OPTIONS_FILE_PREDICATES
+
+
+def _parse_options_file_section(section, source, *, allow_spokes):
+    """Validate one block of a solver-options file and normalize it.
+
+    Used both for the top-level (allow_spokes=True) and each per-spoke
+    sub-block (allow_spokes=False). Returns a dict with keys
+    "default", "iter0", "iterk" (each a dict, possibly empty),
+    "starting_at_iter" (dict[int, dict], possibly empty), and "spokes"
+    (dict[str, dict] when allowed; absent in spoke sub-blocks).
+    """
+    if not isinstance(section, dict):
+        raise ValueError(
+            f"{source}: expected a JSON object, got {type(section).__name__}")
+    allowed = _OPTIONS_FILE_TOP_KEYS if allow_spokes else _OPTIONS_FILE_SPOKE_KEYS
+    extra = set(section) - set(allowed)
+    if extra:
+        raise ValueError(
+            f"{source}: unknown key(s) {sorted(extra)}; allowed: "
+            f"{sorted(allowed)}")
+    out = {p: dict(section.get(p) or {}) for p in ("default", "iter0", "iterk")}
+    raw_after = section.get("starting_at_iter") or {}
+    if not isinstance(raw_after, dict):
+        raise ValueError(
+            f"{source}.starting_at_iter: expected an object mapping iteration "
+            f"numbers to options dicts, got {type(raw_after).__name__}")
+    coerced_after = {}
+    for k, v in raw_after.items():
+        try:
+            N = int(k)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"{source}.starting_at_iter: key {k!r} is not an integer") from None
+        if N < 1:
+            if N == 0:
+                raise ValueError(
+                    f"{source}.starting_at_iter: iteration index 0 is "
+                    "not allowed. Move these options into the 'default' "
+                    "sub-block if they should apply at every iteration."
+                )
+            raise ValueError(
+                f"{source}.starting_at_iter: iteration index must be >= 1; "
+                f"got {N}")
+        if not isinstance(v, dict):
+            raise ValueError(
+                f"{source}.starting_at_iter[{k}]: expected an options object, "
+                f"got {type(v).__name__}")
+        coerced_after[N] = dict(v)
+    out["starting_at_iter"] = coerced_after
+    if allow_spokes:
+        raw_spokes = section.get("spokes") or {}
+        if not isinstance(raw_spokes, dict):
+            raise ValueError(
+                f"{source}.spokes: expected an object mapping spoke "
+                f"names to sub-blocks, got {type(raw_spokes).__name__}")
+        out["spokes"] = {
+            spoke_name: _parse_options_file_section(
+                spoke_block,
+                f"{source}.spokes.{spoke_name}",
+                allow_spokes=False,
+            )
+            for spoke_name, spoke_block in raw_spokes.items()
+        }
+    return out
+
+
+def load_solver_options_file(path):
+    """Read a JSON solver-options file and return its parsed structure.
+
+    The file's shape (see doc/designs/solver_options_redesign.md §5.3):
+
+        {
+          "default":   {...},
+          "iter0":     {...},
+          "iterk":     {...},
+          "starting_at_iter": {"5": {...}, "10": {...}},
+          "spokes": {
+            "lagrangian": {"default": {...}, "iter0": {...}, ...},
+            "reduced_costs": {...}
+          }
+        }
+
+    All sub-blocks are optional; absent ones default to empty dicts so
+    callers can iterate uniformly. ``starting_at_iter`` keys are JSON strings
+    (JSON object keys must be strings) and are coerced to ints here.
+
+    Args:
+        path (str): path to a JSON file.
+
+    Returns:
+        dict: parsed structure with keys "default", "iter0", "iterk",
+        "starting_at_iter" (dict[int, dict]), and "spokes" (dict[str, sub-block]).
+
+    Raises:
+        ValueError: on unknown keys, malformed sub-blocks, or
+            non-integer ``starting_at_iter`` keys. The exception message
+            names the offending source path inside the file.
+    """
+    import json
+    with open(path) as fin:
+        try:
+            raw = json.load(fin)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"{path}: invalid JSON ({e})") from None
+    return _parse_options_file_section(raw, path, allow_spokes=True)
+
+
+def options_file_section_to_layers(section):
+    """Build the layer list for one parsed sub-block in axis-1 order.
+
+    The returned list folds (via fold_solver_options_layers) in the
+    order most-general → most-specific so that more-specific
+    predicates naturally win for any iteration that matches both.
+
+    Args:
+        section (dict): output of ``_parse_options_file_section`` (or
+            one of the per-spoke sub-blocks).
+
+    Returns:
+        list[dict]: layers in order [default, iter0, iterk,
+        starting_at_iter:N₁, starting_at_iter:N₂, ...] (starting_at_iter sorted by
+        ascending N). Sub-blocks that are empty contribute nothing.
+    """
+    layers = []
+    if section["default"]:
+        layers.append(solver_options_layer("default", section["default"]))
+    if section["iter0"]:
+        layers.append(solver_options_layer("iter0", section["iter0"]))
+    if section["iterk"]:
+        layers.append(solver_options_layer("iterk", section["iterk"]))
+    for N in sorted(section["starting_at_iter"]):
+        layers.append(
+            solver_options_layer(("starting_at_iter", N), section["starting_at_iter"][N]))
+    return layers
 
 
 ################################################################################

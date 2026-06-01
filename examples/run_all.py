@@ -269,6 +269,22 @@ if run_first_part:
            "--max-solver-threads=2 "
            "--solver-name={}".format(solver_name))
 
+    # Smoke-test netdes's feasible_xhat_creator end-to-end via the
+    # xhat-feasible-first flag. Discovery: cfg_vanilla auto-imports
+    # netdes_auxiliary because no feasible_xhat_creator is on netdes
+    # itself. Per spoke, --*-try-feasible-xhat-first is mutually
+    # exclusive with --*-try-jensens-first, so this run uses Jensen's
+    # only on the lagrangian outer-bound side.
+    do_one("netdes", "../../mpisppy/generic_cylinders.py", 3,
+           "--module-name netdes --max-iterations=3 "
+           "--instance-name=network-10-20-L-01 --netdes-data-path ./data "
+           "--rel-gap=0.0 --default-rho=10000 --presolve "
+           "--lagrangian --xhatshuffle "
+           "--lagrangian-try-jensens-first "
+           "--xhatshuffle-try-feasible-xhat-first "
+           "--max-solver-threads=2 "
+           "--solver-name={}".format(solver_name))
+
 # -------- Second part: sizes, sslp, hydro, aircond, MMW --------
 if run_second_part:
     # sizes is slow for xpress so try linearizing the proximal term.
@@ -400,7 +416,7 @@ if not nouc:
            "--num-scens=3 --max-iterations=5 "
            "--iter0-mipgap=0.01 --iterk-mipgap=0.005 "
            "--default-rho=1 --lagrangian --xhatshuffle --fwph "
-           "--solver-name={} --display-progress".format(solver_name))
+           "--solver-name={} --display-progress --display-timing".format(solver_name))
 
     if egret_avail():
         print("\nSlow runs ahead...\n")

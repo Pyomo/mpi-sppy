@@ -93,6 +93,24 @@ def _check_admm_compatibility(cfg):
             raise RuntimeError(
                 f"--{opt.replace('_', '-')} is not supported with ADMM"
             )
+    # xhatshuffle without stage2_ef_solver_name is invalid for stoch-admm:
+    # the picked scenario's xhats only fix nonants along its own tree path,
+    # leaving ADMM consensus variables in other stochastic outcomes
+    # unconstrained.  The resulting "inner bound" violates the problem's
+    # ADMM consensus constraints and has no valid interpretation as a
+    # relaxation, so it must not be silently produced.
+    if (cfg.get("stoch_admm", ifmissing=False)
+            and cfg.get("xhatshuffle", ifmissing=False)
+            and cfg.get("stage2_ef_solver_name") is None):
+        raise RuntimeError(
+            "--xhatshuffle with --stoch-admm requires --stage2-ef-solver-name. "
+            "Without it, xhatshuffle fixes nonants only along one scenario's "
+            "tree path, leaving the ADMM consensus variables in other "
+            "stochastic outcomes unconstrained and producing an invalid "
+            "(over-optimistic) inner bound.  Pass --stage2-ef-solver-name "
+            "(typically the same solver as --solver-name), or use "
+            "--xhatxbar instead."
+        )
 
 
 def setup_admm(module, cfg, n_cylinders):
@@ -128,6 +146,64 @@ def setup_admm(module, cfg, n_cylinders):
             all_scenario_names, None)
 
 
+def _discover_first_stage_hooks(module):
+    """Discover the four optional first-stage hooks on a stoch-admm
+    model module and validate the both-or-neither contract.
+
+    The two core hooks (first_stage_cost, first_stage_varlist) must
+    be defined together or both omitted; mixing them is an error.
+
+    The two advanced hooks (first_stage_surrogate_nonant_list,
+    first_stage_nonant_ef_suppl_list) are each independent of the
+    other; defining either alone is fine, but only when the two
+    core hooks are also defined -- they forward to
+    sputils.attach_root_node's optional surrogate_nonant_list /
+    nonant_ef_suppl_list parameters and have nothing to attach to
+    otherwise.
+
+    Returns:
+        dict: keyword arguments suitable for forwarding to
+        Stoch_AdmmWrapper / AdmmBundler.  Hooks that the module did
+        not define are passed as None.
+    """
+    first_stage_cost = getattr(module, "first_stage_cost", None)
+    first_stage_varlist = getattr(module, "first_stage_varlist", None)
+    if (first_stage_cost is None) != (first_stage_varlist is None):
+        present = "first_stage_cost" if first_stage_cost is not None else "first_stage_varlist"
+        missing = "first_stage_varlist" if first_stage_cost is not None else "first_stage_cost"
+        raise RuntimeError(
+            f"Module {module.__name__!r} defines {present} but not "
+            f"{missing}.  These hooks must be defined together "
+            f"(or both omitted).  See doc/src/generic_admm.rst."
+        )
+
+    first_stage_surrogate_nonant_list = getattr(
+        module, "first_stage_surrogate_nonant_list", None)
+    first_stage_nonant_ef_suppl_list = getattr(
+        module, "first_stage_nonant_ef_suppl_list", None)
+    advanced = {
+        "first_stage_surrogate_nonant_list": first_stage_surrogate_nonant_list,
+        "first_stage_nonant_ef_suppl_list": first_stage_nonant_ef_suppl_list,
+    }
+    present_advanced = [n for n, h in advanced.items() if h is not None]
+    if present_advanced and first_stage_cost is None:
+        raise RuntimeError(
+            f"Module {module.__name__!r} defines the advanced hook(s) "
+            f"{present_advanced} but not first_stage_cost / "
+            f"first_stage_varlist.  Advanced hooks forward to "
+            f"sputils.attach_root_node's optional parameters and only "
+            f"make sense when the core hooks are also defined.  See "
+            f"doc/src/generic_admm.rst."
+        )
+
+    return {
+        "first_stage_cost": first_stage_cost,
+        "first_stage_varlist": first_stage_varlist,
+        "first_stage_surrogate_nonant_list": first_stage_surrogate_nonant_list,
+        "first_stage_nonant_ef_suppl_list": first_stage_nonant_ef_suppl_list,
+    }
+
+
 def setup_stoch_admm(module, cfg, n_cylinders):
     """Create Stoch_AdmmWrapper for stochastic ADMM.
 
@@ -147,6 +223,8 @@ def setup_stoch_admm(module, cfg, n_cylinders):
     consensus_vars = module.consensus_vars_creator(
         admm_subproblem_names, stoch_scenario_name, **scenario_creator_kwargs)
 
+    first_stage_hooks = _discover_first_stage_hooks(module)
+
     admm = Stoch_AdmmWrapper(
         options={},
         all_admm_stoch_subproblem_scenario_names=all_names,
@@ -158,13 +236,20 @@ def setup_stoch_admm(module, cfg, n_cylinders):
         n_cylinders=n_cylinders,
         mpicomm=MPI.COMM_WORLD,
         scenario_creator_kwargs=scenario_creator_kwargs,
-        BFs=None,
+        BFs=cfg.get("branching_factors"),
+        **first_stage_hooks,
     )
 
     # Store on cfg as plain attributes (Pyomo Config can't handle these types)
     object.__setattr__(cfg, "_admm_variable_probability", admm.var_prob_list)
     object.__setattr__(cfg, "_admm_scenario_names", all_names)
     object.__setattr__(cfg, "_admm_nodenames", admm.all_nodenames)
+
+    # Publish the augmented branching factors so downstream consumers
+    # (notably xhatshuffle's stage2ef path in extensions/xhatbase.py) see
+    # the wrapper's true tree shape without the user having to hand-encode
+    # the wrapper's append convention.
+    cfg.quick_assign("branching_factors", list, list(admm.BFs))
 
     return (admm.admmWrapper_scenario_creator, {},
             all_names, admm.all_nodenames)
@@ -192,6 +277,8 @@ def setup_stoch_admm_with_bundles(module, cfg, n_cylinders):
     consensus_vars = module.consensus_vars_creator(
         admm_subproblem_names, stoch_scenario_name, **scenario_creator_kwargs)
 
+    first_stage_hooks = _discover_first_stage_hooks(module)
+
     bundler = AdmmBundler(
         module=module,
         scenarios_per_bundle=cfg.scenarios_per_bundle,
@@ -201,6 +288,7 @@ def setup_stoch_admm_with_bundles(module, cfg, n_cylinders):
         combining_fn=module.combining_names,
         split_fn=module.split_admm_stoch_subproblem_scenario_name,
         scenario_creator_kwargs=scenario_creator_kwargs,
+        **first_stage_hooks,
     )
     bundle_names = bundler.bundle_names_creator()
 

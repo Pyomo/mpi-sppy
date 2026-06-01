@@ -8,7 +8,7 @@
 ###############################################################################
 import mpisppy.cylinders.spoke
 import mpisppy.utils.sputils as sputils
-from mpisppy.cylinders._jensens_mixin import _JensensMixin
+from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
 
 class _LagrangianMixin:
 
@@ -32,7 +32,7 @@ class _LagrangianMixin:
             teeme = self.opt.options['tee-rank0-solves']
 
         self.opt.solve_loop(
-            solver_options=self.opt.current_solver_options,
+            solver_options=self.opt._effective_solver_options(self.opt._PHIter),
             dtiming=False,
             gripe=True,
             tee=teeme,
@@ -55,7 +55,7 @@ class _LagrangianMixin:
             self.opt.extobject.post_everything()
         return self.final_bound
 
-class LagrangianOuterBound(_JensensMixin, _LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundWSpoke):
+class LagrangianOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundWSpoke):
 
     converger_spoke_char = 'L'
 
@@ -95,7 +95,9 @@ class LagrangianOuterBound(_JensensMixin, _LagrangianMixin, mpisppy.cylinders.sp
             self.opt.extobject.post_iter0()
         self.opt._PHIter += 1
 
-        self.opt.current_solver_options = self.opt.iterk_solver_options
+        # Clear the dynamic-overrides overlay at the iter0→iterk
+        # transition; static iterk options come from the layer fold.
+        self.opt.current_solver_options = {}
 
         self.send_bound(self.trivial_bound)
         if extensions:

@@ -207,8 +207,9 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                 print("root comm size={}".format(self.comms["ROOT"].size))
                 raise
             # now form the EF for the appropriate number of second-stage scenario tree nodes
-            # Use the branching factors to figure out how many second-stage nodes.
-            stage2cnt = branching_factors[1]
+            # The count of second-stage tree nodes is branching_factors[0] (children of ROOT);
+            # branching_factors[1] is the per-second-stage-node branching, not the count.
+            stage2cnt = branching_factors[0]
             rankcnt = self.n_proc
             # The next assert is important.
             assert stage2cnt % rankcnt== 0, "for stage2ef, ranks must be a multiple of stage2 nodes"            

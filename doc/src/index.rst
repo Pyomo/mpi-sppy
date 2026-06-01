@@ -16,6 +16,7 @@ MPI is used.
    :maxdepth: 2
    :caption: Building Your Model File
 
+   building_overview.rst
    scenario_creator.rst
    helper_functions.rst
 
@@ -54,6 +55,7 @@ MPI is used.
    properbundles.rst
    pickling.rst
    jensens.rst
+   feasible_xhat.rst
    xhat_from_file.rst
    xhat_feasibility_cuts.rst
    smps.rst
@@ -72,6 +74,7 @@ MPI is used.
 
    drivers.rst
    internals.rst
+   debug_utils.rst
    contributors.rst
    amalgamator.rst
    code_coverage.rst

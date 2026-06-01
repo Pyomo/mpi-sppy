@@ -12,7 +12,7 @@ import mpisppy.log
 
 from mpisppy.extensions.xhatbase import XhatBase
 from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
-from mpisppy.cylinders._jensens_mixin import _JensensMixin
+from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
 
 
 # Could also pass, e.g., sys.stdout instead of a filename
@@ -21,7 +21,7 @@ mpisppy.log.setup_logger("mpisppy.cylinders.xhatshufflelooper_bounder",
                          level=logging.CRITICAL)
 logger = logging.getLogger("mpisppy.cylinders.xhatshufflelooper_bounder")
 
-class XhatShuffleInnerBound(_JensensMixin, XhatInnerBoundBase):
+class XhatShuffleInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
 
     converger_spoke_char = 'X'
 
@@ -68,9 +68,11 @@ class XhatShuffleInnerBound(_JensensMixin, XhatInnerBoundBase):
 
         self.xhat_prep()
 
-        # No-op unless --xhatshuffle-try-jensens-first is set. Tolerates
-        # integer recourse and per-scenario infeasibility (silent skip).
+        # No-ops unless --xhatshuffle-try-jensens-first /
+        # --xhatshuffle-try-feasible-xhat-first are set (mutually exclusive).
+        # Both tolerate per-scenario infeasibility via silent skip.
         self._try_average_scenario_xhat()
+        self._try_feasible_xhat()
 
         if "reverse" in self.opt.options["xhat_looper_options"]:
             self.reverse = self.opt.options["xhat_looper_options"]["reverse"]
@@ -115,8 +117,12 @@ class XhatShuffleInnerBound(_JensensMixin, XhatInnerBoundBase):
                 continue
 
             if new_nonants:
-                # similar to above, not all ranks will agree on
-                # when there are new nonants (in the same loop)
+                # All cylinder_comm ranks agree on new_nonants because
+                # update_nonants -> get_receive_buffer(synchronize=True)
+                # gates on a cross-rank write_id Allreduce, so the
+                # collectives inside this branch (Eobjective Allreduce,
+                # comms["ROOT"].bcast in _try_one, the inner
+                # got_kill_signal) are entered in lockstep.
                 logger.debug(f'   *Xhatshuffle loop iter={xh_iter}')
                 logger.debug(f'   *got a new one! on rank {self.global_rank}')
                 logger.debug(f'   *localnonants={str(self.localnonants)}')

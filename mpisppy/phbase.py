@@ -9,6 +9,7 @@
 import time
 import logging
 import math
+import warnings
 
 import numpy as np
 import mpisppy.MPI as MPI
@@ -281,13 +282,54 @@ class PHBase(mpisppy.spopt.SPOpt):
         self.ph_converger = ph_converger
         self.rho_setter = rho_setter
 
-        self.iter0_solver_options = options["iter0_solver_options"]
-        self.iterk_solver_options = options["iterk_solver_options"]
-        self.current_solver_options = self.iter0_solver_options
+        # solver_options_layers, _dynamic_solver_options_layer,
+        # current_solver_options, and _effective_solver_options are
+        # set up in SPOpt.__init__; PHBase inherits them via super.
+        # iter0_solver_options / iterk_solver_options below are
+        # read-only deprecated property shims over the layer fold.
 
         # flags to complete the invariant
         self.convobject = None  # PH converger
         self.attach_xbars()
+
+    @property
+    def iter0_solver_options(self):
+        """Read-only fold of solver_options_layers for iteration 0.
+
+        Deprecated; reads emit a DeprecationWarning. Use
+        ``_effective_solver_options(0)`` for the iter-0 fold, which is
+        the same value but doesn't go through the deprecation path.
+        """
+        if self.cylinder_rank == 0:
+            warnings.warn(
+                "PHBase.iter0_solver_options is deprecated; call "
+                "_effective_solver_options(0) instead. Both return the "
+                "same fold of solver_options_layers.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        return sputils.fold_solver_options_layers(
+            self.solver_options_layers, 0)
+
+    @property
+    def iterk_solver_options(self):
+        """Read-only fold of solver_options_layers for iteration k>=1.
+
+        Deprecated; reads emit a DeprecationWarning. Use
+        ``_effective_solver_options(k)`` for an exact per-iteration
+        fold (which can differ from k=1 when starting_at_iter layers
+        are present).
+        """
+        if self.cylinder_rank == 0:
+            warnings.warn(
+                "PHBase.iterk_solver_options is deprecated; call "
+                "_effective_solver_options(k) for the exact fold at "
+                "iteration k. The property returns the fold at k=1 only.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        return sputils.fold_solver_options_layers(
+            self.solver_options_layers, 1)
 
 
     def Compute_Xbar(self, verbose=False):
@@ -976,7 +1018,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                 print ("About to call PH Iter0 solve loop on rank={}".format(self.cylinder_rank))
             global_toc("Entering solve loop in PHBase.Iter0")
 
-            self.solve_loop(solver_options=self.current_solver_options,
+            self.solve_loop(solver_options=self._effective_solver_options(self._PHIter),
                             dtiming=dtiming,
                             gripe=True,
                             tee=teeme,
@@ -1049,7 +1091,11 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         self.reenable_W_and_prox()
 
-        self.current_solver_options = self.options["iterk_solver_options"]
+        # Clear the dynamic-overrides overlay at the iter0→iterk
+        # transition: static iterk options come from the layer fold,
+        # and dropping any Gapper auto-mode mipgap accumulated during
+        # iter0 lets iterk start from the static fold + fresh updates.
+        self.current_solver_options = {}
 
         return self.trivial_bound
 
@@ -1137,7 +1183,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             )
 
             self.solve_loop(
-                solver_options=self.current_solver_options,
+                solver_options=self._effective_solver_options(self._PHIter),
                 dtiming=dtiming,
                 gripe=True,
                 disable_pyomo_signal_handling=False,

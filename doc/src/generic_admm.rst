@@ -25,6 +25,16 @@ There are two modes:
    ADMM (``--admm``), but are supported with stochastic ADMM
    (``--stoch-admm``); see :ref:`admm_bundling` below.
 
+.. Note::
+   With ``--stoch-admm``, the ``--xhatshuffle`` spoke requires
+   ``--stage2-ef-solver-name`` and an error is raised otherwise.  Without
+   it, xhatshuffle would fix nonants only along the picked scenario's tree
+   path, leaving the ADMM consensus variables in other stochastic outcomes
+   unconstrained and producing an invalid (over-optimistic) inner bound.
+   Use ``--xhatxbar`` if you want an inner bound without solving a stage-2
+   EF; xhatxbar fixes nonants to the PH ``xbar``, which is itself the
+   consensus value.
+
 
 Tutorial: Running the ``distr`` Example
 -----------------------------------------
@@ -83,6 +93,43 @@ Here:
   ``num_admm_subproblems * num_stoch_scens = 9``.
 
 
+.. _stoch_admm_branching_factors:
+
+Branching factors with ``--stoch-admm``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. important::
+
+   When using ``--stoch-admm``, the value passed to ``--branching-factors``
+   describes the **original** problem's tree (i.e., the branching factors
+   **before** the ADMM-stage augmentation).  The stochastic ADMM wrapper
+   appends ``num_admm_subproblems`` as the final stage, then republishes
+   the augmented branching factors back to the config so that downstream
+   consumers (notably xhatshuffle's stage2ef path) see the correct tree
+   shape automatically.
+
+   - For a 2-stage-origin problem (e.g., ``stoch_distr``): ``--branching-factors``
+     may be omitted entirely.  The wrapper infers ``[num_stoch_scens]`` from
+     ``--num-stoch-scens`` and produces the augmented tree
+     ``[num_stoch_scens, num_admm_subproblems]``.
+   - For an N-stage-origin problem: pass the N-1 original branching factors.
+     The wrapper appends ``num_admm_subproblems`` to produce an
+     N-level augmented tree.
+
+   **Semantics change (post mpi-sppy 0.13.2):** earlier versions of
+   ``setup_stoch_admm`` ignored ``--branching-factors`` entirely and hard-coded
+   ``BFs=None`` into ``Stoch_AdmmWrapper``.  As a result, anyone using
+   ``--stoch-admm`` together with ``--xhatshuffle --stage2-ef-solver-name``
+   had to hand-encode the augmented tree as
+   ``--branching-factors "<num_stoch_scens> <num_admm_subproblems>"``.
+   **That workaround now produces an incorrect (too deep) tree** and must be
+   removed: pass only the original problem's branching factors (or omit the
+   flag for 2-stage-origin problems).
+
+A worked example using stage2ef is provided in
+``examples/stoch_distr/stoch_admm_stage2ef.bash``.
+
+
 Model Module Interface
 -----------------------
 
@@ -126,6 +173,7 @@ Additional functions for ``--stoch-admm``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. py:function:: consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, **scenario_creator_kwargs)
+   :no-index:
 
    Creates the consensus variables dictionary for stochastic ADMM.
 
@@ -248,15 +296,15 @@ constraints.
    def scenario_creator(scenario_name, **kwargs):
        cfg = kwargs["cfg"]
        model = build_my_model(scenario_name, cfg)
-       # Attach a trivial root node (ADMM wrapper will handle consensus)
-       varlist = list()
-       sputils.attach_root_node(model, model.Obj, varlist)
        return model
 
 .. Note::
-   Pass an empty ``varlist`` to ``attach_root_node``. The ADMM wrapper
-   automatically manages which variables are non-anticipative (the consensus
-   variables).
+   For ``--admm``, **do not** call ``sputils.attach_root_node`` in your
+   ``scenario_creator``.  ``AdmmWrapper`` builds the scenario tree itself
+   (calling ``attach_root_node`` internally with the consensus variables as
+   the non-anticipative list); any user-supplied node list would be
+   overwritten.  For ``--stoch-admm`` the contract is different — see the
+   note in "Extending to Stochastic ADMM" below.
 
 Step 4: Implement ``consensus_vars_creator``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -319,7 +367,7 @@ Step 7: Run
 
 
 Extending to Stochastic ADMM
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 To support ``--stoch-admm``, additionally implement:
 
@@ -331,10 +379,113 @@ To support ``--stoch-admm``, additionally implement:
 These functions define the naming convention for composite scenarios. See
 ``examples/stoch_distr/stoch_distr.py`` for a complete working example.
 
-Your ``scenario_creator`` will receive composite names and must split them
-to determine both which ADMM subproblem and which stochastic scenario to build.
-Your ``consensus_vars_creator`` returns ``(variable_name, stage)`` tuples
-instead of plain strings.
+.. Note::
+
+   ``scenario_creator`` for ``--stoch-admm`` differs from the
+   deterministic case in one way:
+
+   **It receives a composite name.**  The argument is e.g.
+   ``"ADMM_STOCH_Region1_StochasticScenario3"``; ``scenario_creator``
+   must call ``split_admm_stoch_subproblem_scenario_name`` on it to
+   recover the ADMM subproblem name and the stochastic scenario name,
+   then build the corresponding model.
+
+First-stage attachment via module hooks (recommended)
+""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Under the hood, ``Stoch_AdmmWrapper`` reads the user-supplied
+``_mpisppy_node_list`` and *appends* an ADMM-consensus stage to it
+(whereas ``AdmmWrapper`` overwrites the node list).  The wrapper can
+attach the root node for you if you provide two module-level hook
+functions:
+
+.. code-block:: python
+
+   def first_stage_cost(scenario):
+       """Original problem's first-stage cost expression."""
+       return scenario.FirstStageCost
+
+   def first_stage_varlist(scenario):
+       """Original problem's first-stage variables (NOT ADMM consensus vars)."""
+       return scenario._first_stage_vars   # stashed in scenario_creator
+
+When both hooks (``first_stage_cost`` and ``first_stage_varlist``) are
+defined on the module, the wrapper calls
+``sputils.attach_root_node(scenario, first_stage_cost(scenario),
+first_stage_varlist(scenario))`` itself for each scenario before
+running its consensus-stage logic.  ``scenario_creator`` no longer
+needs to call ``attach_root_node`` (and must not — see error matrix
+below).
+
+See ``examples/stoch_distr/stoch_distr.py`` for the canonical
+pattern, including how to stash the varlist on the scenario from
+inside ``scenario_creator`` so the hook can find it.
+
+.. Note::
+   The hooks are **both-or-neither**: defining only one raises
+   ``RuntimeError`` at ``setup_stoch_admm`` time.  Mixing the hooks
+   with a manual ``attach_root_node`` call also raises.
+
+.. Note::
+   ``first_stage_varlist`` may return a mix of scalar ``Var``,
+   ``VarData``, and indexed ``Var`` containers.  Indexed containers are
+   expanded internally to one consensus entry per ``VarData`` (e.g.
+   ``NumBuilt`` becomes ``NumBuilt[2025]``, ``NumBuilt[2026]``, ...),
+   so you do not need to unpack indexed Vars before returning them.
+
+Advanced first-stage hooks (optional)
+"""""""""""""""""""""""""""""""""""""""
+
+``sputils.attach_root_node`` accepts two further optional parameters,
+``surrogate_nonant_list`` and ``nonant_ef_suppl_list`` (see
+:ref:`surrogate_nonant_list` and :ref:`ef_supplement_list` for what
+each does), for problems that need to mark some first-stage Vars as
+surrogates (EF skips their nonant equality) or as EF-supplemental
+nonants (extra Vars carried through the EF construction).  If your
+problem needs either, define the corresponding optional module-level
+hook:
+
+.. code-block:: python
+
+   def first_stage_surrogate_nonant_list(scenario):
+       """Optional. Forwarded to attach_root_node's surrogate_nonant_list."""
+       return scenario._surrogate_nonants   # stashed in scenario_creator
+
+   def first_stage_nonant_ef_suppl_list(scenario):
+       """Optional. Forwarded to attach_root_node's nonant_ef_suppl_list."""
+       return scenario._ef_suppl_nonants
+
+Each advanced hook is independent of the other — defining either one
+alone is fine — but both depend on the two core hooks
+(``first_stage_cost`` and ``first_stage_varlist``) also being defined,
+because there is nothing for the wrapper to attach the advanced lists
+onto otherwise.  Defining an advanced hook without the core hooks
+raises ``RuntimeError`` at ``setup_stoch_admm`` time.
+
+On the legacy path (no core hooks), pass ``surrogate_nonant_list`` and
+``nonant_ef_suppl_list`` directly to your own ``sputils.attach_root_node``
+call inside ``scenario_creator``; the wrapper inherits whatever you
+attached.
+
+First-stage attachment via manual ``attach_root_node`` (legacy)
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+If you omit both hooks, ``scenario_creator`` must itself call
+``sputils.attach_root_node`` with the original problem's first-stage
+cost and varlist (and ``surrogate_nonant_list`` /
+``nonant_ef_suppl_list`` if you need them).  Skipping the call (when
+no hooks are defined) raises ``RuntimeError`` with a message pointing
+at both options.
+
+This path is preserved for backward compatibility with model modules
+written before the hooks existed (and for direct uses of
+``Stoch_AdmmWrapper`` that bypass ``setup_stoch_admm``).
+
+Consensus vars
+""""""""""""""
+
+Your ``consensus_vars_creator`` returns ``(variable_name, stage)``
+tuples instead of plain strings.
 
 
 .. _admm_bundling:

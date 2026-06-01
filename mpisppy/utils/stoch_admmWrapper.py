@@ -11,6 +11,11 @@ import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
 import mpisppy.scenario_tree as scenario_tree
 import numpy as np
+from mpisppy.utils.admmWrapper import (
+    _admm_normalize_consensus_vars,
+    _first_stage_var_names,
+    _merge_first_stage_into_consensus_vars,
+)
 
 
 def _tag_dummies_as_surrogate(node, dummies):
@@ -92,20 +97,54 @@ class Stoch_AdmmWrapper(): #add scenario_tree
             scenario_creator_kwargs=None,
             verbose=None,
             BFs=None,
+            first_stage_cost=None,
+            first_stage_varlist=None,
+            first_stage_surrogate_nonant_list=None,
+            first_stage_nonant_ef_suppl_list=None,
     ):
         assert len(options) == 0, "no options supported by stoch_admmWrapper"
+        # first_stage_cost / first_stage_varlist must be defined together
+        # or omitted together.  Defensive check; setup_stoch_admm also
+        # enforces this, but the wrapper is callable directly.
+        if (first_stage_cost is None) != (first_stage_varlist is None):
+            present = "first_stage_cost" if first_stage_cost is not None else "first_stage_varlist"
+            missing = "first_stage_varlist" if first_stage_cost is not None else "first_stage_cost"
+            raise RuntimeError(
+                f"Stoch_AdmmWrapper was given {present} but not {missing}. "
+                f"These hooks must be defined together (or both omitted)."
+            )
+        has_first_stage_hooks = first_stage_cost is not None
+        # The advanced hooks forward to attach_root_node's
+        # surrogate_nonant_list / nonant_ef_suppl_list parameters.
+        # Each may be defined alone, but only when the two core hooks
+        # are also defined (there is nothing for the wrapper to attach
+        # them onto otherwise).
+        advanced_hooks = {
+            "first_stage_surrogate_nonant_list": first_stage_surrogate_nonant_list,
+            "first_stage_nonant_ef_suppl_list": first_stage_nonant_ef_suppl_list,
+        }
+        present_advanced = [n for n, h in advanced_hooks.items() if h is not None]
+        if present_advanced and not has_first_stage_hooks:
+            raise RuntimeError(
+                f"Stoch_AdmmWrapper was given the advanced hook(s) "
+                f"{present_advanced} but first_stage_cost / "
+                f"first_stage_varlist were not defined.  The advanced "
+                f"hooks forward to sputils.attach_root_node's optional "
+                f"parameters and only make sense when the core hooks "
+                f"are also driving attach_root_node."
+            )
         # We need local_scenarios
         self.local_admm_stoch_subproblem_scenarios = {}
         scen_tree = sputils._ScenTree(["ROOT"], all_admm_stoch_subproblem_scenario_names)
         assert mpicomm.Get_size() % n_cylinders == 0, \
             f"{mpicomm.Get_size()=} and {n_cylinders=}, but {mpicomm.Get_size() % n_cylinders=} should be 0"
         ranks_per_cylinder = mpicomm.Get_size() // n_cylinders
-        
+
         scenario_names_to_rank, _rank_slices, _scenario_slices =\
                 scen_tree.scen_names_to_ranks(ranks_per_cylinder)
 
         cylinder_rank = mpicomm.Get_rank() // n_cylinders
-        
+
         # taken from spbase
         self.local_admm_stoch_subproblem_scenarios_names = [
             all_admm_stoch_subproblem_scenario_names[i] for i in _rank_slices[cylinder_rank]
@@ -113,12 +152,76 @@ class Stoch_AdmmWrapper(): #add scenario_tree
         for sname in self.local_admm_stoch_subproblem_scenarios_names:
             s = scenario_creator(sname, **scenario_creator_kwargs)
             self.local_admm_stoch_subproblem_scenarios[sname] = s
+            # Error matrix (hooks defined? x _mpisppy_node_list set?).
+            # Catch half-migrations at scenario-construction time before
+            # the deep assertion in assign_variable_probs.
+            already_attached = hasattr(s, "_mpisppy_node_list")
+            if has_first_stage_hooks:
+                if already_attached:
+                    raise RuntimeError(
+                        f"scenario {sname!r}: first_stage_cost and "
+                        f"first_stage_varlist hooks are defined, so "
+                        f"scenario_creator must NOT call "
+                        f"sputils.attach_root_node.  Remove the "
+                        f"attach_root_node call from scenario_creator."
+                    )
+                attach_kwargs = {}
+                if first_stage_surrogate_nonant_list is not None:
+                    attach_kwargs["surrogate_nonant_list"] = \
+                        first_stage_surrogate_nonant_list(s)
+                if first_stage_nonant_ef_suppl_list is not None:
+                    attach_kwargs["nonant_ef_suppl_list"] = \
+                        first_stage_nonant_ef_suppl_list(s)
+                sputils.attach_root_node(
+                    s, first_stage_cost(s), first_stage_varlist(s),
+                    **attach_kwargs)
+            else:
+                if not already_attached:
+                    raise RuntimeError(
+                        f"scenario {sname!r}: no _mpisppy_node_list is "
+                        f"set.  Either call sputils.attach_root_node in "
+                        f"scenario_creator (legacy), or define "
+                        f"first_stage_cost(scenario) and "
+                        f"first_stage_varlist(scenario) module functions "
+                        f"(recommended).  See doc/src/generic_admm.rst."
+                    )
         # we are not collecting instantiation time
 
         self.split_admm_stoch_subproblem_scenario_name = split_admm_stoch_subproblem_scenario_name
-        self.consensus_vars = consensus_vars
+        self.consensus_vars = _admm_normalize_consensus_vars(consensus_vars, tuple_form=True)
+        # When first-stage hooks are defined, auto-merge each ADMM
+        # subproblem's first-stage Vars into its consensus list so
+        # consensus_vars_creator can return only the admm-consensus
+        # Vars and leave first-stage Vars to the wrapper.  Different
+        # ADMM subproblems may carry different first-stage Vars, so
+        # names are gathered per-subproblem: from already-built
+        # before-wrap scenarios where possible, falling back to a
+        # fresh probe before-wrap scenario for ADMM subproblems this
+        # rank does not host locally (every rank must end up with
+        # the same consensus_vars to keep _consensus_vars_number
+        # and assign_variable_probs consistent).  This is setup, not
+        # wrap.
+        if has_first_stage_hooks:
+            fs_names_per_sub = {}
+            for sname, s in self.local_admm_stoch_subproblem_scenarios.items():
+                sub = split_admm_stoch_subproblem_scenario_name(sname)[0]
+                if sub not in fs_names_per_sub:
+                    fs_names_per_sub[sub] = list(_first_stage_var_names(first_stage_varlist(s)))
+            if len(fs_names_per_sub) < len(admm_subproblem_names):
+                name_for_sub = {}
+                for cand in all_admm_stoch_subproblem_scenario_names:
+                    cand_sub = split_admm_stoch_subproblem_scenario_name(cand)[0]
+                    name_for_sub.setdefault(cand_sub, cand)
+                for sub in admm_subproblem_names:
+                    if sub not in fs_names_per_sub:
+                        probe = scenario_creator(name_for_sub[sub],
+                                                 **(scenario_creator_kwargs or {}))
+                        fs_names_per_sub[sub] = list(_first_stage_var_names(first_stage_varlist(probe)))
+                        del probe
+            self.consensus_vars = _merge_first_stage_into_consensus_vars(
+                self.consensus_vars, fs_names_per_sub, root_stage=1)
         self.verbose = verbose
-        self.consensus_vars_number = _consensus_vars_number_creator(consensus_vars)
+        self.consensus_vars_number = _consensus_vars_number_creator(self.consensus_vars)
         self.admm_subproblem_names = admm_subproblem_names
         self.stoch_scenario_names = stoch_scenario_names
         self.BFs = BFs
@@ -128,17 +231,19 @@ class Stoch_AdmmWrapper(): #add scenario_tree
     
 
     def create_node_names(self, num_admm_subproblems, num_stoch_scens):
-        if self.BFs is not None: # already multi-stage problem initially
-            self.BFs.append(num_admm_subproblems) # Adds the last stage with admm_subproblems
-            all_nodenames = sputils.create_nodenames_from_branching_factors(self.BFs)
-        else: # 2-stage problem initially
-            all_node_names_0 = ["ROOT"]
-            all_node_names_1 = ["ROOT_" + str(i) for i in range(num_stoch_scens)]
-            all_node_names_2 = [parent + "_" + str(j) \
-                                for parent in all_node_names_1 \
-                                    for j in range(num_admm_subproblems)]
-            all_nodenames = all_node_names_0 + all_node_names_1 + all_node_names_2
-        return all_nodenames
+        # Normalize self.BFs to the original problem's branching factors.
+        # For a 2-stage-origin problem the caller passes BFs=None (or empty);
+        # the original tree's only branching factor is then num_stoch_scens.
+        # Defensive copy: we mutate self.BFs in place below, so we must not
+        # alias a caller-owned list (e.g. cfg.branching_factors).
+        if not self.BFs:
+            self.BFs = [num_stoch_scens]
+        else:
+            self.BFs = list(self.BFs)
+        # The wrapper augments the original tree with an ADMM stage that
+        # branches each leaf into num_admm_subproblems consensus subproblems.
+        self.BFs.append(num_admm_subproblems)
+        return sputils.create_nodenames_from_branching_factors(self.BFs)
 
 
     def var_prob_list(self, s):

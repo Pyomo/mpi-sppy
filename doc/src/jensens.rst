@@ -27,6 +27,20 @@ Jensen's Bound as potential starting bound
    evaluated across the real scenarios, so Jensen's convexity
    assumption never enters the validity argument.
 
+.. note::
+
+   The Jensen's xhat path **silently skips** a candidate that is
+   infeasible to pin in some real scenario; that is the right behavior
+   for an opportunistic inner-bound spoke. Downstream consumers that
+   pin a candidate first-stage and solve a per-scenario subproblem
+   with no fallback (e.g. pin-dual rho-setting algorithms) need a
+   strictly stronger contract -- a candidate guaranteed to be feasible
+   to pin in *every* real scenario. See :ref:`feasible_xhat` for the
+   ``feasible_xhat_creator`` convention and the
+   ``--<xhatter>-try-feasible-xhat-first`` flags. Per xhat spoke,
+   ``--*-try-jensens-first`` and ``--*-try-feasible-xhat-first`` are
+   mutually exclusive.
+
 What the options do
 -------------------
 
@@ -176,6 +190,17 @@ infeasibility by relaxing a Var domain in the average scenario
 would produce a *different* model whose solution would be solving
 a different problem — at best an LP-relaxation heuristic that
 happens to share the same shape, not a Jensen's bound.
+
+Even when ``average_scenario_creator`` is not directly usable, the
+underscore helpers above (``_scenario_data``, ``_average_scenario_data``,
+``_build_model``) may still be worth shipping. A
+``feasible_xhat_creator`` (see :ref:`feasible_xhat`) is free to
+build an averaged-data model internally — even one with relaxed
+Var domains — to derive a starting first-stage point, because its
+output is then projected and verified feasible in every real
+scenario rather than handed off as a Jensen's bound. The
+data-only-averaging principle does not bind ``feasible_xhat_creator``;
+it only binds ``average_scenario_creator``.
 
 When the model isn't amenable: sslp
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
