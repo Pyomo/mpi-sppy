@@ -28,6 +28,7 @@ from mpisppy.spbase import SPBase
 from mpisppy.utils import config
 from mpisppy.utils import sputils
 from mpisppy.generic.scenario_io import _run_pre_pickle_pipeline
+from mpisppy.generic.parsing import model_fname
 
 import mpisppy.MPI as mpi
 
@@ -591,6 +592,70 @@ class TestADMMBundlePipeline(unittest.TestCase):
                     break
             self.assertTrue(any_value,
                             f"{bname} has no nonant values after iter0")
+
+
+class TestModelFname(unittest.TestCase):
+    """model_fname() must find --module-name in any position, and still
+    honor the implicit-module flags (--smps-dir, --mps-files-directory)."""
+
+    def setUp(self):
+        self._saved_argv = sys.argv
+
+    def tearDown(self):
+        sys.argv = self._saved_argv
+
+    def _fname(self, argv):
+        sys.argv = ["prog"] + argv
+        return model_fname()
+
+    def test_module_name_first_space_form(self):
+        self.assertEqual(self._fname(["--module-name", "farmer"]), "farmer")
+
+    def test_module_name_first_equals_form(self):
+        self.assertEqual(self._fname(["--module-name=farmer"]), "farmer")
+
+    def test_module_name_not_first_space_form(self):
+        self.assertEqual(
+            self._fname(["--solver-name", "gurobi", "--module-name", "farmer"]),
+            "farmer")
+
+    def test_module_name_not_first_equals_form(self):
+        self.assertEqual(
+            self._fname(["--num-scens", "3", "--module-name=farmer"]),
+            "farmer")
+
+    def test_implicit_smps_dir_first(self):
+        self.assertEqual(self._fname(["--smps-dir", "mydir"]),
+                         "mpisppy.problem_io.smps_module")
+
+    def test_implicit_mps_dir_not_first_equals_form(self):
+        self.assertEqual(
+            self._fname(["--num-scens", "3", "--mps-files-directory=mydir"]),
+            "mpisppy.problem_io.mps_module")
+
+    def test_implicit_and_module_name_conflict(self):
+        with self.assertRaises(RuntimeError):
+            self._fname(["--smps-dir", "d", "--module-name", "farmer"])
+
+    def test_implicit_and_module_name_conflict_reversed(self):
+        with self.assertRaises(RuntimeError):
+            self._fname(["--module-name", "farmer", "--smps-dir", "d"])
+
+    def test_missing_module_name_raises(self):
+        with self.assertRaises(RuntimeError):
+            self._fname(["--num-scens", "3"])
+
+    def test_no_args_raises(self):
+        with self.assertRaises(RuntimeError):
+            self._fname([])
+
+    def test_dangling_module_name_raises(self):
+        with self.assertRaises(RuntimeError):
+            self._fname(["--module-name"])
+
+    def test_empty_module_name_value_raises(self):
+        with self.assertRaises(RuntimeError):
+            self._fname(["--module-name="])
 
 
 if __name__ == "__main__":
