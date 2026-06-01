@@ -683,10 +683,15 @@ class CGBase(mpisppy.spopt.SPOpt):
                     print("Iteration time: %6.2f" % (time.time() - iteration_start_time))
                     print("Elapsed time:   %6.2f" % (time.perf_counter() - self.start_time))
 
-            # Broadcast updated bound and convergence metric
+            # Broadcast updated bounds and convergence metric so that
+            # is_converged() (which feeds determine_termination via the inner
+            # bound) reaches the same verdict on every hub rank. Without
+            # broadcasting best_solution_obj_val, only rank 0's gap updates and
+            # ranks can disagree on termination, deadlocking a multi-rank hub.
             self.best_bound_obj_val = self.mpicomm.bcast(self.best_bound_obj_val, root=0)
+            self.best_solution_obj_val = self.mpicomm.bcast(self.best_solution_obj_val, root=0)
             self.conv = self.mpicomm.bcast(self.conv, root=0)
-            
+
             if self.spcomm and self.spcomm.is_converged():
                 global_toc("Cylinder convergence", self.cylinder_rank == 0)
                 break

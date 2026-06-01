@@ -140,6 +140,12 @@ run_phase "test_spwindow_partial_get (serial)" \
 run_phase "test_flexible_rank_ratios (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_flexible_rank_ratios.py -v
 
+run_phase "test_flex_coherence_policy (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_flex_coherence_policy.py -v
+
+run_phase "test_flexible_rank_cli (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_flexible_rank_cli.py -v
+
 run_phase "test_xhat_from_file (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_xhat_from_file.py -v
 
@@ -175,6 +181,11 @@ run_phase "test_cg_main (serial)" \
 run_phase "test_cg_with_cylinders (mpiexec -np 2)" \
     mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_cg_with_cylinders.py
 
+# A CG hub spanning two ranks (one hub + one spoke at np=4) covers the
+# convergence-path broadcast that used to deadlock a multi-rank hub (#729).
+run_phase "test_cg_multirank_hub (mpiexec -np 4)" \
+    mpiexec -np 4 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_cg_multirank_hub.py
+
 run_phase "test_dualcg_main (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_dualcg_main.py
 
@@ -189,6 +200,9 @@ run_phase "test_spwindow_multisource (mpiexec -np 6)" \
 
 run_phase "test_flexible_rank_cylinders (mpiexec -np 6)" \
     mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_cylinders.py
+
+run_phase "test_flexible_rank_duals (mpiexec -np 6)" \
+    mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_duals.py
 
 # ---------- Tests that spawn mpiexec internally ----------
 
