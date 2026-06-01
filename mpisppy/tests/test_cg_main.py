@@ -18,7 +18,7 @@ import mpisppy.tests.examples.farmer as farmer
 import mpisppy.utils.sputils as sputils
 from mpisppy.tests.examples.sizes.sizes import scenario_creator as sizes_creator, \
                                                scenario_denouement as sizes_denouement
-from mpisppy.tests.utils import get_solver
+from mpisppy.tests.utils import get_solver, limit_solver_threads
 import mpisppy.MPI as mpi
 
 solver_available, solver_name, persistent_available, persistent_solver_name = get_solver(persistent_OK=False)
@@ -37,6 +37,7 @@ def _solve_farmer_ef(scenario_names, creator_kwargs):
         scenario_creator_kwargs=creator_kwargs,
     )
     solver = pyo.SolverFactory(solver_name)
+    limit_solver_threads(solver, solver_name)
     solver.solve(ef)
     return pyo.value(ef.EF_Obj)
 

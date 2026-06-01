@@ -332,6 +332,7 @@ class TestEndToEnd(unittest.TestCase):
                 os.chdir(self._farmer_dir())
                 cmd_pickle = (
                     f"{python} {python_args} -m mpisppy.generic_cylinders "
+                    f"--max-solver-threads 1 "
                     f"--module-name farmer "
                     f"--num-scens 6 --crops-mult 1 "
                     f"--pickle-scenarios-dir {pickle_dir} "
@@ -347,6 +348,7 @@ class TestEndToEnd(unittest.TestCase):
 
                 cmd_run = (
                     f"{python} {python_args} -m mpisppy.generic_cylinders "
+                    f"--max-solver-threads 1 "
                     f"--module-name farmer "
                     f"--num-scens 6 --crops-mult 1 "
                     f"--unpickle-scenarios-dir {pickle_dir} "
@@ -375,6 +377,7 @@ class TestEndToEnd(unittest.TestCase):
                 os.chdir(self._farmer_dir())
                 cmd_pickle = (
                     f"{python} {python_args} -m mpisppy.generic_cylinders "
+                    f"--max-solver-threads 1 "
                     f"--module-name farmer "
                     f"--num-scens 6 --crops-mult 1 "
                     f"--pickle-scenarios-dir {pickle_dir} "
@@ -386,6 +389,7 @@ class TestEndToEnd(unittest.TestCase):
 
                 cmd_run = (
                     f"{python} {python_args} -m mpisppy.generic_cylinders "
+                    f"--max-solver-threads 1 "
                     f"--module-name farmer "
                     f"--num-scens 6 --crops-mult 1 "
                     f"--unpickle-scenarios-dir {pickle_dir} "
@@ -417,6 +421,7 @@ class TestEndToEnd(unittest.TestCase):
                 # Pickle WITHOUT --iter0-before-pickle
                 cmd_pickle = (
                     f"{python} {python_args} -m mpisppy.generic_cylinders "
+                    f"--max-solver-threads 1 "
                     f"--module-name farmer "
                     f"--num-scens 6 --crops-mult 1 "
                     f"--pickle-scenarios-dir {pickle_dir} "
@@ -428,6 +433,7 @@ class TestEndToEnd(unittest.TestCase):
 
                 cmd_run = (
                     f"{python} {python_args} -m mpisppy.generic_cylinders "
+                    f"--max-solver-threads 1 "
                     f"--module-name farmer "
                     f"--num-scens 6 --crops-mult 1 "
                     f"--unpickle-scenarios-dir {pickle_dir} "
@@ -458,6 +464,7 @@ class TestEndToEnd(unittest.TestCase):
                 os.chdir(self._farmer_dir())
                 cmd_pickle = (
                     f"{python} {python_args} -m mpisppy.generic_cylinders "
+                    f"--max-solver-threads 1 "
                     f"--module-name farmer "
                     f"--num-scens 6 --crops-mult 1 "
                     f"--pickle-bundles-dir {pickle_dir} --scenarios-per-bundle 3 "
@@ -473,6 +480,7 @@ class TestEndToEnd(unittest.TestCase):
 
                 cmd_run = (
                     f"{python} {python_args} -m mpisppy.generic_cylinders "
+                    f"--max-solver-threads 1 "
                     f"--module-name farmer "
                     f"--num-scens 6 --crops-mult 1 "
                     f"--unpickle-bundles-dir {pickle_dir} --scenarios-per-bundle 3 "

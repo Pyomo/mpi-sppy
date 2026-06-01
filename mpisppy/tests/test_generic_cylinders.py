@@ -52,6 +52,7 @@ class TestGenericCylindersWtracker(unittest.TestCase):
                 "--module-name", "mpisppy.tests.examples.farmer",
                 "--num-scens", "3",
                 "--solver-name", solver_name,
+                "--max-solver-threads", "1",
                 "--max-iterations", "6",
                 "--default-rho", "1",
                 "--wtracker",
