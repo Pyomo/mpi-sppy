@@ -26,7 +26,7 @@ from pyomo.opt import TerminationCondition
 
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils.xhat_helpers import average_xhat_nonants, lp_xbar_nonants
-from mpisppy.tests.utils import get_solver
+from mpisppy.tests.utils import get_solver, limit_solver_threads
 
 _EXAMPLES_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -214,6 +214,7 @@ class TestNetdesFeasibleXhatCreator(unittest.TestCase):
             for v, val in zip(root.nonant_vardata_list, arr):
                 v.fix(val)
             solver = pyo.SolverFactory(solver_name)
+            limit_solver_threads(solver, solver_name)
             if sputils.is_persistent(solver):
                 solver.set_instance(scen)
                 results = solver.solve(tee=False)

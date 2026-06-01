@@ -43,6 +43,7 @@ def _create_cfg():
     cfg.ph_args()
     cfg.solver_name = solver_name
     cfg.default_rho = 1
+    cfg.max_solver_threads = 1
     return cfg
 
 #*****************************************************************************

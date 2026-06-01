@@ -55,6 +55,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
         if (cfg.lagrangian_starting_mipgap is not None
                 or cfg.lagrangian_mipgaps_json is not None):
             vanilla.add_gapper(lagrangian_spoke, cfg, "lagrangian")
+        lagrangian_spoke["rank_ratio"] = cfg.lagrangian_rank_ratio
 
     # dual ph spoke
     if cfg.ph_dual:
@@ -140,6 +141,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
         if cfg.get("stage2_ef_solver_name") is not None:
             xhatshuffle_spoke["opt_kwargs"]["options"]["stage2_ef_solver_name"] = cfg["stage2_ef_solver_name"]
             xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = cfg["branching_factors"]
+        xhatshuffle_spoke["rank_ratio"] = cfg.xhatshuffle_rank_ratio
 
     if cfg.xhatxbar:
         xhatxbar_spoke = vanilla.xhatxbar_spoke(*beans,
@@ -148,6 +150,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
                                                    all_nodenames=all_nodenames,
                                                    average_scenario_creator=average_scenario_creator,
                                                    feasible_xhat_creator=feasible_xhat_creator)
+        xhatxbar_spoke["rank_ratio"] = cfg.xhatxbar_rank_ratio
 
     # reduced cost fixer options setup
     if cfg.reduced_costs:
