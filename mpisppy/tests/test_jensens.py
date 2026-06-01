@@ -9,7 +9,7 @@
 """Tests for the --*-try-jensens-first options.
 
 Serial unit tests only: we exercise the pieces that do not need an MPI
-wheel (sputils helper, farmer's average_scenario_creator, _JensensMixin's
+wheel (sputils helper, farmer's average_scenario_creator, _PreLoopXhatMixin's
 build/assert/solve, and the cfg_vanilla wiring errors). The end-to-end
 MPI path is smoke-tested manually and by straight_tests.
 """
@@ -21,8 +21,8 @@ import unittest
 import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils
-from mpisppy.cylinders._jensens_mixin import (
-    _JensensMixin,
+from mpisppy.cylinders._preloop_xhat_mixin import (
+    _PreLoopXhatMixin,
     assert_jensen_integer_safe,
 )
 from mpisppy.tests.utils import get_solver
@@ -118,8 +118,8 @@ class TestFarmerAverageScenarioCreator(unittest.TestCase):
         self.assertEqual(ya, yb)
 
 
-class _FakeSpoke(_JensensMixin):
-    """Minimal stand-in that exposes the options interface _JensensMixin needs."""
+class _FakeSpoke(_PreLoopXhatMixin):
+    """Minimal stand-in that exposes the options interface _PreLoopXhatMixin needs."""
 
     def __init__(self, jensens_dict, all_scenario_names, solver_name):
         class _Opt:
@@ -169,7 +169,7 @@ class TestJensensMixinEndToEnd(unittest.TestCase):
 
     def test_pack_nonant_cache_is_root_keyed(self):
         sp = self._spoke()
-        cache = sp._jensens_pack_nonant_cache([1.0, 2.0, 3.0])
+        cache = sp._pack_nonant_cache([1.0, 2.0, 3.0])
         self.assertEqual(list(cache.keys()), ["ROOT"])
         self.assertEqual(list(cache["ROOT"]), [1.0, 2.0, 3.0])
 
@@ -305,7 +305,7 @@ class TestSizesInvalidScenarioCount(unittest.TestCase):
 class _StubXhatOpt:
     """Stub stand-in for the Xhat_Eval that lives at spoke.opt.
 
-    Captures the calls _jensens_evaluate_xhat makes and returns
+    Captures the calls _evaluate_xhat makes and returns
     parameterized values for the feasibility check. Lets us exercise
     both the feasible path (returns Eobj, caller updates the bound)
     and the infeasible path (returns None, caller silently skips)
@@ -332,7 +332,7 @@ class _StubXhatOpt:
         return self._eobj
 
 
-class _StubXhatSpoke(_JensensMixin):
+class _StubXhatSpoke(_PreLoopXhatMixin):
     """Mixin host that records update_if_improving calls so we can
     assert the helper's branching behavior."""
 
@@ -345,7 +345,7 @@ class _StubXhatSpoke(_JensensMixin):
 
 
 class TestJensensEvaluateXhat(unittest.TestCase):
-    """Unit tests for _JensensMixin._jensens_evaluate_xhat. The real
+    """Unit tests for _PreLoopXhatMixin._evaluate_xhat. The real
     code path goes through Xhat_Eval; we stub it to isolate the
     feasibility branching that fixes the crash on infeasible recourse.
     """
@@ -353,20 +353,20 @@ class TestJensensEvaluateXhat(unittest.TestCase):
     def test_returns_eobj_when_all_scenarios_feasible(self):
         opt = _StubXhatOpt(infeas_prob=0.0, eobj=42.5)
         sp = _StubXhatSpoke(opt)
-        result = sp._jensens_evaluate_xhat({"ROOT": [1.0, 2.0]})
+        result = sp._evaluate_xhat({"ROOT": [1.0, 2.0]})
         self.assertEqual(result, 42.5)
 
     def test_returns_none_when_any_scenario_infeasible(self):
         opt = _StubXhatOpt(infeas_prob=0.25, eobj=999.0)  # eobj should be ignored
         sp = _StubXhatSpoke(opt)
-        result = sp._jensens_evaluate_xhat({"ROOT": [1.0, 2.0]})
+        result = sp._evaluate_xhat({"ROOT": [1.0, 2.0]})
         self.assertIsNone(result)
 
     def test_passes_cache_to_fix_nonants(self):
         opt = _StubXhatOpt(infeas_prob=0.0, eobj=1.0)
         sp = _StubXhatSpoke(opt)
         cache = {"ROOT": [3.0, 4.0]}
-        sp._jensens_evaluate_xhat(cache)
+        sp._evaluate_xhat(cache)
         self.assertEqual(opt.fix_calls, [cache])
 
     def test_solve_loop_called_with_need_solution_false(self):
@@ -374,7 +374,7 @@ class TestJensensEvaluateXhat(unittest.TestCase):
         # infeasible solve crashes downstream on pyo.value(objfct).
         opt = _StubXhatOpt(infeas_prob=0.0, eobj=1.0)
         sp = _StubXhatSpoke(opt)
-        sp._jensens_evaluate_xhat({"ROOT": [1.0]})
+        sp._evaluate_xhat({"ROOT": [1.0]})
         self.assertEqual(len(opt.solve_loop_calls), 1)
         self.assertFalse(opt.solve_loop_calls[0]["need_solution"])
 
@@ -382,13 +382,13 @@ class TestJensensEvaluateXhat(unittest.TestCase):
         opt = _StubXhatOpt(infeas_prob=0.0, eobj=1.0,
                            options={"solver_options": {"mipgap": 0.01}})
         sp = _StubXhatSpoke(opt)
-        sp._jensens_evaluate_xhat({"ROOT": [1.0]})
+        sp._evaluate_xhat({"ROOT": [1.0]})
         self.assertEqual(opt.solve_loop_calls[0]["solver_options"],
                          {"mipgap": 0.01})
 
 
 class TestTryAverageScenarioXhat(unittest.TestCase):
-    """Unit tests for _JensensMixin._try_average_scenario_xhat -- the
+    """Unit tests for _PreLoopXhatMixin._try_average_scenario_xhat -- the
     one-shot helper each xhat spoke calls instead of inlining a
     four-line block. Covers the fast-return when the flag is off, the
     feasible path that updates the bound, and the infeasible path that

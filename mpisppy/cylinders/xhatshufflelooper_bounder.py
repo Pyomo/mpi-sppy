@@ -12,7 +12,7 @@ import mpisppy.log
 
 from mpisppy.extensions.xhatbase import XhatBase
 from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
-from mpisppy.cylinders._jensens_mixin import _JensensMixin
+from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
 
 
 # Could also pass, e.g., sys.stdout instead of a filename
@@ -21,7 +21,7 @@ mpisppy.log.setup_logger("mpisppy.cylinders.xhatshufflelooper_bounder",
                          level=logging.CRITICAL)
 logger = logging.getLogger("mpisppy.cylinders.xhatshufflelooper_bounder")
 
-class XhatShuffleInnerBound(_JensensMixin, XhatInnerBoundBase):
+class XhatShuffleInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
 
     converger_spoke_char = 'X'
 
