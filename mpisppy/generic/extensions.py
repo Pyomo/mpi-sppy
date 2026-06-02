@@ -36,6 +36,9 @@ def configure_extensions(hub_dict, module, cfg):
     if cfg.rc_fixer:
         vanilla.add_reduced_costs_fixer(hub_dict, cfg)
 
+    if cfg.rc_fixer_converger:
+        vanilla.add_reduced_costs_fixer_converger(hub_dict, cfg)
+
     if cfg.relaxed_ph_fixer:
         vanilla.add_relaxed_ph_fixer(hub_dict, cfg)
 

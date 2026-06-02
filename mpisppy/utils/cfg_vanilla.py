@@ -796,6 +796,22 @@ def add_cross_scenario_cuts(hub_dict,
             = {"check_bound_improve_iterations" : cfg.cross_scenario_iter_cnt}
     return hub_dict
 
+def add_reduced_costs(hub_dict,
+                            cfg,
+                            ):
+    hub_dict["opt_kwargs"]["options"]["rc_options"] = {
+            "verbose": cfg.rc_verbose,
+            "debug": cfg.rc_debug,
+            "zero_rc_tol": cfg.rc_zero_tol,
+            "fix_fraction_target_pre_iter0": cfg.rc_fix_fraction_pre_iter0,
+            "fix_fraction_target_iter0": cfg.rc_fix_fraction_iter0,
+            "fix_fraction_target_iterK": cfg.rc_fix_fraction_iterk,
+            "rc_bound_tol": cfg.rc_bound_tol,
+            "rc_fixer_require_improving_lagrangian": cfg.rc_fixer_require_improving_lagrangian,
+        }
+
+    return hub_dict
+
 def add_reduced_costs_fixer(hub_dict,
                             cfg,
                             ):
@@ -812,6 +828,29 @@ def add_reduced_costs_fixer(hub_dict,
             "fix_fraction_target_iterK": cfg.rc_fix_fraction_iterk,
             "rc_bound_tol": cfg.rc_bound_tol,
             "rc_fixer_require_improving_lagrangian": cfg.rc_fixer_require_improving_lagrangian,
+        }
+
+    return hub_dict
+
+
+def add_reduced_costs_fixer_converger(hub_dict,
+                            cfg,
+                            ):
+    #WARNING: Do not use without a reduced_costs_spoke spoke
+    from mpisppy.extensions.reduced_costs_fixer_converger import ReducedCostsFixerConverger
+    hub_dict = extension_adder(hub_dict, ReducedCostsFixerConverger)
+
+    hub_dict["opt_kwargs"]["options"]["rc_fixer_converger_options"] = {
+            "verbose": cfg.rc_verbose,
+            "debug": cfg.rc_debug,
+            "zero_rc_tol": cfg.rc_zero_tol,
+            "fix_fraction_target_pre_iter0": cfg.rc_fix_fraction_pre_iter0,
+            "fix_fraction_target_iter0": cfg.rc_fix_fraction_iter0,
+            "fix_fraction_target_iterK": cfg.rc_fix_fraction_iterk,
+            "rc_bound_tol": cfg.rc_bound_tol,
+            "rc_fixer_require_improving_outer_bound": cfg.rc_fixer_require_improving_outer_bound,
+            "rc_fixer_require_improving_inner_bound": cfg.rc_fixer_require_improving_inner_bound,
+            "rc_converger_tol": cfg.rc_converger_tol,
         }
 
     return hub_dict
