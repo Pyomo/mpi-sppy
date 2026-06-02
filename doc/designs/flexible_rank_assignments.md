@@ -174,8 +174,9 @@ paired with the nonants it was evaluated at (FWPH turns that pair into a
 Frank-Wolfe column).  Both are guaranteed by reading the whole field
 with **strict coherence** — rejecting any mixed-iteration assembly.  An
 accepted read has every source at one write_id, so the assembled
-first-stage portion is already identical across scenarios and needs no
-post-assembly fix-up.  See §Coherence.
+first-stage portion is already NAC-consistent across the scenarios sharing
+each node — the whole root vector in two-stage, per node in multistage — and
+needs no post-assembly fix-up.  See §Coherence.
 
 #### Category 3 — global-sized fields
 
@@ -491,14 +492,15 @@ retry later.
 
 - **`BEST_XHAT` / `RECENT_XHATS`.**  Per-scenario
   `[first-stage nonants, obj_val]` blocks.  The first-stage portion is
-  NAC-redundant (identical across scenarios); the `obj_val` is genuinely
-  per-scenario.  These are assembled with the same overlap-map
-  multi-source reader as every other per-scenario field.
+  NAC-redundant (identical across the scenarios sharing each node); the
+  `obj_val` is genuinely per-scenario.  These are assembled with the same
+  overlap-map multi-source reader as every other per-scenario field.
 
   **The whole field is read with strict coherence**, which carries both
   invariants at once.  An accepted read has every source at one `write_id`,
-  so the assembled first-stage portion is already identical across scenarios
-  (NAC-consistent) *and* each `obj_val` stays paired with the nonants it was
+  so the assembled first-stage portion is already NAC-consistent across the
+  scenarios sharing each node (the whole root vector in two-stage, per node in
+  multistage) *and* each `obj_val` stays paired with the nonants it was
   evaluated at.  The pairing matters because the FWPH consumer derives a
   Frank-Wolfe column's recourse cost as `obj_val − first_stage_cost(nonants)`,
   so a mixed-iteration assembly — iteration *t*'s nonants beside iteration

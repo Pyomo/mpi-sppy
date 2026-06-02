@@ -69,11 +69,12 @@ _GLOBAL_OR_SCALAR_FIELDS = frozenset((
 #     would stitch one scenario's first stage next to another's obj_val -- an
 #     inconsistent column that can invalidate the bound -- and would also break
 #     NAC across scenarios. Strict coherence rejects the mixed read: an accepted
-#     read has every source at one write_id, so the assembled first stage is
-#     already NAC-consistent across scenarios and every obj_val stays paired with
-#     its own nonants -- no post-assembly fix-up is needed. (Single-sourcing the
-#     first stage would also pair them, but does not generalize to multistage,
-#     where a scenario's nonant path spans several nodes held by different ranks.)
+#     read has every source at one write_id, so the assembled nonant portion is
+#     already NAC-consistent across the scenarios sharing each tree node and
+#     every obj_val stays paired with its own nonants -- no post-assembly fix-up
+#     is needed, at any number of stages. (Single-sourcing the first stage would
+#     also pair them, but does not generalize to multistage, where a scenario's
+#     nonant path spans several nodes held by different ranks.)
 #
 # Every other per-scenario field uses *relaxed* coherence (the assembled value
 # may mix iterations; its consumers re-evaluate, so it is always honest). XFEAS
@@ -689,29 +690,27 @@ class SPCommunicator:
         """Number of field items each scenario contributes, indexed by global
         scenario index, for a per-scenario field (used to build overlap maps).
 
-        For the nonant-valued fields this is the per-scenario nonant count,
-        which is uniform across scenarios in a two-stage problem
-        (``opt.nonant_length``). For the xhat fields each scenario contributes a
-        ``[nonants, obj_val]`` block, so the count is ``nonant_length + 1``; the
-        circular ``RECENT_XHATS`` returns the same single-version block size and
-        is expanded across versions in ``_build_overlap_map``.
+        For the nonant-valued fields this is the per-scenario nonant count
+        (``opt.nonant_length``, uniform across scenarios -- asserted in
+        ``spbase._attach_nonant_indices``). For the xhat fields each scenario
+        contributes a ``[nonants, obj_val]`` block, so the count is
+        ``nonant_length + 1``; the circular ``RECENT_XHATS`` returns the same
+        single-version block size and is expanded across versions in
+        ``_build_overlap_map``. These counts are stage-agnostic: a scenario's
+        block is routed wholesale to its local offset, so multi-source assembly
+        is identical for two-stage and multistage (a multistage block is just
+        the scenario's whole root->leaf nonant path instead of one root vector).
         """
         if field in (Field.NONANTS_VALS, Field.RELAXED_NONANTS_VALS, Field.DUALS):
             k = self.opt.nonant_length
             return [k] * len(self.opt.all_scenario_names)
         if field in (Field.BEST_XHAT, Field.RECENT_XHATS, Field.XFEAS):
-            # Each scenario's block is [first-stage nonants, per-scenario obj_val].
-            # Two-stage only: under multistage the NAC-redundant portion is
-            # per-tree-node (not one global first stage), so the nonant-vs-obj_val
-            # split needs per-node sourcing -- a later phase.
-            if self.opt.multistage:
-                raise NotImplementedError(
-                    f"Flexible (unequal) rank assignments: {self.__class__.__name__} "
-                    f"reads {field.name} on a multistage problem, whose per-node "
-                    f"first-stage sourcing is not implemented yet (two-stage is). "
-                    f"Run the cylinders that exchange {field.name} at equal rank "
-                    f"counts (rank_ratio == 1.0), or wait for the multistage phase."
-                )
+            # Each scenario's block is [nonants, per-scenario obj_val]. Works for
+            # any number of stages: the block is opaque to the assembler (routed
+            # by index), and strict coherence already makes the NAC-redundant
+            # nonant portion consistent across the scenarios sharing each tree
+            # node -- per node, with no per-node sourcing or fix-up needed (see
+            # the strict-coherence note on _flex_get_multi_source).
             k = self.opt.nonant_length
             return [k + 1] * len(self.opt.all_scenario_names)
         # Reached at startup (window creation), not mid-solve: this cylinder is
@@ -856,8 +855,10 @@ class SPCommunicator:
 
         The Category-2 xhat fields (BEST_XHAT, RECENT_XHATS) are strict, so an
         accepted read has every source at one write_id; their NAC-redundant
-        first-stage portion is then already identical across scenarios and each
-        obj_val stays paired with its own nonants -- no post-assembly fix-up.
+        nonant portion is then already consistent across the scenarios sharing
+        each tree node (the whole root vector in two-stage; per node in
+        multistage) and each obj_val stays paired with its own nonants -- no
+        post-assembly fix-up, at any number of stages.
         """
         if synchronize:
             self.cylinder_comm.Barrier()

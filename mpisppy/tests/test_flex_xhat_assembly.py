@@ -219,5 +219,100 @@ class TestFlexXhatAssembly(unittest.TestCase):
         self.assertEqual(len({_xfeas_fs(s) for s in LOCAL_SCEN_IDXS}), NSCEN_LOCAL)
 
 
+# --- multistage assembly (Phase 4b) ---------------------------------------
+#
+# In multistage a scenario's block is its whole root->leaf nonant path plus
+# obj_val, and non-anticipativity is a per-*node* property: the root segment is
+# shared by every scenario, while a stage-2 node's segment is shared only by the
+# scenarios in its subtree (different subtrees hold different stage-2 values).
+#
+# The assembler is index-based and stage-agnostic: it routes each scenario's
+# whole block from the rank that holds it, exactly as in two-stage. Strict
+# coherence guarantees all sources are at one write_id, so the source blocks are
+# one coherent incumbent in which scenarios sharing a node already carry that
+# node's values identically. Faithful routing therefore yields a per-node
+# NAC-consistent assembly with NO post-assembly fix-up -- and does NOT collapse
+# the distinct subtrees onto one another (which a whole-block "copy scenario 0"
+# fix-up would have done).
+#
+# Layout: 3-stage tree, root with R=2 nonants shared by all; two stage-2 subtrees
+# A and B with one nonant each. Per-scenario block = [root(2), stage2(1), obj].
+K_M = 3                        # root(2) + stage2(1)
+BLOCK_M = K_M + 1
+ROOT_LEN = 2
+# 6 scenarios in two subtrees of three: A = {0,1,2}, B = {3,4,5}.
+SUBTREE = {0: "A", 1: "A", 2: "A", 3: "B", 4: "B", 5: "B"}
+# Source ranks: rank 0 straddles the subtree boundary (holds A and one B scen),
+# rank 1 is wholly in B. Receiver holds one A scenario and three B scenarios,
+# straddling both source ranks -- so the assembly must keep A's and B's stage-2
+# values distinct while routing across ranks.
+MS_PEER_SLICES = [[0, 1, 2, 3], [4, 5]]
+MS_LOCAL_SCEN_IDXS = [2, 3, 4, 5]
+
+
+def _root_val(version):
+    return 7.0 + 100.0 * version              # shared by every scenario at root
+
+def _s2_val(scen, version):
+    # distinct per subtree, identical within a subtree
+    return (10.0 if SUBTREE[scen] == "A" else 20.0) + 100.0 * version
+
+def _ms_nonants(scen, version):
+    return np.array([_root_val(version)] * ROOT_LEN + [_s2_val(scen, version)])
+
+
+def _make_ms_source_buffer(scens_on_rank, nversions):
+    """A peer rank's send buffer for a multistage BEST_XHAT-style field: each
+    scenario block is [root(R), stage2(1), obj_val], the source data being one
+    coherent (single-write_id) incumbent."""
+    per_version = len(scens_on_rank) * BLOCK_M
+    buf = np.full(nversions * per_version, np.nan)
+    for v in range(nversions):
+        for j, s in enumerate(scens_on_rank):
+            off = v * per_version + j * BLOCK_M
+            buf[off:off + K_M] = _ms_nonants(s, v)
+            buf[off + K_M] = _obj(s, v)
+    return buf
+
+
+class TestFlexMultistageAssembly(unittest.TestCase):
+
+    def test_assembly_preserves_per_node_nac(self):
+        """Multi-node blocks routed wholesale across straddling ranks: the root
+        segment ends up identical across every scenario (root NAC), each subtree
+        keeps its own stage-2 value (per-node NAC, subtrees not collapsed), and
+        obj_val stays per-scenario -- all with no fix-up."""
+        items_per_scen = [BLOCK_M] * 6
+        segments = compute_overlap_segments(
+            MS_LOCAL_SCEN_IDXS, MS_PEER_SLICES, items_per_scen
+        )
+        sources = {
+            0: _make_ms_source_buffer(MS_PEER_SLICES[0], 1),
+            1: _make_ms_source_buffer(MS_PEER_SLICES[1], 1),
+        }
+        local_len = len(MS_LOCAL_SCEN_IDXS) * BLOCK_M
+        local_buf = _assemble(segments, sources, local_len)
+
+        expected = np.empty(local_len)
+        for j, s in enumerate(MS_LOCAL_SCEN_IDXS):
+            off = j * BLOCK_M
+            expected[off:off + K_M] = _ms_nonants(s, 0)
+            expected[off + K_M] = _obj(s, 0)
+        np.testing.assert_allclose(local_buf, expected)
+
+        # Root segment identical across every local scenario (root NAC)...
+        roots = [local_buf[j * BLOCK_M:j * BLOCK_M + ROOT_LEN]
+                 for j in range(len(MS_LOCAL_SCEN_IDXS))]
+        for r in roots[1:]:
+            np.testing.assert_allclose(r, roots[0])
+        # ...while the two subtrees keep DISTINCT stage-2 values: a whole-block
+        # collapse to scenario 0's would have erased subtree B's value.
+        s2 = {s: local_buf[j * BLOCK_M + ROOT_LEN]
+              for j, s in enumerate(MS_LOCAL_SCEN_IDXS)}
+        self.assertEqual(s2[2], _s2_val(2, 0))          # subtree A
+        self.assertEqual(s2[3], _s2_val(3, 0))          # subtree B
+        self.assertNotEqual(s2[2], s2[3])               # subtrees not collapsed
+
+
 if __name__ == "__main__":
     unittest.main()
