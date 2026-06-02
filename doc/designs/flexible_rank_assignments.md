@@ -162,9 +162,10 @@ The split matters for asymmetric ranks: the **first-stage portion must
 stay NAC-consistent** *and* each scenario's `inner_bound` must stay
 paired with the nonants it was evaluated at (FWPH turns that pair into a
 Frank-Wolfe column).  Both are guaranteed by reading the whole field
-with **strict coherence** — rejecting any mixed-iteration assembly — so
-the NAC fix-up applied after assembly is a defensive no-op.  See
-§Coherence.
+with **strict coherence** — rejecting any mixed-iteration assembly.  An
+accepted read has every source at one write_id, so the assembled
+first-stage portion is already identical across scenarios and needs no
+post-assembly fix-up.  See §Coherence.
 
 #### Category 3 — global-sized fields
 
@@ -482,22 +483,20 @@ retry later.
   `[first-stage nonants, obj_val]` blocks.  The first-stage portion is
   NAC-redundant (identical across scenarios); the `obj_val` is genuinely
   per-scenario.  These are assembled with the same overlap-map
-  multi-source reader as every other per-scenario field, and the
-  first-stage portion is then made NAC-consistent by
-  `_enforce_first_stage_nac` (two-stage: copy scenario-0's first stage to
-  all scenarios; multistage: copy node-by-node).
+  multi-source reader as every other per-scenario field.
 
-  **The whole field is read with strict coherence.**  The fix-up restores
-  the first stage, but it cannot restore the *pairing* between a scenario's
-  `obj_val` and its nonants: under a mixed-iteration assembly the overwrite
-  leaves iteration *t*'s nonants beside iteration *t'*'s `obj_val`.  That
-  matters because the FWPH consumer derives a Frank-Wolfe column's recourse
-  cost as `obj_val − first_stage_cost(nonants)`, so a desynced `obj_val`
-  builds an inconsistent column and can invalidate the FW bound.  (FWPH
-  supports multistage, so this is not a two-stage-only concern.)  Strict
-  coherence rejects the mixed read entirely: the accepted first stage is
-  already NAC-consistent — the fix-up is then a defensive no-op — and every
-  `obj_val` stays paired with its own nonants.
+  **The whole field is read with strict coherence**, which carries both
+  invariants at once.  An accepted read has every source at one `write_id`,
+  so the assembled first-stage portion is already identical across scenarios
+  (NAC-consistent) *and* each `obj_val` stays paired with the nonants it was
+  evaluated at.  The pairing matters because the FWPH consumer derives a
+  Frank-Wolfe column's recourse cost as `obj_val − first_stage_cost(nonants)`,
+  so a mixed-iteration assembly — iteration *t*'s nonants beside iteration
+  *t'*'s `obj_val` — would build an inconsistent column and can invalidate the
+  FW bound.  (FWPH supports multistage, so this is not a two-stage-only
+  concern.)  Strict coherence rejects such a read entirely, so **no
+  post-assembly fix-up is needed**: the per-scenario blocks are used exactly
+  as assembled.
 
   Single-sourcing the first-stage portion would also preserve the pairing
   and avoid the coherence question for **two-stage** (one global first-stage
@@ -506,7 +505,7 @@ retry later.
   nodes held by different ranks, so "single-source the first stage"
   decomposes into per-node sourcing that is itself multi-source within a
   scenario.  Strict-by-`write_id` gives the same guarantee for any stage
-  count.
+  count, with no per-stage fix-up to maintain.
 
   Rejections are cheap: the sender writes `BEST_XHAT` / `RECENT_XHATS` only
   after its `cylinder_comm.Allreduce` verdict, so its ranks are coherent
@@ -628,9 +627,9 @@ unnecessary given the per-field analysis).
   data at the right local offsets.
 - `BEST_XHAT` / `RECENT_XHATS` are assembled per-scenario via the
   overlap map like the other per-scenario fields, under **strict
-  coherence** (all sources at one `write_id`); a post-assembly NAC
-  fix-up restores the first stage and is a no-op on the coherent reads
-  strict coherence admits.
+  coherence** (all sources at one `write_id`); that already makes the
+  first-stage portion NAC-consistent across scenarios, so no
+  post-assembly fix-up is required.
 - Bound and scalar communication is unaffected.
 
 #### `cfg_vanilla.py` and `config.py`
@@ -686,8 +685,9 @@ differs from 1.0)
 - Implement the per-field strict-vs-relaxed reader paths.
 - Add the strict `write_id` check for `DUALS`.
 - Add `BEST_XHAT` / `RECENT_XHATS` as strict-coherence per-scenario
-  fields in the **two-stage** case (overlap-map assembly plus a
-  first-stage NAC fix-up that is a no-op under strict coherence).
+  fields in the **two-stage** case (overlap-map assembly; strict
+  coherence makes the first-stage portion NAC-consistent with no
+  post-assembly fix-up).
 - Wire `cross_scen` with relaxed coherence (resolved — see §Coherence)
   and make `CrossScenarioCutSpoke` accept a multi-source `NONANTS_VALS`
   / `CROSS_SCENARIO_COST` (it currently asserts a single source rank).
@@ -698,9 +698,10 @@ differs from 1.0)
 
 **Phase 4: Multistage and FWPH**
 
-- Extend the `BEST_XHAT` / `RECENT_XHATS` first-stage NAC fix-up to the
-  **multistage** case (per-node).  Strict coherence keeps it a no-op, so
-  this fix-up is a candidate for removal once the strict path is trusted.
+- Extend `BEST_XHAT` / `RECENT_XHATS` strict-coherence assembly to the
+  **multistage** case (per-node first stage).  Strict coherence makes the
+  per-node first stage NAC-consistent the same way it does in two-stage, so
+  no per-node fix-up is needed.
 - FWPH reading `RECENT_XHATS` from an InnerBoundSpoke with a different
   rank count.  This is the most complex consumer of the xhat fields and
   warrants targeted testing.

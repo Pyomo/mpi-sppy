@@ -62,11 +62,12 @@ class TestStrictCoherenceFields(unittest.TestCase):
 
     def test_xhat_objval_fields_are_strict(self):
         # BEST_XHAT / RECENT_XHATS carry per-scenario [first-stage nonants,
-        # obj_val] blocks. The first-stage NAC fix-up, under a mixed-iteration
-        # assembly, would leave a block's obj_val paired with another
-        # iteration's nonants -- and FWPH derives a Frank-Wolfe column's
-        # recourse cost from that obj_val. Strict coherence rejects the mixed
-        # read so each obj_val stays paired with its own nonants.
+        # obj_val] blocks. Under a mixed-iteration assembly a block's obj_val
+        # would be paired with another iteration's nonants -- and FWPH derives a
+        # Frank-Wolfe column's recourse cost from that obj_val. Strict coherence
+        # rejects the mixed read so each obj_val stays paired with its own
+        # nonants (and the NAC-redundant first stage stays consistent across
+        # scenarios).
         self.assertIn(Field.BEST_XHAT, _STRICT_COHERENCE_FIELDS)
         self.assertIn(Field.RECENT_XHATS, _STRICT_COHERENCE_FIELDS)
 
@@ -74,8 +75,9 @@ class TestStrictCoherenceFields(unittest.TestCase):
         self.assertIn(Field.DUALS, _STRICT_COHERENCE_FIELDS)
 
     def test_xfeas_is_relaxed(self):
-        # XFEAS has no NAC fix-up (genuinely distinct per-scenario iterates), so
-        # its obj_val is never desynced from its nonants -- relaxed is correct.
+        # XFEAS carries genuinely distinct per-scenario iterates (no
+        # cross-scenario NAC), so its obj_val is never desynced from its
+        # nonants -- relaxed is correct.
         self.assertNotIn(Field.XFEAS, _STRICT_COHERENCE_FIELDS)
 
     def test_nonants_vals_is_relaxed(self):

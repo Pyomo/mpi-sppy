@@ -61,41 +61,27 @@ _GLOBAL_OR_SCALAR_FIELDS = frozenset((
 #     mixed iterations yields an invalid Lagrangian bound.
 #
 #   - BEST_XHAT / RECENT_XHATS carry per-scenario [first-stage nonants, obj_val]
-#     blocks. The first-stage portion is NAC-redundant and is made coherent
-#     after assembly (see _enforce_first_stage_nac), but the per-scenario
-#     obj_val is not. Under a *mixed*-iteration assembly that fix-up would
-#     overwrite one scenario's first stage with another's while leaving its
-#     obj_val -- a block holding iteration t's nonants next to iteration t''s
-#     objective. The FWPH consumer derives a Frank-Wolfe column's recourse cost
-#     as obj_val - first_stage_cost(nonants), so a desynced obj_val builds an
-#     inconsistent column and can invalidate the bound. Strict coherence rejects
-#     the mixed read instead: the accepted first stage is already NAC-consistent
-#     and every obj_val stays paired with its own nonants. (Single-sourcing the
+#     blocks. The first-stage portion is NAC-redundant: at a single iteration it
+#     is identical across scenarios (the candidate fixes the first stage when it
+#     is evaluated). The per-scenario obj_val, by contrast, is genuinely
+#     per-scenario, and the FWPH consumer derives a Frank-Wolfe column's recourse
+#     cost as obj_val - first_stage_cost(nonants). A *mixed*-iteration assembly
+#     would stitch one scenario's first stage next to another's obj_val -- an
+#     inconsistent column that can invalidate the bound -- and would also break
+#     NAC across scenarios. Strict coherence rejects the mixed read: an accepted
+#     read has every source at one write_id, so the assembled first stage is
+#     already NAC-consistent across scenarios and every obj_val stays paired with
+#     its own nonants -- no post-assembly fix-up is needed. (Single-sourcing the
 #     first stage would also pair them, but does not generalize to multistage,
 #     where a scenario's nonant path spans several nodes held by different ranks.)
 #
 # Every other per-scenario field uses *relaxed* coherence (the assembled value
 # may mix iterations; its consumers re-evaluate, so it is always honest). XFEAS
-# stays relaxed: it carries per-scenario *distinct* iterates with no NAC fix-up,
-# so each block's obj_val is never desynced from its nonants.
+# stays relaxed: it carries per-scenario *distinct* iterates (its consumer tries
+# each scenario's x as its own candidate), so there is no cross-scenario NAC to
+# preserve and no obj_val to desync.
 _STRICT_COHERENCE_FIELDS = frozenset((
     Field.DUALS,
-    Field.BEST_XHAT,
-    Field.RECENT_XHATS,
-))
-
-# Category-2 xhat fields: per-scenario layout [first-stage nonants, obj_val]
-# whose nonant portion is an incumbent first-stage decision identical across all
-# scenarios by non-anticipativity (the candidate fixes the first stage when it
-# is evaluated). These fields use strict coherence (above), so an accepted
-# multi-source read has every source at one write_id and the first-stage portion
-# is already NAC-consistent across scenarios; _enforce_first_stage_nac is then a
-# defensive no-op. The per-scenario obj_val slot is left alone -- it is
-# genuinely per-scenario and, under strict coherence, stays paired with its own
-# nonants. XFEAS is *not* here: it carries per-scenario *distinct* iterates (its
-# consumer tries each scenario's x as its own candidate), so it is assembled
-# per-scenario with no NAC fix-up.
-_FIRST_STAGE_NAC_FIELDS = frozenset((
     Field.BEST_XHAT,
     Field.RECENT_XHATS,
 ))
@@ -706,7 +692,7 @@ class SPCommunicator:
         For the nonant-valued fields this is the per-scenario nonant count,
         which is uniform across scenarios in a two-stage problem
         (``opt.nonant_length``). For the xhat fields each scenario contributes a
-        ``[nonants, cost]`` block, so the count is ``nonant_length + 1``; the
+        ``[nonants, obj_val]`` block, so the count is ``nonant_length + 1``; the
         circular ``RECENT_XHATS`` returns the same single-version block size and
         is expanded across versions in ``_build_overlap_map``.
         """
@@ -714,10 +700,10 @@ class SPCommunicator:
             k = self.opt.nonant_length
             return [k] * len(self.opt.all_scenario_names)
         if field in (Field.BEST_XHAT, Field.RECENT_XHATS, Field.XFEAS):
-            # Each scenario's block is [first-stage nonants, per-scenario cost].
+            # Each scenario's block is [first-stage nonants, per-scenario obj_val].
             # Two-stage only: under multistage the NAC-redundant portion is
-            # per-tree-node (not one global first stage), so the cost-vs-nonant
-            # split and the NAC fix-up need per-node sourcing -- a later phase.
+            # per-tree-node (not one global first stage), so the nonant-vs-obj_val
+            # split needs per-node sourcing -- a later phase.
             if self.opt.multistage:
                 raise NotImplementedError(
                     f"Flexible (unequal) rank assignments: {self.__class__.__name__} "
@@ -828,31 +814,6 @@ class SPCommunicator:
                 ))
         return expanded
 
-    def _enforce_first_stage_nac(self, data_view, field):
-        """Restore non-anticipativity of the first-stage portion of a Category-2
-        xhat field after multi-source assembly (two-stage case).
-
-        Each per-scenario block is ``[first-stage nonants, cost]``. The nonant
-        portion is identical across scenarios by construction, but the blocks
-        were assembled from possibly different ranks/write_ids, so overwrite
-        every scenario's nonants with a single coherent reference -- the first
-        scenario's, which came whole from one rank. The cost slots are left
-        untouched (genuinely per-scenario). For ``RECENT_XHATS`` this is applied
-        independently within each version block. Two-stage only; multistage
-        per-node sourcing is guarded in _items_per_scen_for_field.
-        """
-        k = self.opt.nonant_length            # first-stage nonants per scenario
-        block = k + 1                          # [nonants, cost]
-        nscen = len(self._local_scen_idxs)
-        version_size = nscen * block
-        nversions = len(data_view) // version_size  # 1 for BEST_XHAT, V for RECENT_XHATS
-        for v in range(nversions):
-            v0 = v * version_size
-            ref = data_view[v0:v0 + k].copy()  # this version's scenario-0 first stage
-            for i in range(1, nscen):
-                off = v0 + i * block
-                data_view[off:off + k] = ref
-
     def _flex_get_single_source(self, buf, field, peer_cylinder, synchronize):
         """Read a global/scalar field single-source from a peer cylinder's base
         rank. Every rank of the cylinder holds the identical value, so reading
@@ -893,10 +854,10 @@ class SPCommunicator:
         deadlock). With a synchronous hub all sources share an id, so strict
         reads pass normally and a transient mixed-id read is retried.
 
-        For the Category-2 xhat fields (`_FIRST_STAGE_NAC_FIELDS`) the assembled
-        per-scenario blocks then pass through _enforce_first_stage_nac, which
-        restores the non-anticipativity of their first-stage portion (the cost
-        portion stays per-scenario).
+        The Category-2 xhat fields (BEST_XHAT, RECENT_XHATS) are strict, so an
+        accepted read has every source at one write_id; their NAC-redundant
+        first-stage portion is then already identical across scenarios and each
+        obj_val stays paired with its own nonants -- no post-assembly fix-up.
         """
         if synchronize:
             self.cylinder_comm.Barrier()
@@ -935,8 +896,6 @@ class SPCommunicator:
                 snapshot = source_snapshots[seg.remote_rank]
                 data_view[seg.local_offset : seg.local_offset + seg.count] = \
                     snapshot[seg.remote_offset : seg.remote_offset + seg.count]
-            if field in _FIRST_STAGE_NAC_FIELDS:
-                self._enforce_first_stage_nac(data_view, field)
             return self._mark_new(buf, new_id)
         buf._is_new = False
         return False

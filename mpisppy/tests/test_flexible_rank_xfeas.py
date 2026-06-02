@@ -15,9 +15,9 @@ unequal ranks.
 
 Runs farmer with a CG hub and a ph_xfeas (xhat-feasible) spoke at *unequal* rank
 counts. The ph_xfeas spoke sends XFEAS -- a per-scenario [first-stage nonants,
-cost] block of *distinct* candidate iterates (Category-1, no first-stage NAC
-fix-up) -- which the multi-rank CG hub assembles across the spoke's ranks and
-tries as incumbents. A torn read or misrouted segment would feed the hub garbage
+obj_val] block of *distinct* candidate iterates (Category-1, relaxed coherence,
+no cross-scenario NAC) -- which the multi-rank CG hub assembles across the
+spoke's ranks and tries as incumbents. A torn read or misrouted segment would feed the hub garbage
 candidates: the inner bound would stop tracking the extensive-form optimum or the
 two asymmetry directions would disagree.
 

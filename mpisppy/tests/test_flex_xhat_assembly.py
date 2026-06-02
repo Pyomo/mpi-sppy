@@ -9,23 +9,24 @@
 """Serial, exact-value tests for the Phase-4a xhat-field assembly math.
 
 The np=6 integration test (test_flexible_rank_xhat) confirms the end-to-end
-FWPH run converges at unequal ranks, but a synchronous hub keeps every source at
-the same write_id, so it cannot distinguish a correct first-stage NAC fix-up
-from no fix-up at all, nor pin the exact byte layout of the version-interleaved
-circular buffer. These tests do, directly and without MPI, by exercising the
-two pieces of new arithmetic against a hand-checked straddle layout:
+FWPH run converges at unequal ranks, but it cannot pin the exact byte layout of
+the version-interleaved circular buffer. These tests do, directly and without
+MPI, by exercising the assembly arithmetic against a hand-checked straddle
+layout:
 
   * ``_expand_to_circular_versions`` -- replicating one version's overlap
     segments across the circular buffer, with a *different* version stride per
     source rank (the peer ranks here hold unequal scenario counts);
-  * ``_enforce_first_stage_nac`` -- overwriting every scenario's first-stage
-    portion with the first scenario's, per version, leaving the per-scenario
-    cost slots alone.
+  * the per-scenario segment copy that assembles a local buffer from the source
+    ranks' send buffers.
 
-To force the fix-up to do visible work, the two source ranks publish *different*
-first-stage values (as if read at mixed write_ids); a correct fix-up collapses
-them to a single coherent vector, an absent one would leave them split. XFEAS,
-which carries per-scenario *distinct* iterates, must NOT be collapsed.
+The xhat ring (``BEST_XHAT`` / ``RECENT_XHATS``) is read with strict coherence,
+so an accepted read has every source rank at one write_id -- i.e. every rank
+holds the *same* incumbent first stage. The assembler therefore reproduces a
+NAC-consistent first stage across every scenario block with no post-assembly
+fix-up, while routing each scenario's obj_val to its own slot. ``XFEAS`` carries
+per-scenario *distinct* iterates (its consumer tries each scenario's x as its
+own candidate), which the same assembler preserves per scenario.
 
 The methods read only a handful of attributes, so a tiny stand-in object stands
 in for a fully-constructed SPCommunicator.
@@ -44,7 +45,7 @@ from mpisppy.cylinders.overlap_map import compute_overlap_segments
 # --- fixed straddle layout shared by the tests ---------------------------
 #
 # 6 scenarios (global indices 0..5), 2 first-stage nonants each (K=2), so every
-# per-scenario block is [n, n, cost] (length 3).
+# per-scenario block is [n, n, obj_val] (length 3).
 #
 # Peer (source) cylinder: 2 ranks holding *unequal* counts --
 #   rank 0 -> scenarios [0,1,2,3]   (4 scenarios; version stride 4*3 = 12)
@@ -63,20 +64,26 @@ BEST_XHAT_LEN = NSCEN_LOCAL * BLOCK          # one version's worth, this rank
 NVERSIONS = 2
 RECENT_LEN = NVERSIONS * BEST_XHAT_LEN
 
-# Distinct first-stage markers per (source rank, version); the gap between the
-# two ranks is what the NAC fix-up must erase.
-def _fs(rank, version):
-    return 0.5 + rank + 10.0 * version
 
-# Per-scenario, per-version cost; never touched by the fix-up.
-def _cost(scen, version):
+# First-stage marker for the xhat ring: under strict coherence every source rank
+# holds the same incumbent first stage at a given version, so this depends only
+# on the version (not the rank). The assembler must reproduce it across every
+# scenario block.
+def _ring_fs(version):
+    return 0.5 + 10.0 * version
+
+# First-stage marker for XFEAS: genuinely distinct per scenario (the consumer
+# tries each scenario's x as its own candidate); keyed by global scenario index.
+def _xfeas_fs(scen):
+    return 100.0 + scen
+
+# Per-scenario, per-version objective value (the block's second slot).
+def _obj(scen, version):
     return 1000.0 * version + scen
 
 
 def _make_stub():
     sp = types.SimpleNamespace()
-    sp.opt = types.SimpleNamespace(nonant_length=K)
-    sp._local_scen_idxs = list(LOCAL_SCEN_IDXS)
     sp._field_lengths = {
         Field.BEST_XHAT: BEST_XHAT_LEN,
         Field.RECENT_XHATS: RECENT_LEN,
@@ -84,16 +91,17 @@ def _make_stub():
     return sp
 
 
-def _make_source_buffer(scens_on_rank, rank, nversions):
+def _make_source_buffer(scens_on_rank, nversions, fs_of):
     """A peer rank's send buffer for a BEST_XHAT-style field: nversions copies of
-    [block per scenario], each block = [first-stage(K), cost]."""
+    [block per scenario], each block = [first-stage(K), obj_val]. ``fs_of(scen,
+    version)`` supplies the first-stage marker for each block."""
     per_version = len(scens_on_rank) * BLOCK
     buf = np.full(nversions * per_version, np.nan)
     for v in range(nversions):
         for j, s in enumerate(scens_on_rank):
             off = v * per_version + j * BLOCK
-            buf[off:off + K] = _fs(rank, v)
-            buf[off + K] = _cost(s, v)
+            buf[off:off + K] = fs_of(s, v)
+            buf[off + K] = _obj(s, v)
     return buf
 
 
@@ -134,8 +142,12 @@ class TestFlexXhatAssembly(unittest.TestCase):
         }
         self.assertEqual(got, expected)
 
-    def test_recent_xhats_assembly_and_nac_fixup(self):
-        """Version-interleaved assembly + per-version first-stage NAC fix-up."""
+    def test_recent_xhats_version_interleaved_assembly(self):
+        """Version-interleaved assembly of the circular xhat buffer. Strict
+        coherence guarantees all sources at one write_id, so both source ranks
+        hold the same incumbent first stage per version; the assembly reproduces
+        it across every scenario block (NAC-consistent, no fix-up) while routing
+        each scenario's obj_val to its own slot."""
         sp = _make_stub()
         items_per_scen = [BLOCK] * 6
         base_segments = compute_overlap_segments(
@@ -145,75 +157,66 @@ class TestFlexXhatAssembly(unittest.TestCase):
             sp, base_segments, PEER_SLICES, 0, items_per_scen
         )
         sources = {
-            0: _make_source_buffer(PEER_SLICES[0], 0, NVERSIONS),
-            1: _make_source_buffer(PEER_SLICES[1], 1, NVERSIONS),
+            0: _make_source_buffer(PEER_SLICES[0], NVERSIONS, lambda s, v: _ring_fs(v)),
+            1: _make_source_buffer(PEER_SLICES[1], NVERSIONS, lambda s, v: _ring_fs(v)),
         }
         local_buf = _assemble(expanded, sources, RECENT_LEN)
 
-        # Before the fix-up: scen 2,3 carry rank-0's first stage, scen 4,5
-        # rank-1's -- inconsistent across scenarios (this is what the fix-up
-        # must repair). Costs are already correctly routed per scenario.
-        self.assertEqual(local_buf[0], _fs(0, 0))    # local scen 2, v0
-        self.assertEqual(local_buf[6], _fs(1, 0))    # local scen 4, v0
-
-        SPCommunicator._enforce_first_stage_nac(sp, local_buf, Field.RECENT_XHATS)
-
-        # After: every scenario's first stage equals scenario-0's source
-        # (rank 0), per version; costs untouched and per-scenario.
         expected = np.empty(RECENT_LEN)
         for v in range(NVERSIONS):
-            ref = _fs(0, v)  # rank 0 holds local scenario 0 (global 2)
+            ref = _ring_fs(v)
             for j, s in enumerate(LOCAL_SCEN_IDXS):
                 off = v * BEST_XHAT_LEN + j * BLOCK
                 expected[off:off + K] = ref
-                expected[off + K] = _cost(s, v)
+                expected[off + K] = _obj(s, v)
         np.testing.assert_allclose(local_buf, expected)
+        # The two versions really carry distinct first stages (so the
+        # version-stride assembly is doing visible work).
+        self.assertNotEqual(_ring_fs(0), _ring_fs(1))
 
-    def test_best_xhat_single_version_nac_fixup(self):
-        """BEST_XHAT is the one-version case of the same fix-up."""
-        sp = _make_stub()
+    def test_best_xhat_single_version_assembly(self):
+        """BEST_XHAT is the one-version case: a single coherent first stage
+        reproduced across scenarios, with per-scenario obj_val slots."""
         items_per_scen = [BLOCK] * 6
         segments = compute_overlap_segments(
             LOCAL_SCEN_IDXS, PEER_SLICES, items_per_scen
         )
         sources = {
-            0: _make_source_buffer(PEER_SLICES[0], 0, 1),
-            1: _make_source_buffer(PEER_SLICES[1], 1, 1),
+            0: _make_source_buffer(PEER_SLICES[0], 1, lambda s, v: _ring_fs(v)),
+            1: _make_source_buffer(PEER_SLICES[1], 1, lambda s, v: _ring_fs(v)),
         }
         local_buf = _assemble(segments, sources, BEST_XHAT_LEN)
-        SPCommunicator._enforce_first_stage_nac(sp, local_buf, Field.BEST_XHAT)
 
         expected = np.empty(BEST_XHAT_LEN)
-        ref = _fs(0, 0)
+        ref = _ring_fs(0)
         for j, s in enumerate(LOCAL_SCEN_IDXS):
             off = j * BLOCK
             expected[off:off + K] = ref
-            expected[off + K] = _cost(s, 0)
+            expected[off + K] = _obj(s, 0)
         np.testing.assert_allclose(local_buf, expected)
 
-    def test_xfeas_is_not_collapsed(self):
-        """XFEAS carries per-scenario distinct iterates: assembled per scenario,
-        with NO NAC fix-up, so each scenario keeps its own first stage."""
+    def test_xfeas_per_scenario_iterates(self):
+        """XFEAS carries per-scenario distinct iterates: assembled per scenario
+        (no NAC fix-up), so each scenario keeps its own first stage."""
         items_per_scen = [BLOCK] * 6
         segments = compute_overlap_segments(
             LOCAL_SCEN_IDXS, PEER_SLICES, items_per_scen
         )
         sources = {
-            0: _make_source_buffer(PEER_SLICES[0], 0, 1),
-            1: _make_source_buffer(PEER_SLICES[1], 1, 1),
+            0: _make_source_buffer(PEER_SLICES[0], 1, lambda s, v: _xfeas_fs(s)),
+            1: _make_source_buffer(PEER_SLICES[1], 1, lambda s, v: _xfeas_fs(s)),
         }
         local_buf = _assemble(segments, sources, BEST_XHAT_LEN)
-        # No _enforce_first_stage_nac call: XFEAS is not in _FIRST_STAGE_NAC_FIELDS.
 
         expected = np.empty(BEST_XHAT_LEN)
         for j, s in enumerate(LOCAL_SCEN_IDXS):
-            holding_rank = 0 if s in PEER_SLICES[0] else 1
             off = j * BLOCK
-            expected[off:off + K] = _fs(holding_rank, 0)
-            expected[off + K] = _cost(s, 0)
+            expected[off:off + K] = _xfeas_fs(s)
+            expected[off + K] = _obj(s, 0)
         np.testing.assert_allclose(local_buf, expected)
-        # And the two source ranks really did differ (so the test is meaningful).
-        self.assertNotEqual(_fs(0, 0), _fs(1, 0))
+        # The per-scenario first stages really are distinct (so "preserved per
+        # scenario" is a meaningful claim).
+        self.assertEqual(len({_xfeas_fs(s) for s in LOCAL_SCEN_IDXS}), NSCEN_LOCAL)
 
 
 if __name__ == "__main__":

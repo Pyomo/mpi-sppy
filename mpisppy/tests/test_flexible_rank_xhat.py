@@ -13,14 +13,14 @@ rank counts. This exercises the Category-2 xhat fields the earlier phases did
 not:
 
   * the xhatshuffle spoke sends BEST_XHAT and RECENT_XHATS, which the FWPH hub
-    assembles across the spoke's ranks -- multi-source per-scenario blocks plus
-    the first-stage NAC fix-up, and (for RECENT_XHATS) version-aware assembly of
-    the circular buffer;
+    assembles across the spoke's ranks -- multi-source per-scenario blocks read
+    under strict coherence, and (for RECENT_XHATS) version-aware assembly of the
+    circular buffer;
   * the FWPH hub still sends NONANTS_VALS to the spoke (the Phase-2 path), so the
     two cylinders genuinely run at different rank counts in both directions.
 
-A torn read, a misrouted segment, a broken first-stage fix-up, or wrong version
-interleaving would feed FWPH garbage columns -- the hub's outer bound would stop
+A torn read, a misrouted segment, or wrong version interleaving would feed FWPH
+garbage columns -- the hub's outer bound would stop
 tracking the extensive-form optimum or the directions would disagree. We pin
 correctness with the same two-directional / ground-truth pattern as
 test_flexible_rank_cylinders, using fullcomm windows in both directions:
