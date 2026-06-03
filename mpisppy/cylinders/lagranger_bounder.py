@@ -15,9 +15,9 @@ import numpy as np
 import mpisppy.cylinders.spoke
 import mpisppy.utils.w_utils.wxbarutils
 from mpisppy.cylinders.lagrangian_bounder import _LagrangianMixin
-from mpisppy.cylinders._jensens_mixin import _JensensMixin
+from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
 
-class LagrangerOuterBound(_JensensMixin, _LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
+class LagrangerOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
     """Indepedent Lagrangian that takes x values as input and updates its own W.
     """
     converger_spoke_char = 'A'

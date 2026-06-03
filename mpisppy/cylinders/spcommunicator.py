@@ -52,6 +52,41 @@ _GLOBAL_OR_SCALAR_FIELDS = frozenset((
     Field.EXPECTED_REDUCED_COST,
 ))
 
+# Per-scenario fields that require *strict* coherence when assembled across
+# ranks: every contributing source must be at the same write_id, or the read
+# is rejected and retried. DUALS carries the PH multipliers W_s, whose
+# normalization sum_s p_s W_s = 0 holds only within a single iteration --
+# stitching W from mixed iterations yields an invalid Lagrangian bound. Every
+# other per-scenario field uses *relaxed* coherence (the assembled value may
+# mix iterations; its consumers re-evaluate, so it is always honest).
+_STRICT_COHERENCE_FIELDS = frozenset((
+    Field.DUALS,
+))
+
+
+def reduce_source_write_ids(source_ids, strict: bool) -> int:
+    """Reduce the per-source write_ids of a multi-source read to the single id
+    this rank will compare against its last-accepted id.
+
+    Args:
+        source_ids: write_ids read from each contributing remote rank.
+        strict: if True, the sources must agree on one id (strict coherence);
+            a disagreement returns the sentinel ``-1`` so the read is rejected
+            (it is < any real id, and it breaks the cross-reader agreement
+            check, so every reader rejects together). If False (relaxed), the
+            floor over sources is taken -- a mixed-iteration assembly is
+            accepted, which is fine for fields whose consumers re-evaluate.
+
+    Returns:
+        int: the accepted write_id, or ``-1`` to reject (strict mismatch),
+        or ``0`` when there are no sources.
+    """
+    if not source_ids:
+        return 0
+    if strict:
+        return source_ids[0] if len(set(source_ids)) == 1 else -1
+    return min(source_ids)
+
 def communicator_array(data_length: int):
     """
     Allocate an MPI memory region with a padded length (multiple of 8 doubles = 64B),
@@ -641,11 +676,18 @@ class SPCommunicator:
         if field in (Field.NONANTS_VALS, Field.RELAXED_NONANTS_VALS, Field.DUALS):
             k = self.opt.nonant_length
             return [k] * len(self.opt.all_scenario_names)
+        # Reached at startup (window creation), not mid-solve: this cylinder is
+        # in a flexible-rank run and reads a per-scenario field whose
+        # multi-source assembly across unequal rank counts is not implemented
+        # yet. Fail here with an actionable message rather than mis-assembling.
         raise NotImplementedError(
-            f"multi-source assembly of {field} under unequal rank counts is "
-            f"not implemented in the communication-layer cut; only the "
-            f"per-scenario nonant fields (NONANTS_VALS, RELAXED_NONANTS_VALS, "
-            f"DUALS) are supported so far."
+            f"Flexible (unequal) rank assignments: {self.__class__.__name__} "
+            f"reads {field.name}, whose multi-source assembly across cylinders "
+            f"with different rank counts is not supported yet (only "
+            f"{Field.NONANTS_VALS.name}, {Field.RELAXED_NONANTS_VALS.name}, and "
+            f"{Field.DUALS.name} are). Run the cylinders that exchange "
+            f"{field.name} at equal rank counts (rank_ratio == 1.0), or wait "
+            f"for the phase that adds {field.name} support."
         )
 
     def _validate_segment(self, field: Field, remote_global_rank: int, seg) -> None:
@@ -717,13 +759,21 @@ class SPCommunicator:
         """Assemble a per-scenario field from several of a peer cylinder's
         global ranks using the precomputed overlap map.
 
-        Coherence note. This rank's id is the coherent floor (min) over its
-        sources rather than per-source independent acceptance: a synchronous
-        hub writes all its ranks at one id, so every reader computes the same
-        value and then clears the shared _write_ids_agree check together; a
-        transient mixed-id read floors low, fails agreement, and is retried.
-        (Per-source relaxed acceptance, which would need consumer cooperation,
-        and strict per-field policies such as DUALS are later phases.)
+        Coherence note. The per-source write_ids are reduced to this rank's
+        `new_id` by a per-field coherence policy (reduce_source_write_ids):
+
+          * relaxed (default): `new_id` is the floor (min) over sources -- the
+            assembled value may mix iterations, which is fine for fields whose
+            consumers re-evaluate (NONANTS_VALS, ...);
+          * strict (`_STRICT_COHERENCE_FIELDS`, e.g. DUALS): all sources must
+            share one id, else `new_id` is a sentinel (-1) that rejects the
+            read -- a mixed-iteration assembly would be invalid.
+
+        `new_id` then feeds the shared _write_ids_agree check, so the strict
+        rejection is collective-safe: the sentinel (below any real id) simply
+        breaks agreement and every reader rejects together (no early return, no
+        deadlock). With a synchronous hub all sources share an id, so strict
+        reads pass normally and a transient mixed-id read is retried.
         """
         if synchronize:
             self.cylinder_comm.Barrier()
@@ -738,16 +788,17 @@ class SPCommunicator:
         # also defer writing into buf until the read is accepted, so a rejected
         # (mixed-id) read never leaves stale data behind.
         source_snapshots = {}
-        new_id = None
+        source_ids = []
         for r in self._overlap_source_ranks[(field, peer_cylinder)]:
             _, logical_len, padded_len = self.window.strata_buffer_layouts[r][field]
             snapshot = np.empty(padded_len, dtype="d")
             self.window.get(snapshot, r, field)
             source_snapshots[r] = snapshot
-            rid = int(snapshot[logical_len - 1])
-            new_id = rid if new_id is None else min(new_id, rid)
-        if new_id is None:
-            new_id = 0
+            source_ids.append(int(snapshot[logical_len - 1]))
+
+        new_id = reduce_source_write_ids(
+            source_ids, strict=field in _STRICT_COHERENCE_FIELDS
+        )
 
         if not self._write_ids_agree(new_id, synchronize):
             buf._is_new = False

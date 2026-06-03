@@ -12,7 +12,7 @@
 import pyomo.environ as pyo
 from mpisppy.extensions.xhatxbar import XhatXbar
 from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
-from mpisppy.cylinders._jensens_mixin import _JensensMixin
+from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
 
 import mpisppy.MPI as mpi
 import logging
@@ -34,7 +34,7 @@ def _attach_xbars(opt):
 
 
 ############################################################################
-class XhatXbarInnerBound(_JensensMixin, XhatInnerBoundBase):
+class XhatXbarInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
 
     converger_spoke_char = 'B'
 

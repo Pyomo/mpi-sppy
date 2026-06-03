@@ -8,11 +8,11 @@
 ###############################################################################
 
 from mpisppy.cylinders.spoke import OuterBoundSpoke, Field
-from mpisppy.cylinders._jensens_mixin import _JensensMixin
+from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
 import pyomo.environ as pyo
 
 
-class SubgradientOuterBound(_JensensMixin, OuterBoundSpoke):
+class SubgradientOuterBound(_PreLoopXhatMixin, OuterBoundSpoke):
     send_fields = (*OuterBoundSpoke.send_fields, Field.XFEAS)
     converger_spoke_char = 'G'
 

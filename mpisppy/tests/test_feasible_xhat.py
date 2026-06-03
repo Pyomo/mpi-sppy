@@ -26,7 +26,7 @@ from pyomo.opt import TerminationCondition
 
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils.xhat_helpers import average_xhat_nonants, lp_xbar_nonants
-from mpisppy.tests.utils import get_solver
+from mpisppy.tests.utils import get_solver, limit_solver_threads
 
 _EXAMPLES_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -214,6 +214,7 @@ class TestNetdesFeasibleXhatCreator(unittest.TestCase):
             for v, val in zip(root.nonant_vardata_list, arr):
                 v.fix(val)
             solver = pyo.SolverFactory(solver_name)
+            limit_solver_threads(solver, solver_name)
             if sputils.is_persistent(solver):
                 solver.set_instance(scen)
                 results = solver.solve(tee=False)
@@ -429,20 +430,20 @@ class _StubFeasSpoke:
     """Mixin host wired to capture update_if_improving calls."""
 
     def __init__(self, opt):
-        from mpisppy.cylinders._jensens_mixin import _JensensMixin
+        from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
         self.opt = opt
         self.bound_updates = []
         # bind the mixin methods
-        self._feasible_xhat_enabled = lambda: _JensensMixin._feasible_xhat_enabled(self)
-        self._jensens_evaluate_xhat = lambda c: _JensensMixin._jensens_evaluate_xhat(self, c)
-        self._try_feasible_xhat = lambda: _JensensMixin._try_feasible_xhat(self)
+        self._feasible_xhat_enabled = lambda: _PreLoopXhatMixin._feasible_xhat_enabled(self)
+        self._evaluate_xhat = lambda c: _PreLoopXhatMixin._evaluate_xhat(self, c)
+        self._try_feasible_xhat = lambda: _PreLoopXhatMixin._try_feasible_xhat(self)
 
     def update_if_improving(self, Eobj):
         self.bound_updates.append(Eobj)
 
 
 class TestTryFeasibleXhat(unittest.TestCase):
-    """Unit tests for _JensensMixin._try_feasible_xhat."""
+    """Unit tests for _PreLoopXhatMixin._try_feasible_xhat."""
 
     def test_noop_when_flag_off(self):
         opt = _StubFeasOpt(infeas_prob=0.0, eobj=1.0)  # no "feasible_xhat" key

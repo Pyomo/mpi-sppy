@@ -8,7 +8,7 @@
 ###############################################################################
 import mpisppy.cylinders.spoke
 import mpisppy.utils.sputils as sputils
-from mpisppy.cylinders._jensens_mixin import _JensensMixin
+from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
 
 class _LagrangianMixin:
 
@@ -55,7 +55,7 @@ class _LagrangianMixin:
             self.opt.extobject.post_everything()
         return self.final_bound
 
-class LagrangianOuterBound(_JensensMixin, _LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundWSpoke):
+class LagrangianOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundWSpoke):
 
     converger_spoke_char = 'L'
 
