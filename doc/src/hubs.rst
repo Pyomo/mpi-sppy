@@ -93,6 +93,18 @@ While FWPH is not known to converge to a primal solution for a SMIP, it
 often discovers excellent incumbent values along the way (when paired with
 an xhat spoke).
 
+FWPH solves two kinds of subproblems: the scenario MIP/LP subproblems and
+the proximal QP subproblems. By default both use ``--solver-name``, which
+forces the user to pick a solver that can do both. To pair an LP/MIP-only
+solver (such as ``glpk`` or ``cbc``) with an open-source QP solver (such as
+``ipopt``), set ``--fwph-mip-solver-name`` and ``--fwph-qp-solver-name``
+separately, e.g.::
+
+   --fwph-hub --solver-name glpk --fwph-qp-solver-name ipopt
+
+Either option falls back to ``--solver-name`` when it is not given, so
+``--fwph-mip-solver-name`` is usually redundant with ``--solver-name``.
+
 Hub Convergers
 --------------
 

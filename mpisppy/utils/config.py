@@ -711,6 +711,20 @@ class Config(pyofig.ConfigDict):
                            description="If provided, passed to FWPH as options['save_file'] (cylinder rank 0 writes).",
                            domain=str,
                            default=None)
+        self.add_to_config("fwph_mip_solver_name",
+                           description="Solver for the FWPH MIP/LP subproblems "
+                                       "(default: fall back to --solver-name). Lets you "
+                                       "pair an LP/MIP-only solver (e.g. glpk, cbc) with "
+                                       "a separate QP solver via --fwph-qp-solver-name.",
+                           domain=str,
+                           default=None)
+        self.add_to_config("fwph_qp_solver_name",
+                           description="Solver for the FWPH proximal QP subproblems "
+                                       "(default: fall back to --solver-name). Use an "
+                                       "open-source QP solver (e.g. ipopt) when "
+                                       "--fwph-mip-solver-name is an LP/MIP-only solver.",
+                           domain=str,
+                           default=None)
 
     def cg_args(self):
 
