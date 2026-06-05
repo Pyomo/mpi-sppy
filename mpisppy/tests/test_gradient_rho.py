@@ -37,6 +37,7 @@ def _create_cfg():
     cfg.solver_name = solver_name
     cfg.default_rho = 1
     cfg.grad_order_stat = 0.5
+    cfg.max_solver_threads = 1
     return cfg
 
 #*****************************************************************************

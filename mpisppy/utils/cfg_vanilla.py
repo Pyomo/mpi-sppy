@@ -35,7 +35,7 @@ def _maybe_attach_jensens(spoke_dict, cfg, spoke_prefix,
     --<spoke_prefix>-try-jensens-first flag is set.
 
     The spoke reads these at runtime via self.opt.options["jensens"] and
-    drives _JensensMixin. See doc/designs/jensens_bound_design.md.
+    drives _PreLoopXhatMixin. See doc/designs/jensens_bound_design.md.
     """
     flag = f"{spoke_prefix}_try_jensens_first"
     if not cfg.get(flag, False):
@@ -104,7 +104,7 @@ def _maybe_attach_feasible_xhat(spoke_dict, cfg, spoke_prefix,
     --<spoke_prefix>-try-feasible-xhat-first flag is set.
 
     The spoke reads these at runtime via self.opt.options["feasible_xhat"]
-    and drives _JensensMixin._try_feasible_xhat. See doc/src/feasible_xhat.rst.
+    and drives _PreLoopXhatMixin._try_feasible_xhat. See doc/src/feasible_xhat.rst.
 
     Raises if the user enabled both --<spoke_prefix>-try-jensens-first and
     --<spoke_prefix>-try-feasible-xhat-first on the same xhat spoke; the
@@ -934,6 +934,13 @@ def _fwph_options(cfg):
         "qp_solver_options": qp_solver_options,
         "FW_LP_start_iterations": cfg.fwph_lp_start_iterations,
     }
+
+    # Separate MIP/QP solvers (issue #712). FWPH falls back to solver_name
+    # for either one when it is None, so only forward what the user set.
+    if _hasit(cfg, "fwph_mip_solver_name") and cfg.fwph_mip_solver_name:
+        fw_options["mip_solver_name"] = cfg.fwph_mip_solver_name
+    if _hasit(cfg, "fwph_qp_solver_name") and cfg.fwph_qp_solver_name:
+        fw_options["qp_solver_name"] = cfg.fwph_qp_solver_name
 
     # optional save_file passthrough (only if user provided it)
     if _hasit(cfg, "fwph_save_file") and cfg.fwph_save_file:

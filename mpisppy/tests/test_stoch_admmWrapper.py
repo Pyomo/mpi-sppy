@@ -150,11 +150,11 @@ class TestStochAdmmWrapper(unittest.TestCase):
         # j==0 runs from the test fork (mpisppy/tests/examples/stoch_distr/)
         # where the drivers are still at the top level; j>0 runs from the
         # canonical example where the drivers have moved under archive/.
-        command_line_pairs = [(f"mpiexec -np 3 python -u {python_args} -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 10 --num-admm-subproblems 2 --default-rho 10 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.001 --num-stages 3" \
+        command_line_pairs = [(f"mpiexec -np 3 python -u {python_args} -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 10 --num-admm-subproblems 2 --default-rho 10 --solver-name {solver_name} --max-solver-threads 1 --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.001 --num-stages 3" \
                          , f"python {python_args} stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 10 --num-admm-subproblems 2 --num-stages 3"), \
-                         (f"mpiexec -np 3 python -u {python_args} -m mpi4py archive/stoch_distr_admm_cylinders.py --num-stoch-scens 5 --num-admm-subproblems 3 --default-rho 5 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.01 --ensure-xhat-feas" \
+                         (f"mpiexec -np 3 python -u {python_args} -m mpi4py archive/stoch_distr_admm_cylinders.py --num-stoch-scens 5 --num-admm-subproblems 3 --default-rho 5 --solver-name {solver_name} --max-solver-threads 1 --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.01 --ensure-xhat-feas" \
                          , f"python {python_args} archive/stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 5 --num-admm-subproblems 3 --ensure-xhat-feas"), \
-                              (f"mpiexec -np 6 python -u {python_args} -m mpi4py archive/stoch_distr_admm_cylinders.py --num-stoch-scens 4 --num-admm-subproblems 5 --default-rho 15 --solver-name {solver_name} --max-iterations 30 --xhatxbar --lagrangian --mnpr 5 --scalable --ensure-xhat-feas" \
+                              (f"mpiexec -np 6 python -u {python_args} -m mpi4py archive/stoch_distr_admm_cylinders.py --num-stoch-scens 4 --num-admm-subproblems 5 --default-rho 15 --solver-name {solver_name} --max-solver-threads 1 --max-iterations 30 --xhatxbar --lagrangian --mnpr 5 --scalable --ensure-xhat-feas" \
                          , f"python {python_args} archive/stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 4 --num-admm-subproblems 5 --mnpr 5 --scalable --ensure-xhat-feas")  ]
         #command_line = f"mpiexec -np 6 python -m mpi4py examples/stoch_distr/archive/stoch_distr_admm_cylinders.py --num-admm-subproblems 2 --num-stoch-scens 4 --default-rho 10 --solver-name {solver_name} --max-iterations 100 --xhatxbar --lagrangian"
         original_dir = os.getcwd()
@@ -253,6 +253,7 @@ class TestStochAdmmWrapper(unittest.TestCase):
                 f"--module-name stoch_distr "
                 f"--stoch-admm --num-stoch-scens 4 --num-admm-subproblems 2 "
                 f"--default-rho 10 --solver-name {solver_name} "
+                f"--max-solver-threads 1 "
                 f"--max-iterations 30 --lagrangian "
                 f"--scenarios-per-bundle 4"
             ).split()
@@ -320,6 +321,7 @@ class TestStochAdmmWrapper(unittest.TestCase):
                 f"--stoch-admm --num-stoch-scens {num_stoch_scens} "
                 f"--num-admm-subproblems {num_admm} "
                 f"--default-rho 10 --solver-name {solver_name} "
+                f"--max-solver-threads 1 "
                 f"--max-iterations 30 --lagrangian "
                 f"--turn-off-names-check"
             )
@@ -525,6 +527,7 @@ class TestStochAdmmWrapper(unittest.TestCase):
                 f"--module-name stoch_distr --stoch-admm "
                 f"--num-admm-subproblems 4 --num-stoch-scens 3 "
                 f"--default-rho 10 --solver-name {solver_name} "
+                f"--max-solver-threads 1 "
                 f"--max-iterations 50 --lagrangian --xhatxbar "
                 f"--rel-gap 0.01 --ensure-xhat-feas"
             ).split()
