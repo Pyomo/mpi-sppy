@@ -935,6 +935,13 @@ def _fwph_options(cfg):
         "FW_LP_start_iterations": cfg.fwph_lp_start_iterations,
     }
 
+    # Separate MIP/QP solvers (issue #712). FWPH falls back to solver_name
+    # for either one when it is None, so only forward what the user set.
+    if _hasit(cfg, "fwph_mip_solver_name") and cfg.fwph_mip_solver_name:
+        fw_options["mip_solver_name"] = cfg.fwph_mip_solver_name
+    if _hasit(cfg, "fwph_qp_solver_name") and cfg.fwph_qp_solver_name:
+        fw_options["qp_solver_name"] = cfg.fwph_qp_solver_name
+
     # optional save_file passthrough (only if user provided it)
     if _hasit(cfg, "fwph_save_file") and cfg.fwph_save_file:
         fw_options["save_file"] = cfg.fwph_save_file
