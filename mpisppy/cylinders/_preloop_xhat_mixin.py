@@ -6,11 +6,21 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-"""Mixin used by spokes that support --*-try-jensens-first.
+"""Mixin providing pre-loop xhat candidate machinery for spokes.
 
-Two-stage only. See doc/designs/jensens_bound_design.md for the full design,
-including the convexity precondition that governs when the outer-bound
-path is valid.
+Covers two pre-loop candidate sources that a spoke can opt into before
+its main loop starts:
+
+- Jensen's average-scenario candidate (``--*-try-jensens-first``), whose
+  methods carry the ``_jensens_`` prefix. Two-stage only. See
+  doc/designs/jensens_bound_design.md for the full design, including the
+  convexity precondition that governs when the outer-bound path is valid.
+- A user-supplied feasible xhat (``--*-try-feasible-xhat-first``), via
+  ``feasible_xhat_creator``. See doc/src/feasible_xhat.rst.
+
+The generic helpers (``_pack_nonant_cache``, ``_evaluate_xhat``) are
+shared by both paths; ``feasible_xhat_creator`` has no claim on Jensen's
+theory, it just delivers a candidate by some unspecified means.
 
 The mixin only provides helpers; the caller (each spoke's main()) is
 responsible for deciding when to call them and what to do with the
@@ -59,7 +69,7 @@ def assert_jensen_integer_safe(scenario):
             )
 
 
-class _JensensMixin:
+class _PreLoopXhatMixin:
 
     def _jensens_enabled(self):
         return "jensens" in self.opt.options
@@ -151,13 +161,13 @@ class _JensensMixin:
         nonant_values = [pyo.value(v) for v in root.nonant_vardata_list]
         return outer_bound, nonant_values
 
-    def _jensens_pack_nonant_cache(self, nonant_values):
+    def _pack_nonant_cache(self, nonant_values):
         """Pack average-scenario nonant values into the dict-by-nodename
         cache format consumed by Xhat_Eval._fix_nonants / .evaluate.
         Two-stage: ROOT only."""
         return {"ROOT": np.array(nonant_values, dtype='d')}
 
-    def _jensens_evaluate_xhat(self, nonant_cache):
+    def _evaluate_xhat(self, nonant_cache):
         """Evaluate the average-scenario nonants as a candidate xhat
         across all real scenarios and return the expected objective, or
         ``None`` if at least one scenario is infeasible at this xhat.
@@ -210,7 +220,48 @@ class _JensensMixin:
             return
         avg_scenario = self._jensens_build_avg()
         _, nonant_values = self._jensens_solve(avg_scenario)
-        cache = self._jensens_pack_nonant_cache(nonant_values)
-        Eobj = self._jensens_evaluate_xhat(cache)
+        cache = self._pack_nonant_cache(nonant_values)
+        Eobj = self._evaluate_xhat(cache)
+        if Eobj is not None:
+            self.update_if_improving(Eobj)
+
+    def _feasible_xhat_enabled(self):
+        return "feasible_xhat" in self.opt.options
+
+    def _try_feasible_xhat(self):
+        """One-shot helper for xhat spokes that opt in via
+        ``--*-try-feasible-xhat-first``. No-op when the flag is off.
+
+        Mutually exclusive with ``--*-try-jensens-first`` (cfg_vanilla
+        raises if both are set on the same spoke).
+
+        Unlike the Jensen's path, no average-scenario solve is needed:
+        the user's ``feasible_xhat_creator`` returns the candidate
+        directly, in the same dict-by-nodename cache form the rest of
+        the xhat path consumes. We pin it, evaluate it across all real
+        scenarios, and -- the contract of ``feasible_xhat_creator``
+        guarantees feasibility -- expect ``no_incumbent_prob() == 0``.
+        We still go through ``_evaluate_xhat`` so an
+        unexpected per-scenario infeasibility surfaces as a silent skip
+        rather than a crash.
+        """
+        if not self._feasible_xhat_enabled():
+            return
+        f = self.opt.options["feasible_xhat"]
+        creator = f["feasible_xhat_creator"]
+        kwargs = f.get("scenario_creator_kwargs") or {}
+        cache = creator(
+            solver_name=self.opt.options["solver_name"],
+            solver_options=self.opt.options.get("iterk_solver_options") or None,
+            **kwargs,
+        )
+        if not isinstance(cache, dict) or "ROOT" not in cache:
+            raise RuntimeError(
+                "feasible_xhat_creator must return a dict with at least "
+                "a 'ROOT' key; got "
+                f"{type(cache).__name__} with keys "
+                f"{list(cache.keys()) if isinstance(cache, dict) else 'n/a'}."
+            )
+        Eobj = self._evaluate_xhat(cache)
         if Eobj is not None:
             self.update_if_improving(Eobj)

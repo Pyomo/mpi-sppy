@@ -63,10 +63,14 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs,
 
     average_scenario_creator = getattr(module, "average_scenario_creator", None)
 
+    from mpisppy.utils import cfg_vanilla as vanilla
+    feasible_xhat_creator = vanilla._find_feasible_xhat_creator(module, cfg)
+
     list_of_spoke_dict = build_spoke_list(cfg, beans, scenario_creator_kwargs,
                                           rho_setter, all_nodenames,
                                           variable_probability=variable_probability,
-                                          average_scenario_creator=average_scenario_creator)
+                                          average_scenario_creator=average_scenario_creator,
+                                          feasible_xhat_creator=feasible_xhat_creator)
 
     # if the user dares, let them mess with the hubdict prior to solve
     if hasattr(module, 'hub_and_spoke_dict_callback'):
@@ -86,9 +90,21 @@ def _get_rho_setter(module, cfg):
     if cfg.default_rho is None and rho_setter is None:
         if cfg.sep_rho or cfg.coeff_rho or cfg.sensi_rho:
             cfg.default_rho = 1
-        else:
+        elif _needs_rho(cfg):
             raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
     return rho_setter
+
+
+def _needs_rho(cfg):
+    """True if the chosen hub or any enabled spoke needs a rho value.
+
+    CG-based hubs (cg_hub, dualcg_hub) do not need rho on their own; the
+    requirement only kicks in when a PH-based spoke (currently ph_xfeas_spoke)
+    is attached.
+    """
+    if cfg.cg_hub or cfg.dualcg_hub:
+        return bool(cfg.ph_xfeas_spoke)
+    return True
 
 
 def _get_converger(cfg):
@@ -96,7 +112,7 @@ def _get_converger(cfg):
     if cfg.use_norm_rho_converger:
         from mpisppy.convergers.norm_rho_converger import NormRhoConverger
         if not cfg.use_norm_rho_updater:
-            raise RuntimeError("--use-norm-rho-converger requires --use-norm-rho-updater")
+            print("Warning:--use-norm-rho-converger requires --use-norm-rho-updater")
         return NormRhoConverger
     elif cfg.primal_dual_converger:
         from mpisppy.convergers.primal_dual_converger import PrimalDualConverger

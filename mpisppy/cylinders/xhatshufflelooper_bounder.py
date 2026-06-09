@@ -12,7 +12,7 @@ import mpisppy.log
 
 from mpisppy.extensions.xhatbase import XhatBase
 from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
-from mpisppy.cylinders._jensens_mixin import _JensensMixin
+from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
 
 
 # Could also pass, e.g., sys.stdout instead of a filename
@@ -21,7 +21,7 @@ mpisppy.log.setup_logger("mpisppy.cylinders.xhatshufflelooper_bounder",
                          level=logging.CRITICAL)
 logger = logging.getLogger("mpisppy.cylinders.xhatshufflelooper_bounder")
 
-class XhatShuffleInnerBound(_JensensMixin, XhatInnerBoundBase):
+class XhatShuffleInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
 
     converger_spoke_char = 'X'
 
@@ -68,9 +68,11 @@ class XhatShuffleInnerBound(_JensensMixin, XhatInnerBoundBase):
 
         self.xhat_prep()
 
-        # No-op unless --xhatshuffle-try-jensens-first is set. Tolerates
-        # integer recourse and per-scenario infeasibility (silent skip).
+        # No-ops unless --xhatshuffle-try-jensens-first /
+        # --xhatshuffle-try-feasible-xhat-first are set (mutually exclusive).
+        # Both tolerate per-scenario infeasibility via silent skip.
         self._try_average_scenario_xhat()
+        self._try_feasible_xhat()
 
         if "reverse" in self.opt.options["xhat_looper_options"]:
             self.reverse = self.opt.options["xhat_looper_options"]["reverse"]

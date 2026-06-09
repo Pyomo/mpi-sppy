@@ -14,6 +14,7 @@ from mpisppy.utils.pysp_model import PySPModel
 from mpisppy.tests.test_ef_ph import _get_ph_base_options,\
                                      solver_available,\
                                      round_pos_sig
+from mpisppy.tests.utils import limit_solver_threads
 
 import mpisppy.opt.ef
 import mpisppy.opt.ph
@@ -67,6 +68,7 @@ class Test_sizes_abstract(unittest.TestCase):
             pysp_sizes.all_scenario_names,
             pysp_sizes.scenario_creator,
         )
+        limit_solver_threads(ef.solver, options["solver"])
         results = ef.solve_extensive_form(tee=False)
         pyo.assert_optimal_termination(results)
         sig2eobj = round_pos_sig(pyo.value(ef.ef.EF_Obj),2)

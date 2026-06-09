@@ -16,7 +16,8 @@ import mpisppy.utils.cfg_vanilla as vanilla
 def build_spoke_list(cfg, beans, scenario_creator_kwargs,
                      rho_setter, all_nodenames,
                      variable_probability=None,
-                     average_scenario_creator=None):
+                     average_scenario_creator=None,
+                     feasible_xhat_creator=None):
     """Build and return the list of spoke dicts for WheelSpinner.
 
     Args:
@@ -28,6 +29,9 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
         variable_probability: variable probability list or None (used by ADMM)
         average_scenario_creator: module's average_scenario_creator (or None),
             needed by any spoke whose --*-try-jensens-first flag is set.
+        feasible_xhat_creator: module's feasible_xhat_creator (or None),
+            needed by any xhat spoke whose --*-try-feasible-xhat-first
+            flag is set.
 
     Returns:
         list: list of spoke dicts
@@ -51,6 +55,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
         if (cfg.lagrangian_starting_mipgap is not None
                 or cfg.lagrangian_mipgaps_json is not None):
             vanilla.add_gapper(lagrangian_spoke, cfg, "lagrangian")
+        lagrangian_spoke["rank_ratio"] = cfg.lagrangian_rank_ratio
 
     # dual ph spoke
     if cfg.ph_dual:
@@ -73,6 +78,28 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
         if cfg.grad_rho:
             modified_cfg["grad_order_stat"] = cfg.ph_dual_grad_order_stat
             vanilla.add_grad_rho(ph_dual_spoke, modified_cfg)
+
+    # PH xhat-feasible spoke
+    if cfg.ph_xfeas_spoke:
+        ph_xfeas_spoke = vanilla.ph_xfeas_spoke(*beans,
+                                          scenario_creator_kwargs=scenario_creator_kwargs,
+                                          rho_setter = rho_setter,
+                                          all_nodenames = all_nodenames,
+                                          )
+        if cfg.sep_rho or cfg.coeff_rho or cfg.sensi_rho or cfg.grad_rho:
+            # Note that this deepcopy might be expensive if certain wrappers were used.
+            # (Could we do the modification to cfg in ph_dual to obviate the need?)
+            modified_cfg = copy.deepcopy(cfg)
+            modified_cfg["grad_rho_multiplier"] = cfg.ph_xfeas_spoke_rho_multiplier
+        if cfg.sep_rho:
+            vanilla.add_sep_rho(ph_xfeas_spoke, modified_cfg)
+        if cfg.coeff_rho:
+            vanilla.add_coeff_rho(ph_xfeas_spoke, modified_cfg)
+        if cfg.sensi_rho:
+            vanilla.add_sensi_rho(ph_xfeas_spoke, modified_cfg)
+        if cfg.grad_rho:
+            modified_cfg["grad_order_stat"] = cfg.ph_xfeas_spoke_grad_order_stat
+            vanilla.add_grad_rho(ph_xfeas_spoke, modified_cfg)
 
     # relaxed ph spoke
     if cfg.relaxed_ph:
@@ -108,18 +135,22 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans,
                                                       scenario_creator_kwargs=scenario_creator_kwargs,
                                                       all_nodenames=all_nodenames,
-                                                      average_scenario_creator=average_scenario_creator)
+                                                      average_scenario_creator=average_scenario_creator,
+                                                      feasible_xhat_creator=feasible_xhat_creator)
         # special code for multi-stage (e.g., hydro)
         if cfg.get("stage2_ef_solver_name") is not None:
             xhatshuffle_spoke["opt_kwargs"]["options"]["stage2_ef_solver_name"] = cfg["stage2_ef_solver_name"]
             xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = cfg["branching_factors"]
+        xhatshuffle_spoke["rank_ratio"] = cfg.xhatshuffle_rank_ratio
 
     if cfg.xhatxbar:
         xhatxbar_spoke = vanilla.xhatxbar_spoke(*beans,
                                                    scenario_creator_kwargs=scenario_creator_kwargs,
                                                    variable_probability=variable_probability,
                                                    all_nodenames=all_nodenames,
-                                                   average_scenario_creator=average_scenario_creator)
+                                                   average_scenario_creator=average_scenario_creator,
+                                                   feasible_xhat_creator=feasible_xhat_creator)
+        xhatxbar_spoke["rank_ratio"] = cfg.xhatxbar_rank_ratio
 
     # reduced cost fixer options setup
     if cfg.reduced_costs:
@@ -146,5 +177,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
         list_of_spoke_dict.append(xhatxbar_spoke)
     if cfg.reduced_costs:
         list_of_spoke_dict.append(reduced_costs_spoke)
+    if cfg.ph_xfeas_spoke:
+        list_of_spoke_dict.append(ph_xfeas_spoke)
 
     return list_of_spoke_dict

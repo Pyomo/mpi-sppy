@@ -175,9 +175,29 @@ def scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=None
     # Generating the model
     model = min_cost_distr_problem(local_dict, cfg, stoch_scenario_name, max_revenue=data_params["max revenue"])
 
-    sputils.attach_root_node(model, model.FirstStageCost, [model.y[n] for n in  local_dict["factory nodes"]])
-    
+    # Stash the original first-stage variable list so the module-level
+    # first_stage_varlist hook can retrieve it.  Stoch_AdmmWrapper will
+    # call sputils.attach_root_node on our behalf using the hooks.
+    model._first_stage_vars = [model.y[n] for n in local_dict["factory nodes"]]
+
     return model
+
+
+def first_stage_cost(scenario):
+    """Return the original problem's first-stage cost expression.
+
+    Used by Stoch_AdmmWrapper to attach the root node automatically;
+    the user no longer needs to call sputils.attach_root_node in
+    scenario_creator.  See doc/src/generic_admm.rst.
+    """
+    return scenario.FirstStageCost
+
+
+def first_stage_varlist(scenario):
+    """Return the original problem's first-stage variables (factory
+    production decisions for stoch_distr).  Companion to first_stage_cost.
+    """
+    return scenario._first_stage_vars
 
 
 def scenario_denouement(rank, admm_stoch_subproblem_scenario_name, scenario, eps=10**(-6)):
@@ -248,17 +268,9 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, inter_reg
         if admm_subproblem_name not in consensus_vars:
             print(f"WARNING: {admm_subproblem_name} has no consensus_vars")
             consensus_vars[admm_subproblem_name] = list()
-    
-    # now add the parents. It doesn't depend on the stochastic scenario so we chose one and
-    # then we go through the models (created by scenario creator) for all the admm_stoch_subproblem_scenario 
-    # which have this scenario as an ancestor (parent) in the tree
-    for admm_subproblem_name in admm_subproblem_names:
-        admm_stoch_subproblem_scenario_name = combining_names(admm_subproblem_name,stoch_scenario_name)
-        model = scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=inter_region_dict, cfg=cfg, data_params=data_params, all_nodes_dict=all_nodes_dict)
-        for node in model._mpisppy_node_list:
-            for var in node.nonant_list:
-                if var.name not in consensus_vars[admm_subproblem_name]:
-                    consensus_vars[admm_subproblem_name].append((var.name, node.stage))
+    # Each ADMM subproblem's first-stage Vars are added to its
+    # consensus list by the wrapper (Stoch_AdmmWrapper / AdmmBundler)
+    # at construction time, driven by the first_stage_varlist hook.
     return consensus_vars
 
 

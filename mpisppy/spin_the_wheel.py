@@ -12,6 +12,7 @@ from mpisppy import haveMPI, global_toc, MPI
 
 from mpisppy.utils import nice_join
 from mpisppy.utils.sputils import first_stage_nonant_writer, scenario_tree_solution_writer
+from mpisppy.utils.rank_apportionment import apportion_ranks, rank_to_cylinder
 
 class WheelSpinner:
 
@@ -103,10 +104,40 @@ class WheelSpinner:
 
         # Create the necessary communicators
         fullcomm = comm_world
-        strata_comm, cylinder_comm = _make_comms(n_spcomms, fullcomm=fullcomm)
-        strata_rank = strata_comm.Get_rank()
-        cylinder_rank = cylinder_comm.Get_rank()
         global_rank = fullcomm.Get_rank()
+
+        # Flexible rank assignments: each cylinder may request a rank ratio
+        # relative to the hub (default 1.0) via a "rank_ratio" dict key.
+        #
+        # Equal-rank path (all ratios 1.0, today's only case): build
+        # strata_comm and cylinder_comm with the uniform split, exactly as
+        # before.
+        #
+        # Unequal-rank path (any ratio != 1.0): apportion the rank pool into
+        # contiguous global-rank blocks, one per cylinder (largest-remainder,
+        # floor of one). The strata grouping ("rank i of every cylinder") is
+        # undefined when cylinders differ in size, so strata_comm is NOT
+        # created; strata_comm is passed as None and the communicator layer
+        # puts its window on fullcomm and addresses peers by global rank via
+        # overlap maps (Option D in doc/designs/flexible_rank_assignments.md).
+        # The cylinder index plays strata_rank's role (it selects the
+        # spcomm dict and marks the hub as 0).
+        rank_ratios = [d.get("rank_ratio", 1.0) for d in communicator_list]
+        if any(r != 1.0 for r in rank_ratios):
+            rank_counts = apportion_ranks(rank_ratios, fullcomm.Get_size())
+            global_toc(
+                f"Flexible rank assignment: ratios {rank_ratios} -> "
+                f"per-cylinder rank counts {rank_counts}",
+                global_rank == 0,
+            )
+            strata_comm = None
+            cylinder_index, cylinder_rank = rank_to_cylinder(global_rank, rank_counts)
+            cylinder_comm = fullcomm.Split(key=global_rank, color=cylinder_index)
+            strata_rank = cylinder_index
+        else:
+            strata_comm, cylinder_comm = _make_comms(n_spcomms, fullcomm=fullcomm)
+            strata_rank = strata_comm.Get_rank()
+            cylinder_rank = cylinder_comm.Get_rank()
 
         spcomm_dict = communicator_list[strata_rank]
 

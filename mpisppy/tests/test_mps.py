@@ -11,7 +11,7 @@ import os
 import unittest
 from mip import OptimizationStatus
 import mpisppy.problem_io.mps_reader as mps_reader
-from mpisppy.tests.utils import get_solver
+from mpisppy.tests.utils import get_solver, limit_solver_threads
 import pyomo.environ as pyo
 import mip  # pip install mip (from coin-or)
 
@@ -31,6 +31,7 @@ class TestMPSReader(unittest.TestCase):
         pyomo_model = mps_reader.read_mps_and_create_pyomo_model(fname)
 
         opt = pyo.SolverFactory(solver_name)
+        limit_solver_threads(opt, solver_name)
         opt.solve(pyomo_model)
         pyomo_obj = pyo.value(pyomo_model.objective)
 

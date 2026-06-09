@@ -34,7 +34,7 @@ import mpisppy.tests.examples.hydro.hydro as hydro
 from mpisppy.extensions.mult_rho_updater import MultRhoUpdater
 from mpisppy.extensions.xhatspecific import XhatSpecific
 from mpisppy.extensions.xhatxbar import XhatXbar
-from mpisppy.tests.utils import get_solver,round_pos_sig
+from mpisppy.tests.utils import get_solver,round_pos_sig,limit_solver_threads
 
 __version__ = 0.56
 
@@ -51,11 +51,11 @@ def _get_ph_base_options():
     Baseoptions["display_timing"] = False
     Baseoptions["display_progress"] = False
     if "cplex" in solver_name:
-        Baseoptions["iter0_solver_options"] = {"mip_tolerances_mipgap": 0.001}
-        Baseoptions["iterk_solver_options"] = {"mip_tolerances_mipgap": 0.00001}
+        Baseoptions["iter0_solver_options"] = {"mip_tolerances_mipgap": 0.001, "threads": 1}
+        Baseoptions["iterk_solver_options"] = {"mip_tolerances_mipgap": 0.00001, "threads": 1}
     else:
-        Baseoptions["iter0_solver_options"] = {"mipgap": 0.001}
-        Baseoptions["iterk_solver_options"] = {"mipgap": 0.00001}
+        Baseoptions["iter0_solver_options"] = {"mipgap": 0.001, "threads": 1}
+        Baseoptions["iterk_solver_options"] = {"mipgap": 0.00001, "threads": 1}
 
     Baseoptions["display_progress"] = False
 
@@ -150,6 +150,7 @@ class Test_sizes(unittest.TestCase):
     def test_ef_solve(self):
         options = self._copy_of_base_options()
         solver = pyo.SolverFactory(options["solver_name"])
+        limit_solver_threads(solver, options["solver_name"])
         ScenCount = 3
         ef = mpisppy.utils.sputils.create_EF(
             self.all3_scenario_names,
@@ -169,6 +170,7 @@ class Test_sizes(unittest.TestCase):
     def test_fix_ef_solve(self):
         options = self._copy_of_base_options()
         solver = pyo.SolverFactory(options["solver_name"])
+        limit_solver_threads(solver, options["solver_name"])
         ScenCount = 3
         ef = mpisppy.utils.sputils.create_EF(
             self.all3_scenario_names,
@@ -687,6 +689,7 @@ class Test_hydro(unittest.TestCase):
     def test_ef_solve(self):
         options = self._copy_of_base_options()
         solver = pyo.SolverFactory(options["solver_name"])
+        limit_solver_threads(solver, options["solver_name"])
         ef = mpisppy.utils.sputils.create_EF(
             self.all_scenario_names,
             hydro.scenario_creator,
@@ -709,6 +712,7 @@ class Test_hydro(unittest.TestCase):
     def test_ef_csv(self):
         options = self._copy_of_base_options()
         solver = pyo.SolverFactory(options["solver_name"])
+        limit_solver_threads(solver, options["solver_name"])
         ef = mpisppy.utils.sputils.create_EF(
             self.all_scenario_names,
             hydro.scenario_creator,
