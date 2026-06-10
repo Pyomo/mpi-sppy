@@ -87,6 +87,19 @@ def reduce_source_write_ids(source_ids, strict: bool) -> int:
         return source_ids[0] if len(set(source_ids)) == 1 else -1
     return min(source_ids)
 
+# ===== DEBUG (LOR_bug): canary guard appended to every field buffer =====
+# We allocate _CANARY_GUARD_DOUBLES extra doubles immediately after the
+# padded window region and fill them with a recognizable sentinel. The
+# window/RMA view (full_arr) is still exactly padded_len, so MPI transfers
+# are unchanged, but any over-write that runs past the field's end lands in
+# the guard (which we check every iteration) instead of silently corrupting
+# the adjacent glibc tcache. This localizes the over-write to a specific
+# field/rank/iteration at the moment it happens, rather than at a later
+# malloc. Remove with the rest of the LOR_bug instrumentation.
+_CANARY_GUARD_DOUBLES = 8
+_CANARY_VALUE = -123456789.0
+
+
 def communicator_array(data_length: int):
     """
     Allocate an MPI memory region with a padded length (multiple of 8 doubles = 64B),
@@ -95,6 +108,7 @@ def communicator_array(data_length: int):
 
     Returns:
         full_arr:  padded array (used for SPWindow put/get)
+        guard:     trailing canary region (DEBUG; see _CANARY_VALUE)
         logical_arr: logical view (data + id), last element is id
         data_length: number of data entries (excluding id)
         logical_len: data_length + 1
@@ -104,10 +118,17 @@ def communicator_array(data_length: int):
     padded_len = padded_len_n_doubles(logical_len)
 
     itemsize = np.dtype("d").itemsize
-    mem = MPI.Alloc_mem(padded_len * itemsize)
+    backing_len = padded_len + _CANARY_GUARD_DOUBLES
+    mem = MPI.Alloc_mem(backing_len * itemsize)
 
-    full_arr = np.frombuffer(mem, dtype="d", count=padded_len)
-    full_arr[:] = np.nan
+    backing = np.frombuffer(mem, dtype="d", count=backing_len)
+    backing[:] = np.nan
+
+    # Window/RMA view is exactly padded_len (MPI behavior unchanged).
+    full_arr = backing[:padded_len]
+    # Canary guard immediately after the window view.
+    guard = backing[padded_len:]
+    guard[:] = _CANARY_VALUE
 
     logical_arr = full_arr[:logical_len]
     logical_arr[-1] = 0.0
@@ -115,7 +136,7 @@ def communicator_array(data_length: int):
     # mem is returned so the caller can release it deterministically via
     # MPI.Free_mem (see FieldArray.free); leaving it to garbage collection
     # risks MPI.Free_mem running after MPI_Finalize at interpreter shutdown.
-    return mem, full_arr, logical_arr, data_length, logical_len, padded_len
+    return mem, full_arr, guard, logical_arr, data_length, logical_len, padded_len
 
 
 class FieldArray:
@@ -132,11 +153,22 @@ class FieldArray:
         # length is the data length (excluding the id)
         (self._mem,
          self._full_array,
+         self._guard,
          self._array,
          self._data_length,
          self._logical_len,
          self._padded_len) = communicator_array(length)
         self._id = 0
+
+    def canary_ok(self) -> bool:
+        """DEBUG (LOR_bug): True if the trailing guard region is intact.
+
+        A breach means something wrote past this field's padded window
+        region -- the over-write that was corrupting the adjacent heap.
+        """
+        if self._guard is None:
+            return True
+        return bool(np.all(self._guard == _CANARY_VALUE))
 
     def free(self) -> None:
         """Release the MPI-allocated backing memory deterministically.
@@ -151,6 +183,7 @@ class FieldArray:
             return
         self._array = None
         self._full_array = None
+        self._guard = None
         MPI.Free_mem(self._mem)
         self._mem = None
 
@@ -588,6 +621,37 @@ class SPCommunicator:
                     if self._flex_ranks and field not in _GLOBAL_OR_SCALAR_FIELDS:
                         self._build_overlap_map(field, strata_rank)
 
+    def _report_canary_breach(self, where: str) -> None:
+        """DEBUG (LOR_bug): print a one-line breach record from any rank."""
+        import sys
+        print(
+            f"[LOR_bug CANARY BREACH] {where} "
+            f"cls={type(self).__name__} global_rk={self.global_rank} "
+            f"cyl_rk={self.cylinder_rank} strata_rk={self.strata_rank}",
+            flush=True,
+        )
+        sys.stdout.flush()
+
+    def check_buffer_canaries(self, where: str = "") -> list:
+        """DEBUG (LOR_bug): sweep every send/recv buffer's canary guard.
+
+        Returns a list of breached buffers (empty if clean) and prints a
+        record for each. Call this every iteration to catch an over-write
+        past a field buffer at the point it happens -- naming the field and
+        origin -- instead of at a later, unrelated malloc.
+        """
+        bad = []
+        for key, fa in self.receive_buffers.items():
+            if not fa.canary_ok():
+                fld, origin = self._split_key(key)
+                bad.append(f"recv field={fld.name} origin={origin}")
+        for fld, fa in self.send_buffers.items():
+            if not fa.canary_ok():
+                bad.append(f"send field={fld.name}")
+        if bad:
+            self._report_canary_breach(f"{where}: " + "; ".join(bad))
+        return bad
+
     def put_send_buffer(self, buf: SendArray, field: Field):
         """ Put the specified values into the specified locally-owned buffer
             for the another cylinder to pick up.
@@ -597,6 +661,8 @@ class SPCommunicator:
         """
         buf._next_write_id()
         self.window.put(buf.window_array(), field)
+        if not buf.canary_ok():
+            self._report_canary_breach(f"after put_send_buffer field={field.name}")
         return
 
     def _write_ids_agree(self, new_id: int, synchronize: bool) -> bool:
@@ -672,6 +738,9 @@ class SPCommunicator:
         last_id = buf.id()
 
         self.window.get(buf.window_array(), origin, field)  # padded view
+        if not buf.canary_ok():
+            self._report_canary_breach(
+                f"after get_receive_buffer field={field.name} origin={origin}")
 
         new_id = int(buf.array()[-1])  # logical view
 

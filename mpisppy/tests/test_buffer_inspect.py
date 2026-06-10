@@ -426,6 +426,11 @@ def _make_spoke_stub(shutdown_buf, *, inspect_on=True,
         Spoke._inspect_buffers_on_shutdown, stub)
     stub._warn_if_buffer_bad = types.MethodType(
         Spoke._warn_if_buffer_bad, stub)
+    # got_kill_signal also sweeps field-buffer canaries (LOR_bug debug aid).
+    stub.check_buffer_canaries = types.MethodType(
+        Spoke.check_buffer_canaries, stub)
+    stub._report_canary_breach = types.MethodType(
+        Spoke._report_canary_breach, stub)
     return stub
 
 
