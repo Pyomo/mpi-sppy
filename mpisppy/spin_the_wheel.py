@@ -8,7 +8,7 @@
 ###############################################################################
 
 from pyomo.environ import value
-from mpisppy import haveMPI, global_toc, MPI
+from mpisppy import haveMPI, global_toc, git_commit_hash, MPI
 
 from mpisppy.utils import nice_join
 from mpisppy.utils.sputils import first_stage_nonant_writer, scenario_tree_solution_writer
@@ -83,6 +83,12 @@ class WheelSpinner:
 
         if comm_world is None:
             comm_world = MPI.COMM_WORLD
+
+        # DEBUG (LOR_bug): announce the running source commit so output from
+        # the cluster can be matched to a version (Claude and the experiments
+        # run on different machines). Remove with the LOR_bug instrumentation.
+        global_toc(f"Running mpi-sppy commit {git_commit_hash()}",
+                   comm_world.rank == 0)
 
         _key_conversion = {
             "hub_class" : "spcomm_class",
