@@ -173,15 +173,20 @@ class FieldArray:
     def free(self) -> None:
         """Release the MPI-allocated backing memory deterministically.
 
-        Drops the numpy views first (CPython refcounting collects them
-        immediately, so nothing aliases the buffer), then returns the
-        memory to MPI. After this the FieldArray must not be used. Relying
-        on garbage collection instead risks MPI.Free_mem running after
+        Copies the logical view onto the regular Python heap (so callers
+        that read final values after teardown -- e.g. ``spcomm.bound`` after
+        WheelSpinner.spin() -- still work), drops the RMA-only views, then
+        returns the MPI-allocated backing to MPI. After this the FieldArray
+        is read-only and must not be used for further RMA. Relying on
+        garbage collection instead risks MPI.Free_mem running after
         MPI_Finalize at interpreter shutdown, which corrupts the heap.
         """
         if self._mem is None:
             return
-        self._array = None
+        # Detach the logical view from the MPI-backed buffer before freeing
+        # it; a plain copy keeps post-teardown reads valid without aliasing
+        # released MPI memory.
+        self._array = np.array(self._array)
         self._full_array = None
         self._guard = None
         MPI.Free_mem(self._mem)
