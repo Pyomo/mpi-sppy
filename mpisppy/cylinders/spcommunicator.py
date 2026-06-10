@@ -112,7 +112,10 @@ def communicator_array(data_length: int):
     logical_arr = full_arr[:logical_len]
     logical_arr[-1] = 0.0
 
-    return full_arr, logical_arr, data_length, logical_len, padded_len
+    # mem is returned so the caller can release it deterministically via
+    # MPI.Free_mem (see FieldArray.free); leaving it to garbage collection
+    # risks MPI.Free_mem running after MPI_Finalize at interpreter shutdown.
+    return mem, full_arr, logical_arr, data_length, logical_len, padded_len
 
 
 class FieldArray:
@@ -127,12 +130,29 @@ class FieldArray:
 
     def __init__(self, length: int):
         # length is the data length (excluding the id)
-        (self._full_array,
+        (self._mem,
+         self._full_array,
          self._array,
          self._data_length,
          self._logical_len,
          self._padded_len) = communicator_array(length)
         self._id = 0
+
+    def free(self) -> None:
+        """Release the MPI-allocated backing memory deterministically.
+
+        Drops the numpy views first (CPython refcounting collects them
+        immediately, so nothing aliases the buffer), then returns the
+        memory to MPI. After this the FieldArray must not be used. Relying
+        on garbage collection instead risks MPI.Free_mem running after
+        MPI_Finalize at interpreter shutdown, which corrupts the heap.
+        """
+        if self._mem is None:
+            return
+        self._array = None
+        self._full_array = None
+        MPI.Free_mem(self._mem)
+        self._mem = None
 
     def window_array(self) -> np.typing.NDArray:
         """Full padded array (used for SPWindow get/put)."""
@@ -516,6 +536,14 @@ class SPCommunicator:
 
         if self.window is None:
             return
+
+        # Release the MPI-allocated field buffers deterministically (before
+        # the window and before MPI_Finalize) rather than leaving them to
+        # garbage collection, whose timing relative to finalize is undefined.
+        for fa in self.receive_buffers.values():
+            fa.free()
+        for fa in self.send_buffers.values():
+            fa.free()
 
         self.receive_buffers = {}
         self.send_buffers = {}

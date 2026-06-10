@@ -188,6 +188,10 @@ class WheelSpinner:
 
         ## give the hub the chance to catch new values
         spcomm.hub_finalize()
+
+        # hub_finalize may issue RMA gets; ensure every rank is done with
+        # remote reads before any window is freed.
+        fullcomm.Barrier()
         spcomm.free_windows()
 
         fullcomm.Barrier()
