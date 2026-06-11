@@ -63,6 +63,29 @@ def _solve(model):
     return results
 
 
+def _farmer_original_costs(ef, names):
+    """(probability, realized original cost) per farmer scenario at the solution.
+
+    Uses each scenario's original risk-neutral objective ``Total_Cost_Objective``,
+    which the CVaR transform leaves on the model (deactivated) for exactly this
+    kind of E[Cost] reporting.  Costs follow the minimize convention.
+    """
+    out = []
+    for sname in names:
+        s = getattr(ef, sname)
+        out.append((s._mpisppy_probability, pyo.value(s.Total_Cost_Objective.expr)))
+    return out
+
+
+def _farmer_expected_cost(ef, names):
+    return sum(p * c for p, c in _farmer_original_costs(ef, names))
+
+
+def _farmer_worst_cost(ef, names):
+    # worst == highest cost (minimize convention)
+    return max(c for _, c in _farmer_original_costs(ef, names))
+
+
 class StructureTests(unittest.TestCase):
     """The transform's structure; these do not need a solver."""
 
@@ -187,6 +210,48 @@ class FarmerRegressionTests(unittest.TestCase):
 
         self.assertAlmostEqual(pyo.value(ef_plain.EF_Obj),
                                pyo.value(ef_cvar.EF_Obj), places=3)
+
+
+@unittest.skipIf(not solver_available, "no solver is available")
+class RiskReturnTradeoffTests(unittest.TestCase):
+    """Risk aversion should trade expected cost for a better tail.
+
+    The risk-neutral solution is *the* minimizer of E[Cost], so the CVaR-optimal
+    plan can never have a lower E[Cost]; a good example makes it strictly higher
+    (worse) while improving the worst case.  On the classic 3-scenario farmer the
+    CVaR plan moves E[Cost] from about -108390 to -103313 while improving the
+    worst-case cost from about -48820 to -57640.  A zero gap would mean the
+    example does not exercise risk aversion and we would need a better one.
+    """
+
+    NUM_SCENS = 3            # classic Birge-Louveaux farmer (deterministic)
+    CVAR_ALPHA = 0.8
+    CVAR_WEIGHT = 5.0
+
+    def _solved_ef(self, scenario_creator):
+        names = farmer.scenario_names_creator(self.NUM_SCENS)
+        ef = sputils.create_EF(
+            names, scenario_creator,
+            scenario_creator_kwargs={"num_scens": self.NUM_SCENS},
+            suppress_warnings=True)
+        _solve(ef)
+        return ef, names
+
+    def test_cvar_worsens_expectation_and_improves_tail(self):
+        ef_rn, names = self._solved_ef(farmer.scenario_creator)
+        ef_cvar, _ = self._solved_ef(
+            cvar.cvar_scenario_creator(
+                farmer.scenario_creator,
+                cvar_weight=self.CVAR_WEIGHT, cvar_alpha=self.CVAR_ALPHA))
+
+        e_rn = _farmer_expected_cost(ef_rn, names)
+        e_cvar = _farmer_expected_cost(ef_cvar, names)
+        # The expectation-only part of the objective is strictly worse under CVaR.
+        self.assertGreater(e_cvar, e_rn + 100.0)
+
+        # ... and that price buys a genuine hedge: a strictly better worst case.
+        self.assertLess(_farmer_worst_cost(ef_cvar, names),
+                        _farmer_worst_cost(ef_rn, names))
 
 
 if __name__ == "__main__":
