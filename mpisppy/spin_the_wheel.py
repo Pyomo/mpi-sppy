@@ -89,7 +89,7 @@ class WheelSpinner:
         # the cluster can be matched to a version (Claude and the experiments
         # run on different machines). Remove with the LOR_bug instrumentation.
         global_toc(f"Running mpi-sppy commit {git_commit_hash()}",
-                   comm_world.rank == 0)
+                   comm_world.Get_rank() == 0)
 
         _key_conversion = {
             "hub_class" : "spcomm_class",
