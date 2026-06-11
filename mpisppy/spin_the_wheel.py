@@ -13,6 +13,7 @@ from mpisppy import haveMPI, global_toc, git_commit_hash, MPI
 from mpisppy.utils import nice_join
 from mpisppy.utils.sputils import first_stage_nonant_writer, scenario_tree_solution_writer
 from mpisppy.utils.rank_apportionment import apportion_ranks, rank_to_cylinder
+from mpisppy.debug_utils.heap_probe import heap_probe  # DEBUG(LOR_bug)
 
 class WheelSpinner:
 
@@ -165,6 +166,8 @@ class WheelSpinner:
         # Create the appropriate opt object locally
         opt_kwargs["mpicomm"] = cylinder_comm
         opt = opt_class(**opt_kwargs)
+        # DEBUG(LOR_bug): bracket scenario creation + SPFBBT presolve.
+        heap_probe("after-opt-create", rank=global_rank)
 
         # Create the SPCommunicator object (hub/spoke) with
         # the appropriate SPBase object attached
@@ -172,12 +175,18 @@ class WheelSpinner:
                           communicator_list, **sp_kwargs)
 
         spcomm.make_windows()
+        # DEBUG(LOR_bug): bracket RMA window allocation.
+        heap_probe("after-make-windows", rank=global_rank)
 
         # Run main()
         if strata_rank == 0:
             spcomm.setup_hub()
+            # DEBUG(LOR_bug): bracket hub setup (hub rank only).
+            heap_probe("after-setup-hub", rank=global_rank)
 
         global_toc("Starting spcomm.main()", comm_world.rank == 0)
+        # DEBUG(LOR_bug): last marker before the cylinder loop starts.
+        heap_probe("pre-main", rank=global_rank)
         spcomm.main()
         if strata_rank == 0: # If this is the hub
             spcomm.send_terminate()

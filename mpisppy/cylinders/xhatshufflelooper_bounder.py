@@ -13,6 +13,7 @@ import mpisppy.log
 from mpisppy.extensions.xhatbase import XhatBase
 from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
 from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
+from mpisppy.debug_utils.heap_probe import heap_probe  # DEBUG(LOR_bug)
 
 
 # Could also pass, e.g., sys.stdout instead of a filename
@@ -40,6 +41,9 @@ class XhatShuffleInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
     def try_scenario_dict(self, xhat_scenario_dict):
         """ wrapper for _try_one"""
         snamedict = xhat_scenario_dict
+        # DEBUG(LOR_bug): last marker before the xhat eval / gurobi set_objective
+        # where both 2026-06-11 runs aborted ("unaligned tcache chunk").
+        heap_probe("xhatshuffle:pre-try_scenario_dict", rank=self.global_rank)
 
         stage2_ef_solver_name = self.opt.options.get("stage2_ef_solver_name", None)
         branching_factors = self.opt.options.get("branching_factors", None)  # for stage2ef
@@ -104,6 +108,8 @@ class XhatShuffleInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
                 print("(rank0) " + msg)
 
         xh_iter = 1
+        # DEBUG(LOR_bug): heap intact entering the cylinder loop.
+        heap_probe("xhatshuffle:main-enter", rank=self.global_rank)
         while not self.got_kill_signal():
             # (unrelated: uncomment the next line to see the source of delay getting an xhat)
             if (xh_iter-1) % 100 == 0:
@@ -111,6 +117,9 @@ class XhatShuffleInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
                 logger.debug(f'   Xhatshuffle got from opt on rank {self.global_rank}')
 
             new_nonants = self.update_nonants()
+            # DEBUG(LOR_bug): bracket the RMA receive of nonants from the hub.
+            heap_probe(f"xhatshuffle:post-update_nonants:iter{xh_iter}",
+                       rank=self.global_rank)
 
             # When there is no iter0, the serial number must be checked.
             if self._nonant_len_receive_buffer.id() == 0:
