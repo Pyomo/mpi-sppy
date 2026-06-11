@@ -152,12 +152,27 @@ A single insertion point → `do_EF`, `do_decomp`, and every spoke inherit the r
    A mean-free pure-CVaR objective is instead requested explicitly via `--cvar-mean-weight λ`
    (default 1.0): `obj = λ·Cost_s + β·(η + δ_s/(1-α))`. Pure CVaR = `λ=0, β=1`. Defaults preserve
    E[Cost]; no surprising overload. This is part of the core transform (Phase 1).
-2. **CVaR on total cost only (PySP default).** η at the root node, over the full scenario objective.
-   Per-stage / per-node (nested, time-consistent) CVaR is out of scope for v1.
+2. **Single root-stage η — NOT time-consistent (important).** There is exactly one η, at the root
+   node, taken over the full (end-of-horizon) scenario cost — i.e. CVaR of the *total* cost, which is
+   what PySP does. This is a single-period risk measure on the terminal cost; it is **not** a nested
+   / time-consistent multistage risk measure (no per-stage or per-node η, no recursive composition).
+   For multistage problems it therefore measures risk of the total cost only.
+   **If a time-consistent (nested) risk measure is needed, users should contact the developers.**
+   This caveat MUST appear verbatim in the user-facing docs — see the doc note below and §8/§9.
 3. **Minimize first.** Maximize handled by mirroring PySP (δ domain `NonPositiveReals`, negate the
    excess expression); ship in a later phase.
 4. **η fixed during xhat evaluation** → valid but possibly loose inner bound. Optional later
    refinement: re-optimize the shared η given the fixed "real" first-stage vars.
+
+### 6.5 Documentation note (verbatim — to ship in the Risk Management docs section, Phase 3)
+
+> **Scope: single root-stage CVaR, not time-consistent.** mpi-sppy's CVaR support uses a single
+> Value-at-Risk variable η at the root node and applies CVaR to the *total* (end-of-horizon)
+> scenario cost. This is the same formulation as PySP. It is a single-period risk measure on the
+> total cost and is **not** a nested / time-consistent multistage risk measure (there is no
+> per-stage η and no recursive composition across stages). For two-stage problems this is the usual
+> CVaR; for multistage problems it measures the risk of the total cost only. **If you need a
+> time-consistent (nested) risk measure, please contact the mpi-sppy developers.**
 
 ## 7. Correctness / validation
 
@@ -178,7 +193,8 @@ A single insertion point → `do_EF`, `do_decomp`, and every spoke inherit the r
   `--cvar-alpha`, `--cvar-mean-weight`); `generic_cylinders` wiring; a farmer risk-averse example; a
   cylinders test (PH hub + Lagrangian + xhat bound sandwich). Wire the new test into
   `run_coverage.bash` AND `test_pr_and_main.yml` in the same commit.
-- **Phase 3 — polish.** maximize support; docs section ("Risk Management"); confidence-interval note
+- **Phase 3 — polish.** maximize support; docs section ("Risk Management") that MUST include the
+  single-root-stage / not-time-consistent caveat verbatim from §6.5; confidence-interval note
   (`zhat4xhat` evaluates the same risk-averse objective).
 
 ## 9. Files touched
@@ -190,4 +206,4 @@ A single insertion point → `do_EF`, `do_decomp`, and every spoke inherit the r
 | edit | `mpisppy/utils/config.py` (`cvar_args`) |
 | edit | `mpisppy/generic_cylinders.py` (wrap seam) |
 | new | farmer risk-averse example / `--cvar` pass-through |
-| docs | `doc/source/…` Risk Management section |
+| docs | `doc/source/…` Risk Management section (must include the §6.5 not-time-consistent caveat) |
