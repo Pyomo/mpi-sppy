@@ -642,6 +642,21 @@ class SPBase:
 
 
     def allreduce_or(self, val):
+        # ====== CONTROL toggle (LOR_bug) ======
+        # When MPISPPY_LOR_CONTROL is set in the environment, bypass the
+        # instrumentation below (4 extra Allreduces + 1 Allgather + ~9 numpy
+        # allocations per call) and run the original minimal path. This lets
+        # the single PR branch produce a control data point -- to tell whether
+        # the heap corruption is real or an artifact of the diagnostic's
+        # collective volume -- without re-pushing. Canary guards and the
+        # teardown fixes are unaffected (they live elsewhere). See PR #717.
+        import os
+        if os.environ.get("MPISPPY_LOR_CONTROL"):
+            local_val = np.array([val], dtype='int8')
+            global_val = np.zeros(1, dtype='int8')
+            self.mpicomm.Allreduce(local_val, global_val, op=MPI.LOR)
+            return bool(global_val[0] > 0)
+        # ====== END CONTROL toggle ======
         # ====== DEBUG: LOR_bug instrumentation ======
         # Yields per call (on cyl_rk == 0 of self.mpicomm) the full picture
         # needed to localize an Allreduce(LOR) returning nonzero when every
