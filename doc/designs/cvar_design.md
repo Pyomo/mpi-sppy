@@ -39,6 +39,7 @@ When `generate_weighted_cvar` is set, PySP modifies the *binding* (extensive-for
 - `COMPUTE_SCENARIO_EXCESS` — `ConstraintList` adding `0 ≤ δ_s − cost_s + η` ⇒ `δ_s ≥ cost_s − η`.
 - `CVAR_COST_ROOT` — `Expression` set to `η + 1/(1-α) · Σ_s p_s δ_s`.
 - Objective `MASTER` = `EF_EXPECTED_COST + cvar_weight · CVAR_COST_ROOT`.
+  (mpi-sppy names its risk-averse objective `WITH_CVAR`, not `MASTER`; see §5.1.)
 
 CVaR is taken over the **total** scenario cost (`scenario._instance_cost_expression`).
 
@@ -78,7 +79,9 @@ Verified against the code: nonants are enumerated from each root node's pre-buil
 NAC reference variables generically over `node.nonant_vardata_list` — so appending η to the root
 node is sufficient for both decomposition and EF. The objective is the active Pyomo `Objective`
 (via `sputils.find_active_objective`); there is no separate `_mpisppy_objective_functional` to keep
-in sync — we rewrite `obj.expr` directly (the same approach `admmWrapper` uses).
+in sync. Rather than rewrite the user's objective in place (as `admmWrapper` does), we deactivate it
+(preserving it for E[Cost] reporting) and add a new active objective `WITH_CVAR` — see §5.1; this is
+robust because all mpi-sppy objective lookups filter on `active=True`.
 
 ## 5. Implementation surface
 
@@ -91,22 +94,36 @@ def add_cvar(scenario, *, cvar_weight, cvar_alpha, cvar_mean_weight=1.0):
     Adds  scenario._mpisppy_cvar_eta     (root-node nonant, free; the VaR η)
           scenario._mpisppy_cvar_excess  (>= 0; the excess δ_s)
           scenario._mpisppy_cvar_excess_con
-    and rewrites the active objective to  λ·cost + β·η + β/(1-α)·δ_s,
-    where λ = cvar_mean_weight (default 1.0) and β = cvar_weight.
+    Deactivates the original (risk-neutral) objective — keeping it on the model
+    for separate E[Cost] reporting — and adds a new ACTIVE objective named
+    `WITH_CVAR` = λ·cost + β·η + β/(1-α)·δ_s, where λ = cvar_mean_weight
+    (default 1.0) and β = cvar_weight.
     """
-    obj  = sputils.find_active_objective(scenario)   # pristine user cost
-    cost = obj.expr
-    # sense from obj.sense; minimize first (maximize mirrors PySP — see §6.3)
+    obj   = sputils.find_active_objective(scenario)   # pristine user cost objective
+    cost  = obj.expr
+    sense = obj.sense                                 # minimize first (maximize mirrors PySP — §6.3)
     scenario._mpisppy_cvar_eta    = pyo.Var()
     scenario._mpisppy_cvar_excess = pyo.Var(domain=pyo.NonNegativeReals)
     scenario._mpisppy_cvar_excess_con = pyo.Constraint(
         expr=scenario._mpisppy_cvar_excess >= cost - scenario._mpisppy_cvar_eta)
-    obj.expr = cvar_mean_weight*cost + cvar_weight*scenario._mpisppy_cvar_eta \
-             + (cvar_weight/(1.0 - cvar_alpha))*scenario._mpisppy_cvar_excess
+    # keep the original risk-neutral objective (deactivated) for E[Cost] reporting;
+    # the new objective is named WITH_CVAR (NOT PySP's "MASTER" — see §3).
+    obj.deactivate()
+    scenario.WITH_CVAR = pyo.Objective(
+        expr  = cvar_mean_weight*cost
+              + cvar_weight*scenario._mpisppy_cvar_eta
+              + (cvar_weight/(1.0 - cvar_alpha))*scenario._mpisppy_cvar_excess,
+        sense = sense)
     root = scenario._mpisppy_node_list[0]
     root.nonant_list.append(scenario._mpisppy_cvar_eta)          # append to BOTH:
     root.nonant_vardata_list.append(scenario._mpisppy_cvar_eta)  # vardata list is pre-built in __init__
 ```
+
+Safe because every mpi-sppy objective lookup filters on `active=True`
+(`find_active_objective` requires exactly one active; `get_objs`/`deact_objs` and the EF builder's
+`scenario_objs[0]` likewise see only active objectives), so the deactivated original is invisible and
+only `WITH_CVAR` is used. The name `WITH_CVAR` is a single-token choice — swap for `COMBINED`/`FULL`/
+etc. if preferred; the design only requires it not be `MASTER`.
 
 ### 5.2 scenario_creator wrapper (lightweight, functional)
 
