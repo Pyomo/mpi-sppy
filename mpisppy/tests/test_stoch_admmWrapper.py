@@ -218,19 +218,25 @@ class TestStochAdmmWrapper(unittest.TestCase):
         """Extract the last outer bound from PH output."""
         import re
         target_line = "Iter.           Best Bound  Best Incumbent      Rel. Gap        Abs. Gap"
-        result_by_line = stdout.strip().split('\n')
+        # An iteration row looks like:
+        #   [    0.23]    30  L  -27422.8799   inf   inf%   inf
+        # The flag token after the iteration number is optional and may be
+        # '*' (new incumbent), 'L'/'B' (bound updates), or a combination, so
+        # accept any run of flag characters before the Best Bound value. The
+        # header itself prints more than once (iter 0 and finalization), so
+        # keep scanning every row and keep the last bound seen rather than
+        # only inspecting the single line after a header.
+        iter_re = re.compile(r'\[\s*\d+\.\d+\]\s+\d+\s+(?:[*A-Za-z]+\s+)?(-?[\d.]+)')
         outer_bound = None
         in_results = False
-        for line in result_by_line:
+        for line in stdout.strip().split('\n'):
             if target_line in line:
                 in_results = True
                 continue
             if in_results:
-                # Match a line with iteration number and bounds
-                match = re.search(r'\[\s*\d+\.\d+\]\s+\d+\s+(?:L\s*B?|B\s*L?)?\s+([-.\d]+)', line)
+                match = iter_re.search(line)
                 if match:
                     outer_bound = float(match.group(1))
-                in_results = False
         return outer_bound
 
     @unittest.skipUnless(solver_available, "no solver available")
