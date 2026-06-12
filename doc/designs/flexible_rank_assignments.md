@@ -142,6 +142,16 @@ Multi-source assembly across ranks is the correct primitive.
 - **`CROSS_SCENARIO_COST`** (cross-scenario cut source → cut spoke).
   Per-scenario cost data.
 
+- **`XFEAS`** (xhat-feasible / subgradient spoke → CG hub).  Each
+  scenario contributes a `[feasible x, total cost]` block — the same
+  `[nonants, obj_val]` *layout* as the Category-2 fields, but with a
+  crucial difference: the `x` is **genuinely distinct per scenario**
+  (the CG hub tries each scenario's `x` as its own incumbent
+  candidate), so there is **no** cross-scenario NAC redundancy to
+  preserve and no `obj_val` to keep paired with a shared first stage.
+  It is therefore Category 1, assembled per-scenario with **relaxed**
+  coherence (see §Coherence), not Category 2.
+
 #### Category 2 — per-scenario *layout*, NAC-redundant first-stage
 
 Buffers in this category are laid out per scenario, but the nonant
@@ -525,6 +535,15 @@ source rank.
   per-scenario value just means evaluating a slightly older candidate
   — always honest, never invalid.
 
+- **`XFEAS`** (xhat-feasible / subgradient spoke → CG hub).  Per-scenario
+  `[feasible x, total cost]` blocks whose `x` is genuinely *distinct*
+  per scenario, so — unlike `BEST_XHAT` / `RECENT_XHATS` — there is no
+  cross-scenario NAC to preserve and no shared first stage to keep an
+  `obj_val` paired with.  The CG hub tries each scenario's `x` as its
+  own candidate and re-evaluates it, so a stale or mixed-iteration block
+  just means trying a slightly older candidate — always honest, never
+  invalid.  Hence **relaxed coherence**, assembled per-scenario as-is.
+
 - **Global-sized bounds and scalars** (Categories 3 and 4).  Monotone,
   idempotent application; staleness is safe.
 
@@ -630,6 +649,9 @@ unnecessary given the per-field analysis).
   coherence** (all sources at one `write_id`); that already makes the
   first-stage portion NAC-consistent across scenarios, so no
   post-assembly fix-up is required.
+- `XFEAS` is assembled per-scenario via the same overlap map but under
+  **relaxed** coherence (distinct per-scenario iterates, no shared first
+  stage to keep NAC-consistent).
 - Bound and scalar communication is unaffected.
 
 #### `cfg_vanilla.py` and `config.py`
@@ -688,6 +710,12 @@ differs from 1.0)
   fields in the **two-stage** case (overlap-map assembly; strict
   coherence makes the first-stage portion NAC-consistent with no
   post-assembly fix-up).
+- Add `XFEAS` as a **relaxed**-coherence per-scenario field (Category 1;
+  genuinely distinct per-scenario iterates, no shared first stage) in
+  the **two-stage** case, assembled per-scenario via the overlap map.
+  Its only consumer is the CG hub, so this also adds the
+  `--ph-xfeas-spoke-rank-ratio` CLI flag and the end-to-end CG/`XFEAS`
+  multi-rank test.
 - Wire `cross_scen` with relaxed coherence (resolved — see §Coherence)
   and make `CrossScenarioCutSpoke` accept a multi-source `NONANTS_VALS`
   / `CROSS_SCENARIO_COST` (it currently asserts a single source rank).
