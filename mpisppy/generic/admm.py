@@ -10,14 +10,22 @@
 
 from mpisppy import MPI
 from mpisppy.utils.admmWrapper import AdmmWrapper
-from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
+from mpisppy.utils.stoch_admmWrapper import (
+    Stoch_AdmmWrapper,
+    default_combining_names,
+    default_split_admm_stoch_subproblem_scenario_name,
+    default_admm_stoch_subproblem_scenario_names_creator,
+)
 
 
 def admm_args(cfg):
     """Register ADMM-specific config args.
 
-    Note: num_admm_subproblems and num_stoch_scens may already be registered
-    by the model's inparser_adder; we only add them if not already present.
+    Canonical source for num_admm_subproblems and num_stoch_scens under
+    generic_cylinders --stoch-admm; the guards below are defensive for
+    older model modules that may still register them in their own
+    inparser_adder.  _check_admm_compatibility validates the values
+    were actually set on the command line for stoch-admm runs.
     """
     cfg.add_to_config("admm", description="Use ADMM decomposition",
                       domain=bool, default=False)
@@ -31,7 +39,7 @@ def admm_args(cfg):
         cfg.add_to_config("num_stoch_scens",
                           description="Number of stochastic scenarios (stoch-admm only)",
                           domain=int, default=None)
-    
+
     cfg.add_branching_factors()
     cfg.add_stage2_ef_solver_name_arg()
 
@@ -99,6 +107,18 @@ def _check_admm_compatibility(cfg):
     # unconstrained.  The resulting "inner bound" violates the problem's
     # ADMM consensus constraints and has no valid interpretation as a
     # relaxation, so it must not be silently produced.
+    # admm_args registers num_admm_subproblems / num_stoch_scens with
+    # default=None; if the user neither passed the CLI flags nor
+    # registered them in their inparser_adder, fail clearly here
+    # instead of letting range(None) crash inside the model's
+    # admm_subproblem_names_creator.
+    if cfg.get("stoch_admm", ifmissing=False):
+        for opt in ("num_admm_subproblems", "num_stoch_scens"):
+            if cfg.get(opt) is None:
+                raise RuntimeError(
+                    f"--stoch-admm requires --{opt.replace('_', '-')}; "
+                    f"pass it on the command line."
+                )
     if (cfg.get("stoch_admm", ifmissing=False)
             and cfg.get("xhatshuffle", ifmissing=False)
             and cfg.get("stage2_ef_solver_name") is None):
@@ -144,6 +164,42 @@ def setup_admm(module, cfg, n_cylinders):
 
     return (admm.admmWrapper_scenario_creator, {},
             all_scenario_names, None)
+
+
+def _discover_naming_helpers(module):
+    """Discover the model module's stoch-admm naming inverse-pair and
+    validate the both-or-neither contract.
+
+    ``combining_names(admm_sub, stoch_scen) -> name`` and
+    ``split_admm_stoch_subproblem_scenario_name(name) -> (admm_sub,
+    stoch_scen)`` must agree.  If the user defines one without the
+    other, we cannot pair a default with a custom function safely --
+    the pairing would silently produce mismatched names -- so we
+    raise.  When both are absent, callers fall back to the module
+    defaults in ``mpisppy.utils.stoch_admmWrapper``.
+
+    Returns:
+        dict with keys ``combining_names`` and
+        ``split_admm_stoch_subproblem_scenario_name``; either-both are
+        the module's callables or both are None (signalling "fall back
+        to defaults" to the caller).
+    """
+    combining = getattr(module, "combining_names", None)
+    split = getattr(module, "split_admm_stoch_subproblem_scenario_name", None)
+    if (combining is None) != (split is None):
+        present = "combining_names" if combining is not None else "split_admm_stoch_subproblem_scenario_name"
+        missing = "split_admm_stoch_subproblem_scenario_name" if combining is not None else "combining_names"
+        raise RuntimeError(
+            f"Module {module.__name__!r} defines {present} but not "
+            f"{missing}.  These naming helpers form an inverse pair "
+            f"and must be defined together (or both omitted to use "
+            f"the defaults from mpisppy.utils.stoch_admmWrapper).  "
+            f"See doc/src/generic_admm.rst."
+        )
+    return {
+        "combining_names": combining,
+        "split_admm_stoch_subproblem_scenario_name": split,
+    }
 
 
 def _discover_first_stage_hooks(module):
@@ -215,8 +271,35 @@ def setup_stoch_admm(module, cfg, n_cylinders):
     """
     admm_subproblem_names = module.admm_subproblem_names_creator(cfg)
     stoch_scenario_names = module.stoch_scenario_names_creator(cfg)
-    all_names = module.admm_stoch_subproblem_scenario_names_creator(
-        admm_subproblem_names, stoch_scenario_names)
+
+    naming = _discover_naming_helpers(module)
+    # Fall back to the default scen-names creator (which uses the
+    # module's combining_names if defined, otherwise the package
+    # default).  Same nesting order in both paths so MPI rank
+    # assignment is unaffected by the fallback.
+    if hasattr(module, "admm_stoch_subproblem_scenario_names_creator"):
+        # The wrapper decodes each wrapped-scenario name via
+        # split_admm_stoch_subproblem_scenario_name; if the user
+        # ships custom names without the matching split, decoding
+        # silently falls back to the default split and ValueErrors
+        # at runtime.  Catch the inconsistency here instead.
+        if naming["split_admm_stoch_subproblem_scenario_name"] is None:
+            raise RuntimeError(
+                f"Module {module.__name__!r} defines "
+                f"admm_stoch_subproblem_scenario_names_creator but "
+                f"not the combining_names / "
+                f"split_admm_stoch_subproblem_scenario_name inverse "
+                f"pair.  The wrapper needs the split function to "
+                f"decode the custom names; provide both, or omit "
+                f"all three to use the defaults."
+            )
+        all_names = module.admm_stoch_subproblem_scenario_names_creator(
+            admm_subproblem_names, stoch_scenario_names)
+    else:
+        combining = naming["combining_names"] or default_combining_names
+        all_names = default_admm_stoch_subproblem_scenario_names_creator(
+            admm_subproblem_names, stoch_scenario_names,
+            combining_fn=combining)
 
     scenario_creator_kwargs = module.kw_creator(cfg)
     stoch_scenario_name = stoch_scenario_names[0]
@@ -228,7 +311,8 @@ def setup_stoch_admm(module, cfg, n_cylinders):
     admm = Stoch_AdmmWrapper(
         options={},
         all_admm_stoch_subproblem_scenario_names=all_names,
-        split_admm_stoch_subproblem_scenario_name=module.split_admm_stoch_subproblem_scenario_name,
+        split_admm_stoch_subproblem_scenario_name=naming[
+            "split_admm_stoch_subproblem_scenario_name"],
         admm_subproblem_names=admm_subproblem_names,
         stoch_scenario_names=stoch_scenario_names,
         scenario_creator=module.scenario_creator,
@@ -278,6 +362,13 @@ def setup_stoch_admm_with_bundles(module, cfg, n_cylinders):
         admm_subproblem_names, stoch_scenario_name, **scenario_creator_kwargs)
 
     first_stage_hooks = _discover_first_stage_hooks(module)
+    naming = _discover_naming_helpers(module)
+    # AdmmBundler requires both callables (it does not have the
+    # wrapper's None-default plumbing).  Resolve to the package
+    # defaults here when the module omits them.
+    combining_fn = naming["combining_names"] or default_combining_names
+    split_fn = (naming["split_admm_stoch_subproblem_scenario_name"]
+                or default_split_admm_stoch_subproblem_scenario_name)
 
     bundler = AdmmBundler(
         module=module,
@@ -285,8 +376,8 @@ def setup_stoch_admm_with_bundles(module, cfg, n_cylinders):
         admm_subproblem_names=admm_subproblem_names,
         stoch_scenario_names=stoch_scenario_names,
         consensus_vars=consensus_vars,
-        combining_fn=module.combining_names,
-        split_fn=module.split_admm_stoch_subproblem_scenario_name,
+        combining_fn=combining_fn,
+        split_fn=split_fn,
         scenario_creator_kwargs=scenario_creator_kwargs,
         **first_stage_hooks,
     )

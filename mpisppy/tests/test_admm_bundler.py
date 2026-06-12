@@ -428,6 +428,10 @@ class TestAdmmArgs(unittest.TestCase):
         from mpisppy.generic.admm import _check_admm_compatibility
         cfg = config.Config()
         cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
+        cfg.add_to_config("num_admm_subproblems", description="",
+                          domain=int, default=2)
+        cfg.add_to_config("num_stoch_scens", description="",
+                          domain=int, default=4)
         cfg.add_to_config("scenarios_per_bundle", description="", domain=int, default=4)
         cfg.add_to_config("pickle_bundles_dir", description="", domain=str, default="/tmp")
         with self.assertRaises(RuntimeError):
@@ -446,8 +450,26 @@ class TestAdmmArgs(unittest.TestCase):
         from mpisppy.generic.admm import _check_admm_compatibility
         cfg = config.Config()
         cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
+        # num_admm_subproblems / num_stoch_scens are required for
+        # --stoch-admm; the compat check validates they were set.
+        cfg.add_to_config("num_admm_subproblems", description="",
+                          domain=int, default=2)
+        cfg.add_to_config("num_stoch_scens", description="",
+                          domain=int, default=3)
         # Should not raise
         _check_admm_compatibility(cfg)
+
+    def _stoch_admm_cfg(self):
+        """Minimal cfg for a --stoch-admm compat check: includes the
+        two count flags that admm_args registers and that the compat
+        check now validates."""
+        cfg = config.Config()
+        cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
+        cfg.add_to_config("num_admm_subproblems", description="",
+                          domain=int, default=2)
+        cfg.add_to_config("num_stoch_scens", description="",
+                          domain=int, default=3)
+        return cfg
 
     def test_check_stoch_admm_xhatshuffle_without_stage2ef_errors(self):
         """stoch_admm + xhatshuffle without stage2_ef_solver_name is an
@@ -456,8 +478,7 @@ class TestAdmmArgs(unittest.TestCase):
         stochastic outcomes unconstrained.  This must error, not silently
         produce an invalid inner bound."""
         from mpisppy.generic.admm import _check_admm_compatibility
-        cfg = config.Config()
-        cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
+        cfg = self._stoch_admm_cfg()
         cfg.add_to_config("xhatshuffle", description="", domain=bool, default=True)
         cfg.add_to_config("stage2_ef_solver_name", description="",
                           domain=str, default=None)
@@ -468,8 +489,7 @@ class TestAdmmArgs(unittest.TestCase):
     def test_check_stoch_admm_xhatshuffle_with_stage2ef_ok(self):
         """stoch_admm + xhatshuffle + stage2_ef_solver_name is valid."""
         from mpisppy.generic.admm import _check_admm_compatibility
-        cfg = config.Config()
-        cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
+        cfg = self._stoch_admm_cfg()
         cfg.add_to_config("xhatshuffle", description="", domain=bool, default=True)
         cfg.add_to_config("stage2_ef_solver_name", description="",
                           domain=str, default="gurobi")
@@ -482,13 +502,39 @@ class TestAdmmArgs(unittest.TestCase):
         IS the consensus value, so ADMM consensus is preserved without an
         EF resolve."""
         from mpisppy.generic.admm import _check_admm_compatibility
-        cfg = config.Config()
-        cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
+        cfg = self._stoch_admm_cfg()
         cfg.add_to_config("xhatxbar", description="", domain=bool, default=True)
         cfg.add_to_config("stage2_ef_solver_name", description="",
                           domain=str, default=None)
         # Should not raise
         _check_admm_compatibility(cfg)
+
+    def test_check_stoch_admm_missing_counts_errors(self):
+        """Phase E: --stoch-admm without --num-admm-subproblems or
+        --num-stoch-scens must error with a clear message at compat-check
+        time (since the example modules no longer register these as
+        required and admm_args registers them as default=None)."""
+        from mpisppy.generic.admm import _check_admm_compatibility
+        # Missing num_admm_subproblems.
+        cfg = config.Config()
+        cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
+        cfg.add_to_config("num_admm_subproblems", description="",
+                          domain=int, default=None)
+        cfg.add_to_config("num_stoch_scens", description="",
+                          domain=int, default=4)
+        with self.assertRaises(RuntimeError) as cm:
+            _check_admm_compatibility(cfg)
+        self.assertIn("num-admm-subproblems", str(cm.exception))
+        # Missing num_stoch_scens.
+        cfg = config.Config()
+        cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
+        cfg.add_to_config("num_admm_subproblems", description="",
+                          domain=int, default=2)
+        cfg.add_to_config("num_stoch_scens", description="",
+                          domain=int, default=None)
+        with self.assertRaises(RuntimeError) as cm:
+            _check_admm_compatibility(cfg)
+        self.assertIn("num-stoch-scens", str(cm.exception))
 
     def test_check_admm_xhatshuffle_without_stage2ef_ok(self):
         """Deterministic --admm + xhatshuffle without stage2_ef_solver_name
