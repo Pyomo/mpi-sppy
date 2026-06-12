@@ -100,6 +100,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
         if cfg.grad_rho:
             modified_cfg["grad_order_stat"] = cfg.ph_xfeas_spoke_grad_order_stat
             vanilla.add_grad_rho(ph_xfeas_spoke, modified_cfg)
+        ph_xfeas_spoke["rank_ratio"] = cfg.ph_xfeas_spoke_rank_ratio
 
     # relaxed ph spoke
     if cfg.relaxed_ph:

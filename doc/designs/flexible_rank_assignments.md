@@ -142,6 +142,16 @@ Multi-source assembly across ranks is the correct primitive.
 - **`CROSS_SCENARIO_COST`** (cross-scenario cut source → cut spoke).
   Per-scenario cost data.
 
+- **`XFEAS`** (xhat-feasible / subgradient spoke → CG hub).  Each
+  scenario contributes a `[feasible x, total cost]` block — the same
+  `[nonants, obj_val]` *layout* as the Category-2 fields, but with a
+  crucial difference: the `x` is **genuinely distinct per scenario**
+  (the CG hub tries each scenario's `x` as its own incumbent
+  candidate), so there is **no** cross-scenario NAC redundancy to
+  preserve and no `obj_val` to keep paired with a shared first stage.
+  It is therefore Category 1, assembled per-scenario with **relaxed**
+  coherence (see §Coherence), not Category 2.
+
 #### Category 2 — per-scenario *layout*, NAC-redundant first-stage
 
 Buffers in this category are laid out per scenario, but the nonant
@@ -158,11 +168,14 @@ is evaluated).  A genuinely per-scenario scalar cost rides alongside.
   each scenario's slot), while `inner_bound` is genuinely
   per-scenario.  `RECENT_XHATS` is a circular buffer of such entries.
 
-The split matters for asymmetric ranks: the **first-stage portion
-must stay NAC-consistent**, so it cannot be assembled from ranks at
-different iterations; the **cost portion** is ordinary per-scenario
-data assembled like Category 1.  See §Coherence for how this is
-handled without canonicalization.
+The split matters for asymmetric ranks: the **first-stage portion must
+stay NAC-consistent** *and* each scenario's `inner_bound` must stay
+paired with the nonants it was evaluated at (FWPH turns that pair into a
+Frank-Wolfe column).  Both are guaranteed by reading the whole field
+with **strict coherence** — rejecting any mixed-iteration assembly.  An
+accepted read has every source at one write_id, so the assembled
+first-stage portion is already identical across scenarios and needs no
+post-assembly fix-up.  See §Coherence.
 
 #### Category 3 — global-sized fields
 
@@ -476,29 +489,39 @@ retry later.
   finish an iteration before writing `DUALS`, and their `write_id`
   values naturally agree.
 
-- **`BEST_XHAT` / `RECENT_XHATS` (first-stage portion).**  The
-  first-stage values must be NAC-consistent.  Two ways to guarantee
-  that without canonicalization, both exploiting that the first-stage
-  portion is *identical across scenarios*:
+- **`BEST_XHAT` / `RECENT_XHATS`.**  Per-scenario
+  `[first-stage nonants, obj_val]` blocks.  The first-stage portion is
+  NAC-redundant (identical across scenarios); the `obj_val` is genuinely
+  per-scenario.  These are assembled with the same overlap-map
+  multi-source reader as every other per-scenario field.
 
-  - **Two-stage:** every scenario carries the same first-stage vector,
-    so the receiver can read the first-stage portion from a **single**
-    remote rank (no cross-rank assembly, hence no coherence question).
-    Only the per-scenario `inner_bound` cost is assembled per-scenario
-    (Category-1 style).
+  **The whole field is read with strict coherence**, which carries both
+  invariants at once.  An accepted read has every source at one `write_id`,
+  so the assembled first-stage portion is already identical across scenarios
+  (NAC-consistent) *and* each `obj_val` stays paired with the nonants it was
+  evaluated at.  The pairing matters because the FWPH consumer derives a
+  Frank-Wolfe column's recourse cost as `obj_val − first_stage_cost(nonants)`,
+  so a mixed-iteration assembly — iteration *t*'s nonants beside iteration
+  *t'*'s `obj_val` — would build an inconsistent column and can invalidate the
+  FW bound.  (FWPH supports multistage, so this is not a two-stage-only
+  concern.)  Strict coherence rejects such a read entirely, so **no
+  post-assembly fix-up is needed**: the per-scenario blocks are used exactly
+  as assembled.
 
-  - **Multistage:** a node's first-stage values are shared only by the
-    scenarios passing through that node, which may be spread across
-    ranks.  Source each node's first-stage portion from a single rank
-    that holds a scenario through that node (deterministic from the
-    scenario-to-rank map and the tree).  This is per-node single-source
-    sourcing, computed at startup alongside the overlap maps — not a
-    layout change and not multi-source assembly of the first stage.
+  Single-sourcing the first-stage portion would also preserve the pairing
+  and avoid the coherence question for **two-stage** (one global first-stage
+  vector, read whole from one rank).  It is *not* used because it does not
+  generalize to **multistage**: a scenario's nonant path spans several tree
+  nodes held by different ranks, so "single-source the first stage"
+  decomposes into per-node sourcing that is itself multi-source within a
+  scenario.  Strict-by-`write_id` gives the same guarantee for any stage
+  count, with no per-stage fix-up to maintain.
 
-  The sender side is synchronous in practice (a spoke writes
-  `BEST_XHAT` only after its `cylinder_comm.Allreduce` feasibility
-  verdict), so `write_id` values agree and the single-source reads see
-  a coherent snapshot.
+  Rejections are cheap: the sender writes `BEST_XHAT` / `RECENT_XHATS` only
+  after its `cylinder_comm.Allreduce` verdict, so its ranks are coherent
+  except during the brief publish interval; a straddled read is simply
+  re-read next sync, and these candidates are seeds (skipping one costs
+  nothing).
 
 #### Relaxed coherence
 
@@ -511,6 +534,15 @@ source rank.
   (fixing the first stage and solving), so a stale or mixed-iteration
   per-scenario value just means evaluating a slightly older candidate
   — always honest, never invalid.
+
+- **`XFEAS`** (xhat-feasible / subgradient spoke → CG hub).  Per-scenario
+  `[feasible x, total cost]` blocks whose `x` is genuinely *distinct*
+  per scenario, so — unlike `BEST_XHAT` / `RECENT_XHATS` — there is no
+  cross-scenario NAC to preserve and no shared first stage to keep an
+  `obj_val` paired with.  The CG hub tries each scenario's `x` as its
+  own candidate and re-evaluates it, so a stale or mixed-iteration block
+  just means trying a slightly older candidate — always honest, never
+  invalid.  Hence **relaxed coherence**, assembled per-scenario as-is.
 
 - **Global-sized bounds and scalars** (Categories 3 and 4).  Monotone,
   idempotent application; staleness is safe.
@@ -612,9 +644,14 @@ unnecessary given the per-field analysis).
   scenarios linearly.
 - Unpacking (receive side) uses the overlap map to place multi-source
   data at the right local offsets.
-- For `BEST_XHAT` / `RECENT_XHATS`, the receiver reads the first-stage
-  portion via single-source (per-node) sourcing and the cost portion
-  via per-scenario assembly.
+- `BEST_XHAT` / `RECENT_XHATS` are assembled per-scenario via the
+  overlap map like the other per-scenario fields, under **strict
+  coherence** (all sources at one `write_id`); that already makes the
+  first-stage portion NAC-consistent across scenarios, so no
+  post-assembly fix-up is required.
+- `XFEAS` is assembled per-scenario via the same overlap map but under
+  **relaxed** coherence (distinct per-scenario iterates, no shared first
+  stage to keep NAC-consistent).
 - Bound and scalar communication is unaffected.
 
 #### `cfg_vanilla.py` and `config.py`
@@ -669,8 +706,16 @@ differs from 1.0)
 
 - Implement the per-field strict-vs-relaxed reader paths.
 - Add the strict `write_id` check for `DUALS`.
-- Add single-source first-stage sourcing for `BEST_XHAT` /
-  `RECENT_XHATS` in the **two-stage** case; cost portion per-scenario.
+- Add `BEST_XHAT` / `RECENT_XHATS` as strict-coherence per-scenario
+  fields in the **two-stage** case (overlap-map assembly; strict
+  coherence makes the first-stage portion NAC-consistent with no
+  post-assembly fix-up).
+- Add `XFEAS` as a **relaxed**-coherence per-scenario field (Category 1;
+  genuinely distinct per-scenario iterates, no shared first stage) in
+  the **two-stage** case, assembled per-scenario via the overlap map.
+  Its only consumer is the CG hub, so this also adds the
+  `--ph-xfeas-spoke-rank-ratio` CLI flag and the end-to-end CG/`XFEAS`
+  multi-rank test.
 - Wire `cross_scen` with relaxed coherence (resolved — see §Coherence)
   and make `CrossScenarioCutSpoke` accept a multi-source `NONANTS_VALS`
   / `CROSS_SCENARIO_COST` (it currently asserts a single source rank).
@@ -681,8 +726,10 @@ differs from 1.0)
 
 **Phase 4: Multistage and FWPH**
 
-- Per-node single-source first-stage sourcing for `BEST_XHAT` /
-  `RECENT_XHATS` in the **multistage** case.
+- Extend `BEST_XHAT` / `RECENT_XHATS` strict-coherence assembly to the
+  **multistage** case (per-node first stage).  Strict coherence makes the
+  per-node first stage NAC-consistent the same way it does in two-stage, so
+  no per-node fix-up is needed.
 - FWPH reading `RECENT_XHATS` from an InnerBoundSpoke with a different
   rank count.  This is the most complex consumer of the xhat fields and
   warrants targeted testing.
@@ -788,16 +835,27 @@ regime here.  Both are prerequisites for recommending the feature, not
 for landing the intervening phases on `main`.
 
 
-### Possible future optimization (out of scope)
+### Possible future work (out of scope)
 
-The first-stage portion of `BEST_XHAT` / `RECENT_XHATS` is genuinely
-NAC-redundant (the same node value copied into every scenario's slot).
-A future optimization could store it once per non-leaf node instead of
-once per scenario, saving storage and bandwidth on those fields.  This
-is *only* valid for the Category-2 fields — never for the Category-1
-per-scenario fields — and is explicitly **not** required for flexible
-ranks.  It is recorded here so the idea is not lost, not as planned
-work.
+Recorded here so the ideas are not lost, not as planned work.
+
+**Per-node storage of the NAC-redundant first stage.**  The first-stage
+portion of `BEST_XHAT` / `RECENT_XHATS` is genuinely NAC-redundant (the
+same node value copied into every scenario's slot).  A future
+optimization could store it once per non-leaf node instead of once per
+scenario, saving storage and bandwidth on those fields.  This is *only*
+valid for the Category-2 fields — never for the Category-1 per-scenario
+fields — and is explicitly **not** required for flexible ranks.
+
+**Coherence read-outcome diagnostic** (Pyomo/mpi-sppy#742).  An
+always-on, per-field counter at the multi-source reader breaking each
+read into `not_new` / `new_accepted` / `rejected_incoherent` /
+`accepted_mixed`.  This lets an infrequently-reporting bounds cylinder be
+diagnosed as a coherence problem (reads rejected because sources disagree
+on `write_id`) vs. a slow upstream sender (no new data), and measures how
+often a multi-source read straddles a publish — the empirical basis for
+the strict-vs-relaxed choices above, especially under an asynchronous APH
+sender.
 
 
 ### Backward Compatibility
