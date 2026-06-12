@@ -56,6 +56,13 @@ def do_EF(module, cfg, scenario_creator, scenario_creator_kwargs,
                        all_nodenames=ef_dict["all_nodenames"]
                        )
 
+    # PySP-style chance constraint (EF only; couples all scenarios). The
+    # config.checker guard guarantees --EF when cc_indicator_var is set.
+    if cfg.get("cc_indicator_var", None) is not None:
+        from mpisppy.utils import chance_constraint
+        chance_constraint.add_chance_constraint(
+            ef.ef, cc_indicator_var_name=cfg.cc_indicator_var, cc_alpha=cfg.cc_alpha)
+
     if ef.extensions is not None:
         ef.extobject.pre_solve()
 
