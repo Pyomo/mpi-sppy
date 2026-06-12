@@ -168,6 +168,13 @@ class Config(pyofig.ConfigDict):
         if self.get("hub_only_solver_logs") and not self.get("solver_log_dir"):
             _bad_options("--hub-only-solver-logs requires --solver-log-dir")
 
+        if self.get("cc_indicator_var", None) is not None and not self.get("EF"):
+            # A chance constraint Sum_s p_s z_s >= 1-alpha couples all scenarios
+            # and is not separable, so it is supported only for the EF (matching
+            # PySP). See doc/designs/chance_constraint_design.md.
+            _bad_options("--cc-indicator-var (chance constraint) is currently "
+                         "supported only with --EF")
+
     def add_solver_specs(self, prefix=""):
         sstr = f"{prefix}_solver" if prefix else "solver"
         if prefix:
@@ -489,6 +496,27 @@ class Config(pyofig.ConfigDict):
     def EF_multistage(self):
         self.EF_base()
         # branching factors???
+
+    #### chance constraints (PySP-style SAA; EF only) ####
+    def chance_constraint_args(self):
+        # The user supplies a per-scenario binary indicator (z_s == 1 means the
+        # risky constraint is satisfied in scenario s) and the big-M link; we add
+        # the aggregator Sum_s p_s z_s >= 1 - cc_alpha to the EF.  See
+        # doc/designs/chance_constraint_design.md.  EF only: the aggregator
+        # couples all scenarios, so it does not separate for decomposition.
+        self.add_to_config("cc_indicator_var",
+                           description="Name of the per-scenario binary indicator "
+                                       "variable for a chance constraint (z==1 means "
+                                       "the risky constraint is satisfied). Enables "
+                                       "the chance constraint; EF only.",
+                           domain=str,
+                           default=None)
+        self.add_to_config("cc_alpha",
+                           description="Allowed violation probability for the chance "
+                                       "constraint, 0 <= alpha < 1 (alpha=0 forces "
+                                       "satisfaction in every scenario). Default 0.0.",
+                           domain=float,
+                           default=0.0)
 
     ##### common additions to the command line #####
 
