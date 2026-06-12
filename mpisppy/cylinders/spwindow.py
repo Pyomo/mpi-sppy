@@ -169,8 +169,12 @@ class SPWindow:
 
     def free(self):
         if self.window is not None:
-            self.window.Free()
+            # Drop the numpy view of the window memory BEFORE freeing the
+            # window. self.buff aliases the window's memory via
+            # window.tomemory(); freeing the window first would leave buff
+            # dangling over released memory for the duration of the free.
             self.buff = None
+            self.window.Free()
             self.buffer_layout = None
             self.buffer_length = 0
             self.window = None
