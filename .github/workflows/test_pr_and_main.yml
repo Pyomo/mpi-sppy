@@ -90,6 +90,10 @@ jobs:
         run: |
           coverage run $COV_ARGS mpisppy/tests/test_ef_ph.py
 
+      - name: Test CVaR
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_cvar.py -v
+
       - name: Test afew
         run: |
           PYARGS="-m coverage run $COV_ARGS"
