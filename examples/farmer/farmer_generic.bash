@@ -14,5 +14,16 @@ python ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --E
 
 # Here is a very simple PH command that also computes bounds
 echo "Starting PH"
-mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01 
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01
+
+# Risk-averse (CVaR) variants: minimize cvar-mean-weight*E[Cost] + cvar-weight*CVaR_alpha(Cost).
+# Adding --cvar is all it takes; the VaR variable eta is just another first-stage
+# variable, so the EF solve and every cylinder inherit risk aversion unchanged.
+echo "Starting risk-averse (CVaR) EF"
+python ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi --cvar --cvar-weight 2.0 --cvar-alpha 0.8
+
+# For PH, eta has a much larger cost scale than the acreage variables, so a
+# uniform rho stalls; use a cost-aware rho (--grad-rho here). See the docs.
+echo "Starting risk-averse (CVaR) PH"
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 100 --max-solver-threads 4 --default-rho 1 --grad-rho --grad-order-stat 0.5 --lagrangian --xhatshuffle --rel-gap 1e-6 --cvar --cvar-weight 2.0 --cvar-alpha 0.8
 

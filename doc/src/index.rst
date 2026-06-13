@@ -46,6 +46,7 @@ MPI is used.
    access_solutions.rst
    confidence_intervals.rst
    zhat.rst
+   risk_management.rst
    seqsamp.rst
 
 .. toctree::
