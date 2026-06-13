@@ -580,6 +580,34 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=1e-4)
 
+    def cvar_args(self):
+
+        self.add_to_config('cvar',
+                           description="apply the CVaR (Conditional Value-at-Risk) "
+                                       "risk-management transform to every scenario "
+                                       "(default False)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("cvar_weight",
+                           description="beta >= 0, the weight on CVaR in "
+                                       "lambda*E[Cost] + beta*CVaR (default 1.0)",
+                           domain=float,
+                           default=1.0)
+
+        self.add_to_config("cvar_alpha",
+                           description="CVaR confidence level alpha, 0 < alpha < 1 "
+                                       "(default 0.95)",
+                           domain=float,
+                           default=0.95)
+
+        self.add_to_config("cvar_mean_weight",
+                           description="lambda >= 0, the weight on E[Cost] in "
+                                       "lambda*E[Cost] + beta*CVaR; use 0 for pure "
+                                       "CVaR (default 1.0)",
+                           domain=float,
+                           default=1.0)
+
     def relaxed_ph_fixer_args(self):
 
         self.add_to_config('relaxed_ph_fixer',

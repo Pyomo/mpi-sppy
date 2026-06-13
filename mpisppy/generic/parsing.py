@@ -131,6 +131,7 @@ def parse_args(m):
     cfg.dualcg_args()
     cfg.subgradient_args()
     cfg.fixer_args()
+    cfg.cvar_args()
     cfg.relaxed_ph_fixer_args()
     cfg.integer_relax_then_enforce_args()
     cfg.gapper_args()
