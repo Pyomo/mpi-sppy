@@ -143,6 +143,18 @@ class StructureTests(unittest.TestCase):
             cvar.add_cvar(self._farmer_scenario(), cvar_weight=1.0,
                           cvar_alpha=0.9, cvar_mean_weight=-1.0)
 
+    def test_maximize_objective_raises(self):
+        # Only minimization is supported; maximization must be rejected outright
+        # rather than silently building the (wrong) upper-tail formulation.
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var(bounds=(0.0, 0.0))
+        reward = 10.0 + m.x
+        m.reward = pyo.Objective(expr=reward, sense=pyo.maximize)
+        m._mpisppy_probability = 1.0
+        sputils.attach_root_node(m, reward, [m.x])
+        with self.assertRaises(NotImplementedError):
+            cvar.add_cvar(m, cvar_weight=1.0, cvar_alpha=0.9)
+
 
 @unittest.skipIf(not solver_available, "no solver is available")
 class EFClosedFormTests(unittest.TestCase):

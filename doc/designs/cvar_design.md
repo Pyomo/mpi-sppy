@@ -101,7 +101,9 @@ def add_cvar(scenario, *, cvar_weight, cvar_alpha, cvar_mean_weight=1.0):
     """
     obj   = sputils.find_active_objective(scenario)   # pristine user cost objective
     cost  = obj.expr
-    sense = obj.sense                                 # minimize first (maximize mirrors PySP — §6.3)
+    sense = obj.sense
+    if sense != pyo.minimize:                         # maximize mirrors PySP (§6.3) — not yet shipped
+        raise NotImplementedError("CVaR for maximization is not yet implemented")
     scenario._mpisppy_cvar_eta    = pyo.Var()
     scenario._mpisppy_cvar_excess = pyo.Var(domain=pyo.NonNegativeReals)
     scenario._mpisppy_cvar_excess_con = pyo.Constraint(
@@ -176,8 +178,9 @@ A single insertion point → `do_EF`, `do_decomp`, and every spoke inherit the r
    For multistage problems it therefore measures risk of the total cost only.
    **If a time-consistent (nested) risk measure is needed, users should contact the developers.**
    This caveat MUST appear verbatim in the user-facing docs — see the doc note below and §8/§9.
-3. **Minimize first.** Maximize handled by mirroring PySP (δ domain `NonPositiveReals`, negate the
-   excess expression); ship in a later phase.
+3. **Minimize first.** Phase 1 raises `NotImplementedError` for a maximization objective rather
+   than silently building the wrong (upper-tail) model. Maximize is then handled by mirroring PySP
+   (δ domain `NonPositiveReals`, negate the excess expression); ship in a later phase.
 4. **η fixed during xhat evaluation** → valid but possibly loose inner bound. Optional later
    refinement: re-optimize the shared η given the fixed "real" first-stage vars.
 
@@ -205,7 +208,7 @@ A single insertion point → `do_EF`, `do_decomp`, and every spoke inherit the r
 
 - **Phase 1 — core + EF.** `cvar.py` (`add_cvar` incl. `cvar_mean_weight` + wrapper);
   `tests/test_cvar.py` comparing EF-CVaR to closed form, the β=0 regression, and pure CVaR (λ=0).
-  Programmatic API only.
+  Programmatic API only. Maximization raises `NotImplementedError` (full support is Phase 3).
 - **Phase 2 — CLI + decomposition.** `cvar_args()` in config (`--cvar`, `--cvar-weight`,
   `--cvar-alpha`, `--cvar-mean-weight`); `generic_cylinders` wiring; a farmer risk-averse example; a
   cylinders test (PH hub + Lagrangian + xhat bound sandwich). Wire the new test into
