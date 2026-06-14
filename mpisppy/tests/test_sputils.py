@@ -949,6 +949,13 @@ class TestNonantTreeCsv(unittest.TestCase):
             sputils._node_local_name("Scenario1.x[1]", strip_prefix=False),
             "Scenario1.x[1]",
         )
+        # only the FIRST segment (scenario/bundle block) is stripped, so a
+        # variable inside a per-stage sub-block (e.g. aircond) keeps its dot
+        self.assertEqual(
+            sputils._node_local_name(
+                "Scenario1.stage_model_1.RegularProd", strip_prefix=True),
+            "stage_model_1.RegularProd",
+        )
 
     def test_write_nonant_tree_csv_format_and_order(self):
         import os
