@@ -738,9 +738,19 @@ differs from 1.0)
 
 **Phase 5: APH support**
 
-- Verify APH (asynchronous PH) works with the relaxed-coherence model.
-- The strict-coherence fields already retry on `write_id` mismatch, so
-  they should compose with async senders; verify and add tests.
+- Verify the coherence model composes with an *asynchronous* sender (APH),
+  where the several sources of a multi-source read can sit at different
+  `write_id`s -- the case the per-field policy was designed for.
+- The strict-coherence fields already retry on `write_id` mismatch and the
+  relaxed fields accept the floor, so no reader change is needed.  This is
+  verified deterministically by driving the multi-source reader against a
+  stand-in window with hand-set `write_id`s (`test_flex_coherence_policy.py`),
+  which can force a *particular* mixed-id snapshot that a timing-dependent
+  live run cannot.
+- A live `np=6` APH MPI integration test was prototyped but deferred: APH
+  runs its persistent-solver solves in a worker thread and intermittently
+  hangs in pyomo's threaded output capture (an APH/pyomo issue unrelated to
+  the coherence policy), which times out CI.  Tracked in Pyomo/mpi-sppy#753.
 
 
 ### Development and rollout strategy
