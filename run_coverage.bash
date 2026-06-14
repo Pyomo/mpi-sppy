@@ -241,6 +241,9 @@ run_phase "test_flexible_rank_xfeas (mpiexec -np 6)" \
 run_phase "test_flexible_rank_xhat_multistage (mpiexec -np 6)" \
     mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_xhat_multistage.py
 
+run_phase "test_flexible_rank_extension_fields (mpiexec -np 6)" \
+    mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_extension_fields.py
+
 # ---------- Tests that spawn mpiexec internally ----------
 
 PYARGS="-m coverage run --parallel-mode --rcfile=$PROJ_DIR/.coveragerc --data-file=$PROJ_DIR/.coverage"
