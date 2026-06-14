@@ -35,6 +35,8 @@ import pyomo.environ as pyo
 
 from mpisppy.spopt import SPOpt
 from mpisppy.utils.config import Config
+from mpisppy.utils.xhat_eval import Xhat_Eval
+import mpisppy.utils.sputils as sputils
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.tests.utils import get_solver
 
@@ -89,6 +91,47 @@ def _infeasible_model():
     m.c_hi = pyo.Constraint(expr=m.x <= 0)
     m.obj = pyo.Objective(expr=m.x)
     return m
+
+
+# --- A genuinely incomplete-recourse two-stage model -----------------------
+# First-stage nonant x in [0, 10]; each scenario needs x >= dmin with NO
+# recourse variable able to repair it. An xhat optimal for scen0 (x small)
+# is therefore infeasible for scen1 -- exactly the situation
+# --xhatter-write-iis exists to diagnose.
+_DMIN = {"scen0": 1.0, "scen1": 9.0}
+
+
+def _ir_scenario_names(*_a, **_k):
+    return list(_DMIN.keys())
+
+
+def _ir_scenario_creator(scenario_name, **kwargs):
+    dmin = _DMIN[scenario_name]
+    m = pyo.ConcreteModel(scenario_name)
+    m.x = pyo.Var(bounds=(0.0, 10.0))            # first-stage nonant
+    m.y = pyo.Var(domain=pyo.NonNegativeReals)   # trivial recourse
+    m.need = pyo.Constraint(expr=m.x >= dmin)    # incomplete recourse
+    m.prod = pyo.Constraint(expr=m.y == dmin)
+    m.obj = pyo.Objective(expr=m.x + m.y, sense=pyo.minimize)
+    sputils.attach_root_node(m, m.x, [m.x])
+    m._mpisppy_probability = 1.0 / len(_DMIN)
+    return m
+
+
+def _make_xhat_eval(tmpdir, method):
+    options = {
+        "iter0_solver_options": None,
+        "iterk_solver_options": None,
+        "display_timing": False,
+        "solver_name": solver_name,
+        "verbose": False,
+        "solver_options": None,
+        "xhatter_write_iis": True,
+        "xhatter_iis_method": method,
+        "xhatter_iis_dir": tmpdir,
+    }
+    return Xhat_Eval(options, _ir_scenario_names(), _ir_scenario_creator,
+                     scenario_denouement=None)
 
 
 class TestConfigRegistration(unittest.TestCase):
@@ -257,6 +300,64 @@ class TestEndToEnd(unittest.TestCase):
                 model=_infeasible_model(), label="Scen1")
             self.assertTrue(
                 os.path.exists(os.path.join(d, "StubCyl_Scen1.iis.log")))
+
+
+@unittest.skipUnless(solver_available,
+                     "no commercial solver for the real xhatter path")
+class TestRealXhatterPath(unittest.TestCase):
+    """End-to-end through the production Xhat_Eval path: fix the nonants at an
+    xhat that is infeasible for one scenario, run the real
+    calculate_incumbent (used by slam_heuristic / lshaped spokes), and confirm
+    the IIS file lands -- the path a real user hits, not a stub.
+    """
+
+    def _fix_xhat_and_run(self, ev, xval):
+        # Pin the nonant (x) at the candidate xhat on every local scenario,
+        # then run the real incumbent calculation (fix_nonants=True fixes at
+        # the current value).
+        for s in ev.local_scenarios.values():
+            for v in s._mpisppy_data.nonant_indices.values():
+                v.set_value(xval)
+        return ev.calculate_incumbent(fix_nonants=True)
+
+    @unittest.skipUnless(iis_persistent_available,
+                         "write_iis needs a persistent commercial interface")
+    def test_calculate_incumbent_writes_ilp(self):
+        with tempfile.TemporaryDirectory(dir=".") as d:
+            ev = _make_xhat_eval(d, "ilp")
+            # x = 1.0 is optimal for scen0 but infeasible for scen1 (needs >=9)
+            obj = self._fix_xhat_and_run(ev, 1.0)
+            self.assertIsNone(obj)  # infeasible xhat -> no incumbent
+            self.assertTrue(
+                os.path.exists(os.path.join(d, "Xhat_Eval_scen1.ilp")),
+                msg=f"dir contents: {os.listdir(d)}")
+
+    def test_calculate_incumbent_writes_explanation(self):
+        with tempfile.TemporaryDirectory(dir=".") as d:
+            ev = _make_xhat_eval(d, "explanation")
+            obj = self._fix_xhat_and_run(ev, 1.0)
+            self.assertIsNone(obj)
+            self.assertTrue(
+                os.path.exists(os.path.join(d, "Xhat_Eval_scen1.iis.log")),
+                msg=f"dir contents: {os.listdir(d)}")
+
+    def test_runs_only_once_across_repeat_infeasibilities(self):
+        with tempfile.TemporaryDirectory(dir=".") as d:
+            ev = _make_xhat_eval(d, "explanation")
+            self.assertIsNone(self._fix_xhat_and_run(ev, 1.0))
+            after_first = sorted(os.listdir(d))
+            self.assertEqual(len(after_first), 1)
+            # A second infeasible xhat must NOT produce another IIS file.
+            self.assertIsNone(self._fix_xhat_and_run(ev, 0.0))
+            self.assertEqual(sorted(os.listdir(d)), after_first)
+
+    def test_feasible_xhat_writes_nothing(self):
+        with tempfile.TemporaryDirectory(dir=".") as d:
+            ev = _make_xhat_eval(d, "explanation")
+            # x = 9.0 satisfies both scenarios (scen0 needs >=1, scen1 >=9)
+            obj = self._fix_xhat_and_run(ev, 9.0)
+            self.assertIsNotNone(obj)
+            self.assertEqual(os.listdir(d), [])
 
 
 if __name__ == "__main__":
