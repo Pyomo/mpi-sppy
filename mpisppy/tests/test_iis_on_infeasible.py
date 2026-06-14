@@ -26,6 +26,7 @@ used by test_incumbent_writing.py).
 """
 
 import os
+import glob
 import types
 import tempfile
 import unittest
@@ -58,6 +59,13 @@ def _any_iis_persistent_available():
 
 
 iis_persistent_available = _any_iis_persistent_available()
+
+
+def _ilp_written(d, stem):
+    # The .ilp path is requested as "<stem>.ilp", but some solver writers
+    # append their own extension (xpress writes "<stem>.ilp.lp"), so match
+    # any file the writer produced from that stem.
+    return bool(glob.glob(os.path.join(d, stem + ".ilp*")))
 
 
 class _StubOpt:
@@ -329,7 +337,8 @@ class TestEndToEnd(unittest.TestCase):
             opt.write_iis_on_xhatter_infeasible(
                 model=_infeasible_model(), label="Scen1")
             self.assertTrue(
-                os.path.exists(os.path.join(d, "StubCyl_Scen1.ilp")))
+                _ilp_written(d, "StubCyl_Scen1"),
+                msg=f"dir contents: {os.listdir(d)}")
             self.assertTrue(opt._xhatter_iis_written)
 
     def test_explanation_file_written(self):
@@ -371,7 +380,7 @@ class TestRealXhatterPath(unittest.TestCase):
             obj = self._fix_xhat_and_run(ev, 1.0)
             self.assertIsNone(obj)  # infeasible xhat -> no incumbent
             self.assertTrue(
-                os.path.exists(os.path.join(d, "Xhat_Eval_scen1.ilp")),
+                _ilp_written(d, "Xhat_Eval_scen1"),
                 msg=f"dir contents: {os.listdir(d)}")
 
     def test_calculate_incumbent_writes_explanation(self):

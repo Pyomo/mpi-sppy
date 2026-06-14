@@ -748,8 +748,11 @@ class SPOpt(SPBase):
                 iis_solver = base
             else:
                 iis_solver = None
-            write_iis(model, fname, solver=iis_solver)
-            print(f"[{cyl}] wrote IIS for {label} to {fname}")
+            # Report the path write_iis actually wrote: some solver writers
+            # append their own extension (e.g. xpress appends ".lp", yielding
+            # "<stem>.ilp.lp"), so the requested name is not always the result.
+            written = write_iis(model, fname, solver=iis_solver)
+            print(f"[{cyl}] wrote IIS for {label} to {written}")
         elif method == "explanation":
             fname = stem + ".iis.log"
             # compute_infeasibility_explanation reports to a logger; route
