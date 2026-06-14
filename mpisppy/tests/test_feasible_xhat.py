@@ -422,6 +422,10 @@ class _StubFeasOpt:
     def no_incumbent_prob(self):
         return self._infeas_prob
 
+    def write_iis_on_xhatter_infeasible(self, model=None, label=None):
+        # _evaluate_xhat calls this on the infeasible branch; no-op here.
+        self.iis_calls = getattr(self, "iis_calls", 0) + 1
+
     def Eobjective(self, verbose=False):
         return self._eobj
 

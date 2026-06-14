@@ -1143,6 +1143,7 @@ jobs:
             mpisppy/tests/test_feasible_xhat.py \
             mpisppy/tests/test_proper_bundler.py \
             mpisppy/tests/test_incumbent_writing.py \
+            mpisppy/tests/test_iis_on_infeasible.py \
             mpisppy/tests/test_grad_rho_bundles.py \
             mpisppy/tests/test_sensi_rho_bundles.py \
             mpisppy/tests/test_reduced_costs_rho_bundles.py \

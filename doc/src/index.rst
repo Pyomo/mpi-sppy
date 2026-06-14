@@ -57,6 +57,7 @@ MPI is used.
    jensens.rst
    feasible_xhat.rst
    xhat_from_file.rst
+   iis.rst
    smps.rst
    agnostic.rst
    generic_admm.rst

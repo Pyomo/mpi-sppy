@@ -158,6 +158,9 @@ run_phase "test_xhat_from_file (serial)" \
 run_phase "test_incumbent_writing (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_incumbent_writing.py -v
 
+run_phase "test_iis_on_infeasible (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_iis_on_infeasible.py -v
+
 run_phase "test_conf_int_farmer (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_conf_int_farmer.py
 

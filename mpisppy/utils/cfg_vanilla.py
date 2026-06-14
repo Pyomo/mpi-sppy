@@ -164,6 +164,11 @@ def shared_options(cfg, is_hub=False):
         # Consumed by XhatInnerBoundBase._try_file_xhat.
         "xhat_from_file" : cfg.get("xhat_from_file", None),
         "inspect_buffers_on_shutdown" : cfg.get("inspect_buffers_on_shutdown", False),
+        # IIS-on-xhatter-infeasibility (issue #356); consumed by
+        # SPOpt.write_iis_on_xhatter_infeasible. See doc/src/iis.rst.
+        "xhatter_write_iis" : cfg.get("xhatter_write_iis", False),
+        "xhatter_iis_method" : cfg.get("xhatter_iis_method", "auto"),
+        "xhatter_iis_dir" : cfg.get("xhatter_iis_dir", None),
         # Optional filename prefix; if set, _BoundSpoke.update_if_improving
         # writes a first-stage solution snapshot on each new best incumbent.
         "incumbent_on_improvement_filename_prefix" : cfg.get(

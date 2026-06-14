@@ -162,6 +162,16 @@ class SPOpt(SPBase):
                             "was not communicated to the subproblem solver. ")
 
 
+    def _subproblem_file_stem(self, k):
+        """Filename stem for per-subproblem output files.
+
+        Shared by the solver-log path (solve_one) and the IIS path
+        (write_iis_on_xhatter_infeasible) so their naming conventions
+        stay in sync. `k` is a subproblem name or scenario-tree node name.
+        """
+        return f"{self._get_cylinder_name()}_{k}"
+
+
     def _effective_solver_options(self, k):
         """Effective solver options for iteration *k*.
 
@@ -263,7 +273,7 @@ class SPOpt(SPBase):
             if k not in self._subproblem_solve_index:
                 self._subproblem_solve_index[k] = 0
             dir_name = self.options["solver_log_dir"]
-            file_name = f"{self._get_cylinder_name()}_{k}_{self._subproblem_solve_index[k]}.log"
+            file_name = f"{self._subproblem_file_stem(k)}_{self._subproblem_solve_index[k]}.log"
             # Workaround for Pyomo/pyomo#3589: Setting 'keepfiles' to True is required
             # for proper functionality when using the GurobiDirect / GurobiPersistent solver.
             if isinstance(s._solver_plugin, GurobiDirect):
@@ -619,6 +629,149 @@ class SPOpt(SPBase):
                            op=MPI.SUM)
 
         return float(globalP[0])
+
+
+    def _base_solver_name(self):
+        """The configured solver name with a persistent/direct suffix
+        stripped (e.g. ``gurobi_persistent`` -> ``gurobi``), since the
+        IIS facilities want the base solver."""
+        name = self.options.get("solver_name") or ""
+        for suffix in ("_persistent", "_direct"):
+            if name.endswith(suffix):
+                return name[: -len(suffix)]
+        return name
+
+
+    def _resolve_iis_method(self):
+        """Resolve the ``xhatter_iis_method`` option, expanding ``auto``.
+
+        ``auto`` picks ``ilp`` when the configured solver is one of the
+        commercial solvers with a native IIS engine (cplex/gurobi/xpress),
+        otherwise ``explanation`` (which works with any solver).
+        """
+        method = self.options.get("xhatter_iis_method", "auto")
+        if method == "auto":
+            if self._base_solver_name() in ("cplex", "gurobi", "xpress"):
+                return "ilp"
+            return "explanation"
+        return method
+
+
+    def write_iis_on_xhatter_infeasible(self, model=None, label=None):
+        """Emit an IIS for an infeasible xhatter subproblem, at most once.
+
+        Opt-in via ``options['xhatter_write_iis']``. An xhatter
+        (incumbent-finder) fixes the non-anticipative variables at a
+        candidate solution and solves every scenario subproblem; when one
+        is infeasible the candidate is silently rejected. For a model that
+        is supposed to have (relatively) complete recourse, that silence
+        hides a model or data bug. This writes an IIS (irreducible
+        infeasible set) for the offending subproblem via
+        ``pyomo.contrib.iis`` to expose it.
+
+        Fires AT MOST ONCE per cylinder (per MPI rank): a guard on this
+        object prevents any repeat, so the (expensive) IIS computation
+        cannot turn into a per-iteration storm. In a parallel run you may
+        therefore get up to one IIS file per rank that hit an infeasible
+        local scenario, each named by its scenario. See doc/src/iis.rst.
+
+        Never raises: any failure is reported and the guard is set anyway.
+
+        Args:
+            model (ConcreteModel or Block, optional): the infeasible model
+                to explain. When None, the first local scenario with no
+                solution available is used.
+            label (str, optional): name used in the output file name;
+                defaults to the scenario name when ``model`` is None.
+
+        NOTE:
+            Must be called while the offending model still carries the
+            infeasible configuration (e.g. before ``_restore_nonants``),
+            because the IIS facility re-solves the model.
+        """
+        if not self.options.get("xhatter_write_iis", False):
+            return
+        if getattr(self, "_xhatter_iis_written", False):
+            return
+
+        if model is None:
+            for k, s in self.local_scenarios.items():
+                if not s._mpisppy_data.solution_available:
+                    model, label = s, k
+                    break
+            else:
+                # No infeasible local scenario on this rank: do NOT trip
+                # the guard, so a later infeasibility on this rank can
+                # still be explained (the offending scenario may live on
+                # another rank this time).
+                return
+
+        # Trip the guard before the work, so neither a failure nor an
+        # expensive success can ever be retried.
+        self._xhatter_iis_written = True
+        try:
+            self._emit_iis(model, label)
+        except Exception as e:
+            print(f"[{self._get_cylinder_name()}] IIS emission for {label} "
+                  f"failed: {e}")
+
+
+    def _emit_iis(self, model, label):
+        """Compute and write an IIS for ``model``; see
+        ``write_iis_on_xhatter_infeasible`` for the contract.
+
+        File naming follows the ``--solver-log-dir`` convention
+        (``_subproblem_file_stem``); the index is dropped because the
+        feature runs once. Files land in ``xhatter_iis_dir`` (default cwd).
+        """
+        # Lazy import: keep pyomo.contrib.iis off the non-feature path.
+        from pyomo.contrib.iis import (
+            write_iis,
+            compute_infeasibility_explanation,
+        )
+
+        method = self._resolve_iis_method()
+        out_dir = self.options.get("xhatter_iis_dir") or "."
+        os.makedirs(out_dir, exist_ok=True)
+        stem = os.path.join(out_dir, self._subproblem_file_stem(label))
+        cyl = self._get_cylinder_name()
+
+        if method == "ilp":
+            fname = stem + ".ilp"
+            # write_iis needs a *persistent* commercial interface (it appends
+            # "_persistent"). Use the configured solver when its persistent
+            # interface is installed; otherwise let write_iis pick any
+            # available one (solver=None).
+            base = self._base_solver_name()
+            if base and pyo.SolverFactory(
+                    base + "_persistent").available(exception_flag=False):
+                iis_solver = base
+            else:
+                iis_solver = None
+            write_iis(model, fname, solver=iis_solver)
+            print(f"[{cyl}] wrote IIS for {label} to {fname}")
+        elif method == "explanation":
+            fname = stem + ".iis.log"
+            # compute_infeasibility_explanation reports to a logger; route
+            # it to our file so the explanation is captured, not scrolled.
+            iis_logger = logging.getLogger("mpisppy.spopt.xhatter_iis")
+            iis_logger.setLevel(logging.INFO)
+            iis_logger.propagate = False
+            handler = logging.FileHandler(fname, mode="w")
+            handler.setLevel(logging.INFO)
+            iis_logger.addHandler(handler)
+            try:
+                compute_infeasibility_explanation(
+                    model, self.options.get("solver_name"), logger=iis_logger)
+            finally:
+                handler.close()
+                iis_logger.removeHandler(handler)
+            print(f"[{cyl}] wrote infeasibility explanation for {label} "
+                  f"to {fname}")
+        else:
+            raise ValueError(
+                f"Unknown xhatter_iis_method={method!r}; expected "
+                "'auto', 'ilp', or 'explanation'.")
 
 
     def avg_min_max(self, compstr):

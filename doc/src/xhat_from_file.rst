@@ -138,4 +138,7 @@ See Also
 - :ref:`Spokes` — overview of the xhat spokes.
 - the xhat feasibility-cuts feature (PR #671) — the companion feature for
   non-complete-recourse problems.
+- :ref:`iis` — write an IIS when an xhatter hits an infeasible
+  scenario; pairs naturally with this feature for reproducing an
+  infeasibility on demand.
 - ``doc/designs/xhat_from_file_design.md`` — the design document.
