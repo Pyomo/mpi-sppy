@@ -768,22 +768,22 @@ Coverage therefore tracks field support, not spoke convenience:
 | `xhatshuffle` | `xhatshuffle_rank_ratio` | `BEST_XHAT` / `RECENT_XHATS` | landed |
 | `xhatxbar` | `xhatxbar_rank_ratio` | `BEST_XHAT` / `RECENT_XHATS` | landed |
 | `ph_xfeas_spoke` | `ph_xfeas_spoke_rank_ratio` | `XFEAS` | landed |
-| `ph_dual` | `ph_dual_rank_ratio` | `DUALS` | ready — any stage count |
-| `relaxed_ph` | `relaxed_ph_rank_ratio` | `DUALS`, `RELAXED_NONANTS_VALS` | ready — any stage count |
-| `subgradient` | `subgradient_rank_ratio` | `XFEAS`; `NONANTS_VALS` (recv) | ready two-stage; multistage needs phase 4b |
-| `fwph` | `fwph_rank_ratio` | `BEST_XHAT` / `RECENT_XHATS` (recv); `NONANTS_VALS` (recv) | ready two-stage; multistage needs phase 4b |
+| `ph_dual` | `ph_dual_rank_ratio` | `DUALS` | landed |
+| `relaxed_ph` | `relaxed_ph_rank_ratio` | `DUALS`, `RELAXED_NONANTS_VALS` | landed |
+| `subgradient` | `subgradient_rank_ratio` | `XFEAS`; `NONANTS_VALS` (recv) | landed |
+| `fwph` | `fwph_rank_ratio` | `BEST_XHAT` / `RECENT_XHATS` (recv); `NONANTS_VALS` (recv) | landed |
 | `reduced_costs` | — | `SCENARIO_REDUCED_COST` | needs assembler + consumer rework — see phase 7 |
 
-- Add `ph_dual_rank_ratio`, `relaxed_ph_rank_ratio`,
+- Added `ph_dual_rank_ratio`, `relaxed_ph_rank_ratio`,
   `subgradient_rank_ratio`, and `fwph_rank_ratio` (the spokes whose every
-  per-scenario field already has a multi-source assembler). Each is
+  per-scenario field already has a multi-source assembler). Each was
   mechanical: one `add_to_config(...)` in the matching `*_args` method,
   one `<spoke>_dict["rank_ratio"] = cfg.<gate>_rank_ratio` line in
   `build_spoke_list`, and one assertion in `test_flexible_rank_cli.py`,
-  mirroring `ph_xfeas_spoke_rank_ratio`. `ph_dual` / `relaxed_ph` carry
-  only fields without a multistage guard, so they work at any stage
-  count; `subgradient` / `fwph` carry the xhat/`XFEAS` fields, so a
-  multistage flex run errors cleanly at startup until phase 4b lands.
+  mirroring `ph_xfeas_spoke_rank_ratio`. All four carry only fields whose
+  assembler is stage-agnostic (`DUALS`, `RELAXED_NONANTS_VALS`,
+  `NONANTS_VALS`, and the xhat/`XFEAS` blocks routed wholesale per
+  scenario), so they work at any stage count.
 - This is config-only (additive); the equal-rank path is untouched.
 - `reduced_costs` is **not** folded in here: it is the one remaining
   spoke whose field has no assembler, and adding one is a behavioral
