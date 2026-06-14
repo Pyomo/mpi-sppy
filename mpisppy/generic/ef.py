@@ -88,6 +88,10 @@ def do_EF(module, cfg, scenario_creator, scenario_creator_kwargs,
             ef.write_tree_solution(f'{cfg.solution_base_name}_soldir')
         global_toc("Wrote EF solution data.")
 
+    if cfg.get("write_xhat_file", None) is not None:
+        sputils.ef_nonants_csv(ef.ef, cfg.write_xhat_file)
+        global_toc("Wrote xhat tree file.")
+
     if hasattr(module, "custom_writer"):
         module.custom_writer(ef, cfg)
 

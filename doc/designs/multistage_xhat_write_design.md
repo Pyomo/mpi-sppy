@@ -1,4 +1,4 @@
-# Design: Writing a multi-stage xhat (nonant tree) to a file
+# Design: Reading and writing a multi-stage xhat (nonant tree) file
 
 **Status:** Draft — up for discussion. Nothing implemented yet.
 **Author:** dlw (captured with Claude Code assistance)
@@ -17,16 +17,17 @@ consumes a full `{node_name: array}` cache across every tree node, and
 `ciutils.read_xhat`). So the missing pieces are narrower than the docs
 imply.
 
-This note covers **only the write side**, as a first, self-contained,
-green-on-its-own PR. We establish *and produce* the canonical on-disk
-format that the later reader will consume. Reading, the `ciutils`
-generalization, the multi-stage `feasible_xhat_creator` contract, and
-any new CLI surface are explicitly **out of scope here** (see below).
+This note covers **both write and read** of the canonical multi-stage
+xhat file, as one self-contained PR. (It began as write-only; the read
+side was folded in so the file format is exercised end-to-end by a real
+write→read→fix round trip, rather than shipping a producer with no
+consumer.) The `ciutils` generalization and the multi-stage
+`feasible_xhat_creator` contract remain out of scope (see below).
 
-Rationale for writing first: the reader must consume a concrete format,
-and the most useful producer of that format — a real multi-stage
-cylinders run's incumbent — does not exist today. Settling the format
-by *writing* it first lets the reader phase be pure consumption.
+The read side reuses the existing `--xhat-from-file` surface
+(`xhatbase._try_file_xhat`), which previously accepted only a two-stage
+`.npy` ROOT vector; it now also accepts the canonical `.csv` for any
+number of stages, matched to the model by variable name.
 
 ## What mpi-sppy writes today
 
@@ -179,23 +180,36 @@ rank 0 `os.makedirs` the parent dir if any and
 delegators. EF parity comes free: `ef_nonants_csv` already produces the
 same format via the shared serializer.
 
-## Explicitly out of scope (deferred to the reader phase)
+### 4. The reader (`--xhat-from-file` for any number of stages)
 
-- **The reader** (`{node: array}` from the CSV) and any change to
-  `--xhat-from-file` / `xhatbase._try_file_xhat`.
-- **`ciutils.write_xhat`/`read_xhat` generalization.** Deliberately not
-  touched here: `write_xhat` receives a bare `{node: array}` cache with
-  **no variable names**, so it cannot emit the by-name CSV without a
-  model. Whether the multi-stage `ciutils` path becomes model-aware
-  (by-name) or stays model-free (a positional `.npz`/`node,index,value`)
-  is a reader-phase decision about round-trip semantics, made where the
-  consumers (MMW, zhat4xhat) and their model access are in view. The
-  by-name CSV format chosen here is the input to that decision, not a
-  prejudgment of it.
+`sputils.read_nonant_tree_csv(file_name, node_varname_order)` is the
+inverse of the serializer: it parses the CSV to `{node: {name: value}}`
+and returns `{node: np.ndarray}` ordered to a caller-supplied per-node
+variable order. Because the file is keyed by node-local **name**, the
+consumer supplies the order it wants — typically each
+`node.nonant_vardata_list`'s node-local names — so the array lands in the
+cache's positional order without depending on file row order. Parsing
+splits each data line on the **first** comma (node) and the **last**
+comma (value) so multi-index Var names (`x[a,b]`) survive.
+
+`xhatbase._try_file_xhat` dispatches on extension: `.csv` →
+`read_nonant_tree_csv` against the spoke's own local scenarios (any
+number of stages; a file may carry more nodes than a rank needs, and the
+extras are ignored); anything else → the existing two-stage `.npy`
+`ciutils.read_xhat` path (a multi-stage `.npy` still hard-fails, now
+pointing at the `.csv` format). The assembled cache flows into the
+unchanged `self.opt.evaluate(...)` / `update_if_improving(...)` path.
+
+## Explicitly out of scope
+
+- **`ciutils.write_xhat`/`read_xhat` generalization.** Deliberately left
+  alone: `write_xhat` receives a bare `{node: array}` cache with **no
+  variable names**, and `read_xhat` is model-free (`np.load`), used by
+  MMW/zhat4xhat with no reference model. The by-name CSV needs a model to
+  resolve order, so it lives in `sputils` (writer has the model; reader
+  takes the order map) and `--xhat-from-file` dispatches to it. `ciutils`
+  stays the model-free two-stage `.npy` path, untouched.
 - The multi-stage `feasible_xhat_creator` contract and docs.
-
-This boundary keeps the writing PR small and avoids baking half of a
-reader decision into the writer.
 
 ## Backward compatibility
 
@@ -216,23 +230,35 @@ reader decision into the writer.
 5. `cfg.write_xhat_file_args()` (`--write-xhat-file`), wired into the
    generic parsing and into both `generic/decomp.py::_write_solutions`
    (cylinders) and `generic/ef.py` (EF).
-6. Tests (below), wired into `run_coverage.bash` **and**
-   `test_pr_and_main.yml` in the same commit.
-7. Doc: short note in `doc/src/` on the format + `--write-xhat-file`;
-   mention the EF `.csv` format change.
+6. **Reader:** `sputils.read_nonant_tree_csv`; `.csv` dispatch in
+   `xhatbase._try_file_xhat` (+ `_read_xhat_csv`); `xhat_from_file`
+   description updated for the multi-stage `.csv`.
+7. Tests (below); all added to existing harness-wired files
+   (`test_sputils.py`, `test_xhat_from_file.py`, `test_ef_ph.py`), so no
+   new coverage-harness wiring is needed.
+8. Doc: short note in `doc/src/` on the format + `--write-xhat-file` +
+   the multi-stage `--xhat-from-file`; mention the EF `.csv` format
+   change.
 
 ## Tests
 
-- **Serial / EF:** `ef_nonants_csv` (now node-local) writes the expected
-  rows for a small multi-stage example (e.g. `hydro`); reload the values
-  into a fresh scenario by name and assert they match. Update
-  `test_ef_nonants_csv_creates_file`.
-- **Cylinders gather (needs MPI):** a 2-rank multi-stage run; assert
-  rank 0's `write_tree_nonants` file contains every node exactly once and
-  values match the incumbent. Add to the mpiexec test list.
-- **No-MPI path:** `gather_nonant_tree` returns the single local dict
-  under the `MPI.py` mock.
-- Coverage-harness wiring as in (5) above.
+- **Serializer / EF round-trip (no solver):** `write_nonant_tree_csv`
+  format + node order; `ef_nonants_csv` (now node-local) round-trips
+  position-for-position against `nonant_cache_from_ef`. Updated
+  `test_ef_nonants_csv_creates_file` and the `test_ef_ph` hydro EF check.
+- **Reader (no solver):** `read_nonant_tree_csv` round-trips the writer,
+  follows the requested order, ignores unrequested nodes, survives
+  multi-index names, and raises on a missing node/variable.
+  `_try_file_xhat` `.csv` path via the existing `test_xhat_from_file.py`
+  stubs (happy path, model-order wins, extra nodes ignored, missing var
+  raises).
+- **Gather (no MPI):** `gather_nonant_tree_to_rank0` returns the
+  node-keyed, deduped local dict under the serial path;
+  `_assert_nonant_node_agreement` passes within tolerance and raises on
+  disagreement.
+- **End-to-end smoke (manual, this PR):** farmer (2-stage) and hydro
+  (3-stage) write→read round trips through `generic_cylinders`, EF and
+  cylinders.
 
 ## Resolved
 
