@@ -678,6 +678,13 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config('fwph_rank_ratio',
+                           description="MPI ranks for the fwph spoke "
+                                       "relative to the hub (flexible rank "
+                                       "assignments; default 1.0 = equal)",
+                           domain=float,
+                           default=1.0)
+
         self.add_to_config(name="fwph_hub",
                            description="Use FWPH hub instead of PH (default False)",
                            domain=bool,
@@ -874,6 +881,13 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
+        self.add_to_config('subgradient_rank_ratio',
+                              description="MPI ranks for the subgradient spoke "
+                                          "relative to the hub (flexible rank "
+                                          "assignments; default 1.0 = equal)",
+                              domain=float,
+                              default=1.0)
+
         self.add_solver_specs("subgradient")
         self.add_mipgap_specs("subgradient")
 
@@ -902,6 +916,12 @@ class Config(pyofig.ConfigDict):
                             description="have a relaxed PH spoke",
                             domain=bool,
                             default=False)
+        self.add_to_config("relaxed_ph_rank_ratio",
+                            description="MPI ranks for the relaxed_ph spoke "
+                                        "relative to the hub (flexible rank "
+                                        "assignments; default 1.0 = equal)",
+                            domain=float,
+                            default=1.0)
         self.add_to_config("relaxed_ph_rescale_rho_factor",
                             description="Used to rescale rho initially (default=1.0)",
                             domain=float,
@@ -914,6 +934,12 @@ class Config(pyofig.ConfigDict):
                             description="have a PH xhat-feasible spoke",
                             domain=bool,
                             default=False)
+        self.add_to_config("ph_xfeas_spoke_rank_ratio",
+                            description="MPI ranks for the ph_xfeas spoke "
+                                        "relative to the hub (flexible rank "
+                                        "assignments; default 1.0 = equal)",
+                            domain=float,
+                            default=1.0)
         self.add_to_config("ph_xfeas_spoke_rescale_rho_factor",
                             description="Used to rescale rho initially (default=0.1)",
                             domain=float,
@@ -935,6 +961,13 @@ class Config(pyofig.ConfigDict):
                             description="have a dual PH spoke",
                             domain=bool,
                             default=False)
+
+        self.add_to_config("ph_dual_rank_ratio",
+                            description="MPI ranks for the ph_dual spoke "
+                                        "relative to the hub (flexible rank "
+                                        "assignments; default 1.0 = equal)",
+                            domain=float,
+                            default=1.0)
 
         self.add_solver_specs("ph_dual")
 

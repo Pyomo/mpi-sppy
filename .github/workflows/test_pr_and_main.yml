@@ -90,6 +90,10 @@ jobs:
         run: |
           coverage run $COV_ARGS mpisppy/tests/test_ef_ph.py
 
+      - name: Test CVaR
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_cvar.py -v
+
       - name: Test afew
         run: |
           PYARGS="-m coverage run $COV_ARGS"
@@ -978,6 +982,9 @@ jobs:
           mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_spwindow_multisource.py
           mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_cylinders.py
           mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_duals.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xfeas.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat_multistage.py
 
       - name: Upload coverage data
         if: always()
@@ -1147,7 +1154,8 @@ jobs:
             mpisppy/tests/test_spwindow_partial_get.py \
             mpisppy/tests/test_flexible_rank_ratios.py \
             mpisppy/tests/test_flex_coherence_policy.py \
-            mpisppy/tests/test_flexible_rank_cli.py
+            mpisppy/tests/test_flexible_rank_cli.py \
+            mpisppy/tests/test_flex_xhat_assembly.py
 
       - name: Upload coverage data
         if: always()
