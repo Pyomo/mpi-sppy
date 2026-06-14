@@ -989,6 +989,7 @@ jobs:
           mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat.py
           mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xfeas.py
           mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat_multistage.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_extension_fields.py
 
       - name: Upload coverage data
         if: always()
