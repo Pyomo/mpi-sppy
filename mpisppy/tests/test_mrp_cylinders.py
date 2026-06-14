@@ -22,6 +22,7 @@ from mpi4py import MPI
 from mpisppy.tests.utils import get_solver
 from mpisppy.utils import config
 from mpisppy.generic.mrp import _cylinder_xhat_generator
+from mpisppy.generic.parsing import add_decomp_args
 import mpisppy.tests.examples.farmer as farmer
 
 comm = MPI.COMM_WORLD
@@ -43,48 +44,14 @@ def _get_cylinder_cfg():
     """
     cfg = config.Config()
 
-    # Register all config groups that do_decomp / configure_extensions /
-    # build_spoke_list may access.  This mirrors parse_args in
-    # mpisppy/generic/parsing.py.
+    # Register every config group that do_decomp / configure_extensions /
+    # build_spoke_list may access, using the same shared helper as the
+    # generic_cylinders and mrp_generic drivers so this test cannot drift.
     cfg.proper_bundle_config()
     cfg.pickle_scenarios_config()
     cfg.EF_base()
-    cfg.popular_args()
-    cfg.two_sided_args()
-    cfg.ph_args()
-    cfg.aph_args()
-    cfg.subgradient_args()
-    cfg.fixer_args()
-    cfg.relaxed_ph_fixer_args()
-    cfg.integer_relax_then_enforce_args()
-    cfg.gapper_args()
-    cfg.gapper_args(name="lagrangian")
-    cfg.ph_primal_args()
-    cfg.ph_dual_args()
-    cfg.relaxed_ph_args()
-    cfg.fwph_args()
-    cfg.lagrangian_args()
-    cfg.subgradient_bounder_args()
-    cfg.xhatshuffle_args()
-    cfg.xhatxbar_args()
-    cfg.norm_rho_args()
-    cfg.primal_dual_rho_args()
-    cfg.converger_args()
-    cfg.wxbar_read_write_args()
-    cfg.tracking_args()
-    cfg.gradient_args()
-    cfg.dynamic_rho_args()
-    cfg.reduced_costs_args()
-    cfg.sep_rho_args()
-    cfg.coeff_rho_args()
-    cfg.sensi_rho_args()
-    cfg.reduced_costs_rho_args()
+    add_decomp_args(cfg)
 
-    import pyomo.common.config as pyofig
-    cfg.add_to_config("user_defined_extensions",
-                      description="Space-delimited module names for user extensions",
-                      domain=pyofig.ListOf(str),
-                      default=None)
     cfg.add_to_config(name="solution_base_name",
                       description="Base name for solution output files",
                       domain=str,

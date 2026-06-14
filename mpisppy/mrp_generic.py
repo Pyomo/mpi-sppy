@@ -12,10 +12,8 @@
 import sys
 import numpy as np
 
-import pyomo.common.config as pyofig
-
 from mpisppy import MPI
-from mpisppy.generic.parsing import model_fname, load_module
+from mpisppy.generic.parsing import model_fname, load_module, add_decomp_args
 from mpisppy.generic.mrp import mrp_args, do_mrp
 
 import mpisppy.utils.config as config
@@ -24,9 +22,10 @@ import mpisppy.utils.config as config
 def parse_mrp_args(m):
     """Parse CLI args for sequential sampling given the model module m.
 
-    This is simpler than generic_cylinders' parse_args because MRP does not
-    need cylinder, spoke, extension, or bundling arguments.  However, when
-    --xhat-method=cylinders is used, we do need the decomposition args.
+    MRP shares the full decomposition arg set with generic_cylinders via
+    add_decomp_args, so that --xhat-method=cylinders accepts the same command
+    line as generic_cylinders.  It adds the sequential sampling args and skips
+    the args specific to generic_cylinders (mmw, admm).
 
     Returns a Config object.
     """
@@ -36,6 +35,7 @@ def parse_mrp_args(m):
     # name_lists, which reads cfg.unpickle_bundles_dir / scenarios_per_bundle).
     cfg.proper_bundle_config()
     cfg.pickle_scenarios_config()
+    cfg.pre_pickle_args()
 
     cfg.add_to_config(name="module_name",
                       description="Name of the file that has the scenario creator, etc.",
@@ -62,44 +62,9 @@ def parse_mrp_args(m):
     # Sequential sampling args
     mrp_args(cfg)
 
-    # Always register the full set of decomposition args so that
-    # --xhat-method=cylinders works end-to-end.  This mirrors parse_args in
-    # mpisppy/generic/parsing.py (minus admm_args, which MRP does not use).
-    cfg.popular_args()
-    cfg.two_sided_args()
-    cfg.ph_args()
-    cfg.aph_args()
-    cfg.subgradient_args()
-    cfg.fixer_args()
-    cfg.relaxed_ph_fixer_args()
-    cfg.integer_relax_then_enforce_args()
-    cfg.gapper_args()
-    cfg.gapper_args(name="lagrangian")
-    cfg.ph_primal_args()
-    cfg.ph_dual_args()
-    cfg.relaxed_ph_args()
-    cfg.fwph_args()
-    cfg.lagrangian_args()
-    cfg.subgradient_bounder_args()
-    cfg.xhatshuffle_args()
-    cfg.xhatxbar_args()
-    cfg.norm_rho_args()
-    cfg.primal_dual_rho_args()
-    cfg.converger_args()
-    cfg.wxbar_read_write_args()
-    cfg.tracking_args()
-    cfg.gradient_args()
-    cfg.dynamic_rho_args()
-    cfg.reduced_costs_args()
-    cfg.sep_rho_args()
-    cfg.coeff_rho_args()
-    cfg.sensi_rho_args()
-    cfg.reduced_costs_rho_args()
-
-    cfg.add_to_config("user_defined_extensions",
-                      description="Space-delimited module names for user extensions",
-                      domain=pyofig.ListOf(str),
-                      default=None)
+    # Full hub-and-spoke decomposition args, shared with generic_cylinders, so
+    # --xhat-method=cylinders works end-to-end with the same flags.
+    add_decomp_args(cfg)
 
     cfg.parse_command_line(f"mpi-sppy MRP for {cfg.module_name}")
 

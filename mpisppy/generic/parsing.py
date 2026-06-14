@@ -92,36 +92,16 @@ def load_module(model_fname):
     return importlib.import_module(fname)
 
 
-def parse_args(m):
-    """Parse CLI args given the model module m. Returns a Config object."""
-    cfg = config.Config()
-    cfg.proper_bundle_config()
-    cfg.pickle_scenarios_config()
-    cfg.pre_pickle_args()
+def add_decomp_args(cfg):
+    """Register every CLI arg consumed by hub-and-spoke decomposition.
 
-    cfg.add_to_config(name="module_name",
-                      description="Name of the file that has the scenario creator, etc.",
-                      domain=str,
-                      default=None,
-                      argparse=True)
-    assert hasattr(m, "inparser_adder"), "The model file must have an inparser_adder function"
-    cfg.add_to_config(name="solution_base_name",
-                      description="The string used for a directory of ouput along with a csv and an npv file (default None, which means no soltion output)",
-                      domain=str,
-                      default=None)
-    cfg.add_to_config(name="write_scenario_lp_mps_files_dir",
-                      description="Invokes an extension that writes an model lp file, mps file and a nonants json file for each scenario before iteration 0",
-                      domain=str,
-                      default=None)
-
-    m.inparser_adder(cfg)
-    # many models, e.g., farmer, need num_scens_required
-    #  in which case, it should go in the inparser_adder function
-    # cfg.num_scens_required()
-    # On the other hand, this program really wants cfg.num_scens somehow so
-    # maybe it should just require it.
-
-    cfg.EF_base()  # If EF is slected, most other options will be moot
+    This is the single source of truth for the decomposition (cylinder and
+    spoke) options.  Both generic_cylinders (via parse_args) and mrp_generic
+    (via parse_mrp_args, used when --xhat-method=cylinders) call it, so a
+    command line accepted by one driver is accepted by the other.  Every option
+    read by mpisppy.generic.decomp.do_decomp and the hub/spoke builders it calls
+    must be registered here.
+    """
     # There are some arguments here that will not make sense for all models
     cfg.popular_args()
     cfg.two_sided_args()
@@ -163,6 +143,40 @@ def parse_args(m):
                       description="Space-delimited module names for user extensions",
                       domain=pyofig.ListOf(str),
                       default=None)
+
+
+def parse_args(m):
+    """Parse CLI args given the model module m. Returns a Config object."""
+    cfg = config.Config()
+    cfg.proper_bundle_config()
+    cfg.pickle_scenarios_config()
+    cfg.pre_pickle_args()
+
+    cfg.add_to_config(name="module_name",
+                      description="Name of the file that has the scenario creator, etc.",
+                      domain=str,
+                      default=None,
+                      argparse=True)
+    assert hasattr(m, "inparser_adder"), "The model file must have an inparser_adder function"
+    cfg.add_to_config(name="solution_base_name",
+                      description="The string used for a directory of ouput along with a csv and an npv file (default None, which means no soltion output)",
+                      domain=str,
+                      default=None)
+    cfg.add_to_config(name="write_scenario_lp_mps_files_dir",
+                      description="Invokes an extension that writes an model lp file, mps file and a nonants json file for each scenario before iteration 0",
+                      domain=str,
+                      default=None)
+
+    m.inparser_adder(cfg)
+    # many models, e.g., farmer, need num_scens_required
+    #  in which case, it should go in the inparser_adder function
+    # cfg.num_scens_required()
+    # On the other hand, this program really wants cfg.num_scens somehow so
+    # maybe it should just require it.
+
+    cfg.EF_base()  # If EF is slected, most other options will be moot
+    # Hub-and-spoke decomposition args (shared with mrp_generic)
+    add_decomp_args(cfg)
     # TBD - think about adding directory for json options files
 
     cfg.mmw_args()
