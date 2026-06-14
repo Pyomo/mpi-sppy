@@ -753,6 +753,66 @@ differs from 1.0)
   the coherence policy), which times out CI.  Tracked in Pyomo/mpi-sppy#753.
 
 
+**Phase 6: Complete per-spoke rank-ratio flag coverage**
+
+A spoke may expose a `--<spoke>-rank-ratio` flag exactly when **every
+per-scenario field it sends or receives has a multi-source assembler**.
+The flag *is* the gate (a non-1.0 ratio is what selects the unequal-rank
+path), so exposing it for a spoke whose fields are not yet supported only
+surfaces the startup `NotImplementedError` — honest, but useless.
+Coverage therefore tracks field support, not spoke convenience:
+
+| Spoke (`cfg` gate) | Flag | Per-scenario field(s) | Status |
+|---|---|---|---|
+| `lagrangian` | `lagrangian_rank_ratio` | `DUALS`; `NONANTS_VALS` (recv) | landed |
+| `xhatshuffle` | `xhatshuffle_rank_ratio` | `BEST_XHAT` / `RECENT_XHATS` | landed |
+| `xhatxbar` | `xhatxbar_rank_ratio` | `BEST_XHAT` / `RECENT_XHATS` | landed |
+| `ph_xfeas_spoke` | `ph_xfeas_spoke_rank_ratio` | `XFEAS` | landed |
+| `ph_dual` | `ph_dual_rank_ratio` | `DUALS` | landed |
+| `relaxed_ph` | `relaxed_ph_rank_ratio` | `DUALS`, `RELAXED_NONANTS_VALS` | landed |
+| `subgradient` | `subgradient_rank_ratio` | `XFEAS`; `NONANTS_VALS` (recv) | landed |
+| `fwph` | `fwph_rank_ratio` | `BEST_XHAT` / `RECENT_XHATS` (recv); `NONANTS_VALS` (recv) | landed |
+| `reduced_costs` | — | `SCENARIO_REDUCED_COST` | needs assembler + consumer rework — see phase 7 |
+
+- Added `ph_dual_rank_ratio`, `relaxed_ph_rank_ratio`,
+  `subgradient_rank_ratio`, and `fwph_rank_ratio` (the spokes whose every
+  per-scenario field already has a multi-source assembler). Each was
+  mechanical: one `add_to_config(...)` in the matching `*_args` method,
+  one `<spoke>_dict["rank_ratio"] = cfg.<gate>_rank_ratio` line in
+  `build_spoke_list`, and one assertion in `test_flexible_rank_cli.py`,
+  mirroring `ph_xfeas_spoke_rank_ratio`. All four carry only fields whose
+  assembler is stage-agnostic (`DUALS`, `RELAXED_NONANTS_VALS`,
+  `NONANTS_VALS`, and the xhat/`XFEAS` blocks routed wholesale per
+  scenario), so they work at any stage count.
+- This is config-only (additive); the equal-rank path is untouched.
+- `reduced_costs` is **not** folded in here: it is the one remaining
+  spoke whose field has no assembler, and adding one is a behavioral
+  change (phase 7), not config wiring.
+
+**Phase 7: `reduced_costs` spoke (`SCENARIO_REDUCED_COST`)**
+
+`SCENARIO_REDUCED_COST` is a genuinely per-scenario field with the same
+`_local_nonant_length` layout as `NONANTS_VALS` / `DUALS` (one reduced
+cost per nonant per scenario; relaxed coherence, since it only steers
+rho). The two pieces of work:
+
+- **Assembler (trivial).** Add `SCENARIO_REDUCED_COST` to the
+  per-scenario branch of `_items_per_scen_for_field` (returns
+  `[nonant_length] * num_scenarios`) and leave it out of
+  `_STRICT_COHERENCE_FIELDS` (relaxed).
+- **Consumer rework (the real change).** `ReducedCostsRho`
+  (`extensions/reduced_costs_rho.py`) currently asserts
+  `len(fields_to_ranks[SCENARIO_REDUCED_COST]) == 1` and reads from a
+  single peer rank — the same single-source assumption that the
+  `XFEAS` → CG hub consumer had before phase 4a. Teach it to read
+  multi-source across the spoke's ranks (drop the assert; assemble via
+  the overlap map), then add a `reduced_costs` flag and an end-to-end
+  multi-rank test. Same shape and review size as the `XFEAS`/CG work.
+
+Only after phase 7 does the phase-6 table's last row flip to a landed
+`reduced_costs_rank_ratio`.
+
+
 ### Development and rollout strategy
 
 These changes touch a low-level, implementation-sensitive corner of the
