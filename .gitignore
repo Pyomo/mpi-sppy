@@ -137,3 +137,23 @@ dmypy.json
 
 # .DS_Store
 .DS_Store
+
+# mpi-sppy runtime artifacts from running examples/tests.  Conservative
+# patterns — only obvious per-run output, not anything that could be a
+# fixture.  Add more here as new artifact patterns appear.
+*_summary_iter*_rank*.txt
+None_summary_*.txt
+__*___summary_*.txt
+_delme*
+delete_me*
+specific.csv_*
+_temp_*.csv
+
+# Example output files (each example regenerates these on every run)
+examples/**/ef.txt
+examples/**/hub.log
+examples/**/xhateval.log
+examples/**/solution_*.txt
+examples/**/*_full_solution/
+examples/**/*_pickles/
+examples/**/*_cyl_nonants.npy

@@ -34,11 +34,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           pip install sphinx sphinx_rtd_theme cplex
@@ -68,11 +67,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -92,6 +90,10 @@ jobs:
         run: |
           coverage run $COV_ARGS mpisppy/tests/test_ef_ph.py
 
+      - name: Test CVaR
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_cvar.py -v
+
       - name: Test afew
         run: |
           PYARGS="-m coverage run $COV_ARGS"
@@ -102,6 +104,10 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_component_map_usage.py
 
+      - name: Test solver options layers
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_solver_options_layers.py -v
+
       - name: Test nonant name validation
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_nonant_validation.py -v
@@ -109,6 +115,14 @@ jobs:
       - name: Test generic_cylinders usage
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_generic_cylinders.py -v
+
+      - name: Test xhat from file
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_xhat_from_file.py -v
+
+      - name: Test feasible_xhat
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_feasible_xhat.py -v
 
       - name: Test docs
         run: |
@@ -131,16 +145,17 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
           pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
           pip install xpress coverage
+          # usar runs in first-part and imports matplotlib + scipy at module load
+          pip install matplotlib scipy
 
       - name: Build pyomo extensions
         run: |
@@ -214,16 +229,17 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
           pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
           pip install xpress coverage
+          # usar runs in first-part and imports matplotlib + scipy at module load
+          pip install matplotlib scipy
 
       - name: Build pyomo extensions
         run: |
@@ -290,6 +306,43 @@ jobs:
           if-no-files-found: ignore
           include-hidden-files: true
 
+  uc-relaxed:
+    name: run_uc_pr.py (HiGHS, integer-relaxed PH)
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo dill pybind11 highspy coverage
+          pip install git+https://github.com/grid-parity-exchange/egret.git
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: Run run_uc_pr.py
+        run: |
+          PYARGS="-m coverage run $COV_ARGS"
+          cd examples
+          coverage run $EX_COV_ARGS run_uc_pr.py appsi_highs "" --python-args="$PYARGS"
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-uc-relaxed
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
   schur-complement:
     name: schur-complement
     runs-on: ubuntu-latest
@@ -300,16 +353,16 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: setup conda
-        uses: conda-incubator/setup-miniconda@v2
+        uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: ${{ matrix.python-version }}
-          channels: anaconda, conda-forge
+          channels: conda-forge, anaconda
           activate-environment: test_env
-          auto-activate-base: false
 
       - name: Install dependencies
         shell: bash -l {0}
         run: |
+          conda install -y pip
           python -m pip install --upgrade pip
           pip install pytest pytest-cov pybind11 coverage
           conda install -y conda-forge::libstdcxx-ng
@@ -319,7 +372,7 @@ jobs:
           git clone https://github.com/pyomo/pyomo.git
           cd pyomo/
           pip install -e .
-          pyomo download-extensions
+          pyomo download-extensions || echo "WARNING: pyomo download-extensions had failures (often a netlib.org timeout fetching gjh); not required by test_sc.py"
           pyomo build-extensions
           cd ../
           pip install git+https://github.com/parapint/parapint.git
@@ -350,11 +403,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -379,17 +431,58 @@ jobs:
           if-no-files-found: ignore
           include-hidden-files: true
 
+  straight-tests-gurobi:
+    name: straight_tests.py (gurobi via pip)
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo gurobipy dill matplotlib scipy coverage pytest
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: Probe gurobi_persistent availability
+        run: |
+          python -c "import pyomo.environ as pyo; s = pyo.SolverFactory('gurobi_persistent'); print('gurobi_persistent available:', s.available()); import gurobipy; print('gurobipy version:', gurobipy.gurobi.version())"
+
+      - name: mpi tests
+        run: |
+          PYARGS="-m coverage run $COV_ARGS"
+          cd mpisppy/tests
+          coverage run $COV_ARGS straight_tests.py --python-args="$PYARGS"
+
+      - name: Options-reach-solver end-to-end tests
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_options_reach_solver.py -v
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-straight-tests-gurobi
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
   admm-wrapper:
     name: admm wrapper tests
     runs-on: ubuntu-latest
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -424,11 +517,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -459,11 +551,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -494,11 +585,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -529,11 +619,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy" setuptools
@@ -559,8 +648,8 @@ jobs:
           if-no-files-found: ignore
           include-hidden-files: true
 
-  mps:
-    name: MPS tests
+  pre-pickle-pipeline:
+    name: pre-pickle preprocessing pipeline tests
     runs-on: ubuntu-latest
     needs: [ruff]
     steps:
@@ -570,6 +659,45 @@ jobs:
           activate-environment: test_env
           python-version: 3.11
           auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py "numpy" setuptools
+          pip install pyomo pandas xpress cplex scipy sympy dill PyYAML Pympler networkx packaging coverage pytest
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: run pre-pickle pipeline tests
+        timeout-minutes: 10
+        # Run the test file directly via unittest.main rather than via
+        # pytest, because the --python-args shim used to inject coverage
+        # into spawned subprocesses must reach the test file's sys.argv.
+        # pytest would consume / reject --python-args itself.
+        run: |
+          PYARGS="-m coverage run $COV_ARGS"
+          cd mpisppy/tests
+          coverage run $COV_ARGS test_pre_pickle_pipeline.py --python-args="$PYARGS"
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-pre-pickle-pipeline
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
+  mps:
+    name: MPS tests
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -604,11 +732,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -643,11 +770,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy" setuptools
@@ -697,11 +823,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -735,6 +860,9 @@ jobs:
     name: gradient and rho tests
     runs-on: ubuntu-latest
     needs: [ruff]
+    defaults:
+      run:
+        shell: bash -l {0}
     steps:
       - uses: actions/checkout@v3
 
@@ -742,25 +870,24 @@ jobs:
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
           channels: conda-forge, defaults
 
       - name: Install dependencies
         run: |
           conda install -y conda-forge::libstdcxx-ng
-          conda install -y -c conda-forge openmpi mpi4py "numpy" setuptools cmake
-          pip install pyomo pandas xpress cplex scipy sympy dill packaging coverage
+          conda install -y -c conda-forge openmpi mpi4py "numpy" setuptools cmake pip
+          conda run -n test_env --no-capture-output pip install pyomo pandas xpress cplex scipy sympy dill packaging coverage
 
       - name: setup the program
         run: |
-          pip install -e .
+          conda run -n test_env --no-capture-output pip install -e .
 
       - name: run gradient/rho tests
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          coverage run $COV_ARGS test_gradient_rho.py
-          coverage run $COV_ARGS test_xbar_w_reader_writer.py
+          conda run -n test_env --no-capture-output coverage run $COV_ARGS test_gradient_rho.py
+          conda run -n test_env --no-capture-output coverage run $COV_ARGS test_xbar_w_reader_writer.py
 
       - name: Upload coverage data
         if: always()
@@ -776,11 +903,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy" setuptools
@@ -802,11 +928,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools pytest pyyaml networkx
@@ -843,11 +968,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy" setuptools
@@ -863,11 +987,80 @@ jobs:
           cd mpisppy/tests
           mpiexec -np 2 coverage run $COV_ARGS -m mpi4py test_with_cylinders.py
 
+      - name: run flexible (unequal) rank tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_spwindow_multisource.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_cylinders.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_duals.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xfeas.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat_multistage.py
+
       - name: Upload coverage data
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-cylinders
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
+  test-cg:
+    name: column generation tests
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo xpress cplex coverage
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: run CG serial tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          coverage run $COV_ARGS test_cg_main.py
+
+      - name: run CG cylinder tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          mpiexec -np 2 coverage run $COV_ARGS -m mpi4py test_cg_with_cylinders.py
+
+      - name: run multi-rank CG hub test
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          mpiexec -np 4 coverage run $COV_ARGS -m mpi4py test_cg_multirank_hub.py
+
+      - name: run DCG serial tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          coverage run $COV_ARGS test_dualcg_main.py
+
+      - name: run DCG cylinder tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          mpiexec -np 2 coverage run $COV_ARGS -m mpi4py test_dualcg_with_cylinders.py
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-cg
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
           include-hidden-files: true
@@ -878,11 +1071,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -936,11 +1128,10 @@ jobs:
     needs: [ruff]
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
@@ -959,7 +1150,24 @@ jobs:
             mpisppy/tests/test_scenario_tree.py \
             mpisppy/tests/test_nice_join.py \
             mpisppy/tests/test_solver_spec.py \
-            mpisppy/tests/test_extensions.py
+            mpisppy/tests/test_extensions.py \
+            mpisppy/tests/test_jensens.py \
+            mpisppy/tests/test_feasible_xhat.py \
+            mpisppy/tests/test_proper_bundler.py \
+            mpisppy/tests/test_incumbent_writing.py \
+            mpisppy/tests/test_grad_rho_bundles.py \
+            mpisppy/tests/test_sensi_rho_bundles.py \
+            mpisppy/tests/test_reduced_costs_rho_bundles.py \
+            mpisppy/tests/test_rho_deprecations.py \
+            mpisppy/tests/test_buffer_inspect.py \
+            mpisppy/tests/test_comm_lor_check.py \
+            mpisppy/tests/test_rank_apportionment.py \
+            mpisppy/tests/test_overlap_map.py \
+            mpisppy/tests/test_spwindow_partial_get.py \
+            mpisppy/tests/test_flexible_rank_ratios.py \
+            mpisppy/tests/test_flex_coherence_policy.py \
+            mpisppy/tests/test_flexible_rank_cli.py \
+            mpisppy/tests/test_flex_xhat_assembly.py
 
       - name: Upload coverage data
         if: always()
@@ -980,13 +1188,16 @@ jobs:
       - runall_persistent_part2
       - runall_part1
       - runall_part2
+      - uc-relaxed
       - schur-complement
       - straight-tests
+      - straight-tests-gurobi
       - admm-wrapper
       - aph
       - ph-main
       - ph-extensions
       - pickled-bundles
+      - pre-pickle-pipeline
       - mps
       - smps
       - confidence-intervals
@@ -994,16 +1205,16 @@ jobs:
       - test-gradient-rho
       - test-pysp
       - test-cylinders
+      - test-cg
       - test-agnostic
       - unit-tests
     if: always()
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
-          auto-activate-base: false
 
       - name: Install coverage
         run: pip install coverage

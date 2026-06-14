@@ -77,8 +77,13 @@ argument.
 These functions write ``xhat`` for the root node of the scenario tree to a file and can be read using ``read_xhat``.
 When using a cylinders driver, the function ``sputils.first_stage_nonant_npy_serializer``
 can be given as the ``first_stage_solution_writer`` argument to the function
-``sputils.write_spin_the_wheel_first_stage_solution``. See the ``farmer_cylinders.py``
-and ``farmer_ef.py`` examples. The ``uc_cylinders.py`` file also shows an example.
+``sputils.write_spin_the_wheel_first_stage_solution``. See
+``examples/farmer/CI/farmer_ef.py`` for a small EF example and
+``examples/uc/uc_cylinders.py`` for a hub-and-spoke example. From
+``generic_cylinders.py`` the incumbent xhat from a hub-and-spoke run
+can be written automatically by setting
+``--incumbent-on-improvement-filename-prefix``, which produces both
+``.csv`` and ``.npy`` files each time a better inner bound is found.
 
 Evaluating a candidate solution
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

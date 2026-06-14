@@ -53,13 +53,29 @@ has_module() {
     python -c "import $1" 2>/dev/null
 }
 
+# -oversubscribe is OpenMPI-only (MPICH rejects it). Some flexible-rank tests
+# need more ranks than the host has cores, so add the flag only under OpenMPI.
+OVERSUBSCRIBE=""
+if mpiexec --version 2>&1 | grep -qiE "open[ -]?mpi|open ?rte"; then
+    OVERSUBSCRIBE="-oversubscribe"
+fi
+
 # ---------- Serial pytest / unittest tests ----------
 
 run_phase "test_ef_ph (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_ef_ph.py -v
 
+run_phase "test_cvar (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_cvar.py -v
+
 run_phase "test_component_map_usage (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_component_map_usage.py -v
+
+run_phase "test_solver_options_layers (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_solver_options_layers.py -v
+
+run_phase "test_options_reach_solver (serial; gurobi-only)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_options_reach_solver.py -v
 
 run_phase "test_nonant_validation (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_nonant_validation.py -v
@@ -79,6 +95,9 @@ run_phase "test_stoch_admmWrapper (serial, spawns mpiexec)" \
 run_phase "test_admm_bundler (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_admm_bundler.py -v
 
+run_phase "test_proper_bundler (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_proper_bundler.py -v
+
 run_phase "test_aph (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_aph.py
 
@@ -93,6 +112,51 @@ run_phase "test_smps (serial)" \
 
 run_phase "test_generic_cylinders (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_generic_cylinders.py -v
+
+run_phase "test_jensens (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_jensens.py -v
+
+run_phase "test_feasible_xhat (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_feasible_xhat.py -v
+
+run_phase "test_grad_rho_bundles (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_grad_rho_bundles.py -v
+
+run_phase "test_sensi_rho_bundles (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_sensi_rho_bundles.py -v
+
+run_phase "test_reduced_costs_rho_bundles (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_reduced_costs_rho_bundles.py -v
+
+run_phase "test_rho_deprecations (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_rho_deprecations.py -v
+
+run_phase "test_rank_apportionment (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_rank_apportionment.py -v
+
+run_phase "test_overlap_map (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_overlap_map.py -v
+
+run_phase "test_spwindow_partial_get (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_spwindow_partial_get.py -v
+
+run_phase "test_flexible_rank_ratios (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_flexible_rank_ratios.py -v
+
+run_phase "test_flex_coherence_policy (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_flex_coherence_policy.py -v
+
+run_phase "test_flexible_rank_cli (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_flexible_rank_cli.py -v
+
+run_phase "test_flex_xhat_assembly (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_flex_xhat_assembly.py -v
+
+run_phase "test_xhat_from_file (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_xhat_from_file.py -v
+
+run_phase "test_incumbent_writing (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_incumbent_writing.py -v
 
 run_phase "test_conf_int_farmer (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_conf_int_farmer.py
@@ -123,6 +187,44 @@ run_phase "pysp_model pytest (serial)" \
 run_phase "test_with_cylinders (mpiexec -np 2)" \
     mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_with_cylinders.py
 
+run_phase "test_cg_main (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/test_cg_main.py
+
+run_phase "test_cg_with_cylinders (mpiexec -np 2)" \
+    mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_cg_with_cylinders.py
+
+# A CG hub spanning two ranks (one hub + one spoke at np=4) covers the
+# convergence-path broadcast that used to deadlock a multi-rank hub (#729).
+run_phase "test_cg_multirank_hub (mpiexec -np 4)" \
+    mpiexec -np 4 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_cg_multirank_hub.py
+
+run_phase "test_dualcg_main (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/test_dualcg_main.py
+
+run_phase "test_dualcg_with_cylinders (mpiexec -np 2)" \
+    mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_dualcg_with_cylinders.py
+
+# Flexible (unequal) rank assignments: both need 6 ranks (4-rank + 2-rank
+# cylinders); $OVERSUBSCRIBE (set above, OpenMPI only) lets them run on hosts
+# with fewer than 6 cores.
+run_phase "test_spwindow_multisource (mpiexec -np 6)" \
+    mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_spwindow_multisource.py
+
+run_phase "test_flexible_rank_cylinders (mpiexec -np 6)" \
+    mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_cylinders.py
+
+run_phase "test_flexible_rank_duals (mpiexec -np 6)" \
+    mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_duals.py
+
+run_phase "test_flexible_rank_xhat (mpiexec -np 6)" \
+    mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_xhat.py
+
+run_phase "test_flexible_rank_xfeas (mpiexec -np 6)" \
+    mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_xfeas.py
+
+run_phase "test_flexible_rank_xhat_multistage (mpiexec -np 6)" \
+    mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_xhat_multistage.py
+
 # ---------- Tests that spawn mpiexec internally ----------
 
 PYARGS="-m coverage run --parallel-mode --rcfile=$PROJ_DIR/.coveragerc --data-file=$PROJ_DIR/.coverage"
@@ -147,6 +249,17 @@ run_phase "examples/run_all.py $SOLVER_DIRECT nouc" \
 
 run_phase "examples/generic_tester.py ${SOLVER}_direct nouc" \
     bash -c "cd '$PROJ_DIR/examples' && $EX_COV generic_tester.py '${SOLVER}_direct' '' nouc --python-args='$PYARGS'"
+
+if has_module egret; then
+    run_phase "examples/run_uc.py $SOLVER_PERSISTENT" \
+        bash -c "cd '$PROJ_DIR/examples' && $EX_COV run_uc.py '$SOLVER_PERSISTENT' '' --python-args='$PYARGS'"
+
+    run_phase "examples/run_uc_pr.py $SOLVER_PERSISTENT" \
+        bash -c "cd '$PROJ_DIR/examples' && $EX_COV run_uc_pr.py '$SOLVER_PERSISTENT' '' --python-args='$PYARGS'"
+else
+    echo ""
+    echo "=== skipping run_uc.py and run_uc_pr.py: egret not importable ==="
+fi
 
 # ---------- Optional tests (skip if deps missing) ----------
 

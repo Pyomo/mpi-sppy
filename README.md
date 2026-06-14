@@ -1,7 +1,7 @@
 mpi-sppy
 ========
 
-Optimization under uncertainty for [Pyomo](https://pyomo.org) models.
+Optimization under uncertainty for [Pyomo](https://pyomo.org) and other models.
 
 [Documentation is available at readthedocs](https://mpi-sppy.readthedocs.io/en/latest/) and
 there is a [paper](https://link.springer.com/article/10.1007/s12532-023-00247-3).
@@ -91,6 +91,22 @@ apparently being treated as blocking.
 Further, without this setting and in situations with a large number of
 ranks (e.g., >> 10), we have observed mpi-sppy stalling once scenario
 instances are created.
+
+2026 NOTICE: per-spoke solver-options now overlay the global dict
+-----------------------------------------------------------------
+
+The per-spoke solver-options flags (``--lagrangian-solver-options``,
+``--reduced-costs-solver-options``, etc.) now **overlay** the
+global ``--solver-options`` dict for that spoke instead of
+**replacing** it. The spoke flag's keys win on the keys it names;
+the global flag's other keys survive. Previously the spoke flag
+wiped the global dict for that spoke.
+
+In the unlikely event you relied on the spoke flag dropping a
+global key, re-spell every key you want in the spoke options or
+omit the global flag.
+See the ``solver-options`` section of the generic_cylinders docs
+for the worked example.
 
 2022 NOTICE
 -----------

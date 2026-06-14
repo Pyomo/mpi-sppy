@@ -54,6 +54,7 @@ def _farmer_cfg():
     cfg.popular_args()
     cfg.ph_args()
     cfg.default_rho = 1
+    cfg.max_solver_threads = 1
     farmer_pyomo_agnostic.inparser_adder(cfg)
     return cfg
 
@@ -65,16 +66,15 @@ def _get_ph_base_options():
     Baseoptions["PHIterLimit"] = 3
     Baseoptions["defaultPHrho"] = 1
     Baseoptions["convthresh"] = 0.001
-    Baseoptions["subsolvedirectives"] = None
     Baseoptions["verbose"] = False
     Baseoptions["display_timing"] = False
     Baseoptions["display_progress"] = False
     if "cplex" in solver_name:
-        Baseoptions["iter0_solver_options"] = {"mip_tolerances_mipgap": 0.001}
-        Baseoptions["iterk_solver_options"] = {"mip_tolerances_mipgap": 0.00001}
+        Baseoptions["iter0_solver_options"] = {"mip_tolerances_mipgap": 0.001, "threads": 1}
+        Baseoptions["iterk_solver_options"] = {"mip_tolerances_mipgap": 0.00001, "threads": 1}
     else:
-        Baseoptions["iter0_solver_options"] = {"mipgap": 0.001}
-        Baseoptions["iterk_solver_options"] = {"mipgap": 0.00001}
+        Baseoptions["iter0_solver_options"] = {"mipgap": 0.001, "threads": 1}
+        Baseoptions["iterk_solver_options"] = {"mipgap": 0.00001, "threads": 1}
 
     Baseoptions["display_progress"] = False
 

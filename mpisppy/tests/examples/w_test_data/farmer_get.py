@@ -19,7 +19,7 @@ import mpisppy.utils.cfg_vanilla as vanilla
 
 from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 from mpisppy.convergers.norm_rho_converger import NormRhoConverger
-from mpisppy.utils.wxbarwriter import WXBarWriter
+from mpisppy.utils.w_utils.wxbarwriter import WXBarWriter
 
 write_solution = True
 

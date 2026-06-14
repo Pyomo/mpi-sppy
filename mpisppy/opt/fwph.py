@@ -73,9 +73,35 @@ class FWPH(mpisppy.phbase.PHBase):
     def _init(self, FW_options):
         self.FW_options = FW_options
         self._options_checks_fw()
+        # Resolve separate MIP and QP solvers (issue #712). The MIP/LP
+        # subproblems are created by _create_solvers from
+        # self.options["solver_name"] (self.options is self.FW_options here),
+        # so point that at the MIP solver. The QP solver is used when the QP
+        # subproblems are built in _set_QP_objective. This lets an LP/MIP-only
+        # solver (glpk, cbc) be paired with an open-source QP solver (ipopt).
+        self._mip_solver_name, self._qp_solver_name = \
+            self._resolve_solver_names(self.FW_options)
+        self.options["solver_name"] = self._mip_solver_name
         self.vb = True
         if ('FW_verbose' in self.FW_options):
             self.vb = self.FW_options['FW_verbose']
+
+    @staticmethod
+    def _resolve_solver_names(FW_options):
+        ''' Resolve the MIP and QP solver names for FWPH (issue #712).
+
+            The MIP/LP subproblems and the proximal QP subproblems can use
+            different solvers, so that an LP/MIP-only solver (e.g. glpk or
+            cbc) can be paired with an open-source QP solver (e.g. ipopt).
+            Each dedicated option ('mip_solver_name' / 'qp_solver_name')
+            falls back to the shared 'solver_name' when not set.
+
+            Returns:
+                (mip_solver_name, qp_solver_name) tuple of strings.
+        '''
+        mip_solver_name = FW_options.get("mip_solver_name") or FW_options["solver_name"]
+        qp_solver_name = FW_options.get("qp_solver_name") or FW_options["solver_name"]
+        return mip_solver_name, qp_solver_name
 
     def fwph_main(self, finalize=True):
         self.PH_Prep(attach_duals=True, attach_prox=False)
@@ -145,7 +171,7 @@ class FWPH(mpisppy.phbase.PHBase):
             )
             # teeme = True
             self.fwph_solve_loop(
-                mip_solver_options=self.current_solver_options,
+                mip_solver_options=self._effective_solver_options(self._PHIter),
                 dtiming=self.options["display_timing"],
                 tee=teeme,
                 verbose=self.options["verbose"],
@@ -238,7 +264,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 break
 
             self.fwph_solve_loop(
-                mip_solver_options=self.current_solver_options,
+                mip_solver_options=self._effective_solver_options(self._PHIter),
                 dtiming=dtiming,
                 tee=teeme,
                 verbose=verbose
@@ -885,7 +911,7 @@ class FWPH(mpisppy.phbase.PHBase):
             in Boland et al., if t_max / FW_iter_limit == 1
         """
 
-        stage2EFsolvern = self.options.get("stage2EFsolvern", None)
+        stage2_ef_solver_name = self.options.get("stage2_ef_solver_name", None)
         branching_factors = self.options.get("branching_factors", None)  # for stage2ef
 
         number_points = 0
@@ -899,7 +925,7 @@ class FWPH(mpisppy.phbase.PHBase):
                                    solver_options = self.options["iter0_solver_options"],
                                    verbose=False,
                                    restore_nonants=False,
-                                   stage2EFsolvern=stage2EFsolvern,
+                                   stage2_ef_solver_name=stage2_ef_solver_name,
                                    branching_factors=branching_factors)
             if obj is not None:
                 for model_name in self.local_scenarios:
@@ -931,16 +957,18 @@ class FWPH(mpisppy.phbase.PHBase):
         #    proximal terms (no binary variables allowed in FWPH QPs)
         if ('linearize_binary_proximal_terms' in self.options
             and self.options['linearize_binary_proximal_terms']):
-            print('Warning: linearize_binary_proximal_terms cannot be used '
-                  'with the FWPH algorithm. Ignoring...')
+            if self.cylinder_rank == 0:
+                print('Warning: linearize_binary_proximal_terms cannot be used '
+                      'with the FWPH algorithm. Ignoring...')
             self.options['linearize_binary_proximal_terms'] = False
 
         # 3b. Check that the user did not specify the linearization of all
         #    proximal terms (FWPH QPs should be QPs)
         if ('linearize_proximal_terms' in self.options
             and self.options['linearize_proximal_terms']):
-            print('Warning: linearize_proximal_terms cannot be used '
-                  'with the FWPH algorithm. Ignoring...')
+            if self.cylinder_rank == 0:
+                print('Warning: linearize_proximal_terms cannot be used '
+                      'with the FWPH algorithm. Ignoring...')
             self.options['linearize_proximal_terms'] = False
 
         # 4. Provide a time limit of inf if the user did not specify
@@ -1037,7 +1065,7 @@ class FWPH(mpisppy.phbase.PHBase):
             mip_obj_in_qp  = replace_expressions(obj, mip._mpisppy_data.mip_to_qp)
             QP._mpisppy_model.mip_obj_in_qp = mip_obj_in_qp
             ''' Attach a solver with various options '''
-            solver = pyo.SolverFactory(self.FW_options['solver_name'])
+            solver = pyo.SolverFactory(self._qp_solver_name)
             if sputils.is_persistent(solver):
                 solver.set_instance(QP)
             if 'qp_solver_options' in self.FW_options:

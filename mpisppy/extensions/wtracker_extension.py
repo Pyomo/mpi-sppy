@@ -9,7 +9,7 @@
 
 
 import mpisppy.extensions.extension
-import mpisppy.utils.wtracker as wtracker
+import mpisppy.utils.w_utils.wtracker as wtracker
 
 
 class Wtracker_extension(mpisppy.extensions.extension.Extension):

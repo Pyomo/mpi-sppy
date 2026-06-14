@@ -99,8 +99,14 @@ fwphSaveFile = os.path.join(_tests_dir, "fwph_trace.txt")
 # Use the exact interpreter running this test (important for CI/conda/venv)
 pyexe = shlex.quote(sys.executable)
 
+# -W: escalate any RuntimeWarning from the buffer inspector to a hard error,
+# so a healthy run with --inspect-buffers-on-shutdown is also a buffer health
+# check. (Doubles as a general multi-stage cylinder health check.)
+# Must come before python_args -- when python_args is "-m coverage run ...",
+# -W after it gets parsed by coverage instead of by Python.
+warning_filter = "-W error::RuntimeWarning:mpisppy.cylinders.spoke"
 cmdstr = (
-    f"mpiexec -np 4 {pyexe} {python_args} -m mpi4py {shlex.quote(fpath)} "
+    f"mpiexec -np 4 {pyexe} {warning_filter} {python_args} -m mpi4py {shlex.quote(fpath)} "
     f"--bundles-per-rank=0 --max-iterations=5 --default-rho=1 "
     f"--solver-name={shlex.quote(solver_name)} "
     f'--branching-factors "4 3 2" '
@@ -108,7 +114,8 @@ cmdstr = (
     f"--rel-gap 0.01 --mu-dev 0 --sigma-dev 40 "
     f"--max-solver-threads 2 --start-seed 0 "
     f"--lagranger --lagranger-rho-rescale-factors-json {shlex.quote(jpath)} "
-    f"--fwph --fwph-save-file {shlex.quote(fwphSaveFile)} --xhatshuffle"
+    f"--fwph --fwph-save-file {shlex.quote(fwphSaveFile)} --xhatshuffle "
+    f"--inspect-buffers-on-shutdown"
 )
 
 ok = _doone(cmdstr)
@@ -134,6 +141,7 @@ cmdstr = (
     f"--module-name {shlex.quote(farmer_module)} "
     f"--num-scens 3 "
     f"--solver-name {shlex.quote(solver_name)} "
+    f"--max-solver-threads 1 "
     f"--default-rho 1 "
     f"--max-iterations 3 "
     f"--xhatshuffle "
@@ -151,6 +159,25 @@ mrp_cyl_path = os.path.abspath(os.path.join(_tests_dir, "test_mrp_cylinders.py")
 
 cmdstr = (
     f"mpiexec -np 3 {pyexe} {python_args} -m mpi4py {shlex.quote(mrp_cyl_path)}"
+)
+
+_doone(cmdstr)
+
+
+#####################################################
+# generic_cylinders with both Jensen's flags (farmer)
+# Exercises the outer-bound and xhat Jensen's paths inside the
+# lagrangian and xhatshuffle spokes' main() bodies.
+cmdstr = (
+    f"mpiexec -np 3 {pyexe} {python_args} -m mpi4py {shlex.quote(gc_path)} "
+    f"--module-name {shlex.quote(farmer_module)} "
+    f"--num-scens 3 "
+    f"--solver-name {shlex.quote(solver_name)} "
+    f"--max-solver-threads 1 "
+    f"--default-rho 1 "
+    f"--max-iterations 2 "
+    f"--lagrangian --xhatshuffle "
+    f"--lagrangian-try-jensens-first --xhatshuffle-try-jensens-first"
 )
 
 _doone(cmdstr)

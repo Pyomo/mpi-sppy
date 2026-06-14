@@ -31,7 +31,7 @@
     Modified: DTM, Aug 2019
 '''
 
-import mpisppy.utils.wxbarutils
+import mpisppy.utils.w_utils.wxbarutils
 import os # For checking if files exist
 import mpisppy.extensions.extension
 import mpisppy.MPI as MPI
@@ -103,12 +103,12 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
         if self.not_active:
             return  # nothing to do.
         if self.w_fname:
-            mpisppy.utils.wxbarutils.set_W_from_file(
+            mpisppy.utils.w_utils.wxbarutils.set_W_from_file(
                     self.w_fname, self.PHB, self.cylinder_rank,
                     sep_files=self.sep_files)
             self.PHB._reenable_W() # This makes a big difference.
         if self.x_fname:
-            mpisppy.utils.wxbarutils.set_xbar_from_file(self.x_fname, self.PHB)
+            mpisppy.utils.w_utils.wxbarutils.set_xbar_from_file(self.x_fname, self.PHB)
             self.PHB._reenable_prox()
 
     def post_iter0(self):
