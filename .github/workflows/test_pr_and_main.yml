@@ -603,6 +603,10 @@ jobs:
         run: |
           cd mpisppy/tests
           coverage run $COV_ARGS test_ph_extensions.py
+          # also run the IIS-on-infeasible tests here, where a commercial
+          # solver is present, so the real pyomo.contrib.iis paths execute
+          # (in the no-solver unit-tests job those classes are skipped).
+          coverage run $COV_ARGS -m pytest -v test_iis_on_infeasible.py
 
       - name: Upload coverage data
         if: always()

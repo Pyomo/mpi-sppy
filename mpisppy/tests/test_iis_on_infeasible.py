@@ -29,7 +29,7 @@ import os
 import types
 import tempfile
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pyomo.environ as pyo
 
@@ -269,6 +269,48 @@ class TestHelpers(unittest.TestCase):
         opt = _StubOpt({"xhatter_iis_method": "bogus"})
         with self.assertRaises(ValueError):
             opt._emit_iis(_infeasible_model(), "Scen1")
+
+
+class TestEmitBranchesMocked(unittest.TestCase):
+    """Exercise the two _emit_iis branch bodies -- file naming, IIS-solver
+    derivation, and logger routing -- with the external pyomo.contrib.iis
+    call mocked, so they run (and are covered) even in the no-solver CI job.
+    The real IIS computation is covered by the solver-gated TestEndToEnd /
+    TestRealXhatterPath; here we only assert the surrounding plumbing.
+    """
+
+    def test_ilp_branch_calls_write_iis(self):
+        with tempfile.TemporaryDirectory(dir=".") as d:
+            opt = _StubOpt({"xhatter_iis_method": "ilp",
+                            "xhatter_iis_dir": d,
+                            "solver_name": "gurobi"})
+            model = _infeasible_model()
+            with patch("pyomo.contrib.iis.write_iis") as wi:
+                opt._emit_iis(model, "Scen1")
+            wi.assert_called_once()
+            args, kwargs = wi.call_args
+            self.assertIs(args[0], model)
+            self.assertEqual(args[1], os.path.join(d, "StubCyl_Scen1.ilp"))
+            self.assertIn("solver", kwargs)
+
+    def test_explanation_branch_routes_logger_to_file(self):
+        with tempfile.TemporaryDirectory(dir=".") as d:
+            opt = _StubOpt({"xhatter_iis_method": "explanation",
+                            "xhatter_iis_dir": d,
+                            "solver_name": "glpk"})
+            model = _infeasible_model()
+            with patch("pyomo.contrib.iis."
+                       "compute_infeasibility_explanation") as cie:
+                opt._emit_iis(model, "Scen1")
+            cie.assert_called_once()
+            args, kwargs = cie.call_args
+            self.assertIs(args[0], model)
+            self.assertEqual(args[1], "glpk")        # solver_name forwarded
+            self.assertIn("logger", kwargs)
+            # the FileHandler creates the .iis.log even though the IIS call
+            # itself is mocked out (logger setup/teardown is what we test)
+            self.assertTrue(
+                os.path.exists(os.path.join(d, "StubCyl_Scen1.iis.log")))
 
 
 @unittest.skipUnless(solver_available,
