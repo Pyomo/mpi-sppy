@@ -238,6 +238,90 @@ class Test_confint_farmer(unittest.TestCase):
         G,s = round_pos_sig(G,3),round_pos_sig(s,3)
         self.assertEqual((G,s), (456.0,944.0))
         
+    def test_seqsampling_scenario_disjoint_draws(self):
+        """Two-stage SeqSampling must draw disjoint scenario-name ranges
+        across iterations.
+
+        Before the fix, the inner-loop xhat step asked for ``int(mult*nk)``
+        names but advanced ``self.ScenCount`` by ``mk``; with ``ArRP > 1``
+        and an odd ``lower_bound_k`` these differ, so the next iteration's
+        scen indices could overlap the current draw.  This test patches
+        the xhat_generator and gap_estimators so no solver is needed, plus
+        ``sample_size`` so ``lower_bound_k`` lands on values that exercise
+        the ArRP-rounding path, records every ``scenario_names_creator``
+        call, and asserts pairwise disjoint intervals.
+        """
+        optionsBM = config.Config()
+        confidence_config.confidence_config(optionsBM)
+        confidence_config.sequential_config(optionsBM)
+        confidence_config.BM_config(optionsBM)
+        optionsBM.quick_assign('BM_hprime', float, 0.015)
+        optionsBM.quick_assign('BM_eps_prime', float, 0.4)
+        optionsBM.quick_assign("solver_name", str, "bogus")
+        optionsBM.quick_assign("solving_type", str, "EF_2stage")
+        # Force the ArRP>1 path that used to misalign draws vs. ScenCount
+        optionsBM["ArRP"] = 2
+
+        def _dummy_xhat_gen(scenario_names, **kwargs):
+            return {"ROOT": np.array([0.0, 0.0, 0.0])}
+
+        sampler = seqsampling.SeqSampling(
+            "mpisppy.tests.examples.farmer",
+            _dummy_xhat_gen,
+            optionsBM,
+            stochastic_sampling=False,
+            stopping_criterion="BM",
+            solving_type="EF_2stage",
+        )
+
+        # Pin lower_bound_k to odd values so nk (= ArRP*ceil(L/ArRP)) > mk;
+        # that's the regime where the old code overlapped draws.
+        lb_values = iter([3, 5, 7, 9, 11])
+        def _fake_sample_size(k, G, s, nk_m1):
+            return next(lb_values)
+        sampler.sample_size = _fake_sample_size
+
+        # Record every draw as a half-open [start, start+count) interval.
+        calls = []
+        orig_creator = sampler.refmodel.scenario_names_creator
+        def _recording_creator(num_scens, start=None):
+            s = 0 if start is None else start
+            calls.append((s, int(num_scens)))
+            return orig_creator(num_scens, start=start)
+        sampler.refmodel.scenario_names_creator = _recording_creator
+
+        # Gap values: keep loop going a few iterations, then terminate.
+        gvals = iter([(50.0, 10.0), (40.0, 10.0), (30.0, 10.0), (0.0, 10.0)])
+        def _fake_gap_estimators(xhat, refmodelname, **kwargs):
+            G, s = next(gvals)
+            return {"G": G, "s": s, "seed": 0}
+
+        try:
+            orig_gap = ciutils.gap_estimators
+            ciutils.gap_estimators = _fake_gap_estimators
+            sampler.run(maxit=5)
+        finally:
+            ciutils.gap_estimators = orig_gap
+            sampler.refmodel.scenario_names_creator = orig_creator
+
+        # Invariant: since every call uses start=self.ScenCount and the
+        # advance should match the number of names drawn, the final
+        # ScenCount must equal the total names drawn.  The pre-fix bug
+        # caused ScenCount to advance by mk while only int(mult*nk)
+        # names were drawn, producing a mismatch (and gaps in the
+        # per-iteration xhat samples).
+        total_drawn = sum(c for _, c in calls)
+        self.assertEqual(sampler.ScenCount, total_drawn,
+            f"ScenCount ({sampler.ScenCount}) != total names drawn "
+            f"({total_drawn}); draws were {calls}")
+
+        # And no two recorded intervals should overlap.
+        for i, (si, ci) in enumerate(calls):
+            for sj, cj in calls[:i]:
+                self.assertFalse(si < sj + cj and sj < si + ci,
+                    f"Overlapping scenario draws across iterations: {calls}")
+
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     @unittest.skipIf(True, "too big for community solvers")
