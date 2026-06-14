@@ -6,22 +6,25 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-"""SepRho and ReducedCostsRho are scheduled for deprecation per
-https://github.com/Pyomo/mpi-sppy/issues/673. Both must emit a
-DeprecationWarning the first time a user instantiates them so downstream
-projects have lead time to migrate (likely to GradRho).
+"""Deprecation guards for the legacy rho setters (issue #673).
 
-These tests assert only that the warning is issued; full instantiation
-needs PH machinery the rho setters expect, but the deprecation warning
-is the first thing each ``__init__`` does, so it fires regardless of
-whether the rest of construction succeeds.
+SepRho still ships but is scheduled for deprecation: it must emit a
+DeprecationWarning the first time it is instantiated, so downstream projects
+have lead time to migrate (likely to GradRho). That test asserts only that the
+warning is issued; full instantiation needs PH machinery, but the warning is the
+first statement in ``__init__`` so it fires regardless.
+
+ReducedCostsRho has been removed entirely (reduced-cost rho was never shown to be
+effective in practice and did not support flexible rank assignments). The option
+survives in Config only so its selection fails loudly: Config.checker() raises a
+dated deprecation error rather than silently doing nothing.
 """
 
 import unittest
 import warnings
 
 from mpisppy.extensions.sep_rho import SepRho
-from mpisppy.extensions.reduced_costs_rho import ReducedCostsRho
+from mpisppy.utils.config import Config
 
 
 def _capture_first_warning(callable_, *, category):
@@ -64,17 +67,19 @@ class TestRhoDeprecations(unittest.TestCase):
         self.assertIn("SepRho", str(warning.message))
         self.assertIn("673", str(warning.message))
 
-    def test_reduced_costs_rho_emits_deprecation_warning(self):
-        warning = _capture_first_warning(
-            lambda: ReducedCostsRho(_StubPH("reduced_costs_rho_options")),
-            category=DeprecationWarning,
-        )
-        self.assertIsNotNone(
-            warning,
-            msg="ReducedCostsRho.__init__ did not emit a DeprecationWarning",
-        )
-        self.assertIn("ReducedCostsRho", str(warning.message))
-        self.assertIn("673", str(warning.message))
+    def test_reduced_costs_rho_selection_raises_dated_error(self):
+        # ReducedCostsRho was removed; selecting the surviving option must fail
+        # at config-check time with a dated deprecation message, not silently do
+        # nothing (the whole point is to not let a custom driver be burned).
+        cfg = Config()
+        cfg.reduced_costs_rho_args()
+        cfg.reduced_costs_rho = True
+        with self.assertRaises(ValueError) as ctx:
+            cfg.checker()
+        msg = str(ctx.exception)
+        self.assertIn("reduced_costs_rho", msg)
+        self.assertIn("2026-06-14", msg)  # deprecation date
+        self.assertIn("673", msg)
 
 
 if __name__ == "__main__":
