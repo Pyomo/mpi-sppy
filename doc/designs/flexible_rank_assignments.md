@@ -629,8 +629,15 @@ unnecessary given the per-field analysis).
 
 #### `spcommunicator.py`
 
-- `register_receive_fields()` builds overlap maps for the unequal-rank
-  path; the equal-rank path retains the 1-to-1 rank correspondence.
+- `register_recv_field()` builds the overlap map for a per-scenario field
+  on the unequal-rank path (the equal-rank path retains the 1-to-1 rank
+  correspondence). It lives there, rather than in
+  `register_receive_fields()`, so that a field an *extension* registers
+  directly -- `relaxed_ph_fixer`'s `RELAXED_NONANTS_VALS`, `grad_rho`'s
+  `BEST_XHAT`, ... -- gets the same multi-source assembly as a cylinder's
+  own `receive_fields`. (Otherwise such a read falls to the single-source
+  path and tears, since the buffer and the peer field have different
+  lengths when the rank counts differ.)
 - `get_receive_buffer()` gains a multi-source assembly path (with the
   per-field coherence policy applied), selected when ratios differ; the
   single-source path is unchanged at equal ranks.
