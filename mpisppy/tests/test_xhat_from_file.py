@@ -54,11 +54,13 @@ def _make_sp(num=2, options=None):
 class _FakeXhatEval:
     """Just enough ``Xhat_Eval`` surface for ``_try_file_xhat``."""
 
-    def __init__(self, sp, evaluate_result):
+    def __init__(self, sp, evaluate_result, infeasP=0.0, spcomm=None):
         self.local_scenarios = sp.local_scenarios
         self.options = sp.options
         self.multistage = sp.multistage
         self._evaluate_result = evaluate_result
+        self._infeasP = infeasP
+        self.spcomm = spcomm
         self.evaluate_calls = []
         self.restore_calls = 0
 
@@ -66,15 +68,18 @@ class _FakeXhatEval:
         self.evaluate_calls.append(nonant_cache)
         return self._evaluate_result
 
+    def no_incumbent_prob(self):
+        return self._infeasP
+
     def _restore_nonants(self):
         self.restore_calls += 1
 
 
-def _make_helper(sp, evaluate_result=None):
+def _make_helper(sp, evaluate_result=None, infeasP=0.0, spcomm=None):
     """Build an ``XhatInnerBoundBase``-shaped object without going through
     its __init__ (which needs the whole spoke stack)."""
     h = XhatInnerBoundBase.__new__(XhatInnerBoundBase)
-    h.opt = _FakeXhatEval(sp, evaluate_result)
+    h.opt = _FakeXhatEval(sp, evaluate_result, infeasP=infeasP, spcomm=spcomm)
     h.cylinder_rank = 0
     h.updates = []
 
@@ -192,6 +197,126 @@ class TestFileXhatHappyPath(unittest.TestCase):
             self.assertEqual(helper.opt.restore_calls, 1)
         finally:
             os.remove(path)
+
+
+class _FakeSendArray:
+    def __init__(self, length):
+        self._arr = np.zeros(length)
+
+    def value_array(self):
+        return self._arr
+
+
+class _FakeSpcomm:
+    """Just enough of SPCommunicator for ``pack_no_good_feasibility_cut``."""
+
+    def __init__(self, buffer_length):
+        from mpisppy.cylinders.spwindow import Field
+        self.send_buffers = {
+            Field.XHAT_FEASIBILITY_CUT: _FakeSendArray(buffer_length),
+        }
+        self.sent = []
+
+    def is_send_field_registered(self, field):
+        return field in self.send_buffers
+
+    def put_send_buffer(self, send_array, field):
+        self.sent.append((send_array.value_array().copy(), field))
+
+
+def _set_xhat(sp, xhat_values):
+    """Write xhat values into every local scenario's nonant vars."""
+    for s in sp.local_scenarios.values():
+        for v, val in zip(s._mpisppy_data.nonant_indices.values(), xhat_values):
+            v.set_value(val)
+
+
+class TestFileXhatEmitsFeasibilityCut(unittest.TestCase):
+    """End-to-end on the cylinder side: feeding an infeasible binary xhat
+    via ``--xhat-from-file`` plus ``--xhat-feasibility-cuts-count > 0``
+    must populate the ``XHAT_FEASIBILITY_CUT`` send buffer with the
+    no-good row for that xhat and call ``put_send_buffer``.
+
+    Stubs ``Xhat_Eval`` so no solver/MPI is needed; the spcomm side is
+    a simple capture, identical to the pattern in
+    ``test_xhat_feasibility_cuts.py``."""
+
+    def _setup(self, xhat_values, cuts_count=1):
+        path = _write_npy(xhat_values)
+        sp = _make_sp(options={
+            "xhat_from_file": path,
+            "xhat_feasibility_cuts_count": cuts_count,
+        })
+        # Fix nonants to the infeasible candidate so pack_no_good_*
+        # reads them back correctly. (Real evaluate would do this via
+        # _fix_nonants; the fake skips that, so we do it directly.)
+        _set_xhat(sp, xhat_values)
+        nonant_len = len(xhat_values)
+        spcomm = _FakeSpcomm(cuts_count * (nonant_len + 1) + 1)
+        # evaluate_result is irrelevant on the infeasible path; what
+        # drives cut emission is no_incumbent_prob() != 0.
+        helper = _make_helper(sp, evaluate_result=None, infeasP=0.5,
+                              spcomm=spcomm)
+        return path, helper, spcomm
+
+    def test_infeasible_file_xhat_emits_no_good_cut(self):
+        from mpisppy.cylinders.spwindow import Field
+        path, helper, spcomm = self._setup([1.0, 0.0, 1.0])
+        try:
+            helper._try_file_xhat()
+        finally:
+            os.remove(path)
+        # One emission, on the right field.
+        self.assertEqual(len(spcomm.sent), 1)
+        buf, field = spcomm.sent[0]
+        self.assertEqual(field, Field.XHAT_FEASIBILITY_CUT)
+        # Row format for xhat=[1,0,1]:
+        #   constant = (#ones) - 1 = 1
+        #   coefs    = [1 - 2*1, 1 - 2*0, 1 - 2*1] = [-1, 1, -1]
+        #   tail count slot = 1.0
+        np.testing.assert_array_equal(buf[:4], [1.0, -1.0, 1.0, -1.0])
+        self.assertEqual(buf[-1], 1.0)
+        # Cut excludes its own xhat: constant + sum(coef * xhat) < 0.
+        lhs = buf[0] + sum(c * x for c, x in zip(buf[1:4], [1.0, 0.0, 1.0]))
+        self.assertLess(lhs, 0.0)
+        # No inner-bound improvement (infeasible candidate).
+        self.assertEqual(helper.updates, [])
+        # Nonants restored.
+        self.assertEqual(helper.opt.restore_calls, 1)
+
+    def test_feature_off_file_xhat_does_not_emit(self):
+        """Same setup but xhat_feasibility_cuts_count=0 — pack helper
+        early-returns and put_send_buffer is never called."""
+        path, helper, spcomm = self._setup([1.0, 0.0, 1.0], cuts_count=0)
+        # cuts_count=0 means the buffer would be size 1; rebuild spcomm.
+        helper.opt.spcomm = _FakeSpcomm(1)
+        try:
+            helper._try_file_xhat()
+        finally:
+            os.remove(path)
+        self.assertEqual(helper.opt.spcomm.sent, [])
+        self.assertEqual(helper.updates, [])
+        self.assertEqual(helper.opt.restore_calls, 1)
+
+    def test_feasible_file_xhat_does_not_emit(self):
+        """Eobj is finite and no_incumbent_prob is 0 — no cut emission,
+        and update_if_improving is called."""
+        path = _write_npy([1.0, 0.0, 1.0])
+        sp = _make_sp(options={
+            "xhat_from_file": path,
+            "xhat_feasibility_cuts_count": 1,
+        })
+        _set_xhat(sp, [1.0, 0.0, 1.0])
+        spcomm = _FakeSpcomm(1 * (3 + 1) + 1)
+        helper = _make_helper(sp, evaluate_result=42.0, infeasP=0.0,
+                              spcomm=spcomm)
+        try:
+            helper._try_file_xhat()
+        finally:
+            os.remove(path)
+        self.assertEqual(spcomm.sent, [])
+        self.assertEqual(helper.updates, [42.0])
+        self.assertEqual(helper.opt.restore_calls, 1)
 
 
 class TestMathIsfinite(unittest.TestCase):
