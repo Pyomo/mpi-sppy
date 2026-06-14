@@ -164,6 +164,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
                                               all_nodenames=all_nodenames,
                                               rho_setter=None,
                                               average_scenario_creator=average_scenario_creator)
+        reduced_costs_spoke["rank_ratio"] = cfg.reduced_costs_rank_ratio
 
     list_of_spoke_dict = list()
     if cfg.fwph:

@@ -165,6 +165,21 @@ class Config(pyofig.ConfigDict):
         if self.get("rc_fixer") and not self.get("reduced_costs"):
             _bad_options("--rc-fixer requires --reduced-costs")
 
+        if self.get("reduced_costs_rho") \
+           and self.get("reduced_costs_rank_ratio", 1.0) != 1.0:
+            # reduced-cost rho is the only consumer of the per-scenario
+            # SCENARIO_REDUCED_COST field, and that field has no multi-source
+            # assembler (it is the deprecated rho's, so it was not built out);
+            # at unequal ranks the consumer would misread it. The spoke's other
+            # uses (the reduced-cost fixer, the Lagrangian bound) are fine at
+            # unequal ranks, so only this combination is rejected.
+            _bad_options(
+                "--reduced-costs-rho does not support a reduced_costs spoke at "
+                "unequal ranks; set --reduced-costs-rank-ratio 1.0. (Reduced-cost "
+                "rho is scheduled for deprecation; see "
+                "https://github.com/Pyomo/mpi-sppy/issues/673.)"
+            )
+
         if self.get("hub_only_solver_logs") and not self.get("solver_log_dir"):
             _bad_options("--hub-only-solver-logs requires --solver-log-dir")
 
@@ -792,6 +807,13 @@ class Config(pyofig.ConfigDict):
                               description="have a reduced costs spoke",
                               domain=bool,
                               default=False)
+
+        self.add_to_config('reduced_costs_rank_ratio',
+                           description="MPI ranks for the reduced costs spoke "
+                                       "relative to the hub (flexible rank "
+                                       "assignments; default 1.0 = equal)",
+                           domain=float,
+                           default=1.0)
 
         self.add_solver_specs("reduced_costs")
 

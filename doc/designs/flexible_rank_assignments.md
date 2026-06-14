@@ -779,7 +779,12 @@ Coverage therefore tracks field support, not spoke convenience:
 | `relaxed_ph` | `relaxed_ph_rank_ratio` | `DUALS`, `RELAXED_NONANTS_VALS` | landed |
 | `subgradient` | `subgradient_rank_ratio` | `XFEAS`; `NONANTS_VALS` (recv) | landed |
 | `fwph` | `fwph_rank_ratio` | `BEST_XHAT` / `RECENT_XHATS` (recv); `NONANTS_VALS` (recv) | landed |
-| `reduced_costs` | — | `SCENARIO_REDUCED_COST` | needs assembler + consumer rework — see phase 7 |
+| `reduced_costs` | `reduced_costs_rank_ratio` | `DUALS`, `NONANTS_VALS` (recv); `SCENARIO_REDUCED_COST`† | flag landed (phase 7) |
+
+† `SCENARIO_REDUCED_COST`'s only consumer is the deprecated `ReducedCostsRho`,
+so it was left without a multi-source assembler (see Phase 7). The spoke's
+other uses work at unequal ranks; `checker()` rejects the one unsupported
+combination (`--reduced-costs-rho` with a non-1.0 `reduced_costs_rank_ratio`).
 
 - Added `ph_dual_rank_ratio`, `relaxed_ph_rank_ratio`,
   `subgradient_rank_ratio`, and `fwph_rank_ratio` (the spokes whose every
@@ -792,32 +797,49 @@ Coverage therefore tracks field support, not spoke convenience:
   `NONANTS_VALS`, and the xhat/`XFEAS` blocks routed wholesale per
   scenario), so they work at any stage count.
 - This is config-only (additive); the equal-rank path is untouched.
-- `reduced_costs` is **not** folded in here: it is the one remaining
-  spoke whose field has no assembler, and adding one is a behavioral
-  change (phase 7), not config wiring.
+- `reduced_costs` was deferred to phase 7: it was the one remaining spoke
+  whose per-scenario field had no assembler, and adding one is a
+  behavioral change, not config wiring.
 
-**Phase 7: `reduced_costs` spoke (`SCENARIO_REDUCED_COST`)**
+**Phase 7: `reduced_costs` spoke flag (`reduced_costs_rank_ratio`)**
 
-`SCENARIO_REDUCED_COST` is a genuinely per-scenario field with the same
-`_local_nonant_length` layout as `NONANTS_VALS` / `DUALS` (one reduced
-cost per nonant per scenario; relaxed coherence, since it only steers
-rho). The two pieces of work:
+The reduced-costs spoke's flex-relevant fields split into two groups. Its
+Lagrangian outer bound (`DUALS`) and the nonants it receives from the hub
+(`NONANTS_VALS`) already have multi-source assemblers, and the
+reduced-cost *fixer* reads `EXPECTED_REDUCED_COST`, a global field read
+single-source. So the spoke runs correctly at unequal ranks for those
+uses, and phase 7 exposes `reduced_costs_rank_ratio` for them (one
+`add_to_config` in `reduced_costs_args`, one `build_spoke_list` line,
+mirroring the phase-6 flags).
 
-- **Assembler (trivial).** Add `SCENARIO_REDUCED_COST` to the
-  per-scenario branch of `_items_per_scen_for_field` (returns
-  `[nonant_length] * num_scenarios`) and leave it out of
-  `_STRICT_COHERENCE_FIELDS` (relaxed).
-- **Consumer rework (the real change).** `ReducedCostsRho`
-  (`extensions/reduced_costs_rho.py`) currently asserts
-  `len(fields_to_ranks[SCENARIO_REDUCED_COST]) == 1` and reads from a
-  single peer rank — the same single-source assumption that the
-  `XFEAS` → CG hub consumer had before phase 4a. Teach it to read
-  multi-source across the spoke's ranks (drop the assert; assemble via
-  the overlap map), then add a `reduced_costs` flag and an end-to-end
-  multi-rank test. Same shape and review size as the `XFEAS`/CG work.
+The exception is `SCENARIO_REDUCED_COST` — one reduced cost per nonant per
+scenario, the same `_local_nonant_length` layout as `NONANTS_VALS` /
+`DUALS`, and the one per-scenario field whose *only* consumer is an
+extension (`ReducedCostsRho`, on the PH hub) rather than a cylinder's
+class-level `receive_fields`. `ReducedCostsRho` is **itself scheduled for
+deprecation** (reduced-cost rho has not proven effective in practice;
+Pyomo/mpi-sppy#673), so building out multi-source support for its
+private field was judged not worth it. `SCENARIO_REDUCED_COST` is
+therefore left without an assembler. To stop the new flag from silently
+mis-assembling it, `Config.checker()` rejects the single unsupported
+combination — `--reduced-costs-rho` together with a non-1.0
+`reduced_costs_rank_ratio` — with an actionable message (run reduced-cost
+rho at equal ranks). The flag remains available for the spoke's
+non-deprecated uses.
 
-Only after phase 7 does the phase-6 table's last row flip to a landed
-`reduced_costs_rank_ratio`.
+Should that deprecation ever be reversed, the work is small and follows
+the `XFEAS` → CG-hub precedent: add `SCENARIO_REDUCED_COST` to the
+per-scenario branch of `_items_per_scen_for_field`
+(`[nonant_length] * num_scenarios`, relaxed coherence), route the
+extension-registered field through the overlap-map builder, drop the
+`checker()` guard, and add an end-to-end multi-rank test.
+
+Tests: `test_flexible_rank_cli.py` covers the `reduced_costs_rank_ratio`
+flag (default and `build_spoke_list` injection) and the `checker()` guard.
+
+With phase 7 every spoke now exposes a `--<spoke>-rank-ratio` flag;
+`SCENARIO_REDUCED_COST` is the only per-scenario field still without a
+multi-source assembler, by deliberate choice (deprecated consumer).
 
 
 ### Development and rollout strategy

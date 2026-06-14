@@ -36,6 +36,7 @@ def _full_cfg():
     cfg.xhatshuffle_args()
     cfg.xhatxbar_args()
     cfg.reduced_costs_args()
+    cfg.reduced_costs_rho_args()
     cfg.sep_rho_args()
     cfg.coeff_rho_args()
     cfg.sensi_rho_args()
@@ -56,6 +57,7 @@ class TestFlexibleRankCLI(unittest.TestCase):
         self.assertEqual(cfg.ph_dual_rank_ratio, 1.0)
         self.assertEqual(cfg.relaxed_ph_rank_ratio, 1.0)
         self.assertEqual(cfg.subgradient_rank_ratio, 1.0)
+        self.assertEqual(cfg.reduced_costs_rank_ratio, 1.0)
 
     def test_build_spoke_list_injects_rank_ratio(self):
         cfg = _full_cfg()
@@ -76,6 +78,8 @@ class TestFlexibleRankCLI(unittest.TestCase):
         cfg.relaxed_ph_rank_ratio = 5.0
         cfg.subgradient = True
         cfg.subgradient_rank_ratio = 0.125
+        cfg.reduced_costs = True
+        cfg.reduced_costs_rank_ratio = 0.75
 
         scenario_creator = farmer.scenario_creator
         scenario_denouement = farmer.scenario_denouement
@@ -91,7 +95,7 @@ class TestFlexibleRankCLI(unittest.TestCase):
         # exactly the enabled spokes, each carrying its requested ratio
         ratios = sorted(d["rank_ratio"] for d in spokes)
         self.assertEqual(ratios, sorted([0.5, 0.25, 2.0, 4.0,
-                                         8.0, 3.0, 5.0, 0.125]))
+                                         8.0, 3.0, 5.0, 0.125, 0.75]))
         # and every spoke dict got an explicit rank_ratio
         self.assertTrue(all("rank_ratio" in d for d in spokes))
 
@@ -111,6 +115,26 @@ class TestFlexibleRankCLI(unittest.TestCase):
             rho_setter=None, all_nodenames=None,
         )
         self.assertEqual([d["rank_ratio"] for d in spokes], [1.0])
+
+    def test_checker_rejects_reduced_costs_rho_at_unequal_ranks(self):
+        # reduced-cost rho is the only consumer of SCENARIO_REDUCED_COST, which
+        # has no multi-source assembler, so running the reduced_costs spoke at
+        # unequal ranks with reduced-cost rho is rejected at config time rather
+        # than silently mis-assembling the per-scenario reduced costs.
+        cfg = _full_cfg()
+        cfg.reduced_costs = True
+        cfg.reduced_costs_rho = True
+        cfg.reduced_costs_rank_ratio = 0.5
+        with self.assertRaises(ValueError):
+            cfg.checker()
+
+    def test_checker_allows_reduced_costs_rho_at_equal_ranks(self):
+        # The deprecated combination is fine at equal ranks (the default).
+        cfg = _full_cfg()
+        cfg.reduced_costs = True
+        cfg.reduced_costs_rho = True
+        cfg.reduced_costs_rank_ratio = 1.0
+        cfg.checker()  # must not raise
 
 
 if __name__ == "__main__":
