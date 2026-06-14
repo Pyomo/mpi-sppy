@@ -98,6 +98,9 @@ run_phase "test_admm_bundler (serial)" \
 run_phase "test_proper_bundler (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_proper_bundler.py -v
 
+run_phase "test_prox_approx_e2e (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_prox_approx_e2e.py -v
+
 run_phase "test_aph (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_aph.py
 
@@ -157,6 +160,25 @@ run_phase "test_xhat_from_file (serial)" \
 
 run_phase "test_incumbent_writing (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_incumbent_writing.py -v
+
+# Pure-logic serial unit tests (no MPI, no solver). The CI "run unit tests"
+# job (.github/workflows/test_pr_and_main.yml) runs these under coverage; keep
+# this list in sync with that job so local and CI coverage numbers match.
+run_phase "serial unit tests (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest -v \
+        mpisppy/tests/test_sputils.py \
+        mpisppy/tests/test_config.py \
+        mpisppy/tests/test_log.py \
+        mpisppy/tests/test_scenario_tree.py \
+        mpisppy/tests/test_nice_join.py \
+        mpisppy/tests/test_solver_spec.py \
+        mpisppy/tests/test_extensions.py \
+        mpisppy/tests/test_buffer_inspect.py \
+        mpisppy/tests/test_comm_lor_check.py \
+        mpisppy/tests/test_ciutils.py \
+        mpisppy/tests/test_prox_approx.py \
+        mpisppy/tests/test_sep_rho.py \
+        mpisppy/tests/test_reduced_costs_fixer.py
 
 run_phase "test_conf_int_farmer (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_conf_int_farmer.py
@@ -224,6 +246,9 @@ run_phase "test_flexible_rank_xfeas (mpiexec -np 6)" \
 
 run_phase "test_flexible_rank_xhat_multistage (mpiexec -np 6)" \
     mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_xhat_multistage.py
+
+run_phase "test_flexible_rank_extension_fields (mpiexec -np 6)" \
+    mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_extension_fields.py
 
 # ---------- Tests that spawn mpiexec internally ----------
 

@@ -629,8 +629,15 @@ unnecessary given the per-field analysis).
 
 #### `spcommunicator.py`
 
-- `register_receive_fields()` builds overlap maps for the unequal-rank
-  path; the equal-rank path retains the 1-to-1 rank correspondence.
+- `register_recv_field()` builds the overlap map for a per-scenario field
+  on the unequal-rank path (the equal-rank path retains the 1-to-1 rank
+  correspondence). It lives there, rather than in
+  `register_receive_fields()`, so that a field an *extension* registers
+  directly -- `relaxed_ph_fixer`'s `RELAXED_NONANTS_VALS`, `grad_rho`'s
+  `BEST_XHAT`, ... -- gets the same multi-source assembly as a cylinder's
+  own `receive_fields`. (Otherwise such a read falls to the single-source
+  path and tears, since the buffer and the peer field have different
+  lengths when the rank counts differ.)
 - `get_receive_buffer()` gains a multi-source assembly path (with the
   per-field coherence policy applied), selected when ratios differ; the
   single-source path is unchanged at equal ranks.
@@ -738,9 +745,79 @@ differs from 1.0)
 
 **Phase 5: APH support**
 
-- Verify APH (asynchronous PH) works with the relaxed-coherence model.
-- The strict-coherence fields already retry on `write_id` mismatch, so
-  they should compose with async senders; verify and add tests.
+- Verify the coherence model composes with an *asynchronous* sender (APH),
+  where the several sources of a multi-source read can sit at different
+  `write_id`s -- the case the per-field policy was designed for.
+- The strict-coherence fields already retry on `write_id` mismatch and the
+  relaxed fields accept the floor, so no reader change is needed.  This is
+  verified deterministically by driving the multi-source reader against a
+  stand-in window with hand-set `write_id`s (`test_flex_coherence_policy.py`),
+  which can force a *particular* mixed-id snapshot that a timing-dependent
+  live run cannot.
+- A live `np=6` APH MPI integration test was prototyped but deferred: APH
+  runs its persistent-solver solves in a worker thread and intermittently
+  hangs in pyomo's threaded output capture (an APH/pyomo issue unrelated to
+  the coherence policy), which times out CI.  Tracked in Pyomo/mpi-sppy#753.
+
+
+**Phase 6: Complete per-spoke rank-ratio flag coverage**
+
+A spoke may expose a `--<spoke>-rank-ratio` flag exactly when **every
+per-scenario field it sends or receives has a multi-source assembler**.
+The flag *is* the gate (a non-1.0 ratio is what selects the unequal-rank
+path), so exposing it for a spoke whose fields are not yet supported only
+surfaces the startup `NotImplementedError` — honest, but useless.
+Coverage therefore tracks field support, not spoke convenience:
+
+| Spoke (`cfg` gate) | Flag | Per-scenario field(s) | Status |
+|---|---|---|---|
+| `lagrangian` | `lagrangian_rank_ratio` | `DUALS`; `NONANTS_VALS` (recv) | landed |
+| `xhatshuffle` | `xhatshuffle_rank_ratio` | `BEST_XHAT` / `RECENT_XHATS` | landed |
+| `xhatxbar` | `xhatxbar_rank_ratio` | `BEST_XHAT` / `RECENT_XHATS` | landed |
+| `ph_xfeas_spoke` | `ph_xfeas_spoke_rank_ratio` | `XFEAS` | landed |
+| `ph_dual` | `ph_dual_rank_ratio` | `DUALS` | landed |
+| `relaxed_ph` | `relaxed_ph_rank_ratio` | `DUALS`, `RELAXED_NONANTS_VALS` | landed |
+| `subgradient` | `subgradient_rank_ratio` | `XFEAS`; `NONANTS_VALS` (recv) | landed |
+| `fwph` | `fwph_rank_ratio` | `BEST_XHAT` / `RECENT_XHATS` (recv); `NONANTS_VALS` (recv) | landed |
+| `reduced_costs` | — | `SCENARIO_REDUCED_COST` | needs assembler + consumer rework — see phase 7 |
+
+- Added `ph_dual_rank_ratio`, `relaxed_ph_rank_ratio`,
+  `subgradient_rank_ratio`, and `fwph_rank_ratio` (the spokes whose every
+  per-scenario field already has a multi-source assembler). Each was
+  mechanical: one `add_to_config(...)` in the matching `*_args` method,
+  one `<spoke>_dict["rank_ratio"] = cfg.<gate>_rank_ratio` line in
+  `build_spoke_list`, and one assertion in `test_flexible_rank_cli.py`,
+  mirroring `ph_xfeas_spoke_rank_ratio`. All four carry only fields whose
+  assembler is stage-agnostic (`DUALS`, `RELAXED_NONANTS_VALS`,
+  `NONANTS_VALS`, and the xhat/`XFEAS` blocks routed wholesale per
+  scenario), so they work at any stage count.
+- This is config-only (additive); the equal-rank path is untouched.
+- `reduced_costs` is **not** folded in here: it is the one remaining
+  spoke whose field has no assembler, and adding one is a behavioral
+  change (phase 7), not config wiring.
+
+**Phase 7: `reduced_costs` spoke (`SCENARIO_REDUCED_COST`)**
+
+`SCENARIO_REDUCED_COST` is a genuinely per-scenario field with the same
+`_local_nonant_length` layout as `NONANTS_VALS` / `DUALS` (one reduced
+cost per nonant per scenario; relaxed coherence, since it only steers
+rho). The two pieces of work:
+
+- **Assembler (trivial).** Add `SCENARIO_REDUCED_COST` to the
+  per-scenario branch of `_items_per_scen_for_field` (returns
+  `[nonant_length] * num_scenarios`) and leave it out of
+  `_STRICT_COHERENCE_FIELDS` (relaxed).
+- **Consumer rework (the real change).** `ReducedCostsRho`
+  (`extensions/reduced_costs_rho.py`) currently asserts
+  `len(fields_to_ranks[SCENARIO_REDUCED_COST]) == 1` and reads from a
+  single peer rank — the same single-source assumption that the
+  `XFEAS` → CG hub consumer had before phase 4a. Teach it to read
+  multi-source across the spoke's ranks (drop the assert; assemble via
+  the overlap map), then add a `reduced_costs` flag and an end-to-end
+  multi-rank test. Same shape and review size as the `XFEAS`/CG work.
+
+Only after phase 7 does the phase-6 table's last row flip to a landed
+`reduced_costs_rank_ratio`.
 
 
 ### Development and rollout strategy

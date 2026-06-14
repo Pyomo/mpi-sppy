@@ -124,6 +124,10 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_feasible_xhat.py -v
 
+      - name: Test prox_approx end-to-end
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_prox_approx_e2e.py -v
+
       - name: Test docs
         run: |
           cd ./doc/
@@ -997,6 +1001,7 @@ jobs:
           mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat.py
           mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xfeas.py
           mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat_multistage.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_extension_fields.py
 
       - name: Upload coverage data
         if: always()
@@ -1167,7 +1172,11 @@ jobs:
             mpisppy/tests/test_flexible_rank_ratios.py \
             mpisppy/tests/test_flex_coherence_policy.py \
             mpisppy/tests/test_flexible_rank_cli.py \
-            mpisppy/tests/test_flex_xhat_assembly.py
+            mpisppy/tests/test_flex_xhat_assembly.py \
+            mpisppy/tests/test_ciutils.py \
+            mpisppy/tests/test_prox_approx.py \
+            mpisppy/tests/test_sep_rho.py \
+            mpisppy/tests/test_reduced_costs_fixer.py
 
       - name: Upload coverage data
         if: always()

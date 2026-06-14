@@ -43,6 +43,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
                                       all_nodenames=all_nodenames,
                                       rho_setter=rho_setter,
                                       )
+        fw_spoke["rank_ratio"] = cfg.fwph_rank_ratio
 
     # Standard Lagrangian bound spoke
     if cfg.lagrangian:
@@ -78,6 +79,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
         if cfg.grad_rho:
             modified_cfg["grad_order_stat"] = cfg.ph_dual_grad_order_stat
             vanilla.add_grad_rho(ph_dual_spoke, modified_cfg)
+        ph_dual_spoke["rank_ratio"] = cfg.ph_dual_rank_ratio
 
     # PH xhat-feasible spoke
     if cfg.ph_xfeas_spoke:
@@ -115,6 +117,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
             vanilla.add_coeff_rho(relaxed_ph_spoke, cfg)
         if cfg.sensi_rho:
             vanilla.add_sensi_rho(relaxed_ph_spoke, cfg)
+        relaxed_ph_spoke["rank_ratio"] = cfg.relaxed_ph_rank_ratio
 
     # subgradient outer bound spoke
     if cfg.subgradient:
@@ -130,6 +133,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
             vanilla.add_coeff_rho(subgradient_spoke, cfg)
         if cfg.sensi_rho:
             vanilla.add_sensi_rho(subgradient_spoke, cfg)
+        subgradient_spoke["rank_ratio"] = cfg.subgradient_rank_ratio
 
     # xhat shuffle bound spoke
     if cfg.xhatshuffle:
