@@ -46,14 +46,21 @@ Two observations drive the design:
   canonical format ("support what we already write"). Its only defects
   for round-trip use are EF-qualified variable names and no comment
   convention.
-- **A cylinders run has no whole-tree, single-rank nonant cache.**
-  `Hub.send_nonants` packs only each rank's *local* scenarios into a
-  per-rank buffer; cross-cylinder exchange is rank-to-rank.
-  `write_tree_solution` sidesteps assembly by having every rank write
-  its own scenarios into a shared directory. A *single file* cannot be
-  sharded that way, and one representative scenario only knows the nodes
-  on its own root-to-leaf path. So a single-file multi-stage writer for
-  cylinders needs the nonant tree **assembled on one rank**.
+- **A cylinders run already gathers nonant values to rank 0 — but
+  scenario-keyed, not node-keyed.** `SPBase.gather_var_values_to_rank0`
+  walks every local scenario's node list, builds
+  `{(scenario_name, var_name): value}` (bundle prefix stripped, zero-prob
+  aware), `mpicomm.gather`s to rank 0 and merges — so the whole tree's
+  nonant values *do* land on one rank today (used by
+  `report_var_values_at_rank0`). What it does **not** do is key by
+  *node*: it carries per-scenario redundancy for shared nodes and drops
+  the node association. `WheelSpinner.local_nonant_cache` is the
+  complementary piece — node-keyed and deduped, but *local* (per-rank,
+  values only). So the writer needs **no novel gather**: it needs a
+  node-keyed rank-0 assembly reusing these two existing patterns.
+  (`write_tree_solution` itself still sidesteps assembly by having every
+  rank write its own scenarios into a directory — which is why a *single*
+  file needs the node-keyed rank-0 form.)
 
 ## Decisions taken (the two we discussed)
 
@@ -130,25 +137,36 @@ this. A single `_node_local_name(name)` helper centralizes the
 prefix-strip rule already used by `first_stage_nonant_writer`'s bundling
 branch.
 
-### 2. Whole-tree assembly for cylinders (the genuinely new code)
+### 2. Whole-tree assembly for cylinders (reuse, not new code)
+
+This is **not** a novel gather. `SPBase.gather_var_values_to_rank0`
+already does the intra-cylinder `mpicomm.gather` of nonant values to
+rank 0, and `WheelSpinner.local_nonant_cache` already builds the
+node-keyed, deduped *local* dict. The assembler is the node-keyed analog
+of the former, reusing the latter's per-node dedup:
 
 ```python
-def gather_nonant_tree(opt):
-    # On each rank: local {node -> [(local_name, value)]} from opt.local_scenarios,
-    #   one entry per node (first local scenario through the node wins; NAC
-    #   guarantees the rest agree).
-    # opt.mpicomm.gather(local, root=0); on rank 0 merge (first wins) and return;
+def gather_nonant_tree_to_rank0(opt):
+    # local: {node_name: [(local_var_name, value), ...]}, one entry per node
+    #   (first local scenario through the node wins -- mirrors
+    #   local_nonant_cache's dedup; adds the var name + bundle-prefix strip
+    #   from gather_var_values_to_rank0).
+    # opt.mpicomm.gather(local, root=0); merge on rank 0 (first wins);
     #   non-root ranks return None.
 ```
 
-~25 lines around `mpicomm.gather`. In the no-MPI mock (`mpisppy/MPI.py`)
-the gather is trivially the single local dict. The merge takes
-first-rank-wins, but guards it: if two ranks report different values for
-the same node beyond a small tolerance, **raise**. A genuine
-disagreement means the incumbent is not nonanticipative, so the file
-would be ill-defined (which rank's value would we write?) — failing
-loudly beats silently writing a wrong xhat. Integer/binary nonants must
-match exactly; the tolerance only absorbs floating-point residue.
+Whether this lands as a new sibling or as a `by_node=True` option on
+`gather_var_values_to_rank0` is an implementation call; either way it
+reuses the tested gather/strip logic rather than re-deriving it. In the
+no-MPI mock (`mpisppy/MPI.py`) the gather is trivially the single local
+dict. The merge takes first-rank-wins but guards it: if two ranks report
+different values for the same node beyond a small tolerance, **raise** —
+a genuine disagreement means the incumbent is not nonanticipative, so the
+file would be ill-defined (which rank's value would we write?) and
+failing loudly beats silently writing a wrong xhat. Integer/binary
+nonants must match exactly; the tolerance only absorbs floating-point
+residue. Zero-prob nonants follow `gather_var_values_to_rank0`'s handling
+(request their values explicitly when writing an xhat).
 
 ### 3. The new method
 
@@ -191,7 +209,9 @@ reader decision into the writer.
 
 1. `write_nonant_tree_csv` serializer + `_node_local_name` helper.
 2. `ef_nonants_csv` refactored onto the serializer (node-local names).
-3. `gather_nonant_tree(opt)` assembler.
+3. `gather_nonant_tree_to_rank0(opt)` — node-keyed analog of the existing
+   `gather_var_values_to_rank0`, reusing `local_nonant_cache`'s per-node
+   dedup (not a new gather mechanism).
 4. `SPBase.write_tree_nonants` + `WheelSpinner.write_tree_nonants`.
 5. `cfg.write_xhat_file_args()` (`--write-xhat-file`), wired into the
    generic parsing and into both `generic/decomp.py::_write_solutions`
