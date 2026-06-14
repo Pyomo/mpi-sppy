@@ -16,7 +16,9 @@ import unittest
 from mpisppy.utils import config
 
 import mpisppy.utils.cfg_vanilla as vanilla
+import mpisppy.utils.sputils as sputils
 import mpisppy.tests.examples.farmer as farmer
+import mpisppy.tests.examples.hydro.hydro as hydro
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.tests.utils import get_solver
 
@@ -153,6 +155,99 @@ class Test_farmer_with_cylinders(unittest.TestCase):
         if wheel.global_rank == 1:
             #print(f"{wheel.spcomm.bound= }")
             self.assertAlmostEqual(wheel.spcomm.bound, -109499.5160897, 1)
+
+
+#*****************************************************************************
+
+
+class Test_hydro_with_cylinders(unittest.TestCase):
+    """Test multistage (hydro) with stage2_ef_solver_name."""
+
+    def setUp(self):
+        # Use branching_factors=[2,2] so 2 second-stage nodes works with 2 ranks
+        self.branching_factors = [2, 2]
+        self.num_scens = self.branching_factors[0] * self.branching_factors[1]
+        self.all_scenario_names = [f"Scen{i+1}" for i in range(self.num_scens)]
+        self.all_nodenames = sputils.create_nodenames_from_branching_factors(
+            self.branching_factors)
+
+        self.cfg = config.Config()
+        self.cfg.popular_args()
+        self.cfg.two_sided_args()
+        self.cfg.ph_args()
+        self.cfg.xhatshuffle_args()
+        self.cfg.lagrangian_args()
+        self.cfg.add_branching_factors()
+        self.cfg.solver_name = solver_name
+        self.cfg.default_rho = 1
+        self.cfg.max_iterations = 5
+        self.cfg.branching_factors = self.branching_factors
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_xhatshuffle_stage2ef(self):
+        """Test xhatshuffle with stage2_ef_solver_name on a multistage problem."""
+        scenario_creator_kwargs = {"branching_factors": self.branching_factors}
+        beans = (self.cfg, hydro.scenario_creator,
+                 hydro.scenario_denouement, self.all_scenario_names)
+
+        hub_dict = vanilla.ph_hub(*beans,
+                                  scenario_creator_kwargs=scenario_creator_kwargs,
+                                  all_nodenames=self.all_nodenames)
+
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(
+            *beans,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+            all_nodenames=self.all_nodenames)
+        xhatshuffle_spoke["opt_kwargs"]["options"]["stage2_ef_solver_name"] = solver_name
+        xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = self.branching_factors
+
+        list_of_spoke_dict = [xhatshuffle_spoke]
+
+        wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
+        wheel.spin()
+
+        if wheel.global_rank == 0:
+            self.assertTrue(wheel.BestInnerBound is not None)
+            self.assertTrue(wheel.BestOuterBound is not None)
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_xhatshuffle_stage2ef_asymmetric_bf(self):
+        """Regression test: asymmetric branching factors must use bf[0] as the
+        second-stage node count, not bf[1].
+
+        With branching_factors=[2,3] and 2 ranks, the count of second-stage
+        nodes is 2 (=bf[0]); the buggy code used bf[1]=3 and tripped the
+        `stage2cnt % rankcnt == 0` assertion (3 % 2 != 0)."""
+        branching_factors = [2, 3]
+        num_scens = branching_factors[0] * branching_factors[1]
+        all_scenario_names = [f"Scen{i+1}" for i in range(num_scens)]
+        all_nodenames = sputils.create_nodenames_from_branching_factors(
+            branching_factors)
+        self.cfg.branching_factors = branching_factors
+
+        scenario_creator_kwargs = {"branching_factors": branching_factors}
+        beans = (self.cfg, hydro.scenario_creator,
+                 hydro.scenario_denouement, all_scenario_names)
+
+        hub_dict = vanilla.ph_hub(*beans,
+                                  scenario_creator_kwargs=scenario_creator_kwargs,
+                                  all_nodenames=all_nodenames)
+
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(
+            *beans,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+            all_nodenames=all_nodenames)
+        xhatshuffle_spoke["opt_kwargs"]["options"]["stage2_ef_solver_name"] = solver_name
+        xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = branching_factors
+
+        wheel = WheelSpinner(hub_dict, [xhatshuffle_spoke])
+        wheel.spin()
+
+        if wheel.global_rank == 0:
+            self.assertTrue(wheel.BestInnerBound is not None)
+            self.assertTrue(wheel.BestOuterBound is not None)
 
 
 if __name__ == '__main__':

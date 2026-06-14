@@ -52,8 +52,13 @@ MPI is used.
    :caption: Advanced Topics
 
    properbundles.rst
+   pickling.rst
+   jensens.rst
+   feasible_xhat.rst
+   xhat_from_file.rst
    smps.rst
    agnostic.rst
+   generic_admm.rst
    admmWrapper.rst
    stoch_admmWrapper.rst
    aph.rst
@@ -67,6 +72,7 @@ MPI is used.
 
    drivers.rst
    internals.rst
+   debug_utils.rst
    contributors.rst
    amalgamator.rst
    code_coverage.rst

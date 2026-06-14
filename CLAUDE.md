@@ -137,7 +137,7 @@ Allows coupling mpi-sppy to models written in AMPL (`ampl_guest.py`), GAMS (`gam
 ### Key Utilities (`mpisppy/utils/`)
 
 - `sputils.py`: Core helpers (e.g., `extract_num` scrapes scenario index from name, `attach_Ws_and_prox` adds PH weight/prox terms)
-- `wxbarutils.py` / `wxbarwriter.py` / `wxbarreader.py`: W and xbar serialization
+- `w_utils/` subpackage: W and xbar utilities (`wxbarutils.py`, `wxbarwriter.py`, `wxbarreader.py`, `wxbartester.py`, `wtracker.py`)
 - `proper_bundler.py`: Scenario bundling support
 - `admmWrapper.py` / `stoch_admmWrapper.py`: ADMM-based decomposition wrappers
 

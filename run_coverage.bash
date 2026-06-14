@@ -61,6 +61,12 @@ run_phase "test_ef_ph (serial)" \
 run_phase "test_component_map_usage (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_component_map_usage.py -v
 
+run_phase "test_solver_options_layers (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_solver_options_layers.py -v
+
+run_phase "test_options_reach_solver (serial; gurobi-only)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_options_reach_solver.py -v
+
 run_phase "test_nonant_validation (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_nonant_validation.py -v
 
@@ -76,6 +82,12 @@ run_phase "test_admmWrapper (serial, spawns mpiexec)" \
 run_phase "test_stoch_admmWrapper (serial, spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_stoch_admmWrapper.py
 
+run_phase "test_admm_bundler (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_admm_bundler.py -v
+
+run_phase "test_proper_bundler (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_proper_bundler.py -v
+
 run_phase "test_aph (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_aph.py
 
@@ -90,6 +102,42 @@ run_phase "test_smps (serial)" \
 
 run_phase "test_generic_cylinders (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_generic_cylinders.py -v
+
+run_phase "test_jensens (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_jensens.py -v
+
+run_phase "test_feasible_xhat (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_feasible_xhat.py -v
+
+run_phase "test_grad_rho_bundles (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_grad_rho_bundles.py -v
+
+run_phase "test_sensi_rho_bundles (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_sensi_rho_bundles.py -v
+
+run_phase "test_reduced_costs_rho_bundles (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_reduced_costs_rho_bundles.py -v
+
+run_phase "test_rho_deprecations (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_rho_deprecations.py -v
+
+run_phase "test_rank_apportionment (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_rank_apportionment.py -v
+
+run_phase "test_overlap_map (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_overlap_map.py -v
+
+run_phase "test_spwindow_partial_get (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_spwindow_partial_get.py -v
+
+run_phase "test_flexible_rank_ratios (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_flexible_rank_ratios.py -v
+
+run_phase "test_xhat_from_file (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_xhat_from_file.py -v
+
+run_phase "test_incumbent_writing (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_incumbent_writing.py -v
 
 run_phase "test_conf_int_farmer (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_conf_int_farmer.py
@@ -113,6 +161,18 @@ run_phase "pysp_model pytest (serial)" \
 
 run_phase "test_with_cylinders (mpiexec -np 2)" \
     mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_with_cylinders.py
+
+run_phase "test_cg_main (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/test_cg_main.py
+
+run_phase "test_cg_with_cylinders (mpiexec -np 2)" \
+    mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_cg_with_cylinders.py
+
+run_phase "test_dualcg_main (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/test_dualcg_main.py
+
+run_phase "test_dualcg_with_cylinders (mpiexec -np 2)" \
+    mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_dualcg_with_cylinders.py
 
 # ---------- Tests that spawn mpiexec internally ----------
 
@@ -138,6 +198,17 @@ run_phase "examples/run_all.py $SOLVER_DIRECT nouc" \
 
 run_phase "examples/generic_tester.py ${SOLVER}_direct nouc" \
     bash -c "cd '$PROJ_DIR/examples' && $EX_COV generic_tester.py '${SOLVER}_direct' '' nouc --python-args='$PYARGS'"
+
+if has_module egret; then
+    run_phase "examples/run_uc.py $SOLVER_PERSISTENT" \
+        bash -c "cd '$PROJ_DIR/examples' && $EX_COV run_uc.py '$SOLVER_PERSISTENT' '' --python-args='$PYARGS'"
+
+    run_phase "examples/run_uc_pr.py $SOLVER_PERSISTENT" \
+        bash -c "cd '$PROJ_DIR/examples' && $EX_COV run_uc_pr.py '$SOLVER_PERSISTENT' '' --python-args='$PYARGS'"
+else
+    echo ""
+    echo "=== skipping run_uc.py and run_uc_pr.py: egret not importable ==="
+fi
 
 # ---------- Optional tests (skip if deps missing) ----------
 

@@ -673,5 +673,247 @@ class TestNotGoodEnoughResults(unittest.TestCase):
         self.assertTrue(sputils.not_good_enough_results(None))
 
 
+# ---------------------------------------------------------------------------
+# Helpers shared by EF tests
+# ---------------------------------------------------------------------------
+
+def _make_two_stage_scenario(scenario_name, num_scens=3):
+    """A minimal two-stage scenario creator (no solver required)."""
+    m = pyo.ConcreteModel(scenario_name)
+    m.x = pyo.Var([1, 2], bounds=(0, 10), initialize=1.0)
+    m.y = pyo.Var(bounds=(0, 100), initialize=5.0)
+    m.FirstStageCost = pyo.Expression(expr=sum(m.x[i] for i in m.x))
+    m.SecondStageCost = pyo.Expression(expr=m.y)
+    m.obj = pyo.Objective(
+        expr=m.FirstStageCost + m.SecondStageCost, sense=pyo.minimize
+    )
+    sputils.attach_root_node(m, m.FirstStageCost, [m.x])
+    m._mpisppy_probability = 1.0 / num_scens
+    return m
+
+
+# ---------------------------------------------------------------------------
+# attach_root_node
+# ---------------------------------------------------------------------------
+
+class TestAttachRootNode(unittest.TestCase):
+    """Tests for attach_root_node()."""
+
+    def _make_model(self):
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var([1, 2], initialize=0.0)
+        m.cost = pyo.Expression(expr=sum(m.x[i] for i in m.x))
+        m.obj = pyo.Objective(expr=m.cost, sense=pyo.minimize)
+        return m
+
+    def test_attaches_node_list(self):
+        m = self._make_model()
+        sputils.attach_root_node(m, m.cost, [m.x])
+        self.assertTrue(hasattr(m, "_mpisppy_node_list"))
+        self.assertEqual(len(m._mpisppy_node_list), 1)
+
+    def test_node_name_is_root(self):
+        m = self._make_model()
+        sputils.attach_root_node(m, m.cost, [m.x])
+        self.assertEqual(m._mpisppy_node_list[0].name, "ROOT")
+
+    def test_sets_uniform_probability(self):
+        m = self._make_model()
+        sputils.attach_root_node(m, m.cost, [m.x])
+        self.assertEqual(m._mpisppy_probability, "uniform")
+
+    def test_do_uniform_false_does_not_set_probability(self):
+        m = self._make_model()
+        sputils.attach_root_node(m, m.cost, [m.x], do_uniform=False)
+        self.assertFalse(hasattr(m, "_mpisppy_probability"))
+
+    def test_nonant_vardata_list_correct(self):
+        m = self._make_model()
+        sputils.attach_root_node(m, m.cost, [m.x])
+        node = m._mpisppy_node_list[0]
+        # m.x has 2 elements
+        self.assertEqual(len(node.nonant_vardata_list), 2)
+
+    def test_existing_probability_not_overwritten(self):
+        m = self._make_model()
+        m._mpisppy_probability = 0.5
+        sputils.attach_root_node(m, m.cost, [m.x])
+        # do_uniform=True but probability already set, so no overwrite
+        self.assertAlmostEqual(m._mpisppy_probability, 0.5)
+
+
+# ---------------------------------------------------------------------------
+# create_EF
+# ---------------------------------------------------------------------------
+
+class TestCreateEF(unittest.TestCase):
+    """Tests for create_EF() using a solver-free scenario creator."""
+
+    def _scen_names(self, n):
+        return [f"Scenario{i + 1}" for i in range(n)]
+
+    def test_creates_ef_instance(self):
+        ef = sputils.create_EF(
+            self._scen_names(3),
+            _make_two_stage_scenario,
+        )
+        self.assertIsInstance(ef, pyo.ConcreteModel)
+
+    def test_ef_has_scenario_names(self):
+        names = self._scen_names(3)
+        ef = sputils.create_EF(names, _make_two_stage_scenario)
+        self.assertEqual(sorted(ef._ef_scenario_names), sorted(names))
+
+    def test_ef_has_ef_obj(self):
+        ef = sputils.create_EF(self._scen_names(3), _make_two_stage_scenario)
+        self.assertTrue(hasattr(ef, "EF_Obj"))
+
+    def test_ef_has_ref_vars(self):
+        ef = sputils.create_EF(self._scen_names(3), _make_two_stage_scenario)
+        self.assertTrue(hasattr(ef, "ref_vars"))
+        self.assertGreater(len(ef.ref_vars), 0)
+
+    def test_ef_has_nonant_constraints(self):
+        ef = sputils.create_EF(self._scen_names(3), _make_two_stage_scenario)
+        self.assertTrue(hasattr(ef, "_C_EF_"))
+
+    def test_single_scenario_warns_but_returns(self):
+        import io
+        import contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            ef = sputils.create_EF(
+                self._scen_names(1),
+                _make_two_stage_scenario,
+            )
+        self.assertIsInstance(ef, pyo.ConcreteModel)
+
+    def test_empty_scenario_list_raises(self):
+        with self.assertRaises(RuntimeError):
+            sputils.create_EF([], _make_two_stage_scenario)
+
+    def test_uniform_probability_assigned(self):
+        # When _mpisppy_probability is "uniform", it should be replaced with 1/n.
+        def uniform_creator(name, num_scens=None):
+            m = pyo.ConcreteModel(name)
+            m.x = pyo.Var(initialize=1.0)
+            m.cost = pyo.Expression(expr=m.x)
+            m.obj = pyo.Objective(expr=m.cost, sense=pyo.minimize)
+            sputils.attach_root_node(m, m.cost, [m.x])
+            return m
+
+        ef = sputils.create_EF(self._scen_names(4), uniform_creator)
+        self.assertIsInstance(ef, pyo.ConcreteModel)
+
+    def test_mixed_sense_raises(self):
+        def min_creator(name, **kwargs):
+            m = pyo.ConcreteModel(name)
+            m.x = pyo.Var(initialize=0.0)
+            m.obj = pyo.Objective(expr=m.x, sense=pyo.minimize)
+            sputils.attach_root_node(m, m.obj.expr, [m.x])
+            m._mpisppy_probability = 0.5
+            return m
+
+        def max_creator(name, **kwargs):
+            m = pyo.ConcreteModel(name)
+            m.x = pyo.Var(initialize=0.0)
+            m.obj = pyo.Objective(expr=m.x, sense=pyo.maximize)
+            sputils.attach_root_node(m, m.obj.expr, [m.x])
+            m._mpisppy_probability = 0.5
+            return m
+
+        def mixed_creator(name, **kwargs):
+            if name == "Scenario1":
+                return min_creator(name)
+            return max_creator(name)
+
+        with self.assertRaises(RuntimeError):
+            sputils.create_EF(self._scen_names(2), mixed_creator)
+
+
+# ---------------------------------------------------------------------------
+# ef_scenarios, ef_nonants, ef_nonants_csv, nonant_cache_from_ef
+# ---------------------------------------------------------------------------
+
+class TestEFIterators(unittest.TestCase):
+    """Tests for ef_scenarios(), ef_nonants(), ef_nonants_csv(),
+    and nonant_cache_from_ef()."""
+
+    def setUp(self):
+        names = [f"Scenario{i + 1}" for i in range(3)]
+        self.ef = sputils.create_EF(names, _make_two_stage_scenario)
+
+    def test_ef_scenarios_yields_correct_count(self):
+        pairs = list(sputils.ef_scenarios(self.ef))
+        self.assertEqual(len(pairs), 3)
+
+    def test_ef_scenarios_yields_name_model_pairs(self):
+        for name, model in sputils.ef_scenarios(self.ef):
+            self.assertIsInstance(name, str)
+            self.assertIsInstance(model, pyo.ConcreteModel)
+
+    def test_ef_scenarios_names_match_ef(self):
+        yielded = {name for name, _ in sputils.ef_scenarios(self.ef)}
+        self.assertEqual(yielded, set(self.ef._ef_scenario_names))
+
+    def test_ef_nonants_yields_tuples(self):
+        nonants = list(sputils.ef_nonants(self.ef))
+        self.assertGreater(len(nonants), 0)
+        for item in nonants:
+            ndn, var, val = item
+            self.assertIsInstance(ndn, str)
+
+    def test_ef_nonants_node_name_is_root(self):
+        for ndn, _var, _val in sputils.ef_nonants(self.ef):
+            self.assertEqual(ndn, "ROOT")
+
+    def test_ef_nonants_csv_creates_file(self):
+        import os
+        import tempfile
+        fd, fname = tempfile.mkstemp(suffix='.csv')
+        os.close(fd)
+        try:
+            sputils.ef_nonants_csv(self.ef, fname)
+            self.assertTrue(os.path.exists(fname))
+            with open(fname) as fh:
+                content = fh.read()
+            self.assertIn("Node", content)
+        finally:
+            os.unlink(fname)
+
+    def test_nonant_cache_from_ef_returns_dict(self):
+        cache = sputils.nonant_cache_from_ef(self.ef)
+        self.assertIsInstance(cache, dict)
+
+    def test_nonant_cache_from_ef_has_root_key(self):
+        cache = sputils.nonant_cache_from_ef(self.ef)
+        self.assertIn("ROOT", cache)
+
+    def test_nonant_cache_from_ef_root_length(self):
+        cache = sputils.nonant_cache_from_ef(self.ef)
+        # m.x has 2 elements
+        self.assertEqual(len(cache["ROOT"]), 2)
+
+
+# ---------------------------------------------------------------------------
+# Deprecated write_spin_the_wheel_* functions
+# ---------------------------------------------------------------------------
+
+class TestDeprecatedSpinTheWheelWriters(unittest.TestCase):
+    """Deprecated solution-writer wrappers must raise RuntimeError."""
+
+    def test_write_first_stage_raises(self):
+        with self.assertRaises(RuntimeError):
+            sputils.write_spin_the_wheel_first_stage_solution(None, None, "x.csv")
+
+    def test_write_tree_solution_raises(self):
+        with self.assertRaises(RuntimeError):
+            sputils.write_spin_the_wheel_tree_solution(None, None, "/tmp/sol")
+
+    def test_local_nonant_cache_raises(self):
+        with self.assertRaises(RuntimeError):
+            sputils.local_nonant_cache(None)
+
+
 if __name__ == "__main__":
     unittest.main()

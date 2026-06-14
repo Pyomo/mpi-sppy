@@ -30,7 +30,7 @@
 '''
 
 import os
-import mpisppy.utils.wxbarutils
+import mpisppy.utils.w_utils.wxbarutils
 import mpisppy.extensions.extension
 
 import mpisppy.MPI as MPI 
@@ -111,7 +111,7 @@ class WXBarWriter(mpisppy.extensions.extension.Extension):
             pass
         #if (self.w_fname):
         #     fname = f'fname{self.PHB._PHIter}.csv'
-        #     mpisppy.utils.wxbarutils.write_W_to_file(self.PHB, w_fname,
+        #     mpisppy.utils.w_utils.wxbarutils.write_W_to_file(self.PHB, w_fname,
         #         sep_files=self.sep_files)
 
 
@@ -120,8 +120,8 @@ class WXBarWriter(mpisppy.extensions.extension.Extension):
             return  # nothing to do.
         if (self.w_fname):
             fname = self.w_fname
-            mpisppy.utils.wxbarutils.write_W_to_file(self.PHB, fname,
+            mpisppy.utils.w_utils.wxbarutils.write_W_to_file(self.PHB, fname,
                 sep_files=self.sep_files)
         if (self.x_fname):
-            mpisppy.utils.wxbarutils.write_xbar_to_file(self.PHB, self.x_fname)
+            mpisppy.utils.w_utils.wxbarutils.write_xbar_to_file(self.PHB, self.x_fname)
 

@@ -252,5 +252,409 @@ class TestConfigAddSolverSpecs(unittest.TestCase):
         self.assertIsNone(self.cfg.solver_options)
 
 
+class TestConfigPhArgs(unittest.TestCase):
+    """Tests for Config.ph_args()."""
+
+    def setUp(self):
+        self.cfg = Config()
+        self.cfg.ph_args()
+
+    def test_linearize_binary_proximal_terms_added(self):
+        self.assertIn("linearize_binary_proximal_terms", self.cfg)
+
+    def test_linearize_binary_proximal_terms_default_false(self):
+        self.assertFalse(self.cfg.linearize_binary_proximal_terms)
+
+    def test_linearize_proximal_terms_added(self):
+        self.assertIn("linearize_proximal_terms", self.cfg)
+
+    def test_linearize_proximal_terms_default_false(self):
+        self.assertFalse(self.cfg.linearize_proximal_terms)
+
+    def test_proximal_linearization_tolerance_added(self):
+        self.assertIn("proximal_linearization_tolerance", self.cfg)
+
+    def test_proximal_linearization_tolerance_default(self):
+        self.assertAlmostEqual(self.cfg.proximal_linearization_tolerance, 1e-1)
+
+
+class TestConfigAphArgs(unittest.TestCase):
+    """Tests for Config.aph_args()."""
+
+    def setUp(self):
+        self.cfg = Config()
+        self.cfg.aph_args()
+
+    def test_aph_flag_added(self):
+        self.assertIn("APH", self.cfg)
+
+    def test_aph_flag_default_false(self):
+        self.assertFalse(self.cfg.APH)
+
+    def test_aph_gamma_default(self):
+        self.assertAlmostEqual(self.cfg.aph_gamma, 1.0)
+
+    def test_aph_nu_default(self):
+        self.assertAlmostEqual(self.cfg.aph_nu, 1.0)
+
+    def test_aph_frac_needed_default(self):
+        self.assertAlmostEqual(self.cfg.aph_frac_needed, 1.0)
+
+    def test_aph_dispatch_frac_default(self):
+        self.assertAlmostEqual(self.cfg.aph_dispatch_frac, 1.0)
+
+    def test_aph_sleep_seconds_default(self):
+        self.assertAlmostEqual(self.cfg.aph_sleep_seconds, 0.01)
+
+
+class TestConfigTwoSidedArgs(unittest.TestCase):
+    """Tests for Config.two_sided_args()."""
+
+    def setUp(self):
+        self.cfg = Config()
+        self.cfg.two_sided_args()
+
+    def test_rel_gap_added(self):
+        self.assertIn("rel_gap", self.cfg)
+
+    def test_rel_gap_default(self):
+        self.assertAlmostEqual(self.cfg.rel_gap, 0.05)
+
+    def test_abs_gap_added(self):
+        self.assertIn("abs_gap", self.cfg)
+
+    def test_abs_gap_default(self):
+        self.assertAlmostEqual(self.cfg.abs_gap, 0.0)
+
+    def test_max_stalled_iters_added(self):
+        self.assertIn("max_stalled_iters", self.cfg)
+
+    def test_max_stalled_iters_default(self):
+        self.assertEqual(self.cfg.max_stalled_iters, 100)
+
+
+class TestConfigAddMipgapSpecs(unittest.TestCase):
+    """Tests for Config.add_mipgap_specs()."""
+
+    def setUp(self):
+        self.cfg = Config()
+        self.cfg.add_mipgap_specs()
+
+    def test_iter0_mipgap_added(self):
+        self.assertIn("iter0_mipgap", self.cfg)
+
+    def test_iter0_mipgap_default_none(self):
+        self.assertIsNone(self.cfg.iter0_mipgap)
+
+    def test_iterk_mipgap_added(self):
+        self.assertIn("iterk_mipgap", self.cfg)
+
+    def test_iterk_mipgap_default_none(self):
+        self.assertIsNone(self.cfg.iterk_mipgap)
+
+    def test_prefix_mipgap_specs(self):
+        cfg2 = Config()
+        cfg2.add_mipgap_specs(prefix="EF")
+        self.assertIn("EF_iter0_mipgap", cfg2)
+        self.assertIn("EF_iterk_mipgap", cfg2)
+
+
+class TestConfigNumScens(unittest.TestCase):
+    """Tests for Config.num_scens_optional() and num_scens_required()."""
+
+    def test_num_scens_optional_adds_entry(self):
+        cfg = Config()
+        cfg.num_scens_optional()
+        self.assertIn("num_scens", cfg)
+
+    def test_num_scens_optional_default_none(self):
+        cfg = Config()
+        cfg.num_scens_optional()
+        self.assertIsNone(cfg.num_scens)
+
+    def test_num_scens_optional_can_be_set(self):
+        cfg = Config()
+        cfg.num_scens_optional()
+        cfg.num_scens = 10
+        self.assertEqual(cfg.num_scens, 10)
+
+    def test_num_scens_required_adds_entry(self):
+        cfg = Config()
+        cfg.num_scens_required()
+        self.assertIn("num_scens", cfg)
+
+
+class TestConfigChecker(unittest.TestCase):
+    """Tests for Config.checker()."""
+
+    def _make_rho_cfg(self, **flags):
+        """Build a Config with rho-setter flags.
+
+        Note: the key lists below mirror the checks inside Config.checker().
+        If new rho setters are added to checker(), this helper must be updated
+        to match.
+        """
+        cfg = Config()
+        # Rho-setter keys checked by checker() via get() -- keep in sync with
+        # the condition in Config.checker()
+        rho_keys = ["grad_rho", "sensi_rho", "coeff_rho",
+                    "reduced_costs_rho", "sep_rho"]
+        dynamic_keys = ["dynamic_rho_primal_crit", "dynamic_rho_dual_crit"]
+        other_keys = ["ph_primal_hub", "ph_dual", "relaxed_ph",
+                      "rc_fixer", "reduced_costs"]
+        for k in rho_keys + dynamic_keys + other_keys:
+            cfg.add_to_config(k, description=k, domain=bool,
+                              default=flags.get(k, False), argparse=False)
+        return cfg
+
+    def test_valid_config_does_not_raise(self):
+        cfg = self._make_rho_cfg()
+        # all flags False => no conflict => should not raise
+        cfg.checker()
+
+    def test_two_rho_setters_raises(self):
+        cfg = self._make_rho_cfg(grad_rho=True, sensi_rho=True)
+        with self.assertRaises(ValueError):
+            cfg.checker()
+
+    def test_dynamic_rho_without_setter_raises(self):
+        cfg = self._make_rho_cfg(dynamic_rho_primal_crit=True)
+        with self.assertRaises(ValueError):
+            cfg.checker()
+
+    def test_dynamic_rho_with_setter_does_not_raise(self):
+        cfg = self._make_rho_cfg(grad_rho=True, dynamic_rho_primal_crit=True)
+        # grad_rho is set so dynamic_rho is allowed
+        cfg.checker()
+
+    def test_ph_primal_hub_without_ph_dual_raises(self):
+        cfg = self._make_rho_cfg(ph_primal_hub=True)
+        with self.assertRaises(ValueError):
+            cfg.checker()
+
+    def test_ph_primal_hub_with_ph_dual_does_not_raise(self):
+        cfg = self._make_rho_cfg(ph_primal_hub=True, ph_dual=True)
+        cfg.checker()
+
+    def test_rc_fixer_without_reduced_costs_raises(self):
+        cfg = self._make_rho_cfg(rc_fixer=True)
+        with self.assertRaises(ValueError):
+            cfg.checker()
+
+    def test_rc_fixer_with_reduced_costs_does_not_raise(self):
+        cfg = self._make_rho_cfg(rc_fixer=True, reduced_costs=True)
+        cfg.checker()
+
+    def _add_log_dir_keys(self, cfg, hub_only=False, log_dir=None):
+        cfg.add_to_config("hub_only_solver_logs", description="x",
+                          domain=bool, default=hub_only, argparse=False)
+        cfg.add_to_config("solver_log_dir", description="x",
+                          domain=str, default=log_dir, argparse=False)
+
+    def test_hub_only_solver_logs_without_log_dir_raises(self):
+        cfg = self._make_rho_cfg()
+        self._add_log_dir_keys(cfg, hub_only=True, log_dir=None)
+        with self.assertRaises(ValueError):
+            cfg.checker()
+
+    def test_hub_only_solver_logs_with_log_dir_does_not_raise(self):
+        cfg = self._make_rho_cfg()
+        self._add_log_dir_keys(cfg, hub_only=True, log_dir="/tmp/logs")
+        cfg.checker()
+
+    def test_hub_only_solver_logs_default_off_does_not_raise(self):
+        cfg = self._make_rho_cfg()
+        self._add_log_dir_keys(cfg, hub_only=False, log_dir=None)
+        cfg.checker()
+
+
+class TestSharedOptionsLogDir(unittest.TestCase):
+    """Tests for solver_log_dir propagation through cfg_vanilla.shared_options."""
+
+    def _make_cfg(self, log_dir=None, hub_only=False):
+        cfg = Config()
+        cfg.popular_args()
+        cfg.solver_name = "gurobi"
+        cfg.solver_log_dir = log_dir
+        cfg.hub_only_solver_logs = hub_only
+        return cfg
+
+    def test_log_dir_propagates_to_hub_and_spoke_by_default(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(log_dir="/tmp/logs", hub_only=False)
+        self.assertEqual(vanilla.shared_options(cfg, is_hub=True)["solver_log_dir"],
+                         "/tmp/logs")
+        self.assertEqual(vanilla.shared_options(cfg, is_hub=False)["solver_log_dir"],
+                         "/tmp/logs")
+
+    def test_hub_only_suppresses_spoke_but_keeps_hub(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(log_dir="/tmp/logs", hub_only=True)
+        self.assertEqual(vanilla.shared_options(cfg, is_hub=True)["solver_log_dir"],
+                         "/tmp/logs")
+        self.assertNotIn("solver_log_dir",
+                         vanilla.shared_options(cfg, is_hub=False))
+
+    def test_no_log_dir_no_key_anywhere(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(log_dir=None, hub_only=False)
+        self.assertNotIn("solver_log_dir",
+                         vanilla.shared_options(cfg, is_hub=True))
+        self.assertNotIn("solver_log_dir",
+                         vanilla.shared_options(cfg, is_hub=False))
+
+
+class TestConfigFixerArgs(unittest.TestCase):
+    """Tests for Config.fixer_args() and related extension args."""
+
+    def test_fixer_args_adds_fixer(self):
+        cfg = Config()
+        cfg.fixer_args()
+        self.assertIn("fixer", cfg)
+
+    def test_fixer_default_false(self):
+        cfg = Config()
+        cfg.fixer_args()
+        self.assertFalse(cfg.fixer)
+
+    def test_fixer_tol_default(self):
+        cfg = Config()
+        cfg.fixer_args()
+        self.assertAlmostEqual(cfg.fixer_tol, 1e-4)
+
+    def test_grad_rho_args_added(self):
+        cfg = Config()
+        cfg.gradient_args()
+        self.assertIn("grad_rho", cfg)
+
+    def test_sep_rho_args_added(self):
+        cfg = Config()
+        cfg.sep_rho_args()
+        self.assertIn("sep_rho", cfg)
+
+    def test_sep_rho_multiplier_default(self):
+        cfg = Config()
+        cfg.sep_rho_args()
+        self.assertAlmostEqual(cfg.sep_rho_multiplier, 1.0)
+
+    def test_sensi_rho_args_added(self):
+        cfg = Config()
+        cfg.sensi_rho_args()
+        self.assertIn("sensi_rho", cfg)
+
+    def test_coeff_rho_args_added(self):
+        cfg = Config()
+        cfg.coeff_rho_args()
+        self.assertIn("coeff_rho", cfg)
+
+
+class TestFWPHLinearizeForwarding(unittest.TestCase):
+    """The fwph_hub / fwph_spoke factories must forward
+    cfg.linearize_proximal_terms and cfg.linearize_binary_proximal_terms
+    into the options dict so FWPH._options_checks_fw can warn that
+    FWPH cannot honor them (issue #274)."""
+
+    def _make_cfg(self, lin_prox=True, lin_bin=True):
+        cfg = Config()
+        cfg.popular_args()
+        cfg.ph_args()
+        cfg.fwph_args()
+        cfg.two_sided_args()
+        cfg.solver_name = "gurobi"
+        cfg.linearize_proximal_terms = lin_prox
+        cfg.linearize_binary_proximal_terms = lin_bin
+        return cfg
+
+    def _beans(self, cfg):
+        # placeholder values for the positional args of the factories;
+        # nothing here is actually called because the factories just
+        # stuff them into the returned dict.
+        return dict(
+            scenario_creator=lambda *a, **kw: None,
+            scenario_denouement=None,
+            all_scenario_names=["Scenario1"],
+        )
+
+    def test_fwph_hub_forwards_linearize_options(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(lin_prox=True, lin_bin=True)
+        hub = vanilla.fwph_hub(cfg, **self._beans(cfg))
+        opts = hub["opt_kwargs"]["options"]
+        self.assertTrue(opts["linearize_proximal_terms"])
+        self.assertTrue(opts["linearize_binary_proximal_terms"])
+
+    def test_fwph_spoke_forwards_linearize_options(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(lin_prox=True, lin_bin=True)
+        spoke = vanilla.fwph_spoke(cfg, **self._beans(cfg))
+        opts = spoke["opt_kwargs"]["options"]
+        self.assertTrue(opts["linearize_proximal_terms"])
+        self.assertTrue(opts["linearize_binary_proximal_terms"])
+
+    def test_fwph_hub_forwards_false_when_off(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(lin_prox=False, lin_bin=False)
+        hub = vanilla.fwph_hub(cfg, **self._beans(cfg))
+        opts = hub["opt_kwargs"]["options"]
+        self.assertFalse(opts["linearize_proximal_terms"])
+        self.assertFalse(opts["linearize_binary_proximal_terms"])
+
+
+class TestFWPHOptionsChecksWarnings(unittest.TestCase):
+    """FWPH._options_checks_fw must print a warning (rank 0 only) when
+    linearize_proximal_terms or linearize_binary_proximal_terms is on,
+    and must clear the flag so the QP solve proceeds."""
+
+    def _stub(self, lin_prox=False, lin_bin=False, rank=0):
+        import types
+        stub = types.SimpleNamespace()
+        stub.cylinder_rank = rank
+        stub.options = {
+            "linearize_proximal_terms": lin_prox,
+            "linearize_binary_proximal_terms": lin_bin,
+        }
+        stub.FW_options = {
+            "FW_iter_limit": 1,
+            "FW_weight": 0.0,
+            "FW_conv_thresh": 1e-4,
+            "solver_name": "gurobi",
+        }
+        return stub
+
+    def _run(self, stub):
+        import io
+        import contextlib
+        from mpisppy.opt.fwph import FWPH
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            FWPH._options_checks_fw(stub)
+        return buf.getvalue()
+
+    def test_warn_and_clear_linearize_proximal_on_rank0(self):
+        stub = self._stub(lin_prox=True, rank=0)
+        out = self._run(stub)
+        self.assertIn("linearize_proximal_terms cannot be used", out)
+        self.assertFalse(stub.options["linearize_proximal_terms"])
+
+    def test_warn_and_clear_linearize_binary_proximal_on_rank0(self):
+        stub = self._stub(lin_bin=True, rank=0)
+        out = self._run(stub)
+        self.assertIn("linearize_binary_proximal_terms cannot be used", out)
+        self.assertFalse(stub.options["linearize_binary_proximal_terms"])
+
+    def test_no_warning_on_nonzero_rank(self):
+        stub = self._stub(lin_prox=True, lin_bin=True, rank=1)
+        out = self._run(stub)
+        self.assertEqual(out, "")
+        # flag is still cleared regardless of rank
+        self.assertFalse(stub.options["linearize_proximal_terms"])
+        self.assertFalse(stub.options["linearize_binary_proximal_terms"])
+
+    def test_no_warning_when_flags_off(self):
+        stub = self._stub(lin_prox=False, lin_bin=False, rank=0)
+        out = self._run(stub)
+        self.assertEqual(out, "")
+
+
 if __name__ == "__main__":
     unittest.main()

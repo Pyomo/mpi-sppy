@@ -23,8 +23,6 @@ license = { file = "LICENSE.md" }
 requires-python = ">=3.9"
 dependencies = [
     "numpy",
-    "scipy",
-    "pandas",
     "sortedcollections",
     "pyomo>=6.4",
 ]
@@ -44,4 +42,13 @@ doc = [
 ]
 mpi = [
     "mpi4py>=3.0.3"
+]
+scipy = [
+    "scipy",
+]
+pandas = [
+    "pandas",
+]
+plot = [
+    "matplotlib",
 ]

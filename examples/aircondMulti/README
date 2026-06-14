@@ -1,0 +1,9 @@
+NOTE: The reference model for aircondMulti is found in: ~/mpisppy/tests/examples/aircondMulti.py
+
+This is a multi-product version of aircond. It is exercised via
+mpisppy/generic_cylinders.py --module-name ../../mpisppy/tests/examples/aircondMulti
+(see examples/run_all.py for the command line used in regression testing).
+
+sample_tree_scen_creator is not yet implemented for aircondMulti, so
+MMW / sequential-sampling confidence interval routines are not available
+for this example.

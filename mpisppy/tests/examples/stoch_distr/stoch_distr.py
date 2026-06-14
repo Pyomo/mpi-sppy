@@ -472,21 +472,24 @@ def scenario_creator(admm_stoch_subproblem_scenario_name, **kwargs):
     return model
 
 
-def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, kwargs, num_stages=2):
+def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, cfg=None, **kwargs):
     """The following function creates the consensus_vars dictionary thanks to the inter-region dictionary.
     This dictionary has redundant information, but is useful for admmWrapper.
 
     Args:
         admm_subproblem_names (list of str): name of the admm subproblems (regions)
-        stoch_scenario_name (str): name of any stochastic_scenario, it is only used 
-        in this example to access the non anticipative variables (which are common to 
+        stoch_scenario_name (str): name of any stochastic_scenario, it is only used
+        in this example to access the non anticipative variables (which are common to
         every stochastic scenario) and their stage.
-    
+        cfg: config object (used to get num_stages); if None, defaults to 2-stage
+        **kwargs: additional keyword args from kw_creator (unused, for generic interface)
+
     Returns:
-        dict: dictionary which keys are the subproblems and values are the list of 
+        dict: dictionary which keys are the subproblems and values are the list of
         pairs (consensus_variable_name (str), stage (int)).
     """
-    # Due to the small size of inter_region_dict, it is not given as argument but rather created. 
+    num_stages = cfg.num_stages if cfg is not None else 2
+    # Due to the small size of inter_region_dict, it is not given as argument but rather created.
     inter_region_dict = inter_region_dict_creator(len(admm_subproblem_names))
     consensus_vars = {}
     for arc in inter_region_dict["arcs"]:
@@ -530,7 +533,7 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, kwargs, n
     return consensus_vars
 
 
-def stoch_scenario_names_creator(num_stoch_scens, num_stages=2):
+def stoch_scenario_names_creator(cfg):
     """Creates the name of every stochastic scenario.
 
     Args:
@@ -539,13 +542,16 @@ def stoch_scenario_names_creator(num_stoch_scens, num_stages=2):
     Returns:
         list (str): the list of stochastic scenario names
     """
+    num_stoch_scens = cfg.num_stoch_scens
+    num_stages = cfg.num_stages
+
     if num_stages == 3:
         return [f"StochasticScenario{i+1}_{demand}" for i in range(num_stoch_scens//2) for demand in ["high","low"]]
     else:
         return [f"StochasticScenario{i+1}" for i in range(num_stoch_scens)]
 
 
-def admm_subproblem_names_creator(num_admm_subproblems):
+def admm_subproblem_names_creator(cfg):
     """Creates the name of every admm subproblem.
 
     Args:
@@ -554,7 +560,7 @@ def admm_subproblem_names_creator(num_admm_subproblems):
     Returns:
         list (str): the list of admm subproblem names
     """
-    return [f"Region{i+1}" for i in range(num_admm_subproblems)]
+    return [f"Region{i+1}" for i in range(cfg.num_admm_subproblems)]
 
 
 def combining_names(admm_subproblem_name,stoch_scenario_name):

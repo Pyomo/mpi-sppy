@@ -15,7 +15,7 @@
 from pyomo.contrib.pynumero.interfaces import pyomo_nlp
 from pyomo.contrib.pynumero.sparse import BlockMatrix, BlockVector
 import numpy as np
-import scipy.sparse
+from pyomo.common.dependencies import scipy
 from pyomo.common.timing import HierarchicalTimer
 
 class InteriorPointInterface:

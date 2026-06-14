@@ -91,6 +91,7 @@ def parse_args(m):
     cfg = config.Config()
     cfg.proper_bundle_config()
     cfg.pickle_scenarios_config()
+    cfg.pre_pickle_args()
 
     cfg.add_to_config(name="module_name",
                       description="Name of the file that has the scenario creator, etc.",
@@ -122,6 +123,8 @@ def parse_args(m):
     cfg.two_sided_args()
     cfg.ph_args()
     cfg.aph_args()
+    cfg.cg_args()
+    cfg.dualcg_args()
     cfg.subgradient_args()
     cfg.fixer_args()
     cfg.relaxed_ph_fixer_args()
@@ -131,15 +134,18 @@ def parse_args(m):
     cfg.ph_primal_args()
     cfg.ph_dual_args()
     cfg.relaxed_ph_args()
+    cfg.ph_xfeas_spoke_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.subgradient_bounder_args()
     cfg.xhatshuffle_args()
     cfg.xhatxbar_args()
+    cfg.xhat_from_file_args()
     cfg.norm_rho_args()
     cfg.primal_dual_rho_args()
     cfg.converger_args()
     cfg.wxbar_read_write_args()
+    cfg.wtracker_args()
     cfg.tracking_args()
     cfg.gradient_args()
     cfg.dynamic_rho_args()
@@ -157,6 +163,9 @@ def parse_args(m):
 
     cfg.mmw_args()
 
+    from mpisppy.generic.admm import admm_args
+    admm_args(cfg)
+
     cfg.parse_command_line(f"mpi-sppy for {cfg.module_name}")
 
     cfg.checker()  # looks for inconsistencies
@@ -169,14 +178,25 @@ def name_lists(module, cfg, bundle_wrapper=None):
     Returns:
         tuple: (all_scenario_names, all_nodenames)
     """
+    # ADMM wrappers provide their own scenario names and nodenames
+    admm_names = getattr(cfg, "_admm_scenario_names", None)
+    if admm_names is not None:
+        all_nodenames = getattr(cfg, "_admm_nodenames", None)
+        return admm_names, all_nodenames
+
     # Note: high level code like this assumes there are branching factors for
     # multi-stage problems. For other trees, you will need lower-level code
     if cfg.get("branching_factors") is not None:
         all_nodenames = sputils.create_nodenames_from_branching_factors(
                                     cfg.branching_factors)
         num_scens = np.prod(cfg.branching_factors)
-        assert not cfg.xhatshuffle or cfg.get("stage2EFsolvern") is not None,\
-            "For now, stage2EFsolvern is required for multistage xhat"
+        if cfg.xhatshuffle and cfg.get("stage2_ef_solver_name") is None:
+            import warnings
+            warnings.warn(
+                "stage2_ef_solver_name is recommended for multistage xhatshuffle",
+                UserWarning,
+                stacklevel=2,
+            )
     else:
         all_nodenames = None
         num_scens = cfg.get("num_scens")  # maybe None is OK

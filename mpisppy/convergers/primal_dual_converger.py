@@ -8,11 +8,11 @@
 ###############################################################################
 import numpy as np
 import os
-import pandas as pd
-import matplotlib.pyplot as plt
 import mpisppy.convergers.converger
 from mpisppy import MPI
 from mpisppy.extensions.phtracker import TrackedData
+from pyomo.common.dependencies import attempt_import, pandas as pd
+plt, plt_available = attempt_import('matplotlib.pyplot')
 
 class PrimalDualConverger(mpisppy.convergers.converger.Converger):
     """ Convergence checker for the primal-dual metrics.

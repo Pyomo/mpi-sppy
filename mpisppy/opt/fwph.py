@@ -145,7 +145,7 @@ class FWPH(mpisppy.phbase.PHBase):
             )
             # teeme = True
             self.fwph_solve_loop(
-                mip_solver_options=self.current_solver_options,
+                mip_solver_options=self._effective_solver_options(self._PHIter),
                 dtiming=self.options["display_timing"],
                 tee=teeme,
                 verbose=self.options["verbose"],
@@ -238,7 +238,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 break
 
             self.fwph_solve_loop(
-                mip_solver_options=self.current_solver_options,
+                mip_solver_options=self._effective_solver_options(self._PHIter),
                 dtiming=dtiming,
                 tee=teeme,
                 verbose=verbose
@@ -885,7 +885,7 @@ class FWPH(mpisppy.phbase.PHBase):
             in Boland et al., if t_max / FW_iter_limit == 1
         """
 
-        stage2EFsolvern = self.options.get("stage2EFsolvern", None)
+        stage2_ef_solver_name = self.options.get("stage2_ef_solver_name", None)
         branching_factors = self.options.get("branching_factors", None)  # for stage2ef
 
         number_points = 0
@@ -899,7 +899,7 @@ class FWPH(mpisppy.phbase.PHBase):
                                    solver_options = self.options["iter0_solver_options"],
                                    verbose=False,
                                    restore_nonants=False,
-                                   stage2EFsolvern=stage2EFsolvern,
+                                   stage2_ef_solver_name=stage2_ef_solver_name,
                                    branching_factors=branching_factors)
             if obj is not None:
                 for model_name in self.local_scenarios:
@@ -931,16 +931,18 @@ class FWPH(mpisppy.phbase.PHBase):
         #    proximal terms (no binary variables allowed in FWPH QPs)
         if ('linearize_binary_proximal_terms' in self.options
             and self.options['linearize_binary_proximal_terms']):
-            print('Warning: linearize_binary_proximal_terms cannot be used '
-                  'with the FWPH algorithm. Ignoring...')
+            if self.cylinder_rank == 0:
+                print('Warning: linearize_binary_proximal_terms cannot be used '
+                      'with the FWPH algorithm. Ignoring...')
             self.options['linearize_binary_proximal_terms'] = False
 
         # 3b. Check that the user did not specify the linearization of all
         #    proximal terms (FWPH QPs should be QPs)
         if ('linearize_proximal_terms' in self.options
             and self.options['linearize_proximal_terms']):
-            print('Warning: linearize_proximal_terms cannot be used '
-                  'with the FWPH algorithm. Ignoring...')
+            if self.cylinder_rank == 0:
+                print('Warning: linearize_proximal_terms cannot be used '
+                      'with the FWPH algorithm. Ignoring...')
             self.options['linearize_proximal_terms'] = False
 
         # 4. Provide a time limit of inf if the user did not specify

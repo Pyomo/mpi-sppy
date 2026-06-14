@@ -346,15 +346,17 @@ def scenario_denouement(rank, scenario_name, scenario):
     scenario.y.pprint()
 
 
-def consensus_vars_creator(num_scens):
+def consensus_vars_creator(num_scens, all_scenario_names=None, **kwargs):
     """The following function creates the consensus_vars dictionary thanks to the inter-region dictionary. \n
     This dictionary has redundant information, but is useful for admmWrapper.
 
     Args:
         num_scens (int): select the number of scenarios (regions) wanted
-    
+        all_scenario_names (list of str): scenario names (unused, for generic interface)
+        **kwargs: additional keyword args from kw_creator (unused, for generic interface)
+
     Returns:
-        dict: dictionary which keys are the regions and values are the list of consensus variables 
+        dict: dictionary which keys are the regions and values are the list of consensus variables
         present in the region
     """
     # Due to the small size of inter_region_dict, it is not given as argument but rather created. 
