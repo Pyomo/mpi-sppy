@@ -687,6 +687,13 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config('fwph_rank_ratio',
+                           description="MPI ranks for the fwph spoke "
+                                       "relative to the hub (flexible rank "
+                                       "assignments; default 1.0 = equal)",
+                           domain=float,
+                           default=1.0)
+
         self.add_to_config(name="fwph_hub",
                            description="Use FWPH hub instead of PH (default False)",
                            domain=bool,
@@ -718,6 +725,20 @@ class Config(pyofig.ConfigDict):
                             default=0)
         self.add_to_config("fwph_save_file",
                            description="If provided, passed to FWPH as options['save_file'] (cylinder rank 0 writes).",
+                           domain=str,
+                           default=None)
+        self.add_to_config("fwph_mip_solver_name",
+                           description="Solver for the FWPH MIP/LP subproblems "
+                                       "(default: fall back to --solver-name). Lets you "
+                                       "pair an LP/MIP-only solver (e.g. glpk, cbc) with "
+                                       "a separate QP solver via --fwph-qp-solver-name.",
+                           domain=str,
+                           default=None)
+        self.add_to_config("fwph_qp_solver_name",
+                           description="Solver for the FWPH proximal QP subproblems "
+                                       "(default: fall back to --solver-name). Use an "
+                                       "open-source QP solver (e.g. ipopt) when "
+                                       "--fwph-mip-solver-name is an LP/MIP-only solver.",
                            domain=str,
                            default=None)
 
@@ -753,6 +774,13 @@ class Config(pyofig.ConfigDict):
                               description="have a lagrangian spoke",
                               domain=bool,
                               default=False)
+
+        self.add_to_config('lagrangian_rank_ratio',
+                              description="MPI ranks for the lagrangian spoke "
+                                          "relative to the hub (flexible rank "
+                                          "assignments; default 1.0 = equal)",
+                              domain=float,
+                              default=1.0)
 
         self.add_solver_specs("lagrangian")
         self.add_mipgap_specs("lagrangian")
@@ -862,6 +890,13 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
+        self.add_to_config('subgradient_rank_ratio',
+                              description="MPI ranks for the subgradient spoke "
+                                          "relative to the hub (flexible rank "
+                                          "assignments; default 1.0 = equal)",
+                              domain=float,
+                              default=1.0)
+
         self.add_solver_specs("subgradient")
         self.add_mipgap_specs("subgradient")
 
@@ -890,6 +925,12 @@ class Config(pyofig.ConfigDict):
                             description="have a relaxed PH spoke",
                             domain=bool,
                             default=False)
+        self.add_to_config("relaxed_ph_rank_ratio",
+                            description="MPI ranks for the relaxed_ph spoke "
+                                        "relative to the hub (flexible rank "
+                                        "assignments; default 1.0 = equal)",
+                            domain=float,
+                            default=1.0)
         self.add_to_config("relaxed_ph_rescale_rho_factor",
                             description="Used to rescale rho initially (default=1.0)",
                             domain=float,
@@ -902,6 +943,12 @@ class Config(pyofig.ConfigDict):
                             description="have a PH xhat-feasible spoke",
                             domain=bool,
                             default=False)
+        self.add_to_config("ph_xfeas_spoke_rank_ratio",
+                            description="MPI ranks for the ph_xfeas spoke "
+                                        "relative to the hub (flexible rank "
+                                        "assignments; default 1.0 = equal)",
+                            domain=float,
+                            default=1.0)
         self.add_to_config("ph_xfeas_spoke_rescale_rho_factor",
                             description="Used to rescale rho initially (default=0.1)",
                             domain=float,
@@ -923,6 +970,13 @@ class Config(pyofig.ConfigDict):
                             description="have a dual PH spoke",
                             domain=bool,
                             default=False)
+
+        self.add_to_config("ph_dual_rank_ratio",
+                            description="MPI ranks for the ph_dual spoke "
+                                        "relative to the hub (flexible rank "
+                                        "assignments; default 1.0 = equal)",
+                            domain=float,
+                            default=1.0)
 
         self.add_solver_specs("ph_dual")
 
@@ -979,6 +1033,13 @@ class Config(pyofig.ConfigDict):
                            description="have an xhatshuffle spoke",
                            domain=bool,
                            default=False)
+
+        self.add_to_config('xhatshuffle_rank_ratio',
+                           description="MPI ranks for the xhatshuffle spoke "
+                                       "relative to the hub (flexible rank "
+                                       "assignments; default 1.0 = equal)",
+                           domain=float,
+                           default=1.0)
 
         self.add_to_config('add_reversed_shuffle',
                            description="using also the reversed shuffling (multistage only, default True)",
@@ -1078,6 +1139,13 @@ class Config(pyofig.ConfigDict):
                               description="have an xhatxbar spoke",
                               domain=bool,
                               default=False)
+
+        self.add_to_config('xhatxbar_rank_ratio',
+                              description="MPI ranks for the xhatxbar spoke "
+                                          "relative to the hub (flexible rank "
+                                          "assignments; default 1.0 = equal)",
+                              domain=float,
+                              default=1.0)
 
         self.add_to_config('xhatxbar_try_jensens_first',
                            description="before entering the xhatxbar main loop, solve "

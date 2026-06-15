@@ -26,7 +26,7 @@ import mpisppy.opt.ph
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils import config
 from mpisppy.utils.proper_bundler import ProperBundler
-from mpisppy.tests.utils import get_solver
+from mpisppy.tests.utils import get_solver, limit_solver_threads
 
 solver_available, solver_name, _, _ = get_solver()
 
@@ -313,6 +313,7 @@ class TestPHWithFixedFirstStageBundledAndUnbundled(unittest.TestCase):
             scenario_creator_kwargs={},
         )
         ef_solver = pyo.SolverFactory(solver_name)
+        limit_solver_threads(ef_solver, solver_name)
         if "_persistent" in solver_name:
             # Persistent solvers require the model be attached
             # before solve(); without this the call raises

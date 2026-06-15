@@ -16,6 +16,7 @@ MPI is used.
    :maxdepth: 2
    :caption: Building Your Model File
 
+   building_overview.rst
    scenario_creator.rst
    helper_functions.rst
 

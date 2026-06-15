@@ -71,7 +71,7 @@ The Jensen's xhat path (see :ref:`jensens`) already exposes the
 average-scenario solution as a candidate first-stage. It tolerates
 infeasibility: if the candidate xhat value, when fixed for one
 or more scenarios is infeasible, then
-``_jensens_evaluate_xhat`` returns ``None`` and the inner-bound spoke
+``_evaluate_xhat`` returns ``None`` and the inner-bound spoke
 silently moves on. That is the right behavior for an inner-bound
 spoke whose only job is to opportunistically improve a bound.
 
@@ -104,8 +104,8 @@ before entering its main loop, fixes the candidate as the first-stage
 nonants, evaluates the expected objective across all real scenarios,
 and -- if the evaluation is feasible -- sends that as its first inner
 bound. Implementation lives in
-``_JensensMixin._try_feasible_xhat`` in
-``mpisppy/cylinders/_jensens_mixin.py``; the spoke ``main()`` methods
+``_PreLoopXhatMixin._try_feasible_xhat`` in
+``mpisppy/cylinders/_preloop_xhat_mixin.py``; the spoke ``main()`` methods
 call it once after ``_try_average_scenario_xhat``.
 
 .. admonition:: Mutually exclusive with ``--*-try-jensens-first``

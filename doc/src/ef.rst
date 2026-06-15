@@ -57,7 +57,7 @@ Other method: ``mpisppy.utils.sputils.create_EF``
 -------------------------------------------------
 
 The use of this function does not require the installation of ``mpi4py``. Its use
-is illustrated in ``examples.farmer.farmer_ef.py``. Here are the
+is illustrated in ``examples.farmer.CI.farmer_ef.py``. Here are the
 arguments to the function:
 
 .. autofunction:: mpisppy.utils.sputils.create_EF

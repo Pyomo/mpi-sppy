@@ -656,5 +656,84 @@ class TestFWPHOptionsChecksWarnings(unittest.TestCase):
         self.assertEqual(out, "")
 
 
+class TestFWPHSeparateSolvers(unittest.TestCase):
+    """FWPH can use separate MIP and QP solvers (issue #712), so that an
+    LP/MIP-only solver (glpk, cbc) can be paired with an open-source QP
+    solver (ipopt). Each falls back to solver_name when unset."""
+
+    def _make_cfg(self, mip=None, qp=None):
+        cfg = Config()
+        cfg.popular_args()
+        cfg.ph_args()
+        cfg.fwph_args()
+        cfg.two_sided_args()
+        cfg.solver_name = "gurobi"
+        if mip is not None:
+            cfg.fwph_mip_solver_name = mip
+        if qp is not None:
+            cfg.fwph_qp_solver_name = qp
+        return cfg
+
+    def _beans(self, cfg):
+        return dict(
+            scenario_creator=lambda *a, **kw: None,
+            scenario_denouement=None,
+            all_scenario_names=["Scenario1"],
+        )
+
+    def test_args_registered_default_none(self):
+        cfg = self._make_cfg()
+        self.assertIsNone(cfg.fwph_mip_solver_name)
+        self.assertIsNone(cfg.fwph_qp_solver_name)
+
+    def test_fwph_options_omits_when_unset(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg()
+        opts = vanilla._fwph_options(cfg)
+        self.assertNotIn("mip_solver_name", opts)
+        self.assertNotIn("qp_solver_name", opts)
+        self.assertEqual(opts["solver_name"], "gurobi")
+
+    def test_fwph_options_forwards_when_set(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(mip="glpk", qp="ipopt")
+        opts = vanilla._fwph_options(cfg)
+        self.assertEqual(opts["mip_solver_name"], "glpk")
+        self.assertEqual(opts["qp_solver_name"], "ipopt")
+
+    def test_hub_forwards_solver_names(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg(mip="cbc", qp="ipopt")
+        hub = vanilla.fwph_hub(cfg, **self._beans(cfg))
+        opts = hub["opt_kwargs"]["options"]
+        self.assertEqual(opts["mip_solver_name"], "cbc")
+        self.assertEqual(opts["qp_solver_name"], "ipopt")
+
+    def test_resolve_falls_back_to_solver_name(self):
+        from mpisppy.opt.fwph import FWPH
+        mip, qp = FWPH._resolve_solver_names({"solver_name": "gurobi"})
+        self.assertEqual(mip, "gurobi")
+        self.assertEqual(qp, "gurobi")
+
+    def test_resolve_uses_dedicated_names(self):
+        from mpisppy.opt.fwph import FWPH
+        mip, qp = FWPH._resolve_solver_names(
+            {"solver_name": "gurobi",
+             "mip_solver_name": "glpk",
+             "qp_solver_name": "ipopt"}
+        )
+        self.assertEqual(mip, "glpk")
+        self.assertEqual(qp, "ipopt")
+
+    def test_resolve_partial_override(self):
+        from mpisppy.opt.fwph import FWPH
+        # only the QP solver is overridden; MIP falls back to solver_name
+        mip, qp = FWPH._resolve_solver_names(
+            {"solver_name": "cbc", "qp_solver_name": "ipopt"}
+        )
+        self.assertEqual(mip, "cbc")
+        self.assertEqual(qp, "ipopt")
+
+
 if __name__ == "__main__":
     unittest.main()

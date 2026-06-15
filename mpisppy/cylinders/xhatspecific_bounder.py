@@ -11,7 +11,7 @@
 
 from mpisppy.extensions.xhatspecific import XhatSpecific
 from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
-from mpisppy.cylinders._jensens_mixin import _JensensMixin
+from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
 
 import mpisppy.MPI as mpi
 import logging
@@ -22,7 +22,7 @@ fullcom_n_proc = fullcomm.Get_size()
 
 
 ############################################################################
-class XhatSpecificInnerBound(_JensensMixin, XhatInnerBoundBase):
+class XhatSpecificInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
 
     converger_spoke_char = 'S'
 

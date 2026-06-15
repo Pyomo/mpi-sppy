@@ -90,6 +90,10 @@ jobs:
         run: |
           coverage run $COV_ARGS mpisppy/tests/test_ef_ph.py
 
+      - name: Test CVaR
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_cvar.py -v
+
       - name: Test afew
         run: |
           PYARGS="-m coverage run $COV_ARGS"
@@ -119,6 +123,10 @@ jobs:
       - name: Test feasible_xhat
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_feasible_xhat.py -v
+
+      - name: Test prox_approx end-to-end
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_prox_approx_e2e.py -v
 
       - name: Test docs
         run: |
@@ -971,6 +979,18 @@ jobs:
           cd mpisppy/tests
           mpiexec -np 2 coverage run $COV_ARGS -m mpi4py test_with_cylinders.py
 
+      - name: run flexible (unequal) rank tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_spwindow_multisource.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_cylinders.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_duals.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xfeas.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat_multistage.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_extension_fields.py
+
       - name: Upload coverage data
         if: always()
         uses: actions/upload-artifact@v4
@@ -1010,6 +1030,12 @@ jobs:
         run: |
           cd mpisppy/tests
           mpiexec -np 2 coverage run $COV_ARGS -m mpi4py test_cg_with_cylinders.py
+
+      - name: run multi-rank CG hub test
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          mpiexec -np 4 coverage run $COV_ARGS -m mpi4py test_cg_multirank_hub.py
 
       - name: run DCG serial tests
         timeout-minutes: 10
@@ -1131,7 +1157,14 @@ jobs:
             mpisppy/tests/test_rank_apportionment.py \
             mpisppy/tests/test_overlap_map.py \
             mpisppy/tests/test_spwindow_partial_get.py \
-            mpisppy/tests/test_flexible_rank_ratios.py
+            mpisppy/tests/test_flexible_rank_ratios.py \
+            mpisppy/tests/test_flex_coherence_policy.py \
+            mpisppy/tests/test_flexible_rank_cli.py \
+            mpisppy/tests/test_flex_xhat_assembly.py \
+            mpisppy/tests/test_ciutils.py \
+            mpisppy/tests/test_prox_approx.py \
+            mpisppy/tests/test_sep_rho.py \
+            mpisppy/tests/test_reduced_costs_fixer.py
 
       - name: Upload coverage data
         if: always()

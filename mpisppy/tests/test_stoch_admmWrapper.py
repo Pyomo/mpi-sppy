@@ -147,11 +147,11 @@ class TestStochAdmmWrapper(unittest.TestCase):
         "cause is diagnosed."
     )
     def test_values(self):
-        command_line_pairs = [(f"mpiexec -np 3 python -u {python_args} -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 10 --num-admm-subproblems 2 --default-rho 10 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.001 --num-stages 3" \
+        command_line_pairs = [(f"mpiexec -np 3 python -u {python_args} -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 10 --num-admm-subproblems 2 --default-rho 10 --solver-name {solver_name} --max-solver-threads 1 --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.001 --num-stages 3" \
                          , f"python {python_args} stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 10 --num-admm-subproblems 2 --num-stages 3"), \
-                         (f"mpiexec -np 3 python -u {python_args} -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 5 --num-admm-subproblems 3 --default-rho 5 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.01 --ensure-xhat-feas" \
+                         (f"mpiexec -np 3 python -u {python_args} -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 5 --num-admm-subproblems 3 --default-rho 5 --solver-name {solver_name} --max-solver-threads 1 --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.01 --ensure-xhat-feas" \
                          , f"python {python_args} stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 5 --num-admm-subproblems 3 --ensure-xhat-feas"), \
-                              (f"mpiexec -np 6 python -u {python_args} -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 4 --num-admm-subproblems 5 --default-rho 15 --solver-name {solver_name} --max-iterations 30 --xhatxbar --lagrangian --mnpr 5 --scalable --ensure-xhat-feas" \
+                              (f"mpiexec -np 6 python -u {python_args} -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 4 --num-admm-subproblems 5 --default-rho 15 --solver-name {solver_name} --max-solver-threads 1 --max-iterations 30 --xhatxbar --lagrangian --mnpr 5 --scalable --ensure-xhat-feas" \
                          , f"python {python_args} stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 4 --num-admm-subproblems 5 --mnpr 5 --scalable --ensure-xhat-feas")  ]
         #command_line = f"mpiexec -np 6 python -m mpi4py examples/stoch_distr/stoch_distr_admm_cylinders.py --num-admm-subproblems 2 --num-stoch-scens 4 --default-rho 10 --solver-name {solver_name} --max-iterations 100 --xhatxbar --lagrangian"
         original_dir = os.getcwd()
@@ -215,19 +215,25 @@ class TestStochAdmmWrapper(unittest.TestCase):
         """Extract the last outer bound from PH output."""
         import re
         target_line = "Iter.           Best Bound  Best Incumbent      Rel. Gap        Abs. Gap"
-        result_by_line = stdout.strip().split('\n')
+        # An iteration row looks like:
+        #   [    0.23]    30  L  -27422.8799   inf   inf%   inf
+        # The flag token after the iteration number is optional and may be
+        # '*' (new incumbent), 'L'/'B' (bound updates), or a combination, so
+        # accept any run of flag characters before the Best Bound value. The
+        # header itself prints more than once (iter 0 and finalization), so
+        # keep scanning every row and keep the last bound seen rather than
+        # only inspecting the single line after a header.
+        iter_re = re.compile(r'\[\s*\d+\.\d+\]\s+\d+\s+(?:[*A-Za-z]+\s+)?(-?[\d.]+)')
         outer_bound = None
         in_results = False
-        for line in result_by_line:
+        for line in stdout.strip().split('\n'):
             if target_line in line:
                 in_results = True
                 continue
             if in_results:
-                # Match a line with iteration number and bounds
-                match = re.search(r'\[\s*\d+\.\d+\]\s+\d+\s+(?:L\s*B?|B\s*L?)?\s+([-.\d]+)', line)
+                match = iter_re.search(line)
                 if match:
                     outer_bound = float(match.group(1))
-                in_results = False
         return outer_bound
 
     @unittest.skipUnless(solver_available, "no solver available")
@@ -250,6 +256,7 @@ class TestStochAdmmWrapper(unittest.TestCase):
                 f"--module-name stoch_distr "
                 f"--stoch-admm --num-stoch-scens 4 --num-admm-subproblems 2 "
                 f"--default-rho 10 --solver-name {solver_name} "
+                f"--max-solver-threads 1 "
                 f"--max-iterations 30 --lagrangian "
                 f"--scenarios-per-bundle 4"
             ).split()
@@ -314,6 +321,7 @@ class TestStochAdmmWrapper(unittest.TestCase):
                 f"--stoch-admm --num-stoch-scens {num_stoch_scens} "
                 f"--num-admm-subproblems {num_admm} "
                 f"--default-rho 10 --solver-name {solver_name} "
+                f"--max-solver-threads 1 "
                 f"--max-iterations 30 --lagrangian "
                 f"--turn-off-names-check"
             )
@@ -516,6 +524,7 @@ class TestStochAdmmWrapper(unittest.TestCase):
                 f"--module-name stoch_distr --stoch-admm "
                 f"--num-admm-subproblems 4 --num-stoch-scens 3 "
                 f"--default-rho 10 --solver-name {solver_name} "
+                f"--max-solver-threads 1 "
                 f"--max-iterations 50 --lagrangian --xhatxbar "
                 f"--rel-gap 0.01 --ensure-xhat-feas"
             ).split()

@@ -142,6 +142,16 @@ Multi-source assembly across ranks is the correct primitive.
 - **`CROSS_SCENARIO_COST`** (cross-scenario cut source → cut spoke).
   Per-scenario cost data.
 
+- **`XFEAS`** (xhat-feasible / subgradient spoke → CG hub).  Each
+  scenario contributes a `[feasible x, total cost]` block — the same
+  `[nonants, obj_val]` *layout* as the Category-2 fields, but with a
+  crucial difference: the `x` is **genuinely distinct per scenario**
+  (the CG hub tries each scenario's `x` as its own incumbent
+  candidate), so there is **no** cross-scenario NAC redundancy to
+  preserve and no `obj_val` to keep paired with a shared first stage.
+  It is therefore Category 1, assembled per-scenario with **relaxed**
+  coherence (see §Coherence), not Category 2.
+
 #### Category 2 — per-scenario *layout*, NAC-redundant first-stage
 
 Buffers in this category are laid out per scenario, but the nonant
@@ -158,11 +168,15 @@ is evaluated).  A genuinely per-scenario scalar cost rides alongside.
   each scenario's slot), while `inner_bound` is genuinely
   per-scenario.  `RECENT_XHATS` is a circular buffer of such entries.
 
-The split matters for asymmetric ranks: the **first-stage portion
-must stay NAC-consistent**, so it cannot be assembled from ranks at
-different iterations; the **cost portion** is ordinary per-scenario
-data assembled like Category 1.  See §Coherence for how this is
-handled without canonicalization.
+The split matters for asymmetric ranks: the **first-stage portion must
+stay NAC-consistent** *and* each scenario's `inner_bound` must stay
+paired with the nonants it was evaluated at (FWPH turns that pair into a
+Frank-Wolfe column).  Both are guaranteed by reading the whole field
+with **strict coherence** — rejecting any mixed-iteration assembly.  An
+accepted read has every source at one write_id, so the assembled
+first-stage portion is already NAC-consistent across the scenarios sharing
+each node — the whole root vector in two-stage, per node in multistage — and
+needs no post-assembly fix-up.  See §Coherence.
 
 #### Category 3 — global-sized fields
 
@@ -363,6 +377,25 @@ window creation.  Cons:
   over one anchor rank per cylinder — rather than a single
   `fullcomm.allgather`, which scales worse at N=thousands.
 
+  *What the communication-layer cut actually ships, and the release
+  gate.*  The first cut uses a single `fullcomm.allgather` for the
+  unequal-rank layout exchange.  This is deliberate but interim: it is
+  effectively zero new code (the existing `SPWindow` exchange run on
+  `fullcomm` instead of `strata_comm`), it is a one-time *startup* cost
+  on a cold path — not the RMA hot path — and at development/test scale
+  (a handful of ranks) it is free.  It is **not** the end state.
+  Because total rank counts in the thousands are a real operating
+  regime here, the O(N) startup allgather and its O(N)-per-rank layout
+  storage must be replaced by the two-level (or local-compute) scheme
+  **before flexible ranks is documented or recommended for production
+  use** (it can land on `main` before then, since it is inert until a
+  non-default ratio).  That replacement is its own focused change — it
+  touches only how
+  `strata_buffer_layouts` is populated at startup, not the multi-source
+  reader — so it is tracked as a release-gate item rather than folded
+  into the feature phases, letting it be reviewed and scale-tested on
+  its own.  See §Gate reliance on the feature with an MPI CI matrix.
+
   *Lock granularity.*  `MPI_Win_lock(rank=target, ...)` is per-
   target-rank in the MPI spec, not per-window — a writer's exclusive
   lock on its own buffer does not block readers fetching from a
@@ -457,29 +490,40 @@ retry later.
   finish an iteration before writing `DUALS`, and their `write_id`
   values naturally agree.
 
-- **`BEST_XHAT` / `RECENT_XHATS` (first-stage portion).**  The
-  first-stage values must be NAC-consistent.  Two ways to guarantee
-  that without canonicalization, both exploiting that the first-stage
-  portion is *identical across scenarios*:
+- **`BEST_XHAT` / `RECENT_XHATS`.**  Per-scenario
+  `[first-stage nonants, obj_val]` blocks.  The first-stage portion is
+  NAC-redundant (identical across the scenarios sharing each node); the
+  `obj_val` is genuinely per-scenario.  These are assembled with the same
+  overlap-map multi-source reader as every other per-scenario field.
 
-  - **Two-stage:** every scenario carries the same first-stage vector,
-    so the receiver can read the first-stage portion from a **single**
-    remote rank (no cross-rank assembly, hence no coherence question).
-    Only the per-scenario `inner_bound` cost is assembled per-scenario
-    (Category-1 style).
+  **The whole field is read with strict coherence**, which carries both
+  invariants at once.  An accepted read has every source at one `write_id`,
+  so the assembled first-stage portion is already NAC-consistent across the
+  scenarios sharing each node (the whole root vector in two-stage, per node in
+  multistage) *and* each `obj_val` stays paired with the nonants it was
+  evaluated at.  The pairing matters because the FWPH consumer derives a
+  Frank-Wolfe column's recourse cost as `obj_val − first_stage_cost(nonants)`,
+  so a mixed-iteration assembly — iteration *t*'s nonants beside iteration
+  *t'*'s `obj_val` — would build an inconsistent column and can invalidate the
+  FW bound.  (FWPH supports multistage, so this is not a two-stage-only
+  concern.)  Strict coherence rejects such a read entirely, so **no
+  post-assembly fix-up is needed**: the per-scenario blocks are used exactly
+  as assembled.
 
-  - **Multistage:** a node's first-stage values are shared only by the
-    scenarios passing through that node, which may be spread across
-    ranks.  Source each node's first-stage portion from a single rank
-    that holds a scenario through that node (deterministic from the
-    scenario-to-rank map and the tree).  This is per-node single-source
-    sourcing, computed at startup alongside the overlap maps — not a
-    layout change and not multi-source assembly of the first stage.
+  Single-sourcing the first-stage portion would also preserve the pairing
+  and avoid the coherence question for **two-stage** (one global first-stage
+  vector, read whole from one rank).  It is *not* used because it does not
+  generalize to **multistage**: a scenario's nonant path spans several tree
+  nodes held by different ranks, so "single-source the first stage"
+  decomposes into per-node sourcing that is itself multi-source within a
+  scenario.  Strict-by-`write_id` gives the same guarantee for any stage
+  count, with no per-stage fix-up to maintain.
 
-  The sender side is synchronous in practice (a spoke writes
-  `BEST_XHAT` only after its `cylinder_comm.Allreduce` feasibility
-  verdict), so `write_id` values agree and the single-source reads see
-  a coherent snapshot.
+  Rejections are cheap: the sender writes `BEST_XHAT` / `RECENT_XHATS` only
+  after its `cylinder_comm.Allreduce` verdict, so its ranks are coherent
+  except during the brief publish interval; a straddled read is simply
+  re-read next sync, and these candidates are seeds (skipping one costs
+  nothing).
 
 #### Relaxed coherence
 
@@ -492,6 +536,15 @@ source rank.
   (fixing the first stage and solving), so a stale or mixed-iteration
   per-scenario value just means evaluating a slightly older candidate
   — always honest, never invalid.
+
+- **`XFEAS`** (xhat-feasible / subgradient spoke → CG hub).  Per-scenario
+  `[feasible x, total cost]` blocks whose `x` is genuinely *distinct*
+  per scenario, so — unlike `BEST_XHAT` / `RECENT_XHATS` — there is no
+  cross-scenario NAC to preserve and no shared first stage to keep an
+  `obj_val` paired with.  The CG hub tries each scenario's `x` as its
+  own candidate and re-evaluates it, so a stale or mixed-iteration block
+  just means trying a slightly older candidate — always honest, never
+  invalid.  Hence **relaxed coherence**, assembled per-scenario as-is.
 
 - **Global-sized bounds and scalars** (Categories 3 and 4).  Monotone,
   idempotent application; staleness is safe.
@@ -576,8 +629,15 @@ unnecessary given the per-field analysis).
 
 #### `spcommunicator.py`
 
-- `register_receive_fields()` builds overlap maps for the unequal-rank
-  path; the equal-rank path retains the 1-to-1 rank correspondence.
+- `register_recv_field()` builds the overlap map for a per-scenario field
+  on the unequal-rank path (the equal-rank path retains the 1-to-1 rank
+  correspondence). It lives there, rather than in
+  `register_receive_fields()`, so that a field an *extension* registers
+  directly -- `relaxed_ph_fixer`'s `RELAXED_NONANTS_VALS`, `grad_rho`'s
+  `BEST_XHAT`, ... -- gets the same multi-source assembly as a cylinder's
+  own `receive_fields`. (Otherwise such a read falls to the single-source
+  path and tears, since the buffer and the peer field have different
+  lengths when the rank counts differ.)
 - `get_receive_buffer()` gains a multi-source assembly path (with the
   per-field coherence policy applied), selected when ratios differ; the
   single-source path is unchanged at equal ranks.
@@ -593,9 +653,14 @@ unnecessary given the per-field analysis).
   scenarios linearly.
 - Unpacking (receive side) uses the overlap map to place multi-source
   data at the right local offsets.
-- For `BEST_XHAT` / `RECENT_XHATS`, the receiver reads the first-stage
-  portion via single-source (per-node) sourcing and the cost portion
-  via per-scenario assembly.
+- `BEST_XHAT` / `RECENT_XHATS` are assembled per-scenario via the
+  overlap map like the other per-scenario fields, under **strict
+  coherence** (all sources at one `write_id`); that already makes the
+  first-stage portion NAC-consistent across scenarios, so no
+  post-assembly fix-up is required.
+- `XFEAS` is assembled per-scenario via the same overlap map but under
+  **relaxed** coherence (distinct per-scenario iterates, no shared first
+  stage to keep NAC-consistent).
 - Bound and scalar communication is unaffected.
 
 #### `cfg_vanilla.py` and `config.py`
@@ -632,9 +697,12 @@ the first pass bundled into "Phase 0" has already landed separately.
 **Phase 2: Communication layer** (additive; reached only when a ratio
 differs from 1.0)
 
-- Add a `fullcomm`-based or locally-computed layout exchange for the
-  unequal-rank path (Option D's addressing), *alongside* the existing
+- Add the `fullcomm.allgather` layout exchange for the unequal-rank
+  path (Option D's addressing), *alongside* the existing
   `strata_comm`-based exchange, which the equal-rank path keeps using.
+  This is the interim exchange; the scalable replacement is a release
+  gate, not a feature phase (see the Option D layout-exchange note and
+  §Gate reliance on the feature with an MPI CI matrix).
 - Implement multi-source `get_receive_buffer()` using overlap maps, as
   a path taken only under non-default ratios; the single-source reader
   is unchanged for the equal-rank case.
@@ -647,8 +715,16 @@ differs from 1.0)
 
 - Implement the per-field strict-vs-relaxed reader paths.
 - Add the strict `write_id` check for `DUALS`.
-- Add single-source first-stage sourcing for `BEST_XHAT` /
-  `RECENT_XHATS` in the **two-stage** case; cost portion per-scenario.
+- Add `BEST_XHAT` / `RECENT_XHATS` as strict-coherence per-scenario
+  fields in the **two-stage** case (overlap-map assembly; strict
+  coherence makes the first-stage portion NAC-consistent with no
+  post-assembly fix-up).
+- Add `XFEAS` as a **relaxed**-coherence per-scenario field (Category 1;
+  genuinely distinct per-scenario iterates, no shared first stage) in
+  the **two-stage** case, assembled per-scenario via the overlap map.
+  Its only consumer is the CG hub, so this also adds the
+  `--ph-xfeas-spoke-rank-ratio` CLI flag and the end-to-end CG/`XFEAS`
+  multi-rank test.
 - Wire `cross_scen` with relaxed coherence (resolved — see §Coherence)
   and make `CrossScenarioCutSpoke` accept a multi-source `NONANTS_VALS`
   / `CROSS_SCENARIO_COST` (it currently asserts a single source rank).
@@ -659,17 +735,89 @@ differs from 1.0)
 
 **Phase 4: Multistage and FWPH**
 
-- Per-node single-source first-stage sourcing for `BEST_XHAT` /
-  `RECENT_XHATS` in the **multistage** case.
+- Extend `BEST_XHAT` / `RECENT_XHATS` strict-coherence assembly to the
+  **multistage** case (per-node first stage).  Strict coherence makes the
+  per-node first stage NAC-consistent the same way it does in two-stage, so
+  no per-node fix-up is needed.
 - FWPH reading `RECENT_XHATS` from an InnerBoundSpoke with a different
   rank count.  This is the most complex consumer of the xhat fields and
   warrants targeted testing.
 
 **Phase 5: APH support**
 
-- Verify APH (asynchronous PH) works with the relaxed-coherence model.
-- The strict-coherence fields already retry on `write_id` mismatch, so
-  they should compose with async senders; verify and add tests.
+- Verify the coherence model composes with an *asynchronous* sender (APH),
+  where the several sources of a multi-source read can sit at different
+  `write_id`s -- the case the per-field policy was designed for.
+- The strict-coherence fields already retry on `write_id` mismatch and the
+  relaxed fields accept the floor, so no reader change is needed.  This is
+  verified deterministically by driving the multi-source reader against a
+  stand-in window with hand-set `write_id`s (`test_flex_coherence_policy.py`),
+  which can force a *particular* mixed-id snapshot that a timing-dependent
+  live run cannot.
+- A live `np=6` APH MPI integration test was prototyped but deferred: APH
+  runs its persistent-solver solves in a worker thread and intermittently
+  hangs in pyomo's threaded output capture (an APH/pyomo issue unrelated to
+  the coherence policy), which times out CI.  Tracked in Pyomo/mpi-sppy#753.
+
+
+**Phase 6: Complete per-spoke rank-ratio flag coverage**
+
+A spoke may expose a `--<spoke>-rank-ratio` flag exactly when **every
+per-scenario field it sends or receives has a multi-source assembler**.
+The flag *is* the gate (a non-1.0 ratio is what selects the unequal-rank
+path), so exposing it for a spoke whose fields are not yet supported only
+surfaces the startup `NotImplementedError` — honest, but useless.
+Coverage therefore tracks field support, not spoke convenience:
+
+| Spoke (`cfg` gate) | Flag | Per-scenario field(s) | Status |
+|---|---|---|---|
+| `lagrangian` | `lagrangian_rank_ratio` | `DUALS`; `NONANTS_VALS` (recv) | landed |
+| `xhatshuffle` | `xhatshuffle_rank_ratio` | `BEST_XHAT` / `RECENT_XHATS` | landed |
+| `xhatxbar` | `xhatxbar_rank_ratio` | `BEST_XHAT` / `RECENT_XHATS` | landed |
+| `ph_xfeas_spoke` | `ph_xfeas_spoke_rank_ratio` | `XFEAS` | landed |
+| `ph_dual` | `ph_dual_rank_ratio` | `DUALS` | landed |
+| `relaxed_ph` | `relaxed_ph_rank_ratio` | `DUALS`, `RELAXED_NONANTS_VALS` | landed |
+| `subgradient` | `subgradient_rank_ratio` | `XFEAS`; `NONANTS_VALS` (recv) | landed |
+| `fwph` | `fwph_rank_ratio` | `BEST_XHAT` / `RECENT_XHATS` (recv); `NONANTS_VALS` (recv) | landed |
+| `reduced_costs` | — | `SCENARIO_REDUCED_COST` | needs assembler + consumer rework — see phase 7 |
+
+- Added `ph_dual_rank_ratio`, `relaxed_ph_rank_ratio`,
+  `subgradient_rank_ratio`, and `fwph_rank_ratio` (the spokes whose every
+  per-scenario field already has a multi-source assembler). Each was
+  mechanical: one `add_to_config(...)` in the matching `*_args` method,
+  one `<spoke>_dict["rank_ratio"] = cfg.<gate>_rank_ratio` line in
+  `build_spoke_list`, and one assertion in `test_flexible_rank_cli.py`,
+  mirroring `ph_xfeas_spoke_rank_ratio`. All four carry only fields whose
+  assembler is stage-agnostic (`DUALS`, `RELAXED_NONANTS_VALS`,
+  `NONANTS_VALS`, and the xhat/`XFEAS` blocks routed wholesale per
+  scenario), so they work at any stage count.
+- This is config-only (additive); the equal-rank path is untouched.
+- `reduced_costs` is **not** folded in here: it is the one remaining
+  spoke whose field has no assembler, and adding one is a behavioral
+  change (phase 7), not config wiring.
+
+**Phase 7: `reduced_costs` spoke (`SCENARIO_REDUCED_COST`)**
+
+`SCENARIO_REDUCED_COST` is a genuinely per-scenario field with the same
+`_local_nonant_length` layout as `NONANTS_VALS` / `DUALS` (one reduced
+cost per nonant per scenario; relaxed coherence, since it only steers
+rho). The two pieces of work:
+
+- **Assembler (trivial).** Add `SCENARIO_REDUCED_COST` to the
+  per-scenario branch of `_items_per_scen_for_field` (returns
+  `[nonant_length] * num_scenarios`) and leave it out of
+  `_STRICT_COHERENCE_FIELDS` (relaxed).
+- **Consumer rework (the real change).** `ReducedCostsRho`
+  (`extensions/reduced_costs_rho.py`) currently asserts
+  `len(fields_to_ranks[SCENARIO_REDUCED_COST]) == 1` and reads from a
+  single peer rank — the same single-source assumption that the
+  `XFEAS` → CG hub consumer had before phase 4a. Teach it to read
+  multi-source across the spoke's ranks (drop the assert; assemble via
+  the overlap map), then add a `reduced_costs` flag and an end-to-end
+  multi-rank test. Same shape and review size as the `XFEAS`/CG work.
+
+Only after phase 7 does the phase-6 table's last row flip to a landed
+`reduced_costs_rank_ratio`.
 
 
 ### Development and rollout strategy
@@ -750,23 +898,43 @@ are subtle.  If isolation is ever genuinely wanted, prefer a branch in
 the upstream repository over a separate fork -- same isolation, far less
 CI and merge friction.)
 
-**Gate reliance on the feature with an MPI CI matrix.**  There is no
-default to flip, but before the `fullcomm` path is advertised as
-supported, exercise it on at least two MPI implementations (e.g. OpenMPI
-and MPICH) and more than one mpi4py / MPI version, since that path is
-where the RMA-portability risk lives.
+**Prerequisites before the feature is recommended for production use.**
+There is no default to flip, but before the `fullcomm` path is
+documented or recommended for production use, exercise it on at least
+two MPI implementations (e.g. OpenMPI and MPICH) and more than one
+mpi4py / MPI version, since that path is where the RMA-portability risk
+lives.
+
+The same "finish before recommending it" list carries the **scalable
+layout exchange**: the interim `fullcomm.allgather` (see the Option D
+layout-exchange note) must be replaced by the two-level or local-compute
+scheme before the feature is documented or recommended for production
+use, because total rank counts in the thousands are a real operating
+regime here.  Both are prerequisites for recommending the feature, not
+for landing the intervening phases on `main`.
 
 
-### Possible future optimization (out of scope)
+### Possible future work (out of scope)
 
-The first-stage portion of `BEST_XHAT` / `RECENT_XHATS` is genuinely
-NAC-redundant (the same node value copied into every scenario's slot).
-A future optimization could store it once per non-leaf node instead of
-once per scenario, saving storage and bandwidth on those fields.  This
-is *only* valid for the Category-2 fields — never for the Category-1
-per-scenario fields — and is explicitly **not** required for flexible
-ranks.  It is recorded here so the idea is not lost, not as planned
-work.
+Recorded here so the ideas are not lost, not as planned work.
+
+**Per-node storage of the NAC-redundant first stage.**  The first-stage
+portion of `BEST_XHAT` / `RECENT_XHATS` is genuinely NAC-redundant (the
+same node value copied into every scenario's slot).  A future
+optimization could store it once per non-leaf node instead of once per
+scenario, saving storage and bandwidth on those fields.  This is *only*
+valid for the Category-2 fields — never for the Category-1 per-scenario
+fields — and is explicitly **not** required for flexible ranks.
+
+**Coherence read-outcome diagnostic** (Pyomo/mpi-sppy#742).  An
+always-on, per-field counter at the multi-source reader breaking each
+read into `not_new` / `new_accepted` / `rejected_incoherent` /
+`accepted_mixed`.  This lets an infrequently-reporting bounds cylinder be
+diagnosed as a coherence problem (reads rejected because sources disagree
+on `write_id`) vs. a slow upstream sender (no new data), and measures how
+often a multi-source read straddles a publish — the empirical basis for
+the strict-vs-relaxed choices above, especially under an asynchronous APH
+sender.
 
 
 ### Backward Compatibility

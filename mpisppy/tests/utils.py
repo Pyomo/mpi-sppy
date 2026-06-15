@@ -11,6 +11,19 @@
 import pyomo.environ as pyo
 from math import log10, floor
 
+from mpisppy.utils import sputils
+
+
+def limit_solver_threads(solver, solver_name, threads=1):
+    """Cap thread count on a directly-constructed Pyomo solver so test
+    solves do not fan out across every core. Reuses the canonical->native
+    option translator so we do not hardcode per-solver key names. Safe to
+    call before or after set_instance for persistent solvers (thread
+    options are applied at solve time)."""
+    solver.options.update(
+        sputils.translate_solver_options({"threads": threads}, solver_name))
+
+
 def get_solver(persistent_OK=True):
     solvers = ["cplex","gurobi","xpress"]
     if persistent_OK:
