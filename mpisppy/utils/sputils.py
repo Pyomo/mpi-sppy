@@ -554,6 +554,29 @@ def _node_local_name(var_name, strip_prefix):
     return var_name
 
 
+def _node_local_nonant_name(var_name, scenario_name, bundling):
+    """Strip a scenario/bundle block prefix from a nonant Var's name so it
+    is local to a single scenario model and consistent across scenarios.
+
+    - Bundled: the leading segment is the inner scenario name; strip it
+      (matches the existing bundling writers).
+    - Non-bundled: some spokes (e.g. the multistage xhatshuffle stage-2
+      EF) rebind nonants into a sub-block named for the owning scenario;
+      strip a leading ``<scenario_name>.`` when present. Plain scenarios
+      have no prefix and are returned unchanged.
+
+    Writer and reader both go through this so the by-name file round-trips
+    regardless of how the run happens to qualify its Var names.
+    """
+    if bundling:
+        dot_index = var_name.find('.')
+        if dot_index >= 0:
+            var_name = var_name[(dot_index + 1):]
+    elif var_name.startswith(scenario_name + "."):
+        var_name = var_name[(len(scenario_name) + 1):]
+    return var_name
+
+
 def _node_sort_key(node_name):
     """Deterministic tree order for a node name like ``ROOT_0_10``.
 

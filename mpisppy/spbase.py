@@ -717,11 +717,8 @@ class SPBase:
                     continue
                 rows = []
                 for var in node.nonant_vardata_list:
-                    var_name = var.name
-                    if self.bundling:
-                        dot_index = var_name.find('.')
-                        assert dot_index >= 0
-                        var_name = var_name[(dot_index + 1):]
+                    var_name = sputils._node_local_nonant_name(
+                        var.name, sname, self.bundling)
                     if self.is_zero_prob(model, var) and not get_zero_prob_values:
                         rows.append((var_name, None))
                     else:

@@ -115,7 +115,13 @@ ROOT_1, ProductionAdjust[CORN], 48.0
   distinguishes nodes. Answers the "file vs directory" question for the
   multi-stage case.
 - **Node-local names** so the same file reads back into any single
-  scenario model regardless of EF-vs-cylinders origin.
+  scenario model regardless of EF-vs-cylinders origin. Localizing is
+  prefix-aware (`sputils._node_local_nonant_name`): a leading bundle
+  segment, or a `<scenario_name>.` prefix that some spokes introduce
+  (the multistage xhatshuffle stage-2 EF rebinds nonants into a
+  scenario-named sub-block), is stripped on both write and read so the
+  names stay scenario-independent and round-trip. (aircond surfaced
+  this; without it the file carried per-node scenario prefixes.)
 - **Nodes written are the non-leaf nodes** in each scenario's
   `_mpisppy_node_list` — exactly the set `_fix_nonants` requires. Leaf
   recourse is scenario-specific and not part of an xhat.
@@ -256,6 +262,12 @@ unchanged `self.opt.evaluate(...)` / `update_if_improving(...)` path.
   node-keyed, deduped local dict under the serial path;
   `_assert_nonant_node_agreement` passes within tolerance and raises on
   disagreement.
+- **End-to-end MPI round trip (automated):**
+  `test_xhat_file_multistage.py` (mpiexec -np 4) runs a multistage
+  aircond cylinder system, writes the incumbent tree, and reads it back
+  by name. At np 4 the writing cylinder spans two ranks, so it exercises
+  the cross-rank gather/merge (a single rank holds only some subtrees).
+  Wired into `run_coverage.bash` and `test_pr_and_main.yml`.
 - **End-to-end smoke (manual, this PR):** farmer (2-stage) and hydro
   (3-stage) write→read round trips through `generic_cylinders`, EF and
   cylinders.

@@ -957,6 +957,27 @@ class TestNonantTreeCsv(unittest.TestCase):
             "stage_model_1.RegularProd",
         )
 
+    def test_node_local_nonant_name_strips_scenario_prefix(self):
+        # non-bundled: a leading "<scenario_name>." (e.g. a multistage
+        # stage-2 EF sub-block rebind) is stripped to stay node-local...
+        self.assertEqual(
+            sputils._node_local_nonant_name(
+                "scen0.stage_model_1.RegularProd", "scen0", bundling=False),
+            "stage_model_1.RegularProd",
+        )
+        # ...while an unprefixed name is left alone
+        self.assertEqual(
+            sputils._node_local_nonant_name(
+                "DevotedAcreage[CORN0]", "scen0", bundling=False),
+            "DevotedAcreage[CORN0]",
+        )
+        # bundled: strip the first segment (the inner scenario name)
+        self.assertEqual(
+            sputils._node_local_nonant_name(
+                "scen3.stage_model_1.RegularProd", "Bundle0", bundling=True),
+            "stage_model_1.RegularProd",
+        )
+
     def test_write_nonant_tree_csv_format_and_order(self):
         import os
         import tempfile

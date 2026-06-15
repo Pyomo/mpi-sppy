@@ -131,17 +131,12 @@ class XhatInnerBoundBase(spoke.InnerBoundNonantSpoke):
         from mpisppy.utils import sputils
         bundling = getattr(self.opt, "bundling", False)
         node_varname_order = dict()
-        for s in self.opt.local_scenarios.values():
+        for sname, s in self.opt.local_scenarios.items():
             for node in s._mpisppy_node_list:
                 if node.name in node_varname_order:
                     continue
-                names = []
-                for var in node.nonant_vardata_list:
-                    var_name = var.name
-                    if bundling:
-                        dot_index = var_name.find('.')
-                        assert dot_index >= 0
-                        var_name = var_name[(dot_index + 1):]
-                    names.append(var_name)
-                node_varname_order[node.name] = names
+                node_varname_order[node.name] = [
+                    sputils._node_local_nonant_name(var.name, sname, bundling)
+                    for var in node.nonant_vardata_list
+                ]
         return sputils.read_nonant_tree_csv(path, node_varname_order)
