@@ -146,6 +146,7 @@ def parse_args(m):
     cfg.xhatshuffle_args()
     cfg.xhatxbar_args()
     cfg.xhat_from_file_args()
+    cfg.write_xhat_file_args()
     cfg.norm_rho_args()
     cfg.primal_dual_rho_args()
     cfg.converger_args()

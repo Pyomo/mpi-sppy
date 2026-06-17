@@ -1041,6 +1041,12 @@ jobs:
           cd mpisppy/tests
           mpiexec -np 4 coverage run $COV_ARGS -m mpi4py test_cg_multirank_hub.py
 
+      - name: run multi-stage xhat-file round-trip test
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          mpiexec -np 4 coverage run $COV_ARGS -m mpi4py test_xhat_file_multistage.py
+
       - name: run DCG serial tests
         timeout-minutes: 10
         run: |

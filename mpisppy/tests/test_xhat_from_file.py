@@ -92,6 +92,13 @@ def _write_npy(values):
     return path
 
 
+def _write_csv(node_to_rows):
+    fd, path = tempfile.mkstemp(suffix=".csv")
+    os.close(fd)
+    sputils.write_nonant_tree_csv(path, node_to_rows)
+    return path
+
+
 class TestFileXhatDisabled(unittest.TestCase):
 
     def test_off_by_default_is_noop(self):
@@ -141,6 +148,65 @@ class TestFileXhatHardFails(unittest.TestCase):
             with self.assertRaises(RuntimeError) as cm:
                 helper._try_file_xhat()
             self.assertIn("two-stage", str(cm.exception))
+        finally:
+            os.remove(path)
+
+
+class TestFileXhatCsv(unittest.TestCase):
+    """The by-name .csv path (works for any number of stages)."""
+
+    def test_csv_happy_path_evaluates_by_name(self):
+        # node-local names for _binary_scenario's ROOT node are x[0..2]
+        path = _write_csv(
+            {"ROOT": [("x[0]", 1.0), ("x[1]", 0.0), ("x[2]", 1.0)]})
+        try:
+            sp = _make_sp(options={"xhat_from_file": path})
+            helper = _make_helper(sp, evaluate_result=42.0)
+            helper._try_file_xhat()
+            self.assertEqual(len(helper.opt.evaluate_calls), 1)
+            np.testing.assert_array_equal(
+                helper.opt.evaluate_calls[0]["ROOT"], [1.0, 0.0, 1.0])
+            self.assertEqual(helper.updates, [42.0])
+            self.assertEqual(helper.opt.restore_calls, 1)
+        finally:
+            os.remove(path)
+
+    def test_csv_order_follows_model_not_file(self):
+        # file lists the vars in a different order; result must follow the
+        # model's nonant_vardata_list order (x[0], x[1], x[2])
+        path = _write_csv(
+            {"ROOT": [("x[2]", 1.0), ("x[0]", 1.0), ("x[1]", 0.0)]})
+        try:
+            sp = _make_sp(options={"xhat_from_file": path})
+            helper = _make_helper(sp, evaluate_result=1.0)
+            helper._try_file_xhat()
+            np.testing.assert_array_equal(
+                helper.opt.evaluate_calls[0]["ROOT"], [1.0, 0.0, 1.0])
+        finally:
+            os.remove(path)
+
+    def test_csv_extra_nodes_ignored(self):
+        # a deeper node in the file is ignored for this two-stage model
+        path = _write_csv({
+            "ROOT": [("x[0]", 1.0), ("x[1]", 1.0), ("x[2]", 0.0)],
+            "ROOT_0": [("y", 5.0)],
+        })
+        try:
+            sp = _make_sp(options={"xhat_from_file": path})
+            helper = _make_helper(sp, evaluate_result=2.0)
+            helper._try_file_xhat()
+            self.assertEqual(set(helper.opt.evaluate_calls[0]), {"ROOT"})
+        finally:
+            os.remove(path)
+
+    def test_csv_missing_variable_raises(self):
+        path = _write_csv({"ROOT": [("x[0]", 1.0), ("x[1]", 0.0)]})  # no x[2]
+        try:
+            sp = _make_sp(options={"xhat_from_file": path})
+            helper = _make_helper(sp, evaluate_result=1.0)
+            with self.assertRaises(RuntimeError) as cm:
+                helper._try_file_xhat()
+            self.assertIn("x[2]", str(cm.exception))
         finally:
             os.remove(path)
 

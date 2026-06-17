@@ -1195,17 +1195,35 @@ class Config(pyofig.ConfigDict):
                               default=False)
 
     def xhat_from_file_args(self):
-        # Supply an initial xhat candidate from a .npy file. Every xhat
-        # spoke (xhatlooper, xhatshufflelooper, xhatspecific, xhatxbar)
-        # that descends from XhatInnerBoundBase will evaluate it once,
-        # before its normal exploration loop. Two-stage only today
-        # (matches ciutils.read_xhat). See
-        # doc/src/xhat_from_file.rst.
+        # Supply an initial xhat candidate from a file. Every xhat spoke
+        # (xhatlooper, xhatshufflelooper, xhatspecific, xhatxbar) that
+        # descends from XhatInnerBoundBase will evaluate it once, before
+        # its normal exploration loop. A .csv (node_name, variable_name,
+        # value; see sputils.write_nonant_tree_csv) works for any number
+        # of stages and is matched by name; a .npy holds a bare ROOT
+        # vector and is two-stage only. See doc/src/xhat_from_file.rst.
         self.add_to_config("xhat_from_file",
-                           description="Path to a .npy file holding an initial "
-                                       "first-stage xhat vector to evaluate "
-                                       "before normal xhatter exploration. "
-                                       "Two-stage only. Default None (off).",
+                           description="Path to a file holding an initial xhat "
+                                       "to evaluate before normal xhatter "
+                                       "exploration. A .csv nonant tree "
+                                       "(node_name, variable_name, value) works "
+                                       "for any number of stages; a .npy ROOT "
+                                       "vector is two-stage only. "
+                                       "Default None (off).",
+                           domain=str,
+                           default=None)
+
+    def write_xhat_file_args(self):
+        # Write the incumbent xhat (the whole nonant tree) to a single
+        # by-name CSV. Works for any number of stages and identically for
+        # EF and cylinders runs (both route through
+        # sputils.write_nonant_tree_csv). Default None (off).
+        self.add_to_config("write_xhat_file",
+                           description="Path to write the incumbent xhat (the "
+                                       "whole nonant tree) as a single by-name "
+                                       "CSV: 'node_name, variable_name, value', "
+                                       "node-local names. All stages; EF and "
+                                       "cylinders. Default None (off).",
                            domain=str,
                            default=None)
 
