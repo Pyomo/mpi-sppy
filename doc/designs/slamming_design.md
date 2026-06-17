@@ -1,7 +1,9 @@
 # Slamming — design
 
-**Status:** Draft — up for discussion. Nothing is implemented yet.
-Intended branch: `slamming` (off Pyomo/mpi-sppy `main`).
+**Status:** The mechanism described here is implemented on branch `slamming`
+(off Pyomo/mpi-sppy `main`). This document describes the slamming *mechanism*;
+the work that decides *when* to invoke it (stall/cycle detection) is a separate
+future project that uses slamming as a consumer — not a later phase of this one.
 **Author:** dlw (captured with Claude Code assistance)
 **Last updated:** 2026-06-17
 
@@ -30,12 +32,13 @@ family of in-PH fixers).
    the way PySP did.
 3. Support wildcards in the file so a single rule can cover a family of
    indexed variables.
-4. Decouple the slamming **mechanism** (this design) from slam
-   **triggering**, so that:
-   - Phase 1 ships a simple iteration-count trigger (PySP's
+4. Keep the slamming **mechanism** (this design) cleanly separable from the
+   decision of *when* to slam, so that:
+   - this design ships a simple iteration-count trigger (PySP's
      "slam-after-iter" plus an iters-between cadence), and
-   - a later phase can drop a genuine **stall detector** into the same
-     seam without touching the mechanism.
+   - a separate future project that detects stalls/cycles can invoke the
+     slamming mechanism on demand (the action layer, §7) rather than relying
+     on the iteration trigger.
 5. **Total backward compatibility.** A run that uses none of the new
    slamming options behaves byte-for-byte as it does today.
 6. Multistage-capable from the start (the existing slam *spokes* are
@@ -43,20 +46,21 @@ family of in-PH fixers).
 
 ### Non-goals
 
-- **Stall detection.** Phase 1's trigger is iteration counting. Real
-  stall/cycle detection is a named follow-up (§11, Phase 2). The point
-  of this design is to build the slamming machinery *first*, with a
-  pluggable trigger, so stall detection slots in later.
-- **Automatic un-slamming / backtracking.** Phase 1 slams are sticky.
-  We reserve an `unslam` hook (§7.5) for a later phase but do not
-  implement release logic now.
+- **Stall detection.** This design's trigger is iteration counting. Real
+  stall/cycle detection is out of scope; it is expected to live in a
+  *separate* project that invokes this slamming mechanism when it decides one
+  is warranted. The point here is to build the slamming machinery *first*, so
+  such a consumer has something to call.
+- **Automatic un-slamming / backtracking.** Slams here are sticky. The
+  `_slammed` record (§7.5) is kept so a future consumer could add release
+  logic, but no release logic is implemented now.
 - **Replacing the existing fixers.** `fixer.py`, `reduced_costs_fixer.py`,
   `relaxed_ph_fixer.py`, and `integer_relax_then_enforce.py` are
   untouched; the slammer coexists with them (§9).
 - **Replacing the `SlamMin` / `SlamMax` spokes.** Those remain (§1); this
   is a different, complementary mechanism.
 - **PySP config-file syntax compatibility.** We use a modern by-name file
-  (§5). A WW-syntax importer is an optional later phase if there is
+  (§5). A WW-syntax importer is an optional future enhancement if there is
   demand to bring old files verbatim.
 
 ---
@@ -110,7 +114,7 @@ in spirit:
   integer).
 - A slam **priority** per variable.
 - `PH_Iters_Between_Slamming` and a "slam after iteration K" start point —
-  the iteration-count trigger this design adopts for Phase 1.
+  the iteration-count trigger this design adopts.
 
 When triggered (PySP triggered on detected cycling / stall), PySP slammed
 variables according to these preferences to break the cycle.
@@ -161,9 +165,10 @@ organized as three independent layers so each can evolve separately:
   iteration_for_slam()      directive map from file        slam(ndn_i, dir)
 ```
 
-**Trigger (`when`)** — a predicate `iteration_for_slam(phiter) -> bool`. Phase 1:
-iteration counting (§6). Phase 2: a stall detector implementing the same
-predicate. The rest of the extension never changes.
+**Trigger (`when`)** — a predicate `iteration_for_slam(phiter) -> bool`,
+implemented here as iteration counting (§6). The action layer (below) is the
+reusable mechanism; a separate future project that decides slams are needed can
+drive it directly, so the trigger is just one (the built-in) caller.
 
 **Preferences (`who`/`where`)** — a directive map built once from the file
 (§5): for each nonant, `{can_slam, directions, priority}`. Only nonants
@@ -180,9 +185,9 @@ driven from `PHBase`, so the Slammer runs under any `PHBase`-derived hub:
 `_mpisppy_model.xbars` (for `nearest` / `anywhere`) and the per-node
 communicators `comms[ndn]` (for `min` / `max`), both of which the whole
 `PHBase` family maintains. **L-shaped** (`SPBase`, no extension hooks) is
-out. One caveat: the Phase-1 trigger counts iterations, and APH's
+out. One caveat: the built-in trigger counts iterations, and APH's
 asynchronous notion of an "iteration" makes that cadence less meaningful
-there — APH is a more natural fit for the Phase-2 stall trigger.
+there — APH is a more natural fit for an external, stall-driven caller.
 
 ---
 
@@ -245,9 +250,9 @@ identical on every rank, so all ranks raise together.
 
 ---
 
-## 6. Trigger layer — Phase 1
+## 6. Trigger layer
 
-Two options drive the iteration-count trigger:
+Two options drive the built-in iteration-count trigger:
 
 - `--slam-start-iter K` — do not slam before hub iteration `K` (PySP's
   "slam after iter").
@@ -264,10 +269,11 @@ def iteration_for_slam(self, phiter):
 Purely a function of the iteration counter, so it is identical on every
 rank with no communication.
 
-**Phase 2 seam.** The stall detector will implement the same
-`iteration_for_slam(phiter)` signature (reading the convergence history the hub
-already tracks). Swapping it in is a one-line change in `Slammer`; nothing
-else moves.
+**External callers.** This predicate is just the built-in trigger. A separate
+project that detects stalls/cycles is not expected to rewrite it; the natural
+integration is for that project to invoke the slammer's action layer (§7) when
+it decides a slam is warranted, leaving this iteration trigger in place (or
+disabled) alongside it.
 
 ---
 
@@ -286,8 +292,8 @@ There is deliberately **no convergence gate**: an eligible nonant is
 slammed strictly by priority whether or not the scenarios already agree on
 it. The user has already expressed intent by listing the variable with a
 priority; second-guessing that with a dynamic "skip already-converged"
-test adds a subtle behavior whose natural home is the Phase-2 stall
-detector (which is, by definition, the layer that knows what is stuck).
+test adds a subtle behavior whose natural home is a stall detector (a
+separate project, which is by definition the layer that knows what is stuck).
 Slamming an already-converged variable is harmless — it pins the variable
 where it was settling and reduces the live problem, which is exactly what
 `fixer.py` would have done. If a fixer is also active, no work is
@@ -297,9 +303,10 @@ a fixer-fixed variable fails eligibility test 2 here.
 ### 7.2 Selection
 
 Among eligible nonants, pick the one with the **largest** `priority`
-(ties → name order). Phase 1 slams **one nonant per event** — conservative,
+(ties → name order). This design slams **one nonant per event** — conservative,
 PySP-faithful, and the trigger cadence (`--iters-between-slams`) controls
-aggressiveness. A batched / fraction-based variant is a later option.
+aggressiveness. A batched / fraction-based variant is a possible future
+enhancement.
 
 ### 7.3 Determinism across ranks
 
@@ -310,7 +317,8 @@ picks the *same* nonant with no communication:
   all scenarios on all ranks.
 
 If any future input to selection could differ across ranks, the selection
-result is reduced to agreement before acting; in Phase 1 none can.
+result is reduced to agreement before acting; with the inputs used here none
+can.
 
 ### 7.4 `min` / `max` direction — on-demand reduction
 
@@ -331,9 +339,10 @@ For the chosen `(ndn, i)` and value `v`, in every local scenario:
 `xvar.fix(v)`; if the solver is persistent, `solver.update_var(xvar)`.
 Record `self._slammed[(ndn, i)] = v`.
 
-`_slammed` exists for reporting and for the **`unslam` hook** reserved for
-Phase 2 (releasing a bad slam). Phase 1 never calls it; the seam is left
-so the stall/backtracking phase need not refactor the action layer.
+`_slammed` exists for reporting and as the record an eventual **`unslam`**
+(releasing a bad slam) would need. This design never releases a slam; keeping
+the record means a future consumer that wants backtracking need not refactor
+the action layer.
 
 ### 7.6 Reporting
 
@@ -400,19 +409,22 @@ update`). Not required for correctness.
 
 ---
 
-## 11. Phasing (each its own review-sized PR)
+## 11. Scope and future work
 
-**Phase 1 (this design):** the slammer mechanism — directives file
+**This design (one review-sized PR):** the slammer mechanism — directives file
 (by-name + wildcards), the five+`nearest` directions, one-slam-per-event
-selection, iteration-count trigger, sticky slams, multistage, full
+selection, the built-in iteration-count trigger, sticky slams, multistage, full
 backward compatibility. Plus example + docs + tests.
 
-**Phase 2:** a real **stall/cycle detector** implementing
-`iteration_for_slam(phiter)`, dropped into the trigger seam; and the **`unslam`**
-release logic the Phase 1 hook anticipates.
+**Separate future project (not a phase of this one):** stall/cycle detection.
+That project decides *when* slamming is warranted and **invokes this mechanism
+as a consumer** (the action layer, §7); it may also add `unslam` / backtracking,
+for which the `_slammed` record (§7.5) is already kept. It is deliberately not
+built here — this design exists so that project has a slamming mechanism to call.
 
-**Phase 3 (optional):** batched / fraction-based slamming; PySP WW-syntax
-file importer; JSON file format.
+**Optional independent enhancements:** batched / fraction-based slamming; a PySP
+WW-syntax file importer; a JSON file format. Each stands alone if there is
+demand.
 
 ---
 
@@ -445,8 +457,8 @@ Settled in review (DLW, 2026-06-17); recorded here for provenance.
 2. **`nearest` token** — kept as a convenience for "either bound, pick the
    closer." *Confirmed.*
 3. **Convergence gate** — the proposed `--slam-only-unconverged` option is
-   **dropped**. Phase 1 slams strictly by priority with no convergence
-   test (§7.1); convergence-aware targeting, if wanted, belongs in the
-   Phase-2 stall detector.
-4. **One slam per event** in Phase 1; batched / priority-band slamming is a
-   later option (§7.2).
+   **dropped**. The mechanism slams strictly by priority with no convergence
+   test (§7.1); convergence-aware targeting, if wanted, belongs in the separate
+   stall-detection project.
+4. **One slam per event**; batched / priority-band slamming is a possible
+   future enhancement (§7.2).
