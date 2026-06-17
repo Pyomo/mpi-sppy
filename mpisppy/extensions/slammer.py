@@ -40,6 +40,7 @@ import csv
 import math
 import re
 
+import numpy as np
 import pyomo.environ as pyo
 
 import mpisppy.MPI as MPI
@@ -226,6 +227,8 @@ class Slammer(Extension):
     def __init__(self, spobj):
         super().__init__(spobj)
         opts = spobj.options.get("slammer_options", {})
+        # Kept for error messages; None when directives are passed in directly.
+        self._directives_file = opts.get("directives_file")
         if "directives" in opts:
             self.directives = opts["directives"]
         else:
@@ -248,7 +251,7 @@ class Slammer(Extension):
     # ------------------------------------------------------------------ #
     # Trigger layer (WHEN)
     # ------------------------------------------------------------------ #
-    def should_slam(self, phiter):
+    def iteration_for_slam(self, phiter):
         """Whether to slam at hub iteration ``phiter``: at or after
         ``slam_start_iter``, then once every ``iters_between_slams`` iterations.
         A pure function of the iteration counter, so it is identical on every
@@ -264,7 +267,8 @@ class Slammer(Extension):
         """Build the eligibility map by matching each nonant's name against the
         directives.  The same nonant has the same ``xvar.name`` in every
         scenario, so one representative scenario suffices and the map is
-        scenario-independent and multistage-clean."""
+        scenario-independent and multistage-clean.  Raises ``ValueError`` (on
+        every rank) if any directive pattern matches no nonant anywhere."""
         rep = self.opt.local_scenarios[self.opt.local_scenario_names[0]]
         local_names = []
         for ndn_i, xvar in rep._mpisppy_data.nonant_indices.items():
@@ -278,24 +282,35 @@ class Slammer(Extension):
             if d is not None and d.can_slam:
                 self._directive_of[ndn_i] = d
 
-        # Warn (rank 0) about patterns that match no local nonant; usually a
-        # typo.  Gated on rank 0 per the design; in a multi-rank multistage run
-        # rank 0 may not own every node, so this is advisory only.
-        if self.opt.cylinder_rank == 0:
-            import warnings
-            for d in self.directives:
-                if not any(d.matches(nm) for nm in local_names):
-                    warnings.warn(
-                        f"slamming directive pattern {d.pattern!r} matched no "
-                        "nonanticipative variable",
-                        UserWarning, stacklevel=2)
+        # A directive pattern that matches no nonanticipative variable anywhere
+        # is almost always a typo, so it is a hard error.  Each rank sees only
+        # the nonants of the nodes it owns, so reduce the per-directive match
+        # flags across the hub (ROOT spans every hub rank); a pattern matched on
+        # some other rank is then not falsely flagged (this matters for
+        # multistage).  The reduced result is identical on every rank, so all
+        # ranks raise together.
+        local_match = np.array(
+            [1 if any(d.matches(nm) for nm in local_names) else 0
+             for d in self.directives], 'i')
+        global_match = np.zeros(len(self.directives), 'i')
+        self.opt.comms["ROOT"].Allreduce(
+            [local_match, MPI.INT], [global_match, MPI.INT], op=MPI.MAX)
+        unmatched = [d.pattern for d, hit in zip(self.directives, global_match)
+                     if not hit]
+        if unmatched:
+            where = f" in {self._directives_file}" if self._directives_file \
+                    else ""
+            raise ValueError(
+                f"slamming directives{where}: pattern(s) matched no "
+                "nonanticipative variable: "
+                f"{', '.join(repr(p) for p in unmatched)}")
 
     # ------------------------------------------------------------------ #
     # Action layer (WHAT)
     # ------------------------------------------------------------------ #
     def miditer(self):
         phiter = self.opt._PHIter
-        if not self.should_slam(phiter):
+        if not self.iteration_for_slam(phiter):
             return
         self._slam_one()
 
@@ -397,7 +412,6 @@ class Slammer(Extension):
                 local = v
             else:
                 local = min(local, v) if direction == "min" else max(local, v)
-        import numpy as np
         local_arr = np.array([local], dtype="d")
         global_arr = np.empty(1, dtype="d")
         self.opt.comms[ndn].Allreduce(

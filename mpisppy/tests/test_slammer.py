@@ -27,7 +27,6 @@ import os
 import tempfile
 import types
 import unittest
-import warnings
 
 import pyomo.environ as pyo
 from pyomo.common.collections import ComponentSet
@@ -105,8 +104,21 @@ class _FakeComm:
         recvbuf[0][:] = sendbuf[0]
 
 
+def _make_opt(scenarios, slammer_options):
+    """A fake opt carrying the given scenarios and slammer options."""
+    opt = types.SimpleNamespace(
+        cylinder_rank=0,
+        _PHIter=1,
+        comms={NDN: _FakeComm()},
+        local_scenarios={f"Scen{i+1}": s for i, s in enumerate(scenarios)},
+        options={"slammer_options": slammer_options},
+    )
+    opt.local_scenario_names = list(opt.local_scenarios.keys())
+    return opt
+
+
 def _build(directives, scenario_specs, slam_start_iter=1, iters_between_slams=1,
-           rounding_bias=0.0, suppress_warnings=True):
+           rounding_bias=0.0):
     """Build (ext, opt, models) from directives and a list of scenarios, each a
     list of var specs.  pre_iter0() is called so the eligibility map is ready."""
     models, scenarios = [], []
@@ -115,28 +127,16 @@ def _build(directives, scenario_specs, slam_start_iter=1, iters_between_slams=1,
         models.append(m)
         scenarios.append(sc)
 
-    opt = types.SimpleNamespace(
-        cylinder_rank=0,
-        _PHIter=1,
-        comms={NDN: _FakeComm()},
-        local_scenarios={f"Scen{i+1}": s for i, s in enumerate(scenarios)},
-        options={"slammer_options": {
-            "directives": directives,
-            "slam_start_iter": slam_start_iter,
-            "iters_between_slams": iters_between_slams,
-            "rounding_bias": rounding_bias,
-            "verbose": False,
-        }},
-    )
-    opt.local_scenario_names = list(opt.local_scenarios.keys())
+    opt = _make_opt(scenarios, {
+        "directives": directives,
+        "slam_start_iter": slam_start_iter,
+        "iters_between_slams": iters_between_slams,
+        "rounding_bias": rounding_bias,
+        "verbose": False,
+    })
 
     ext = Slammer(opt)
-    if suppress_warnings:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            ext.pre_iter0()
-    else:
-        ext.pre_iter0()
+    ext.pre_iter0()
     return ext, opt, models
 
 
@@ -459,35 +459,63 @@ class Test_selection(unittest.TestCase):
         self.assertEqual(_var(models, 0, 0).value, 7.0)  # left alone
 
     def test_unmatched_nonant_never_slammed(self):
-        ds = [SlamDirective("other[*]", True, ("lb",), 1.0)]
-        ext, _, models = _build(ds, [[{"lb": 1.0, "ub": 9.0, "value": 5.0}]])
+        # v[1] is matched by no rule -> never slammed (the coverage default)
+        ds = [SlamDirective("v[0]", True, ("lb",), 1.0)]
+        ext, _, models = _build(ds, [[
+            {"lb": 1.0, "ub": 9.0, "value": 5.0},
+            {"lb": 2.0, "ub": 9.0, "value": 5.0},
+        ]])
         ext._slam_one()
-        self.assertFalse(_var(models, 0, 0).fixed)
+        self.assertTrue(_var(models, 0, 0).fixed)    # v[0] matched -> slammed
+        self.assertFalse(_var(models, 0, 1).fixed)   # v[1] unmatched -> never
 
-    def test_zero_match_pattern_warns(self):
-        # a pattern matching no nonant is almost always a typo -> warn (rank 0)
+
+class Test_zero_match(unittest.TestCase):
+    def test_zero_match_pattern_errors(self):
+        # a pattern matching no nonant is almost always a typo -> hard error
         ds = [SlamDirective("typo[*]", True, ("lb",), 1.0)]
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            _build(ds, [[{"lb": 1.0, "ub": 9.0, "value": 5.0}]],
-                   suppress_warnings=False)
-        self.assertTrue(any(issubclass(w.category, UserWarning) and
-                            "typo[*]" in str(w.message) for w in caught))
+        with self.assertRaises(ValueError):
+            _build(ds, [[{"lb": 1.0, "ub": 9.0, "value": 5.0}]])
+
+    def test_error_names_the_directives_file(self):
+        path = _write_csv("name,directions\ntypo[*],lb\n")
+        try:
+            _m, sc = _make_scenario([{"lb": 1.0, "ub": 9.0, "value": 5.0}])
+            opt = _make_opt([sc], {"directives_file": path})
+            ext = Slammer(opt)
+            with self.assertRaises(ValueError) as cm:
+                ext.pre_iter0()
+            self.assertIn(path, str(cm.exception))
+        finally:
+            os.remove(path)
+
+    def test_pattern_matched_on_another_rank_is_ok(self):
+        # a pattern that matches no *local* nonant but is reported as matched by
+        # the cross-rank reduction must not error (simulated via the fake comm)
+        class _OrComm:
+            def Allreduce(self, sendbuf, recvbuf, op=None):
+                recvbuf[0][:] = 1  # some other rank matched everything
+        ds = [SlamDirective("only_elsewhere[*]", True, ("lb",), 1.0)]
+        _m, sc = _make_scenario([{"lb": 1.0, "ub": 9.0, "value": 5.0}])
+        opt = _make_opt([sc], {"directives": ds})
+        opt.comms[NDN] = _OrComm()
+        ext = Slammer(opt)
+        ext.pre_iter0()  # must not raise
 
 
 # --------------------------------------------------------------------------- #
 # trigger + config (backward compatibility contract)
 # --------------------------------------------------------------------------- #
 class Test_trigger(unittest.TestCase):
-    def test_should_slam_predicate(self):
+    def test_iteration_for_slam_predicate(self):
         ds = [SlamDirective("v[*]", True, ("lb",), 1.0)]
         ext, _, _ = _build(ds, [[{"lb": 0.0, "ub": 1.0, "value": 0.0}]],
                            slam_start_iter=3, iters_between_slams=2)
-        self.assertFalse(ext.should_slam(1))
-        self.assertFalse(ext.should_slam(2))
-        self.assertTrue(ext.should_slam(3))
-        self.assertFalse(ext.should_slam(4))
-        self.assertTrue(ext.should_slam(5))
+        self.assertFalse(ext.iteration_for_slam(1))
+        self.assertFalse(ext.iteration_for_slam(2))
+        self.assertTrue(ext.iteration_for_slam(3))
+        self.assertFalse(ext.iteration_for_slam(4))
+        self.assertTrue(ext.iteration_for_slam(5))
 
     def test_miditer_respects_trigger(self):
         ds = [SlamDirective("v[*]", True, ("lb",), 1.0)]

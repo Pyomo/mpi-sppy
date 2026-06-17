@@ -199,9 +199,10 @@ out an exception), an ordered ``|``-separated list of ``directions`` from
 and a ``priority`` (the eligible nonant with the largest priority is slammed
 first). Matching is last-match-wins, so write broad defaults first and
 exceptions after; only variables matched by a ``can_slam`` rule are ever
-slammed. A multi-index name contains a comma and so must be quoted. A worked
-example translated from PySP ships at
-``examples/sizes/config/slamming_directives.csv``.
+slammed. A multi-index name contains a comma and so must be quoted. A pattern
+that matches no variable in the model is a hard error (it is almost always a
+typo) and the message names the file. A worked example translated from PySP
+ships at ``examples/sizes/config/slamming_directives.csv``.
 
 The available ``directions``, and the value each fixes the variable to, are:
 

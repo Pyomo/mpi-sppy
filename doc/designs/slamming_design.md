@@ -158,10 +158,10 @@ organized as three independent layers so each can evolve separately:
 ```
    Trigger          Selection + preferences          Action
   (WHEN)      →        (WHO / WHERE)           →      (WHAT)
-  should_slam()      directive map from file        slam(ndn_i, dir)
+  iteration_for_slam()      directive map from file        slam(ndn_i, dir)
 ```
 
-**Trigger (`when`)** — a predicate `should_slam(phiter) -> bool`. Phase 1:
+**Trigger (`when`)** — a predicate `iteration_for_slam(phiter) -> bool`. Phase 1:
 iteration counting (§6). Phase 2: a stall detector implementing the same
 predicate. The rest of the extension never changes.
 
@@ -236,8 +236,12 @@ This is the requirement that only explicitly-specified variables can be
 slammed, and it is what makes the feature backward compatible.
 
 The file is parsed once and validated at startup: unknown direction
-tokens, unparseable priorities, and patterns that match **zero** nonants
-are reported (the last as a warning, gated on rank 0).
+tokens and unparseable priorities are errors at parse time, and a pattern
+that matches **zero** nonanticipative variables is a hard error naming the
+file (almost always a typo). Because each rank owns only some nodes, the
+per-pattern match is reduced across the hub before the check, so a pattern
+matched on another rank is not falsely flagged; the reduced result is
+identical on every rank, so all ranks raise together.
 
 ---
 
@@ -251,7 +255,7 @@ Two options drive the iteration-count trigger:
   iterations.
 
 ```python
-def should_slam(self, phiter):
+def iteration_for_slam(self, phiter):
     if phiter < self.slam_start_iter:
         return False
     return (phiter - self.slam_start_iter) % self.iters_between_slams == 0
@@ -261,7 +265,7 @@ Purely a function of the iteration counter, so it is identical on every
 rank with no communication.
 
 **Phase 2 seam.** The stall detector will implement the same
-`should_slam(phiter)` signature (reading the convergence history the hub
+`iteration_for_slam(phiter)` signature (reading the convergence history the hub
 already tracks). Swapping it in is a one-line change in `Slammer`; nothing
 else moves.
 
@@ -404,7 +408,7 @@ selection, iteration-count trigger, sticky slams, multistage, full
 backward compatibility. Plus example + docs + tests.
 
 **Phase 2:** a real **stall/cycle detector** implementing
-`should_slam(phiter)`, dropped into the trigger seam; and the **`unslam`**
+`iteration_for_slam(phiter)`, dropped into the trigger seam; and the **`unslam`**
 release logic the Phase 1 hook anticipates.
 
 **Phase 3 (optional):** batched / fraction-based slamming; PySP WW-syntax
