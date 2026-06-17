@@ -8,14 +8,20 @@
 ###############################################################################
 """Preference-driven in-hub slamming.
 
-Slamming forces (fixes) a non-converged nonanticipative variable according to
-pre-specified user preferences while a decomposition hub is running, to drive
-toward a feasible / converged incumbent when ordinary convergence is slow.  Unlike the
+Slamming forces (fixes) a nonanticipative variable according to pre-specified
+user preferences while a decomposition hub is running, to drive toward a
+feasible / converged incumbent when ordinary convergence is slow.  Unlike the
 other in-hub fixers (``fixer.py``, ``reduced_costs_fixer.py``,
-``relaxed_ph_fixer.py``), which fix on *agreement* and so can infer a direction
-automatically, slamming forces *non-converged* variables and therefore needs
-*user-supplied* direction preferences.  Those preferences come from a directives
-file (see :func:`parse_directives_file`).
+``relaxed_ph_fixer.py``), which fix a variable once its scenarios *agree* and so
+can infer a direction automatically, slamming is meant for variables that are
+*not* settling -- where there is no agreement to read a direction from -- which
+is why it needs *user-supplied* direction preferences.  Those preferences come
+from a directives file (see :func:`parse_directives_file`).
+
+This "not settling" framing is the intended use, not an enforced precondition:
+slamming does not test convergence per variable.  Any variable matched by a
+``can_slam`` rule is eligible whether or not its scenarios already agree --
+slamming an already-settled variable simply pins it where it was heading.
 
 The trigger is an iteration count (slam after a start iteration, then once
 every so many iterations); one variable is slammed per event and the slam is

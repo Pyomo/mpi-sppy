@@ -166,14 +166,16 @@ slammer
 ^^^^^^^
 
 This extension does preference-driven *slamming*: it forces (fixes) a
-non-converged nonanticipative variable according to pre-specified user
-preferences while the hub is running, to break a stall or cycle. Unlike the
-other fixers above -- which fix on *agreement* and so can infer a direction
-automatically -- slamming forces variables precisely *because* they are not
-settling, so the directions are supplied by the user in a directives file.
-(This is distinct from the
-``SlamMin`` / ``SlamMax`` *spokes*, which are non-destructive incumbent finders
-that never perturb the hub.)
+nonanticipative variable according to pre-specified user preferences while the
+hub is running, to break a stall or cycle. Unlike the other fixers above --
+which fix on *agreement* and so can infer a direction automatically -- slamming
+is meant for variables that are *not* settling, where there is no agreement to
+read a direction from, so the directions are supplied by the user in a
+directives file. This is the intended use rather than an enforced precondition:
+slamming does not test convergence per variable; any variable matched by a
+``can_slam`` rule is eligible (see the eligibility rules below). (Slamming is
+distinct from the ``SlamMin`` / ``SlamMax`` *spokes*, which are non-destructive
+incumbent finders that never perturb the hub.)
 
 From ``generic_cylinders.py`` the extension is activated **only** when a
 directives file is supplied, so a run with no slamming options behaves exactly
