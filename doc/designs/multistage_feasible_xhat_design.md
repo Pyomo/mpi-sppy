@@ -293,10 +293,12 @@ review-sized PR.
 
 1. `ef_xhat_nonants` in `mpisppy/utils/xhat_helpers.py` (+ reuse the
    existing solve/termination-check pattern from `_solve_and_extract_root`).
-2. `examples/aircond/aircond_auxiliary.py` with `feasible_xhat_creator`
-   (resolve where the aircond scenario module is importable from for the
-   `_auxiliary` discovery convention — the model currently lives at
-   `mpisppy/tests/examples/aircond.py`).
+2. `aircond_auxiliary.py` with `feasible_xhat_creator`. Placed at
+   `mpisppy/tests/examples/aircond_auxiliary.py` — beside the model
+   (`mpisppy.tests.examples.aircond`) so the `<module>_auxiliary`
+   discovery in `_find_feasible_xhat_creator` resolves it; the
+   `examples/<model>/` doc convention assumes the model lives under
+   `examples/`, which aircond does not.
 3. Revise `doc/src/feasible_xhat.rst` (multistage section + aircond worked
    example; drop the two-stage-only caveat).
 4. Tests in `mpisppy/tests/test_feasible_xhat.py`; wire into
