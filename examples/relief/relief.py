@@ -1,5 +1,10 @@
 ###############################################################################
 # Disaster relief example for TutORials 2026
+#
+# A description of this example can be found in
+# T. Valencia Zuluaga, E. Glista, A. Musselman and J-P. Watson, "Parallel Computing for Large-Scale
+# Infrastructure Planning Optimization under Uncertainty", Tutorials in Operations Research,
+# 2026 (to appear).
 ###############################################################################
 
 import pyomo.environ as pyo
