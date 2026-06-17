@@ -249,9 +249,10 @@ class Slammer(Extension):
     # Trigger layer (WHEN)
     # ------------------------------------------------------------------ #
     def should_slam(self, phiter):
-        """Iteration-count trigger: a pure function of the iteration counter, so
-        it is identical on every rank with no communication.  A future stall
-        detector can replace this predicate without touching the rest."""
+        """Whether to slam at hub iteration ``phiter``: at or after
+        ``slam_start_iter``, then once every ``iters_between_slams`` iterations.
+        A pure function of the iteration counter, so it is identical on every
+        rank with no communication."""
         if phiter < self.slam_start_iter:
             return False
         return (phiter - self.slam_start_iter) % self.iters_between_slams == 0
