@@ -8,20 +8,21 @@
 ###############################################################################
 """Preference-driven in-hub slamming.
 
-Slamming forces (fixes) a non-converged nonanticipative variable to a
-user-chosen value while a decomposition hub is running, to drive toward a
-feasible / converged incumbent when ordinary convergence is slow.  Unlike the
+Slamming forces (fixes) a non-converged nonanticipative variable according to
+pre-specified user preferences while a decomposition hub is running, to drive
+toward a feasible / converged incumbent when ordinary convergence is slow.  Unlike the
 other in-hub fixers (``fixer.py``, ``reduced_costs_fixer.py``,
 ``relaxed_ph_fixer.py``), which fix on *agreement* and so can infer a direction
 automatically, slamming forces *non-converged* variables and therefore needs
 *user-supplied* direction preferences.  Those preferences come from a directives
 file (see :func:`parse_directives_file`).
 
-See ``doc/designs/slamming_design.md`` for the full design.  This is the
-Phase-1 mechanism: an iteration-count trigger, one slam per event, sticky
-slams, full backward compatibility.  The ``Slammer`` is added to a hub only
-when ``--slamming-directives-file`` is supplied; with no slamming options a run
-behaves exactly as it does today.
+The trigger is an iteration count (slam after a start iteration, then once
+every so many iterations); one variable is slammed per event and the slam is
+sticky.  The ``Slammer`` is added to a hub only when
+``--slamming-directives-file`` is supplied; with no slamming options a run
+behaves exactly as it does today.  See ``doc/designs/slamming_design.md`` for
+design details and rationale.
 
 The ``Slammer`` is distinct from the ``SlamMin`` / ``SlamMax`` *spokes* in
 ``mpisppy/cylinders/slam_heuristic.py``: those are non-destructive incumbent
@@ -199,7 +200,7 @@ def _finite(x):
 
 
 class Slammer(Extension):
-    """Preference-driven in-hub slammer (Phase 1).
+    """Preference-driven in-hub slammer.
 
     Constructed from ``opt.options["slammer_options"]``, a dict with keys:
 
@@ -230,8 +231,8 @@ class Slammer(Extension):
         self.rounding_bias = opts.get("rounding_bias", 0.0)
         self.verbose = opts.get("verbose", False)
 
-        # (ndn, i) -> value, for every slam done so far (sticky in Phase 1).
-        # Also the seam for the Phase-2 unslam hook.
+        # (ndn, i) -> value, for every slam done so far.  Slams are sticky:
+        # this also records what would have to be released to ever un-slam.
         self._slammed = {}
         # Built in pre_iter0(): the eligibility map and bookkeeping.
         self._directive_of = {}   # (ndn, i) -> SlamDirective (can_slam only)
@@ -242,9 +243,9 @@ class Slammer(Extension):
     # Trigger layer (WHEN)
     # ------------------------------------------------------------------ #
     def should_slam(self, phiter):
-        """Phase-1 trigger: a pure function of the iteration counter, so it is
-        identical on every rank with no communication.  Phase 2 will drop a
-        stall detector into this same predicate."""
+        """Iteration-count trigger: a pure function of the iteration counter, so
+        it is identical on every rank with no communication.  A future stall
+        detector can replace this predicate without touching the rest."""
         if phiter < self.slam_start_iter:
             return False
         return (phiter - self.slam_start_iter) % self.iters_between_slams == 0
@@ -298,8 +299,9 @@ class Slammer(Extension):
         and name; the fixed mask, which is coherent because slamming/fixing is
         applied to all scenarios on all ranks), so every rank picks the same
         nonant with no communication.  This holds when the nonant catalog is
-        rank-coherent (two-stage, or single-rank multistage).  A cross-rank
-        selection reduction for node-split multistage is a Phase-2 seam.
+        rank-coherent (two-stage, or single-rank multistage); node-split
+        multistage would need a cross-rank reduction to agree on the selection,
+        which is not done here.
         """
         rep = self.opt.local_scenarios[self.opt.local_scenario_names[0]]
         surrogates = rep._mpisppy_data.all_surrogate_nonants

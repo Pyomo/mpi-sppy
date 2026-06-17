@@ -166,11 +166,12 @@ slammer
 ^^^^^^^
 
 This extension does preference-driven *slamming*: it forces (fixes) a
-non-converged nonanticipative variable to a user-chosen value while the hub is
-running, to break a stall or cycle. Unlike the other fixers above -- which fix
-on *agreement* and so can infer a direction automatically -- slamming forces
-variables precisely *because* they are not settling, so the directions are
-supplied by the user in a directives file. (This is distinct from the
+non-converged nonanticipative variable according to pre-specified user
+preferences while the hub is running, to break a stall or cycle. Unlike the
+other fixers above -- which fix on *agreement* and so can infer a direction
+automatically -- slamming forces variables precisely *because* they are not
+settling, so the directions are supplied by the user in a directives file.
+(This is distinct from the
 ``SlamMin`` / ``SlamMax`` *spokes*, which are non-destructive incumbent finders
 that never perturb the hub.)
 
@@ -200,10 +201,50 @@ slammed. A multi-index name contains a comma and so must be quoted. A worked
 example translated from PySP ships at
 ``examples/sizes/config/slamming_directives.csv``.
 
-Phase 1 uses an iteration-count trigger and slams one variable per event;
-slams are sticky. See ``doc/designs/slamming_design.md`` for the full design,
-including the directions, the directives-file semantics, and the planned stall
-detector.
+The available ``directions``, and the value each fixes the variable to, are:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 85
+
+   * - Direction
+     - Value the variable is fixed to
+   * - ``lb``
+     - the variable's lower bound
+   * - ``ub``
+     - the variable's upper bound
+   * - ``nearest``
+     - whichever bound (``lb`` or ``ub``) the current consensus value ``xbar``
+       is closer to
+   * - ``anywhere``
+     - ``xbar`` itself, rounded to the nearest integer for integer and binary
+       variables (using ``--rounding-bias``)
+   * - ``min``
+     - the minimum of the variable's value across all scenarios that share its
+       scenario-tree node
+   * - ``max``
+     - the maximum of the variable's value across all scenarios that share its
+       scenario-tree node
+
+A direction is *applicable* only when it produces a finite value (for example,
+``lb`` is skipped for a variable that has no lower bound). The directions in a
+row are tried in order and the first applicable one is used; if none applies,
+that variable is not slammed at this event.
+
+Slamming is triggered by iteration count: no variable is slammed before
+``--slam-start-iter``, and from then on at most one variable is slammed every
+``--iters-between-slams`` iterations. At each such event the single eligible
+variable with the largest ``priority`` is slammed (ties are broken by name, so
+the choice is the same on every rank). A variable is eligible only if it is
+matched by a ``can_slam`` rule, is not already fixed (by the modeler or another
+fixer), and is not a surrogate variable. Once a variable is slammed it stays
+fixed for the remainder of the run.
+
+The directions ``lb``, ``ub``, ``nearest``, and ``anywhere`` use only data that
+is already identical on every rank, so they need no communication; ``min`` and
+``max`` perform a single small reduction across scenarios, and only when such a
+slam actually occurs. See ``doc/designs/slamming_design.md`` for design details
+and rationale.
 
 WXBarWriter and WXBarReader
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
