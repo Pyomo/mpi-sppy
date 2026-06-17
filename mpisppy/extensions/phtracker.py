@@ -10,14 +10,14 @@
     Must use the PH object for this to work
 '''
 import ast
-import matplotlib.pyplot as plt
 import numpy as np
 import os
-import pandas as pd
 from mpisppy.extensions.extension import Extension
 from mpisppy.cylinders.spwindow import Field
 from mpisppy.cylinders.spoke import Spoke
-from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke 
+from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
+from pyomo.common.dependencies import attempt_import, pandas as pd
+plt, plt_available = attempt_import('matplotlib.pyplot')
 
 class TrackedData():
     ''' A class to manage the data for a single variable (e.g. gaps, bounds, etc.)

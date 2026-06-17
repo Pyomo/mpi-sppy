@@ -27,8 +27,89 @@ from math import inf
 
 from mpisppy import MPI, global_toc
 from mpisppy.cylinders.spwindow import Field, FieldLengths, SPWindow, padded_len_n_doubles
+from mpisppy.cylinders.overlap_map import OverlapSegment, compute_overlap_segments
+from mpisppy.utils.rank_apportionment import (
+    apportion_ranks,
+    cylinder_bases,
+    rank_to_cylinder,
+)
 
 logger = logging.getLogger(__name__)
+
+# Fields whose buffer length is the same on every rank (global-sized) or a
+# fixed-size record (scalar): Categories 3 and 4 in the design doc. Under
+# unequal rank counts these are read single-source from the publishing
+# cylinder's base rank -- there is nothing to assemble. Every other field is
+# local-sized / per-scenario (Categories 1 and 2) and is read via the
+# overlap-map multi-source path.
+_GLOBAL_OR_SCALAR_FIELDS = frozenset((
+    Field.SHUTDOWN,
+    Field.OBJECTIVE_INNER_BOUND,
+    Field.OBJECTIVE_OUTER_BOUND,
+    Field.BEST_OBJECTIVE_BOUNDS,
+    Field.NONANT_LOWER_BOUNDS,
+    Field.NONANT_UPPER_BOUNDS,
+    Field.EXPECTED_REDUCED_COST,
+))
+
+# Per-scenario fields that require *strict* coherence when assembled across
+# ranks: every contributing source must be at the same write_id, or the read
+# is rejected and retried.
+#
+#   - DUALS carries the PH multipliers W_s, whose normalization
+#     sum_s p_s W_s = 0 holds only within a single iteration -- stitching W from
+#     mixed iterations yields an invalid Lagrangian bound.
+#
+#   - BEST_XHAT / RECENT_XHATS carry per-scenario [first-stage nonants, obj_val]
+#     blocks. The first-stage portion is NAC-redundant: at a single iteration it
+#     is identical across scenarios (the candidate fixes the first stage when it
+#     is evaluated). The per-scenario obj_val, by contrast, is genuinely
+#     per-scenario, and the FWPH consumer derives a Frank-Wolfe column's recourse
+#     cost as obj_val - first_stage_cost(nonants). A *mixed*-iteration assembly
+#     would stitch one scenario's first stage next to another's obj_val -- an
+#     inconsistent column that can invalidate the bound -- and would also break
+#     NAC across scenarios. Strict coherence rejects the mixed read: an accepted
+#     read has every source at one write_id, so the assembled nonant portion is
+#     already NAC-consistent across the scenarios sharing each tree node and
+#     every obj_val stays paired with its own nonants -- no post-assembly fix-up
+#     is needed, at any number of stages. (Single-sourcing the first stage would
+#     also pair them, but does not generalize to multistage, where a scenario's
+#     nonant path spans several nodes held by different ranks.)
+#
+# Every other per-scenario field uses *relaxed* coherence (the assembled value
+# may mix iterations; its consumers re-evaluate, so it is always honest). XFEAS
+# stays relaxed: it carries per-scenario *distinct* iterates (its consumer tries
+# each scenario's x as its own candidate), so there is no cross-scenario NAC to
+# preserve and no obj_val to desync.
+_STRICT_COHERENCE_FIELDS = frozenset((
+    Field.DUALS,
+    Field.BEST_XHAT,
+    Field.RECENT_XHATS,
+))
+
+
+def reduce_source_write_ids(source_ids, strict: bool) -> int:
+    """Reduce the per-source write_ids of a multi-source read to the single id
+    this rank will compare against its last-accepted id.
+
+    Args:
+        source_ids: write_ids read from each contributing remote rank.
+        strict: if True, the sources must agree on one id (strict coherence);
+            a disagreement returns the sentinel ``-1`` so the read is rejected
+            (it is < any real id, and it breaks the cross-reader agreement
+            check, so every reader rejects together). If False (relaxed), the
+            floor over sources is taken -- a mixed-iteration assembly is
+            accepted, which is fine for fields whose consumers re-evaluate.
+
+    Returns:
+        int: the accepted write_id, or ``-1`` to reject (strict mismatch),
+        or ``0`` when there are no sources.
+    """
+    if not source_ids:
+        return 0
+    if strict:
+        return source_ids[0] if len(set(source_ids)) == 1 else -1
+    return min(source_ids)
 
 def communicator_array(data_length: int):
     """
@@ -222,11 +303,30 @@ class SPCommunicator:
         self.strata_comm = strata_comm
         self.cylinder_comm = cylinder_comm
         self.communicators = communicators
-        assert len(communicators) == strata_comm.Get_size()
         self.global_rank = fullcomm.Get_rank()
-        self.strata_rank = strata_comm.Get_rank()
         self.cylinder_rank = cylinder_comm.Get_rank()
-        self.n_spokes = strata_comm.Get_size() - 1
+
+        # Flexible rank assignments (Option D in the design doc): when
+        # strata_comm is None the cylinders have unequal rank counts, so the
+        # strata grouping is undefined and the window lives on fullcomm with
+        # peers addressed by global rank via overlap maps. The cylinder index
+        # plays the role strata_rank does on the equal path -- it indexes
+        # `communicators` and marks the hub as 0 -- so we set strata_rank to it
+        # for the code paths shared with the equal-rank case.
+        self._flex_ranks = strata_comm is None
+        if self._flex_ranks:
+            rank_ratios = [d.get("rank_ratio", 1.0) for d in communicators]
+            self.rank_counts = apportion_ranks(rank_ratios, fullcomm.Get_size())
+            self._cylinder_bases = cylinder_bases(self.rank_counts)
+            self.cylinder_index, _ = rank_to_cylinder(self.global_rank, self.rank_counts)
+            self.strata_rank = self.cylinder_index
+            self.n_spokes = len(communicators) - 1
+        else:
+            assert len(communicators) == strata_comm.Get_size()
+            self.strata_rank = strata_comm.Get_rank()
+            self.cylinder_index = self.strata_rank
+            self.n_spokes = strata_comm.Get_size() - 1
+
         self.opt = spbase_object
         self.inst_time = time.time() # For diagnostics
         if options is None:
@@ -239,6 +339,11 @@ class SPCommunicator:
         self.send_buffers = {}
         # key: Field, value: list of (strata_rank, SPComm, buffer) with that Field
         self.receive_field_spcomms = {}
+
+        # Overlap-map state for the unequal-rank path; empty on the equal path.
+        # Keyed by (field, peer_cylinder_index).
+        self.overlap_maps = {}            # -> list[OverlapSegment] (global ranks)
+        self._overlap_source_ranks = {}   # -> sorted distinct source global ranks
 
         # setup FieldLengths which calculates
         # the length of each buffer type based
@@ -290,6 +395,25 @@ class SPCommunicator:
         self.fields_to_ranks = {}
         self.ranks_to_fields = {}
 
+        if self._flex_ranks:
+            # On the unequal-rank path the window spans fullcomm, so
+            # strata_buffer_layouts is indexed by global rank. Map fields to
+            # peer *cylinder* indices instead (so downstream `origin` values
+            # stay cylinder indices, as on the equal path): every rank in a
+            # cylinder registers the same send fields, so the base rank's
+            # layout names exactly the fields that cylinder publishes.
+            for peer in range(len(self.rank_counts)):
+                if peer == self.cylinder_index:
+                    continue
+                base_layout = self.window.strata_buffer_layouts[self._cylinder_bases[peer]]
+                self.ranks_to_fields[peer] = []
+                for field in base_layout.keys():
+                    if field == Field.WHOLE:
+                        continue
+                    self.fields_to_ranks.setdefault(field, []).append(peer)
+                    self.ranks_to_fields[peer].append(field)
+            return
+
         for rank, buffer_layout in enumerate(self.window.strata_buffer_layouts):
             if rank == self.strata_rank:
                 continue
@@ -337,10 +461,30 @@ class SPCommunicator:
             assert expected_logical_len == my_fa.logical_len()
             assert expected_padded_len == my_fa.padded_len()
         else:
-            self._validate_recv_field(field, origin, length)
+            # On the equal-rank path the remote buffer for `origin` has the
+            # same local sizing as ours, so we can validate it directly. On the
+            # unequal-rank path `origin` is a peer cylinder spanning several
+            # global ranks of differing sizes, so validation is per-segment
+            # (in _build_overlap_map) instead.
+            if not self._flex_ranks:
+                self._validate_recv_field(field, origin, length)
             my_fa = RecvArray(length)
             self.receive_buffers[key] = my_fa
         ## End if
+        # On the unequal-rank path a per-scenario (local-sized) field is
+        # assembled from several of the peer cylinder's global ranks; precompute
+        # its overlap map (which also validates each remote segment -- the
+        # per-segment analogue of the equal-rank _validate_recv_field above).
+        # Global/scalar fields are read single-source and need no map. Building
+        # it here -- not only in register_receive_fields -- means a field an
+        # extension registers directly (relaxed_ph_fixer's RELAXED_NONANTS_VALS,
+        # grad_rho's BEST_XHAT, ...) gets the same multi-source assembly as the
+        # cylinder's own receive_fields. Without it those reads fall to the
+        # single-source path and tear (the buffer/field sizes differ across
+        # unequal ranks), so the run aborts.
+        if self._flex_ranks and field not in _GLOBAL_OR_SCALAR_FIELDS \
+                and (field, origin) not in self.overlap_maps:
+            self._build_overlap_map(field, origin)
         return my_fa
 
     def register_send_field(self, field: Field, length: int = -1) -> SendArray:
@@ -393,7 +537,11 @@ class SPCommunicator:
         self.register_send_fields()
 
         window_spec = self._build_window_spec()
-        self.window = SPWindow(window_spec, self.strata_comm)
+        # Equal-rank: window on strata_comm (rank i of every cylinder),
+        # addressed by strata_rank. Unequal-rank: window on fullcomm,
+        # addressed by global rank via overlap maps (strata_comm is None).
+        window_comm = self.fullcomm if self._flex_ranks else self.strata_comm
+        self.window = SPWindow(window_spec, window_comm)
 
         self._create_field_rank_mappings()
         self.register_receive_fields()
@@ -410,6 +558,8 @@ class SPCommunicator:
         self.receive_buffers = {}
         self.send_buffers = {}
         self.receive_field_spcomms = {}
+        self.overlap_maps = {}
+        self._overlap_source_ranks = {}
 
         self.window.free()
 
@@ -424,6 +574,10 @@ class SPCommunicator:
 
     def register_receive_fields(self) -> None:
         # print(f"{self.__class__.__name__}: {self.receive_fields=}")
+        if self._flex_ranks:
+            # local global scenario indices held by this rank (its slice in
+            # its own cylinder's partition); used to build overlap maps
+            self._local_scen_idxs = list(self.opt._rank_slices[self.cylinder_rank])
         for field in self.receive_fields:
             # NOTE: If this list is empty after this method, it is up
             #       to the caller to raise an error. Sometimes optional
@@ -435,6 +589,8 @@ class SPCommunicator:
                     continue
                 cls = comm["spcomm_class"]
                 if field != Field.WHOLE and field in self.ranks_to_fields[strata_rank]:
+                    # register_recv_field also precomputes the per-scenario
+                    # overlap map on the unequal-rank path (see there).
                     buff = self.register_recv_field(field, strata_rank)
                     self.receive_field_spcomms[field].append((strata_rank, cls, buff))
 
@@ -448,6 +604,42 @@ class SPCommunicator:
         buf._next_write_id()
         self.window.put(buf.window_array(), field)
         return
+
+    def _write_ids_agree(self, new_id: int, synchronize: bool) -> bool:
+        """Cross-rank write_id agreement on ``cylinder_comm`` (shared by every
+        reader: the equal-rank path and both unequal-rank helpers).
+
+        Consumers that run collectives on freshly-received data (Eobjective
+        Allreduce, ROOT bcast, ...) must enter them in lockstep, so every reader
+        rank has to agree on whether a read is "new". A synchronous writer
+        stamps all of its ranks at one write_id, so when ids agree every rank
+        computes the same answer; a transient mixed-id read (the writer Put
+        between two readers' Gets) fails here and is rejected, to be retried,
+        rather than accepted out of lockstep.
+
+        Returns True if not synchronizing, or if all ranks read the same id.
+        """
+        if not synchronize:
+            return True
+        local_val = np.array((new_id,), 'i')
+        sum_ids = np.zeros(1, 'i')
+        self.cylinder_comm.Allreduce((local_val, MPI.INT),
+                                     (sum_ids, MPI.INT),
+                                     op=MPI.SUM)
+        return new_id * self.cylinder_comm.size == sum_ids[0]
+
+    def _mark_new(self, buf: RecvArray, new_id: int) -> bool:
+        """Commit an accepted read: stamp ``new_id`` into the buffer's id slot
+        and mark it new. The data itself must already be in ``buf`` (placed by
+        the caller's single Get, or by overlap-map assembly for a multi-source
+        read). Writing the id slot before ``_pull_id`` lets the multi-source
+        path -- whose assembly fills only the data region -- reuse the same
+        commit as the single-source/equal-rank paths.
+        """
+        buf._is_new = True
+        buf._array[-1] = new_id
+        buf._pull_id()
+        return True
 
     def get_receive_buffer(self,
                            buf: RecvArray,
@@ -471,6 +663,15 @@ class SPCommunicator:
             is_new (bool): Indicates whether the "gotten" values are new,
                 based on the write_id.
         """
+        if self._flex_ranks:
+            # Unequal-rank path: `origin` is a peer cylinder index. A
+            # per-scenario field is assembled from several of that cylinder's
+            # global ranks via its overlap map; a global/scalar field is read
+            # single-source from the cylinder's base rank.
+            if (field, origin) in self.overlap_maps:
+                return self._flex_get_multi_source(buf, field, origin, synchronize)
+            return self._flex_get_single_source(buf, field, origin, synchronize)
+
         if synchronize:
             self.cylinder_comm.Barrier()
 
@@ -480,23 +681,235 @@ class SPCommunicator:
 
         new_id = int(buf.array()[-1])  # logical view
 
-        if synchronize:
-            local_val = np.array((new_id,), 'i')
-            sum_ids = np.zeros(1, 'i')
-            self.cylinder_comm.Allreduce((local_val, MPI.INT),
-                                         (sum_ids, MPI.INT),
-                                         op=MPI.SUM)
-            if new_id * self.cylinder_comm.size != sum_ids[0]:
-                buf._is_new = False
-                return False
-
-        if new_id > last_id:
-            buf._is_new = True
-            buf._pull_id()
-            return True
-        else:
+        if not self._write_ids_agree(new_id, synchronize):
             buf._is_new = False
             return False
+
+        if new_id > last_id:
+            # data is already in buf from the Get above
+            return self._mark_new(buf, new_id)
+        buf._is_new = False
+        return False
+
+    # ------------------------------------------------------------------
+    # Unequal-rank (Option D) helpers. These are reached only when
+    # self._flex_ranks is True; the equal-rank path above never calls them.
+    # ------------------------------------------------------------------
+
+    def _items_per_scen_for_field(self, field: Field):
+        """Number of field items each scenario contributes, indexed by global
+        scenario index, for a per-scenario field (used to build overlap maps).
+
+        For the nonant-valued fields this is the per-scenario nonant count
+        (``opt.nonant_length``, uniform across scenarios -- asserted in
+        ``spbase._attach_nonant_indices``). For the xhat fields each scenario
+        contributes a ``[nonants, obj_val]`` block, so the count is
+        ``nonant_length + 1``; the circular ``RECENT_XHATS`` returns the same
+        single-version block size and is expanded across versions in
+        ``_build_overlap_map``. These counts are stage-agnostic: a scenario's
+        block is routed wholesale to its local offset, so multi-source assembly
+        is identical for two-stage and multistage (a multistage block is just
+        the scenario's whole root->leaf nonant path instead of one root vector).
+        """
+        if field in (Field.NONANTS_VALS, Field.RELAXED_NONANTS_VALS, Field.DUALS):
+            k = self.opt.nonant_length
+            return [k] * len(self.opt.all_scenario_names)
+        if field in (Field.BEST_XHAT, Field.RECENT_XHATS, Field.XFEAS):
+            # Each scenario's block is [nonants, per-scenario obj_val]. Works for
+            # any number of stages: the block is opaque to the assembler (routed
+            # by index), and strict coherence already makes the NAC-redundant
+            # nonant portion consistent across the scenarios sharing each tree
+            # node -- per node, with no per-node sourcing or fix-up needed (see
+            # the strict-coherence note on _flex_get_multi_source).
+            k = self.opt.nonant_length
+            return [k + 1] * len(self.opt.all_scenario_names)
+        # Reached at startup (window creation), not mid-solve: this cylinder is
+        # in a flexible-rank run and reads a per-scenario field whose
+        # multi-source assembly across unequal rank counts is not implemented
+        # yet. Fail here with an actionable message rather than mis-assembling.
+        raise NotImplementedError(
+            f"Flexible (unequal) rank assignments: {self.__class__.__name__} "
+            f"reads {field.name}, whose multi-source assembly across cylinders "
+            f"with different rank counts is not supported yet. Run the cylinders "
+            f"that exchange {field.name} at equal rank counts (rank_ratio == 1.0), "
+            f"or wait for the phase that adds {field.name} support."
+        )
+
+    def _validate_segment(self, field: Field, remote_global_rank: int, seg) -> None:
+        """Check that one overlap segment fits within the remote buffer it
+        will be read from (the per-segment analogue of _validate_recv_field)."""
+        layout = self.window.strata_buffer_layouts[remote_global_rank]
+        if field not in layout:
+            raise RuntimeError(
+                f"{self.__class__.__name__} on cylinder {self.cylinder_index} "
+                f"expected {field} on global rank {remote_global_rank} but it "
+                f"is not published there."
+            )
+        _, logical_len, _ = layout[field]
+        remote_data_len = logical_len - 1  # exclude the trailing write_id slot
+        # The segment occupies the half-open remote range
+        # [remote_offset, remote_offset + count); the guard is an overrun
+        # check on its exclusive end, so '>' (ending exactly at remote_data_len
+        # is legal) and remote_offset belongs in the LHS (a segment may start
+        # mid-buffer). A reader needing only a subset of a source's scenarios
+        # legitimately ends before remote_data_len, so this is not '!='.
+        if seg.remote_offset + seg.count > remote_data_len:
+            raise RuntimeError(
+                f"{self.__class__.__name__}: overlap segment for {field} reads "
+                f"items [{seg.remote_offset}, {seg.remote_offset + seg.count}) "
+                f"from global rank {remote_global_rank} whose {field} data "
+                f"length is only {remote_data_len}."
+            )
+
+    def _build_overlap_map(self, field: Field, peer_cylinder: int) -> None:
+        """Precompute, for a per-scenario field and a peer cylinder, the list
+        of remote segments (in global-rank terms) that assemble this rank's
+        local buffer, validating each against the remote layout."""
+        base = self._cylinder_bases[peer_cylinder]
+        rc_peer = self.rank_counts[peer_cylinder]
+        # peer cylinder's scenario partition for its own rank count
+        _, peer_slices, _ = self.opt._scenario_tree.scen_names_to_ranks(rc_peer)
+        items_per_scen = self._items_per_scen_for_field(field)
+        segments = compute_overlap_segments(
+            self._local_scen_idxs, peer_slices, items_per_scen
+        )
+        for seg in segments:
+            seg.remote_rank = base + seg.remote_rank  # peer-local -> global
+        if field == Field.RECENT_XHATS:
+            # The single-version segments computed above describe one xhat
+            # version's per-scenario layout; replicate them across all versions
+            # of the circular buffer (see _expand_to_circular_versions).
+            segments = self._expand_to_circular_versions(
+                segments, peer_slices, base, items_per_scen
+            )
+        for seg in segments:
+            self._validate_segment(field, seg.remote_rank, seg)
+        self.overlap_maps[(field, peer_cylinder)] = segments
+        self._overlap_source_ranks[(field, peer_cylinder)] = \
+            sorted({seg.remote_rank for seg in segments})
+
+    def _expand_to_circular_versions(self, base_segments, peer_slices, base,
+                                     items_per_scen):
+        """Replicate single-version overlap segments across the versions of the
+        ``RECENT_XHATS`` circular buffer.
+
+        ``RECENT_XHATS`` holds ``V`` versions, each a ``BEST_XHAT``-sized block
+        laid out per scenario. Within one version the per-scenario blocks are
+        contiguous, but version ``v``'s block for a given rank sits at
+        ``v * (that rank's version size)`` -- and the version size differs per
+        rank because it scales with the rank's local scenario count. So a
+        single-version segment is emitted once per version, shifting its remote
+        offset by the *source rank's* version size and its local offset by this
+        rank's version size. Reading every physical slot faithfully (just
+        re-partitioned across scenarios) lets the receiver's ``RecvCircularBuffer``
+        interpret the write_id exactly as on the equal-rank path.
+        """
+        nversions = (self._field_lengths[Field.RECENT_XHATS]
+                     // self._field_lengths[Field.BEST_XHAT])
+        local_version_size = self._field_lengths[Field.BEST_XHAT]
+        # global source rank -> its single-version (BEST_XHAT) block size, in items
+        remote_version_size = {
+            base + r: sum(items_per_scen[s] for s in scens)
+            for r, scens in enumerate(peer_slices)
+        }
+        expanded = []
+        for v in range(nversions):
+            for seg in base_segments:
+                expanded.append(OverlapSegment(
+                    remote_rank=seg.remote_rank,
+                    remote_offset=v * remote_version_size[seg.remote_rank] + seg.remote_offset,
+                    local_offset=v * local_version_size + seg.local_offset,
+                    count=seg.count,
+                ))
+        return expanded
+
+    def _flex_get_single_source(self, buf, field, peer_cylinder, synchronize):
+        """Read a global/scalar field single-source from a peer cylinder's base
+        rank. Every rank of the cylinder holds the identical value, so reading
+        the base rank is sufficient and keeps the cross-cylinder write_id
+        agreement check (every local rank reads the same remote rank)."""
+        window_rank = self._cylinder_bases[peer_cylinder]
+        if synchronize:
+            self.cylinder_comm.Barrier()
+        last_id = buf.id()
+        self.window.get(buf.window_array(), window_rank, field)
+        new_id = int(buf.array()[-1])
+        if not self._write_ids_agree(new_id, synchronize):
+            buf._is_new = False
+            return False
+        if new_id > last_id:
+            # data is already in buf from the Get above
+            return self._mark_new(buf, new_id)
+        buf._is_new = False
+        return False
+
+    def _flex_get_multi_source(self, buf, field, peer_cylinder, synchronize):
+        """Assemble a per-scenario field from several of a peer cylinder's
+        global ranks using the precomputed overlap map.
+
+        Coherence note. The per-source write_ids are reduced to this rank's
+        `new_id` by a per-field coherence policy (reduce_source_write_ids):
+
+          * relaxed (default): `new_id` is the floor (min) over sources -- the
+            assembled value may mix iterations, which is fine for fields whose
+            consumers re-evaluate (NONANTS_VALS, ...);
+          * strict (`_STRICT_COHERENCE_FIELDS`, e.g. DUALS): all sources must
+            share one id, else `new_id` is a sentinel (-1) that rejects the
+            read -- a mixed-iteration assembly would be invalid.
+
+        `new_id` then feeds the shared _write_ids_agree check, so the strict
+        rejection is collective-safe: the sentinel (below any real id) simply
+        breaks agreement and every reader rejects together (no early return, no
+        deadlock). With a synchronous hub all sources share an id, so strict
+        reads pass normally and a transient mixed-id read is retried.
+
+        The Category-2 xhat fields (BEST_XHAT, RECENT_XHATS) are strict, so an
+        accepted read has every source at one write_id; their NAC-redundant
+        nonant portion is then already consistent across the scenarios sharing
+        each tree node (the whole root vector in two-stage; per node in
+        multistage) and each obj_val stays paired with its own nonants -- no
+        post-assembly fix-up, at any number of stages.
+        """
+        if synchronize:
+            self.cylinder_comm.Barrier()
+        last_id = buf.id()
+
+        # Read each source's whole field once -- data and trailing write_id
+        # from a single atomic snapshot, exactly as the equal-rank reader does.
+        # Reading the data segment and the id in separate Gets would race the
+        # writer: the hub could Put a source between the two reads, yielding
+        # pre-write NaN data paired with a fresh id, which the gate below would
+        # then accept. One whole-field Get per source closes that window. We
+        # also defer writing into buf until the read is accepted, so a rejected
+        # (mixed-id) read never leaves stale data behind.
+        source_snapshots = {}
+        source_ids = []
+        for r in self._overlap_source_ranks[(field, peer_cylinder)]:
+            _, logical_len, padded_len = self.window.strata_buffer_layouts[r][field]
+            snapshot = np.empty(padded_len, dtype="d")
+            self.window.get(snapshot, r, field)
+            source_snapshots[r] = snapshot
+            source_ids.append(int(snapshot[logical_len - 1]))
+
+        new_id = reduce_source_write_ids(
+            source_ids, strict=field in _STRICT_COHERENCE_FIELDS
+        )
+
+        if not self._write_ids_agree(new_id, synchronize):
+            buf._is_new = False
+            return False
+
+        if new_id > last_id:
+            # assemble the accepted data into buf, then commit via the shared
+            # _mark_new (which stamps the id slot the assembly does not touch)
+            data_view = buf.value_array()
+            for seg in self.overlap_maps[(field, peer_cylinder)]:
+                snapshot = source_snapshots[seg.remote_rank]
+                data_view[seg.local_offset : seg.local_offset + seg.count] = \
+                    snapshot[seg.remote_offset : seg.remote_offset + seg.count]
+            return self._mark_new(buf, new_id)
+        buf._is_new = False
+        return False
 
     def receive_nonant_bounds(self):
         """ receive the bounds on the nonanticipative variables based on
@@ -536,6 +949,61 @@ class SPCommunicator:
 
         if bounds_modified > 0:
             global_toc(f"{self.__class__.__name__}: tightened {int(bounds_modified)} variable bounds", self.cylinder_rank == 0)
+
+    def receive_best_xhat(self):
+        """
+        Receive the BEST_XHAT buffer from spokes.
+        If new, process the xhat values (e.g., store or use them).
+        """
+        is_new = False
+        for idx, _, recv_buf in self.receive_field_spcomms.get(Field.BEST_XHAT, []):
+            is_new = self.get_receive_buffer(recv_buf, Field.BEST_XHAT, idx)
+            if is_new:
+                self.best_xhat = recv_buf.value_array().copy()
+        return is_new
+
+
+    def receive_xfeas(self):
+        """
+        Receive the  XFEAS buffer from spokes.
+        If new, process the x values (e.g., store or use them).
+        """
+        is_new = False
+        for idx, _, recv_buf in self.receive_field_spcomms.get(Field.XFEAS, []):
+            is_new = self.get_receive_buffer(recv_buf, Field.XFEAS, idx)
+            if is_new:
+                self.xfeas = recv_buf.value_array().copy()
+
+        return is_new
+
+    def receive_latest_xhat(self):
+        """
+        Receive the RECENT_XHATS circular buffer from spokes.
+        If new, extract all recent xhats via the circular buffer wrapper.
+        """
+        is_new_any = False
+        all_received_xhats = []
+
+        for idx, cls, recv_buf_circular in self._recent_xhat_recv_circular_buffers:
+            is_new = self.get_receive_buffer(recv_buf_circular.data, Field.RECENT_XHATS, idx)
+            if not is_new:
+                continue
+
+            is_new_any = True
+
+            for value_array in recv_buf_circular.most_recent_value_arrays():
+                all_received_xhats.append(value_array.copy())
+        
+        
+        if not is_new_any or not all_received_xhats:
+            self.recent_xhats_list = []
+            return False
+
+        self.recent_xhats_list = all_received_xhats
+        self.latest_xhat = all_received_xhats[-1].copy()
+
+        return True
+
 
     def receive_innerbounds(self):
         """ Get inner bounds from inner bound providers

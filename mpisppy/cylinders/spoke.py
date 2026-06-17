@@ -11,9 +11,12 @@ import abc
 import time
 import os
 import math
+import warnings
 
 from mpisppy.cylinders.spcommunicator import SPCommunicator, SendCircularBuffer
 from mpisppy.cylinders.spwindow import Field
+from mpisppy.debug_utils.buffer_inspect import InspectContext, inspect_buffer
+from mpisppy.utils import sputils
 
 
 class Spoke(SPCommunicator):
@@ -27,7 +30,47 @@ class Spoke(SPCommunicator):
         """
         shutdown_buf = self.receive_buffers[self._make_key(Field.SHUTDOWN, 0)]
         self.get_receive_buffer(shutdown_buf, Field.SHUTDOWN, 0, synchronize=False)
-        return self.allreduce_or(shutdown_buf[0] == 1.0)
+        fired = bool(shutdown_buf[0] == 1.0)
+        if fired and self.opt.options.get("inspect_buffers_on_shutdown"):
+            self._inspect_buffers_on_shutdown(shutdown_buf)
+        return self.allreduce_or(fired)
+
+    def _inspect_buffers_on_shutdown(self, shutdown_buf):
+        """Sweep every registered receive and send buffer through the
+        inspector and emit a RuntimeWarning for each non-OK report.
+
+        The SHUTDOWN recv buffer is inspected first and verbose so the
+        diagnostic dump is in the warning text. All other buffers are
+        inspected non-verbose. InspectContext.spbase is set so checkers
+        that need nonant length pick it up via the fallback.
+        """
+        ctx = InspectContext(spbase=self.opt)
+        shutdown_key = self._make_key(Field.SHUTDOWN, 0)
+
+        rep = inspect_buffer(shutdown_buf, Field.SHUTDOWN, ctx,
+                             send=False, verbose=True)
+        self._warn_if_buffer_bad(rep, Field.SHUTDOWN, direction="recv")
+
+        for key, buf in self.receive_buffers.items():
+            if key == shutdown_key:
+                continue
+            fld, _origin = self._split_key(key)
+            rep = inspect_buffer(buf, fld, ctx, send=False, verbose=False)
+            self._warn_if_buffer_bad(rep, fld, direction="recv")
+
+        for fld, buf in self.send_buffers.items():
+            rep = inspect_buffer(buf, fld, ctx, send=True, verbose=False)
+            self._warn_if_buffer_bad(rep, fld, direction="send")
+
+    def _warn_if_buffer_bad(self, rep, fld, *, direction):
+        if rep.ok:
+            return
+        warnings.warn(
+            f"[buffer_inspect] field={fld.name} ({direction}) "
+            f"{self.cylinder_rank=} {self.strata_rank=} {self.global_rank=}\n{rep}",
+            RuntimeWarning,
+            stacklevel=3,
+        )
 
     def is_converged(self, screen_trace=False):
         """ Alias for got_kill_signal; useful for algorithms working as both
@@ -161,6 +204,8 @@ class InnerBoundSpoke(_BoundSpoke):
         self.is_minimizing = self.opt.is_minimizing
         self.best_inner_bound = math.inf if self.is_minimizing else -math.inf
         self.solver_options = None # can be overwritten by derived classes
+        self._incumbent_write_counter = 0
+        self._incumbent_write_disabled = False
 
     def register_send_fields(self):
         super().register_send_fields()
@@ -186,8 +231,37 @@ class InnerBoundSpoke(_BoundSpoke):
             # send to hub
             self.send_bound(candidate_inner_bound)
             self.send_best_xhat()
+            self._maybe_write_incumbent_on_improvement()
             return True
         return False
+
+    def _maybe_write_incumbent_on_improvement(self):
+        """ If --incumbent-on-improvement-filename-prefix is set, write the
+            current first-stage solution to <prefix>_<NNNN>.csv and
+            <prefix>_<NNNN>.npy. Fails soft: if no first-stage solution is
+            available (e.g. an xhatter spoke that bypasses the best-solution
+            cache), warn once on rank 0 and stop trying.
+        """
+        prefix = self.opt.options.get("incumbent_on_improvement_filename_prefix")
+        if prefix is None or self._incumbent_write_disabled:
+            return
+        counter = self._incumbent_write_counter
+        try:
+            self.opt.write_first_stage_solution(f"{prefix}_{counter:04d}.csv")
+            self.opt.write_first_stage_solution(
+                f"{prefix}_{counter:04d}.npy",
+                first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer,
+            )
+        except RuntimeError as exc:
+            if self.cylinder_rank == 0:
+                warnings.warn(
+                    f"incumbent_on_improvement_filename_prefix is set but no "
+                    f"first-stage solution was available on this update: {exc}. "
+                    f"Disabling further per-improvement writes from this spoke."
+                )
+            self._incumbent_write_disabled = True
+            return
+        self._incumbent_write_counter = counter + 1
 
     def send_best_xhat(self):
         best_xhat_buf = self.send_buffers[Field.BEST_XHAT]
@@ -283,7 +357,7 @@ class _BoundNonantSpoke(_BoundNonantLenSpoke):
     """
 
     def nonant_len_type(self) -> Field:
-        return Field.NONANT
+        return Field.NONANTS_VALS
 
     @property
     def localnonants(self):
@@ -309,7 +383,7 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke, InnerBoundSpoke):
     """
 
     send_fields = (*InnerBoundSpoke.send_fields, )
-    receive_fields = (*InnerBoundSpoke.receive_fields, Field.NONANT)
+    receive_fields = (*InnerBoundSpoke.receive_fields, Field.NONANTS_VALS)
 
     converger_spoke_char = 'I'
 
@@ -322,7 +396,7 @@ class OuterBoundNonantSpoke(_BoundNonantSpoke):
     """
 
     send_fields = (*_BoundNonantSpoke.send_fields, Field.OBJECTIVE_OUTER_BOUND, )
-    receive_fields = (*_BoundNonantSpoke.receive_fields, Field.NONANT)
+    receive_fields = (*_BoundNonantSpoke.receive_fields, Field.NONANTS_VALS)
 
     converger_spoke_char = 'A'  # probably Lagrangian
 

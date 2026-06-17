@@ -37,7 +37,6 @@ setup(
     install_requires=[
         'sortedcollections',
         'numpy',
-        'scipy',
         'pyomo>=6.4',
     ],
     extras_require={
@@ -45,6 +44,18 @@ setup(
             'sphinx_rtd_theme',
             'sphinx-copybutton',
             'sphinx',
-        ]
+        ],
+        'mpi': [
+            'mpi4py>=3.0.3',
+        ],
+        'scipy': [
+            'scipy',
+        ],
+        'pandas': [
+            'pandas',
+        ],
+        'plot': [
+            'matplotlib',
+        ],
     },
 )

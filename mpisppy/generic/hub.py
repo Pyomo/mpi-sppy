@@ -12,7 +12,8 @@ import mpisppy.utils.cfg_vanilla as vanilla
 
 
 def build_hub_dict(cfg, beans, scenario_creator_kwargs,
-                   rho_setter, all_nodenames, ph_converger):
+                   rho_setter, all_nodenames, ph_converger,
+                   variable_probability=None):
     """Build and return the hub_dict for WheelSpinner.
 
     Args:
@@ -22,6 +23,7 @@ def build_hub_dict(cfg, beans, scenario_creator_kwargs,
         rho_setter: rho setter function or None
         all_nodenames: list of node names or None
         ph_converger: converger class or None
+        variable_probability: variable probability list or None (used by ADMM)
 
     Returns:
         dict: hub_dict for WheelSpinner
@@ -31,6 +33,7 @@ def build_hub_dict(cfg, beans, scenario_creator_kwargs,
                                    scenario_creator_kwargs=scenario_creator_kwargs,
                                    ph_extensions=None,
                                    rho_setter=rho_setter,
+                                   variable_probability=variable_probability,
                                    all_nodenames=all_nodenames,
                                    )
     elif cfg.subgradient_hub:
@@ -40,6 +43,7 @@ def build_hub_dict(cfg, beans, scenario_creator_kwargs,
                        ph_extensions=None,
                        ph_converger=ph_converger,
                        rho_setter=rho_setter,
+                       variable_probability=variable_probability,
                        all_nodenames=all_nodenames,
                    )
     elif cfg.fwph_hub:
@@ -49,6 +53,7 @@ def build_hub_dict(cfg, beans, scenario_creator_kwargs,
                        ph_extensions=None,
                        ph_converger=ph_converger,
                        rho_setter=rho_setter,
+                       variable_probability=variable_probability,
                        all_nodenames=all_nodenames,
                    )
     elif cfg.ph_primal_hub:
@@ -57,19 +62,33 @@ def build_hub_dict(cfg, beans, scenario_creator_kwargs,
                                   ph_extensions=None,
                                   ph_converger=ph_converger,
                                   rho_setter=rho_setter,
+                                  variable_probability=variable_probability,
                                   all_nodenames=all_nodenames,
-                                  )
+                                  )        
     elif cfg.lshaped_hub:
         # Vanilla LShaped hub
         hub_dict = vanilla.lshaped_hub(*beans,
                                   scenario_creator_kwargs=scenario_creator_kwargs,
                                   )        
+    elif cfg.cg_hub:
+        #Vanilla CG Hub
+        hub_dict = vanilla.cg_hub(*beans,
+                                  scenario_creator_kwargs=scenario_creator_kwargs,
+                                  all_nodenames = all_nodenames,
+                                  )
+    elif cfg.dualcg_hub:
+        #Dual Stabilized CG Hub
+        hub_dict = vanilla.dualcg_hub(*beans,
+                                  scenario_creator_kwargs=scenario_creator_kwargs,
+                                  all_nodenames = all_nodenames,
+                                  )
     else:
         hub_dict = vanilla.ph_hub(*beans,
                                   scenario_creator_kwargs=scenario_creator_kwargs,
                                   ph_extensions=None,
                                   ph_converger=ph_converger,
                                   rho_setter=rho_setter,
+                                  variable_probability=variable_probability,
                                   all_nodenames=all_nodenames,
                                   )
 

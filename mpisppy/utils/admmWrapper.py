@@ -6,11 +6,200 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-#creating the class AdmmWrapper
+"""ADMM wrapper for --admm; shared helpers for the stoch-admm family.
+
+This module hosts AdmmWrapper (used by --admm) and helpers that
+Stoch_AdmmWrapper and AdmmBundler also import.
+
+----------------------------------------------------------------------
+Vocabulary used consistently across the ADMM wrappers and their tests
+----------------------------------------------------------------------
+
+before-wrap scenario (a.k.a. before-wrap extended scenario)
+    The per-(ADMM subproblem, stochastic scenario) Pyomo model that
+    the user's scenario_creator returns.  Has the user's scenario
+    tree (stages 1..T) but no ADMM consensus stage yet.
+
+wrapped scenario (a.k.a. wrapped extended scenario)
+    The same Pyomo model after the wrapper applies the wrap
+    operation.  This is what mpi-sppy iterates over.  For
+    Stoch_AdmmWrapper, the tree gains an ADMM consensus stage at a
+    new last node; for AdmmBundler, the bundle carries every
+    consensus Var on a single ROOT node.
+
+wrap (verb), narrow scope
+    The ADMM-specific transformation between before-wrap and
+    wrapped: append the ADMM consensus stage (Stoch_AdmmWrapper) or
+    flatten consensus Vars into ROOT (AdmmBundler), plus the
+    consequent surrogate-Var / probability bookkeeping.  Wrap does
+    NOT cover sputils.attach_root_node -- whether the user calls it
+    in scenario_creator or the wrapper calls it on the user's behalf
+    via the first_stage_cost / first_stage_varlist hooks, that step
+    is setup, not wrap.
+
+the wrapper
+    Any of AdmmWrapper, Stoch_AdmmWrapper, AdmmBundler.  Use the
+    class name when which wrapper matters.
+
+stochastic scenario (paper: xi in Xi)
+    One realization of the random data; the user has |Xi| of them.
+    Always write "stochastic scenario" in prose -- bare "scenario"
+    is ambiguous now that before-wrap / wrapped also exist.
+
+ADMM subproblem (paper: a in A)
+    One partition / region of the decomposed problem; the user has
+    |A| of them.  ADMM capitalized in prose; the code identifier is
+    admm_subproblem.  scenario_creator is called once per
+    (ADMM subproblem, stochastic scenario) pair, ordering matched to
+    the ADMM_STOCH_{admm}_{stoch} naming convention.
+
+first-stage Vars / first-stage cost
+    The Vars at stage 1 of the before-wrap scenario tree, and the
+    corresponding cost expression.  Paper-aligned, algorithm-level
+    term; use it when describing the user-facing API
+    (first_stage_varlist / first_stage_cost hooks) or the algorithm
+    in the abstract.
+
+root-node Vars
+    The Vars attached to _mpisppy_node_list[0].  In the standard
+    case these are the user's first-stage Vars after
+    sputils.attach_root_node has run.  Use this term when the
+    surrounding prose is about what mpi-sppy is doing to the
+    node-list data structure.
+"""
+
 import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
 from mpisppy import MPI
 global_rank = MPI.COMM_WORLD.Get_rank()
+
+def _admm_normalize_consensus_vars(consensus_vars, *, tuple_form):
+    """Coerce every Var identifier in consensus_vars to its .name string.
+
+    Each entry of a subproblem's consensus list may be a string
+    (legacy) or a Pyomo Var / VarData (anything exposing a .name
+    attribute).  Mixed lists are allowed so callers can migrate one
+    entry at a time.  For indexed Vars, pass individual VarData
+    objects (e.g., scenario.x[idx]) rather than the container.
+
+    Caveat: a Pyomo VarData holds its parent block via a weakref, so
+    the .name lookup here only resolves to a real name if the
+    before-wrap scenario the Var was taken from is still alive when
+    the wrapper is constructed.  Callers that build a before-wrap
+    scenario inside a helper function must keep it alive across the
+    wrapper call, or snapshot the names themselves before letting it
+    go out of scope.
+
+    Args:
+        consensus_vars (dict): {ADMM subproblem name: list_of_entries}.
+            tuple_form=False (--admm): entries are Var identifiers.
+            tuple_form=True  (--stoch-admm): entries are
+                (Var identifier, stage) tuples.
+        tuple_form (bool): which list shape consensus_vars uses.
+
+    Returns:
+        dict: a new dict with the same shape, all identifiers as
+        strings.
+    """
+    def _to_name(v):
+        if isinstance(v, str):
+            return v
+        name = getattr(v, "name", None)
+        if name is None:
+            raise TypeError(
+                f"consensus_vars entry must be a string or a Pyomo "
+                f"Var/VarData (anything with a .name attribute), got "
+                f"{type(v).__name__}: {v!r}"
+            )
+        return name
+
+    out = {}
+    for sub, entries in consensus_vars.items():
+        if tuple_form:
+            out[sub] = [(_to_name(v), stage) for (v, stage) in entries]
+        else:
+            out[sub] = [_to_name(v) for v in entries]
+    return out
+
+
+def _first_stage_var_names(varlist):
+    """Yield VarData-level names from a first_stage_varlist return value.
+
+    Accepts a mixed iterable of strings, Pyomo VarData, scalar Vars,
+    and indexed Var containers; indexed containers are expanded to one
+    name per VarData (e.g. NumBuilt -> NumBuilt[2025], NumBuilt[2026]).
+
+    Without this expansion the wrapper would record the container name
+    in varprob_dict, but ScenarioNode and varid_to_nonant_index work in
+    terms of VarData IDs, so variable_probability() would later raise
+    a KeyError for every indexed first-stage Var.
+    """
+    for v in varlist:
+        if isinstance(v, str):
+            yield v
+        elif hasattr(v, "is_indexed") and v.is_indexed():
+            for vdata in v.values():
+                yield vdata.name
+        else:
+            name = getattr(v, "name", None)
+            if name is None:
+                raise TypeError(
+                    f"first_stage_varlist entry must be a string, a "
+                    f"Pyomo Var/VarData, or an indexed Var container, "
+                    f"got {type(v).__name__}: {v!r}"
+                )
+            yield name
+
+
+def _merge_first_stage_into_consensus_vars(consensus_vars, first_stage_var_names_per_sub, root_stage=1):
+    """Add each ADMM subproblem's first-stage Var names to its
+    consensus_vars entry, tagged at root_stage.
+
+    Used by --stoch-admm at wrapper-construction time (NOT during
+    wrap) when the first_stage_cost / first_stage_varlist hooks are
+    defined, so the user's consensus_vars_creator can return only the
+    admm-consensus Vars and leave first-stage Vars to the wrapper.
+
+    Per-subproblem because different ADMM subproblems may carry
+    different first-stage Vars (e.g., one region owns its factory
+    production decisions, a different region owns its own).  Callers
+    gather the names by invoking first_stage_varlist on one
+    before-wrap scenario per ADMM subproblem.  Those names will end
+    up on the root node of every wrapped scenario in the subproblem,
+    because Stoch_AdmmWrapper later runs sputils.attach_root_node
+    over the same first_stage_varlist; this helper is what makes the
+    merge of first-stage Vars into the cross-subproblem consensus
+    list happen automatically.
+
+    De-duplicates: entries already present (e.g., from a partially
+    migrated consensus_vars_creator that still pre-merges
+    first-stage Vars by hand) are left in place.
+
+    Args:
+        consensus_vars (dict): {ADMM subproblem name: [(name_str, stage),
+            ...]}, already normalized by _admm_normalize_consensus_vars.
+        first_stage_var_names_per_sub (dict): {ADMM subproblem name:
+            [name_str, ...]}.  ADMM subproblems absent from this map
+            get no merge.
+        root_stage (int): stage tag for the appended entries (1 for the
+            user's stage 1, i.e. the root of the before-wrap scenario
+            tree in a 2-stage-origin problem).
+
+    Returns:
+        dict: a new consensus_vars dict with first-stage entries merged in.
+    """
+    out = {}
+    for sub, entries in consensus_vars.items():
+        existing = set(entries)
+        merged = list(entries)
+        for name in first_stage_var_names_per_sub.get(sub, []):
+            key = (name, root_stage)
+            if key not in existing:
+                merged.append(key)
+                existing.add(key)
+        out[sub] = merged
+    return out
+
 
 def _consensus_vars_number_creator(consensus_vars):
     """associates to each consensus vars the number of time it appears
@@ -86,9 +275,9 @@ class AdmmWrapper():
             self.local_scenarios[sname] = s
         #we are not collecting instantiation time
 
-        self.consensus_vars = consensus_vars
+        self.consensus_vars = _admm_normalize_consensus_vars(consensus_vars, tuple_form=False)
         self.verbose = verbose
-        self.consensus_vars_number = _consensus_vars_number_creator(consensus_vars)
+        self.consensus_vars_number = _consensus_vars_number_creator(self.consensus_vars)
         #check_consensus_vars(consensus_vars)
         self.assign_variable_probs(verbose=self.verbose)
         self.number_of_scenario = len(all_scenario_names)
@@ -153,6 +342,17 @@ class AdmmWrapper():
                                 f"for each pair (scenario, variable) of the following list, the variable appears "
                                 f"in the model, but not in consensus var: \n {error_list2}")
 
+
+    def get_scenario_unscaled(self, sname):
+        """Return pre-created scenario without objective scaling (for bundling).
+
+        Args:
+            sname (str): scenario name
+
+        Returns:
+            Pyomo ConcreteModel: the scenario model (not objective-scaled)
+        """
+        return self.local_scenarios[sname]
 
     def admmWrapper_scenario_creator(self, sname):
         #this is the function the user will supply for all cylinders 

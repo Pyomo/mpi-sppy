@@ -27,7 +27,7 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
             teeme = self.opt.options['tee-rank0-solves']
 
         self.opt.solve_loop(
-            solver_options=self.opt.current_solver_options,
+            solver_options=self.opt._effective_solver_options(0),
             dtiming=False,
             gripe=True,
             tee=teeme,
@@ -50,7 +50,8 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
 
         self.opt._save_nonants() # make the cache
 
-        self.opt.current_solver_options = self.opt.options["iterk_solver_options"]
+        # iter0 stuff done; Xhat_Eval's subsequent solves pull the
+        # iterk fold directly from _effective_solver_options.
         ### end iter0 stuff
 
     def main(self):

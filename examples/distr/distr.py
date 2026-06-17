@@ -118,22 +118,24 @@ def min_cost_distr_problem(local_dict, cfg, sense=pyo.minimize, max_revenue=None
 
 
 ###Creates the scenario
-def scenario_creator(scenario_name, inter_region_dict=None, cfg=None, data_params=None, all_nodes_dict=None):
+def scenario_creator(scenario_name, inter_region_dict, cfg, data_params=None, all_nodes_dict=None):
     """Creates the model, which should include the consensus variables. \n
     However, this function shouldn't attach the consensus variables to root nodes, as it is done in admmWrapper.
 
     Args:
-        scenario_name (str): the name of the scenario that will be created. Here is of the shape f"Region{i}" with 1<=i<=num_scens \n
-        num_scens (int): number of scenarios (regions). Useful to create the corresponding inter-region dictionary
+        scenario_name (str): the name of the scenario that will be created.
+            Of the shape f"Region{i}" with 1<=i<=num_scens. \n
+        inter_region_dict (dict): inter-region arcs/costs/capacities; from kw_creator(cfg). \n
+        cfg (Config): mpi-sppy config object. \n
+        data_params (dict, optional): pseudo-random data params; required when cfg.scalable. \n
+        all_nodes_dict (dict, optional): per-region node lists; required when cfg.scalable.
 
     Returns:
         Pyomo ConcreteModel: the instantiated model
-    """        
-    assert (inter_region_dict is not None)
-    assert (cfg is not None)
+    """
     if cfg.scalable:
-        assert (data_params is not None)
-        assert (all_nodes_dict is not None)
+        assert data_params is not None, "data_params is required when cfg.scalable"
+        assert all_nodes_dict is not None, "all_nodes_dict is required when cfg.scalable"
         region_creation_starting_time = time.time()
         region_dict = distr_data.scalable_region_dict_creator(scenario_name, all_nodes_dict=all_nodes_dict, cfg=cfg, data_params=data_params)
         region_creation_end_time = time.time()
@@ -145,9 +147,9 @@ def scenario_creator(scenario_name, inter_region_dict=None, cfg=None, data_param
     # Generating the model
     model = min_cost_distr_problem(local_dict, cfg, max_revenue=data_params["max revenue"])
 
-    #varlist = list()
-    #sputils.attach_root_node(model, model.MinCost, varlist)    
-    
+    # No attach_root_node call here: AdmmWrapper builds the scenario tree
+    # itself (with the consensus variables as the non-anticipative list)
+    # and would overwrite any node list set here.  See doc/src/generic_admm.rst.
     return model
 
 
@@ -166,26 +168,27 @@ def scenario_denouement(rank, scenario_name, scenario, eps=10**(-6)):
         if 'DC' in var:
             if (abs(scenario.y[var].value) > eps):
                 print(f"The penalty slack {scenario.y[var].name} is too big, its absolute value is {abs(scenario.y[var].value)}")
-    return
-    print(f"flow values for {scenario_name}")
-    scenario.flow.pprint()
-    print(f"slack values for {scenario_name}")
-    scenario.y.pprint()
-    pass
 
 
-def consensus_vars_creator(num_scens, inter_region_dict, all_scenario_names):
+def consensus_vars_creator(num_scens, all_scenario_names, inter_region_dict=None, **kwargs):
     """The following function creates the consensus_vars dictionary thanks to the inter-region dictionary. \n
     This dictionary has redundant information, but is useful for admmWrapper.
 
     Args:
         num_scens (int): select the number of scenarios (regions) wanted
-    
+        all_scenario_names (list of str): scenario names
+        inter_region_dict (dict): inter-region arcs/costs/capacities; if None,
+            derived from kwargs via _get_inter_region_dict
+        **kwargs: additional keyword args from kw_creator (for generic interface)
+
     Returns:
-        dict: dictionary which keys are the regions and values are the list of consensus variables 
+        dict: dictionary which keys are the regions and values are the list of consensus variables
         present in the region
     """
-    # Due to the small size of inter_region_dict, it is not given as argument but rather created. 
+    if inter_region_dict is None:
+        inter_region_dict = kwargs.get("inter_region_dict")
+        if inter_region_dict is None:
+            inter_region_dict = _get_inter_region_dict(kwargs.get("cfg"), num_scens)
     consensus_vars = {}
     for inter_arc in inter_region_dict["arcs"]:
         source,target = inter_arc
@@ -222,14 +225,45 @@ def scenario_names_creator(num_scens):
     return [f"Region{i+1}" for i in range(num_scens)]
 
 
-def kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params):
+def _get_inter_region_dict(cfg, num_scens=None):
+    """Compute inter_region_dict from cfg, creating data as needed."""
+    if num_scens is None:
+        num_scens = cfg.num_scens
+    if cfg.scalable:
+        import json
+        json_file_path = "data_params.json"
+        with open(json_file_path, 'r') as file:
+            data_params = json.load(file)
+        all_nodes_dict = distr_data.all_nodes_dict_creator(cfg, data_params)
+        all_DC_nodes = [DC_node for region in all_nodes_dict
+                        for DC_node in all_nodes_dict[region]["distribution center nodes"]]
+        return distr_data.scalable_inter_region_dict_creator(all_DC_nodes, cfg, data_params)
+    else:
+        return distr_data.inter_region_dict_creator(num_scens=num_scens)
+
+
+def kw_creator(cfg):
     """
     Args:
-        cfg (config): specifications for the problem. We only look at the number of scenarios
+        cfg (config): specifications for the problem
 
     Returns:
-        dict (str): the kwargs that are used in distr.scenario_creator, here {"num_scens": num_scens}
+        dict (str): the kwargs that are used in distr.scenario_creator
     """
+    if cfg.scalable:
+        import json
+        json_file_path = "data_params.json"
+        with open(json_file_path, 'r') as file:
+            data_params = json.load(file)
+        all_nodes_dict = distr_data.all_nodes_dict_creator(cfg, data_params)
+        all_DC_nodes = [DC_node for region in all_nodes_dict
+                        for DC_node in all_nodes_dict[region]["distribution center nodes"]]
+        inter_region_dict = distr_data.scalable_inter_region_dict_creator(all_DC_nodes, cfg, data_params)
+    else:
+        inter_region_dict = distr_data.inter_region_dict_creator(num_scens=cfg.num_scens)
+        all_nodes_dict = None
+        data_params = {"max revenue": 1200}
+
     kwargs = {
         "all_nodes_dict" : all_nodes_dict,
         "inter_region_dict" : inter_region_dict,
@@ -244,7 +278,7 @@ def inparser_adder(cfg):
     cfg.num_scens_required()
 
     cfg.add_to_config("scalable",
-                      description="decides whether a sclale model is used",
+                      description="generate pseudo-random data parameterized by --mnpr instead of using the hardwired 2/3/4-region datasets",
                       domain=bool,
                       default=False)
 

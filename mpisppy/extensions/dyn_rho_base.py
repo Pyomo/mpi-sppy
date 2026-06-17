@@ -14,7 +14,7 @@ import numpy as np
 import mpisppy.MPI as MPI
 
 import mpisppy.extensions.extension
-from mpisppy.utils.wtracker import WTracker
+from mpisppy.utils.w_utils.wtracker import WTracker
 
 # for trapping numpy warnings
 import warnings

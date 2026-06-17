@@ -44,11 +44,10 @@ class TestPHMainFarmer(unittest.TestCase):
             "verbose": False,
             "display_timing": False,
             "display_progress": False,
-            "iter0_solver_options": None,
-            "iterk_solver_options": None,
+            "iter0_solver_options": {"threads": 1},
+            "iterk_solver_options": {"threads": 1},
             "smoothed": 0,
             "asynchronousPH": False,
-            "subsolvedirectives": None,
             "toc": False,
         }
         self.scenario_names = [f"Scenario{i+1}" for i in range(3)]
@@ -225,11 +224,10 @@ class TestPHMainSizes(unittest.TestCase):
             "verbose": False,
             "display_timing": False,
             "display_progress": False,
-            "iter0_solver_options": {"mipgap": 0.1},
-            "iterk_solver_options": {"mipgap": 0.02},
+            "iter0_solver_options": {"mipgap": 0.1, "threads": 1},
+            "iterk_solver_options": {"mipgap": 0.02, "threads": 1},
             "smoothed": 0,
             "asynchronousPH": False,
-            "subsolvedirectives": None,
             "toc": False,
         }
         self.scenario_names = [f"Scenario{i+1}" for i in range(3)]

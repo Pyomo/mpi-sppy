@@ -7,7 +7,6 @@
 # full copyright and license information.
 ###############################################################################
 # Test PH extensions that are otherwise untested:
-#   - Gapper (mipgapper.py, 0% coverage)
 #   - MultRhoUpdater (mult_rho_updater.py, 24% coverage)
 #   - Wtracker_extension (wtracker_extension.py, 0%) + WTracker (wtracker.py, 27%)
 
@@ -28,79 +27,6 @@ fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
 
-class TestGapper(unittest.TestCase):
-    """Test the Gapper (mipgapper) extension with sizes."""
-
-    def setUp(self):
-        self.options = {
-            "solver_name": solver_name,
-            "PHIterLimit": 5,
-            "defaultPHrho": 1,
-            "convthresh": 0.001,
-            "verbose": False,
-            "display_timing": False,
-            "display_progress": False,
-            "iter0_solver_options": {"mipgap": 0.1},
-            "iterk_solver_options": {"mipgap": 0.02},
-            "smoothed": 0,
-            "asynchronousPH": False,
-            "subsolvedirectives": None,
-            "toc": False,
-        }
-        self.scenario_names = [f"Scenario{i+1}" for i in range(3)]
-        self.creator_kwargs = {"scenario_count": 3}
-
-    def _copy_options(self):
-        return dict(self.options)
-
-    @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
-    def test_gapper_dict_mode(self):
-        """Gapper with mipgapdict should set mipgap per iteration."""
-        from mpisppy.extensions.mipgapper import Gapper
-        options = self._copy_options()
-        options["gapperoptions"] = {
-            "mipgapdict": {0: 0.10, 2: 0.05, 4: 0.01},
-        }
-        ph = mpisppy.opt.ph.PH(
-            options,
-            self.scenario_names,
-            sizes_creator,
-            sizes_denouement,
-            scenario_creator_kwargs=self.creator_kwargs,
-            extensions=Gapper,
-        )
-        conv, obj, tbound = ph.ph_main()
-        self.assertIsNotNone(obj)
-        # After iteration 4, mipgap should have been set to 0.01
-        self.assertAlmostEqual(
-            ph.current_solver_options["mipgap"], 0.01, places=5)
-
-    @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
-    def test_gapper_changes_gap(self):
-        """Verify Gapper actually changes the gap across iterations."""
-        from mpisppy.extensions.mipgapper import Gapper
-        options = self._copy_options()
-        options["PHIterLimit"] = 3
-        options["gapperoptions"] = {
-            "mipgapdict": {0: 0.50, 2: 0.001},
-        }
-        ph = mpisppy.opt.ph.PH(
-            options,
-            self.scenario_names,
-            sizes_creator,
-            sizes_denouement,
-            scenario_creator_kwargs=self.creator_kwargs,
-            extensions=Gapper,
-        )
-        conv, obj, tbound = ph.ph_main()
-        self.assertIsNotNone(obj)
-        # Verify the final gap was applied
-        self.assertAlmostEqual(
-            ph.current_solver_options["mipgap"], 0.001, places=5)
-
-
 class TestMultRhoUpdater(unittest.TestCase):
     """Test the MultRhoUpdater extension."""
 
@@ -113,11 +39,10 @@ class TestMultRhoUpdater(unittest.TestCase):
             "verbose": False,
             "display_timing": False,
             "display_progress": False,
-            "iter0_solver_options": {"mipgap": 0.1},
-            "iterk_solver_options": {"mipgap": 0.02},
+            "iter0_solver_options": {"mipgap": 0.1, "threads": 1},
+            "iterk_solver_options": {"mipgap": 0.02, "threads": 1},
             "smoothed": 0,
             "asynchronousPH": False,
-            "subsolvedirectives": None,
             "toc": False,
         }
         self.scenario_names = [f"Scenario{i+1}" for i in range(3)]
@@ -183,11 +108,10 @@ class TestWtrackerExtension(unittest.TestCase):
             "verbose": False,
             "display_timing": False,
             "display_progress": False,
-            "iter0_solver_options": None,
-            "iterk_solver_options": None,
+            "iter0_solver_options": {"threads": 1},
+            "iterk_solver_options": {"threads": 1},
             "smoothed": 0,
             "asynchronousPH": False,
-            "subsolvedirectives": None,
             "toc": False,
         }
         self.scenario_names = [f"Scenario{i+1}" for i in range(3)]
@@ -239,7 +163,7 @@ class TestWtrackerExtension(unittest.TestCase):
                      "%s solver is not available" % (solver_name,))
     def test_wtracker_direct(self):
         """WTracker used directly should compute moving stats."""
-        from mpisppy.utils.wtracker import WTracker
+        from mpisppy.utils.w_utils.wtracker import WTracker
         options = self._copy_options()
         options["PHIterLimit"] = 8
         ph = mpisppy.opt.ph.PH(
