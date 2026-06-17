@@ -23,6 +23,7 @@ Many extensions are supported in :ref:`generic_cylinders` via
 command-line flags:
 
 - ``--fixer`` -- activates the fixer extension
+- ``--slamming-directives-file <file>`` -- activates the slammer extension
 - ``--mipgaps-json <file>`` -- activates the mipgapper extension
 - ``--user-defined-extensions <module>`` -- loads a custom extension
 - ``--grad-rho`` -- activates gradient-based rho (see :ref:`rho_setting`)
@@ -158,6 +159,51 @@ threshold is within 10\%  of the convergence tolerance.
 This extension can be especially effective if (1) solving the relaxation
 is much easier than solving the problem with integrality constraints or (2) the
 relaxation is reasonably "tight".
+
+.. _slammer:
+
+slammer
+^^^^^^^
+
+This extension does preference-driven *slamming*: it forces (fixes) a
+non-converged nonanticipative variable to a user-chosen value while the hub is
+running, to break a stall or cycle. Unlike the other fixers above -- which fix
+on *agreement* and so can infer a direction automatically -- slamming forces
+variables precisely *because* they are not settling, so the directions are
+supplied by the user in a directives file. (This is distinct from the
+``SlamMin`` / ``SlamMax`` *spokes*, which are non-destructive incumbent finders
+that never perturb the hub.)
+
+From ``generic_cylinders.py`` the extension is activated **only** when a
+directives file is supplied, so a run with no slamming options behaves exactly
+as it does today:
+
+- ``--slamming-directives-file <file>`` -- the directives file (its presence
+  activates the extension)
+- ``--slam-start-iter <K>`` -- first hub iteration at which slamming may occur
+  (default 1)
+- ``--iters-between-slams <M>`` -- once started, slam at most once every ``M``
+  iterations (default 1)
+
+Supplying ``--slam-start-iter`` or ``--iters-between-slams`` without the file is
+an error.
+
+The directives file is a CSV keyed by nonant name with shell-style wildcards
+(``*``/``?``; the index brackets ``[`` ``]`` are matched literally). Each row
+gives a name pattern, an optional ``can_slam`` flag (``1``/``0``; ``0`` carves
+out an exception), an ordered ``|``-separated list of ``directions`` from
+``{lb, ub, nearest, anywhere, min, max}`` (the first applicable one is used),
+and a ``priority`` (the eligible nonant with the largest priority is slammed
+first). Matching is last-match-wins, so write broad defaults first and
+exceptions after; only variables matched by a ``can_slam`` rule are ever
+slammed. A multi-index name contains a comma and so must be quoted. A worked
+example translated from PySP ships at
+``examples/sizes/config/slamming_directives.csv``.
+
+Phase 1 uses an iteration-count trigger and slams one variable per event;
+slams are sticky. See ``doc/designs/slamming_design.md`` for the full design,
+including the directions, the directives-file semantics, and the planned stall
+detector.
 
 WXBarWriter and WXBarReader
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^

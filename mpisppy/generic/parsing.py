@@ -134,6 +134,7 @@ def parse_args(m):
     cfg.fixer_args()
     cfg.relaxed_ph_fixer_args()
     cfg.integer_relax_then_enforce_args()
+    cfg.slamming_args()
     cfg.gapper_args()
     cfg.gapper_args(name="lagrangian")
     cfg.ph_primal_args()

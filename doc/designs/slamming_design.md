@@ -197,7 +197,7 @@ Columns:
 
 | Column | Meaning |
 |---|---|
-| `name` | nonant name pattern, matched with `fnmatch` against `xvar.name` (e.g. `DoBuild[*]`, `Reservoir*.spill[*]`). |
+| `name` | nonant name pattern matched against `xvar.name` (e.g. `DoBuild[*]`, `Reservoir*.spill[*]`). Shell-style `*`/`?` wildcards; `[` and `]` are **literal**, not character classes (so `DoBuild[*]` matches every `DoBuild[...]`). This is deliberately *not* `fnmatch`, whose bracket semantics would make `DoBuild[*]` fail to match an indexed Pyomo name. |
 | `can_slam` | `1`/`0`. Optional; defaults to `1` when the row is present. `0` carves out an exception. |
 | `directions` | `\|`-separated ordered list from `{lb, ub, nearest, anywhere, min, max}`. First *applicable* direction wins. |
 | `priority` | float; the eligible nonant with the **largest** priority is slammed first. Ties broken by name (deterministic across ranks). |
@@ -211,6 +211,15 @@ NumUnits[*],1,nearest,50
 NumUnits[7],0,,0
 Reservoir*.spill[*],1,min,10
 ```
+
+A worked example translated from PySP's historical `wwph.suffixes` ships at
+`examples/sizes/config/slamming_directives.csv`.
+
+**Comments and quoting.** Blank lines and whole-line `#` comments are ignored
+anywhere, including before the header. A multi-index name contains a comma
+(e.g. `NumUnitsCutFirstStage[*,*]`), so it must be **quoted**
+(`"NumUnitsCutFirstStage[*,*]"`) to survive the CSV split — standard CSV
+quoting.
 
 **Matching against scenario variables.** Each scenario is its own Pyomo
 model, but the *same* nonant has the *same* `xvar.name` in every scenario
