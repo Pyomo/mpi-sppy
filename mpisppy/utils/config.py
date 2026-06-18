@@ -147,13 +147,25 @@ class Config(pyofig.ConfigDict):
             raise ValueError("Options do not make sense together:\n"
                              f"{msg}")
 
+        # reduced_costs_rho was removed (deprecated): it was never shown to be
+        # effective in practice and it does not support flexible (unequal) rank
+        # assignments, so a custom driver could be silently burned. The option
+        # is kept so its selection fails loudly here rather than being ignored.
+        if self.get("reduced_costs_rho"):
+            raise ValueError(
+                "reduced_costs_rho was deprecated and removed on 2026-06-14 "
+                "(reduced-cost rho was not demonstrated to be effective in "
+                "practice and does not support flexible rank assignments; see "
+                "https://github.com/Pyomo/mpi-sppy/issues/673). Remove "
+                "--reduced-costs-rho; consider --grad-rho instead."
+            )
+
         # remember that True is 1 and False is 0
-        if (self.get("grad_rho") + self.get("sensi_rho") + self.get("coeff_rho") + self.get("reduced_costs_rho") + self.get("sep_rho")) > 1:
+        if (self.get("grad_rho") + self.get("sensi_rho") + self.get("coeff_rho") + self.get("sep_rho")) > 1:
             _bad_options("Only one rho setter can be active.")
         if not (self.get("grad_rho")
                 or self.get("sensi_rho")
-                or self.get("sep_rho")
-                or self.get("reduced_costs_rho")):
+                or self.get("sep_rho")):
             if self.get("dynamic_rho_primal_crit") or self.get("dynamic_rho_dual_crit"):
                 _bad_options("dynamic rho only works with an automated rho setter")
 
@@ -634,11 +646,16 @@ class Config(pyofig.ConfigDict):
 
     def reduced_costs_rho_args(self):
         self.add_to_config("reduced_costs_rho",
-                           description="have a ReducedCostsRho extension",
+                           description="DEPRECATED and removed (2026-06-14); "
+                                       "selecting it raises an error. Reduced-cost "
+                                       "rho was not effective in practice and did "
+                                       "not support flexible rank assignments. "
+                                       "Consider grad_rho. See "
+                                       "https://github.com/Pyomo/mpi-sppy/issues/673",
                            domain=bool,
                            default=False)
         self.add_to_config("reduced_costs_rho_multiplier",
-                           description="multiplier for ReducedCostsRho (default 1.0)",
+                           description="DEPRECATED (no effect); see reduced_costs_rho",
                            domain=float,
                            default=1.0)
 
