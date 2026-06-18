@@ -13,6 +13,7 @@ mpiexec -np 2 python -m mpi4py test_with_cylinders.py
 """
 
 import unittest
+import pyomo.environ as pyo
 from mpisppy.utils import config
 
 import mpisppy.utils.cfg_vanilla as vanilla
@@ -46,7 +47,7 @@ def _create_cfg():
 class Test_farmer_with_cylinders(unittest.TestCase):
     """ Test the find rho code using farmer."""
 
-    def _create_stuff(self, iters=5):
+    def _create_stuff(self, iters=5, sense=pyo.minimize):
         # assumes setup has been called; very specific...
         self.cfg.num_scens = 3
         self.cfg.max_iterations = iters
@@ -54,6 +55,8 @@ class Test_farmer_with_cylinders(unittest.TestCase):
         scenario_denouement = farmer.scenario_denouement
         all_scenario_names = farmer.scenario_names_creator(self.cfg.num_scens)
         scenario_creator_kwargs = farmer.kw_creator(self.cfg)
+        # farmer negates its cost expression for sense=pyo.maximize
+        scenario_creator_kwargs["sense"] = sense
         beans = (self.cfg, scenario_creator, scenario_denouement, all_scenario_names)
         hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
@@ -155,6 +158,28 @@ class Test_farmer_with_cylinders(unittest.TestCase):
         if wheel.global_rank == 1:
             #print(f"{wheel.spcomm.bound= }")
             self.assertAlmostEqual(wheel.spcomm.bound, -109499.5160897, 1)
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_lagrangian_max(self):
+        # Same as test_lagrangian but maximizing. farmer negates its cost for
+        # sense=pyo.maximize, so the Lagrangian (outer) bound is the negation
+        # of the minimize bound. For max the outer bound is an UPPER bound, so
+        # it must lie above the optimal expected profit (108390).
+        print("Start lagrangian_max")
+        scenario_creator_kwargs, beans, hub_dict = self._create_stuff(sense=pyo.maximize)
+
+        self.cfg.lagrangian_args()
+        list_of_spoke_dict = list()
+        lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
+                                                    scenario_creator_kwargs=scenario_creator_kwargs,)
+        list_of_spoke_dict.append(lagrangian_spoke)
+
+        wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
+        wheel.spin()
+        if wheel.global_rank == 1:
+            self.assertAlmostEqual(wheel.spcomm.bound, 109499.5160897, 1)
+            self.assertGreaterEqual(wheel.spcomm.bound, 108390.0)
 
 
 #*****************************************************************************
