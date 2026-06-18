@@ -10,15 +10,16 @@
 from mpisppy import global_toc
 import mpisppy.extensions.dyn_rho_base
 from mpisppy.utils.nonant_sensitivities import nonant_sensitivies
-from mpisppy.utils.rho_utils import report_zero_rho_fallback
+from mpisppy.utils.rho_utils import resolve_rho, report_zero_rho_fallback
 
 
 class _SensiRhoBase(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
     def __init__(self, ph, cfg):
         super().__init__(ph, cfg)
-        # we'll set a minimum rho value to be the default rho
-        self._minimum_rho = ph.options["defaultPHrho"]
-        # remembers the last reported floored-rho count to avoid log spam
+        # positive fallback rho for nonants whose computed rho is ~0 (the
+        # sensitivity heuristic cannot determine a magnitude for those)
+        self._fallback_rho = ph.options["defaultPHrho"]
+        # remembers the last reported fallback count to avoid log spam
         self._rho_report_state = {}
 
     def get_nonant_sensitivites(self):
@@ -35,35 +36,30 @@ class _SensiRhoBase(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         # dict of dicts [s][ndn_i]
         nonant_sensis = self.get_nonant_sensitivites()
 
-        # a computed rho below the default is floored to the (positive) default
-        # rather than being allowed to fall toward zero; we report rather than
-        # flooring silently; see issue #560.
-        floored = set()
+        # Pass 1: raw sensitivity-based rho per scenario (may be ~0). Small
+        # positive values are kept as computed -- not floored to the default
+        # (see issue #560); the zero fallback is applied to the final value
+        # below, after the cross-scenario max, so a single near-zero scenario
+        # does not inflate the max with the default.
         for s in ph.local_scenarios.values():
             xbars = s._mpisppy_model.xbars
             for ndn_i, rho in s._mpisppy_model.rho.items():
                 nv = s._mpisppy_data.nonant_indices[ndn_i]  # var_data object
                 val = abs(nonant_sensis[s][ndn_i]) / max(1, abs(nv._value - xbars[ndn_i]._value))
-                val *= self.multiplier
-                if val < self._minimum_rho:
-                    rho._value = self._minimum_rho
-                    floored.add(ndn_i)
-                else:
-                    rho._value = val
-                # if ph.cylinder_rank == 0:
-                #     print(f"{s.name=}, {nv.name=}, {rho.value=}")
-        report_zero_rho_fallback(ph, self.__class__.__name__, len(floored),
-                                 self._minimum_rho, self._rho_report_state,
-                                 reason="a computed rho below the default (floored to the default)")
+                rho._value = val * self.multiplier
 
+        # Pass 2: take the cross-scenario max, then replace any near-zero
+        # result with the positive default rho and report it.
         rhomax = self._compute_rho_max(ph)
+        defaulted = set()
         for s in ph.local_scenarios.values():
-            xbars = s._mpisppy_model.xbars
             for ndn_i, rho in s._mpisppy_model.rho.items():
-                rho._value = rhomax[ndn_i]
-                # if ph.cylinder_rank == 0:
-                #     nv = s._mpisppy_data.nonant_indices[ndn_i]  # var_data object
-                #     print(f"{s.name=}, {nv.name=}, {rho.value=}")
+                rho._value, used_default = resolve_rho(rhomax[ndn_i], self._fallback_rho)
+                if used_default:
+                    defaulted.add(ndn_i)
+        report_zero_rho_fallback(ph, self.__class__.__name__, len(defaulted),
+                                 self._fallback_rho, self._rho_report_state,
+                                 reason="a near-zero computed rho")
 
         global_toc(f"Rho values updated by {self.__class__.__name__} Extension", ph.cylinder_rank == 0)
 

@@ -28,8 +28,15 @@ import pyomo.environ as pyo
 
 import mpisppy.opt.ph
 import mpisppy.MPI as MPI
-from mpisppy.utils.rho_utils import check_rhos_positive, report_zero_rho_fallback
+from mpisppy.utils.rho_utils import (
+    check_rhos_positive,
+    report_zero_rho_fallback,
+    resolve_rho,
+    RHO_ZERO_TOL,
+)
 from mpisppy.generic.decomp import _get_rho_setter
+
+from mpisppy.extensions.sensi_rho import _SensiRhoBase
 
 from mpisppy.tests.utils import get_solver
 from mpisppy.tests.examples.farmer import scenario_creator, scenario_denouement
@@ -43,6 +50,13 @@ class _Holder:
     """Stand-in for a mutable Pyomo Param data object (only ._value is used)."""
     def __init__(self, value):
         self._value = value
+
+
+class _Scen:
+    """Hashable scenario stand-in (used as a dict key by get_nonant_sensitivites;
+    types.SimpleNamespace defines __eq__ and is therefore unhashable)."""
+    def __init__(self, **kw):
+        self.__dict__.update(kw)
 
 
 def _make_opt(rho_values, cylinder_rank=0):
@@ -94,6 +108,39 @@ class Test_check_rhos_positive(unittest.TestCase):
         opt = _make_opt([1.0, None])
         with self.assertRaises(RuntimeError):
             check_rhos_positive(opt)
+
+
+class Test_resolve_rho(unittest.TestCase):
+    """The shared rule: keep small positive computed rhos; fall back to the
+    positive default only for near-zero or negative values (issue #560)."""
+
+    DEFAULT = 7.0
+
+    def test_ordinary_positive_kept(self):
+        val, used_default = resolve_rho(0.5, self.DEFAULT)
+        self.assertEqual(val, 0.5)
+        self.assertFalse(used_default)
+
+    def test_small_positive_kept_not_inflated(self):
+        # the whole point of #560: a small but genuine rho is NOT bumped up
+        val, used_default = resolve_rho(1e-6, self.DEFAULT)
+        self.assertEqual(val, 1e-6)
+        self.assertFalse(used_default)
+
+    def test_zero_falls_back_to_default(self):
+        val, used_default = resolve_rho(0.0, self.DEFAULT)
+        self.assertEqual(val, self.DEFAULT)
+        self.assertTrue(used_default)
+
+    def test_negative_falls_back_to_default(self):
+        val, used_default = resolve_rho(-3.0, self.DEFAULT)
+        self.assertEqual(val, self.DEFAULT)
+        self.assertTrue(used_default)
+
+    def test_at_tolerance_falls_back_just_above_is_kept(self):
+        # boundary is strict: val must exceed the tolerance to be kept
+        self.assertTrue(resolve_rho(RHO_ZERO_TOL, self.DEFAULT)[1])
+        self.assertFalse(resolve_rho(RHO_ZERO_TOL * 10, self.DEFAULT)[1])
 
 
 class Test_report_zero_rho_fallback(unittest.TestCase):
@@ -157,6 +204,60 @@ class Test_default_rho_validation(unittest.TestCase):
     def test_positive_default_rho_ok(self):
         # no rho_setter on the module, positive default -> returns None, no raise
         self.assertIsNone(_get_rho_setter(types.SimpleNamespace(), self._cfg(2.0)))
+
+
+class _StubSensiRho(_SensiRhoBase):
+    """Drives the real _SensiRhoBase.compute_and_update_rho with controlled
+    sensitivities (no solver / KKT), bypassing the heavy base __init__."""
+    def __init__(self, ph, sensis, multiplier=1.0):
+        self.ph = ph
+        self.opt = ph
+        self.multiplier = multiplier
+        self._fallback_rho = ph.options["defaultPHrho"]
+        self._rho_report_state = {}
+        self._sensis = sensis
+
+    def get_nonant_sensitivites(self):
+        return {s: self._sensis for s in self.ph.local_scenarios.values()}
+
+
+def _make_sensi_ph(xvals, xbars, default_rho=1.0):
+    n = len(xvals)
+    nonant_indices = {(NDN, i): _Holder(xvals[i]) for i in range(n)}
+    node = types.SimpleNamespace(
+        name=NDN,
+        nonant_vardata_list=[nonant_indices[(NDN, i)] for i in range(n)],
+    )
+    data = types.SimpleNamespace(nlens={NDN: n}, nonant_indices=nonant_indices)
+    model = types.SimpleNamespace(
+        xbars={(NDN, i): _Holder(xbars[i]) for i in range(n)},
+        rho={(NDN, i): _Holder(99.0) for i in range(n)},  # seed; should be overwritten
+    )
+    scen = _Scen(
+        _mpisppy_node_list=[node], _mpisppy_data=data,
+        _mpisppy_model=model, _mpisppy_probability=1.0,
+    )
+    return types.SimpleNamespace(
+        local_scenarios={"s0": scen},
+        comms={NDN: MPI.COMM_SELF},
+        options={"defaultPHrho": default_rho},
+        cylinder_rank=0,
+    )
+
+
+@unittest.skipIf(MPI.COMM_WORLD.Get_size() > 1, "serial unit test")
+class Test_sensi_rho_small_value_kept(unittest.TestCase):
+    """sensi_rho must keep a small but genuine computed rho rather than flooring
+    it up to the default, and fall back to the default only for ~zero (#560)."""
+
+    def test_small_kept_zero_defaults(self):
+        # gap |x - xbar| = 0 -> denom max(1, 0) = 1, so rho = |sensitivity|
+        ph = _make_sensi_ph(xvals=[10.0, 10.0], xbars=[10.0, 10.0], default_rho=1.0)
+        sensis = {(NDN, 0): 0.05, (NDN, 1): 0.0}
+        _StubSensiRho(ph, sensis, multiplier=1.0).compute_and_update_rho()
+        rho = ph.local_scenarios["s0"]._mpisppy_model.rho
+        self.assertAlmostEqual(rho[(NDN, 0)]._value, 0.05)  # NOT inflated to 1.0
+        self.assertEqual(rho[(NDN, 1)]._value, 1.0)         # ~zero -> default
 
 
 def _farmer_ph_options(default_rho=1.0):

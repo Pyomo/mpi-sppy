@@ -11,6 +11,34 @@ from pyomo.common.dependencies import pandas as pd
 
 from mpisppy import global_toc
 
+# A rho computed by a heuristic (from objective coefficients, gradients,
+# sensitivities, reduced costs, ...) that is at or below this magnitude is
+# treated as effectively zero -- or, if negative, as uninformative -- and is
+# replaced by the positive default rho (see resolve_rho). This is a
+# numerical-zero tolerance, NOT a rho floor: a small but genuinely positive
+# computed rho (above this) is kept as computed rather than being inflated to
+# the default (GitHub issue #560).
+RHO_ZERO_TOL = 1e-8
+
+
+def resolve_rho(val, default_rho):
+    """Resolve a heuristic-computed rho to a usable, strictly positive value.
+
+    Args:
+        val (float): the rho value a heuristic computed.
+        default_rho: the positive default rho to fall back to when ``val`` is
+            not a usable rho.
+
+    Returns:
+        (rho_value, used_default): if ``val > RHO_ZERO_TOL`` it is returned
+        unchanged (small positive values are respected); otherwise (near-zero
+        or negative -- the heuristic is uninformative) ``default_rho`` is
+        returned and ``used_default`` is True.
+    """
+    if val > RHO_ZERO_TOL:
+        return val, False
+    return default_rho, True
+
 
 def check_rhos_positive(opt, source=""):
     """Raise a RuntimeError if any rho value is not strictly positive.
