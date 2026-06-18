@@ -166,7 +166,7 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
         # nonants with a (near-)zero objective coefficient yield no meaningful
         # rho from this heuristic; they fall back to the positive default rho.
-        # We report the fallback rather than substituting silently; see #560.
+        # We report the fallback rather than substituting silently; see issue #560.
         default_rho = ph.options.get("defaultPHrho")
         defaulted = set()
         for s in ph.local_scenarios.values():

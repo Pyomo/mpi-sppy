@@ -35,7 +35,7 @@ INTEGER_FLAGS = [False, True, False, False]
 # the same objective coefficients are used for every scenario
 COSTS = [10.0, -15.0, 7.0, 0.0]
 # nonant 3 has c == 0, so the heuristic cannot determine its rho; it falls back
-# to the positive default rho (DEFAULT_PH_RHO), overwriting this seed (#560)
+# to the positive default rho (DEFAULT_PH_RHO), overwriting this seed (issue #560)
 INIT_RHOS = [99.0, 99.0, 99.0, 42.0]
 DEFAULT_PH_RHO = 1.0
 # probability-weighted mean of each nonant across the two scenarios below

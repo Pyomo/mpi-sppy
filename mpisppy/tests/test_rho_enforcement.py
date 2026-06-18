@@ -122,7 +122,7 @@ class Test_resolve_rho(unittest.TestCase):
         self.assertFalse(used_default)
 
     def test_small_positive_kept_not_inflated(self):
-        # the whole point of #560: a small but genuine rho is NOT bumped up
+        # the whole point of issue #560: a small but genuine rho is NOT bumped up
         val, used_default = resolve_rho(1e-6, self.DEFAULT)
         self.assertEqual(val, 1e-6)
         self.assertFalse(used_default)
@@ -248,7 +248,7 @@ def _make_sensi_ph(xvals, xbars, default_rho=1.0):
 @unittest.skipIf(MPI.COMM_WORLD.Get_size() > 1, "serial unit test")
 class Test_sensi_rho_small_value_kept(unittest.TestCase):
     """sensi_rho must keep a small but genuine computed rho rather than flooring
-    it up to the default, and fall back to the default only for ~zero (#560)."""
+    it up to the default, and fall back to the default only for ~zero (issue #560)."""
 
     def test_small_kept_zero_defaults(self):
         # gap |x - xbar| = 0 -> denom max(1, 0) = 1, so rho = |sensitivity|

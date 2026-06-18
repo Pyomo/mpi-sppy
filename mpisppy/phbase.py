@@ -1085,7 +1085,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                 self._use_rho_setter(False)
 
         # Central enforcement of rho > 0 once all initial rho-setting is done
-        # (defaults, post_iter0 rho extensions, and any rho_setter); see #560.
+        # (defaults, post_iter0 rho extensions, and any rho_setter); see issue #560.
         check_rhos_positive(self, source="after Iter0 rho setup")
 
         ## If ratio: Add reset p according to rho
@@ -1200,7 +1200,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             # Enforce rho > 0 before every solve: any rho-updating extension may
             # have changed rho this iteration, so this is the single consistent
             # place to catch a non-positive value before it reaches the solver
-            # (see #560).
+            # (see issue #560).
             check_rhos_positive(self, source=f"PH iteration {self._PHIter}")
 
             teeme = (

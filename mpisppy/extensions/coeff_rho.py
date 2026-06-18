@@ -33,7 +33,7 @@ class CoeffRho(mpisppy.extensions.extension.Extension):
     def post_iter0(self):
         # nonants with a (near-)zero objective coefficient yield no meaningful
         # rho from this heuristic; they fall back to the positive default rho.
-        # We report the fallback rather than substituting silently; see #560.
+        # We report the fallback rather than substituting silently; see issue #560.
         default_rho = self.ph.options.get("defaultPHrho")
         defaulted = set()
         for s in self.ph.local_scenarios.values():
