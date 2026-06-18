@@ -323,6 +323,9 @@ class _FakePHwithComms:
             for node in s._mpisppy_node_list:
                 local_nodenames.add(node.name)
         self.comms = {ndn: MPI.COMM_SELF for ndn in local_nodenames}
+        # _compute_and_update_rho reports any zero-rho fallback to the default
+        self.cylinder_rank = 0
+        self.options = {"defaultPHrho": 1.0}
 
 
 def _make_full_grad_rho(local_scenarios, *, alpha=0.5, multiplier=1.0):
@@ -337,6 +340,7 @@ def _make_full_grad_rho(local_scenarios, *, alpha=0.5, multiplier=1.0):
     g.denom_bound = 1.0 / 1e9  # very large bound -> never triggers
     g.eval_at_xhat = False
     g.indep_denom = True
+    g._rho_report_state = {}  # zero-rho fallback de-dup state (set in __init__)
     # value_array() is read to build the xhat arg even when eval_at_xhat is
     # False; an all-NaN buffer is fine because the xhat-priming branch is
     # gated and skipped here.

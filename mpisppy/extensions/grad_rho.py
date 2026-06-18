@@ -16,6 +16,7 @@ import mpisppy.MPI as MPI
 from mpisppy import global_toc
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils.nonant_sensitivities import _bundle_consensus_groups
+from mpisppy.utils.rho_utils import report_zero_rho_fallback
 from mpisppy.cylinders.spwindow import Field
 
 class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
@@ -41,7 +42,9 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
         self.eval_at_xhat = cfg.eval_at_xhat
         self.indep_denom = cfg.indep_denom
-    
+        # remembers the last reported zero-rho count to avoid log spam
+        self._rho_report_state = {}
+
     def _scen_dep_denom(self, s):
         """ Computes scenario dependent denominator for grad rho calculation.
 
@@ -314,10 +317,19 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         else:
             raise RuntimeError("Coding error.")
 
-        for s in opt.local_scenarios.values():    
+        # a computed rho of zero (e.g. from a zero objective gradient) is not a
+        # usable rho; those nonants keep the (positive) default rho. We report
+        # rather than silently skipping the update; see issue #560.
+        zero_rho = set()
+        for s in opt.local_scenarios.values():
             for ndn_i, rho in s._mpisppy_model.rho.items():
                 if rhos[ndn_i] != 0:
                     rho._value = self.multiplier*rhos[ndn_i]
+                else:
+                    zero_rho.add(ndn_i)
+        report_zero_rho_fallback(opt, "GradRho", len(zero_rho),
+                                 opt.options.get("defaultPHrho"), self._rho_report_state,
+                                 reason="a zero computed rho (e.g. zero objective gradient)")
 
     def compute_and_update_rho(self):
         self._compute_and_update_rho()

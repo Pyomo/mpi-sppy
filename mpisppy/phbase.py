@@ -20,6 +20,7 @@ import mpisppy.utils.sputils as sputils
 import mpisppy.spopt
 
 from mpisppy.utils.prox_approx import ProxApproxManager
+from mpisppy.utils.rho_utils import check_rhos_positive
 from mpisppy import global_toc
 
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
@@ -472,6 +473,13 @@ class PHBase(mpisppy.spopt.SPOpt):
             rholist = self.rho_setter(scenario, **rho_setter_kwargs)
             for (vid, rho) in rholist:
                 (ndn, i) = scenario._mpisppy_data.varid_to_nonant_index[vid]
+                if rho is None or rho <= 0:
+                    vname = scenario._mpisppy_data.nonant_indices[(ndn, i)].name
+                    raise RuntimeError(
+                        f"rho_setter returned a non-positive rho for "
+                        f"scenario={sname}, variable={vname}: rho={rho}. "
+                        "Progressive Hedging requires rho > 0."
+                    )
                 scenario._mpisppy_model.rho[(ndn, i)] = rho
             didit += len(rholist)
             skipped += len(scenario._mpisppy_data.varid_to_nonant_index) - didit
@@ -685,10 +693,19 @@ class PHBase(mpisppy.spopt.SPOpt):
 
             scenario._mpisppy_model.prox_on = pyo.Param(initialize=0, mutable=True, within=pyo.Binary)
 
-            # note that rho is per var and scenario here
+            # note that rho is per var and scenario here. A None default is
+            # allowed here (e.g. when a rho_setter supplies every nonant); any
+            # nonant left without a positive rho is caught by check_rhos_positive
+            # after Iter0. An explicitly non-positive default is rejected now.
+            default_rho = self.options["defaultPHrho"]
+            if default_rho is not None and default_rho <= 0:
+                raise RuntimeError(
+                    f"defaultPHrho must be a strictly positive number, got "
+                    f"{default_rho}. Progressive Hedging requires rho > 0."
+                )
             scenario._mpisppy_model.rho = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                         mutable=True,
-                                        default=self.options["defaultPHrho"])
+                                        default=default_rho)
 
             if self.Ag is not None:
                 self.Ag.callout_agnostic({"sname":sname, "scenario":scenario})
@@ -1067,6 +1084,10 @@ class PHBase(mpisppy.spopt.SPOpt):
             else:
                 self._use_rho_setter(False)
 
+        # Central enforcement of rho > 0 once all initial rho-setting is done
+        # (defaults, post_iter0 rho extensions, and any rho_setter); see #560.
+        check_rhos_positive(self, source="after Iter0 rho setup")
+
         ## If ratio: Add reset p according to rho
         if smooth_type == 2:
             for _, scenario in self.local_scenarios.items():
@@ -1175,6 +1196,12 @@ class PHBase(mpisppy.spopt.SPOpt):
                 if time_to_stop:
                     global_toc(f"Time limit {self.options['time_limit']} seconds reached.", self.cylinder_rank == 0)
                     break
+
+            # Enforce rho > 0 before every solve: any rho-updating extension may
+            # have changed rho this iteration, so this is the single consistent
+            # place to catch a non-positive value before it reaches the solver
+            # (see #560).
+            check_rhos_positive(self, source=f"PH iteration {self._PHIter}")
 
             teeme = (
                 "tee-rank0-solves" in self.options

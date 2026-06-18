@@ -10,6 +10,7 @@
 from mpisppy import global_toc
 import mpisppy.extensions.dyn_rho_base
 from mpisppy.utils.nonant_sensitivities import nonant_sensitivies
+from mpisppy.utils.rho_utils import report_zero_rho_fallback
 
 
 class _SensiRhoBase(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
@@ -17,6 +18,8 @@ class _SensiRhoBase(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         super().__init__(ph, cfg)
         # we'll set a minimum rho value to be the default rho
         self._minimum_rho = ph.options["defaultPHrho"]
+        # remembers the last reported floored-rho count to avoid log spam
+        self._rho_report_state = {}
 
     def get_nonant_sensitivites(self):
         """
@@ -32,6 +35,10 @@ class _SensiRhoBase(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         # dict of dicts [s][ndn_i]
         nonant_sensis = self.get_nonant_sensitivites()
 
+        # a computed rho below the default is floored to the (positive) default
+        # rather than being allowed to fall toward zero; we report rather than
+        # flooring silently; see issue #560.
+        floored = set()
         for s in ph.local_scenarios.values():
             xbars = s._mpisppy_model.xbars
             for ndn_i, rho in s._mpisppy_model.rho.items():
@@ -40,10 +47,14 @@ class _SensiRhoBase(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                 val *= self.multiplier
                 if val < self._minimum_rho:
                     rho._value = self._minimum_rho
+                    floored.add(ndn_i)
                 else:
                     rho._value = val
                 # if ph.cylinder_rank == 0:
                 #     print(f"{s.name=}, {nv.name=}, {rho.value=}")
+        report_zero_rho_fallback(ph, self.__class__.__name__, len(floored),
+                                 self._minimum_rho, self._rho_report_state,
+                                 reason="a computed rho below the default (floored to the default)")
 
         rhomax = self._compute_rho_max(ph)
         for s in ph.local_scenarios.values():

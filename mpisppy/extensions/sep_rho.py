@@ -14,6 +14,7 @@ import numpy as np
 import mpisppy.MPI as MPI
 from mpisppy import global_toc
 from mpisppy.utils.sputils import nonant_cost_coeffs
+from mpisppy.utils.rho_utils import report_zero_rho_fallback
 
 
 class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
@@ -46,6 +47,8 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             self.multiplier = ph.options["sep_rho_options"]["multiplier"]
 
         self._nonant_cost_coeffs = {}
+        # remembers the last reported zero-coefficient count to avoid log spam
+        self._rho_report_state = {}
 
     def _compute_primal_residual_norm(self, ph):
         local_nodenames = []
@@ -161,6 +164,10 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         xmax = self._compute_xmax(ph)
         xmin = self._compute_xmin(ph)
 
+        # nonants with a zero objective coefficient yield no meaningful rho from
+        # this heuristic; they keep the (positive) default rho. We report rather
+        # than silently substituting; see issue #560.
+        zero_coeff = set()
         for s in ph.local_scenarios.values():
             cc = self.nonant_cost_coeffs(s)
             for ndn_i, rho in s._mpisppy_model.rho.items():
@@ -171,6 +178,10 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                     else:
                         rho._value = abs(cc[ndn_i]) / max(1, primal_resid[ndn_i])
                     rho._value *= self.multiplier
+                else:
+                    zero_coeff.add(ndn_i)
+        report_zero_rho_fallback(ph, "SepRho", len(zero_coeff),
+                                 ph.options.get("defaultPHrho"), self._rho_report_state)
 
     def compute_and_update_rho(self):
         self._compute_and_update_rho()
