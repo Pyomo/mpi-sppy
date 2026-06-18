@@ -4,10 +4,15 @@ Supplying an Initial Xhat from a File
 =====================================
 
 Every xhat spoke (``xhatlooper``, ``xhatshufflelooper``,
-``xhatspecific``, ``xhatxbar``) will optionally read a first-stage
-solution ``xhat`` from a ``.npy`` file, evaluate it across all
-scenarios once, and report the resulting inner bound — **before** its
-normal exploration loop starts.
+``xhatspecific``, ``xhatxbar``) will optionally read an ``xhat`` from a
+file, evaluate it across all scenarios once, and report the resulting
+inner bound — **before** its normal exploration loop starts. Two file
+formats are accepted:
+
+- a ``.csv`` nonant tree (``node_name, variable_name, value``), matched
+  to the model **by variable name**, for **any number of stages**; and
+- a ``.npy`` holding a bare root-node vector, matched **by position**,
+  for **two-stage** problems only.
 
 When This is Useful
 -------------------
@@ -38,33 +43,53 @@ Enabling the Feature
 
    --xhat-from-file <path>
 
-where ``<path>`` points at a ``.npy`` file whose contents is a
-one-dimensional numpy array holding the first-stage values **in the
-same order as the problem's root-node nonant list**. Order-sensitive
-— the ordinary pyomo iteration order over
-``scenario._mpisppy_node_list[0].nonant_vardata_list`` for any local
-scenario. (If you generated the file from a previous mpi-sppy run,
-the order matches automatically.)
+The format is chosen by the file extension: ``.csv`` for the by-name
+nonant tree, anything else (``.npy``) for the positional root vector.
+The flag is off by default; the feature is only active when supplied.
 
-The flag is off by default; the feature is only active when the flag
-is supplied.
+File Formats
+------------
 
-File Format
------------
+**CSV nonant tree (any number of stages).** Lines are
+``node_name, variable_name, value`` with **node-local** variable names;
+lines beginning with ``#`` are comments. This is matched to the model
+by name, so it is **not** order-sensitive, and a file may carry more
+nodes than a given run needs (extras are ignored). Produce one directly
+from a run with ``--write-xhat-file`` (below), or by hand:
 
-``.npy`` only, via the existing ``mpisppy.confidence_intervals.ciutils.read_xhat``
-helper. That is the canonical mpi-sppy xhat on-disk format: the
-MMW confidence-interval code already uses it
-(``--mmw-xhat-input-file-name``), and several examples write xhats
-this way (``ciutils.write_xhat``).
+.. code-block:: text
 
-To produce a compatible file from a script:
+   # node_name, variable_name, value
+   ROOT, DevotedAcreage[CORN0], 80.0
+   ROOT, DevotedAcreage[SUGAR_BEETS0], 250.0
+   ROOT, DevotedAcreage[WHEAT0], 170.0
+
+**Positional ``.npy`` (two-stage only).** A one-dimensional numpy array
+of the root-node values **in nonant order** — the pyomo iteration order
+over ``scenario._mpisppy_node_list[0].nonant_vardata_list`` for any
+local scenario. This is the format the MMW confidence-interval code uses
+(``--mmw-xhat-input-file-name``, via ``ciutils.read_xhat``):
 
 .. code-block:: python
 
    import numpy as np
    xhat_values = [1.0, 0.0, 1.0]   # in nonant order
    np.save("my_xhat.npy", np.array(xhat_values, dtype=float))
+
+Producing a file with ``--write-xhat-file``
+-------------------------------------------
+
+A run writes its incumbent xhat as the canonical CSV nonant tree with:
+
+.. code-block:: bash
+
+   --write-xhat-file <path>
+
+It works for any number of stages and identically for EF and cylinders
+runs (both route through ``sputils.write_nonant_tree_csv``), so the file
+from one run is directly readable by ``--xhat-from-file`` in another.
+Programmatically, ``WheelSpinner.write_tree_nonants(path)`` and
+``sputils.ef_nonants_csv(ef, path)`` write the same format.
 
 Example
 -------
@@ -87,18 +112,15 @@ spoke starts its normal shuffle loop.
 Scope and Limitations
 ---------------------
 
-**Two-stage only.** V1 supports two-stage problems only, matching
-``ciutils.read_xhat``. Multi-stage is planned as a follow-up; for
-now, enabling the flag on a multi-stage run raises
+**Multi-stage needs the CSV.** The ``.csv`` nonant tree supports any
+number of stages. The positional ``.npy`` is two-stage only; pointing
+``--xhat-from-file`` at a ``.npy`` on a multi-stage run raises, naming
+the ``.csv`` format as the multi-stage path.
 
-.. code-block:: text
-
-   RuntimeError: --xhat-from-file is two-stage only; multi-stage
-   support is planned as a follow-up.
-
-**Length must match.** The file's vector length must equal the
-problem's root-node nonant count. A mismatch raises at spoke startup
-with an error naming both counts — no silent truncation or padding.
+**Names / lengths must match.** For a ``.csv``, every node and variable
+the run needs must be present, by node-local name, or startup raises
+naming the missing item. For a ``.npy``, the vector length must equal
+the root-node nonant count — no silent truncation or padding.
 
 **Missing file is a hard error.** The path must exist when the spoke
 starts; a missing file is not silently treated as "feature off".
@@ -126,16 +148,13 @@ recommended way to exercise feasibility cuts in an end-to-end test:
 hand in a known-infeasible binary vector via ``--xhat-from-file``
 with ``--xhat-feasibility-cuts-count=1`` and watch the cut land.
 
-Follow-up Milestones
---------------------
-
-- Multi-stage support (per-node xhat file or a multi-node format).
-- Additional file formats (CSV, JSON) if a concrete use case appears.
-
 See Also
 --------
 
 - :ref:`Spokes` — overview of the xhat spokes.
 - the xhat feasibility-cuts feature (PR #671) — the companion feature for
   non-complete-recourse problems.
-- ``doc/designs/xhat_from_file_design.md`` — the design document.
+- ``doc/designs/multistage_xhat_write_design.md`` — the design document
+  for the multi-stage CSV nonant tree (read and write).
+- ``doc/designs/xhat_from_file_design.md`` — the original two-stage
+  design document.

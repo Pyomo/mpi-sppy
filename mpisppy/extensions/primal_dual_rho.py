@@ -40,10 +40,13 @@ class PrimalDualRho(mpisppy.extensions.extension.Extension):
                           (decision node name, index)
         """
         xbars = {}
+        # Accumulate over all local scenarios: in a multistage tree a single
+        # scenario only traverses its own path's nodes, so one scenario's
+        # xbars miss sibling subtrees. xbar is the node consensus, so
+        # scenarios sharing a node agree and the overwrite is harmless.
         for s in self._ph.local_scenarios.values():
             for ndn_i, xbar in s._mpisppy_model.xbars.items():
                 xbars[ndn_i] = xbar.value
-            break
         return xbars
 
     def _compute_primal_convergence(self):

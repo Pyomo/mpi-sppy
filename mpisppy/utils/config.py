@@ -180,6 +180,13 @@ class Config(pyofig.ConfigDict):
         if self.get("hub_only_solver_logs") and not self.get("solver_log_dir"):
             _bad_options("--hub-only-solver-logs requires --solver-log-dir")
 
+        if self.get("cc_indicator_var", None) is not None and not self.get("EF"):
+            # A chance constraint Sum_s p_s z_s >= 1-alpha couples all scenarios
+            # and is not separable, so it is supported only for the EF (matching
+            # PySP). See doc/designs/chance_constraint_design.md.
+            _bad_options("--cc-indicator-var (chance constraint) is currently "
+                         "supported only with --EF")
+
     def add_solver_specs(self, prefix=""):
         sstr = f"{prefix}_solver" if prefix else "solver"
         if prefix:
@@ -501,6 +508,27 @@ class Config(pyofig.ConfigDict):
     def EF_multistage(self):
         self.EF_base()
         # branching factors???
+
+    #### chance constraints (PySP-style SAA; EF only) ####
+    def chance_constraint_args(self):
+        # The user supplies a per-scenario binary indicator (z_s == 1 means the
+        # risky constraint is satisfied in scenario s) and the big-M link; we add
+        # the aggregator Sum_s p_s z_s >= 1 - cc_alpha to the EF.  See
+        # doc/designs/chance_constraint_design.md.  EF only: the aggregator
+        # couples all scenarios, so it does not separate for decomposition.
+        self.add_to_config("cc_indicator_var",
+                           description="Name of the per-scenario binary indicator "
+                                       "variable for a chance constraint (z==1 means "
+                                       "the risky constraint is satisfied). Enables "
+                                       "the chance constraint; EF only.",
+                           domain=str,
+                           default=None)
+        self.add_to_config("cc_alpha",
+                           description="Allowed violation probability for the chance "
+                                       "constraint, 0 <= alpha < 1 (alpha=0 forces "
+                                       "satisfaction in every scenario). Default 0.0.",
+                           domain=float,
+                           default=0.0)
 
     ##### common additions to the command line #####
 
@@ -1184,17 +1212,35 @@ class Config(pyofig.ConfigDict):
                               default=False)
 
     def xhat_from_file_args(self):
-        # Supply an initial xhat candidate from a .npy file. Every xhat
-        # spoke (xhatlooper, xhatshufflelooper, xhatspecific, xhatxbar)
-        # that descends from XhatInnerBoundBase will evaluate it once,
-        # before its normal exploration loop. Two-stage only today
-        # (matches ciutils.read_xhat). See
-        # doc/src/xhat_from_file.rst.
+        # Supply an initial xhat candidate from a file. Every xhat spoke
+        # (xhatlooper, xhatshufflelooper, xhatspecific, xhatxbar) that
+        # descends from XhatInnerBoundBase will evaluate it once, before
+        # its normal exploration loop. A .csv (node_name, variable_name,
+        # value; see sputils.write_nonant_tree_csv) works for any number
+        # of stages and is matched by name; a .npy holds a bare ROOT
+        # vector and is two-stage only. See doc/src/xhat_from_file.rst.
         self.add_to_config("xhat_from_file",
-                           description="Path to a .npy file holding an initial "
-                                       "first-stage xhat vector to evaluate "
-                                       "before normal xhatter exploration. "
-                                       "Two-stage only. Default None (off).",
+                           description="Path to a file holding an initial xhat "
+                                       "to evaluate before normal xhatter "
+                                       "exploration. A .csv nonant tree "
+                                       "(node_name, variable_name, value) works "
+                                       "for any number of stages; a .npy ROOT "
+                                       "vector is two-stage only. "
+                                       "Default None (off).",
+                           domain=str,
+                           default=None)
+
+    def write_xhat_file_args(self):
+        # Write the incumbent xhat (the whole nonant tree) to a single
+        # by-name CSV. Works for any number of stages and identically for
+        # EF and cylinders runs (both route through
+        # sputils.write_nonant_tree_csv). Default None (off).
+        self.add_to_config("write_xhat_file",
+                           description="Path to write the incumbent xhat (the "
+                                       "whole nonant tree) as a single by-name "
+                                       "CSV: 'node_name, variable_name, value', "
+                                       "node-local names. All stages; EF and "
+                                       "cylinders. Default None (off).",
                            domain=str,
                            default=None)
 
