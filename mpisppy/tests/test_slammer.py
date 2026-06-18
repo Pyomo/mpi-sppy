@@ -534,7 +534,7 @@ def _cfg_with_rho_seeded():
     the checker can run in isolation."""
     cfg = config.Config()
     cfg.slamming_args()
-    for n in ("grad_rho", "sensi_rho", "coeff_rho", "reduced_costs_rho", "sep_rho"):
+    for n in ("grad_rho", "sensi_rho", "coeff_rho", "sep_rho"):
         cfg.quick_assign(n, bool, False)
     return cfg
 
