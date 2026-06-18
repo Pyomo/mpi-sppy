@@ -740,6 +740,78 @@ class PHBase(mpisppy.spopt.SPOpt):
         return not bool(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model.prox_on.value)
 
 
+    def _prox_is_quadratic(self):
+        """True when subproblem objectives carry a (non-linearized) quadratic
+        proximal term, i.e. the prox term is attached and active and is not
+        being approximated by linear cuts. This is exactly the condition under
+        which a solver that cannot handle a quadratic objective will fail.
+        """
+        return (not self._prox_approx) and (not self.prox_disabled)
+
+
+    def _check_prox_solver_capability(self):
+        """Proactive half of the quadratic-prox/solver compatibility check.
+
+        If the solver reports (via the legacy ``has_capability`` API) that it
+        cannot handle a quadratic objective, fail immediately with an
+        actionable message rather than letting the first proximal solve fail
+        cryptically. Solvers that do not expose capability information (e.g.
+        HiGHS via the APPSI or ``pyomo.contrib.solver`` interfaces) are left to
+        the reactive check after the first solve.
+
+        The decision is deterministic and identical on every rank (same
+        ``solver_name``), so raising here cannot desynchronize MPI.
+        """
+        if not self._prox_is_quadratic():
+            return
+        # All subproblems share solver_name, so one probe is representative.
+        s = next(iter(self.local_scenarios.values()))
+        if sputils.solver_quadratic_objective_capability(s._solver_plugin) is False:
+            raise RuntimeError(
+                f"Solver '{self.options.get('solver_name')}' reports that it "
+                "cannot handle a quadratic objective, which the Progressive "
+                "Hedging proximal term requires. Re-run with "
+                "--linearize-proximal-terms (add "
+                "--linearize-binary-proximal-terms for binary variables)."
+            )
+
+
+    def _check_prox_solve_succeeded(self):
+        """Reactive half of the quadratic-prox/solver compatibility check.
+
+        After the first proximal (quadratic) solve, if no subproblem anywhere
+        produced a solution, the most likely cause is a solver that cannot
+        handle a quadratic objective but does not report it through
+        ``has_capability`` (e.g. HiGHS, which cannot solve an MIQP). Emit an
+        actionable message instead of leaving the user with the cryptic
+        ``TerminationCondition=unknown`` from the failed solve.
+
+        Restricted to iteration 1: if the first quadratic solve succeeds, the
+        solver supports quadratic objectives, so any later failure is a genuine
+        optimization issue rather than a capability problem. The "no solution
+        anywhere" test is reduced across ranks with ``allreduce_or`` so the
+        raise decision is identical on every rank (no MPI desynchronization);
+        a partial failure (some subproblems still solve) falls through to the
+        existing behavior.
+        """
+        if self._PHIter != 1 or not self._prox_is_quadratic():
+            return
+        local_any_solution = any(
+            s._mpisppy_data.solution_available
+            for s in self.local_scenarios.values()
+        )
+        if self.allreduce_or(local_any_solution):
+            return
+        raise RuntimeError(
+            f"No subproblem produced a solution at PH iteration "
+            f"{self._PHIter} while a quadratic proximal term was active. "
+            f"Solver '{self.options.get('solver_name')}' may not support "
+            "quadratic objectives (e.g. HiGHS cannot solve an MIQP). Re-run "
+            "with --linearize-proximal-terms (add "
+            "--linearize-binary-proximal-terms for binary variables)."
+        )
+
+
     def attach_PH_to_objective(self, add_duals, add_prox, add_smooth=0):
         """ Attach dual weight and prox terms to the objective function of the
         models in `local_scenarios`.
@@ -1271,6 +1343,12 @@ class PHBase(mpisppy.spopt.SPOpt):
                 and self.cylinder_rank == 0
             )
 
+            # Before the first proximal (quadratic) solve, fail fast with
+            # guidance if the solver reports it cannot handle a quadratic
+            # objective; see issue #762.
+            if self._PHIter == 1:
+                self._check_prox_solver_capability()
+
             self.solve_loop(
                 solver_options=self._effective_solver_options(self._PHIter),
                 dtiming=dtiming,
@@ -1280,6 +1358,11 @@ class PHBase(mpisppy.spopt.SPOpt):
                 verbose=verbose,
                 warmstart=True,
             )
+
+            # If the first proximal solve produced nothing, the solver may not
+            # support quadratic objectives; give an actionable message
+            # (see issue #762).
+            self._check_prox_solve_succeeded()
 
             if have_extensions:
                 self.extobject.enditer()
