@@ -10,6 +10,7 @@
 # This extension of SeqSampling works for multistage, using independent 
 # scenarios instead of a single scenario tree.
 
+import pyomo.environ as pyo
 import pyomo.common.config as pyofig
 import mpisppy.MPI as mpi
 import mpisppy.utils.sputils as sputils
@@ -264,8 +265,9 @@ class IndepScens_SeqSampling(SeqSampling):
         sk = np.sqrt(sample_var)
         
         use_relative_error = (np.abs(zstar)>1)
+        sense = pyo.minimize if ev.is_minimizing else pyo.maximize
         Gk = ciutils.correcting_numeric(G,cfg,objfct=obj_at_xhat,
-                               relative_error=use_relative_error)
+                               relative_error=use_relative_error, sense=sense)
         
         self.SeedCount = start
         

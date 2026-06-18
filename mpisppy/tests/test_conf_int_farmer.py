@@ -49,7 +49,7 @@ class Test_confint_farmer(unittest.TestCase):
         self.arefmodelname ="mpisppy.tests.examples.farmer"  # amalgamator compatible
 
 
-    def _get_base_options(self):
+    def _get_base_options(self, maximize=False):
         cfg = config.Config()
         cfg.quick_assign("EF_solver_name", str, solver_name)
         cfg.quick_assign("use_integer", bool, False)
@@ -58,6 +58,7 @@ class Test_confint_farmer(unittest.TestCase):
         cfg.quick_assign("EF_2stage", bool, True)
         cfg.quick_assign("num_batches", int, 2)
         cfg.quick_assign("batch_size", int, 10)
+        cfg.quick_assign("farmer_maximize", bool, maximize)
         scenario_creator_kwargs = farmer.kw_creator(cfg)
         cfg.quick_assign('kwargs', dict,scenario_creator_kwargs)
         return cfg
@@ -131,6 +132,30 @@ class Test_confint_farmer(unittest.TestCase):
                                 stopping_criterion="BM",
                                 solving_type="EF_2stage",
         )
+
+    def test_seqsampling_maximize_raises(self):
+        # Sequential sampling supports minimization only; constructing it on a
+        # maximize model must fail loudly rather than misbehave silently.
+        optionsBM = config.Config()
+        confidence_config.confidence_config(optionsBM)
+        confidence_config.sequential_config(optionsBM)
+        optionsBM.quick_assign('BM_h', float, 0.2)
+        optionsBM.quick_assign('BM_hprime', float, 0.015,)
+        optionsBM.quick_assign('BM_eps', float, 0.5,)
+        optionsBM.quick_assign('BM_eps_prime', float, 0.4,)
+        optionsBM.quick_assign("BM_p", float, 0.2)
+        optionsBM.quick_assign("BM_q", float, 1.2)
+        optionsBM.quick_assign("solver_name", str, solver_name)
+        optionsBM.quick_assign("solving_type", str, "EF_2stage")
+        optionsBM.quick_assign("farmer_maximize", bool, True)
+        with self.assertRaises(RuntimeError):
+            seqsampling.SeqSampling("mpisppy.tests.examples.farmer",
+                                    seqsampling.xhat_generator_farmer,
+                                    optionsBM,
+                                    stochastic_sampling=False,
+                                    stopping_criterion="BM",
+                                    solving_type="EF_2stage",
+            )
 
 
     def test_pyomo_opt_sense(self):
@@ -218,11 +243,30 @@ class Test_confint_farmer(unittest.TestCase):
                                            cfg['num_batches'],
                                            batch_size = cfg["batch_size"],
                                            start = cfg['num_scens'])
-        r = MMW.run() 
+        r = MMW.run()
         s = round_pos_sig(r['std'],2)
         bound = round_pos_sig(r['gap_inner_bound'],2)
         self.assertEqual((s,bound), (1.5,96.0))
-   
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_MMW_running_maximize(self):
+        # The optimality-gap magnitude is sense-independent, so the maximize
+        # bound matches the minimize case above. Before the sense fix the
+        # reported bound came out negative (Gbar < 0 for maximization).
+        cfg = self._get_base_options(maximize=True)
+        xhat = ciutils.read_xhat(self.xhat_path)
+        MMW = MMWci.MMWConfidenceIntervals(self.refmodelname,
+                                           cfg,
+                                           xhat,
+                                           cfg['num_batches'],
+                                           batch_size = cfg["batch_size"],
+                                           start = cfg['num_scens'])
+        r = MMW.run()
+        s = round_pos_sig(r['std'],2)
+        bound = round_pos_sig(r['gap_inner_bound'],2)
+        self.assertEqual((s,bound), (1.5,96.0))
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_gap_estimators(self):
@@ -237,6 +281,24 @@ class Test_confint_farmer(unittest.TestCase):
         s = estim['s']
         G,s = round_pos_sig(G,3),round_pos_sig(s,3)
         self.assertEqual((G,s), (456.0,944.0))
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_gap_estimators_maximize(self):
+        # farmer negates its objective for maximization, so the gap is the
+        # negation of the minimize gap; the standard deviation is unchanged.
+        # Before the sense fix the gap was mis-signed/clipped.
+        scenario_names = farmer.scenario_names_creator(50,start=1000)
+        estim = ciutils.gap_estimators(self.xhat,
+                                       self.refmodelname,
+                                       cfg=self._get_base_options(maximize=True),
+                                       solver_name=solver_name,
+                                       scenario_names=scenario_names,
+                                       )
+        G = estim['G']
+        s = estim['s']
+        G,s = round_pos_sig(G,3),round_pos_sig(s,3)
+        self.assertEqual((G,s), (-456.0,944.0))
         
     @unittest.skipIf(not solver_available,
                      "no solver is available")

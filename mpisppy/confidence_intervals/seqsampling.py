@@ -185,6 +185,21 @@ class SeqSampling():
         if not you_can_have_it_all:
             raise RuntimeError(f"Module {refmodel} not complete for seqsampling")
 
+        # Sequential sampling's BM/BPL stopping criteria and sample-size rules
+        # assume a non-negative, shrinking optimality gap, which holds for
+        # minimization. For maximization the gap is non-positive and the
+        # criteria would need the gap-magnitude form (not yet vetted), so
+        # refuse maximization loudly rather than return silently wrong
+        # stopping decisions or sample sizes.
+        _sn = self.refmodel.scenario_names_creator(1)
+        _m = self.refmodel.scenario_creator(_sn[0], **self.refmodel.kw_creator(cfg))
+        if not sputils.find_active_objective(_m).is_minimizing():
+            raise RuntimeError(
+                "Sequential sampling currently supports minimization only "
+                "(the BM/BPL stopping criteria assume a non-negative "
+                "optimality gap)."
+            )
+
         """ delete this on or after July 14, 2022
         #Manage options
         optional_options = {"ArRP": 1,
