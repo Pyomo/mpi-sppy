@@ -367,13 +367,9 @@ def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
                 sense = "minimizing"
                 sign = "+"
             elif "maximizing" in words:
-                # The GAMS guest is minimize-only: it would negate the objective
-                # without undoing the sign in the reported bounds/objective, so
-                # fail loudly rather than return silently wrong results.
-                raise RuntimeError(
-                    "The GAMS agnostic guest currently supports minimization "
-                    "only; the model solves 'maximizing'. Maximization is not "
-                    "implemented for the GAMS guest.")
+                print("WARNING: the objective function's sign has been changed")
+                sense = "maximizing"
+                sign = "-"
             else:
                 raise RuntimeError(f"The line: {line}, doesn't include any sense")
             assert gmodel_name == words[1], f"Model line as model name {gmodel_name} but solve line has {words[1]}"

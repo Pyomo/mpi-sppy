@@ -42,6 +42,7 @@ guests), now fixed or guarded.
 | Linearized prox (`utils/prox_approx.py`) | works (cuts are lower bounds on `x^2`; objective sign-flip drives them; placement heuristic uses `abs`) | via PH max test |
 | `generic_cylinders.py`, `problem_io/mps_reader.py` | works (sense passed through / mapped from the model) | by construction |
 | Agnostic Pyomo guest (`agnostic/pyomo_guest.py`, loose example) | works (reads the model's sense) | yes |
+| Agnostic GAMS guest (`agnostic/gams_guest.py`) | runs (negates a `maximizing` model to a minimize internally) — but its only test is a smoke test that does not assert objective/bound values, so the sign-correctness of reported bounds for max is **unverified** | smoke only |
 
 ## Minimization-only (raise a clear error or are not a maximization surface)
 
@@ -49,18 +50,19 @@ guests), now fixed or guarded.
 |---|---|
 | Sequential sampling (`seqsampling.SeqSampling`, `multi_seqsampling.IndepScens_SeqSampling`) | **raises `RuntimeError`** — the BM/BPL stopping criteria and sample-size rules assume a non-negative, shrinking optimality gap. A vetted gap-magnitude formulation would be needed to support max. |
 | Agnostic AMPL guest (`agnostic/ampl_guest.py`) | **raises `RuntimeError`** — the guest splices the PH term into a `minimize` objective; minimize-only. |
-| Agnostic GAMS guest (`agnostic/gams_guest.py`) | **raises `RuntimeError`** on a `maximizing` model — minimize-only (it would negate the objective without undoing the sign in the reported bounds). |
 | Agnostic gurobipy guest (`examples/farmer/agnostic/farmer_gurobipy_agnostic.py`) | **raises `RuntimeError`** on `GRB.MAXIMIZE` — minimize-only (PH prox/weight terms use a fixed minimize sign). |
 
 ### Note on the agnostic guests
 
-By project guidance the agnostic guests (Pyomo / AMPL / GAMS / gurobipy) are a
-minimize-only surface; there is no plan to support maximization in them. The
-AMPL, GAMS, and gurobipy guests each raise a clear `RuntimeError` on a
-maximization model rather than silently mis-signing it. The Pyomo guest happens
-to handle maximization (its sense was simply being read instead of hardcoded),
-but guests are not a maintained maximization surface — none should be relied on
-for maximization.
+By project guidance the agnostic guests are a minimize-only surface; there is no
+plan to support maximization in them. The AMPL and gurobipy guests raise a clear
+`RuntimeError` on a maximization model rather than silently mis-signing it. The
+Pyomo guest happens to handle maximization (its sense was simply being read
+instead of hardcoded). The GAMS guest predates this guidance and *runs* a
+`maximizing` model by negating it to a minimize internally; its test is only a
+smoke test (it does not assert the reported objective/bounds), so the
+sign-correctness of those reported values under maximization is unverified. None
+of the guests should be relied on as a maintained maximization surface.
 
 ## Tests added by the audit
 

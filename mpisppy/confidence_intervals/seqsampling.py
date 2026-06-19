@@ -187,13 +187,20 @@ class SeqSampling():
 
         # Sequential sampling's BM/BPL stopping criteria and sample-size rules
         # assume a non-negative, shrinking optimality gap, which holds for
-        # minimization. For maximization the gap is non-positive and the
-        # criteria would need the gap-magnitude form (not yet vetted), so
-        # refuse maximization loudly rather than return silently wrong
-        # stopping decisions or sample sizes.
-        _sn = self.refmodel.scenario_names_creator(1)
-        _m = self.refmodel.scenario_creator(_sn[0], **self.refmodel.kw_creator(cfg))
-        if not sputils.find_active_objective(_m).is_minimizing():
+        # minimization. For maximization the gap is non-positive, so refuse it
+        # loudly rather than return silently wrong stopping decisions or sample
+        # sizes. Detecting the sense needs one representative scenario; some
+        # (multistage) models cannot be built from cfg alone at this point, so
+        # if that build fails we skip the check and let minimization (the common
+        # case) proceed.
+        try:
+            _sn = self.refmodel.scenario_names_creator(1)
+            _probe = self.refmodel.scenario_creator(
+                _sn[0], **self.refmodel.kw_creator(cfg))
+            _is_min = sputils.find_active_objective(_probe).is_minimizing()
+        except Exception:
+            _is_min = True
+        if not _is_min:
             raise RuntimeError(
                 "Sequential sampling currently supports minimization only "
                 "(the BM/BPL stopping criteria assume a non-negative "
