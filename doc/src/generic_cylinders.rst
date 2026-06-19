@@ -101,6 +101,7 @@ are selected with flags:
 
 - (default) PH -- no flag needed
 - ``--APH`` -- Asynchronous PH (see :ref:`sec-aph`)
+- ``--lshaped-hub`` -- L-shaped (Benders decomposition) for two-stage problems
 - ``--subgradient-hub`` -- Subgradient method
 - ``--fwph-hub`` -- Frank-Wolfe PH
 - ``--ph-primal-hub`` -- PH primal
@@ -124,8 +125,32 @@ Spokes provide bounds and heuristic solutions. Enable them with flags:
 
 - ``--xhatshuffle`` -- Randomly shuffle scenario solutions
 - ``--xhatxbar`` -- Use xbar as a candidate solution
+- ``--xhatlshaped`` -- Use L-shaped method to evaluate candidate solutions (pairs with ``--lshaped-hub``)
 
 See :ref:`Spokes` for details on each spoke type.
+
+Running L-Shaped with Spokes
+-----------------------------
+
+To run L-shaped (Benders decomposition) with bound-computing spokes for
+two-stage problems:
+
+.. code-block:: bash
+
+    mpiexec -np 3 python -m mpi4py mpisppy/generic_cylinders.py \
+        --module-name farmer --num-scens 3 \
+        --solver-name gurobi --lshaped-hub --xhatlshaped \
+        --max-iterations 100 --rel-gap 1e-4
+
+.. note::
+   L-shaped is currently implemented for two-stage stochastic programs only.
+   The hub algorithm decomposes by stage, solving a master problem with
+   first-stage variables and subproblems for each scenario.
+
+The ``--xhatlshaped`` spoke provides inner bounds (incumbent solutions) by
+evaluating candidate first-stage decisions using the L-shaped method. This
+spoke is designed to work with the ``--lshaped-hub`` and shares the
+decomposition structure.
 
 Multistage Options
 -------------------
