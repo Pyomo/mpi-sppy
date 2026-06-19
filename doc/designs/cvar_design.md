@@ -99,22 +99,26 @@ def add_cvar(scenario, *, cvar_weight, cvar_alpha, cvar_mean_weight=1.0):
     `WITH_CVAR` = λ·cost + β·η + β/(1-α)·δ_s, where λ = cvar_mean_weight
     (default 1.0) and β = cvar_weight.
     """
-    obj   = sputils.find_active_objective(scenario)   # pristine user cost objective
-    cost  = obj.expr
-    sense = obj.sense
-    if sense != pyo.minimize:                         # maximize mirrors PySP (§6.3) — not yet shipped
-        raise NotImplementedError("CVaR for maximization is not yet implemented")
+    obj     = sputils.find_active_objective(scenario)   # pristine user objective
+    objexpr = obj.expr
+    sense   = obj.sense
     scenario._mpisppy_cvar_eta    = pyo.Var()
     scenario._mpisppy_cvar_excess = pyo.Var(domain=pyo.NonNegativeReals)
-    scenario._mpisppy_cvar_excess_con = pyo.Constraint(
-        expr=scenario._mpisppy_cvar_excess >= cost - scenario._mpisppy_cvar_eta)
-    # keep the original risk-neutral objective (deactivated) for E[Cost] reporting;
+    if sense == pyo.minimize:                            # CVaR of the upper (cost) tail
+        scenario._mpisppy_cvar_excess_con = pyo.Constraint(
+            expr=scenario._mpisppy_cvar_excess >= objexpr - scenario._mpisppy_cvar_eta)
+        excess_term = (cvar_weight/(1.0 - cvar_alpha))*scenario._mpisppy_cvar_excess
+    else:                                                # maximize: lower (reward) tail mirror
+        scenario._mpisppy_cvar_excess_con = pyo.Constraint(
+            expr=scenario._mpisppy_cvar_excess >= scenario._mpisppy_cvar_eta - objexpr)
+        excess_term = -(cvar_weight/(1.0 - cvar_alpha))*scenario._mpisppy_cvar_excess
+    # keep the original risk-neutral objective (deactivated) for E[Cost]/E[Reward] reporting;
     # the new objective is named WITH_CVAR (NOT PySP's "MASTER" — see §3).
     obj.deactivate()
     scenario.WITH_CVAR = pyo.Objective(
-        expr  = cvar_mean_weight*cost
+        expr  = cvar_mean_weight*objexpr
               + cvar_weight*scenario._mpisppy_cvar_eta
-              + (cvar_weight/(1.0 - cvar_alpha))*scenario._mpisppy_cvar_excess,
+              + excess_term,
         sense = sense)
     root = scenario._mpisppy_node_list[0]
     root.nonant_list.append(scenario._mpisppy_cvar_eta)          # append to BOTH:
@@ -178,9 +182,11 @@ A single insertion point → `do_EF`, `do_decomp`, and every spoke inherit the r
    For multistage problems it therefore measures risk of the total cost only.
    **If a time-consistent (nested) risk measure is needed, users should contact the developers.**
    This caveat MUST appear verbatim in the user-facing docs — see the doc note below and §8/§9.
-3. **Minimize first.** Phase 1 raises `NotImplementedError` for a maximization objective rather
-   than silently building the wrong (upper-tail) model. Maximize is then handled by mirroring PySP
-   (δ domain `NonPositiveReals`, negate the excess expression); ship in a later phase.
+3. **Both senses supported.** Minimization linearizes CVaR of the upper (cost) tail. Maximization
+   uses the mirrored lower (reward) tail: keep δ_s ≥ 0 but constrain δ_s ≥ η − Reward_s and
+   subtract β/(1-α)·δ_s from the (maximized) objective. Both keep the model's native sense, so η is
+   just another first-stage variable for every algorithm. (Phase 1 shipped minimize-only with a
+   `NotImplementedError` guard for maximize; that guard is now replaced by the mirror above.)
 4. **η fixed during xhat evaluation** → valid but possibly loose inner bound. Optional later
    refinement: re-optimize the shared η given the fixed "real" first-stage vars.
 
@@ -213,9 +219,10 @@ A single insertion point → `do_EF`, `do_decomp`, and every spoke inherit the r
   `--cvar-alpha`, `--cvar-mean-weight`); `generic_cylinders` wiring; a farmer risk-averse example; a
   cylinders test (PH hub + Lagrangian + xhat bound sandwich). Wire the new test into
   `run_coverage.bash` AND `test_pr_and_main.yml` in the same commit.
-- **Phase 3 — polish.** maximize support; docs section ("Risk Management") that MUST include the
-  single-root-stage / not-time-consistent caveat verbatim from §6.5; confidence-interval note
-  (`zhat4xhat` evaluates the same risk-averse objective).
+- **Phase 3 — polish.** maximize support (DONE — lower-tail mirror, §6.4 note 3, with a closed-form
+  maximize EF test); docs section ("Risk Management") that MUST include the single-root-stage /
+  not-time-consistent caveat verbatim from §6.5; confidence-interval note (`zhat4xhat` evaluates the
+  same risk-averse objective).
 
 ## 9. Files touched
 

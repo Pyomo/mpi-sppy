@@ -53,6 +53,31 @@ def tiny_scenario_creator(sname, **kwargs):
     return model
 
 
+# ---------------------------------------------------------------------------
+# The maximization mirror: rewards instead of costs, protecting the LOWER tail.
+#
+# Rewards {10, 20, 30, 40}, uniform probability, alpha = 0.6 (lower-tail CVaR via
+# the mirrored Rockafellar-Uryasev formula  max_eta [eta - 1/(1-alpha) E[(eta-R)+]]):
+#   E[Reward]    = 25
+#   VaR (eta*)   = 20
+#   CVaR_0.6     = 20 - (1/(1-0.6))*(1/4)*(20-10) = 20 - 6.25 = 13.75
+# ---------------------------------------------------------------------------
+TINY_REWARDS = {"s0": 10.0, "s1": 20.0, "s2": 30.0, "s3": 40.0}
+TINY_EXPECTED_REWARD = 25.0
+TINY_VAR_MAX = 20.0
+TINY_CVAR_MAX = 13.75
+
+
+def tiny_reward_scenario_creator(sname, **kwargs):
+    model = pyo.ConcreteModel(name=sname)
+    model.x = pyo.Var(bounds=(0.0, 0.0))            # forced to 0; a real nonant
+    reward_expr = TINY_REWARDS[sname] + model.x
+    model.reward = pyo.Objective(expr=reward_expr, sense=pyo.maximize)
+    model._mpisppy_probability = 1.0 / len(TINY_REWARDS)
+    sputils.attach_root_node(model, reward_expr, [model.x])
+    return model
+
+
 def _solve(model):
     solver = pyo.SolverFactory(solver_name)
     limit_solver_threads(solver, solver_name)
@@ -143,17 +168,21 @@ class StructureTests(unittest.TestCase):
             cvar.add_cvar(self._farmer_scenario(), cvar_weight=1.0,
                           cvar_alpha=0.9, cvar_mean_weight=-1.0)
 
-    def test_maximize_objective_raises(self):
-        # Only minimization is supported; maximization must be rejected outright
-        # rather than silently building the (wrong) upper-tail formulation.
+    def test_maximize_objective_supported(self):
+        # Maximization is supported via the mirrored lower-tail formulation: the
+        # transform must accept it, keep the maximize sense, and orient the
+        # excess constraint as delta_s >= eta - Reward_s.
         m = pyo.ConcreteModel()
         m.x = pyo.Var(bounds=(0.0, 0.0))
         reward = 10.0 + m.x
         m.reward = pyo.Objective(expr=reward, sense=pyo.maximize)
         m._mpisppy_probability = 1.0
         sputils.attach_root_node(m, reward, [m.x])
-        with self.assertRaises(NotImplementedError):
-            cvar.add_cvar(m, cvar_weight=1.0, cvar_alpha=0.9)
+        cvar.add_cvar(m, cvar_weight=1.0, cvar_alpha=0.9)
+        active = sputils.find_active_objective(m)
+        self.assertIs(active, m.WITH_CVAR)
+        self.assertEqual(m.WITH_CVAR.sense, pyo.maximize)
+        self.assertIs(m._mpisppy_cvar_excess.domain, pyo.NonNegativeReals)
 
 
 @unittest.skipIf(not solver_available, "no solver is available")
@@ -198,6 +227,49 @@ class EFClosedFormTests(unittest.TestCase):
             suppress_warnings=True)
         _solve(ef)
         self.assertAlmostEqual(pyo.value(ef.EF_Obj), TINY_EXPECTED_COST, places=4)
+
+
+@unittest.skipIf(not solver_available, "no solver is available")
+class EFClosedFormMaxTests(unittest.TestCase):
+    """EF-CVaR on the tiny MAXIMIZE instance vs the closed-form lower-tail CVaR."""
+
+    def _eta_value(self, ef):
+        # NAC has tied all scenario etas together; read the first one.
+        return pyo.value(getattr(ef, "s0")._mpisppy_cvar_eta)
+
+    def test_ef_cvar_matches_closed_form(self):
+        # lambda = 1, beta = 1  =>  maximize  E[Reward] + CVaR_lower
+        ef = sputils.create_EF(
+            list(TINY_REWARDS.keys()),
+            cvar.cvar_scenario_creator(
+                tiny_reward_scenario_creator, cvar_weight=1.0, cvar_alpha=TINY_ALPHA),
+            suppress_warnings=True)
+        _solve(ef)
+        self.assertAlmostEqual(pyo.value(ef.EF_Obj),
+                               TINY_EXPECTED_REWARD + TINY_CVAR_MAX, places=4)
+        self.assertAlmostEqual(self._eta_value(ef), TINY_VAR_MAX, places=4)
+
+    def test_pure_cvar(self):
+        # lambda = 0, beta = 1  =>  CVaR_lower only
+        ef = sputils.create_EF(
+            list(TINY_REWARDS.keys()),
+            cvar.cvar_scenario_creator(
+                tiny_reward_scenario_creator, cvar_weight=1.0, cvar_alpha=TINY_ALPHA,
+                cvar_mean_weight=0.0),
+            suppress_warnings=True)
+        _solve(ef)
+        self.assertAlmostEqual(pyo.value(ef.EF_Obj), TINY_CVAR_MAX, places=4)
+        self.assertAlmostEqual(self._eta_value(ef), TINY_VAR_MAX, places=4)
+
+    def test_weight_zero_is_risk_neutral(self):
+        # beta = 0  =>  plain E[Reward]
+        ef = sputils.create_EF(
+            list(TINY_REWARDS.keys()),
+            cvar.cvar_scenario_creator(
+                tiny_reward_scenario_creator, cvar_weight=0.0, cvar_alpha=TINY_ALPHA),
+            suppress_warnings=True)
+        _solve(ef)
+        self.assertAlmostEqual(pyo.value(ef.EF_Obj), TINY_EXPECTED_REWARD, places=4)
 
 
 @unittest.skipIf(not solver_available, "no solver is available")
