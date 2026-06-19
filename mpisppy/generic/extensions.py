@@ -102,8 +102,7 @@ def configure_extensions(hub_dict, module, cfg):
     if cfg.sensi_rho:
         vanilla.add_sensi_rho(hub_dict, cfg)
 
-    if cfg.reduced_costs_rho:
-        vanilla.add_reduced_costs_rho(hub_dict, cfg)
+    # reduced_costs_rho was deprecated and removed; Config.checker() rejects it.
 
     if len(ext_classes) != 0:
         hub_dict['opt_kwargs']['extensions'] = MultiExtension

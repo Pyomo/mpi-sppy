@@ -147,17 +147,30 @@ class Config(pyofig.ConfigDict):
             raise ValueError("Options do not make sense together:\n"
                              f"{msg}")
 
+        # reduced_costs_rho was removed (deprecated): it was never shown to be
+        # effective in practice and it does not support flexible (unequal) rank
+        # assignments, so a custom driver could be silently burned. The option
+        # is kept so its selection fails loudly here rather than being ignored.
+        if self.get("reduced_costs_rho"):
+            raise ValueError(
+                "reduced_costs_rho was deprecated and removed on 2026-06-14 "
+                "(reduced-cost rho was not demonstrated to be effective in "
+                "practice and does not support flexible rank assignments; see "
+                "https://github.com/Pyomo/mpi-sppy/issues/673). Remove "
+                "--reduced-costs-rho; consider --grad-rho instead."
+            )
+
         # remember that True is 1 and False is 0
         if (self.get("APH") + self.get("subgradient_hub") + self.get("fwph_hub") + self.get("ph_primal_hub") + self.get("lshaped_hub") + self.get("cg_hub") + self.get("dualcg_hub")) > 1:
             _bad_options("Only one hub can be active.")
 
         # remember that True is 1 and False is 0
-        if (self.get("grad_rho") + self.get("sensi_rho") + self.get("coeff_rho") + self.get("reduced_costs_rho") + self.get("sep_rho")) > 1:
+        if (self.get("grad_rho") + self.get("sensi_rho") + self.get("coeff_rho") + self.get("sep_rho")) > 1:
+
             _bad_options("Only one rho setter can be active.")
         if not (self.get("grad_rho")
                 or self.get("sensi_rho")
-                or self.get("sep_rho")
-                or self.get("reduced_costs_rho")):
+                or self.get("sep_rho")):
             if self.get("dynamic_rho_primal_crit") or self.get("dynamic_rho_dual_crit"):
                 _bad_options("dynamic rho only works with an automated rho setter")
 
@@ -171,6 +184,13 @@ class Config(pyofig.ConfigDict):
 
         if self.get("hub_only_solver_logs") and not self.get("solver_log_dir"):
             _bad_options("--hub-only-solver-logs requires --solver-log-dir")
+
+        if self.get("cc_indicator_var", None) is not None and not self.get("EF"):
+            # A chance constraint Sum_s p_s z_s >= 1-alpha couples all scenarios
+            # and is not separable, so it is supported only for the EF (matching
+            # PySP). See doc/designs/chance_constraint_design.md.
+            _bad_options("--cc-indicator-var (chance constraint) is currently "
+                         "supported only with --EF")
 
     def add_solver_specs(self, prefix=""):
         sstr = f"{prefix}_solver" if prefix else "solver"
@@ -494,6 +514,27 @@ class Config(pyofig.ConfigDict):
         self.EF_base()
         # branching factors???
 
+    #### chance constraints (PySP-style SAA; EF only) ####
+    def chance_constraint_args(self):
+        # The user supplies a per-scenario binary indicator (z_s == 1 means the
+        # risky constraint is satisfied in scenario s) and the big-M link; we add
+        # the aggregator Sum_s p_s z_s >= 1 - cc_alpha to the EF.  See
+        # doc/designs/chance_constraint_design.md.  EF only: the aggregator
+        # couples all scenarios, so it does not separate for decomposition.
+        self.add_to_config("cc_indicator_var",
+                           description="Name of the per-scenario binary indicator "
+                                       "variable for a chance constraint (z==1 means "
+                                       "the risky constraint is satisfied). Enables "
+                                       "the chance constraint; EF only.",
+                           domain=str,
+                           default=None)
+        self.add_to_config("cc_alpha",
+                           description="Allowed violation probability for the chance "
+                                       "constraint, 0 <= alpha < 1 (alpha=0 forces "
+                                       "satisfaction in every scenario). Default 0.0.",
+                           domain=float,
+                           default=0.0)
+
     ##### Lshaped #####        
 
     def lshaped_args(self):
@@ -502,6 +543,7 @@ class Config(pyofig.ConfigDict):
                            description="Use LShaped Hub (default False)",
                            domain=bool,
                            default=False)        
+        
 
     ##### common additions to the command line #####
 
@@ -619,11 +661,16 @@ class Config(pyofig.ConfigDict):
 
     def reduced_costs_rho_args(self):
         self.add_to_config("reduced_costs_rho",
-                           description="have a ReducedCostsRho extension",
+                           description="DEPRECATED and removed (2026-06-14); "
+                                       "selecting it raises an error. Reduced-cost "
+                                       "rho was not effective in practice and did "
+                                       "not support flexible rank assignments. "
+                                       "Consider grad_rho. See "
+                                       "https://github.com/Pyomo/mpi-sppy/issues/673",
                            domain=bool,
                            default=False)
         self.add_to_config("reduced_costs_rho_multiplier",
-                           description="multiplier for ReducedCostsRho (default 1.0)",
+                           description="DEPRECATED (no effect); see reduced_costs_rho",
                            domain=float,
                            default=1.0)
 
@@ -1180,17 +1227,35 @@ class Config(pyofig.ConfigDict):
                               default=False)
 
     def xhat_from_file_args(self):
-        # Supply an initial xhat candidate from a .npy file. Every xhat
-        # spoke (xhatlooper, xhatshufflelooper, xhatspecific, xhatxbar)
-        # that descends from XhatInnerBoundBase will evaluate it once,
-        # before its normal exploration loop. Two-stage only today
-        # (matches ciutils.read_xhat). See
-        # doc/src/xhat_from_file.rst.
+        # Supply an initial xhat candidate from a file. Every xhat spoke
+        # (xhatlooper, xhatshufflelooper, xhatspecific, xhatxbar) that
+        # descends from XhatInnerBoundBase will evaluate it once, before
+        # its normal exploration loop. A .csv (node_name, variable_name,
+        # value; see sputils.write_nonant_tree_csv) works for any number
+        # of stages and is matched by name; a .npy holds a bare ROOT
+        # vector and is two-stage only. See doc/src/xhat_from_file.rst.
         self.add_to_config("xhat_from_file",
-                           description="Path to a .npy file holding an initial "
-                                       "first-stage xhat vector to evaluate "
-                                       "before normal xhatter exploration. "
-                                       "Two-stage only. Default None (off).",
+                           description="Path to a file holding an initial xhat "
+                                       "to evaluate before normal xhatter "
+                                       "exploration. A .csv nonant tree "
+                                       "(node_name, variable_name, value) works "
+                                       "for any number of stages; a .npy ROOT "
+                                       "vector is two-stage only. "
+                                       "Default None (off).",
+                           domain=str,
+                           default=None)
+
+    def write_xhat_file_args(self):
+        # Write the incumbent xhat (the whole nonant tree) to a single
+        # by-name CSV. Works for any number of stages and identically for
+        # EF and cylinders runs (both route through
+        # sputils.write_nonant_tree_csv). Default None (off).
+        self.add_to_config("write_xhat_file",
+                           description="Path to write the incumbent xhat (the "
+                                       "whole nonant tree) as a single by-name "
+                                       "CSV: 'node_name, variable_name, value', "
+                                       "node-local names. All stages; EF and "
+                                       "cylinders. Default None (off).",
                            domain=str,
                            default=None)
 

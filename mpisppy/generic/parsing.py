@@ -122,11 +122,12 @@ def parse_args(m):
     # maybe it should just require it.
 
     cfg.EF_base()  # If EF is slected, most other options will be moot
-    cfg.lshaped_args()
-    cfg.xhatlshaped_args()        
+    cfg.chance_constraint_args()  # EF-only (see config.checker)
     # There are some arguments here that will not make sense for all models
     cfg.popular_args()
     cfg.two_sided_args()
+    cfg.lshaped_args()
+    cfg.xhatlshaped_args()    
     cfg.ph_args()
     cfg.aph_args()
     cfg.cg_args()
@@ -147,6 +148,7 @@ def parse_args(m):
     cfg.xhatshuffle_args()
     cfg.xhatxbar_args()
     cfg.xhat_from_file_args()
+    cfg.write_xhat_file_args()
     cfg.norm_rho_args()
     cfg.primal_dual_rho_args()
     cfg.converger_args()

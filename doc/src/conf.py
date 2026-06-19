@@ -60,7 +60,6 @@ extensions = [
 copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
 copybutton_prompt_is_regexp = True
 
-viewcode_import = True
 #napoleon_include_private_with_doc = True
 
 # Add any paths that contain templates here, relative to this directory.

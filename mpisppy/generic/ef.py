@@ -56,6 +56,13 @@ def do_EF(module, cfg, scenario_creator, scenario_creator_kwargs,
                        all_nodenames=ef_dict["all_nodenames"]
                        )
 
+    # PySP-style chance constraint (EF only; couples all scenarios). The
+    # config.checker guard guarantees --EF when cc_indicator_var is set.
+    if cfg.get("cc_indicator_var", None) is not None:
+        from mpisppy.utils import chance_constraint
+        chance_constraint.add_chance_constraint(
+            ef.ef, cc_indicator_var_name=cfg.cc_indicator_var, cc_alpha=cfg.cc_alpha)
+
     if ef.extensions is not None:
         ef.extobject.pre_solve()
 
@@ -87,6 +94,10 @@ def do_EF(module, cfg, scenario_creator, scenario_creator_kwargs,
         else:
             ef.write_tree_solution(f'{cfg.solution_base_name}_soldir')
         global_toc("Wrote EF solution data.")
+
+    if cfg.get("write_xhat_file", None) is not None:
+        sputils.ef_nonants_csv(ef.ef, cfg.write_xhat_file)
+        global_toc("Wrote xhat tree file.")
 
     if hasattr(module, "custom_writer"):
         module.custom_writer(ef, cfg)

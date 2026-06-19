@@ -137,5 +137,9 @@ def _write_solutions(wheel, module, cfg):
             wheel.write_tree_solution(f'{cfg.solution_base_name}_soldir')
         global_toc("Wrote solution data.")
 
+    if cfg.get("write_xhat_file", None) is not None:
+        wheel.write_tree_nonants(cfg.write_xhat_file)
+        global_toc("Wrote xhat tree file.")
+
     if hasattr(module, "custom_writer"):
         module.custom_writer(wheel, cfg)

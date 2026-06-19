@@ -777,11 +777,6 @@ def add_integer_relax_then_enforce(hub_dict,
     hub_dict["opt_kwargs"]["options"]["integer_relax_then_enforce_options"] = {"ratio":cfg.integer_relax_then_enforce_ratio}
     return hub_dict
 
-def add_reduced_costs_rho(hub_dict, cfg):
-    from mpisppy.extensions.reduced_costs_rho import ReducedCostsRho
-    hub_dict = extension_adder(hub_dict,ReducedCostsRho)
-    hub_dict["opt_kwargs"]["options"]["reduced_costs_rho_options"] = {"multiplier" : cfg.reduced_costs_rho_multiplier, "cfg": cfg}
-
 def add_sep_rho(hub_dict, cfg):
     from mpisppy.extensions.sep_rho import SepRho
     hub_dict = extension_adder(hub_dict,SepRho)
