@@ -148,6 +148,10 @@ class Config(pyofig.ConfigDict):
                              f"{msg}")
 
         # remember that True is 1 and False is 0
+        if (self.get("APH") + self.get("subgradient_hub") + self.get("fwph_hub") + self.get("ph_primal_hub") + self.get("lshaped_hub") + self.get("cg_hub") + self.get("dualcg_hub")) > 1:
+            _bad_options("Only one hub can be active.")
+
+        # remember that True is 1 and False is 0
         if (self.get("grad_rho") + self.get("sensi_rho") + self.get("coeff_rho") + self.get("reduced_costs_rho") + self.get("sep_rho")) > 1:
             _bad_options("Only one rho setter can be active.")
         if not (self.get("grad_rho")
