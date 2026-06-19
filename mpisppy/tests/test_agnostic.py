@@ -245,6 +245,12 @@ class Test_Agnostic_gurobipy(unittest.TestCase):
         s0 = Ag.scenario_creator("scen0")
         s2 = Ag.scenario_creator("scen2")
 
+    def test_agnostic_gurobipy_maximize_raises(self):
+        # The gurobipy guest is minimize-only; a maximize model must fail loudly.
+        import gurobipy as gp
+        with self.assertRaises(RuntimeError):
+            farmer_gurobipy_agnostic.scenario_creator("scen0", sense=gp.GRB.MAXIMIZE)
+
     def test_agnostic_gurobipy_PH_constructor(self):
         cfg = _farmer_cfg()
         Ag = agnostic.Agnostic(farmer_gurobipy_agnostic, cfg)
