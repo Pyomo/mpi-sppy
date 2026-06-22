@@ -1,0 +1,20 @@
+This directory contains test instances for a stochastic multicommodity network
+design problem. 
+
+Instances stored in Data folder has name convention as scmnd_N_E_K_S,
+where 
+    N:nodes, 
+    E:arcs, 
+    K:commodities,
+    S:scenarios. 
+    
+The problem formulation
+
+    min_{y,x}   \sum_{e\in E} f_e y_e + \sum_{s\in S} \sum_{e\in E} \sum_{k\in K} Pr(s) c_e^{ks}_e y^{ks}_e
+    s.t.        \sum_{e\in E^{in}_i} x^{ks}_e - \sum_{e\in E^{out}_i} x^{ks}_e = d^{ks}_i
+                \sum_{k\in K} x^{ks}_e <= u_e y_e
+                x^{ks}_i >= 0
+                y_e \in {0, 1} **
+                
+    ** ReferenceModel.py implements linear relaxation. 
+    ** Change the DesignArcVar from UnitInterval to Binary to solve the MILP 
