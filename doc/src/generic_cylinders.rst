@@ -137,7 +137,7 @@ two-stage problems:
 
 .. code-block:: bash
 
-    mpiexec -np 3 python -m mpi4py mpisppy/generic_cylinders.py \
+    mpiexec -np 2 python -m mpisppy.generic_cylinders \
         --module-name farmer --num-scens 3 \
         --solver-name gurobi --lshaped-hub --xhatlshaped \
         --max-iterations 100 --rel-gap 1e-4
