@@ -1,4 +1,11 @@
 #!/bin/bash
+# Deprecated: exercises the archived stoch_distr_admm_cylinders driver.
+# Prefer running from examples/stoch_distr/ with generic_cylinders:
+#   mpiexec -np 3 python -u -m mpi4py ../../mpisppy/generic_cylinders.py \
+#       --module-name stoch_distr --stoch-admm --num-stoch-scens 3 \
+#       --num-admm-subproblems 2 --default-rho 10 --solver-name $SOLVERNAME \
+#       --max-iterations 50 --scalable --xhatxbar --lagrangian --mnpr 9 \
+#       --ensure-xhat-feas
 set -e
 
 SOLVERNAME=gurobi_persistent

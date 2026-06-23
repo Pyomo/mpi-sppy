@@ -6,10 +6,16 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-# general example driver for stoch_distr with cylinders
-# Consider using generic_cylinders.py with --stoch-admm instead.
+# Deprecated standalone driver for stoch_distr.  Use
+# `python ../../../mpisppy/generic_cylinders.py --module-name stoch_distr
+# --stoch-admm` from examples/stoch_distr/ instead.  Kept here for
+# reference and so tests can compare the wrapper path against the
+# generic driver.
+import os
+import sys
+# stoch_distr.py lives one directory up (examples/stoch_distr/).
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Driver file for stochastic admm
 import mpisppy.utils.stoch_admmWrapper as stoch_admmWrapper
 
 import stoch_distr
@@ -28,6 +34,17 @@ def _parse_args():
     # create a config object and parse
     cfg = config.Config()
     stoch_distr.inparser_adder(cfg)
+    # admm subproblem / stochastic scenario counts: registered by
+    # mpisppy.generic.admm.admm_args under generic_cylinders --stoch-admm,
+    # but this deprecated driver bypasses that path, so register here.
+    cfg.add_to_config("num_admm_subproblems",
+                      description="Number of admm subproblems (regions)",
+                      domain=int, default=None,
+                      argparse_args={"required": True})
+    cfg.add_to_config("num_stoch_scens",
+                      description="Number of stochastic scenarios",
+                      domain=int, default=None,
+                      argparse_args={"required": True})
     cfg.popular_args()
     cfg.two_sided_args()
     cfg.ph_args()
@@ -64,9 +81,11 @@ def _make_admm(cfg, n_cylinders, verbose=None):
 
     admm_subproblem_names = stoch_distr.admm_subproblem_names_creator(cfg)
     stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(cfg)
-    all_admm_stoch_subproblem_scenario_names = stoch_distr.admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names,stoch_scenario_names)
-
-    split_admm_stoch_subproblem_scenario_name = stoch_distr.split_admm_stoch_subproblem_scenario_name
+    # stoch_distr no longer ships custom naming helpers; use the
+    # package defaults from mpisppy.utils.stoch_admmWrapper.
+    all_admm_stoch_subproblem_scenario_names = (
+        stoch_admmWrapper.default_admm_stoch_subproblem_scenario_names_creator(
+            admm_subproblem_names, stoch_scenario_names))
 
     scenario_creator = stoch_distr.scenario_creator
     scenario_creator_kwargs = stoch_distr.kw_creator(cfg)
@@ -74,10 +93,11 @@ def _make_admm(cfg, n_cylinders, verbose=None):
     consensus_vars = stoch_distr.consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, **scenario_creator_kwargs)
     # stoch_distr exposes first_stage_cost / first_stage_varlist
     # module-level hooks so Stoch_AdmmWrapper attaches the root node
-    # itself; pass them through here too.
+    # itself; pass them through here too.  split=None opts in to the
+    # default split (paired with default_combining_names above).
     admm = stoch_admmWrapper.Stoch_AdmmWrapper(options,
                            all_admm_stoch_subproblem_scenario_names,
-                           split_admm_stoch_subproblem_scenario_name,
+                           None,  # split_admm_stoch_subproblem_scenario_name
                            admm_subproblem_names,
                            stoch_scenario_names,
                            scenario_creator,
