@@ -291,6 +291,11 @@ def stoch_scenario_names_creator(cfg):
     Returns:
         list (str): the list of stochastic scenario names
     """
+    if cfg.get("num_stoch_scens") is None:
+        raise RuntimeError(
+            "stoch_distr builds stochastic scenario names from a count, so "
+            "it requires --num-stoch-scens; pass it on the command line."
+        )
     return [f"StochasticScenario{i+1}" for i in range(cfg.num_stoch_scens)]
 
 
@@ -303,6 +308,12 @@ def admm_subproblem_names_creator(cfg):
     Returns:
         list (str): the list of admm subproblem names
     """
+    if cfg.get("num_admm_subproblems") is None:
+        raise RuntimeError(
+            "stoch_distr builds ADMM subproblem (region) names from a count, "
+            "so it requires --num-admm-subproblems; pass it on the command "
+            "line."
+        )
     return [f"Region{i+1}" for i in range(cfg.num_admm_subproblems)]
 
 

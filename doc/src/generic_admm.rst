@@ -617,11 +617,17 @@ Argument                                    Domain       Description
 .. Note::
    ``--num-admm-subproblems`` and ``--num-stoch-scens`` are registered
    automatically by ``mpisppy.generic.admm.admm_args`` under
-   ``generic_cylinders --stoch-admm``; the model module's
-   ``inparser_adder`` does not need to re-register them.  Passing
-   ``--stoch-admm`` without both flags raises a clear error from
-   ``_check_admm_compatibility`` instead of crashing inside the
-   model's ``admm_subproblem_names_creator``.
+   ``generic_cylinders --stoch-admm`` (both default to ``None``), so the
+   model module's ``inparser_adder`` does not need to re-register them.
+   Whether they are *needed* depends on your model.  These counts are an
+   input to your name creators, not to the library: the wrapper takes the
+   number of subproblems and scenarios from the lengths of the lists that
+   ``admm_subproblem_names_creator`` / ``stoch_scenario_names_creator``
+   return.  The ``stoch_distr`` example builds those lists from the counts
+   (``range(num_...)``), so it requires both flags and raises a clear
+   error if either is missing.  A model that derives its names another way
+   -- for example, one stochastic scenario per day across a date range --
+   can ignore the flags entirely.
 
 .. Note::
    For deterministic ADMM, the number of subproblems is given by ``--num-scens``,

@@ -450,8 +450,8 @@ class TestAdmmArgs(unittest.TestCase):
         from mpisppy.generic.admm import _check_admm_compatibility
         cfg = config.Config()
         cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
-        # num_admm_subproblems / num_stoch_scens are required for
-        # --stoch-admm; the compat check validates they were set.
+        # The counts are not required by the compat check; set here only to
+        # mirror a typical count-based (stoch_distr-style) configuration.
         cfg.add_to_config("num_admm_subproblems", description="",
                           domain=int, default=2)
         cfg.add_to_config("num_stoch_scens", description="",
@@ -461,8 +461,8 @@ class TestAdmmArgs(unittest.TestCase):
 
     def _stoch_admm_cfg(self):
         """Minimal cfg for a --stoch-admm compat check: includes the
-        two count flags that admm_args registers and that the compat
-        check now validates."""
+        two count flags that admm_args registers (the compat check does
+        not require them, but count-based models like stoch_distr do)."""
         cfg = config.Config()
         cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
         cfg.add_to_config("num_admm_subproblems", description="",
@@ -509,32 +509,23 @@ class TestAdmmArgs(unittest.TestCase):
         # Should not raise
         _check_admm_compatibility(cfg)
 
-    def test_check_stoch_admm_missing_counts_errors(self):
-        """Phase E: --stoch-admm without --num-admm-subproblems or
-        --num-stoch-scens must error with a clear message at compat-check
-        time (since the example modules no longer register these as
-        required and admm_args registers them as default=None)."""
+    def test_check_stoch_admm_missing_counts_ok(self):
+        """The library does not require --num-admm-subproblems /
+        --num-stoch-scens under --stoch-admm.  The counts are an input to
+        the model's name creators (and only for count-based models such as
+        stoch_distr), not to the library, which derives the counts from the
+        lengths of the name lists the model returns.  A model that builds
+        names another way (e.g. one per day in a date range) passes the
+        compat check without them."""
         from mpisppy.generic.admm import _check_admm_compatibility
-        # Missing num_admm_subproblems.
         cfg = config.Config()
         cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
         cfg.add_to_config("num_admm_subproblems", description="",
                           domain=int, default=None)
         cfg.add_to_config("num_stoch_scens", description="",
-                          domain=int, default=4)
-        with self.assertRaises(RuntimeError) as cm:
-            _check_admm_compatibility(cfg)
-        self.assertIn("num-admm-subproblems", str(cm.exception))
-        # Missing num_stoch_scens.
-        cfg = config.Config()
-        cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
-        cfg.add_to_config("num_admm_subproblems", description="",
-                          domain=int, default=2)
-        cfg.add_to_config("num_stoch_scens", description="",
                           domain=int, default=None)
-        with self.assertRaises(RuntimeError) as cm:
-            _check_admm_compatibility(cfg)
-        self.assertIn("num-stoch-scens", str(cm.exception))
+        # Should not raise
+        _check_admm_compatibility(cfg)
 
     def test_check_admm_xhatshuffle_without_stage2ef_ok(self):
         """Deterministic --admm + xhatshuffle without stage2_ef_solver_name
