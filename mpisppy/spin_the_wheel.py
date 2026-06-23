@@ -240,6 +240,19 @@ class WheelSpinner:
         if winner:
             self.spcomm.opt.write_tree_solution(solution_directory_name,scenario_tree_solution_writer)
 
+    def write_tree_nonants(self, solution_file_name):
+        """ Write the whole nonant tree (the xhat) to one by-name CSV, if a
+        solution is available. Single-file, nonant-only companion to
+        write_tree_solution.
+        Args:
+            solution_file_name : path of the CSV file to write the xhat tree to
+        """
+        if not self._ran:
+            raise RuntimeError("Need to call WheelSpinner.run() before querying solutions.")
+        winner = self._determine_innerbound_winner()
+        if winner:
+            self.spcomm.opt.write_tree_nonants(solution_file_name)
+
     def local_nonant_cache(self):
         """ Returns a dict with non-anticipative values at each local node
             We assume that the optimization has been done before calling this

@@ -68,6 +68,9 @@ run_phase "test_ef_ph (serial)" \
 run_phase "test_cvar (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_cvar.py -v
 
+run_phase "test_chance_constraint (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_chance_constraint.py -v
+
 run_phase "test_component_map_usage (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_component_map_usage.py -v
 
@@ -213,6 +216,11 @@ run_phase "test_cg_with_cylinders (mpiexec -np 2)" \
 # convergence-path broadcast that used to deadlock a multi-rank hub (#729).
 run_phase "test_cg_multirank_hub (mpiexec -np 4)" \
     mpiexec -np 4 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_cg_multirank_hub.py
+
+# Multi-stage xhat-file round trip: at np=4 the writing cylinder spans two
+# ranks, so gather_nonant_tree_to_rank0 must merge subtrees across ranks.
+run_phase "test_xhat_file_multistage (mpiexec -np 4)" \
+    mpiexec -np 4 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_xhat_file_multistage.py
 
 run_phase "test_dualcg_main (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_dualcg_main.py

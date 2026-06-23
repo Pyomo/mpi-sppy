@@ -94,6 +94,10 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_cvar.py -v
 
+      - name: Test chance_constraint
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_chance_constraint.py -v
+
       - name: Test afew
         run: |
           PYARGS="-m coverage run $COV_ARGS"
@@ -1036,6 +1040,12 @@ jobs:
         run: |
           cd mpisppy/tests
           mpiexec -np 4 coverage run $COV_ARGS -m mpi4py test_cg_multirank_hub.py
+
+      - name: run multi-stage xhat-file round-trip test
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          mpiexec -np 4 coverage run $COV_ARGS -m mpi4py test_xhat_file_multistage.py
 
       - name: run DCG serial tests
         timeout-minutes: 10
