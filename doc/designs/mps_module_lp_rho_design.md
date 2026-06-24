@@ -116,8 +116,8 @@ def _rho_setter(scenario):
 
 ### 4.1 Header reconciliation (`varname` vs `fullname`)
 
-The file-path `_rho.csv` — written by `scenario_lp_mps_files.py` (L84–87), by
-PyPSA, and in `_delme_test_write_mp_mps_dir/` — uses header **`varname,rho`**.
+The file-path `_rho.csv` — written by the `scenario_lp_mps_files.py` extension
+(L84–87) and by PyPSA — uses header **`varname,rho`**.
 But `rho_utils.rho_list_from_csv` (L34/L37) reads a **`fullname`** column.
 Reconcile by generalizing the reader to accept either header and to apply the
 same `(`→`_`, `)`→`_` normalization that `scenario_creator` uses (L67), so names
