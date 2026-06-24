@@ -15,6 +15,13 @@ is the model file (.lp or .mps) and the other is a json file with a scenario
 tree dictionary for the scenario. An optional {scenario}_rho.csv file supplies
 per-nonant rho values.
 
+Rho consistency is the file writer's responsibility: PH requires the SAME rho
+for a given nonant at a tree node across every scenario that passes through
+that node. mpi-sppy applies these rhos per scenario and does NOT check
+cross-scenario consistency (a full check would need a collective across ranks),
+so an inconsistent set of {scenario}_rho.csv files silently yields an
+ill-defined PH run.
+
 Scenario names must have a consistent base (e.g. "scenario" or "scen") and
 must end in a serial number (unless you can't, you should start with 0; 
 otherwise, start with 1).
@@ -170,6 +177,9 @@ def _rho_setter(scenario):
     preserved. When a rho file is present it should cover every nonant (with
     --default-rho passed as a backstop), because defining _rho_setter bypasses
     the driver's --default-rho check.
+
+    The csv writer must give identical rho to every scenario sharing a node for
+    a given nonant (see the module docstring); this is not checked here.
     """
     path = getattr(scenario, "_rho_csv_path", None)
     if not path:

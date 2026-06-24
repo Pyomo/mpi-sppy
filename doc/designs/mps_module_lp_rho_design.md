@@ -135,6 +135,29 @@ for _, row in rhodf.iterrows():
 (With PyPSA's implicit `x{label}` names there are no parens, so normalization is a
 no-op there; it keeps general Pyomo-name cases working.)
 
+### 4.2 Per-node rho consistency is the writer's responsibility
+
+PH requires the **same rho for a given nonant at a tree node across every
+scenario through that node** (the proximal and W updates assume a common rho so
+that `Σ_s p_s W_s` stays 0). `_rho_setter` is applied per scenario
+(`phbase._use_rho_setter`) and mpi-sppy does **not** reconcile rhos across
+scenarios, so producing a consistent set is the responsibility of whatever
+writes the `{scenario}_rho.csv` files. The `scenario_lp_mps_files.py` extension
+does this by construction (it copies a live, already-consistent
+`_mpisppy_model.rho`); hand-authored or externally generated sets must take
+care.
+
+We document the requirement rather than enforce it. A **full** cross-scenario
+check needs a collective — scenarios at a node are spread across MPI ranks —
+analogous to the existing per-node Allreduce in
+`_check_variable_probabilities_sum`. A **no-communication partial check** is
+possible: compare rhos across the scenarios local to each rank that share a
+node. That partial check is actually *complete* in serial runs (all scenarios
+are local) and only degrades to partial in parallel (worst case: two-stage,
+where every scenario shares ROOT but they are scattered across ranks). A free
+local partial check and/or a one-time setup reduce could be added later if this
+proves error-prone in practice.
+
 ## 5. Backward compatibility
 
 - MPS-only directories: `scenario_creator` / `scenario_names_creator` still find
