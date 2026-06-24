@@ -2,9 +2,9 @@
 
 Status: draft for review. Small, **additive, back-compatible** changes to
 `mpisppy/problem_io/mps_module.py` (plus a one-line generalization in
-`mpisppy/utils/rho_utils.py`). Motivated by the PyPSA integration
-(`doc/designs/pypsa_stochastic_design.md`) but useful for any file-based scenario
-workflow. No changes to the driver, the reader, or PH.
+`mpisppy/utils/rho_utils.py`). Motivated in part by ongoing PyPSA-integration
+work, but useful for any file-based scenario workflow. No changes to the driver,
+the reader, or PH.
 
 ## 1. Scope
 
