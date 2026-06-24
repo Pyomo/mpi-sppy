@@ -187,6 +187,16 @@ class Config(pyofig.ConfigDict):
             _bad_options("--cc-indicator-var (chance constraint) is currently "
                          "supported only with --EF")
 
+        # Slamming options other than the directives file are meaningless
+        # without it; require the file so that a run with no slamming options
+        # behaves exactly as it does today (total backward compatibility).
+        if self.get("slamming_directives_file") is None and (
+                self.get("slam_start_iter") is not None
+                or self.get("iters_between_slams") is not None):
+            _bad_options("slamming options (--slam-start-iter / "
+                         "--iters-between-slams) require "
+                         "--slamming-directives-file")
+
     def add_solver_specs(self, prefix=""):
         sstr = f"{prefix}_solver" if prefix else "solver"
         if prefix:
@@ -643,6 +653,33 @@ class Config(pyofig.ConfigDict):
                                        "to spend with relaxed integers",
                            domain=float,
                            default=0.5)
+
+    def slamming_args(self):
+        # Phase-1 preference-driven slamming (see doc/designs/slamming_design.md).
+        # The Slammer extension is activated iff slamming_directives_file is set;
+        # supplying the other slam options without the file is a hard error
+        # (enforced in checker()) so that a run with no slamming options behaves
+        # exactly as it does today.
+        self.add_to_config("slamming_directives_file",
+                           description="CSV of by-name (wildcard) slamming "
+                           "directives; its presence activates the Slammer "
+                           "extension (default None)",
+                           domain=str,
+                           default=None)
+
+        self.add_to_config("slam_start_iter",
+                           description="first hub iteration at which slamming "
+                           "may occur (default 1); requires "
+                           "--slamming-directives-file",
+                           domain=int,
+                           default=None)
+
+        self.add_to_config("iters_between_slams",
+                           description="once started, slam at most once every "
+                           "this many iterations (default 1); requires "
+                           "--slamming-directives-file",
+                           domain=int,
+                           default=None)
 
     def reduced_costs_rho_args(self):
         self.add_to_config("reduced_costs_rho",

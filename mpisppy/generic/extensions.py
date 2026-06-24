@@ -42,6 +42,9 @@ def configure_extensions(hub_dict, module, cfg):
     if cfg.integer_relax_then_enforce:
         vanilla.add_integer_relax_then_enforce(hub_dict, cfg)
 
+    if cfg.slamming_directives_file is not None:
+        vanilla.add_slammer(hub_dict, cfg)
+
     if cfg.grad_rho:
         from mpisppy.extensions.grad_rho import GradRho
         ext_classes.append(GradRho)
