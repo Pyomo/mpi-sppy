@@ -117,7 +117,7 @@ class TestMPSModule(unittest.TestCase):
 
     @unittest.skipIf(not solver_available, "no solver available")
     def test_rho_setter_no_csv_falls_back(self):
-        # A dir with no {s}_rho.csv -> _mps_rho_csv None -> _rho_setter == [].
+        # A dir with no {s}_rho.csv -> _rho_csv_path None -> _rho_setter == [].
         with tempfile.TemporaryDirectory() as td:
             for suffix in (".lp", "_nonants.json"):
                 shutil.copy(
@@ -125,7 +125,7 @@ class TestMPSModule(unittest.TestCase):
                     os.path.join(td, "Scenario1" + suffix))
             cfg = self._cfg(td)
             model = mps_module.scenario_creator("Scenario1", cfg=cfg)
-            self.assertIsNone(model._mps_rho_csv)
+            self.assertIsNone(model._rho_csv_path)
             self.assertEqual(mps_module._rho_setter(model), [])
 
     def test_both_exts_lp_preferred(self):

@@ -101,9 +101,12 @@ def scenario_creator(sname, cfg=None):
     model._mpisppy_probability = scenProb
     model._mpisppy_node_list = treeNodes
 
-    # Optional per-nonant rho file; picked up by _rho_setter (None if absent).
+    # Optional {scenario}_rho.csv: stash its path for this module's _rho_setter
+    # to read later (a private handshake within mps_module). Like
+    # _mpisppy_node_list above, this is a plain creation-time attribute;
+    # _mpisppy_data does not exist until SPBase sets the scenario up.
     rho_path = sharedPath + "_rho.csv"
-    model._mps_rho_csv = rho_path if os.path.exists(rho_path) else None
+    model._rho_csv_path = rho_path if os.path.exists(rho_path) else None
 
     return model
 
@@ -160,13 +163,15 @@ def kw_creator(cfg):
 def _rho_setter(scenario):
     """ Per-nonant rho from the scenario's {s}_rho.csv, if present.
 
-    Auto-discovered by the generic driver (generic/decomp.py:_get_rho_setter)
-    and threaded to the hub/spokes. Returns an empty list when no rho file is
-    present, so the --default-rho path is preserved. When a rho file is present
-    it should cover every nonant (with --default-rho passed as a backstop),
-    because defining _rho_setter bypasses the driver's --default-rho check.
+    Reads the csv path that scenario_creator stashed on the scenario as
+    _rho_csv_path. Auto-discovered by the generic driver
+    (generic/decomp.py:_get_rho_setter) and threaded to the hub/spokes. Returns
+    an empty list when no rho file is present, so the --default-rho path is
+    preserved. When a rho file is present it should cover every nonant (with
+    --default-rho passed as a backstop), because defining _rho_setter bypasses
+    the driver's --default-rho check.
     """
-    path = getattr(scenario, "_mps_rho_csv", None)
+    path = getattr(scenario, "_rho_csv_path", None)
     if not path:
         return []
     return rho_utils.rho_list_from_csv(scenario, path)

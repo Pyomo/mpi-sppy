@@ -79,20 +79,28 @@ def _scenario_model_path(directory, sname):
 ## 4. Change 2 — per-nonant rho from `{s}_rho.csv`
 
 Add a module `_rho_setter` so the driver applies per-nonant rho automatically.
-To avoid depending on a scenario-name attribute, `scenario_creator` stashes the
-rho-file path on the model (it already computes `sharedPath`):
+The reader builds an unnamed `ConcreteModel`, so the scenario name `sname` is
+not recoverable from the model passed to `_rho_setter`. `scenario_creator`
+therefore stashes the rho-file path on the model (it already computes
+`sharedPath` and knows `sname`):
 
 ```python
 # in scenario_creator, after building `model`:
 rho_path = sharedPath + "_rho.csv"
-model._mps_rho_csv = rho_path if os.path.exists(rho_path) else None
+model._rho_csv_path = rho_path if os.path.exists(rho_path) else None
 ```
+
+This is a private handshake within `mps_module`: `scenario_creator` writes
+`_rho_csv_path` and `_rho_setter` reads it; no framework code touches it. It is
+a plain creation-time attribute (like `_mpisppy_node_list`), **not** a field of
+`_mpisppy_data` — that Pyomo `Block` is attached later by `SPBase`, after
+`scenario_creator` returns, and holds framework-computed runtime data.
 
 ```python
 import mpisppy.utils.rho_utils as rho_utils
 
 def _rho_setter(scenario):
-    path = getattr(scenario, "_mps_rho_csv", None)
+    path = getattr(scenario, "_rho_csv_path", None)
     if not path:
         return []            # no rho file -> fall back to --default-rho
     return rho_utils.rho_list_from_csv(scenario, path)
@@ -148,7 +156,7 @@ no-op there; it keeps general Pyomo-name cases working.)
 
 - `mpisppy/problem_io/mps_module.py`:
   - add `_SCENARIO_EXTS` + `_scenario_model_path`;
-  - `scenario_creator` (L47–49) use the resolver; stash `_mps_rho_csv`;
+  - `scenario_creator` (L47–49) use the resolver; stash `_rho_csv_path`;
   - `scenario_names_creator` (L94–112) glob both exts, `os.path.splitext`;
   - add `_rho_setter`; `import mpisppy.utils.rho_utils`.
 - `mpisppy/utils/rho_utils.py`: `rho_list_from_csv` (L34–43) accept `varname` and
