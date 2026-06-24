@@ -23,6 +23,7 @@ Many extensions are supported in :ref:`generic_cylinders` via
 command-line flags:
 
 - ``--fixer`` -- activates the fixer extension
+- ``--slamming-directives-file <file>`` -- activates the slammer extension
 - ``--mipgaps-json <file>`` -- activates the mipgapper extension
 - ``--user-defined-extensions <module>`` -- loads a custom extension
 - ``--grad-rho`` -- activates gradient-based rho (see :ref:`rho_setting`)
@@ -158,6 +159,95 @@ threshold is within 10\%  of the convergence tolerance.
 This extension can be especially effective if (1) solving the relaxation
 is much easier than solving the problem with integrality constraints or (2) the
 relaxation is reasonably "tight".
+
+.. _slammer:
+
+slammer
+^^^^^^^
+
+This extension does preference-driven *slamming*: it forces (fixes) a
+nonanticipative variable according to pre-specified user preferences while the
+hub is running, to break a stall or cycle. Unlike the other fixers above --
+which fix on *agreement* and so can infer a direction automatically -- slamming
+is meant for variables that are *not* settling, where there is no agreement to
+read a direction from, so the directions are supplied by the user in a
+directives file. This is the intended use rather than an enforced precondition:
+slamming does not test convergence per variable; any variable matched by a
+``can_slam`` rule is eligible (see the eligibility rules below). (Slamming is
+distinct from the ``SlamMin`` / ``SlamMax`` *spokes*, which are non-destructive
+incumbent finders that never perturb the hub.)
+
+From ``generic_cylinders.py`` the extension is activated **only** when a
+directives file is supplied, so a run with no slamming options behaves exactly
+as it does today:
+
+- ``--slamming-directives-file <file>`` -- the directives file (its presence
+  activates the extension)
+- ``--slam-start-iter <K>`` -- first hub iteration at which slamming may occur
+  (default 1)
+- ``--iters-between-slams <M>`` -- once started, slam at most once every ``M``
+  iterations (default 1)
+
+Supplying ``--slam-start-iter`` or ``--iters-between-slams`` without the file is
+an error.
+
+The directives file is a CSV keyed by nonant name with shell-style wildcards
+(``*``/``?``; the index brackets ``[`` ``]`` are matched literally). Each row
+gives a name pattern, an optional ``can_slam`` flag (``1``/``0``; ``0`` carves
+out an exception), an ordered ``|``-separated list of ``directions`` from
+``{lb, ub, nearest, anywhere, min, max}`` (the first applicable one is used),
+and a ``priority`` (the eligible nonant with the largest priority is slammed
+first). Matching is last-match-wins, so write broad defaults first and
+exceptions after; only variables matched by a ``can_slam`` rule are ever
+slammed. A multi-index name contains a comma and so must be quoted. A pattern
+that matches no variable in the model is a hard error (it is almost always a
+typo) and the message names the file. A worked example translated from PySP
+ships at ``examples/sizes/config/slamming_directives.csv``.
+
+The available ``directions``, and the value each fixes the variable to, are:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 85
+
+   * - Direction
+     - Value the variable is fixed to
+   * - ``lb``
+     - the variable's lower bound
+   * - ``ub``
+     - the variable's upper bound
+   * - ``nearest``
+     - whichever bound (``lb`` or ``ub``) the current consensus value ``xbar``
+       is closer to
+   * - ``anywhere``
+     - ``xbar`` itself, rounded to the nearest integer for integer and binary
+       variables (using ``--rounding-bias``)
+   * - ``min``
+     - the minimum of the variable's value across all scenarios that share its
+       scenario-tree node
+   * - ``max``
+     - the maximum of the variable's value across all scenarios that share its
+       scenario-tree node
+
+A direction is *applicable* only when it produces a finite value (for example,
+``lb`` is skipped for a variable that has no lower bound). The directions in a
+row are tried in order and the first applicable one is used; if none applies,
+that variable is not slammed at this event.
+
+Slamming is triggered by iteration count: no variable is slammed before
+``--slam-start-iter``, and from then on at most one variable is slammed every
+``--iters-between-slams`` iterations. At each such event the single eligible
+variable with the largest ``priority`` is slammed (ties are broken by name, so
+the choice is the same on every rank). A variable is eligible only if it is
+matched by a ``can_slam`` rule, is not already fixed (by the modeler or another
+fixer), and is not a surrogate variable. Once a variable is slammed it stays
+fixed for the remainder of the run.
+
+The directions ``lb``, ``ub``, ``nearest``, and ``anywhere`` use only data that
+is already identical on every rank, so they need no communication; ``min`` and
+``max`` perform a single small reduction across scenarios, and only when such a
+slam actually occurs. See ``doc/designs/slamming_design.md`` for design details
+and rationale.
 
 WXBarWriter and WXBarReader
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
