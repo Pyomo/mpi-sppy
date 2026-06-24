@@ -11,8 +11,16 @@
 """You pass in a path to a special mps_files_directory in the config and this
 module will become a valid mpi-sppy module.
 The directory has to have file pairs for each scenario where one file
-is the mps file and other is a json file with a scenario tree dictionary
-for the scenario.
+is the model file (.lp or .mps) and the other is a json file with a scenario
+tree dictionary for the scenario. An optional {scenario}_rho.csv file supplies
+per-nonant rho values.
+
+Rho consistency is the file writer's responsibility: PH requires the SAME rho
+for a given nonant at a tree node across every scenario that passes through
+that node. mpi-sppy applies these rhos per scenario and does NOT check
+cross-scenario consistency (a full check would need a collective across ranks),
+so an inconsistent set of {scenario}_rho.csv files silently yields an
+ill-defined PH run.
 
 Scenario names must have a consistent base (e.g. "scenario" or "scen") and
 must end in a serial number (unless you can't, you should start with 0; 
@@ -32,8 +40,23 @@ import json
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
 import mpisppy.problem_io.mps_reader as mps_reader
+import mpisppy.utils.rho_utils as rho_utils
 # assume you can get the path from config, set in kw_creator as a side-effect
 mps_files_directory = None
+
+# Scenario model files may be MPS or LP; .lp is preferred when both are present.
+_SCENARIO_EXTS = (".lp", ".mps")
+
+
+def _scenario_model_path(directory, sname):
+    """ Return the path to the scenario model file, preferring .lp over .mps. """
+    for ext in _SCENARIO_EXTS:
+        p = os.path.join(directory, sname + ext)
+        if os.path.exists(p):
+            return p
+    raise FileNotFoundError(
+        f"No scenario model file for '{sname}' in {directory} "
+        f"(looked for {', '.join(sname + e for e in _SCENARIO_EXTS)})")
 
 def scenario_creator(sname, cfg=None):
     """ Load the model from an mps file
@@ -45,8 +68,8 @@ def scenario_creator(sname, cfg=None):
     """
 
     sharedPath = os.path.join(cfg.mps_files_directory, sname)
-    mpsPath = sharedPath + ".mps"
-    model = mps_reader.read_mps_and_create_pyomo_model(mpsPath)
+    modelPath = _scenario_model_path(cfg.mps_files_directory, sname)
+    model = mps_reader.read_mps_and_create_pyomo_model(modelPath)
 
     # now read the JSON file and attach the tree information.
     jsonPath = sharedPath + "_nonants.json"
@@ -84,6 +107,14 @@ def scenario_creator(sname, cfg=None):
         
     model._mpisppy_probability = scenProb
     model._mpisppy_node_list = treeNodes
+
+    # Optional {scenario}_rho.csv: stash its path for this module's _rho_setter
+    # to read later (a private handshake within mps_module). Like
+    # _mpisppy_node_list above, this is a plain creation-time attribute;
+    # _mpisppy_data does not exist until SPBase sets the scenario up.
+    rho_path = sharedPath + "_rho.csv"
+    model._rho_csv_path = rho_path if os.path.exists(rho_path) else None
+
     return model
 
 
@@ -91,25 +122,29 @@ def scenario_creator(sname, cfg=None):
 def scenario_names_creator(num_scens, start=None):
     # validate the directory and use it to get names (that have to be numbered)
     # IMPORTANT: start is zero-based even if the names are one-based!
-    mps_files = [os.path.basename(f)
-                for f in glob.glob(os.path.join(mps_files_directory, "*.mps"))]
-    mps_files.sort()
+    model_files = []
+    for ext in _SCENARIO_EXTS:
+        model_files += glob.glob(os.path.join(mps_files_directory, "*" + ext))
+    # dedup base names so a dir with both {s}.lp and {s}.mps yields one name
+    model_names = sorted({os.path.splitext(os.path.basename(f))[0]
+                          for f in model_files})
     if start is None:
         start = 0
     if num_scens is None:
-        num_scens = len(mps_files) - start
-    first = re.search(r"\d+$",mps_files[0][:-4])  # first scenario number
+        num_scens = len(model_names) - start
+    first = re.search(r"\d+$", model_names[0])  # first scenario number
     try:
         first = int(first.group())
     except Exception as e:
-        raise RuntimeError(f'mps files in {mps_files_directory} must end with an integer'
-                           f'found file {mps_files[0]} (error was: {e})')
+        raise RuntimeError(f'scenario model files in {mps_files_directory} must end'
+                           f' with an integer found file {model_names[0]}'
+                           f' (error was: {e})')
     if first != 0:
         print("WARNING: non-zero-based senario names might cause trouble"
               f" found {first=} for dir {mps_files_directory}")
-    assert start+num_scens <= len(mps_files),\
-        f"Trying to create scenarios names with {start=}, {num_scens=} but {len(mps_files)=}"
-    retval = [fn[:-4] for fn in mps_files[start:start+num_scens]]
+    assert start+num_scens <= len(model_names),\
+        f"Trying to create scenarios names with {start=}, {num_scens=} but {len(model_names)=}"
+    retval = model_names[start:start+num_scens]
     return retval
 
 #=========
@@ -129,6 +164,27 @@ def kw_creator(cfg):
     global mps_files_directory
     mps_files_directory = cfg.mps_files_directory
     return {"cfg": cfg}
+
+
+#=========
+def _rho_setter(scenario):
+    """ Per-nonant rho from the scenario's {s}_rho.csv, if present.
+
+    Reads the csv path that scenario_creator stashed on the scenario as
+    _rho_csv_path. Auto-discovered by the generic driver
+    (generic/decomp.py:_get_rho_setter) and threaded to the hub/spokes. Returns
+    an empty list when no rho file is present, so the --default-rho path is
+    preserved. When a rho file is present it should cover every nonant (with
+    --default-rho passed as a backstop), because defining _rho_setter bypasses
+    the driver's --default-rho check.
+
+    The csv writer must give identical rho to every scenario sharing a node for
+    a given nonant (see the module docstring); this is not checked here.
+    """
+    path = getattr(scenario, "_rho_csv_path", None)
+    if not path:
+        return []
+    return rho_utils.rho_list_from_csv(scenario, path)
 
 
 # This is only needed for sampling
