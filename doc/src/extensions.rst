@@ -464,15 +464,16 @@ only for the Vars you expect before setting it to True.
 Scenario_lp_mps_writer_dir
 --------------------------
 
-This extension writes an lp file and an mps file with the model as well as a
+This extension writes an lp file and an mps file with the model, a
 json file with (a) list(s) of scenario tree node names and
-nonanticaptive variables for each scenario before the iteration zero
+nonanticaptive variables, and a ``{scenario}_rho.csv`` file with the
+per-nonant rho values, for each scenario before the iteration zero
 solve of PH or APH. Note that for two-stage problems, all json files
-will be the same. See ``mpisppy.generic_cylinders.py`` for an example
-of use. In that program it is activated with the
+(and all rho files) will be the same. See ``mpisppy.generic_cylinders.py``
+for an example of use. In that program it is activated with the
 ``--scenario-lp-mps-writerdir`` option that specifies a directory that
 does not exist. The extension
 writes the files to this directory and for each scenario
-the base name of the three files written is the scenario name.
+the base name of the four files written is the scenario name.
 
 Unless you know exactly why you need this, you probably don't.
