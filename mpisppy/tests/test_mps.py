@@ -8,6 +8,7 @@
 ###############################################################################
 # test mps utilities
 import os
+import json
 import types
 import shutil
 import tempfile
@@ -15,6 +16,7 @@ import unittest
 from mip import OptimizationStatus
 import mpisppy.problem_io.mps_reader as mps_reader
 import mpisppy.problem_io.mps_module as mps_module
+import mpisppy.utils.sputils as sputils
 from mpisppy.tests.utils import get_solver, limit_solver_threads
 import pyomo.environ as pyo
 import mip  # pip install mip (from coin-or)
@@ -140,6 +142,102 @@ class TestMPSModule(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             with self.assertRaises(FileNotFoundError):
                 mps_module._scenario_model_path(td, "Scenario1")
+
+
+def _build_mps_bundle(cfg, scen_names):
+    """Build a proper-bundle-shaped EF from mps_module scenarios.
+
+    Mirrors mpisppy.utils.proper_bundler: create_EF over the sub-scenarios,
+    attach the ROOT node from the non-surrogate ref Vars, then attach the
+    SPBase-style nonant metadata (_mpisppy_data.nonant_indices) that
+    mps_module._rho_setter reads for a bundle. No solve is involved.
+    """
+    bundle = sputils.create_EF(
+        scen_names, mps_module.scenario_creator,
+        scenario_creator_kwargs={"cfg": cfg},
+        EF_name="Bundle_test", suppress_warnings=True,
+    )
+    nonantlist = [v for idx, v in bundle.ref_vars.items()
+                  if idx[0] == "ROOT" and idx not in bundle.ref_surrogate_vars]
+    surrogates = [v for idx, v in bundle.ref_surrogate_vars.items()
+                  if idx[0] == "ROOT"]
+    sputils.attach_root_node(bundle, 0, nonantlist, None, surrogates)
+    nonant_indices = {}
+    for node in bundle._mpisppy_node_list:
+        for i, v in enumerate(node.nonant_vardata_list):
+            nonant_indices[(node.name, i)] = v
+    bundle._mpisppy_data.nonant_indices = nonant_indices
+    return bundle
+
+
+def _write_scenario(directory, name, prob, rho_map):
+    """Write a {name}.lp/_nonants.json/_rho.csv triple into directory.
+
+    The model is the shared fixture lp (vars x(1), x(2), y); prob and rho_map
+    let a test pin the probability weighting and per-nonant rho independently.
+    """
+    shutil.copy(os.path.join(_MPS_MODULE_DATA, "Scenario1.lp"),
+                os.path.join(directory, name + ".lp"))
+    nonants = {
+        "scenarioData": {"name": name, "scenProb": prob},
+        "treeData": {"globalNodeCount": 1,
+                     "nodes": {"ROOT": {"serialNumber": 0, "condProb": 1.0,
+                                        "nonAnts": ["x(1)", "x(2)"]}}},
+    }
+    with open(os.path.join(directory, name + "_nonants.json"), "w") as f:
+        json.dump(nonants, f)
+    with open(os.path.join(directory, name + "_rho.csv"), "w") as f:
+        f.write("varname,rho\n")
+        for var, rho in rho_map.items():
+            f.write(f"{var},{rho}\n")
+
+
+class TestMPSModuleBundleRho(unittest.TestCase):
+    """_rho_setter assembles bundle rho from the sub-scenarios' {s}_rho.csv."""
+
+    def _cfg(self, directory):
+        mps_module.mps_files_directory = directory
+        return types.SimpleNamespace(mps_files_directory=directory)
+
+    def _by_nonant(self, bundle, rho_list):
+        # map returned (id(refVar), rho) back to the nonant suffix (x_1_/x_2_),
+        # dropping the sub-scenario component prefix on the ref Var name.
+        id_to_var = {id(v): v
+                     for v in bundle._mpisppy_data.nonant_indices.values()}
+        return {id_to_var[vid].name.split(".")[-1]: rho
+                for vid, rho in rho_list}
+
+    def test_bundle_rho_from_consistent_csvs(self):
+        # Identical sub-scenario rho files -> bundle nonant rho is the common
+        # value (independent of probabilities), keyed to the bundle's ref Vars.
+        cfg = self._cfg(_MPS_MODULE_DATA)
+        bundle = _build_mps_bundle(cfg, ["Scenario1", "Scenario2"])
+        got = self._by_nonant(bundle, mps_module._rho_setter(bundle))
+        self.assertEqual(got, {"x_1_": 11.0, "x_2_": 22.0})
+
+    def test_bundle_rho_disagreement_is_error(self):
+        # PH uses one rho per bundle nonant, so sub-scenarios that disagree on a
+        # nonant's rho are a malformed input -> hard error. The check is local to
+        # the bundle (no MPI collective). x(2) agrees; x(1) differs (10 vs 20).
+        with tempfile.TemporaryDirectory() as td:
+            _write_scenario(td, "Scenario1", 0.5, {"x(1)": 10.0, "x(2)": 20.0})
+            _write_scenario(td, "Scenario2", 0.5, {"x(1)": 20.0, "x(2)": 20.0})
+            cfg = self._cfg(td)
+            bundle = _build_mps_bundle(cfg, ["Scenario1", "Scenario2"])
+            with self.assertRaises(RuntimeError):
+                mps_module._rho_setter(bundle)
+
+    def test_bundle_no_csv_falls_back(self):
+        # A bundle whose sub-scenarios carry no rho file -> [] (=> --default-rho).
+        with tempfile.TemporaryDirectory() as td:
+            for name in ("Scenario1", "Scenario2"):
+                for suffix in (".lp", "_nonants.json"):
+                    shutil.copy(
+                        os.path.join(_MPS_MODULE_DATA, name + suffix),
+                        os.path.join(td, name + suffix))
+            cfg = self._cfg(td)
+            bundle = _build_mps_bundle(cfg, ["Scenario1", "Scenario2"])
+            self.assertEqual(mps_module._rho_setter(bundle), [])
 
 
 if __name__ == '__main__':
