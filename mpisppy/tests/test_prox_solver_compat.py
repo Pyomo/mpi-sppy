@@ -164,5 +164,35 @@ class TestCheckProxSolveSucceeded(unittest.TestCase):
         PHBase._check_prox_solve_succeeded(opt)
 
 
+class TestReraiseAsProxCapabilityError(unittest.TestCase):
+    """The reactive check is unreachable when a solver signals 'no quadratic
+    objective' by *raising* during the solve (e.g. cbc/glpk, whose LP writer
+    raises before any solution is returned). This converts that raise into the
+    same actionable message, preserving the original via exception chaining.
+    """
+
+    def test_reraises_actionable_message_at_iter1(self):
+        opt = _opt(True, {"s1": _scenario()}, phiter=1)
+        original = ValueError("contains nonlinear terms")
+        with self.assertRaisesRegex(RuntimeError, "linearize-proximal-terms") as cm:
+            PHBase._reraise_as_prox_capability_error(opt, original)
+        # the original solver error is preserved for debugging
+        self.assertIs(cm.exception.__cause__, original)
+
+    def test_no_reraise_after_first_iteration(self):
+        # a later raise is a genuine solve error -> caller re-raises it as-is
+        opt = _opt(True, {"s1": _scenario()}, phiter=2)
+        self.assertIsNone(
+            PHBase._reraise_as_prox_capability_error(opt, ValueError("boom"))
+        )
+
+    def test_no_reraise_when_prox_linearized(self):
+        # linearized prox is not quadratic, so a raise is not a capability issue
+        opt = _opt(False, {"s1": _scenario()}, phiter=1)
+        self.assertIsNone(
+            PHBase._reraise_as_prox_capability_error(opt, ValueError("boom"))
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
