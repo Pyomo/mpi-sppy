@@ -200,7 +200,7 @@ def _rho_setter(scenario):
     scenario's value without checking; within a bundle _bundle_rho_list checks
     (the sub-scenarios are local) and errors on a mismatch.
     """
-    sub_models = _bundle_sub_models(scenario)
+    sub_models = _bundled_sub_models(scenario)
     if sub_models:
         return _bundle_rho_list(scenario, sub_models)
     path = getattr(scenario, "_rho_csv_path", None)
@@ -209,7 +209,7 @@ def _rho_setter(scenario):
     return rho_utils.rho_list_from_csv(scenario, path)
 
 
-def _bundle_sub_models(scenario):
+def _bundled_sub_models(scenario):
     """Return the per-sub-scenario Pyomo models nested in a proper bundle.
 
     A proper bundle is an EF model that sputils.create_EF tags with
