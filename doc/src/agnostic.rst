@@ -19,10 +19,10 @@ Loose integration
 
 You can use ``generic_cylinders.py`` with ``--mps-files-directory``
 as the first argument (the module ``mpisppy.problem_io.mps_module`` is
-inferred automatically, so ``--module-name`` is not needed).  Note that at
-the time of this writing, the number of scenarios is obtained by
-counting the mps files in the directory given. (It would require
-only a small amount of programming to support lp files.)
+inferred automatically, so ``--module-name`` is not needed).  The number
+of scenarios is obtained by counting the model files (``.lp`` or ``.mps``)
+in the directory given. When both a ``.lp`` and a ``.mps`` file are present
+for the same scenario, the ``.lp`` file is used.
 
 The file ``examples.loose_agnostic.AMPL.farmer_example.bash`` has three
 commands.  The second illustrates how to instruct ``MPI-SPPY`` to read
@@ -50,15 +50,17 @@ write them and then read them again!). This functionality is intended
 to be used by users of other AMLs or other scenario-based stochastic
 programming applications.
 
-There is low-level support for `.lp` files instead of `.mps` files.
-Code for creating a
-Pyomo model from an mps file is in ``mpisppy.problem_io.mps_reader.py``,
+Either ``.lp`` or ``.mps`` files can be used for the scenario models. The
+code that creates a Pyomo model from a model file is in
+``mpisppy.problem_io.mps_reader.py``.
 
 JSON file format
 ----------------
 
 The directory named in the ``--mps-files-directory`` needs to have
-two files for each scenario: a mps file and a json file. The json
+two files for each scenario: a model file (``.mps`` or ``.lp``) and a json
+file. An optional third file, ``{scenario}_rho.csv``, supplies per-nonant rho
+values (see `Per-nonant rho file (optional)`_ below). The json
 file need to have certain literal strings as well as scenario-specific
 data. In this specification, scenario specific data is named with underscores.
 Note that the total number of tree nodes is given as an integer, but the file
@@ -133,9 +135,35 @@ Naming Conventions
 - The root node of the scenario tree must be named ROOT.
 - Other nodes must begin with the name of the parent node and end with an underscore followed by a zero-based serial
   number for the node at its stage.
-- The names of the nonanticaptive variables at the node are given in the `nonAnts` list and the names must match column names in the mps file.
+- The names of the nonanticaptive variables at the node are given in the `nonAnts` list and the names must match the variable (column) names in the model file (``.mps`` or ``.lp``).
 
   
+Per-nonant rho file (optional)
+------------------------------
+
+You can optionally supply a ``{scenario}_rho.csv`` file for each scenario in
+the ``--mps-files-directory``. When present, ``mps_module`` uses it to set
+per-nonant rho values for PH; when absent, rho falls back to ``--default-rho``.
+The file has a header line and one row per nonanticipative variable:
+
+.. code-block:: text
+
+  varname,rho
+  NumProducedFirstStage(1),1.0
+  NumProducedFirstStage(2),1.0
+  # ...
+
+The ``varname`` column uses the same variable names as the ``nonAnts`` list in
+the json file (a ``fullname`` header is also accepted). A rho file should cover
+every nonant; pass ``--default-rho`` as a backstop for any nonant that is not
+listed.
+
+**Consistency is the writer's responsibility.** PH requires the same rho for a
+given nonant at a tree node across every scenario that passes through that node.
+mpi-sppy applies these rhos per scenario and does not check cross-scenario
+consistency, so an inconsistent set of rho files silently yields an ill-defined
+run.
+
 Tight integration
 ^^^^^^^^^^^^^^^^^
 

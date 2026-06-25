@@ -147,13 +147,25 @@ class Config(pyofig.ConfigDict):
             raise ValueError("Options do not make sense together:\n"
                              f"{msg}")
 
+        # reduced_costs_rho was removed (deprecated): it was never shown to be
+        # effective in practice and it does not support flexible (unequal) rank
+        # assignments, so a custom driver could be silently burned. The option
+        # is kept so its selection fails loudly here rather than being ignored.
+        if self.get("reduced_costs_rho"):
+            raise ValueError(
+                "reduced_costs_rho was deprecated and removed on 2026-06-14 "
+                "(reduced-cost rho was not demonstrated to be effective in "
+                "practice and does not support flexible rank assignments; see "
+                "https://github.com/Pyomo/mpi-sppy/issues/673). Remove "
+                "--reduced-costs-rho; consider --grad-rho instead."
+            )
+
         # remember that True is 1 and False is 0
-        if (self.get("grad_rho") + self.get("sensi_rho") + self.get("coeff_rho") + self.get("reduced_costs_rho") + self.get("sep_rho")) > 1:
+        if (self.get("grad_rho") + self.get("sensi_rho") + self.get("coeff_rho") + self.get("sep_rho")) > 1:
             _bad_options("Only one rho setter can be active.")
         if not (self.get("grad_rho")
                 or self.get("sensi_rho")
-                or self.get("sep_rho")
-                or self.get("reduced_costs_rho")):
+                or self.get("sep_rho")):
             if self.get("dynamic_rho_primal_crit") or self.get("dynamic_rho_dual_crit"):
                 _bad_options("dynamic rho only works with an automated rho setter")
 
@@ -174,6 +186,16 @@ class Config(pyofig.ConfigDict):
             # PySP). See doc/designs/chance_constraint_design.md.
             _bad_options("--cc-indicator-var (chance constraint) is currently "
                          "supported only with --EF")
+
+        # Slamming options other than the directives file are meaningless
+        # without it; require the file so that a run with no slamming options
+        # behaves exactly as it does today (total backward compatibility).
+        if self.get("slamming_directives_file") is None and (
+                self.get("slam_start_iter") is not None
+                or self.get("iters_between_slams") is not None):
+            _bad_options("slamming options (--slam-start-iter / "
+                         "--iters-between-slams) require "
+                         "--slamming-directives-file")
 
     def add_solver_specs(self, prefix=""):
         sstr = f"{prefix}_solver" if prefix else "solver"
@@ -632,13 +654,45 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=0.5)
 
+    def slamming_args(self):
+        # Phase-1 preference-driven slamming (see doc/designs/slamming_design.md).
+        # The Slammer extension is activated iff slamming_directives_file is set;
+        # supplying the other slam options without the file is a hard error
+        # (enforced in checker()) so that a run with no slamming options behaves
+        # exactly as it does today.
+        self.add_to_config("slamming_directives_file",
+                           description="CSV of by-name (wildcard) slamming "
+                           "directives; its presence activates the Slammer "
+                           "extension (default None)",
+                           domain=str,
+                           default=None)
+
+        self.add_to_config("slam_start_iter",
+                           description="first hub iteration at which slamming "
+                           "may occur (default 1); requires "
+                           "--slamming-directives-file",
+                           domain=int,
+                           default=None)
+
+        self.add_to_config("iters_between_slams",
+                           description="once started, slam at most once every "
+                           "this many iterations (default 1); requires "
+                           "--slamming-directives-file",
+                           domain=int,
+                           default=None)
+
     def reduced_costs_rho_args(self):
         self.add_to_config("reduced_costs_rho",
-                           description="have a ReducedCostsRho extension",
+                           description="DEPRECATED and removed (2026-06-14); "
+                                       "selecting it raises an error. Reduced-cost "
+                                       "rho was not effective in practice and did "
+                                       "not support flexible rank assignments. "
+                                       "Consider grad_rho. See "
+                                       "https://github.com/Pyomo/mpi-sppy/issues/673",
                            domain=bool,
                            default=False)
         self.add_to_config("reduced_costs_rho_multiplier",
-                           description="multiplier for ReducedCostsRho (default 1.0)",
+                           description="DEPRECATED (no effect); see reduced_costs_rho",
                            domain=float,
                            default=1.0)
 
