@@ -17,6 +17,9 @@ from mip import OptimizationStatus
 import mpisppy.problem_io.mps_reader as mps_reader
 import mpisppy.problem_io.mps_module as mps_module
 import mpisppy.utils.sputils as sputils
+import mpisppy.utils.config as config
+import mpisppy.utils.proper_bundler as proper_bundler
+from mpisppy.generic.parsing import name_lists
 from mpisppy.tests.utils import get_solver, limit_solver_threads
 import pyomo.environ as pyo
 import mip  # pip install mip (from coin-or)
@@ -238,6 +241,27 @@ class TestMPSModuleBundleRho(unittest.TestCase):
             cfg = self._cfg(td)
             bundle = _build_mps_bundle(cfg, ["Scenario1", "Scenario2"])
             self.assertEqual(mps_module._rho_setter(bundle), [])
+
+
+class TestMPSModuleProperBundling(unittest.TestCase):
+    """Proper bundling is reachable from the file path: the scenario count is
+    implied by the directory (no --num-scens), so parsing.name_lists infers it
+    and can size the bundles."""
+
+    def test_bundle_count_inferred_from_mps_directory(self):
+        # _MPS_MODULE_DATA holds 2 scenario files; at 1 scenario per bundle that
+        # is 2 bundles, and cfg.num_scens must be filled in (to 2) for the bundle
+        # math, even though no --num-scens was given.
+        cfg = config.Config()
+        cfg.add_branching_factors()       # default None -> two-stage
+        cfg.proper_bundle_config()        # scenarios_per_bundle, *_bundles_dir
+        cfg.quick_assign("scenarios_per_bundle", int, 1)
+        mps_module.mps_files_directory = _MPS_MODULE_DATA
+        bundle_wrapper = proper_bundler.ProperBundler(mps_module)
+        names, _ = name_lists(mps_module, cfg, bundle_wrapper=bundle_wrapper)
+        self.assertEqual(cfg.num_scens, 2)   # inferred from the 2 files
+        self.assertEqual(len(names), 2)      # 2 bundles, 1 scenario each
+        self.assertTrue(all(n.startswith("Bundle_") for n in names))
 
 
 if __name__ == '__main__':

@@ -210,10 +210,15 @@ def name_lists(module, cfg, bundle_wrapper=None):
 
     # proper bundles should be almost magic
     if cfg.unpickle_bundles_dir or cfg.scenarios_per_bundle is not None:
-        # When branching_factors are used (multi-stage), num_scens is computed locally
-        # above but cfg.num_scens is never set from it.  Fill it in so that
-        # bundle_names_creator (which asserts cfg.num_scens is not None) works.
-        if cfg.get("num_scens") is None and num_scens is not None:
+        # bundle_names_creator needs cfg.num_scens, but it is not always set yet:
+        #  - multi-stage: num_scens was computed locally above from branching
+        #    factors but never written back to cfg.
+        #  - file-based paths (e.g. --mps-files-directory): the scenario count is
+        #    implied by the files, so there is no --num-scens; recover it from the
+        #    module's scenario_names_creator (None => every scenario).
+        if num_scens is None:
+            num_scens = len(module.scenario_names_creator(None))
+        if cfg.get("num_scens") is None:
             cfg.quick_assign("num_scens", int, int(num_scens))
         num_buns = cfg.num_scens // cfg.scenarios_per_bundle
         all_scenario_names = bundle_wrapper.bundle_names_creator(num_buns, cfg=cfg)
