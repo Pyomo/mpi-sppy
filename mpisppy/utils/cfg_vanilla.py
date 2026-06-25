@@ -840,6 +840,30 @@ def add_relaxed_ph_fixer(hub_dict,
 
     return hub_dict
 
+def add_slammer(hub_dict,
+                cfg,
+                ):
+    # Preference-driven in-hub slamming; activated only when the directives
+    # file is supplied (see doc/designs/slamming_design.md).
+    from mpisppy.extensions.slammer import Slammer
+    hub_dict = extension_adder(hub_dict, Slammer)
+
+    # slam_start_iter / iters_between_slams default to None in Config so the
+    # checker can detect "supplied without a file"; resolve to the Slammer's
+    # built-in defaults here.
+    slammer_options = {
+        "directives_file": cfg.slamming_directives_file,
+        "rounding_bias": cfg.rounding_bias,
+        "verbose": cfg.verbose,
+    }
+    if cfg.get("slam_start_iter") is not None:
+        slammer_options["slam_start_iter"] = cfg.slam_start_iter
+    if cfg.get("iters_between_slams") is not None:
+        slammer_options["iters_between_slams"] = cfg.iters_between_slams
+
+    hub_dict["opt_kwargs"]["options"]["slammer_options"] = slammer_options
+    return hub_dict
+
 def add_wxbar_read_write(hub_dict, cfg):
     """
     Add the wxbar read and write extensions to the hub_dict
