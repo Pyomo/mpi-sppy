@@ -357,7 +357,7 @@ that is feasible to *fix* in the real, stochastic scenarios. Multistage
 raises the bar:
 
 * If the model has **relatively complete recourse** -- every later stage
-  stays feasible for any setting of the earlier (capacity-respecting)
+  stays feasible for any setting of the earlier (with proper feasibility)
   decisions -- no repair is needed. The expected-value-tree solution is
   feasible to fix on every path as is. aircond (below) is this case.
 * If recourse is **integer or tightly coupled**, a feasible *path* is a
