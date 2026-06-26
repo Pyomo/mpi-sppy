@@ -28,7 +28,6 @@ def _hasit(cfg, argname):
         return val
     return val is not None
 
-
 def _maybe_attach_jensens(spoke_dict, cfg, spoke_prefix,
                           average_scenario_creator, scenario_creator_kwargs):
     """Attach Jensen's options to spoke_dict when the corresponding
@@ -310,6 +309,23 @@ def add_multistage_options(cylinder_dict,all_nodenames,branching_factors):
     if all_nodenames is not None:
         cylinder_dict["opt_kwargs"]["all_nodenames"] = all_nodenames
     return cylinder_dict
+
+def lshaped_options(cfg):
+    if _hasit(cfg, "solver_options"):
+        odict = sputils.option_string_to_dict(cfg.solver_options)
+    else:
+        odict=dict()
+    
+    lshoptions = {
+        "root_solver": cfg.solver_name,
+        "sp_solver": cfg.solver_name,
+        "sp_solver_options" : odict,
+        "max_iter": cfg.max_iterations,
+        "verbose": False,
+        "root_scenarios":None
+   }
+    
+    return lshoptions
 
 def ph_hub(
         cfg,
@@ -1585,6 +1601,34 @@ def slammin_spoke(
     )
     return slammin_dict
 
+
+def lshaped_hub(
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=None,
+):
+    from mpisppy.cylinders.hub import LShapedHub
+    from mpisppy.opt.lshaped import LShapedMethod    
+    hub_dict = {
+        "hub_class": LShapedHub,
+        "hub_kwargs": {
+            "options": {
+                "rel_gap": cfg.rel_gap,
+                "abs_gap": cfg.abs_gap,
+            },
+        },
+        "opt_class": LShapedMethod,
+        "opt_kwargs": { # Args passed to LShapedMethod __init__
+            "options": lshaped_options(cfg),
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": scenario_creator,
+            "scenario_denouement": scenario_denouement,
+            "scenario_creator_kwargs": scenario_creator_kwargs,        
+        }
+        }
+    return hub_dict
 
 def cross_scenario_cuts_spoke(
     cfg,

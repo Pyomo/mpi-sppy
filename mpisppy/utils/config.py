@@ -161,7 +161,12 @@ class Config(pyofig.ConfigDict):
             )
 
         # remember that True is 1 and False is 0
+        if (self.get("APH",0) + self.get("subgradient_hub",0) + self.get("fwph_hub",0) + self.get("ph_primal_hub",0) + self.get("lshaped_hub",0) + self.get("cg_hub",0) + self.get("dualcg_hub",0)) > 1:
+            _bad_options("Only one hub can be active.")
+
+        # remember that True is 1 and False is 0
         if (self.get("grad_rho") + self.get("sensi_rho") + self.get("coeff_rho") + self.get("sep_rho")) > 1:
+
             _bad_options("Only one rho setter can be active.")
         if not (self.get("grad_rho")
                 or self.get("sensi_rho")
@@ -539,6 +544,16 @@ class Config(pyofig.ConfigDict):
                                        "satisfaction in every scenario). Default 0.0.",
                            domain=float,
                            default=0.0)
+
+    ##### Lshaped #####        
+
+    def lshaped_args(self):
+
+        self.add_to_config(name="lshaped_hub",
+                           description="Use LShaped Hub (default False)",
+                           domain=bool,
+                           default=False)        
+        
 
     ##### common additions to the command line #####
 

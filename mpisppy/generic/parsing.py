@@ -126,6 +126,8 @@ def parse_args(m):
     # There are some arguments here that will not make sense for all models
     cfg.popular_args()
     cfg.two_sided_args()
+    cfg.lshaped_args()
+    cfg.xhatlshaped_args()    
     cfg.ph_args()
     cfg.aph_args()
     cfg.cg_args()
