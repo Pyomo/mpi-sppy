@@ -190,6 +190,22 @@ See :ref:`rho_setting` for a full description of all rho-related options,
 including ``--default-rho``, ``--sep-rho``, ``--coeff-rho``,
 ``--sensi-rho``, ``--grad-rho``, and adaptive rho updaters.
 
+Risk Management (CVaR)
+----------------------
+
+A risk-averse CVaR objective can be requested with ``--cvar``:
+
+- ``--cvar`` -- apply the CVaR transform to every scenario
+- ``--cvar-weight`` -- weight on CVaR, :math:`\beta` (default ``1.0``)
+- ``--cvar-alpha`` -- confidence level :math:`\alpha`, ``0 < alpha < 1``
+  (default ``0.95``)
+- ``--cvar-mean-weight`` -- weight on the expectation, :math:`\lambda`
+  (default ``1.0``; use ``0`` for pure CVaR)
+
+Because the Value-at-Risk variable has a much larger cost scale than typical
+model variables, a cost-aware rho such as ``--grad-rho`` or ``--sep-rho`` is
+strongly recommended; see :ref:`risk management` for details and an example.
+
 Extensions via Command Line
 ----------------------------
 
