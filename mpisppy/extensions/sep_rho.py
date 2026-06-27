@@ -14,6 +14,7 @@ import numpy as np
 import mpisppy.MPI as MPI
 from mpisppy import global_toc
 from mpisppy.utils.sputils import nonant_cost_coeffs
+from mpisppy.utils.rho_utils import assign_rho_with_fallback
 
 
 class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
@@ -46,6 +47,8 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             self.multiplier = ph.options["sep_rho_options"]["multiplier"]
 
         self._nonant_cost_coeffs = {}
+        # remembers the last reported zero-coefficient count to avoid log spam
+        self._rho_report_state = {}
 
     def _compute_primal_residual_norm(self, ph):
         local_nodenames = []
@@ -161,16 +164,22 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         xmax = self._compute_xmax(ph)
         xmin = self._compute_xmin(ph)
 
-        for s in ph.local_scenarios.values():
-            cc = self.nonant_cost_coeffs(s)
-            for ndn_i, rho in s._mpisppy_model.rho.items():
-                if cc[ndn_i] != 0:
-                    nv = s._mpisppy_data.nonant_indices[ndn_i]  # var_data object
-                    if nv.is_integer():
-                        rho._value = abs(cc[ndn_i]) / (xmax[ndn_i] - xmin[ndn_i] + 1)
-                    else:
-                        rho._value = abs(cc[ndn_i]) / max(1, primal_resid[ndn_i])
-                    rho._value *= self.multiplier
+        # nonants with a (near-)zero objective coefficient yield no meaningful
+        # rho from this heuristic; they fall back to the positive default rho.
+        # We report the fallback rather than substituting silently; see issue #560.
+        default_rho = ph.options.get("defaultPHrho")
+
+        def sep_value(s, ndn_i):
+            cc = self.nonant_cost_coeffs(s)  # cached per scenario
+            nv = s._mpisppy_data.nonant_indices[ndn_i]  # var_data object
+            if nv.is_integer():
+                val = abs(cc[ndn_i]) / (xmax[ndn_i] - xmin[ndn_i] + 1)
+            else:
+                val = abs(cc[ndn_i]) / max(1, primal_resid[ndn_i])
+            return val * self.multiplier
+
+        assign_rho_with_fallback(ph, default_rho, "SepRho",
+                                 self._rho_report_state, sep_value)
 
     def compute_and_update_rho(self):
         self._compute_and_update_rho()

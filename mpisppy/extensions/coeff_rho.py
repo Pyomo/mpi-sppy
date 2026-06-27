@@ -11,6 +11,7 @@ from mpisppy import global_toc
 import mpisppy.extensions.extension
 
 from mpisppy.utils.sputils import nonant_cost_coeffs
+from mpisppy.utils.rho_utils import assign_rho_with_fallback
 
 
 class CoeffRho(mpisppy.extensions.extension.Extension):
@@ -26,15 +27,16 @@ class CoeffRho(mpisppy.extensions.extension.Extension):
             and "multiplier" in ph.options["coeff_rho_options"]
         ):
             self.multiplier = ph.options["coeff_rho_options"]["multiplier"]
+        # remembers the last reported zero-coefficient count to avoid log spam
+        self._rho_report_state = {}
 
     def post_iter0(self):
-        for s in self.ph.local_scenarios.values():
-            cc = nonant_cost_coeffs(s)
-            for ndn_i, rho in s._mpisppy_model.rho.items():
-                if cc[ndn_i] != 0:
-                    rho._value = abs(cc[ndn_i]) * self.multiplier
-                # if self.ph.cylinder_rank==0:
-                #     nv = s._mpisppy_data.nonant_indices[ndn_i] # var_data object
-                #     print(ndn_i,nv.getname(),cc[ndn_i],rho._value)
-
+        # nonants with a (near-)zero objective coefficient yield no meaningful
+        # rho from this heuristic; they fall back to the positive default rho.
+        # We report the fallback rather than substituting silently; see issue #560.
+        default_rho = self.ph.options.get("defaultPHrho")
+        coeffs = {s: nonant_cost_coeffs(s) for s in self.ph.local_scenarios.values()}
+        assign_rho_with_fallback(
+            self.ph, default_rho, "CoeffRho", self._rho_report_state,
+            lambda s, ndn_i: abs(coeffs[s][ndn_i]) * self.multiplier)
         global_toc("Rho values updated by CoeffRho Extension", self.ph.cylinder_rank == 0)
