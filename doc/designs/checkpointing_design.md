@@ -144,7 +144,7 @@ restored incumbent objective is never regressed because
 
 Note: in a cylinders run the hub's `opt.best_solution_obj_val` is often `None` —
 the inner bound arrives as a scalar via `receive_innerbounds`
-(`spcommunicator.py:1019`) and lands in `spcomm.BestInnerBound`. So the
+(`spcommunicator.py:1010`) and lands in `spcomm.BestInnerBound`. So the
 incumbent **objective** is on the hub, but the incumbent **solution** is not (see
 5.3).
 
