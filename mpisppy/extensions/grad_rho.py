@@ -16,7 +16,7 @@ import mpisppy.MPI as MPI
 from mpisppy import global_toc
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils.nonant_sensitivities import _bundle_consensus_groups
-from mpisppy.utils.rho_utils import resolve_rho, report_zero_rho_fallback
+from mpisppy.utils.rho_utils import assign_rho_with_fallback
 from mpisppy.cylinders.spwindow import Field
 
 class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
@@ -322,15 +322,9 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         # usable rho; those nonants fall back to the positive default rho. We
         # report the fallback rather than substituting silently; see issue #560.
         default_rho = opt.options.get("defaultPHrho")
-        defaulted = set()
-        for s in opt.local_scenarios.values():
-            for ndn_i, rho in s._mpisppy_model.rho.items():
-                rho._value, used_default = resolve_rho(self.multiplier * rhos[ndn_i],
-                                                       default_rho)
-                if used_default:
-                    defaulted.add(ndn_i)
-        report_zero_rho_fallback(opt, "GradRho", len(defaulted),
-                                 default_rho, self._rho_report_state,
+        assign_rho_with_fallback(opt, default_rho, "GradRho",
+                                 self._rho_report_state,
+                                 lambda s, ndn_i: self.multiplier * rhos[ndn_i],
                                  reason="a near-zero or negative computed rho")
 
     def compute_and_update_rho(self):

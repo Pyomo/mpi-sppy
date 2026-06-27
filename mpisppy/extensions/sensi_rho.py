@@ -10,7 +10,7 @@
 from mpisppy import global_toc
 import mpisppy.extensions.dyn_rho_base
 from mpisppy.utils.nonant_sensitivities import nonant_sensitivies
-from mpisppy.utils.rho_utils import resolve_rho, report_zero_rho_fallback
+from mpisppy.utils.rho_utils import assign_rho_with_fallback
 
 
 class _SensiRhoBase(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
@@ -51,14 +51,9 @@ class _SensiRhoBase(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         # Pass 2: take the cross-scenario max, then replace any near-zero
         # result with the positive default rho and report it.
         rhomax = self._compute_rho_max(ph)
-        defaulted = set()
-        for s in ph.local_scenarios.values():
-            for ndn_i, rho in s._mpisppy_model.rho.items():
-                rho._value, used_default = resolve_rho(rhomax[ndn_i], self._fallback_rho)
-                if used_default:
-                    defaulted.add(ndn_i)
-        report_zero_rho_fallback(ph, self.__class__.__name__, len(defaulted),
-                                 self._fallback_rho, self._rho_report_state,
+        assign_rho_with_fallback(ph, self._fallback_rho, self.__class__.__name__,
+                                 self._rho_report_state,
+                                 lambda s, ndn_i: rhomax[ndn_i],
                                  reason="a near-zero computed rho")
 
         global_toc(f"Rho values updated by {self.__class__.__name__} Extension", ph.cylinder_rank == 0)

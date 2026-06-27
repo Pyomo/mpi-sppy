@@ -111,6 +111,36 @@ def report_zero_rho_fallback(opt, source, count, default_rho, state,
         )
 
 
+def assign_rho_with_fallback(opt, default_rho, source, report_state,
+                             value_fn, reason="a zero objective coefficient"):
+    """Set rho for every nonant from a heuristic, applying the zero-rho fallback.
+
+    This is the shared body of the rho-setting extensions (CoeffRho, SepRho,
+    SensiRho, GradRho): they differ only in how the raw rho is computed. For
+    every nonant in every local scenario, ``value_fn(s, ndn_i)`` supplies that
+    heuristic's raw value; ``resolve_rho`` keeps it when usably positive,
+    otherwise falls back to ``default_rho``. The count of distinct nonants that
+    fell back is reported via ``report_zero_rho_fallback`` (see issue #560).
+
+    Args:
+        opt: PHBase-like object with ``local_scenarios`` and ``cylinder_rank``.
+        default_rho: the positive fallback rho.
+        source (str): label for the fallback report (e.g. the extension name).
+        report_state (dict): caller-held dict used to de-duplicate the report;
+            pass the same dict on every call.
+        value_fn: callable ``(s, ndn_i) -> float`` giving the raw computed rho.
+        reason (str): short phrase for the report describing the fallback cause.
+    """
+    defaulted = set()
+    for s in opt.local_scenarios.values():
+        for ndn_i, rho in s._mpisppy_model.rho.items():
+            rho._value, used_default = resolve_rho(value_fn(s, ndn_i), default_rho)
+            if used_default:
+                defaulted.add(ndn_i)
+    report_zero_rho_fallback(opt, source, len(defaulted), default_rho,
+                             report_state, reason=reason)
+
+
 def rhos_to_csv(s, filename):
     """ write the rho values to a csv "fullname", rho
     Args:
