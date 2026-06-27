@@ -124,6 +124,10 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_generic_cylinders.py -v
 
+      - name: Test W-oscillation detection
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_w_oscillation.py -v
+
       - name: Test xhat from file
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_xhat_from_file.py -v
