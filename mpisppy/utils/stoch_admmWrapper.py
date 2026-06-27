@@ -18,6 +18,62 @@ from mpisppy.utils.admmWrapper import (
 )
 
 
+# Default delimiter for the naming inverse-pair below.  Verbose enough
+# to be unambiguous in shells, filenames, and CSV columns; printable
+# ASCII so it round-trips through any text channel.  Changing this
+# value is a back-compat break for any persisted artefacts that embed
+# wrapped-scenario names — leave it alone unless coordinating that.
+_DEFAULT_DELIM = "__ADMM__"
+
+
+def default_combining_names(admm_subproblem_name, stoch_scenario_name):
+    """Default wrapped-scenario name from (ADMM subproblem, stochastic scenario).
+
+    Pairs with default_split_admm_stoch_subproblem_scenario_name as a
+    delimiter-based inverse.  See the "ADMM vocabulary" glossary at the
+    top of mpisppy/utils/admmWrapper.py for the terminology used here.
+    """
+    return (f"ADMM_STOCH{_DEFAULT_DELIM}{admm_subproblem_name}"
+            f"{_DEFAULT_DELIM}{stoch_scenario_name}")
+
+
+def default_split_admm_stoch_subproblem_scenario_name(name):
+    """Default inverse of default_combining_names.
+
+    Tolerates ADMM subproblem and stochastic scenario names that
+    themselves contain underscores; only names containing the
+    _DEFAULT_DELIM sentinel would collide.
+    """
+    parts = name.split(_DEFAULT_DELIM)
+    if len(parts) != 3 or parts[0] != "ADMM_STOCH":
+        raise ValueError(
+            f"name {name!r} is not in the default ADMM-stochastic "
+            f"naming format ('ADMM_STOCH{_DEFAULT_DELIM}<sub>"
+            f"{_DEFAULT_DELIM}<stoch>').  If you customized "
+            f"combining_names you must also supply a matching "
+            f"split_admm_stoch_subproblem_scenario_name."
+        )
+    _, admm_subproblem_name, stoch_scenario_name = parts
+    return admm_subproblem_name, stoch_scenario_name
+
+
+def default_admm_stoch_subproblem_scenario_names_creator(
+        admm_subproblem_names, stoch_scenario_names,
+        combining_fn=default_combining_names):
+    """Default wrapped-scenario name list builder.
+
+    The nesting order (stochastic scenarios outer, ADMM subproblems
+    inner) groups all subproblems for the same stochastic scenario
+    together; the MPI rank-assignment code assumes this grouping.
+
+    Pass a custom combining_fn to combine a user-defined combiner
+    with the default nesting order.
+    """
+    return [combining_fn(admm_sub, stoch_scen)
+            for stoch_scen in stoch_scenario_names
+            for admm_sub in admm_subproblem_names]
+
+
 def _tag_dummies_as_surrogate(node, dummies):
     """Mark fixed-to-0 dummy consensus vars as surrogate on an existing node.
 
@@ -103,6 +159,13 @@ class Stoch_AdmmWrapper(): #add scenario_tree
             first_stage_nonant_ef_suppl_list=None,
     ):
         assert len(options) == 0, "no options supported by stoch_admmWrapper"
+        # split_admm_stoch_subproblem_scenario_name=None means "use
+        # the delimiter-based default that pairs with
+        # default_combining_names".  Callers that want the default
+        # pass None here instead of importing the function.
+        if split_admm_stoch_subproblem_scenario_name is None:
+            split_admm_stoch_subproblem_scenario_name = (
+                default_split_admm_stoch_subproblem_scenario_name)
         # first_stage_cost / first_stage_varlist must be defined together
         # or omitted together.  Defensive check; setup_stoch_admm also
         # enforces this, but the wrapper is callable directly.

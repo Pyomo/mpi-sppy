@@ -148,6 +148,9 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
             xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = cfg["branching_factors"]
         xhatshuffle_spoke["rank_ratio"] = cfg.xhatshuffle_rank_ratio
 
+    if cfg.xhatlshaped:
+        xhatlshaped_spoke = vanilla.xhatlshaped_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+
     if cfg.xhatxbar:
         xhatxbar_spoke = vanilla.xhatxbar_spoke(*beans,
                                                    scenario_creator_kwargs=scenario_creator_kwargs,
@@ -182,6 +185,8 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
         list_of_spoke_dict.append(xhatxbar_spoke)
     if cfg.reduced_costs:
         list_of_spoke_dict.append(reduced_costs_spoke)
+    if cfg.xhatlshaped:
+        list_of_spoke_dict.append(xhatlshaped_spoke)
     if cfg.ph_xfeas_spoke:
         list_of_spoke_dict.append(ph_xfeas_spoke)
 

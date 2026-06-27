@@ -24,19 +24,17 @@ A scenario module that participates exposes:
    def feasible_xhat_creator(*, solver_name,
                              solver_options=None,
                              **scenario_creator_kwargs):
-       """Return {nodename: np.ndarray} -- a candidate first-stage
-       point that is feasible to fix in every real scenario's
-       per-scenario subproblem. Two-stage: only "ROOT" is populated."""
+       """Return {nodename: np.ndarray} -- a candidate point that is
+       feasible to fix in every real scenario's per-scenario
+       subproblem. Two-stage populates only "ROOT"; multistage
+       populates every non-leaf node (see Multistage, below)."""
 
 Discovery is via ``getattr(module, "feasible_xhat_creator", None)``,
 parallel to ``average_scenario_creator`` (see :ref:`jensens`). The
 returned dict is in the cache form consumed by
-``Xhat_Eval._fix_nonants``; the ``np.ndarray`` is in
-``_mpisppy_node_list[0].nonant_vardata_list`` order.
-
-Two-stage only, for now. Multi-stage extensions would need a candidate
-per non-leaf node, plus a story for inter-stage feasibility coupling
-that does not exist in the two-stage case.
+``Xhat_Eval._fix_nonants``: one ``np.ndarray`` per non-leaf node, each
+in that node's ``nonant_vardata_list`` order. Two-stage models populate
+only ``"ROOT"``; the multistage case is covered in `Multistage`_, below.
 
 File layout
 -----------
@@ -304,6 +302,123 @@ chosen here is ``np.round``.
            solver_options=solver_options,
        )
        return {"ROOT": np.round(arr)}
+
+Multistage
+----------
+
+The convention extends to multistage problems with **no change to the
+machinery**: the cache is ``{nodename: np.ndarray}`` over *every*
+non-leaf node (not just ``"ROOT"``), each array in that node's
+``nonant_vardata_list`` order, and the spoke pins and evaluates it
+exactly as in the two-stage case (``_fix_nonants`` already loops over
+every node of the scenario tree). What changes is how you *build* the
+candidate.
+
+Inter-stage coupling
+^^^^^^^^^^^^^^^^^^^^^
+
+In two stages there is a single decision point, so feasibility factors
+scenario by scenario. In multiple stages the candidate is a whole
+*policy over the tree*: a vector at every non-leaf node, and the vectors
+are coupled -- a later-stage decision lives downstream of the earlier
+decisions on the same path, through the model's staircase constraints.
+
+The consequence: you cannot assemble a multistage candidate by choosing
+each node's vector in isolation (for instance, by averaging each node's
+values across scenarios independently). Individually reasonable node
+choices can be **jointly infeasible** along a path.
+
+The construction that stays sound is to derive *all* node vectors from
+**one feasible solution of a single deterministic proxy whose tree has
+the same node structure as the real problem** -- typically the
+expected-value tree (the real branching factors with the random data
+pinned to its mean). Because the node values then come from one feasible
+point of the same staircase system, they are jointly feasible along
+every path by construction. This is the multistage analogue of "solve
+the average *scenario*": solve the average *tree*.
+
+The engine: ``ef_xhat_nonants``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``mpisppy.utils.xhat_helpers`` ships the multistage engine:
+
+``ef_xhat_nonants(scenario_creator, scenario_names, *, solver_name, ...)``
+   Builds the extensive form over the supplied (proxy) scenario set,
+   optionally LP-relaxes it, solves it once, and returns
+   ``{nodename: np.ndarray}`` over all non-leaf nodes. Pass the scenario
+   names/kwargs that define your deterministic proxy tree.
+
+The repair rule is still yours -- now for whole paths
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+As in the two-stage case (see `The rounding rule is also yours`_), the
+raw solve output may need a model-specific repair to become a candidate
+that is feasible to *fix* in the real, stochastic scenarios. Multistage
+raises the bar:
+
+* If the model has **relatively complete recourse** -- every later stage
+  stays feasible for any setting of the earlier (with proper feasibility)
+  decisions -- no repair is needed. The expected-value-tree solution is
+  feasible to fix on every path as is. aircond (below) is this case.
+* If recourse is **integer or tightly coupled**, a feasible *path* is a
+  stronger requirement than the two-stage per-variable rounding rules
+  deliver: rounding a stage-:math:`t` decision can render a *later* stage
+  infeasible on some path, so per-node monotone rounding does **not**
+  generally preserve path feasibility. ``mpi-sppy`` does **not** ship an
+  automatic multistage repair. The repair belongs in your
+  ``feasible_xhat_creator``, where you have the domain knowledge to keep
+  the whole path feasible (a forward pass that re-checks each stage
+  against the fixed earlier stages, an aggregation across scenarios, a
+  per-path proof-of-feasibility, etc.). When in doubt, evaluate the
+  candidate and let the inner-bound spoke skip any path it cannot fix --
+  but then you are back to the weaker "Jensen's plus luck" contract.
+
+Worked example: aircond (multistage, continuous, complete recourse)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+aircond's node decisions ``RegularProd`` and ``OvertimeProd`` are bounded
+``NonNegativeReals``; the only hard constraint on them is
+``RegularProd <= Capacity``. The material-balance constraint lets the
+free ``Inventory`` variable absorb any demand imbalance as penalized
+backorder, so aircond has relatively complete recourse: any
+capacity-respecting production plan is feasible to fix on every path. No
+rounding is needed -- the multistage analogue of farmer.
+
+``mpisppy/tests/examples/aircond_auxiliary.py`` (kept beside the model so
+the ``<module>_auxiliary`` discovery resolves):
+
+.. code-block:: python
+
+   import numpy as np
+   from mpisppy.utils.xhat_helpers import ef_xhat_nonants
+   from mpisppy.tests.examples.aircond import (
+       scenario_creator, scenario_names_creator,
+   )
+
+
+   def feasible_xhat_creator(*, solver_name, solver_options=None,
+                             branching_factors=None, **scenario_creator_kwargs):
+       proxy_kwargs = dict(scenario_creator_kwargs)
+       proxy_kwargs["branching_factors"] = branching_factors
+       proxy_kwargs["sigma_dev"] = 0.0   # expected-value tree
+       proxy_kwargs["mu_dev"] = 0.0
+       proxy_kwargs.setdefault("start_seed", 0)
+       snames = scenario_names_creator(int(np.prod(branching_factors)))
+       return ef_xhat_nonants(
+           scenario_creator, snames, solver_name=solver_name,
+           scenario_creator_kwargs=proxy_kwargs, solver_options=solver_options,
+       )
+
+The expected-value tree has the same node structure as the real problem
+(every real non-leaf node has a counterpart), but with ``sigma_dev=0`` it
+is a trivial deterministic LP. For a model whose true EF is a hard MIP,
+the proxy's LP relaxation is where the speedup lives; here aircond is
+already an LP, so the proxy's value is to demonstrate the convention and
+to hand back a feasible deterministic policy. You are free to use any
+method that yields a feasible per-node candidate -- a closed-form myopic
+rule (set each node's ``RegularProd = min(Capacity, max(0, expected
+demand - incoming inventory))``) builds one with no solve and no file at
+all.
 
 See also
 --------

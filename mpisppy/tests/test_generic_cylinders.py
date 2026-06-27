@@ -99,6 +99,7 @@ def _make_rho_cfg(**overrides):
         sensi_rho=False,
         cg_hub=False,
         dualcg_hub=False,
+        lshaped_hub=False,
         ph_xfeas_spoke=False,
     )
     base.update(overrides)

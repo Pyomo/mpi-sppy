@@ -6,14 +6,14 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-"""Tests for the ``feasible_xhat_creator`` convention and its
-``average_xhat_nonants`` helper.
+"""Tests for the ``feasible_xhat_creator`` convention and its helpers.
 
-Two prototypes are exercised: netdes (LP-relax + ceil, via the helper)
-and sslp (LP-relax + average + round, rolls own). The convention's
-contract is that the returned candidate must be feasible to fix in
-every real scenario's per-scenario subproblem; the netdes test
-verifies this directly.
+Two-stage prototypes: netdes (LP-relax + ceil, via the helper) and sslp
+(LP-relax + average + round, rolls own). Multistage prototype: aircond
+(expected-value tree via ``ef_xhat_nonants``). The convention's contract
+is that the returned candidate must be feasible to fix in every real
+scenario's per-scenario subproblem; the netdes and aircond tests verify
+this directly.
 """
 
 import os
@@ -25,8 +25,13 @@ import pyomo.environ as pyo
 from pyomo.opt import TerminationCondition
 
 import mpisppy.utils.sputils as sputils
-from mpisppy.utils.xhat_helpers import average_xhat_nonants, lp_xbar_nonants
+from mpisppy.utils.xhat_helpers import (
+    average_xhat_nonants,
+    lp_xbar_nonants,
+)
 from mpisppy.tests.utils import get_solver, limit_solver_threads
+import mpisppy.tests.examples.aircond as aircond
+import mpisppy.tests.examples.aircond_auxiliary as aircond_auxiliary
 
 _EXAMPLES_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -243,6 +248,70 @@ class TestSslpFeasibleXhatCreator(unittest.TestCase):
         self.assertTrue(np.allclose(arr, np.round(arr), atol=1e-9))
         self.assertTrue(np.all((arr >= 0) & (arr <= 1)),
                         f"FacilityOpen out of [0,1]: {arr}")
+
+
+@unittest.skipIf(not solver_available, "no solver available")
+class TestAircondFeasibleXhatCreator(unittest.TestCase):
+    """Multistage end-to-end: aircond_auxiliary.feasible_xhat_creator
+    returns a per-node candidate (via ef_xhat_nonants) that is feasible
+    to fix in every real (stochastic) scenario's subproblem."""
+
+    BF = [3, 3]  # 3 stages, 9 scenarios
+
+    def setUp(self):
+        self.cache = aircond_auxiliary.feasible_xhat_creator(
+            solver_name=solver_name,
+            branching_factors=self.BF,
+            start_seed=1134,
+        )
+
+    def test_returns_full_node_tree(self):
+        # Non-leaf nodes for branching [3, 3]: ROOT plus the stage-2 nodes.
+        self.assertEqual(set(self.cache.keys()),
+                         {"ROOT", "ROOT_0", "ROOT_1", "ROOT_2"})
+        for ndn, arr in self.cache.items():
+            self.assertEqual(arr.shape, (2,),  # [RegularProd, OvertimeProd]
+                             f"node {ndn} wrong shape: {arr.shape}")
+            self.assertTrue(np.all(np.isfinite(arr)))
+
+    def test_values_respect_node_bounds(self):
+        # RegularProd (index 0) is bounded by Capacity; both are >= 0.
+        capacity = aircond.parms["Capacity"][1]
+        for ndn, arr in self.cache.items():
+            self.assertGreaterEqual(arr[0], -1e-9, f"RegularProd < 0 at {ndn}")
+            self.assertLessEqual(arr[0], capacity + 1e-6,
+                                 f"RegularProd > Capacity at {ndn}")
+            self.assertGreaterEqual(arr[1], -1e-9, f"OvertimeProd < 0 at {ndn}")
+
+    def test_fixes_are_feasible_in_every_real_scenario(self):
+        # Real scenarios are stochastic (sigma_dev > 0); the
+        # expected-value candidate must still be feasible to fix because
+        # aircond has relatively complete recourse. mu_dev/sigma_dev must
+        # be passed explicitly -- _demands_creator defaults them to None.
+        real_kwargs = dict(
+            branching_factors=self.BF,
+            start_seed=1134,
+            mu_dev=aircond.parms["mu_dev"][1],
+            sigma_dev=aircond.parms["sigma_dev"][1],
+        )
+        for sname in aircond.scenario_names_creator(int(np.prod(self.BF))):
+            scen = aircond.scenario_creator(sname, **real_kwargs)
+            for node in scen._mpisppy_node_list:
+                arr = self.cache[node.name]
+                for i, v in enumerate(node.nonant_vardata_list):
+                    v.fix(arr[i])
+            solver = pyo.SolverFactory(solver_name)
+            limit_solver_threads(solver, solver_name)
+            if sputils.is_persistent(solver):
+                solver.set_instance(scen)
+                results = solver.solve(tee=False)
+            else:
+                results = solver.solve(scen, tee=False)
+            tc = results.solver.termination_condition
+            self.assertIn(
+                tc, (TerminationCondition.optimal, TerminationCondition.feasible),
+                f"aircond fix infeasible on {sname}: tc={tc}",
+            )
 
 
 class TestMaybeAttachFeasibleXhat(unittest.TestCase):
