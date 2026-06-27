@@ -846,23 +846,59 @@ class PHBase(mpisppy.spopt.SPOpt):
                                           "add_duals": add_duals, "add_prox": add_prox})
 
 
+    def _attach_PH_to_objective_after_iter0(self):
+        """ Splice the W/prox terms into the objective after the iteration-0
+        solve, and refresh any persistent solvers.
+
+        ``attach_PH_to_objective`` mutates each subproblem objective and, in
+        prox-approximation mode, also adds the ``xsqvar`` variable plus its cut
+        constraints. Because the subproblem solvers were already created (and
+        persistent solvers had ``set_instance`` called) on the user's original
+        objective during Iter0, a persistent solver does not see these later
+        changes; we re-run ``set_instance`` so the new terms and components
+        reach the solver. Non-persistent solvers re-read the model on the next
+        solve, so they need nothing here.
+        """
+        self.attach_PH_to_objective(self._attach_duals,
+                                    self._attach_prox,
+                                    self._attach_smooth)
+        if (not self._attach_duals) and (not self._attach_prox):
+            # attach_PH_to_objective made no change to the objective
+            # (e.g. APH passes both flags False); nothing to re-push.
+            return
+        for sname, s in self.local_scenarios.items():
+            if sputils.is_persistent(s._solver_plugin):
+                mpisppy.spopt.set_instance_retry(s, s._solver_plugin, sname)
+
 
     def PH_Prep(
         self,
         attach_duals=True,
         attach_prox=True,
-        attach_smooth=0
+        attach_smooth=0,
+        defer_attach=True,
     ):
         """ Set up PH objectives (duals and prox terms), and prepare
         extensions, if available.
 
         Args:
-            add_duals (boolean, optional):
+            attach_duals (boolean, optional):
                 If True, adds dual weight (Ws) to the objective. Default True.
-            add_prox (boolean, optional):
+            attach_prox (boolean, optional):
                 If True, adds prox terms to the objective. Default True.
             attach_smooth (int, optional):
                 If 0, no smoothing; if 1, p_value is used; if 2, p_ratio is used.
+            defer_attach (boolean, optional):
+                If True (default), the W and prox terms are not spliced into
+                the subproblem objectives here; instead they are attached at
+                the end of Iter0 (see _attach_PH_to_objective_after_iter0) so
+                that the iteration-0 solve uses exactly the user's objective --
+                no PH machinery in the expression tree. If False, the terms are
+                attached immediately (legacy behavior, needed by FWPH, which
+                snarfs the subproblem objective between PH_Prep and Iter0).
+                Agnostic (AML guest) runs are always attached immediately
+                regardless of this flag (the guest builds its xbars Param in
+                the attach callout, which solve_one needs from iteration 0).
 
         Note:
             This function constructs an Extension object if one was specified
@@ -872,7 +908,24 @@ class PHBase(mpisppy.spopt.SPOpt):
         self.attach_Ws_and_prox()
         if attach_smooth:
             self.attach_smoothing()
-        self.attach_PH_to_objective(attach_duals, attach_prox, attach_smooth)
+        # attach_PH_to_objective sets self._prox_approx; when the attach is
+        # deferred it has not run yet, but the iteration-0 solve_loop reads
+        # this flag. Prox terms (and any prox approximation) are structurally
+        # absent in iteration 0, so the flag must read False there regardless.
+        self._prox_approx = False
+        # Remember what to attach and whether it was deferred, so Iter0 can
+        # splice the terms in after the iteration-0 solve.
+        self._attach_duals = attach_duals
+        self._attach_prox = attach_prox
+        self._attach_smooth = attach_smooth
+        # Agnostic (AML) guests build the W/prox terms -- including the guest
+        # xbars Param that solve_one copies into on every solve -- inside the
+        # guest's attach_PH_to_objective callout, which must run before the
+        # iteration-0 solve. The deferral is therefore not applied to agnostic
+        # runs; they keep the legacy attach-in-PH_Prep behavior.
+        self._deferred_ph_attach = defer_attach and (self.Ag is None)
+        if not self._deferred_ph_attach:
+            self.attach_PH_to_objective(attach_duals, attach_prox, attach_smooth)
 
 
     def options_check(self):
@@ -1109,6 +1162,15 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         if dconvergence_detail:
             self.report_var_values_at_rank0(header="Convergence detail:", fixed_vars=False)
+
+        # Iteration 0 solved the user's original objective. Now (unless a
+        # caller already attached them in PH_Prep) splice the dual (W) and
+        # proximal terms into the subproblem objectives. Deferring to here
+        # keeps the iteration-0 model structurally identical to what the user
+        # passed in -- helpful for debugging and for LP-only solvers that
+        # cannot handle the quadratic prox term until iteration 1.
+        if getattr(self, "_deferred_ph_attach", False):
+            self._attach_PH_to_objective_after_iter0()
 
         self.reenable_W_and_prox()
 
