@@ -37,6 +37,7 @@ from mpisppy.utils.rho_utils import (
 from mpisppy.generic.decomp import _get_rho_setter
 
 from mpisppy.extensions.sensi_rho import _SensiRhoBase
+from mpisppy.extensions.coeff_rho import CoeffRho
 
 from mpisppy.tests.utils import get_solver
 from mpisppy.tests.examples.farmer import scenario_creator, scenario_denouement
@@ -258,6 +259,58 @@ class Test_sensi_rho_small_value_kept(unittest.TestCase):
         rho = ph.local_scenarios["s0"]._mpisppy_model.rho
         self.assertAlmostEqual(rho[(NDN, 0)]._value, 0.05)  # NOT inflated to 1.0
         self.assertEqual(rho[(NDN, 1)]._value, 1.0)         # ~zero -> default
+
+
+def _make_coeff_ph(coeffs, default_rho=1.0, multiplier=1.0):
+    """Stub PH holding one real Pyomo scenario whose (linear) objective has the
+    given per-nonant cost coefficients, ready to drive CoeffRho.post_iter0 with
+    no solver. coeff_rho needs a real model: nonant_cost_coeffs reads the
+    objective expression via find_objective.
+    """
+    n = len(coeffs)
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(range(n))
+    for i in range(n):
+        m.x[i]._value = 1.0
+    m.obj = pyo.Objective(expr=sum(coeffs[i] * m.x[i] for i in range(n)))
+    nonant_indices = {(NDN, i): m.x[i] for i in range(n)}
+    # _mpisppy_data / _mpisppy_model live on the scenario model itself, as in
+    # a real scenario (so find_objective(s) and s._mpisppy_data both resolve).
+    m._mpisppy_data = types.SimpleNamespace(
+        nonant_indices=nonant_indices,
+        varid_to_nonant_index={id(m.x[i]): (NDN, i) for i in range(n)},
+    )
+    m._mpisppy_model = types.SimpleNamespace(
+        rho={(NDN, i): _Holder(99.0) for i in range(n)},  # seed; overwritten
+    )
+    options = {"defaultPHrho": default_rho}
+    if multiplier != 1.0:
+        options["coeff_rho_options"] = {"multiplier": multiplier}
+    return types.SimpleNamespace(
+        local_scenarios={"s0": m},
+        options=options,
+        cylinder_rank=0,
+    )
+
+
+@unittest.skipIf(MPI.COMM_WORLD.Get_size() > 1, "serial unit test")
+class Test_coeff_rho(unittest.TestCase):
+    """coeff_rho sets rho to |objective coefficient| * multiplier; a zero
+    coefficient yields no usable rho and must fall back to the positive default
+    (issue #560). Verifies the actual computed rho values, not just that it runs."""
+
+    def test_coeff_value_kept_and_zero_defaults(self):
+        ph = _make_coeff_ph(coeffs=[3.0, 0.0], default_rho=1.0)
+        CoeffRho(ph).post_iter0()
+        rho = ph.local_scenarios["s0"]._mpisppy_model.rho
+        self.assertAlmostEqual(rho[(NDN, 0)]._value, 3.0)  # |coeff| kept
+        self.assertEqual(rho[(NDN, 1)]._value, 1.0)        # zero coeff -> default
+
+    def test_multiplier_applied(self):
+        ph = _make_coeff_ph(coeffs=[2.0], default_rho=1.0, multiplier=2.5)
+        CoeffRho(ph).post_iter0()
+        rho = ph.local_scenarios["s0"]._mpisppy_model.rho
+        self.assertAlmostEqual(rho[(NDN, 0)]._value, 5.0)  # 2.0 * 2.5
 
 
 def _farmer_ph_options(default_rho=1.0):
