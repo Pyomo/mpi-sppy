@@ -701,9 +701,14 @@ class Test_hydro(unittest.TestCase):
         pyo.assert_optimal_termination(results)
         mpisppy.utils.sputils.ef_nonants_csv(ef, "delme.csv")
 
-        df = pd.read_csv("delme.csv", index_col=1)
-        val2 = round_pos_sig(df.loc[" Scen7.Pgt[2]"].at[" Value"])
-        self.assertEqual(val2, 60)
+        # ef_nonants_csv writes the canonical xhat CSV: '#'-comment header,
+        # columns node_name, variable_name, value, with node-local variable
+        # names (the scenario-block prefix is stripped, so the second-stage
+        # Pgt[2] is shared across its node by non-anticipativity).
+        df = pd.read_csv("delme.csv", comment="#", header=None,
+                         names=["node", "var", "value"], skipinitialspace=True)
+        pgt2_vals = [round_pos_sig(v) for v in df[df["var"] == "Pgt[2]"]["value"]]
+        self.assertIn(60, pgt2_vals)
         os.remove("delme.csv")
 
         

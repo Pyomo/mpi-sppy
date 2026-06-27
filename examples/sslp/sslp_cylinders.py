@@ -99,9 +99,8 @@ def main():
     if cfg.coeff_rho:
         vanilla.add_coeff_rho(hub_dict, cfg)
 
-    if cfg.reduced_costs_rho:
-        vanilla.add_reduced_costs_rho(hub_dict, cfg)
-
+    # reduced_costs_rho was deprecated and removed; Config.checker() (called by
+    # parse_command_line above) rejects --reduced-costs-rho with a clear message.
 
     if cfg.use_primal_dual_rho_updater:
         vanilla.extension_adder(hub_dict, PrimalDualRho)

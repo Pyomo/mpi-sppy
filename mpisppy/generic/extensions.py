@@ -42,6 +42,9 @@ def configure_extensions(hub_dict, module, cfg):
     if cfg.integer_relax_then_enforce:
         vanilla.add_integer_relax_then_enforce(hub_dict, cfg)
 
+    if cfg.slamming_directives_file is not None:
+        vanilla.add_slammer(hub_dict, cfg)
+
     if cfg.grad_rho:
         from mpisppy.extensions.grad_rho import GradRho
         ext_classes.append(GradRho)
@@ -102,8 +105,7 @@ def configure_extensions(hub_dict, module, cfg):
     if cfg.sensi_rho:
         vanilla.add_sensi_rho(hub_dict, cfg)
 
-    if cfg.reduced_costs_rho:
-        vanilla.add_reduced_costs_rho(hub_dict, cfg)
+    # reduced_costs_rho was deprecated and removed; Config.checker() rejects it.
 
     if len(ext_classes) != 0:
         hub_dict['opt_kwargs']['extensions'] = MultiExtension

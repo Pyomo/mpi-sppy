@@ -171,6 +171,15 @@ farmeref_ext = (f"--EF --num-scens 3 --EF-solver-name={solver_name} --min-wheat 
 #rebaseline_xhat("farmer", "farmer", 1, farmeref, "test_data/farmeref_baseline")
 do_one("farmer", "farmer_ef_ext", 1, farmeref_ext, xhat_baseline_dir = None)
 
+farmer_lsh = (f"--solver-name={solver_name} --lshaped-hub --xhatlshaped "
+              "--max-iterations 100 --rel-gap 1E-4 --num-scens 3")
+#rebaseline_xhat("farmer", "farmer", 1, farmeref, "test_data/farmeref_baseline")
+do_one("farmer", "farmer", 2, farmer_lsh, xhat_baseline_dir = None)
+
+relief_lsh = (f"--solver-name={solver_name} --lshaped-hub --xhatlshaped "
+              "--max-iterations 100 --rel-gap 1E-4")
+do_one("relief", "relief", 2, relief_lsh, xhat_baseline_dir = None)
+
 # we need slammax and cross-scenario to make this work well
 netdesC = (f"--max-iterations=60 --instance-name=network-10-20-L-01 --netdes-data-path ./data "
            f"--solver-name={solver_name} --rel-gap=0.0 --default-rho=10000 --presolve "
@@ -224,9 +233,11 @@ if os.path.exists(_lp_mps_path):
 ### end combined mps file runs ###
 
 # reduced costs test (hydro)
+# (reduced-cost rho was deprecated and removed; this exercises the reduced-cost
+# fixer, which is unaffected. The converged xhat baseline is rho-independent.)
 hydroa_rc = ("--max-iterations 100 --default-rho 1 "
           "--reduced-costs --xhatshuffle --rel-gap 0.001 --branching-factors '3 3' "
-          "--rc-fixer --reduced-costs-rho --reduced-costs-rho-multiplier=1.0 "
+          "--rc-fixer "
           f"--stage2-ef-solver-name {solver_name} --solver-name={solver_name}")
 #rebaseline_xhat("hydro", "hydro", 3, hydroa, "test_data/hydroa_baseline")
 do_one("hydro", "hydro", 3, hydroa_rc, xhat_baseline_dir = "test_data/hydroa_baseline")

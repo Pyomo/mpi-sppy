@@ -6,11 +6,17 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-# Stochastic distribution example without decomposition, this file is only written to execute the non-scalable example
+# Deprecated single-process driver: solves the stochastic distribution
+# problem as one global model (no ADMM, no PH).  Useful as a baseline.
+# Only the non-scalable example is supported.
+#
+# Run from examples/stoch_distr/archive/:
+#   python globalmodel.py --solver-name xpress --num-stoch-scens 2 --num-admm-subproblems 3
 
-### This code line can execute the script for a certain example
-# python globalmodel.py --solver-name xpress --num-stoch-scens 2 --num-admm-subproblems 3
-
+import os
+import sys
+# stoch_distr.py lives one directory up (examples/stoch_distr/).
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pyomo.environ as pyo
 import stoch_distr
@@ -21,6 +27,18 @@ def _parse_args():
     # create a config object and parse
     cfg = config.Config()
     stoch_distr.inparser_adder(cfg)
+    # admm subproblem / stochastic scenario counts: registered by
+    # mpisppy.generic.admm.admm_args under generic_cylinders --stoch-admm,
+    # but this non-decomposed driver runs the global model directly,
+    # so register here.
+    cfg.add_to_config("num_admm_subproblems",
+                      description="Number of admm subproblems (regions)",
+                      domain=int, default=None,
+                      argparse_args={"required": True})
+    cfg.add_to_config("num_stoch_scens",
+                      description="Number of stochastic scenarios",
+                      domain=int, default=None,
+                      argparse_args={"required": True})
     cfg.add_to_config("solver_name",
                       description="which solver",
                       domain=str,
@@ -28,7 +46,7 @@ def _parse_args():
                       argparse_args = {"required": True},
                       )
     cfg.parse_command_line("globalmodel")
-    
+
     return cfg
 
 

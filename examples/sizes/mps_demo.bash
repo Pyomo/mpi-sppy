@@ -20,3 +20,13 @@ python ../../mpisppy/generic_cylinders.py --module-name sizes_expression --num-s
 
 # --mps-files-directory as the first arg infers the module automatically.
 mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --mps-files-directory=_delme_lp_mps_dir --xhatshuffle --lagrangian --default-rho 1 --solver-name ${SOLVER} --max-iterations 10
+
+# Proper bundling with the file-based path.
+# Write 10 scenarios (the writer also emits a {scenario}_rho.csv for each), then
+# read them back grouped into proper bundles with --scenarios-per-bundle.
+# The scenario count is implied by the files in the directory (no --num-scens),
+# so 10 scenarios / 5 per bundle = 2 bundles. Under bundling the per-scenario rho
+# values are assembled onto each bundle's nonants.
+python ../../mpisppy/generic_cylinders.py --module-name sizes_expression --num-scens 10 --default-rho 1 --solver-name ${SOLVER} --max-iterations 0 --write-scenario-lp-mps-files-dir _delme_lp_mps_bundle_dir
+
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --mps-files-directory=_delme_lp_mps_bundle_dir --scenarios-per-bundle 5 --xhatshuffle --lagrangian --default-rho 1 --solver-name ${SOLVER} --max-iterations 10

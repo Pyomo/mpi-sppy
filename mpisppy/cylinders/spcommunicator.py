@@ -144,9 +144,11 @@ class FieldArray:
     The intention here is that these are passive data holding classes. That is, other classes are
     expected to update the internal fields. The lone exception to this is the read/write id field.
     See the `SendArray` and `RecvArray` classes for how that field is updated.
+
     Wrapper around an MPI-allocated numpy buffer with:
-      - a padded "window" array used for MPI RMA
-      - a logical view used by mpi-sppy code (data + id)
+
+    - a padded "window" array used for MPI RMA
+    - a logical view used by mpi-sppy code (data + id)
     """
 
     def __init__(self, length: int):
@@ -471,6 +473,20 @@ class SPCommunicator:
             my_fa = RecvArray(length)
             self.receive_buffers[key] = my_fa
         ## End if
+        # On the unequal-rank path a per-scenario (local-sized) field is
+        # assembled from several of the peer cylinder's global ranks; precompute
+        # its overlap map (which also validates each remote segment -- the
+        # per-segment analogue of the equal-rank _validate_recv_field above).
+        # Global/scalar fields are read single-source and need no map. Building
+        # it here -- not only in register_receive_fields -- means a field an
+        # extension registers directly (relaxed_ph_fixer's RELAXED_NONANTS_VALS,
+        # grad_rho's BEST_XHAT, ...) gets the same multi-source assembly as the
+        # cylinder's own receive_fields. Without it those reads fall to the
+        # single-source path and tear (the buffer/field sizes differ across
+        # unequal ranks), so the run aborts.
+        if self._flex_ranks and field not in _GLOBAL_OR_SCALAR_FIELDS \
+                and (field, origin) not in self.overlap_maps:
+            self._build_overlap_map(field, origin)
         return my_fa
 
     def register_send_field(self, field: Field, length: int = -1) -> SendArray:
@@ -575,14 +591,10 @@ class SPCommunicator:
                     continue
                 cls = comm["spcomm_class"]
                 if field != Field.WHOLE and field in self.ranks_to_fields[strata_rank]:
+                    # register_recv_field also precomputes the per-scenario
+                    # overlap map on the unequal-rank path (see there).
                     buff = self.register_recv_field(field, strata_rank)
                     self.receive_field_spcomms[field].append((strata_rank, cls, buff))
-                    # On the unequal-rank path, a per-scenario (local-sized)
-                    # field is assembled from several remote buffers; precompute
-                    # its overlap map now. Global/scalar fields are read
-                    # single-source and need no map.
-                    if self._flex_ranks and field not in _GLOBAL_OR_SCALAR_FIELDS:
-                        self._build_overlap_map(field, strata_rank)
 
     def put_send_buffer(self, buf: SendArray, field: Field):
         """ Put the specified values into the specified locally-owned buffer
