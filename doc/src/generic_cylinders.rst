@@ -437,6 +437,20 @@ requires ``--solver-log-dir`` to also be set.
    the resulting log is rarely useful. Use ``--solver-log-dir`` (with
    ``--hub-only-solver-logs`` if needed) instead.
 
+``xhatter-write-iis``
+---------------------
+
+When an xhatter (incumbent-finder) rejects a candidate because a
+scenario subproblem is infeasible, ``--xhatter-write-iis`` writes an
+IIS (irreducible infeasible set) for the offending subproblem, to help
+diagnose models that should have complete recourse but don't. It fires
+**at most once per cylinder (per MPI rank)**. The output file name
+follows the ``--solver-log-dir`` convention. Companion flags
+``--xhatter-iis-method`` (``auto`` / ``ilp`` / ``explanation``) and
+``--xhatter-iis-dir`` select the facility and output directory. See
+:ref:`iis` for the full treatment, including the per-rank run-once
+semantics.
+
 ``warmstart-subproblems``
 --------------------------
 
