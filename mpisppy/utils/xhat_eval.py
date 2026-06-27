@@ -381,6 +381,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
 
         infeasP = self.no_incumbent_prob()
         if infeasP != 0.:
+            self.write_iis_on_xhatter_infeasible()
             return None
         else:
             if verbose and self.cylinder_rank == 0:

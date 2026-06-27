@@ -264,6 +264,35 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config("xhatter_write_iis",
+                           description="When an xhatter (incumbent-finder) rejects a candidate "
+                           "because a scenario subproblem is infeasible, write an IIS "
+                           "(irreducible infeasible set) for the offending subproblem via "
+                           "pyomo.contrib.iis. Useful to diagnose models that should have "
+                           "(relatively) complete recourse but don't. Fires AT MOST ONCE per "
+                           "cylinder (per MPI rank): the (expensive) IIS computation cannot "
+                           "repeat. The facility is chosen by --xhatter-iis-method (default "
+                           "'auto'). See doc/src/iis.rst for the full story.",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("xhatter_iis_method",
+                           description="Which pyomo.contrib.iis facility --xhatter-write-iis "
+                           "uses: 'ilp' writes a .ilp file with a commercial solver "
+                           "(cplex/gurobi/xpress); 'explanation' uses "
+                           "compute_infeasibility_explanation, which works with any solver; "
+                           "'auto' (default) picks 'ilp' for a commercial solver, else "
+                           "'explanation'. See doc/src/iis.rst.",
+                           domain=str,
+                           default="auto")
+
+        self.add_to_config("xhatter_iis_dir",
+                           description="Directory for IIS files written by --xhatter-write-iis "
+                           "(default: current working directory). File names follow the "
+                           "--solver-log-dir convention. See doc/src/iis.rst.",
+                           domain=str,
+                           default=None)
+
         self.add_to_config("inspect_buffers_on_shutdown",
                            description="When a spoke detects a shutdown signal, run "
                            "mpisppy.debug_utils.buffer_inspect on the SHUTDOWN receive "

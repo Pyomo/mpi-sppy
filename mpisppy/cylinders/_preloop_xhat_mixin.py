@@ -197,6 +197,7 @@ class _PreLoopXhatMixin:
             need_solution=False,
         )
         if self.opt.no_incumbent_prob() != 0.0:
+            self.opt.write_iis_on_xhatter_infeasible()
             return None
         return self.opt.Eobjective(verbose=False)
 
