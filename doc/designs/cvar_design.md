@@ -102,12 +102,15 @@ def add_cvar(scenario, *, cvar_weight, cvar_alpha, cvar_mean_weight=1.0):
     obj   = sputils.find_active_objective(scenario)   # pristine user cost objective
     cost  = obj.expr
     sense = obj.sense
-    if sense != pyo.minimize:                         # maximize mirrors PySP (§6.3) — not yet shipped
-        raise NotImplementedError("CVaR for maximization is not yet implemented")
     scenario._mpisppy_cvar_eta    = pyo.Var()
-    scenario._mpisppy_cvar_excess = pyo.Var(domain=pyo.NonNegativeReals)
-    scenario._mpisppy_cvar_excess_con = pyo.Constraint(
-        expr=scenario._mpisppy_cvar_excess >= cost - scenario._mpisppy_cvar_eta)
+    if sense == pyo.minimize:                          # upper (cost) tail
+        scenario._mpisppy_cvar_excess = pyo.Var(domain=pyo.NonNegativeReals)
+        scenario._mpisppy_cvar_excess_con = pyo.Constraint(
+            expr=scenario._mpisppy_cvar_excess >= cost - scenario._mpisppy_cvar_eta)
+    else:                                              # lower (reward) tail mirror (§6.3)
+        scenario._mpisppy_cvar_excess = pyo.Var(domain=pyo.NonPositiveReals)
+        scenario._mpisppy_cvar_excess_con = pyo.Constraint(
+            expr=scenario._mpisppy_cvar_excess <= cost - scenario._mpisppy_cvar_eta)
     # keep the original risk-neutral objective (deactivated) for E[Cost] reporting;
     # the new objective is named WITH_CVAR (NOT PySP's "MASTER" — see §3).
     obj.deactivate()
@@ -178,11 +181,16 @@ A single insertion point → `do_EF`, `do_decomp`, and every spoke inherit the r
    For multistage problems it therefore measures risk of the total cost only.
    **If a time-consistent (nested) risk measure is needed, users should contact the developers.**
    This caveat MUST appear verbatim in the user-facing docs — see the doc note below and §8/§9.
-3. **Minimize first.** Phase 1 raises `NotImplementedError` for a maximization objective rather
-   than silently building the wrong (upper-tail) model. Maximize is then handled by mirroring PySP
-   (δ domain `NonPositiveReals`, negate the excess expression); ship in a later phase.
+3. **Both senses supported.** Minimization penalizes the upper (cost) tail
+   (δ ≥ Cost−η, δ ≥ 0). Maximization mirrors PySP onto the lower (reward) tail
+   (δ ≤ Cost−η, δ ≤ 0); the objective expression and its sense are unchanged.
+   (Phase 1 shipped minimize-only and raised `NotImplementedError` for maximize;
+   the combined Phase 2/3 PR added the maximize mirror.)
 4. **η fixed during xhat evaluation** → valid but possibly loose inner bound. Optional later
    refinement: re-optimize the shared η given the fixed "real" first-stage vars.
+5. **Setting ρ.** η has a much larger cost scale than typical first-stage variables, so a uniform
+   proximal ρ stalls PH (e.g. farmer with `--default-rho 1` sits at a 40% gap after 100 iters while
+   `--grad-rho` / `--sep-rho` converge to 0%). The docs recommend a cost-aware ρ (grad-rho/sep-rho).
 
 ### 6.5 Documentation note (verbatim — to ship in the Risk Management docs section, Phase 3)
 
@@ -201,21 +209,24 @@ A single insertion point → `do_EF`, `do_decomp`, and every spoke inherit the r
 - EF-CVaR (mpi-sppy) vs an independent PySP-style monolithic build.
 - β=0 reduces to risk-neutral EF (regression guard).
 - α sweep: α→0 ⇒ CVaR ≈ E[Cost]; α→1 ⇒ CVaR ≈ worst case.
-- PH-on-CVaR converges to EF-CVaR objective; η consensus → VaR.
-- Bound sandwich: Lagrangian outer ≤ EF-CVaR ≤ xhat inner.
+- PH-on-CVaR converges to EF-CVaR objective; η consensus → VaR (needs a cost-aware ρ such as
+  grad-rho/sep-rho — a uniform ρ stalls because η's cost scale dwarfs the other variables').
+- Bound sandwich: Lagrangian outer ≤ EF-CVaR ≤ xhat inner (rho-independent; this is what the
+  cylinder test asserts).
 
 ## 8. Phased rollout (each phase a review-sized, green-on-its-own PR)
 
-- **Phase 1 — core + EF.** `cvar.py` (`add_cvar` incl. `cvar_mean_weight` + wrapper);
-  `tests/test_cvar.py` comparing EF-CVaR to closed form, the β=0 regression, and pure CVaR (λ=0).
-  Programmatic API only. Maximization raises `NotImplementedError` (full support is Phase 3).
-- **Phase 2 — CLI + decomposition.** `cvar_args()` in config (`--cvar`, `--cvar-weight`,
-  `--cvar-alpha`, `--cvar-mean-weight`); `generic_cylinders` wiring; a farmer risk-averse example; a
-  cylinders test (PH hub + Lagrangian + xhat bound sandwich). Wire the new test into
-  `run_coverage.bash` AND `test_pr_and_main.yml` in the same commit.
-- **Phase 3 — polish.** maximize support; docs section ("Risk Management") that MUST include the
-  single-root-stage / not-time-consistent caveat verbatim from §6.5; confidence-interval note
-  (`zhat4xhat` evaluates the same risk-averse objective).
+- **Phase 1 — core + EF (DONE, PR #746).** `cvar.py` (`add_cvar` incl. `cvar_mean_weight` +
+  wrapper); `tests/test_cvar.py` comparing EF-CVaR to closed form, the β=0 regression, and pure
+  CVaR (λ=0). Programmatic API only; minimize-only (maximize raised `NotImplementedError`).
+- **Phases 2 + 3 — CLI, decomposition, maximize, docs (combined PR).** `cvar_args()` in config
+  (`--cvar`, `--cvar-weight`, `--cvar-alpha`, `--cvar-mean-weight`); `generic_cylinders` wiring;
+  maximize support (lower-tail mirror, replacing the Phase 1 guard); a farmer risk-averse example
+  (`farmer_generic.bash` + `run_all.py`, using `--grad-rho`); the maximize closed-form, serial-PH,
+  CLI, and cylinder bound-sandwich tests added to existing test files (already wired into CI and
+  `run_coverage.bash`); and a "Risk Management" docs section that includes the single-root-stage /
+  not-time-consistent caveat verbatim from §6.5, the ρ-with-η guidance, and the `zhat4xhat`
+  confidence-interval note. (The two phases were combined into one PR at the maintainer's request.)
 
 ## 9. Files touched
 

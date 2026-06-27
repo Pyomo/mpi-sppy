@@ -15,6 +15,7 @@
 import unittest
 import pyomo.environ as pyo
 
+import mpisppy.opt.ph
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.cvar as cvar
 import mpisppy.tests.examples.farmer as farmer
@@ -50,6 +51,28 @@ def tiny_scenario_creator(sname, **kwargs):
     model.cost = pyo.Objective(expr=cost_expr, sense=pyo.minimize)
     model._mpisppy_probability = 1.0 / len(TINY_COSTS)
     sputils.attach_root_node(model, cost_expr, [model.x])
+    return model
+
+
+# ---------------------------------------------------------------------------
+# The maximization mirror of the tiny instance: same numbers {10,20,30,40},
+# uniform, alpha = 0.6, but now *rewards* (maximize), so risk aversion is on the
+# LOWER tail:
+#   E[Reward]            = 25
+#   lower VaR (eta*)     = 20
+#   lower CVaR_0.6       = 20 - (1/(1-0.6))*(1/4)*(20-10) = 13.75
+# ---------------------------------------------------------------------------
+TINY_MAX_VAR = 20.0
+TINY_MAX_CVAR = 13.75
+
+
+def tiny_max_scenario_creator(sname, **kwargs):
+    model = pyo.ConcreteModel(name=sname)
+    model.x = pyo.Var(bounds=(0.0, 0.0))
+    reward_expr = TINY_COSTS[sname] + model.x
+    model.reward = pyo.Objective(expr=reward_expr, sense=pyo.maximize)
+    model._mpisppy_probability = 1.0 / len(TINY_COSTS)
+    sputils.attach_root_node(model, reward_expr, [model.x])
     return model
 
 
@@ -143,17 +166,22 @@ class StructureTests(unittest.TestCase):
             cvar.add_cvar(self._farmer_scenario(), cvar_weight=1.0,
                           cvar_alpha=0.9, cvar_mean_weight=-1.0)
 
-    def test_maximize_objective_raises(self):
-        # Only minimization is supported; maximization must be rejected outright
-        # rather than silently building the (wrong) upper-tail formulation.
+    def test_maximize_mirrors_to_lower_tail(self):
+        # A maximization objective gets the mirrored (lower-tail) formulation:
+        # the excess var is NonPositiveReals and WITH_CVAR keeps the maximize
+        # sense; the constant objective expression is unchanged.
         m = pyo.ConcreteModel()
         m.x = pyo.Var(bounds=(0.0, 0.0))
         reward = 10.0 + m.x
         m.reward = pyo.Objective(expr=reward, sense=pyo.maximize)
         m._mpisppy_probability = 1.0
         sputils.attach_root_node(m, reward, [m.x])
-        with self.assertRaises(NotImplementedError):
-            cvar.add_cvar(m, cvar_weight=1.0, cvar_alpha=0.9)
+        cvar.add_cvar(m, cvar_weight=1.0, cvar_alpha=0.9)
+        self.assertIs(m._mpisppy_cvar_excess.domain, pyo.NonPositiveReals)
+        active = sputils.find_active_objective(m)
+        self.assertIs(active, m.WITH_CVAR)
+        self.assertEqual(active.sense, pyo.maximize)
+        self.assertFalse(m.reward.active)
 
 
 @unittest.skipIf(not solver_available, "no solver is available")
@@ -198,6 +226,83 @@ class EFClosedFormTests(unittest.TestCase):
             suppress_warnings=True)
         _solve(ef)
         self.assertAlmostEqual(pyo.value(ef.EF_Obj), TINY_EXPECTED_COST, places=4)
+
+
+@unittest.skipIf(not solver_available, "no solver is available")
+class EFMaxClosedFormTests(unittest.TestCase):
+    """Maximization EF-CVaR (lower-tail mirror) on the tiny instance."""
+
+    def _eta_value(self, ef):
+        return pyo.value(getattr(ef, "s0")._mpisppy_cvar_eta)
+
+    def test_ef_cvar_max_matches_closed_form(self):
+        # lambda = 1, beta = 1  =>  E[Reward] + lower-tail CVaR
+        ef = sputils.create_EF(
+            list(TINY_COSTS.keys()),
+            cvar.cvar_scenario_creator(
+                tiny_max_scenario_creator, cvar_weight=1.0, cvar_alpha=TINY_ALPHA),
+            suppress_warnings=True)
+        _solve(ef)
+        self.assertAlmostEqual(pyo.value(ef.EF_Obj),
+                               TINY_EXPECTED_COST + TINY_MAX_CVAR, places=4)
+        self.assertAlmostEqual(self._eta_value(ef), TINY_MAX_VAR, places=4)
+
+    def test_pure_cvar_max(self):
+        # lambda = 0, beta = 1  =>  lower-tail CVaR only
+        ef = sputils.create_EF(
+            list(TINY_COSTS.keys()),
+            cvar.cvar_scenario_creator(
+                tiny_max_scenario_creator, cvar_weight=1.0, cvar_alpha=TINY_ALPHA,
+                cvar_mean_weight=0.0),
+            suppress_warnings=True)
+        _solve(ef)
+        self.assertAlmostEqual(pyo.value(ef.EF_Obj), TINY_MAX_CVAR, places=4)
+        self.assertAlmostEqual(self._eta_value(ef), TINY_MAX_VAR, places=4)
+
+
+@unittest.skipIf(not solver_available, "no solver is available")
+class SerialPHTests(unittest.TestCase):
+    """PH (run serially) accepts a CVaR-transformed model and yields a valid bound.
+
+    Because eta is appended to the root node it is "just another first-stage
+    variable", so PH builds and iterates with no algorithm changes.  We assert
+    the trivial outer bound brackets the EF-CVaR optimum (a rho-independent
+    guarantee); the EF closed-form tests above verify the CVaR value itself, and
+    the cylinder bound-sandwich test verifies the full decomposition.
+    """
+
+    def test_ph_on_cvar_runs_and_bounds(self):
+        names = farmer.scenario_names_creator(3)
+        kwargs = {"num_scens": 3}
+        creator = cvar.cvar_scenario_creator(
+            farmer.scenario_creator, cvar_weight=2.0, cvar_alpha=0.8)
+
+        ef = sputils.create_EF(
+            names, creator, scenario_creator_kwargs=kwargs, suppress_warnings=True)
+        _solve(ef)
+        ef_obj = pyo.value(ef.EF_Obj)
+
+        options = {
+            "solver_name": solver_name,
+            "PHIterLimit": 10,
+            "defaultPHrho": 1.0,
+            "convthresh": 1e-8,
+            "verbose": False,
+            "display_timing": False,
+            "display_progress": False,
+            "iter0_solver_options": None,
+            "iterk_solver_options": None,
+        }
+        ph = mpisppy.opt.ph.PH(
+            options, names, creator, lambda rank, sname, scenario: None,
+            scenario_creator_kwargs=kwargs)
+        conv, obj, tbound = ph.ph_main()
+
+        # eta is being treated as a nonant by PH
+        for s in ph.local_scenarios.values():
+            self.assertTrue(hasattr(s, "_mpisppy_cvar_eta"))
+        # the trivial (iter0) bound is a valid outer bound for this minimization
+        self.assertLessEqual(tbound, ef_obj + 1e-6)
 
 
 @unittest.skipIf(not solver_available, "no solver is available")
