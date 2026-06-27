@@ -238,9 +238,12 @@ class CrossScenarioExtension(Extension):
             )
             self.send_nonants = True
         ## End if-else
+        # CROSS_SCENARIO_COST is local-sized: one eta value per global scenario,
+        # for each local scenario (see send_to_cross_cuts). It is nscen * nscen
+        # only when every cylinder has exactly one rank (local_scen_count==nscen).
         self.all_etas = spcomm.register_send_field(
             Field.CROSS_SCENARIO_COST,
-            nscen * nscen,
+            nscen * local_scen_count,
         )
         return
 

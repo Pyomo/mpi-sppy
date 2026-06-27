@@ -98,6 +98,10 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_chance_constraint.py -v
 
+      - name: Test cross-scenario buffer sizing
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_cross_scenario_buffer_sizing.py -v
+
       - name: Test afew
         run: |
           PYARGS="-m coverage run $COV_ARGS"
