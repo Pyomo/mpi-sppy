@@ -6,9 +6,18 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-# general example driver for stoch_distr with cylinders
+# Deprecated EF driver for stoch_distr.  Use
+# `python ../../../mpisppy/generic_cylinders.py --module-name stoch_distr
+# --EF --EF-solver-name <solver> --stoch-admm --num-admm-subproblems X
+# --num-stoch-scens Y` from examples/stoch_distr/ instead.  Kept here
+# because tests still compare against the EF baseline produced here.
 
-# This file can be executed thanks to python stoch_distr_ef.py --num-stoch-scens 2 --solver-name xpress --num-stoch-scens 2 --num-admm-subproblems 3 --scalable --mnpr 6
+import os
+import sys
+# stoch_distr.py lives one directory up (examples/stoch_distr/);
+# stoch_distr_admm_cylinders.py lives next to us under archive/.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Solves the stochastic distribution problem
 import stoch_distr
@@ -27,6 +36,17 @@ def _parse_args():
     # create a config object and parse
     cfg = config.Config()
     stoch_distr.inparser_adder(cfg)
+    # admm subproblem / stochastic scenario counts: registered by
+    # mpisppy.generic.admm.admm_args under generic_cylinders --stoch-admm,
+    # but this deprecated driver bypasses that path, so register here.
+    cfg.add_to_config("num_admm_subproblems",
+                      description="Number of admm subproblems (regions)",
+                      domain=int, default=None,
+                      argparse_args={"required": True})
+    cfg.add_to_config("num_stoch_scens",
+                      description="Number of stochastic scenarios",
+                      domain=int, default=None,
+                      argparse_args={"required": True})
     cfg.add_to_config("solver_name",
                          description="Choice of the solver",
                          domain=str,

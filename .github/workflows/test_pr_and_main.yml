@@ -1178,7 +1178,8 @@ jobs:
             mpisppy/tests/test_ciutils.py \
             mpisppy/tests/test_prox_approx.py \
             mpisppy/tests/test_sep_rho.py \
-            mpisppy/tests/test_reduced_costs_fixer.py
+            mpisppy/tests/test_reduced_costs_fixer.py \
+            mpisppy/tests/test_slammer.py
 
       - name: Upload coverage data
         if: always()

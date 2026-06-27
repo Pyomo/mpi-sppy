@@ -92,7 +92,7 @@ def _get_rho_setter(module, cfg):
             f"--default-rho must be strictly positive, got {cfg.default_rho}. "
             "Progressive Hedging requires rho > 0."
         )
-    if cfg.default_rho is None and rho_setter is None:
+    if cfg.default_rho is None and rho_setter is None and not cfg.lshaped_hub:
         if cfg.sep_rho or cfg.coeff_rho or cfg.sensi_rho:
             cfg.default_rho = 1
         elif _needs_rho(cfg):

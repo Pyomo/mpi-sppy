@@ -28,7 +28,6 @@ def _hasit(cfg, argname):
         return val
     return val is not None
 
-
 def _maybe_attach_jensens(spoke_dict, cfg, spoke_prefix,
                           average_scenario_creator, scenario_creator_kwargs):
     """Attach Jensen's options to spoke_dict when the corresponding
@@ -310,6 +309,23 @@ def add_multistage_options(cylinder_dict,all_nodenames,branching_factors):
     if all_nodenames is not None:
         cylinder_dict["opt_kwargs"]["all_nodenames"] = all_nodenames
     return cylinder_dict
+
+def lshaped_options(cfg):
+    if _hasit(cfg, "solver_options"):
+        odict = sputils.option_string_to_dict(cfg.solver_options)
+    else:
+        odict=dict()
+    
+    lshoptions = {
+        "root_solver": cfg.solver_name,
+        "sp_solver": cfg.solver_name,
+        "sp_solver_options" : odict,
+        "max_iter": cfg.max_iterations,
+        "verbose": False,
+        "root_scenarios":None
+   }
+    
+    return lshoptions
 
 def ph_hub(
         cfg,
@@ -761,11 +777,6 @@ def add_integer_relax_then_enforce(hub_dict,
     hub_dict["opt_kwargs"]["options"]["integer_relax_then_enforce_options"] = {"ratio":cfg.integer_relax_then_enforce_ratio}
     return hub_dict
 
-def add_reduced_costs_rho(hub_dict, cfg):
-    from mpisppy.extensions.reduced_costs_rho import ReducedCostsRho
-    hub_dict = extension_adder(hub_dict,ReducedCostsRho)
-    hub_dict["opt_kwargs"]["options"]["reduced_costs_rho_options"] = {"multiplier" : cfg.reduced_costs_rho_multiplier, "cfg": cfg}
-
 def add_sep_rho(hub_dict, cfg):
     from mpisppy.extensions.sep_rho import SepRho
     hub_dict = extension_adder(hub_dict,SepRho)
@@ -827,6 +838,30 @@ def add_relaxed_ph_fixer(hub_dict,
             "bound_tol": cfg.relaxed_ph_fixer_tol,
         }
 
+    return hub_dict
+
+def add_slammer(hub_dict,
+                cfg,
+                ):
+    # Preference-driven in-hub slamming; activated only when the directives
+    # file is supplied (see doc/designs/slamming_design.md).
+    from mpisppy.extensions.slammer import Slammer
+    hub_dict = extension_adder(hub_dict, Slammer)
+
+    # slam_start_iter / iters_between_slams default to None in Config so the
+    # checker can detect "supplied without a file"; resolve to the Slammer's
+    # built-in defaults here.
+    slammer_options = {
+        "directives_file": cfg.slamming_directives_file,
+        "rounding_bias": cfg.rounding_bias,
+        "verbose": cfg.verbose,
+    }
+    if cfg.get("slam_start_iter") is not None:
+        slammer_options["slam_start_iter"] = cfg.slam_start_iter
+    if cfg.get("iters_between_slams") is not None:
+        slammer_options["iters_between_slams"] = cfg.iters_between_slams
+
+    hub_dict["opt_kwargs"]["options"]["slammer_options"] = slammer_options
     return hub_dict
 
 def add_wxbar_read_write(hub_dict, cfg):
@@ -1566,6 +1601,34 @@ def slammin_spoke(
     )
     return slammin_dict
 
+
+def lshaped_hub(
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=None,
+):
+    from mpisppy.cylinders.hub import LShapedHub
+    from mpisppy.opt.lshaped import LShapedMethod    
+    hub_dict = {
+        "hub_class": LShapedHub,
+        "hub_kwargs": {
+            "options": {
+                "rel_gap": cfg.rel_gap,
+                "abs_gap": cfg.abs_gap,
+            },
+        },
+        "opt_class": LShapedMethod,
+        "opt_kwargs": { # Args passed to LShapedMethod __init__
+            "options": lshaped_options(cfg),
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": scenario_creator,
+            "scenario_denouement": scenario_denouement,
+            "scenario_creator_kwargs": scenario_creator_kwargs,        
+        }
+        }
+    return hub_dict
 
 def cross_scenario_cuts_spoke(
     cfg,

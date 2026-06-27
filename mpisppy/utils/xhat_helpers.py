@@ -34,7 +34,9 @@ from pyomo.opt import TerminationCondition
 import mpisppy.utils.sputils as sputils
 
 
-def _solve_and_extract_root(model, solver_name, solver_options):
+def _solve_model(model, solver_name, solver_options):
+    """Solve ``model`` with the named solver; raise unless the
+    termination condition is optimal or feasible. Returns the results."""
     solver = pyo.SolverFactory(solver_name)
     for k, v in (solver_options or {}).items():
         solver.options[k] = v
@@ -48,6 +50,11 @@ def _solve_and_extract_root(model, solver_name, solver_options):
         raise RuntimeError(
             f"solve in xhat_helpers failed with termination_condition={tc}"
         )
+    return results
+
+
+def _solve_and_extract_root(model, solver_name, solver_options):
+    _solve_model(model, solver_name, solver_options)
     root = model._mpisppy_node_list[0]
     return np.array(
         [pyo.value(v) for v in root.nonant_vardata_list], dtype="d"
@@ -150,3 +157,58 @@ def lp_xbar_nonants(
             f"{weight_sum}; cannot form a weighted average."
         )
     return arr_sum / weight_sum
+
+
+def ef_xhat_nonants(
+    scenario_creator,
+    scenario_names,
+    *,
+    solver_name,
+    scenario_creator_kwargs=None,
+    solver_options=None,
+    relax_integrality=False,
+):
+    """Solve one extensive form over ``scenario_names`` and return the
+    whole nonant tree as ``{node_name: np.ndarray}`` -- the cache form
+    consumed by ``Xhat_Eval._fix_nonants``.
+
+    This is the multistage engine for ``feasible_xhat_creator``. Unlike
+    ``average_xhat_nonants`` (which returns only the ROOT array), it
+    returns a candidate at *every* non-leaf node, each array in that
+    node's ``nonant_vardata_list`` order.
+
+    The supplied scenario set should define a deterministic proxy whose
+    tree has the same node structure as the real problem -- e.g. the
+    expected-value tree: the real branching factors with the random data
+    pinned to its mean -- so every real non-leaf node has a counterpart
+    here. Because all node values come from one feasible solution of one
+    EF, they are jointly feasible along every path *by construction*;
+    this is the inter-stage coupling the two-stage case does not have.
+    Whether they remain feasible to *fix* in the real (stochastic)
+    scenarios is then a property of the model (relatively complete
+    recourse) or the responsibility of a model-specific repair -- see
+    doc/src/feasible_xhat.rst.
+
+    Two-stage is the degenerate special case (only ``"ROOT"`` is
+    populated), so this works there too; ``average_xhat_nonants`` remains
+    the lighter two-stage engine.
+    """
+    ef = sputils.create_EF(
+        scenario_names,
+        scenario_creator,
+        scenario_creator_kwargs=scenario_creator_kwargs or {},
+    )
+    if relax_integrality:
+        pyo.TransformationFactory("core.relax_integer_vars").apply_to(ef)
+    _solve_model(ef, solver_name, solver_options)
+    # ef.ref_vars maps (node_name, i) -> the representative nonant Var,
+    # where i is the index into that node's nonant_vardata_list (see
+    # sputils.create_EF / sputils.ef_nonants). Group by node and order by
+    # i so each array lines up with _fix_nonants' per-node loop.
+    by_node = {}
+    for (ndn, i), var in ef.ref_vars.items():
+        by_node.setdefault(ndn, {})[i] = pyo.value(var)
+    return {
+        ndn: np.array([vals[i] for i in range(len(vals))], dtype="d")
+        for ndn, vals in by_node.items()
+    }

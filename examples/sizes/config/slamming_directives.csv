@@ -1,0 +1,30 @@
+# Slamming directives for the sizes model.
+#
+# Modernized from the historical PySP WWPH suffix file (wwph.suffixes in this
+# directory): the production / cut variables are slow to converge, so when the
+# hub stalls we force them to their per-scenario maximum to break the cycle.
+#
+# Used by generic_cylinders.py via:
+#   --slamming-directives-file examples/sizes/config/slamming_directives.csv
+#   --slam-start-iter 100 --iters-between-slams 5
+# (matching PySP's SlamAfterIter=100, PH_Iters_Between_Cycle_Slams=5).
+#
+# Columns: name (wildcard pattern), can_slam (1/0), directions (|-separated),
+# priority (larger is slammed first).  Matching is last-match-wins, so the
+# broad rules come first and the per-index priorities override them.
+#
+# NOTE: a multi-index name like NumUnitsCutFirstStage[*,*] contains a comma, so
+# it must be quoted to keep the CSV from splitting it (standard CSV quoting).
+name,can_slam,directions,priority
+NumProducedFirstStage[*],1,max,5
+"NumUnitsCutFirstStage[*,*]",1,max,10
+NumProducedFirstStage[1],1,max,1
+NumProducedFirstStage[2],1,max,2
+NumProducedFirstStage[3],1,max,3
+NumProducedFirstStage[4],1,max,4
+NumProducedFirstStage[5],1,max,5
+NumProducedFirstStage[6],1,max,6
+NumProducedFirstStage[7],1,max,7
+NumProducedFirstStage[8],1,max,8
+NumProducedFirstStage[9],1,max,9
+NumProducedFirstStage[10],1,max,10

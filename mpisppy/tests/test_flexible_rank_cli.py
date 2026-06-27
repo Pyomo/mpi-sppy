@@ -35,6 +35,7 @@ def _full_cfg():
     cfg.subgradient_bounder_args()
     cfg.xhatshuffle_args()
     cfg.xhatxbar_args()
+    cfg.xhatlshaped_args()
     cfg.reduced_costs_args()
     cfg.sep_rho_args()
     cfg.coeff_rho_args()
