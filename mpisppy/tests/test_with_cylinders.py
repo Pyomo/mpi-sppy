@@ -210,8 +210,8 @@ class Test_farmer_cvar_with_cylinders(unittest.TestCase):
         if wheel.global_rank == 0:
             ef_opt = self._ef_cvar_opt()
             self.assertIsNotNone(wheel.BestOuterBound)
-            # outer (lower) bound for this minimization
-            self.assertLessEqual(wheel.BestOuterBound, ef_opt + 1e-4 * abs(ef_opt))
+            # outer (lower) bound for this minimization (small epsilon for solver round-off)
+            self.assertLessEqual(wheel.BestOuterBound, ef_opt + 1e-8 * abs(ef_opt))
 
     @unittest.skipIf(not solver_available, "no solver is available")
     def test_cvar_xhatshuffle_inner_bound(self):
@@ -224,8 +224,8 @@ class Test_farmer_cvar_with_cylinders(unittest.TestCase):
         if wheel.global_rank == 0:
             ef_opt = self._ef_cvar_opt()
             self.assertIsNotNone(wheel.BestInnerBound)
-            # inner (upper) bound for this minimization
-            self.assertGreaterEqual(wheel.BestInnerBound, ef_opt - 1e-4 * abs(ef_opt))
+            # inner (upper) bound for this minimization (small epsilon for solver round-off)
+            self.assertGreaterEqual(wheel.BestInnerBound, ef_opt - 1e-8 * abs(ef_opt))
 
 
 #*****************************************************************************
