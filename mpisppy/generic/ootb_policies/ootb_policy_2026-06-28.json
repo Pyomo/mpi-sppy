@@ -61,14 +61,20 @@
       "outer": 1,
       "inner": 1
     },
-    "max_cylinders": 6,
+    "max_cylinders": 7,
     "_cold_start_guess": ["max_cylinders", "ladder ordering of priorities 3-6"]
   },
 
   "rank_allocation": {
-    "_comment": "How to spend ranks. First fill the spoke ladder up to max_cylinders (each cylinder = 1 rung + the hub). Then, rather than adding lower-value spokes, spend remaining ranks on intra-cylinder parallelism (more ranks per cylinder => faster subproblem throughput), especially when there are many scenarios/bundles. v1 keeps this simple and conservative.",
-    "fill_ladder_before_intra_cylinder": true,
-    "extra_ranks_policy": "intra_cylinder"
+    "_comment": "Two parts. (A) ROSTER SIZE: prefer a SMALL CORE (>=1 outer + >=1 inner spoke) widened by ranks over a wide roster of weak spokes. Start from the core; add further ladder rungs only while each cylinder would still get >= min_ranks_per_cylinder ranks (uniform/nominal basis -- a coarse gate) and we stay <= max_cylinders. So 6 ranks -> hub + lagrangian + xhatshuffle (3 cylinders, widened), NOT 6 single-rank cylinders. (B) UNBALANCED DISTRIBUTION (flex-ranks): split ranks across the chosen cylinders by per-cylinder RATIOS, not uniformly -- cheaper cylinders get fewer ranks. ratios are normalized over the chosen cylinders and floored at 1 rank each. WARNING: rank_ratios here are a CRUDE cold-start (e.g. xhatter 0.2); the right split is a much more complicated calculation that depends on the NATURE OF THE SUBPROBLEMS (relative solve cost), ideally informed by the plus tier's measurements.",
+    "min_ranks_per_cylinder": 2,
+    "default_rank_ratio": 1.0,
+    "rank_ratios": {
+      "--xhatshuffle": 0.2,
+      "--xhatxbar": 0.2,
+      "--xhatlshaped": 0.2
+    },
+    "_cold_start_guess": ["min_ranks_per_cylinder", "default_rank_ratio", "rank_ratios"]
   },
 
   "effort_scaling": {

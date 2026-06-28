@@ -188,7 +188,7 @@ data):
 | `solver` | `preference_order` (persistent-commercial → commercial → free QP-capable → LP/MIP-only), plus `commercial` / `qp_capable` / `lp_mip_only_force_linearize_prox` sets and `caveats` |
 | `hub` | default hub factory (`ph_hub`, no flag) |
 | `spoke_ladder` | ordered `rungs` of WIRED spoke flags (outer/inner), `core_roster_min` (≥1 outer + ≥1 inner = the 3-rank floor), `max_cylinders` |
-| `rank_allocation` | fill the ladder first, then spend leftover ranks on intra-cylinder parallelism |
+| `rank_allocation` | small-core roster widened by ranks (add a rung only while each cylinder keeps ≥ `min_ranks_per_cylinder`, ≤ `max_cylinders`); ranks split **unbalanced** across cylinders by `rank_ratios` (xhatter 0.2) — crude cold-start (§5.5) |
 | `effort_scaling` | shape of solve effort vs. size (continuous ~linear, integers superlinear via `int_exponent`); shared by bundle sizing (§5.3) |
 | `bundle_sizing` | how big bundles are (base/plus only — **minus cannot bundle**): largest `spb` within an effort budget (base = relative M; plus = measured seconds); `--scenarios-per-bundle` divides `num_scens`; `#bundles ≥ #ranks` |
 | `option_categories` | per-concern default options (`rho_setter` `--grad-rho`, `termination` `--rel-gap 0.01`, `max_iterations` `--max-iterations 100`, `dynamic_rho` `--dynamic-rho-primal-crit`), each skipped if the user set any flag in its `superseded_by` list; skipped on the EF path |
@@ -359,6 +359,30 @@ config-time suggestions, then stop before the production optimization run.**
 
 Ships in **PR1**: a plain `store_true` flag; the driver short-circuits after
 printing, before apply-to-`Config` / run.
+
+## 5.5 Rank allocation — small core, widened, and unbalanced
+
+Two parts (policy `rank_allocation`):
+
+**Roster size — prefer width over weak spokes.** Start from the minimal core
+(≥1 outer + ≥1 inner spoke = hub + `--lagrangian` + `--xhatshuffle`). Add
+further ladder rungs only while each cylinder would still keep
+`min_ranks_per_cylinder` ranks (a coarse uniform gate), up to `max_cylinders`
+(now **7**, so all six ladder rungs are reachable at enough ranks — no dead
+rung). So **6 ranks → hub + lagrangian + xhatshuffle (3 cylinders), widened** —
+*not* 6 single-rank cylinders. Extra ranks buy subproblem throughput, which (so
+far in practice) beats piling on lower-value bound spokes.
+
+**Unbalanced distribution (flex-ranks).** Ranks are split across the chosen
+cylinders by per-cylinder **`rank_ratios`**, *not* uniformly: cheaper cylinders
+get a smaller share. v1 ships `--xhatshuffle` (and the xhat family) at **0.2**;
+everything else uses `default_rank_ratio` 1.0. Ratios are normalized over the
+chosen cylinders and floored at 1 rank each (e.g. 6 ranks → hub 3, lagrangian 2,
+xhatshuffle 1). **This is a crude cold-start:** the right split is a much more
+complicated calculation that depends on the *nature of the subproblems*
+(relative solve cost), and is a natural place for the `plus` tier's measurements
+to inform. The widest cylinder's rank count governs the bundling
+`#bundles ≥ #ranks` floor.
 
 ---
 
