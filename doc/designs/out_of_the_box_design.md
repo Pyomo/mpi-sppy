@@ -4,9 +4,10 @@
 the DLWoodruff fork. Proceeding deliberately ("slowly"): requirements confirmed
 and the major design questions resolved — decision-logic mechanism (§5), policy
 file + path selection (§5.1), effort tiers (§5.2), bundle sizing & the EF gate
-(§5.3), `--inspect-only` (§5.4), rank allocation (§5.5), and the PR1 validator
-(§8). The first dated policy file is committed. No production library code yet —
-only an uncommitted interpreter *sketch* (§7).
+(§5.3), `--inspect-only` (§5.4), rank allocation (§5.5), and the PR1 tooling —
+validator (§8) and effort calibrator (§9). The first dated policy file is
+committed. No production library code yet — only an uncommitted interpreter
+*sketch* (§7).
 **Author:** dlw (captured with Claude Code assistance)
 **Last updated:** 2026-06-28
 
@@ -180,9 +181,11 @@ program does not parse focus from the name, and no machine-read `focus` field is
 needed. A user selects a focus simply by passing that file's path. The run
 **logs which policy file (and `policy_version`) it used**, for reproducibility.
 
-**v1 schema** (see the file for the authoritative, self-documenting copy; every
-threshold is flagged `_cold_start_guess` and is a placeholder to be tuned with
-data):
+**v1 schema** (see the file for the authoritative, self-documenting copy). The
+*structure* is authored; the *numbers* are produced by the calibration tool (§9)
+on the example set — reproducible, not hand-guesses. (The current design-phase
+file still carries hand-guesses flagged `_cold_start_guess`; PR1 replaces them
+with calibration output.) Schema keys:
 
 | Key | Purpose |
 |---|---|
@@ -408,8 +411,8 @@ to inform. The widest cylinder's rank count governs the bundling
   problem against an absolute **EF budget** — base `ef_effort_budget`, plus
   `ef_target_seconds`, minus the count rule `ef_if_num_scens_at_most`.
 - **Dated data files — generation mechanism is the effort-calibration tool
-  (§9)** (fits coefficients + an effort→seconds scale from a benchmark corpus);
-  the corpus, versioning, and shipping cadence are **still open**.
+  (§9)**, in PR1 (calibrated on the examples); a broader benchmark corpus,
+  versioning, and shipping cadence are **still open**.
 - **Still open:** Amalgamator reachability (§2.1) — `generic_cylinders` first.
 
 ---
@@ -428,8 +431,12 @@ smoke-tested; environment/model probing and apply-to-`Config` are stubbed.
   (equivalent command line + post-run suggestions), apply-to-`Config`, the
   `probe_scenarios` knob, the `--inspect-only` dry run (§5.4, incl. the shared
   `verify_instantiation`), the **policy-file validator (§8)** with its CI-gating
-  layers wired into CI, quick-start docs, and tests. Ships the default on-ramp
-  and the no-instantiation escape hatch in one PR.
+  layers wired into CI, the **effort-calibration tool (§9)** — whose output *is*
+  the shipped policy's effort numbers (calibrated on the examples, not
+  hand-guesses) — quick-start docs, and tests. Ships the default on-ramp and the
+  no-instantiation escape hatch in one **large but cohesive** PR: interpreter +
+  validator + calibrator together make the shipped policy both *runnable* and
+  *assessable*.
 - **PR2 (later) — `--out-of-the-box-plus`.** Full instantiation + a brief timed
   solve, a probe-time budget, and handling for "doesn't solve quickly"; feeds
   iteration/time-limit defaults and solve-cost-aware bundling.
@@ -530,8 +537,9 @@ report all ship in PR1.
 
 ## 9. Effort-calibration tool (future; data-tuning side)
 
-The `effort_scaling` coefficients and the effort budgets ship as abstract
-cold-start guesses (§5.3) in arbitrary "effort units." A separate **calibration
+The `effort_scaling` coefficients and the effort budgets are abstract by
+construction (arbitrary "effort units"); left as hand-guesses they are
+**unassessable** — reviewers would be reviewing noise (§5.3). A **calibration
 tool** turns them into data-tuned, *interpretable* values:
 
 - **Fit the coefficients.** Run timed solves across a benchmark spread (varying
@@ -552,6 +560,10 @@ calibrated scale is per reference machine/solver and approximate. The **plus**
 tier effectively *re-calibrates per session* via its measured single-scenario
 time (`t₁`); **base** relies on this offline calibration.
 
-**Status:** future tool (not PR1). The on-ramp ships with cold-start
-coefficients; calibration produces the first data-tuned dated policy once a
-benchmark corpus exists.
+**Status: PR1.** Reviewers can't assess a policy whose effort coefficients and
+budgets are *wild guesses*, so the calibration tool ships in PR1 and **the v1
+policy's numbers are its output** — an initial calibration on the **example set**
+(the same timed solves the validator's run-tier performs, so they share
+infrastructure), reproducible by re-running it. Preliminary but principled, and
+far better than hand-guesses; a broader benchmark corpus (more models / machines)
+is the future refinement that later dated files fold in.
