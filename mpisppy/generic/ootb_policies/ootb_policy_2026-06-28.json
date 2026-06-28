@@ -91,12 +91,32 @@
     "_cold_start_guess": ["min_scens_to_consider_bundling", "min_bundles_per_intra_rank", "base_max_hardness_vs_single_scenario", "plus_target_seconds_per_bundle", "plus_probe_solve_time_cap_seconds"]
   },
 
+  "option_categories": {
+    "_comment": "Named option blocks OOTB applies by default, one per CONCERN, beyond the structural choices (solver / EF / spokes / bundling). Each is applied UNLESS the user already set any flag in its 'superseded_by' list -- the robust, per-concern form of 'user options win' (the user may address a concern with a DIFFERENT flag than OOTB's default). 'value' null = a boolean flag. These are decomposition-run options (skipped on the EF path). Foci may change them. All cold-start.",
+    "rho_setter": {
+      "flag": "--grad-rho", "value": null,
+      "superseded_by": ["--grad-rho", "--sensi-rho", "--coeff-rho", "--sep-rho", "--reduced-costs-rho"],
+      "_note": "mpi-sppy enforces that only ONE rho setter is active, so OOTB adding --grad-rho when the user already picked another rho setter would be a HARD ERROR -- this is exactly why superseded_by lists all of them, not just --grad-rho."
+    },
+    "termination": {
+      "flag": "--rel-gap", "value": "0.01",
+      "superseded_by": ["--rel-gap", "--abs-gap"]
+    },
+    "max_iterations": {
+      "flag": "--max-iterations", "value": "100",
+      "superseded_by": ["--max-iterations"]
+    },
+    "dynamic_rho": {
+      "flag": "--dynamic-rho-primal-crit", "value": null,
+      "superseded_by": ["--dynamic-rho-primal-crit", "--dynamic-rho-dual-crit"],
+      "_note": "Boolean flag (no argument needed); its paired threshold dynamic_rho_primal_thresh defaults to 0.1. Requires an active rho setter (config errors otherwise), which OOTB's default --grad-rho provides."
+    },
+    "_cold_start_guess": ["rho_setter", "termination", "max_iterations", "dynamic_rho"]
+  },
+
   "additional_options": {
-    "_comment": "Extra command-line options OOTB turns on by default, BEYOND the structural choices (solver / EF / spokes / bundling). Applied via the same 'user options win' rule (requirement 0). CONDITIONALITY IS EXPRESSED BY FOCUS, not by predicates: a 'quality' focus file would list e.g. {\"flag\": \"--grad-rho\"} here while a 'quick' focus omits it. Each entry: flag, and value (null = a boolean flag). These are decomposition-run options (skipped on the EF path). Subsumes the old param_defaults. All cold-start.",
-    "options": [
-      {"flag": "--max-iterations", "value": "100"}
-    ],
-    "_cold_start_guess": ["options"]
+    "_comment": "Catch-all for any OTHER extra flags not worth a named category. Each entry: flag, value (null = boolean), and optional superseded_by (defaults to [its own flag], i.e. plain per-flag override). For concern-level override (e.g. rho setters) use option_categories instead. Decomposition-run options (skipped on the EF path).",
+    "options": []
   },
 
   "suggestions": {

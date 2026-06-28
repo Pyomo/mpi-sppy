@@ -191,14 +191,26 @@ data):
 | `rank_allocation` | fill the ladder first, then spend leftover ranks on intra-cylinder parallelism |
 | `effort_scaling` | shape of solve effort vs. size (continuous ~linear, integers superlinear via `int_exponent`); shared by bundle sizing (§5.3) |
 | `bundle_sizing` | how big bundles are (base/plus only — **minus cannot bundle**): largest `spb` within an effort budget (base = relative M; plus = measured seconds); `--scenarios-per-bundle` divides `num_scens`; `#bundles ≥ #ranks` |
-| `additional_options` | extra CLI options OOTB applies by default beyond the structural ones (e.g. `--max-iterations`; or `--grad-rho` in a quality focus); user options still win; skipped on the EF path |
+| `option_categories` | per-concern default options (`rho_setter` `--grad-rho`, `termination` `--rel-gap 0.01`, `max_iterations` `--max-iterations 100`, `dynamic_rho` `--dynamic-rho-primal-crit`), each skipped if the user set any flag in its `superseded_by` list; skipped on the EF path |
+| `additional_options` | catch-all for other extra flags (each with an optional `superseded_by`, default = its own flag) |
 | `suggestions` | toggles/tunes the **computed** suggestion generators (`disabled` suppresses specific ones); the prose lives in code, emitted after the run |
 
-**Additional options.** Beyond the structural choices, the policy
-`additional_options` list applies extra flags (e.g. `--max-iterations`, or
-`--grad-rho` in a quality focus) through the same user-options-win path;
-**conditionality is expressed by *focus*** (which file ships the option), not by
-predicates. These are decomposition-run options, skipped on the EF path.
+**Additional options, with per-concern override.** Beyond the structural
+choices, the policy applies extra options grouped by **concern** in
+`option_categories` — `rho_setter` (`--grad-rho`), `termination`
+(`--rel-gap 0.01`), `max_iterations` (`--max-iterations 100`), `dynamic_rho`
+(`--dynamic-rho-primal-crit`). Each carries a **`superseded_by`** list of user
+flags that obviate OOTB's default for that concern, so OOTB backs off when the
+user addresses the concern with *any* equivalent flag — not just the identical
+one. This matters concretely: mpi-sppy allows **only one rho setter active**, so
+adding `--grad-rho` when the user chose `--sensi-rho` would be a *hard error*, so
+`rho_setter.superseded_by` lists all the rho setters. A leftover
+`additional_options` catch-all handles miscellaneous flags (each with an optional
+`superseded_by` that defaults to its own flag). Conditionality across problem
+*classes* is still expressed by **focus** (which file ships which options). All
+are decomposition-run options, skipped on the EF path. (`--dynamic-rho-primal-crit`
+is a boolean — no argument; its threshold `dynamic_rho_primal_thresh` defaults to
+0.1 — and needs an active rho setter, which OOTB's default `--grad-rho` provides.)
 
 **Suggestions are computed, not canned.** The post-run **Suggestions** (req. 4,
 §4) are produced by small Python *generators* that compute text from live
