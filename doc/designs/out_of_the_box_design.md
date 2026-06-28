@@ -187,7 +187,8 @@ data):
 | `hub` | default hub factory (`ph_hub`, no flag) |
 | `spoke_ladder` | ordered `rungs` of WIRED spoke flags (outer/inner), `core_roster_min` (≥1 outer + ≥1 inner = the 3-rank floor), `max_cylinders` |
 | `rank_allocation` | fill the ladder first, then spend leftover ranks on intra-cylinder parallelism |
-| `bundling` | proper-bundling targets; `--scenarios-per-bundle` must divide `num_scens`; hard `#bundles ≥ #ranks` |
+| `effort_scaling` | shape of solve effort vs. size (continuous ~linear, integers superlinear via `int_exponent`); shared by bundle sizing (§5.3) |
+| `bundle_sizing` | how big bundles are: largest `spb` within an effort budget (base = relative M; plus = measured seconds; minus = count); `--scenarios-per-bundle` divides `num_scens`; `#bundles ≥ #ranks` |
 | `param_defaults` | gap-fill only; minimal in v1 (`max_iterations`) |
 | `suggestions` | named-predicate rules → the prioritized **Suggestions** list (req. 4), emitted after the run |
 
@@ -207,7 +208,7 @@ to the tier.
 | Tier | Flag | Instantiates | New facts | What it can decide (vs. advise) |
 |---|---|---|---|---|
 | minus | `--out-of-the-box-minus` | nothing | scenario count, ranks, solvers, stage structure | EF gate by **count**; solver by availability. Integrality/size unknown → only **advises** on prox linearization |
-| base (default) | `--out-of-the-box` | **one** probe scenario | integrality, per-scenario size, nonant count | EF gate **size-aware**; integrality **decides** ipopt/HiGHS/linearize-prox; memory-aware bundling |
+| base (default) | `--out-of-the-box` | **one** probe scenario | size profile: `vars_int`, `vars_cont`, `nonants_total`, `nonants_int` | EF gate **size-aware**; integrality **decides** ipopt/HiGHS/linearize-prox; effort-budgeted bundle sizing (§5.3) |
 | plus (later) | `--out-of-the-box-plus` | **all** + brief solve | per-subproblem solve time, LP-relax / integrality gap | iteration/time-limit defaults, bundle sizing to amortize solve cost, "hard MIP" signals |
 
 **Mechanism.** The three flags set one internal `ootb_effort` level
@@ -240,17 +241,78 @@ scenarios base/plus instantiate (`scenario_names[:probe_scenarios]`). Default
 size or integrality varies by scenario. Added to the policy file when base is
 implemented (PR1); not in the 2026-06-28 file.
 
+## 5.3 Bundle sizing & effort scaling — how big, not just whether
+
+The hard question is not *whether* to bundle but *how big* bundles should be —
+unportable in raw variable counts (the same count is trivial for one model,
+intractable for another). The design makes bundle size a **derived** quantity:
+pick the **largest** `scenarios_per_bundle` (`spb`) that (a) divides
+`num_scens`, (b) leaves at least `B_min = max(intra_ranks,
+min_bundles_per_intra_rank · intra_ranks)` bundles, and (c) keeps a bundle's
+**modeled solve effort** within a budget.
+
+**Shared effort shape (`effort_scaling`).** One policy block models how solve
+effort grows with sub-problem size, from the probe profile (`vars_cont`,
+`vars_int`, `nonants_int`):
+
+> `effort(spb) = cont_coeff·(spb·vars_cont) + int_weight·(spb·vars_int)^int_exponent + int_nonant_coeff·nonants_int`
+
+Continuous content is ~linear; integers are **superlinear** (`int_exponent > 1`
+captures branch-and-bound blow-up); integer nonants are a fixed per-bundle
+coupling cost. (Second-stage integers scale with `spb`; integer *nonants* are
+first-stage, shared once per bundle — hence a fixed term, not a `spb`
+multiplier.)
+
+**Two anchors, one shape.** Both tiers call the same `effort(spb)`; only the
+budget differs:
+
+- **base** (relative, no measurement): accept the largest `spb` with
+  `effort(spb)/effort(1) ≤ base_max_hardness_vs_single_scenario` (**M**). M is
+  unit-free and portable — "a bundle may be at most M× as hard as one
+  scenario." Pure-continuous ⇒ allowed `spb ≈ M`; pure-integer ⇒
+  `≈ M^(1/int_exponent)`, automatically smaller.
+- **plus** (absolute, measured): measure `t₁` = a single-scenario solve (capped
+  at `plus_probe_solve_time_cap_seconds`), predict
+  `t(spb) ≈ t₁·effort(spb)/effort(1)`, accept the largest `spb` with
+  `t(spb) ≤ plus_target_seconds_per_bundle`.
+- **minus** (no profile): effort is unknown → fall back to a conservative count
+  target (`fallback_bundles_per_intra_rank` bundles per intra-rank).
+
+**Measurement does not remove the JSON assumptions.** `plus` only pins the
+*scale* (`t₁`); the *shape* (`int_exponent`, weights) still comes from
+`effort_scaling`. And MIP solve times are **noisy and non-monotone** (a bigger
+MIP can solve faster), so a single timing must not drive the whole choice — the
+JSON shape is a **prior/regularizer** that measurement calibrates. (Later
+refinement: `plus` measures two points to nudge `int_exponent` locally.)
+
+**EF gate vs. bundle sizing.** Both use the same effort *shape*, but the EF gate
+needs an **absolute** ceiling ("is the monolith small enough to solve as one
+model?"); the relative-to-a-single-scenario trick does not gate the whole EF.
+That absolute threshold is the genuinely hard part without measurement, so the
+EF gate stays **count/rank-based for now** (§5.1 `ef_fallback`) — reusing
+`effort` with an absolute ceiling (or deferring to `plus`) is a follow-on.
+
+**Status.** All `effort_scaling` / `bundle_sizing` numbers are
+`_cold_start_guess`es; **foci** ship different shapes (a `mip-heavy` file with a
+steeper `int_exponent`), and the dated-file migration path (§5) refines the
+coefficients from benchmark data. The interpreter sketch implements the base
+relative sizer (`_effort`, `_pick_spb_by_effort`) with `_pick_spb_by_count` as
+the minus fallback; the `plus` measure-and-scale hook is stubbed.
+
 ---
 
 ## 6. Open details
 
 - **Instantiation depth — RESOLVED** as the effort tiers (§5.2): minus (none),
   base (one probe, default), plus (all + brief solve, later).
-- **Bundling heuristic — RESOLVED** in the policy (`bundling`) + interpreter
-  (`_pick_scenarios_per_bundle` divisor search): aim for
-  ~`target_bundles_per_intra_rank` bundles per intra-cylinder rank, never fewer
-  than the rank count, with `scenarios_per_bundle` dividing `num_scens`. The
-  numbers are `_cold_start_guess`es.
+- **Bundle sizing — RESOLVED** as an effort-budgeted rule (§5.3): policy
+  `effort_scaling` shape + `bundle_sizing` budgets; interpreter `_effort` /
+  `_pick_spb_by_effort` (base, relative M) with `_pick_spb_by_count` (minus
+  fallback) and a stubbed `plus` measure-and-scale. Numbers are
+  `_cold_start_guess`es.
+- **Still open:** an absolute, size-aware **EF gate** — reuse the effort *shape*
+  with an absolute ceiling (unlike bundle sizing's relative budget) or defer to
+  `plus`; count/rank-based for now (§5.3).
 - **Still open:** how the dated data files are generated, versioned, and shipped
   (the §5 migration path anticipates data-tuned successors).
 - **Still open:** Amalgamator reachability (§2.1) — `generic_cylinders` first.

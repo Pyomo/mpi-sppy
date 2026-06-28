@@ -69,12 +69,25 @@
     "extra_ranks_policy": "intra_cylinder"
   },
 
-  "bundling": {
-    "_comment": "Proper bundling only (loose bundling was removed in 2026). The live flag is --scenarios-per-bundle and it MUST divide num_scens evenly. Hard constraint enforced by the library: number_of_bundles >= number_of_ranks. Strategy: when there are many scenarios, choose a scenarios_per_bundle that divides num_scens and yields about target_bundles_per_intra_rank bundles per intra-cylinder rank, never dropping below the rank count.",
+  "effort_scaling": {
+    "_comment": "SHAPE of how solve effort grows with the size of a (sub)problem. Shared by bundle sizing at every tier (design doc Bundle sizing section). effort(n) for a bundle of n scenarios = cont_coeff*(n*vars_cont) + int_weight*(n*vars_int)^int_exponent + int_nonant_coeff*nonants_int, using the probe size profile (vars_cont, vars_int, nonants_int). The base tier uses this RELATIVE (ratio vs a single scenario); the plus tier uses the SAME shape CALIBRATED by a measured single-scenario solve time. int_exponent>1 captures MIP superlinearity; =1 treats integers like LP. All cold-start guesses; foci ship different shapes; benchmark data refines.",
+    "cont_coeff": 1.0,
+    "int_weight": 10.0,
+    "int_exponent": 2.0,
+    "int_nonant_coeff": 5.0,
+    "_cold_start_guess": ["cont_coeff", "int_weight", "int_exponent", "int_nonant_coeff"]
+  },
+
+  "bundle_sizing": {
+    "_comment": "How big should proper bundles be (not just whether to bundle)? Proper bundling only (loose bundling removed in 2026); --scenarios-per-bundle MUST divide num_scens; library requires number_of_bundles >= number_of_ranks. Rule: pick the LARGEST scenarios_per_bundle that (a) divides num_scens, (b) leaves >= max(intra_ranks, min_bundles_per_intra_rank*intra_ranks) bundles, and (c) keeps a bundle's modeled effort within budget. base budget is RELATIVE: effort(spb)/effort(1) <= base_max_hardness_vs_single_scenario (unitless, portable, no measurement). plus budget is ABSOLUTE: measured_single_scenario_seconds * effort(spb)/effort(1) <= plus_target_seconds_per_bundle, with the measuring solve capped at plus_probe_solve_time_cap_seconds. Without a size profile (minus tier) effort is unknown, so fall back to fallback_bundles_per_intra_rank bundles per rank. Skip bundling below min_scens_to_consider_bundling. MIP solve times are noisy/non-monotone, so the shape in effort_scaling acts as a prior; a single measurement only sets the scale.",
     "min_scens_to_consider_bundling": 50,
-    "target_bundles_per_intra_rank": 2,
+    "min_bundles_per_intra_rank": 1,
+    "fallback_bundles_per_intra_rank": 2,
     "never_fewer_bundles_than_ranks": true,
-    "_cold_start_guess": ["min_scens_to_consider_bundling", "target_bundles_per_intra_rank"]
+    "base_max_hardness_vs_single_scenario": 10,
+    "plus_target_seconds_per_bundle": 30,
+    "plus_probe_solve_time_cap_seconds": 60,
+    "_cold_start_guess": ["min_scens_to_consider_bundling", "min_bundles_per_intra_rank", "fallback_bundles_per_intra_rank", "base_max_hardness_vs_single_scenario", "plus_target_seconds_per_bundle", "plus_probe_solve_time_cap_seconds"]
   },
 
   "param_defaults": {
