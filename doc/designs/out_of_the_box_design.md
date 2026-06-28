@@ -437,17 +437,19 @@ smoke-tested; environment/model probing and apply-to-`Config` are stubbed.
 
 ## 8. Policy-file validator (PR1 deliverable)
 
-A **fully automated** validator that, given a policy file, checks it is correct
-and produces configurations that are *executable* and *behave about as we
-expect* — using the mpi-sppy **examples** as test models. **It ships with PR1**
-for two reasons: (1) a dated policy file should not be shipped without the tool
-that validates it; and (2) it is the **easiest way to *try OOTB out*** — running
-it on the bundled examples exercises the whole pipeline end-to-end (decisions,
-real decomposition runs, EF comparison, the report), so it doubles as the
-demonstration harness. Because of (2), the **full tool — all three layers,
-including the run-tier — is in PR1** (not a fast-follow); the small example set
-keeps the run-tier feasible with a modest/free solver. Three layers, fast to
-slow:
+A **fully automated** validator that, given a policy file, checks it is
+well-formed and that its recommended configurations **run** — and **flags the
+runs that look problematic** for a human to review — using the mpi-sppy
+**examples** as test models. It does **not** assert correctness or "expected
+results" (we have no cheap, reliable oracle for that); the reader judges whether
+performance is acceptable, which is why the report is human-readable. **It ships
+with PR1** for two reasons: (1) a dated policy file should not be shipped without
+the tool that validates it; and (2) it is the **easiest way to *try OOTB out***
+— running it on the bundled examples exercises the whole pipeline end-to-end
+(decisions, real runs, the report), so it doubles as the demonstration harness.
+Because of (2), the **full tool — all three layers, including the run-tier — is
+in PR1** (not a fast-follow); the small example set keeps the run-tier feasible
+with a modest/free solver. Three layers, fast to slow:
 
 **1. Static (schema) checks.** JSON parses; required keys/types present; every
 referenced flag is real — `spoke_ladder` rungs are wired spokes, solver names
@@ -471,34 +473,33 @@ solvers, problem sizes), and assert:
   second rho setter (which would be a hard error).
 
 **3. Run checks (slow; actually execute — *longer runs*).** The decision checks
-only verify *what OOTB chooses*; this layer verifies it *works and behaves about
-right* by really running on the (small) examples:
+only verify *what OOTB chooses*; this layer actually **runs** the recommended
+configurations on the (small) examples and records what happened. We can't assert
+"expected results," but two failure modes are worth **flagging automatically**:
 
-- **Round-trip executability:** run OOTB's emitted command line and confirm it
-  completes (not just gets past setup).
-- **Forced decomposition on small problems:** force cylinders **even where the EF
-  gate would have picked the EF**, run them to (near) convergence, and verify the
-  decomposition behaves as expected — it converges, bounds don't cross, and the
-  result **matches the EF ground truth** (objective / first-stage solution within
-  tolerance). Small examples make this possible: the EF gives the true optimum to
-  compare against. (So the validator runs *both* the EF and the forced
-  decomposition on the same small model and compares.)
-- Spot-check a few rank counts / bundlings so decomposition runs more-or-less as
-  expected across the configurations OOTB would actually produce.
+- **EF recommended but slow:** when OOTB recommends the EF, run it and **flag any
+  that fail to reach a 1% MIP gap within ten minutes** — a sign the EF was the
+  wrong call for that problem.
+- **Cylinders maxed out on iterations:** run the decomposition — including
+  **forced** cylinders where the EF gate would otherwise have picked the EF, to
+  exercise that path — and **flag any that terminate on `max_iterations`** rather
+  than converging.
 
-These runs are **not cheap** — PH to convergence takes time, and they need a
-real solver — so layer 3 runs **nightly / on demand / locally**, never as a
-per-PR gate.
+Everything else (objective, bound/gap, iteration count, wall time per run) is
+**recorded for the reader**, not auto-judged. The 1%-gap and ten-minute
+thresholds are validator settings, not policy. These runs are **not cheap** — PH
+to convergence takes time, and they need a real solver — so layer 3 runs
+**nightly / on demand / locally**, never as a per-PR gate.
 
 **Report.** The validator produces a **report** that details **every** test, not
-just failures: which example and synthetic environment, expected vs. actual, and
-for layer-3 runs the EF-vs-decomposition objective gap, **iteration count**, and
-convergence status. It **prominently highlights runs that hit the iteration cap
-without converging** ("maxed out on iterations") — a yellow flag that the
-recommended configuration (or the policy's defaults) converges poorly on that
-example, *even when the run technically completed*. The report is both
-**machine-readable** (CI gating) and **human-readable** (a summary), and it names
-the policy file and `policy_version` validated.
+just failures: which example and synthetic environment, and for layer-3 runs the
+objective, bound/gap, **iteration count**, and wall time. It does **not** print
+"expected vs. actual" — there is no oracle — so the reader verifies that
+performance is acceptable, which is exactly why the report must be
+**human-readable** (a summary) as well as **machine-readable**. It **prominently
+highlights** the two automatic flags: EF runs that **missed a 1% gap in ten
+minutes**, and decomposition runs that **maxed out on iterations**. It names the
+policy file and `policy_version` validated.
 
 **Only a small part can gate CI.** CI runners typically have **no commercial
 solver** and tight time budgets, so the per-PR gate is limited to the cheap,
