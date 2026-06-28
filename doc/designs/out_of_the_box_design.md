@@ -437,9 +437,15 @@ smoke-tested; environment/model probing and apply-to-`Config` are stubbed.
 
 A **fully automated** validator that, given a policy file, checks it is correct
 and produces configurations that are *executable* and *behave about as we
-expect* — using the mpi-sppy **examples** as test models. **It ships with PR1:** a
-dated policy file should not be shipped without the tool that validates it. Three
-layers, fast to slow:
+expect* — using the mpi-sppy **examples** as test models. **It ships with PR1**
+for two reasons: (1) a dated policy file should not be shipped without the tool
+that validates it; and (2) it is the **easiest way to *try OOTB out*** — running
+it on the bundled examples exercises the whole pipeline end-to-end (decisions,
+real decomposition runs, EF comparison, the report), so it doubles as the
+demonstration harness. Because of (2), the **full tool — all three layers,
+including the run-tier — is in PR1** (not a fast-follow); the small example set
+keeps the run-tier feasible with a modest/free solver. Three layers, fast to
+slow:
 
 **1. Static (schema) checks.** JSON parses; required keys/types present; every
 referenced flag is real — `spoke_ladder` rungs are wired spokes, solver names
