@@ -435,18 +435,19 @@ smoke-tested; environment/model probing and apply-to-`Config` are stubbed.
 ## 8. Policy-file validation (TODO — tool to build)
 
 A **fully automated** validator that, given a policy file, checks it is correct
-and produces sensible, *executable* configurations — using the mpi-sppy
-**examples** as test models. Two layers:
+and produces configurations that are *executable* and *behave about as we
+expect* — using the mpi-sppy **examples** as test models. Three layers, fast to
+slow:
 
-**Static (schema) checks.** JSON parses; required keys/types present; every
+**1. Static (schema) checks.** JSON parses; required keys/types present; every
 referenced flag is real — `spoke_ladder` rungs are wired spokes, solver names
 known, each `option_categories[*].flag` and every `superseded_by` entry is a
 valid option, `DECOMPOSITION_FLAGS` match the `generic_cylinders` vocabulary;
 `_cold_start_guess` entries name real keys; numbers in range.
 
-**Behavioral checks (using examples).** Run `recommend()` against real example
-models (farmer, aircond, sizes, …) under synthetic environments (varying ranks,
-available solvers, problem sizes) and assert:
+**2. Decision checks (fast; `recommend()` only, no solves).** Run `recommend()`
+against real example models (farmer, aircond, sizes, …) under synthetic
+environments (varying ranks, solvers, problem sizes) and assert:
 
 - **EF invoked when it should be:** small problem or `< min_ranks` ⇒ EF.
 - **EF *not* invoked when it shouldn't be:** large / integer-heavy ⇒ decompose.
@@ -456,10 +457,32 @@ available solvers, problem sizes) and assert:
   `num_scens` and `#bundles ≥ #ranks`.
 - **No conflicting options:** `superseded_by` simulation ⇒ OOTB never stacks a
   second rho setter (which would be a hard error).
-- **Round-trip executability (strongest):** actually *run* OOTB's emitted
-  equivalent command line on the example (a short smoke run) and confirm it gets
-  past setup / completes — both for OOTB's own choice *and* for forced
-  decomposition, confirming decomposition "works more-or-less as expected."
 
-**Status: design TODO** — this checklist is partial; more checks to add. The
-validator will gate the shipped policy files (eventually in CI).
+**3. Run checks (slow; actually execute — *longer runs*).** The decision checks
+only verify *what OOTB chooses*; this layer verifies it *works and behaves about
+right* by really running on the (small) examples:
+
+- **Round-trip executability:** run OOTB's emitted command line and confirm it
+  completes (not just gets past setup).
+- **Forced decomposition on small problems:** force cylinders **even where the EF
+  gate would have picked the EF**, run them to (near) convergence, and verify the
+  decomposition behaves as expected — it converges, bounds don't cross, and the
+  result **matches the EF ground truth** (objective / first-stage solution within
+  tolerance). Small examples make this possible: the EF gives the true optimum to
+  compare against. (So the validator runs *both* the EF and the forced
+  decomposition on the same small model and compares.)
+- Spot-check a few rank counts / bundlings so decomposition runs more-or-less as
+  expected across the configurations OOTB would actually produce.
+
+These runs are **not cheap** — PH to convergence takes time — so layer 3 is a
+**heavier, slower tier** (nightly / opt-in), separate from the fast static +
+decision checks that can gate every change.
+
+**Report.** The validator produces a **report**: pass/fail per check with
+details — which example and synthetic environment, expected vs. actual, and for
+layer-3 runs the EF-vs-decomposition objective gap and convergence status. It is
+both **machine-readable** (so CI can gate on it) and **human-readable** (a
+summary), and it names the policy file and `policy_version` validated.
+
+**Status: design TODO** — checklist still partial; more to add. The validator
+will gate the shipped policy files (fast tiers in CI; the run tier nightly).
