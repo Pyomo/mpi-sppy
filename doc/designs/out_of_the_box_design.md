@@ -108,7 +108,8 @@ These were raised as scoping questions and confirmed by the user (2026-06-28):
    small enough per §5.1/§5.2 — otherwise the chosen cylinder configuration);
    **skipped entirely under `--inspect-only`** (§5.4).
 4. A printed prioritized **Suggestions** list, emitted **after the run**
-   (labelled "Suggestions"; may reflect how the run went).
+   (labelled "Suggestions"). Mostly **computed** from live facts / decision /
+   run outcome, not canned (§5.1).
 
 ---
 
@@ -141,8 +142,8 @@ Reasoning:
   *harder* to explain.
 - So: implement the "expert-system framing" (facts + declarative knowledge +
   thin matcher) as plain Python reading a JSON policy file (~order of 100
-  lines). Conditions are **named predicates** the interpreter knows how to
-  evaluate — no expression language in v1.
+  lines). Conditions are **plain coded checks** over the facts — no expression
+  language in v1.
 
 **Migration path preserved:** when a benchmark corpus eventually exists it
 *tunes the numbers inside the next dated policy file* (e.g. a regression that
@@ -190,11 +191,20 @@ data):
 | `rank_allocation` | fill the ladder first, then spend leftover ranks on intra-cylinder parallelism |
 | `effort_scaling` | shape of solve effort vs. size (continuous ~linear, integers superlinear via `int_exponent`); shared by bundle sizing (§5.3) |
 | `bundle_sizing` | how big bundles are: largest `spb` within an effort budget (base = relative M; plus = measured seconds; minus = count); `--scenarios-per-bundle` divides `num_scens`; `#bundles ≥ #ranks` |
-| `param_defaults` | gap-fill only; minimal in v1 (`max_iterations`) |
-| `suggestions` | named-predicate rules → the prioritized **Suggestions** list (req. 4), emitted after the run |
+| `additional_options` | extra CLI options OOTB applies by default beyond the structural ones (e.g. `--max-iterations`; or `--grad-rho` in a quality focus); user options still win; skipped on the EF path |
+| `suggestions` | toggles/tunes the **computed** suggestion generators (`disabled` suppresses specific ones); the prose lives in code, emitted after the run |
 
-**Predicates the interpreter must implement (v1):** `ran_ef_due_to_min_ranks`,
-`chosen_solver_not_persistent`, `solver_is_lp_mip_only`, `cylinders_below_max`.
+**Additional options.** Beyond the structural choices, the policy
+`additional_options` list applies extra flags (e.g. `--max-iterations`, or
+`--grad-rho` in a quality focus) through the same user-options-win path;
+**conditionality is expressed by *focus*** (which file ships the option), not by
+predicates. These are decomposition-run options, skipped on the EF path.
+
+**Suggestions are computed, not canned.** The post-run **Suggestions** (req. 4,
+§4) are produced by small Python *generators* that compute text from live
+facts / decision / run-outcome; the policy only toggles/tunes them
+(`suggestions.disabled`). This keeps the split clean: **decisions stay
+data-driven (this policy); suggestions are the computed diagnostics layer.**
 
 ## 5.2 Effort tiers (instantiation depth) — RESOLVED 2026-06-28
 

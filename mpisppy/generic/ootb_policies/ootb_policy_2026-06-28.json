@@ -90,23 +90,16 @@
     "_cold_start_guess": ["min_scens_to_consider_bundling", "min_bundles_per_intra_rank", "fallback_bundles_per_intra_rank", "base_max_hardness_vs_single_scenario", "plus_target_seconds_per_bundle", "plus_probe_solve_time_cap_seconds"]
   },
 
-  "param_defaults": {
-    "_comment": "Filled ONLY if the user did not set them. Kept minimal in v1 to avoid surprising the user; flag names not yet verified are intentionally omitted rather than guessed.",
-    "max_iterations": 100,
-    "_cold_start_guess": ["max_iterations"]
+  "additional_options": {
+    "_comment": "Extra command-line options OOTB turns on by default, BEYOND the structural choices (solver / EF / spokes / bundling). Applied via the same 'user options win' rule (requirement 0). CONDITIONALITY IS EXPRESSED BY FOCUS, not by predicates: a 'quality' focus file would list e.g. {\"flag\": \"--grad-rho\"} here while a 'quick' focus omits it. Each entry: flag, and value (null = a boolean flag). These are decomposition-run options (skipped on the EF path). Subsumes the old param_defaults. All cold-start.",
+    "options": [
+      {"flag": "--max-iterations", "value": "100"}
+    ],
+    "_cold_start_guess": ["options"]
   },
 
   "suggestions": {
-    "_comment": "Requirement 4: a prioritized 'Suggestions' list, printed AFTER the run executes (so it can also reflect how the run went). Each entry has a named predicate the interpreter evaluates (explainable; no expression language in v1) and a message; the run proceeds regardless.",
-    "rules": [
-      {"id": "ran_ef_too_few_ranks", "when": "ran_ef_due_to_min_ranks", "priority": 1,
-       "message": "Ran the monolithic EF because fewer than 3 MPI ranks were available. With >= 3 ranks, mpi-sppy can run a parallel decomposition (hub + bound spokes) instead."},
-      {"id": "no_persistent_solver", "when": "chosen_solver_not_persistent", "priority": 2,
-       "message": "The chosen solver has no persistent interface available. Installing/licensing a persistent interface (e.g. gurobi_persistent) lets subproblems warm-start and is typically much faster for PH."},
-      {"id": "linearized_prox", "when": "solver_is_lp_mip_only", "priority": 3,
-       "message": "An LP/MIP-only solver was chosen, so the PH proximal term is being linearized (--linearize-proximal-terms). A QP-capable solver (gurobi/cplex/xpress, or ipopt for continuous models) avoids this approximation."},
-      {"id": "more_ranks_help", "when": "cylinders_below_max", "priority": 4,
-       "message": "More MPI ranks would let OOTB add bound-tightening spokes (e.g. fwph, subgradient) and/or more intra-cylinder parallelism."}
-    ]
+    "_comment": "Requirement 4: a prioritized 'Suggestions' list, printed AFTER the run (so it can also reflect how the run went). The messages are MOSTLY COMPUTED in code (suggestion generators in mpisppy/generic/out_of_the_box.py): each inspects facts/decision/run-outcome and builds text with live values, so the PROSE lives in code, not here. Note the split from design sec. 5: decisions stay data-driven (this policy); suggestions are diagnostics and are computed. This block only TOGGLES/TUNES them -- 'disabled' lists generator names to suppress; thresholds (if any) can be added here for generators to read.",
+    "disabled": []
   }
 }
