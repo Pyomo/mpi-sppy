@@ -172,6 +172,7 @@ def parse_args(m):
     # TBD - think about adding directory for json options files
 
     cfg.mmw_args()
+    cfg.ootb_args()
 
     from mpisppy.generic.admm import admm_args
     admm_args(cfg)

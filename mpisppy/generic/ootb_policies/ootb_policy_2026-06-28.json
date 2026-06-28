@@ -99,6 +99,11 @@
 
   "option_categories": {
     "_comment": "Named option blocks OOTB applies by default, one per CONCERN, beyond the structural choices (solver / EF / spokes / bundling). Each is applied UNLESS the user already set any flag in its 'superseded_by' list -- the robust, per-concern form of 'user options win' (the user may address a concern with a DIFFERENT flag than OOTB's default). 'value' null = a boolean flag. These are decomposition-run options (skipped on the EF path). Foci may change them. All cold-start.",
+    "base_rho": {
+      "flag": "--default-rho", "value": "1",
+      "superseded_by": ["--default-rho"],
+      "_note": "PH needs a base rho value. The grad-rho setter REFINES rho but does not itself supply a base, and (unlike sep/coeff/sensi rho) mpi-sppy does not auto-default it, so a decomposition with --grad-rho and no --default-rho is a hard error. Set a sane base here; the rho setter adapts from it."
+    },
     "rho_setter": {
       "flag": "--grad-rho", "value": null,
       "superseded_by": ["--grad-rho", "--sensi-rho", "--coeff-rho", "--sep-rho", "--reduced-costs-rho"],
@@ -117,7 +122,7 @@
       "superseded_by": ["--dynamic-rho-primal-crit", "--dynamic-rho-dual-crit"],
       "_note": "Boolean flag (no argument needed); its paired threshold dynamic_rho_primal_thresh defaults to 0.1. Requires an active rho setter (config errors otherwise), which OOTB's default --grad-rho provides."
     },
-    "_cold_start_guess": ["rho_setter", "termination", "max_iterations", "dynamic_rho"]
+    "_cold_start_guess": ["base_rho", "rho_setter", "termination", "max_iterations", "dynamic_rho"]
   },
 
   "additional_options": {

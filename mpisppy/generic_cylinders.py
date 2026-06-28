@@ -45,6 +45,21 @@ if __name__ == "__main__":
     if hasattr(module, "get_mpisppy_helper_object"):
         module = module.get_mpisppy_helper_object(cfg)
 
+    # Out-of-the-box auto-configuration (and the OOTB-independent --inspect-only
+    # dry run). configure() probes the environment + model, prints the chosen
+    # configuration and equivalent command line, and mutates cfg so the normal
+    # driver path below runs it. --inspect-only stops before the production run.
+    from mpisppy.generic import out_of_the_box as ootb
+    ootb_state = None
+    if ootb.requested(cfg):
+        ootb_state = ootb.configure(module, cfg)
+        if cfg.get("inspect_only") is not None:
+            ootb.report_suggestions(ootb_state)  # config-time suggestions only
+            sys.exit(0)
+    elif cfg.get("inspect_only") is not None:
+        ootb.inspect_only_standalone(module, cfg)
+        sys.exit(0)
+
     bundle_wrapper = None  # the default
     if proper_bundles(cfg):
         # Nonant name validation will fail with proper bundles because
@@ -145,3 +160,8 @@ if __name__ == "__main__":
                           scenario_denouement, bundle_wrapper=bundle_wrapper)
         if mmw_requested(cfg):
             do_mmw(fname, cfg, wheel=wheel)
+
+    # Out-of-the-box: the prioritized "Suggestions" list is printed AFTER the
+    # run so it can also reflect how the run went (req. 4).
+    if ootb_state is not None:
+        ootb.report_suggestions(ootb_state)
