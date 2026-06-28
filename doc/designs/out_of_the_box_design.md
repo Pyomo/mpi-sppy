@@ -1,9 +1,10 @@
 # Out-of-the-box auto-configuration — design
 
-**Status:** Design only; no library code yet. Branch `outOfTheBox`
-(off Pyomo/mpi-sppy `main`), on the DLWoodruff fork. Proceeding deliberately
-("slowly"): requirements captured and confirmed; the core *decision-logic
-mechanism* is still an open question (§5).
+**Status:** Design phase. Branch `outOfTheBox` (off Pyomo/mpi-sppy `main`), on
+the DLWoodruff fork. Proceeding deliberately ("slowly"): requirements
+confirmed; the decision-logic mechanism (§5) and instantiation effort tiers
+(§5.2) are resolved; the first dated policy file is committed. No production
+library code yet — only an uncommitted interpreter *sketch* (§7).
 **Author:** dlw (captured with Claude Code assistance)
 **Last updated:** 2026-06-28
 
@@ -11,9 +12,10 @@ mechanism* is still an open question (§5).
 
 ## 0. Vocabulary
 
-**Out-of-the-box (OOTB)** mode: a single CLI switch (`--out-of-the-box`) that
-lets a relatively naive user obtain a *sensible* mpi-sppy run with almost no
-knowledge of the library's internals. The user supplies a model module (and
+**Out-of-the-box (OOTB)** mode: a CLI switch (`--out-of-the-box`, with a lighter
+`--out-of-the-box-minus` and a heavier `--out-of-the-box-plus` variant — §5.2)
+that lets a relatively naive user obtain a *sensible* mpi-sppy run with almost
+no knowledge of the library's internals. The user supplies a model module (and
 scenario data); mpi-sppy **introspects the environment and the model** and
 **auto-assembles a defensible configuration** — algorithm, spokes, bundling,
 solver — rather than requiring a hand-crafted hub/spoke command line.
@@ -28,8 +30,9 @@ explanation of what was chosen and how to do better.
 
 ### Goals
 
-1. A `--out-of-the-box` option (primary home: `generic_cylinders.py`) that
-   sets run options automatically.
+1. A `--out-of-the-box` option (CLI entry `generic_cylinders.py`, implemented
+   in the refactored `mpisppy/generic/` package) that sets run options
+   automatically.
 2. **User options always win** (requirement 0). OOTB only *fills gaps*; any
    option the user explicitly set is retained verbatim and never overridden.
 3. **Environment + model introspection** (requirement 2). At minimum: the
@@ -100,7 +103,8 @@ These were raised as scoping questions and confirmed by the user (2026-06-28):
    executes.
 2. A printed **equivalent explicit command line**.
 3. A printed prioritized **"to improve" advisory** list.
-4. The run itself (EF if < 3 ranks, otherwise the chosen cylinder
+4. The run itself (EF when the EF gate trips — too few ranks, or too few /
+   too large scenarios per §5.1/§5.2 — otherwise the chosen cylinder
    configuration).
 
 ---
@@ -153,10 +157,10 @@ works day one), maintainability (Python + JSON), testability (deterministic
 ## 5.1 Policy file: location, selection, and v1 schema
 
 **Location.** Dated policy files ship with the library under
-`mpisppy/generic/ootb_policies/` (co-located with the future OOTB code, which
-belongs in the refactored `mpisppy/generic/` package — `parsing.py`, `ef.py`,
-`hub.py`, `spokes.py`, `scenario_io.py`, … — not the old monolithic
-`generic_cylinders.py`). First file:
+`mpisppy/generic/ootb_policies/` (co-located with the OOTB code, which lives in
+the refactored `mpisppy/generic/` package — `parsing.py`, `ef.py`, `hub.py`,
+`spokes.py`, `scenario_io.py`, … ; `generic_cylinders.py` remains the
+user-facing CLI entry that delegates into this package). First file:
 `ootb_policies/ootb_policy_2026-06-28.json`.
 
 **Selection.** By default the interpreter loads the **newest dated file** in
