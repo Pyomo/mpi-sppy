@@ -424,20 +424,22 @@ smoke-tested; environment/model probing and apply-to-`Config` are stubbed.
   interpreter, EF-vs-cylinder / bundling / spoke selection, reporting
   (equivalent command line + post-run suggestions), apply-to-`Config`, the
   `probe_scenarios` knob, the `--inspect-only` dry run (§5.4, incl. the shared
-  `verify_instantiation`), quick-start docs, and tests. Ships the default
-  on-ramp and the no-instantiation escape hatch in one PR.
+  `verify_instantiation`), the **policy-file validator (§8)** with its CI-gating
+  layers wired into CI, quick-start docs, and tests. Ships the default on-ramp
+  and the no-instantiation escape hatch in one PR.
 - **PR2 (later) — `--out-of-the-box-plus`.** Full instantiation + a brief timed
   solve, a probe-time budget, and handling for "doesn't solve quickly"; feeds
   iteration/time-limit defaults and solve-cost-aware bundling.
 
 ---
 
-## 8. Policy-file validation (TODO — tool to build)
+## 8. Policy-file validator (PR1 deliverable)
 
 A **fully automated** validator that, given a policy file, checks it is correct
 and produces configurations that are *executable* and *behave about as we
-expect* — using the mpi-sppy **examples** as test models. Three layers, fast to
-slow:
+expect* — using the mpi-sppy **examples** as test models. **It ships with PR1:** a
+dated policy file should not be shipped without the tool that validates it. Three
+layers, fast to slow:
 
 **1. Static (schema) checks.** JSON parses; required keys/types present; every
 referenced flag is real — `spoke_ladder` rungs are wired spokes, solver names
@@ -495,4 +497,19 @@ of layer 2 (pure `recommend()` decisions on hand-built `Facts`, no instantiation
 no solver). Everything else — example instantiation, anything needing a solver,
 and all of layer 3 — runs **nightly / on demand / locally**, not as a gate.
 
-**Status: design TODO** — checklist still partial; more to add.
+**Concrete shape (built in PR1).** A runnable module
+`mpisppy/generic/ootb_validate.py` — `python -m mpisppy.generic.ootb_validate
+<policy.json>` — exercising a fixed small example set: **farmer** (two-stage,
+continuous), a small **MIP** example (e.g. `sizes`/`sslp`), and **aircond**
+(multistage). Decision checks sweep a handful of synthetic
+`(ranks, solvers, num_scens, size/integrality)` tuples chosen to hit each branch
+(EF-small, EF-few-ranks, decompose-large, forced-decomp, bundling on/off, LP-only
+solver, no-persistent). The CI gate is a **pytest** that runs only layers 1 +
+2-synthetic on the shipped policy file(s) — and, per project convention, is wired
+into `run_coverage.bash` **and** `test_pr_and_main.yml` in the same commit. Layer
+3 is the same module invoked with `--run` (nightly / local). The report is
+written human-readable and machine-readable (JSON).
+
+**Status:** design nailed down; **scheduled for PR1**. The check *catalog* will
+keep growing, but the tool, the three-layer structure, the CI gate, and the
+report all ship in PR1.
