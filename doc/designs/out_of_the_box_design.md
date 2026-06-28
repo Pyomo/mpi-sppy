@@ -474,9 +474,9 @@ right* by really running on the (small) examples:
 - Spot-check a few rank counts / bundlings so decomposition runs more-or-less as
   expected across the configurations OOTB would actually produce.
 
-These runs are **not cheap** — PH to convergence takes time — so layer 3 is a
-**heavier, slower tier** (nightly / opt-in), separate from the fast static +
-decision checks that can gate every change.
+These runs are **not cheap** — PH to convergence takes time, and they need a
+real solver — so layer 3 runs **nightly / on demand / locally**, never as a
+per-PR gate.
 
 **Report.** The validator produces a **report**: pass/fail per check with
 details — which example and synthetic environment, expected vs. actual, and for
@@ -484,5 +484,11 @@ layer-3 runs the EF-vs-decomposition objective gap and convergence status. It is
 both **machine-readable** (so CI can gate on it) and **human-readable** (a
 summary), and it names the policy file and `policy_version` validated.
 
-**Status: design TODO** — checklist still partial; more to add. The validator
-will gate the shipped policy files (fast tiers in CI; the run tier nightly).
+**Only a small part can gate CI.** CI runners typically have **no commercial
+solver** and tight time budgets, so the per-PR gate is limited to the cheap,
+solver-free checks: layer 1 (static schema) plus the **synthetic-facts** subset
+of layer 2 (pure `recommend()` decisions on hand-built `Facts`, no instantiation,
+no solver). Everything else — example instantiation, anything needing a solver,
+and all of layer 3 — runs **nightly / on demand / locally**, not as a gate.
+
+**Status: design TODO** — checklist still partial; more to add.
