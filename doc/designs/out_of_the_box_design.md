@@ -320,6 +320,14 @@ Because the units match bundle effort, the EF budget and bundle budgets are
 mutually consistent: when the whole problem exceeds the EF budget, OOTB
 decomposes and sizes each bundle within its own (smaller) effort budget.
 
+**User-forced decomposition overrides the gate.** If the user explicitly set any
+**decomposition flag** — a wired spoke or a non-default hub (`DECOMPOSITION_FLAGS`
+in the interpreter) — and has at least the rank floor, OOTB **never** substitutes
+the EF, even for a small problem (requirement 0). The rank floor is checked
+first: below it the decomposition can't fit, so the EF is used regardless. (This
+flag vocabulary is a *fact* about `generic_cylinders`, not a focus preference, so
+it lives in code, not the policy; the validator checks it against the real CLI.)
+
 **Status.** All `effort_scaling` / `bundle_sizing` numbers are
 `_cold_start_guess`es; **foci** ship different shapes (a `mip-heavy` file with a
 steeper `int_exponent`), and the dated-file migration path (§5) refines the
@@ -389,3 +397,37 @@ smoke-tested; environment/model probing and apply-to-`Config` are stubbed.
 - **PR2 (later) — `--out-of-the-box-plus`.** Full instantiation + a brief timed
   solve, a probe-time budget, and handling for "doesn't solve quickly"; feeds
   iteration/time-limit defaults and solve-cost-aware bundling.
+
+---
+
+## 8. Policy-file validation (TODO — tool to build)
+
+A **fully automated** validator that, given a policy file, checks it is correct
+and produces sensible, *executable* configurations — using the mpi-sppy
+**examples** as test models. Two layers:
+
+**Static (schema) checks.** JSON parses; required keys/types present; every
+referenced flag is real — `spoke_ladder` rungs are wired spokes, solver names
+known, each `option_categories[*].flag` and every `superseded_by` entry is a
+valid option, `DECOMPOSITION_FLAGS` match the `generic_cylinders` vocabulary;
+`_cold_start_guess` entries name real keys; numbers in range.
+
+**Behavioral checks (using examples).** Run `recommend()` against real example
+models (farmer, aircond, sizes, …) under synthetic environments (varying ranks,
+available solvers, problem sizes) and assert:
+
+- **EF invoked when it should be:** small problem or `< min_ranks` ⇒ EF.
+- **EF *not* invoked when it shouldn't be:** large / integer-heavy ⇒ decompose.
+- **User-forced decomposition wins:** simulated user `--ph --lagrangian
+  --xhatshuffle` with ≥ rank floor ⇒ never EF (§5.3).
+- **Bundling validity:** when bundling, `scenarios_per_bundle` divides
+  `num_scens` and `#bundles ≥ #ranks`.
+- **No conflicting options:** `superseded_by` simulation ⇒ OOTB never stacks a
+  second rho setter (which would be a hard error).
+- **Round-trip executability (strongest):** actually *run* OOTB's emitted
+  equivalent command line on the example (a short smoke run) and confirm it gets
+  past setup / completes — both for OOTB's own choice *and* for forced
+  decomposition, confirming decomposition "works more-or-less as expected."
+
+**Status: design TODO** — this checklist is partial; more checks to add. The
+validator will gate the shipped policy files (eventually in CI).
