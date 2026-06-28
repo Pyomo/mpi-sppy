@@ -62,7 +62,8 @@ explanation of what was chosen and how to do better.
 - Replacing the explicit cylinder command line for expert users. OOTB is an
   *on-ramp*, and it deliberately emits the explicit command line it chose.
 - Tuning convergence parameters to optimality. OOTB aims for *defensible*,
-  not *optimal*, configurations.
+  not *optimal*, configurations — this includes `--out-of-the-box-plus`, which is
+  OOTB *with more information*, not an autotuner (§5.2).
 - Running a solver to make decisions in the default path. Trial solves are
   confined to the opt-in `plus` tier (§5.2); minus and base never solve.
 
@@ -238,6 +239,13 @@ to the tier.
 | minus | `--out-of-the-box-minus` | nothing | scenario count, ranks, solvers, stage structure | EF gate by **count**; solver by availability; **cannot bundle**. Integrality/size unknown → only **advises** on prox linearization |
 | base (default) | `--out-of-the-box` | **one** probe scenario | size profile: `vars_int`, `vars_cont`, `nonants_total`, `nonants_int` | EF gate **size-aware**; integrality **decides** ipopt/HiGHS/linearize-prox; effort-budgeted bundle sizing (§5.3) |
 | plus (later) | `--out-of-the-box-plus` | **all** + brief solve | per-subproblem solve time, LP-relax / integrality gap | iteration/time-limit defaults, bundle sizing to amortize solve cost, "hard MIP" signals |
+
+**`plus` is still OOTB, not a tuning tool.** It makes the *same* one-shot
+decisions as base — only with a richer fact base (measured single-scenario solve
+time, LP-relaxation / integrality gap). It does **not** iterate, search a
+parameter space, or auto-tune to optimality (a non-goal, §1); think *"out-of-the-
+box with more information,"* not an autotuner. (Offline coefficient fitting is a
+separate concern — the calibration tool, §9.)
 
 **Mechanism.** The three flags set one internal `ootb_effort` level
 (`minus`/`base`/`plus`); at most one may be supplied. Each takes an **optional
