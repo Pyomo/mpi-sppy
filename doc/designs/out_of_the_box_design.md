@@ -356,9 +356,17 @@ config-time suggestions, then stop before the production optimization run.**
   *decision* stays minus-level (structural, no size profile fed into choices).
 - **Suggestions:** only the config-time ones (nothing ran to yield
   outcome-based ones).
+- **Optional assumed rank count (HPC planning):** `--inspect-only N` plans as if
+  `N` ranks were available — so a supercomputer user can get the recommended
+  command line for, say, a 512-rank job *from a login node, without launching
+  it*. Bare `--inspect-only` uses the actually-detected ranks. Everything else
+  (solvers, model size) still comes from the real (possibly small) session; only
+  the rank count is hypothetical, and the emitted `mpiexec -np N …` reflects it.
 
-Ships in **PR1**: a plain `store_true` flag; the driver short-circuits after
-printing, before apply-to-`Config` / run.
+Ships in **PR1**: an **optional-value** flag (`domain=str, nargs='?'`, the value
+being the assumed rank count) — *not* `store_true`, since it now takes a value
+(the same bool-domain caveat as the effort flags). The driver short-circuits
+after printing, before apply-to-`Config` / run.
 
 ## 5.5 Rank allocation — small core, widened, and unbalanced
 
