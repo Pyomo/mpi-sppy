@@ -79,15 +79,14 @@
   },
 
   "bundle_sizing": {
-    "_comment": "How big should proper bundles be (not just whether to bundle)? Proper bundling only (loose bundling removed in 2026); --scenarios-per-bundle MUST divide num_scens; library requires number_of_bundles >= number_of_ranks. Rule: pick the LARGEST scenarios_per_bundle that (a) divides num_scens, (b) leaves >= max(intra_ranks, min_bundles_per_intra_rank*intra_ranks) bundles, and (c) keeps a bundle's modeled effort within budget. base budget is RELATIVE: effort(spb)/effort(1) <= base_max_hardness_vs_single_scenario (unitless, portable, no measurement). plus budget is ABSOLUTE: measured_single_scenario_seconds * effort(spb)/effort(1) <= plus_target_seconds_per_bundle, with the measuring solve capped at plus_probe_solve_time_cap_seconds. Without a size profile (minus tier) effort is unknown, so fall back to fallback_bundles_per_intra_rank bundles per rank. Skip bundling below min_scens_to_consider_bundling. MIP solve times are noisy/non-monotone, so the shape in effort_scaling acts as a prior; a single measurement only sets the scale.",
+    "_comment": "How big should proper bundles be (not just whether to bundle)? Proper bundling only (loose bundling removed in 2026); --scenarios-per-bundle MUST divide num_scens; library requires number_of_bundles >= number_of_ranks. The MINUS tier CANNOT bundle: with no size profile there is no safe way to size a bundle, so minus always runs unbundled (bundling needs base or plus). For base/plus: pick the LARGEST scenarios_per_bundle that (a) divides num_scens, (b) leaves >= max(intra_ranks, min_bundles_per_intra_rank*intra_ranks) bundles, and (c) keeps a bundle's modeled effort within budget. base budget is RELATIVE: effort(spb)/effort(1) <= base_max_hardness_vs_single_scenario (unitless, portable, no measurement). plus budget is ABSOLUTE: measured_single_scenario_seconds * effort(spb)/effort(1) <= plus_target_seconds_per_bundle, with the measuring solve capped at plus_probe_solve_time_cap_seconds. Skip bundling below min_scens_to_consider_bundling. MIP solve times are noisy/non-monotone, so the shape in effort_scaling acts as a prior; a single measurement only sets the scale.",
     "min_scens_to_consider_bundling": 50,
     "min_bundles_per_intra_rank": 1,
-    "fallback_bundles_per_intra_rank": 2,
     "never_fewer_bundles_than_ranks": true,
     "base_max_hardness_vs_single_scenario": 10,
     "plus_target_seconds_per_bundle": 30,
     "plus_probe_solve_time_cap_seconds": 60,
-    "_cold_start_guess": ["min_scens_to_consider_bundling", "min_bundles_per_intra_rank", "fallback_bundles_per_intra_rank", "base_max_hardness_vs_single_scenario", "plus_target_seconds_per_bundle", "plus_probe_solve_time_cap_seconds"]
+    "_cold_start_guess": ["min_scens_to_consider_bundling", "min_bundles_per_intra_rank", "base_max_hardness_vs_single_scenario", "plus_target_seconds_per_bundle", "plus_probe_solve_time_cap_seconds"]
   },
 
   "additional_options": {

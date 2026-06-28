@@ -190,7 +190,7 @@ data):
 | `spoke_ladder` | ordered `rungs` of WIRED spoke flags (outer/inner), `core_roster_min` (≥1 outer + ≥1 inner = the 3-rank floor), `max_cylinders` |
 | `rank_allocation` | fill the ladder first, then spend leftover ranks on intra-cylinder parallelism |
 | `effort_scaling` | shape of solve effort vs. size (continuous ~linear, integers superlinear via `int_exponent`); shared by bundle sizing (§5.3) |
-| `bundle_sizing` | how big bundles are: largest `spb` within an effort budget (base = relative M; plus = measured seconds; minus = count); `--scenarios-per-bundle` divides `num_scens`; `#bundles ≥ #ranks` |
+| `bundle_sizing` | how big bundles are (base/plus only — **minus cannot bundle**): largest `spb` within an effort budget (base = relative M; plus = measured seconds); `--scenarios-per-bundle` divides `num_scens`; `#bundles ≥ #ranks` |
 | `additional_options` | extra CLI options OOTB applies by default beyond the structural ones (e.g. `--max-iterations`; or `--grad-rho` in a quality focus); user options still win; skipped on the EF path |
 | `suggestions` | toggles/tunes the **computed** suggestion generators (`disabled` suppresses specific ones); the prose lives in code, emitted after the run |
 
@@ -218,7 +218,7 @@ to the tier.
 
 | Tier | Flag | Instantiates | New facts | What it can decide (vs. advise) |
 |---|---|---|---|---|
-| minus | `--out-of-the-box-minus` | nothing | scenario count, ranks, solvers, stage structure | EF gate by **count**; solver by availability. Integrality/size unknown → only **advises** on prox linearization |
+| minus | `--out-of-the-box-minus` | nothing | scenario count, ranks, solvers, stage structure | EF gate by **count**; solver by availability; **cannot bundle**. Integrality/size unknown → only **advises** on prox linearization |
 | base (default) | `--out-of-the-box` | **one** probe scenario | size profile: `vars_int`, `vars_cont`, `nonants_total`, `nonants_int` | EF gate **size-aware**; integrality **decides** ipopt/HiGHS/linearize-prox; effort-budgeted bundle sizing (§5.3) |
 | plus (later) | `--out-of-the-box-plus` | **all** + brief solve | per-subproblem solve time, LP-relax / integrality gap | iteration/time-limit defaults, bundle sizing to amortize solve cost, "hard MIP" signals |
 
@@ -286,8 +286,8 @@ budget differs:
   at `plus_probe_solve_time_cap_seconds`), predict
   `t(spb) ≈ t₁·effort(spb)/effort(1)`, accept the largest `spb` with
   `t(spb) ≤ plus_target_seconds_per_bundle`.
-- **minus** (no profile): effort is unknown → fall back to a conservative count
-  target (`fallback_bundles_per_intra_rank` bundles per intra-rank).
+- **minus** (no profile): **cannot bundle** — with no model information there is
+  no safe way to size a bundle, so minus always runs unbundled.
 
 **Measurement does not remove the JSON assumptions.** `plus` only pins the
 *scale* (`t₁`); the *shape* (`int_exponent`, weights) still comes from
@@ -307,8 +307,8 @@ EF gate stays **count/rank-based for now** (§5.1 `ef_fallback`) — reusing
 `_cold_start_guess`es; **foci** ship different shapes (a `mip-heavy` file with a
 steeper `int_exponent`), and the dated-file migration path (§5) refines the
 coefficients from benchmark data. The interpreter sketch implements the base
-relative sizer (`_effort`, `_pick_spb_by_effort`) with `_pick_spb_by_count` as
-the minus fallback; the `plus` measure-and-scale hook is stubbed.
+relative sizer (`_effort`, `_pick_spb_by_effort`); minus does not bundle; the
+`plus` measure-and-scale hook is stubbed.
 
 ## 5.4 `--inspect-only` (dry run; shares OOTB's instantiation) — RESOLVED 2026-06-28
 
@@ -343,9 +343,8 @@ printing, before apply-to-`Config` / run.
   base (one probe, default), plus (all + brief solve, later).
 - **Bundle sizing — RESOLVED** as an effort-budgeted rule (§5.3): policy
   `effort_scaling` shape + `bundle_sizing` budgets; interpreter `_effort` /
-  `_pick_spb_by_effort` (base, relative M) with `_pick_spb_by_count` (minus
-  fallback) and a stubbed `plus` measure-and-scale. Numbers are
-  `_cold_start_guess`es.
+  `_pick_spb_by_effort` (base, relative M); minus does not bundle; stubbed
+  `plus` measure-and-scale. Numbers are `_cold_start_guess`es.
 - **Still open:** an absolute, size-aware **EF gate** — reuse the effort *shape*
   with an absolute ceiling (unlike bundle sizing's relative budget) or defer to
   `plus`; count/rank-based for now (§5.3).
