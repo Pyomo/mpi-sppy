@@ -44,8 +44,10 @@ explanation of what was chosen and how to do better.
    instead.
 5. **Transparency** (requirement 4): print (a) the **equivalent explicit
    command line** the choices imply, so the user can reproduce / learn from /
-   tweak it, and (b) a short, prioritized **"to improve, get..."** list
-   (e.g., a persistent solver, more ranks). The run proceeds regardless.
+   tweak it, and (b) a short, prioritized list of **suggestions** (labelled
+   "Suggestions"), **written after the run executes** so it can also reflect
+   how the run went (e.g., a persistent solver, more ranks). The run proceeds
+   regardless.
 6. **Proper bundling is central** (requirement 5): auto-forming proper bundles
    from scenario count vs. available ranks is a first-class part of the
    decision, not an afterthought.
@@ -80,8 +82,8 @@ These were raised as scoping questions and confirmed by the user (2026-06-28):
    resources like Y, configuration Z worked well") that *guides* the chooser
    and can be refreshed over time — **not** user run-config files.
 4. **"What would help" output.** Echo the equivalent command line *and* a
-   short prioritized "to improve, get..." list; both printed; the run proceeds
-   anyway.
+   short prioritized **Suggestions** list — the command line up front, the
+   suggestions after the run; the run proceeds anyway.
 
 ---
 
@@ -101,11 +103,11 @@ These were raised as scoping questions and confirmed by the user (2026-06-28):
 
 1. A fully-populated `Config` (or equivalent) that the normal driver path then
    executes.
-2. A printed **equivalent explicit command line**.
-3. A printed prioritized **"to improve" advisory** list.
-4. The run itself (EF when the EF gate trips — too few ranks, or too few /
-   too large scenarios per §5.1/§5.2 — otherwise the chosen cylinder
-   configuration).
+2. A printed **equivalent explicit command line** (up front, before the run).
+3. The run itself (EF when the EF gate trips — too few ranks, or the problem is
+   small enough per §5.1/§5.2 — otherwise the chosen cylinder configuration).
+4. A printed prioritized **Suggestions** list, emitted **after the run**
+   (labelled "Suggestions"; may reflect how the run went).
 
 ---
 
@@ -150,7 +152,7 @@ the policy file's contents into a CLIPS KB — the policy-as-data design keeps
 that open. We expect never to need it.
 
 Criteria this satisfies: transparency (every decision logs its reason →
-equivalent command line + advisory fall straight out), cold-start (authored v1
+equivalent command line + suggestions fall straight out), cold-start (authored v1
 works day one), maintainability (Python + JSON), testability (deterministic
 "facts X ⇒ config Y" unit tests).
 
@@ -187,7 +189,7 @@ data):
 | `rank_allocation` | fill the ladder first, then spend leftover ranks on intra-cylinder parallelism |
 | `bundling` | proper-bundling targets; `--scenarios-per-bundle` must divide `num_scens`; hard `#bundles ≥ #ranks` |
 | `param_defaults` | gap-fill only; minimal in v1 (`max_iterations`) |
-| `advisories` | named-predicate rules → the prioritized "to improve, get…" messages (req. 4) |
+| `suggestions` | named-predicate rules → the prioritized **Suggestions** list (req. 4), emitted after the run |
 
 **Predicates the interpreter must implement (v1):** `ran_ef_due_to_min_ranks`,
 `chosen_solver_not_persistent`, `solver_is_lp_mip_only`, `cylinders_below_max`.
@@ -198,7 +200,7 @@ OOTB exposes three tiers along an **effort axis** — how deeply it inspects the
 model — selected by mutually-exclusive flags. They share ONE interpreter and
 ONE policy file; the tiers differ only in how deeply `gather_facts()` populates
 the `Facts` object. Every decision uses the **best fact available** and
-**degrades gracefully** (to structural reasoning, or to an advisory) when a
+**degrades gracefully** (to structural reasoning, or to a suggestion) when a
 fact is absent. Requirement 0 (the user's explicit options win) is orthogonal
 to the tier.
 
@@ -217,7 +219,7 @@ that policy file. (A `bool` domain cannot be used: pyomo's
 `declare_as_argument` forces `store_true` for bool, which takes no value;
 `str` + `nargs='?'` is the supported optional-value form, and `add_to_config`
 forwards `argparse_args` straight to `argparse.add_argument`.) This keeps a
-single code path — richer tiers merely turn advisories into decisions.
+single code path — richer tiers merely turn suggestions into decisions.
 
 **Why a probe, not reuse-all (the intervention seam).** The *structural*
 choices — EF-vs-decomposition, bundling, cylinder/comm/rank layout — must be
@@ -266,7 +268,7 @@ smoke-tested; environment/model probing and apply-to-`Config` are stubbed.
   (base).** These share everything except one probe instantiation, so they land
   together: fact-gathering (structural + one-scenario probe), the policy
   interpreter, EF-vs-cylinder / bundling / spoke selection, reporting
-  (equivalent command line + advisories), apply-to-`Config`, the
+  (equivalent command line + post-run suggestions), apply-to-`Config`, the
   `probe_scenarios` knob, quick-start docs, and tests. Ships the default
   on-ramp and the no-instantiation escape hatch in one PR.
 - **PR2 (later) — `--out-of-the-box-plus`.** Full instantiation + a brief timed

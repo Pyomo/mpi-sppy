@@ -31,7 +31,7 @@
     ],
     "lp_mip_only_force_linearize_prox": ["glpk", "cbc"],
     "caveats": {
-      "_comment": "Surfaced via advisories, not branched on yet (model integrality is not introspected in v1; see design §6).",
+      "_comment": "Surfaced via suggestions, not branched on yet (model integrality is not introspected in v1; see design §6).",
       "ipopt": "Continuous NLP only; cannot handle integer variables.",
       "highs": "QP ok; mixed-integer quadratic (MIQP) support is limited, so the PH prox on MIP subproblems may be rejected.",
       "glpk_cbc": "LP/MIP only; cannot handle the quadratic PH prox term, so OOTB sets --linearize-proximal-terms."
@@ -83,8 +83,8 @@
     "_cold_start_guess": ["max_iterations"]
   },
 
-  "advisories": {
-    "_comment": "Requirement 4: a prioritized 'to improve, get...' list. Each entry has a named predicate the interpreter knows how to evaluate (keeps conditions explainable; no expression language needed in v1) and a message. Printed after the run is configured; the run proceeds regardless.",
+  "suggestions": {
+    "_comment": "Requirement 4: a prioritized 'Suggestions' list, printed AFTER the run executes (so it can also reflect how the run went). Each entry has a named predicate the interpreter evaluates (explainable; no expression language in v1) and a message; the run proceeds regardless.",
     "rules": [
       {"id": "ran_ef_too_few_ranks", "when": "ran_ef_due_to_min_ranks", "priority": 1,
        "message": "Ran the monolithic EF because fewer than 3 MPI ranks were available. With >= 3 ranks, mpi-sppy can run a parallel decomposition (hub + bound spokes) instead."},
