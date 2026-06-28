@@ -105,7 +105,8 @@ These were raised as scoping questions and confirmed by the user (2026-06-28):
    executes.
 2. A printed **equivalent explicit command line** (up front, before the run).
 3. The run itself (EF when the EF gate trips — too few ranks, or the problem is
-   small enough per §5.1/§5.2 — otherwise the chosen cylinder configuration).
+   small enough per §5.1/§5.2 — otherwise the chosen cylinder configuration);
+   **skipped entirely under `--inspect-only`** (§5.4).
 4. A printed prioritized **Suggestions** list, emitted **after the run**
    (labelled "Suggestions"; may reflect how the run went).
 
@@ -299,6 +300,31 @@ coefficients from benchmark data. The interpreter sketch implements the base
 relative sizer (`_effort`, `_pick_spb_by_effort`) with `_pick_spb_by_count` as
 the minus fallback; the `plus` measure-and-scale hook is stubbed.
 
+## 5.4 `--inspect-only` (dry run; shares OOTB's instantiation) — RESOLVED 2026-06-28
+
+A general driver flag (not OOTB-specific, but documented here because it shares
+code): do the inspection, **print the configuration + equivalent command line +
+config-time suggestions, then stop before the production optimization run.**
+
+- **Semantics:** "no *production* run," not "no solver call ever." Per the
+  user's decision, **`--out-of-the-box-plus`'s brief calibration solves count as
+  inspection** (resolution B) — they are bounded by
+  `plus_probe_solve_time_cap_seconds` and are *how* `plus` forms its
+  recommendation — so `plus` + `--inspect-only` still measures, then stops.
+- **Standalone (no `--out-of-the-box`):** `--inspect-only` **verifies a scenario
+  can be instantiated** (builds one and reports) — a cheap model smoke-test —
+  **reusing OOTB's probe instantiation code** (`verify_instantiation`, shared
+  with the base/plus probe).
+- **× `minus`:** silly but allowed. `minus` says "instantiate nothing," yet
+  `--inspect-only` must build one scenario to verify — so **`--inspect-only`
+  takes priority**: a single verification instantiation happens, while the
+  *decision* stays minus-level (structural, no size profile fed into choices).
+- **Suggestions:** only the config-time ones (nothing ran to yield
+  outcome-based ones).
+
+Ships in **PR1**: a plain `store_true` flag; the driver short-circuits after
+printing, before apply-to-`Config` / run.
+
 ---
 
 ## 6. Open details
@@ -331,7 +357,8 @@ smoke-tested; environment/model probing and apply-to-`Config` are stubbed.
   together: fact-gathering (structural + one-scenario probe), the policy
   interpreter, EF-vs-cylinder / bundling / spoke selection, reporting
   (equivalent command line + post-run suggestions), apply-to-`Config`, the
-  `probe_scenarios` knob, quick-start docs, and tests. Ships the default
+  `probe_scenarios` knob, the `--inspect-only` dry run (§5.4, incl. the shared
+  `verify_instantiation`), quick-start docs, and tests. Ships the default
   on-ramp and the no-instantiation escape hatch in one PR.
 - **PR2 (later) — `--out-of-the-box-plus`.** Full instantiation + a brief timed
   solve, a probe-time budget, and handling for "doesn't solve quickly"; feeds
