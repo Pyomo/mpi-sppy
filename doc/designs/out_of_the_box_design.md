@@ -1,10 +1,12 @@
 # Out-of-the-box auto-configuration — design
 
 **Status:** Design phase. Branch `outOfTheBox` (off Pyomo/mpi-sppy `main`), on
-the DLWoodruff fork. Proceeding deliberately ("slowly"): requirements
-confirmed; the decision-logic mechanism (§5) and instantiation effort tiers
-(§5.2) are resolved; the first dated policy file is committed. No production
-library code yet — only an uncommitted interpreter *sketch* (§7).
+the DLWoodruff fork. Proceeding deliberately ("slowly"): requirements confirmed
+and the major design questions resolved — decision-logic mechanism (§5), policy
+file + path selection (§5.1), effort tiers (§5.2), bundle sizing & the EF gate
+(§5.3), `--inspect-only` (§5.4), rank allocation (§5.5), and the PR1 validator
+(§8). The first dated policy file is committed. No production library code yet —
+only an uncommitted interpreter *sketch* (§7).
 **Author:** dlw (captured with Claude Code assistance)
 **Last updated:** 2026-06-28
 
@@ -105,7 +107,7 @@ These were raised as scoping questions and confirmed by the user (2026-06-28):
    executes.
 2. A printed **equivalent explicit command line** (up front, before the run).
 3. The run itself (EF when the EF gate trips — too few ranks, or the problem is
-   small enough per §5.1/§5.2 — otherwise the chosen cylinder configuration);
+   small enough per §5.1/§5.3 — otherwise the chosen cylinder configuration);
    **skipped entirely under `--inspect-only`** (§5.4).
 4. A printed prioritized **Suggestions** list, emitted **after the run**
    (labelled "Suggestions"). Mostly **computed** from live facts / decision /
@@ -141,8 +143,8 @@ Reasoning:
   dependency into already-fragile MPI/solver installs and can make firing-order
   *harder* to explain.
 - So: implement the "expert-system framing" (facts + declarative knowledge +
-  thin matcher) as plain Python reading a JSON policy file (~order of 100
-  lines). Conditions are **plain coded checks** over the facts — no expression
+  thin matcher) as a thin, hand-written Python interpreter reading a JSON policy
+  file. Conditions are **plain coded checks** over the facts — no expression
   language in v1.
 
 **Migration path preserved:** when a benchmark corpus eventually exists it
@@ -454,8 +456,10 @@ valid option, `DECOMPOSITION_FLAGS` match the `generic_cylinders` vocabulary;
 `_cold_start_guess` entries name real keys; numbers in range.
 
 **2. Decision checks (fast; `recommend()` only, no solves).** Run `recommend()`
-against real example models (farmer, aircond, sizes, …) under synthetic
-environments (varying ranks, solvers, problem sizes) and assert:
+on **hand-built synthetic `Facts`** (no instantiation — the CI-gating subset)
+and, more thoroughly, on **real example models** (farmer, aircond, sizes, …;
+probe-instantiated, hence out of CI) under synthetic environments (varying ranks,
+solvers, problem sizes), and assert:
 
 - **EF invoked when it should be:** small problem or `< min_ranks` ⇒ EF.
 - **EF *not* invoked when it shouldn't be:** large / integer-heavy ⇒ decompose.
