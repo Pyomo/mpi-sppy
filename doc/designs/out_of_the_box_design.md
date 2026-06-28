@@ -105,24 +105,81 @@ These were raised as scoping questions and confirmed by the user (2026-06-28):
 
 ---
 
-## 5. OPEN DESIGN QUESTION — the decision-logic mechanism
+## 5. Decision-logic mechanism (RESOLVED 2026-06-28)
 
-> This is the **first design question** and is intentionally **not yet
-> decided.** Candidates raised, in no order:
->
-> - **Expert system** (rules engine over facts about environment + model)
-> - **Neural net** (learned mapping from features to configuration)
-> - **Nested case statements / ifs** (hand-coded decision tree)
->
-> Crosscutting all three: **dated data files** (§2.3) that *drive or guide*
-> the decision process, so recommendations can evolve and be tuned over time
-> without rewriting code.
+The first design question — expert system vs. neural net vs. nested case/ifs,
+all optionally driven by dated data files — is **resolved**:
 
-Evaluation criteria to apply once we take this up (placeholder; to be filled
-in during the design discussion): transparency/explainability (OOTB must emit
-*why* it chose what it chose), maintainability, the cold-start problem (what
-do we do before we have data), how the dated data files are produced and
-consumed, and testability.
+**Authored, declarative, data-driven: a dated/versioned policy file holding the
+knowledge, interpreted by a thin hand-written Python decision routine. No
+rules-engine library, no neural net.**
+
+Reasoning:
+
+- The three candidates are really two categories: *authored* knowledge
+  (expert system, nested ifs — the same thing at two points on a spectrum) vs.
+  *learned* knowledge (neural net). The "dated data files" idea cuts across
+  all three and is the real commitment: **knowledge lives in data, not frozen
+  in code.**
+- **Neural net rejected** on four independent grounds: cold start (no training
+  corpus, and never NN-scale data), the hard transparency requirement (must
+  explain *why* — req. 4), the contributor base (optimization researchers edit
+  rules, not models), and testability.
+- **Rules-engine libraries rejected** (pyke is abandonware ~2010; experta is
+  stale ~2018 with `frozendict` pin problems; clipspy/CLIPS is maintained but
+  heaviest — C extension + its own language — for our smallest need). A RETE
+  engine earns its cost only with many interacting, re-firing rules; OOTB makes
+  a handful of decisions once, in an obvious order. An engine also adds a heavy
+  dependency into already-fragile MPI/solver installs and can make firing-order
+  *harder* to explain.
+- So: implement the "expert-system framing" (facts + declarative knowledge +
+  thin matcher) as plain Python reading a JSON policy file (~order of 100
+  lines). Conditions are **named predicates** the interpreter knows how to
+  evaluate — no expression language in v1.
+
+**Migration path preserved:** when a benchmark corpus eventually exists it
+*tunes the numbers inside the next dated policy file* (e.g. a regression that
+sets the EF cutoff or bundle target); structure stays rule-based and
+explainable. **Escape hatch:** if the knowledge base ever explodes into dozens
+of forward-chaining rules, revisit **clipspy** (never experta/pyke) by porting
+the policy file's contents into a CLIPS KB — the policy-as-data design keeps
+that open. We expect never to need it.
+
+Criteria this satisfies: transparency (every decision logs its reason →
+equivalent command line + advisory fall straight out), cold-start (authored v1
+works day one), maintainability (Python + JSON), testability (deterministic
+"facts X ⇒ config Y" unit tests).
+
+## 5.1 Policy file: location, selection, and v1 schema
+
+**Location.** Dated policy files ship with the library under
+`mpisppy/generic/ootb_policies/` (co-located with the future OOTB code, which
+belongs in the refactored `mpisppy/generic/` package — `parsing.py`, `ef.py`,
+`hub.py`, `spokes.py`, `scenario_io.py`, … — not the old monolithic
+`generic_cylinders.py`). First file:
+`ootb_policies/ootb_policy_2026-06-28.json`.
+
+**Selection.** By default the interpreter loads the **newest dated file** in
+that directory; a flag (proposed `--ootb-policy-file`) overrides it. The run
+**logs which policy file (and `policy_version`) it used**, for reproducibility.
+
+**v1 schema** (see the file for the authoritative, self-documenting copy; every
+threshold is flagged `_cold_start_guess` and is a placeholder to be tuned with
+data):
+
+| Key | Purpose |
+|---|---|
+| `ef_fallback` | `min_ranks_for_decomposition` (=3, req. 3) and `ef_if_num_scens_at_most` |
+| `solver` | `preference_order` (persistent-commercial → commercial → free QP-capable → LP/MIP-only), plus `commercial` / `qp_capable` / `lp_mip_only_force_linearize_prox` sets and `caveats` |
+| `hub` | default hub factory (`ph_hub`, no flag) |
+| `spoke_ladder` | ordered `rungs` of WIRED spoke flags (outer/inner), `core_roster_min` (≥1 outer + ≥1 inner = the 3-rank floor), `max_cylinders` |
+| `rank_allocation` | fill the ladder first, then spend leftover ranks on intra-cylinder parallelism |
+| `bundling` | proper-bundling targets; `--scenarios-per-bundle` must divide `num_scens`; hard `#bundles ≥ #ranks` |
+| `param_defaults` | gap-fill only; minimal in v1 (`max_iterations`) |
+| `advisories` | named-predicate rules → the prioritized "to improve, get…" messages (req. 4) |
+
+**Predicates the interpreter must implement (v1):** `ran_ef_due_to_min_ranks`,
+`chosen_solver_not_persistent`, `solver_is_lp_mip_only`, `cylinders_below_max`.
 
 ---
 

@@ -1,0 +1,99 @@
+{
+  "_description": "Out-of-the-box (OOTB) auto-configuration policy. This is DATA, not code: a thin Python interpreter reads it and a set of facts about the environment (MPI ranks, installed solvers, optional cores/memory) and the model (scenario count, stage structure) to assemble a defensible mpi-sppy run. User-supplied options always win; OOTB only fills gaps. See doc/designs/out_of_the_box_design.md.",
+
+  "schema_version": 1,
+  "policy_version": "2026-06-28",
+  "provenance": "COLD START. Authored by hand from mpi-sppy defaults and common practice; NO benchmark data yet. Every numeric threshold below is an educated guess flagged with _cold_start_guess and is expected to be replaced by data-tuned values in a later dated policy file.",
+
+  "ef_fallback": {
+    "_comment": "Requirement 3: need at least min_ranks_for_decomposition ranks, else solve the EF. Also fall back to EF when there are too few scenarios for decomposition to buy anything.",
+    "min_ranks_for_decomposition": 3,
+    "ef_if_num_scens_at_most": 2,
+    "_cold_start_guess": ["ef_if_num_scens_at_most"]
+  },
+
+  "solver": {
+    "_comment": "Picked by trying preference_order in order and keeping the first that SolverFactory(name).available(exception_flag=False) reports. Persistence is requested by NAMING the *_persistent interface (no separate flag). Persistent commercial first, then plain commercial, then free QP-capable, then LP/MIP-only (which forces prox linearization).",
+    "preference_order": [
+      "gurobi_persistent", "cplex_persistent", "xpress_persistent",
+      "gurobi", "cplex", "xpress",
+      "appsi_highs", "highs", "ipopt",
+      "cbc", "glpk"
+    ],
+    "commercial": [
+      "gurobi", "cplex", "xpress",
+      "gurobi_persistent", "cplex_persistent", "xpress_persistent"
+    ],
+    "qp_capable": [
+      "gurobi", "cplex", "xpress",
+      "gurobi_persistent", "cplex_persistent", "xpress_persistent",
+      "ipopt", "highs", "appsi_highs"
+    ],
+    "lp_mip_only_force_linearize_prox": ["glpk", "cbc"],
+    "caveats": {
+      "_comment": "Surfaced via advisories, not branched on yet (model integrality is not introspected in v1; see design §6).",
+      "ipopt": "Continuous NLP only; cannot handle integer variables.",
+      "highs": "QP ok; mixed-integer quadratic (MIQP) support is limited, so the PH prox on MIP subproblems may be rejected.",
+      "glpk_cbc": "LP/MIP only; cannot handle the quadratic PH prox term, so OOTB sets --linearize-proximal-terms."
+    }
+  },
+
+  "hub": {
+    "_comment": "PH is the default hub in the generic driver; no flag is emitted to select it.",
+    "default_factory": "ph_hub",
+    "flag": null
+  },
+
+  "spoke_ladder": {
+    "_comment": "Ordered list of spokes to switch on as ranks allow, lowest priority number first. Only flags WIRED in mpisppy/generic/spokes.py appear here. The 3-rank minimum fills priorities 1 and 2 (one outer + one inner bound) so there is always an optimality gap. Each rung consumes one cylinder; see rank_allocation for how leftover ranks are spent.",
+    "rungs": [
+      {"priority": 1, "flag": "--lagrangian",   "factory": "lagrangian_spoke",   "bound": "outer", "note": "Lagrangian dual bound; cheap and robust. Core."},
+      {"priority": 2, "flag": "--xhatshuffle",  "factory": "xhatshuffle_spoke",  "bound": "inner", "note": "Incumbent finder over shuffled scenarios. Core."},
+      {"priority": 3, "flag": "--fwph",         "factory": "fwph_spoke",         "bound": "outer", "note": "Frank-Wolfe PH; often tightens the outer bound."},
+      {"priority": 4, "flag": "--xhatxbar",     "factory": "xhatxbar_spoke",     "bound": "inner", "note": "Cheap second incumbent source from xbar."},
+      {"priority": 5, "flag": "--subgradient",  "factory": "subgradient_spoke",  "bound": "outer", "note": "Alternative dual bound."},
+      {"priority": 6, "flag": "--reduced-costs","factory": "reduced_costs_spoke","bound": "outer", "note": "More advanced; benefits markedly from a persistent solver. Last."}
+    ],
+    "core_roster_min": {
+      "_comment": "Minimum spokes for a meaningful run: at least one of each bound type. With the PH hub this is the 3-rank floor.",
+      "outer": 1,
+      "inner": 1
+    },
+    "max_cylinders": 6,
+    "_cold_start_guess": ["max_cylinders", "ladder ordering of priorities 3-6"]
+  },
+
+  "rank_allocation": {
+    "_comment": "How to spend ranks. First fill the spoke ladder up to max_cylinders (each cylinder = 1 rung + the hub). Then, rather than adding lower-value spokes, spend remaining ranks on intra-cylinder parallelism (more ranks per cylinder => faster subproblem throughput), especially when there are many scenarios/bundles. v1 keeps this simple and conservative.",
+    "fill_ladder_before_intra_cylinder": true,
+    "extra_ranks_policy": "intra_cylinder"
+  },
+
+  "bundling": {
+    "_comment": "Proper bundling only (loose bundling was removed in 2026). The live flag is --scenarios-per-bundle and it MUST divide num_scens evenly. Hard constraint enforced by the library: number_of_bundles >= number_of_ranks. Strategy: when there are many scenarios, choose a scenarios_per_bundle that divides num_scens and yields about target_bundles_per_intra_rank bundles per intra-cylinder rank, never dropping below the rank count.",
+    "min_scens_to_consider_bundling": 50,
+    "target_bundles_per_intra_rank": 2,
+    "never_fewer_bundles_than_ranks": true,
+    "_cold_start_guess": ["min_scens_to_consider_bundling", "target_bundles_per_intra_rank"]
+  },
+
+  "param_defaults": {
+    "_comment": "Filled ONLY if the user did not set them. Kept minimal in v1 to avoid surprising the user; flag names not yet verified are intentionally omitted rather than guessed.",
+    "max_iterations": 100,
+    "_cold_start_guess": ["max_iterations"]
+  },
+
+  "advisories": {
+    "_comment": "Requirement 4: a prioritized 'to improve, get...' list. Each entry has a named predicate the interpreter knows how to evaluate (keeps conditions explainable; no expression language needed in v1) and a message. Printed after the run is configured; the run proceeds regardless.",
+    "rules": [
+      {"id": "ran_ef_too_few_ranks", "when": "ran_ef_due_to_min_ranks", "priority": 1,
+       "message": "Ran the monolithic EF because fewer than 3 MPI ranks were available. With >= 3 ranks, mpi-sppy can run a parallel decomposition (hub + bound spokes) instead."},
+      {"id": "no_persistent_solver", "when": "chosen_solver_not_persistent", "priority": 2,
+       "message": "The chosen solver has no persistent interface available. Installing/licensing a persistent interface (e.g. gurobi_persistent) lets subproblems warm-start and is typically much faster for PH."},
+      {"id": "linearized_prox", "when": "solver_is_lp_mip_only", "priority": 3,
+       "message": "An LP/MIP-only solver was chosen, so the PH proximal term is being linearized (--linearize-proximal-terms). A QP-capable solver (gurobi/cplex/xpress, or ipopt for continuous models) avoids this approximation."},
+      {"id": "more_ranks_help", "when": "cylinders_below_max", "priority": 4,
+       "message": "More MPI ranks would let OOTB add bound-tightening spokes (e.g. fwph, subgradient) and/or more intra-cylinder parallelism."}
+    ]
+  }
+}
