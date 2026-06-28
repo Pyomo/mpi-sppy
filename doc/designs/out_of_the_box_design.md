@@ -163,8 +163,15 @@ the refactored `mpisppy/generic/` package — `parsing.py`, `ef.py`, `hub.py`,
 user-facing CLI entry that delegates into this package). First file:
 `ootb_policies/ootb_policy_2026-06-28.json`.
 
-**Selection.** By default the interpreter loads the **newest dated file** in
-that directory; a flag (proposed `--ootb-policy-file`) overrides it. The run
+**Selection.** Each OOTB flag takes an **optional policy-file path** (see the
+§5.2 mechanism): a bare flag uses the shipped default (the newest dated file
+whose name carries no focus token, e.g. `ootb_policy_<date>.json`);
+`--out-of-the-box PATH` uses `PATH`. There is **no separate policy-file flag** —
+the optional value *is* the path. Multiple policy files with **different foci**
+may ship side by side; the **focus is conveyed by the filename** (e.g.
+`ootb_policy_quick_<date>.json`), which is human-facing documentation only — the
+program does not parse focus from the name, and no machine-read `focus` field is
+needed. A user selects a focus simply by passing that file's path. The run
 **logs which policy file (and `policy_version`) it used**, for reproducibility.
 
 **v1 schema** (see the file for the authoritative, self-documenting copy; every
@@ -202,8 +209,15 @@ to the tier.
 | plus (later) | `--out-of-the-box-plus` | **all** + brief solve | per-subproblem solve time, LP-relax / integrality gap | iteration/time-limit defaults, bundle sizing to amortize solve cost, "hard MIP" signals |
 
 **Mechanism.** The three flags set one internal `ootb_effort` level
-(`minus`/`base`/`plus`); at most one may be supplied. This keeps a single code
-path — richer tiers merely turn advisories into decisions.
+(`minus`/`base`/`plus`); at most one may be supplied. Each takes an **optional
+policy-file path** — declared `domain=str, default=None,
+argparse_args={'nargs': '?', 'const': <default-policy>}` — giving three states:
+absent → `None` → OOTB off; bare flag → `const` → the default policy; `PATH` →
+that policy file. (A `bool` domain cannot be used: pyomo's
+`declare_as_argument` forces `store_true` for bool, which takes no value;
+`str` + `nargs='?'` is the supported optional-value form, and `add_to_config`
+forwards `argparse_args` straight to `argparse.add_argument`.) This keeps a
+single code path — richer tiers merely turn advisories into decisions.
 
 **Why a probe, not reuse-all (the intervention seam).** The *structural*
 choices — EF-vs-decomposition, bundling, cylinder/comm/rank layout — must be
