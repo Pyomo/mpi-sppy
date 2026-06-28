@@ -6,8 +6,8 @@ and the major design questions resolved — decision-logic mechanism (§5), poli
 file + path selection (§5.1), effort tiers (§5.2), bundle sizing & the EF gate
 (§5.3), `--inspect-only` (§5.4), rank allocation (§5.5), and the PR1 tooling —
 validator (§8) and effort calibrator (§9). The first dated policy file is
-committed. No production library code yet — only an uncommitted interpreter
-*sketch* (§7).
+committed, as is an interpreter *sketch* (§7) whose decision logic is complete
+with the environment wiring stubbed. Next: turn the sketch into PR1 code.
 **Author:** dlw (captured with Claude Code assistance)
 **Last updated:** 2026-06-28
 
