@@ -478,11 +478,15 @@ These runs are **not cheap** — PH to convergence takes time, and they need a
 real solver — so layer 3 runs **nightly / on demand / locally**, never as a
 per-PR gate.
 
-**Report.** The validator produces a **report**: pass/fail per check with
-details — which example and synthetic environment, expected vs. actual, and for
-layer-3 runs the EF-vs-decomposition objective gap and convergence status. It is
-both **machine-readable** (so CI can gate on it) and **human-readable** (a
-summary), and it names the policy file and `policy_version` validated.
+**Report.** The validator produces a **report** that details **every** test, not
+just failures: which example and synthetic environment, expected vs. actual, and
+for layer-3 runs the EF-vs-decomposition objective gap, **iteration count**, and
+convergence status. It **prominently highlights runs that hit the iteration cap
+without converging** ("maxed out on iterations") — a yellow flag that the
+recommended configuration (or the policy's defaults) converges poorly on that
+example, *even when the run technically completed*. The report is both
+**machine-readable** (CI gating) and **human-readable** (a summary), and it names
+the policy file and `policy_version` validated.
 
 **Only a small part can gate CI.** CI runners typically have **no commercial
 solver** and tight time budgets, so the per-PR gate is limited to the cheap,
