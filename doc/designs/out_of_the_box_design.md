@@ -184,7 +184,7 @@ data):
 
 | Key | Purpose |
 |---|---|
-| `ef_fallback` | `min_ranks_for_decomposition` (=3, req. 3) and `ef_if_num_scens_at_most` |
+| `ef_fallback` | when to solve the EF: rank floor `min_ranks_for_decomposition` (req. 3); else the **same effort model as bundles** on the whole problem — base `effort(num_scens) ≤ ef_effort_budget`, plus measured `ef_target_seconds`, minus count `ef_if_num_scens_at_most` |
 | `solver` | `preference_order` (persistent-commercial → commercial → free QP-capable → LP/MIP-only), plus `commercial` / `qp_capable` / `lp_mip_only_force_linearize_prox` sets and `caveats` |
 | `hub` | default hub factory (`ph_hub`, no flag) |
 | `spoke_ladder` | ordered `rungs` of WIRED spoke flags (outer/inner), `core_roster_min` (≥1 outer + ≥1 inner = the 3-rank floor), `max_cylinders` |
@@ -296,12 +296,17 @@ MIP can solve faster), so a single timing must not drive the whole choice — th
 JSON shape is a **prior/regularizer** that measurement calibrates. (Later
 refinement: `plus` measures two points to nudge `int_exponent` locally.)
 
-**EF gate vs. bundle sizing.** Both use the same effort *shape*, but the EF gate
-needs an **absolute** ceiling ("is the monolith small enough to solve as one
-model?"); the relative-to-a-single-scenario trick does not gate the whole EF.
-That absolute threshold is the genuinely hard part without measurement, so the
-EF gate stays **count/rank-based for now** (§5.1 `ef_fallback`) — reusing
-`effort` with an absolute ceiling (or deferring to `plus`) is a follow-on.
+**EF gate uses the same effort model.** The EF is just all scenarios as one
+model, so the EF gate reuses `effort()` on the whole problem: above the rank
+floor, run the EF when `effort(num_scens)` is within an **EF budget**. Unlike
+bundle sizing's *relative* budget (M× a single scenario), the EF budget is
+**absolute** — the monolith has no single-scenario reference: **base**
+`effort(num_scens) ≤ ef_effort_budget` (same effort units as bundle effort);
+**plus** measured `t₁·effort(num_scens)/effort(1) ≤ ef_target_seconds`; **minus**
+(no profile) falls back to the count rule `num_scens ≤ ef_if_num_scens_at_most`.
+Because the units match bundle effort, the EF budget and bundle budgets are
+mutually consistent: when the whole problem exceeds the EF budget, OOTB
+decomposes and sizes each bundle within its own (smaller) effort budget.
 
 **Status.** All `effort_scaling` / `bundle_sizing` numbers are
 `_cold_start_guess`es; **foci** ship different shapes (a `mip-heavy` file with a
@@ -345,9 +350,9 @@ printing, before apply-to-`Config` / run.
   `effort_scaling` shape + `bundle_sizing` budgets; interpreter `_effort` /
   `_pick_spb_by_effort` (base, relative M); minus does not bundle; stubbed
   `plus` measure-and-scale. Numbers are `_cold_start_guess`es.
-- **Still open:** an absolute, size-aware **EF gate** — reuse the effort *shape*
-  with an absolute ceiling (unlike bundle sizing's relative budget) or defer to
-  `plus`; count/rank-based for now (§5.3).
+- **EF gate — RESOLVED** (§5.3): reuses the bundle `effort()` model on the whole
+  problem against an absolute **EF budget** — base `ef_effort_budget`, plus
+  `ef_target_seconds`, minus the count rule `ef_if_num_scens_at_most`.
 - **Still open:** how the dated data files are generated, versioned, and shipped
   (the §5 migration path anticipates data-tuned successors).
 - **Still open:** Amalgamator reachability (§2.1) — `generic_cylinders` first.

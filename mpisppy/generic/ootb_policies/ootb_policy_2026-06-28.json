@@ -6,10 +6,12 @@
   "provenance": "COLD START. Authored by hand from mpi-sppy defaults and common practice; NO benchmark data yet. Every numeric threshold below is an educated guess flagged with _cold_start_guess and is expected to be replaced by data-tuned values in a later dated policy file.",
 
   "ef_fallback": {
-    "_comment": "Requirement 3: need at least min_ranks_for_decomposition ranks, else solve the EF. Also fall back to EF when there are too few scenarios for decomposition to buy anything.",
+    "_comment": "When to solve the monolithic EF instead of decomposing. Always EF when ranks < min_ranks_for_decomposition (requirement 3). Otherwise EF when the WHOLE problem is small enough, measured with the SAME effort model as bundle sizing (effort_scaling) applied to all scenarios as one model, i.e. effort(num_scens). Unlike bundle sizing's RELATIVE budget, the EF budget is ABSOLUTE (the monolith has no single-scenario reference). base: effort(num_scens) <= ef_effort_budget (same effort units as bundle effort). plus: measured_single_scenario_seconds * effort(num_scens)/effort(1) <= ef_target_seconds. minus (no size profile): fall back to the count rule num_scens <= ef_if_num_scens_at_most. All cold-start guesses.",
     "min_ranks_for_decomposition": 3,
     "ef_if_num_scens_at_most": 2,
-    "_cold_start_guess": ["ef_if_num_scens_at_most"]
+    "ef_effort_budget": 100000,
+    "ef_target_seconds": 120,
+    "_cold_start_guess": ["ef_if_num_scens_at_most", "ef_effort_budget", "ef_target_seconds"]
   },
 
   "solver": {
