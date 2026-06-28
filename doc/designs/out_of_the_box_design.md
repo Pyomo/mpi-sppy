@@ -55,8 +55,8 @@ explanation of what was chosen and how to do better.
   *on-ramp*, and it deliberately emits the explicit command line it chose.
 - Tuning convergence parameters to optimality. OOTB aims for *defensible*,
   not *optimal*, configurations.
-- (TBD, see §6) Deep per-model profiling / trial solves beyond what is needed
-  to pick a configuration.
+- Running a solver to make decisions in the default path. Trial solves are
+  confined to the opt-in `plus` tier (§5.2); minus and base never solve.
 
 ---
 
@@ -69,9 +69,9 @@ These were raised as scoping questions and confirmed by the user (2026-06-28):
    target. *(CONFIRMED as the assumed direction; revisit if Amalgamator
    coverage is wanted sooner.)*
 2. **What we read from the module.** OOTB learns scenario count / names (hence
-   two-stage vs. multistage structure) from the module. Whether OOTB may
-   *instantiate a scenario* to gauge size/difficulty vs. staying purely
-   structural is itself an open detail — see §6.
+   two-stage vs. multistage structure) from the module. Whether OOTB also
+   *instantiates scenarios* to gauge size/difficulty is **resolved** as a
+   user-selectable effort axis (none / one probe / all) — see §5.2.
 3. **"Dated data files."** Interpreted as a versioned, **date-stamped
    knowledge base** of heuristics/benchmarks ("for problems like X with
    resources like Y, configuration Z worked well") that *guides* the chooser
@@ -87,7 +87,7 @@ These were raised as scoping questions and confirmed by the user (2026-06-28):
 | Source | Items | Notes |
 |---|---|---|
 | User-supplied options | anything already on the command line / Config | Highest precedence; never overridden |
-| Model module | scenario count/names, stage structure (2-stage vs multistage) | Structural read; trial instantiation is TBD (§6) |
+| Model module | scenario count/names, stage structure (2-stage vs multistage); at base/plus also integrality, per-scenario size, nonant count | Depth set by the effort tier (§5.2): minus structural-only, base one probe, plus all |
 | MPI environment | number of ranks | Drives EF-vs-cylinders and the 3-rank floor |
 | Installed solvers | which solvers import / are licensed; persistent variants | Drives solver choice + a "get a persistent solver" hint |
 | OS / SLURM (best effort) | core count, memory | OS-dependent; SLURM env vars when present |
@@ -181,19 +181,76 @@ data):
 **Predicates the interpreter must implement (v1):** `ran_ef_due_to_min_ranks`,
 `chosen_solver_not_persistent`, `solver_is_lp_mip_only`, `cylinders_below_max`.
 
+## 5.2 Effort tiers (instantiation depth) — RESOLVED 2026-06-28
+
+OOTB exposes three tiers along an **effort axis** — how deeply it inspects the
+model — selected by mutually-exclusive flags. They share ONE interpreter and
+ONE policy file; the tiers differ only in how deeply `gather_facts()` populates
+the `Facts` object. Every decision uses the **best fact available** and
+**degrades gracefully** (to structural reasoning, or to an advisory) when a
+fact is absent. Requirement 0 (the user's explicit options win) is orthogonal
+to the tier.
+
+| Tier | Flag | Instantiates | New facts | What it can decide (vs. advise) |
+|---|---|---|---|---|
+| minus | `--out-of-the-box-minus` | nothing | scenario count, ranks, solvers, stage structure | EF gate by **count**; solver by availability. Integrality/size unknown → only **advises** on prox linearization |
+| base (default) | `--out-of-the-box` | **one** probe scenario | integrality, per-scenario size, nonant count | EF gate **size-aware**; integrality **decides** ipopt/HiGHS/linearize-prox; memory-aware bundling |
+| plus (later) | `--out-of-the-box-plus` | **all** + brief solve | per-subproblem solve time, LP-relax / integrality gap | iteration/time-limit defaults, bundle sizing to amortize solve cost, "hard MIP" signals |
+
+**Mechanism.** The three flags set one internal `ootb_effort` level
+(`minus`/`base`/`plus`); at most one may be supplied. This keeps a single code
+path — richer tiers merely turn advisories into decisions.
+
+**Why a probe, not reuse-all (the intervention seam).** The *structural*
+choices — EF-vs-decomposition, bundling, cylinder/comm/rank layout — must be
+fixed *before* models are built: they determine what is instantiated and the
+MPI topology, and proper bundling builds a *new combined* Pyomo model, so
+singleton instantiations cannot be reused as bundles (Pyomo components cannot
+be re-parented). Instantiating everything first and then restructuring wastes
+work and reshuffles comms. So **base** instantiates only a cheap *probe*
+(discarded) for the structural decisions; the normal driver then does the real,
+layout-correct instantiation — needed anyway — which also feeds any *parametric*
+refinement (solver, spokes, rho, iterations) where intervening is free.
+**plus** accepts more redundant work by design, in exchange for solve-time /
+gap information.
+
+**`probe_scenarios` knob (lands with the base tier).** How many representative
+scenarios base/plus instantiate (`scenario_names[:probe_scenarios]`). Default
+**1** — enough for structurally homogeneous scenarios; bump it for models whose
+size or integrality varies by scenario. Added to the policy file when base is
+implemented (PR1); not in the 2026-06-28 file.
+
 ---
 
-## 6. Open details (deferred)
+## 6. Open details
 
-- May OOTB instantiate a single scenario to estimate size/difficulty, or stay
-  purely structural for the first cut?
-- Exact bundling heuristic (scenarios per bundle vs. ranks) — depends on §5.
-- How the dated data files are generated, versioned, and shipped.
-- Amalgamator reachability (§2.1).
+- **Instantiation depth — RESOLVED** as the effort tiers (§5.2): minus (none),
+  base (one probe, default), plus (all + brief solve, later).
+- **Bundling heuristic — RESOLVED** in the policy (`bundling`) + interpreter
+  (`_pick_scenarios_per_bundle` divisor search): aim for
+  ~`target_bundles_per_intra_rank` bundles per intra-cylinder rank, never fewer
+  than the rank count, with `scenarios_per_bundle` dividing `num_scens`. The
+  numbers are `_cold_start_guess`es.
+- **Still open:** how the dated data files are generated, versioned, and shipped
+  (the §5 migration path anticipates data-tuned successors).
+- **Still open:** Amalgamator reachability (§2.1) — `generic_cylinders` first.
 
 ---
 
-## 7. Phased rollout (placeholder)
+## 7. Phased rollout
 
-To be drafted once §5 is settled. Per project convention, sizable redesigns
-ship as review-sized phases, each green on its own.
+Per project convention, ship as review-sized phases, each green on its own. A
+sketch of the interpreter already exists at `mpisppy/generic/out_of_the_box.py`
+— the pure `recommend(facts, policy) → Decision` logic is complete and
+smoke-tested; environment/model probing and apply-to-`Config` are stubbed.
+
+- **PR1 — interpreter pipeline + `--out-of-the-box-minus` + `--out-of-the-box`
+  (base).** These share everything except one probe instantiation, so they land
+  together: fact-gathering (structural + one-scenario probe), the policy
+  interpreter, EF-vs-cylinder / bundling / spoke selection, reporting
+  (equivalent command line + advisories), apply-to-`Config`, the
+  `probe_scenarios` knob, quick-start docs, and tests. Ships the default
+  on-ramp and the no-instantiation escape hatch in one PR.
+- **PR2 (later) — `--out-of-the-box-plus`.** Full instantiation + a brief timed
+  solve, a probe-time budget, and handling for "doesn't solve quickly"; feeds
+  iteration/time-limit defaults and solve-cost-aware bundling.
