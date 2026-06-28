@@ -407,8 +407,9 @@ to inform. The widest cylinder's rank count governs the bundling
 - **EF gate — RESOLVED** (§5.3): reuses the bundle `effort()` model on the whole
   problem against an absolute **EF budget** — base `ef_effort_budget`, plus
   `ef_target_seconds`, minus the count rule `ef_if_num_scens_at_most`.
-- **Still open:** how the dated data files are generated, versioned, and shipped
-  (the §5 migration path anticipates data-tuned successors).
+- **Dated data files — generation mechanism is the effort-calibration tool
+  (§9)** (fits coefficients + an effort→seconds scale from a benchmark corpus);
+  the corpus, versioning, and shipping cadence are **still open**.
 - **Still open:** Amalgamator reachability (§2.1) — `generic_cylinders` first.
 
 ---
@@ -524,3 +525,33 @@ written human-readable and machine-readable (JSON).
 **Status:** design nailed down; **scheduled for PR1**. The check *catalog* will
 keep growing, but the tool, the three-layer structure, the CI gate, and the
 report all ship in PR1.
+
+---
+
+## 9. Effort-calibration tool (future; data-tuning side)
+
+The `effort_scaling` coefficients and the effort budgets ship as abstract
+cold-start guesses (§5.3) in arbitrary "effort units." A separate **calibration
+tool** turns them into data-tuned, *interpretable* values:
+
+- **Fit the coefficients.** Run timed solves across a benchmark spread (varying
+  continuous / integer var counts, scenarios-per-bundle, nonant counts) and fit
+  `cont_coeff`, `int_weight`, `int_exponent`, `int_nonant_coeff` so that modeled
+  `effort(...)` tracks measured solve time.
+- **Translate effort ↔ seconds.** Produce an effort→time scale so the abstract
+  budgets (`ef_effort_budget`, the base `M`, …) can be set and read in
+  **seconds** — the unit the `plus_*` budgets already use (minutes = seconds/60
+  for humans) — e.g. "run the EF only if it should finish in ~600 s" instead of
+  opaque effort units.
+- **Output.** Updated coefficients + the effort→seconds scale for a new **dated**
+  policy file — the producer side of the §5 "dated data files refined by
+  benchmark data" migration path.
+
+Caveats: solve time is machine- and solver-dependent and (for MIPs) noisy, so a
+calibrated scale is per reference machine/solver and approximate. The **plus**
+tier effectively *re-calibrates per session* via its measured single-scenario
+time (`t₁`); **base** relies on this offline calibration.
+
+**Status:** future tool (not PR1). The on-ramp ships with cold-start
+coefficients; calibration produces the first data-tuned dated policy once a
+benchmark corpus exists.
