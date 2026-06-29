@@ -120,6 +120,10 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_rho_enforcement.py -v
 
+      - name: Test prox/solver quadratic compatibility checks
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_prox_solver_compat.py -v
+
       - name: Test generic_cylinders usage
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_generic_cylinders.py -v

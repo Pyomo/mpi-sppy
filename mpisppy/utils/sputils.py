@@ -511,7 +511,35 @@ def _models_have_same_sense(models):
 def is_persistent(solver):
     return isinstance(solver,
         pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver)
-    
+
+
+def solver_quadratic_objective_capability(solver_plugin):
+    """Tri-state probe of whether a solver can handle a quadratic objective.
+
+    Returns ``True`` or ``False`` as reported by the legacy ``has_capability``
+    API, or ``None`` when the capability cannot be determined. The APPSI and
+    newer ``pyomo.contrib.solver`` interfaces (e.g. ``appsi_highs``, ``highs``)
+    do not expose ``has_capability``, so they return ``None`` and the caller
+    must fall back to detecting a failed solve. ``None`` therefore means
+    "unknown", never "unsupported".
+
+    Args:
+        solver_plugin: an instantiated Pyomo solver object (e.g. the object
+            attached as ``scenario._solver_plugin``).
+
+    Returns:
+        bool or None
+    """
+    has_capability = getattr(solver_plugin, "has_capability", None)
+    if has_capability is None:
+        return None
+    try:
+        return bool(has_capability("quadratic_objective"))
+    except Exception:
+        # Be conservative: any trouble querying capability means "unknown",
+        # so we never wrongly block a solve based on a capability probe.
+        return None
+
 def ef_scenarios(ef):
     """ An iterator to give the scenario sub-models in an ef
     Args:
