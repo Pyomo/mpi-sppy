@@ -30,6 +30,14 @@ def profile(filename=None, comm=MPI.COMM_WORLD):
 logger = logging.getLogger('PHBase')
 logger.setLevel(logging.WARN)
 
+# Shared remediation hint for the quadratic-prox / solver compatibility checks
+# (issue #762): a solver that cannot handle the quadratic proximal term should
+# linearize it instead.
+_LINEARIZE_PROX_HINT = (
+    "Re-run with --linearize-proximal-terms (add "
+    "--linearize-binary-proximal-terms for binary variables)."
+)
+
 #======================
 
 def _Compute_Xbar(opt, verbose=False):
@@ -740,6 +748,103 @@ class PHBase(mpisppy.spopt.SPOpt):
         return not bool(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model.prox_on.value)
 
 
+    def _prox_is_quadratic(self):
+        """True when subproblem objectives carry a (non-linearized) quadratic
+        proximal term, i.e. the prox term is attached and active and is not
+        being approximated by linear cuts. This is exactly the condition under
+        which a solver that cannot handle a quadratic objective will fail.
+        """
+        return (not self._prox_approx) and (not self.prox_disabled)
+
+
+    def _check_prox_solver_capability(self):
+        """Proactive half of the quadratic-prox/solver compatibility check.
+
+        If the solver reports (via the legacy ``has_capability`` API) that it
+        cannot handle a quadratic objective, fail immediately with an
+        actionable message rather than letting the first proximal solve fail
+        cryptically. Solvers that do not expose capability information (e.g.
+        HiGHS via the APPSI or ``pyomo.contrib.solver`` interfaces) are left to
+        the reactive check after the first solve.
+
+        The decision is deterministic and identical on every rank (same
+        ``solver_name``), so raising here cannot desynchronize MPI.
+        """
+        if not self._prox_is_quadratic():
+            return
+        # All subproblems share solver_name, so one probe is representative.
+        s = next(iter(self.local_scenarios.values()))
+        if sputils.solver_quadratic_objective_capability(s._solver_plugin) is False:
+            raise RuntimeError(
+                f"Solver '{self.options.get('solver_name')}' reports that it "
+                "cannot handle a quadratic objective, which the Progressive "
+                "Hedging proximal term requires. " + _LINEARIZE_PROX_HINT
+            )
+
+
+    def _check_prox_solve_succeeded(self):
+        """Reactive half of the quadratic-prox/solver compatibility check.
+
+        After the first proximal (quadratic) solve, if no subproblem anywhere
+        produced a solution, the most likely cause is a solver that cannot
+        handle a quadratic objective but does not report it through
+        ``has_capability`` (e.g. HiGHS, which cannot solve an MIQP). Emit an
+        actionable message instead of leaving the user with the cryptic
+        ``TerminationCondition=unknown`` from the failed solve.
+
+        Restricted to iteration 1: if the first quadratic solve succeeds, the
+        solver supports quadratic objectives, so any later failure is a genuine
+        optimization issue rather than a capability problem. The "no solution
+        anywhere" test is reduced across ranks with ``allreduce_or`` so the
+        raise decision is identical on every rank (no MPI desynchronization);
+        a partial failure (some subproblems still solve) falls through to the
+        existing behavior.
+        """
+        if self._PHIter != 1 or not self._prox_is_quadratic():
+            return
+        local_any_solution = any(
+            s._mpisppy_data.solution_available
+            for s in self.local_scenarios.values()
+        )
+        if self.allreduce_or(local_any_solution):
+            return
+        raise RuntimeError(
+            f"No subproblem produced a solution at PH iteration "
+            f"{self._PHIter} while a quadratic proximal term was active. "
+            f"Solver '{self.options.get('solver_name')}' may not support "
+            "quadratic objectives (e.g. HiGHS cannot solve an MIQP). "
+            + _LINEARIZE_PROX_HINT
+        )
+
+
+    def _reraise_as_prox_capability_error(self, exc):
+        """Wrap a raised first-solve error as an actionable capability message.
+
+        Completes the quadratic-prox/solver compatibility checks for solvers
+        that signal "cannot handle a quadratic objective" by *raising* during
+        the solve rather than returning without a solution. cbc and glpk are the
+        motivating case: their LP writer raises before the reactive
+        ``_check_prox_solve_succeeded`` can run, and the proactive
+        ``has_capability`` probe does not always catch them (the capability is
+        reported inconsistently across Pyomo versions / solver interfaces).
+
+        Only the first quadratic solve is treated this way; a raise at a later
+        iteration is a genuine solve error and is left to propagate unchanged.
+        When applicable this raises a new ``RuntimeError`` chained from ``exc``
+        (so the original traceback is preserved); otherwise it returns and the
+        caller re-raises ``exc`` as-is. The guard matches the reactive check, so
+        MPI synchronization is unchanged beyond the raise that already occurred.
+        """
+        if self._PHIter != 1 or not self._prox_is_quadratic():
+            return
+        raise RuntimeError(
+            f"Solver '{self.options.get('solver_name')}' raised an error on the "
+            "first solve with a quadratic proximal term active, which it may "
+            "not support (e.g. cbc/glpk cannot write a quadratic objective to "
+            "LP format). " + _LINEARIZE_PROX_HINT
+        ) from exc
+
+
     def attach_PH_to_objective(self, add_duals, add_prox, add_smooth=0):
         """ Attach dual weight and prox terms to the objective function of the
         models in `local_scenarios`.
@@ -846,23 +951,59 @@ class PHBase(mpisppy.spopt.SPOpt):
                                           "add_duals": add_duals, "add_prox": add_prox})
 
 
+    def _attach_PH_to_objective_after_iter0(self):
+        """ Splice the W/prox terms into the objective after the iteration-0
+        solve, and refresh any persistent solvers.
+
+        ``attach_PH_to_objective`` mutates each subproblem objective and, in
+        prox-approximation mode, also adds the ``xsqvar`` variable plus its cut
+        constraints. Because the subproblem solvers were already created (and
+        persistent solvers had ``set_instance`` called) on the user's original
+        objective during Iter0, a persistent solver does not see these later
+        changes; we re-run ``set_instance`` so the new terms and components
+        reach the solver. Non-persistent solvers re-read the model on the next
+        solve, so they need nothing here.
+        """
+        self.attach_PH_to_objective(self._attach_duals,
+                                    self._attach_prox,
+                                    self._attach_smooth)
+        if (not self._attach_duals) and (not self._attach_prox):
+            # attach_PH_to_objective made no change to the objective
+            # (e.g. APH passes both flags False); nothing to re-push.
+            return
+        for sname, s in self.local_scenarios.items():
+            if sputils.is_persistent(s._solver_plugin):
+                mpisppy.spopt.set_instance_retry(s, s._solver_plugin, sname)
+
 
     def PH_Prep(
         self,
         attach_duals=True,
         attach_prox=True,
-        attach_smooth=0
+        attach_smooth=0,
+        defer_attach=True,
     ):
         """ Set up PH objectives (duals and prox terms), and prepare
         extensions, if available.
 
         Args:
-            add_duals (boolean, optional):
+            attach_duals (boolean, optional):
                 If True, adds dual weight (Ws) to the objective. Default True.
-            add_prox (boolean, optional):
+            attach_prox (boolean, optional):
                 If True, adds prox terms to the objective. Default True.
             attach_smooth (int, optional):
                 If 0, no smoothing; if 1, p_value is used; if 2, p_ratio is used.
+            defer_attach (boolean, optional):
+                If True (default), the W and prox terms are not spliced into
+                the subproblem objectives here; instead they are attached at
+                the end of Iter0 (see _attach_PH_to_objective_after_iter0) so
+                that the iteration-0 solve uses exactly the user's objective --
+                no PH machinery in the expression tree. If False, the terms are
+                attached immediately (legacy behavior, needed by FWPH, which
+                snarfs the subproblem objective between PH_Prep and Iter0).
+                Agnostic (AML guest) runs are always attached immediately
+                regardless of this flag (the guest builds its xbars Param in
+                the attach callout, which solve_one needs from iteration 0).
 
         Note:
             This function constructs an Extension object if one was specified
@@ -872,7 +1013,24 @@ class PHBase(mpisppy.spopt.SPOpt):
         self.attach_Ws_and_prox()
         if attach_smooth:
             self.attach_smoothing()
-        self.attach_PH_to_objective(attach_duals, attach_prox, attach_smooth)
+        # attach_PH_to_objective sets self._prox_approx; when the attach is
+        # deferred it has not run yet, but the iteration-0 solve_loop reads
+        # this flag. Prox terms (and any prox approximation) are structurally
+        # absent in iteration 0, so the flag must read False there regardless.
+        self._prox_approx = False
+        # Remember what to attach and whether it was deferred, so Iter0 can
+        # splice the terms in after the iteration-0 solve.
+        self._attach_duals = attach_duals
+        self._attach_prox = attach_prox
+        self._attach_smooth = attach_smooth
+        # Agnostic (AML) guests build the W/prox terms -- including the guest
+        # xbars Param that solve_one copies into on every solve -- inside the
+        # guest's attach_PH_to_objective callout, which must run before the
+        # iteration-0 solve. The deferral is therefore not applied to agnostic
+        # runs; they keep the legacy attach-in-PH_Prep behavior.
+        self._deferred_ph_attach = defer_attach and (self.Ag is None)
+        if not self._deferred_ph_attach:
+            self.attach_PH_to_objective(attach_duals, attach_prox, attach_smooth)
 
 
     def options_check(self):
@@ -1110,6 +1268,15 @@ class PHBase(mpisppy.spopt.SPOpt):
         if dconvergence_detail:
             self.report_var_values_at_rank0(header="Convergence detail:", fixed_vars=False)
 
+        # Iteration 0 solved the user's original objective. Now (unless a
+        # caller already attached them in PH_Prep) splice the dual (W) and
+        # proximal terms into the subproblem objectives. Deferring to here
+        # keeps the iteration-0 model structurally identical to what the user
+        # passed in -- helpful for debugging and for LP-only solvers that
+        # cannot handle the quadratic prox term until iteration 1.
+        if getattr(self, "_deferred_ph_attach", False):
+            self._attach_PH_to_objective_after_iter0()
+
         self.reenable_W_and_prox()
 
         # Clear the dynamic-overrides overlay at the iter0→iterk
@@ -1209,15 +1376,35 @@ class PHBase(mpisppy.spopt.SPOpt):
                 and self.cylinder_rank == 0
             )
 
-            self.solve_loop(
-                solver_options=self._effective_solver_options(self._PHIter),
-                dtiming=dtiming,
-                gripe=True,
-                disable_pyomo_signal_handling=False,
-                tee=teeme,
-                verbose=verbose,
-                warmstart=True,
-            )
+            # Before the first proximal (quadratic) solve, fail fast with
+            # guidance if the solver reports it cannot handle a quadratic
+            # objective; see issue #762.
+            if self._PHIter == 1:
+                self._check_prox_solver_capability()
+
+            try:
+                self.solve_loop(
+                    solver_options=self._effective_solver_options(self._PHIter),
+                    dtiming=dtiming,
+                    gripe=True,
+                    disable_pyomo_signal_handling=False,
+                    tee=teeme,
+                    verbose=verbose,
+                    warmstart=True,
+                )
+            except Exception as e:
+                # Some solvers reject a quadratic objective by *raising* during
+                # the solve rather than returning no solution -- e.g. cbc/glpk,
+                # whose LP writer raises before the reactive check below can
+                # run. If this is the first quadratic solve, re-raise with an
+                # actionable message; see issue #762.
+                self._reraise_as_prox_capability_error(e)
+                raise
+
+            # If the first proximal solve produced nothing, the solver may not
+            # support quadratic objectives; give an actionable message
+            # (see issue #762).
+            self._check_prox_solve_succeeded()
 
             if have_extensions:
                 self.extobject.enditer()

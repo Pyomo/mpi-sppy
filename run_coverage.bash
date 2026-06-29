@@ -86,6 +86,9 @@ run_phase "test_nonant_validation (serial)" \
 run_phase "test_rho_enforcement (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_rho_enforcement.py -v
 
+run_phase "test_prox_solver_compat (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_prox_solver_compat.py -v
+
 run_phase "test_ph_main (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_main.py
 
