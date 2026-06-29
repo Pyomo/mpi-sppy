@@ -412,30 +412,29 @@ Two detection methods are available:
 An example control file is shipped at
 ``examples/sizes/config/w_oscillation.json``. It enables both detectors,
 keeps a 20-iteration window, and reports a nonant once at least half of the
-scenarios (``min_frac_to_report``) flag it::
+scenarios (``min_frac_to_report``) flag it:
 
-  {
-      "output_csv": "w_oscillations.csv",
-      "per_scenario_csv": null,
-      "warmup_iters": 5,
-      "check_every": 1,
-      "report_mode": "on_detect",
-      "min_frac_to_report": 0.5,
-      "methods": {
-          "zero_crossings": {
-              "tol": 1e-6,
-              "window": 20,
-              "thresh_w_crossings": 2,
-              "thresh_diff_crossings": 3,
-              "thresh_diffs_ratio": 0.2
-          },
-          "w_hash_recurrence": {
-              "window": 20,
-              "quantum": 1e-6,
-              "min_period": 2
-          }
-      }
-  }
+.. literalinclude:: ../../examples/sizes/config/w_oscillation.json
+   :language: json
+
+That example leaves ``per_scenario_csv`` at ``null``, so only the aggregate
+report is written. To also emit the per-(scenario, nonant) detail file --
+one row per flagged trace per check, gathered to rank 0 -- set
+``per_scenario_csv`` to a path (other keys fall back to their defaults):
+
+.. code-block:: json
+
+    {
+        "output_csv": "w_oscillations.csv",
+        "per_scenario_csv": "w_oscillations_per_scenario.csv",
+        "report_mode": "every_check",
+        "methods": {
+            "zero_crossings": {}
+        }
+    }
+
+The detail file has columns ``iteration, node, scenario, variable, method,
+w_crossings, diff_crossings, diffs_ratio, w_value``.
 
 The aggregate CSV has a header row and one row per flagged nonant per
 detection event, with columns ``iteration, node, variable, method,
