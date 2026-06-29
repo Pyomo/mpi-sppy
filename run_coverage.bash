@@ -122,6 +122,9 @@ run_phase "test_smps (serial)" \
 run_phase "test_generic_cylinders (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_generic_cylinders.py -v
 
+run_phase "test_ootb_validate (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_ootb_validate.py -v
+
 run_phase "test_jensens (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_jensens.py -v
 

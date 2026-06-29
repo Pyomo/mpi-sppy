@@ -47,7 +47,7 @@
   },
 
   "spoke_ladder": {
-    "_comment": "Ordered list of spokes to switch on as ranks allow, lowest priority number first. Only flags WIRED in mpisppy/generic/spokes.py appear here. The 3-rank minimum fills priorities 1 and 2 (one outer + one inner bound) so there is always an optimality gap. Each rung consumes one cylinder; see rank_allocation for how leftover ranks are spent.",
+    "_comment": "Ordered list of spokes to switch on as ranks allow, lowest priority number first. Only flags WIRED in mpisppy/generic/spokes.py appear here. The 3-rank minimum fills priorities 1 and 2 (one outer + one inner bound) so there is always an optimality gap. Each rung consumes one cylinder; see rank_allocation for how leftover ranks are spent. NOTE: the ORDERING of priorities 3-6 is itself a cold-start guess (no benchmark data yet); _cold_start_guess lists only real keys, so it cannot name the ordering, but treat the priority order below as provisional.",
     "rungs": [
       {"priority": 1, "flag": "--lagrangian",   "factory": "lagrangian_spoke",   "bound": "outer", "note": "Lagrangian dual bound; cheap and robust. Core."},
       {"priority": 2, "flag": "--xhatshuffle",  "factory": "xhatshuffle_spoke",  "bound": "inner", "note": "Incumbent finder over shuffled scenarios. Core."},
@@ -62,7 +62,7 @@
       "inner": 1
     },
     "max_cylinders": 7,
-    "_cold_start_guess": ["max_cylinders", "ladder ordering of priorities 3-6"]
+    "_cold_start_guess": ["max_cylinders"]
   },
 
   "rank_allocation": {
