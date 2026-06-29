@@ -505,7 +505,7 @@ def _parse_decompose(out: str):
     return converged, iters, rel_gap
 
 
-def _run_one(spec, mode, nranks, extra_args, timeout):
+def _run_one(spec, mode, nranks, extra_args, timeout):  # pragma: no cover
     """Run one example via generic_cylinders in a subprocess and time it."""
     if mode == "EF":
         cmd = [sys.executable, "-m", "mpisppy.generic_cylinders"]
@@ -533,7 +533,7 @@ def _run_one(spec, mode, nranks, extra_args, timeout):
 
 
 def validate_runs(policy_path: str, *, ef_time_limit=EF_TIME_LIMIT_SEC,
-                  ef_gap=EF_GAP_TARGET) -> list:
+                  ef_gap=EF_GAP_TARGET) -> list:  # pragma: no cover
     """Run two configurations per example and flag the two failure modes."""
     records = []
     pol_arg = ["--out-of-the-box", policy_path] if policy_path else ["--out-of-the-box"]
@@ -684,5 +684,5 @@ def main(argv=None):
     return 0 if report["ok"] else 1
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())

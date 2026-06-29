@@ -91,5 +91,17 @@ class TestCalibratedPolicy(unittest.TestCase):
                          msg="\n".join(f"{c.name}: {c.detail}" for c in fails))
 
 
+class TestCalibrationSpecs(unittest.TestCase):
+    def test_specs_use_larger_counts(self):
+        specs = cal._calibration_specs()
+        self.assertEqual({s["name"] for s in specs},
+                         {"farmer", "sizes", "aircond"})
+        farmer = next(s for s in specs if s["name"] == "farmer")
+        self.assertEqual(farmer["scens"], {"num_scens": 16})
+        self.assertEqual(cal._design_columns(
+            {"vars_cont": 2, "vars_int": 3, "nonants_int": 4, "spb": 5}, 2.0),
+            [10, (15) ** 2.0, 4])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -51,12 +51,12 @@ if __name__ == "__main__":
     # driver path below runs it. --inspect-only stops before the production run.
     from mpisppy.generic import out_of_the_box as ootb
     ootb_state = None
-    if ootb.requested(cfg):
+    if ootb.requested(cfg):  # pragma: no cover (CLI entrypoint; configure() is unit-tested)
         ootb_state = ootb.configure(module, cfg)
         if cfg.get("inspect_only") is not None:
             ootb.report_suggestions(ootb_state)  # config-time suggestions only
             sys.exit(0)
-    elif cfg.get("inspect_only") is not None:
+    elif cfg.get("inspect_only") is not None:  # pragma: no cover (CLI entrypoint)
         ootb.inspect_only_standalone(module, cfg)
         sys.exit(0)
 
@@ -163,5 +163,5 @@ if __name__ == "__main__":
 
     # Out-of-the-box: the prioritized "Suggestions" list is printed AFTER the
     # run so it can also reflect how the run went (req. 4).
-    if ootb_state is not None:
+    if ootb_state is not None:  # pragma: no cover (CLI entrypoint)
         ootb.report_suggestions(ootb_state)

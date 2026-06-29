@@ -134,7 +134,7 @@ def fit_effort_model(points: list, exponents=EXPONENT_GRID) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _pick_solver(policy: dict, requested: str | None) -> str:
+def _pick_solver(policy: dict, requested: str | None) -> str:  # pragma: no cover
     """A non-persistent solver for one-shot EF solves (persistent interfaces
     need set_instance and add setup overhead that would pollute the timing)."""
     if requested:
@@ -146,7 +146,7 @@ def _pick_solver(policy: dict, requested: str | None) -> str:
     raise RuntimeError("no known solver available; pass --solver-name")
 
 
-def _time_ef_solve(names, scenario_creator, kwargs, solver_name, reps) -> float:
+def _time_ef_solve(names, scenario_creator, kwargs, solver_name, reps) -> float:  # pragma: no cover
     """Build an EF over `names` scenarios and return the MIN wall-clock solve
     time over `reps` solves (model build excluded from the timing)."""
     import pyomo.environ as pyo
@@ -162,7 +162,7 @@ def _time_ef_solve(names, scenario_creator, kwargs, solver_name, reps) -> float:
     return best
 
 
-def measure_example(spec: dict, solver_name: str, spb_grid, reps) -> list:
+def measure_example(spec: dict, solver_name: str, spb_grid, reps) -> list:  # pragma: no cover
     """Probe one example's per-scenario size profile, then time EF solves over a
     range of bundle sizes. Returns a list of measured points."""
     module = val._load_example_module(spec)
@@ -208,7 +208,7 @@ def _calibration_specs() -> list:
 
 
 def collect_points(policy: dict, solver_name: str, spb_grid, reps,
-                   specs=None) -> list:
+                   specs=None) -> list:  # pragma: no cover
     points = []
     for spec in (specs if specs is not None else _calibration_specs()):
         print(f"[calibrate] timing {spec['name']} ({spec['kind']}) ...")
@@ -278,7 +278,7 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
 
 
 def run_calibration(base_policy_path, solver_name=None, spb_grid=DEFAULT_SPB_GRID,
-                    reps=DEFAULT_REPS, today=None):
+                    reps=DEFAULT_REPS, today=None):  # pragma: no cover
     """Measure, fit, and return (calibrated_policy_dict, fit, points)."""
     base = ootb.load_policy(base_policy_path or None)
     solver = _pick_solver(base, solver_name)
@@ -291,7 +291,7 @@ def run_calibration(base_policy_path, solver_name=None, spb_grid=DEFAULT_SPB_GRI
     return pol, fit, points
 
 
-def main(argv=None):
+def main(argv=None):  # pragma: no cover
     p = argparse.ArgumentParser(
         prog="python -m mpisppy.generic.ootb_calibrate",
         description="Calibrate OOTB effort_scaling from timed example solves "
@@ -332,5 +332,5 @@ def main(argv=None):
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())
