@@ -240,6 +240,11 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
         "example set; per reference machine/solver and approximate. "
         "seconds_per_effort_unit: modeled effort * this ~= seconds."}
     es.pop("_cold_start_guess", None)        # these numbers are now data-tuned
+    # Reconcile the prose: the coefficients are no longer cold-start guesses.
+    es["_comment"] = es.get("_comment", "").replace(
+        "All cold-start guesses; foci ship different shapes; benchmark data refines.",
+        "Coefficients are calibrated by ootb_calibrate (see _calibration); foci "
+        "may ship different shapes; more benchmark data refines further.")
 
     # Derive the EF budget in effort units from the seconds target so the budget
     # is consistent with the fitted scale (effort <= seconds / sec_per_effort).
@@ -252,6 +257,10 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
                                    f"(calibrated {today}).")
         guesses = ef.get("_cold_start_guess", [])
         ef["_cold_start_guess"] = [g for g in guesses if g != "ef_effort_budget"]
+        ef["_comment"] = ef.get("_comment", "").replace(
+            "All cold-start guesses.",
+            "ef_effort_budget is calibrated (see _calibration_note); "
+            "ef_target_seconds and ef_if_num_scens_at_most remain authored guesses.")
 
     pol["policy_version"] = today
     pol["provenance"] = (f"CALIBRATED {today} by mpisppy.generic.ootb_calibrate "

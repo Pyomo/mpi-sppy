@@ -98,7 +98,8 @@ class TestValidatorCatchesBadPolicies(unittest.TestCase):
 
     def test_cold_start_guess_names_unknown_key(self):
         # regression: a _cold_start_guess entry that is prose, not a real key.
-        self.policy["effort_scaling"]["_cold_start_guess"].append("not_a_key")
+        # (bundle_sizing stays hand-authored even after effort calibration.)
+        self.policy["bundle_sizing"]["_cold_start_guess"].append("not_a_key")
         self.assertTrue(self._fails(val.validate_static(self.policy)))
 
     def test_rho_setter_must_list_all_setters(self):
