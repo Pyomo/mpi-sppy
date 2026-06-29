@@ -25,6 +25,7 @@ MPI is used.
    :caption: Running with generic_cylinders
 
    generic_cylinders.rst
+   out_of_the_box.rst
    examples.rst
    ef.rst
    chance_constraints.rst
