@@ -377,6 +377,24 @@ guidance and HPC-specific tips, see :ref:`Install mpi4py`.
 Running the Farmer Example
 ---------------------------
 
+**Recommended first run: let mpi-sppy configure itself.** Add
+``--out-of-the-box`` and the driver introspects the environment and the model and
+picks a sensible configuration (solver, EF vs. decomposition, spokes, bundling),
+prints the equivalent explicit command line, and runs it:
+
+.. code-block:: bash
+
+   python -m mpisppy.generic_cylinders --module-name farmer --num-scens 3 \
+       --out-of-the-box
+
+Any option you set explicitly always wins, so this is a good starting point you
+can refine. (For a small, fast-solving model like farmer, OOTB will sensibly
+choose the extensive form; it decomposes for larger or harder problems.) See
+:ref:`out_of_the_box` for the full description -- effort tiers,
+``--inspect-only``, policy files, and the validation and calibration tools.
+
+The explicit forms below show what such a run is equivalent to.
+
 **Solve the EF** (does not use MPI):
 
 .. code-block:: bash

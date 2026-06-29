@@ -1671,6 +1671,64 @@ class Config(pyofig.ConfigDict):
             default=None,
         )
 
+    def ootb_args(self):
+        """Out-of-the-box (OOTB) auto-configuration flags.
+
+        Three mutually-exclusive effort tiers plus the (OOTB-independent)
+        ``--inspect-only`` dry run. See doc/designs/out_of_the_box_design.md
+        and mpisppy/generic/out_of_the_box.py.
+
+        Each tier flag takes an OPTIONAL value: the path to a policy file.
+        Declared ``domain=str, default=None`` with ``nargs='?', const=''`` so
+        there are three states -- absent (None, OOTB off), bare flag ('', use
+        the shipped default policy), and ``--out-of-the-box PATH`` (that policy
+        file). A bool domain cannot be used because pyomo forces ``store_true``
+        (which takes no value); ``str`` + ``nargs='?'`` is the supported
+        optional-value form. Detection keys on ``is not None`` (not truthiness)
+        because the bare-flag value is the empty string.
+        """
+        self.add_to_config(
+            "out_of_the_box",
+            description="Auto-configure a defensible run from the environment "
+            "and model (base tier: one probe scenario). Optional value is a "
+            "policy-file path; bare flag uses the shipped default policy. "
+            "User-supplied options always win.",
+            domain=str,
+            default=None,
+            argparse_args={"nargs": "?", "const": ""},
+        )
+        self.add_to_config(
+            "out_of_the_box_minus",
+            description="Like --out-of-the-box but instantiates nothing "
+            "(structural decisions only; cannot bundle). Optional policy-file "
+            "path; bare flag uses the default policy.",
+            domain=str,
+            default=None,
+            argparse_args={"nargs": "?", "const": ""},
+        )
+        self.add_to_config(
+            "out_of_the_box_plus",
+            description="Like --out-of-the-box but instantiates all scenarios "
+            "and does a brief timed solve for more information (NOT a tuning "
+            "tool). Optional policy-file path; bare flag uses the default "
+            "policy.",
+            domain=str,
+            default=None,
+            argparse_args={"nargs": "?", "const": ""},
+        )
+        self.add_to_config(
+            "inspect_only",
+            description="Do the inspection (and, with --out-of-the-box-plus, "
+            "the brief calibration solve), print the configuration, the "
+            "equivalent command line, and config-time suggestions, then STOP "
+            "before the production run. Optional value is an assumed MPI rank "
+            "count for HPC planning (e.g. --inspect-only 512); bare flag uses "
+            "the actually-detected rank count.",
+            domain=str,
+            default=None,
+            argparse_args={"nargs": "?", "const": "detected"},
+        )
+
     #================
     def create_parser(self,progname=None):
         # seldom used
