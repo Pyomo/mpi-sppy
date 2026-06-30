@@ -54,6 +54,14 @@ VALID_REPORT_MODES = ("on_detect", "final", "every_check")
 
 _MASK64 = (1 << 64) - 1
 
+# numpy dtype -> MPI datatype for the arrays reduced by _reduce_per_node. Keyed
+# explicitly (rather than an int/else fallback) so an unexpected dtype fails
+# loudly instead of being silently treated as a double.
+_NUMPY_TO_MPI = {
+    np.dtype(np.int32): MPI.INT,
+    np.dtype(np.float64): MPI.DOUBLE,
+}
+
 # Default parameters per method; a method's omitted JSON keys fall back here.
 _ZERO_CROSSINGS_DEFAULTS = {
     "tol": 1e-6,
@@ -122,6 +130,12 @@ def zero_crossings_detect(traj, tol=1e-6, window=None,
     diffs = [w[i + 1] - w[i] for i in range(len(w) - 1)]
     diff_crossings = count_sign_changes(diffs, tol)
 
+    # diffs_ratio is a damping check: split |ΔW| into a front (older) and back
+    # (newer) half and compare their mean step sizes. If the W swings are
+    # shrinking over time (converging), the back-half mean is small relative to
+    # the front-half mean and the ratio is well below 1; if the swings are not
+    # damping out (sustained oscillation), the ratio stays near or above 1. A
+    # high ratio therefore signals oscillation that is failing to settle.
     absdiffs = [abs(d) for d in diffs]
     half = len(absdiffs) // 2
     front = absdiffs[:half]
@@ -486,7 +500,12 @@ class WOscillationMonitor(Extension):
             comm = self.opt.comms[ndn]
             pos = np.array(positions)
             for (a, op), out in zip(arrays_and_ops, outs):
-                mpitype = MPI.INT if a.dtype == np.int32 else MPI.DOUBLE
+                try:
+                    mpitype = _NUMPY_TO_MPI[a.dtype]
+                except KeyError:
+                    raise ValueError(
+                        f"_reduce_per_node got array of unsupported dtype "
+                        f"{a.dtype}; add it to _NUMPY_TO_MPI.")
                 loc = np.ascontiguousarray(a[pos])
                 res = np.zeros(len(pos), a.dtype)
                 comm.Allreduce([loc, mpitype], [res, mpitype], op=op)
