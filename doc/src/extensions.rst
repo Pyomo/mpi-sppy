@@ -354,144 +354,15 @@ diagnostic tool intended for tuning rho and convergence behavior; it
 adds time and memory and is not recommended for production runs.
 
 
-.. _w_oscillation:
-
 w_oscillation
 ^^^^^^^^^^^^^
 
 The ``w_oscillation`` extension (``mpisppy.extensions.w_oscillation``)
-*detects* oscillation / cycling in the PH dual weight (W) vector, reports
-it to a CSV, and can optionally *interrupt* it. Oscillating (sign-flipping,
-non-damping) weights are a common, convergence-killing symptom for
-mixed-integer problems. With only ``--detect-W-oscillations`` the extension
-is **pure observation**: it changes no rho values and fixes no variables, so
-a run with detection enabled follows exactly the same optimization trajectory
-as one without. With ``--interrupt-W-oscillations`` it additionally acts on
-the detected oscillation (see `Interrupting oscillation`_ below).
-
-For a broader view of how W evolves -- moving means, standard deviations,
-and coefficient of variation across all nonant/scenario traces -- use the
-:ref:`wtracker_extension`; ``w_oscillation`` is the focused layer that
-flags the specific traces that are *cycling*.
-
-From ``generic_cylinders.py``, enable it with::
-
-  --detect-W-oscillations <control.json>
-
-The JSON control file selects and parameterizes the detection methods and
-controls the output. Keys:
-
-- ``output_csv`` (required) -- the per-nonant aggregate report; written by
-  cylinder rank 0.
-- ``per_scenario_csv`` (optional) -- a per-(scenario, nonant) detail file
-  (gathered to rank 0); off by default.
-- ``warmup_iters`` -- do not evaluate until this many W samples exist
-  (default 5).
-- ``check_every`` -- evaluate the detectors every this many iterations
-  after warm-up (default 1).
-- ``report_mode`` -- ``on_detect`` (a row the first time a nonant is
-  flagged; the default), ``every_check``, or ``final`` (one report at the
-  end).
-- ``min_scenarios_to_report`` / ``min_frac_to_report`` -- a nonant is
-  reported once at least this many scenarios (or this fraction of them)
-  flag it.
-- ``methods`` -- a (non-empty) object selecting one or both detectors;
-  per-method keys override documented defaults.
-
-Two detection methods are available:
-
-- ``zero_crossings`` -- a port of PySP's ``sorgw`` plugin: per
-  (scenario, nonant) it counts sign changes of W and of the consecutive
-  differences, plus a back-half/front-half damping ratio of ``|ΔW|``, and
-  flags a trace when any of ``thresh_w_crossings`` (default 2),
-  ``thresh_diff_crossings`` (default 3), or ``thresh_diffs_ratio``
-  (default 0.2) is met.
-- ``w_hash_recurrence`` -- the Watson-Woodruff "Progressive Hedging
-  Innovations" (Computational Management Science, 2011) §2.4 cycle
-  detector: it hashes the per-scenario W vector for each nonant and flags
-  a *recurrence* of that vector (a genuine cycle of period
-  ``min_period`` or more, so convergence is not mistaken for a cycle).
-  Keys: ``window`` (default 20), ``quantum`` (default 1e-6),
-  ``min_period`` (default 2).
-
-An example control file is shipped at
-``examples/sizes/config/w_oscillation.json``. It enables both detectors,
-keeps a 20-iteration window, and reports a nonant once at least half of the
-scenarios (``min_frac_to_report``) flag it:
-
-.. literalinclude:: ../../examples/sizes/config/w_oscillation.json
-   :language: json
-
-That example leaves ``per_scenario_csv`` at ``null``, so only the aggregate
-report is written. To also emit the per-(scenario, nonant) detail file --
-one row per flagged trace per check, gathered to rank 0 -- set
-``per_scenario_csv`` to a path (other keys fall back to their defaults):
-
-.. code-block:: json
-
-    {
-        "output_csv": "w_oscillations.csv",
-        "per_scenario_csv": "w_oscillations_per_scenario.csv",
-        "report_mode": "every_check",
-        "methods": {
-            "zero_crossings": {}
-        }
-    }
-
-The detail file has columns ``iteration, node, scenario, variable, method,
-w_crossings, diff_crossings, diffs_ratio, w_value``.
-
-The aggregate CSV has a header row and one row per flagged nonant per
-detection event, with columns ``iteration, node, variable, method,
-num_scenarios_total, num_scenarios_flagged, max_w_crossings,
-max_diff_crossings, max_diffs_ratio, cycle_period``. The report is
-independent of how scenarios are distributed across MPI ranks.
-
-Interrupting oscillation
-""""""""""""""""""""""""
-
-Passing ``--interrupt-W-oscillations <file>`` makes the extension *act* on
-the nonants it flags, to break the cycle. Interruption needs the detection
-*engine* to find the cycling nonants, but writing the cycling *report* (CSV)
-is **opt-in**: a pure ``--interrupt-W-oscillations`` run announces each
-interruption with a log line and writes **no** report. The report is written
-only when you *also* ask for detection -- via ``--detect-W-oscillations`` or a
-``detect`` block in the interrupt file (which then also configures the engine).
-Without either, a built-in default detector drives the actions silently. The
-interrupt JSON keys are:
-
-- ``action`` (required) -- ``rho_reduction``, ``slam``, or ``both``. The
-  recommendation is to choose one; ``both`` simply applies each in turn (once
-  slamming has fixed a nonant, a subsequent rho change on it is inert).
-- ``trigger`` -- when to act: ``start_iter`` (default 5), then every
-  ``iters_between_actions`` iterations (default 3); a nonant is acted on once
-  at least ``min_scenarios_flagged`` (default 1) scenarios flag it.
-- ``rho_reduction`` (for ``rho_reduction`` / ``both``) -- multiply each
-  flagged nonant's rho by ``factor`` (default 0.5, must be in ``(0, 1)``),
-  floored at ``min_rho`` (default 1e-3, must be ``> 0`` since PH requires a
-  positive rho). Reducing rho relaxes the proximal pull that drives the
-  overshoot.
-- ``slam`` (for ``slam`` / ``both``) -- ``directives_file``, a
-  :ref:`slammer <slammer>`-style directives CSV. The extension drives the
-  slammer's action layer directly on the flagged nonants (rather than the
-  slammer's own iteration-count trigger). Watson-Woodruff §2.4's native
-  remedy -- fixing a cycling variable to its per-scenario maximum -- is just a
-  directives file of ``...,max,...``.
-
-An example is shipped at
-``examples/sizes/config/w_oscillation_interrupt.json``; pair it with the
-detection example, e.g.::
-
-  --detect-W-oscillations examples/sizes/config/w_oscillation.json
-  --interrupt-W-oscillations examples/sizes/config/w_oscillation_interrupt.json
-
-.. literalinclude:: ../../examples/sizes/config/w_oscillation_interrupt.json
-   :language: json
-
-Interruption is for synchronous PH; like detection it is a hub extension and
-leaves the spokes untouched.
-
-See ``doc/designs/w_oscillation_design.md`` for the full design.
+*detects* oscillation / cycling in the PH dual weight (W) vector and can
+optionally *interrupt* it (by reducing rho and/or slamming). Because both
+detection and interruption have a fair amount of configuration, they have
+their own page: :doc:`w_oscillation`. It is activated with
+``--detect-W-oscillations`` and/or ``--interrupt-W-oscillations``.
 
 
 gradient_extension
