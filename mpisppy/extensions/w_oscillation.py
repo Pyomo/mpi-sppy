@@ -51,6 +51,7 @@ import numpy as np
 import pyomo.environ as pyo
 
 import mpisppy.MPI as MPI
+from mpisppy import global_toc
 from mpisppy.extensions.extension import Extension
 from mpisppy.extensions.slammer import Slammer
 
@@ -438,6 +439,16 @@ class WOscillationMonitor(Extension):
         elif opts.get("interrupt_json"):
             self._interrupt_cfg = parse_interrupt_config(opts["interrupt_json"])
 
+        # Interruption needs the detection *engine* to know which nonants are
+        # cycling, but writing the cycling *report* (CSV) is opt-in.  The report
+        # is written only when detection was explicitly requested -- via
+        # --detect-W-oscillations / a detect_config, or a "detect" block in the
+        # interrupt file.  A pure --interrupt-W-oscillations run runs the engine
+        # (to drive the actions) but writes no report; its activity is announced
+        # with a global_toc instead (see _apply_interruption).
+        self._report_enabled = self.cfg is not None or (
+            self._interrupt_cfg is not None and "detect" in self._interrupt_cfg)
+
         # Interruption implies detection: derive a detection config if none was
         # supplied directly.
         if self.cfg is None:
@@ -538,7 +549,7 @@ class WOscillationMonitor(Extension):
             })
             self._slammer.pre_iter0()
 
-        if self._is_writer:
+        if self._is_writer and self._report_enabled:
             self._agg_file = open(self.cfg["output_csv"], "w", newline="")
             self._agg_writer = csv.writer(self._agg_file)
             self._agg_writer.writerow(_AGG_COLUMNS)
@@ -583,15 +594,18 @@ class WOscillationMonitor(Extension):
     def miditer(self):
         self._capture()
         phiter = self.opt._PHIter
-        detect_due = self._detect_due(phiter)
+        # The report is opt-in (self._report_enabled); a detection check only
+        # matters when reporting is on.  The engine still runs whenever an
+        # interruption action is due, to find the cycling nonants to act on.
+        report_due = self._report_enabled and self._detect_due(phiter)
         act_due = self._interrupt_cfg is not None and self._act_due(phiter)
-        if not (detect_due or act_due):
+        if not (report_due or act_due):
             return
         # Evaluate the detectors (always populates the rank-identical flagged
-        # counts the interrupter reads; emits report rows only on a detection
-        # check).  The decision to evaluate is a pure function of phiter, so the
+        # counts the interrupter reads; emits report rows only when a report is
+        # due).  The decision to evaluate is a pure function of phiter, so the
         # collective reductions inside fire symmetrically on every rank.
-        flagged = self._evaluate(phiter, emit=detect_due)
+        flagged = self._evaluate(phiter, emit=report_due)
         if act_due:
             self._apply_interruption(phiter, flagged)
 
@@ -725,14 +739,18 @@ class WOscillationMonitor(Extension):
         n_slam = self._slam_targets(targets) if action in ("slam", "both") \
             else 0
         self._n_action_events += 1
-        if self.verbose and self.opt.cylinder_rank == 0:
-            bits = []
-            if action in ("rho_reduction", "both"):
-                bits.append(f"reduced rho on {n_rho} nonant(s)")
-            if action in ("slam", "both"):
-                bits.append(f"slammed {n_slam} nonant(s)")
-            print(f"(rank0) WOscillationMonitor[iter {phiter}]: "
-                  f"{len(targets)} flagged; " + "; ".join(bits))
+        # Announce the interruption activity unconditionally (rank-0 gated) --
+        # this is the only output a pure --interrupt-W-oscillations run produces;
+        # the cycling report (CSV) is opt-in (self._report_enabled).
+        bits = []
+        if action in ("rho_reduction", "both"):
+            bits.append(f"reduced rho on {n_rho} nonant(s)")
+        if action in ("slam", "both"):
+            bits.append(f"slammed {n_slam} nonant(s)")
+        global_toc(
+            f"W-oscillation interruption [iter {phiter}]: {len(targets)} "
+            f"nonant(s) flagged; " + "; ".join(bits),
+            self.opt.cylinder_rank == 0)
 
     def _reduce_rho(self, targets):
         """Multiply each flagged nonant's rho by ``factor`` (floored at
@@ -840,7 +858,7 @@ class WOscillationMonitor(Extension):
 
     # ------------------------------------------------------------------ #
     def post_everything(self):
-        if self.cfg["report_mode"] == "final":
+        if self._report_enabled and self.cfg["report_mode"] == "final":
             self._evaluate(self.opt._PHIter)
         if self._is_writer:
             if self._agg_file is not None:
@@ -848,8 +866,12 @@ class WOscillationMonitor(Extension):
             if self._scen_file is not None:
                 self._scen_file.close()
         if self.verbose and self.opt.cylinder_rank == 0:
-            msg = (f"(rank0) WOscillationMonitor: {self._n_flag_events} "
-                   f"oscillation report event(s); see {self.cfg['output_csv']}")
+            if self._report_enabled:
+                msg = (f"(rank0) WOscillationMonitor: {self._n_flag_events} "
+                       f"oscillation report event(s); see "
+                       f"{self.cfg['output_csv']}")
+            else:
+                msg = "(rank0) WOscillationMonitor: report disabled"
             if self._interrupt_cfg is not None:
                 msg += (f"; {self._n_action_events} interruption action "
                         f"event(s) [{self._interrupt_cfg['action']}]")

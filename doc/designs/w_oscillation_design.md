@@ -92,11 +92,18 @@ Two flags on the generic driver (and any Config-based driver), each taking a
 | Flag | Effect |
 |---|---|
 | `--detect-W-oscillations PATH` | Activates the extension in **detect+report** mode; controls in the JSON at `PATH`. |
-| `--interrupt-W-oscillations PATH` | (PR2) Activates **interruption**; controls in the JSON at `PATH`. Implies detection — if `--detect-W-oscillations` is absent, a default detector config is used (or the interrupt JSON may carry a `detect` block, see §9). |
+| `--interrupt-W-oscillations PATH` | (PR2) Activates **interruption**; controls in the JSON at `PATH`. Runs the detection *engine* to find the cycling nonants, but **does not write the report** unless detection is *also* requested — via `--detect-W-oscillations` or a `detect` block in the interrupt JSON. With neither, a default detector config drives the actions and **no CSV is written** (each interruption is announced with a `global_toc` line instead). |
 
 Presence of a flag activates the extension (mirroring how
 `--slamming-directives-file` activates the Slammer). Neither flag ⇒ extension
 never constructed ⇒ identical behavior to today.
+
+**Reporting is opt-in.** Interruption *implies the detection engine* (it must
+know which nonants are cycling), but it does **not** imply the *report*: the
+CSV is written only when the user explicitly asks for detection. A pure
+`--interrupt-W-oscillations` run produces only a per-event `global_toc`
+("`W-oscillation interruption [iter k]: …`"); to also get the cycling CSV, add
+`--detect-W-oscillations` or a `detect` block.
 
 ### 2.1 Detection JSON schema (PR1)
 
@@ -479,13 +486,16 @@ Following the Slammer wiring precisely:
 - **PR2 — action layers fire end-to-end:** the shipped tests cover the
   interrupt-config validators (action / factor-range / positive-`min_rho` /
   slam-needs-a-file / trigger defaults), the `reduced_rho` floor, and an
-  end-to-end farmer run with `--interrupt-W-oscillations` asserting that **both**
-  the rho-reduction and the slam action actually execute through a real PH loop
-  (and the detection CSV is still written). The slam path's per-node min/max
-  `Allreduce` was exercised under `mpiexec -np 2` to confirm it is reached
-  symmetrically (no deadlock; slam value = the global per-scenario max). A
-  cycle-tuned *numeric*-improvement assertion (fewer iters to a target gap) is a
-  natural follow-up but is omitted here to avoid a flaky test.
+  end-to-end farmer run with `--interrupt-W-oscillations` (with a `detect`
+  block, so the report *is* requested) asserting that **both** the
+  rho-reduction and the slam action actually execute through a real PH loop and
+  the detection CSV is written. A second end-to-end run with **no** detection
+  request asserts the **opt-in** rule: the engine still drives the actions but
+  **no report CSV is written**. The slam path's per-node min/max `Allreduce`
+  was exercised under `mpiexec -np 2` to confirm it is reached symmetrically
+  (no deadlock; slam value = the global per-scenario max). A cycle-tuned
+  *numeric*-improvement assertion (fewer iters to a target gap) is a natural
+  follow-up but is omitted here to avoid a flaky test.
 - **Coverage harness:** add `mpisppy/tests/test_w_oscillation.py` to
   `run_coverage.bash` **and** `.github/workflows/test_pr_and_main.yml` in the
   **same commit** (else codecov/patch reports 0%).

@@ -451,10 +451,13 @@ Interrupting oscillation
 """"""""""""""""""""""""
 
 Passing ``--interrupt-W-oscillations <file>`` makes the extension *act* on
-the nonants it flags, to break the cycle. Interruption implies detection, so
-the detection report is still written; if ``--detect-W-oscillations`` is not
-also given, the detection configuration is taken from an optional ``detect``
-block inside the interrupt file, otherwise a default detector is used. The
+the nonants it flags, to break the cycle. Interruption needs the detection
+*engine* to find the cycling nonants, but writing the cycling *report* (CSV)
+is **opt-in**: a pure ``--interrupt-W-oscillations`` run announces each
+interruption with a log line and writes **no** report. The report is written
+only when you *also* ask for detection -- via ``--detect-W-oscillations`` or a
+``detect`` block in the interrupt file (which then also configures the engine).
+Without either, a built-in default detector drives the actions silently. The
 interrupt JSON keys are:
 
 - ``action`` (required) -- ``rho_reduction``, ``slam``, or ``both``. The

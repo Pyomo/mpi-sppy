@@ -346,6 +346,50 @@ class TestEndToEndInterrupt(unittest.TestCase):
             self.assertIn("DevotedAcreage[SUGAR_BEETS", out)
             self.assertIn("reduced rho on", out)
 
+    def test_interrupt_without_request_writes_no_report(self):
+        """A pure --interrupt-W-oscillations run (no --detect flag, no detect
+        block) runs the detection engine to drive the actions but writes **no**
+        cycling report CSV; the report is opt-in."""
+        with tempfile.TemporaryDirectory() as tmp:
+            ctrl = os.path.join(tmp, "interrupt.json")
+            with open(ctrl, "w") as f:
+                json.dump({
+                    "action": "rho_reduction",
+                    "trigger": {"start_iter": 3, "iters_between_actions": 1},
+                    "rho_reduction": {"factor": 0.5, "min_rho": 1e-3},
+                }, f)
+
+            argv = [
+                "generic_cylinders",
+                "--module-name", "mpisppy.tests.examples.farmer",
+                "--num-scens", "3",
+                "--solver-name", solver_name,
+                "--max-solver-threads", "1",
+                "--max-iterations", "6",
+                "--default-rho", "1",
+                "--verbose",
+                "--interrupt-W-oscillations", ctrl,
+            ]
+            # The default detector's output_csv is a bare filename, so run from
+            # the temp dir and confirm no such file is created there.
+            cwd = os.getcwd()
+            buf = io.StringIO()
+            try:
+                os.chdir(tmp)
+                with patch.object(sys, "argv", argv), \
+                        contextlib.redirect_stdout(buf):
+                    runpy.run_module("mpisppy.generic_cylinders",
+                                     run_name="__main__")
+            finally:
+                os.chdir(cwd)
+            out = buf.getvalue()
+
+            self.assertFalse(
+                os.path.exists(os.path.join(tmp, "w_oscillations.csv")),
+                "report CSV was written without an explicit detection request")
+            # The opt-in report being off is reported in the verbose summary.
+            self.assertIn("report disabled", out)
+
 
 if __name__ == "__main__":
     unittest.main()
