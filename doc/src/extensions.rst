@@ -461,8 +461,8 @@ Without either, a built-in default detector drives the actions silently. The
 interrupt JSON keys are:
 
 - ``action`` (required) -- ``rho_reduction``, ``slam``, or ``both``. The
-  recommendation is to choose one; ``both`` simply applies each in turn (a
-  nonant slamming has fixed is unaffected by a subsequent rho change).
+  recommendation is to choose one; ``both`` simply applies each in turn (once
+  slamming has fixed a nonant, a subsequent rho change on it is inert).
 - ``trigger`` -- when to act: ``start_iter`` (default 5), then every
   ``iters_between_actions`` iterations (default 3); a nonant is acted on once
   at least ``min_scenarios_flagged`` (default 1) scenarios flag it.
