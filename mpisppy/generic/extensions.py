@@ -45,6 +45,9 @@ def configure_extensions(hub_dict, module, cfg):
     if cfg.slamming_directives_file is not None:
         vanilla.add_slammer(hub_dict, cfg)
 
+    if cfg.detect_W_oscillations is not None:
+        vanilla.add_w_oscillation(hub_dict, cfg)
+
     if cfg.grad_rho:
         from mpisppy.extensions.grad_rho import GradRho
         ext_classes.append(GradRho)

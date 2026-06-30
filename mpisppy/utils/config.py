@@ -753,6 +753,20 @@ class Config(pyofig.ConfigDict):
                            domain=int,
                            default=None)
 
+    def w_oscillation_args(self):
+        # Detect oscillation/cycling in the PH W vector and report it to a CSV
+        # (see doc/designs/w_oscillation_design.md). The WOscillationMonitor
+        # extension is activated iff detect_W_oscillations is set; with no
+        # option a run behaves exactly as it does today (pure observation, no
+        # algorithm change). Interruption is a separate piece of work.
+        self.add_to_config("detect_W_oscillations",
+                           description="path to a JSON control file for "
+                           "W-oscillation detection; its presence activates the "
+                           "WOscillationMonitor extension and CSV reporting "
+                           "(default None)",
+                           domain=str,
+                           default=None)
+
     def reduced_costs_rho_args(self):
         self.add_to_config("reduced_costs_rho",
                            description="DEPRECATED and removed (2026-06-14); "

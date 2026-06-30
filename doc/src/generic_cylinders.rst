@@ -217,6 +217,8 @@ Some extensions can be activated directly from the command line:
 - ``--wtracker`` -- Track W (Lagrange-multiplier) values per iteration
   and write a convergence report at the end of the run
   (see :ref:`wtracker_extension`)
+- ``--detect-W-oscillations <file>`` -- Detect oscillation/cycling in the
+  W vector and report it to a CSV (see :ref:`w_oscillation`)
 
 See :ref:`Extensions` for details on available extensions.
 
