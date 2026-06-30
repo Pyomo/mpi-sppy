@@ -6,13 +6,18 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-"""Tests for the W-oscillation detection extension (PR1).
+"""Tests for the W-oscillation detection and interruption extension.
 
 The pure detector logic (zero-crossing counting, the W-vector signature, and the
-recurrence tracker) is tested directly with no MPI; an end-to-end test confirms
-the ``--detect-W-oscillations`` flag wires the extension in and writes the CSV.
+recurrence tracker) and the config validators (detection and interruption) are
+tested directly with no MPI; end-to-end tests confirm that
+``--detect-W-oscillations`` wires the extension in and writes the CSV (PR1) and
+that ``--interrupt-W-oscillations`` drives the rho-reduction and slam action
+layers through a real PH run (PR2).
 """
+import contextlib
 import csv
+import io
 import json
 import os
 import sys
@@ -196,6 +201,150 @@ class TestEndToEnd(unittest.TestCase):
                 self.assertIn(row[3], wosc.VALID_METHODS)
                 # full variable name, not an index tuple
                 self.assertIn("DevotedAcreage", row[2])
+
+
+class TestReducedRho(unittest.TestCase):
+    def test_multiplies(self):
+        self.assertEqual(wosc.reduced_rho(1.0, 0.5, 1e-3), 0.5)
+        self.assertAlmostEqual(wosc.reduced_rho(0.1, 0.1, 1e-3), 0.01)
+
+    def test_floors_at_min_rho(self):
+        # below the floor after scaling -> clamped to min_rho (stays > 0)
+        self.assertEqual(wosc.reduced_rho(1e-3, 0.5, 1e-3), 1e-3)
+        self.assertEqual(wosc.reduced_rho(1e-6, 0.5, 1e-3), 1e-3)
+
+
+class TestInterruptConfigValidation(unittest.TestCase):
+    def test_action_required_and_known(self):
+        with self.assertRaises(ValueError):
+            wosc.validate_interrupt_config({})
+        with self.assertRaises(ValueError):
+            wosc.validate_interrupt_config({"action": "bogus"})
+
+    def test_factor_must_reduce(self):
+        for bad in (0.0, 1.0, 1.5, -0.5):
+            with self.assertRaises(ValueError):
+                wosc.validate_interrupt_config(
+                    {"action": "rho_reduction",
+                     "rho_reduction": {"factor": bad, "min_rho": 1e-3}})
+
+    def test_min_rho_must_be_positive(self):
+        with self.assertRaises(ValueError):
+            wosc.validate_interrupt_config(
+                {"action": "rho_reduction",
+                 "rho_reduction": {"factor": 0.5, "min_rho": 0.0}})
+
+    def test_slam_requires_directives_file(self):
+        with self.assertRaises(ValueError):
+            wosc.validate_interrupt_config({"action": "slam"})
+        with self.assertRaises(ValueError):
+            wosc.validate_interrupt_config({"action": "slam", "slam": {}})
+
+    def test_both_requires_both_sections(self):
+        # 'both' needs a valid slam directives file even with rho defaults
+        with self.assertRaises(ValueError):
+            wosc.validate_interrupt_config({"action": "both"})
+        cfg = wosc.validate_interrupt_config(
+            {"action": "both", "slam": {"directives_file": "d.csv"}})
+        self.assertIn("rho_reduction", cfg)
+        self.assertIn("slam", cfg)
+
+    def test_trigger_defaults_and_validation(self):
+        cfg = wosc.validate_interrupt_config({"action": "rho_reduction"})
+        self.assertEqual(cfg["trigger"]["start_iter"], 5)
+        self.assertEqual(cfg["trigger"]["iters_between_actions"], 3)
+        self.assertEqual(cfg["rho_reduction"]["factor"], 0.5)
+        with self.assertRaises(ValueError):
+            wosc.validate_interrupt_config(
+                {"action": "rho_reduction",
+                 "trigger": {"iters_between_actions": 0}})
+
+    def test_detect_block_parsed(self):
+        cfg = wosc.validate_interrupt_config({
+            "action": "rho_reduction",
+            "detect": {"output_csv": "x.csv",
+                       "methods": {"zero_crossings": {}}},
+        })
+        self.assertIn("detect", cfg)
+        self.assertEqual(cfg["detect"]["output_csv"], "x.csv")
+
+    def test_default_detect_config(self):
+        d = wosc.default_detect_config()
+        self.assertEqual(d["output_csv"], "w_oscillations.csv")
+        self.assertIn("zero_crossings", d["methods"])
+        self.assertIn("w_hash_recurrence", d["methods"])
+
+
+@unittest.skipIf(not solver_available, "no MIP solver available")
+class TestEndToEndInterrupt(unittest.TestCase):
+    """--interrupt-W-oscillations drives the rho-reduction and slam actions.
+
+    Uses only the interrupt flag (no --detect-W-oscillations) with an inline
+    ``detect`` block, so it also exercises the "interruption implies detection"
+    path.  Thresholds are set low so the detector flags the acreage nonants
+    early; the slam directive targets a single crop and fixes it to its lower
+    bound (0 acres), which is always feasible for farmer."""
+
+    def test_interrupt_flag_reduces_rho_and_slams(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_csv = os.path.join(tmp, "wosc.csv")
+            slam_csv = os.path.join(tmp, "slam.csv")
+            # farmer's crop names carry a group suffix (SUGAR_BEETS0, ...), so
+            # match with a wildcard ('[' / ']' are literal in slam globs).
+            with open(slam_csv, "w") as f:
+                f.write("name,can_slam,directions,priority\n")
+                f.write("DevotedAcreage[SUGAR_BEETS*],1,lb,1\n")
+            ctrl = os.path.join(tmp, "interrupt.json")
+            with open(ctrl, "w") as f:
+                json.dump({
+                    "action": "both",
+                    "trigger": {"min_scenarios_flagged": 1, "start_iter": 3,
+                                "iters_between_actions": 1},
+                    "rho_reduction": {"factor": 0.5, "min_rho": 1e-3},
+                    "slam": {"directives_file": slam_csv},
+                    "detect": {
+                        "output_csv": out_csv,
+                        "warmup_iters": 2,
+                        "report_mode": "every_check",
+                        "methods": {
+                            "zero_crossings": {"thresh_w_crossings": 1,
+                                               "thresh_diff_crossings": 1,
+                                               "thresh_diffs_ratio": 0.0},
+                        },
+                    },
+                }, f)
+
+            argv = [
+                "generic_cylinders",
+                "--module-name", "mpisppy.tests.examples.farmer",
+                "--num-scens", "3",
+                "--solver-name", solver_name,
+                "--max-solver-threads", "1",
+                "--max-iterations", "8",
+                "--default-rho", "1",
+                "--verbose",
+                "--interrupt-W-oscillations", ctrl,
+            ]
+            buf = io.StringIO()
+            with patch.object(sys, "argv", argv), \
+                    contextlib.redirect_stdout(buf):
+                runpy.run_module("mpisppy.generic_cylinders",
+                                 run_name="__main__")
+            out = buf.getvalue()
+
+            # Detection still happened (implied by interruption): CSV written.
+            self.assertTrue(os.path.exists(out_csv),
+                            "detection CSV not written under interrupt mode")
+            with open(out_csv) as f:
+                rows = list(csv.reader(f))
+            self.assertEqual(rows[0], wosc._AGG_COLUMNS)
+            self.assertTrue(any("DevotedAcreage" in r[2] for r in rows[1:]))
+
+            # Both action layers fired: the Slammer slammed the targeted crop
+            # and the monitor reduced rho on the flagged nonants.
+            self.assertIn("Slammer: slammed", out)
+            self.assertIn("DevotedAcreage[SUGAR_BEETS", out)
+            self.assertIn("reduced rho on", out)
 
 
 if __name__ == "__main__":

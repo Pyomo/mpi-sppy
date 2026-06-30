@@ -1,9 +1,10 @@
 # W-oscillation detection and interruption — design
 
-**Status:** PR1 *detection + reporting* (pure observation, no behavior
-change) is implemented in ``mpisppy/extensions/w_oscillation.py``; PR2
-*interruption* (acts on the detector to break the oscillation) is not yet
-started. Shipped as **two review-sized PRs**.
+**Status:** both PRs implemented in ``mpisppy/extensions/w_oscillation.py``.
+PR1 *detection + reporting* is pure observation (no behavior change); PR2
+*interruption* (``--interrupt-W-oscillations``: rho reduction and/or slamming,
+the latter via the existing Slammer action layer) acts on the detector to
+break the oscillation. Shipped as **two review-sized PRs**.
 **Author:** dlw (captured with Claude Code assistance)
 **Last updated:** 2026-06-30
 
@@ -475,9 +476,16 @@ Following the Slammer wiring precisely:
 - **MPI (`mpiexec -np 2`/`3`):** the same induced-oscillation run; assert the
   rank-0 CSV is **independent of scenario→rank distribution** (the reduction
   is correct).
-- **PR2 — improvement:** on the cycle-tuned model, assert the interrupted run
-  improves on the plain run (fewer iters to a target gap, or better gap at the
-  iteration cap).
+- **PR2 — action layers fire end-to-end:** the shipped tests cover the
+  interrupt-config validators (action / factor-range / positive-`min_rho` /
+  slam-needs-a-file / trigger defaults), the `reduced_rho` floor, and an
+  end-to-end farmer run with `--interrupt-W-oscillations` asserting that **both**
+  the rho-reduction and the slam action actually execute through a real PH loop
+  (and the detection CSV is still written). The slam path's per-node min/max
+  `Allreduce` was exercised under `mpiexec -np 2` to confirm it is reached
+  symmetrically (no deadlock; slam value = the global per-scenario max). A
+  cycle-tuned *numeric*-improvement assertion (fewer iters to a target gap) is a
+  natural follow-up but is omitted here to avoid a flaky test.
 - **Coverage harness:** add `mpisppy/tests/test_w_oscillation.py` to
   `run_coverage.bash` **and** `.github/workflows/test_pr_and_main.yml` in the
   **same commit** (else codecov/patch reports 0%).
@@ -493,10 +501,14 @@ CSV writer (rank 0), unit + reduction + end-to-end + MPI tests, and a user-doc
 page cross-referencing wtracker. Pure observation ⇒ green on its own,
 backward compatible.
 
-**PR2 — interruption.**
+**PR2 — interruption (implemented).**
 `--interrupt-W-oscillations` flag and JSON, the rho-reduction action, the
-slam action (calling the Slammer action layer), the trigger layer, the
-`both` = apply-both rule (§9), and an improvement test. Builds on PR1's engine.
+slam action (calling the Slammer action layer via a small new public
+`Slammer.slam_nonant(ndn_i)` entry point — the action layer §7 anticipated),
+the trigger layer, and the `both` = apply-both rule (§9). Builds on PR1's
+engine: the detectors now also return the rank-identical flagged set the
+interrupter acts on. Backward compatible — with neither flag the extension is
+never built, and a detect-only run is byte-identical to PR1.
 
 Each PR is review-sized and green independently (per the project's
 phased-PR-for-redesigns practice).

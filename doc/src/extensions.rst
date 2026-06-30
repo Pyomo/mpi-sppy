@@ -26,6 +26,9 @@ command-line flags:
 - ``--slamming-directives-file <file>`` -- activates the slammer extension
 - ``--detect-W-oscillations <file>`` -- activates W-oscillation detection
   (see :ref:`w_oscillation`)
+- ``--interrupt-W-oscillations <file>`` -- activates W-oscillation
+  interruption (rho reduction and/or slamming; implies detection;
+  see :ref:`w_oscillation`)
 - ``--mipgaps-json <file>`` -- activates the mipgapper extension
 - ``--user-defined-extensions <module>`` -- loads a custom extension
 - ``--grad-rho`` -- activates gradient-based rho (see :ref:`rho_setting`)
@@ -357,12 +360,14 @@ w_oscillation
 ^^^^^^^^^^^^^
 
 The ``w_oscillation`` extension (``mpisppy.extensions.w_oscillation``)
-*detects* oscillation / cycling in the PH dual weight (W) vector and
-reports it to a CSV. Oscillating (sign-flipping, non-damping) weights are
-a common, convergence-killing symptom for mixed-integer problems. The
-extension is **pure observation**: it changes no rho values and fixes no
-variables, so a run with detection enabled follows exactly the same
-optimization trajectory as one without.
+*detects* oscillation / cycling in the PH dual weight (W) vector, reports
+it to a CSV, and can optionally *interrupt* it. Oscillating (sign-flipping,
+non-damping) weights are a common, convergence-killing symptom for
+mixed-integer problems. With only ``--detect-W-oscillations`` the extension
+is **pure observation**: it changes no rho values and fixes no variables, so
+a run with detection enabled follows exactly the same optimization trajectory
+as one without. With ``--interrupt-W-oscillations`` it additionally acts on
+the detected oscillation (see `Interrupting oscillation`_ below).
 
 For a broader view of how W evolves -- moving means, standard deviations,
 and coefficient of variation across all nonant/scenario traces -- use the
@@ -441,6 +446,47 @@ detection event, with columns ``iteration, node, variable, method,
 num_scenarios_total, num_scenarios_flagged, max_w_crossings,
 max_diff_crossings, max_diffs_ratio, cycle_period``. The report is
 independent of how scenarios are distributed across MPI ranks.
+
+Interrupting oscillation
+""""""""""""""""""""""""
+
+Passing ``--interrupt-W-oscillations <file>`` makes the extension *act* on
+the nonants it flags, to break the cycle. Interruption implies detection, so
+the detection report is still written; if ``--detect-W-oscillations`` is not
+also given, the detection configuration is taken from an optional ``detect``
+block inside the interrupt file, otherwise a default detector is used. The
+interrupt JSON keys are:
+
+- ``action`` (required) -- ``rho_reduction``, ``slam``, or ``both``. The
+  recommendation is to choose one; ``both`` simply applies each in turn (a
+  nonant slamming has fixed is unaffected by a subsequent rho change).
+- ``trigger`` -- when to act: ``start_iter`` (default 5), then every
+  ``iters_between_actions`` iterations (default 3); a nonant is acted on once
+  at least ``min_scenarios_flagged`` (default 1) scenarios flag it.
+- ``rho_reduction`` (for ``rho_reduction`` / ``both``) -- multiply each
+  flagged nonant's rho by ``factor`` (default 0.5, must be in ``(0, 1)``),
+  floored at ``min_rho`` (default 1e-3, must be ``> 0`` since PH requires a
+  positive rho). Reducing rho relaxes the proximal pull that drives the
+  overshoot.
+- ``slam`` (for ``slam`` / ``both``) -- ``directives_file``, a
+  :ref:`slammer <slammer>`-style directives CSV. The extension drives the
+  slammer's action layer directly on the flagged nonants (rather than the
+  slammer's own iteration-count trigger). Watson-Woodruff §2.4's native
+  remedy -- fixing a cycling variable to its per-scenario maximum -- is just a
+  directives file of ``...,max,...``.
+
+An example is shipped at
+``examples/sizes/config/w_oscillation_interrupt.json``; pair it with the
+detection example, e.g.::
+
+  --detect-W-oscillations examples/sizes/config/w_oscillation.json
+  --interrupt-W-oscillations examples/sizes/config/w_oscillation_interrupt.json
+
+.. literalinclude:: ../../examples/sizes/config/w_oscillation_interrupt.json
+   :language: json
+
+Interruption is for synchronous PH; like detection it is a hub extension and
+leaves the spokes untouched.
 
 See ``doc/designs/w_oscillation_design.md`` for the full design.
 

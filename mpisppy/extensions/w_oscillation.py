@@ -6,13 +6,18 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-"""Detect oscillation / cycling in the PH dual weight (W) vector.
+"""Detect (and optionally interrupt) oscillation / cycling in the PH dual
+weight (W) vector.
 
 This is a *hub* extension that observes the W vector while a synchronous PH hub
-runs and reports detected oscillation to a CSV.  It is **pure observation**: it
-attaches no rho or fixing changes, so a run with ``--detect-W-oscillations``
-produces the same optimization trajectory as one without.  Interrupting the
-oscillation (rho reduction / slamming) is a separate piece of work.
+runs and reports detected oscillation to a CSV.  With only
+``--detect-W-oscillations`` it is **pure observation**: it attaches no rho or
+fixing changes, so the optimization trajectory is identical to a run without
+the flag.  With ``--interrupt-W-oscillations`` it additionally *acts* on the
+detected oscillation to break it -- by **reducing rho** on the cycling nonant
+and/or **slamming** it (fixing it via the existing :class:`Slammer
+<mpisppy.extensions.slammer.Slammer>` action layer).  Interruption implies
+detection; see :func:`parse_interrupt_config`.
 
 Two detection methods are available, selected and parameterized from a JSON
 control file (see :func:`parse_detect_config`):
@@ -43,14 +48,18 @@ import csv
 import json
 
 import numpy as np
+import pyomo.environ as pyo
 
 import mpisppy.MPI as MPI
 from mpisppy.extensions.extension import Extension
+from mpisppy.extensions.slammer import Slammer
 
 
 # Method names recognized in the JSON "methods" block.
 VALID_METHODS = ("zero_crossings", "w_hash_recurrence")
 VALID_REPORT_MODES = ("on_detect", "final", "every_check")
+# Interruption actions recognized in the interrupt JSON "action" field.
+VALID_ACTIONS = ("rho_reduction", "slam", "both")
 
 _MASK64 = (1 << 64) - 1
 
@@ -74,6 +83,17 @@ _W_HASH_DEFAULTS = {
     "window": 20,                   # look back this many checks for a repeat
     "quantum": 1e-6,                # W quantized to this before hashing
     "min_period": 2,                # >=2 so constant W (convergence) is ignored
+}
+
+# Interruption (PR2) defaults; an interrupt file's omitted keys fall back here.
+_TRIGGER_DEFAULTS = {
+    "min_scenarios_flagged": 1,     # act when >= this many scenarios flag a nonant
+    "start_iter": 5,                # first iteration at which to act
+    "iters_between_actions": 3,     # cadence once started
+}
+_RHO_REDUCTION_DEFAULTS = {
+    "factor": 0.5,                  # multiply the cycling nonant's rho by this
+    "min_rho": 1e-3,                # floor; rho stays > 0 (PH requires it, #767)
 }
 
 
@@ -266,6 +286,102 @@ def validate_detect_config(cfg, where="<detect config>"):
     return out
 
 
+def default_detect_config():
+    """A sensible default detection config for a run that supplies only
+    ``--interrupt-W-oscillations`` (interruption implies detection): both
+    methods at their defaults, reporting to ``w_oscillations.csv``."""
+    return validate_detect_config({
+        "output_csv": "w_oscillations.csv",
+        "methods": {"zero_crossings": {}, "w_hash_recurrence": {}},
+    })
+
+
+def parse_interrupt_config(path):
+    """Load and validate an ``--interrupt-W-oscillations`` JSON control file
+    (see :func:`validate_interrupt_config`)."""
+    with open(path, "r") as f:
+        cfg = json.load(f)
+    return validate_interrupt_config(cfg, where=path)
+
+
+def validate_interrupt_config(cfg, where="<interrupt config>"):
+    """Validate an interruption control dict and fill in defaults.
+
+    Schema (see ``doc/designs/w_oscillation_design.md`` §2.2)::
+
+        {
+          "action": "rho_reduction" | "slam" | "both",
+          "trigger": {min_scenarios_flagged, start_iter, iters_between_actions},
+          "rho_reduction": {"factor": <0..1>, "min_rho": <>0>},  # if rho_reduction/both
+          "slam": {"directives_file": <path>},                   # if slam/both
+          "detect": { ... }   # optional detection config (else a default is used)
+        }
+
+    Raises ``ValueError`` on an unknown/missing ``action``, a ``factor`` not in
+    ``(0, 1)``, a non-positive ``min_rho``, a ``slam`` action with no
+    ``directives_file``, or a bad trigger value.
+    """
+    if not isinstance(cfg, dict):
+        raise ValueError(f"{where}: top level must be a JSON object")
+    action = cfg.get("action")
+    if action not in VALID_ACTIONS:
+        raise ValueError(
+            f"{where}: 'action' {action!r} not in {VALID_ACTIONS}")
+
+    trig = dict(_TRIGGER_DEFAULTS)
+    trig.update(cfg.get("trigger") or {})
+    trigger = {
+        "min_scenarios_flagged": int(trig["min_scenarios_flagged"]),
+        "start_iter": int(trig["start_iter"]),
+        "iters_between_actions": int(trig["iters_between_actions"]),
+    }
+    if trigger["iters_between_actions"] < 1:
+        raise ValueError(f"{where}: trigger.iters_between_actions must be >= 1")
+    if trigger["min_scenarios_flagged"] < 1:
+        raise ValueError(f"{where}: trigger.min_scenarios_flagged must be >= 1")
+
+    out = {"action": action, "trigger": trigger}
+
+    if action in ("rho_reduction", "both"):
+        rr = dict(_RHO_REDUCTION_DEFAULTS)
+        rr.update(cfg.get("rho_reduction") or {})
+        rr["factor"] = float(rr["factor"])
+        rr["min_rho"] = float(rr["min_rho"])
+        if not (0.0 < rr["factor"] < 1.0):
+            raise ValueError(
+                f"{where}: rho_reduction.factor must be in (0, 1) to reduce "
+                f"rho (got {rr['factor']})")
+        if rr["min_rho"] <= 0.0:
+            raise ValueError(
+                f"{where}: rho_reduction.min_rho must be > 0 (PH requires "
+                f"rho > 0; got {rr['min_rho']})")
+        out["rho_reduction"] = rr
+
+    if action in ("slam", "both"):
+        slam = cfg.get("slam") or {}
+        directives_file = slam.get("directives_file")
+        if not directives_file:
+            raise ValueError(
+                f"{where}: action {action!r} requires "
+                "'slam': {{'directives_file': <path>}}")
+        out["slam"] = {"directives_file": directives_file}
+
+    if "detect" in cfg:
+        out["detect"] = validate_detect_config(
+            cfg["detect"], where=f"{where} (detect block)")
+    return out
+
+
+def reduced_rho(old, factor, min_rho):
+    """Rho after one reduction event: ``old * factor`` floored at ``min_rho``.
+
+    The floor keeps rho strictly positive, which PH requires (see issue #560 /
+    the rho>0 enforcement); reducing rho relaxes the proximal pull that drives
+    the overshoot, the dynamic analogue of Watson--Woodruff §2.1's SEP rho that
+    approaches the optimal weight "from below"."""
+    return max(min_rho, old * factor)
+
+
 # --------------------------------------------------------------------------- #
 # The extension
 # --------------------------------------------------------------------------- #
@@ -282,24 +398,58 @@ _PER_SCEN_COLUMNS = [
 
 
 class WOscillationMonitor(Extension):
-    """Detect (and report) oscillation in the W vector; see the module docstring.
+    """Detect, report, and optionally interrupt W-vector oscillation; see the
+    module docstring.
 
     Constructed from ``opt.options["w_oscillation_options"]``, a dict with:
 
     ``detect_config`` (dict) or ``detect_json`` (path)
-        the parsed control dict, or a path parsed with
+        the parsed detection control dict, or a path parsed with
         :func:`parse_detect_config`.
+    ``interrupt_config`` (dict) or ``interrupt_json`` (path)
+        (optional) the parsed interruption control dict, or a path parsed with
+        :func:`parse_interrupt_config`.  Its presence turns on interruption.
     ``verbose`` (bool, default False)
-        print a rank-0 summary line at the end.
+        print rank-0 summary lines.
+
+    At least one of detection / interruption must be configured.  When only
+    interruption is configured, the detection config is taken from the
+    interrupt file's optional ``detect`` block, else a default
+    (:func:`default_detect_config`).
     """
 
     def __init__(self, spobj):
         super().__init__(spobj)
         opts = spobj.options.get("w_oscillation_options", {})
+
+        # Detection config (direct dict, by path, or -- below -- derived from
+        # the interrupt config).
+        self.cfg = None
         if "detect_config" in opts:
             self.cfg = validate_detect_config(opts["detect_config"])
-        else:
+        elif opts.get("detect_json"):
             self.cfg = parse_detect_config(opts["detect_json"])
+
+        # Interruption config (PR2); None when only detecting.
+        self._interrupt_cfg = None
+        if "interrupt_config" in opts:
+            self._interrupt_cfg = validate_interrupt_config(
+                opts["interrupt_config"])
+        elif opts.get("interrupt_json"):
+            self._interrupt_cfg = parse_interrupt_config(opts["interrupt_json"])
+
+        # Interruption implies detection: derive a detection config if none was
+        # supplied directly.
+        if self.cfg is None:
+            if self._interrupt_cfg is not None and "detect" in self._interrupt_cfg:
+                self.cfg = self._interrupt_cfg["detect"]
+            elif self._interrupt_cfg is not None:
+                self.cfg = default_detect_config()
+            else:
+                raise ValueError(
+                    "WOscillationMonitor requires a detection or interruption "
+                    "control file (none supplied)")
+
         self.verbose = opts.get("verbose", False)
 
         self._methods = self.cfg["methods"]
@@ -325,6 +475,13 @@ class WOscillationMonitor(Extension):
         self._scen_writer = None
         self._scen_file = None
         self._n_flag_events = 0
+
+        # Interruption state (PR2), built in pre_iter0() / updated in miditer().
+        self._slammer = None        # internal Slammer for the slam action
+        self._n_action_events = 0
+        # j -> max scenarios flagging nonant j on the most recent evaluation
+        # (rank-identical; the interrupter reads this).
+        self._flagged_counts = {}
 
     @property
     def _is_writer(self):
@@ -368,6 +525,19 @@ class WOscillationMonitor(Extension):
                 self._recur[j] = RecurrenceTracker(window=hp["window"],
                                                    min_period=hp["min_period"])
 
+        # For the slam action, drive the existing Slammer action layer (the
+        # consumer the slamming design anticipated).  Construct it directly (not
+        # via the extension machinery) and call its pre_iter0() here, on every
+        # rank symmetrically; its iteration-count trigger is never used -- the
+        # interrupter calls slam_nonant() on exactly the flagged nonants.
+        if self._interrupt_cfg is not None \
+                and self._interrupt_cfg["action"] in ("slam", "both"):
+            self._slammer = Slammer(self.opt, options={
+                "directives_file": self._interrupt_cfg["slam"]["directives_file"],
+                "verbose": self.verbose,
+            })
+            self._slammer.pre_iter0()
+
         if self._is_writer:
             self._agg_file = open(self.cfg["output_csv"], "w", newline="")
             self._agg_writer = csv.writer(self._agg_file)
@@ -392,24 +562,59 @@ class WOscillationMonitor(Extension):
             if len(buf) > self._history:
                 buf.pop(0)
 
+    def _detect_due(self, phiter):
+        """Whether to run the detectors for *reporting* at ``phiter``: at or
+        after ``warmup_iters``, then every ``check_every`` iterations.  A pure
+        function of the iteration counter, so it is identical on every rank."""
+        w = self.cfg["warmup_iters"]
+        if phiter < w:
+            return False
+        return (phiter - w) % self.cfg["check_every"] == 0
+
+    def _act_due(self, phiter):
+        """Whether to *interrupt* at ``phiter`` (interruption configured): at or
+        after the trigger's ``start_iter``, then every ``iters_between_actions``.
+        Pure function of the counter -> identical on every rank."""
+        t = self._interrupt_cfg["trigger"]
+        if phiter < t["start_iter"]:
+            return False
+        return (phiter - t["start_iter"]) % t["iters_between_actions"] == 0
+
     def miditer(self):
         self._capture()
         phiter = self.opt._PHIter
-        if phiter < self.cfg["warmup_iters"]:
+        detect_due = self._detect_due(phiter)
+        act_due = self._interrupt_cfg is not None and self._act_due(phiter)
+        if not (detect_due or act_due):
             return
-        if (phiter - self.cfg["warmup_iters"]) % self.cfg["check_every"] != 0:
-            return
-        self._evaluate_and_report(phiter)
+        # Evaluate the detectors (always populates the rank-identical flagged
+        # counts the interrupter reads; emits report rows only on a detection
+        # check).  The decision to evaluate is a pure function of phiter, so the
+        # collective reductions inside fire symmetrically on every rank.
+        flagged = self._evaluate(phiter, emit=detect_due)
+        if act_due:
+            self._apply_interruption(phiter, flagged)
 
     # ------------------------------------------------------------------ #
-    def _evaluate_and_report(self, phiter):
-        """Run the active detectors, reduce across scenarios per node, and emit
-        rows for nonants that meet the reporting threshold."""
+    def _evaluate(self, phiter, emit=True):
+        """Run the active detectors, reduce across scenarios per node, and (if
+        ``emit``) write report rows for nonants meeting the reporting threshold.
+
+        Returns the per-nonant flagged-scenario counts ``{j: count}`` (the
+        rank-identical SUM reduction; for method B the participating scenario
+        count), regardless of ``emit``, for the interrupter's own threshold."""
         nJ = len(self._ndn_i)
+        self._flagged_counts = {}
         if "zero_crossings" in self._methods:
-            self._eval_zero_crossings(phiter, nJ)
+            self._eval_zero_crossings(phiter, nJ, emit)
         if "w_hash_recurrence" in self._methods:
-            self._eval_w_hash(phiter, nJ)
+            self._eval_w_hash(phiter, nJ, emit)
+        return self._flagged_counts
+
+    def _record_flagged(self, j, count):
+        """Record (max over methods) how many scenarios flagged nonant ``j``."""
+        if count > self._flagged_counts.get(j, 0):
+            self._flagged_counts[j] = count
 
     def _threshold(self, ndn):
         frac = self.cfg["min_frac_to_report"]
@@ -417,7 +622,7 @@ class WOscillationMonitor(Extension):
             return max(1, int(np.ceil(frac * self._n_scen_total[ndn])))
         return int(self.cfg["min_scenarios_to_report"])
 
-    def _eval_zero_crossings(self, phiter, nJ):
+    def _eval_zero_crossings(self, phiter, nJ, emit=True):
         p = self._methods["zero_crossings"]
         # local per-nonant accumulators
         n_flag = np.zeros(nJ, "i")
@@ -451,15 +656,17 @@ class WOscillationMonitor(Extension):
             nJ, [(n_flag, MPI.SUM), (mx_w, MPI.MAX),
                  (mx_d, MPI.MAX), (mx_r, MPI.MAX)])
         for j in range(nJ):
-            if g_flag[j] >= self._threshold(self._nodes[j]):
+            self._record_flagged(j, int(g_flag[j]))
+            if emit and g_flag[j] >= self._threshold(self._nodes[j]):
                 self._emit_agg(phiter, j, "zero_crossings",
                                int(g_flag[j]),
                                max_w_crossings=int(g_w[j]),
                                max_diff_crossings=int(g_d[j]),
                                max_diffs_ratio=round(float(g_r[j]), 6))
-        self._emit_scen(scen_rows)
+        if emit:
+            self._emit_scen(scen_rows)
 
-    def _eval_w_hash(self, phiter, nJ):
+    def _eval_w_hash(self, phiter, nJ, emit=True):
         p = self._methods["w_hash_recurrence"]
         q = p["quantum"]
         # local partial signature per nonant (sum of identity-mixed hashes)
@@ -476,20 +683,94 @@ class WOscillationMonitor(Extension):
         for j in range(nJ):
             flagged, period = self._recur[j].push(int(glob[j]))
             if flagged and period >= self._threshold_period():
-                self._emit_agg(phiter, j, "w_hash_recurrence",
-                               self._n_scen_total[self._nodes[j]],
-                               cycle_period=period)
-                if self.cfg["per_scenario_csv"]:
-                    for sname, s in self.opt.local_scenarios.items():
-                        scen_rows.append((
-                            phiter, self._nodes[j], sname, self._names[j],
-                            "w_hash_recurrence", "", "", "",
-                            round(float(s._mpisppy_model.W[self._ndn_i[j]]._value),
-                                  9)))
-        self._emit_scen(scen_rows)
+                # A recurring vector implicates every scenario at the node.
+                self._record_flagged(j, self._n_scen_total[self._nodes[j]])
+                if emit:
+                    self._emit_agg(phiter, j, "w_hash_recurrence",
+                                   self._n_scen_total[self._nodes[j]],
+                                   cycle_period=period)
+                    if self.cfg["per_scenario_csv"]:
+                        for sname, s in self.opt.local_scenarios.items():
+                            scen_rows.append((
+                                phiter, self._nodes[j], sname, self._names[j],
+                                "w_hash_recurrence", "", "", "",
+                                round(float(
+                                    s._mpisppy_model.W[self._ndn_i[j]]._value),
+                                    9)))
+        if emit:
+            self._emit_scen(scen_rows)
 
     def _threshold_period(self):
         return self._methods["w_hash_recurrence"]["min_period"]
+
+    # ------------------------------------------------------------------ #
+    # Interruption (PR2): act on the flagged nonants to break the oscillation.
+    # ------------------------------------------------------------------ #
+    def _apply_interruption(self, phiter, flagged):
+        """Act on every nonant flagged by at least ``min_scenarios_flagged``
+        scenarios: reduce its rho and/or slam it, per the configured action.
+
+        ``flagged`` and the eligibility tests are rank-identical, so all ranks
+        act on the same nonants in the same order -- this matters because the
+        slam action may trigger a per-node ``Allreduce`` (the min/max extremum),
+        which must be reached symmetrically."""
+        thresh = self._interrupt_cfg["trigger"]["min_scenarios_flagged"]
+        targets = [j for j in range(len(self._ndn_i))
+                   if flagged.get(j, 0) >= thresh]
+        if not targets:
+            return
+        action = self._interrupt_cfg["action"]
+        n_rho = self._reduce_rho(targets) if action in ("rho_reduction", "both") \
+            else 0
+        n_slam = self._slam_targets(targets) if action in ("slam", "both") \
+            else 0
+        self._n_action_events += 1
+        if self.verbose and self.opt.cylinder_rank == 0:
+            bits = []
+            if action in ("rho_reduction", "both"):
+                bits.append(f"reduced rho on {n_rho} nonant(s)")
+            if action in ("slam", "both"):
+                bits.append(f"slammed {n_slam} nonant(s)")
+            print(f"(rank0) WOscillationMonitor[iter {phiter}]: "
+                  f"{len(targets)} flagged; " + "; ".join(bits))
+
+    def _reduce_rho(self, targets):
+        """Multiply each flagged nonant's rho by ``factor`` (floored at
+        ``min_rho``) in every local scenario; return the number of nonants
+        whose rho was actually lowered.
+
+        rho is a mutable Pyomo Param in the prox term, so changing its value is
+        picked up by the per-iteration ``set_objective`` that ``solve_one``
+        issues for persistent solvers -- no explicit solver push is needed (the
+        same mechanism the rho-updating extensions rely on)."""
+        rr = self._interrupt_cfg["rho_reduction"]
+        factor, min_rho = rr["factor"], rr["min_rho"]
+        touched = 0
+        for j in targets:
+            ndn_i = self._ndn_i[j]
+            changed = False
+            for s in self.opt.local_scenarios.values():
+                rho = s._mpisppy_model.rho
+                if ndn_i not in rho:
+                    continue  # scenario does not pass through this node
+                r = rho[ndn_i]
+                new = reduced_rho(pyo.value(r), factor, min_rho)
+                if new < pyo.value(r):
+                    r._value = new
+                    changed = True
+            if changed:
+                touched += 1
+        return touched
+
+    def _slam_targets(self, targets):
+        """Slam each flagged nonant via the Slammer action layer; return the
+        number actually slammed (others are not in the directives, already
+        fixed, or have no applicable direction this event)."""
+        n = 0
+        for j in targets:
+            if self._slammer.slam_nonant(self._ndn_i[j]):
+                n += 1
+        return n
 
     # ------------------------------------------------------------------ #
     def _reduce_per_node(self, nJ, arrays_and_ops):
@@ -560,12 +841,16 @@ class WOscillationMonitor(Extension):
     # ------------------------------------------------------------------ #
     def post_everything(self):
         if self.cfg["report_mode"] == "final":
-            self._evaluate_and_report(self.opt._PHIter)
+            self._evaluate(self.opt._PHIter)
         if self._is_writer:
             if self._agg_file is not None:
                 self._agg_file.close()
             if self._scen_file is not None:
                 self._scen_file.close()
         if self.verbose and self.opt.cylinder_rank == 0:
-            print(f"(rank0) WOscillationMonitor: {self._n_flag_events} "
-                  f"oscillation report event(s); see {self.cfg['output_csv']}")
+            msg = (f"(rank0) WOscillationMonitor: {self._n_flag_events} "
+                   f"oscillation report event(s); see {self.cfg['output_csv']}")
+            if self._interrupt_cfg is not None:
+                msg += (f"; {self._n_action_events} interruption action "
+                        f"event(s) [{self._interrupt_cfg['action']}]")
+            print(msg)

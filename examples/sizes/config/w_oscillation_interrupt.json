@@ -1,0 +1,15 @@
+{
+    "action": "both",
+    "trigger": {
+        "min_scenarios_flagged": 1,
+        "start_iter": 100,
+        "iters_between_actions": 5
+    },
+    "rho_reduction": {
+        "factor": 0.5,
+        "min_rho": 1e-3
+    },
+    "slam": {
+        "directives_file": "examples/sizes/config/slamming_directives.csv"
+    }
+}
