@@ -159,6 +159,12 @@ Therefore **"keep the best xhat" requires checkpointing the spoke incumbent.**
 Checkpointing the hub alone preserves the incumbent *number* but can lose the
 *solution* if the crash is late and a short resume does not re-find it.
 
+The spoke already holds this cache, so it checkpoints it **itself, on its own
+schedule** — on each incumbent improvement, independent of the hub's checkpoint
+iteration (§9, item 6). No hub↔spoke coordination is needed: the incumbent is a
+carried-forward best-so-far value, not part of the bit-reproducible primal
+trajectory (§7), so it does not have to align to a global iteration `k`.
+
 Serialize the `ComponentMap` by **variable name** (`{var.name: value}`) — the
 `Var` objects are tied to one process's model and cannot cross a restart; rebuild
 the map by name lookup on the reconstructed model.
@@ -282,8 +288,9 @@ Checkpointing is **opt-in** and adds nothing when off.
   error.
 
 Hard-kill coverage is the user's tradeoff: small `k` is safest, larger `k` cuts
-I/O. Combined with last-*k* retention (§9, item 7), a kill *during* a write still
-leaves a usable earlier checkpoint.
+I/O. Each checkpoint is published atomically (§9, item 7; §10), so a kill *during*
+a write leaves the previous complete checkpoint intact and referenced — never a
+half-written one.
 
 ### 8.1 Bundles
 
@@ -340,16 +347,32 @@ extension/subclass hacks:
    but any *full-objective* read taken right after an eval is wrong. Snapshot and
    restore all vars around an eval, or evaluate on a copy.
 5. **Geometry / cfg fingerprint** (§5.6) with a clear refusal on mismatch.
-6. **Hub↔spoke snapshot coordination.** A spoke writes its *latest* incumbent and
-   does not know the hub's iteration number, so a naive set of files is not a
-   globally-consistent snapshot at a known iteration. The hub's checkpoint barrier
-   should trigger spoke snapshots (e.g. a checkpoint Field broadcast), so a
-   resume restores a coherent cross-cylinder state.
-7. **Atomic, per-rank, barriered writes** (already in the PoC): each rank writes
-   only its local state to a rank-tagged file via temp-then-rename, inside a
-   barrier, so a hard kill never yields a half-written or partial-across-ranks
-   checkpoint. Retain the last *k* checkpoints (configurable) so a kill *during*
-   a checkpoint still leaves a usable earlier one.
+6. **Async per-spoke incumbent checkpoints — no hub↔spoke coordination.** Each
+   spoke serializes its *own* best incumbent (the best xhat solution values, §5.3)
+   and bound on its own schedule — whenever its incumbent improves, reusing the
+   trigger already in `_maybe_write_incumbent_on_improvement` — to its own
+   rank-tagged file with the same atomic write (item 7). Spokes are **not**
+   synchronized to the hub's checkpoint iteration. The determinism contract (§7)
+   makes bounds and the incumbent best-so-far, not bit-reproducible, so a
+   globally-consistent "snapshot at iteration `k`" across cylinders is
+   unnecessary: on resume the hub restores its bit-identical primal state (§5.1)
+   while each spoke independently reloads its latest incumbent/bound, all of which
+   are accepted only if improving (`update_best_solution_if_improving`,
+   `spbase.py:578`). Leaning into the existing asynchrony this way avoids a
+   hub-triggered snapshot barrier and its stall/deadlock risk against
+   `got_kill_signal`.
+7. **Atomic writes with a single published generation** (per-rank temp-then-rename
+   is already in the PoC). Each rank writes only its local state to a rank-tagged
+   temp file and renames it into place; the hub's set of per-rank files is then
+   published as one checkpoint by atomically rewriting `manifest.json` (itself
+   temp-then-rename) to point at the new complete generation (§10). Because that
+   manifest flip is the single commit point, **one committed generation is
+   enough**: a kill before the flip leaves the previous complete checkpoint intact
+   and still referenced; a kill after it leaves the new one. The prior generation
+   can therefore be deleted as soon as the new manifest is in place — there is no
+   correctness need to retain the last *k*. Keeping a few older generations is an
+   optional convenience (roll back further, inspect history), not a kill-safety
+   requirement.
 
 ---
 
@@ -357,15 +380,24 @@ extension/subclass hacks:
 
 ```
 <ckpt_dir>/
-  manifest.json                 # cfg hash, n_proc, cylinder map, latest complete iter
-  iter_<NNNN>/
-    hub_rank_<RRRR>.pkl         # hub primal + extension state (+ bounds/incumbent obj)
-    spoke_<name>_rank_<RRRR>.pkl# spoke incumbent / bound state
+  manifest.json                    # cfg hash, n_proc, cylinder map, latest complete hub iter
+  hub/
+    iter_<NNNN>/
+      hub_rank_<RRRR>.pkl          # hub primal + extension state (+ bounds/incumbent obj)
+  spokes/
+    spoke_<name>_rank_<RRRR>.pkl   # each spoke's latest incumbent/bound, overwritten
+                                   #   asynchronously on improvement (§9, item 6)
 ```
 
-`manifest.json` names the latest *complete* checkpoint (all ranks + cylinders
-flushed); resume reads that. Use plain `pickle` for the numeric state; `dill`
-only where models/closures must be serialized.
+The hub writes iteration-tagged generations under `hub/`; each spoke keeps a
+single latest-wins file under `spokes/` that it overwrites (atomically) whenever
+its incumbent improves — the two are deliberately *not* aligned to a common
+iteration (§9, item 6). `manifest.json` is the single commit point: it names the
+latest *complete* hub generation (all hub ranks flushed), and publishing a new
+one means atomically renaming a freshly written `manifest.json` into place (§9,
+item 7). Resume reads whatever the manifest currently names, plus whatever each
+spoke last committed under `spokes/`. Use plain `pickle` for the numeric state;
+`dill` only where models/closures must be serialized.
 
 ---
 
@@ -381,11 +413,12 @@ value. New tests are wired into `run_coverage.bash` **and**
   CLI flags `--checkpoint-dir`, `--checkpoint-every k` (0/unset ⇒ off; else every
   `k` iters **and always after iter 0** — §8), `--resume-from`/`--resume`. Restore
   W/nonants/rho. Test: serial farmer kill+resume bit-identical.
-- **Phase 2 — Multi-rank + bundles.** Barriers, rank-tagged files, last-*k*
-  retention. Validate checkpointing with **proper bundles** (bundle = first-class
-  subproblem, §8.1) and refresh the stale `_restore_nonants` bundle comment.
-  Test: `mpiexec` farmer kill+resume bit-identical on every rank, incl. uneven
-  distribution and a `--scenarios-per-bundle` run; mismatch refusal.
+- **Phase 2 — Multi-rank + bundles.** Barriers, rank-tagged files, single-generation
+  atomic publish via the manifest (§9, item 7). Validate checkpointing with
+  **proper bundles** (bundle = first-class subproblem, §8.1) and refresh the stale
+  `_restore_nonants` bundle comment. Test: `mpiexec` farmer kill+resume
+  bit-identical on every rank, incl. uneven distribution and a
+  `--scenarios-per-bundle` run; mismatch refusal.
 - **Phase 3 — Extension state contract.** `checkpoint_state`/`restore_state` on
   `Extension` (covering `self.*` and model-attached state); restore nonant
   fixedness in the primal set (§5.1); implement the contract for rho updaters,
@@ -393,10 +426,10 @@ value. New tests are wired into `run_coverage.bash` **and**
   `fixer` resumes with the *same* variables fixed (and the same in-progress
   counters); PH + `slammer` resumes with slams intact.
 - **Phase 4 — Cylinders / spokes.** One-line xhatter write hook; unified
-  `Checkpointer` on spoke opts; checkpoint the **spoke incumbent (best xhat
-  solution)**; hub↔spoke snapshot coordination. Test: farmer cylinders
-  (hub+lagrangian+xhatshuffle) crash+resume — hub primal bit-identical, best xhat
-  preserved.
+  `Checkpointer` on spoke opts; each spoke checkpoints its own **incumbent (best
+  xhat solution)** asynchronously on improvement — no hub↔spoke coordination (§9,
+  item 6). Test: farmer cylinders (hub+lagrangian+xhatshuffle) crash+resume — hub
+  primal bit-identical, best xhat preserved.
 - **Phase 5 — Exact spoke continuity (optional).** Hoist `ScenarioCycler`/`xh_iter`
   onto `self`; checkpoint cursor (+ RNG getstate if a stream becomes stateful).
 - **Phase 6 — Broader coverage.** lagranger, FWPH, subgradient spokes;
@@ -406,17 +439,28 @@ value. New tests are wired into `run_coverage.bash` **and**
 
 ## 12. Open questions / risks
 
-Resolved (see §8): the `--checkpoint-every k` semantics (0/unset ⇒ off; otherwise
-every `k` iters and always after iter 0) and bundles (only proper bundles exist;
-each is a first-class subproblem, so checkpointing applies uniformly — no special
-handling needed).
+Resolved:
+
+- **`--checkpoint-every k` semantics** (§8): 0/unset ⇒ off; otherwise every `k`
+  iters and always after iter 0.
+- **Bundles** (§8.1): only proper bundles exist; each is a first-class subproblem,
+  so checkpointing applies uniformly — no special handling needed.
+- **Spoke snapshot coordination** (§9, item 6): resolved by *not* coordinating.
+  Spokes checkpoint their own incumbents asynchronously on improvement; the
+  determinism contract (§7) makes this sufficient and removes the sync point that
+  would otherwise risk stalling fast spokes or deadlocking with `got_kill_signal`.
+- **Checkpoint retention** (§9, item 7): a single manifest-published generation is
+  enough for kill-safety; last-*k* retention is optional history, not required.
 
 Still open:
 
-- **Coordinated spoke snapshots** (§9, item 6) add a sync point; need to confirm
-  it does not stall fast spokes or deadlock with `got_kill_signal`.
-- **variable_probability / surrogate vars.** The masked-W / prob-0 design must be
-  re-checked under restore.
+- **variable_probability / surrogate vars.** With variable probabilities mpi-sppy
+  masks `W` (but not prox) for zero-probability nonants and assumes each such
+  nonant's surrogate var is fixed at 0. Restore must **reproduce that invariant,
+  not just reload the raw `W` array**: confirm the zero-probability mask is
+  re-applied and the surrogate vars come back fixed-at-0 (§5.1 fixedness), so a
+  masked component is never treated as live on resume. Needs verification; among
+  the spokes only `xhatxbar` supports variable_probability today.
 - **Cross-geometry resume** is explicitly deferred; revisit if HPC users need to
   resume on a different node count.
 ```
