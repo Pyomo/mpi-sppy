@@ -185,28 +185,6 @@ class SeqSampling():
         if not you_can_have_it_all:
             raise RuntimeError(f"Module {refmodel} not complete for seqsampling")
 
-        # Sequential sampling's BM/BPL stopping criteria and sample-size rules
-        # assume a non-negative, shrinking optimality gap, which holds for
-        # minimization. For maximization the gap is non-positive, so refuse it
-        # loudly rather than return silently wrong stopping decisions or sample
-        # sizes. Detecting the sense needs one representative scenario; some
-        # (multistage) models cannot be built from cfg alone at this point, so
-        # if that build fails we skip the check and let minimization (the common
-        # case) proceed.
-        try:
-            _sn = self.refmodel.scenario_names_creator(1)
-            _probe = self.refmodel.scenario_creator(
-                _sn[0], **self.refmodel.kw_creator(cfg))
-            _is_min = sputils.find_active_objective(_probe).is_minimizing()
-        except Exception:
-            _is_min = True
-        if not _is_min:
-            raise RuntimeError(
-                "Sequential sampling currently supports minimization only "
-                "(the BM/BPL stopping criteria assume a non-negative "
-                "optimality gap)."
-            )
-
         """ delete this on or after July 14, 2022
         #Manage options
         optional_options = {"ArRP": 1,
@@ -354,6 +332,20 @@ class SeqSampling():
         return(int(np.ceil(maxroot**2)))
     
     
+    def _min_only_guard(self, is_minimizing):
+        # Sequential sampling's BM/BPL stopping criteria and sample-size rules
+        # assume a non-negative, shrinking optimality gap, which holds only for
+        # minimization (for maximization the gap is non-positive). The sense is
+        # read from the first gap estimator's fully built model, so this adds no
+        # extra model construction, and it raises before any stopping decision
+        # or sample size is computed from a wrong-signed gap.
+        if not is_minimizing:
+            raise RuntimeError(
+                "Sequential sampling currently supports minimization only "
+                "(the BM/BPL stopping criteria assume a non-negative "
+                "optimality gap)."
+            )
+
     def run(self,maxit=200):
         """ Execute a sequental sampling algorithm
         Args:
@@ -446,6 +438,7 @@ class SeqSampling():
                                        scenario_denouement=scenario_denouement,
                                        solver_name=self.solver_name,
                                        solver_options=self.solver_options)
+        self._min_only_guard(estim['is_minimizing'])
         Gk,sk = estim['G'],estim['s']
         if self.multistage:
             self.SeedCount = estim['seed']
