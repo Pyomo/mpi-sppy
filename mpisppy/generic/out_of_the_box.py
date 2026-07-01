@@ -77,6 +77,10 @@ class Facts:
     vars_cont: int | None = None      # continuous vars per scenario
     nonants_total: int | None = None  # first-stage (nonanticipative) vars
     nonants_int: int | None = None    # integer nonants
+    # user-model nonlinearity from the probe: "linear" | "quadratic" | "nonlinear"
+    # (more nonlinear than quadratic, i.e. degree > 2 or non-polynomial); None at
+    # the minus tier (nothing is instantiated, so the class cannot be determined).
+    model_degree: str | None = None
     multistage: bool = False
     branching_factors: list | None = None  # for the equivalent command line
     user_solver_name: str | None = None    # name the user gave (if any)
@@ -98,6 +102,7 @@ class Decision:
     run_ef: bool = False
     ef_reason: str | None = None          # "min_ranks" | "few_scens" | "user" ...
     chosen_solver: str | None = None
+    problem_class: str | None = None      # LP|MIP|QP|MIQP|NLP|MINLP (base/plus)
     num_cylinders: int = 1                # hub + spokes actually configured
     intra_ranks: int = 1                  # widest cylinder's rank count
     rank_split: dict = field(default_factory=dict)   # cylinder -> ranks (flex)
@@ -166,22 +171,35 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     # --- step 1: pick the solver NAME ---------------------------------------
     # The flag is emitted only once the EF gate decides: --EF-solver-name for the
     # EF, --solver-name to decompose (mpi-sppy uses different keys). Here we just
-    # settle on the name.
+    # settle on the name -- routed by the model's PROBLEM CLASS (LP/MIP/QP/MIQP/
+    # NLP/MINLP) so a more-than-quadratic model gets an NLP solver (ipopt) and an
+    # integer model never gets a continuous-only one.
     sp = policy["solver"]
+    d.problem_class = _problem_class(facts)
+    if d.problem_class is not None:
+        d.notes.append(f"model class: {d.problem_class} ({_class_english(facts)})")
     if facts.user_flags & {"--solver-name", "--EF-solver-name"} and facts.user_solver_name:
         d.chosen_solver = facts.user_solver_name
         d.notes.append(f"solver: kept user's value ({facts.user_solver_name}); "
                        f"OOTB defers")
     else:
-        for name in sp["preference_order"]:
-            if name in facts.available_solvers:
-                d.chosen_solver = name
-                break
-        if d.chosen_solver is None:
-            d.notes.append("WARNING: no known solver detected; user must supply one")
+        by_class = sp.get("preference_order_by_class", {})
+        if d.problem_class is not None and d.problem_class in by_class:
+            order = by_class[d.problem_class]
+            why = f"first available preferred for a {d.problem_class} model"
         else:
-            d.notes.append(f"solver: {d.chosen_solver} "
-                           f"(first available in preference order)")
+            # minus tier (class unknown) or a class with no dedicated list: use
+            # the master preference order.
+            order = sp["preference_order"]
+            why = "first available in preference order"
+        d.chosen_solver = _first_available(order, facts.available_solvers)
+        if d.chosen_solver is None:
+            d.notes.append(
+                f"WARNING: no installed solver for this model "
+                f"({d.problem_class or 'class unknown'}); tried {', '.join(order)}. "
+                f"User must supply one (--solver-name).")
+        else:
+            d.notes.append(f"solver: {d.chosen_solver} ({why})")
 
     # --- step 2: EF gate ----------------------------------------------------
     # Reuses the bundle effort() model on the WHOLE problem (all scenarios as one
@@ -334,6 +352,42 @@ def _fmt_ratio(x: float) -> str:
     return str(int(x)) if float(x).is_integer() else str(x)
 
 
+def _first_available(order, available) -> str | None:
+    """First solver in `order` that is installed (present in `available`)."""
+    for name in order:
+        if name in available:
+            return name
+    return None
+
+
+# (model_degree, has_integer_vars) -> problem class label. Used to route solver
+# selection to the matching preference_order_by_class list.
+_PROBLEM_CLASS = {
+    ("linear", False): "LP",
+    ("quadratic", False): "QP",
+    ("nonlinear", False): "NLP",
+    ("linear", True): "MIP",
+    ("quadratic", True): "MIQP",
+    ("nonlinear", True): "MINLP",
+}
+
+
+def _problem_class(facts: Facts) -> str | None:
+    """The model's problem class (LP/MIP/QP/MIQP/NLP/MINLP), or None when the
+    model was not instantiated (minus tier) so integrality/degree are unknown.
+    Integrality is `vars_int > 0`; the degree is `model_degree` -- "linear",
+    "quadratic", or "nonlinear" (more nonlinear than quadratic)."""
+    if facts.model_degree is None or facts.vars_int is None:
+        return None
+    return _PROBLEM_CLASS[(facts.model_degree, facts.vars_int > 0)]
+
+
+def _class_english(facts: Facts) -> str:
+    """Plain-language basis for the problem class, e.g. "integer + quadratic"."""
+    integer = "integer" if (facts.vars_int or 0) > 0 else "continuous"
+    return f"{integer} + {facts.model_degree}"
+
+
 def _effort(spb: int, facts: Facts, scaling: dict) -> float:
     """Modeled solve effort of a bundle of `spb` scenarios, from the probe size
     profile (facts.vars_cont/vars_int/nonants_int) and the policy effort_scaling
@@ -405,6 +459,21 @@ def _sg_ran_ef_few_ranks(d, facts, policy, outcome):
     return None
 
 
+def _sg_no_class_solver(d, facts, policy, outcome):
+    # A problem class was detected but nothing installed handles it -- e.g. an
+    # MINLP with no baron/scip/bonmin/couenne, or an NLP with no ipopt. (Integer
+    # + more-than-quadratic models route to MINLP, which rarely has an installed
+    # solver.) recommend() already left chosen_solver None here.
+    if d.chosen_solver is None and d.problem_class:
+        listed = policy["solver"].get("preference_order_by_class", {}) \
+            .get(d.problem_class, [])
+        names = ", ".join(listed) if listed else "none listed"
+        return (f"Detected a {d.problem_class} model, but none of the solvers "
+                f"OOTB prefers for it ({names}) are installed; install one or "
+                f"pass --solver-name explicitly.")
+    return None
+
+
 def _sg_no_persistent_solver(d, facts, policy, outcome):
     s = d.chosen_solver
     if not d.run_ef and s is not None and not s.endswith("_persistent"):
@@ -453,6 +522,7 @@ def _sg_from_outcome(d, facts, policy, outcome):
 # generators in priority order (lower first)
 SUGGESTION_GENERATORS = [
     _sg_ran_ef_few_ranks,
+    _sg_no_class_solver,
     _sg_no_persistent_solver,
     _sg_linearized_prox,
     _sg_more_ranks,
@@ -594,10 +664,40 @@ def _user_flags() -> set:
     return flags
 
 
+def _model_degree(model) -> str:
+    """Classify the user model's nonlinearity from the probe: "linear" (every
+    active objective/constraint has polynomial degree <= 1), "quadratic" (max
+    degree == 2), or "nonlinear" (degree > 2, or non-polynomial such as
+    log/exp/x*y/y -- reported by Pyomo as polynomial_degree() == None).
+
+    The probe is the RAW scenario_creator model, so the PH proximal term (a
+    quadratic that mpi-sppy attaches later) is absent and does not inflate the
+    degree -- this reflects the user's own model."""
+    import pyomo.environ as pyo
+    max_deg = 0
+    for obj in model.component_data_objects(pyo.Objective, active=True,
+                                            descend_into=True):
+        deg = obj.expr.polynomial_degree() if obj.expr is not None else 0
+        if deg is None:
+            return "nonlinear"
+        max_deg = max(max_deg, deg)
+    for con in model.component_data_objects(pyo.Constraint, active=True,
+                                            descend_into=True):
+        body = con.body
+        deg = body.polynomial_degree() if body is not None else 0
+        if deg is None:
+            return "nonlinear"
+        max_deg = max(max_deg, deg)
+    if max_deg > 2:
+        return "nonlinear"
+    return "quadratic" if max_deg == 2 else "linear"
+
+
 def _size_profile(model) -> dict:
     """Read a built scenario's size profile: integer vs continuous variable
-    counts, and nonant (first-stage) counts. Used by the base/plus probe and by
-    --inspect-only's instantiation check."""
+    counts, nonant (first-stage) counts, and the model degree (linear/quadratic/
+    nonlinear). Used by the base/plus probe and by --inspect-only's
+    instantiation check."""
     import pyomo.environ as pyo
     vars_int = vars_cont = 0
     for v in model.component_data_objects(pyo.Var, active=True, descend_into=True):
@@ -612,7 +712,8 @@ def _size_profile(model) -> dict:
             if not v.is_continuous():
                 nonants_int += 1
     return {"vars_int": vars_int, "vars_cont": vars_cont,
-            "nonants_total": nonants_total, "nonants_int": nonants_int}
+            "nonants_total": nonants_total, "nonants_int": nonants_int,
+            "model_degree": _model_degree(model)}
 
 
 def _build_probe_scenario(module, cfg):
@@ -660,6 +761,7 @@ def gather_facts(module, cfg, effort: str, policy: dict) -> Facts:
         facts.vars_cont = profile["vars_cont"]
         facts.nonants_total = profile["nonants_total"]
         facts.nonants_int = profile["nonants_int"]
+        facts.model_degree = profile["model_degree"]
     # plus tier (PR2): instantiate all + brief timed solve for solve-time facts.
     return facts
 

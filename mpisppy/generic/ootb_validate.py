@@ -200,6 +200,20 @@ def validate_static(policy: dict) -> list:
         add(f"solver.{key} is a subset of preference_order",
             isinstance(val, list) and set(val) <= set(pref or []),
             f"stray: {sorted(set(val) - set(pref or []))}")
+    # per-class preferred solver lists: all six classes present, each a non-empty
+    # subset of the master preference_order (so detection always probes them).
+    by_class = {k: v for k, v in sp.get("preference_order_by_class", {}).items()
+                if not k.startswith("_")}
+    add("solver.preference_order_by_class covers all six problem classes",
+        set(by_class) == {"LP", "MIP", "QP", "MIQP", "NLP", "MINLP"},
+        f"have {sorted(by_class)}")
+    for cls, lst in by_class.items():
+        add(f"solver.preference_order_by_class.{cls} is a non-empty subset of "
+            f"preference_order",
+            isinstance(lst, list) and len(lst) > 0
+            and all(isinstance(s, str) for s in lst)
+            and set(lst) <= set(pref or []),
+            f"stray: {sorted(set(lst) - set(pref or []))}")
 
     # spoke ladder
     ladder = policy["spoke_ladder"]
@@ -403,6 +417,34 @@ def validate_decisions_synthetic(policy: dict) -> list:
                               user_flags={"--lagrangian"}), policy)
     add("OOTB adds at most one rho setter", len(_rho_setter_args(d)) <= 1,
         f"OOTB rho setters: {_rho_setter_args(d)}")
+
+    # solver routing by problem class: the chosen solver must come from the
+    # matching per-class preference list (base/plus, where the class is known).
+    by_class = policy["solver"].get("preference_order_by_class", {})
+    all_solvers = set(policy["solver"]["preference_order"])
+
+    def _routes(name, model_degree, vars_int, available):
+        d = ootb.recommend(_facts(num_ranks=6, num_scens=10, vars_cont=10,
+                                  vars_int=vars_int, model_degree=model_degree,
+                                  available_solvers=available), policy)
+        want = by_class.get(d.problem_class, [])
+        add(f"{name} -> solver from the {d.problem_class} list",
+            d.chosen_solver is not None and d.chosen_solver in want,
+            f"class={d.problem_class} chose={d.chosen_solver} want in {want}")
+
+    _routes("continuous linear", "linear", 0, all_solvers)
+    _routes("integer linear", "linear", 5, all_solvers)
+    _routes("continuous quadratic", "quadratic", 0, all_solvers)
+    _routes("integer quadratic", "quadratic", 5, all_solvers)
+    # more-than-quadratic continuous routes to the NLP solver, never a MIP solver
+    _routes("continuous nonlinear", "nonlinear", 0, {"gurobi", "ipopt"})
+
+    # a nonlinear model with NO NLP solver must NOT fall back to a MIP solver
+    d = ootb.recommend(_facts(num_ranks=6, num_scens=10, vars_cont=10, vars_int=0,
+                              model_degree="nonlinear",
+                              available_solvers={"gurobi", "cbc"}), policy)
+    add("nonlinear model without an NLP solver -> no solver (not a MIP solver)",
+        d.chosen_solver is None, f"chose={d.chosen_solver}")
 
     return checks
 

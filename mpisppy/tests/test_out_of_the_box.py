@@ -21,6 +21,8 @@ import os
 import sys
 import unittest
 
+import pyomo.environ as pyo
+
 import mpisppy.utils.config as config
 from mpisppy.generic import parsing
 from mpisppy.generic import out_of_the_box as ootb
@@ -104,8 +106,10 @@ class TestInspectStandalone(unittest.TestCase):
         cfg, module = _farmer_cfg()
         profile = ootb.verify_instantiation(module, cfg)
         self.assertEqual(set(profile),
-                         {"vars_int", "vars_cont", "nonants_total", "nonants_int"})
+                         {"vars_int", "vars_cont", "nonants_total", "nonants_int",
+                          "model_degree"})
         self.assertGreater(profile["vars_cont"], 0)
+        self.assertEqual(profile["model_degree"], "linear")   # farmer is an LP
         ootb.inspect_only_standalone(module, cfg)     # prints, returns None
 
 
@@ -222,6 +226,96 @@ class TestSuggestionGenerators(unittest.TestCase):
         pol["suggestions"]["disabled"] = ["_sg_ran_ef_few_ranks"]
         msgs = ootb.make_suggestions(d, facts, pol)
         self.assertFalse(any("only 1 MPI" in m for m in msgs))
+
+    def test_no_class_solver_suggestion(self):
+        # MINLP with nothing installed -> "install one or pass --solver-name"
+        facts = ootb.Facts("m", 6, {"gurobi"}, 10, effort="base",
+                           vars_int=3, vars_cont=5, model_degree="nonlinear")
+        d = ootb.Decision(run_ef=False, chosen_solver=None, problem_class="MINLP")
+        self.assertTrue(any("MINLP" in m for m in self._msgs(d, facts)))
+
+
+def _tiny_model(kind):
+    """A one-scenario-shaped model whose objective/constraint degree we control."""
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(bounds=(0, 10))
+    m.y = pyo.Var(bounds=(0, 10))
+    m.c = pyo.Constraint(expr=m.x + m.y <= 5)          # linear unless overridden
+    if kind == "linear":
+        m.o = pyo.Objective(expr=m.x + 2 * m.y)
+    elif kind == "quadratic":
+        m.o = pyo.Objective(expr=m.x ** 2 + m.y)
+    elif kind == "cubic":
+        m.o = pyo.Objective(expr=m.x ** 3 + m.y)
+    elif kind == "nonpoly":
+        m.o = pyo.Objective(expr=pyo.log(m.x + 1) + m.y)
+    elif kind == "quad_constraint":
+        m.o = pyo.Objective(expr=m.x + m.y)
+        m.c2 = pyo.Constraint(expr=m.x * m.y <= 4)     # degree comes from a con
+    return m
+
+
+class TestModelDegreeAndClass(unittest.TestCase):
+    def test_model_degree(self):
+        self.assertEqual(ootb._model_degree(_tiny_model("linear")), "linear")
+        self.assertEqual(ootb._model_degree(_tiny_model("quadratic")), "quadratic")
+        self.assertEqual(ootb._model_degree(_tiny_model("cubic")), "nonlinear")
+        self.assertEqual(ootb._model_degree(_tiny_model("nonpoly")), "nonlinear")
+        # a quadratic CONSTRAINT (linear objective) still makes the model QP
+        self.assertEqual(ootb._model_degree(_tiny_model("quad_constraint")),
+                         "quadratic")
+
+    def test_problem_class_mapping(self):
+        def pc(degree, vint):
+            return ootb._problem_class(
+                ootb.Facts("m", 3, set(), 10, vars_int=vint, model_degree=degree))
+        self.assertEqual(pc("linear", 0), "LP")
+        self.assertEqual(pc("quadratic", 0), "QP")
+        self.assertEqual(pc("nonlinear", 0), "NLP")
+        self.assertEqual(pc("linear", 5), "MIP")
+        self.assertEqual(pc("quadratic", 5), "MIQP")
+        self.assertEqual(pc("nonlinear", 5), "MINLP")
+        # minus tier: not instantiated -> class unknown
+        self.assertIsNone(ootb._problem_class(ootb.Facts("m", 3, set(), 10)))
+
+
+class TestSolverRoutingByClass(unittest.TestCase):
+    def setUp(self):
+        self.policy = ootb.load_policy()
+
+    def _rec(self, degree, vars_int, available):
+        facts = ootb.Facts("m", 6, set(available), 10, effort="base",
+                           vars_int=vars_int, vars_cont=5, model_degree=degree)
+        return ootb.recommend(facts, self.policy)
+
+    def test_nonlinear_continuous_routes_to_ipopt(self):
+        d = self._rec("nonlinear", 0, {"gurobi", "ipopt"})
+        self.assertEqual(d.problem_class, "NLP")
+        self.assertEqual(d.chosen_solver, "ipopt")     # not gurobi
+
+    def test_nonlinear_without_nlp_solver_picks_nothing(self):
+        # a MIP solver must NOT be chosen for a nonlinear model
+        d = self._rec("nonlinear", 0, {"gurobi", "cbc"})
+        self.assertEqual(d.problem_class, "NLP")
+        self.assertIsNone(d.chosen_solver)
+
+    def test_integer_model_never_routes_to_ipopt(self):
+        d = self._rec("linear", 5, {"ipopt", "cbc"})
+        self.assertEqual(d.problem_class, "MIP")
+        self.assertEqual(d.chosen_solver, "cbc")       # ipopt can't do integers
+
+    def test_integer_nonlinear_is_minlp(self):
+        d = self._rec("nonlinear", 3, {"gurobi", "ipopt"})
+        self.assertEqual(d.problem_class, "MINLP")
+        self.assertIsNone(d.chosen_solver)             # no MINLP solver installed
+
+    def test_user_solver_wins_over_class_routing(self):
+        facts = ootb.Facts("m", 6, {"gurobi", "ipopt"}, 10, effort="base",
+                           vars_int=0, vars_cont=5, model_degree="nonlinear",
+                           user_solver_name="cbc",
+                           user_flags={"--solver-name"})
+        d = ootb.recommend(facts, self.policy)
+        self.assertEqual(d.chosen_solver, "cbc")       # OOTB defers to the user
 
 
 if __name__ == "__main__":

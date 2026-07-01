@@ -191,7 +191,7 @@ with calibration output.) Schema keys:
 | Key | Purpose |
 |---|---|
 | `ef_fallback` | when to solve the EF: rank floor `min_ranks_for_decomposition` (req. 3); else the **same effort model as bundles** on the whole problem — base `effort(num_scens) ≤ ef_effort_budget`, plus measured `ef_target_seconds`, minus count `ef_if_num_scens_at_most` |
-| `solver` | `preference_order` (persistent-commercial → commercial → free QP-capable → LP/MIP-only), plus `commercial` / `qp_capable` / `lp_mip_only_force_linearize_prox` sets and `caveats` |
+| `solver` | `preference_order_by_class` — one preferred-solver list per **problem class** (`LP`, `MIP`, `QP`, `MIQP`, `NLP`, `MINLP`); the base/plus probe classifies the model from its integrality (`vars_int`) and max objective/constraint degree (`model_degree`: linear/quadratic/more-than-quadratic → NLP/MINLP), so a nonlinear model routes to `ipopt` and an integer model never routes to `ipopt`. `preference_order` is the master superset (detection candidates + the minus-tier fallback when the class is unknown); each class list is a subset of it. Plus `commercial` / `qp_capable` / `lp_mip_only_force_linearize_prox` sets and `caveats` |
 | `hub` | default hub factory (`ph_hub`, no flag) |
 | `spoke_ladder` | ordered `rungs` of WIRED spoke flags (outer/inner), `core_roster_min` (≥1 outer + ≥1 inner = the 3-rank floor), `max_cylinders` |
 | `rank_allocation` | small-core roster widened by ranks (add a rung only while each cylinder keeps ≥ `min_ranks_per_cylinder`, ≤ `max_cylinders`); ranks split **unbalanced** across cylinders by `rank_ratios` (xhatter 0.2) — crude cold-start (§5.5) |
@@ -237,7 +237,7 @@ to the tier.
 | Tier | Flag | Instantiates | New facts | What it can decide (vs. advise) |
 |---|---|---|---|---|
 | minus | `--out-of-the-box-minus` | nothing | scenario count, ranks, solvers, stage structure | EF gate by **count**; solver by availability; **cannot bundle**. Integrality/size unknown → only **advises** on prox linearization |
-| base (default) | `--out-of-the-box` | **one** probe scenario | size profile: `vars_int`, `vars_cont`, `nonants_total`, `nonants_int` | EF gate **size-aware**; integrality **decides** ipopt/HiGHS/linearize-prox; effort-budgeted bundle sizing (§5.3) |
+| base (default) | `--out-of-the-box` | **one** probe scenario | size profile: `vars_int`, `vars_cont`, `nonants_total`, `nonants_int`, `model_degree` | EF gate **size-aware**; integrality + degree **decide** the problem class (LP/MIP/QP/MIQP/NLP/MINLP) and hence the solver (nonlinear → ipopt); linearize-prox for LP/MIP-only solvers; effort-budgeted bundle sizing (§5.3) |
 | plus (later) | `--out-of-the-box-plus` | **all** + brief solve | per-subproblem solve time, LP-relax / integrality gap | iteration/time-limit defaults, bundle sizing to amortize solve cost, "hard MIP" signals |
 
 **`plus` is still OOTB, not a tuning tool.** It makes the *same* one-shot

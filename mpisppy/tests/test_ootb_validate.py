@@ -106,6 +106,15 @@ class TestValidatorCatchesBadPolicies(unittest.TestCase):
         self.policy["option_categories"]["rho_setter"]["superseded_by"] = ["--grad-rho"]
         self.assertTrue(self._fails(val.validate_static(self.policy)))
 
+    def test_class_list_with_stray_solver(self):
+        # a per-class list must be a subset of preference_order
+        self.policy["solver"]["preference_order_by_class"]["NLP"] = ["not_a_solver"]
+        self.assertTrue(self._fails(val.validate_static(self.policy)))
+
+    def test_missing_a_problem_class(self):
+        del self.policy["solver"]["preference_order_by_class"]["MINLP"]
+        self.assertTrue(self._fails(val.validate_static(self.policy)))
+
     def test_decision_layer_detects_broken_ef_gate(self):
         # If the rank floor is absurdly high, OOTB would never decompose; the
         # "large problem -> decompose" decision check must then fail.

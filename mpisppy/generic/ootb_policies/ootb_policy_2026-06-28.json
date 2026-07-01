@@ -16,7 +16,7 @@
     "_calibration_note": "ef_effort_budget derived from ef_target_seconds / seconds_per_effort_unit (calibrated 2026-06-28)."
   },
   "solver": {
-    "_comment": "Picked by trying preference_order in order and keeping the first that SolverFactory(name).available(exception_flag=False) reports. Persistence is requested by NAMING the *_persistent interface (no separate flag). Persistent commercial first, then plain commercial, then free QP-capable, then LP/MIP-only (which forces prox linearization).",
+    "_comment": "The base/plus probe classifies the model into one of six problem classes (LP, MIP, QP, MIQP, NLP, MINLP) from its integrality (vars_int) and the max polynomial degree of its objective/constraints (linear / quadratic / more-than-quadratic). OOTB then picks the first AVAILABLE solver from that class's list in preference_order_by_class -- e.g. a more-than-quadratic (NLP) model routes to ipopt, an integer model never routes to ipopt. Availability is SolverFactory(name).available(exception_flag=False). Persistence is requested by NAMING the *_persistent interface (no separate flag), so persistent commercial comes first within each class. preference_order is the MASTER superset (the detection candidate set, and the fallback when the class is unknown -- the minus tier does not instantiate, so it cannot classify). Every per-class list is a subset of it (the validator enforces this). Continuous QP/NLP lists drop the LP/MIP-only solvers (cbc/glpk); integer lists drop ipopt (continuous only); MINLP lists dedicated global solvers, which are rarely installed (OOTB then warns).",
     "preference_order": [
       "gurobi_persistent",
       "cplex_persistent",
@@ -28,8 +28,21 @@
       "highs",
       "ipopt",
       "cbc",
-      "glpk"
+      "glpk",
+      "baron",
+      "scip",
+      "bonmin",
+      "couenne"
     ],
+    "preference_order_by_class": {
+      "_comment": "Per-problem-class preferred solver lists (design sec. 6). Keyed by class: LP, MIP, QP, MIQP, NLP, MINLP. Each list is tried top-to-bottom; the first installed solver wins. Every entry must also appear in preference_order. Note: on the DECOMPOSITION path PH adds a quadratic proximal term, so an LP/MIP model's subproblem is really a QP/MIQP; when the chosen solver is LP/MIP-only (lp_mip_only_force_linearize_prox) OOTB linearizes that prox instead of requiring a QP-capable solver, which is why cbc/glpk remain acceptable for LP/MIP.",
+      "LP": ["gurobi_persistent", "cplex_persistent", "xpress_persistent", "gurobi", "cplex", "xpress", "appsi_highs", "highs", "cbc", "glpk"],
+      "MIP": ["gurobi_persistent", "cplex_persistent", "xpress_persistent", "gurobi", "cplex", "xpress", "appsi_highs", "highs", "cbc", "glpk"],
+      "QP": ["gurobi_persistent", "cplex_persistent", "xpress_persistent", "gurobi", "cplex", "xpress", "appsi_highs", "highs", "ipopt"],
+      "MIQP": ["gurobi_persistent", "cplex_persistent", "xpress_persistent", "gurobi", "cplex", "xpress", "appsi_highs", "highs"],
+      "NLP": ["ipopt"],
+      "MINLP": ["baron", "scip", "bonmin", "couenne"]
+    },
     "commercial": [
       "gurobi",
       "cplex",
@@ -54,8 +67,8 @@
       "cbc"
     ],
     "caveats": {
-      "_comment": "Surfaced via suggestions, not branched on yet (model integrality is not introspected in v1; see design \u00a76).",
-      "ipopt": "Continuous NLP only; cannot handle integer variables.",
+      "_comment": "Human-readable notes about individual solvers. The base/plus probe now DOES introspect integrality and nonlinearity to route solver selection (see preference_order_by_class), so these caveats mostly explain the routing; the remaining ones are surfaced via suggestions.",
+      "ipopt": "Continuous NLP only; cannot handle integer variables (so it is in the NLP/QP lists, never the MIP/MIQP/MINLP lists).",
       "highs": "QP ok; mixed-integer quadratic (MIQP) support is limited, so the PH prox on MIP subproblems may be rejected.",
       "glpk_cbc": "LP/MIP only; cannot handle the quadratic PH prox term, so OOTB sets --linearize-proximal-terms."
     }
