@@ -133,13 +133,14 @@ class Test_confint_farmer(unittest.TestCase):
                                 solving_type="EF_2stage",
         )
 
-    @unittest.skipIf(not solver_available, "no solver is available")
     def test_seqsampling_maximize_raises(self):
         # Sequential sampling supports minimization only. The sense is read from
         # the first gap estimator's fully built model (no extra probe build), so
-        # construction succeeds and the run raises loudly once the real maximize
-        # sense is known -- before any stopping decision or sample size is
-        # computed from a wrong-signed gap.
+        # construction succeeds; the guard then raises once the real sense is
+        # known -- before any stopping decision or sample size is computed from a
+        # wrong-signed gap. Reaching the guard through a real run() requires a
+        # full gap estimation, which is too big for community solvers (see the
+        # skipped test_seqsampling_running), so exercise the guard directly.
         optionsBM = config.Config()
         confidence_config.confidence_config(optionsBM)
         confidence_config.sequential_config(optionsBM)
@@ -151,7 +152,6 @@ class Test_confint_farmer(unittest.TestCase):
         optionsBM.quick_assign("BM_q", float, 1.2)
         optionsBM.quick_assign("solver_name", str, solver_name)
         optionsBM.quick_assign("solving_type", str, "EF_2stage")
-        optionsBM.quick_assign("farmer_maximize", bool, True)
         seq_pb = seqsampling.SeqSampling("mpisppy.tests.examples.farmer",
                                          seqsampling.xhat_generator_farmer,
                                          optionsBM,
@@ -159,8 +159,10 @@ class Test_confint_farmer(unittest.TestCase):
                                          stopping_criterion="BM",
                                          solving_type="EF_2stage",
         )
+        # minimization passes through; maximization must raise loudly
+        seq_pb._min_only_guard(True)
         with self.assertRaisesRegex(RuntimeError, "minimization only"):
-            seq_pb.run(maxit=1)
+            seq_pb._min_only_guard(False)
 
 
     def test_pyomo_opt_sense(self):
