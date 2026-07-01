@@ -50,7 +50,14 @@ def scenario_creator(scenario_name, use_integer=False, sense=GRB.MINIMIZE, crops
 
     if sense not in [GRB.MINIMIZE, GRB.MAXIMIZE]:
         raise ValueError("Model sense Not recognized")
-    
+    if sense == GRB.MAXIMIZE:
+        # The gurobipy guest adds the PH proximal/weight terms with a fixed
+        # minimize sign, so it is minimize-only.  Fail loudly rather than
+        # silently solve a wrong-signed augmented problem.
+        raise RuntimeError(
+            "The gurobipy agnostic guest currently supports minimization only; "
+            "maximization is not implemented for this guest.")
+
     model = gp.Model(scenname)
     # Silence gurobi output
     model.setParam('OutputFlag', 0)
