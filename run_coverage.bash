@@ -65,11 +65,17 @@ fi
 run_phase "test_ef_ph (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_ef_ph.py -v
 
+run_phase "test_maximization (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_maximization.py -v
+
 run_phase "test_cvar (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_cvar.py -v
 
 run_phase "test_chance_constraint (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_chance_constraint.py -v
+
+run_phase "test_cross_scenario_buffer_sizing (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_cross_scenario_buffer_sizing.py -v
 
 run_phase "test_component_map_usage (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_component_map_usage.py -v
@@ -85,6 +91,9 @@ run_phase "test_nonant_validation (serial)" \
 
 run_phase "test_rho_enforcement (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_rho_enforcement.py -v
+
+run_phase "test_prox_solver_compat (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_prox_solver_compat.py -v
 
 run_phase "test_ph_main (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_main.py
@@ -121,6 +130,9 @@ run_phase "test_smps (serial)" \
 
 run_phase "test_generic_cylinders (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_generic_cylinders.py -v
+
+run_phase "test_w_oscillation (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_w_oscillation.py -v
 
 run_phase "test_jensens (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_jensens.py -v

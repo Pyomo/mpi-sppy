@@ -869,6 +869,17 @@ def add_slammer(hub_dict,
     hub_dict["opt_kwargs"]["options"]["slammer_options"] = slammer_options
     return hub_dict
 
+def add_w_oscillation(hub_dict, cfg):
+    # W-oscillation detection/reporting; activated only when the detect JSON
+    # control file is supplied (see doc/designs/w_oscillation_design.md).
+    from mpisppy.extensions.w_oscillation import WOscillationMonitor
+    hub_dict = extension_adder(hub_dict, WOscillationMonitor)
+    hub_dict["opt_kwargs"]["options"]["w_oscillation_options"] = {
+        "detect_json": cfg.detect_W_oscillations,
+        "verbose": cfg.verbose,
+    }
+    return hub_dict
+
 def add_wxbar_read_write(hub_dict, cfg):
     """
     Add the wxbar read and write extensions to the hub_dict

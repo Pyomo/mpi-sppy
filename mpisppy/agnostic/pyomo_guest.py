@@ -55,8 +55,12 @@ class Pyomo_guest():
                 Name of the scenario to construct.
         """
         s = self.model_module.scenario_creator(scenario_name, **kwargs)
-        ### TBD: assert that this is minimization?
-        if hasattr(s, "_nonant_vardata_list"): 
+        # Read the guest model's objective sense so PH augmentation and bounds
+        # are handled correctly for both minimization and maximization.
+        sense = (pyo.minimize
+                 if sputils.find_active_objective(s).is_minimizing()
+                 else pyo.maximize)
+        if hasattr(s, "_nonant_vardata_list"):
             nonant_vars = s._nonant_vardata_list  # a list of vars
         elif hasattr(s, "_mpisppy_node_list"):
             assert len(s._mpisppy_node_list) == 1, "multi-stage agnostic with Pyomo as guest not yet supported."
@@ -71,7 +75,7 @@ class Pyomo_guest():
             "nonant_start": {("ROOT",i): v._value for i,v in enumerate(nonant_vars)},
             "nonant_names": {("ROOT",i): v.name for i, v in enumerate(nonant_vars)},
             "probability": s._mpisppy_probability,
-            "sense": pyo.minimize,
+            "sense": sense,
             "BFs": None
             }
         # we don't need to attach nonants to s; the agnostic class does it

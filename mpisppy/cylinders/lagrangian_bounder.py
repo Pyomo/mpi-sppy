@@ -15,8 +15,12 @@ class _LagrangianMixin:
     def lagrangian_prep(self):
         # Split up PH_Prep? Prox option is important for APH.
         # Seems like we shouldn't need the Lagrangian stuff, so attach_prox=False
-        # Scenarios are created here
-        self.opt.PH_Prep(attach_prox=False)
+        # Scenarios are created here.
+        # defer_attach=False: the Lagrangian spoke never runs Iter0; it attaches
+        # W here, re-enables it, and solves directly, so the W term must be
+        # spliced into the objective now rather than deferred to the end of
+        # Iter0 (which is where the PH hub attaches it).
+        self.opt.PH_Prep(attach_prox=False, defer_attach=False)
         self.opt._reenable_W()
         self.opt._create_solvers()
 

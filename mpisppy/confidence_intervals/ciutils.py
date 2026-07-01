@@ -182,15 +182,20 @@ def pyomo_opt_sense(module_name, cfg):
     kw = module.kw_creator(cfg)
     m = module.scenario_creator(sn[0], **kw)
     objs = sputils.get_objs(m)
-    if objs[0].is_minimizing:
+    if objs[0].is_minimizing():
         cfg.quick_assign("pyomo_opt_sense", int, pyo.minimize)
     else:
         cfg.quick_assign("pyomo_opt_sense", int, pyo.maximize)
 
-        
-def correcting_numeric(G, cfg, relative_error=True, threshold=1e-4, objfct=None):
+
+def correcting_numeric(G, cfg, relative_error=True, threshold=1e-4, objfct=None,
+                       sense=None):
     #Correcting small negative G due to numerical error while solving EF
-    sense = cfg.get("pyo_opt_sense", pyo.minimize)  # 1 is minimize, -1 max
+    # The gap sign is sense-dependent: for minimization G should be >= 0, for
+    # maximization G should be <= 0. Callers that know the sense pass it
+    # directly; otherwise fall back to the cfg entry set by pyomo_opt_sense().
+    if sense is None:
+        sense = cfg.get("pyomo_opt_sense", pyo.minimize)  # 1 is minimize, -1 max
     assert sense == 1 or sense == -1
     if relative_error:
         crit = threshold*np.abs(objfct)
@@ -199,10 +204,12 @@ def correcting_numeric(G, cfg, relative_error=True, threshold=1e-4, objfct=None)
     if objfct is None:
         raise RuntimeError("We need a value of the objective function to remove numerically small G")
     elif sense == pyo.minimize and G <= -crit:
-        print(f"WARNING: The gap estimator is the wrong sign: {G}")
+        if global_rank == 0:
+            print(f"WARNING: The gap estimator is the wrong sign: {G}")
         return G
     elif sense == pyo.maximize and G >= crit:
-        print(f"WARNING: The gap estimator is the wrong sign: {G}")
+        if global_rank == 0:
+            print(f"WARNING: The gap estimator is the wrong sign: {G}")
         return G
     else:
         if sense == pyo.minimize:
@@ -426,8 +433,9 @@ def gap_estimators(xhat_one,
     s = np.sqrt(sample_var)
     
     use_relative_error = (np.abs(zn_star)>1)
+    sense = pyo.minimize if ev.is_minimizing else pyo.maximize
     G = correcting_numeric(G,cfg,objfct=obj_at_xhat,
-                           relative_error=use_relative_error)
+                           relative_error=use_relative_error, sense=sense)
   
     #objective_gap removed Sept.29 2022
-    return {"G":G,"s":s,"seed":start}
+    return {"G":G,"s":s,"seed":start,"is_minimizing":ev.is_minimizing}

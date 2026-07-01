@@ -196,7 +196,15 @@ class AMPL_guest():
         gs.eval("param xbars{nonant_indices};")
         obj_fct = gd["obj_fct"]
         objstr = str(obj_fct)
-        assert objstr.split(' ')[0] == "minimize", "We currently assume minimization"
+        # The AMPL guest currently supports minimization only (the PH term is
+        # spliced into a "minimize" objective below). Fail loudly and early on
+        # a maximization model rather than silently producing wrong results.
+        if objstr.split(' ')[0] != "minimize":
+            raise RuntimeError(
+                "The AMPL guest currently supports minimization only; the "
+                f"active objective starts with '{objstr.split(' ')[0]}'. "
+                "Maximization is not yet implemented for the AMPL guest."
+            )
 
         # Dual term (weights W) (This is where indexes are an issue)
         phobjstr = ""
