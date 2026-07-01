@@ -176,7 +176,11 @@ class MMWConfidenceIntervals():
 
         epsilon_g = t_g*s_g/np.sqrt(num_batches)
 
-        gap_inner_bound =  Gbar + epsilon_g
+        # The optimality gap is a non-negative quantity. For minimization the
+        # raw gap Gbar is >= 0; for maximization it is <= 0, so use its
+        # magnitude. gap_estimators reports the sense of the model.
+        minimizing = estim.get("is_minimizing", True)
+        gap_inner_bound = (Gbar if minimizing else -Gbar) + epsilon_g
         gap_outer_bound = 0
  
         self.result={"gap_inner_bound": gap_inner_bound,
