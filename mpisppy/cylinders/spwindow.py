@@ -58,8 +58,13 @@ _field_lengths = {
         Field.OBJECTIVE_OUTER_BOUND : 1,
         Field.EXPECTED_REDUCED_COST : field_length_components._total_number_nonants,
         Field.SCENARIO_REDUCED_COST : field_length_components._local_nonant_length,
+        # CROSS_SCENARIO_CUT is global-sized: every rank holds one cut row (eta
+        # coef + nonant coefs + constant) for every scenario, replicated across a
+        # cylinder's ranks. CROSS_SCENARIO_COST is local-sized: one recourse-cost
+        # (eta) value per global scenario, for each *local* scenario. Both must use
+        # the global scenario count (_total_number_scenarios), not the local one.
         Field.CROSS_SCENARIO_CUT : field_length_components._total_number_scenarios * (field_length_components._total_number_nonants + 1 + 1),
-        Field.CROSS_SCENARIO_COST : field_length_components._total_number_scenarios * field_length_components._total_number_scenarios,
+        Field.CROSS_SCENARIO_COST : field_length_components._total_number_scenarios * field_length_components._local_scenario_length,
         Field.NONANT_LOWER_BOUNDS : field_length_components._total_number_nonants,
         Field.NONANT_UPPER_BOUNDS : field_length_components._total_number_nonants,
         Field.BEST_XHAT : field_length_components._local_nonant_length + field_length_components._local_scenario_length,
@@ -80,7 +85,7 @@ class FieldLengths:
         field_length_components._local_nonant_length.value = number_nonants
         field_length_components._local_scenario_length.value = len(opt.local_scenarios)
         field_length_components._total_number_nonants.value = opt.nonant_length
-        field_length_components._total_number_scenarios.value = len(opt.local_scenarios)
+        field_length_components._total_number_scenarios.value = len(opt.all_scenario_names)
 
         self._field_lengths = {k : pyo.value(v) for k, v in _field_lengths.items()}
 

@@ -71,6 +71,9 @@ run_phase "test_cvar (serial)" \
 run_phase "test_chance_constraint (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_chance_constraint.py -v
 
+run_phase "test_cross_scenario_buffer_sizing (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_cross_scenario_buffer_sizing.py -v
+
 run_phase "test_component_map_usage (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_component_map_usage.py -v
 
