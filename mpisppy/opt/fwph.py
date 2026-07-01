@@ -104,7 +104,11 @@ class FWPH(mpisppy.phbase.PHBase):
         return mip_solver_name, qp_solver_name
 
     def fwph_main(self, finalize=True):
-        self.PH_Prep(attach_duals=True, attach_prox=False)
+        # defer_attach=False: FWPH snarfs the subproblem objective (with W
+        # attached) between PH_Prep and Iter0 via _attach_nonant_objective and
+        # _set_QP_objective, so the W terms must be spliced in here rather than
+        # deferred to the end of Iter0.
+        self.PH_Prep(attach_duals=True, attach_prox=False, defer_attach=False)
         self._output_header()
         self._attach_MIP_vars()
         self._cache_nonant_var_swap_mip()

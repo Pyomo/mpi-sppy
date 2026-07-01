@@ -86,6 +86,12 @@ run_phase "test_options_reach_solver (serial; gurobi-only)" \
 run_phase "test_nonant_validation (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_nonant_validation.py -v
 
+run_phase "test_rho_enforcement (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_rho_enforcement.py -v
+
+run_phase "test_prox_solver_compat (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_prox_solver_compat.py -v
+
 run_phase "test_ph_main (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_main.py
 
@@ -121,6 +127,9 @@ run_phase "test_smps (serial)" \
 
 run_phase "test_generic_cylinders (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_generic_cylinders.py -v
+
+run_phase "test_w_oscillation (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_w_oscillation.py -v
 
 run_phase "test_jensens (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_jensens.py -v

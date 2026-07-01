@@ -87,6 +87,11 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs,
 def _get_rho_setter(module, cfg):
     """Get the rho_setter from the module, or None."""
     rho_setter = module._rho_setter if hasattr(module, '_rho_setter') else None
+    if cfg.default_rho is not None and cfg.default_rho <= 0:
+        raise RuntimeError(
+            f"--default-rho must be strictly positive, got {cfg.default_rho}. "
+            "Progressive Hedging requires rho > 0."
+        )
     if cfg.default_rho is None and rho_setter is None and not cfg.lshaped_hub:
         if cfg.sep_rho or cfg.coeff_rho or cfg.sensi_rho:
             cfg.default_rho = 1
