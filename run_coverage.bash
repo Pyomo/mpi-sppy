@@ -74,6 +74,9 @@ run_phase "test_cvar (serial)" \
 run_phase "test_chance_constraint (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_chance_constraint.py -v
 
+run_phase "test_cross_scenario_buffer_sizing (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_cross_scenario_buffer_sizing.py -v
+
 run_phase "test_component_map_usage (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_component_map_usage.py -v
 
@@ -85,6 +88,12 @@ run_phase "test_options_reach_solver (serial; gurobi-only)" \
 
 run_phase "test_nonant_validation (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_nonant_validation.py -v
+
+run_phase "test_rho_enforcement (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_rho_enforcement.py -v
+
+run_phase "test_prox_solver_compat (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_prox_solver_compat.py -v
 
 run_phase "test_ph_main (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_main.py
@@ -121,6 +130,9 @@ run_phase "test_smps (serial)" \
 
 run_phase "test_generic_cylinders (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_generic_cylinders.py -v
+
+run_phase "test_w_oscillation (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_w_oscillation.py -v
 
 run_phase "test_jensens (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_jensens.py -v
@@ -167,6 +179,9 @@ run_phase "test_xhat_from_file (serial)" \
 run_phase "test_incumbent_writing (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_incumbent_writing.py -v
 
+run_phase "test_iis_on_infeasible (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_iis_on_infeasible.py -v
+
 # Pure-logic serial unit tests (no MPI, no solver). The CI "run unit tests"
 # job (.github/workflows/test_pr_and_main.yml) runs these under coverage; keep
 # this list in sync with that job so local and CI coverage numbers match.
@@ -184,7 +199,8 @@ run_phase "serial unit tests (serial)" \
         mpisppy/tests/test_ciutils.py \
         mpisppy/tests/test_prox_approx.py \
         mpisppy/tests/test_sep_rho.py \
-        mpisppy/tests/test_reduced_costs_fixer.py
+        mpisppy/tests/test_reduced_costs_fixer.py \
+        mpisppy/tests/test_slammer.py
 
 run_phase "test_conf_int_farmer (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_conf_int_farmer.py

@@ -23,6 +23,9 @@ Many extensions are supported in :ref:`generic_cylinders` via
 command-line flags:
 
 - ``--fixer`` -- activates the fixer extension
+- ``--slamming-directives-file <file>`` -- activates the slammer extension
+- ``--detect-W-oscillations <file>`` -- activates W-oscillation detection
+  (see :ref:`w_oscillation`)
 - ``--mipgaps-json <file>`` -- activates the mipgapper extension
 - ``--user-defined-extensions <module>`` -- loads a custom extension
 - ``--grad-rho`` -- activates gradient-based rho (see :ref:`rho_setting`)
@@ -159,6 +162,95 @@ This extension can be especially effective if (1) solving the relaxation
 is much easier than solving the problem with integrality constraints or (2) the
 relaxation is reasonably "tight".
 
+.. _slammer:
+
+slammer
+^^^^^^^
+
+This extension does preference-driven *slamming*: it forces (fixes) a
+nonanticipative variable according to pre-specified user preferences while the
+hub is running, to break a stall or cycle. Unlike the other fixers above --
+which fix on *agreement* and so can infer a direction automatically -- slamming
+is meant for variables that are *not* settling, where there is no agreement to
+read a direction from, so the directions are supplied by the user in a
+directives file. This is the intended use rather than an enforced precondition:
+slamming does not test convergence per variable; any variable matched by a
+``can_slam`` rule is eligible (see the eligibility rules below). (Slamming is
+distinct from the ``SlamMin`` / ``SlamMax`` *spokes*, which are non-destructive
+incumbent finders that never perturb the hub.)
+
+From ``generic_cylinders.py`` the extension is activated **only** when a
+directives file is supplied, so a run with no slamming options behaves exactly
+as it does today:
+
+- ``--slamming-directives-file <file>`` -- the directives file (its presence
+  activates the extension)
+- ``--slam-start-iter <K>`` -- first hub iteration at which slamming may occur
+  (default 1)
+- ``--iters-between-slams <M>`` -- once started, slam at most once every ``M``
+  iterations (default 1)
+
+Supplying ``--slam-start-iter`` or ``--iters-between-slams`` without the file is
+an error.
+
+The directives file is a CSV keyed by nonant name with shell-style wildcards
+(``*``/``?``; the index brackets ``[`` ``]`` are matched literally). Each row
+gives a name pattern, an optional ``can_slam`` flag (``1``/``0``; ``0`` carves
+out an exception), an ordered ``|``-separated list of ``directions`` from
+``{lb, ub, nearest, anywhere, min, max}`` (the first applicable one is used),
+and a ``priority`` (the eligible nonant with the largest priority is slammed
+first). Matching is last-match-wins, so write broad defaults first and
+exceptions after; only variables matched by a ``can_slam`` rule are ever
+slammed. A multi-index name contains a comma and so must be quoted. A pattern
+that matches no variable in the model is a hard error (it is almost always a
+typo) and the message names the file. A worked example translated from PySP
+ships at ``examples/sizes/config/slamming_directives.csv``.
+
+The available ``directions``, and the value each fixes the variable to, are:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 85
+
+   * - Direction
+     - Value the variable is fixed to
+   * - ``lb``
+     - the variable's lower bound
+   * - ``ub``
+     - the variable's upper bound
+   * - ``nearest``
+     - whichever bound (``lb`` or ``ub``) the current consensus value ``xbar``
+       is closer to
+   * - ``anywhere``
+     - ``xbar`` itself, rounded to the nearest integer for integer and binary
+       variables (using ``--rounding-bias``)
+   * - ``min``
+     - the minimum of the variable's value across all scenarios that share its
+       scenario-tree node
+   * - ``max``
+     - the maximum of the variable's value across all scenarios that share its
+       scenario-tree node
+
+A direction is *applicable* only when it produces a finite value (for example,
+``lb`` is skipped for a variable that has no lower bound). The directions in a
+row are tried in order and the first applicable one is used; if none applies,
+that variable is not slammed at this event.
+
+Slamming is triggered by iteration count: no variable is slammed before
+``--slam-start-iter``, and from then on at most one variable is slammed every
+``--iters-between-slams`` iterations. At each such event the single eligible
+variable with the largest ``priority`` is slammed (ties are broken by name, so
+the choice is the same on every rank). A variable is eligible only if it is
+matched by a ``can_slam`` rule, is not already fixed (by the modeler or another
+fixer), and is not a surrogate variable. Once a variable is slammed it stays
+fixed for the remainder of the run.
+
+The directions ``lb``, ``ub``, ``nearest``, and ``anywhere`` use only data that
+is already identical on every rank, so they need no communication; ``min`` and
+``max`` perform a single small reduction across scenarios, and only when such a
+slam actually occurs. See ``doc/designs/slamming_design.md`` for design details
+and rationale.
+
 WXBarWriter and WXBarReader
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -257,6 +349,100 @@ Each CSV row is indexed by ``(varname, scenario_name)`` and gives the
 windowed mean and stdev of W for that nonant/scenario pair. This is a
 diagnostic tool intended for tuning rho and convergence behavior; it
 adds time and memory and is not recommended for production runs.
+
+
+.. _w_oscillation:
+
+w_oscillation
+^^^^^^^^^^^^^
+
+The ``w_oscillation`` extension (``mpisppy.extensions.w_oscillation``)
+*detects* oscillation / cycling in the PH dual weight (W) vector and
+reports it to a CSV. Oscillating (sign-flipping, non-damping) weights are
+a common, convergence-killing symptom for mixed-integer problems. The
+extension is **pure observation**: it changes no rho values and fixes no
+variables, so a run with detection enabled follows exactly the same
+optimization trajectory as one without.
+
+For a broader view of how W evolves -- moving means, standard deviations,
+and coefficient of variation across all nonant/scenario traces -- use the
+:ref:`wtracker_extension`; ``w_oscillation`` is the focused layer that
+flags the specific traces that are *cycling*.
+
+From ``generic_cylinders.py``, enable it with::
+
+  --detect-W-oscillations <control.json>
+
+The JSON control file selects and parameterizes the detection methods and
+controls the output. Keys:
+
+- ``output_csv`` (required) -- the per-nonant aggregate report; written by
+  cylinder rank 0.
+- ``per_scenario_csv`` (optional) -- a per-(scenario, nonant) detail file
+  (gathered to rank 0); off by default.
+- ``warmup_iters`` -- do not evaluate until this many W samples exist
+  (default 5).
+- ``check_every`` -- evaluate the detectors every this many iterations
+  after warm-up (default 1).
+- ``report_mode`` -- ``on_detect`` (a row the first time a nonant is
+  flagged; the default), ``every_check``, or ``final`` (one report at the
+  end).
+- ``min_scenarios_to_report`` / ``min_frac_to_report`` -- a nonant is
+  reported once at least this many scenarios (or this fraction of them)
+  flag it.
+- ``methods`` -- a (non-empty) object selecting one or both detectors;
+  per-method keys override documented defaults.
+
+Two detection methods are available:
+
+- ``zero_crossings`` -- a port of PySP's ``sorgw`` plugin: per
+  (scenario, nonant) it counts sign changes of W and of the consecutive
+  differences, plus a back-half/front-half damping ratio of ``|ΔW|``, and
+  flags a trace when any of ``thresh_w_crossings`` (default 2),
+  ``thresh_diff_crossings`` (default 3), or ``thresh_diffs_ratio``
+  (default 0.2) is met.
+- ``w_hash_recurrence`` -- the Watson-Woodruff "Progressive Hedging
+  Innovations" (Computational Management Science, 2011) §2.4 cycle
+  detector: it hashes the per-scenario W vector for each nonant and flags
+  a *recurrence* of that vector (a genuine cycle of period
+  ``min_period`` or more, so convergence is not mistaken for a cycle).
+  Keys: ``window`` (default 20), ``quantum`` (default 1e-6),
+  ``min_period`` (default 2).
+
+An example control file is shipped at
+``examples/sizes/config/w_oscillation.json``. It enables both detectors,
+keeps a 20-iteration window, and reports a nonant once at least half of the
+scenarios (``min_frac_to_report``) flag it:
+
+.. literalinclude:: ../../examples/sizes/config/w_oscillation.json
+   :language: json
+
+That example leaves ``per_scenario_csv`` at ``null``, so only the aggregate
+report is written. To also emit the per-(scenario, nonant) detail file --
+one row per flagged trace per check, gathered to rank 0 -- set
+``per_scenario_csv`` to a path (other keys fall back to their defaults):
+
+.. code-block:: json
+
+    {
+        "output_csv": "w_oscillations.csv",
+        "per_scenario_csv": "w_oscillations_per_scenario.csv",
+        "report_mode": "every_check",
+        "methods": {
+            "zero_crossings": {}
+        }
+    }
+
+The detail file has columns ``iteration, node, scenario, variable, method,
+w_crossings, diff_crossings, diffs_ratio, w_value``.
+
+The aggregate CSV has a header row and one row per flagged nonant per
+detection event, with columns ``iteration, node, variable, method,
+num_scenarios_total, num_scenarios_flagged, max_w_crossings,
+max_diff_crossings, max_diffs_ratio, cycle_period``. The report is
+independent of how scenarios are distributed across MPI ranks.
+
+See ``doc/designs/w_oscillation_design.md`` for the full design.
 
 
 gradient_extension
@@ -374,15 +560,16 @@ only for the Vars you expect before setting it to True.
 Scenario_lp_mps_writer_dir
 --------------------------
 
-This extension writes an lp file and an mps file with the model as well as a
+This extension writes an lp file and an mps file with the model, a
 json file with (a) list(s) of scenario tree node names and
-nonanticaptive variables for each scenario before the iteration zero
+nonanticaptive variables, and a ``{scenario}_rho.csv`` file with the
+per-nonant rho values, for each scenario before the iteration zero
 solve of PH or APH. Note that for two-stage problems, all json files
-will be the same. See ``mpisppy.generic_cylinders.py`` for an example
-of use. In that program it is activated with the
+(and all rho files) will be the same. See ``mpisppy.generic_cylinders.py``
+for an example of use. In that program it is activated with the
 ``--scenario-lp-mps-writerdir`` option that specifies a directory that
 does not exist. The extension
 writes the files to this directory and for each scenario
-the base name of the three files written is the scenario name.
+the base name of the four files written is the scenario name.
 
 Unless you know exactly why you need this, you probably don't.

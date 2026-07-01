@@ -18,6 +18,11 @@ StochAdmmWrapper
    own driver, extending the wrapper, or trying to understand how
    ``generic_cylinders --stoch-admm`` works under the hood.
 
+   The driver files referenced below (``stoch_distr_admm_cylinders.py``,
+   ``stoch_distr_ef.py``, ``globalmodel.py``) have been moved to
+   ``examples/stoch_distr/archive/`` to keep the canonical example
+   directory uncluttered.  They are kept as historical references.
+
 .. automodule:: stoch_distr
    :noindex:
    :show-inheritance:
@@ -48,7 +53,7 @@ was just helpful for this example.
 Example Driver file
 -------------------
 
-The driver ``stoch_distr_admm_cylinders.py`` calls
+The driver ``archive/stoch_distr_admm_cylinders.py`` calls
 ``stoch_admmWrapper.py``, using the model provided by the model file
 (in the example ``examples.stoch_distr.stoch_distr.py``).  Under the
 hood (so to speak), the file ``stoch_admmWrapper.py`` returns
@@ -128,7 +133,7 @@ to create an ``admm_stoch_subproblem_scenario``, also called extended scenario.
 For instance, in the stochastic distribution example, in a ``stochastic_scenario``: ``StochasticScenario1``,
 in the ``admm_subproblem``: ``Region2``, the ``admm_stoch_subproblem_scenario`` is ``ADMM_STOCH_Region2_StochasticScenario1``.
 
-All these names are required in the driver file ``stoch_distr_admm_cylinders.py`` to create the wrapper file ``stoch_admmWrapper.py``.
+All these names are required in the driver file ``archive/stoch_distr_admm_cylinders.py`` to create the wrapper file ``stoch_admmWrapper.py``.
 The function ``split_admm_stoch_subproblem_scenario_name`` is also needed to obtain the ``admm_subproblem`` and ``stochastic_scenarios``
 from the ``admm_stoch_subproblem_scenario``.
 
@@ -136,9 +141,10 @@ from the ``admm_stoch_subproblem_scenario``.
 
 Direct solution of the extensive form
 +++++++++++++++++++++++++++++++++++++
-``stoch_distr_ef.py`` can be used as a verification or debugging tool for small instances.
+``archive/stoch_distr_ef.py`` can be used as a verification or debugging tool for small instances.
 It directly solves the extensive form using the wrapper ``scenario_creator`` from ``stoch_admmWrapper``.
-It has the advantage of requiring the same arguments as ``stoch_distr_admm_cylinders`` because both solve the extensive form.
+It has the advantage of requiring the same arguments as ``archive/stoch_distr_admm_cylinders.py`` because both solve the extensive form.
+(``generic_cylinders.py --module-name stoch_distr --EF --stoch-admm ...`` is the recommended modern equivalent.)
 
 This method offers a verification for small instances, but doesn't decompose the problem.
 
@@ -160,7 +166,7 @@ Finally everything else can be determined.
 To decompose it in ADMM subproblems, an extra stage is added in ``stoch_admmWrapper.py``.
 
 ``examples.stoch_distr.stoch_distr.py`` is an example of model creator in stoch_admmWrapper for a (linear) inter-region minimal cost distribution problem.
-``stoch_distr_admm_cylinders.py`` is the driver.
+``archive/stoch_distr_admm_cylinders.py`` is the (deprecated) driver.
 
 Original data dictionaries
 +++++++++++++++++++++++++++
@@ -262,21 +268,21 @@ In the example the driver gets argument from the command line through the functi
 Non local solvers
 +++++++++++++++++
 
-The file ``globalmodel.py`` and ``distr_ef.py`` are used for debugging or learning. They don't rely on ph or admm, they simply solve the
+The files ``archive/globalmodel.py`` and ``archive/stoch_distr_ef.py`` are used for debugging or learning. They don't rely on ph or admm, they simply solve the
 problem without decomposition.
 
-* ``globalmodel.py``
+* ``archive/globalmodel.py``
 
-    In ``globalmodel.py``,  ``global_dict_creator`` merges the data into a global dictionary
-    thanks to the inter-region dictionary, without creating inter_region_arcs. Then model is created (as if there was 
+    In ``archive/globalmodel.py``,  ``global_dict_creator`` merges the data into a global dictionary
+    thanks to the inter-region dictionary, without creating inter_region_arcs. Then model is created (as if there was
     only one region without arcs leaving it) and solved.
 
     However this file depends on the structure of the problem and doesn't decompose the problems.
     Luckily in this example, the model creator is the same as in stoch_distr, because the changes for consensus-vars are neglectible.
     However, in general, this file may be difficultly adapted and inefficient.
 
-* ``stoch_distr_ef.py``
+* ``archive/stoch_distr_ef.py``
 
-    As presented previously solves the extensive form. 
-    The arguments are the same as ``stoch_distr_admm_cylinders.py``, the method doesn't need to be adapted with the model.
+    As presented previously solves the extensive form.
+    The arguments are the same as ``archive/stoch_distr_admm_cylinders.py``, the method doesn't need to be adapted with the model.
 

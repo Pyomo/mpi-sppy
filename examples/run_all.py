@@ -171,6 +171,16 @@ if run_first_part:
            "--rel-gap 0.001 --max-iterations=50 "
            "--grad-rho --indep-denom "
            "--default-rho=2 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
+    # risk-averse (CVaR): eta is just another first-stage var, so the cylinders
+    # run unchanged with --cvar added.  eta has a much larger cost scale than the
+    # acreage variables, so use a cost-aware rho (grad-rho) instead of a uniform
+    # default-rho (see the Risk Management docs).
+    do_one("farmer", "../../mpisppy/generic_cylinders.py", 3,
+           "--module-name farmer --num-scens 6 "
+           "--rel-gap 0.001 --max-iterations=50 "
+           "--default-rho=2 --grad-rho --grad-order-stat 0.5 "
+           "--solver-name={} --lagrangian --xhatshuffle "
+           "--cvar --cvar-weight 2.0 --cvar-alpha 0.8".format(solver_name))
     do_one("farmer", "../../mpisppy/generic_cylinders.py", 4,
            "--module-name farmer --num-scens 6 "
            "--rel-gap 0.001 --max-iterations=50 "

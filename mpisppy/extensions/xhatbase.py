@@ -193,6 +193,8 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                     sputils.reactivate_objs(s)
                 # if you hit infeas, return None
                 if not pyo.check_optimal_termination(results):
+                    self.opt.write_iis_on_xhatter_infeasible(
+                        model=self._EFs[ndn2], label=ndn2)
                     if restore_nonants:
                         self.opt._restore_nonants()
                     return None
@@ -228,6 +230,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
 
         infeasP = self.opt.no_incumbent_prob()
         if infeasP != 0.:
+            self.opt.write_iis_on_xhatter_infeasible()
             if restore_nonants:
                 self.opt._restore_nonants()
             return None

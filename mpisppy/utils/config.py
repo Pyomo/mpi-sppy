@@ -161,7 +161,12 @@ class Config(pyofig.ConfigDict):
             )
 
         # remember that True is 1 and False is 0
+        if (self.get("APH",0) + self.get("subgradient_hub",0) + self.get("fwph_hub",0) + self.get("ph_primal_hub",0) + self.get("lshaped_hub",0) + self.get("cg_hub",0) + self.get("dualcg_hub",0)) > 1:
+            _bad_options("Only one hub can be active.")
+
+        # remember that True is 1 and False is 0
         if (self.get("grad_rho") + self.get("sensi_rho") + self.get("coeff_rho") + self.get("sep_rho")) > 1:
+
             _bad_options("Only one rho setter can be active.")
         if not (self.get("grad_rho")
                 or self.get("sensi_rho")
@@ -186,6 +191,16 @@ class Config(pyofig.ConfigDict):
             # PySP). See doc/designs/chance_constraint_design.md.
             _bad_options("--cc-indicator-var (chance constraint) is currently "
                          "supported only with --EF")
+
+        # Slamming options other than the directives file are meaningless
+        # without it; require the file so that a run with no slamming options
+        # behaves exactly as it does today (total backward compatibility).
+        if self.get("slamming_directives_file") is None and (
+                self.get("slam_start_iter") is not None
+                or self.get("iters_between_slams") is not None):
+            _bad_options("slamming options (--slam-start-iter / "
+                         "--iters-between-slams) require "
+                         "--slamming-directives-file")
 
     def add_solver_specs(self, prefix=""):
         sstr = f"{prefix}_solver" if prefix else "solver"
@@ -248,6 +263,35 @@ class Config(pyofig.ConfigDict):
                            "solver logs; spokes do not. Requires --solver-log-dir.",
                            domain=bool,
                            default=False)
+
+        self.add_to_config("xhatter_write_iis",
+                           description="When an xhatter (incumbent-finder) rejects a candidate "
+                           "because a scenario subproblem is infeasible, write an IIS "
+                           "(irreducible infeasible set) for the offending subproblem via "
+                           "pyomo.contrib.iis. Useful to diagnose models that should have "
+                           "(relatively) complete recourse but don't. Fires AT MOST ONCE per "
+                           "cylinder (per MPI rank): the (expensive) IIS computation cannot "
+                           "repeat. The facility is chosen by --xhatter-iis-method (default "
+                           "'auto'). See doc/src/iis.rst for the full story.",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("xhatter_iis_method",
+                           description="Which pyomo.contrib.iis facility --xhatter-write-iis "
+                           "uses: 'ilp' writes a .ilp file with a commercial solver "
+                           "(cplex/gurobi/xpress); 'explanation' uses "
+                           "compute_infeasibility_explanation, which works with any solver; "
+                           "'auto' (default) picks 'ilp' for a commercial solver, else "
+                           "'explanation'. See doc/src/iis.rst.",
+                           domain=str,
+                           default="auto")
+
+        self.add_to_config("xhatter_iis_dir",
+                           description="Directory for IIS files written by --xhatter-write-iis "
+                           "(default: current working directory). File names follow the "
+                           "--solver-log-dir convention. See doc/src/iis.rst.",
+                           domain=str,
+                           default=None)
 
         self.add_to_config("inspect_buffers_on_shutdown",
                            description="When a spoke detects a shutdown signal, run "
@@ -530,6 +574,16 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=0.0)
 
+    ##### Lshaped #####        
+
+    def lshaped_args(self):
+
+        self.add_to_config(name="lshaped_hub",
+                           description="Use LShaped Hub (default False)",
+                           domain=bool,
+                           default=False)        
+        
+
     ##### common additions to the command line #####
 
     def two_sided_args(self):
@@ -620,6 +674,34 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=1e-4)
 
+    def cvar_args(self):
+
+        self.add_to_config('cvar',
+                           description="apply the CVaR (Conditional Value-at-Risk) "
+                                       "risk-management transform to every scenario "
+                                       "(default False)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("cvar_weight",
+                           description="beta >= 0, the weight on CVaR in "
+                                       "lambda*E[Cost] + beta*CVaR (default 1.0)",
+                           domain=float,
+                           default=1.0)
+
+        self.add_to_config("cvar_alpha",
+                           description="CVaR confidence level alpha, 0 < alpha < 1 "
+                                       "(default 0.95)",
+                           domain=float,
+                           default=0.95)
+
+        self.add_to_config("cvar_mean_weight",
+                           description="lambda >= 0, the weight on E[Cost] in "
+                                       "lambda*E[Cost] + beta*CVaR; use 0 for pure "
+                                       "CVaR (default 1.0)",
+                           domain=float,
+                           default=1.0)
+
     def relaxed_ph_fixer_args(self):
 
         self.add_to_config('relaxed_ph_fixer',
@@ -643,6 +725,47 @@ class Config(pyofig.ConfigDict):
                                        "to spend with relaxed integers",
                            domain=float,
                            default=0.5)
+
+    def slamming_args(self):
+        # Phase-1 preference-driven slamming (see doc/designs/slamming_design.md).
+        # The Slammer extension is activated iff slamming_directives_file is set;
+        # supplying the other slam options without the file is a hard error
+        # (enforced in checker()) so that a run with no slamming options behaves
+        # exactly as it does today.
+        self.add_to_config("slamming_directives_file",
+                           description="CSV of by-name (wildcard) slamming "
+                           "directives; its presence activates the Slammer "
+                           "extension (default None)",
+                           domain=str,
+                           default=None)
+
+        self.add_to_config("slam_start_iter",
+                           description="first hub iteration at which slamming "
+                           "may occur (default 1); requires "
+                           "--slamming-directives-file",
+                           domain=int,
+                           default=None)
+
+        self.add_to_config("iters_between_slams",
+                           description="once started, slam at most once every "
+                           "this many iterations (default 1); requires "
+                           "--slamming-directives-file",
+                           domain=int,
+                           default=None)
+
+    def w_oscillation_args(self):
+        # Detect oscillation/cycling in the PH W vector and report it to a CSV
+        # (see doc/designs/w_oscillation_design.md). The WOscillationMonitor
+        # extension is activated iff detect_W_oscillations is set; with no
+        # option a run behaves exactly as it does today (pure observation, no
+        # algorithm change). Interruption is a separate piece of work.
+        self.add_to_config("detect_W_oscillations",
+                           description="path to a JSON control file for "
+                           "W-oscillation detection; its presence activates the "
+                           "WOscillationMonitor extension and CSV reporting "
+                           "(default None)",
+                           domain=str,
+                           default=None)
 
     def reduced_costs_rho_args(self):
         self.add_to_config("reduced_costs_rho",

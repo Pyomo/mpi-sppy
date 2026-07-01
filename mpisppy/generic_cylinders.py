@@ -85,6 +85,22 @@ if __name__ == "__main__":
             scenario_creator, scenario_creator_kwargs, _, _ = \
                 setup_stoch_admm(module, cfg, n_cylinders)
 
+    # CVaR risk-management transform: wrap whatever scenario_creator we ended up
+    # with so every scenario carries the risk-averse WITH_CVAR objective. eta
+    # becomes "just another first-stage variable", so EF and every cylinder
+    # inherit risk aversion with no further changes.
+    if cfg.get("cvar", ifmissing=False):
+        if proper_bundles(cfg) or cfg.get("admm", ifmissing=False) \
+           or cfg.get("stoch_admm", ifmissing=False):
+            raise RuntimeError(
+                "--cvar cannot (yet) be combined with proper bundles or ADMM")
+        from mpisppy.utils.cvar import cvar_scenario_creator
+        scenario_creator = cvar_scenario_creator(
+            scenario_creator,
+            cvar_weight=cfg.cvar_weight,
+            cvar_alpha=cfg.cvar_alpha,
+            cvar_mean_weight=cfg.cvar_mean_weight)
+
     assert hasattr(module, "scenario_denouement"), "The model file must have a scenario_denouement function"
     scenario_denouement = module.scenario_denouement
     # Bundle models are EFs, not individual scenarios — the module's denouement

@@ -162,7 +162,15 @@ def scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=None
     """
     assert (inter_region_dict is not None)
     assert (cfg is not None)
-    admm_subproblem_name, stoch_scenario_name = split_admm_stoch_subproblem_scenario_name(admm_stoch_subproblem_scenario_name)
+    # Use the package default split so this module does not have to
+    # ship its own combining/split inverse pair.  See
+    # mpisppy.utils.stoch_admmWrapper for the default convention.
+    from mpisppy.utils.stoch_admmWrapper import (
+        default_split_admm_stoch_subproblem_scenario_name,
+    )
+    admm_subproblem_name, stoch_scenario_name = (
+        default_split_admm_stoch_subproblem_scenario_name(
+            admm_stoch_subproblem_scenario_name))
     if cfg.scalable:
         assert (data_params is not None)
         assert (all_nodes_dict is not None)
@@ -283,6 +291,11 @@ def stoch_scenario_names_creator(cfg):
     Returns:
         list (str): the list of stochastic scenario names
     """
+    if cfg.get("num_stoch_scens") is None:
+        raise RuntimeError(
+            "stoch_distr builds stochastic scenario names from a count, so "
+            "it requires --num-stoch-scens; pass it on the command line."
+        )
     return [f"StochasticScenario{i+1}" for i in range(cfg.num_stoch_scens)]
 
 
@@ -295,47 +308,13 @@ def admm_subproblem_names_creator(cfg):
     Returns:
         list (str): the list of admm subproblem names
     """
+    if cfg.get("num_admm_subproblems") is None:
+        raise RuntimeError(
+            "stoch_distr builds ADMM subproblem (region) names from a count, "
+            "so it requires --num-admm-subproblems; pass it on the command "
+            "line."
+        )
     return [f"Region{i+1}" for i in range(cfg.num_admm_subproblems)]
-
-
-def combining_names(admm_subproblem_name,stoch_scenario_name):
-    # Used to create the admm_stoch_subproblem_scenario_name
-    return f"ADMM_STOCH_{admm_subproblem_name}_{stoch_scenario_name}"
-
-
-def admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names,stoch_scenario_names):
-    """ Creates the list of the admm stochastic subproblem scenarios, which are the admm subproblems given a scenario
-
-    Args:
-        admm_subproblem_names (list of str): names of the admm subproblem
-        stoch_scenario_names (list of str): names of the stochastic scenario
-
-    Returns:
-        list of str: name of the admm stochastic subproblem scenarios
-    """
-    ### The order is important, we may want all the subproblems to appear consecutively in a scenario
-    return [combining_names(admm_subproblem_name,stoch_scenario_name) \
-            for stoch_scenario_name in stoch_scenario_names \
-                for admm_subproblem_name in admm_subproblem_names ]
-
-
-def split_admm_stoch_subproblem_scenario_name(admm_stoch_subproblem_scenario_name):
-    """ Returns the admm_subproblem_name and the stoch_scenario_name given an admm_stoch_subproblem_scenario_name.
-    This function, specific to the problem, is the reciprocal function of ``combining_names`` which creates the 
-    admm_stoch_subproblem_scenario_name given the admm_subproblem_name and the stoch_scenario_name.
-
-    Args:
-        admm_stoch_subproblem_scenario_name (str)
-
-    Returns:
-        (str,str): admm_subproblem_name, stoch_scenario_name
-    """
-    # Method specific to our example and because the admm_subproblem_name and stoch_scenario_name don't include "_"
-    splitted = admm_stoch_subproblem_scenario_name.split('_')
-    assert (len(splitted) == 4), "no underscore should be attached to admm_subproblem_name nor stoch_scenario_name"
-    admm_subproblem_name = splitted[2]
-    stoch_scenario_name = splitted[3]
-    return admm_subproblem_name, stoch_scenario_name
 
 
 def kw_creator(cfg):
@@ -376,28 +355,16 @@ def kw_creator(cfg):
 
 
 def inparser_adder(cfg):
-    """Adding to the config argument, specific elements to our problems. In this case the numbers of stochastic scenarios 
-    and admm subproblems which are required + elements used for random number generation + possibility to scale
+    """Adding to the config argument, specific elements to our problem:
+    elements used for random number generation + possibility to scale.
+
+    num_admm_subproblems / num_stoch_scens are registered by
+    mpisppy.generic.admm.admm_args; setup_stoch_admm checks that they
+    were actually set on the command line.
 
     Args:
         cfg (config): specifications for the problem given on the command line
     """
-    cfg.add_to_config(
-            "num_stoch_scens",
-            description="Number of stochastic scenarios (default None)",
-            domain=int,
-            default=None,
-            argparse_args = {"required": True}
-        )
-    
-    cfg.add_to_config(
-            "num_admm_subproblems",
-            description="Number of admm subproblems (regions)",
-            domain=int,
-            default=None,
-            argparse_args = {"required": True}
-        )
-
     ### For the pseudo-random scenarios
     cfg.add_to_config("spm",
                       description="mean percentage of scrap loss at the production",
