@@ -70,12 +70,15 @@ of the guests should be relied on as a maintained maximization surface.
   a maximize farmer; each solves both senses and checks `max == -min` and that
   bounds bracket the optimum on the correct side.
 - `mpisppy/tests/test_with_cylinders.py::test_lagrangian_max` — hub→spoke outer
-  bound under maximization (a valid upper bound).
+  bound under maximization (a valid upper bound);
+  `test_wheel_sign_flip_equivalence` — the same PH-hub + xhatshuffle-spoke wheel
+  run min and max, asserting every reported bound is the exact negation of its
+  counterpart and brackets the optimum on the correct side.
 - `mpisppy/tests/test_ciutils.py` / `test_conf_int_farmer.py` — `correcting_numeric`
   sense handling, and end-to-end maximize `gap_estimators` / MMW, plus a
   sequential-sampling-rejects-max test.
 - `mpisppy/tests/test_cvar.py` — closed-form maximize CVaR (lower-tail).
 - `mpisppy/tests/test_agnostic.py::test_agnostic_pyomo_PH_maximize` — the Pyomo
   guest under maximization; `test_agnostic_gurobipy_maximize_raises` — the
-  gurobipy guest rejects maximization. (The AMPL and GAMS min-only guards are
-  exercised by the CI agnostic job, which has those backends installed.)
+  gurobipy guest rejects maximization. (The AMPL min-only guard is exercised by
+  the CI agnostic job, which has that backend installed.)
