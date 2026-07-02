@@ -12,7 +12,7 @@ The pure detector logic (zero-crossing counting, the W-vector signature, and the
 recurrence tracker) and the config validators (detection and interruption) are
 tested directly with no MPI; end-to-end tests confirm that
 ``--detect-W-oscillations`` wires the extension in and writes the CSV (PR1) and
-that ``--interrupt-W-oscillations`` drives the rho-reduction and slam action
+that ``--interrupt-W-oscillations`` drives the W-damping and slam action
 layers through a real PH run (PR2).
 """
 import contextlib
@@ -203,15 +203,26 @@ class TestEndToEnd(unittest.TestCase):
                 self.assertIn("DevotedAcreage", row[2])
 
 
-class TestReducedRho(unittest.TestCase):
-    def test_multiplies(self):
-        self.assertEqual(wosc.reduced_rho(1.0, 0.5, 1e-3), 0.5)
-        self.assertAlmostEqual(wosc.reduced_rho(0.1, 0.1, 1e-3), 0.01)
+class TestWDamped(unittest.TestCase):
+    def test_rescales_increment(self):
+        # Update_W applied W = w0 + rho*xdiff; damping to factor keeps only
+        # factor of that increment.
+        rho, xdiff, w0 = 2.0, 0.5, 10.0
+        w_after_update = w0 + rho * xdiff                  # 11.0
+        # factor=0.5 -> half the step -> w0 + 0.5*rho*xdiff = 10.5
+        self.assertAlmostEqual(
+            wosc.w_damped(w_after_update, rho, xdiff, 0.5), 10.5)
 
-    def test_floors_at_min_rho(self):
-        # below the floor after scaling -> clamped to min_rho (stays > 0)
-        self.assertEqual(wosc.reduced_rho(1e-3, 0.5, 1e-3), 1e-3)
-        self.assertEqual(wosc.reduced_rho(1e-6, 0.5, 1e-3), 1e-3)
+    def test_factor_zero_cancels_step(self):
+        rho, xdiff, w0 = 3.0, -0.4, 1.0
+        w_after_update = w0 + rho * xdiff
+        # factor=0 fully undoes the increment -> back to w0
+        self.assertAlmostEqual(
+            wosc.w_damped(w_after_update, rho, xdiff, 0.0), w0)
+
+    def test_zero_xdiff_is_inert(self):
+        # at a fixed point x == xbar -> no change regardless of factor
+        self.assertEqual(wosc.w_damped(5.0, 2.0, 0.0, 0.5), 5.0)
 
 
 class TestInterruptConfigValidation(unittest.TestCase):
@@ -221,18 +232,16 @@ class TestInterruptConfigValidation(unittest.TestCase):
         with self.assertRaises(ValueError):
             wosc.validate_interrupt_config({"action": "bogus"})
 
-    def test_factor_must_reduce(self):
-        for bad in (0.0, 1.0, 1.5, -0.5):
+    def test_factor_must_be_in_range(self):
+        # 1.0 is a no-op and >1 / <0 are nonsense: all rejected.
+        for bad in (1.0, 1.5, -0.5):
             with self.assertRaises(ValueError):
                 wosc.validate_interrupt_config(
-                    {"action": "rho_reduction",
-                     "rho_reduction": {"factor": bad, "min_rho": 1e-3}})
-
-    def test_min_rho_must_be_positive(self):
-        with self.assertRaises(ValueError):
-            wosc.validate_interrupt_config(
-                {"action": "rho_reduction",
-                 "rho_reduction": {"factor": 0.5, "min_rho": 0.0}})
+                    {"action": "w_damping", "w_damping": {"factor": bad}})
+        # 0.0 is allowed (fully cancels the dual step that iteration).
+        cfg = wosc.validate_interrupt_config(
+            {"action": "w_damping", "w_damping": {"factor": 0.0}})
+        self.assertEqual(cfg["w_damping"]["factor"], 0.0)
 
     def test_slam_requires_directives_file(self):
         with self.assertRaises(ValueError):
@@ -241,27 +250,28 @@ class TestInterruptConfigValidation(unittest.TestCase):
             wosc.validate_interrupt_config({"action": "slam", "slam": {}})
 
     def test_both_requires_both_sections(self):
-        # 'both' needs a valid slam directives file even with rho defaults
+        # 'both' needs a valid slam directives file even with w_damping defaults
         with self.assertRaises(ValueError):
             wosc.validate_interrupt_config({"action": "both"})
         cfg = wosc.validate_interrupt_config(
             {"action": "both", "slam": {"directives_file": "d.csv"}})
-        self.assertIn("rho_reduction", cfg)
+        self.assertIn("w_damping", cfg)
         self.assertIn("slam", cfg)
 
     def test_trigger_defaults_and_validation(self):
-        cfg = wosc.validate_interrupt_config({"action": "rho_reduction"})
+        cfg = wosc.validate_interrupt_config({"action": "w_damping"})
         self.assertEqual(cfg["trigger"]["start_iter"], 5)
-        self.assertEqual(cfg["trigger"]["iters_between_actions"], 3)
-        self.assertEqual(cfg["rho_reduction"]["factor"], 0.5)
+        # the inter-action cadence knob was dropped
+        self.assertNotIn("iters_between_actions", cfg["trigger"])
+        self.assertEqual(cfg["w_damping"]["factor"], 0.5)
         with self.assertRaises(ValueError):
             wosc.validate_interrupt_config(
-                {"action": "rho_reduction",
-                 "trigger": {"iters_between_actions": 0}})
+                {"action": "w_damping",
+                 "trigger": {"min_scenarios_flagged": 0}})
 
     def test_detect_block_parsed(self):
         cfg = wosc.validate_interrupt_config({
-            "action": "rho_reduction",
+            "action": "w_damping",
             "detect": {"output_csv": "x.csv",
                        "methods": {"zero_crossings": {}}},
         })
@@ -277,7 +287,7 @@ class TestInterruptConfigValidation(unittest.TestCase):
 
 @unittest.skipIf(not solver_available, "no MIP solver available")
 class TestEndToEndInterrupt(unittest.TestCase):
-    """--interrupt-W-oscillations drives the rho-reduction and slam actions.
+    """--interrupt-W-oscillations drives the W-damping and slam actions.
 
     Uses only the interrupt flag (no --detect-W-oscillations) with an inline
     ``detect`` block, so it also exercises the "interruption implies detection"
@@ -285,7 +295,7 @@ class TestEndToEndInterrupt(unittest.TestCase):
     early; the slam directive targets a single crop and fixes it to its lower
     bound (0 acres), which is always feasible for farmer."""
 
-    def test_interrupt_flag_reduces_rho_and_slams(self):
+    def test_interrupt_flag_damps_w_and_slams(self):
         with tempfile.TemporaryDirectory() as tmp:
             out_csv = os.path.join(tmp, "wosc.csv")
             slam_csv = os.path.join(tmp, "slam.csv")
@@ -298,9 +308,8 @@ class TestEndToEndInterrupt(unittest.TestCase):
             with open(ctrl, "w") as f:
                 json.dump({
                     "action": "both",
-                    "trigger": {"min_scenarios_flagged": 1, "start_iter": 3,
-                                "iters_between_actions": 1},
-                    "rho_reduction": {"factor": 0.5, "min_rho": 1e-3},
+                    "trigger": {"min_scenarios_flagged": 1, "start_iter": 3},
+                    "w_damping": {"factor": 0.5},
                     "slam": {"directives_file": slam_csv},
                     "detect": {
                         "output_csv": out_csv,
@@ -341,10 +350,12 @@ class TestEndToEndInterrupt(unittest.TestCase):
             self.assertTrue(any("DevotedAcreage" in r[2] for r in rows[1:]))
 
             # Both action layers fired: the Slammer slammed the targeted crop
-            # and the monitor reduced rho on the flagged nonants.
+            # and the monitor damped W on the flagged nonants.
             self.assertIn("Slammer: slammed", out)
             self.assertIn("DevotedAcreage[SUGAR_BEETS", out)
-            self.assertIn("reduced rho on", out)
+            self.assertIn("damped W on", out)
+            # slam fixes at most one nonant per acting iteration
+            self.assertIn("slammed 1 nonant(s)", out)
 
     def test_interrupt_without_request_writes_no_report(self):
         """A pure --interrupt-W-oscillations run (no --detect flag, no detect
@@ -354,9 +365,9 @@ class TestEndToEndInterrupt(unittest.TestCase):
             ctrl = os.path.join(tmp, "interrupt.json")
             with open(ctrl, "w") as f:
                 json.dump({
-                    "action": "rho_reduction",
-                    "trigger": {"start_iter": 3, "iters_between_actions": 1},
-                    "rho_reduction": {"factor": 0.5, "min_rho": 1e-3},
+                    "action": "w_damping",
+                    "trigger": {"start_iter": 3},
+                    "w_damping": {"factor": 0.5},
                 }, f)
 
             argv = [

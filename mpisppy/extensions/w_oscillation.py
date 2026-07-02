@@ -14,10 +14,10 @@ runs and reports detected oscillation to a CSV.  With only
 ``--detect-W-oscillations`` it is **pure observation**: it attaches no rho or
 fixing changes, so the optimization trajectory is identical to a run without
 the flag.  With ``--interrupt-W-oscillations`` it additionally *acts* on the
-detected oscillation to break it -- by **reducing rho** on the cycling nonant
-and/or **slamming** it (fixing it via the existing :class:`Slammer
-<mpisppy.extensions.slammer.Slammer>` action layer).  Interruption implies
-detection; see :func:`parse_interrupt_config`.
+detected oscillation to break it -- by **damping W** (rescaling the dual-weight
+step) on every cycling nonant and/or **slamming** one of them (fixing it via the
+existing :class:`Slammer <mpisppy.extensions.slammer.Slammer>` action layer).
+Interruption implies detection; see :func:`parse_interrupt_config`.
 
 Two detection methods are available, selected and parameterized from a JSON
 control file (see :func:`parse_detect_config`):
@@ -60,7 +60,7 @@ from mpisppy.extensions.slammer import Slammer
 VALID_METHODS = ("zero_crossings", "w_hash_recurrence")
 VALID_REPORT_MODES = ("on_detect", "final", "every_check")
 # Interruption actions recognized in the interrupt JSON "action" field.
-VALID_ACTIONS = ("rho_reduction", "slam", "both")
+VALID_ACTIONS = ("w_damping", "slam", "both")
 
 _MASK64 = (1 << 64) - 1
 
@@ -89,12 +89,12 @@ _W_HASH_DEFAULTS = {
 # Interruption (PR2) defaults; an interrupt file's omitted keys fall back here.
 _TRIGGER_DEFAULTS = {
     "min_scenarios_flagged": 1,     # act when >= this many scenarios flag a nonant
-    "start_iter": 5,                # first iteration at which to act
-    "iters_between_actions": 3,     # cadence once started
+    "start_iter": 5,                # first iteration at which to act; then every
+                                    # iteration a nonant is still flagged
 }
-_RHO_REDUCTION_DEFAULTS = {
-    "factor": 0.5,                  # multiply the cycling nonant's rho by this
-    "min_rho": 1e-3,                # floor; rho stays > 0 (PH requires it, #767)
+_W_DAMPING_DEFAULTS = {
+    "factor": 0.5,                  # retained fraction of each dual (W) step on a
+                                    # flagged nonant; 0 <= factor < 1
 }
 
 
@@ -311,16 +311,16 @@ def validate_interrupt_config(cfg, where="<interrupt config>"):
     Schema (see ``doc/designs/w_oscillation_design.md`` §2.2)::
 
         {
-          "action": "rho_reduction" | "slam" | "both",
-          "trigger": {min_scenarios_flagged, start_iter, iters_between_actions},
-          "rho_reduction": {"factor": <0..1>, "min_rho": <>0>},  # if rho_reduction/both
-          "slam": {"directives_file": <path>},                   # if slam/both
+          "action": "w_damping" | "slam" | "both",
+          "trigger": {min_scenarios_flagged, start_iter},
+          "w_damping": {"factor": <0..1>},      # if w_damping/both
+          "slam": {"directives_file": <path>},  # if slam/both
           "detect": { ... }   # optional detection config (else a default is used)
         }
 
     Raises ``ValueError`` on an unknown/missing ``action``, a ``factor`` not in
-    ``(0, 1)``, a non-positive ``min_rho``, a ``slam`` action with no
-    ``directives_file``, or a bad trigger value.
+    ``[0, 1)``, a ``slam`` action with no ``directives_file``, or a bad trigger
+    value.
     """
     if not isinstance(cfg, dict):
         raise ValueError(f"{where}: top level must be a JSON object")
@@ -334,29 +334,21 @@ def validate_interrupt_config(cfg, where="<interrupt config>"):
     trigger = {
         "min_scenarios_flagged": int(trig["min_scenarios_flagged"]),
         "start_iter": int(trig["start_iter"]),
-        "iters_between_actions": int(trig["iters_between_actions"]),
     }
-    if trigger["iters_between_actions"] < 1:
-        raise ValueError(f"{where}: trigger.iters_between_actions must be >= 1")
     if trigger["min_scenarios_flagged"] < 1:
         raise ValueError(f"{where}: trigger.min_scenarios_flagged must be >= 1")
 
     out = {"action": action, "trigger": trigger}
 
-    if action in ("rho_reduction", "both"):
-        rr = dict(_RHO_REDUCTION_DEFAULTS)
-        rr.update(cfg.get("rho_reduction") or {})
-        rr["factor"] = float(rr["factor"])
-        rr["min_rho"] = float(rr["min_rho"])
-        if not (0.0 < rr["factor"] < 1.0):
+    if action in ("w_damping", "both"):
+        wd = dict(_W_DAMPING_DEFAULTS)
+        wd.update(cfg.get("w_damping") or {})
+        wd["factor"] = float(wd["factor"])
+        if not (0.0 <= wd["factor"] < 1.0):
             raise ValueError(
-                f"{where}: rho_reduction.factor must be in (0, 1) to reduce "
-                f"rho (got {rr['factor']})")
-        if rr["min_rho"] <= 0.0:
-            raise ValueError(
-                f"{where}: rho_reduction.min_rho must be > 0 (PH requires "
-                f"rho > 0; got {rr['min_rho']})")
-        out["rho_reduction"] = rr
+                f"{where}: w_damping.factor must be in [0, 1) to damp the W "
+                f"step (1.0 is a no-op; got {wd['factor']})")
+        out["w_damping"] = wd
 
     if action in ("slam", "both"):
         slam = cfg.get("slam") or {}
@@ -373,14 +365,17 @@ def validate_interrupt_config(cfg, where="<interrupt config>"):
     return out
 
 
-def reduced_rho(old, factor, min_rho):
-    """Rho after one reduction event: ``old * factor`` floored at ``min_rho``.
+def w_damped(w, rho, xdiff, factor):
+    """W after one damping event: undo the fraction ``1 - factor`` of the dual
+    step ``rho * xdiff`` that ``Update_W`` just applied.
 
-    The floor keeps rho strictly positive, which PH requires (see issue #560 /
-    the rho>0 enforcement); reducing rho relaxes the proximal pull that drives
-    the overshoot, the dynamic analogue of Watson--Woodruff §2.1's SEP rho that
-    approaches the optimal weight "from below"."""
-    return max(min_rho, old * factor)
+    ``Update_W`` set ``W += rho * (x - xbar)``; had it used ``factor * rho``
+    instead, ``W`` would be smaller by ``(1 - factor) * rho * xdiff``.  This
+    rescales that most recent increment to what a lower rho would have produced,
+    leaving the proximal rho untouched -- damping the dual (``w``) step that
+    Watson--Woodruff §2.1 identifies as "shoot[ing] past" the optimal weight.
+    ``factor`` is in ``[0, 1)``: 0 fully cancels the step, near 1 barely damps."""
+    return w - (1.0 - factor) * rho * xdiff
 
 
 # --------------------------------------------------------------------------- #
@@ -584,12 +579,10 @@ class WOscillationMonitor(Extension):
 
     def _act_due(self, phiter):
         """Whether to *interrupt* at ``phiter`` (interruption configured): at or
-        after the trigger's ``start_iter``, then every ``iters_between_actions``.
-        Pure function of the counter -> identical on every rank."""
-        t = self._interrupt_cfg["trigger"]
-        if phiter < t["start_iter"]:
-            return False
-        return (phiter - t["start_iter"]) % t["iters_between_actions"] == 0
+        after the trigger's ``start_iter``.  There is no inter-action cadence --
+        once started, act every iteration a nonant is still flagged.  Pure
+        function of the counter -> identical on every rank."""
+        return phiter >= self._interrupt_cfg["trigger"]["start_iter"]
 
     def miditer(self):
         self._capture()
@@ -721,8 +714,9 @@ class WOscillationMonitor(Extension):
     # Interruption (PR2): act on the flagged nonants to break the oscillation.
     # ------------------------------------------------------------------ #
     def _apply_interruption(self, phiter, flagged):
-        """Act on every nonant flagged by at least ``min_scenarios_flagged``
-        scenarios: reduce its rho and/or slam it, per the configured action.
+        """Act on the nonants flagged by at least ``min_scenarios_flagged``
+        scenarios: damp W on **every** such nonant and/or slam **one** of them,
+        per the configured action.
 
         ``flagged`` and the eligibility tests are rank-identical, so all ranks
         act on the same nonants in the same order -- this matters because the
@@ -734,7 +728,7 @@ class WOscillationMonitor(Extension):
         if not targets:
             return
         action = self._interrupt_cfg["action"]
-        n_rho = self._reduce_rho(targets) if action in ("rho_reduction", "both") \
+        n_damp = self._damp_w(targets) if action in ("w_damping", "both") \
             else 0
         n_slam = self._slam_targets(targets) if action in ("slam", "both") \
             else 0
@@ -743,8 +737,8 @@ class WOscillationMonitor(Extension):
         # this is the only output a pure --interrupt-W-oscillations run produces;
         # the cycling report (CSV) is opt-in (self._report_enabled).
         bits = []
-        if action in ("rho_reduction", "both"):
-            bits.append(f"reduced rho on {n_rho} nonant(s)")
+        if action in ("w_damping", "both"):
+            bits.append(f"damped W on {n_damp} nonant(s)")
         if action in ("slam", "both"):
             bits.append(f"slammed {n_slam} nonant(s)")
         global_toc(
@@ -752,43 +746,44 @@ class WOscillationMonitor(Extension):
             f"nonant(s) flagged; " + "; ".join(bits),
             self.opt.cylinder_rank == 0)
 
-    def _reduce_rho(self, targets):
-        """Multiply each flagged nonant's rho by ``factor`` (floored at
-        ``min_rho``) in every local scenario; return the number of nonants
-        whose rho was actually lowered.
+    def _damp_w(self, targets):
+        """Damp the dual weight on **every** flagged nonant, in every local
+        scenario, by rescaling the increment ``Update_W`` just applied:
+        ``W -= (1 - factor) * rho * (x - xbar)`` (see :func:`w_damped`).  Return
+        the number of nonants touched.
 
-        rho is a mutable Pyomo Param in the prox term, so changing its value is
+        W is a mutable Pyomo Param in the objective, so changing its value is
         picked up by the per-iteration ``set_objective`` that ``solve_one``
         issues for persistent solvers -- no explicit solver push is needed (the
-        same mechanism the rho-updating extensions rely on)."""
-        rr = self._interrupt_cfg["rho_reduction"]
-        factor, min_rho = rr["factor"], rr["min_rho"]
+        same mechanism the rho-updating extensions rely on).  The proximal rho
+        is left unchanged; only the dual step is damped."""
+        factor = self._interrupt_cfg["w_damping"]["factor"]
         touched = 0
         for j in targets:
             ndn_i = self._ndn_i[j]
             changed = False
             for s in self.opt.local_scenarios.values():
-                rho = s._mpisppy_model.rho
-                if ndn_i not in rho:
+                W = s._mpisppy_model.W
+                if ndn_i not in W:
                     continue  # scenario does not pass through this node
-                r = rho[ndn_i]
-                new = reduced_rho(pyo.value(r), factor, min_rho)
-                if new < pyo.value(r):
-                    r._value = new
-                    changed = True
+                rho = pyo.value(s._mpisppy_model.rho[ndn_i])
+                xdiff = s._mpisppy_data.nonant_indices[ndn_i]._value \
+                    - s._mpisppy_model.xbars[ndn_i]._value
+                W[ndn_i]._value = w_damped(W[ndn_i]._value, rho, xdiff, factor)
+                changed = True
             if changed:
                 touched += 1
         return touched
 
     def _slam_targets(self, targets):
-        """Slam each flagged nonant via the Slammer action layer; return the
-        number actually slammed (others are not in the directives, already
-        fixed, or have no applicable direction this event)."""
-        n = 0
-        for j in targets:
-            if self._slammer.slam_nonant(self._ndn_i[j]):
-                n += 1
-        return n
+        """Slam **at most one** flagged nonant this iteration -- the
+        highest-priority one that can actually be slammed -- via the Slammer
+        action layer.  Fixing is drastic, and fixing the single worst oscillator
+        often re-settles the others (WW §2.1), so we reuse Slammer's own
+        priority-ranked, one-per-call :meth:`~mpisppy.extensions.slammer.Slammer._slam_one`
+        restricted to the flagged set.  Return the number slammed (0 or 1)."""
+        candidates = {self._ndn_i[j] for j in targets}
+        return self._slammer._slam_one(candidates=candidates)
 
     # ------------------------------------------------------------------ #
     def _reduce_per_node(self, nJ, arrays_and_ops):

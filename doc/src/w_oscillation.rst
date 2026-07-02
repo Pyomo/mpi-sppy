@@ -7,8 +7,8 @@ The ``w_oscillation`` extension (``mpisppy.extensions.w_oscillation``,
 class ``WOscillationMonitor``) watches the Progressive Hedging dual weight
 (``W``) vector while a synchronous PH hub runs. It can **detect** oscillation /
 cycling in ``W`` and report it, and it can optionally **interrupt** the
-oscillation -- reducing rho and/or slamming the offending variables -- to break
-the cycle.
+oscillation -- damping the dual weight and/or slamming the offending variables
+-- to break the cycle.
 
 Oscillating weights -- a ``W`` trajectory that flips sign repeatedly or whose
 swings fail to damp out -- are a common and convergence-killing symptom for
@@ -27,7 +27,7 @@ Flag                           Effect
 ============================== =================================================
 ``--detect-W-oscillations``    Detect and **report** oscillation (pure
                                observation; no change to the optimization).
-``--interrupt-W-oscillations`` **Act** on detected oscillation (rho reduction
+``--interrupt-W-oscillations`` **Act** on detected oscillation (W-damping
                                and/or slamming). Runs the detection engine, but
                                the report is opt-in (see below).
 ============================== =================================================
@@ -204,30 +204,41 @@ Actions
 
 ``action`` (**required**) is one of:
 
-``rho_reduction``
-   Multiply each flagged nonant's rho by ``factor`` (default ``0.5``; must be in
-   ``(0, 1)`` so it actually reduces), floored at ``min_rho`` (default
-   ``1e-3``; must be ``> 0`` because PH requires a strictly positive rho).
-   Reducing rho relaxes the proximal pull that is driving the overshoot -- the
-   dynamic analogue of Watson-Woodruff §2.1's SEP rho, which is designed to
-   approach the optimal weight "from below." rho is a mutable parameter in the
-   proximal term, so the reduced value is picked up by the per-iteration
-   objective refresh that persistent solvers already perform.
+``w_damping``
+   Damp the dual (``W``) step on **every** flagged nonant. The weight update
+   ``Update_W`` just applied ``W += rho * (x - xbar)``; W-damping rescales that
+   increment to what a lower rho would have produced,
+   ``W -= (1 - factor) * rho * (x - xbar)``, leaving the *proximal* rho
+   untouched. ``factor`` (default ``0.5``; must be in ``[0, 1)`` -- ``1`` is a
+   no-op) is the retained fraction of the step; applied every flagged iteration
+   it damps the W swing by ``factor`` per step. This decouples the dual step
+   from the penalty and targets the Watson-Woodruff §2.1 overshoot (``w``
+   "shooting past" its optimum) directly, without loosening the proximal pull;
+   it preserves the dual-feasibility identity ``sum_s p_s W_s = 0`` and is inert
+   once the nonant settles (``x = xbar``). ``W`` is a mutable parameter in the
+   objective, so the change is picked up by the per-iteration objective refresh
+   that persistent solvers already perform.
 
 ``slam``
-   Fix each flagged nonant via the existing :ref:`slammer <slammer>` action
-   layer. The ``slam`` block names a ``directives_file`` -- a slammer-style
-   directives CSV (by-name patterns, a direction such as ``lb`` / ``ub`` /
-   ``nearest`` / ``max``, and a priority). The extension drives the slammer
-   directly on the nonants the detector flagged, rather than using the
-   slammer's own iteration-count trigger. Watson-Woodruff §2.4's native remedy
-   -- fixing a cycling variable to its per-scenario maximum -- is exactly a
-   directives file of ``...,max,...``.
+   Fix **one** flagged nonant per iteration -- the highest-priority one that can
+   actually be slammed -- via the existing :ref:`slammer <slammer>` action
+   layer. Fixing is drastic and near-irreversible, and fixing the single worst
+   oscillator often re-settles the others, so even when many nonants are flagged
+   only one is slammed each iteration; the next iteration re-detects and fixes
+   the next if it is still cycling. The ``slam`` block names a
+   ``directives_file`` -- a slammer-style directives CSV (by-name patterns, a
+   direction such as ``lb`` / ``ub`` / ``nearest`` / ``max``, and a
+   ``priority``). Among the flagged nonants the slammer picks by that
+   ``priority`` column (largest first, ties by name), so the priority ranking
+   decides which one is fixed. Watson-Woodruff §2.4's native remedy -- fixing a
+   cycling variable to its per-scenario maximum -- is exactly a directives file
+   of ``...,max,...``.
 
 ``both``
-   Apply each in turn. The recommendation is to choose one; ``both`` performs
-   no coordination -- once slamming has fixed a nonant, a subsequent rho change
-   on it is simply inert.
+   Apply each: W-damping nudges *all* flagged nonants and slam fixes the *one*
+   highest-priority flagged nonant. The recommendation is to choose one;
+   ``both`` performs no coordination -- once slamming has fixed a nonant, any
+   W-damping of it is simply inert.
 
 Trigger
 ^^^^^^^
@@ -235,8 +246,8 @@ Trigger
 The ``trigger`` block controls *when* and *which* nonants are acted on:
 
 - ``start_iter`` (``5``) -- the first iteration at which interruption may occur.
-- ``iters_between_actions`` (``3``) -- once started, act at most once every
-  this many iterations.
+  Once past it, the extension acts every iteration a nonant is still flagged
+  (there is no inter-action cadence).
 - ``min_scenarios_flagged`` (``1``) -- a nonant is acted on once at least this
   many scenarios flag it.
 
@@ -263,7 +274,7 @@ What you will see
 Every time the extension acts, it prints one rank-0 progress line, for
 example::
 
-  [   12.34] W-oscillation interruption [iter 7]: 3 nonant(s) flagged; reduced rho on 3 nonant(s); slammed 1 nonant(s)
+  [   12.34] W-oscillation interruption [iter 7]: 3 nonant(s) flagged; damped W on 3 nonant(s); slammed 1 nonant(s)
 
 This line is always emitted (it does not require ``--verbose``); it is the only
 output of a report-less interrupt run. Detailed per-slam reporting comes from

@@ -321,12 +321,21 @@ class Slammer(Extension):
             return
         self._slam_one()
 
-    def _slam_one(self):
-        """Select the highest-priority eligible nonant and slam it.
+    def _slam_one(self, candidates=None):
+        """Select the highest-priority eligible nonant and slam it; return 1 if
+        one was slammed, else 0.
+
+        When ``candidates`` is given (a set/collection of ``(ndn, i)`` keys),
+        only those nonants are considered -- the entry point a stall/cycle
+        detector uses to slam the worst of *its* flagged nonants while still
+        honoring the directives file's priority ranking.  Ineligible or
+        no-applicable-direction candidates are skipped, so this effectively
+        walks the priority order until it finds one it can slam.
 
         Selection uses only globally-consistent inputs (file-supplied priority
         and name; the fixed mask, which is coherent because slamming/fixing is
-        applied to all scenarios on all ranks), so every rank picks the same
+        applied to all scenarios on all ranks; and, for the detector-driven
+        path, a rank-identical ``candidates`` set), so every rank picks the same
         nonant with no communication.  This holds when the nonant catalog is
         rank-coherent (two-stage, or single-rank multistage); node-split
         multistage would need a cross-rank reduction to agree on the selection,
@@ -338,6 +347,8 @@ class Slammer(Extension):
         best_ndn_i = None
         best_key = None    # (priority, name) for max-priority, name-tiebreak
         for ndn_i, d in self._directive_of.items():
+            if candidates is not None and ndn_i not in candidates:
+                continue
             if not self._slam_eligible(rep, ndn_i, surrogates):
                 continue
             if self._first_applicable_direction(rep, ndn_i, d.directions) is None:
@@ -352,8 +363,8 @@ class Slammer(Extension):
                 best_key = key
 
         if best_ndn_i is None:
-            return  # nothing eligible this event
-        self.slam_nonant(best_ndn_i)
+            return 0  # nothing eligible this event
+        return 1 if self.slam_nonant(best_ndn_i) else 0
 
     def _slam_eligible(self, rep, ndn_i, surrogates):
         """Whether ``ndn_i`` may be slammed: it is in the directive map (checked

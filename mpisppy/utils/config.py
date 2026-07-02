@@ -759,7 +759,7 @@ class Config(pyofig.ConfigDict):
         # WOscillationMonitor extension is activated iff either flag is set;
         # with neither a run behaves exactly as it does today. Detection alone
         # is pure observation (no algorithm change); interruption acts on the
-        # cycling nonant (rho reduction and/or slamming) and implies detection.
+        # cycling nonants (W-damping and/or slamming) and implies detection.
         self.add_to_config("detect_W_oscillations",
                            description="path to a JSON control file for "
                            "W-oscillation detection; its presence activates the "
@@ -770,7 +770,7 @@ class Config(pyofig.ConfigDict):
 
         self.add_to_config("interrupt_W_oscillations",
                            description="path to a JSON control file for "
-                           "W-oscillation interruption (rho reduction and/or "
+                           "W-oscillation interruption (W-damping and/or "
                            "slamming); its presence activates the "
                            "WOscillationMonitor extension in interrupt mode and "
                            "implies detection (default None)",
