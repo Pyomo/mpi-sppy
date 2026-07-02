@@ -1,6 +1,7 @@
 # Merging boot-sp into mpi-sppy — design
 
-**Status:** design captured and decisions ratified 2026-07-02; no code yet.
+**Status:** design captured and decisions ratified 2026-07-02; open
+questions resolved and PR structure set to two PRs 2026-07-02; no code yet.
 **Author:** dlw (captured with Claude Code assistance)
 **Last updated:** 2026-07-02
 
@@ -75,6 +76,13 @@ Related work:
    most heavily CI-exercised part of boot-sp).
 4. **Old repo:** archive with a README pointer after the final phase; no
    shim release.
+5. **Two PRs** (was three): PR-1 = empirical core + simulation harness +
+   all examples; PR-2 = statdist + smoothed methods. The seam sits on the
+   one real fault line — the dependency boundary between the empirical
+   code (numpy-only) and the smoothed code (statdist + scipy + epi-spline
+   Pyomo fits) — and folding the thin `simulate_boot.py` (~215 lines) into
+   PR-1 lets the §4.2 dispatch consolidation happen once instead of being
+   built in one PR and touched again in another.
 
 ---
 
@@ -85,13 +93,13 @@ mpisppy/confidence_intervals/bootsp/
     __init__.py
     boot_sp.py              # estimator engine: classical, extended,
                             #   subsampling, bagging (+ *_resample helpers)
-    smoothed_boot_sp.py     # smoothed bootstrap/bagging          (PR-B)
+    smoothed_boot_sp.py     # smoothed bootstrap/bagging          (PR-2)
     boot_utils.py           # BootMethods enum, cfg_for_boot, module
                             #   loading, cfg_from_json, compute_xhat
     user_boot.py            # end-user CLI
     boot_general_prep.py    # z*/xhat precompute CLI
-    simulate_boot.py        # coverage-experiment harness          (PR-C)
-    statdist/               # trimmed distribution library         (PR-B)
+    simulate_boot.py        # coverage-experiment harness
+    statdist/               # trimmed distribution library         (PR-2)
         __init__.py
         README.md           # provenance + what was trimmed and where
                             #   the full version lives (archived repo)
@@ -103,12 +111,15 @@ mpisppy/confidence_intervals/bootsp/
         sampler.py
 
 examples/bootsp/
-    farmer/                 # PR-A; cvar/, multi_knapsack/, schultz/ in PR-C
+    farmer/                 # all examples in PR-1
+    cvar/
+    multi_knapsack/
+    schultz/
 
 mpisppy/tests/
-    test_boot_sp.py                 # PR-A (empirical, user_boot, prep)
-    test_boot_sp_smoothed.py        # PR-B (smoothed + statdist univariate)
-    test_boot_sp_simulate.py        # PR-C (coverage harness)
+    test_boot_sp.py                 # PR-1 (empirical, user_boot, prep)
+    test_boot_sp_smoothed.py        # PR-2 (smoothed + statdist univariate)
+    test_boot_sp_simulate.py        # PR-1 (coverage harness, empirical)
 
 doc/src/boot_sp.rst         # toctree: after seqsamp.rst in index.rst
 doc/designs/bootsp_merge_design.md   # this file
@@ -166,10 +177,17 @@ Behavior-preserving unless noted.
    `fit_resample_utils.compute_xhat`, but no such module is imported or
    exists — the no-`xhat_fname` branch of the smoothed simulation cannot
    run today. Port it calling `boot_utils.compute_xhat` (the evident
-   intent) and cover the branch with a test.
+   intent) and cover the branch with a test. Although `simulate_boot.py`
+   is ported in PR-1, this branch is behind the smoothed dispatch, so the
+   fix becomes live (and gets its test) in PR-2.
 4. **Unused/heavy imports.** Delete the unused `matplotlib.pyplot` import
-   in `smoothed_boot_sp.py`; scipy imports in the bootsp modules follow
-   the guarded/lazy pattern `mmw_ci.py` already uses
+   in `smoothed_boot_sp.py`. The only scipy use in the empirical modules
+   is `scipy.stats.norm.ppf(1-cfg.alpha/2)` in `boot_sp.py` (two call
+   sites, the gaussian CI half-width); replace it with the numerically
+   identical `statistics.NormalDist().inv_cdf()` from the standard
+   library, so the empirical core is scipy-free outright. Any scipy
+   imports remaining in the PR-2 modules follow the guarded/lazy pattern
+   `mmw_ci.py` already uses
    (`from pyomo.common.dependencies import scipy`).
 5. **Headers.** Every ported file gets the standard mpi-sppy header
    (`addheader -c addheader.yml`); `test_headers.py` enforces. Both
@@ -202,47 +220,56 @@ Behavior-preserving unless noted.
   table, module contract, JSON/CLI usage, citations) and enters the
   `index.rst` toctree under "Solutions and Confidence Intervals" after
   `seqsamp.rst`. Each PR ships the doc section for what it merges.
-- Examples: `examples/bootsp/farmer` in PR-A; whether to also register a
-  small run in `examples/run_all.py` is decided in PR-A (open question
-  §7).
+- Examples: all of `examples/bootsp/` in PR-1. A `do_one_boot` helper
+  (mirroring `do_one_mmw`) registers a small bootstrap run in part 1 of
+  `examples/run_all.py`, also in PR-1.
+- MPI testing: batch-parallel bootstrap with `Gatherv` gets real
+  `mpiexec -np 2` tests with value assertions (not just smoke) — the
+  `test_with_cylinders.py` pattern, wired into CI. Empirical coverage in
+  PR-1; the smoothed methods get the same treatment in PR-2.
 
 ---
 
 ## 6. Phased PRs
 
-Each phase is a review-sized PR, green on its own.
+Two PRs, each review-sized and green on its own, split on the dependency
+boundary (see ratified decision §2.5).
 
-- **PR-A — empirical core.** `bootsp/` subpackage with `boot_sp.py`,
-  `boot_utils.py`, `user_boot.py`, `boot_general_prep.py`;
-  `examples/bootsp/farmer`; `test_boot_sp.py` (+ CI/coverage wiring);
+- **PR-1 — empirical core and simulation harness.** `bootsp/` subpackage
+  with `boot_sp.py`, `boot_utils.py`, `user_boot.py`,
+  `boot_general_prep.py`, and `simulate_boot.py`; all of
+  `examples/bootsp/` plus the `do_one_boot` entry in part 1 of
+  `run_all.py`; `test_boot_sp.py` and `test_boot_sp_simulate.py`
+  including the `mpiexec -np 2` Gatherv tests (+ CI/coverage wiring);
   `boot_sp.rst` covering the empirical methods. No statdist, no scipy
-  requirement. The `BootMethods` enum ships complete; dispatch of a
-  `Smoothed_*` method raises a clear "smoothed methods not yet merged —
-  use the boot-sp package meanwhile" error.
-- **PR-B — smoothed methods.** Trimmed `statdist/` (per §3) +
-  `smoothed_boot_sp.py`; smoothed dispatch replaces the PR-A error;
+  (§4.4). The `BootMethods` enum ships complete; dispatch of a
+  `Smoothed_*` method — in `user_boot` or `simulate_boot` alike — raises
+  a clear "smoothed methods not yet merged — use the boot-sp package
+  meanwhile" error.
+- **PR-2 — smoothed methods.** Trimmed `statdist/` (per §3) +
+  `smoothed_boot_sp.py`; smoothed dispatch replaces the PR-1 error,
+  which activates the smoothed simulation path and its §4.3 fix;
   `test_boot_sp_smoothed.py` including direct univariate-distribution
   tests (statdist's own test covered one class; extend to the
-  distributions the smoothed methods actually request); doc section.
-- **PR-C — simulation harness and remaining examples.**
-  `simulate_boot.py` (with the §4.3 fix), `examples/bootsp/{cvar,
-  multi_knapsack, schultz}`, `test_boot_sp_simulate.py`, doc completion.
+  distributions the smoothed methods actually request) and the smoothed
+  MPI test; doc completion.
 - **Post-merge (not a PR).** Update the boot-sp README to point at the
   mpi-sppy docs and archive the GitHub repo. `paper_runs/`, the copula/
   vine/bicop code, and the multivariate classes remain there.
 
 ---
 
-## 7. Open questions
+## 7. Resolved questions (2026-07-02)
 
-1. Do the empirical estimators need scipy at all (e.g. `norm.ppf` for the
-   gaussian CI)? Checked during PR-A; if yes, they use the same guarded
-   import and PR-A's "no scipy" claim softens to "scipy only for the
-   gaussian CI path".
-2. Register a bootstrap example in `examples/run_all.py`, or rely on the
-   unit tests for CI coverage? (The MMW example has a dedicated
-   `do_one_mmw` helper there; a `do_one_boot` would mirror it.)
-3. Multi-rank smoke test: boot-sp's own CI never ran under `mpiexec`.
-   Batch-parallel bootstrap with `Gatherv` deserves at least one
-   `mpiexec -np 2` test — probably in `straight_tests.py` or a
-   `test_with_cylinders.py`-style guard. Decide in PR-A.
+1. **Does the empirical core need scipy?** Checked: the only use is
+   `scipy.stats.norm.ppf` at two call sites in `boot_sp.py`. Resolved by
+   replacing it with the stdlib `statistics.NormalDist().inv_cdf()`
+   (§4.4), so PR-1 needs no scipy at all.
+
+2. **`run_all.py` registration?** Yes — a `do_one_boot` helper
+   (mirroring `do_one_mmw`) in part 1 of `examples/run_all.py`,
+   shipped in PR-1 (§5).
+
+3. **MPI testing?** Yes, and more than smoke: `mpiexec -np 2` tests with
+   value assertions on the Gatherv-based batch parallelism, wired into
+   CI — empirical in PR-1, smoothed in PR-2 (§5).
