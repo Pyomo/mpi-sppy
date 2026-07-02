@@ -16,7 +16,8 @@ fixing changes, so the optimization trajectory is identical to a run without
 the flag.  With ``--interrupt-W-oscillations`` it additionally *acts* on the
 detected oscillation to break it -- by **damping W** (rescaling the dual-weight
 step) on every cycling nonant and/or **slamming** one of them (fixing it via the
-existing :class:`Slammer <mpisppy.extensions.slammer.Slammer>` action layer).
+existing :class:`Slammer <mpisppy.extensions.slammer.Slammer>` action layer,
+with at least ``iters_between_slams`` iterations between successive slams).
 Interruption implies detection; see :func:`parse_interrupt_config`.
 
 Two detection methods are available, selected and parameterized from a JSON
@@ -95,6 +96,10 @@ _TRIGGER_DEFAULTS = {
 _W_DAMPING_DEFAULTS = {
     "factor": 0.5,                  # retained fraction of each dual (W) step on a
                                     # flagged nonant; 0 <= factor < 1
+}
+_SLAM_DEFAULTS = {
+    "iters_between_slams": 3,       # cooldown: iterations that must pass after a
+                                    # successful slam before the next one
 }
 
 
@@ -314,13 +319,14 @@ def validate_interrupt_config(cfg, where="<interrupt config>"):
           "action": "w_damping" | "slam" | "both",
           "trigger": {min_scenarios_flagged, start_iter},
           "w_damping": {"factor": <0..1>},      # if w_damping/both
-          "slam": {"directives_file": <path>},  # if slam/both
+          "slam": {"directives_file": <path>,   # if slam/both
+                   "iters_between_slams": <int >= 1>},
           "detect": { ... }   # optional detection config (else a default is used)
         }
 
     Raises ``ValueError`` on an unknown/missing ``action``, a ``factor`` not in
-    ``[0, 1)``, a ``slam`` action with no ``directives_file``, or a bad trigger
-    value.
+    ``[0, 1)``, a ``slam`` action with no ``directives_file``, a
+    non-positive ``iters_between_slams``, or a bad trigger value.
     """
     if not isinstance(cfg, dict):
         raise ValueError(f"{where}: top level must be a JSON object")
@@ -351,18 +357,40 @@ def validate_interrupt_config(cfg, where="<interrupt config>"):
         out["w_damping"] = wd
 
     if action in ("slam", "both"):
-        slam = cfg.get("slam") or {}
+        slam = dict(_SLAM_DEFAULTS)
+        slam.update(cfg.get("slam") or {})
         directives_file = slam.get("directives_file")
         if not directives_file:
             raise ValueError(
                 f"{where}: action {action!r} requires "
                 "'slam': {{'directives_file': <path>}}")
-        out["slam"] = {"directives_file": directives_file}
+        iters_between = int(slam["iters_between_slams"])
+        if iters_between < 1:
+            raise ValueError(
+                f"{where}: slam.iters_between_slams must be >= 1 "
+                f"(got {iters_between}; 1 means a slam may occur every "
+                "iteration)")
+        out["slam"] = {"directives_file": directives_file,
+                       "iters_between_slams": iters_between}
 
     if "detect" in cfg:
         out["detect"] = validate_detect_config(
             cfg["detect"], where=f"{where} (detect block)")
     return out
+
+
+def slam_due(phiter, last_slam_iter, iters_between_slams):
+    """Whether a slam may occur at ``phiter`` given the cooldown: true when no
+    slam has happened yet (``last_slam_iter`` is None) or at least
+    ``iters_between_slams`` iterations have passed since the last successful
+    one.  The cooldown exists because the detectors judge a trailing history
+    window, which keeps signaling oscillation for a while after a fix -- this
+    gives the fix time to re-settle the others (WW §2.1) before concluding that
+    another variable must also be fixed.  A pure function of rank-identical
+    inputs, so the verdict is identical on every rank."""
+    if last_slam_iter is None:
+        return True
+    return phiter - last_slam_iter >= iters_between_slams
 
 
 def w_damped(w, rho, xdiff, factor):
@@ -484,6 +512,8 @@ class WOscillationMonitor(Extension):
 
         # Interruption state (PR2), built in pre_iter0() / updated in miditer().
         self._slammer = None        # internal Slammer for the slam action
+        self._last_slam_iter = None # iteration of the last successful slam
+                                    # (rank-identical; drives the slam cooldown)
         self._n_action_events = 0
         # j -> max scenarios flagging nonant j on the most recent evaluation
         # (rank-identical; the interrupter reads this).
@@ -579,8 +609,10 @@ class WOscillationMonitor(Extension):
 
     def _act_due(self, phiter):
         """Whether to *interrupt* at ``phiter`` (interruption configured): at or
-        after the trigger's ``start_iter``.  There is no inter-action cadence --
-        once started, act every iteration a nonant is still flagged.  Pure
+        after the trigger's ``start_iter``.  W-damping has no inter-action
+        cadence -- once started, it acts every iteration a nonant is still
+        flagged; the slam action is additionally throttled by its own cooldown
+        (:func:`slam_due`, applied in :meth:`_apply_interruption`).  Pure
         function of the counter -> identical on every rank."""
         return phiter >= self._interrupt_cfg["trigger"]["start_iter"]
 
@@ -716,31 +748,45 @@ class WOscillationMonitor(Extension):
     def _apply_interruption(self, phiter, flagged):
         """Act on the nonants flagged by at least ``min_scenarios_flagged``
         scenarios: damp W on **every** such nonant and/or slam **one** of them,
-        per the configured action.
+        per the configured action.  Slamming is additionally throttled by the
+        ``iters_between_slams`` cooldown (:func:`slam_due`) -- the detectors'
+        trailing-history flags outlive a fix, so without the cooldown a slam
+        would land every iteration until the history flushes.
 
-        ``flagged`` and the eligibility tests are rank-identical, so all ranks
-        act on the same nonants in the same order -- this matters because the
-        slam action may trigger a per-node ``Allreduce`` (the min/max extremum),
-        which must be reached symmetrically."""
+        ``flagged``, the eligibility tests, and the cooldown state are
+        rank-identical, so all ranks act on the same nonants in the same order
+        -- this matters because the slam action may trigger a per-node
+        ``Allreduce`` (the min/max extremum), which must be reached
+        symmetrically."""
         thresh = self._interrupt_cfg["trigger"]["min_scenarios_flagged"]
         targets = [j for j in range(len(self._ndn_i))
                    if flagged.get(j, 0) >= thresh]
         if not targets:
             return
         action = self._interrupt_cfg["action"]
-        n_damp = self._damp_w(targets) if action in ("w_damping", "both") \
-            else 0
-        n_slam = self._slam_targets(targets) if action in ("slam", "both") \
-            else 0
+        damp = action in ("w_damping", "both")
+        slam = action in ("slam", "both") and slam_due(
+            phiter, self._last_slam_iter,
+            self._interrupt_cfg["slam"]["iters_between_slams"])
+        if not (damp or slam):
+            return  # slam-only action, cooling down: nothing to do or announce
+        n_damp = self._damp_w(targets) if damp else 0
+        n_slam = self._slam_targets(targets) if slam else 0
+        if n_slam:
+            # Start the cooldown only on a *successful* slam; a no-candidate
+            # attempt (n_slam == 0) retries on the next flagged iteration.
+            self._last_slam_iter = phiter
         self._n_action_events += 1
         # Announce the interruption activity unconditionally (rank-0 gated) --
         # this is the only output a pure --interrupt-W-oscillations run produces;
         # the cycling report (CSV) is opt-in (self._report_enabled).
         bits = []
-        if action in ("w_damping", "both"):
+        if damp:
             bits.append(f"damped W on {n_damp} nonant(s)")
-        if action in ("slam", "both"):
+        if slam:
             bits.append(f"slammed {n_slam} nonant(s)")
+        elif action == "both":
+            bits.append("slam cooling down")
         global_toc(
             f"W-oscillation interruption [iter {phiter}]: {len(targets)} "
             f"nonant(s) flagged; " + "; ".join(bits),

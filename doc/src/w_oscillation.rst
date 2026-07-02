@@ -220,19 +220,26 @@ Actions
    that persistent solvers already perform.
 
 ``slam``
-   Fix **one** flagged nonant per iteration -- the highest-priority one that can
-   actually be slammed -- via the existing :ref:`slammer <slammer>` action
-   layer. Fixing is drastic and near-irreversible, and fixing the single worst
-   oscillator often re-settles the others, so even when many nonants are flagged
-   only one is slammed each iteration; the next iteration re-detects and fixes
-   the next if it is still cycling. The ``slam`` block names a
-   ``directives_file`` -- a slammer-style directives CSV (by-name patterns, a
-   direction such as ``lb`` / ``ub`` / ``nearest`` / ``max``, and a
-   ``priority``). Among the flagged nonants the slammer picks by that
-   ``priority`` column (largest first, ties by name), so the priority ranking
-   decides which one is fixed. Watson-Woodruff §2.4's native remedy -- fixing a
-   cycling variable to its per-scenario maximum -- is exactly a directives file
-   of ``...,max,...``.
+   Fix **one** flagged nonant per slam event -- the highest-priority one that
+   can actually be slammed -- via the existing :ref:`slammer <slammer>` action
+   layer, with successive slams separated by a cooldown of at least
+   ``iters_between_slams`` iterations (default ``3``). Fixing is drastic and
+   near-irreversible, and fixing the single worst oscillator often re-settles
+   the others, so even when many nonants are flagged only one is slammed per
+   event. The cooldown matters because the detectors judge a trailing history
+   window: a nonant that is re-settling after a fix keeps its flag until the
+   old oscillation ages out of the window, so "still flagged" is *not* yet
+   evidence of "still cycling" -- the cooldown gives each fix time to work
+   before the next variable is fixed (set it to ``1`` to slam on every flagged
+   iteration). The cooldown starts only when a slam actually lands; an event
+   where nothing was slammable retries on the next flagged iteration. The
+   ``slam`` block also names a ``directives_file`` -- a slammer-style
+   directives CSV (by-name patterns, a direction such as ``lb`` / ``ub`` /
+   ``nearest`` / ``max``, and a ``priority``). Among the flagged nonants the
+   slammer picks by that ``priority`` column (largest first, ties by name), so
+   the priority ranking decides which one is fixed. Watson-Woodruff §2.4's
+   native remedy -- fixing a cycling variable to its per-scenario maximum -- is
+   exactly a directives file of ``...,max,...``.
 
 ``both``
    Apply each: W-damping nudges *all* flagged nonants and slam fixes the *one*
@@ -246,8 +253,9 @@ Trigger
 The ``trigger`` block controls *when* and *which* nonants are acted on:
 
 - ``start_iter`` (``5``) -- the first iteration at which interruption may occur.
-  Once past it, the extension acts every iteration a nonant is still flagged
-  (there is no inter-action cadence).
+  Once past it, W-damping acts every iteration a nonant is still flagged (it
+  has no inter-action cadence); slamming is additionally paced by its own
+  ``iters_between_slams`` cooldown (see the ``slam`` action above).
 - ``min_scenarios_flagged`` (``1``) -- a nonant is acted on once at least this
   many scenarios flag it.
 
@@ -277,8 +285,10 @@ example::
   [   12.34] W-oscillation interruption [iter 7]: 3 nonant(s) flagged; damped W on 3 nonant(s); slammed 1 nonant(s)
 
 This line is always emitted (it does not require ``--verbose``); it is the only
-output of a report-less interrupt run. Detailed per-slam reporting comes from
-the slammer itself under ``--verbose``.
+output of a report-less interrupt run. Under ``action: both``, iterations on
+which the slam cooldown suppresses a slam say ``slam cooling down`` in place of
+the slam count (a slam-only action prints nothing while cooling down).
+Detailed per-slam reporting comes from the slammer itself under ``--verbose``.
 
 
 Scope, MPI, and limitations

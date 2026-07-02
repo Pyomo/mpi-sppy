@@ -6,7 +6,8 @@ PR2 *interruption* (``--interrupt-W-oscillations``: **W-damping** and/or
 slamming, the latter via the existing Slammer action layer) acts on the detector
 to break the oscillation. **PR2's action set is being revised on this branch**:
 the original rho-reduction action is replaced by **W-damping** (§9.1) and slam
-now fixes **one** nonant per iteration (§9.2); the design below is the target,
+now fixes **one** nonant per slam event, with successive slams paced by an
+`iters_between_slams` cooldown (§9.2); the design below is the target,
 ahead of the code. Shipped as **two review-sized PRs**.
 **Author:** dlw (captured with Claude Code assistance)
 **Last updated:** 2026-07-02
@@ -155,12 +156,16 @@ with that method (§5).
   "trigger": {
     "min_scenarios_flagged": 1,   // act when >= this many scenarios flag a nonant
     "start_iter": 5               // first acting iteration; then every iteration
-                                  // a nonant is still flagged (no cadence, §9)
+                                  // a nonant is still flagged (damping has no
+                                  // cadence; slams have a cooldown, §9)
   },
   "w_damping": { "factor": 0.5 },  // retained fraction of each dual (W) step on
                                    // a flagged nonant; 0 <= factor < 1
-  "slam": { "directives_file": "slam_directives.csv" }  // priority column ranks
-                                   // which single nonant is slammed (§9.2)
+  "slam": {
+    "directives_file": "slam_directives.csv",  // priority column ranks which
+                                   // single nonant is slammed (§9.2)
+    "iters_between_slams": 3       // cooldown after a successful slam (§9.2)
+  }
 }
 ```
 
@@ -411,14 +416,16 @@ large, so the file is **off by default**.
 
 When a nonant is flagged, act in `miditer` (after `Update_W`, before the
 solve). The trigger is simply `phiter >= start_iter`: once past the start
-iteration the detector is evaluated **every** iteration, and an action lands on
-a nonant **exactly on the iterations it is still flagged** (§4). There is no
-inter-action cadence — a nonant is regulated for as long as it keeps
+iteration the detector is evaluated **every** iteration, and W-damping lands on
+a nonant **exactly on the iterations it is still flagged** (§4) — no
+inter-action cadence; a nonant is regulated for as long as it keeps
 oscillating and left alone once it settles.
 
 The two actions are deliberately asymmetric: **W-damping nudges *every* flagged
 nonant this iteration** (it is gentle, reversible, and self-correcting), while
-**slam fixes at most *one*** (fixing is drastic, §9.2).
+**slam fixes at most *one*, and only after a cooldown** of
+`iters_between_slams` iterations since the last successful slam (fixing is
+drastic and the flags outlive a fix, §9.2).
 
 ### 9.1 `w_damping` — the dual-step damper (replaces rho reduction)
 
@@ -474,14 +481,31 @@ communication; the per-scenario W write is local and picked up by the next
 `set_objective` (W is a mutable Param in the objective — the same mechanism the
 rho-updating extensions rely on).
 
-### 9.2 `slam` — one highest-priority nonant per iteration
+### 9.2 `slam` — one highest-priority nonant per slam event, with a cooldown
 
 Invoke the **Slammer action layer** (`slammer.py` §7), but slam **at most one**
-nonant per iteration even when many are flagged: fixing is drastic and
+nonant per slam event even when many are flagged: fixing is drastic and
 near-irreversible, and fixing the single worst oscillator often re-settles the
 others for free (WW §2.1: changes in one integer variable induce changes in
-others). This is the graceful pace that dropping the cadence enables — fix one,
-re-solve, re-detect, fix the next if it is still cycling.
+others). The intended pace is: fix one, re-solve, re-detect, fix the next *if
+it is still cycling*.
+
+But "re-detect" cannot answer *still cycling?* one iteration after a fix: the
+detectors judge a **trailing history window**, so a nonant that is re-settling
+keeps its flag until the old oscillation ages out of the buffer (with the
+zero-crossings defaults, potentially tens of iterations). Acting on the raw
+flag every iteration would therefore fix one variable per iteration for as
+long as the stale signal persists — far more fixing than the re-settle story
+calls for. So successive slams are separated by a **cooldown**:
+`slam.iters_between_slams` (default 3), counted from the last **successful**
+slam (a no-candidate event starts no cooldown and retries on the next flagged
+iteration; `1` recovers slam-every-flagged-iteration). W-damping is *not*
+throttled — it is a per-step under-relaxation whose semantics depend on acting
+each flagged iteration. The cooldown state derives from the rank-identical
+slam count, so the slam/skip decision is identical on every rank and the
+direction extremum's `Allreduce` stays symmetric. (This reinstates, slam-scoped
+and as a cooldown rather than a modulo grid, the `iters_between_actions`
+cadence an earlier revision dropped.)
 
 Selection reuses Slammer's existing `_slam_one`, restricted to the flagged set:
 among the flagged nonants it ranks by the directives file's **`priority`**
@@ -560,15 +584,17 @@ Following the Slammer wiring precisely:
   is correct).
 - **PR2 — action layers fire end-to-end:** tests cover the interrupt-config
   validators (action ∈ `{w_damping, slam, both}`, `factor` in `[0,1)`,
-  slam-needs-a-file, trigger defaults with no `iters_between_actions`), a pure
-  arithmetic check of the W-damping rescale (a `w_damped(...)` helper, no MPI),
-  and an end-to-end farmer run with `--interrupt-W-oscillations` (with a
-  `detect` block, so the report *is* requested) asserting that both the
+  slam-needs-a-file, `iters_between_slams` defaulting/validation, trigger
+  defaults with no `iters_between_actions`), pure arithmetic checks of the
+  W-damping rescale (`w_damped(...)`) and the slam cooldown (`slam_due(...)`)
+  (no MPI), and an end-to-end farmer run with `--interrupt-W-oscillations`
+  (with a `detect` block, so the report *is* requested) asserting that both the
   W-damping and the slam action execute through a real PH loop and the detection
   CSV is written. The W-damping assertion checks a flagged nonant's post-action
-  W equals its pre-action W minus `(1−factor)·rho·(x−x̄)`; the slam assertion
-  checks **exactly one** nonant is fixed per acting iteration (the
-  highest-priority flagged one). A second end-to-end run with **no** detection
+  W equals its pre-action W minus `(1−factor)·rho·(x−x̄)`; the slam assertions
+  check **exactly one** nonant is fixed per slam event (the highest-priority
+  flagged one) and that the cooldown then suppresses further slams (the
+  `slam cooling down` log line) while damping continues. A second end-to-end run with **no** detection
   request asserts the **opt-in** rule: the engine still drives the actions but
   **no report CSV is written**. The slam path's per-node min/max `Allreduce` is
   exercised under `mpiexec -np 2` to confirm it is reached symmetrically (no
@@ -592,8 +618,9 @@ backward compatible.
 
 **PR2 — interruption.**
 `--interrupt-W-oscillations` flag and JSON, the **W-damping** action (§9.1), the
-**slam** action (one highest-priority nonant per iteration via Slammer's
-`_slam_one` restricted to the flagged set, §9.2), the trigger layer (no
+**slam** action (one highest-priority nonant per slam event via Slammer's
+`_slam_one` restricted to the flagged set, paced by the `iters_between_slams`
+cooldown, §9.2), the trigger layer (`start_iter`; damping itself has no
 cadence), and the `both` = apply-both rule (§9.3). Builds on PR1's engine: the
 detectors also return the rank-identical flagged set the interrupter acts on.
 Backward compatible — with neither flag the extension is never built, and a

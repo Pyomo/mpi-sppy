@@ -8,6 +8,7 @@
         "factor": 0.5
     },
     "slam": {
-        "directives_file": "examples/sizes/config/slamming_directives.csv"
+        "directives_file": "examples/sizes/config/slamming_directives.csv",
+        "iters_between_slams": 3
     }
 }

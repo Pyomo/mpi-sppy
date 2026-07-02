@@ -249,6 +249,32 @@ class TestInterruptConfigValidation(unittest.TestCase):
         with self.assertRaises(ValueError):
             wosc.validate_interrupt_config({"action": "slam", "slam": {}})
 
+    def test_slam_cooldown_defaults_and_validation(self):
+        # default fills in; explicit value is kept; < 1 is rejected.
+        cfg = wosc.validate_interrupt_config(
+            {"action": "slam", "slam": {"directives_file": "d.csv"}})
+        self.assertEqual(cfg["slam"]["iters_between_slams"], 3)
+        cfg = wosc.validate_interrupt_config(
+            {"action": "slam",
+             "slam": {"directives_file": "d.csv", "iters_between_slams": 10}})
+        self.assertEqual(cfg["slam"]["iters_between_slams"], 10)
+        for bad in (0, -2):
+            with self.assertRaises(ValueError):
+                wosc.validate_interrupt_config(
+                    {"action": "slam",
+                     "slam": {"directives_file": "d.csv",
+                              "iters_between_slams": bad}})
+
+    def test_slam_due_cooldown(self):
+        # No slam yet: always due (start_iter alone gates the first slam).
+        self.assertTrue(wosc.slam_due(5, None, 3))
+        # Slammed at 7 with cooldown 3: not due at 8, 9; due again at 10.
+        self.assertFalse(wosc.slam_due(8, 7, 3))
+        self.assertFalse(wosc.slam_due(9, 7, 3))
+        self.assertTrue(wosc.slam_due(10, 7, 3))
+        # Cooldown 1 reproduces the every-iteration behavior.
+        self.assertTrue(wosc.slam_due(8, 7, 1))
+
     def test_both_requires_both_sections(self):
         # 'both' needs a valid slam directives file even with w_damping defaults
         with self.assertRaises(ValueError):
@@ -261,7 +287,8 @@ class TestInterruptConfigValidation(unittest.TestCase):
     def test_trigger_defaults_and_validation(self):
         cfg = wosc.validate_interrupt_config({"action": "w_damping"})
         self.assertEqual(cfg["trigger"]["start_iter"], 5)
-        # the inter-action cadence knob was dropped
+        # the global inter-action cadence knob was dropped (the slam-specific
+        # cooldown lives in the slam block as iters_between_slams)
         self.assertNotIn("iters_between_actions", cfg["trigger"])
         self.assertEqual(cfg["w_damping"]["factor"], 0.5)
         with self.assertRaises(ValueError):
@@ -310,7 +337,8 @@ class TestEndToEndInterrupt(unittest.TestCase):
                     "action": "both",
                     "trigger": {"min_scenarios_flagged": 1, "start_iter": 3},
                     "w_damping": {"factor": 0.5},
-                    "slam": {"directives_file": slam_csv},
+                    "slam": {"directives_file": slam_csv,
+                             "iters_between_slams": 5},
                     "detect": {
                         "output_csv": out_csv,
                         "warmup_iters": 2,
@@ -354,8 +382,13 @@ class TestEndToEndInterrupt(unittest.TestCase):
             self.assertIn("Slammer: slammed", out)
             self.assertIn("DevotedAcreage[SUGAR_BEETS", out)
             self.assertIn("damped W on", out)
-            # slam fixes at most one nonant per acting iteration
+            # slam fixes at most one nonant per slam event
             self.assertIn("slammed 1 nonant(s)", out)
+            # ... and the cooldown then suppresses further slams while damping
+            # continues (iters_between_slams=5 > the remaining iterations, so
+            # the run ends inside the cooldown).
+            self.assertIn("slam cooling down", out)
+            self.assertEqual(out.count("slammed 1 nonant(s)"), 1)
 
     def test_interrupt_without_request_writes_no_report(self):
         """A pure --interrupt-W-oscillations run (no --detect flag, no detect
