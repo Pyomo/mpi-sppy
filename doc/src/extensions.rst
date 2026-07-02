@@ -26,6 +26,9 @@ command-line flags:
 - ``--slamming-directives-file <file>`` -- activates the slammer extension
 - ``--detect-W-oscillations <file>`` -- activates W-oscillation detection
   (see :ref:`w_oscillation`)
+- ``--interrupt-W-oscillations <file>`` -- activates W-oscillation
+  interruption (rho reduction and/or slamming; implies detection;
+  see :ref:`w_oscillation`)
 - ``--mipgaps-json <file>`` -- activates the mipgapper extension
 - ``--user-defined-extensions <module>`` -- loads a custom extension
 - ``--grad-rho`` -- activates gradient-based rho (see :ref:`rho_setting`)
@@ -351,98 +354,15 @@ diagnostic tool intended for tuning rho and convergence behavior; it
 adds time and memory and is not recommended for production runs.
 
 
-.. _w_oscillation:
-
 w_oscillation
 ^^^^^^^^^^^^^
 
 The ``w_oscillation`` extension (``mpisppy.extensions.w_oscillation``)
-*detects* oscillation / cycling in the PH dual weight (W) vector and
-reports it to a CSV. Oscillating (sign-flipping, non-damping) weights are
-a common, convergence-killing symptom for mixed-integer problems. The
-extension is **pure observation**: it changes no rho values and fixes no
-variables, so a run with detection enabled follows exactly the same
-optimization trajectory as one without.
-
-For a broader view of how W evolves -- moving means, standard deviations,
-and coefficient of variation across all nonant/scenario traces -- use the
-:ref:`wtracker_extension`; ``w_oscillation`` is the focused layer that
-flags the specific traces that are *cycling*.
-
-From ``generic_cylinders.py``, enable it with::
-
-  --detect-W-oscillations <control.json>
-
-The JSON control file selects and parameterizes the detection methods and
-controls the output. Keys:
-
-- ``output_csv`` (required) -- the per-nonant aggregate report; written by
-  cylinder rank 0.
-- ``per_scenario_csv`` (optional) -- a per-(scenario, nonant) detail file
-  (gathered to rank 0); off by default.
-- ``warmup_iters`` -- do not evaluate until this many W samples exist
-  (default 5).
-- ``check_every`` -- evaluate the detectors every this many iterations
-  after warm-up (default 1).
-- ``report_mode`` -- ``on_detect`` (a row the first time a nonant is
-  flagged; the default), ``every_check``, or ``final`` (one report at the
-  end).
-- ``min_scenarios_to_report`` / ``min_frac_to_report`` -- a nonant is
-  reported once at least this many scenarios (or this fraction of them)
-  flag it.
-- ``methods`` -- a (non-empty) object selecting one or both detectors;
-  per-method keys override documented defaults.
-
-Two detection methods are available:
-
-- ``zero_crossings`` -- a port of PySP's ``sorgw`` plugin: per
-  (scenario, nonant) it counts sign changes of W and of the consecutive
-  differences, plus a back-half/front-half damping ratio of ``|ΔW|``, and
-  flags a trace when any of ``thresh_w_crossings`` (default 2),
-  ``thresh_diff_crossings`` (default 3), or ``thresh_diffs_ratio``
-  (default 0.2) is met.
-- ``w_hash_recurrence`` -- the Watson-Woodruff "Progressive Hedging
-  Innovations" (Computational Management Science, 2011) §2.4 cycle
-  detector: it hashes the per-scenario W vector for each nonant and flags
-  a *recurrence* of that vector (a genuine cycle of period
-  ``min_period`` or more, so convergence is not mistaken for a cycle).
-  Keys: ``window`` (default 20), ``quantum`` (default 1e-6),
-  ``min_period`` (default 2).
-
-An example control file is shipped at
-``examples/sizes/config/w_oscillation.json``. It enables both detectors,
-keeps a 20-iteration window, and reports a nonant once at least half of the
-scenarios (``min_frac_to_report``) flag it:
-
-.. literalinclude:: ../../examples/sizes/config/w_oscillation.json
-   :language: json
-
-That example leaves ``per_scenario_csv`` at ``null``, so only the aggregate
-report is written. To also emit the per-(scenario, nonant) detail file --
-one row per flagged trace per check, gathered to rank 0 -- set
-``per_scenario_csv`` to a path (other keys fall back to their defaults):
-
-.. code-block:: json
-
-    {
-        "output_csv": "w_oscillations.csv",
-        "per_scenario_csv": "w_oscillations_per_scenario.csv",
-        "report_mode": "every_check",
-        "methods": {
-            "zero_crossings": {}
-        }
-    }
-
-The detail file has columns ``iteration, node, scenario, variable, method,
-w_crossings, diff_crossings, diffs_ratio, w_value``.
-
-The aggregate CSV has a header row and one row per flagged nonant per
-detection event, with columns ``iteration, node, variable, method,
-num_scenarios_total, num_scenarios_flagged, max_w_crossings,
-max_diff_crossings, max_diffs_ratio, cycle_period``. The report is
-independent of how scenarios are distributed across MPI ranks.
-
-See ``doc/designs/w_oscillation_design.md`` for the full design.
+*detects* oscillation / cycling in the PH dual weight (W) vector and can
+optionally *interrupt* it (by reducing rho and/or slamming). Because both
+detection and interruption have a fair amount of configuration, they have
+their own page: :doc:`w_oscillation`. It is activated with
+``--detect-W-oscillations`` and/or ``--interrupt-W-oscillations``.
 
 
 gradient_extension
