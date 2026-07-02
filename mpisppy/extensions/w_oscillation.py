@@ -620,9 +620,13 @@ class WOscillationMonitor(Extension):
         self._capture()
         phiter = self.opt._PHIter
         # The report is opt-in (self._report_enabled); a detection check only
-        # matters when reporting is on.  The engine still runs whenever an
-        # interruption action is due, to find the cycling nonants to act on.
-        report_due = self._report_enabled and self._detect_due(phiter)
+        # matters when reporting is on.  In "final" report mode all rows are
+        # deferred to the single end-of-run evaluation in post_everything.
+        # The engine still runs whenever an interruption action is due, to
+        # find the cycling nonants to act on.
+        report_due = (self._report_enabled
+                      and self.cfg["report_mode"] != "final"
+                      and self._detect_due(phiter))
         act_due = self._interrupt_cfg is not None and self._act_due(phiter)
         if not (report_due or act_due):
             return
@@ -770,7 +774,8 @@ class WOscillationMonitor(Extension):
             self._interrupt_cfg["slam"]["iters_between_slams"])
         if not (damp or slam):
             return  # slam-only action, cooling down: nothing to do or announce
-        n_damp = self._damp_w(targets) if damp else 0
+        if damp:
+            self._damp_w(targets)
         n_slam = self._slam_targets(targets) if slam else 0
         if n_slam:
             # Start the cooldown only on a *successful* slam; a no-candidate
@@ -782,7 +787,9 @@ class WOscillationMonitor(Extension):
         # the cycling report (CSV) is opt-in (self._report_enabled).
         bits = []
         if damp:
-            bits.append(f"damped W on {n_damp} nonant(s)")
+            # len(targets) is rank-identical (a rank's *local* touched count
+            # can be smaller under node-split multistage distributions).
+            bits.append(f"damped W on {len(targets)} nonant(s)")
         if slam:
             bits.append(f"slammed {n_slam} nonant(s)")
         elif action == "both":
@@ -795,8 +802,7 @@ class WOscillationMonitor(Extension):
     def _damp_w(self, targets):
         """Damp the dual weight on **every** flagged nonant, in every local
         scenario, by rescaling the increment ``Update_W`` just applied:
-        ``W -= (1 - factor) * rho * (x - xbar)`` (see :func:`w_damped`).  Return
-        the number of nonants touched.
+        ``W -= (1 - factor) * rho * (x - xbar)`` (see :func:`w_damped`).
 
         W is a mutable Pyomo Param in the objective, so changing its value is
         picked up by the per-iteration ``set_objective`` that ``solve_one``
@@ -804,10 +810,8 @@ class WOscillationMonitor(Extension):
         same mechanism the rho-updating extensions rely on).  The proximal rho
         is left unchanged; only the dual step is damped."""
         factor = self._interrupt_cfg["w_damping"]["factor"]
-        touched = 0
         for j in targets:
             ndn_i = self._ndn_i[j]
-            changed = False
             for s in self.opt.local_scenarios.values():
                 W = s._mpisppy_model.W
                 if ndn_i not in W:
@@ -816,10 +820,6 @@ class WOscillationMonitor(Extension):
                 xdiff = s._mpisppy_data.nonant_indices[ndn_i]._value \
                     - s._mpisppy_model.xbars[ndn_i]._value
                 W[ndn_i]._value = w_damped(W[ndn_i]._value, rho, xdiff, factor)
-                changed = True
-            if changed:
-                touched += 1
-        return touched
 
     def _slam_targets(self, targets):
         """Slam **at most one** flagged nonant this iteration -- the

@@ -220,7 +220,7 @@ Some extensions can be activated directly from the command line:
 - ``--detect-W-oscillations <file>`` -- Detect oscillation/cycling in the
   W vector and report it to a CSV (see :ref:`w_oscillation`)
 - ``--interrupt-W-oscillations <file>`` -- Act on detected W oscillation
-  (rho reduction and/or slamming) to break the cycle; implies detection
+  (W-damping and/or slamming) to break the cycle; implies detection
   (see :ref:`w_oscillation`)
 
 See :ref:`Extensions` for details on available extensions.
