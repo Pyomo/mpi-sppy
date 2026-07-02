@@ -327,7 +327,7 @@ class Slammer(Extension):
 
         When ``candidates`` is given (a set/collection of ``(ndn, i)`` keys),
         only those nonants are considered -- the entry point a stall/cycle
-        detector uses to slam the worst of *its* flagged nonants while still
+        detector uses to slam one of *its* flagged nonants while still
         honoring the directives file's priority ranking.  Ineligible or
         no-applicable-direction candidates are skipped, so this effectively
         walks the priority order until it finds one it can slam.

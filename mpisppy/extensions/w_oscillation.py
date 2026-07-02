@@ -824,7 +824,7 @@ class WOscillationMonitor(Extension):
     def _slam_targets(self, targets):
         """Slam **at most one** flagged nonant this iteration -- the
         highest-priority one that can actually be slammed -- via the Slammer
-        action layer.  Fixing is drastic, and fixing the single worst oscillator
+        action layer.  Fixing is drastic, and fixing just one cycling variable
         often re-settles the others (WW §2.1), so we reuse Slammer's own
         priority-ranked, one-per-call :meth:`~mpisppy.extensions.slammer.Slammer._slam_one`
         restricted to the flagged set.  Return the number slammed (0 or 1)."""

@@ -486,9 +486,10 @@ rho-updating extensions rely on).
 Invoke the **Slammer action layer** (`slammer.py` §7), but slam **at most one**
 nonant per slam event even when many are flagged: fixing is drastic and
 permanent (a slammed variable stays fixed for the rest of the run, even after
-its flag clears), and fixing the single worst oscillator often re-settles the
+its flag clears), and fixing just one cycling variable often re-settles the
 others for free (WW §2.1: changes in one integer variable induce changes in
-others). The intended pace is: fix one, re-solve, re-detect, fix the next *if
+others). Which one is slammed is decided by the directives file's `priority`
+ranking, not by any measure of oscillation severity. The intended pace is: fix one, re-solve, re-detect, fix the next *if
 it is still cycling*.
 
 But "re-detect" cannot answer *still cycling?* one iteration after a fix: the
