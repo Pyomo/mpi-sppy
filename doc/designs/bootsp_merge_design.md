@@ -1,7 +1,9 @@
 # Merging boot-sp into mpi-sppy — design
 
 **Status:** design captured and decisions ratified 2026-07-02; open
-questions resolved and PR structure set to two PRs 2026-07-02; no code yet.
+questions resolved and PR structure set to two PRs 2026-07-02; PR-1 example
+scope narrowed to the statdist-free example while implementing PR-1
+(2026-07-02, see §2.5 and §8).
 **Author:** dlw (captured with Claude Code assistance)
 **Last updated:** 2026-07-02
 
@@ -77,12 +79,30 @@ Related work:
 4. **Old repo:** archive with a README pointer after the final phase; no
    shim release.
 5. **Two PRs** (was three): PR-1 = empirical core + simulation harness +
-   all examples; PR-2 = statdist + smoothed methods. The seam sits on the
-   one real fault line — the dependency boundary between the empirical
-   code (numpy-only) and the smoothed code (statdist + scipy + epi-spline
-   Pyomo fits) — and folding the thin `simulate_boot.py` (~215 lines) into
-   PR-1 lets the §4.2 dispatch consolidation happen once instead of being
-   built in one PR and touched again in another.
+   the statdist-free example (schultz); PR-2 = statdist + smoothed methods
+   + the three examples that need statdist (farmer, cvar, multi_knapsack).
+   The seam sits on the one real fault line — the dependency boundary
+   between the empirical code (numpy-only) and the smoothed code (statdist
+   + scipy + epi-spline Pyomo fits) — and folding the thin
+   `simulate_boot.py` (~215 lines) into PR-1 lets the §4.2 dispatch
+   consolidation happen once instead of being built in one PR and touched
+   again in another.
+
+   **Example placement follows the same fault line (revised 2026-07-02
+   during PR-1 implementation).** The original plan put all four examples
+   in PR-1, but three of them (farmer, cvar, multi_knapsack) build their
+   scenario data with statdist univariate distributions and `Sampler`
+   *on the empirical path too* — `farmer` calls
+   `distribution_factory('univariate-unif')`, `multi_knapsack` calls
+   `'univariate-normal'`, `cvar` samples a fitted distribution — so
+   importing them pulls in `statdist.distributions`, whose top of file has
+   `from scipy.stats import mvn` (the scipy≥1.14 breakage this merge
+   removes). Those examples therefore cannot import, let alone run, in a
+   statdist-free/scipy-free PR-1, and PR-1 must be green on its own. Only
+   `schultz` generates its data with plain numpy. So PR-1 ships `schultz`
+   and its tests; farmer/cvar/multi_knapsack — and their empirical *and*
+   smoothed tests — land in PR-2 with statdist, each example landing
+   exactly once. See §8 for the full record.
 
 ---
 
@@ -111,15 +131,16 @@ mpisppy/confidence_intervals/bootsp/
         sampler.py
 
 examples/bootsp/
-    farmer/                 # all examples in PR-1
-    cvar/
-    multi_knapsack/
-    schultz/
+    schultz/                # PR-1 (numpy-only data generation)
+    farmer/                 # PR-2 (needs statdist univariate + Sampler)
+    cvar/                   # PR-2
+    multi_knapsack/         # PR-2
 
 mpisppy/tests/
-    test_boot_sp.py                 # PR-1 (empirical, user_boot, prep)
-    test_boot_sp_smoothed.py        # PR-2 (smoothed + statdist univariate)
-    test_boot_sp_simulate.py        # PR-1 (coverage harness, empirical)
+    test_boot_sp.py                 # PR-1 (empirical, user_boot, prep; schultz)
+    test_boot_sp_simulate.py        # PR-1 (coverage harness + MPI; schultz)
+    test_boot_sp_smoothed.py        # PR-2 (smoothed + statdist univariate;
+                                    #   also the empirical farmer/cvar tests)
 
 doc/src/boot_sp.rst         # toctree: after seqsamp.rst in index.rst
 doc/designs/bootsp_merge_design.md   # this file
@@ -220,13 +241,17 @@ Behavior-preserving unless noted.
   table, module contract, JSON/CLI usage, citations) and enters the
   `index.rst` toctree under "Solutions and Confidence Intervals" after
   `seqsamp.rst`. Each PR ships the doc section for what it merges.
-- Examples: all of `examples/bootsp/` in PR-1. A `do_one_boot` helper
-  (mirroring `do_one_mmw`) registers a small bootstrap run in part 1 of
-  `examples/run_all.py`, also in PR-1.
+- Examples: `examples/bootsp/schultz/` in PR-1 (the other three examples
+  need statdist and land in PR-2, §2.5). A `do_one_boot` helper
+  (mirroring `do_one_mmw`) registers a small bootstrap run on schultz in
+  part 1 of `examples/run_all.py`, also in PR-1.
 - MPI testing: batch-parallel bootstrap with `Gatherv` gets real
   `mpiexec -np 2` tests with value assertions (not just smoke) — the
-  `test_with_cylinders.py` pattern, wired into CI. Empirical coverage in
-  PR-1; the smoothed methods get the same treatment in PR-2.
+  `test_with_cylinders.py` pattern, wired into CI. schultz is a small
+  integer program with fully deterministic discrete data, so its EF
+  optimum and bootstrap draws are solver- and rank-independent, which
+  makes it a good vehicle for cross-rank value assertions. Empirical
+  coverage in PR-1; the smoothed methods get the same treatment in PR-2.
 
 ---
 
@@ -237,8 +262,8 @@ boundary (see ratified decision §2.5).
 
 - **PR-1 — empirical core and simulation harness.** `bootsp/` subpackage
   with `boot_sp.py`, `boot_utils.py`, `user_boot.py`,
-  `boot_general_prep.py`, and `simulate_boot.py`; all of
-  `examples/bootsp/` plus the `do_one_boot` entry in part 1 of
+  `boot_general_prep.py`, and `simulate_boot.py`; `examples/bootsp/schultz/`
+  (the statdist-free example) plus the `do_one_boot` entry in part 1 of
   `run_all.py`; `test_boot_sp.py` and `test_boot_sp_simulate.py`
   including the `mpiexec -np 2` Gatherv tests (+ CI/coverage wiring);
   `boot_sp.rst` covering the empirical methods. No statdist, no scipy
@@ -247,12 +272,14 @@ boundary (see ratified decision §2.5).
   a clear "smoothed methods not yet merged — use the boot-sp package
   meanwhile" error.
 - **PR-2 — smoothed methods.** Trimmed `statdist/` (per §3) +
-  `smoothed_boot_sp.py`; smoothed dispatch replaces the PR-1 error,
+  `smoothed_boot_sp.py`; the farmer, cvar, and multi_knapsack examples
+  (which need statdist, §2.5); smoothed dispatch replaces the PR-1 error,
   which activates the smoothed simulation path and its §4.3 fix;
   `test_boot_sp_smoothed.py` including direct univariate-distribution
   tests (statdist's own test covered one class; extend to the
-  distributions the smoothed methods actually request) and the smoothed
-  MPI test; doc completion.
+  distributions the smoothed methods actually request), the empirical
+  farmer/cvar tests that PR-1 could not host, and the smoothed MPI test;
+  doc completion.
 - **Post-merge (not a PR).** Update the boot-sp README to point at the
   mpi-sppy docs and archive the GitHub repo. `paper_runs/`, the copula/
   vine/bicop code, and the multivariate classes remain there.
@@ -273,3 +300,29 @@ boundary (see ratified decision §2.5).
 3. **MPI testing?** Yes, and more than smoke: `mpiexec -np 2` tests with
    value assertions on the Gatherv-based batch parallelism, wired into
    CI — empirical in PR-1, smoothed in PR-2 (§5).
+
+---
+
+## 8. Revision during PR-1 implementation (2026-07-02)
+
+While implementing PR-1 it turned out that the example/PR boundary and the
+code/PR boundary are the *same* fault line, and the original "all examples
+in PR-1" plan crossed it.
+
+- **Discovery.** farmer, cvar, and multi_knapsack build their scenario
+  data with statdist univariate distributions and `Sampler` on the
+  empirical path — not just the smoothed path. Importing any of them
+  imports `bootsp.statdist.distributions`, which begins with
+  `from scipy.stats import mvn` (removed in scipy 1.14). So these three
+  examples cannot be imported in a statdist-free, scipy-free PR-1, and a
+  PR must be green on its own.
+- **Resolution.** PR-1 ships only `schultz` (plain-numpy data) and its
+  tests. farmer, cvar, and multi_knapsack — and their empirical *and*
+  smoothed tests — move to PR-2, where statdist is present, so each
+  example is added exactly once. The consequential edits to §2.5, §3,
+  §5, and §6 above were made at the same time.
+- **Not chosen:** pulling a scipy-lazy univariate subset of statdist
+  forward into PR-1 so all four examples could ship there. It would have
+  worked but blurred the dependency seam that motivates the two-PR split
+  and grown PR-1 with statdist code the "statdist lands in PR-2" decision
+  (§2.2) deliberately kept out.

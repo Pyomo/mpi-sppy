@@ -49,6 +49,7 @@ MPI is used.
    zhat.rst
    risk_management.rst
    seqsamp.rst
+   boot_sp.rst
 
 .. toctree::
    :maxdepth: 2
