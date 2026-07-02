@@ -186,6 +186,13 @@ Passing ``--interrupt-W-oscillations <file>`` makes the extension *act* on the
 nonants it flags, in ``miditer`` before that iteration's solve, so the change
 takes effect immediately.
 
+Actions are strictly detection-gated: on an iteration where the detectors flag
+no nonant (or none reaches ``min_scenarios_flagged`` scenarios), nothing is
+damped and nothing is slammed -- the run is untouched. W-damping applies only
+to the specific nonants flagged at that iteration. A slam, however, is
+one-way: the variable it fixes *stays* fixed for the remainder of the run,
+even after its oscillation flag clears (there is no unfix path).
+
 Reporting is opt-in
 ^^^^^^^^^^^^^^^^^^^
 
@@ -224,9 +231,10 @@ Actions
    can actually be slammed -- via the existing :ref:`slammer <slammer>` action
    layer, with successive slams separated by a cooldown of at least
    ``iters_between_slams`` iterations (default ``3``). Fixing is drastic and
-   near-irreversible, and fixing the single worst oscillator often re-settles
-   the others, so even when many nonants are flagged only one is slammed per
-   event. The cooldown matters because the detectors judge a trailing history
+   permanent -- a slammed variable stays fixed for the rest of the run, even
+   after its oscillation flag clears -- and fixing the single worst oscillator
+   often re-settles the others, so even when many nonants are flagged only one
+   is slammed per event. The cooldown matters because the detectors judge a trailing history
    window: a nonant that is re-settling after a fix keeps its flag until the
    old oscillation ages out of the window, so "still flagged" is *not* yet
    evidence of "still cycling" -- the cooldown gives each fix time to work
