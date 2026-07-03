@@ -498,9 +498,16 @@ them.
   Decomposing a batch (cylinders) is therefore an expected case, not a rare
   edge — the design must accommodate it from the start.
 
-**Unified model — a batch is solved by a group of K ranks.** The allocation of
-`R` ranks is split into `G` groups of `K` (`G·K ≤ R`); the `nB` batches are
-distributed across the `G` groups and `Gatherv`'d to rank 0.
+**Unified model — a batch is solved by a group of K ranks.** `K` is the group
+size: the number of ranks that cooperate on *one* batch solve. The bootstrap
+phase partitions **all** `R` ranks into `G = R // K` groups (only the `R mod K`
+leftover ranks, if any, sit out); the `G` groups run **concurrently**, each
+solving its share of the `nB` batches in sequence, and the results are
+`Gatherv`'d to rank 0. There are no ranks "left over doing nothing" — every rank
+is in a group, and every group is working on a different batch at the same time.
+The two phases are temporal, over the same ranks: phase 1 (find `xhat`) uses all
+`R` ranks as one wheel; phase 2 re-arranges those same `R` ranks into the `G`
+groups for the batches.
 
 - `K = 1` — each group is one rank and a batch is a direct EF (boot-sp's
   model). **This is what the first integration ships.**
@@ -508,10 +515,9 @@ distributed across the `G` groups and `Gatherv`'d to rank 0.
   batches with cylinders. `K = 1` is just the degenerate case of the same
   batch-executor code path, not a separate mechanism.
 
-The `xhat` phase uses all `R` ranks (the configured solve); the bootstrap phase
-then re-partitions the allocation into the `G·K` grid. The `xhat`-evaluation
-(upper-bound) solves are embarrassingly parallel across scenarios and spread
-within a group the same way.
+The `xhat`-evaluation (upper-bound) solves for a batch are embarrassingly
+parallel across that batch's scenarios and spread across the group's ranks the
+same way.
 
 **This unifies the config and the rank problem:** one **batch sub-config**
 describes how to solve *any* batch (it is singular — you resample the data, not
@@ -572,9 +578,11 @@ disambiguates solves by role: `solver_specification(cfg, prefix)` resolves
   `--boot-solver-options`, resolved via `solver_specification(cfg, ["boot",
   ""])` — the batch solver, falling back to the generic `solver_name` (not
   `EF_solver_name`, so a batch stays independent of any xhat-EF solver).
-- `--boot-batch-ranks` — `K`, the number of ranks per batch group (§9.4),
-  default `1`. `K = 1` (a per-rank EF) needs only the `boot` solver role above.
-  `K > 1` runs a wheel per group and takes a full **batch sub-config** — a
-  nested `generic_cylinders` option set, not a `boot_*`-prefixed copy of every
-  option; the exact way that nested set is supplied is settled with the
-  `K > 1` enhancement (§9.4).
+- `--boot-ranks-per-batch` — `K`, the group size: how many ranks cooperate on
+  one batch solve (§9.4), default `1`. The framework forms `R // K` groups that
+  all run at once, so this is a partition of the allocation, not a subset that
+  leaves other ranks idle. `K = 1` (a per-rank EF) needs only the `boot` solver
+  role above. `K > 1` runs a wheel per group and takes a full **batch
+  sub-config** — a nested `generic_cylinders` option set, not a
+  `boot_*`-prefixed copy of every option; the exact way that nested set is
+  supplied is settled with the `K > 1` enhancement (§9.4).
