@@ -288,7 +288,10 @@ usual "branch off main" default.)
 - **Stage 1 — move boot-sp into mpi-sppy** (PR-1, PR-2). Split on the
   dependency boundary (ratified decision §2.5).
 - **Stage 2 — integrate into `generic_cylinders`** (PR-3, and possibly a
-  PR-4). The payoff; designed in §9. Depends on Stage 1 being in.
+  PR-4). The payoff; designed in §9. Depends on Stage 1 being in. The initial
+  integration assumes a bootstrap batch EF is solvable on its own; the
+  large-batch nested-rank enhancement (§9.4) is scheduled right after this
+  stack merges.
 
 - **PR-1 — empirical core and simulation harness.** `bootsp/` subpackage
   with `boot_sp.py`, `boot_utils.py`, `user_boot.py`,
@@ -413,15 +416,19 @@ data does not, in general, map simply to scenarios — the "dataset" might be a
 csv, a database, or a web resource — so the model owns loading and the
 name→data mapping, and any data-source option (e.g. `--data-file`,
 `--db-connection`) is the *model's* option, not a `--boot-*` flag. The
-framework needs only two things from the model: the canonical ordered list of
-scenario names (`scenario_names_creator`) and its length — the dataset size —
-which it uses for the positional M/N split (§9.2). Because the source can be a
-database or web page, the size is not inferred by the framework; it is supplied
-(a `--boot-*` count option and/or reported by the model).
+framework learns the dataset by **calling a model function that returns all
+scenario names implied by the dataset** — every scenario the data supports,
+whether that count comes from csv rows, a database query, or a web resource.
+There is no dataset-size flag and the framework does not infer a size; it
+derives it from the length of that returned list, and the ordered list is what
+the positional M/N split (§9.2) indexes into. This contract must be documented
+for model authors: the function returns the *whole* dataset's scenario names.
+Note that the internal code that finds `xhat` (when we are finding it) works
+with a *subset* of those names — the M candidate records — not the whole list.
 
-The per-batch resample solves stay within the estimator code; their solve
-path and how they share MPI ranks with the cylinder run is the remaining open
-question (§9.4).
+The per-batch resample solves stay within the estimator code; their solve path
+and how they share MPI ranks with the cylinder run is settled for the first
+integration and revisited as a scheduled enhancement (§9.4).
 
 ### 9.2 Scenario names vs. positions (the key reconciliation)
 
@@ -471,10 +478,10 @@ clear message rather than silently ignoring them:
   scenarios do not apply.
 - **Multistage.** Two-stage only, as everywhere else in this document.
 
-### 9.4 The rank tension (needs more thought)
+### 9.4 MPI ranks: batch solves
 
-The genuine open problem is how MPI ranks are used. Two things both want the
-ranks and pull in opposite directions:
+How MPI ranks are used is a genuine tension, because two things want them and
+pull in opposite directions:
 
 - **within a solve** — cylinders arrange the ranks as a hub plus spokes to
   solve one problem (used for `xhat`, and potentially for a large per-batch
@@ -483,31 +490,48 @@ ranks and pull in opposite directions:
   batches, and boot-sp uses the ranks as independent batch workers (each rank
   solves its share of batches as direct EFs and `Gatherv`s to rank 0).
 
-You cannot give the same ranks both roles at the same time without nesting.
-The deciding factor is the size of a single bootstrap batch (an EF over the
-`sample_size` resampled records):
+The same ranks cannot hold both roles at once without nesting. The deciding
+factor is the size of a single bootstrap batch (an EF over the `sample_size`
+resampled records).
 
-- **Small batches (the common data-based regime).** Each batch is a
-  single-rank direct EF. Then a clean **phase separation** works: phase 1
-  finds `xhat` with the configured solve using all ranks (cylinders/EF); phase
-  2 flattens the ranks and divides the `nB` batches across them (boot-sp's
-  `Gatherv` model). This is the natural first target.
-- **Large batches.** If the model is big enough to need cylinders for `xhat`,
-  its batch EFs (the same per-scenario model over `sample_size` records) may be
-  too big for a single-rank direct EF too. Then across-batch parallelism and
-  within-batch cylinders both want ranks, which forces **nested MPI groups**
-  (split the world into groups, each group runs a cylinder solve for a subset
-  of batches) — considerably more complex — or **serial** cylinder solves of
-  the batches (simple but slow).
+**Decided: the first integration assumes a batch EF is solvable on its own.**
+`xhat` is found with the configured solve using all ranks (cylinders/EF); the
+bootstrap phase then flattens the ranks and divides the `nB` batches across
+them, each batch a direct EF (boot-sp's `Gatherv` model). This phase-separated
+design covers the common data-based regime.
 
-The tension is real and unresolved; capturing the regimes is the point for
-now. A likely path is to build PR-3 for the small-batch phase-separated case
-first and treat nested-group large batches as a later enhancement, but this
-needs more thought before it is decided.
+**Scheduled enhancement: large batches.** If the model is big enough that a
+single batch EF cannot be solved on one rank, across-batch parallelism and
+within-batch cylinders both want the ranks, which forces **nested MPI groups**
+(split the world into groups, each group cylinder-solves a subset of batches)
+or **serial** cylinder solves of the batches. This is deferred to an
+enhancement to be taken up right after the first PR stack merges — the initial
+integration ships assuming the EF is solvable, and the nested-rank support
+follows.
 
-### 9.5 Flag names (proposal, to be finalized)
+### 9.5 Flag names
 
 Following MMW's `mmw_*` convention (§9.1), the estimator options are namespaced
-`boot_*` (CLI `--boot-*`); data-source options remain the model's own (§9.1).
-The proposed set and open sub-choices are being finalized with dlw; see the
-discussion accompanying this revision.
+`boot_*` (CLI `--boot-*`). There is **no** data-source or dataset-size flag:
+the data source is the model's own option and the dataset size comes from the
+model's all-scenario-names function (§9.1).
+
+- `--boot-method` — the estimator (`Classical_gaussian`, `Classical_quantile`,
+  `Extended`, `Subsampling`, `Bagging_with_replacement`,
+  `Bagging_without_replacement`; smoothed methods later).
+- `--boot-candidate-sample-size` — M, the number of records used to find
+  `xhat`. **Explicit.** It carves the candidate block that the bootstrap pool
+  is kept disjoint from (§9.1). If `--boot-xhat-input-file-name` is given
+  (`xhat` is read, not found), this must be omitted or given as `0`; giving
+  both a positive M and an xhat file is an error.
+- `--boot-sample-size` — N, records resampled per batch.
+- `--boot-subsample-size` — subsample size (bagging only).
+- `--boot-nB` — number of bootstrap/bagging batches.
+- `--boot-alpha` — two-sided significance level.
+- `--boot-seed-offset` — RNG offset for replication.
+- `--boot-xhat-input-file-name` — optional precomputed `xhat` (the no-wheel
+  path; parallels `--mmw-xhat-input-file-name`), mutually exclusive with a
+  positive `--boot-candidate-sample-size`.
+
+`boot_requested(cfg)` (mirroring `mmw_requested`) is true iff `--boot-method`
+is set, and it validates the candidate-size / xhat-file exclusivity.
