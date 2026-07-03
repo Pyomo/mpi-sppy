@@ -1,11 +1,20 @@
-# Merging boot-sp into mpi-sppy — design
+# Bootstrap/bagging for data-based stochastic programming in mpi-sppy — design
 
-**Status:** design captured and decisions ratified 2026-07-02; open
-questions resolved and PR structure set to two PRs 2026-07-02; PR-1 example
-scope narrowed to the statdist-free example while implementing PR-1
-(2026-07-02, see §2.5 and §8).
+**Status:** design captured and decisions ratified 2026-07-02; PR-1
+implemented (empirical core + schultz, incl. a data-file example) and pushed
+to a fork branch; extended 2026-07-03 to state the end goal
+(`generic_cylinders` integration) and a stacked, multi-PR roadmap (§6, §9).
 **Author:** dlw (captured with Claude Code assistance)
-**Last updated:** 2026-07-02
+**Last updated:** 2026-07-03
+
+**Ultimate goal.** The end state this design builds toward is *bootstrap and
+bagging confidence intervals, computed from a given dataset, available
+directly in `generic_cylinders`*: point the driver at a data file and it finds
+a candidate solution (`xhat`) from part of the data and a confidence interval
+on the optimality gap from the rest — the data-based analog of the driver's
+existing MMW option. Merging boot-sp into mpi-sppy (the bulk of this document)
+is the enabling step; the `generic_cylinders` integration is the payoff, is
+designed in §9, and lands in later PRs of a stacked, multi-PR effort (§6).
 
 Related work:
 
@@ -34,22 +43,28 @@ Related work:
 
 ### Goals
 
-1. All boot-sp functionality that users need — the end-user CI tool
+1. **The end goal — data-based bootstrap/bagging in `generic_cylinders`.**
+   Given a dataset (a data file for the first examples), `generic_cylinders`
+   finds `xhat` from part of the data and a bootstrap/bagging confidence
+   interval on the optimality gap from the rest, using the driver's normal
+   solve machinery. This is the data-based analog of the driver's MMW option;
+   everything else in this document enables it. Designed in §9.
+2. All boot-sp functionality that users need — the end-user CI tool
    (`user_boot`), the z*/xhat prep tool (`boot_general_prep`), the
    coverage-experiment harness (`simulate_boot`), and all eleven
    `BootMethods` (empirical and smoothed) — available from mpi-sppy proper,
    with tests, docs, and examples.
-2. **No new hard dependencies.** mpi-sppy's core deps stay
+3. **No new hard dependencies.** mpi-sppy's core deps stay
    numpy/pyomo/sortedcollections; scipy and matplotlib remain optional
    extras. Anything that needs them imports lazily and fails with a
    friendly message.
-3. Importable on current and future scipy (the `scipy.stats.mvn` removal
+4. Importable on current and future scipy (the `scipy.stats.mvn` removal
    in scipy 1.14 must not break mpi-sppy).
-4. mpi-sppy conventions throughout: standard file headers, `Config`-based
+5. mpi-sppy conventions throughout: standard file headers, `Config`-based
    options, `mpisppy.tests.utils.get_solver` in tests, tests wired into
    both `run_coverage.bash` and `test_pr_and_main.yml` in the same commit
    as the test files.
-5. One canonical copy: after the merge, the boot-sp GitHub repo is
+6. One canonical copy: after the merge, the boot-sp GitHub repo is
    archived with a pointer to mpi-sppy.
 
 ### Non-goals
@@ -60,17 +75,15 @@ Related work:
   import hook goes with it.
 - **paper_runs.** The scripts reproducing the papers' experiments stay in
   the archived repo, where the citations point.
-- **generic_cylinders integration.** MMW has `--mmw-*` flags in the
-  generic driver; giving bootstrap CIs the same treatment is a follow-on,
-  not part of this merge. The intended shape (a possible third PR) is
-  richer than mirroring the MMW flags: a *data-splitting* workflow where,
-  given a dataset, `generic_cylinders` finds `xhat` from part of the data
-  and computes a bootstrap confidence interval from the rest — a hold-out
-  split that maps onto boot-sp's `candidate_sample_size` (M) /
-  `sample_size` (N) partition of a `max_count` dataset. This does not
-  change the two-PR plan for the merge itself.
+- **Non-file data sources.** The `generic_cylinders` integration (§9)
+  targets a dataset in a *data file* for its first examples. Pulling data
+  from a database, a live sampler, or a model's own generator is a later
+  concern, not part of the initial integration.
 - **Multistage.** boot-sp is two-stage by construction; that does not
   change here.
+
+(The `generic_cylinders` integration was a non-goal in the first draft of
+this document; it is now the stated end goal — see the goals above and §9.)
 
 ---
 
@@ -84,13 +97,15 @@ Related work:
    most heavily CI-exercised part of boot-sp).
 4. **Old repo:** archive with a README pointer after the final phase; no
    shim release.
-5. **Two PRs** (was three): PR-1 = empirical core + simulation harness +
-   the statdist-free example (schultz); PR-2 = statdist + smoothed methods
-   + the three examples that need statdist (farmer, cvar, multi_knapsack).
-   The seam sits on the one real fault line — the dependency boundary
-   between the empirical code (numpy-only) and the smoothed code (statdist
-   + scipy + epi-spline Pyomo fits) — and folding the thin
-   `simulate_boot.py` (~215 lines) into PR-1 lets the §4.2 dispatch
+5. **The *move* is two PRs** (was three): PR-1 = empirical core + simulation
+   harness + the statdist-free example (schultz); PR-2 = statdist + smoothed
+   methods + the three examples that need statdist (farmer, cvar,
+   multi_knapsack). This decision is about Stage 1 (the merge); the overall
+   effort then adds the Stage-2 `generic_cylinders` integration PR(s) (§6,
+   §9). The seam for the move sits on the one real fault line — the
+   dependency boundary between the empirical code (numpy-only) and the
+   smoothed code (statdist + scipy + epi-spline Pyomo fits) — and folding the
+   thin `simulate_boot.py` (~215 lines) into PR-1 lets the §4.2 dispatch
    consolidation happen once instead of being built in one PR and touched
    again in another.
 
@@ -261,10 +276,19 @@ Behavior-preserving unless noted.
 
 ---
 
-## 6. Phased PRs
+## 6. Phased, stacked PRs
 
-Two PRs, each review-sized and green on its own, split on the dependency
-boundary (see ratified decision §2.5).
+This is a multi-PR effort in two stages, and the PRs are **stacked**: each
+branches off its predecessor rather than off `main`, so reviewers see a
+review-sized, self-contained diff and each PR is green on its own. As each
+lands, the next is rebased down onto the new `main`. (Stacking is used
+deliberately here for review/testing granularity; it is the exception to the
+usual "branch off main" default.)
+
+- **Stage 1 — move boot-sp into mpi-sppy** (PR-1, PR-2). Split on the
+  dependency boundary (ratified decision §2.5).
+- **Stage 2 — integrate into `generic_cylinders`** (PR-3, and possibly a
+  PR-4). The payoff; designed in §9. Depends on Stage 1 being in.
 
 - **PR-1 — empirical core and simulation harness.** `bootsp/` subpackage
   with `boot_sp.py`, `boot_utils.py`, `user_boot.py`,
@@ -286,6 +310,15 @@ boundary (see ratified decision §2.5).
   distributions the smoothed methods actually request), the empirical
   farmer/cvar tests that PR-1 could not host, and the smoothed MPI test;
   doc completion.
+- **PR-3 — `generic_cylinders` integration (the end goal).** A `--boot-*`
+  option group in `generic_cylinders` that takes a dataset (a data file for
+  the first examples), finds `xhat` from part of it and a bootstrap/bagging
+  CI on the gap from the rest, reusing the driver's solve machinery. Includes
+  the positional name/sample layer (§9), mutual-exclusion guards against the
+  sampling-based CI options (§9), at least one worked data-file example
+  (building on `examples/bootsp/schultz_data`), tests (serial + `mpiexec`),
+  and docs. If it grows past review size, the additional examples/features
+  split into a PR-4. Full design in §9.
 - **Post-merge (not a PR).** Update the boot-sp README to point at the
   mpi-sppy docs and archive the GitHub repo. `paper_runs/`, the copula/
   vine/bicop code, and the multivariate classes remain there.
@@ -332,3 +365,93 @@ in PR-1" plan crossed it.
   worked but blurred the dependency seam that motivates the two-PR split
   and grown PR-1 with statdist code the "statdist lands in PR-2" decision
   (§2.2) deliberately kept out.
+
+---
+
+## 9. Integrating bootstrap/bagging into generic_cylinders (the end goal)
+
+This is the payoff described in the goals and lands in Stage 2 (§6). Stage 1
+delivers the estimators as a library and via `user_boot`/`simulate_boot`;
+Stage 2 makes them a first-class capability of the everyday driver.
+
+### 9.1 What it adds
+
+A `--boot-*` option group on `generic_cylinders` (a sibling of the existing
+`--mmw-*` group) that, given a **dataset**, reports a bootstrap/bagging
+confidence interval on the optimality gap. The first examples take the
+dataset from a **data file** (as in `examples/bootsp/schultz_data`). The
+workflow is the hold-out split already implicit in boot-sp: a candidate
+solution `xhat` is found from part of the data (the `candidate_sample_size`
+M records) and the confidence interval is estimated by resampling the rest
+(the `sample_size` N records), for the chosen `boot_method`.
+
+The intended synthesis is that `xhat` is produced with the driver's *own*
+solve machinery — EF for small instances, or PH and the cylinder hub/spoke
+system for large ones — rather than the direct sub-EF solve boot-sp uses in
+isolation. The per-batch resample solves remain small (sub-EF-sized) and stay
+within the estimator code.
+
+### 9.2 Scenario names vs. positions (the key reconciliation)
+
+mpi-sppy's convention is that `scenario_creator` is **name-based**: it is
+handed a scenario *name* and builds that scenario, and `scenario_names_creator`
+produces the canonical, ordered list of names. The bootstrap/bagging logic,
+however, is inherently **positional**: it partitions the dataset (the M/N
+split) and *resamples* it by index into the list of all scenarios. The
+integration reconciles the two as follows.
+
+1. The driver treats the dataset as the ordered list of scenario names from
+   `scenario_names_creator` (one name per data record). Record *k* is
+   *position k* in that list; there is no need to parse an integer out of a
+   name.
+2. Bootstrap/bagging operate on **positions** `0..N-1`: the hold-out split is
+   a positional partition, and a resample is a multiset of positions (drawn
+   with replacement for bootstrap, as size-limited subsets for bagging).
+3. Because an mpi-sppy extensive form needs **distinct** scenario names but a
+   resample can select the same record more than once, the driver builds a
+   fresh, unique *sample* name for each draw and keeps a mapping from each
+   sample name back to the position (hence to the underlying record's
+   canonical name). `scenario_creator` is always called with a name that
+   resolves to exactly one record. This generalizes boot-sp's existing
+   `Scenario{i}` / `SampleScenario{i}`→mapping trick (§4 / `boot_sp.py`), but
+   keyed on **list position** instead of an integer scraped from the name.
+
+The practical consequence: the positional layer (the canonical name list and
+the sample-name→position mapping) lives in the driver/estimator, so a model
+only has to follow the standard mpi-sppy naming (`scen0`, `scen1`, …) and map
+its own name to its own data — it does not have to embed dataset addressing in
+`extract_num`. The current ported `boot_sp.py` still addresses records via
+`extract_num`; PR-3 introduces the positional layer so the integrated path
+does not depend on that convention.
+
+### 9.3 Features that do not apply
+
+Not every `generic_cylinders` capability is meaningful for a data-based
+bootstrap run, and the driver should refuse incompatible combinations with a
+clear message rather than silently ignoring them:
+
+- **MMW (`--mmw-*`) and sequential sampling.** These are *distribution-
+  sampling* confidence-interval methods; they assume a scenario generator that
+  can draw fresh samples, not a fixed dataset. They are mutually exclusive
+  with the bootstrap CI — you would not run MMW and bootstrap on the same run.
+- **Anything that assumes unbounded scenario generation.** The dataset is
+  finite; options that presume the model can mint arbitrarily many new
+  scenarios do not apply.
+- **Multistage.** Two-stage only, as everywhere else in this document.
+
+### 9.4 Open questions for PR-3
+
+- **Strict vs. overlapping split.** boot-sp's classical bootstrap draws its
+  pool from the whole `range(max_count)`, so the pool can overlap the
+  candidate records. The integration is the natural place to make the M/N
+  hold-out strict (disjoint xhat and resampling records) if that is desired;
+  decide and document.
+- **Dataset contract.** Whether to standardize a `--data-file` convention plus
+  a light "data model" contract (a model advertises its dataset size and how a
+  position maps to data), versus per-model loading like `schultz_data`.
+- **Solve path for xhat and for batches.** Confirm whether `xhat` uses the
+  full cylinder machinery while the per-batch resample solves stay as direct
+  EF solves, and how the bootstrap `Gatherv` batching coexists with cylinder
+  rank layouts.
+- **Flag names.** The concrete `--boot-*` option spelling (kept close to the
+  boot-sp option names in §4.6 for continuity).
