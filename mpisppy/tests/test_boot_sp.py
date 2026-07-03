@@ -205,9 +205,11 @@ class Test_boot_sp(unittest.TestCase):
         self.assertIn("xhat_generator", msg)
         self.assertIn("xhat_generator_no_generator_module", msg)
 
-    def test_smoothed_not_yet_merged_boot_sp(self):
+    def test_compute_ci_rejects_smoothed(self):
+        # compute_ci is the empirical dispatch; a smoothed method is routed to
+        # smoothed_boot_sp.compute_smoothed_ci instead and must be rejected here
         cfg = _make_cfg("Smoothed_boot_kernel")
-        with self.assertRaises(RuntimeError) as ctx:
+        with self.assertRaises(ValueError) as ctx:
             boot_sp.compute_ci(cfg, None, {"ROOT": [0.0, 5.0]})
         self.assertIn("smoothed", str(ctx.exception).lower())
 
@@ -256,13 +258,6 @@ class Test_boot_sp(unittest.TestCase):
         self.assertEqual(len(res), 6)
         self._assert_close_list(res[0], locked_ci_optimal["Classical_quantile"])
         self.assertGreaterEqual(res[2][0], 0.0)  # ci_gap[0] clamped to >= 0
-
-    @unittest.skipIf(not solver_available, "no solver is available")
-    def test_user_boot_smoothed_raises(self):
-        module = boot_utils.module_name_to_module(MODULE_NAME)
-        cfg = _make_cfg("Smoothed_bagging")
-        with self.assertRaises(RuntimeError):
-            user_boot.main_routine(cfg, module)
 
 
 #*****************************************************************************

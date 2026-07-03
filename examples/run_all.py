@@ -154,6 +154,16 @@ if run_first_part:
     do_one_boot("schultz_data", "schultz_data", "Bagging_with_replacement",
                 "--max-count 200 --candidate-sample-size 5 --sample-size 100 "
                 "--subsample-size 20 --nB 20", np=2)
+    # farmer: an empirical run on a statdist-dependent example (crop yields are
+    # perturbed by a statdist univariate distribution)
+    do_one_boot("farmer", "farmer", "Bagging_with_replacement",
+                "--max-count 200 --candidate-sample-size 5 --sample-size 30 "
+                "--subsample-size 10 --nB 8 --crops-multiplier 1 --yield-cv 0.1", np=2)
+    # cvar: a smoothed run (statdist fits a kernel density to the sampled data)
+    do_one_boot("cvar", "cvar", "Smoothed_bagging",
+                "--max-count 200 --candidate-sample-size 5 --sample-size 20 "
+                "--subsample-size 5 --nB 8 --smoothed-B-I 3 "
+                "--smoothed-center-sample-size 20", np=2)
     do_one("farmer/CI", "farmer_ef.py", 1,
            "1 3 {}".format(solver_name))
     # for farmer_cylinders, the first arg is num_scens and is required
