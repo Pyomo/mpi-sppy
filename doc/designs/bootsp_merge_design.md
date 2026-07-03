@@ -61,8 +61,14 @@ Related work:
 - **paper_runs.** The scripts reproducing the papers' experiments stay in
   the archived repo, where the citations point.
 - **generic_cylinders integration.** MMW has `--mmw-*` flags in the
-  generic driver; giving bootstrap CIs the same treatment is a possible
-  follow-on, not part of this merge.
+  generic driver; giving bootstrap CIs the same treatment is a follow-on,
+  not part of this merge. The intended shape (a possible third PR) is
+  richer than mirroring the MMW flags: a *data-splitting* workflow where,
+  given a dataset, `generic_cylinders` finds `xhat` from part of the data
+  and computes a bootstrap confidence interval from the rest — a hold-out
+  split that maps onto boot-sp's `candidate_sample_size` (M) /
+  `sample_size` (N) partition of a `max_count` dataset. This does not
+  change the two-PR plan for the merge itself.
 - **Multistage.** boot-sp is two-stage by construction; that does not
   change here.
 
