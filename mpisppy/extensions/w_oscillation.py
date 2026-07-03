@@ -335,8 +335,12 @@ def validate_interrupt_config(cfg, where="<interrupt config>"):
         raise ValueError(
             f"{where}: 'action' {action!r} not in {VALID_ACTIONS}")
 
+    trigger_block = cfg.get("trigger")
+    if trigger_block is not None and not isinstance(trigger_block, dict):
+        raise ValueError(f"{where}: 'trigger' must be a JSON object")
+
     trig = dict(_TRIGGER_DEFAULTS)
-    trig.update(cfg.get("trigger") or {})
+    trig.update(trigger_block or {})
     trigger = {
         "min_scenarios_flagged": int(trig["min_scenarios_flagged"]),
         "start_iter": int(trig["start_iter"]),
