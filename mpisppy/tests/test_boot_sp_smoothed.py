@@ -192,10 +192,14 @@ class Test_empirical_examples(unittest.TestCase):
         xhat = boot_utils.compute_xhat(_make_farmer_cfg(), module)
         self.assertIn("ROOT", xhat)
         for method in ["Classical_quantile", "Bagging_with_replacement"]:
+            # every rank participates in the collective inside compute_ci
             res = boot_sp.compute_ci(_make_farmer_cfg(method), module, xhat)
             self.assertEqual(len(res), 6)
-            for ci in res[:3]:
-                self.assertLessEqual(ci[0], ci[1], msg=f"{method}: {ci}")
+            if my_rank == 0:
+                for ci in res[:3]:
+                    self.assertLessEqual(ci[0], ci[1], msg=f"{method}: {ci}")
+            else:
+                self.assertEqual(res, (None, None, None, None, None, None))
 
     @unittest.skipIf(not solver_available, "no solver is available")
     def test_cvar_empirical_wellformed(self):
@@ -205,18 +209,23 @@ class Test_empirical_examples(unittest.TestCase):
         self.assertIn("ROOT", xhat)
         res = boot_sp.compute_ci(_make_cvar_cfg("Classical_quantile"), module, xhat)
         self.assertEqual(len(res), 6)
-        for ci in res[:3]:
-            self.assertLessEqual(ci[0], ci[1])
+        if my_rank == 0:
+            for ci in res[:3]:
+                self.assertLessEqual(ci[0], ci[1])
+        else:
+            self.assertEqual(res, (None, None, None, None, None, None))
 
     @unittest.skipIf(not solver_available, "no solver is available")
     def test_cvar_empirical_deterministic(self):
         # same cfg twice must give the same interval (seeded streams)
         module = boot_utils.module_name_to_module("cvar")
         xhat = boot_utils.compute_xhat(_make_cvar_cfg("Classical_gaussian"), module)
+        # both runs are collectives on every rank; only rank 0 gets real values
         r1 = boot_sp.compute_ci(_make_cvar_cfg("Classical_gaussian"), module, xhat)
         r2 = boot_sp.compute_ci(_make_cvar_cfg("Classical_gaussian"), module, xhat)
-        for a, b in zip(list(r1[0]), list(r2[0])):
-            self.assertEqual(round_pos_sig(a, 6), round_pos_sig(b, 6))
+        if my_rank == 0:
+            for a, b in zip(list(r1[0]), list(r2[0])):
+                self.assertEqual(round_pos_sig(a, 6), round_pos_sig(b, 6))
 
 
 #*****************************************************************************
