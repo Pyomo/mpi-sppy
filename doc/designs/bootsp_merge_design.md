@@ -380,10 +380,21 @@ A `--boot-*` option group on `generic_cylinders` (a sibling of the existing
 `--mmw-*` group) that, given a **dataset**, reports a bootstrap/bagging
 confidence interval on the optimality gap. The first examples take the
 dataset from a **data file** (as in `examples/bootsp/schultz_data`). The
-workflow is the hold-out split already implicit in boot-sp: a candidate
-solution `xhat` is found from part of the data (the `candidate_sample_size`
-M records) and the confidence interval is estimated by resampling the rest
-(the `sample_size` N records), for the chosen `boot_method`.
+workflow is a hold-out split: a candidate solution `xhat` is found from part
+of the data (the `candidate_sample_size` M records) and the confidence
+interval is estimated by resampling the rest (the `sample_size` N records),
+for the chosen `boot_method`.
+
+**Decided: the split is strictly disjoint in `generic_cylinders`.** The M
+records used to find `xhat` and the N records resampled for the CI do not
+overlap. This is a correctness requirement, not a convenience: a bootstrap CI
+on the optimality gap of `xhat` is only meaningful when it is estimated on
+data that did *not* choose `xhat` — reusing the candidate records would make
+the gap estimate in-sample and optimistic. This is stricter than boot-sp's
+standalone classical bootstrap, which draws its pool from the whole dataset
+and can overlap the candidate records. The positional layer (§9.2) makes the
+disjointness natural: the driver reserves one block of positions for the
+candidate and a separate block for the resampling pool.
 
 The intended synthesis is that `xhat` is produced with the driver's *own*
 solve machinery — EF for small instances, or PH and the cylinder hub/spoke
@@ -441,11 +452,6 @@ clear message rather than silently ignoring them:
 
 ### 9.4 Open questions for PR-3
 
-- **Strict vs. overlapping split.** boot-sp's classical bootstrap draws its
-  pool from the whole `range(max_count)`, so the pool can overlap the
-  candidate records. The integration is the natural place to make the M/N
-  hold-out strict (disjoint xhat and resampling records) if that is desired;
-  decide and document.
 - **Dataset contract.** Whether to standardize a `--data-file` convention plus
   a light "data model" contract (a model advertises its dataset size and how a
   position maps to data), versus per-model loading like `schultz_data`.
