@@ -1,8 +1,9 @@
 # Bootstrap/bagging for data-based stochastic programming in mpi-sppy — design
 
 **Status:** design captured and decisions ratified 2026-07-02; PR-1
-implemented (empirical core + schultz, incl. a data-file example) and pushed
-to a fork branch; extended 2026-07-03 to state the end goal
+(empirical core + schultz, incl. a data-file example) implemented and open
+upstream as draft [Pyomo/mpi-sppy#783](https://github.com/Pyomo/mpi-sppy/pull/783);
+extended 2026-07-03 to state the end goal
 (`generic_cylinders` integration) and a stacked, multi-PR roadmap (§6, §9).
 **Author:** dlw (captured with Claude Code assistance)
 **Last updated:** 2026-07-03
