@@ -289,9 +289,10 @@ usual "branch off main" default.)
   dependency boundary (ratified decision §2.5).
 - **Stage 2 — integrate into `generic_cylinders`** (PR-3, and possibly a
   PR-4). The payoff; designed in §9. Depends on Stage 1 being in. The initial
-  integration assumes a bootstrap batch EF is solvable on its own; the
-  large-batch nested-rank enhancement (§9.4) is scheduled right after this
-  stack merges.
+  integration ships the `K = 1` batch executor (each batch a per-rank EF); the
+  `K > 1` groups-of-`K` enhancement (§9.4), which solves large batches with a
+  wheel per rank-group, is scheduled right after this stack merges — its only
+  prerequisite (Pyomo/mpi-sppy#782) is a small tidy-up.
 
 - **PR-1 — empirical core and simulation harness.** `bootsp/` subpackage
   with `boot_sp.py`, `boot_utils.py`, `user_boot.py`,
@@ -478,36 +479,59 @@ clear message rather than silently ignoring them:
   scenarios do not apply.
 - **Multistage.** Two-stage only, as everywhere else in this document.
 
-### 9.4 MPI ranks: batch solves
+### 9.4 MPI ranks: groups of K (the batch executor)
 
-How MPI ranks are used is a genuine tension, because two things want them and
-pull in opposite directions:
+Two things want the MPI ranks and pull in opposite directions: a **solve**
+wants ranks arranged as a hub plus spokes (for `xhat`, and for a large batch),
+while the bootstrap is **embarrassingly parallel across its `nB` batches** and
+wants ranks as independent batch workers. Two facts settle how to reconcile
+them.
 
-- **within a solve** — cylinders arrange the ranks as a hub plus spokes to
-  solve one problem (used for `xhat`, and potentially for a large per-batch
-  problem);
-- **across batches** — the bootstrap is embarrassingly parallel over its `nB`
-  batches, and boot-sp uses the ranks as independent batch workers (each rank
-  solves its share of batches as direct EFs and `Gatherv`s to rank 0).
+- **SLURM.** Runs happen inside one allocation — a single `MPI_COMM_WORLD`
+  launched by one `srun`/`mpirun`. The idiomatic way to give different work to
+  different ranks is `MPI_Comm_split` into sub-communicators; it needs no
+  scheduler interaction. Launching `nB` separate jobs (`sbatch`) or juggling
+  `srun` job-steps is fragile, non-portable, and hard to `Gatherv` across, so
+  **in-process nested groups win** and job-level orchestration is out.
+- **Large single scenarios.** A single data record's model can be very large,
+  so a batch can be a big optimization *even with few scenarios in it*.
+  Decomposing a batch (cylinders) is therefore an expected case, not a rare
+  edge — the design must accommodate it from the start.
 
-The same ranks cannot hold both roles at once without nesting. The deciding
-factor is the size of a single bootstrap batch (an EF over the `sample_size`
-resampled records).
+**Unified model — a batch is solved by a group of K ranks.** The allocation of
+`R` ranks is split into `G` groups of `K` (`G·K ≤ R`); the `nB` batches are
+distributed across the `G` groups and `Gatherv`'d to rank 0.
 
-**Decided: the first integration assumes a batch EF is solvable on its own.**
-`xhat` is found with the configured solve using all ranks (cylinders/EF); the
-bootstrap phase then flattens the ranks and divides the `nB` batches across
-them, each batch a direct EF (boot-sp's `Gatherv` model). This phase-separated
-design covers the common data-based regime.
+- `K = 1` — each group is one rank and a batch is a direct EF (boot-sp's
+  model). **This is what the first integration ships.**
+- `K > 1` — each group runs a full wheel on its sub-communicator to solve its
+  batches with cylinders. `K = 1` is just the degenerate case of the same
+  batch-executor code path, not a separate mechanism.
 
-**Scheduled enhancement: large batches.** If the model is big enough that a
-single batch EF cannot be solved on one rank, across-batch parallelism and
-within-batch cylinders both want the ranks, which forces **nested MPI groups**
-(split the world into groups, each group cylinder-solves a subset of batches)
-or **serial** cylinder solves of the batches. This is deferred to an
-enhancement to be taken up right after the first PR stack merges — the initial
-integration ships assuming the EF is solvable, and the nested-rank support
-follows.
+The `xhat` phase uses all `R` ranks (the configured solve); the bootstrap phase
+then re-partitions the allocation into the `G·K` grid. The `xhat`-evaluation
+(upper-bound) solves are embarrassingly parallel across scenarios and spread
+within a group the same way.
+
+**This unifies the config and the rank problem:** one **batch sub-config**
+describes how to solve *any* batch (it is singular — you resample the data, not
+re-tune the solver — so it is not per-batch and never a `boot_*`-prefixed copy
+of the whole option surface), and every group applies it. For `K = 1` the
+sub-config is just the `boot` solver role (§9.5); for `K > 1` it is a nested
+`generic_cylinders` option set parsed by the same `Config` machinery.
+
+**Prerequisite (essentially in hand).** Running a wheel on a group's
+sub-communicator already works: `WheelSpinner.run(comm_world=...)` threads a
+passed-in base communicator through, and `SPBase`/`PHBase` take an `mpicomm`;
+across `mpisppy/cylinders/` the only residual `COMM_WORLD` references are two
+logging-only module globals in the xhat bounders, tracked in
+[Pyomo/mpi-sppy#782](https://github.com/Pyomo/mpi-sppy/issues/782).
+
+**Phasing.** The first integration ships `K = 1` (SLURM-fine, simple,
+forward-compatible). `K > 1` — the batch executor splitting the allocation into
+`G` groups of `K` and running a wheel per group from the batch sub-config — is
+the scheduled enhancement right after the first stack merges; the prerequisite
+(#782) is expected to land quickly, so the enhancement is largely unblocked.
 
 ### 9.5 Flag names
 
@@ -535,3 +559,22 @@ model's all-scenario-names function (§9.1).
 
 `boot_requested(cfg)` (mirroring `mmw_requested`) is true iff `--boot-method`
 is set, and it validates the candidate-size / xhat-file exclusivity.
+
+**Batch executor and the xhat/batch solve-option split.** Finding `xhat` and
+solving the batches are two *different* solves and must not share one solver
+option (the awkward case is when `xhat` is also an EF). mpi-sppy already
+disambiguates solves by role: `solver_specification(cfg, prefix)` resolves
+`<prefix>_solver_name` / `<prefix>_solver_options` with a fallback chain. So:
+
+- **`xhat`** uses the existing `generic_cylinders` surface — `solver_name` plus
+  the PH/spoke/EF options — exactly as today. No new flags.
+- **Batches** get their own `boot` solver role: `--boot-solver-name` /
+  `--boot-solver-options`, resolved via `solver_specification(cfg, ["boot",
+  ""])` — the batch solver, falling back to the generic `solver_name` (not
+  `EF_solver_name`, so a batch stays independent of any xhat-EF solver).
+- `--boot-batch-ranks` — `K`, the number of ranks per batch group (§9.4),
+  default `1`. `K = 1` (a per-rank EF) needs only the `boot` solver role above.
+  `K > 1` runs a wheel per group and takes a full **batch sub-config** — a
+  nested `generic_cylinders` option set, not a `boot_*`-prefixed copy of every
+  option; the exact way that nested set is supplied is settled with the
+  `K > 1` enhancement (§9.4).
