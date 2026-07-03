@@ -14,28 +14,13 @@ import sys
 import mpisppy.confidence_intervals.ciutils as ciutils
 import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
 import mpisppy.confidence_intervals.bootsp.boot_sp as boot_sp
+import mpisppy.confidence_intervals.bootsp.smoothed_boot_sp as smoothed_boot_sp
 
 my_rank = boot_utils.my_rank
 
 
-def main_routine(cfg, module):
-    """ The top level of user_boot; called by __main__ and by test drivers.
-
-    Args:
-        cfg (Config): parameters
-        module (Python module): contains the scenario creator function and helpers
-    Returns:
-        (ci_optimal, ci_upper, ci_gap, center_optimal, center_upper, center_gap);
-        the ci_* entries are None on MPI ranks other than 0.
-    Note:
-        Prints the confidence-interval results to the terminal on rank 0. A
-        smoothed boot_method raises a friendly "not yet merged" error.
-    """
-    if cfg["xhat_fname"] is not None and cfg["xhat_fname"] != "None":
-        xhat = ciutils.read_xhat(cfg["xhat_fname"])
-    else:
-        xhat = boot_utils.compute_xhat(cfg, module)
-
+def _empirical_report(cfg, module, xhat):
+    """ Run and print an empirical bootstrap CI; return the 6-tuple. """
     ci_optimal, ci_upper, ci_gap, center_optimal, center_upper, center_gap = \
         boot_sp.compute_ci(cfg, module, xhat)
 
@@ -50,6 +35,46 @@ def main_routine(cfg, module):
         print(f"ci for optimality gap: {ci_gap}")
 
     return ci_optimal, ci_upper, ci_gap, center_optimal, center_upper, center_gap
+
+
+def _smoothed_report(cfg, module, xhat):
+    """ Run and print a smoothed bootstrap/bagging CI; return (ci_gap, center_gap).
+
+    The smoothed methods estimate only the optimality-gap interval, so the
+    return signature differs from the empirical 6-tuple.
+    """
+    result = smoothed_boot_sp.compute_smoothed_ci(cfg, module, xhat)
+    if my_rank == 0:
+        ci_gap_two_sided, center_gap = result
+        ci_gap_two_sided[0] = max(0, ci_gap_two_sided[0])
+        print(f"point estimator for the optimality gap: {center_gap}")
+        print(f"two-sided CI for optimality gap: {ci_gap_two_sided}")
+        return ci_gap_two_sided, center_gap
+    return result
+
+
+def main_routine(cfg, module):
+    """ The top level of user_boot; called by __main__ and by test drivers.
+
+    Args:
+        cfg (Config): parameters
+        module (Python module): contains the scenario creator function and helpers
+    Returns:
+        For an empirical boot_method, the 6-tuple
+        (ci_optimal, ci_upper, ci_gap, center_optimal, center_upper, center_gap);
+        for a smoothed boot_method, the pair (ci_gap_two_sided, center_gap).
+        The ci_* entries are None on MPI ranks other than 0.
+    Note:
+        Prints the confidence-interval results to the terminal on rank 0.
+    """
+    if cfg["xhat_fname"] is not None and cfg["xhat_fname"] != "None":
+        xhat = ciutils.read_xhat(cfg["xhat_fname"])
+    else:
+        xhat = boot_utils.compute_xhat(cfg, module)
+
+    if boot_utils.is_smoothed(cfg.boot_method):
+        return _smoothed_report(cfg, module, xhat)
+    return _empirical_report(cfg, module, xhat)
 
 
 if __name__ == '__main__':

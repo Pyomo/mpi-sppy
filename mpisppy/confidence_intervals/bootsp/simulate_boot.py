@@ -12,9 +12,11 @@
 #   python -m mpisppy.confidence_intervals.bootsp.simulate_boot <json>
 
 import sys
+import time
 import mpisppy.confidence_intervals.ciutils as ciutils
 import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
 import mpisppy.confidence_intervals.bootsp.boot_sp as boot_sp
+import mpisppy.confidence_intervals.bootsp.smoothed_boot_sp as smoothed_boot_sp
 
 my_rank = boot_utils.my_rank
 
@@ -73,14 +75,77 @@ def empirical_main_routine(cfg, module):
         return None, None
 
 
+def smoothed_main_routine(cfg, module):
+    """ The smoothed-method coverage harness; called by main() and test drivers.
+
+    Args:
+        cfg (Config): parameters
+        module (Python module): contains the scenario creator function and helpers
+    Returns:
+        (coverage_two_sided, coverage_one_sided, ci_lengths, run_times);
+        all None on MPI ranks other than 0.
+
+    Note:
+        The smoothed estimators report only the optimality-gap interval, so the
+        coverage counts are against opt_gap (from process_optimal) rather than
+        against z* as in the empirical harness.
+    """
+    if my_rank == 0:
+        # only opt_gap is used by the smoothed coverage counting
+        _, opt_gap = boot_sp.process_optimal(cfg, module)
+    else:
+        opt_gap = None
+
+    if cfg["xhat_fname"] is not None and cfg["xhat_fname"] != "None":
+        xhat = ciutils.read_xhat(cfg["xhat_fname"])
+    else:
+        # boot-sp called an undefined fit_resample_utils.compute_xhat here; the
+        # intended call is boot_utils.compute_xhat (design doc section 4.3).
+        xhat = boot_utils.compute_xhat(cfg, module)
+
+    coverage_cnt_one_sided, coverage_cnt_two_sided = 0, 0
+    ci_len = []
+    run_time = []
+    seed_offset = cfg.seed_offset  # store the original offset
+    seed_list = [i * cfg.nB * 100 + seed_offset for i in range(cfg.coverage_replications)]
+
+    for seed in seed_list:
+        cfg.seed_offset = seed
+        if my_rank == 0:
+            st_time = time.time()
+        ci_gap_two_sided, _ = smoothed_boot_sp.compute_smoothed_ci(cfg, module, xhat)
+        if my_rank == 0:
+            en_time = time.time()
+            if cfg.trace_fname is not None:
+                with open(cfg.trace_fname, "a+") as f:
+                    f.write(f"seed: {cfg.seed_offset}\n")
+                    f.write(f"optimality gap: {opt_gap}\n")
+                    f.write(f"ci for optimality gap: {ci_gap_two_sided}\n")
+            if (ci_gap_two_sided[0] <= opt_gap) and (opt_gap <= ci_gap_two_sided[1]):
+                coverage_cnt_two_sided += 1
+            if (opt_gap <= ci_gap_two_sided[1]):
+                coverage_cnt_one_sided += 1
+            ci_len.append(ci_gap_two_sided[1] - ci_gap_two_sided[0])
+            run_time.append(en_time - st_time)
+
+    if my_rank == 0:
+        assert cfg.coverage_replications != 0
+        return (coverage_cnt_two_sided / cfg.coverage_replications,
+                coverage_cnt_one_sided / cfg.coverage_replications,
+                ci_len, run_time)
+    else:
+        return None, None, None, None
+
+
 def main(cfg, module):
     """ Dispatch to the appropriate coverage harness for cfg.boot_method.
 
-    A smoothed method raises a friendly "not yet merged" error; the empirical
-    methods run the empirical coverage harness.
+    The empirical methods run the empirical coverage harness (returns a
+    (rate, length) pair); the smoothed methods run the smoothed harness
+    (returns a (cov_two, cov_one, ci_lengths, run_times) tuple).
     """
     if boot_utils.is_smoothed(cfg.boot_method):
-        boot_utils.smoothed_not_yet_merged(cfg.boot_method)
+        return smoothed_main_routine(cfg, module)
     return empirical_main_routine(cfg, module)
 
 

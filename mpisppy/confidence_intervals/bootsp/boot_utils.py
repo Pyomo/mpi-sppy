@@ -58,24 +58,13 @@ def is_smoothed(boot_method):
 
 
 def empirical_members():
-    """ The BootMethods tokens that are available now (the empirical ones). """
+    """ The BootMethods tokens that use only the empirical (statdist-free) code. """
     return [m for m in BootMethods.list_of_members() if not is_smoothed(m)]
 
 
-def smoothed_not_yet_merged(boot_method):
-    """ Raise a friendly error for a smoothed method that is not merged yet.
-
-    The smoothed bootstrap methods depend on the statdist distribution
-    library and are being merged separately. Until they land, the empirical
-    methods are available here and the full set lives in the boot-sp package.
-    """
-    raise RuntimeError(
-        f"boot_method={boot_method} is a smoothed method, which is not yet "
-        "available in mpi-sppy (it arrives in a follow-on merge along with "
-        "the statdist distribution library). Use one of the empirical "
-        f"methods {empirical_members()} here, or the smoothed methods in the "
-        "separate boot-sp package (https://github.com/boot-sp/boot-sp)."
-    )
+def smoothed_members():
+    """ The BootMethods tokens that use the statdist smoothed code. """
+    return [m for m in BootMethods.list_of_members() if is_smoothed(m)]
 
 
 def module_name_to_module(module_name):

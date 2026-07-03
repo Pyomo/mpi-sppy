@@ -684,14 +684,18 @@ def compute_ci(cfg, module, xhat):
         the ci_* entries are None on MPI ranks other than 0.
 
     Note:
-        This is the single dispatch point shared by user_boot and
-        simulate_boot. A smoothed method raises a friendly "not yet merged"
-        error (the smoothed methods land in a follow-on merge).
+        This is the empirical dispatch point shared by user_boot and
+        simulate_boot. The smoothed methods have a different (gap-only) return
+        signature and are dispatched by smoothed_boot_sp.compute_smoothed_ci;
+        a smoothed method reaching here is an error.
     """
     method = cfg.boot_method
     boot_utils.BootMethods.check_for_it(method)
     if boot_utils.is_smoothed(method):
-        boot_utils.smoothed_not_yet_merged(method)
+        raise ValueError(
+            f"boot_method={method} is a smoothed method; it is dispatched by "
+            "smoothed_boot_sp.compute_smoothed_ci, not boot_sp.compute_ci "
+            "(the drivers route smoothed methods automatically).")
     if method == "Extended":
         return extended_bootstrap(cfg, module, xhat)
     elif method == "Bagging_with_replacement":
