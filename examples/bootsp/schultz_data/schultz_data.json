@@ -1,0 +1,17 @@
+{
+    "module_name": "schultz_data",
+    "max_count": 200,
+    "candidate_sample_size": 5,
+    "sample_size": 100,
+    "subsample_size": 20,
+    "nB": 20,
+    "alpha": 0.1,
+    "seed_offset": 100,
+    "optimal_fname": "None",
+    "xhat_fname": "None",
+    "solver_name": "gurobi_direct",
+    "boot_method": "Classical_quantile",
+    "trace_fname": "None",
+    "coverage_replications": 5,
+    "data_file": "schultz_data.csv"
+}

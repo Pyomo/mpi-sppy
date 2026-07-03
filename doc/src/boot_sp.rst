@@ -152,6 +152,43 @@ reproducible across solvers. From that directory:
 See ``examples/bootsp/schultz/schultz.bash`` for a serial run, a parallel run,
 and a coverage simulation.
 
+Working from a dataset file
+---------------------------
+
+The ``schultz`` example above generates its data arithmetically from the
+scenario number. The companion example ``examples/bootsp/schultz_data`` shows
+the more typical *data-based* setup: the same model, but each scenario reads
+one observation (one row) from a committed dataset, ``schultz_data.csv``:
+
+.. code-block:: text
+
+   xi1,xi2
+   11,11
+   10,12
+   12,9
+   ...
+
+The model's ``scenario_creator`` reads row ``scennum`` of the file (the file is
+loaded once and cached), and ``inparser_adder`` exposes a ``--data-file``
+option. The dataset defines the "population" the estimators work from:
+``max_count`` is the number of rows, ``xhat`` is computed from
+``candidate_sample_size`` of them (the scenarios
+``[sample_size : sample_size + candidate_sample_size]``), and the bootstrap
+resamples ``sample_size`` rows for its batches. In other words, part of the
+data is used to find the candidate solution and the rest drives the
+confidence interval:
+
+.. code-block:: bash
+
+   $ python -m mpisppy.confidence_intervals.bootsp.user_boot schultz_data \
+       --max-count 200 --candidate-sample-size 5 --sample-size 100 \
+       --subsample-size 20 --nB 20 --alpha 0.1 --seed-offset 100 \
+       --solver-name gurobi_direct --boot-method Bagging_with_replacement
+
+``schultz_data.csv`` is produced by ``schultz_data_generator.py`` (a fixed seed
+makes it reproducible); replace it with your own two-column dataset, or point
+``--data-file`` at another file, to run the bootstrap on your own data.
+
 References
 ----------
 

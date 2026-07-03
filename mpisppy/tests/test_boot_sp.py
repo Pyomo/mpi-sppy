@@ -27,19 +27,24 @@ from mpisppy.tests.utils import get_solver, round_pos_sig
 import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
 import mpisppy.confidence_intervals.bootsp.boot_sp as boot_sp
 import mpisppy.confidence_intervals.bootsp.user_boot as user_boot
+import mpisppy.confidence_intervals.bootsp.simulate_boot as simulate_boot
 
 sputils.disable_tictoc_output()
 
 solver_available, solver_name, persistent_available, persistent_solver_name = get_solver()
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
-example_dir = os.path.join(module_dir, "..", "..", "examples", "bootsp", "schultz")
-if not os.path.exists(example_dir):
-    raise RuntimeError(f"Directory not found: {example_dir}")
-if example_dir not in sys.path:
-    sys.path.insert(0, example_dir)
+bootsp_examples = os.path.join(module_dir, "..", "..", "examples", "bootsp")
+example_dir = os.path.join(bootsp_examples, "schultz")
+data_example_dir = os.path.join(bootsp_examples, "schultz_data")
+for _d in (example_dir, data_example_dir):
+    if not os.path.exists(_d):
+        raise RuntimeError(f"Directory not found: {_d}")
+    if _d not in sys.path:
+        sys.path.insert(0, _d)
 
 MODULE_NAME = "unique_schultz"
+DATA_MODULE_NAME = "schultz_data"
 
 empirical_methods = ["Classical_gaussian",
                      "Classical_quantile",
@@ -53,6 +58,14 @@ locked_ci_optimal = {
     "Classical_gaussian": [-55.15313724796903, -49.780196085364324],
     "Classical_quantile": [-54.94166666666668, -50.03166666666667],
 }
+
+# same, for the data-file example (schultz_data), serial, seed_offset=100
+locked_ci_optimal_data = {
+    "Classical_gaussian": [-68.27054940987843, -66.1294505901215],
+    "Classical_quantile": [-68.08299999999997, -66.22149999999996],
+}
+# coverage harness (rate, length) for schultz_data, serial, seed base 0, 4 reps
+locked_coverage_data = (1.0, 2.5269999999999975)
 
 
 def _make_cfg(method="Classical_quantile"):
@@ -71,6 +84,26 @@ def _make_cfg(method="Classical_quantile"):
     cfg.coverage_replications = 4
     cfg.solver_name = solver_name
     cfg.boot_method = method
+    return cfg
+
+
+def _make_data_cfg(method="Classical_quantile", seed=100, reps=4):
+    cfg = boot_utils._process_module(DATA_MODULE_NAME)
+    cfg.module_name = DATA_MODULE_NAME
+    cfg.max_count = 200          # the number of rows in schultz_data.csv
+    cfg.candidate_sample_size = 5
+    cfg.sample_size = 100
+    cfg.subsample_size = 20
+    cfg.nB = 20
+    cfg.alpha = 0.1
+    cfg.seed_offset = seed
+    cfg.xhat_fname = "None"
+    cfg.optimal_fname = "None"
+    cfg.trace_fname = None
+    cfg.coverage_replications = reps
+    cfg.solver_name = solver_name
+    cfg.boot_method = method
+    cfg.data_file = "schultz_data.csv"
     return cfg
 
 
@@ -175,6 +208,51 @@ class Test_boot_sp(unittest.TestCase):
         cfg = _make_cfg("Smoothed_bagging")
         with self.assertRaises(RuntimeError):
             user_boot.main_routine(cfg, module)
+
+
+#*****************************************************************************
+class Test_boot_sp_data(unittest.TestCase):
+    """ Test the data-file example (schultz_data), which reads its scenario
+        data from a committed CSV rather than generating it on the fly. """
+
+    def _assert_close_list(self, got, expected, sig=4):
+        got = list(got)
+        self.assertEqual(len(got), len(expected))
+        for g, e in zip(got, expected):
+            self.assertEqual(round_pos_sig(g, sig), round_pos_sig(e, sig))
+
+    def test_load_data(self):
+        # no solver needed: just the dataset reader
+        module = boot_utils.module_name_to_module(DATA_MODULE_NAME)
+        data = module.load_data()
+        self.assertEqual(data.shape, (200, 2))
+        with self.assertRaises(FileNotFoundError):
+            module.load_data("does_not_exist.csv")
+
+    @unittest.skipIf(not solver_available, "no solver is available")
+    def test_data_file_xhat(self):
+        cfg = _make_data_cfg()
+        module = boot_utils.module_name_to_module(DATA_MODULE_NAME)
+        xhat = boot_utils.compute_xhat(cfg, module)
+        self.assertIn("ROOT", xhat)
+        self.assertEqual(len(xhat["ROOT"]), 2)
+
+    @unittest.skipIf(not solver_available, "no solver is available")
+    def test_data_file_locked_values(self):
+        module = boot_utils.module_name_to_module(DATA_MODULE_NAME)
+        xhat = boot_utils.compute_xhat(_make_data_cfg(), module)
+        for method, expected in locked_ci_optimal_data.items():
+            res = boot_sp.compute_ci(_make_data_cfg(method), module, xhat)
+            self._assert_close_list(res[0], expected)
+
+    @unittest.skipIf(not solver_available, "no solver is available")
+    def test_data_file_coverage(self):
+        module = boot_utils.module_name_to_module(DATA_MODULE_NAME)
+        cfg = _make_data_cfg("Classical_quantile", seed=0, reps=4)
+        rate, length = simulate_boot.main(cfg, module)
+        self.assertEqual(rate, locked_coverage_data[0])
+        self.assertEqual(round_pos_sig(length, 4),
+                         round_pos_sig(locked_coverage_data[1], 4))
 
 
 if __name__ == '__main__':
