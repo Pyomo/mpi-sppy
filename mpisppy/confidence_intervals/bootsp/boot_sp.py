@@ -339,7 +339,7 @@ def _sub_resample(cfg, module, scenario_pool, xhat, serial=False):
         boot_ef = solve_routine(cfg, module, scenarios, num_threads=2, duplication=True)
         if cfg.get("tron", False) and my_rank == 0:
             print(f"_sub_resample using EF_obj: {pyo.value(boot_ef.EF_Obj)}")
-            print(f"   using evaluation:{evaluate_scenarios(scenarios, boot_ef, duplication = True):}")
+            print(f"   using evaluation: {boot_ev}")
         local_boot_optimals[iter] = pyo.value(boot_ef.EF_Obj)
         local_boot_uppers[iter] = boot_ev
         local_boot_gaps[iter] = local_boot_uppers[iter] - local_boot_optimals[iter]
