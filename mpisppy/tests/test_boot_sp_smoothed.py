@@ -22,7 +22,6 @@
 import os
 import sys
 import math
-import warnings
 import unittest
 
 import pyomo.environ as pyo
@@ -39,16 +38,6 @@ from mpisppy.confidence_intervals.bootsp.statdist.distribution_factory import (
 )
 
 sputils.disable_tictoc_output()
-
-# statdist integrates array-valued pdfs through scipy.integrate.quad, which
-# emits a NumPy>=1.25 "array to scalar" DeprecationWarning many thousands of
-# times; silence just that one so the (large) CI logs stay readable. The
-# numerics are unchanged.
-warnings.filterwarnings(
-    "ignore",
-    message="Conversion of an array with ndim > 0 to a scalar is deprecated",
-    category=DeprecationWarning,
-)
 
 solver_available, solver_name, persistent_available, persistent_solver_name = get_solver()
 ipopt_available = pyo.SolverFactory("ipopt").available(exception_flag=False)

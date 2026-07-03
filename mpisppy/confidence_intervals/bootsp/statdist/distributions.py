@@ -311,7 +311,10 @@ class UnivariateGaussianKernelDistribution(UnivariateDistribution):
             (float) The value of the probability density function of this
                 distribution on x.
         """
-        return self.kernel.evaluate(x)
+        # gaussian_kde.evaluate returns an array; the base-class cdf feeds this
+        # to scipy.integrate.quad, which needs a scalar integrand (a size-1
+        # array triggers a NumPy>=1.25 "array to scalar" DeprecationWarning).
+        return float(self.kernel.evaluate(x)[0])
 
     def _cdf(self, x):
         """
