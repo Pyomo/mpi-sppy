@@ -1,0 +1,19 @@
+{
+    "module_name": "farmer",
+    "max_count": 300,
+    "candidate_sample_size": 5,
+    "sample_size": 50,
+    "subsample_size": 10,
+    "nB": 20,
+    "alpha": 0.1,
+    "seed_offset": 100,
+    "optimal_fname": "None",
+    "xhat_fname": "None",
+    "solver_name": "cplex_direct",
+    "boot_method": "Bagging_with_replacement",
+    "trace_fname": "None",
+    "coverage_replications": 5,
+    "crops_multiplier": 1,
+    "farmer_with_integers": "False",
+    "yield_cv": "0.1"
+}
