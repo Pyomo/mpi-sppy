@@ -311,6 +311,19 @@ class TestInterruptConfigValidation(unittest.TestCase):
         self.assertIn("zero_crossings", d["methods"])
         self.assertIn("w_hash_recurrence", d["methods"])
 
+    def test_non_object_subblock_rejected(self):
+        # a sub-block supplied as something other than a JSON object must give a
+        # clear ValueError (naming the field), not a low-level TypeError from
+        # the subsequent dict.update()
+        for action, key, block in (
+            ("w_damping", "trigger", [1, 2]),
+            ("w_damping", "w_damping", "0.5"),
+            ("slam", "slam", ["file.txt"]),
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                wosc.validate_interrupt_config({"action": action, key: block})
+            self.assertIn(key, str(ctx.exception))
+
 
 @unittest.skipIf(not solver_available, "no MIP solver available")
 class TestEndToEndInterrupt(unittest.TestCase):

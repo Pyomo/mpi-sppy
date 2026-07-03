@@ -310,6 +310,21 @@ def parse_interrupt_config(path):
     return validate_interrupt_config(cfg, where=path)
 
 
+def _as_json_object(cfg, key, where):
+    """Return ``cfg[key]`` as a dict to merge over defaults, treating an absent
+    or null value as an empty object.  Raise a clear ``ValueError`` when the
+    value is present but not a JSON object, rather than letting the subsequent
+    ``dict.update`` fail later with a low-level ``TypeError``."""
+    val = cfg.get(key)
+    if val is None:
+        return {}
+    if not isinstance(val, dict):
+        raise ValueError(
+            f"{where}: {key!r} must be a JSON object (got "
+            f"{type(val).__name__})")
+    return val
+
+
 def validate_interrupt_config(cfg, where="<interrupt config>"):
     """Validate an interruption control dict and fill in defaults.
 
@@ -335,12 +350,8 @@ def validate_interrupt_config(cfg, where="<interrupt config>"):
         raise ValueError(
             f"{where}: 'action' {action!r} not in {VALID_ACTIONS}")
 
-    trigger_block = cfg.get("trigger")
-    if trigger_block is not None and not isinstance(trigger_block, dict):
-        raise ValueError(f"{where}: 'trigger' must be a JSON object")
-
     trig = dict(_TRIGGER_DEFAULTS)
-    trig.update(trigger_block or {})
+    trig.update(_as_json_object(cfg, "trigger", where))
     trigger = {
         "min_scenarios_flagged": int(trig["min_scenarios_flagged"]),
         "start_iter": int(trig["start_iter"]),
@@ -352,7 +363,7 @@ def validate_interrupt_config(cfg, where="<interrupt config>"):
 
     if action in ("w_damping", "both"):
         wd = dict(_W_DAMPING_DEFAULTS)
-        wd.update(cfg.get("w_damping") or {})
+        wd.update(_as_json_object(cfg, "w_damping", where))
         wd["factor"] = float(wd["factor"])
         if not (0.0 <= wd["factor"] < 1.0):
             raise ValueError(
@@ -362,7 +373,7 @@ def validate_interrupt_config(cfg, where="<interrupt config>"):
 
     if action in ("slam", "both"):
         slam = dict(_SLAM_DEFAULTS)
-        slam.update(cfg.get("slam") or {})
+        slam.update(_as_json_object(cfg, "slam", where))
         directives_file = slam.get("directives_file")
         if not directives_file:
             raise ValueError(

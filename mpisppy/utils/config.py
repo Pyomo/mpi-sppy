@@ -772,8 +772,10 @@ class Config(pyofig.ConfigDict):
                            description="path to a JSON control file for "
                            "W-oscillation interruption (W-damping and/or "
                            "slamming); its presence activates the "
-                           "WOscillationMonitor extension in interrupt mode and "
-                           "implies detection (default None)",
+                           "WOscillationMonitor extension in interrupt mode, "
+                           "which runs the detection engine to drive the "
+                           "actions (CSV reporting stays opt-in via a 'detect' "
+                           "block) (default None)",
                            domain=str,
                            default=None)
 
