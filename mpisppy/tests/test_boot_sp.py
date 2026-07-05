@@ -249,6 +249,13 @@ class Test_boot_sp_data(unittest.TestCase):
     def test_data_file_coverage(self):
         module = boot_utils.module_name_to_module(DATA_MODULE_NAME)
         cfg = _make_data_cfg("Classical_quantile", seed=0, reps=4)
+        # Read a precomputed optimum so the coverage simulation skips the full
+        # max_count-scenario extensive form (process_optimal). That single solve
+        # is large enough to exceed size-limited solvers on CI (e.g. the
+        # community edition of cplex, error 1016); the resampled batches are
+        # smaller and solve fine. The stored value is exactly what process_optimal
+        # would compute, so the coverage result is unchanged.
+        cfg.optimal_fname = os.path.join(data_example_dir, "schultz_data_optimal.npy")
         rate, length = simulate_boot.main(cfg, module)
         self.assertEqual(rate, locked_coverage_data[0])
         self.assertEqual(round_pos_sig(length, 4),
