@@ -363,7 +363,8 @@ class Test_confint_farmer(unittest.TestCase):
         gvals = iter([(50.0, 10.0), (40.0, 10.0), (30.0, 10.0), (0.0, 10.0)])
         def _fake_gap_estimators(xhat, refmodelname, **kwargs):
             G, s = next(gvals)
-            return {"G": G, "s": s, "seed": 0}
+            # farmer is a minimization; run()'s min-only guard reads this key
+            return {"G": G, "s": s, "seed": 0, "is_minimizing": True}
 
         try:
             orig_gap = ciutils.gap_estimators
