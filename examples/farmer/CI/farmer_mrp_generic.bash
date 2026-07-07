@@ -32,9 +32,11 @@ run_and_check () {
     echo "$out"
     [ "$rc" -eq 0 ] \
         || { echo "FAIL (${label}): command exited ${rc}"; exit 1; }
-    # A completed run prints "MRP complete: T=<int>, CI=[0, <number>]".
-    # Requiring a digit right after "[0, " rejects inf/nan/None and no-output.
-    echo "$out" | grep -qE "MRP complete: T=[0-9]+, CI=\[0, [0-9]" \
+    # A completed run prints "MRP complete: T=<int>, CI=[0, <number>]". The
+    # upper bound may be a bare float (100.0) or a numpy repr
+    # (np.float64(2136.78), from numpy>=2); requiring a digit right after either
+    # form still rejects inf/nan/None and no-output.
+    echo "$out" | grep -qE "MRP complete: T=[0-9]+, CI=\[0, (np\.float64\()?[0-9]" \
         || { echo "FAIL (${label}): no completed MRP result with a finite CI"; exit 1; }
 }
 
