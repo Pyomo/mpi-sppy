@@ -34,8 +34,10 @@ NLEN = 4
 INTEGER_FLAGS = [False, True, False, False]
 # the same objective coefficients are used for every scenario
 COSTS = [10.0, -15.0, 7.0, 0.0]
-# nonant 3 has c == 0, so its rho must never change from this seed
+# nonant 3 has c == 0, so the heuristic cannot determine its rho; it falls back
+# to the positive default rho (DEFAULT_PH_RHO), overwriting this seed (issue #560)
 INIT_RHOS = [99.0, 99.0, 99.0, 42.0]
+DEFAULT_PH_RHO = 1.0
 # probability-weighted mean of each nonant across the two scenarios below
 XBARS = [15.0, 6.0, 10.25, 1.5]
 # per-scenario nonant values (rows are scenarios)
@@ -100,7 +102,8 @@ def _make_ph(multiplier=1.0):
         _PHIter=0,
         local_scenarios=scenarios,
         comms={NDN: MPI.COMM_WORLD},
-        options={"sep_rho_options": {"cfg": types.SimpleNamespace(),
+        options={"defaultPHrho": DEFAULT_PH_RHO,
+                 "sep_rho_options": {"cfg": types.SimpleNamespace(),
                                      "multiplier": multiplier}},
     )
 
@@ -171,19 +174,20 @@ class Test_sep_rho_formula(unittest.TestCase):
         for sname in ("Scen1", "Scen2"):
             self.assertAlmostEqual(self._rho(ph, sname, 1), 3.0)
 
-    def test_zero_cost_coeff_leaves_rho_untouched(self):
+    def test_zero_cost_coeff_uses_default_rho(self):
         ph = self._run()
-        # c == 0 -> rho keeps its seeded value
-        self.assertEqual(self._rho(ph, "Scen1", 3), 42.0)
-        self.assertEqual(self._rho(ph, "Scen2", 3), 42.0)
+        # c == 0 -> heuristic is uninformative -> positive default rho
+        # (issue #560: fall back and report, rather than leave a stale seed)
+        self.assertEqual(self._rho(ph, "Scen1", 3), DEFAULT_PH_RHO)
+        self.assertEqual(self._rho(ph, "Scen2", 3), DEFAULT_PH_RHO)
 
     def test_multiplier_scales_every_updated_rho(self):
         ph = self._run(multiplier=2.0)
         self.assertAlmostEqual(self._rho(ph, "Scen1", 0), 4.0)   # 2.0 * 2
         self.assertAlmostEqual(self._rho(ph, "Scen1", 1), 6.0)   # 3.0 * 2
         self.assertAlmostEqual(self._rho(ph, "Scen1", 2), 14.0)  # 7.0 * 2
-        # the zero-cost nonant is still skipped, so no scaling applies
-        self.assertEqual(self._rho(ph, "Scen1", 3), 42.0)
+        # the zero-cost nonant falls back to the (unscaled) default rho
+        self.assertEqual(self._rho(ph, "Scen1", 3), DEFAULT_PH_RHO)
 
     def test_multiplier_default_reads_from_options(self):
         # multiplier defaults to 1.0 when omitted from sep_rho_options

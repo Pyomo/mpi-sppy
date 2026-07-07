@@ -690,6 +690,74 @@ class SPBase:
             return result
 
 
+    def gather_nonant_tree_to_rank0(self, get_zero_prob_values=True):
+        """ Gather the whole nonant tree to the root of the cylinder's
+        ``mpicomm``, keyed by node name.
+
+        Node-keyed analog of ``gather_var_values_to_rank0``: builds, per
+        node, the list of ``(node-local variable name, value)`` pairs --
+        one entry per node, deduped across local scenarios that share it
+        -- gathers to rank 0 and merges.
+
+        Returns:
+            dict or None:
+                On rank 0, ``{node_name: [(local_var_name, value), ...]}``.
+                On other ranks, ``None``.
+
+        Raises:
+            RuntimeError: if two ranks report different values for a
+                shared node beyond tolerance (the incumbent is then not
+                nonanticipative and the tree would be ill-defined).
+        """
+        local = dict()
+        for (sname, model) in self.local_scenarios.items():
+            for node in model._mpisppy_node_list:
+                ndn = node.name
+                if ndn in local:
+                    continue
+                rows = []
+                for var in node.nonant_vardata_list:
+                    var_name = sputils._node_local_nonant_name(
+                        var.name, sname, self.bundling)
+                    if self.is_zero_prob(model, var) and not get_zero_prob_values:
+                        rows.append((var_name, None))
+                    else:
+                        rows.append((var_name, pyo.value(var)))
+                local[ndn] = rows
+
+        if self.n_proc == 1:
+            return local
+
+        gathered = self.mpicomm.gather(local, root=0)
+        if self.cylinder_rank != 0:
+            return None
+        merged = dict()
+        for d in gathered:
+            for ndn, rows in d.items():
+                if ndn in merged:
+                    self._assert_nonant_node_agreement(ndn, merged[ndn], rows)
+                else:
+                    merged[ndn] = rows
+        return merged
+
+    @staticmethod
+    def _assert_nonant_node_agreement(ndn, rows_a, rows_b, tol=1e-6):
+        """ Raise if two ranks disagree on a shared node's nonant values.
+
+        Integer/binary nonants must match exactly; the tolerance only
+        absorbs floating-point residue. ``None`` (a masked zero-prob
+        value) is skipped.
+        """
+        for (name_a, val_a), (name_b, val_b) in zip(rows_a, rows_b):
+            if val_a is None or val_b is None:
+                continue
+            if abs(val_a - val_b) > tol:
+                raise RuntimeError(
+                    f"Inconsistent nonant value for node {ndn}, variable "
+                    f"{name_a}: {val_a} vs {val_b}. The incumbent is not "
+                    "nonanticipative; cannot write a well-defined xhat tree."
+                )
+
     def report_var_values_at_rank0(self, header="", print_zero_prob_values=False, fixed_vars=True):
         """ Pretty-print the values and associated statistics for
         non-anticipative variables across all scenarios. """
@@ -767,6 +835,27 @@ class SPBase:
         self.mpicomm.Barrier()
         for scenario_name, scenario in self.local_scenarios.items():
             scenario_tree_solution_writer(directory_name, scenario_name, scenario, self.bundling)
+
+    def write_tree_nonants(self, file_name):
+        """ Write the whole nonant tree (the xhat) to one by-name CSV.
+
+        Single-file, node-local-name companion to ``write_tree_solution``
+        (which writes a directory of per-scenario, all-variable files).
+        Only rank 0 of the cylinder writes; the tree is assembled there by
+        ``gather_nonant_tree_to_rank0``.
+
+            Args:
+                file_name: path of the CSV file to write the xhat tree to
+        """
+        if not self.tree_solution_available:
+            if not self.load_best_solution():
+                raise RuntimeError("No tree solution available")
+        node_to_rows = self.gather_nonant_tree_to_rank0(get_zero_prob_values=True)
+        if self.cylinder_rank == 0:
+            dirname = os.path.dirname(file_name)
+            if dirname != '':
+                os.makedirs(dirname, exist_ok=True)
+            sputils.write_nonant_tree_csv(file_name, node_to_rows)
 
 
 def _put_var_vals_in_component_map_dict(sn_cache_dict, var_iter):

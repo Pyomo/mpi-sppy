@@ -105,14 +105,19 @@ def add_decomp_args(cfg):
     # There are some arguments here that will not make sense for all models
     cfg.popular_args()
     cfg.two_sided_args()
+    cfg.lshaped_args()
+    cfg.xhatlshaped_args()    
     cfg.ph_args()
     cfg.aph_args()
     cfg.cg_args()
     cfg.dualcg_args()
     cfg.subgradient_args()
     cfg.fixer_args()
+    cfg.cvar_args()
     cfg.relaxed_ph_fixer_args()
     cfg.integer_relax_then_enforce_args()
+    cfg.slamming_args()
+    cfg.w_oscillation_args()
     cfg.gapper_args()
     cfg.gapper_args(name="lagrangian")
     cfg.ph_primal_args()
@@ -125,6 +130,7 @@ def add_decomp_args(cfg):
     cfg.xhatshuffle_args()
     cfg.xhatxbar_args()
     cfg.xhat_from_file_args()
+    cfg.write_xhat_file_args()
     cfg.norm_rho_args()
     cfg.primal_dual_rho_args()
     cfg.converger_args()
@@ -175,6 +181,7 @@ def parse_args(m):
     # maybe it should just require it.
 
     cfg.EF_base()  # If EF is slected, most other options will be moot
+    cfg.chance_constraint_args()  # EF-only (see config.checker)
     # Hub-and-spoke decomposition args (shared with mrp_generic)
     add_decomp_args(cfg)
     # TBD - think about adding directory for json options files
@@ -221,10 +228,15 @@ def name_lists(module, cfg, bundle_wrapper=None):
 
     # proper bundles should be almost magic
     if cfg.unpickle_bundles_dir or cfg.scenarios_per_bundle is not None:
-        # When branching_factors are used (multi-stage), num_scens is computed locally
-        # above but cfg.num_scens is never set from it.  Fill it in so that
-        # bundle_names_creator (which asserts cfg.num_scens is not None) works.
-        if cfg.get("num_scens") is None and num_scens is not None:
+        # bundle_names_creator needs cfg.num_scens, but it is not always set yet:
+        #  - multi-stage: num_scens was computed locally above from branching
+        #    factors but never written back to cfg.
+        #  - file-based paths (e.g. --mps-files-directory): the scenario count is
+        #    implied by the files, so there is no --num-scens; recover it from the
+        #    module's scenario_names_creator (None => every scenario).
+        if num_scens is None:
+            num_scens = len(module.scenario_names_creator(None))
+        if cfg.get("num_scens") is None:
             cfg.quick_assign("num_scens", int, int(num_scens))
         num_buns = cfg.num_scens // cfg.scenarios_per_bundle
         all_scenario_names = bundle_wrapper.bundle_names_creator(num_buns, cfg=cfg)

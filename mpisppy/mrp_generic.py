@@ -58,6 +58,7 @@ def parse_mrp_args(m):
 
     # EF solver specs (always needed, since gap estimation uses EF)
     cfg.EF_base()
+    cfg.chance_constraint_args()  # EF-only (see config.checker); keeps CLI parity
 
     # Sequential sampling args
     mrp_args(cfg)

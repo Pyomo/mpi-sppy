@@ -41,14 +41,18 @@ def add_cvar(scenario, *, cvar_weight, cvar_alpha, cvar_mean_weight=1.0):
     This is safe because every mpi-sppy objective lookup filters on active=True,
     so only ``WITH_CVAR`` is ever used.
 
-    Only minimization objectives are supported; a maximization objective raises
-    ``NotImplementedError`` (the mirrored lower-tail formulation is future work).
+    Both minimization (CVaR of the upper/cost tail) and maximization (CVaR of the
+    lower/reward tail) objectives are supported; the excess variable's domain and
+    the excess constraint's direction flip with the sense, but the new objective
+    expression is identical and keeps the original sense.
 
     Components added to ``scenario``:
         ``_mpisppy_cvar_eta``        the VaR eta (free; appended to the root node
                                      nonant lists, so it is non-anticipative)
-        ``_mpisppy_cvar_excess``     the excess delta_s (>= 0)
+        ``_mpisppy_cvar_excess``     the excess delta_s (>= 0 for minimize,
+                                     <= 0 for maximize)
         ``_mpisppy_cvar_excess_con`` the constraint delta_s >= Cost_s - eta
+                                     (minimize) / delta_s <= Cost_s - eta (maximize)
         ``WITH_CVAR``                the new active risk-averse objective
 
     Args:
@@ -70,19 +74,22 @@ def add_cvar(scenario, *, cvar_weight, cvar_alpha, cvar_mean_weight=1.0):
     obj = sputils.find_active_objective(scenario)   # pristine user cost objective
     cost = obj.expr
     sense = obj.sense
-    # This transform linearizes CVaR of the upper (cost) tail, which is correct
-    # only for minimization.  Maximization needs the mirrored formulation (excess
-    # on the lower tail); until that ships, reject it explicitly rather than
-    # silently building a wrong model.
-    if sense != pyo.minimize:
-        raise NotImplementedError(
-            "add_cvar currently supports only minimization objectives; "
-            "CVaR for maximization is not yet implemented")
 
+    # Rockafellar-Uryasev linearization.  Minimization penalizes the upper (cost)
+    # tail:  delta_s >= Cost_s - eta,  delta_s >= 0.  Maximization is risk-averse
+    # on the lower (reward) tail, so it mirrors:  delta_s <= Cost_s - eta,
+    # delta_s <= 0.  In BOTH cases the per-scenario objective is the same
+    # expression (below), carried with the original sense; only the excess
+    # variable's domain and the excess constraint's direction flip.
     scenario._mpisppy_cvar_eta = pyo.Var()
-    scenario._mpisppy_cvar_excess = pyo.Var(domain=pyo.NonNegativeReals)
-    scenario._mpisppy_cvar_excess_con = pyo.Constraint(
-        expr=scenario._mpisppy_cvar_excess >= cost - scenario._mpisppy_cvar_eta)
+    if sense == pyo.minimize:
+        scenario._mpisppy_cvar_excess = pyo.Var(domain=pyo.NonNegativeReals)
+        scenario._mpisppy_cvar_excess_con = pyo.Constraint(
+            expr=scenario._mpisppy_cvar_excess >= cost - scenario._mpisppy_cvar_eta)
+    else:
+        scenario._mpisppy_cvar_excess = pyo.Var(domain=pyo.NonPositiveReals)
+        scenario._mpisppy_cvar_excess_con = pyo.Constraint(
+            expr=scenario._mpisppy_cvar_excess <= cost - scenario._mpisppy_cvar_eta)
 
     # Keep the original risk-neutral objective (deactivated) for E[Cost]
     # reporting; the new active objective is named WITH_CVAR (not PySP's MASTER).

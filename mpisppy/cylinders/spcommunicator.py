@@ -144,9 +144,11 @@ class FieldArray:
     The intention here is that these are passive data holding classes. That is, other classes are
     expected to update the internal fields. The lone exception to this is the read/write id field.
     See the `SendArray` and `RecvArray` classes for how that field is updated.
+
     Wrapper around an MPI-allocated numpy buffer with:
-      - a padded "window" array used for MPI RMA
-      - a logical view used by mpi-sppy code (data + id)
+
+    - a padded "window" array used for MPI RMA
+    - a logical view used by mpi-sppy code (data + id)
     """
 
     def __init__(self, length: int):

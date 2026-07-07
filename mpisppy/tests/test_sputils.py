@@ -877,7 +877,11 @@ class TestEFIterators(unittest.TestCase):
             self.assertTrue(os.path.exists(fname))
             with open(fname) as fh:
                 content = fh.read()
-            self.assertIn("Node", content)
+            # canonical format: '#'-comment header, node-local var names
+            self.assertIn("# node_name, variable_name, value", content)
+            self.assertIn("ROOT, x[1], 1.0", content)
+            # node-local: the EF scenario-block prefix must be stripped
+            self.assertNotIn("Scenario1.x[", content)
         finally:
             os.unlink(fname)
 
@@ -913,6 +917,261 @@ class TestDeprecatedSpinTheWheelWriters(unittest.TestCase):
     def test_local_nonant_cache_raises(self):
         with self.assertRaises(RuntimeError):
             sputils.local_nonant_cache(None)
+
+
+# ---------------------------------------------------------------------------
+# Canonical multi-stage xhat CSV: write_nonant_tree_csv, _node_sort_key,
+# _node_local_name
+# ---------------------------------------------------------------------------
+
+class TestNonantTreeCsv(unittest.TestCase):
+    """The single-file, by-name, multi-stage xhat writer."""
+
+    def _read(self, fname):
+        with open(fname) as fh:
+            return fh.read()
+
+    def test_node_sort_key_orders_numerically(self):
+        names = ["ROOT_10", "ROOT", "ROOT_2", "ROOT_0_1", "ROOT_0"]
+        ordered = sorted(names, key=sputils._node_sort_key)
+        self.assertEqual(
+            ordered, ["ROOT", "ROOT_0", "ROOT_0_1", "ROOT_2", "ROOT_10"]
+        )
+
+    def test_node_local_name_strips_one_prefix(self):
+        self.assertEqual(
+            sputils._node_local_name("Scenario1.x[1]", strip_prefix=True), "x[1]"
+        )
+        self.assertEqual(
+            sputils._node_local_name("x[1]", strip_prefix=True), "x[1]"
+        )
+        self.assertEqual(
+            sputils._node_local_name("Scenario1.x[1]", strip_prefix=False),
+            "Scenario1.x[1]",
+        )
+        # only the FIRST segment (scenario/bundle block) is stripped, so a
+        # variable inside a per-stage sub-block (e.g. aircond) keeps its dot
+        self.assertEqual(
+            sputils._node_local_name(
+                "Scenario1.stage_model_1.RegularProd", strip_prefix=True),
+            "stage_model_1.RegularProd",
+        )
+
+    def test_node_local_nonant_name_strips_scenario_prefix(self):
+        # non-bundled: a leading "<scenario_name>." (e.g. a multistage
+        # stage-2 EF sub-block rebind) is stripped to stay node-local...
+        self.assertEqual(
+            sputils._node_local_nonant_name(
+                "scen0.stage_model_1.RegularProd", "scen0", bundling=False),
+            "stage_model_1.RegularProd",
+        )
+        # ...while an unprefixed name is left alone
+        self.assertEqual(
+            sputils._node_local_nonant_name(
+                "DevotedAcreage[CORN0]", "scen0", bundling=False),
+            "DevotedAcreage[CORN0]",
+        )
+        # bundled: strip the first segment (the inner scenario name)
+        self.assertEqual(
+            sputils._node_local_nonant_name(
+                "scen3.stage_model_1.RegularProd", "Bundle0", bundling=True),
+            "stage_model_1.RegularProd",
+        )
+
+    def test_write_nonant_tree_csv_format_and_order(self):
+        import os
+        import tempfile
+        node_to_rows = {
+            "ROOT_1": [("z", 7.0)],
+            "ROOT": [("x[1]", 80.0), ("x[2]", 250.0)],
+            "ROOT_0": [("z", 0.0)],
+        }
+        fd, fname = tempfile.mkstemp(suffix=".csv")
+        os.close(fd)
+        try:
+            sputils.write_nonant_tree_csv(fname, node_to_rows)
+            content = self._read(fname)
+        finally:
+            os.unlink(fname)
+        lines = [ln for ln in content.splitlines() if not ln.startswith("#")]
+        self.assertEqual(
+            lines,
+            ["ROOT, x[1], 80.0", "ROOT, x[2], 250.0",
+             "ROOT_0, z, 0.0", "ROOT_1, z, 7.0"],
+        )
+        self.assertTrue(content.startswith("# mpi-sppy xhat"))
+
+    def test_round_trip_by_name_from_ef(self):
+        # Write an EF's nonant tree, parse it back by (node, name), and
+        # confirm it matches nonant_cache_from_ef position-for-position.
+        import os
+        import tempfile
+        names = [f"Scenario{i + 1}" for i in range(3)]
+        ef = sputils.create_EF(names, _make_two_stage_scenario)
+        fd, fname = tempfile.mkstemp(suffix=".csv")
+        os.close(fd)
+        try:
+            sputils.ef_nonants_csv(ef, fname)
+            content = self._read(fname)
+        finally:
+            os.unlink(fname)
+        parsed = {}
+        for ln in content.splitlines():
+            if ln.startswith("#") or not ln.strip():
+                continue
+            ndn, name, val = [t.strip() for t in ln.split(",")]
+            parsed.setdefault(ndn, []).append(float(val))
+        cache = sputils.nonant_cache_from_ef(ef)
+        self.assertEqual(set(parsed), set(cache))
+        for ndn in cache:
+            self.assertEqual(parsed[ndn], list(cache[ndn]))
+
+    def test_read_round_trips_write_multistage(self):
+        # write -> read back, ordered to a caller-supplied per-node order
+        import os
+        import tempfile
+        node_to_rows = {
+            "ROOT": [("x[1]", 80.0), ("x[2]", 250.0)],
+            "ROOT_0": [("z", 0.0)],
+            "ROOT_1": [("z", 7.0)],
+        }
+        order = {ndn: [n for n, _ in rows] for ndn, rows in node_to_rows.items()}
+        fd, fname = tempfile.mkstemp(suffix=".csv")
+        os.close(fd)
+        try:
+            sputils.write_nonant_tree_csv(fname, node_to_rows)
+            cache = sputils.read_nonant_tree_csv(fname, order)
+        finally:
+            os.unlink(fname)
+        self.assertEqual(set(cache), {"ROOT", "ROOT_0", "ROOT_1"})
+        self.assertEqual(list(cache["ROOT"]), [80.0, 250.0])
+        self.assertEqual(list(cache["ROOT_1"]), [7.0])
+
+    def test_read_respects_requested_order(self):
+        # the array follows node_varname_order, not file order
+        import os
+        import tempfile
+        fd, fname = tempfile.mkstemp(suffix=".csv")
+        os.close(fd)
+        try:
+            sputils.write_nonant_tree_csv(
+                fname, {"ROOT": [("a", 1.0), ("b", 2.0)]})
+            cache = sputils.read_nonant_tree_csv(fname, {"ROOT": ["b", "a"]})
+        finally:
+            os.unlink(fname)
+        self.assertEqual(list(cache["ROOT"]), [2.0, 1.0])
+
+    def test_read_ignores_unrequested_nodes(self):
+        import os
+        import tempfile
+        fd, fname = tempfile.mkstemp(suffix=".csv")
+        os.close(fd)
+        try:
+            sputils.write_nonant_tree_csv(
+                fname, {"ROOT": [("a", 1.0)], "ROOT_0": [("z", 9.0)]})
+            cache = sputils.read_nonant_tree_csv(fname, {"ROOT": ["a"]})
+        finally:
+            os.unlink(fname)
+        self.assertEqual(set(cache), {"ROOT"})
+
+    def test_read_survives_multi_index_var_names(self):
+        # commas inside a Var name (x[a,b]) must round-trip
+        import os
+        import tempfile
+        fd, fname = tempfile.mkstemp(suffix=".csv")
+        os.close(fd)
+        try:
+            sputils.write_nonant_tree_csv(
+                fname, {"ROOT": [("x[CORN,2024]", 3.5)]})
+            cache = sputils.read_nonant_tree_csv(
+                fname, {"ROOT": ["x[CORN,2024]"]})
+        finally:
+            os.unlink(fname)
+        self.assertEqual(list(cache["ROOT"]), [3.5])
+
+    def test_read_missing_node_raises(self):
+        import os
+        import tempfile
+        fd, fname = tempfile.mkstemp(suffix=".csv")
+        os.close(fd)
+        try:
+            sputils.write_nonant_tree_csv(fname, {"ROOT": [("a", 1.0)]})
+            with self.assertRaises(RuntimeError) as ctx:
+                sputils.read_nonant_tree_csv(fname, {"ROOT_9": ["a"]})
+        finally:
+            os.unlink(fname)
+        self.assertIn("ROOT_9", str(ctx.exception))
+
+    def test_read_missing_variable_raises(self):
+        import os
+        import tempfile
+        fd, fname = tempfile.mkstemp(suffix=".csv")
+        os.close(fd)
+        try:
+            sputils.write_nonant_tree_csv(fname, {"ROOT": [("a", 1.0)]})
+            with self.assertRaises(RuntimeError) as ctx:
+                sputils.read_nonant_tree_csv(fname, {"ROOT": ["a", "missing"]})
+        finally:
+            os.unlink(fname)
+        self.assertIn("missing", str(ctx.exception))
+
+
+# ---------------------------------------------------------------------------
+# SPBase node-keyed nonant gather + agreement check
+# ---------------------------------------------------------------------------
+
+class _Node:
+    def __init__(self, name, vardatas):
+        self.name = name
+        self.nonant_vardata_list = vardatas
+
+
+class _StubScen:
+    def __init__(self, node_list):
+        self._mpisppy_node_list = node_list
+
+
+class _StubOpt:
+    """Minimal stand-in exposing what gather_nonant_tree_to_rank0 reads on
+    the serial (n_proc == 1) path."""
+    bundling = False
+    n_proc = 1
+    cylinder_rank = 0
+
+    def __init__(self, local_scenarios):
+        self.local_scenarios = local_scenarios
+
+    def is_zero_prob(self, model, var):
+        return False
+
+
+class TestGatherNonantTree(unittest.TestCase):
+    from mpisppy.spbase import SPBase
+
+    def test_serial_gather_is_node_keyed_and_deduped(self):
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var([1, 2], initialize=3.0)
+        root = _Node("ROOT", [m.x[1], m.x[2]])
+        # two scenarios share ROOT -> exactly one ROOT entry in the result
+        scens = {"S1": _StubScen([root]), "S2": _StubScen([root])}
+        opt = _StubOpt(scens)
+        result = self.SPBase.gather_nonant_tree_to_rank0(opt)
+        self.assertEqual(set(result), {"ROOT"})
+        self.assertEqual(result["ROOT"], [("x[1]", 3.0), ("x[2]", 3.0)])
+
+    def test_agreement_check_passes_within_tol(self):
+        # exact ints and near-equal floats are fine
+        self.SPBase._assert_nonant_node_agreement(
+            "ROOT", [("a", 1.0), ("b", 2.0)], [("a", 1.0), ("b", 2.0 + 1e-9)]
+        )
+
+    def test_agreement_check_raises_on_disagreement(self):
+        with self.assertRaises(RuntimeError) as ctx:
+            self.SPBase._assert_nonant_node_agreement(
+                "ROOT_0", [("a", 1.0)], [("a", 5.0)]
+            )
+        self.assertIn("Inconsistent", str(ctx.exception))
+        self.assertIn("ROOT_0", str(ctx.exception))
 
 
 if __name__ == "__main__":

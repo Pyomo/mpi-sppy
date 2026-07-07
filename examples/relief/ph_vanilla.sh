@@ -1,0 +1,1 @@
+mpiexec -n 9 python -m mpisppy.generic_cylinders --module-name relief --solver-name gurobi --default-rho 2.0 --lagrangian --xhatshuffle --max-iterations 2000 --rel-gap 1e-4 --intra-hub-conv-thresh 1e-7 
