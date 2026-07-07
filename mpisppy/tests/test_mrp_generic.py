@@ -16,6 +16,8 @@ from unittest.mock import patch, MagicMock
 import numpy as np
 
 import mpisppy.tests.examples.farmer as farmer
+import mpisppy.tests.examples.aircond as aircond
+import pyomo.common.config as pyofig
 from mpisppy.confidence_intervals import ciutils
 
 from mpisppy.tests.utils import get_solver
@@ -28,6 +30,7 @@ solver_available, solver_name, persistent_available, persistent_solver_name \
     = get_solver()
 
 _refmodelname = "mpisppy.tests.examples.farmer"
+_aircond_refmodelname = "mpisppy.tests.examples.aircond"
 
 
 def _get_BM_cfg():
@@ -76,6 +79,32 @@ def _get_BPL_cfg():
     cfg.BPL_n0min = 0
     scenario_creator_kwargs = farmer.kw_creator(cfg)
     cfg.quick_assign("xhat_gen_kwargs", dict, scenario_creator_kwargs)
+    return cfg
+
+
+def _get_multistage_BM_cfg():
+    """Create a Config for a real multistage (aircond) BM run.
+
+    Mirrors the aircond branch of farmer_mrp_generic.bash: a small tree whose
+    sampled EFs stay tiny, so it converges quickly under any solver. aircond
+    kw_creator supplies defaults for the model args we do not set here.
+    """
+    cfg = config.Config()
+    mrp_args(cfg)
+    cfg.stopping_criterion = "BM"
+    cfg.quick_assign("solver_name", str, solver_name)
+    cfg.quick_assign("EF_solver_name", str, solver_name)
+    # Multistage tree (matches the bash); sampled EFs stay small.
+    cfg.quick_assign("branching_factors", pyofig.ListOf(int), [3, 2, 2])
+    cfg.quick_assign("start_ups", bool, False)
+    cfg.quick_assign("start_seed", int, 0)
+    # BM parameters (loose enough to converge quickly)
+    cfg.BM_h = 1.75
+    cfg.BM_hprime = 0.5
+    cfg.BM_eps = 0.2
+    cfg.BM_eps_prime = 0.1
+    cfg.BM_p = 0.1
+    cfg.BM_q = 1.2
     return cfg
 
 
@@ -283,6 +312,29 @@ class Test_mrp_do_mrp(unittest.TestCase):
 
         self.assertEqual(result["T"], 2)
         self.assertEqual(result["CI"], [0, 5.0])
+
+    @unittest.skipIf(not solver_available, "no solver is available")
+    def test_do_mrp_multistage_result_structure(self):
+        """Real multistage (aircond) do_mrp run: assert a well-formed result.
+
+        Unlike test_do_mrp_multistage_branch (which mocks the sampler), this
+        executes a full multistage sequential-sampling run() with real
+        multistage-EF solves through IndepScens_SeqSampling -- the value-level
+        counterpart of the aircond run in farmer_mrp_generic.bash.
+        """
+        cfg = _get_multistage_BM_cfg()
+        result = do_mrp(_aircond_refmodelname, aircond, cfg)
+        self.assertIn("T", result)
+        self.assertIn("Candidate_solution", result)
+        self.assertIn("CI", result)
+        self.assertIsInstance(result["T"], int)
+        self.assertGreater(result["T"], 0)
+        self.assertEqual(len(result["CI"]), 2)
+        self.assertEqual(result["CI"][0], 0)
+        # A finite, strictly positive gap upper bound (not inf/nan).
+        self.assertTrue(np.isfinite(result["CI"][1]))
+        self.assertGreater(result["CI"][1], 0)
+        self.assertIn("ROOT", result["Candidate_solution"])
 
     def test_do_mrp_multistage_branch(self):
         """Cover the multistage code path in do_mrp."""
