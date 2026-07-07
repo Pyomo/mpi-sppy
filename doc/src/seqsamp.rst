@@ -77,7 +77,7 @@ large for EF, use hub-and-spoke decomposition instead:
 
 .. code-block:: bash
 
-    mpiexec -np 3 python -m mpi4py mpisppy/mrp_generic.py \
+    mpiexec -np 3 python -m mpi4py -m mpisppy.mrp_generic \
         --module-name farmer \
         --num-scens 3 \
         --solver-name gurobi \

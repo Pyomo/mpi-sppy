@@ -73,7 +73,9 @@ def _ef_xhat_generator(scenario_names, solver_name=None, solver_options=None,
         solver_options_str = sputils.option_dict_to_string(solver_options)
         local_cfg.quick_assign("EF_solver_options", str, solver_options_str)
     else:
-        local_cfg.quick_assign("EF_solver_options", dict, {})
+        # EF_solver_options is declared with a str domain (space-delimited
+        # "k=v"); use the empty string, not an empty dict, for "no options".
+        local_cfg.quick_assign("EF_solver_options", str, "")
     local_cfg.quick_assign("num_scens", int, num_scens)
     local_cfg.quick_assign("_mpisppy_probability", float, 1 / num_scens)
     if start_seed is not None:
@@ -127,10 +129,16 @@ def _cylinder_xhat_generator(scenario_names, solver_name=None,
     wheel = do_decomp(module, local_cfg, scenario_creator,
                       scenario_creator_kwargs, scenario_denouement)
 
-    # Extract xhat from the wheel, using the same approach as generic/mmw.py
+    # Extract xhat from the wheel via a temp .npy file.  Rank 0 owns a secure
+    # temp directory; the .npy inside it is written by write_first_stage_solution
+    # only when a feasible first-stage solution exists, so the file's absence
+    # after the barrier signals "no feasible solution".  (A pre-created temp
+    # file, e.g. from mkstemp, would defeat that existence test.)
     if global_rank == 0:
-        tmp_path = tempfile.mktemp(suffix=".npy")
+        tmp_dir = tempfile.mkdtemp()
+        tmp_path = os.path.join(tmp_dir, "xhat.npy")
     else:
+        tmp_dir = None
         tmp_path = None
     tmp_path = global_comm.bcast(tmp_path, root=0)
 
@@ -149,6 +157,7 @@ def _cylinder_xhat_generator(scenario_names, solver_name=None,
     if global_rank == 0:
         try:
             os.remove(tmp_path)
+            os.rmdir(tmp_dir)
         except OSError:
             pass
 

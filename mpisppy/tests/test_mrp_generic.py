@@ -179,7 +179,8 @@ class Test_cylinder_xhat_generator(unittest.TestCase):
 
         # Write a fake xhat file that ciutils.read_xhat will find
         xhat_data = {"ROOT": np.array([74.0, 245.0, 181.0])}
-        tmp_path = tempfile.mktemp(suffix=".npy")
+        fd, tmp_path = tempfile.mkstemp(suffix=".npy")
+        os.close(fd)
         ciutils.write_xhat(xhat_data, tmp_path)
 
         mock_wheel = MagicMock()
