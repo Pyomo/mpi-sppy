@@ -7,8 +7,7 @@ The ``w_oscillation`` extension (``mpisppy.extensions.w_oscillation``,
 class ``WOscillationMonitor``) watches the Progressive Hedging dual weight
 (``W``) vector while a synchronous PH hub runs. It can **detect** oscillation /
 cycling in ``W`` and report it, and it can optionally **interrupt** the
-oscillation -- damping the dual weight and/or slamming the offending variables
--- to break the cycle.
+oscillation -- slamming (fixing) the offending variables -- to break the cycle.
 
 Oscillating weights -- a ``W`` trajectory that flips sign repeatedly or whose
 swings fail to damp out -- are a common and convergence-killing symptom for
@@ -27,9 +26,9 @@ Flag                           Effect
 ============================== =================================================
 ``--detect-W-oscillations``    Detect and **report** oscillation (pure
                                observation; no change to the optimization).
-``--interrupt-W-oscillations`` **Act** on detected oscillation (W-damping
-                               and/or slamming). Runs the detection engine, but
-                               the report is opt-in (see below).
+``--interrupt-W-oscillations`` **Act** on detected oscillation (slamming).
+                               Runs the detection engine, but the report is
+                               opt-in (see below).
 ============================== =================================================
 
 With **neither** flag the extension is never constructed and a run behaves
@@ -188,10 +187,9 @@ takes effect immediately.
 
 Actions are strictly detection-gated: on an iteration where the detectors flag
 no nonant (or none reaches ``min_scenarios_flagged`` scenarios), nothing is
-damped and nothing is slammed -- the run is untouched. W-damping applies only
-to the specific nonants flagged at that iteration. A slam, however, is
-one-way: the variable it fixes *stays* fixed for the remainder of the run,
-even after its oscillation flag clears (there is no unfix path).
+slammed -- the run is untouched. A slam is one-way: the variable it fixes
+*stays* fixed for the remainder of the run, even after its oscillation flag
+clears (there is no unfix path).
 
 Reporting is opt-in
 ^^^^^^^^^^^^^^^^^^^
@@ -209,22 +207,7 @@ engine. With neither, a built-in default detector drives the actions silently.
 Actions
 ^^^^^^^
 
-``action`` (**required**) is one of:
-
-``w_damping``
-   Damp the dual (``W``) step on **every** flagged nonant. The weight update
-   ``Update_W`` just applied ``W += rho * (x - xbar)``; W-damping rescales that
-   increment to what a lower rho would have produced,
-   ``W -= (1 - factor) * rho * (x - xbar)``, leaving the *proximal* rho
-   untouched. ``factor`` (default ``0.5``; must be in ``[0, 1)`` -- ``1`` is a
-   no-op) is the retained fraction of the step; applied every flagged iteration
-   it damps the W swing by ``factor`` per step. This decouples the dual step
-   from the penalty and targets the Watson-Woodruff §2.1 overshoot (``w``
-   "shooting past" its optimum) directly, without loosening the proximal pull;
-   it preserves the dual-feasibility identity ``sum_s p_s W_s = 0`` and is inert
-   once the nonant settles (``x = xbar``). ``W`` is a mutable parameter in the
-   objective, so the change is picked up by the per-iteration objective refresh
-   that persistent solvers already perform.
+``action`` (**required**) must be ``slam``:
 
 ``slam``
    Fix **one** flagged nonant per slam event -- the highest-priority one that
@@ -250,21 +233,14 @@ Actions
    native remedy -- fixing a cycling variable to its per-scenario maximum -- is
    exactly a directives file of ``...,max,...``.
 
-``both``
-   Apply each: W-damping nudges *all* flagged nonants and slam fixes the *one*
-   highest-priority flagged nonant. The recommendation is to choose one;
-   ``both`` performs no coordination -- once slamming has fixed a nonant, any
-   W-damping of it is simply inert.
-
 Trigger
 ^^^^^^^
 
 The ``trigger`` block controls *when* and *which* nonants are acted on:
 
 - ``start_iter`` (``5``) -- the first iteration at which interruption may occur.
-  Once past it, W-damping acts every iteration a nonant is still flagged (it
-  has no inter-action cadence); slamming is additionally paced by its own
-  ``iters_between_slams`` cooldown (see the ``slam`` action above).
+  Once past it, slamming is paced by its own ``iters_between_slams`` cooldown
+  (see the ``slam`` action above).
 - ``min_scenarios_flagged`` (``1``) -- a nonant is acted on once at least this
   many scenarios flag it.
 
@@ -291,13 +267,12 @@ What you will see
 Every time the extension acts, it prints one rank-0 progress line, for
 example::
 
-  [   12.34] W-oscillation interruption [iter 7]: 3 nonant(s) flagged; damped W on 3 nonant(s); slammed 1 nonant(s)
+  [   12.34] W-oscillation interruption [iter 7]: 3 nonant(s) flagged; slammed 1 nonant(s)
 
 This line is always emitted (it does not require ``--verbose``); it is the only
-output of a report-less interrupt run. Under ``action: both``, iterations on
-which the slam cooldown suppresses a slam say ``slam cooling down`` in place of
-the slam count (a slam-only action prints nothing while cooling down).
-Detailed per-slam reporting comes from the slammer itself under ``--verbose``.
+output of a report-less interrupt run. On iterations where the slam cooldown
+suppresses a slam, nothing is printed. Detailed per-slam reporting comes from
+the slammer itself under ``--verbose``.
 
 
 Scope, MPI, and limitations

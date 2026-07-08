@@ -27,8 +27,7 @@ command-line flags:
 - ``--detect-W-oscillations <file>`` -- activates W-oscillation detection
   (see :ref:`w_oscillation`)
 - ``--interrupt-W-oscillations <file>`` -- activates W-oscillation
-  interruption (W-damping and/or slamming; implies detection;
-  see :ref:`w_oscillation`)
+  interruption (slamming; implies detection; see :ref:`w_oscillation`)
 - ``--mipgaps-json <file>`` -- activates the mipgapper extension
 - ``--user-defined-extensions <module>`` -- loads a custom extension
 - ``--grad-rho`` -- activates gradient-based rho (see :ref:`rho_setting`)
@@ -359,7 +358,7 @@ w_oscillation
 
 The ``w_oscillation`` extension (``mpisppy.extensions.w_oscillation``)
 *detects* oscillation / cycling in the PH dual weight (W) vector and can
-optionally *interrupt* it (by damping W and/or slamming). Because both
+optionally *interrupt* it (by slamming). Because both
 detection and interruption have a fair amount of configuration, they have
 their own page: :doc:`w_oscillation`. It is activated with
 ``--detect-W-oscillations`` and/or ``--interrupt-W-oscillations``.
