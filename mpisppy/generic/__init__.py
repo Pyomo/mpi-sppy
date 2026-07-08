@@ -9,3 +9,4 @@
 from mpisppy.generic.decomp import do_decomp as do_decomp
 from mpisppy.generic.ef import do_EF as do_EF
 from mpisppy.generic.mmw import do_mmw as do_mmw
+from mpisppy.generic.mrp import do_mrp as do_mrp

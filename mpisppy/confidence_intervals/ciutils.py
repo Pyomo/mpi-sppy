@@ -323,7 +323,10 @@ def gap_estimators(xhat_one,
         #Pooling
         G = np.mean(G)
         s = np.linalg.norm(s)/np.sqrt(n//ArRP)
-        return {"G": G, "s": s, "seed": start}
+        # Every pooled sub-estimator shares the same model sense, so propagate
+        # is_minimizing from the last one; run()'s min-only guard reads it
+        # regardless of ArRP.
+        return {"G": G, "s": s, "seed": start, "is_minimizing": tmp['is_minimizing']}
     
 
     #A1RP
