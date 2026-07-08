@@ -17,6 +17,8 @@ Computational Management Science, 2011) describe the mechanism in their §2.1:
 the weight update is ``w += rho * (x - xbar)``, so a too-large rho lets ``w``
 "shoot past" its optimal value and thrash, especially in MIPs where a change in
 one integer variable induces changes in others that are then reversed.
+(As an aside, we note that for MIPs a rho that is too small can also result in
+oscillation.)
 
 The extension is activated entirely by command-line flags on
 ``generic_cylinders.py`` (and any ``Config``-based driver):
@@ -31,8 +33,7 @@ Flag                           Effect
                                opt-in (see below).
 ============================== =================================================
 
-With **neither** flag the extension is never constructed and a run behaves
-exactly as it does today. Both flags take the path to a JSON control file.
+With **neither** flag the extension is never constructed. Both flags take the path to a JSON control file.
 
 .. note::
 
@@ -137,8 +138,9 @@ Keys (besides ``methods``):
   scenarios at its node) flag it.
 
 An example is shipped at ``examples/sizes/config/w_oscillation.json``. It
-enables both detectors, keeps a 20-iteration window, and reports a nonant once
-at least half of the scenarios (``min_frac_to_report``) flag it:
+enables both detectors, keeps a 20-iteration window, and (via
+``min_frac_to_report`` of ``0.5``) reports a nonant once at least half of the
+scenarios at its node flag it:
 
 .. literalinclude:: ../../examples/sizes/config/w_oscillation.json
    :language: json
@@ -199,10 +201,30 @@ but it does **not** automatically write the cycling **report**. A pure
 ``--interrupt-W-oscillations`` run drives the engine to act and announces each
 interruption with a log line (see `What you will see`_), and writes **no** CSV.
 
-To also get the report, ask for detection explicitly -- either add
-``--detect-W-oscillations``, or include a ``detect`` block (a full detection
-control object) inside the interrupt file, which then *also* configures the
-engine. With neither, a built-in default detector drives the actions silently.
+To also get the report, ask for detection explicitly, in either of two ways:
+add ``--detect-W-oscillations <file>`` alongside the interrupt flag, or embed a
+``detect`` block inside the interrupt JSON. The ``detect`` block takes the same
+keys as a standalone `Detection control file`_ (so ``output_csv`` is still
+required, and ``methods`` selects the detectors). Either way the detection
+settings you supply serve double duty -- they produce the report *and* become
+the engine the interrupter acts on. With neither, a built-in default detector
+drives the actions silently.
+
+For example, an interrupt file that also writes the report:
+
+.. code-block:: json
+
+    {
+        "action": "slam",
+        "trigger": { "start_iter": 100 },
+        "slam": {
+            "directives_file": "examples/sizes/config/slamming_directives.csv"
+        },
+        "detect": {
+            "output_csv": "w_oscillations.csv",
+            "methods": { "zero_crossings": {} }
+        }
+    }
 
 Actions
 ^^^^^^^
@@ -287,7 +309,7 @@ Scope, MPI, and limitations
   set in a fixed order, so the slammer's per-node ``min`` / ``max`` reduction is
   reached symmetrically on every rank.
 - **Multistage.** Detection and reporting iterate the scenario tree node by
-  node and are multistage-clean. The action selection is rank-coherent for
+  node and support multistage problems. The action selection is rank-coherent for
   two-stage problems and single-rank-per-node multistage; a node split across
   ranks would need an extra reduction to agree on the action, which is not done
   (the same limitation the slammer documents).
