@@ -93,9 +93,12 @@ class FieldLengths:
         field_length_components._local_scenario_length.value = len(opt.local_scenarios)
         field_length_components._total_number_nonants.value = opt.nonant_length
         field_length_components._total_number_scenarios.value = len(opt.all_scenario_names)
-        # user-tunable cap on feasibility cuts per iteration (0 = off)
+        # user-tunable cap on feasibility cuts per iteration (0 = off).
+        # getattr guard: FieldLengths only requires the nonant/scenario
+        # attributes above, so tolerate an opt without .options (feature
+        # off in that case).
         field_length_components.xhat_feasibility_cuts_per_iter.value = int(
-            opt.options.get("xhat_feasibility_cuts_count", 0)
+            getattr(opt, "options", {}).get("xhat_feasibility_cuts_count", 0)
         )
 
         self._field_lengths = {k : pyo.value(v) for k, v in _field_lengths.items()}
