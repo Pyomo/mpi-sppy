@@ -148,6 +148,10 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_feasible_xhat.py -v
 
+      - name: Test vss
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_vss.py -v
+
       - name: Test prox_approx end-to-end
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_prox_approx_e2e.py -v
