@@ -16,6 +16,7 @@ import mpisppy.MPI as MPI
 from mpisppy import global_toc
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils.nonant_sensitivities import _bundle_consensus_groups
+from mpisppy.utils.rho_utils import assign_rho_with_fallback
 from mpisppy.cylinders.spwindow import Field
 
 class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
@@ -41,7 +42,9 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
         self.eval_at_xhat = cfg.eval_at_xhat
         self.indep_denom = cfg.indep_denom
-    
+        # remembers the last reported zero-rho count to avoid log spam
+        self._rho_report_state = {}
+
     def _scen_dep_denom(self, s):
         """ Computes scenario dependent denominator for grad rho calculation.
 
@@ -314,10 +317,15 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         else:
             raise RuntimeError("Coding error.")
 
-        for s in opt.local_scenarios.values():    
-            for ndn_i, rho in s._mpisppy_model.rho.items():
-                if rhos[ndn_i] != 0:
-                    rho._value = self.multiplier*rhos[ndn_i]
+        # a near-zero or negative computed rho (e.g. from a ~zero objective
+        # gradient, or sign cancellation when grad_order_stat > 0.5) is not a
+        # usable rho; those nonants fall back to the positive default rho. We
+        # report the fallback rather than substituting silently; see issue #560.
+        default_rho = opt.options.get("defaultPHrho")
+        assign_rho_with_fallback(opt, default_rho, "GradRho",
+                                 self._rho_report_state,
+                                 lambda s, ndn_i: self.multiplier * rhos[ndn_i],
+                                 reason="a near-zero or negative computed rho")
 
     def compute_and_update_rho(self):
         self._compute_and_update_rho()
@@ -338,6 +346,15 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
     def post_iter0(self):
         global_toc("Using grad-rho rho setter")
+        # PHBase.Iter0 runs the iter0 solve loop before this hook but does not
+        # compute xbar (Compute_Xbar is first called in iterk_loop, i.e. at
+        # iteration 1). Until then the xbars Param sits at its attach_xbars
+        # init value of 0.0, which would make the rho denominator abs(x - xbar)
+        # collapse to abs(x) -- distance from zero rather than from the iter0
+        # consensus mean. Compute xbar from the iter0 solutions here so both
+        # the convergence caches (update_caches) and the rho denominator use
+        # the real mean.
+        self.opt.Compute_Xbar()
         self.update_caches()
         self._get_grad_exprs()
         self.compute_and_update_rho()

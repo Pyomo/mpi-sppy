@@ -99,6 +99,7 @@ def _make_rho_cfg(**overrides):
         sensi_rho=False,
         cg_hub=False,
         dualcg_hub=False,
+        lshaped_hub=False,
         ph_xfeas_spoke=False,
     )
     base.update(overrides)
@@ -143,6 +144,53 @@ class TestGetRhoSetter(unittest.TestCase):
         cfg = _make_rho_cfg(sep_rho=True)
         _get_rho_setter(_NoRhoSetterModule(), cfg)
         self.assertEqual(cfg.default_rho, 1)
+
+
+class TestGenericCylindersCVaR(unittest.TestCase):
+    """--cvar wires the risk-management transform into the generic driver."""
+
+    @unittest.skipIf(not solver_available, "no MIP solver available")
+    def test_cvar_ef_matches_direct_build(self):
+        import re
+        import pyomo.environ as pyo
+        import mpisppy.utils.sputils as sputils
+        import mpisppy.utils.cvar as cvar
+        import mpisppy.tests.examples.farmer as farmer
+
+        weight, alpha = 1.5, 0.75
+
+        # reference EF-CVaR objective, built directly with the same parameters
+        names = farmer.scenario_names_creator(3)
+        creator = cvar.cvar_scenario_creator(
+            farmer.scenario_creator, cvar_weight=weight, cvar_alpha=alpha)
+        ef = sputils.create_EF(names, creator,
+                               scenario_creator_kwargs={"num_scens": 3},
+                               suppress_warnings=True)
+        solver = pyo.SolverFactory(solver_name)
+        if "persistent" in solver_name:
+            solver.set_instance(ef)
+        solver.solve(ef)
+        ref_obj = pyo.value(ef.EF_Obj)
+
+        # the same solve through the CLI driver
+        argv = [
+            "generic_cylinders",
+            "--module-name", "mpisppy.tests.examples.farmer",
+            "--num-scens", "3",
+            "--EF",
+            "--EF-solver-name", solver_name,
+            "--cvar",
+            "--cvar-weight", str(weight),
+            "--cvar-alpha", str(alpha),
+        ]
+        captured = io.StringIO()
+        with patch.object(sys, "argv", argv), patch("sys.stdout", captured):
+            runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
+        out = captured.getvalue()
+
+        match = re.search(r"EF objective:\s*([-\d.eE+]+)", out)
+        self.assertIsNotNone(match, f"no EF objective in output:\n{out}")
+        self.assertAlmostEqual(float(match.group(1)), ref_obj, places=2)
 
 
 if __name__ == "__main__":

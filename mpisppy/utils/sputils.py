@@ -511,7 +511,35 @@ def _models_have_same_sense(models):
 def is_persistent(solver):
     return isinstance(solver,
         pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver)
-    
+
+
+def solver_quadratic_objective_capability(solver_plugin):
+    """Tri-state probe of whether a solver can handle a quadratic objective.
+
+    Returns ``True`` or ``False`` as reported by the legacy ``has_capability``
+    API, or ``None`` when the capability cannot be determined. The APPSI and
+    newer ``pyomo.contrib.solver`` interfaces (e.g. ``appsi_highs``, ``highs``)
+    do not expose ``has_capability``, so they return ``None`` and the caller
+    must fall back to detecting a failed solve. ``None`` therefore means
+    "unknown", never "unsupported".
+
+    Args:
+        solver_plugin: an instantiated Pyomo solver object (e.g. the object
+            attached as ``scenario._solver_plugin``).
+
+    Returns:
+        bool or None
+    """
+    has_capability = getattr(solver_plugin, "has_capability", None)
+    if has_capability is None:
+        return None
+    try:
+        return bool(has_capability("quadratic_objective"))
+    except Exception:
+        # Be conservative: any trouble querying capability means "unknown",
+        # so we never wrongly block a solve based on a capability probe.
+        return None
+
 def ef_scenarios(ef):
     """ An iterator to give the scenario sub-models in an ef
     Args:
@@ -538,16 +566,156 @@ def ef_nonants(ef):
         yield (ndn, var, pyo.value(var))
 
         
+def _node_local_name(var_name, strip_prefix):
+    """Return a variable name local to a single scenario model.
+
+    EF and loosely-bundled models qualify a nonant Var with a leading
+    ``<block>.`` (scenario or bundle name). Strip it so the same name can
+    be matched against any scenario's node-local Vars. Mirrors the
+    bundling branch in ``first_stage_nonant_writer`` and
+    ``SPBase.gather_var_values_to_rank0``.
+    """
+    if strip_prefix:
+        dot_index = var_name.find('.')
+        if dot_index >= 0:
+            var_name = var_name[(dot_index + 1):]
+    return var_name
+
+
+def _node_local_nonant_name(var_name, scenario_name, bundling):
+    """Strip a scenario/bundle block prefix from a nonant Var's name so it
+    is local to a single scenario model and consistent across scenarios.
+
+    - Bundled: the leading segment is the inner scenario name; strip it
+      (matches the existing bundling writers).
+    - Non-bundled: some spokes (e.g. the multistage xhatshuffle stage-2
+      EF) rebind nonants into a sub-block named for the owning scenario;
+      strip a leading ``<scenario_name>.`` when present. Plain scenarios
+      have no prefix and are returned unchanged.
+
+    Writer and reader both go through this so the by-name file round-trips
+    regardless of how the run happens to qualify its Var names.
+    """
+    if bundling:
+        dot_index = var_name.find('.')
+        if dot_index >= 0:
+            var_name = var_name[(dot_index + 1):]
+    elif var_name.startswith(scenario_name + "."):
+        var_name = var_name[(len(scenario_name) + 1):]
+    return var_name
+
+
+def _node_sort_key(node_name):
+    """Deterministic tree order for a node name like ``ROOT_0_10``.
+
+    Stage is implied by the name's depth, so no node object is needed.
+    Numeric path segments sort numerically (``ROOT_2`` before
+    ``ROOT_10``); the leading ``ROOT`` sorts before its children. Each
+    segment maps to a same-typed triple so mixed names never raise.
+    """
+    key = []
+    for seg in node_name.split('_'):
+        if seg.isdigit():
+            key.append((1, int(seg), ""))
+        else:
+            key.append((0, 0, seg))
+    return key
+
+
+def write_nonant_tree_csv(file_name, node_to_rows):
+    """Write a whole nonant tree (an xhat) to one by-name CSV.
+
+    Args:
+        file_name (str): output path.
+        node_to_rows (dict): ``{node_name: [(local_var_name, value), ...]}``
+            with node-local variable names (see ``_node_local_name``).
+
+    The format is the canonical mpi-sppy xhat interchange file: comment
+    lines start with ``#``; data lines are ``node_name, variable_name,
+    value``. Nodes are written in tree order (``_node_sort_key``). This
+    is the single-file, nonant-only companion to the per-scenario
+    ``scenario_tree_solution_writer`` directory format.
+    """
+    with open(file_name, "w") as outfile:
+        outfile.write("# mpi-sppy xhat: nonant tree, node-local variable names\n")
+        outfile.write("# node_name, variable_name, value\n")
+        for ndn in sorted(node_to_rows, key=_node_sort_key):
+            for (var_name, value) in node_to_rows[ndn]:
+                outfile.write(f"{ndn}, {var_name}, {value}\n")
+
+
+def read_nonant_tree_csv(file_name, node_varname_order):
+    """Read a canonical xhat CSV into a ``{node_name: np.ndarray}`` cache.
+
+    Inverse of ``write_nonant_tree_csv``. The file is keyed by (node,
+    node-local variable name), so the caller supplies the variable order
+    to return for each node it needs -- typically the node-local names of
+    each ``node.nonant_vardata_list`` from its own scenarios.
+
+    Args:
+        file_name (str): a CSV written by ``write_nonant_tree_csv``.
+        node_varname_order (dict): ``{node_name: [local_var_name, ...]}``.
+            Only these nodes are returned; nodes present in the file but
+            not requested are ignored (so each rank can read just the
+            nodes its local scenarios traverse).
+
+    Returns:
+        dict: ``{node_name: np.ndarray}`` for exactly the requested nodes,
+        each array ordered to match ``node_varname_order[node]``.
+
+    Raises:
+        RuntimeError: a requested node or variable is missing from the
+            file, or a data line is malformed.
+    """
+    parsed = dict()
+    with open(file_name) as infile:
+        for line in infile:
+            s = line.strip()
+            if not s or s.startswith("#"):
+                continue
+            # Split on the FIRST comma (node) and the LAST comma (value)
+            # so variable names with internal commas (multi-index Vars
+            # such as x[a,b]) survive the round trip.
+            try:
+                ndn, rest = s.split(",", 1)
+                name, val = rest.rsplit(",", 1)
+            except ValueError:
+                raise RuntimeError(
+                    f"{file_name}: malformed data line: {line!r}")
+            parsed.setdefault(ndn.strip(), dict())[name.strip()] = float(val)
+
+    cache = dict()
+    for ndn, names in node_varname_order.items():
+        if ndn not in parsed:
+            raise RuntimeError(f"{file_name}: node {ndn} not found in file")
+        node_vals = parsed[ndn]
+        arr = np.empty(len(names), dtype="d")
+        for i, nm in enumerate(names):
+            if nm not in node_vals:
+                raise RuntimeError(
+                    f"{file_name}: variable {nm!r} for node {ndn} not found "
+                    "in file")
+            arr[i] = node_vals[nm]
+        cache[ndn] = arr
+    return cache
+
+
 def ef_nonants_csv(ef, filename):
-    """ Dump the nonant vars from an ef to a csv file; truly a dump...
+    """Write the EF's nonant tree to the canonical xhat CSV.
+
+    Variable names are made node-local (the scenario-block prefix is
+    stripped) so the file reads back into any single scenario model. See
+    ``write_nonant_tree_csv`` for the format.
+
     Args:
         ef (ConcreteModel): the full extensive form model
         filename (str): the full name of the csv output file
     """
-    with open(filename, "w") as outfile:
-        outfile.write("Node, EF_VarName, Value\n")
-        for (ndname, varname, varval) in ef_nonants(ef):
-            outfile.write("{}, {}, {}\n".format(ndname, varname, varval))
+    node_to_rows = dict()
+    for (ndname, var, varval) in ef_nonants(ef):
+        node_to_rows.setdefault(ndname, []).append(
+            (_node_local_name(var.name, strip_prefix=True), varval))
+    write_nonant_tree_csv(filename, node_to_rows)
 
             
 def nonant_cache_from_ef(ef,verbose=False):

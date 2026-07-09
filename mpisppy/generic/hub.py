@@ -64,7 +64,12 @@ def build_hub_dict(cfg, beans, scenario_creator_kwargs,
                                   rho_setter=rho_setter,
                                   variable_probability=variable_probability,
                                   all_nodenames=all_nodenames,
-                                  )
+                                  )        
+    elif cfg.lshaped_hub:
+        # Vanilla LShaped hub
+        hub_dict = vanilla.lshaped_hub(*beans,
+                                  scenario_creator_kwargs=scenario_creator_kwargs,
+                                  )        
     elif cfg.cg_hub:
         #Vanilla CG Hub
         hub_dict = vanilla.cg_hub(*beans,

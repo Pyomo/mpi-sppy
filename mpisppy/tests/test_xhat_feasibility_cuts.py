@@ -803,36 +803,15 @@ class TestGenericExtensionsWiring(unittest.TestCase):
 
     def _make_configured_cfg(self, cuts_count):
         from mpisppy.utils import config as cfgmod
+        from mpisppy.generic.parsing import add_decomp_args
         cfg = cfgmod.Config()
-        # configure_extensions reads these; register them as no-ops.
-        cfg.popular_args()
-        cfg.ph_args()
-        cfg.aph_args()
-        cfg.two_sided_args()
-        cfg.fixer_args()
-        cfg.relaxed_ph_fixer_args()
-        cfg.integer_relax_then_enforce_args()
-        cfg.gapper_args()
-        cfg.gapper_args(name="lagrangian")
-        cfg.ph_primal_args()
-        cfg.ph_dual_args()
-        cfg.relaxed_ph_args()
-        cfg.gradient_args()
-        cfg.dynamic_rho_args()
-        cfg.reduced_costs_args()
-        cfg.sep_rho_args()
-        cfg.coeff_rho_args()
-        cfg.sensi_rho_args()
-        cfg.reduced_costs_rho_args()
-        cfg.norm_rho_args()
-        cfg.primal_dual_rho_args()
-        cfg.wxbar_read_write_args()
-        cfg.tracking_args()
-        cfg.converger_args()
-        cfg.xhat_feasibility_cut_args()
-        cfg.add_to_config("user_defined_extensions",
-                          description="list of user-defined extensions",
-                          domain=list, default=None)
+        # configure_extensions reads the decomposition flags registered by
+        # add_decomp_args (the single source of truth the real drivers use),
+        # so build from it rather than a hand-maintained list that silently
+        # rots each time upstream adds an extension flag.
+        add_decomp_args(cfg)
+        # Registered directly in parse_args (not add_decomp_args) but read
+        # by configure_extensions.
         cfg.add_to_config("write_scenario_lp_mps_files_dir",
                           description="not used here",
                           domain=str, default=None)
@@ -922,6 +901,7 @@ class TestTryOneExceptionWrapper(unittest.TestCase):
             def _fix_nonants(self, xhats): pass
             def solve_loop(self, **kw): pass
             def no_incumbent_prob(self): return 1.0  # force infeasibility
+            def write_iis_on_xhatter_infeasible(self, model=None, label=None): pass
             def Eobjective(self, **kw): return 0.0
             def update_best_solution_if_improving(self, obj): return False
 

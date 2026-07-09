@@ -101,6 +101,7 @@ are selected with flags:
 
 - (default) PH -- no flag needed
 - ``--APH`` -- Asynchronous PH (see :ref:`sec-aph`)
+- ``--lshaped-hub`` -- L-shaped (Benders decomposition) for two-stage problems
 - ``--subgradient-hub`` -- Subgradient method
 - ``--fwph-hub`` -- Frank-Wolfe PH
 - ``--ph-primal-hub`` -- PH primal
@@ -124,8 +125,32 @@ Spokes provide bounds and heuristic solutions. Enable them with flags:
 
 - ``--xhatshuffle`` -- Randomly shuffle scenario solutions
 - ``--xhatxbar`` -- Use xbar as a candidate solution
+- ``--xhatlshaped`` -- Use L-shaped method to evaluate candidate solutions (pairs with ``--lshaped-hub``)
 
 See :ref:`Spokes` for details on each spoke type.
+
+Running L-Shaped with Spokes
+-----------------------------
+
+To run L-shaped (Benders decomposition) with bound-computing spokes for
+two-stage problems:
+
+.. code-block:: bash
+
+    mpiexec -np 2 python -m mpisppy.generic_cylinders \
+        --module-name farmer --num-scens 3 \
+        --solver-name gurobi --lshaped-hub --xhatlshaped \
+        --max-iterations 100 --rel-gap 1e-4
+
+.. note::
+   L-shaped is currently implemented for two-stage stochastic programs only.
+   The hub algorithm decomposes by stage, solving a master problem with
+   first-stage variables and subproblems for each scenario.
+
+The ``--xhatlshaped`` spoke provides inner bounds (incumbent solutions) by
+evaluating candidate first-stage decisions using the L-shaped method. This
+spoke is designed to work with the ``--lshaped-hub`` and shares the
+decomposition structure.
 
 Multistage Options
 -------------------
@@ -165,6 +190,22 @@ See :ref:`rho_setting` for a full description of all rho-related options,
 including ``--default-rho``, ``--sep-rho``, ``--coeff-rho``,
 ``--sensi-rho``, ``--grad-rho``, and adaptive rho updaters.
 
+Risk Management (CVaR)
+----------------------
+
+A risk-averse CVaR objective can be requested with ``--cvar``:
+
+- ``--cvar`` -- apply the CVaR transform to every scenario
+- ``--cvar-weight`` -- weight on CVaR, :math:`\beta` (default ``1.0``)
+- ``--cvar-alpha`` -- confidence level :math:`\alpha`, ``0 < alpha < 1``
+  (default ``0.95``)
+- ``--cvar-mean-weight`` -- weight on the expectation, :math:`\lambda`
+  (default ``1.0``; use ``0`` for pure CVaR)
+
+Because the Value-at-Risk variable has a much larger cost scale than typical
+model variables, a cost-aware rho such as ``--grad-rho`` or ``--sep-rho`` is
+strongly recommended; see :ref:`risk management` for details and an example.
+
 Extensions via Command Line
 ----------------------------
 
@@ -176,6 +217,12 @@ Some extensions can be activated directly from the command line:
 - ``--wtracker`` -- Track W (Lagrange-multiplier) values per iteration
   and write a convergence report at the end of the run
   (see :ref:`wtracker_extension`)
+- ``--detect-W-oscillations <file>`` -- Detect oscillation/cycling in the
+  W vector and report it to a CSV (see :ref:`w_oscillation`)
+- ``--interrupt-W-oscillations <file>`` -- Act on detected W oscillation
+  (slamming) to break the cycle; runs the detection engine to drive the
+  action, but CSV reporting stays opt-in (via ``--detect-W-oscillations``
+  or a ``detect`` block) (see :ref:`w_oscillation`)
 
 See :ref:`Extensions` for details on available extensions.
 
@@ -411,6 +458,20 @@ requires ``--solver-log-dir`` to also be set.
    file overwrites itself or interleaves output from concurrent solves;
    the resulting log is rarely useful. Use ``--solver-log-dir`` (with
    ``--hub-only-solver-logs`` if needed) instead.
+
+``xhatter-write-iis``
+---------------------
+
+When an xhatter (incumbent-finder) rejects a candidate because a
+scenario subproblem is infeasible, ``--xhatter-write-iis`` writes an
+IIS (irreducible infeasible set) for the offending subproblem, to help
+diagnose models that should have complete recourse but don't. It fires
+**at most once per cylinder (per MPI rank)**. The output file name
+follows the ``--solver-log-dir`` convention. Companion flags
+``--xhatter-iis-method`` (``auto`` / ``ilp`` / ``explanation``) and
+``--xhatter-iis-dir`` select the facility and output directory. See
+:ref:`iis` for the full treatment, including the per-rank run-once
+semantics.
 
 ``warmstart-subproblems``
 --------------------------

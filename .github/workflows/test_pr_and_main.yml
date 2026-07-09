@@ -90,6 +90,22 @@ jobs:
         run: |
           coverage run $COV_ARGS mpisppy/tests/test_ef_ph.py
 
+      - name: Test maximization
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_maximization.py -v
+
+      - name: Test CVaR
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_cvar.py -v
+
+      - name: Test chance_constraint
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_chance_constraint.py -v
+
+      - name: Test cross-scenario buffer sizing
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_cross_scenario_buffer_sizing.py -v
+
       - name: Test afew
         run: |
           PYARGS="-m coverage run $COV_ARGS"
@@ -108,9 +124,21 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_nonant_validation.py -v
 
+      - name: Test rho > 0 enforcement
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_rho_enforcement.py -v
+
+      - name: Test prox/solver quadratic compatibility checks
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_prox_solver_compat.py -v
+
       - name: Test generic_cylinders usage
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_generic_cylinders.py -v
+
+      - name: Test W-oscillation detection
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_w_oscillation.py -v
 
       - name: Test xhat from file
         run: |
@@ -123,6 +151,10 @@ jobs:
       - name: Test feasible_xhat
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_feasible_xhat.py -v
+
+      - name: Test prox_approx end-to-end
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_prox_approx_e2e.py -v
 
       - name: Test docs
         run: |
@@ -558,7 +590,8 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo xpress cplex coverage
+          # scipy is needed for the prox-linearization (linearize_proximal_terms) test
+          pip install pyomo xpress cplex scipy coverage
 
       - name: setup the program
         run: |
@@ -592,7 +625,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo xpress cplex coverage
+          pip install pyomo xpress cplex coverage pytest
 
       - name: setup the program
         run: |
@@ -603,6 +636,10 @@ jobs:
         run: |
           cd mpisppy/tests
           coverage run $COV_ARGS test_ph_extensions.py
+          # also run the IIS-on-infeasible tests here, where a commercial
+          # solver is present, so the real pyomo.contrib.iis paths execute
+          # (in the no-solver unit-tests job those classes are skipped).
+          coverage run $COV_ARGS -m pytest -v test_iis_on_infeasible.py
 
       - name: Upload coverage data
         if: always()
@@ -795,6 +832,18 @@ jobs:
           cd mpisppy/tests
           coverage run $COV_ARGS test_conf_int_aircond.py
 
+      - name: run mrp tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          coverage run $COV_ARGS test_mrp_generic.py
+
+      - name: run farmer_mrp_generic.bash
+        timeout-minutes: 10
+        run: |
+          cd examples/farmer/CI
+          bash farmer_mrp_generic.bash
+
       - name: Upload coverage data
         if: always()
         uses: actions/upload-artifact@v4
@@ -982,6 +1031,10 @@ jobs:
           mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_spwindow_multisource.py
           mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_cylinders.py
           mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_duals.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xfeas.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat_multistage.py
+          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_extension_fields.py
 
       - name: Upload coverage data
         if: always()
@@ -1028,6 +1081,12 @@ jobs:
         run: |
           cd mpisppy/tests
           mpiexec -np 4 coverage run $COV_ARGS -m mpi4py test_cg_multirank_hub.py
+
+      - name: run multi-stage xhat-file round-trip test
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          mpiexec -np 4 coverage run $COV_ARGS -m mpi4py test_xhat_file_multistage.py
 
       - name: run DCG serial tests
         timeout-minutes: 10
@@ -1140,6 +1199,7 @@ jobs:
             mpisppy/tests/test_feasible_xhat.py \
             mpisppy/tests/test_proper_bundler.py \
             mpisppy/tests/test_incumbent_writing.py \
+            mpisppy/tests/test_iis_on_infeasible.py \
             mpisppy/tests/test_grad_rho_bundles.py \
             mpisppy/tests/test_sensi_rho_bundles.py \
             mpisppy/tests/test_reduced_costs_rho_bundles.py \
@@ -1151,7 +1211,13 @@ jobs:
             mpisppy/tests/test_spwindow_partial_get.py \
             mpisppy/tests/test_flexible_rank_ratios.py \
             mpisppy/tests/test_flex_coherence_policy.py \
-            mpisppy/tests/test_flexible_rank_cli.py
+            mpisppy/tests/test_flexible_rank_cli.py \
+            mpisppy/tests/test_flex_xhat_assembly.py \
+            mpisppy/tests/test_ciutils.py \
+            mpisppy/tests/test_prox_approx.py \
+            mpisppy/tests/test_sep_rho.py \
+            mpisppy/tests/test_reduced_costs_fixer.py \
+            mpisppy/tests/test_slammer.py
 
       - name: Upload coverage data
         if: always()

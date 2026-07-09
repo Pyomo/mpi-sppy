@@ -147,13 +147,30 @@ class Config(pyofig.ConfigDict):
             raise ValueError("Options do not make sense together:\n"
                              f"{msg}")
 
+        # reduced_costs_rho was removed (deprecated): it was never shown to be
+        # effective in practice and it does not support flexible (unequal) rank
+        # assignments, so a custom driver could be silently burned. The option
+        # is kept so its selection fails loudly here rather than being ignored.
+        if self.get("reduced_costs_rho"):
+            raise ValueError(
+                "reduced_costs_rho was deprecated and removed on 2026-06-14 "
+                "(reduced-cost rho was not demonstrated to be effective in "
+                "practice and does not support flexible rank assignments; see "
+                "https://github.com/Pyomo/mpi-sppy/issues/673). Remove "
+                "--reduced-costs-rho; consider --grad-rho instead."
+            )
+
         # remember that True is 1 and False is 0
-        if (self.get("grad_rho") + self.get("sensi_rho") + self.get("coeff_rho") + self.get("reduced_costs_rho") + self.get("sep_rho")) > 1:
+        if (self.get("APH",0) + self.get("subgradient_hub",0) + self.get("fwph_hub",0) + self.get("ph_primal_hub",0) + self.get("lshaped_hub",0) + self.get("cg_hub",0) + self.get("dualcg_hub",0)) > 1:
+            _bad_options("Only one hub can be active.")
+
+        # remember that True is 1 and False is 0
+        if (self.get("grad_rho") + self.get("sensi_rho") + self.get("coeff_rho") + self.get("sep_rho")) > 1:
+
             _bad_options("Only one rho setter can be active.")
         if not (self.get("grad_rho")
                 or self.get("sensi_rho")
-                or self.get("sep_rho")
-                or self.get("reduced_costs_rho")):
+                or self.get("sep_rho")):
             if self.get("dynamic_rho_primal_crit") or self.get("dynamic_rho_dual_crit"):
                 _bad_options("dynamic rho only works with an automated rho setter")
 
@@ -167,6 +184,23 @@ class Config(pyofig.ConfigDict):
 
         if self.get("hub_only_solver_logs") and not self.get("solver_log_dir"):
             _bad_options("--hub-only-solver-logs requires --solver-log-dir")
+
+        if self.get("cc_indicator_var", None) is not None and not self.get("EF"):
+            # A chance constraint Sum_s p_s z_s >= 1-alpha couples all scenarios
+            # and is not separable, so it is supported only for the EF (matching
+            # PySP). See doc/designs/chance_constraint_design.md.
+            _bad_options("--cc-indicator-var (chance constraint) is currently "
+                         "supported only with --EF")
+
+        # Slamming options other than the directives file are meaningless
+        # without it; require the file so that a run with no slamming options
+        # behaves exactly as it does today (total backward compatibility).
+        if self.get("slamming_directives_file") is None and (
+                self.get("slam_start_iter") is not None
+                or self.get("iters_between_slams") is not None):
+            _bad_options("slamming options (--slam-start-iter / "
+                         "--iters-between-slams) require "
+                         "--slamming-directives-file")
 
     def add_solver_specs(self, prefix=""):
         sstr = f"{prefix}_solver" if prefix else "solver"
@@ -229,6 +263,35 @@ class Config(pyofig.ConfigDict):
                            "solver logs; spokes do not. Requires --solver-log-dir.",
                            domain=bool,
                            default=False)
+
+        self.add_to_config("xhatter_write_iis",
+                           description="When an xhatter (incumbent-finder) rejects a candidate "
+                           "because a scenario subproblem is infeasible, write an IIS "
+                           "(irreducible infeasible set) for the offending subproblem via "
+                           "pyomo.contrib.iis. Useful to diagnose models that should have "
+                           "(relatively) complete recourse but don't. Fires AT MOST ONCE per "
+                           "cylinder (per MPI rank): the (expensive) IIS computation cannot "
+                           "repeat. The facility is chosen by --xhatter-iis-method (default "
+                           "'auto'). See doc/src/iis.rst for the full story.",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("xhatter_iis_method",
+                           description="Which pyomo.contrib.iis facility --xhatter-write-iis "
+                           "uses: 'ilp' writes a .ilp file with a commercial solver "
+                           "(cplex/gurobi/xpress); 'explanation' uses "
+                           "compute_infeasibility_explanation, which works with any solver; "
+                           "'auto' (default) picks 'ilp' for a commercial solver, else "
+                           "'explanation'. See doc/src/iis.rst.",
+                           domain=str,
+                           default="auto")
+
+        self.add_to_config("xhatter_iis_dir",
+                           description="Directory for IIS files written by --xhatter-write-iis "
+                           "(default: current working directory). File names follow the "
+                           "--solver-log-dir convention. See doc/src/iis.rst.",
+                           domain=str,
+                           default=None)
 
         self.add_to_config("inspect_buffers_on_shutdown",
                            description="When a spoke detects a shutdown signal, run "
@@ -490,6 +553,37 @@ class Config(pyofig.ConfigDict):
         self.EF_base()
         # branching factors???
 
+    #### chance constraints (PySP-style SAA; EF only) ####
+    def chance_constraint_args(self):
+        # The user supplies a per-scenario binary indicator (z_s == 1 means the
+        # risky constraint is satisfied in scenario s) and the big-M link; we add
+        # the aggregator Sum_s p_s z_s >= 1 - cc_alpha to the EF.  See
+        # doc/designs/chance_constraint_design.md.  EF only: the aggregator
+        # couples all scenarios, so it does not separate for decomposition.
+        self.add_to_config("cc_indicator_var",
+                           description="Name of the per-scenario binary indicator "
+                                       "variable for a chance constraint (z==1 means "
+                                       "the risky constraint is satisfied). Enables "
+                                       "the chance constraint; EF only.",
+                           domain=str,
+                           default=None)
+        self.add_to_config("cc_alpha",
+                           description="Allowed violation probability for the chance "
+                                       "constraint, 0 <= alpha < 1 (alpha=0 forces "
+                                       "satisfaction in every scenario). Default 0.0.",
+                           domain=float,
+                           default=0.0)
+
+    ##### Lshaped #####        
+
+    def lshaped_args(self):
+
+        self.add_to_config(name="lshaped_hub",
+                           description="Use LShaped Hub (default False)",
+                           domain=bool,
+                           default=False)        
+        
+
     ##### common additions to the command line #####
 
     def two_sided_args(self):
@@ -580,6 +674,34 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=1e-4)
 
+    def cvar_args(self):
+
+        self.add_to_config('cvar',
+                           description="apply the CVaR (Conditional Value-at-Risk) "
+                                       "risk-management transform to every scenario "
+                                       "(default False)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("cvar_weight",
+                           description="beta >= 0, the weight on CVaR in "
+                                       "lambda*E[Cost] + beta*CVaR (default 1.0)",
+                           domain=float,
+                           default=1.0)
+
+        self.add_to_config("cvar_alpha",
+                           description="CVaR confidence level alpha, 0 < alpha < 1 "
+                                       "(default 0.95)",
+                           domain=float,
+                           default=0.95)
+
+        self.add_to_config("cvar_mean_weight",
+                           description="lambda >= 0, the weight on E[Cost] in "
+                                       "lambda*E[Cost] + beta*CVaR; use 0 for pure "
+                                       "CVaR (default 1.0)",
+                           domain=float,
+                           default=1.0)
+
     def relaxed_ph_fixer_args(self):
 
         self.add_to_config('relaxed_ph_fixer',
@@ -604,13 +726,71 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=0.5)
 
+    def slamming_args(self):
+        # Phase-1 preference-driven slamming (see doc/designs/slamming_design.md).
+        # The Slammer extension is activated iff slamming_directives_file is set;
+        # supplying the other slam options without the file is a hard error
+        # (enforced in checker()) so that a run with no slamming options behaves
+        # exactly as it does today.
+        self.add_to_config("slamming_directives_file",
+                           description="CSV of by-name (wildcard) slamming "
+                           "directives; its presence activates the Slammer "
+                           "extension (default None)",
+                           domain=str,
+                           default=None)
+
+        self.add_to_config("slam_start_iter",
+                           description="first hub iteration at which slamming "
+                           "may occur (default 1); requires "
+                           "--slamming-directives-file",
+                           domain=int,
+                           default=None)
+
+        self.add_to_config("iters_between_slams",
+                           description="once started, slam at most once every "
+                           "this many iterations (default 1); requires "
+                           "--slamming-directives-file",
+                           domain=int,
+                           default=None)
+
+    def w_oscillation_args(self):
+        # Detect (and optionally interrupt) oscillation/cycling in the PH W
+        # vector (see doc/designs/w_oscillation_design.md). The
+        # WOscillationMonitor extension is activated iff either flag is set;
+        # with neither a run behaves exactly as it does today. Detection alone
+        # is pure observation (no algorithm change); interruption acts on the
+        # cycling nonants (slamming) and implies detection.
+        self.add_to_config("detect_W_oscillations",
+                           description="path to a JSON control file for "
+                           "W-oscillation detection; its presence activates the "
+                           "WOscillationMonitor extension and CSV reporting "
+                           "(default None)",
+                           domain=str,
+                           default=None)
+
+        self.add_to_config("interrupt_W_oscillations",
+                           description="path to a JSON control file for "
+                           "W-oscillation interruption (slamming); its "
+                           "presence activates the "
+                           "WOscillationMonitor extension in interrupt mode, "
+                           "which runs the detection engine to drive the "
+                           "actions (CSV reporting stays opt-in via a 'detect' "
+                           "block) (default None)",
+                           domain=str,
+                           default=None)
+
     def reduced_costs_rho_args(self):
         self.add_to_config("reduced_costs_rho",
-                           description="have a ReducedCostsRho extension",
+                           description="DEPRECATED and removed (2026-06-14); "
+                                       "selecting it raises an error. Reduced-cost "
+                                       "rho was not effective in practice and did "
+                                       "not support flexible rank assignments. "
+                                       "Consider grad_rho. See "
+                                       "https://github.com/Pyomo/mpi-sppy/issues/673",
                            domain=bool,
                            default=False)
         self.add_to_config("reduced_costs_rho_multiplier",
-                           description="multiplier for ReducedCostsRho (default 1.0)",
+                           description="DEPRECATED (no effect); see reduced_costs_rho",
                            domain=float,
                            default=1.0)
 
@@ -678,6 +858,13 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config('fwph_rank_ratio',
+                           description="MPI ranks for the fwph spoke "
+                                       "relative to the hub (flexible rank "
+                                       "assignments; default 1.0 = equal)",
+                           domain=float,
+                           default=1.0)
+
         self.add_to_config(name="fwph_hub",
                            description="Use FWPH hub instead of PH (default False)",
                            domain=bool,
@@ -709,6 +896,20 @@ class Config(pyofig.ConfigDict):
                             default=0)
         self.add_to_config("fwph_save_file",
                            description="If provided, passed to FWPH as options['save_file'] (cylinder rank 0 writes).",
+                           domain=str,
+                           default=None)
+        self.add_to_config("fwph_mip_solver_name",
+                           description="Solver for the FWPH MIP/LP subproblems "
+                                       "(default: fall back to --solver-name). Lets you "
+                                       "pair an LP/MIP-only solver (e.g. glpk, cbc) with "
+                                       "a separate QP solver via --fwph-qp-solver-name.",
+                           domain=str,
+                           default=None)
+        self.add_to_config("fwph_qp_solver_name",
+                           description="Solver for the FWPH proximal QP subproblems "
+                                       "(default: fall back to --solver-name). Use an "
+                                       "open-source QP solver (e.g. ipopt) when "
+                                       "--fwph-mip-solver-name is an LP/MIP-only solver.",
                            domain=str,
                            default=None)
 
@@ -860,6 +1061,13 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
+        self.add_to_config('subgradient_rank_ratio',
+                              description="MPI ranks for the subgradient spoke "
+                                          "relative to the hub (flexible rank "
+                                          "assignments; default 1.0 = equal)",
+                              domain=float,
+                              default=1.0)
+
         self.add_solver_specs("subgradient")
         self.add_mipgap_specs("subgradient")
 
@@ -888,6 +1096,12 @@ class Config(pyofig.ConfigDict):
                             description="have a relaxed PH spoke",
                             domain=bool,
                             default=False)
+        self.add_to_config("relaxed_ph_rank_ratio",
+                            description="MPI ranks for the relaxed_ph spoke "
+                                        "relative to the hub (flexible rank "
+                                        "assignments; default 1.0 = equal)",
+                            domain=float,
+                            default=1.0)
         self.add_to_config("relaxed_ph_rescale_rho_factor",
                             description="Used to rescale rho initially (default=1.0)",
                             domain=float,
@@ -900,6 +1114,12 @@ class Config(pyofig.ConfigDict):
                             description="have a PH xhat-feasible spoke",
                             domain=bool,
                             default=False)
+        self.add_to_config("ph_xfeas_spoke_rank_ratio",
+                            description="MPI ranks for the ph_xfeas spoke "
+                                        "relative to the hub (flexible rank "
+                                        "assignments; default 1.0 = equal)",
+                            domain=float,
+                            default=1.0)
         self.add_to_config("ph_xfeas_spoke_rescale_rho_factor",
                             description="Used to rescale rho initially (default=0.1)",
                             domain=float,
@@ -921,6 +1141,13 @@ class Config(pyofig.ConfigDict):
                             description="have a dual PH spoke",
                             domain=bool,
                             default=False)
+
+        self.add_to_config("ph_dual_rank_ratio",
+                            description="MPI ranks for the ph_dual spoke "
+                                        "relative to the hub (flexible rank "
+                                        "assignments; default 1.0 = equal)",
+                            domain=float,
+                            default=1.0)
 
         self.add_solver_specs("ph_dual")
 
@@ -1120,17 +1347,35 @@ class Config(pyofig.ConfigDict):
                               default=False)
 
     def xhat_from_file_args(self):
-        # Supply an initial xhat candidate from a .npy file. Every xhat
-        # spoke (xhatlooper, xhatshufflelooper, xhatspecific, xhatxbar)
-        # that descends from XhatInnerBoundBase will evaluate it once,
-        # before its normal exploration loop. Two-stage only today
-        # (matches ciutils.read_xhat). See
-        # doc/src/xhat_from_file.rst.
+        # Supply an initial xhat candidate from a file. Every xhat spoke
+        # (xhatlooper, xhatshufflelooper, xhatspecific, xhatxbar) that
+        # descends from XhatInnerBoundBase will evaluate it once, before
+        # its normal exploration loop. A .csv (node_name, variable_name,
+        # value; see sputils.write_nonant_tree_csv) works for any number
+        # of stages and is matched by name; a .npy holds a bare ROOT
+        # vector and is two-stage only. See doc/src/xhat_from_file.rst.
         self.add_to_config("xhat_from_file",
-                           description="Path to a .npy file holding an initial "
-                                       "first-stage xhat vector to evaluate "
-                                       "before normal xhatter exploration. "
-                                       "Two-stage only. Default None (off).",
+                           description="Path to a file holding an initial xhat "
+                                       "to evaluate before normal xhatter "
+                                       "exploration. A .csv nonant tree "
+                                       "(node_name, variable_name, value) works "
+                                       "for any number of stages; a .npy ROOT "
+                                       "vector is two-stage only. "
+                                       "Default None (off).",
+                           domain=str,
+                           default=None)
+
+    def write_xhat_file_args(self):
+        # Write the incumbent xhat (the whole nonant tree) to a single
+        # by-name CSV. Works for any number of stages and identically for
+        # EF and cylinders runs (both route through
+        # sputils.write_nonant_tree_csv). Default None (off).
+        self.add_to_config("write_xhat_file",
+                           description="Path to write the incumbent xhat (the "
+                                       "whole nonant tree) as a single by-name "
+                                       "CSV: 'node_name, variable_name, value', "
+                                       "node-local names. All stages; EF and "
+                                       "cylinders. Default None (off).",
                            domain=str,
                            default=None)
 

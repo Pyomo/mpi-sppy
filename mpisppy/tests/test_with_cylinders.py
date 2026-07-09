@@ -13,10 +13,12 @@ mpiexec -np 2 python -m mpi4py test_with_cylinders.py
 """
 
 import unittest
+import pyomo.environ as pyo
 from mpisppy.utils import config
 
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.sputils as sputils
+import mpisppy.utils.cvar as cvar
 import mpisppy.tests.examples.farmer as farmer
 import mpisppy.tests.examples.hydro.hydro as hydro
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -46,7 +48,7 @@ def _create_cfg():
 class Test_farmer_with_cylinders(unittest.TestCase):
     """ Test the find rho code using farmer."""
 
-    def _create_stuff(self, iters=5):
+    def _create_stuff(self, iters=5, sense=pyo.minimize):
         # assumes setup has been called; very specific...
         self.cfg.num_scens = 3
         self.cfg.max_iterations = iters
@@ -54,6 +56,8 @@ class Test_farmer_with_cylinders(unittest.TestCase):
         scenario_denouement = farmer.scenario_denouement
         all_scenario_names = farmer.scenario_names_creator(self.cfg.num_scens)
         scenario_creator_kwargs = farmer.kw_creator(self.cfg)
+        # farmer negates its cost expression for sense=pyo.maximize
+        scenario_creator_kwargs["sense"] = sense
         beans = (self.cfg, scenario_creator, scenario_denouement, all_scenario_names)
         hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
@@ -155,6 +159,136 @@ class Test_farmer_with_cylinders(unittest.TestCase):
         if wheel.global_rank == 1:
             #print(f"{wheel.spcomm.bound= }")
             self.assertAlmostEqual(wheel.spcomm.bound, -109499.5160897, 1)
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_lagrangian_max(self):
+        # Same as test_lagrangian but maximizing. farmer negates its cost for
+        # sense=pyo.maximize, so the Lagrangian (outer) bound is the negation
+        # of the minimize bound. For max the outer bound is an UPPER bound, so
+        # it must lie above the optimal expected profit (108390).
+        print("Start lagrangian_max")
+        scenario_creator_kwargs, beans, hub_dict = self._create_stuff(sense=pyo.maximize)
+
+        self.cfg.lagrangian_args()
+        list_of_spoke_dict = list()
+        lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
+                                                    scenario_creator_kwargs=scenario_creator_kwargs,)
+        list_of_spoke_dict.append(lagrangian_spoke)
+
+        wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
+        wheel.spin()
+        if wheel.global_rank == 1:
+            self.assertAlmostEqual(wheel.spcomm.bound, 109499.5160897, 1)
+            self.assertGreaterEqual(wheel.spcomm.bound, 108390.0)
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_wheel_sign_flip_equivalence(self):
+        # Full-featured sign-flip equivalence: run the SAME PH-hub +
+        # xhatshuffle-spoke wheel once minimizing and once maximizing (farmer
+        # negates its cost expression for sense=pyo.maximize). The two runs are
+        # exact mirror images, so every reported bound must be the negation of
+        # its counterpart, and each must bracket the optimum (+/-108390) on the
+        # correct, sense-dependent side: for max the incumbent (inner) bound is
+        # below the optimum and the outer bound above it; for min the reverse.
+        FARMER_OPT = 108390.0
+
+        def run(sense):
+            self.cfg = _create_cfg()
+            self.cfg.xhatshuffle_args()
+            scenario_creator_kwargs, beans, hub_dict = self._create_stuff(
+                iters=10, sense=sense)
+            xhatshuffle_spoke = vanilla.xhatshuffle_spoke(
+                *beans, scenario_creator_kwargs=scenario_creator_kwargs)
+            wheel = WheelSpinner(hub_dict, [xhatshuffle_spoke])
+            wheel.spin()
+            return wheel
+
+        wmin = run(pyo.minimize)
+        wmax = run(pyo.maximize)
+        if wmin.global_rank == 0:
+            for w in (wmin, wmax):
+                self.assertIsNotNone(w.BestInnerBound)
+                self.assertIsNotNone(w.BestOuterBound)
+            # exact mirror equivalence of the full-run results
+            self.assertAlmostEqual(wmax.BestInnerBound, -wmin.BestInnerBound, 1)
+            self.assertAlmostEqual(wmax.BestOuterBound, -wmin.BestOuterBound, 1)
+            # max: incumbent (inner) <= optimum <= outer bound
+            self.assertLessEqual(wmax.BestInnerBound, FARMER_OPT + 1.0)
+            self.assertGreaterEqual(wmax.BestOuterBound, FARMER_OPT - 1.0)
+            # min: outer bound <= optimum <= incumbent (inner)
+            self.assertGreaterEqual(wmin.BestInnerBound, -FARMER_OPT - 1.0)
+            self.assertLessEqual(wmin.BestOuterBound, -FARMER_OPT + 1.0)
+
+
+#*****************************************************************************
+
+
+class Test_farmer_cvar_with_cylinders(unittest.TestCase):
+    """Risk-averse (CVaR) farmer through the cylinders.
+
+    eta is just another first-stage variable, so PH/Lagrangian/xhat run with no
+    algorithm changes.  The spoke bounds must bracket the EF-CVaR optimum; this
+    is a rho-independent guarantee (valid bounds regardless of PH convergence
+    rate), so we assert the bracket, not a specific value.
+    """
+
+    CVAR_WEIGHT = 2.0
+    CVAR_ALPHA = 0.8
+
+    def setUp(self):
+        self.cfg = _create_cfg()
+        self.cfg.num_scens = 3
+        self.cfg.max_iterations = 10
+        self.creator = cvar.cvar_scenario_creator(
+            farmer.scenario_creator,
+            cvar_weight=self.CVAR_WEIGHT, cvar_alpha=self.CVAR_ALPHA)
+        self.names = farmer.scenario_names_creator(self.cfg.num_scens)
+        self.kwargs = farmer.kw_creator(self.cfg)
+
+    def _ef_cvar_opt(self):
+        ef = sputils.create_EF(self.names, self.creator,
+                               scenario_creator_kwargs=self.kwargs,
+                               suppress_warnings=True)
+        solver = pyo.SolverFactory(solver_name)
+        if "persistent" in solver_name:
+            solver.set_instance(ef)
+        solver.solve(ef)
+        return pyo.value(ef.EF_Obj)
+
+    def _hub(self):
+        beans = (self.cfg, self.creator, farmer.scenario_denouement, self.names)
+        hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=self.kwargs)
+        return beans, hub_dict
+
+    @unittest.skipIf(not solver_available, "no solver is available")
+    def test_cvar_lagrangian_outer_bound(self):
+        self.cfg.lagrangian_args()
+        beans, hub_dict = self._hub()
+        lagrangian_spoke = vanilla.lagrangian_spoke(
+            *beans, scenario_creator_kwargs=self.kwargs)
+        wheel = WheelSpinner(hub_dict, [lagrangian_spoke])
+        wheel.spin()
+        if wheel.global_rank == 0:
+            ef_opt = self._ef_cvar_opt()
+            self.assertIsNotNone(wheel.BestOuterBound)
+            # outer (lower) bound for this minimization (small epsilon for solver round-off)
+            self.assertLessEqual(wheel.BestOuterBound, ef_opt + 1e-8 * abs(ef_opt))
+
+    @unittest.skipIf(not solver_available, "no solver is available")
+    def test_cvar_xhatshuffle_inner_bound(self):
+        self.cfg.xhatshuffle_args()
+        beans, hub_dict = self._hub()
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(
+            *beans, scenario_creator_kwargs=self.kwargs)
+        wheel = WheelSpinner(hub_dict, [xhatshuffle_spoke])
+        wheel.spin()
+        if wheel.global_rank == 0:
+            ef_opt = self._ef_cvar_opt()
+            self.assertIsNotNone(wheel.BestInnerBound)
+            # inner (upper) bound for this minimization (small epsilon for solver round-off)
+            self.assertGreaterEqual(wheel.BestInnerBound, ef_opt - 1e-8 * abs(ef_opt))
 
 
 #*****************************************************************************

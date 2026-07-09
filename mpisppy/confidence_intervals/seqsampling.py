@@ -29,7 +29,17 @@ import mpisppy.confidence_intervals.confidence_config as confidence_config
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-print("\nTBD: check seqsampling for start vs start_seed")
+# Seed-management convention used below (and in mmw_ci.py):
+#   - Two-stage path:  self.ScenCount is the index offset passed as
+#     scenario_names_creator(..., start=ScenCount).  The scenario_creator
+#     is expected to derive its RNG seed from the scenario name (via
+#     sputils.extract_num or similar).  start_seed is not set.
+#   - Multi-stage path: self.SeedCount is passed via
+#     xhat_gen_kwargs["start_seed"] (for xhat) and sample_options["seed"]
+#     (for the gap estimator); sample_tree_scen_creator honors `seed=`.
+#     scenario names are regenerated from 0 each iteration.
+# Either way, SeqSampling advances its counter by exactly the number of
+# names / nodes it asked for, so successive iterations see disjoint draws.
 
 
 #==========
@@ -332,6 +342,20 @@ class SeqSampling():
         return(int(np.ceil(maxroot**2)))
     
     
+    def _min_only_guard(self, is_minimizing):
+        # Sequential sampling's BM/BPL stopping criteria and sample-size rules
+        # assume a non-negative, shrinking optimality gap, which holds only for
+        # minimization (for maximization the gap is non-positive). The sense is
+        # read from the first gap estimator's fully built model, so this adds no
+        # extra model construction, and it raises before any stopping decision
+        # or sample size is computed from a wrong-signed gap.
+        if not is_minimizing:
+            raise RuntimeError(
+                "Sequential sampling currently supports minimization only "
+                "(the BM/BPL stopping criteria assume a non-negative "
+                "optimality gap)."
+            )
+
     def run(self,maxit=200):
         """ Execute a sequental sampling algorithm
         Args:
@@ -424,6 +448,7 @@ class SeqSampling():
                                        scenario_denouement=scenario_denouement,
                                        solver_name=self.solver_name,
                                        solver_options=self.solver_options)
+        self._min_only_guard(estim['is_minimizing'])
         Gk,sk = estim['G'],estim['s']
         if self.multistage:
             self.SeedCount = estim['seed']
@@ -449,12 +474,12 @@ class SeqSampling():
                 assert mk>= mk_m1, "Our sample size should be increasing"
                 if (k%self.kf_xhat==0):
                     #We use only new scenarios to compute xhat
-                    xhat_scenario_names = refmodel.scenario_names_creator(int(mult*nk),
+                    xhat_scenario_names = refmodel.scenario_names_creator(mk,
                                                                           start=self.ScenCount)
                     self.ScenCount+= mk
                 else:
                     #We reuse the previous scenarios
-                    xhat_scenario_names+= refmodel.scenario_names_creator(mult*(nk-nk_m1),
+                    xhat_scenario_names+= refmodel.scenario_names_creator(mk-mk_m1,
                                                                           start=self.ScenCount)
                     self.ScenCount+= mk-mk_m1
             

@@ -67,45 +67,55 @@ class XhatInnerBoundBase(spoke.InnerBoundNonantSpoke):
     def _try_file_xhat(self):
         """Evaluate a file-supplied xhat once, before the main loop.
 
-        Gated on ``options['xhat_from_file']`` being a path. Two-stage
-        only for V1 (matches ``ciutils.read_xhat``). Hard-fails on
-        missing file, length mismatch, or multi-stage. Restores
-        nonants afterwards so the spoke's main loop sees clean state.
+        Gated on ``options['xhat_from_file']`` being a path. The file may be
+
+        * a ``.csv`` written by ``sputils.write_nonant_tree_csv``
+          (``node_name, variable_name, value``; node-local names) -- any
+          number of stages, matched to the model by variable name, or
+        * a ``.npy`` holding a bare ROOT vector (``ciutils.read_xhat``) --
+          two-stage only, matched by position.
+
+        Hard-fails on a missing file, a length/coverage mismatch, or a
+        multi-stage ``.npy``. Restores nonants afterwards so the spoke's
+        main loop sees clean state.
         """
         path = self.opt.options.get("xhat_from_file", None)
         if not path:
             return
-        # Lazy import to avoid any startup-time coupling and to keep
-        # numpy out of the non-feature path.
-        from mpisppy.confidence_intervals import ciutils
-
-        if self.opt.multistage:
-            raise RuntimeError(
-                "--xhat-from-file is two-stage only; multi-stage support "
-                "is planned as a follow-up. See "
-                "doc/designs/xhat_from_file_design.md."
-            )
         if not os.path.exists(path):
             raise RuntimeError(
                 f"--xhat-from-file={path!r} does not exist."
             )
 
-        nonant_cache = ciutils.read_xhat(path, num_stages=2)
-        # Length check against the root-node nonant count of an
-        # arbitrary local scenario (all local scenarios share the
-        # same nonant count by PH invariant).
-        any_s = next(iter(self.opt.local_scenarios.values()))
-        expected = len(any_s._mpisppy_data.nonant_indices)
-        got = len(nonant_cache["ROOT"])
-        if got != expected:
-            raise RuntimeError(
-                f"--xhat-from-file vector length {got} does not match the "
-                f"problem's root-node nonant count {expected} (file={path!r})."
-            )
+        if path.endswith(".csv"):
+            nonant_cache = self._read_xhat_csv(path)
+        else:
+            # Lazy import to keep numpy out of the non-feature path.
+            from mpisppy.confidence_intervals import ciutils
+            if self.opt.multistage:
+                raise RuntimeError(
+                    "--xhat-from-file with a .npy file is two-stage only; "
+                    "use the .csv format (node_name, variable_name, value) "
+                    "for multi-stage. See "
+                    "doc/designs/multistage_xhat_write_design.md."
+                )
+            nonant_cache = ciutils.read_xhat(path, num_stages=2)
+            # Length check against the root-node nonant count of an
+            # arbitrary local scenario (all local scenarios share the
+            # same nonant count by PH invariant).
+            any_s = next(iter(self.opt.local_scenarios.values()))
+            expected = len(any_s._mpisppy_data.nonant_indices)
+            got = len(nonant_cache["ROOT"])
+            if got != expected:
+                raise RuntimeError(
+                    f"--xhat-from-file vector length {got} does not match the "
+                    f"problem's root-node nonant count {expected} (file={path!r})."
+                )
 
+        n_nonants = sum(len(v) for v in nonant_cache.values())
         if self.cylinder_rank == 0:
             print(f"[xhat-from-file] evaluating {path!r} "
-                  f"({expected} nonants)")
+                  f"({n_nonants} nonants)")
         try:
             Eobj = self.opt.evaluate(nonant_cache)
         except Exception:
@@ -139,3 +149,27 @@ class XhatInnerBoundBase(spoke.InnerBoundNonantSpoke):
         elif self.cylinder_rank == 0:
             print(f"[xhat-from-file] candidate gave Eobj={Eobj!r}; not "
                   f"updating inner bound")
+
+    def _read_xhat_csv(self, path):
+        """Read a canonical by-name xhat CSV into a ``{node: ndarray}``
+        cache for this spoke's local scenarios (any number of stages).
+
+        The CSV is keyed by node-local variable name, so the per-node
+        order is resolved from the local scenarios' ``nonant_vardata_list``
+        (matching the writer's name-localization), then
+        ``sputils.read_nonant_tree_csv`` orders the values. The file may
+        carry more nodes than this rank needs; only the local nodes are
+        read.
+        """
+        from mpisppy.utils import sputils
+        bundling = getattr(self.opt, "bundling", False)
+        node_varname_order = dict()
+        for sname, s in self.opt.local_scenarios.items():
+            for node in s._mpisppy_node_list:
+                if node.name in node_varname_order:
+                    continue
+                node_varname_order[node.name] = [
+                    sputils._node_local_nonant_name(var.name, sname, bundling)
+                    for var in node.nonant_vardata_list
+                ]
+        return sputils.read_nonant_tree_csv(path, node_varname_order)
