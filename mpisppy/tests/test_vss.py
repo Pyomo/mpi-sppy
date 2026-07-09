@@ -146,6 +146,18 @@ class TestVssEndToEnd(unittest.TestCase):
         self.assertAlmostEqual(res["EEV"], -107240.0, delta=1.0)
         self.assertAlmostEqual(res["VSS"], 1150.0, delta=1.0)
 
+    def test_ef_solver_options_threaded(self):
+        # A mipgap in --EF-solver-options must flow into the VSS (EV and EEV)
+        # solves without error. farmer is an LP, so the value doesn't change
+        # the result; this locks the threading, not the numeric effect.
+        cfg = _make_cfg(["--EF", "--EF-solver-name", solver_name,
+                         "--EF-solver-options", "mipgap=1e-9"])
+        kwargs = farmer.kw_creator(cfg)
+        ef = self._ef(kwargs)
+        res = vss.do_vss(farmer, cfg, farmer.scenario_creator, kwargs,
+                         farmer.scenario_denouement, ef=ef)
+        self.assertAlmostEqual(res["VSS"], 1150.0, delta=1.0)
+
     def test_ef_maximize(self):
         cfg = _make_cfg(["--EF", "--EF-solver-name", solver_name])
         kwargs = dict(farmer.kw_creator(cfg), sense=pyo.maximize)
@@ -188,10 +200,9 @@ class TestVssEndToEnd(unittest.TestCase):
             sputils.attach_root_node(m, m.x, [m.x])
             return m
 
-        cfg = types.SimpleNamespace(solver_name=solver_name)
         eev, names = vss._compute_eev(
-            cfg, _infeas_creator, {}, ["Scenario0", "Scenario1"],
-            np.array([5.0]))
+            solver_name, None, _infeas_creator, {},
+            ["Scenario0", "Scenario1"], np.array([5.0]))
         self.assertTrue(math.isinf(eev))
         self.assertIn("Scenario1", names)
 

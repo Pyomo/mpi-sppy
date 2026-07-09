@@ -1702,9 +1702,11 @@ class Config(pyofig.ConfigDict):
             "vss",
             description="After the run, report the Value of the Stochastic "
             "Solution (VSS = EEV - RP). Requires the scenario module to define "
-            "average_scenario_creator. WARNING: computing EEV re-solves every "
-            "scenario with the first stage fixed and can roughly double run "
-            "time on large or integer models. Two-stage only.",
+            "average_scenario_creator. Computing EEV re-solves every scenario "
+            "once with the first stage fixed; the added time depends on the "
+            "model and can be significant for some problems. The EV/EEV solves "
+            "reuse the run's solver options (--EF-solver-options for --EF, else "
+            "--solver-options), including mipgap. Two-stage only.",
             domain=bool,
             default=False,
         )

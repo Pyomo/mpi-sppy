@@ -14,13 +14,15 @@ once the real uncertainty shows up. A large VSS justifies building a
 stochastic model; a near-zero VSS says the deterministic shortcut was
 almost as good.
 
-.. warning::
+.. note::
 
-   **Computing VSS can be expensive.** The mean-value solve is cheap, but
-   the ``EEV`` term (below) re-solves the recourse problem for *every*
-   scenario with the first stage fixed — a full second pass over all
-   scenarios. On large or integer models, ``--vss`` can roughly **double**
-   the run time. It is off by default.
+   **Computing VSS does extra work.** ``RP`` comes for free from the run and
+   the mean-value solve is cheap, but ``EEV`` re-solves the recourse problem
+   for *every* scenario once with the first stage fixed. Fixing the first
+   stage decouples the scenarios and usually makes each solve easier than the
+   original, so how much wall-clock this adds is hard to predict: for many
+   problems it is a modest fraction of the run, but with very many scenarios
+   or expensive recourse it can be significant. ``--vss`` is off by default.
 
 The three numbers (minimization)
 --------------------------------
@@ -80,6 +82,22 @@ produces::
      EEV (EV first stage over scenarios)    :        -107240
      VSS = EEV - RP (sense=min)             :           1150   (1.06% of |RP|)
    =============================================
+
+Solver options and mipgap
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The EV and EEV solves **reuse the run's solver and solver options** so that
+all three numbers are solved the same way. After an ``--EF`` run they use
+``--EF-solver-options`` (falling back to ``--solver-options`` if the former
+is unset); after a decomposition run they use ``--solver-options``. Any
+``mipgap`` in that option string therefore applies to the VSS solves too.
+
+Because ``VSS = EEV - RP`` is a *difference* of two optimized values, the
+mipgap matters: if you solve with a loose gap, a small VSS can be dominated
+by that gap and is not trustworthy. When VSS is small relative to ``RP``,
+solve tightly, for example ``--EF-solver-options "mipgap=1e-7"``. (VSS
+inherits only the solver-options *string*; it does not read the separate
+``--EF-mipgap`` / ``--*-iter*-mipgap`` knobs or a ``--*-solver-options-file``.)
 
 Exact vs. bracketed RP
 ~~~~~~~~~~~~~~~~~~~~~~~~

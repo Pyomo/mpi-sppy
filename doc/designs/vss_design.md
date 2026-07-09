@@ -98,14 +98,35 @@ three pieces cost very differently:
 | :--- | :--- | :--- |
 | `RP` | already done by the run | free |
 | `EV` / `x̄` | one deterministic solve of the average scenario | cheap |
-| **`EEV`** | **fix `x̄`, solve the recourse subproblem for every scenario** | **can rival the original solve** |
+| **`EEV`** | **fix `x̄`, solve the recourse subproblem for every scenario** | **an extra pass over all scenarios** |
 
-`EEV` is the expensive piece. It is a *full second pass over all
-scenarios* — `N` second-stage solves (or one first-stage-fixed extensive
-form). For a hard MIP with many scenarios, `--vss` can roughly **double**
-the wall-clock of the job. On easy LPs it is negligible; on large
-integer recourse it is not. The docs must say this plainly so nobody is
-surprised when `--vss` turns a 10-minute run into a 20-minute run.
+`EEV` is the added piece: `N` second-stage solves with the first stage
+fixed. How much wall-clock that adds is genuinely hard to state in general,
+and the naive "it's a second solve, so ~2x" intuition is usually wrong.
+Fixing `x̄` *decouples* the scenarios and removes the here-and-now decisions,
+so each `EEV` subproblem is smaller and easier than the original coupled
+solve:
+
+- vs. an **EF** run, `EEV` solves `N` decoupled fixed-first-stage
+  subproblems instead of one big coupled model — typically much cheaper,
+  and dramatically so for a MIP (fixing integer first-stage vars is exactly
+  what makes the recourse easy).
+- vs. a **decomposition** run, `EEV` is roughly *one iteration's* worth of
+  subproblem solves, against the run's many iterations — a small fraction.
+
+So `--vss` adds real but usually sub-linear work; it becomes noticeable
+mainly with very many scenarios or genuinely expensive recourse. The docs
+should say this honestly rather than promise a fixed multiplier.
+
+**Solver options / mipgap.** The `EV` and `EEV` solves reuse the run's
+solver and `solver_options` (via `solver_specification`) — `EF_solver_options`
+after an `--EF` run, `solver_options` after a decomposition run — so all
+three numbers are solved consistently, and any `mipgap` in that option
+string applies to the VSS solves too. This matters because `VSS = EEV - RP`
+is a *difference* of two optimized values: with a loose gap a small VSS is
+gap-noise. V1 threads only the solver-options *string*, not the separate
+`EF_mipgap` / `*_iter*_mipgap` knobs or a `*_solver_options_file` (a
+possible later refinement).
 
 A second, subtler cost: if `RP` came from a decomposition run that did
 **not** close the optimality gap, then `RP` is only known to lie in a

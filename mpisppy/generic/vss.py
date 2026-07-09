@@ -20,8 +20,14 @@ VSS = EEV - RP  (minimization; VSS = RP - EEV for maximization), where
 
 Two-stage only in this version. See doc/designs/vss_design.md.
 
-WARNING: computing EEV re-solves every scenario with the first stage fixed;
-on large or integer models this can rival the cost of the original run.
+Cost: computing EEV re-solves every scenario once with the first stage
+fixed. Fixing the first stage decouples the scenarios, so each solve is
+usually easier than the original; how much wall-clock this adds depends on
+the model and can be significant for some problems (very many scenarios or
+expensive recourse). The EV and EEV solves reuse the run's solver and
+solver_options (including any mipgap) via solver_specification, so all three
+numbers are solved consistently -- but VSS is a difference of two optimized
+values, so a loose mipgap makes a small VSS unreliable.
 """
 
 import math
@@ -32,6 +38,7 @@ import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 from mpisppy import global_toc, MPI
 from mpisppy.utils import xhat_eval
+from mpisppy.utils import solver_spec
 from mpisppy.generic.parsing import name_lists, proper_bundles
 
 
@@ -88,15 +95,23 @@ def do_vss(module, cfg, scenario_creator, scenario_creator_kwargs,
 
     all_scenario_names, _ = name_lists(module, cfg)
 
+    # The VSS solves (EV and EEV) reuse the SAME solver and solver_options as
+    # the run that produced RP -- including any mipgap in that option string --
+    # so the three numbers are solved consistently. After an EF run prefer the
+    # EF spec (falling back to the default); after a decomposition run use the
+    # default (subproblem) spec.
+    prefix = ["EF", ""] if ef is not None else ""
+    _, solver_name, solver_options = solver_spec.solver_specification(cfg, prefix)
+
     # EV problem: solve the mean-value scenario for its objective and its
     # first-stage solution x_bar.
     ev_obj, x_bar, is_min = _solve_average_scenario(
-        module, cfg, scenario_creator_kwargs)
+        module, solver_name, solver_options, scenario_creator_kwargs)
 
     # EEV: fix x_bar in the first stage, evaluate across all scenarios.
     eev, infeasible_names = _compute_eev(
-        cfg, scenario_creator, scenario_creator_kwargs,
-        all_scenario_names, x_bar)
+        solver_name, solver_options, scenario_creator,
+        scenario_creator_kwargs, all_scenario_names, x_bar)
 
     # RP: exact from EF, or incumbent (+ bracket) from the wheel.
     if ef is not None:
@@ -133,7 +148,8 @@ def do_vss(module, cfg, scenario_creator, scenario_creator_kwargs,
     return result
 
 
-def _solve_average_scenario(module, cfg, scenario_creator_kwargs):
+def _solve_average_scenario(module, solver_name, solver_options,
+                            scenario_creator_kwargs):
     """Build and solve the mean-value scenario. Return
     (EV_objective, x_bar, is_minimizing) where x_bar is the ROOT first-stage
     solution as a 1-D np.ndarray in nonant_vardata_list order.
@@ -148,7 +164,9 @@ def _solve_average_scenario(module, cfg, scenario_creator_kwargs):
             "--vss is two-stage only; average_scenario_creator must return a "
             "model with exactly one tree node (ROOT)."
         )
-    solver = pyo.SolverFactory(cfg.solver_name)
+    solver = pyo.SolverFactory(solver_name)
+    for k, v in (solver_options or {}).items():
+        solver.options[k] = v
     if sputils.is_persistent(solver):
         solver.set_instance(avg)
         results = solver.solve(tee=False)
@@ -168,8 +186,8 @@ def _solve_average_scenario(module, cfg, scenario_creator_kwargs):
     return ev_obj, x_bar, is_min
 
 
-def _compute_eev(cfg, scenario_creator, scenario_creator_kwargs,
-                 all_scenario_names, x_bar):
+def _compute_eev(solver_name, solver_options, scenario_creator,
+                 scenario_creator_kwargs, all_scenario_names, x_bar):
     """Fix x_bar in the first stage and evaluate expected cost across all
     scenarios. Return (EEV, infeasible_scenario_names). EEV is math.inf if
     the mean-value first stage is infeasible in any scenario.
@@ -181,9 +199,9 @@ def _compute_eev(cfg, scenario_creator, scenario_creator_kwargs,
         "iter0_solver_options": None,
         "iterk_solver_options": None,
         "display_timing": False,
-        "solver_name": cfg.solver_name,
+        "solver_name": solver_name,
         "verbose": False,
-        "solver_options": None,
+        "solver_options": solver_options,
     }
     ev = xhat_eval.Xhat_Eval(
         options,
@@ -199,7 +217,7 @@ def _compute_eev(cfg, scenario_creator, scenario_creator_kwargs,
     # compute_val_at_nonant=False => need_solution=False in solve_one, so a
     # clean per-scenario infeasibility does NOT raise. That matters for MPI:
     # a raise on only some ranks would deadlock the collectives below.
-    ev.solve_loop(solver_options=None, gripe=True, tee=False,
+    ev.solve_loop(solver_options=solver_options, gripe=True, tee=False,
                   compute_val_at_nonant=False)
 
     local_infeasible = [
