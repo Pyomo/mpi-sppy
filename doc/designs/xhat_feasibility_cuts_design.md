@@ -1,9 +1,13 @@
 # Design: Optional Feasibility Cuts from Xhatters
 
-**Status:** Draft — up for discussion. Nothing is implemented yet.
+**Status:** V1 implemented on branch `xhat_feasibility_cuts_design`
+([PR #671](https://github.com/Pyomo/mpi-sppy/pull/671), open). V2/V3 and
+multi-stage remain future milestones. See "Implementation status (V1 as
+shipped)" below for what actually landed and where it diverged from the
+original proposal.
 **Addresses:** [issue #601](https://github.com/Pyomo/mpi-sppy/issues/601)
 **Author:** dlw (captured with Claude Code assistance)
-**Last updated:** 2026-04-23
+**Last updated:** 2026-07-09
 
 ## Motivation
 
@@ -28,6 +32,71 @@ inside the mpi-sppy xhat evaluation loop.
   its optimality cuts.
 - Changing default behavior. The feature is off by default
   (`--xhat-feasibility-cuts-count 0`).
+
+## Implementation status (V1 as shipped)
+
+V1 is implemented on branch `xhat_feasibility_cuts_design` (PR #671).
+The sections below record the original design thinking; this section
+records what actually landed and, importantly, **where the build
+diverged from the proposal**. Where the two disagree, this section is
+authoritative.
+
+**As built, V1 delivers:**
+
+- CLI flag `--xhat-feasibility-cuts-count N` (default 0 = off),
+  registered in `Config.xhat_feasibility_cut_args()` and — post the
+  upstream `add_decomp_args` refactor — exposed by both
+  `generic_cylinders` and `mrp_generic`.
+- Shared-memory field `Field.XHAT_FEASIBILITY_CUT = 700` in
+  `spwindow.py`, sized `N × (nonant_len + 1) + 1` (rows of
+  `[rhs_constant, nonant_coefs...]` plus a trailing valid-count slot).
+- Hub extension
+  `mpisppy/extensions/xhat_feasibility_cut_extension.py`
+  (`XhatFeasibilityCutExtension`), wired by
+  `cfg_vanilla.add_xhat_feasibility_cuts` and
+  `mpisppy/generic/extensions.py`.
+- No-good cut emission for an all-binary first stage; two-stage-only
+  and binary-only preconditions enforced at `setup_hub` (hard
+  `RuntimeError`, not a silent no-op).
+- Tests in `mpisppy/tests/test_xhat_feasibility_cuts.py` (wired into
+  `run_coverage.bash` and the CI workflow), a user page at
+  `doc/src/xhat_feasibility_cuts.rst`, and a full-run smoke entry on
+  the binary-first-stage `usar` example in `examples/run_all.py`.
+
+**Where the build diverged from the original proposal below:**
+
+1. **Emission is centralized, not per-spoke.** The "Spoke-side
+   generation" and "Plumbing touchpoints" sections proposed editing
+   each xhatter spoke (`xhatlooper_bounder`, `xhatshufflelooper_bounder`,
+   `xhatspecific_bounder`). Instead, a single shared helper
+   `pack_no_good_feasibility_cut(opt)` lives in
+   `mpisppy/extensions/xhatbase.py` and is called from exactly two
+   places that every xhat spoke already flows through:
+   `XhatBase._try_one` (via `_maybe_emit_feasibility_cut`, the in-loop
+   path) and `XhatInnerBoundBase._try_file_xhat` (the file-fed path).
+   The send buffer is advertised once on `XhatInnerBoundBase.send_fields`
+   (`mpisppy/cylinders/xhatbase.py`), so all xhat inner-bound spokes
+   inherit it. No individual `*_bounder.py` file was modified.
+2. **xhat-from-file participates.** Not in the original design: a
+   candidate supplied via `--xhat-from-file` that proves infeasible now
+   emits a cut through the same helper.
+3. **Bundle install uses the consolidated nonant set.** The proposal
+   said to push the cut into each per-scenario block inside a bundle.
+   As built, the cut is installed once against the bundle's canonical
+   `s._mpisppy_data.nonant_indices`, relying on intra-bundle
+   nonanticipativity — the same approach the cross-scenario machinery
+   uses. The binary precondition is validated against that same
+   consolidated set.
+4. **Constraint container.** Cuts accumulate in a
+   `pyo.Constraint(pyo.Any)` keyed by a monotonic integer, rather than
+   the `ConstraintList` / tuple-keyed `IndexedConstraint` the proposal
+   floated.
+5. **Integer [0,1] counts as binary.** The binary-only check accepts an
+   integer variable bounded to `[0, 1]`, not just a declared `Binary`
+   domain, so a common modeling style is not rejected.
+6. **Robustness.** Both call sites wrap emission so a failure logs
+   (rank 0) and never breaks the xhatter; the hub extension's
+   `sync_with_spokes` is a no-op when no spoke advertises the field.
 
 ## Stage support
 
@@ -218,10 +287,16 @@ doubles as on/off switch and buffer sizer.
 
 ### Spoke-side generation
 
-Modify the **existing** xhatter spokes (`xhatlooper_bounder`,
-`xhatshufflelooper_bounder`, `xhatspecific_bounder`). They already
-know when their candidate is infeasible in a scenario; we add a
-small path:
+> **As built (V1):** the per-spoke edits described here were replaced by
+> a single shared helper `pack_no_good_feasibility_cut(opt)` called from
+> `XhatBase._try_one` and `XhatInnerBoundBase._try_file_xhat`; no
+> individual `*_bounder.py` was modified. See "Implementation status"
+> above. The logic below is otherwise accurate.
+
+The original plan was to modify the **existing** xhatter spokes
+(`xhatlooper_bounder`, `xhatshufflelooper_bounder`,
+`xhatspecific_bounder`). They already know when their candidate is
+infeasible in a scenario; the small path is:
 
 1. If `cfg.xhat_feasibility_cuts_count > 0`, register
    `Field.XHAT_FEASIBILITY_CUT` as a send field at startup.
@@ -263,12 +338,13 @@ bookkeeping:
   the cut is on first-stage (nonant) variables, nonanticipativity
   makes it valid globally — there is no version that cuts only the
   infeasible scenario.
-- Bundle-safe: when a local "scenario" is a proper bundle, push the
-  cut into each per-scenario block inside the bundle (the nonants are
-  duplicated across the scenario blocks inside the bundle EF, so the
-  cut has to land on each). This is the same class of gotcha PR #669
-  is addressing on the `nonant_cost_coeffs` side — solve it once
-  here, up front.
+- Bundle-safe: **as built**, the cut is installed once against the
+  bundle's consolidated `s._mpisppy_data.nonant_indices` (the canonical
+  nonant set), relying on intra-bundle nonanticipativity to make it
+  effective on every per-scenario block — the same approach the
+  cross-scenario machinery uses. (The original design proposed pushing
+  a copy into each per-scenario block; the consolidated-set install
+  supersedes that.)
 
 ### Startup check: first-stage must be fully binary
 
@@ -303,17 +379,29 @@ user sees the error before any work is done.
 
 ### Plumbing touchpoints
 
-- `mpisppy/utils/config.py` — add `xhat_feasibility_cuts_count` to an
-  appropriate config bundle (likely `cfg.spoke_xhat_args()` or a new
-  `cfg.xhat_feasibility_cut_args()`).
-- `mpisppy/utils/cfg_vanilla.py` — flag in the xhatter spoke dicts so
-  the extension and the send-field are registered together.
-- `mpisppy/cylinders/spwindow.py` — new `Field` enum value and
-  length formula.
+As built (V1):
+
+- `mpisppy/utils/config.py` — new `cfg.xhat_feasibility_cut_args()`
+  registering `xhat_feasibility_cuts_count`.
+- `mpisppy/utils/cfg_vanilla.py` — `add_xhat_feasibility_cuts(hub_dict,
+  cfg)` attaches the hub extension and propagates the cap; the count is
+  also carried in `shared_options` so the spoke/window see it.
+- `mpisppy/cylinders/spwindow.py` — new `Field.XHAT_FEASIBILITY_CUT`
+  enum value and its length formula.
 - `mpisppy/extensions/xhat_feasibility_cut_extension.py` — new hub
   extension.
-- `mpisppy/cylinders/xhatlooper_bounder.py` (etc.) — add the cut
-  emission path gated on `cfg.xhat_feasibility_cuts_count > 0`.
+- `mpisppy/extensions/xhatbase.py` — the shared
+  `pack_no_good_feasibility_cut(opt)` helper and
+  `XhatBase._maybe_emit_feasibility_cut`, gated on
+  `cfg.xhat_feasibility_cuts_count > 0`.
+- `mpisppy/cylinders/xhatbase.py` — advertises the send field on
+  `XhatInnerBoundBase.send_fields` and emits from the file-fed path.
+- `mpisppy/generic/parsing.py` + `mpisppy/generic/extensions.py` — CLI
+  registration (inside `add_decomp_args`) and hub wiring for the
+  generic drivers.
+
+(The individual `*_bounder.py` files were **not** touched — emission is
+centralized; see "Implementation status" above.)
 
 ## Code sharing / refactoring opportunities
 
