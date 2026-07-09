@@ -352,6 +352,11 @@ def validate_interrupt_config(cfg, where="<interrupt config>"):
     }
     if trigger["min_scenarios_flagged"] < 1:
         raise ValueError(f"{where}: trigger.min_scenarios_flagged must be >= 1")
+    if trigger["start_iter"] < 0:
+        raise ValueError(
+            f"{where}: trigger.start_iter must be >= 0 "
+            f"(got {trigger['start_iter']}; a negative value would make "
+            "interruption eligible from iteration 0)")
 
     out = {"action": action, "trigger": trigger}
 

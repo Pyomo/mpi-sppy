@@ -253,6 +253,12 @@ class TestInterruptConfigValidation(unittest.TestCase):
             wosc.validate_interrupt_config(
                 {"action": "slam", "slam": {"directives_file": "d.csv"},
                  "trigger": {"min_scenarios_flagged": 0}})
+        # a negative start_iter would make interruption eligible from
+        # iteration 0 (_act_due is phiter >= start_iter) -- reject it
+        with self.assertRaises(ValueError):
+            wosc.validate_interrupt_config(
+                {"action": "slam", "slam": {"directives_file": "d.csv"},
+                 "trigger": {"start_iter": -1}})
 
     def test_detect_block_parsed(self):
         cfg = wosc.validate_interrupt_config({
