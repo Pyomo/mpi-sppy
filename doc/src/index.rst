@@ -58,6 +58,7 @@ MPI is used.
    properbundles.rst
    pickling.rst
    jensens.rst
+   vss.rst
    feasible_xhat.rst
    xhat_from_file.rst
    iis.rst

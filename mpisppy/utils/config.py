@@ -1697,6 +1697,18 @@ class Config(pyofig.ConfigDict):
             default=None,
         )
 
+    def vss_args(self):
+        self.add_to_config(
+            "vss",
+            description="After the run, report the Value of the Stochastic "
+            "Solution (VSS = EEV - RP). Requires the scenario module to define "
+            "average_scenario_creator. WARNING: computing EEV re-solves every "
+            "scenario with the first stage fixed and can roughly double run "
+            "time on large or integer models. Two-stage only.",
+            domain=bool,
+            default=False,
+        )
+
     #================
     def create_parser(self,progname=None):
         # seldom used

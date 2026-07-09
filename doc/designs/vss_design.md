@@ -1,7 +1,8 @@
 # Value of the Stochastic Solution (VSS) design (two-stage first)
 
-Status: design approved by DLW (all §10 decisions resolved).
-Implementation pending.
+Status: design approved by DLW (all §10 decisions resolved). V1 implemented
+(`mpisppy/generic/vss.py`, `--vss` flag, `mpisppy/tests/test_vss.py`,
+`doc/src/vss.rst`).
 
 Related: `doc/designs/pysp_but_not_mpisppy.md` §A7 (PySP `ef_vss.py` —
 `create_expected_value_instance` + `fix_ef_first_stage_variables` — has no
