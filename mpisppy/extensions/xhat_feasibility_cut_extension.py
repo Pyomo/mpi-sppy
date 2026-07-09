@@ -54,7 +54,7 @@ class XhatFeasibilityCutExtension(Extension):
             )
         self._nonant_len = None  # filled in at setup_hub
         self._row_len = None
-        self._recv_buffer = None  # filled in at register_receive_fields
+        self._recv_buffers = []  # one per emitting spoke; register_receive_fields
         self._install_counter = 0  # monotonic key for the ConstraintList
 
     # ---- two-stage-only precondition (V1) --------------------------------
@@ -142,26 +142,23 @@ class XhatFeasibilityCutExtension(Extension):
         return
 
     def register_receive_fields(self):
+        # Every xhat inner-bound spoke advertises Field.XHAT_FEASIBILITY_CUT
+        # (it is in XhatInnerBoundBase.send_fields), so a run with more than
+        # one xhat spoke (e.g. --xhatshuffle --xhatxbar) has several emitting
+        # ranks. Register a recv buffer for each and install from whichever
+        # is new; a no-good cut from any xhatter is valid for every scenario.
         spcomm = self.opt.spcomm
         ranks = spcomm.fields_to_ranks.get(Field.XHAT_FEASIBILITY_CUT, [])
-        if not ranks:
-            # No xhatter spoke is emitting cuts this run; extension is a no-op.
-            self._recv_buffer = None
-            return
-        # For now assume a single emitting spoke (mirrors cross-scen).
-        assert len(ranks) == 1, (
-            "XhatFeasibilityCutExtension expects exactly one spoke to emit "
-            f"Field.XHAT_FEASIBILITY_CUT; found {len(ranks)}."
-        )
-        self._recv_buffer = spcomm.register_recv_field(
-            Field.XHAT_FEASIBILITY_CUT, ranks[0]
-        )
+        # No xhatter spoke is emitting cuts this run => extension is a no-op.
+        self._recv_buffers = [
+            spcomm.register_recv_field(Field.XHAT_FEASIBILITY_CUT, rank)
+            for rank in ranks
+        ]
 
     def sync_with_spokes(self):
-        if self._recv_buffer is None:
-            return
-        if self._recv_buffer.is_new():
-            self._install_cuts(self._recv_buffer.array())
+        for buf in self._recv_buffers:
+            if buf.is_new():
+                self._install_cuts(buf.array())
 
     # ---- Cut installation ------------------------------------------------
 

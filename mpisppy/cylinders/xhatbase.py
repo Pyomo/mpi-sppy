@@ -118,8 +118,14 @@ class XhatInnerBoundBase(spoke.InnerBoundNonantSpoke):
                   f"({n_nonants} nonants)")
         try:
             Eobj = self.opt.evaluate(nonant_cache)
-        except Exception:
+        except Exception as e:
+            # Treat an evaluation/solver failure as "no usable objective"
+            # (Eobj=None) so the run continues, but surface it so a real
+            # failure is not silently swallowed behind a bare Eobj=None.
             Eobj = None
+            if self.cylinder_rank == 0:
+                print(f"[xhat-from-file] evaluate failed: {e!r}; "
+                      f"treating candidate as Eobj=None")
         # Same predicate XhatBase._try_one uses to detect infeasibility
         # in some scenario. When True and feasibility cuts are enabled,
         # pack a no-good cut so the hub extension can install it on

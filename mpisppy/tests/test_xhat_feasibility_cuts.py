@@ -507,11 +507,11 @@ class TestExtensionRegistrationAndSync(unittest.TestCase):
         ext.register_send_fields()
 
     def test_register_receive_fields_no_emitting_spoke(self):
-        """If no rank advertises the cut field, recv_buffer stays None."""
+        """If no rank advertises the cut field, no recv buffers are registered."""
         sp, ext = self._make_ext()
         ext.opt.spcomm = _SpcommStub(fields_to_ranks={})
         ext.register_receive_fields()
-        self.assertIsNone(ext._recv_buffer)
+        self.assertEqual(ext._recv_buffers, [])
 
     def test_register_receive_fields_with_one_emitter(self):
         sp, ext = self._make_ext()
@@ -521,19 +521,24 @@ class TestExtensionRegistrationAndSync(unittest.TestCase):
             recv_buffer=recv,
         )
         ext.register_receive_fields()
-        self.assertIs(ext._recv_buffer, recv)
+        self.assertEqual(ext._recv_buffers, [recv])
 
-    def test_register_receive_fields_multiple_emitters_asserts(self):
+    def test_register_receive_fields_multiple_emitters(self):
+        """Multiple xhat spokes (e.g. --xhatshuffle --xhatxbar) all advertise
+        the cut field; the extension registers one recv buffer per rank
+        instead of crashing."""
         sp, ext = self._make_ext()
         ext.opt.spcomm = _SpcommStub(
             fields_to_ranks={Field.XHAT_FEASIBILITY_CUT: [1, 2]},
         )
-        with self.assertRaises(AssertionError):
-            ext.register_receive_fields()
+        ext.register_receive_fields()
+        self.assertEqual(len(ext._recv_buffers), 2)
+        # The stub hands out a distinct buffer per rank.
+        self.assertIsNot(ext._recv_buffers[0], ext._recv_buffers[1])
 
     def test_sync_with_spokes_no_buffer(self):
         sp, ext = self._make_ext()
-        ext._recv_buffer = None
+        ext._recv_buffers = []
         # No side effects, no raise.
         ext.sync_with_spokes()
         for s in sp.local_scenarios.values():
@@ -547,7 +552,7 @@ class TestExtensionRegistrationAndSync(unittest.TestCase):
         buf[0] = -1.0
         buf[1:4] = [1.0, 1.0, 1.0]
         buf[-1] = 1.0
-        ext._recv_buffer = _RecvBufferStub(arr=buf, is_new_result=False)
+        ext._recv_buffers = [_RecvBufferStub(arr=buf, is_new_result=False)]
         ext.sync_with_spokes()
         for s in sp.local_scenarios.values():
             self.assertEqual(len(s._mpisppy_model.xhat_feasibility_cuts), 0)
@@ -559,10 +564,33 @@ class TestExtensionRegistrationAndSync(unittest.TestCase):
         buf[0] = -1.0
         buf[1:4] = [1.0, 1.0, 1.0]
         buf[-1] = 1.0
-        ext._recv_buffer = _RecvBufferStub(arr=buf, is_new_result=True)
+        ext._recv_buffers = [_RecvBufferStub(arr=buf, is_new_result=True)]
         ext.sync_with_spokes()
         for s in sp.local_scenarios.values():
             self.assertEqual(len(s._mpisppy_model.xhat_feasibility_cuts), 1)
+
+    def test_sync_with_spokes_installs_from_each_buffer(self):
+        """With more than one emitting spoke, a new cut on any buffer is
+        installed; two new buffers install two cuts."""
+        sp, ext = self._make_ext()
+        nonant_len = 3
+
+        def _one_cut_buf(coefs):
+            buf = np.zeros(3 * (nonant_len + 1) + 1)
+            buf[0] = -1.0
+            buf[1:4] = coefs
+            buf[-1] = 1.0
+            return buf
+
+        ext._recv_buffers = [
+            _RecvBufferStub(arr=_one_cut_buf([1.0, 1.0, 1.0]),
+                            is_new_result=True),
+            _RecvBufferStub(arr=_one_cut_buf([1.0, 1.0, -1.0]),
+                            is_new_result=True),
+        ]
+        ext.sync_with_spokes()
+        for s in sp.local_scenarios.values():
+            self.assertEqual(len(s._mpisppy_model.xhat_feasibility_cuts), 2)
 
 
 class TestCutInstallPersistentSolverBranch(unittest.TestCase):
