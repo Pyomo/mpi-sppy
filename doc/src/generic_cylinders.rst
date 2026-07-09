@@ -219,6 +219,10 @@ Some extensions can be activated directly from the command line:
   (see :ref:`wtracker_extension`)
 - ``--detect-W-oscillations <file>`` -- Detect oscillation/cycling in the
   W vector and report it to a CSV (see :ref:`w_oscillation`)
+- ``--interrupt-W-oscillations <file>`` -- Act on detected W oscillation
+  (slamming) to break the cycle; runs the detection engine to drive the
+  action, but CSV reporting stays opt-in (via ``--detect-W-oscillations``
+  or a ``detect`` block) (see :ref:`w_oscillation`)
 
 See :ref:`Extensions` for details on available extensions.
 
