@@ -14,6 +14,7 @@ Budget 80 iters; interventions from iter 10. Metrics averaged over the last 10 i
 | prox-refire (x10, 5 iters, cooldown 5) | 10.6 | 16 | **converges (cycle broken)** |
 | prox-hold (x10, held to end) | 13.0 | 25 | **converges (cycle broken)** |
 | prox-escalate (x10 base, x2/5 iters) | 13.6 | 0 | **converges (cycle broken)** (converged @ iter 32) |
+| smoothing (r=0.1, b=0.2) | 17.8 | 968 | cycle amplified |
 | fix (slam analogue) | 5.0 | 0 | **converges (cycle broken)** (converged @ iter 48) |
 
 ## 2. rho level (uniform; native `_rho_setter` disabled)
@@ -37,7 +38,7 @@ Budget 80 iters; interventions from iter 10. Metrics averaged over the last 10 i
 * **zc**: nonants the detector still flags (scale-free; fooled by frozen W).
 * **primal gap** `sum_s p_s |x_s - xbar|`: low only when scenarios actually agree.
 
-Only `fix` (changing the problem structure), an escalating prox boost, and a larger rho converge the gap. A *fixed*-magnitude state-perturbing move (W-damping, W-reset, rho reduction, rho jitter, a one-shot or re-firing prox boost) leaves the cycle intact, decouples the scenarios, or only damps it to a residual. The sizes cycle is a small-rho artifact -- its `_rho_setter` uses cost x 0.001.
+Only `fix` (changing the problem structure), an escalating prox boost, and a larger rho converge the gap. A *fixed*-magnitude state-perturbing move (W-damping, W-reset, rho reduction, rho jitter, a one-shot or re-firing prox boost) leaves the cycle intact, decouples the scenarios, or only damps it to a residual. `smoothing` *amplifies* the cycle (it anchors each scenario to its own lagged EMA, fighting consensus), worse as the ratio grows. The sizes cycle is a small-rho artifact -- its `_rho_setter` uses cost x 0.001.
 
 ## 4. Solution quality vs EF optimum (z* = 224275)
 
@@ -53,6 +54,7 @@ Sections 1-3 say whether an arm stopped *moving*; this says whether what it prod
 | prox-refire (x10, 5 iters, cooldown 5) | 224891 | +0.27% | 222967 | +0.6% | good x, good W |
 | prox-hold (x10, held to end) | 224944 | +0.30% | 223039 | +0.6% | good x, good W |
 | prox-escalate (x10 base, x2/5 iters) | 224967 | +0.31% | 216655 | +3.4% | good x, **loose W** |
+| smoothing (r=0.1, b=0.2) | 225735 | +0.65% | 223699 | +0.3% | good x, good W |
 | fix (slam analogue) | 225060 | +0.35% | 213836 | +4.7% | good x, **loose W** |
 | rho=0.001 | 225215 | +0.42% | 222607 | +0.7% | good x, good W |
 | rho=0.01 | 225635 | +0.61% | 214655 | +4.3% | good x, **loose W** |

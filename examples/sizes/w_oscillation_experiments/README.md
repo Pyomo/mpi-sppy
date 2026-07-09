@@ -5,9 +5,10 @@ W-vector oscillation, using the `sizes` model as a testbed. The harness began as
 the evidence behind shipping **slamming as the only interruption remedy** in the
 W-oscillation extension (`mpisppy/extensions/w_oscillation.py`; the design doc
 `doc/designs/w_oscillation_design.md`, §9, points here). It has since been
-extended to explore a family of **prox-penalty** schedules and to score not just
-whether a remedy *stops the cycle* but whether the answer it produces is any
-*good* — separately in the first-stage decision `x` and in the dual weights `W`.
+extended to explore a family of **prox-penalty** schedules and mpi-sppy's
+built-in **smoothed PH**, and to score not just whether a remedy *stops the
+cycle* but whether the answer it produces is any *good* — separately in the
+first-stage decision `x` and in the dual weights `W`.
 
 Nothing here is a product feature or wired into CI — it is a reproducible
 research harness. It needs a MIP solver (gurobi_persistent by default).
@@ -82,6 +83,7 @@ solver tie-breaking shifts them run to run, but the qualitative picture is stabl
 | prox-refire (×10, 5 iters, cooldown 5) | 10.6 | 16 | damps to threshold (borderline) |
 | prox-hold (×10, held to end) | 13.0 | 25 | damps to threshold (borderline) |
 | **prox-escalate (×10 base, ×2 / 5 iters)** | 13.6 | **0** | **converges @ iter 32** |
+| smoothing (r=0.1, b=0.2) | 17.8 | 968 | cycle amplified |
 | **fix (slam analogue)** | 5.0 | **0** | **converges @ iter 48** |
 
 ### 2. rho level (uniform; native `_rho_setter` disabled)
@@ -109,6 +111,7 @@ solver tie-breaking shifts them run to run, but the qualitative picture is stabl
 | plain PH (cycling) | 224872 | **+0.27%** | 222992 | **+0.6%** | good x, good W |
 | prox-boost (one-shot) | 224878 | +0.27% | 222948 | +0.6% | good x, good W |
 | prox-hold | 224944 | +0.30% | 223039 | +0.6% | good x, good W |
+| smoothing (r=0.1, b=0.2) | 225735 | +0.65% | 223699 | +0.3% | good x, good W |
 | **prox-escalate** | 224967 | **+0.31%** | 216655 | **+3.4%** | good x, **loose W** |
 | **fix (slam analogue)** | 225060 | +0.35% | 213836 | +4.7% | good x, **loose W** |
 | rho=0.1 | 229380 | +2.28% | 212513 | +5.2% | poor x, loose W |
@@ -125,7 +128,13 @@ solver tie-breaking shifts them run to run, but the qualitative picture is stabl
    leaves the cycle intact or only *damps* it to a residual near the convergence
    threshold. `prox-hold` and `prox-refire` sit exactly on that boundary and read
    "converged" or "cycling" depending on the budget — a warning against calling
-   the cycle beaten from a short run.
+   the cycle beaten from a short run. mpi-sppy's built-in **smoothing** goes the
+   *wrong* way: it *amplifies* the cycle (gap ~968 at ratio 0.1, worse as the
+   ratio grows, numerically catastrophic by ratio 100), because it anchors each
+   scenario to its own lagged EMA `z` — a per-scenario momentum that fights
+   consensus. Its center still orbits the optimum (the rounded average is a fine
+   decision), but it is strictly worse than plain PH — bigger swings, no
+   convergence — at this pathological small rho.
 
 2. **A prox boost is prox-only, and that matters.** Scaling `prox_on` tightens
    the anchor to `xbar` without inflating the dual step (`rho`). A temporary or

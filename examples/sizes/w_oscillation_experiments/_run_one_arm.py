@@ -17,8 +17,9 @@ monitor writes the per-iteration metrics CSV.
 Arm JSON keys: arm, intervention (none|w_damping|rho_reduce|w_reset|fix|
 prox_boost), factor, floorfrac, start_iter, iters_between_slams, boost_factor,
 boost_iters, refire_cooldown, escalate_mult, escalate_every, escalate_cap,
-escalate_on, escalate_gap_thresh, measure_quality, num_scens, iters, solver,
-default_rho, out_csv, rho_setter (native|off|perturb), eps, seed, pmode.
+escalate_on, escalate_gap_thresh, measure_quality, smoothing,
+smoothing_rho_ratio, smoothing_beta, num_scens, iters, solver, default_rho,
+out_csv, rho_setter (native|off|perturb), eps, seed, pmode.
 """
 
 import json
@@ -54,6 +55,14 @@ def main():
     cfg.two_sided_args()
     cfg.mip_options()
     cfg.parse_command_line("_run_one_arm")
+
+    # smoothed PH (mpi-sppy's built-in smoothing term): anchor each scenario's x
+    # to its own EMA trajectory z, penalty p = smoothing_rho_ratio * rho, EMA
+    # memory beta. vanilla.ph_hub reads these off cfg, so set them before it.
+    if arm.get("smoothing", False):
+        cfg.smoothing = True
+        cfg.smoothing_rho_ratio = float(arm.get("smoothing_rho_ratio", 0.1))
+        cfg.smoothing_beta = float(arm.get("smoothing_beta", 0.2))
 
     num_scen = cfg.num_scens
     scenario_creator = sizes.scenario_creator

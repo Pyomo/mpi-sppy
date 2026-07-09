@@ -33,8 +33,9 @@ Groups of runs:
 1. **Interventions** at the model's native (small) rho: plain, W-damping,
    rho reduction (geometric), W-reset, ``prox_boost`` (scale only the quadratic
    penalty, leaving the dual step at native rho -- one-shot, re-firing, held, and
-   escalating variants), and ``fix`` (the slam analogue -- fix one flagged nonant
-   per cooldown to its per-scenario max).
+   escalating variants), mpi-sppy's built-in ``smoothing`` (anchor each scenario
+   to its own EMA trajectory), and ``fix`` (the slam analogue -- fix one flagged
+   nonant per cooldown to its per-scenario max).
 2. **rho level**: disable the ``_rho_setter`` so ``--default-rho`` applies
    uniformly, and sweep it -- to show the cycle is a *small-rho* artifact.
 3. **rho perturbation**: keep the native rho but add ±eps jitter to each value.
@@ -88,6 +89,13 @@ _INTERVENTIONS = [
     ("prox-escalate (x10 base, x2/5 iters)",
      {"intervention": "prox_boost", "boost_factor": 10.0, "boost_iters": 100000,
       "escalate_mult": 2.0, "escalate_every": 5, "escalate_on": "gap"}),
+    # mpi-sppy's built-in smoothed PH: anchor each scenario to its own EMA
+    # trajectory (penalty p = ratio*rho, memory beta). A different mechanism
+    # from prox (per-scenario, not consensus). Representative default; a ratio
+    # sweep (r=1 .. 100) only makes it worse -- see README.
+    ("smoothing (r=0.1, b=0.2)",
+     {"intervention": "none", "smoothing": True,
+      "smoothing_rho_ratio": 0.1, "smoothing_beta": 0.2}),
     ("fix (slam analogue)", {"intervention": "fix"}),
 ]
 _RHO_LEVELS = [0.001, 0.01, 0.1, 0.3, 1.0]  # uniform (rho_setter disabled)
@@ -203,7 +211,11 @@ def _row(label, metrics, status, iters):
     if gap < 25:
         tag = "**converges (cycle broken)**"
     elif gap > 500:
-        tag = "decoupled (gap exploded)"
+        # a huge gap with LOW zc means W froze while the scenarios flew apart
+        # (decoupled); a huge gap with HIGH zc means the cycle got bigger, not
+        # broken (amplified) -- e.g. smoothing anchors each scenario to its own
+        # lagged EMA and fights consensus.
+        tag = "decoupled (gap exploded)" if zc < 10 else "cycle amplified"
     else:
         tag = "still cycling"
     if early:
@@ -290,8 +302,10 @@ def main():
         "and a larger rho converge the gap. A *fixed*-magnitude state-perturbing "
         "move (W-damping, W-reset, rho reduction, rho jitter, a one-shot or "
         "re-firing prox boost) leaves the cycle intact, decouples the scenarios, "
-        "or only damps it to a residual. The sizes cycle is a small-rho artifact "
-        "-- its `_rho_setter` uses cost x 0.001.",
+        "or only damps it to a residual. `smoothing` *amplifies* the cycle (it "
+        "anchors each scenario to its own lagged EMA, fighting consensus), worse "
+        "as the ratio grows. The sizes cycle is a small-rho artifact -- its "
+        "`_rho_setter` uses cost x 0.001.",
     ]
 
     # ---- 4. solution quality (x and W) vs the EF optimum --------------------
