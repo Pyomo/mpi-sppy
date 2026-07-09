@@ -14,8 +14,10 @@ PH-only hub on sizes via the vanilla cylinders helpers, attaches the experiment
 monitor (and, for the slam arm, the real Slammer extension), and spins. The
 monitor writes the per-iteration metrics CSV.
 
-Arm JSON keys: arm, intervention (none|w_damping|rho_reduce|w_reset|fix),
-factor, floorfrac, start_iter, iters_between_slams, num_scens, iters, solver,
+Arm JSON keys: arm, intervention (none|w_damping|rho_reduce|w_reset|fix|
+prox_boost), factor, floorfrac, start_iter, iters_between_slams, boost_factor,
+boost_iters, refire_cooldown, escalate_mult, escalate_every, escalate_cap,
+escalate_on, escalate_gap_thresh, measure_quality, num_scens, iters, solver,
 default_rho, out_csv, rho_setter (native|off|perturb), eps, seed, pmode.
 """
 
@@ -99,6 +101,15 @@ def main():
         "floorfrac": arm.get("floorfrac", 1e-3),
         "start_iter": arm.get("start_iter", 10),
         "iters_between_slams": arm.get("iters_between_slams", 3),
+        "boost_factor": arm.get("boost_factor", 10.0),
+        "boost_iters": arm.get("boost_iters", 5),
+        "refire_cooldown": arm.get("refire_cooldown", 0),
+        "escalate_mult": arm.get("escalate_mult", 1.0),
+        "escalate_every": arm.get("escalate_every", 5),
+        "escalate_cap": arm.get("escalate_cap", 1e6),
+        "escalate_on": arm.get("escalate_on", "gap"),
+        "escalate_gap_thresh": arm.get("escalate_gap_thresh", 5.0),
+        "measure_quality": arm.get("measure_quality", False),
         "out_csv": arm["out_csv"],
     }
 

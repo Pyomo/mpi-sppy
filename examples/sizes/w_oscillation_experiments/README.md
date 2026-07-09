@@ -1,109 +1,177 @@
 # What actually breaks a PH W-oscillation cycle? (experiments on `sizes`)
 
 These experiments ask which interruption actually breaks a Progressive Hedging
-W-vector oscillation, using the `sizes` model as a testbed. The finding drove
-the decision to ship **slamming as the only interruption remedy** in the
-W-oscillation extension (`mpisppy/extensions/w_oscillation.py`); the extension's
-design doc (`doc/designs/w_oscillation_design.md`, §9) points here for the
-evidence.
+W-vector oscillation, using the `sizes` model as a testbed. The harness began as
+the evidence behind shipping **slamming as the only interruption remedy** in the
+W-oscillation extension (`mpisppy/extensions/w_oscillation.py`; the design doc
+`doc/designs/w_oscillation_design.md`, §9, points here). It has since been
+extended to explore a family of **prox-penalty** schedules and to score not just
+whether a remedy *stops the cycle* but whether the answer it produces is any
+*good* — separately in the first-stage decision `x` and in the dual weights `W`.
 
 Nothing here is a product feature or wired into CI — it is a reproducible
 research harness. It needs a MIP solver (gurobi_persistent by default).
 
 ## Background
 
-Under plain PH, `sizes` settles into a **stable limit cycle**: ~11–20
+Under plain PH, `sizes` settles into a **stable limit cycle**: ~9–20
 nonanticipative variables have a sign-flipping W trajectory every iteration and
 the run never converges. Watson–Woodruff (§2.1) attribute such cycling to the
 dual weight `w` "shooting past" its optimum, which suggests dual-side remedies
 (shrink the dual step, reduce rho). We test those and more.
 
-## Two metrics (one is not enough)
+## Metrics (four of them, on two axes)
+
+**Did it stop the cycle?** (per iteration)
 
 * **`zc`** — how many nonants the zero-crossings detector still flags. It counts
   *sign changes*, so it is **scale-free** and can be fooled: anything that
   freezes W (e.g. driving rho → 0) makes `zc` fall even when nothing has
   converged.
 * **`gap`** — the PH primal gap `sum_s p_s |x_s − xbar|`. This is the **ground
-  truth**: it is low only when the scenarios actually agree. A large `gap` with
-  a small `zc` means an intervention *decoupled* the scenarios rather than
-  converging them.
+  truth** for consensus: low only when the scenarios actually agree.
+
+**Was the answer any good?** (once, at the end, vs the monolithic EF optimum `z*`)
+
+* **`x-gap`** — expected cost of *committing to* the consensus `xbar`, above `z*`.
+  Small = a good first-stage decision.
+* **`W-gap`** — the Lagrangian bound from the final `W`, below `z*`. Small = duals
+  good enough to certify optimality. `sizes` is a MIP, so a duality gap keeps
+  `W-gap > 0` even for a good `W` — read it *relative* across arms.
+
+## The prox-boost idea
+
+`prox_boost` scales **only** the quadratic proximal penalty — the `prox_on`
+coefficient on `ProxExpr` in the objective — while leaving `rho` (and hence the
+dual update `W += rho·(x−xbar)`) untouched. It is a *prox-only* lever, distinct
+from the rho-level sweep, which moves the penalty and the dual step together. Four
+schedules are tested:
+
+| schedule | what it does |
+|---|---|
+| one-shot | boost for a few iterations on the first detected cycle, then revert |
+| re-firing | re-open that window on each re-detected cycle (with a cooldown) |
+| held | boost and never revert (near-permanent) |
+| escalating | hold and *ramp the multiplier up* while the cycle persists |
 
 ## Running it
 
 ```bash
-python run_experiments.py                          # gurobi_persistent, 60 iters
-python run_experiments.py --solver-name cplex --iters 60 --outdir results
+python run_experiments.py                          # gurobi_persistent, 80 iters
+python run_experiments.py --solver-name cplex --iters 120 --outdir results
 ```
 
 Each arm runs in its own subprocess (`_run_one_arm.py`) for clean state;
-`w_osc_experiment_ext.py` is the PH extension that detects, intervenes, and
-records the metrics. Results land in `--outdir` (`results/summary.md` and
-`results/interventions_by_iteration.csv`).
+`w_osc_experiment_ext.py` is the PH extension that detects, intervenes, records
+the per-iteration metrics, and (at the end) measures the x/W solution quality.
+Results land in `--outdir` (`results/summary.md` and
+`results/interventions_by_iteration.csv`). Numbers below are representative;
+solver tie-breaking shifts them run to run, but the qualitative picture is stable.
 
-## Results (sizes-3, 60 iterations, interventions from iter 10)
+## Results (sizes-3, 80 iterations, interventions from iter 10)
 
 ### 1. Interventions at the model's native (small) rho
 
 | arm | zc | primal gap | reading |
 |---|---|---|---|
-| plain PH | 11.0 | 94 | still cycling |
-| w_damping ×0.5 | 12.1 | 94 | still cycling |
-| rho reduction (geometric ×0.7) | 9.1 | 23757 | decoupled (gap exploded) |
-| W reset + rho ×0.5 | 13.9 | 243 | still cycling |
-| **fix (slam analogue)** | 9.6 | **0** | **converges @ iter 35** |
+| plain PH | 9.0 | 34 | still cycling |
+| w_damping ×0.5 | 9.0 | 33 | still cycling |
+| rho reduction (geometric ×0.7) | 7.2 | 22261 | decoupled (gap exploded) |
+| W reset + rho ×0.5 | 13.0 | 141 | still cycling |
+| prox-boost (×10, 5 iters, one-shot) | 8.5 | 34 | still cycling |
+| prox-refire (×10, 5 iters, cooldown 5) | 10.6 | 16 | damps to threshold (borderline) |
+| prox-hold (×10, held to end) | 13.0 | 25 | damps to threshold (borderline) |
+| **prox-escalate (×10 base, ×2 / 5 iters)** | 13.6 | **0** | **converges @ iter 32** |
+| **fix (slam analogue)** | 5.0 | **0** | **converges @ iter 48** |
 
 ### 2. rho level (uniform; native `_rho_setter` disabled)
 
 | default_rho | zc | primal gap | reading |
 |---|---|---|---|
-| 0.001 | 18.2 | 60 | still cycling |
-| 0.01 | 24.0 | 57 | still cycling |
-| **0.1** | 24.0 | **6** | **converges** |
-| **0.3** | 20.9 | **0** | **converges @ iter 25** |
-| **1** | 15.9 | **0** | **converges @ iter 12** |
+| 0.001 | 18.1 | 73 | still cycling |
+| 0.01 | 22.0 | 19 | converges (borderline) |
+| **0.1** | 10.8 | **0** | **converges @ iter 52** |
+| **0.3** | 17.2 | **0** | **converges @ iter 34** |
+| **1** | 16.8 | **0** | **converges @ iter 24** |
 
 ### 3. rho perturbation (native rho + jitter)
 
 | perturbation | zc | primal gap | reading |
 |---|---|---|---|
-| native (ε 0) | 11.0 | 94 | still cycling |
-| jitter ±50% per-variable | 11.0 | 68 | still cycling |
-| jitter ±50% per-call | 11.8 | 80 | still cycling |
+| native (ε 0) | 9.0 | 34 | still cycling |
+| jitter ±50% per-variable | 9.4 | 91 | still cycling |
+| jitter ±50% per-call | 7.3 | 21 | borderline (noise) |
+
+### 4. Solution quality vs the EF optimum (`z* = 224275`)
+
+| arm | inner Ū | x-gap | outer L | W-gap | reading |
+|---|---|---|---|---|---|
+| plain PH (cycling) | 224872 | **+0.27%** | 222992 | **+0.6%** | good x, good W |
+| prox-boost (one-shot) | 224878 | +0.27% | 222948 | +0.6% | good x, good W |
+| prox-hold | 224944 | +0.30% | 223039 | +0.6% | good x, good W |
+| **prox-escalate** | 224967 | **+0.31%** | 216655 | **+3.4%** | good x, **loose W** |
+| **fix (slam analogue)** | 225060 | +0.35% | 213836 | +4.7% | good x, **loose W** |
+| rho=0.1 | 229380 | +2.28% | 212513 | +5.2% | poor x, loose W |
+| rho=0.3 | 230894 | +2.95% | 180390 | +19.6% | poor x, loose W |
+| rho=1 | 231089 | **+3.04%** | 209067 | +6.8% | poor x, loose W |
 
 ## Conclusions
 
-1. **No state-perturbing move breaks the cycle.** W-damping (any factor),
-   W-reset, and rho *reduction* all leave the primal gap high or make it worse.
-   Geometric rho reduction is the cautionary case: `zc` *drops* (to 9.1) while
-   the primal gap **explodes to ~24000** — driving rho → 0 freezes W (fooling
-   the sign-based detector) while the scenarios fly apart. That is a false
-   positive, not a fix.
+1. **Stopping the cycle: only three things converge the primal gap** —
+   `fix` (change the problem *structure* by fixing a cycling variable), an
+   **escalating** prox boost (keep raising the penalty until it forces
+   consensus), and a **larger rho**. Every *fixed*-magnitude perturbation
+   (W-damping, W-reset, rho reduction/jitter, a one-shot or re-firing prox boost)
+   leaves the cycle intact or only *damps* it to a residual near the convergence
+   threshold. `prox-hold` and `prox-refire` sit exactly on that boundary and read
+   "converged" or "cycling" depending on the budget — a warning against calling
+   the cycle beaten from a short run.
 
-2. **Randomly perturbing the rho values does not help either** — it is the rho
-   *level*, not its *symmetry*, that matters.
+2. **A prox boost is prox-only, and that matters.** Scaling `prox_on` tightens
+   the anchor to `xbar` without inflating the dual step (`rho`). A temporary or
+   re-firing boost is therefore a transient anesthetic — the small-rho cycle
+   snaps back the instant the penalty relaxes. Only *escalating* it — cranking
+   the multiplier (×10 → ×160 here) while the gap persists — is strong enough to
+   force primal consensus outright.
 
-3. **Only two things converge the primal gap:** `fix` (the slam analogue —
-   changing the problem *structure* by fixing a cycling variable), and simply
-   using a **larger rho**.
+3. **Convergence and solution quality are different axes.** The arm that
+   converges *fastest* (a large uniform rho) lands the *worst* decision
+   (x-gap ~3%) and an overshot dual bound (rho=0.3 → W-gap ~20% — the literal
+   "shooting past"). Meanwhile the native small-rho **cycle that never converges
+   is near-optimal in both** x (~0.3%) and W (tightest bound, <1%): it is quietly
+   orbiting the optimum.
 
-4. **Root cause:** the cycle is a **small-rho artifact**. `sizes`'s
+4. **So what gives better x, and better W?**
+   * **Better x (the decision):** keep the dual step small. `prox-escalate`
+     (0.31%) and `fix` (0.35%) match the cycle's near-optimal decision and beat a
+     larger rho (2–3%) by an order of magnitude, because they settle near the
+     cycle's centre instead of a rho-distorted point.
+   * **Better W (the bound):** the **cycle itself** — the very thing we are trying
+     to fix. Every cycle-breaker moves `W` away from optimal: `prox-escalate` and
+     `fix` *freeze* it off-optimum (loose bound ~3–5%), and a large rho
+     *overshoots* it. A strong prox forces consensus regardless of the duals (the
+     `W`'s cancel in aggregate), which is exactly why the decision is good while
+     the certificate is weak.
+   * **Net:** for a good first-stage **decision**, escalating prox beats raising
+     rho; for a tight dual **bound**, nothing beats letting the small-rho cycle
+     run.
+
+5. **Root cause of the cycle:** it is a **small-rho artifact**. `sizes`'s
    `_rho_setter` uses `rho = cost × 0.001`, squarely in the oscillating regime
-   (rho ≤ 0.01 cycles; rho ≥ 0.1 converges, often early, with no interruption at
-   all). Reducing rho pushes *further* into the bad regime — which is why the
-   rho-reduction arm is counterproductive.
+   (rho ≤ 0.01 cycles; rho ≥ 0.1 converges early). Reducing rho pushes *further*
+   into the bad regime — which is why the rho-reduction arm is counterproductive.
 
-5. **Metric lesson:** an oscillation detector that watches W alone can be gamed
-   by anything that freezes W. Confirming that an interruption actually
-   *converged* (rather than *decoupled*) requires a primal-side check like the
-   gap used here.
+6. **Metric lesson:** a detector that watches `W` alone can be gamed by anything
+   that freezes `W`; confirming an interruption actually *converged* (not merely
+   *decoupled* or *damped*) needs a primal-side check like the gap — and judging
+   whether the result is *good* needs the x/W bounds in §4, not the cycle metrics.
 
 ## Files
 
 | file | role |
 |---|---|
-| `run_experiments.py` | orchestrator: runs every arm, writes `summary.md` + a per-iteration CSV |
+| `run_experiments.py` | orchestrator: runs every arm, solves the EF for `z*`, writes `summary.md` + a per-iteration CSV |
 | `_run_one_arm.py` | worker: builds a PH-only hub on `sizes` and runs one arm |
-| `w_osc_experiment_ext.py` | PH extension: detect (reusing PR1 primitives), intervene, record `zc` + primal gap |
+| `w_osc_experiment_ext.py` | PH extension: detect (reusing PR1 primitives), intervene (incl. the prox-boost schedules), record `zc`/gap, and measure end-of-run x/W quality |
 | `results/summary.md` | captured results (this run) |
 | `results/interventions_by_iteration.csv` | per-iteration `zc` and `gap` for the intervention arms |

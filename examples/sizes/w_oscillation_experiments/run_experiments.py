@@ -10,28 +10,43 @@
 
 The ``sizes`` model cycles hard under plain PH: with its shipped ``_rho_setter``
 the W vector settles into a stable limit cycle that never converges. This driver
-runs a battery of would-be remedies and scores each by two metrics per iteration
-(recorded by ``w_osc_experiment_ext.WOscExperimentMonitor``):
+runs a battery of would-be remedies and scores each on two axes: whether it
+*stops the cycle* (per-iteration metrics from ``WOscExperimentMonitor``) and
+whether what it produces is any *good* (end-of-run solution quality vs the EF
+optimum).
+
+Cycle metrics:
 
 * ``zc``  -- how many nonants the zero-crossings detector still flags (scale-free;
              can be fooled by anything that freezes W).
 * ``gap`` -- the PH primal gap ``sum_s p_s |x_s - xbar|`` -- the ground truth:
              low only when the scenarios actually agree.
 
-Three groups of runs:
+Quality metrics (section 4), both vs the monolithic EF optimum ``z*``:
+
+* x-gap -- expected cost of committing to the consensus xbar, above ``z*``.
+* W-gap -- Lagrangian bound from the final W, below ``z*`` (a MIP has a duality
+           gap, so read it relative across arms).
+
+Groups of runs:
 
 1. **Interventions** at the model's native (small) rho: plain, W-damping,
-   rho reduction (geometric), W-reset, and ``fix`` (the slam analogue -- fix one
-   flagged nonant per cooldown to its per-scenario max).
+   rho reduction (geometric), W-reset, ``prox_boost`` (scale only the quadratic
+   penalty, leaving the dual step at native rho -- one-shot, re-firing, held, and
+   escalating variants), and ``fix`` (the slam analogue -- fix one flagged nonant
+   per cooldown to its per-scenario max).
 2. **rho level**: disable the ``_rho_setter`` so ``--default-rho`` applies
    uniformly, and sweep it -- to show the cycle is a *small-rho* artifact.
 3. **rho perturbation**: keep the native rho but add ±eps jitter to each value.
 
-Headline finding (see the emitted summary): only ``fix`` (changing the problem
-structure) and using a **larger rho** converge the primal gap. Every
-state-perturbing move -- W-damping, W-reset, rho reduction, rho jitter -- leaves
-the cycle intact, decouples the scenarios (gap explodes while W merely freezes),
-or makes it worse.
+Headline findings (see the emitted summary): ``fix``, an **escalating** prox
+boost, and a **larger rho** each converge the primal gap; fixed-magnitude
+state-perturbing moves (W-damping, W-reset, rho reduction/jitter, a one-shot or
+re-firing prox boost) leave the cycle intact or only damp it. But convergence and
+quality are different axes: a larger rho converges *fastest* yet lands the *worst*
+decision and a loose bound, the native cycle orbits the optimum (best W-bound),
+and escalating prox is the sweet spot for the decision (near-optimal x) at the
+cost of a frozen, loose W. See ``README.md``.
 
 Each arm runs in its own subprocess (``_run_one_arm.py``) for clean state.
 Needs a MIP solver (gurobi_persistent by default). Not wired into CI.
@@ -39,7 +54,7 @@ Needs a MIP solver (gurobi_persistent by default). Not wired into CI.
 Usage::
 
   python run_experiments.py
-  python run_experiments.py --solver-name cplex --iters 60 --outdir results
+  python run_experiments.py --solver-name cplex --iters 120 --outdir results
 """
 
 import argparse
@@ -58,6 +73,21 @@ _INTERVENTIONS = [
     ("w_damping x0.5", {"intervention": "w_damping", "factor": 0.5}),
     ("rho reduction (geom x0.7)", {"intervention": "rho_reduce", "factor": 0.7}),
     ("W reset + rho x0.5", {"intervention": "w_reset", "factor": 0.5}),
+    ("prox-boost (x10, 5 iters, one-shot)",
+     {"intervention": "prox_boost", "boost_factor": 10.0, "boost_iters": 5}),
+    ("prox-refire (x10, 5 iters, cooldown 5)",
+     {"intervention": "prox_boost", "boost_factor": 10.0, "boost_iters": 5,
+      "refire_cooldown": 5}),
+    # boost_iters far exceeds the budget => once it fires (~start_iter) it never
+    # reverts: a near-permanent prox-only boost, held to the end of the run.
+    ("prox-hold (x10, held to end)",
+     {"intervention": "prox_boost", "boost_factor": 10.0, "boost_iters": 100000}),
+    # held AND escalating: ramp the multiplier x2 every 5 iters while the primal
+    # gap persists (> escalate_gap_thresh) -- keep cranking the penalty until it
+    # forces consensus. The only prox-only schedule that actually converges.
+    ("prox-escalate (x10 base, x2/5 iters)",
+     {"intervention": "prox_boost", "boost_factor": 10.0, "boost_iters": 100000,
+      "escalate_mult": 2.0, "escalate_every": 5, "escalate_on": "gap"}),
     ("fix (slam analogue)", {"intervention": "fix"}),
 ]
 _RHO_LEVELS = [0.001, 0.01, 0.1, 0.3, 1.0]  # uniform (rho_setter disabled)
@@ -69,11 +99,12 @@ _PERTURBATIONS = [
 
 
 def _run(arm, cfg):
-    """Write the arm JSON, run the worker subprocess, return its metrics dict
-    {iter -> (zc, gap, w)} plus a status string."""
+    """Write the arm JSON, run the worker subprocess, and return its metrics dict
+    {iter -> (zc, gap, w)}, a status string, and its solution-quality bounds
+    {inner, outer} (or None if not measured)."""
     path = os.path.join(cfg["outdir"], f"{arm['arm']}.json")
     arm = dict(arm, num_scens=cfg["num_scens"], iters=cfg["iters"],
-               solver=cfg["solver"],
+               solver=cfg["solver"], measure_quality=True,
                out_csv=os.path.join(cfg["outdir"], f"{arm['arm']}.csv"))
     with open(path, "w") as f:
         json.dump(arm, f, indent=2)
@@ -93,7 +124,54 @@ def _run(arm, cfg):
                 metrics[int(r["iteration"])] = (
                     int(r["zc_flagged"]), float(r["primal_gap"]),
                     float(r["mean_abs_W"]))
-    return metrics, status
+    bounds = None
+    bpath = arm["out_csv"].rsplit(".csv", 1)[0] + ".bounds.json"
+    if os.path.exists(bpath):
+        with open(bpath) as f:
+            bounds = json.load(f)
+    return metrics, status, bounds
+
+
+def _solve_ef(cfg):
+    """Solve the monolithic extensive form once for the ground-truth optimum z*
+    (the yardstick for both x-quality and W-quality). Returns z* or None."""
+    sys.path.insert(0, os.path.dirname(_HERE))   # the examples/sizes dir (sizes)
+    import sizes
+    from mpisppy.opt.ef import ExtensiveForm
+    names = [f"Scenario{i + 1}" for i in range(cfg["num_scens"])]
+    ef = ExtensiveForm({"solver": cfg["solver"]}, names, sizes.scenario_creator,
+                       scenario_creator_kwargs={"scenario_count": cfg["num_scens"]})
+    ef.solve_extensive_form()
+    return ef.get_objective_value()
+
+
+def _quality_rows(labels, quality, z_star):
+    """Markdown rows scoring each arm against z* (a minimization): x-gap is how
+    far the committed consensus decision's expected cost sits above z*; W-gap is
+    how far the Lagrangian bound from the final W sits below z*. Small = good."""
+    rows = []
+    for lab in labels:
+        b = quality.get(lab)
+        if not b or b.get("inner") is None or b.get("outer") is None:
+            rows.append(f"| {lab} | - | - | - | - | not measured |")
+            continue
+        inner, outer = b["inner"], b["outer"]
+        xgap = (inner - z_star) / abs(z_star) * 100.0
+        wgap = (z_star - outer) / abs(z_star) * 100.0
+        # thresholds separate the observed clusters: the small-rho arms sit near
+        # x <0.5% / W <1%, the cycle-breakers push W past a few %, and a large
+        # uniform rho pushes x past a couple %.
+        if xgap < 1.0 and wgap < 1.5:
+            tag = "good x, good W"
+        elif xgap < 1.0:
+            tag = "good x, **loose W**"
+        elif wgap < 1.5:
+            tag = "**poor x**, good W"
+        else:
+            tag = "poor x, loose W"
+        rows.append(f"| {lab} | {inner:.0f} | {xgap:+.2f}% | {outer:.0f} | "
+                    f"{wgap:+.1f}% | {tag} |")
+    return rows
 
 
 def _tail(metrics, idx, n=10):
@@ -140,7 +218,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--solver-name", default="gurobi_persistent")
     p.add_argument("--num-scens", type=int, default=3)
-    p.add_argument("--iters", type=int, default=60)
+    p.add_argument("--iters", type=int, default=80)
     p.add_argument("--start-iter", type=int, default=10)
     p.add_argument("--timeout", type=int, default=120,
                    help="per-arm subprocess timeout (s)")
@@ -162,6 +240,7 @@ def main():
 
     # ---- 1. interventions at native rho -------------------------------------
     per_iter = {}
+    quality = {}          # label -> {inner, outer} solution-quality bounds
     lines += ["## 1. Interventions (native rho)\n",
               "| arm | zc | primal gap | reading |", "|---|---|---|---|"]
     for label, over in _INTERVENTIONS:
@@ -169,8 +248,9 @@ def main():
                    start_iter=args.start_iter, rho_setter="native",
                    default_rho=1.0)
         print(f"  [{label}] ...")
-        m, st = _run(arm, cfg)
+        m, st, b = _run(arm, cfg)
         per_iter[label] = m
+        quality[label] = b
         lines.append(_row(label, m, st, cfg["iters"]))
     lines.append("")
 
@@ -182,7 +262,8 @@ def main():
                "start_iter": args.start_iter, "rho_setter": "off",
                "default_rho": rho}
         print(f"  [rho level {rho:g}] ...")
-        m, st = _run(arm, cfg)
+        m, st, b = _run(arm, cfg)
+        quality[f"rho={rho:g}"] = b
         lines.append(_row(f"{rho:g}", m, st, cfg["iters"]))
     lines.append("")
 
@@ -195,7 +276,8 @@ def main():
                    rho_setter=("native" if over["eps"] == 0.0 else "perturb"),
                    default_rho=1.0)
         print(f"  [perturb {label}] ...")
-        m, st = _run(arm, cfg)
+        m, st, b = _run(arm, cfg)
+        quality[label] = b
         lines.append(_row(label, m, st, cfg["iters"]))
     lines += [
         "",
@@ -204,11 +286,56 @@ def main():
         "* **primal gap** `sum_s p_s |x_s - xbar|`: low only when scenarios "
         "actually agree.",
         "",
-        "Only `fix` (changing the problem structure) and a larger rho converge "
-        "the gap. Every state-perturbing move leaves the cycle intact, "
-        "decouples the scenarios, or worsens it. The sizes cycle is a small-rho "
-        "artifact -- its `_rho_setter` uses cost x 0.001.",
+        "Only `fix` (changing the problem structure), an escalating prox boost, "
+        "and a larger rho converge the gap. A *fixed*-magnitude state-perturbing "
+        "move (W-damping, W-reset, rho reduction, rho jitter, a one-shot or "
+        "re-firing prox boost) leaves the cycle intact, decouples the scenarios, "
+        "or only damps it to a residual. The sizes cycle is a small-rho artifact "
+        "-- its `_rho_setter` uses cost x 0.001.",
     ]
+
+    # ---- 4. solution quality (x and W) vs the EF optimum --------------------
+    z_star = None
+    try:
+        z_star = _solve_ef(cfg)
+    except Exception as e:                          # noqa: BLE001
+        print(f"EF solve failed, skipping quality section: {e}")
+    if z_star is not None:
+        q_labels = ([lab for lab, _ in _INTERVENTIONS]
+                    + [f"rho={rho:g}" for rho in _RHO_LEVELS])
+        lines += [
+            "",
+            f"## 4. Solution quality vs EF optimum (z* = {z_star:.0f})\n",
+            "Sections 1-3 say whether an arm stopped *moving*; this says whether "
+            "what it produced is any *good*. **x-gap** = expected cost of "
+            "committing to the consensus xbar, above z* (small = a good "
+            "decision). **W-gap** = Lagrangian bound from the final W, below z* "
+            "(small = duals good enough to certify optimality). sizes is a MIP, "
+            "so a duality gap keeps W-gap > 0 even for good W -- read it "
+            "*relative* across arms.\n",
+            "| arm | inner Ū | x-gap | outer L | W-gap | reading |",
+            "|---|---|---|---|---|---|",
+        ]
+        lines += _quality_rows(q_labels, quality, z_star)
+        lines += [
+            "",
+            "**Convergence and solution quality are different axes.** The native "
+            "small-rho cycle never meets a convergence *criterion*, yet it orbits "
+            "the optimum: its average xbar is near-optimal (x-gap ~0.3%) and its W "
+            "gives the *tightest* Lagrangian bound (W-gap <1%). Raising rho "
+            "uniformly converges fast but to a *worse* consensus -- both gaps blow "
+            "up (rho=1: x ~3%, W loose; rho=0.3: W-gap ~20%) -- so \"a larger rho "
+            "converges\" costs real solution quality. An **escalating prox boost "
+            "is the sweet spot for the decision**: it converges (primal gap -> 0) "
+            "and keeps x near-optimal, because it retains the small native dual "
+            "step and settles near the cycle's centre rather than a distorted "
+            "large-rho point. But a strong prox forces primal consensus regardless "
+            "of the duals (the W's cancel in aggregate), so it *freezes* W "
+            "off-optimum -- a loose dual bound (W-gap ~3%). `fix` shares that "
+            "profile. Net: for a good first-stage **decision**, escalating prox "
+            "beats raising rho; for a tight dual **bound**, none of the "
+            "cycle-breakers beats letting the small-rho cycle run.",
+        ]
 
     # ---- per-iteration CSV for the intervention arms ------------------------
     labels = [lab for lab, _ in _INTERVENTIONS]
