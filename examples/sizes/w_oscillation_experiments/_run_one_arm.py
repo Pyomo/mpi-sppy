@@ -14,8 +14,8 @@ PH-only hub on sizes via the vanilla cylinders helpers, attaches the experiment
 monitor (and, for the slam arm, the real Slammer extension), and spins. The
 monitor writes the per-iteration metrics CSV.
 
-Arm JSON keys: arm, intervention (none|w_damping|rho_reduce|w_reset|fix|
-prox_boost), factor, floorfrac, start_iter, iters_between_slams, boost_factor,
+Arm JSON keys: arm, intervention (none|w_damping|rho_reduce|w_reset|w_average|
+fix|prox_boost), factor, floorfrac, start_iter, iters_between_slams, boost_factor,
 boost_iters, refire_cooldown, escalate_mult, escalate_every, escalate_cap,
 escalate_on, escalate_gap_thresh, measure_quality, smoothing,
 smoothing_rho_ratio, smoothing_beta, num_scens, iters, solver, default_rho,

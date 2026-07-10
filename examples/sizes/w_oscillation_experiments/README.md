@@ -55,6 +55,30 @@ schedules are tested:
 | held | boost and never revert (near-permanent) |
 | escalating | hold and *ramp the multiplier up* while the cycle persists |
 
+## The W-average idea (and why it is a legal PH move)
+
+`w_average` asks a different question from the state-perturbing arms: instead of
+*shrinking* the dual step (`w_damping`) or *zeroing* it (`w_reset`), replace each
+cycling nonant's `W`, in every scenario, with **its own mean over the cycle** — a
+one-shot warm restart to the point the oscillation is *orbiting* rather than to
+zero. It fires once, after a full detection `window` of history has buffered, so
+the mean spans several cycle periods.
+
+**Is that still a valid PH dual state?** Yes — and trivially so. PH maintains the
+dual invariant `sum_s p_s W_s = 0` at every iteration (each update adds
+`rho·(x_s − xbar)`, and `sum_s p_s (x_s − xbar) = 0` by definition of `xbar`). The
+cycle average is a *per-scenario linear combination* of past iterates,
+`W̃_s = (1/|K|)·Σ_{k∈K} W_s^k`, so
+
+```
+Σ_s p_s W̃_s = (1/|K|)·Σ_{k∈K} ( Σ_s p_s W_s^k ) = (1/|K|)·Σ_{k∈K} 0 = 0.
+```
+
+Every buffered `W^k` already has expectation zero and the expectation over
+scenarios is linear, so their average inherits the property — nothing needs to be
+renormalized. (The same one line licenses *any* weighted average of the iterates,
+not only the uniform one.)
+
 ## Running it
 
 ```bash
@@ -79,6 +103,7 @@ solver tie-breaking shifts them run to run, but the qualitative picture is stabl
 | w_damping ×0.5 | 9.0 | 33 | still cycling |
 | rho reduction (geometric ×0.7) | 7.2 | 22261 | decoupled (gap exploded) |
 | W reset + rho ×0.5 | 13.0 | 141 | still cycling |
+| W average over cycle | 11.1 | 113 | still cycling |
 | prox-boost (×10, 5 iters, one-shot) | 8.5 | 34 | still cycling |
 | prox-refire (×10, 5 iters, cooldown 5) | 10.6 | 16 | damps to threshold (borderline) |
 | prox-hold (×10, held to end) | 13.0 | 25 | damps to threshold (borderline) |
@@ -109,6 +134,7 @@ solver tie-breaking shifts them run to run, but the qualitative picture is stabl
 | arm | inner Ū | x-gap | outer L | W-gap | reading |
 |---|---|---|---|---|---|
 | plain PH (cycling) | 224872 | **+0.27%** | 222992 | **+0.6%** | good x, good W |
+| W average over cycle | 224885 | +0.27% | 222684 | +0.7% | good x, good W |
 | prox-boost (one-shot) | 224878 | +0.27% | 222948 | +0.6% | good x, good W |
 | prox-hold | 224944 | +0.30% | 223039 | +0.6% | good x, good W |
 | smoothing (r=0.1, b=0.2) | 225735 | +0.65% | 223699 | +0.3% | good x, good W |
@@ -124,9 +150,14 @@ solver tie-breaking shifts them run to run, but the qualitative picture is stabl
    `fix` (change the problem *structure* by fixing a cycling variable), an
    **escalating** prox boost (keep raising the penalty until it forces
    consensus), and a **larger rho**. Every *fixed*-magnitude perturbation
-   (W-damping, W-reset, rho reduction/jitter, a one-shot or re-firing prox boost)
-   leaves the cycle intact or only *damps* it to a residual near the convergence
-   threshold. `prox-hold` and `prox-refire` sit exactly on that boundary and read
+   (W-damping, W-reset, W-average, rho reduction/jitter, a one-shot or re-firing
+   prox boost) leaves the cycle intact or only *damps* it to a residual near the
+   convergence threshold. `w_average` is the sharpest illustration: restarting
+   `W` at the cycle's centre kicks the primal gap *up* (≈3 → ≈5200 as the duals
+   jump off their orbit), after which it slowly re-damps but re-enters the same
+   oscillation — a one-shot move to a good centre cannot hold without also
+   changing rho or the problem structure. `prox-hold` and `prox-refire` sit
+   exactly on that boundary and read
    "converged" or "cycling" depending on the budget — a warning against calling
    the cycle beaten from a short run. mpi-sppy's built-in **smoothing** goes the
    *wrong* way: it *amplifies* the cycle (gap ~968 at ratio 0.1, worse as the

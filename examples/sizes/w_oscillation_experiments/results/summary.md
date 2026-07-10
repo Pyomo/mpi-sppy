@@ -10,6 +10,7 @@ Budget 80 iters; interventions from iter 10. Metrics averaged over the last 10 i
 | w_damping x0.5 | 9.0 | 33 | still cycling |
 | rho reduction (geom x0.7) | 7.2 | 22261 | decoupled (gap exploded) |
 | W reset + rho x0.5 | 13.0 | 141 | still cycling |
+| W average over cycle | 11.1 | 113 | still cycling |
 | prox-boost (x10, 5 iters, one-shot) | 8.5 | 34 | still cycling |
 | prox-refire (x10, 5 iters, cooldown 5) | 10.6 | 16 | **converges (cycle broken)** |
 | prox-hold (x10, held to end) | 13.0 | 25 | **converges (cycle broken)** |
@@ -50,6 +51,7 @@ Sections 1-3 say whether an arm stopped *moving*; this says whether what it prod
 | w_damping x0.5 | 224878 | +0.27% | 223150 | +0.5% | good x, good W |
 | rho reduction (geom x0.7) | 225107 | +0.37% | 223586 | +0.3% | good x, good W |
 | W reset + rho x0.5 | 224868 | +0.26% | 222325 | +0.9% | good x, good W |
+| W average over cycle | 224885 | +0.27% | 222684 | +0.7% | good x, good W |
 | prox-boost (x10, 5 iters, one-shot) | 224878 | +0.27% | 222948 | +0.6% | good x, good W |
 | prox-refire (x10, 5 iters, cooldown 5) | 224891 | +0.27% | 222967 | +0.6% | good x, good W |
 | prox-hold (x10, held to end) | 224944 | +0.30% | 223039 | +0.6% | good x, good W |

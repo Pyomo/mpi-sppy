@@ -31,8 +31,10 @@ Quality metrics (section 4), both vs the monolithic EF optimum ``z*``:
 Groups of runs:
 
 1. **Interventions** at the model's native (small) rho: plain, W-damping,
-   rho reduction (geometric), W-reset, ``prox_boost`` (scale only the quadratic
-   penalty, leaving the dual step at native rho -- one-shot, re-firing, held, and
+   rho reduction (geometric), W-reset, ``w_average`` (replace each cycling W by
+   its mean over the cycle -- a per-scenario linear move that trivially keeps
+   ``sum_s p_s W = 0``), ``prox_boost`` (scale only the quadratic penalty,
+   leaving the dual step at native rho -- one-shot, re-firing, held, and
    escalating variants), mpi-sppy's built-in ``smoothing`` (anchor each scenario
    to its own EMA trajectory), and ``fix`` (the slam analogue -- fix one flagged
    nonant per cooldown to its per-scenario max).
@@ -74,6 +76,7 @@ _INTERVENTIONS = [
     ("w_damping x0.5", {"intervention": "w_damping", "factor": 0.5}),
     ("rho reduction (geom x0.7)", {"intervention": "rho_reduce", "factor": 0.7}),
     ("W reset + rho x0.5", {"intervention": "w_reset", "factor": 0.5}),
+    ("W average over cycle", {"intervention": "w_average"}),
     ("prox-boost (x10, 5 iters, one-shot)",
      {"intervention": "prox_boost", "boost_factor": 10.0, "boost_iters": 5}),
     ("prox-refire (x10, 5 iters, cooldown 5)",

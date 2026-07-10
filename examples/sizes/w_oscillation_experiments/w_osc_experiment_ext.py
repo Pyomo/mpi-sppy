@@ -26,6 +26,13 @@ Interventions (``intervention`` in ``opt.options["wosc_experiment_options"]``):
 ``rho_reduce``  multiply flagged nonants' rho by ``factor`` each acting iteration,
                 floored at ``floorfrac * original_rho`` (rho must stay > 0).
 ``w_reset``     one-shot: zero ALL W and scale ALL rho by ``factor`` (keep xbar).
+``w_average``   one-shot: replace each flagged nonant's W, in every scenario, by
+                that scenario's mean W over the captured cycle (the trajectory
+                buffer) -- a warm restart to the cycle's *centre* rather than to
+                zero. The mean is a per-scenario linear combination of past W
+                iterates, so it trivially preserves PH's dual invariant
+                ``sum_s p_s W_s = 0``: every buffered W already has expectation
+                zero and expectation is linear (README, "expectation zero").
 ``fix``         the slam analogue: fix **one** flagged nonant per
                 ``iters_between_slams`` cooldown to its per-scenario max (the
                 Watson-Woodruff §2.4 / Slammer ``max`` remedy), solver-correctly
@@ -113,6 +120,7 @@ class WOscExperimentMonitor(Extension):
         self._rows = []          # (iter, zc_flagged, primal_gap, mean_abs_W)
         self._orig_rho = {}      # (id(scenario), ndn_i) -> original rho
         self._reset_fired = False
+        self._wavg_fired = False   # w_average: has the one-shot averaging fired?
         self._fixed = set()      # ndn_i already fixed (fix intervention)
         self._last_fix_iter = None
         self._boost_fired = False   # prox_boost: has any window opened yet?
@@ -190,6 +198,9 @@ class WOscExperimentMonitor(Extension):
             return
         if self.intervention == "w_reset":
             self._w_reset()
+            return
+        if self.intervention == "w_average":
+            self._w_average(flagged)
             return
         if self.intervention == "fix":
             self._fix_one(flagged, phiter)
@@ -301,6 +312,32 @@ class WOscExperimentMonitor(Extension):
                 model.rho[ndn_i]._value = max(
                     model.rho[ndn_i]._value * self.factor, floor)
         self._reset_fired = True
+
+    def _w_average(self, flagged):
+        """Replace each flagged nonant's W, in every scenario, with that
+        scenario's mean W over the captured cycle (the trajectory buffer) -- a
+        warm restart to the cycle's *centre*, the counterpart to w_reset's
+        restart to zero. The mean is a per-scenario linear combination of past W
+        iterates, so it trivially preserves PH's dual invariant
+        ``sum_s p_s W_s = 0``: every buffered W already satisfies it and
+        expectation over scenarios is linear (README). One-shot, fired once a
+        full ``window`` of history has accumulated so the mean spans several
+        cycle periods."""
+        if self._wavg_fired:
+            return
+        buflen = len(next(iter(self._traj.values())))
+        if buflen < self.window:
+            return                              # wait for a full cycle to buffer
+        for j in flagged:
+            ndn_i = self._ndn_i[j]
+            for sname, s in self.opt.local_scenarios.items():
+                model = s._mpisppy_model
+                if ndn_i not in model.W:
+                    continue
+                col = np.fromiter((vec[j] for vec in self._traj[sname]),
+                                  dtype="d", count=buflen)
+                model.W[ndn_i]._value = float(col.mean())
+        self._wavg_fired = True
 
     def _fix_one(self, flagged, phiter):
         """Slam analogue: fix one flagged nonant per cooldown to its per-scenario
