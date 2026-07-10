@@ -1,80 +1,146 @@
 # Checkpoint / Resume for mpi-sppy — Design
 
-Status: **draft** (PoC validated; not yet implemented in the library).
-Scope: checkpoint a running mpi-sppy job so a killed/interrupted run can resume
-where it left off. Must work on multiple MPI ranks and for cylinder
-(hub-and-spoke) runs.
+Status: **draft** (framework PoC validated; dill-reload backend designed, not yet
+validated). Scope: checkpoint a running mpi-sppy job so it can be stopped and
+resumed later. Must work on multiple MPI ranks and for cylinder (hub-and-spoke)
+runs.
 
 ---
 
 ## 1. Goals and non-goals
 
+**Primary use case.** A long (multi-day) run that is **intentionally stopped and
+resumed** on a schedule — e.g. a three-day study that ends each day and picks up
+the next morning on the same cluster. Checkpoints are **infrequent** (a small
+number over the whole run; roughly twice as many writes as resumes) and resumes
+are planned, not crash-driven. The scenarios are **large MIPs**.
+
+That regime drives the design decisions below (dill the scenario models, restore
+a MIP warm start), and it is worth stating up front because a *different* use
+case — frequent checkpoints purely for hard-kill safety — would push toward a
+lighter, leaf-data-only checkpoint (still supported; §4, §11 Phase 6).
+
 **Goals**
 
 - Resume a Progressive Hedging (PH) run — serial, multi-rank, or full cylinders
-  (hub + spokes) — after a crash or a deliberate stop.
-- Preserve the **best feasible solution found so far (the best xhat), not just
-  the best bound.**
-- Survive a hard kill (`kill -9`, node failure, walltime), not only a clean
-  shutdown.
-- Add no measurable overhead when checkpointing is off, and modest, tunable
-  overhead when on.
+  (hub + spokes) — after a planned stop (and, as a bonus, after a crash).
+- **Continue the optimization as if it had not stopped**, warm-started from the
+  last iterate, without losing the **best feasible solution found so far (the best
+  xhat), not just the best bound.**
+- Survive a hard kill (`kill -9`, node failure, walltime) as a secondary benefit,
+  via atomic publication (§9).
+- Add no measurable overhead when checkpointing is off, and — because checkpoints
+  are infrequent here — tolerate a heavier per-checkpoint cost in exchange for a
+  complete, warm-startable restore.
 
 **Non-goals (initially)**
 
 - Resuming across a *different* rank count or scenario-to-rank distribution
-  (cross-geometry remap). The first cut requires identical geometry and refuses
-  a mismatch with a clear error.
-- Bit-identical reproduction of *bounds* (see §7 — bounds are async and not
-  reproducible; only the primal trajectory is).
+  (cross-geometry remap). The first cut requires identical geometry and refuses a
+  mismatch with a clear error.
+- **Bit-identical reproduction for MIPs.** Multi-threaded MIP solves are not
+  deterministic and admit multiple optima, so a resumed MIP run is *not*
+  bit-reproducible against a hypothetical uninterrupted run. The guarantee is
+  correct, warm-started continuation with the incumbent preserved (§7). (A
+  deterministic LP/QP solve *can* be bit-identical under the leaf-rebuild backend
+  — that is what the PoC showed — but it is not the target here.)
+- Bit-identical reproduction of *bounds* (§7 — bounds are async and not
+  reproducible; carried forward as best-so-far).
+- Robustness across a library/env upgrade between stop and resume. The use case
+  resumes in the **same environment** the next day, so a dill-based checkpoint
+  (welded to the current Pyomo/mpi-sppy/model code) is acceptable. Cross-version
+  resume is out of scope.
 - APH. A C++ APH is expected to replace the Python `opt/aph.py`; PH-family only.
 
 ---
 
-## 2. Why "pickle every object with dill" does not work
+## 2. What to serialize, and what not to
 
-The obvious idea — `dill.dump()` the whole opt/hub object graph and reload — is
-not viable, because the core objects are built around **live, non-serializable
-OS/MPI/solver handles**, not data:
+There are two very different "just dill it" ideas, and they get opposite answers.
+
+### 2.1 Do NOT dill the opt/hub object graph
+
+`dill.dump()` of the whole opt/hub object and reload is not viable — the core
+objects are built around **live, non-serializable OS/MPI/solver handles**, not
+data:
 
 - **MPI communicators** — `SPBase.mpicomm`, `SPBase.comms` (`spbase.py`), and the
   `fullcomm`/`strata_comm`/`cylinder_comm` on the spcomm
-  (`cylinders/spcommunicator.py`). Handles into the running MPI runtime;
-  meaningless once the process exits.
+  (`cylinders/spcommunicator.py`). Handles into a running MPI runtime; meaningless
+  once the process exits.
 - **MPI RMA windows and `MPI.Alloc_mem` buffers** — `SPWindow`
   (`cylinders/spwindow.py`) and the `FieldArray` send/receive buffers. Kernel
   shared-memory regions.
-- **Persistent solver handles** — `s._solver_plugin` for
-  gurobi/cplex/xpress persistent interfaces (`spopt.py`). A C handle + license
-  session.
+- **Persistent solver handles** — `s._solver_plugin` for gurobi/cplex/xpress
+  persistent interfaces (`spopt.py`). A C handle + license session.
 
-The moment you write a custom `__getstate__`/`__reduce__` to drop and rebuild
-those, you have conceded the "just pickle it" dream and are doing
-reconstruct-scaffolding + restore-state anyway — only with the checkpoint format
-welded to the live object graph (fragile across versions). Better to do that
-split explicitly.
+A resumed run launches a **fresh process** (new MPI job) anyway, so these must be
+**reconstructed via normal startup** regardless of how anything else is restored.
+That is not negotiable and not something a checkpoint can carry.
 
-dill *is* useful for the leaf data (Pyomo scenario models, closures), and the
-repo already uses it that way — see §4.
+### 2.2 DO dill the scenario models (the recommended backend here)
+
+The narrower idea — dill each **scenario Pyomo model** — is not only viable, it is
+the right backend for this use case. The repo already dills *clean* scenario
+models for the scenario-pickle path (§4); the only extension is to dill them
+**mid-run**. The single non-serializable attribute on a scenario model is
+`s._solver_plugin`, which we drop before writing and rebuild with `set_instance`
+on resume (a dance we already do — the reconstruct step needs it regardless);
+`_mpisppy_data` is a `pyo.Block` on the model with **no** back-references to the
+comms or opt object.
+
+Dilling the mid-run model captures, in one shot and mutually consistent,
+everything that lives *on* the scenario model:
+
+- the dual weights `W`, `rho`, `xbars` (on `s._mpisppy_model`);
+- nonant values **and fixedness** (from variable-fixing/forcing extensions);
+- **second-stage (recourse) variable values → a MIP warm start** (§5.2);
+- the proximal-approximation `xsqvar` and its accumulated `xsqvar_cuts`, plus the
+  `ProxApproxManager` bookkeeping on `_mpisppy_data` (§5.3) — the linearized prox
+  is likely in use for large MIPs (a MIQP prox is often intractable), and dill
+  brings the cuts back for free instead of replaying them;
+- model-attached extension state, e.g. `fixer`'s per-variable `conv_iter_count`
+  on `s._mpisppy_data`.
+
+The costs that argued against this backend elsewhere — **version fragility** (dill
+serializes by class/closure reference) and **per-checkpoint overhead** (full
+models are large) — are both moot for this use case: the resume is same-environment
+and the checkpoints are infrequent, so a heavy write paid a handful of times over
+three days is negligible. And it *avoids re-running an expensive `scenario_creator`*
+on every resume, which for large models is itself a real saving.
+
+The alternative — rebuild each model via `scenario_creator` and overlay the state
+as leaf data (arrays/name→value maps) — is retained as the **low-cost backend**:
+its checkpoints are tiny and fast (a handful of `O(first-stage)` arrays, no model
+structure) and version-robust (plain numbers, not pickled classes). That makes it
+the right choice for small scenarios, cheap creators, or *frequent* kill-safety
+checkpoints where a per-write model dump would hurt — the mirror image of this
+use case. It is also what the PoC validated (§6, §11 Phase 6). The two backends
+share the same framework and manifest; only the scenario-model restore step
+differs.
 
 ---
 
 ## 3. Approach: reconstruct the scaffolding, restore the state
 
-A checkpoint is **not** a snapshot of the object graph. It is the **algorithmic
-state** needed to continue. On resume:
+A checkpoint is **not** a snapshot of the object graph. On resume:
 
 1. **Reconstruct the scaffolding** via the normal startup path — comms, RMA
-   windows, persistent solvers, and the Pyomo scenario models (from
-   `scenario_creator`, or from the existing scenario-pickle path). This is
-   exactly what a fresh run already does.
-2. **Restore the state** into that fresh scaffolding: iteration counter, dual
-   weights, nonant values, rho, the incumbent (best xhat), aggregated bounds,
-   and any stateful-extension internals.
-
-This is the design the library *already leans toward* (it pickles scenario
-models alone, never the comms/solvers) — we are extending it from "warm-start
-iteration 0" to "resume at iteration k".
+   windows, and persistent solvers. This is exactly what a fresh run already does.
+2. **Restore the scenario-model state** via the chosen backend:
+   - **dill-reload (recommended here):** load each rank's dilled mid-run scenario
+     models; rebuild `_solver_plugin` (`set_instance`) and mark
+     `solution_available` so the first solve warm-starts (§5.2). Because the
+     reloaded model already carries the spliced W/prox objective and the prox
+     cuts, startup must **skip** re-attaching them (§9, item 2).
+   - **leaf-rebuild (alternative):** rebuild each model via `scenario_creator`,
+     then overlay W / rho / nonant values+fixedness / prox `cut_values` from the
+     checkpoint.
+3. **Restore the non-model state** — the pieces that do *not* live on a scenario
+   model and so are never captured by dilling models: the global iteration
+   counter, hub bounds/incumbent objective, the spoke incumbent (best xhat), the
+   internal state of extension *objects*, and cursor/RNG. These are always small
+   leaf data (§5.4–5.6).
 
 ---
 
@@ -82,188 +148,227 @@ iteration 0" to "resume at iteration k".
 
 - **Scenario-model pickling (dill):** `utils/pickle_bundle.py`
   (`dill_pickle`/`dill_unpickle`) and `generic/scenario_io.py` pickle each
-  scenario Pyomo model *alone*. Iter-0 solution + bounds can be baked into
-  `pickle_metadata` and warm-started via `--iter0-from-pickle`. Precedent for
-  persisting algorithmic state, and a ready path for reconstructing expensive /
-  nondeterministic scenario models.
+  scenario Pyomo model *alone*, driven by `--pickle-scenarios-dir` /
+  `--unpickle-scenarios-dir` (with `iter0_before_pickle` baking an iter-0 solve
+  into the pickle). The dill-reload backend (§2.2) is exactly this path
+  **generalized from iter-0 to iter-k** — pickle the model as it stands at the
+  checkpoint, not only after iter 0.
+- **Warm-start plumbing:** `spopt.py` already supports warm-starting subproblem
+  solves — the `warmstart_subproblems` option plus `WarmstartStatus.PRIOR_SOLUTION`
+  use a warm start when `s._mpisppy_data.solution_available` is set
+  (`spopt.py:301-305`). Restoring the model's variable values and setting
+  `solution_available=True` feeds the restored MIP solution straight into this
+  path — no new solver code.
 - **W / xbar persistence:** `utils/w_utils/wxbarwriter.py` (writes in
-  `post_everything`) / `wxbarreader.py` (reads in `pre_iter0`) round-trip the
-  dual weights `W` and the consensus `xbar` as CSV, as extensions. Covers part
-  of the restore set; does **not** cover rho, the iteration counter, bounds, the
-  incumbent, or RNG.
+  `post_everything`) / `wxbarreader.py` (reads in `pre_iter0`) round-trip `W` and
+  `xbar` as CSV. A precedent for the leaf-rebuild backend; unnecessary under
+  dill-reload (W/xbar ride in the model).
 - **Incumbent-to-disk (spokes):** `cylinders/spoke.py`
-  `_maybe_write_incumbent_on_improvement` (`--incumbent-on-improvement-filename-prefix`)
-  already writes the first-stage solution on each improvement — a reference for
-  serializing the incumbent.
+  `_maybe_write_incumbent_on_improvement`
+  (`--incumbent-on-improvement-filename-prefix`) already writes the first-stage
+  solution on each improvement — the reference for serializing the incumbent.
 
 ---
 
 ## 5. State inventory
 
-The key question for each piece: **reconstructed** (rebuilt by startup, no save
-needed) vs **restored** (must be checkpointed), and if restored, is it
-**bit-reproducible** on resume or only **carried forward** as a valid
-best-so-far value?
+For each piece: is it **reconstructed** (rebuilt by startup, no save), **carried
+in the dilled model** (dill-reload backend), or **restored as non-model leaf
+data** (always)? And if restored, is it **carried forward** as a valid
+best-so-far value or (LP/QP only) potentially bit-reproducible?
 
-### 5.1 Hub PH primal state — *restored, bit-reproducible*
+### 5.1 Hub PH primal state — *in the dilled model*
 
-The hub's primal trajectory is pure synchronous PH and is **independent of the
-spokes** (lagrangian only contributes an outer bound; xhatshuffle only an
-incumbent; neither perturbs the iterate). Minimum set, per local scenario:
+The hub's primal trajectory is pure synchronous PH, independent of the spokes
+(lagrangian only contributes an outer bound; xhatshuffle only an incumbent).
+Per local scenario, all of the following live **on the scenario model** and are
+therefore captured by dilling it:
 
 | State | Where it lives | Note |
 |---|---|---|
-| `_PHIter` | `phbase` | iteration counter |
-| `W[ndn_i]` (accumulated duals) | `s._mpisppy_model.W` | **must** restore — `Update_W` accumulates, so it is not recomputable |
-| nonant values | `s._mpisppy_data.nonant_indices` vardata `_value` | restoring these lets `Compute_Xbar` reproduce `xbar`; `xbar` itself need not be saved |
-| nonant **fixedness** | same vardata `.fixed` (+ the fixed value) | **must** restore — variable-fixing/forcing extensions (`fixer`, `slammer`) leave nonants fixed; a rebuilt model has them free. See §5.4 |
-| `rho[ndn_i]` | `s._mpisppy_model.rho` | restore (rho-updaters mutate it) |
+| `W[ndn_i]` (accumulated duals) | `s._mpisppy_model.W` | `Update_W` accumulates — not recomputable; must be preserved |
+| nonant values | nonant vardata `_value` | drive `Compute_Xbar`; `xbar` itself need not be separately saved |
+| nonant **fixedness** (+ fixed value) | nonant vardata `.fixed` | `fixer`/`slammer` leave nonants fixed; must survive (§5.5) |
+| `rho[ndn_i]` | `s._mpisppy_model.rho` | rho-updaters mutate it |
+| `xbars[ndn_i]` | `s._mpisppy_model.xbars` | consensus target |
 | smoothing `z/p/beta` | `s._mpisppy_model` | only if `--smoothing` |
 
-Helpers already exist: `_populate_W_cache` / `W_from_flat_list` (`phbase.py`),
-`_save_nonants` / `_restore_nonants` (`spopt.py`). Note `_save_nonants` already
-captures fixedness (`fixedness_cache`) — the checkpoint must gather it too (the
-PoC captured only `_value`).
+Under **leaf-rebuild**, this set is instead gathered/restored explicitly — helpers
+already exist: `_populate_W_cache`/`W_from_flat_list` (`phbase.py`),
+`_save_nonants`/`_restore_nonants` (`spopt.py`, which already captures fixedness in
+`fixedness_cache`).
 
-**Restore point:** between `Iter0()` and `iterk_loop()`. In serial this can be a
-driver call; in cylinders the hub runs `ph_main` internally, so restore happens
-in the **`post_iter0_after_sync`** extension hook (fires at the end of `Iter0`,
-`phbase.py:1079`). Iteration 1 of the resumed loop then reproduces what would
-have been iteration k+1 — verified bit-identical (§6).
+**Restore point:** after the scaffolding exists and models are loaded, before the
+`iterk` loop. In serial this can be a driver call; in cylinders the hub runs
+`ph_main` internally, so restore happens in the **`post_iter0_after_sync`**
+extension hook (end of `Iter0`, `phbase.py:1079`).
 
-### 5.2 Hub bounds + incumbent objective — *restored, carried forward*
+### 5.2 Recourse variable values — *warm start, in the dilled model*
 
-- `spcomm.BestInnerBound`, `spcomm.BestOuterBound` — aggregated bounds.
-- `opt.best_bound_obj_val`, `opt.best_solution_obj_val`.
+The second-stage (recourse) variable values are the bulk of a large scenario and
+are **not** part of the algorithmic primal state (only the nonants and params
+are). Their value is as a **MIP warm start**: restoring them and setting
+`s._mpisppy_data.solution_available = True` makes the first resumed subproblem
+solve start from the last iterate's solution via the existing
+`warmstart_subproblems` path (§4). For large MIPs this can save substantial
+branch-and-bound time on the first solve after each resume.
 
-These are products of the **async** spoke interaction; their *timing* is not
-reproducible, so they are carried forward (restored as best-so-far). They remain
-valid: a restored looser bound is simply improved again by the fresh spokes; a
-restored incumbent objective is never regressed because
-`update_best_solution_if_improving` (`spbase.py:578`) only accepts improvements.
+Because they ride in the dilled model, they cost nothing extra here. Under the
+leaf-rebuild backend they would be an **optional** all-var snapshot (off by
+default): a per-checkpoint O(scenario) cost that only pays off for MIP/simplex
+warm starts and is pure overhead for barrier solves — a bad trade when
+checkpoints are frequent, which is why it is opt-in there.
 
-Note: in a cylinders run the hub's `opt.best_solution_obj_val` is often `None` —
-the inner bound arrives as a scalar via `receive_innerbounds`
-(`spcommunicator.py:1010`) and lands in `spcomm.BestInnerBound`. So the
-incumbent **objective** is on the hub, but the incumbent **solution** is not (see
-5.3).
+**Caveat (both backends):** an xhat/incumbent evaluation fixes the first stage and
+re-solves, leaving recourse vars in the *eval* state; `_restore_nonants` restores
+only nonants. So the model must be checkpointed (dilled) at a point where its
+recourse values reflect the true last subproblem solve, not a mid-eval state —
+i.e. snapshot before an eval corrupts them, or evaluate on a copy (§9, item 4).
 
-### 5.3 Spoke incumbent — *the best xhat solution* — *restored, carried forward*
+### 5.3 Proximal-approximation cuts (`--linearize-proximal-terms`) — *in the dilled model*
 
-**The best xhat solution VALUES live on the xhat spoke, not the hub.** The
-xhatshuffle spoke holds them in `spoke.opt.best_solution_cache` (a `ComponentMap`
-over all vars) and `spoke.best_inner_bound`; `InnerBoundSpoke.finalize()`
-(`spoke.py:293`) loads them back. The hub keeps only the bound scalar.
+When the linearized prox is on, `attach_PH_to_objective` builds, per scenario
+(`phbase.py:892-894`):
 
-Therefore **"keep the best xhat" requires checkpointing the spoke incumbent.**
-Checkpointing the hub alone preserves the incumbent *number* but can lose the
-*solution* if the crash is late and a short resume does not re-find it.
+- `s._mpisppy_model.xsqvar` — the epigraph var for `x²`;
+- `s._mpisppy_model.xsqvar_cuts` — a `Constraint` that accumulates one linear cut
+  per visited x-location (`prox_approx.py:232,278,291`);
+- `s._mpisppy_data.xsqvar_prox_approx[ndn_i]` — a `ProxApproxManager` whose
+  bookkeeping (`cut_index`, the sorted `cut_values` array; `prox_approx.py:46-47`)
+  decides when a new cut is redundant.
 
-The spoke already holds this cache, so it checkpoints it **itself, on its own
-schedule** — on each incumbent improvement, independent of the hub's checkpoint
-iteration (§9, item 6). No hub↔spoke coordination is needed: the incumbent is a
-carried-forward best-so-far value, not part of the bit-reproducible primal
-trajectory (§7), so it does not have to align to a global iteration `k`.
+The cut *constraints* live on the model; the manager's bookkeeping lives on
+`_mpisppy_data` (a Block on the model). **Dilling the model captures both, and
+keeps them consistent** (the manager's references and the constraint set come back
+in lockstep) — no replay, no re-binding.
 
-Serialize the `ComponentMap` by **variable name** (`{var.name: value}`) — the
-`Var` objects are tied to one process's model and cannot cross a restart; rebuild
-the map by name lookup on the reconstructed model.
+Under **leaf-rebuild**, neither survives (`attach_PH_to_objective` rebuilds
+`xsqvar_cuts` empty). Each cut is fully determined by its x-location (continuous:
+`xsqvar ≥ 2v·x − v²`; discrete: integer-keyed), so the checkpoint stores only the
+per-nonant `cut_values` arrays and **replays** `add_cut` into the fresh model on
+restore. Skipping this leaves resume correct (cuts regenerate lazily via
+`check_tol_add_cut`) but coarser initially — fine for MIPs (not bit-reproducible
+anyway), relevant only if an LP/QP run wants bit-identity.
 
-### 5.4 Stateful extensions — *restored, bit-reproducible (if saved)*
+### 5.4 Hub bounds + incumbent, and the spoke incumbent — *non-model leaf data, carried forward*
 
-Several extensions hold trajectory-driving state and **must** be checkpointed or
-resume diverges:
+None of this lives on a hub scenario model, so it is restored as leaf data under
+**both** backends:
 
-- rho updaters (`mult_rho_updater`, `norm_rho_updater`, `grad_rho`) — multipliers
-  / previous-gradient history.
-- convergers — convergence history.
-- **variable-fixing/forcing extensions** — `fixer.py` and `slammer.py` both
-  decide to pin nonants and then **skip what they have already pinned**, so their
-  tracking *is* the trajectory. They illustrate two complications:
-  - **Where the tracking lives differs.** `slammer` keeps `self._slammed`
-    (`(ndn,i) → value`, sticky) on the **extension object** — covered directly by
-    the contract below. `fixer` keeps its per-variable convergence counters on the
-    **scenario model** (`s._mpisppy_data.conv_iter_count`), *not* on `self` — so a
-    contract that only serializes `self.*` would miss them. The contract must let
-    an extension serialize its model-attached state too.
-  - **The tracker and the actual variable state must be restored together and
-    agree.** Both extensions call `.fix()` / set a value on real nonant vardata.
-    On resume the rebuilt model has those vars free. If the tracker is restored
-    ("already fixed/slammed X") but X's actual `.fixed`/value is not (§5.1), they
-    **disagree**: the extension skips X as done while the solver re-optimizes X
-    freely — drift, and X is never re-pinned. This is *worse* than not tracking.
-    So variable fixedness (§5.1) and the extension's records are one unit:
-    checkpoint and restore them together.
+- `spcomm.BestInnerBound`, `spcomm.BestOuterBound`; `opt.best_bound_obj_val`,
+  `opt.best_solution_obj_val`. Products of **async** spoke interaction — their
+  timing is not reproducible, so they are carried forward as best-so-far. They
+  stay valid: a restored looser bound is improved again; a restored incumbent
+  objective is never regressed because `update_best_solution_if_improving`
+  (`spbase.py:578`) only accepts improvements. In cylinders the hub's
+  `best_solution_obj_val` is often `None` — the inner bound arrives as a scalar via
+  `receive_innerbounds` (`spcommunicator.py:1010`) into `spcomm.BestInnerBound`.
+- **The best xhat SOLUTION values live on the xhat spoke**, in
+  `spoke.opt.best_solution_cache` (a `ComponentMap` over all vars) +
+  `spoke.best_inner_bound`; `InnerBoundSpoke.finalize()` (`spoke.py:293`) loads
+  them back. So **"keep the best xhat" requires checkpointing the spoke
+  incumbent**, not just hub bounds. The spoke checkpoints its own cache **on its
+  own schedule** — on each improvement, reusing
+  `_maybe_write_incumbent_on_improvement`, independent of the hub checkpoint (§9,
+  item 6). Serialize the `ComponentMap` **by variable name** (`{var.name: value}`)
+  and rebuild by name lookup on the reconstructed model.
 
-The `Extension` base class has **no serialization hook today**. We add a
-`checkpoint_state()` / `restore_state()` contract (§9, item 3) that can serialize
-both `self.*` state and the extension's model-attached state
-(`s._mpisppy_data.*`). The same contract serves the hub's extensions and an
-xhatter's extensions, because both run through the same `extobject` machinery
-(`MultiExtension`).
+### 5.5 Stateful extensions — *split: object state is leaf data, model state rides in the dill*
 
-**Answer to "do fixing extensions keep tracking across resume?"** Yes — that is
-the intent: their records are restored, so they continue to keep track (and
-`slammer`'s slams stay sticky, `fixer` does not re-count from zero). But only if
-both points above hold; the variable fixedness (§5.1) and model-attached counters
-must be restored alongside the extension object, consistently.
+Several extensions hold trajectory-driving state and **must** be restored or resume
+diverges:
 
-### 5.5 RNG and spoke cursor — *partially restored*
+- rho updaters (`mult_rho_updater`, `norm_rho_updater`, `grad_rho`), convergers —
+  multiplier / gradient / convergence history, kept on the **extension object**.
+- variable-fixing/forcing extensions — `fixer.py` and `slammer.py` pin nonants and
+  then **skip what they already pinned**, so their tracking *is* the trajectory.
+  They span both storage locations: `slammer._slammed` is on the **extension
+  object**, while `fixer`'s per-variable `conv_iter_count` is on the **scenario
+  model** (`s._mpisppy_data`).
+
+Consequences:
+
+- **Model-attached tracker state (`fixer`) rides in the dilled model** for free —
+  consistent with the nonant fixedness it pairs with (§5.1). Under leaf-rebuild it
+  must be gathered explicitly.
+- **Extension-object state is never on a model**, so it needs a serialization
+  contract regardless of backend. The `Extension` base has none today; add
+  `checkpoint_state()` / `restore_state()` (no-ops by default; implemented by rho
+  updaters, `fixer`, `slammer`, convergers), aggregated by the `Checkpointer`
+  (§9, item 3). The same contract serves hub and xhatter extensions
+  (`MultiExtension`).
+- **The tracker and the actual variable state must agree.** Restoring "already
+  fixed X" without X's real `.fixed`/value (§5.1) makes the extension skip X while
+  the solver frees it — worse than no tracking. dill-reload gives this for free
+  (both come back together); leaf-rebuild must restore fixedness and the tracker as
+  one unit.
+
+### 5.6 RNG and spoke cursor — *non-model leaf data, partially restored*
 
 - xhatshuffle seeds its stream to a fixed `42` and samples **once**
-  (`xhatshufflelooper_bounder.py:88,94`) — the shuffle is deterministic, so no
-  RNG state needs saving.
-- The `ScenarioCycler` cursor and `xh_iter` are **local variables inside
-  `main()`** — unreachable from outside. Exact spoke-cursor resume needs those
-  hoisted onto `self` (Phase 5). Without it, the spoke restarts its cursor; for
-  correctness this only changes *which* scenario it tries next, not the
-  preserved best (which is restored from 5.3).
-- lagrangian / lagranger spokes use **no RNG**; their bound is deterministic
-  given the hub's W. State to carry: `_PHIter`, `trivial_bound`, last `bound`,
-  received `localWs`.
+  (`xhatshufflelooper_bounder.py:88,94`) — deterministic, no RNG state to save.
+- The `ScenarioCycler` cursor and `xh_iter` are **local variables inside `main()`**
+  — unreachable. Exact spoke-cursor resume needs them hoisted onto `self` (Phase
+  5). Without it the spoke restarts its cursor; this only changes *which* scenario
+  it tries next, not the preserved best (restored from §5.4).
+- lagrangian / lagranger spokes use **no RNG**; their bound is deterministic given
+  the hub's `W`. State to carry: `_PHIter`, `trivial_bound`, last `bound`, received
+  `localWs`.
 
-### 5.6 Geometry / cfg fingerprint — *checkpoint metadata*
+### 5.7 Geometry / cfg fingerprint — *checkpoint metadata*
 
-Each per-rank file records `{n_proc, rank, local scenario list}` (and, for the
-header, a cfg hash). Resume verifies the current layout matches and **refuses a
-mismatch with a clear error** (validated — see §6).
+Each per-rank file records `{n_proc, rank, local scenario list}` and a cfg hash.
+Resume verifies the current layout matches and **refuses a mismatch with a clear
+error** (validated — §6).
 
 ---
 
-## 6. PoC evidence (what is already validated)
+## 6. PoC evidence (what is validated, and what is not)
 
-A throwaway PoC (serial + multi-rank + cylinders, farmer, gurobi_persistent)
-confirmed the design:
+A throwaway PoC (serial + multi-rank + cylinders, farmer LP, gurobi_persistent)
+validated the **framework and the leaf-rebuild backend**:
 
 - **Serial:** resume-from-iter-6 reproduced a full 12-iteration run with
-  `max|diff| = 0.000e+00` for W, nonants, and rho. Persistent solver survives the
-  rebuild (Iter0 re-creates + `set_instance`).
-- **Multi-rank:** `-np 3` (1 scenario/rank) and uneven `-np 2` (2+1) both resume
-  bit-identical on every rank. Per-rank rank-tagged files, barrier + atomic
-  temp-then-rename write. Geometry mismatch (resume `-np 3` ckpt under `-np 2`)
-  fails with a clear error.
+  `max|diff| = 0.000e+00` for W, nonants, rho (bit-identical — LP, deterministic
+  solver). Persistent solver survives the rebuild (Iter0 re-creates +
+  `set_instance`).
+- **Multi-rank:** `-np 3` (1 scenario/rank) and uneven `-np 2` (2+1) resume
+  bit-identical on every rank; per-rank rank-tagged files, barrier + atomic
+  temp-then-rename write. Geometry mismatch fails with a clear error.
 - **Cylinders (PH hub + lagrangian + xhatshuffle):** hub primal resumes
-  **bit-identical** inside `WheelSpinner` (windows, spokes, async). The best xhat
-  *solution* (carried on the spoke) is preserved exactly across a crash;
-  `BestInnerBound` carried exactly; `BestOuterBound` **differed** run-to-run
-  (async timing) but stayed valid.
+  bit-identical inside `WheelSpinner`; the best xhat *solution* (on the spoke) is
+  preserved exactly; `BestInnerBound` carried exactly; `BestOuterBound` differed
+  run-to-run (async) but stayed valid.
 
-These also surfaced the findings folded into §5 and §9.
+**Not yet validated (the primary backend for this use case):**
+
+- Dilling and reloading a **mid-run** scenario model — spliced W/prox objective,
+  `LinearExpression` cut bodies, mutable params, post-`set_instance` — round-trips
+  cleanly. The repo only dills *clean* models today.
+- The **MIP** path end-to-end: warm start via `solution_available`, incumbent
+  preserved across a stop/resume, run continues correctly (bit-identity is *not*
+  expected — §7).
+
+These are the first things Phase 1 must prove (a small MIP, e.g. `sizes`).
 
 ---
 
 ## 7. Determinism contract (what resume guarantees)
 
-- **Primal trajectory (W, nonants, rho, xbar): bit-identical.** This is the
-  correctness guarantee — the resumed run produces the same iterates as an
-  uninterrupted run.
-- **Bounds and incumbent: valid and best-so-far, but NOT bit-reproducible.** They
-  come from async, timing-dependent spoke interaction. Resume never reports a
-  *worse* best-so-far than the checkpoint, but it may report a different
-  (equally valid) bound than the original run would have at the same iteration.
+- **For the target MIP use case:** resume **continues the optimization correctly
+  and warm-started**, and **never loses or regresses the best xhat**. It is *not*
+  bit-reproducible — multi-threaded MIP solves are nondeterministic and admit
+  multiple optima, so the resumed iterates may differ from a hypothetical
+  uninterrupted run. That is expected, not a bug.
+- **Bounds and incumbent:** valid and best-so-far, not bit-reproducible (async,
+  timing-dependent). Resume never reports a *worse* best-so-far than the
+  checkpoint.
+- **Leaf-rebuild on a deterministic LP/QP solver:** the primal trajectory (W,
+  nonants, rho, xbar) *can* be bit-identical — this is what the PoC showed — but it
+  is a bonus, not the target guarantee.
 
-This distinction must be stated in user docs so a tightened/loosened bound after
-resume is not mistaken for a bug.
+State this in user docs so a differing (but valid) trajectory or bound after
+resuming a MIP is not mistaken for a bug.
 
 ---
 
@@ -271,108 +376,104 @@ resume is not mistaken for a bug.
 
 Checkpointing is **opt-in** and adds nothing when off.
 
-- **`--checkpoint-every k`** — write a checkpoint every `k` PH iterations.
-  - `k` unset or `0` ⇒ checkpointing is **disabled**: the `Checkpointer`
-    extension is not attached, so there is zero overhead and no files.
-  - `k ≥ 1` ⇒ checkpoint every `k` iterations **and always at the end of
-    iteration 0**, regardless of `k`. Iteration 0 establishes the resume
-    baseline — solvers are created, the trivial bound is computed, the initial
-    (`W = 0`) solve is done — so a crash anywhere in the `iterk` loop has a valid
-    resume point even before the first periodic checkpoint, and the iter-0 state
-    composes with the existing `--iter0-from-pickle` warm-start.
-- **`--checkpoint-dir <dir>`** — where per-rank checkpoint files and the
-  manifest are written (see §10).
+- **Trigger — end-of-run / on-signal (primary).** The use case stops on a
+  schedule, so the natural trigger is "checkpoint and exit cleanly at the end of
+  the run or on a signal" — after a fixed number of iterations
+  (`--max-iterations`), on a wall-clock budget, or on `SIGTERM`/`SIGUSR1`. This
+  writes one complete, resumable checkpoint per planned stop.
+- **`--checkpoint-every k` (optional insurance).** Also checkpoint every `k` PH
+  iterations for unplanned-crash coverage. `k` unset/`0` ⇒ disabled (the
+  `Checkpointer` extension is not attached; zero overhead, no files). `k ≥ 1` ⇒
+  every `k` iterations **and always at the end of iteration 0** (which establishes
+  the resume baseline — solvers created, trivial bound computed, initial `W = 0`
+  solve done — and composes with `--iter0-from-pickle`). Given infrequent planned
+  stops, most runs will leave this off or large.
+- **`--checkpoint-dir <dir>`** — where per-rank files and the manifest are written
+  (§10).
+- **`--checkpoint-backend {dill-model, leaf}`** — how scenario-model state is
+  restored (§2.2). Default `dill-model` (captures the warm start + cuts, dodges an
+  expensive `scenario_creator` re-run). `leaf` is the **low-cost** option — tiny,
+  fast, version-robust checkpoints — for small/cheap-creator runs or frequent
+  kill-safety writes.
 - **`--resume-from <dir>`** (or `--resume`, auto-selecting the latest *complete*
-  checkpoint from the manifest) — rebuild the wheel and restore that checkpoint.
-  Resume requires identical geometry (§5.6); a mismatch is refused with a clear
-  error.
+  checkpoint from the manifest) — reconstruct the wheel and restore. Resume
+  requires identical geometry (§5.7); a mismatch is refused with a clear error.
 
-Hard-kill coverage is the user's tradeoff: small `k` is safest, larger `k` cuts
-I/O. Each checkpoint is published atomically (§9, item 7; §10), so a kill *during*
-a write leaves the previous complete checkpoint intact and referenced — never a
+Each checkpoint is published atomically (§9, item 7; §10), so a kill *during* a
+write leaves the previous complete checkpoint intact and referenced — never a
 half-written one.
 
 ### 8.1 Bundles
 
-mpi-sppy has **only proper bundles** now — loose bundling (`bundles_per_rank`)
-was removed in 2026 (`spbase.py`; see `doc/src/properbundles.rst`). A proper
-bundle consumes whole second-stage tree nodes and is a **first-class
+mpi-sppy has **only proper bundles** now — loose bundling was removed in 2026
+(`spbase.py`; `doc/src/properbundles.rst`). A proper bundle is a **first-class
 subproblem**: it appears in `local_scenarios` with its own `nonant_indices`, and
-PH has no separate `local_subproblems` for it.
+is itself a Pyomo model. So checkpointing **applies uniformly** — dilling
+`local_scenarios` dills bundles exactly as it dills plain scenarios, and the
+leaf-rebuild path iterates `nonant_indices` identically. Holds whether bundles are
+in memory (`--scenarios-per-bundle`) or pickled (`--pickle-bundles-dir` /
+`--unpickle-bundles-dir`).
 
-Consequently checkpointing **applies to bundled runs directly and uniformly** —
-the same code that gathers/restores `W`, nonants, and `rho` by iterating
-`local_scenarios` + `nonant_indices` covers a bundle exactly as it covers a plain
-scenario. This holds whether bundles are built in memory
-(`--scenarios-per-bundle`) or pickled and re-read
-(`--pickle-bundles-dir` / `--unpickle-bundles-dir`); both produce proper bundles
-and checkpoint identically. Pickling is an independent optimization (skip the
-bundle rebuild on resume), not a requirement for checkpointing.
-
-One cleanup: `_restore_nonants` still carries a 2019 comment that it "will not
-work on bundles" (`spopt.py`). That predates proper bundles and refers to the
-removed loose mechanism; it should be re-verified and refreshed when bundle
-checkpointing is validated (Phase 2).
+One cleanup: `_restore_nonants` still carries a 2019 comment that it "will not work
+on bundles" (`spopt.py`). That predates proper bundles and refers to the removed
+loose mechanism; re-verify and refresh it when bundle checkpointing is validated
+(Phase 2).
 
 ---
 
 ## 9. Core changes required
 
-These are the touch-points an implementation needs beyond the PoC's
-extension/subclass hacks:
+Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
 
 1. **Global iteration counter / resume offset.** `iterk_loop` hardcodes
    `for _PHIter in range(1, max+1)` (`phbase.py:1156`), so a resumed run renumbers
-   from 1 and its checkpoints collide with the pre-crash ones. Add a resume
-   offset so checkpoint numbering is the global iteration, and so termination
-   honors the original `max_iterations`.
-2. **One-line xhatter write hook.** The xhatter `main()` loop calls no
-   per-iteration extension hook. Add a single `self.opt.extobject.enditer()` (or a
-   dedicated checkpoint hook) inside the loop. Then **one `Checkpointer` extension
-   serves hub and xhatter uniformly** — restore at `post_iter0` /
-   `post_iter0_after_sync`, write at `enditer` — instead of bespoke spoke
-   subclasses. (Spoke restore already has a home: `pre_iter0`/`post_iter0` fire
-   once in `xhat_prep`, `xhatbase.py:36,49`.)
-3. **Extension `checkpoint_state` / `restore_state` contract** on the `Extension`
-   base (no-ops by default; implemented by rho updaters, `fixer`, `slammer`,
-   convergers). Must serialize both `self.*` state and the extension's
-   model-attached state (`s._mpisppy_data.*`, e.g. `fixer`'s `conv_iter_count`),
-   and be restored consistently with the variable fixedness in §5.1 (see §5.4).
-   The `Checkpointer` aggregates the other extensions' dicts into the per-rank
-   file.
-4. **Full-var snapshot around any xhat/incumbent evaluation.** Evaluating an xhat
-   fixes the first stage and re-solves; `_restore_nonants` restores *only*
-   nonants, leaving second-stage recourse vars in the eval state. The checkpointed
-   primal state (W/nonants/rho) is unaffected (it is gathered from nonants/params),
-   but any *full-objective* read taken right after an eval is wrong. Snapshot and
-   restore all vars around an eval, or evaluate on a copy.
-5. **Geometry / cfg fingerprint** (§5.6) with a clear refusal on mismatch.
+   from 1 and its checkpoints collide with the pre-crash ones. Add a resume offset
+   so checkpoint numbering is the global iteration and termination honors the
+   original `max_iterations`.
+2. **A reload-model resume branch.** When restoring via dill-reload, startup must
+   reconstruct comms/windows/solvers but **skip `attach_PH_to_objective`** — the
+   reloaded model already carries the spliced W/prox objective and the prox cuts —
+   then strip/rebuild `_solver_plugin` (`set_instance`) and set
+   `solution_available` for the warm start (§5.2). This is a distinct branch from
+   the leaf-rebuild "build fresh, overlay values" path; the `Checkpointer` picks
+   the branch from `--checkpoint-backend`.
+3. **Extension `checkpoint_state` / `restore_state` contract** on `Extension`
+   (no-ops by default; implemented by rho updaters, `fixer`, `slammer`,
+   convergers). Covers **extension-object** state under both backends;
+   model-attached state (`fixer`'s `conv_iter_count`) rides in the dill under
+   dill-reload but must be gathered explicitly under leaf-rebuild (§5.5). The
+   `Checkpointer` aggregates the dicts into the per-rank file.
+4. **Clean-point model snapshot (xhat/incumbent eval).** Evaluating an xhat fixes
+   the first stage and re-solves, corrupting recourse vars (§5.2). The model must
+   be dilled (or its values gathered) when recourse values reflect the true last
+   solve — snapshot before an eval, or evaluate on a copy.
+5. **Geometry / cfg fingerprint** (§5.7) with a clear refusal on mismatch.
 6. **Async per-spoke incumbent checkpoints — no hub↔spoke coordination.** Each
-   spoke serializes its *own* best incumbent (the best xhat solution values, §5.3)
-   and bound on its own schedule — whenever its incumbent improves, reusing the
-   trigger already in `_maybe_write_incumbent_on_improvement` — to its own
-   rank-tagged file with the same atomic write (item 7). Spokes are **not**
-   synchronized to the hub's checkpoint iteration. The determinism contract (§7)
-   makes bounds and the incumbent best-so-far, not bit-reproducible, so a
-   globally-consistent "snapshot at iteration `k`" across cylinders is
-   unnecessary: on resume the hub restores its bit-identical primal state (§5.1)
-   while each spoke independently reloads its latest incumbent/bound, all of which
-   are accepted only if improving (`update_best_solution_if_improving`,
-   `spbase.py:578`). Leaning into the existing asynchrony this way avoids a
-   hub-triggered snapshot barrier and its stall/deadlock risk against
-   `got_kill_signal`.
-7. **Atomic writes with a single published generation** (per-rank temp-then-rename
-   is already in the PoC). Each rank writes only its local state to a rank-tagged
-   temp file and renames it into place; the hub's set of per-rank files is then
-   published as one checkpoint by atomically rewriting `manifest.json` (itself
-   temp-then-rename) to point at the new complete generation (§10). Because that
-   manifest flip is the single commit point, **one committed generation is
-   enough**: a kill before the flip leaves the previous complete checkpoint intact
-   and still referenced; a kill after it leaves the new one. The prior generation
-   can therefore be deleted as soon as the new manifest is in place — there is no
-   correctness need to retain the last *k*. Keeping a few older generations is an
-   optional convenience (roll back further, inspect history), not a kill-safety
-   requirement.
+   spoke serializes its *own* best incumbent (the best xhat solution values, §5.4)
+   and bound whenever its incumbent improves — reusing
+   `_maybe_write_incumbent_on_improvement` — to its own rank-tagged file with the
+   same atomic write (item 7). Spokes are **not** synchronized to the hub's
+   checkpoint iteration: the determinism contract (§7) makes bounds/incumbent
+   best-so-far, not bit-reproducible, so a globally-consistent "snapshot at
+   iteration `k`" across cylinders is unnecessary. On resume the hub restores its
+   primal state while each spoke reloads its latest incumbent/bound, all accepted
+   only if improving (`update_best_solution_if_improving`, `spbase.py:578`). This
+   also avoids a hub-triggered snapshot barrier and its stall/deadlock risk.
+7. **Atomic writes with a single published generation.** Each rank writes only its
+   local state (dilled models + leaf non-model data) to rank-tagged temp files and
+   renames them into place; the set of per-rank files is then published as one
+   checkpoint by atomically rewriting `manifest.json` (itself temp-then-rename) to
+   point at the new complete generation (§10). That flip is the single commit
+   point, so **one committed generation is enough**: a kill before it keeps the
+   previous checkpoint, a kill after it keeps the new one. The prior generation can
+   be deleted once the manifest is in place. Keeping a few older generations is
+   optional convenience, not a kill-safety requirement.
+8. **A `Checkpointer` extension** (write at `enditer` / on trigger, restore at
+   `post_iter0_after_sync`). For spokes, the xhatter `main()` loop calls no
+   per-iteration extension hook — add a single `self.opt.extobject.enditer()` (or a
+   dedicated checkpoint hook) inside it so **one `Checkpointer` serves hub and
+   xhatter uniformly** (restore already has a home: `pre_iter0`/`post_iter0` fire
+   once in `xhat_prep`, `xhatbase.py:36,49`).
 
 ---
 
@@ -380,24 +481,24 @@ extension/subclass hacks:
 
 ```
 <ckpt_dir>/
-  manifest.json                    # cfg hash, n_proc, cylinder map, latest complete hub iter
+  manifest.json                       # cfg hash, n_proc, backend, cylinder map, latest complete hub generation
   hub/
-    iter_<NNNN>/
-      hub_rank_<RRRR>.pkl          # hub primal + extension state (+ bounds/incumbent obj)
+    gen_<NNNN>/                        # NNNN = global PH iteration at the checkpoint
+      hub_rank_<RRRR>.pkl             # non-model leaf state: iter counter, bounds, extension-object state
+      hub_rank_<RRRR>_scen_<S>.dill   # dilled scenario model(s) for this rank (dill-model backend)
   spokes/
-    spoke_<name>_rank_<RRRR>.pkl   # each spoke's latest incumbent/bound, overwritten
-                                   #   asynchronously on improvement (§9, item 6)
+    spoke_<name>_rank_<RRRR>.pkl      # each spoke's latest incumbent (best xhat, by name) + bound,
+                                      #   overwritten asynchronously on improvement (§9, item 6)
 ```
 
 The hub writes iteration-tagged generations under `hub/`; each spoke keeps a
-single latest-wins file under `spokes/` that it overwrites (atomically) whenever
-its incumbent improves — the two are deliberately *not* aligned to a common
-iteration (§9, item 6). `manifest.json` is the single commit point: it names the
-latest *complete* hub generation (all hub ranks flushed), and publishing a new
-one means atomically renaming a freshly written `manifest.json` into place (§9,
-item 7). Resume reads whatever the manifest currently names, plus whatever each
-spoke last committed under `spokes/`. Use plain `pickle` for the numeric state;
-`dill` only where models/closures must be serialized.
+single latest-wins file under `spokes/` that it overwrites atomically on
+improvement — the two are deliberately *not* aligned (§9, item 6).
+`manifest.json` is the single commit point: it names the latest *complete* hub
+generation and records the backend so resume loads the right way. Under the `leaf`
+backend the `.dill` model files are replaced by numeric arrays inside the
+`hub_rank_*.pkl`. Use plain `pickle` for the numeric/leaf state; `dill` for the
+scenario models.
 
 ---
 
@@ -407,60 +508,67 @@ Each phase is a review-sized PR that is green on its own and adds user-visible
 value. New tests are wired into `run_coverage.bash` **and**
 `test_pr_and_main.yml` in the same commit.
 
-- **Phase 1 — Serial hub checkpoint/resume.** `Checkpointer` extension
-  (write at `enditer`, restore at `post_iter0_after_sync`); global iteration
-  counter / resume offset; geometry+cfg fingerprint; atomic per-rank writes;
-  CLI flags `--checkpoint-dir`, `--checkpoint-every k` (0/unset ⇒ off; else every
-  `k` iters **and always after iter 0** — §8), `--resume-from`/`--resume`. Restore
-  W/nonants/rho. Test: serial farmer kill+resume bit-identical.
+- **Phase 1 — Serial hub checkpoint/resume, dill-model backend.** `Checkpointer`
+  extension; global iteration counter / resume offset; reload-model resume branch
+  (skip `attach_PH_to_objective`, rebuild `_solver_plugin`, set warm start);
+  geometry+cfg fingerprint; atomic per-rank writes + manifest; end-of-run/on-signal
+  trigger (+ optional `--checkpoint-every k`); CLI flags `--checkpoint-dir`,
+  `--checkpoint-backend`, `--resume-from`/`--resume`. Test: serial **MIP** (e.g.
+  `sizes`) stop+resume — run continues correctly, incumbent preserved, warm start
+  taken (mid-run model dill round-trip proven, §6).
 - **Phase 2 — Multi-rank + bundles.** Barriers, rank-tagged files, single-generation
-  atomic publish via the manifest (§9, item 7). Validate checkpointing with
-  **proper bundles** (bundle = first-class subproblem, §8.1) and refresh the stale
-  `_restore_nonants` bundle comment. Test: `mpiexec` farmer kill+resume
-  bit-identical on every rank, incl. uneven distribution and a
-  `--scenarios-per-bundle` run; mismatch refusal.
-- **Phase 3 — Extension state contract.** `checkpoint_state`/`restore_state` on
-  `Extension` (covering `self.*` and model-attached state); restore nonant
-  fixedness in the primal set (§5.1); implement the contract for rho updaters,
-  `fixer`, and `slammer`. Test: PH + norm-rho-updater resumes bit-identical; PH +
-  `fixer` resumes with the *same* variables fixed (and the same in-progress
-  counters); PH + `slammer` resumes with slams intact.
+  atomic publish. Validate with **proper bundles** (§8.1) and refresh the stale
+  `_restore_nonants` comment. Test: `mpiexec` MIP stop+resume on every rank, incl.
+  uneven distribution and `--scenarios-per-bundle`; mismatch refusal.
+- **Phase 3 — Extension-object state contract.** `checkpoint_state`/`restore_state`
+  on `Extension`; implement for rho updaters, `fixer`, `slammer`, convergers.
+  (Model-attached `fixer` counter and nonant fixedness ride in the dill.) Test: PH
+  + norm-rho-updater, PH + `fixer`, PH + `slammer` each resume with state intact
+  and consistent with variable fixedness.
 - **Phase 4 — Cylinders / spokes.** One-line xhatter write hook; unified
-  `Checkpointer` on spoke opts; each spoke checkpoints its own **incumbent (best
-  xhat solution)** asynchronously on improvement — no hub↔spoke coordination (§9,
-  item 6). Test: farmer cylinders (hub+lagrangian+xhatshuffle) crash+resume — hub
-  primal bit-identical, best xhat preserved.
+  `Checkpointer` on spoke opts; each spoke checkpoints its own **best xhat** (by
+  name) asynchronously on improvement — no hub↔spoke coordination (§9, item 6).
+  Test: farmer/`sizes` cylinders (hub+lagrangian+xhatshuffle) stop+resume — run
+  continues, best xhat preserved.
 - **Phase 5 — Exact spoke continuity (optional).** Hoist `ScenarioCycler`/`xh_iter`
-  onto `self`; checkpoint cursor (+ RNG getstate if a stream becomes stateful).
-- **Phase 6 — Broader coverage.** lagranger, FWPH, subgradient spokes;
-  scenario-pickle reconstruction path for expensive `scenario_creator`s.
+  onto `self`; checkpoint the cursor (+ RNG getstate if a stream becomes stateful).
+- **Phase 6 — Leaf-rebuild backend + broader coverage.** The lighter,
+  version-robust `--checkpoint-backend leaf` path (rebuild via `scenario_creator`,
+  overlay W/rho/nonants/fixedness, replay prox `cut_values`, optional all-var warm
+  start); this is what the PoC prototyped. Plus lagranger, FWPH, subgradient
+  spokes.
 
 ---
 
 ## 12. Open questions / risks
 
-Resolved:
+Resolved (given the §1 use case):
 
-- **`--checkpoint-every k` semantics** (§8): 0/unset ⇒ off; otherwise every `k`
-  iters and always after iter 0.
-- **Bundles** (§8.1): only proper bundles exist; each is a first-class subproblem,
-  so checkpointing applies uniformly — no special handling needed.
+- **Backend choice.** dill the scenario models (§2.2): overhead is negligible at a
+  few checkpoints, version robustness is unneeded (same-environment resume next
+  day), and it captures the warm start + prox cuts + model-attached state for free
+  while avoiding an expensive `scenario_creator` re-run.
+- **Warm start.** Worthwhile for MIPs (branch-and-bound benefits), free via the
+  dilled model, fed through the existing `warmstart_subproblems` /
+  `solution_available` path.
+- **Checkpoint retention** (§9, item 7): a single manifest-published generation
+  suffices; older generations are optional history.
 - **Spoke snapshot coordination** (§9, item 6): resolved by *not* coordinating.
-  Spokes checkpoint their own incumbents asynchronously on improvement; the
-  determinism contract (§7) makes this sufficient and removes the sync point that
-  would otherwise risk stalling fast spokes or deadlocking with `got_kill_signal`.
-- **Checkpoint retention** (§9, item 7): a single manifest-published generation is
-  enough for kill-safety; last-*k* retention is optional history, not required.
 
 Still open:
 
-- **variable_probability / surrogate vars.** With variable probabilities mpi-sppy
-  masks `W` (but not prox) for zero-probability nonants and assumes each such
-  nonant's surrogate var is fixed at 0. Restore must **reproduce that invariant,
-  not just reload the raw `W` array**: confirm the zero-probability mask is
-  re-applied and the surrogate vars come back fixed-at-0 (§5.1 fixedness), so a
-  masked component is never treated as live on resume. Needs verification; among
-  the spokes only `xhatxbar` supports variable_probability today.
+- **Mid-run MIP model dill round-trip** (§6) — the load-bearing unvalidated
+  assumption. Must be proven first in Phase 1 (spliced objective, `LinearExpression`
+  cut bodies, mutable params, post-`set_instance`).
+- **Disk footprint.** Dilled large MIP models × scenarios/rank × a few generations
+  can be large; the single-generation policy (§9, item 7) keeps only one live, but
+  document the peak (two generations during a publish).
+- **variable_probability / surrogate vars.** mpi-sppy masks `W` (not prox) for
+  zero-probability nonants and assumes each surrogate var is fixed at 0. Restore
+  must **reproduce that invariant**: dill-reload preserves the mask and fixedness
+  automatically, but verify; leaf-rebuild must re-apply the mask and re-fix the
+  surrogate at 0 (§5.1 fixedness), not just reload raw `W`. Among the spokes only
+  `xhatxbar` supports variable_probability today.
 - **Cross-geometry resume** is explicitly deferred; revisit if HPC users need to
   resume on a different node count.
 ```
