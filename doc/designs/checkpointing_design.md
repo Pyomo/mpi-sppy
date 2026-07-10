@@ -157,7 +157,7 @@ A checkpoint is **not** a snapshot of the object graph. On resume:
 - **Warm-start plumbing:** `spopt.py` already supports warm-starting subproblem
   solves — the `warmstart_subproblems` option plus `WarmstartStatus.PRIOR_SOLUTION`
   use a warm start when `s._mpisppy_data.solution_available` is set
-  (`spopt.py:301-305`). Restoring the model's variable values and setting
+  (`warmstart_subproblems` in `spopt.py`). Restoring the model's variable values and setting
   `solution_available=True` feeds the restored MIP solution straight into this
   path — no new solver code.
 - **W / xbar persistence:** `utils/w_utils/wxbarwriter.py` (writes in
@@ -202,7 +202,7 @@ already exist: `_populate_W_cache`/`W_from_flat_list` (`phbase.py`),
 **Restore point:** after the scaffolding exists and models are loaded, before the
 `iterk` loop. In serial this can be a driver call; in cylinders the hub runs
 `ph_main` internally, so restore happens in the **`post_iter0_after_sync`**
-extension hook (end of `Iter0`, `phbase.py:1079`).
+extension hook (`post_iter0_after_sync`, end of `Iter0` in `phbase.py`).
 
 ### 5.2 Recourse variable values — *warm start, in the dilled model*
 
@@ -229,13 +229,13 @@ i.e. snapshot before an eval corrupts them, or evaluate on a copy (§9, item 4).
 ### 5.3 Proximal-approximation cuts (`--linearize-proximal-terms`) — *in the dilled model*
 
 When the linearized prox is on, `attach_PH_to_objective` builds, per scenario
-(`phbase.py:892-894`):
+(in `attach_PH_to_objective`, `phbase.py`):
 
 - `s._mpisppy_model.xsqvar` — the epigraph var for `x²`;
 - `s._mpisppy_model.xsqvar_cuts` — a `Constraint` that accumulates one linear cut
-  per visited x-location (`prox_approx.py:232,278,291`);
+  per visited x-location (`add_cut` in `prox_approx.py`);
 - `s._mpisppy_data.xsqvar_prox_approx[ndn_i]` — a `ProxApproxManager` whose
-  bookkeeping (`cut_index`, the sorted `cut_values` array; `prox_approx.py:46-47`)
+  bookkeeping (`cut_index`, the sorted `cut_values` array; `ProxApproxManager` in `prox_approx.py`)
   decides when a new cut is redundant.
 
 The cut *constraints* live on the model; the manager's bookkeeping lives on
@@ -261,12 +261,12 @@ None of this lives on a hub scenario model, so it is restored as leaf data under
   timing is not reproducible, so they are carried forward as best-so-far. They
   stay valid: a restored looser bound is improved again; a restored incumbent
   objective is never regressed because `update_best_solution_if_improving`
-  (`spbase.py:578`) only accepts improvements. In cylinders the hub's
+  (`spbase.py`) only accepts improvements. In cylinders the hub's
   `best_solution_obj_val` is often `None` — the inner bound arrives as a scalar via
-  `receive_innerbounds` (`spcommunicator.py:1010`) into `spcomm.BestInnerBound`.
+  `receive_innerbounds` (`spcommunicator.py`) into `spcomm.BestInnerBound`.
 - **The best xhat SOLUTION values live on the xhat spoke**, in
   `spoke.opt.best_solution_cache` (a `ComponentMap` over all vars) +
-  `spoke.best_inner_bound`; `InnerBoundSpoke.finalize()` (`spoke.py:293`) loads
+  `spoke.best_inner_bound`; `InnerBoundSpoke.finalize()` (`spoke.py`) loads
   them back. So **"keep the best xhat" requires checkpointing the spoke
   incumbent**, not just hub bounds. The spoke checkpoints its own cache **on its
   own schedule** — on each improvement, reusing
@@ -307,7 +307,7 @@ Consequences:
 ### 5.6 RNG and spoke cursor — *non-model leaf data, partially restored*
 
 - xhatshuffle seeds its stream to a fixed `42` and samples **once**
-  (`xhatshufflelooper_bounder.py:88,94`) — deterministic, no RNG state to save.
+  (`main()` in `xhatshufflelooper_bounder.py`) — deterministic, no RNG state to save.
 - The `ScenarioCycler` cursor and `xh_iter` are **local variables inside `main()`**
   — unreachable. Exact spoke-cursor resume needs them hoisted onto `self` (Phase
   5). Without it the spoke restarts its cursor; this only changes *which* scenario
@@ -407,8 +407,8 @@ Checkpointing is **opt-in** and adds nothing when off.
   stops, most runs will leave this off or large.
 - **`--checkpoint-dir <dir>`** — where per-rank files and the manifest are written
   (§10).
-- **`--checkpoint-backend {dill-model, leaf}`** — how scenario-model state is
-  restored (§2.2). Default `dill-model` (captures the warm start + cuts, dodges an
+- **`--checkpoint-backend {dill-reload, leaf}`** — how scenario-model state is
+  restored (§2.2). Default `dill-reload` (captures the warm start + cuts, dodges an
   expensive `scenario_creator` re-run). `leaf` is the **low-cost** option — tiny,
   fast, version-robust checkpoints — for small/cheap-creator runs or frequent
   kill-safety writes.
@@ -443,7 +443,7 @@ loose mechanism; re-verify and refresh it when bundle checkpointing is validated
 Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
 
 1. **Global iteration counter / resume offset.** `iterk_loop` hardcodes
-   `for _PHIter in range(1, max+1)` (`phbase.py:1156`), so a resumed run renumbers
+   `for _PHIter in range(1, max+1)` (in `iterk_loop`, `phbase.py`), so a resumed run renumbers
    from 1 and its checkpoints collide with the pre-crash ones. Add a resume offset
    so checkpoint numbering is the global iteration and termination honors the
    original `max_iterations`.
@@ -455,11 +455,14 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
    (`set_instance`) and set `solution_available` for the warm start (§5.2). Two
    details the PoC surfaced: **refresh `saved_objectives[sname]`** for each
    reloaded model — `Eobjective` reads those objective handles and they otherwise
-   dangle to the discarded fresh model — and note the reload targets
-   `local_scenarios` only (there is no `local_subproblems`; the solve path
-   iterates `local_scenarios`). This is a distinct branch from the leaf-rebuild
-   "build fresh, overlay values" path; the `Checkpointer` picks the branch from
-   `--checkpoint-backend`.
+   dangle to the discarded fresh model — and swap the reloaded model into
+   `local_scenarios` (which `SPOpt.solve_loop` iterates). A plain PH keeps no
+   `local_subproblems`, but the **generic file-based path** the dill-reload backend
+   builds on (`scenario_io.py` sets `sp.local_subproblems = sp.local_scenarios`)
+   maintains that alias, and `CGBase.solve_loop` iterates it — so where the alias
+   exists the reload branch must refresh it too, or it dangles to the discarded
+   model. This is a distinct branch from the leaf-rebuild "build fresh, overlay
+   values" path; the `Checkpointer` picks the branch from `--checkpoint-backend`.
 3. **Extension `checkpoint_state` / `restore_state` contract** on `Extension`
    (no-ops by default; implemented by rho updaters, `fixer`, `slammer`,
    convergers). Covers **extension-object** state under both backends;
@@ -480,7 +483,7 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
    best-so-far, not bit-reproducible, so a globally-consistent "snapshot at
    iteration `k`" across cylinders is unnecessary. On resume the hub restores its
    primal state while each spoke reloads its latest incumbent/bound, all accepted
-   only if improving (`update_best_solution_if_improving`, `spbase.py:578`). This
+   only if improving (`update_best_solution_if_improving` in `spbase.py`). This
    also avoids a hub-triggered snapshot barrier and its stall/deadlock risk.
 7. **Atomic writes with a single published generation.** Each rank writes only its
    local state (dilled models + leaf non-model data) to rank-tagged temp files and
@@ -496,7 +499,7 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
    per-iteration extension hook — add a single `self.opt.extobject.enditer()` (or a
    dedicated checkpoint hook) inside it so **one `Checkpointer` serves hub and
    xhatter uniformly** (restore already has a home: `pre_iter0`/`post_iter0` fire
-   once in `xhat_prep`, `xhatbase.py:36,49`).
+   once in `xhat_prep` in `xhatbase.py`).
 
 ---
 
@@ -508,7 +511,7 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
   hub/
     gen_<NNNN>/                        # NNNN = global PH iteration at the checkpoint
       hub_rank_<RRRR>.pkl             # non-model leaf state: iter counter, bounds, extension-object state
-      hub_rank_<RRRR>_scen_<S>.dill   # dilled scenario model(s) for this rank (dill-model backend)
+      hub_rank_<RRRR>_scen_<S>.dill   # dilled scenario model(s) for this rank (dill-reload backend)
   spokes/
     spoke_<name>_rank_<RRRR>.pkl      # each spoke's latest incumbent (best xhat, by name) + bound,
                                       #   overwritten asynchronously on improvement (§9, item 6)
@@ -531,7 +534,7 @@ Each phase is a review-sized PR that is green on its own and adds user-visible
 value. New tests are wired into `run_coverage.bash` **and**
 `test_pr_and_main.yml` in the same commit.
 
-- **Phase 1 — Serial hub checkpoint/resume, dill-model backend.** `Checkpointer`
+- **Phase 1 — Serial hub checkpoint/resume, dill-reload backend.** `Checkpointer`
   extension; global iteration counter / resume offset; reload-model resume branch
   (skip `attach_PH_to_objective`, rebuild `_solver_plugin`, set warm start);
   geometry+cfg fingerprint; atomic per-rank writes + manifest; end-of-run/on-signal
