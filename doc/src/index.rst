@@ -37,6 +37,7 @@ MPI is used.
    hubs.rst
    spokes.rst
    extensions.rst
+   w_oscillation.rst
    rho_setting.rst
 
 .. toctree::

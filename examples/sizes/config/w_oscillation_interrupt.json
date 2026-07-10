@@ -1,0 +1,11 @@
+{
+    "action": "slam",
+    "trigger": {
+        "min_scenarios_flagged": 1,
+        "start_iter": 100
+    },
+    "slam": {
+        "directives_file": "examples/sizes/config/slamming_directives.csv",
+        "iters_between_slams": 3
+    }
+}

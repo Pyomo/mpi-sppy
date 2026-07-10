@@ -870,12 +870,14 @@ def add_slammer(hub_dict,
     return hub_dict
 
 def add_w_oscillation(hub_dict, cfg):
-    # W-oscillation detection/reporting; activated only when the detect JSON
-    # control file is supplied (see doc/designs/w_oscillation_design.md).
+    # W-oscillation detection/reporting and (optionally) interruption; activated
+    # when either JSON control file is supplied (see
+    # doc/designs/w_oscillation_design.md).
     from mpisppy.extensions.w_oscillation import WOscillationMonitor
     hub_dict = extension_adder(hub_dict, WOscillationMonitor)
     hub_dict["opt_kwargs"]["options"]["w_oscillation_options"] = {
         "detect_json": cfg.detect_W_oscillations,
+        "interrupt_json": cfg.interrupt_W_oscillations,
         "verbose": cfg.verbose,
     }
     return hub_dict
