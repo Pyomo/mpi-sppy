@@ -1,9 +1,9 @@
 # Checkpoint / Resume for mpi-sppy — Design
 
-Status: **draft** (framework PoC validated; dill-reload backend designed, not yet
-validated). Scope: checkpoint a running mpi-sppy job so it can be stopped and
-resumed later. Must work on multiple MPI ranks and for cylinder (hub-and-spoke)
-runs.
+Status: **draft** (framework and dill-reload backend both PoC-validated — the
+latter on a serial MIP; multi-rank and cylinders pending). Scope: checkpoint a
+running mpi-sppy job so it can be stopped and resumed later. Must work on multiple
+MPI ranks and for cylinder (hub-and-spoke) runs.
 
 ---
 
@@ -110,7 +110,8 @@ three days is negligible. And it *avoids re-running an expensive `scenario_creat
 on every resume, which for large models is itself a real saving.
 
 The alternative — rebuild each model via `scenario_creator` and overlay the state
-as leaf data (arrays/name→value maps) — is retained as the **low-cost backend**:
+as leaf data (arrays/name→value maps) — remains available as the **low-cost
+backend**:
 its checkpoints are tiny and fast (a handful of `O(first-stage)` arrays, no model
 structure) and version-robust (plain numbers, not pickled classes). That makes it
 the right choice for small scenarios, cheap creators, or *frequent* kill-safety
@@ -340,16 +341,32 @@ validated the **framework and the leaf-rebuild backend**:
   preserved exactly; `BestInnerBound` carried exactly; `BestOuterBound` differed
   run-to-run (async) but stayed valid.
 
-**Not yet validated (the primary backend for this use case):**
+A second PoC then validated the **dill-reload backend on a MIP** (`sizes` SIZES3,
+`gurobi_persistent`, single-thread `Threads=1`/`Seed=1`/`MIPGap=0` for a
+deterministic solve — the §7 validation crutch):
 
-- Dilling and reloading a **mid-run** scenario model — spliced W/prox objective,
-  `LinearExpression` cut bodies, mutable params, post-`set_instance` — round-trips
-  cleanly. The repo only dills *clean* models today.
-- The **MIP** path end-to-end: warm start via `solution_available`, incumbent
-  preserved across a stop/resume, run continues correctly (bit-identity is *not*
-  expected — §7).
+- **Mid-run model round-trip.** After a few PH iterations, a scenario model was
+  stripped of `_solver_plugin`, dilled, and reloaded **both in-process and in a
+  fresh process**; a new solver was attached with `set_instance` and the
+  subproblem re-solved. The reloaded model reproduced the original solve's
+  objective and **every decision variable exactly** — including the hardest case,
+  **linearized prox** (176 KB carrying **845 `xsqvar_cuts` + 65
+  `ProxApproxManager`s** on `_mpisppy_data`), which came back structurally
+  identical and self-consistent. The only difference was the x² epigraph auxiliary
+  `xsqvar` wobbling ~1.5e-6 at solver feasibility tolerance (immaterial; MIQP was
+  exact). This is the load-bearing assumption — that a mid-run MIP model, cuts and
+  all, survives dill — and it **holds**.
+- **Stop → reload → continue, bit-identical.** Stopping PH at iteration 3, dilling
+  the mid-run models, then rebuilding the scaffolding and continuing through the
+  reload branch reproduced an uninterrupted 6-iteration run with
+  `max|dW| = max|d nonant| = 0.0` — for **both** quadratic and linearized prox.
+  Under the deterministic single-thread solve this is exact bit-identity, the
+  strong "nothing was lost" check.
 
-These are the first things Phase 1 must prove (a small MIP, e.g. `sizes`).
+Still to prove in later phases (this PoC was serial and focused on the model
+round-trip + continuation): the dill-reload backend under **multi-rank** and
+**cylinders**; carrying the **incumbent** across a dill-reload stop; a measured
+warm-start speedup; and the disk/time footprint at true model scale.
 
 ---
 
@@ -431,12 +448,18 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
    so checkpoint numbering is the global iteration and termination honors the
    original `max_iterations`.
 2. **A reload-model resume branch.** When restoring via dill-reload, startup must
-   reconstruct comms/windows/solvers but **skip `attach_PH_to_objective`** — the
-   reloaded model already carries the spliced W/prox objective and the prox cuts —
-   then strip/rebuild `_solver_plugin` (`set_instance`) and set
-   `solution_available` for the warm start (§5.2). This is a distinct branch from
-   the leaf-rebuild "build fresh, overlay values" path; the `Checkpointer` picks
-   the branch from `--checkpoint-backend`.
+   reconstruct comms/windows/solvers but **skip both `attach_Ws_and_prox` and
+   `attach_PH_to_objective`** — the reloaded model already carries the W/rho/xbars
+   params, the spliced objective, and the prox cuts, so re-running either would
+   duplicate components or double the terms. Then strip/rebuild `_solver_plugin`
+   (`set_instance`) and set `solution_available` for the warm start (§5.2). Two
+   details the PoC surfaced: **refresh `saved_objectives[sname]`** for each
+   reloaded model — `Eobjective` reads those objective handles and they otherwise
+   dangle to the discarded fresh model — and note the reload targets
+   `local_scenarios` only (there is no `local_subproblems`; the solve path
+   iterates `local_scenarios`). This is a distinct branch from the leaf-rebuild
+   "build fresh, overlay values" path; the `Checkpointer` picks the branch from
+   `--checkpoint-backend`.
 3. **Extension `checkpoint_state` / `restore_state` contract** on `Extension`
    (no-ops by default; implemented by rho updaters, `fixer`, `slammer`,
    convergers). Covers **extension-object** state under both backends;
@@ -554,12 +577,13 @@ Resolved (given the §1 use case):
 - **Checkpoint retention** (§9, item 7): a single manifest-published generation
   suffices; older generations are optional history.
 - **Spoke snapshot coordination** (§9, item 6): resolved by *not* coordinating.
+- **Mid-run MIP model dill round-trip** — was the load-bearing unvalidated
+  assumption; **validated by the MIP dill-reload PoC** (§6), including the
+  linearized-prox cuts, in-process and cross-process, with serial stop→reload→
+  continue bit-identical under a deterministic solver.
 
 Still open:
 
-- **Mid-run MIP model dill round-trip** (§6) — the load-bearing unvalidated
-  assumption. Must be proven first in Phase 1 (spliced objective, `LinearExpression`
-  cut bodies, mutable params, post-`set_instance`).
 - **Disk footprint.** Dilled large MIP models × scenarios/rank × a few generations
   can be large; the single-generation policy (§9, item 7) keeps only one live, but
   document the peak (two generations during a publish).
