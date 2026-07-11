@@ -190,19 +190,38 @@ if res.solver.termination_condition != pyo.TerminationCondition.optimal:
                         to converge.')
 ```
 
-That is, it generates **optimality cuts only** from optimally-solved
-subproblems. `mpisppy/utils/lshaped_cuts.py` inherits the same
-limitation — its `LShapedCutGenerator` is a thin subclass of pyomo's
+This is **not** a restriction to optimality cuts. `_setup_subproblem`
+relaxes every subproblem constraint with a nonnegative violation
+variable `_z` (the GLM99 "note on feasibility in Benders" formulation
+the module cites) and minimizes `_z`, so the subproblem is always
+feasible by construction. The single cut `generate_cut()` returns is
+therefore **blended**: when `_z = 0` the recourse is feasible and the
+cut behaves as an optimality cut; when `_z > 0` the recourse is
+infeasible and the same cut certifies and cuts off that infeasibility.
+The `RuntimeError` fires only on a genuine solver failure
+(unbounded/error), not on recourse infeasibility.
+`mpisppy/utils/lshaped_cuts.py` inherits this blended behavior — its
+`LShapedCutGenerator` is a thin subclass of pyomo's
 `BendersCutGeneratorData`.
 
 Issue #601 is fundamentally about the **infeasibility** case — that's
-where we want the cut. So "reuse `lshaped_cuts`" is necessary but not
-sufficient. We need one of:
+where we want the cut. Reusing `lshaped_cuts` therefore already gives
+us a valid cut for the infeasibility case, but with two caveats:
 
-1. **Upstream extension** — add feasibility-cut support to
-   `pyomo.contrib.benders.benders_cuts` so that an infeasible
-   subproblem yields a Farkas-dual cut. This is the most correct
-   option; it is also a Pyomo PR with its own review cycle.
+- The blended cut is dual-based, so it is valid only for **continuous
+  (LP) recourse**. A model with integer second-stage variables gets an
+  invalid cut.
+- It is the L1-penalty (GLM99) style rather than a dedicated Farkas
+  feasibility cut, so its strength is worth revisiting before we lean
+  on it.
+
+So for the general case we still want one of:
+
+1. **Use / revisit pyomo's blended cut** for LP-recourse models —
+   possibly tightening it, or replacing the L1 relaxation with a
+   dedicated Farkas feasibility cut from the infeasible subproblem's
+   dual ray. No new Pyomo feature is required for the LP-recourse
+   infeasibility case; pyomo already produces a valid cut.
 2. **mpi-sppy-side extraction** — drop down to solver-specific APIs
    (`gurobipy.Model.FarkasProof`, `cplex.solution.get_status`,
    `xpress.getdualray`) inside mpi-sppy and build the cut ourselves,

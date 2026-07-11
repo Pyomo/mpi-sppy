@@ -138,14 +138,18 @@ Follow-up Milestones
   scenario, which is only valid in two-stage; that's why V1 hard-fails
   at setup on a multi-stage model. Tracking as a follow-up alongside
   V2.
-- Lifting the binary-only restriction requires generating **Farkas
-  feasibility cuts** from the dual ray of an infeasible second-stage
-  LP. The upstream
+- Lifting the binary-only restriction requires **feasibility cuts**
+  for models with LP (continuous) recourse. The upstream
   ``pyomo.contrib.benders.benders_cuts.BendersCutGeneratorData``
-  currently only produces optimality cuts; supporting the
-  infeasibility case is a Pyomo PR. Once that lands, the xhatter will
-  be able to emit valid cuts for integer and continuous first-stage
-  variables as well (LP recourse only).
+  already emits *blended* optimality/feasibility cuts in a single pass
+  -- it relaxes the subproblem with a violation variable, so an
+  infeasible recourse yields a valid cut rather than an error -- so no
+  new Pyomo feature is needed for the LP-recourse infeasibility case.
+  That blended L1-penalty cut is worth revisiting, though: we may
+  prefer to tighten it or generate our own dedicated Farkas feasibility
+  cut from the infeasible subproblem's dual ray. Either way the xhatter
+  will then be able to emit valid cuts for integer and continuous
+  first-stage variables as well (LP recourse only).
 - **Cut-pool management** is deferred to
   `issue #670 <https://github.com/Pyomo/mpi-sppy/issues/670>`_. Today
   cuts accumulate indefinitely in the per-scenario constraint
