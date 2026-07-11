@@ -59,6 +59,16 @@ The flags are:
   (default ``0.95``).
 * ``--cvar-mean-weight`` -- :math:`\lambda`, the weight on
   :math:`\mathbb{E}[\text{Cost}]` (default ``1.0``); use ``0`` for pure CVaR.
+* ``--cvar-eta-lb`` / ``--cvar-eta-ub`` -- explicit lower / upper bounds for the
+  Value-at-Risk variable :math:`\eta` (see :ref:`cvar eta bound`); each overrides
+  the automatic bound on that side (default: unset).
+* ``--cvar-eta-bound-method`` -- how to bound :math:`\eta` automatically:
+  ``fbbt`` (structural, no solves; the default), ``solve`` (relax the
+  easy side and solve a MIP for the worst-case side), or ``none``
+  (see :ref:`cvar eta bound`).
+* ``--cvar-eta-mipgap`` -- the (loose) mip gap for the worst-case MIP solves
+  under ``--cvar-eta-bound-method solve`` (default ``0.5``); only the valid dual
+  bound is used, so a loose gap keeps it cheap.
 
 Using it programmatically
 -------------------------
@@ -119,6 +129,115 @@ So a risk-averse PH run on the farmer looks like:
        --cvar --cvar-weight 2.0 --cvar-alpha 0.8
 
 See :ref:`rho_setting` for the full menu of rho strategies.
+
+.. _cvar eta bound:
+
+Bounding the Value-at-Risk variable eta
+---------------------------------------
+
+At the optimum the Value-at-Risk variable :math:`\eta` equals
+:math:`\text{VaR}_\alpha(\text{Cost})`, which is *provably* within the range of
+the cost over all scenarios: :math:`\min_s \text{Cost}_s \le \eta^\star \le
+\max_s \text{Cost}_s`. mpi-sppy uses this to give :math:`\eta` -- which is
+otherwise a completely free variable living on the (large) objective scale -- a
+valid bound. A bounded :math:`\eta` helps some solvers and keeps the
+Progressive Hedging subproblems well posed; it can also be *necessary* for the
+outer-bound spokes: a Lagrangian or subgradient relaxation dualizes the
+non-anticipativity of :math:`\eta`, and with :math:`\eta` free that relaxed
+subproblem is easily unbounded (its solves then simply fail).
+
+**This is on by default, with two methods** selected by
+``--cvar-eta-bound-method``:
+
+* ``fbbt`` (the default) -- for every scenario, compute the range of the cost
+  expression *structurally* with feasibility-based bounds tightening (FBBT); no
+  solves. FBBT uses only the cost expression and its variables' bounds, **not the
+  constraints**, so it can behave poorly with **big-M** formulations: the big-M
+  variable bounds are deliberately large (order :math:`M`), so FBBT returns a
+  correspondingly huge (valid but useless) bound. Prefer ``solve`` there, since
+  it respects the constraints and integrality.
+* ``solve`` -- for every scenario, find the cost range by solving. The two ends
+  are found differently, because they need different things:
+
+  * The **easy side** -- "how cheap it could be" for a minimization (or how good
+    for a maximization) -- only needs a valid enclosing value, so a
+    **relaxation** (LP) is enough; this side sits far from the VaR, so its
+    looseness is harmless.
+  * The **worst-case side** -- "how bad it could be" (the maximum cost for a
+    minimization, the minimum reward for a maximization) -- *cannot* be obtained
+    from a relaxation, which would only tell you the relaxed problem's worst
+    case. To bound how bad the true (integer) problem can get you must solve the
+    **MIP**. We only need a valid bound, not the exact worst case, so the MIP is
+    run with a **loose** gap (``--cvar-eta-mipgap``) and we read its **dual
+    bound**, which is valid at any gap -- a loose gap just makes it looser, never
+    invalid.
+
+Either way, mpi-sppy reduces the per-scenario cost ranges to the global
+``[min cost, max cost]`` across *all* scenarios (an MPI reduction) and sets
+:math:`\eta`'s bounds from it. Both ends *enclose* the true range, so the box
+always contains the VaR and can never cut off the optimum.
+
+.. note::
+
+   The bound must be **global** (across all scenarios), not per-scenario.
+   :math:`\eta` is a single non-anticipative variable, so in the extensive form
+   the per-scenario copies are tied together; a bound taken from one scenario's
+   cost range could exclude the true VaR (which may sit in a *different*
+   scenario's range) and would then cut off the optimum. mpi-sppy therefore
+   reduces the per-scenario cost ranges to a single global box before bounding.
+
+**When the automatic bound does nothing.** A bound only exists on a side where
+the cost is actually bounded. Many models (the classic ``farmer`` among them,
+whose purchase quantities are unbounded above) have a structurally unbounded
+cost, so *no* method can bound that side and :math:`\eta` is left free there.
+``fbbt`` is also weaker than ``solve``: on the farmer it finds *nothing*, while
+``solve`` still bounds the profit (lower) side. On a side that remains unbounded
+you can supply a bound *by hand* from what you know about the model, with
+``--cvar-eta-lb`` / ``--cvar-eta-ub``. Under ``solve``, ``generic_cylinders``
+prints the bounds it computed and, for any side it had to leave free, names the
+flag that would bound it, e.g.::
+
+   CVaR --cvar-eta-bound-method solve computed eta bounds: lower=-167667, upper=unbounded
+     eta is unbounded above and left free; supply --cvar-eta-ub to bound it
+
+*Worked example -- the farmer.* The farmer minimizes total cost = planting cost
+:math:`+` purchase cost :math:`-` sales revenue, on 500 acres. Its cost is
+unbounded above (nothing stops the model from buying arbitrarily much), so the
+upper side cannot be bounded automatically, but the lower (profit) side can:
+
+* **Lower bound**, automatically with ``--cvar-eta-bound-method solve``: the LPs
+  find the most profitable plan per scenario, giving :math:`\eta \gtrsim
+  -167{,}667` here -- no hand computation needed.
+* **Upper bound**, by hand: planting is at most all 500 acres in the most
+  expensive crop, sugar beets at ``$260``/acre :math:`\Rightarrow 500 \times 260
+  = 130{,}000`; at an optimum the farmer never buys more than the cattle-feed
+  requirement (buying more only wastes money), so purchases cost at most
+  :math:`200 \times 238 + 240 \times 210 = 98{,}000`; sales revenue is
+  non-negative. Hence :math:`\eta \le 228{,}000`; round up to
+  ``--cvar-eta-ub 250000``.
+
+.. code-block:: bash
+
+   # solve for the (finite) lower bound; supply the unbounded upper side by hand
+   python ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 \
+       --EF --EF-solver-name gurobi --cvar --cvar-weight 2.0 --cvar-alpha 0.8 \
+       --cvar-eta-bound-method solve --cvar-eta-ub 250000
+
+For this instance the optimal :math:`\eta^\star` is about ``-56800``, comfortably
+inside the resulting box, so the bound tightens the model without changing the
+answer. That is the goal: choose bounds you are confident *bracket* the
+Value-at-Risk. ``--cvar-eta-lb`` and ``--cvar-eta-ub`` *override* the automatic
+bound on their side (so you can tighten it or fill in an unbounded side), and
+``--cvar-eta-bound-method none`` turns the automatic bound off entirely. An
+explicit bound is your responsibility: set it tighter than the true VaR and you
+will change the answer, exactly as any incorrect variable bound would.
+
+Programmatically, :func:`add_cvar` and :func:`cvar_scenario_creator` accept
+``eta_lb``, ``eta_ub`` and ``auto_eta_bound`` (the FBBT bound); ``SPBase``
+performs the FBBT reduction automatically when each extensive-form or cylinder
+object is constructed. The ``solve`` bound is available as
+:func:`compute_cvar_eta_bounds_by_solve`, whose ``(lb, ub)`` you pass as
+``eta_lb`` / ``eta_ub``.
 
 Maximization
 ------------

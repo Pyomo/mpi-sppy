@@ -702,6 +702,38 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=1.0)
 
+        self.add_to_config("cvar_eta_bound_method",
+                           description="how to automatically bound the CVaR "
+                                       "Value-at-Risk variable eta by the global "
+                                       "cost range: 'fbbt' (structural, no solves; "
+                                       "default), 'solve' (per scenario, relax the "
+                                       "'how cheap/good' side and solve a MIP for "
+                                       "the worst-case side), or 'none'",
+                           domain=pyofig.In(['none', 'fbbt', 'solve']),
+                           default='fbbt')
+
+        self.add_to_config("cvar_eta_mipgap",
+                           description="loose relative mip gap for the worst-case "
+                                       "MIP solves in --cvar-eta-bound-method solve; "
+                                       "only the (valid) dual bound is used, so a "
+                                       "loose gap keeps it cheap (default 0.5)",
+                           domain=float,
+                           default=0.5)
+
+        self.add_to_config("cvar_eta_lb",
+                           description="explicit lower bound for the CVaR "
+                                       "Value-at-Risk variable eta; overrides the "
+                                       "automatic lower bound (default None)",
+                           domain=float,
+                           default=None)
+
+        self.add_to_config("cvar_eta_ub",
+                           description="explicit upper bound for the CVaR "
+                                       "Value-at-Risk variable eta; overrides the "
+                                       "automatic upper bound (default None)",
+                           domain=float,
+                           default=None)
+
     def relaxed_ph_fixer_args(self):
 
         self.add_to_config('relaxed_ph_fixer',

@@ -12,13 +12,13 @@
 
 import sys
 
-from mpisppy import MPI
+from mpisppy import MPI, global_toc
 
 # Re-export public API for backwards compatibility
 from mpisppy.generic.decomp import do_decomp  # noqa: F401
 from mpisppy.generic.mmw import do_mmw  # noqa: F401
 
-from mpisppy.generic.parsing import model_fname, load_module, parse_args, proper_bundles
+from mpisppy.generic.parsing import model_fname, load_module, parse_args, proper_bundles, name_lists
 from mpisppy.generic.ef import do_EF
 from mpisppy.generic.scenario_io import (write_bundles, write_scenarios,
                                           read_pickled_scenario,
@@ -94,12 +94,52 @@ if __name__ == "__main__":
            or cfg.get("stoch_admm", ifmissing=False):
             raise RuntimeError(
                 "--cvar cannot (yet) be combined with proper bundles or ADMM")
-        from mpisppy.utils.cvar import cvar_scenario_creator
+        from mpisppy.utils.cvar import cvar_scenario_creator, \
+            compute_cvar_eta_bounds_by_solve
+        method = cfg.get("cvar_eta_bound_method", ifmissing="fbbt")
+        eta_lb = cfg.get("cvar_eta_lb", ifmissing=None)
+        eta_ub = cfg.get("cvar_eta_ub", ifmissing=None)
+        if method == "solve":
+            # Solve for a valid bound (a relaxation on the "how cheap/good" side,
+            # a MIP on the worst-case side), computed once here distributed over
+            # COMM_WORLD on the risk-neutral scenario_creator, then injected as
+            # eta bounds.  An explicit --cvar-eta-lb/ub still wins on its side.
+            all_scenario_names, _ = name_lists(module, cfg)
+            solver_name = cfg.get("solver_name", ifmissing=None) \
+                or cfg.get("EF_solver_name", ifmissing=None)
+            if solver_name is None:
+                raise RuntimeError(
+                    "--cvar-eta-bound-method solve needs a solver; set "
+                    "--solver-name (or --EF-solver-name)")
+            solved_lb, solved_ub = compute_cvar_eta_bounds_by_solve(
+                all_scenario_names, scenario_creator, solver_name,
+                scenario_creator_kwargs=scenario_creator_kwargs,
+                mipgap=cfg.get("cvar_eta_mipgap", ifmissing=0.5))
+            # Report (rank 0) what the solve produced, and flag any side that
+            # came back unbounded and is therefore left free -- unless the user
+            # pinned that side with --cvar-eta-lb/ub.
+            lo = "unbounded" if solved_lb is None else f"{solved_lb:.6g}"
+            hi = "unbounded" if solved_ub is None else f"{solved_ub:.6g}"
+            global_toc("CVaR --cvar-eta-bound-method solve computed eta bounds: "
+                       f"lower={lo}, upper={hi}")
+            if solved_lb is None and eta_lb is None:
+                global_toc("  eta is unbounded below and left free; supply "
+                           "--cvar-eta-lb to bound it")
+            if solved_ub is None and eta_ub is None:
+                global_toc("  eta is unbounded above and left free; supply "
+                           "--cvar-eta-ub to bound it")
+            if eta_lb is None:
+                eta_lb = solved_lb
+            if eta_ub is None:
+                eta_ub = solved_ub
         scenario_creator = cvar_scenario_creator(
             scenario_creator,
             cvar_weight=cfg.cvar_weight,
             cvar_alpha=cfg.cvar_alpha,
-            cvar_mean_weight=cfg.cvar_mean_weight)
+            cvar_mean_weight=cfg.cvar_mean_weight,
+            eta_lb=eta_lb,
+            eta_ub=eta_ub,
+            auto_eta_bound=(method == "fbbt"))
 
     assert hasattr(module, "scenario_denouement"), "The model file must have a scenario_denouement function"
     scenario_denouement = module.scenario_denouement

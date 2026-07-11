@@ -129,9 +129,25 @@ class SPBase:
         self._set_sense()
         self._use_variable_probability_setter()
         self._set_solution_cache()
+        self._set_cvar_eta_bounds()
 
         ## SPCommunicator object
         self._spcomm = None
+
+
+    def _set_cvar_eta_bounds(self):
+        """Bound the CVaR Value-at-Risk variable eta, if the CVaR transform
+        (mpisppy.utils.cvar) was applied to the scenarios.  eta is otherwise
+        free; now that every local scenario and the ROOT comm (which spans all
+        scenarios) exist, give it a valid global bound.  No-op for non-CVaR runs.
+        """
+        if not self.local_scenarios:
+            return
+        first = next(iter(self.local_scenarios.values()))
+        if not hasattr(first, "_mpisppy_cvar_eta"):
+            return
+        from mpisppy.utils.cvar import set_cvar_eta_bounds
+        set_cvar_eta_bounds(self.local_scenarios, self.comms["ROOT"])
 
 
     def _set_sense(self, comm=None):
