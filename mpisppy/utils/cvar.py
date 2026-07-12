@@ -247,28 +247,25 @@ def set_cvar_eta_bounds(local_scenarios, comm):
             eta.setub(global_ub)
 
 
-def _solve_dual_bound(solver, solver_name, model, maximize):
-    """Solve ``model`` and return a valid *dual* (best) bound on its objective.
+def _solve_dual_bound(solver, solver_name, relaxed_model, maximize):
+    """Solve a relaxed ``relaxed_model`` and return a valid enclosing bound.
 
-    For a maximize this is an UPPER bound on the objective (``>=`` the true
-    optimum); for a minimize a LOWER bound (``<=`` the true optimum).  Because it
-    is the dual bound it is valid at **any** mip gap -- a loose gap only makes it
-    looser, never invalid -- unlike the incumbent, which sits on the wrong side
-    of the optimum and could cut.  Pyomo brackets the optimum as
-    ``lower_bound <= opt <= upper_bound``, so the dual bound is ``upper_bound``
-    for a maximize and ``lower_bound`` for a minimize.  Returns None when the
-    objective is unbounded (or no finite dual bound is reported), leaving that
-    side of eta free.
+    Used for the **slack (easy) side** of the eta box, where a relaxation is
+    enough (see :func:`compute_cvar_eta_bounds_by_solve`).  For a maximize this
+    returns an UPPER bound on the true value (``>=`` it); for a minimize a LOWER
+    bound (``<=`` it).  Pyomo brackets the optimum as
+    ``lower_bound <= opt <= upper_bound``, so we read ``upper_bound`` for a
+    maximize and ``lower_bound`` for a minimize.  Returns None when the objective
+    is unbounded (or no finite bound is reported), leaving that side of eta free.
 
     A persistent solver is re-``set_instance``'d each call so it picks up the
-    current model (whose objective sense and integrality may have changed since
-    the previous solve).
+    current model (whose objective sense may have changed since the last solve).
     """
     if "_persistent" in solver_name:
-        solver.set_instance(model)
+        solver.set_instance(relaxed_model)
         results = solver.solve(load_solutions=False)
     else:
-        results = solver.solve(model, load_solutions=False)
+        results = solver.solve(relaxed_model, load_solutions=False)
     tc = results.solver.termination_condition
     if tc in (TerminationCondition.unbounded,
               TerminationCondition.infeasibleOrUnbounded):
@@ -280,30 +277,58 @@ def _solve_dual_bound(solver, solver_name, model, maximize):
     return float(bound)
 
 
+def _ef_scenario_costs(ef, scenario_names):
+    """The realized per-scenario cost of the solved EF, one value per scenario.
+
+    ``create_EF`` deactivates each scenario submodel's original objective (and,
+    for a single scenario, returns the scenario itself with an ``EF_Obj``); this
+    reads that (deactivated) cost expression at the loaded EF solution, i.e.
+    ``Cost_s(x)`` at the EF's first-stage decision ``x``.
+    """
+    if len(scenario_names) == 1:
+        return [pyo.value(ef.EF_Obj.expr)]
+    costs = []
+    for sname in scenario_names:
+        sub = getattr(ef, sname)
+        obj = next(sub.component_data_objects(pyo.Objective, active=None))
+        costs.append(pyo.value(obj.expr))
+    return costs
+
+
 def compute_cvar_eta_bounds_by_solve(scenario_names, scenario_creator, solver_name,
                                      scenario_creator_kwargs=None, comm=None,
-                                     mipgap=0.5):
+                                     mipgap=1e-4, max_ef_scenarios=1000):
     """Compute a valid global bound on the CVaR VaR variable eta by solving.
 
-    eta must be enclosed: ``lb <= min cost`` and ``ub <= ... <= max cost``, so
-    the box contains the VaR and never cuts the optimum.  The two ends are found
-    differently, because they need different things:
+    eta must be enclosed so the box contains the VaR and never cuts the optimum.
+    The two ends need different things:
 
-    * The **"how cheap/good" (slack) side** -- the min cost for a minimize, the
-      max reward for a maximize -- only needs a valid enclosing value, so a
-      **relaxation** (LP) is enough: the LP optimum is ``<= min cost`` (resp.
-      ``>= max reward``), and this side sits far from the VaR so its looseness is
-      harmless.
+    * The **easy (slack) side** -- the min cost for a minimize, the max reward
+      for a maximize -- only needs a valid enclosing value, so a **relaxation**
+      (LP) over the feasible region is enough: the LP optimum is ``<= min cost``
+      (resp. ``>= max reward``), and this side sits far from the VaR so its
+      looseness is harmless.  It is finite for any real model and is computed
+      round-robin across ``comm``.
     * The **worst-case (tail) side** -- the max cost for a minimize, the min
-      reward for a maximize -- cannot be gotten from a relaxation: to bound how
-      bad things can get you must solve the actual **MIP**.  We only need a valid
-      bound though, not the exact worst case, so the MIP is run with a **loose
-      ``mipgap``** and we read its **dual bound** (valid at any gap; see
-      :func:`_solve_dual_bound`).
+      reward for a maximize -- **cannot** come from maximizing cost over the
+      feasible region: that is unbounded whenever the model can act arbitrarily
+      wastefully (e.g. big-M formulations, or farmer's unlimited purchases).
+      Instead we evaluate the cost at a single **feasible point** -- the
+      risk-neutral solution ``x^RN`` (which minimizes ``E[Cost]``) -- and take
+      ``max_s Cost_s(x^RN)`` (min for a maximize).  This is finite and valid:
+      ``eta* = VaR(x*) <= CVaR(x*) <= CVaR(x^RN) <= max_s Cost_s(x^RN)`` (the
+      middle step uses ``E(x^RN) <= E(x*)``), so it never cuts the optimum.
 
-    A side that is genuinely unbounded comes back as None, leaving eta free
-    there.  Scenarios are distributed round-robin across ``comm`` (default
-    ``COMM_WORLD``), so **every rank must call this** -- it ends in an Allreduce.
+    Getting ``x^RN`` is a **coupled** solve -- a common first-stage decision --
+    so this builds and solves the risk-neutral extensive form.  That is only
+    tractable when the EF is; it is **gated** by ``max_ef_scenarios`` and left
+    free above the gate.  A genuinely large model should therefore use
+    ``--cvar-eta-bound-method fbbt`` or an explicit ``--cvar-eta-lb/ub`` for the
+    tail; this ``solve`` path is a convenience for small/medium models where the
+    structural (``fbbt``) bound is unbounded but one EF solve is affordable.
+
+    Every rank in ``comm`` must call this: the slack side ends in an Allreduce
+    and the (rank-0) tail is broadcast.
 
     Args:
         scenario_names (list): all scenario names.
@@ -312,11 +337,15 @@ def compute_cvar_eta_bounds_by_solve(scenario_names, scenario_creator, solver_na
         solver_name (str): a Pyomo solver name (persistent variants are handled).
         scenario_creator_kwargs (dict): kwargs for ``scenario_creator``.
         comm: MPI communicator to distribute over (default ``COMM_WORLD``).
-        mipgap (float): the (loose) relative mip gap for the worst-case MIP
-            solves; only the dual bound is used, so a loose gap keeps it cheap.
+        mipgap (float): relative mip gap for the risk-neutral EF solve; keep it
+            tight so ``x^RN`` is near-optimal (a loose gap slightly weakens the
+            tail bound's validity).
+        max_ef_scenarios (int): gate; if there are more scenarios than this the
+            risk-neutral EF solve is skipped and the tail side is left free.
 
     Returns:
-        tuple: ``(lb, ub)`` as floats, or ``None`` on a side that is unbounded.
+        tuple: ``(lb, ub)`` as floats, or ``None`` on a side left free (unbounded
+        slack, or a tail skipped by the gate).
     """
     if comm is None:
         comm = MPI.COMM_WORLD
@@ -334,55 +363,74 @@ def compute_cvar_eta_bounds_by_solve(scenario_names, scenario_creator, solver_na
         raise RuntimeError(
             f"solver '{solver_name}' is not available for the CVaR eta "
             "bound solves (--cvar-eta-bound-method solve)")
-    # loose gap (we only read the dual bound) and single-threaded so distributed
-    # bound solves do not oversubscribe; native option names per solver
+    # tight gap so the risk-neutral EF solution is near-optimal, single-threaded
+    # so distributed slack solves do not oversubscribe; native names per solver
     solver.options.update(sputils.translate_solver_options(
         {"mipgap": mipgap, "threads": 1}, solver_name))
     relax = pyo.TransformationFactory("core.relax_integer_vars")
 
-    local_lb = math.inf
-    local_ub = -math.inf
+    # The objective sense is needed on every rank (including ranks with no
+    # round-robin scenarios and non-root ranks that skip the EF solve).
+    if rank == 0:
+        probe = scenario_creator(scenario_names[0], **scenario_creator_kwargs)
+        minimizing = (sputils.find_active_objective(probe).sense == pyo.minimize)
+    else:
+        minimizing = None
+    minimizing = comm.bcast(minimizing, root=0)
+
+    # ---- Easy (slack) side: LP relaxation over the feasible region ----
+    # min cost (minimize) / max reward (maximize); finite and enclosing.
+    local_slack = math.inf if minimizing else -math.inf
     for i, sname in enumerate(scenario_names):
         if i % nranks != rank:
             continue
         model = scenario_creator(sname, **scenario_creator_kwargs)
         obj = sputils.find_active_objective(model)
         cost = obj.expr
-        minimizing = (obj.sense == pyo.minimize)
-        # throwaway objective we can point at min or max of the cost
         obj.deactivate()
-        model._mpisppy_cvar_bound_obj = pyo.Objective(expr=cost, sense=pyo.minimize)
-
-        # Worst-case (tail) side FIRST, as a MIP (integrality intact): the max
-        # cost for a minimize, the min reward for a maximize.  Read the dual
-        # bound so a loose mipgap stays valid.
-        model._mpisppy_cvar_bound_obj.sense = pyo.maximize if minimizing \
-            else pyo.minimize
-        tail = _solve_dual_bound(solver, solver_name, model, maximize=minimizing)
-
-        # "How cheap/good" (slack) side: a relaxation is enough, so relax
-        # integrality and solve the opposite direction (its dual bound is the LP
-        # optimum, which encloses the true value).
+        model._mpisppy_cvar_bound_obj = pyo.Objective(
+            expr=cost, sense=pyo.minimize if minimizing else pyo.maximize)
         relax.apply_to(model)
-        model._mpisppy_cvar_bound_obj.sense = pyo.minimize if minimizing \
-            else pyo.maximize
-        slack = _solve_dual_bound(solver, solver_name, model,
-                                  maximize=(not minimizing))
-
-        if minimizing:
-            cost_min, cost_max = slack, tail   # slack = min (LP), tail = max (MIP)
+        val = _solve_dual_bound(solver, solver_name, model,
+                                maximize=(not minimizing))
+        if val is None:
+            local_slack = -math.inf if minimizing else math.inf  # unbounded slack
+        elif minimizing:
+            local_slack = min(local_slack, val)
         else:
-            cost_min, cost_max = tail, slack   # tail = min (MIP), slack = max (LP)
-        local_lb = min(local_lb, cost_min) if cost_min is not None else -math.inf
-        local_ub = max(local_ub, cost_max) if cost_max is not None else math.inf
+            local_slack = max(local_slack, val)
 
-    global_lb = np.zeros(1, dtype='d')
-    global_ub = np.zeros(1, dtype='d')
-    comm.Allreduce([np.array([local_lb], dtype='d'), MPI.DOUBLE],
-                   [global_lb, MPI.DOUBLE], op=MPI.MIN)
-    comm.Allreduce([np.array([local_ub], dtype='d'), MPI.DOUBLE],
-                   [global_ub, MPI.DOUBLE], op=MPI.MAX)
-    lb = float(global_lb[0])
-    ub = float(global_ub[0])
-    return (lb if math.isfinite(lb) else None,
-            ub if math.isfinite(ub) else None)
+    slack_buf = np.zeros(1, dtype='d')
+    comm.Allreduce([np.array([local_slack], dtype='d'), MPI.DOUBLE],
+                   [slack_buf, MPI.DOUBLE],
+                   op=MPI.MIN if minimizing else MPI.MAX)
+    slack = float(slack_buf[0])
+
+    # ---- Worst-case (tail) side: cost at the risk-neutral solution x^RN ----
+    # Gated: it is a coupled (EF) solve, so only attempted when the EF is small
+    # enough.  Solved on rank 0 and broadcast; None (left free) otherwise.
+    tail = None
+    if rank == 0 and len(scenario_names) <= max_ef_scenarios:
+        ef = sputils.create_EF(scenario_names, scenario_creator,
+                               scenario_creator_kwargs=scenario_creator_kwargs,
+                               suppress_warnings=True)
+        if "_persistent" in solver_name:
+            solver.set_instance(ef)
+            results = solver.solve(ef, load_solutions=False)
+        else:
+            results = solver.solve(ef, load_solutions=False)
+        if results.solver.termination_condition == TerminationCondition.optimal:
+            if "_persistent" in solver_name:
+                solver.load_vars()
+            else:
+                ef.solutions.load_from(results)
+            costs = _ef_scenario_costs(ef, scenario_names)
+            tail = max(costs) if minimizing else min(costs)
+    tail = comm.bcast(tail, root=0)
+
+    if minimizing:
+        lb, ub = slack, tail
+    else:
+        lb, ub = tail, slack
+    return (lb if (lb is not None and math.isfinite(lb)) else None,
+            ub if (ub is not None and math.isfinite(ub)) else None)

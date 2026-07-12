@@ -63,12 +63,16 @@ The flags are:
   Value-at-Risk variable :math:`\eta` (see :ref:`cvar eta bound`); each overrides
   the automatic bound on that side (default: unset).
 * ``--cvar-eta-bound-method`` -- how to bound :math:`\eta` automatically:
-  ``fbbt`` (structural, no solves; the default), ``solve`` (relax the
-  easy side and solve a MIP for the worst-case side), or ``none``
+  ``fbbt`` (structural, no solves; the default), ``solve`` (relax the easy side;
+  for the worst-case side solve the risk-neutral extensive form and take the cost
+  at that solution -- a coupled solve, only for small/medium models), or ``none``
   (see :ref:`cvar eta bound`).
-* ``--cvar-eta-mipgap`` -- the (loose) mip gap for the worst-case MIP solves
-  under ``--cvar-eta-bound-method solve`` (default ``0.5``); only the valid dual
-  bound is used, so a loose gap keeps it cheap.
+* ``--cvar-eta-mipgap`` -- the mip gap for the solves under
+  ``--cvar-eta-bound-method solve`` (default ``1e-4``); for the worst-case side it
+  is the risk-neutral EF solve gap, so keep it tight.
+* ``--cvar-eta-solve-max-scenarios`` -- gate for ``--cvar-eta-bound-method
+  solve`` (default ``1000``): above this many scenarios the coupled EF solve is
+  skipped and the worst-case side is left free.
 
 Using it programmatically
 -------------------------
@@ -156,26 +160,42 @@ subproblem is easily unbounded (its solves then simply fail).
   variable bounds are deliberately large (order :math:`M`), so FBBT returns a
   correspondingly huge (valid but useless) bound. Prefer ``solve`` there, since
   it respects the constraints and integrality.
-* ``solve`` -- for every scenario, find the cost range by solving. The two ends
-  are found differently, because they need different things:
+* ``solve`` -- find the cost range by solving. The two ends are found
+  differently, because they need different things:
 
   * The **easy side** -- "how cheap it could be" for a minimization (or how good
     for a maximization) -- only needs a valid enclosing value, so a
-    **relaxation** (LP) is enough; this side sits far from the VaR, so its
-    looseness is harmless.
+    **relaxation** (LP) over the feasible region is enough; this side is finite
+    for any real model, sits far from the VaR, and its looseness is harmless. It
+    is solved per scenario, distributed across the ranks.
   * The **worst-case side** -- "how bad it could be" (the maximum cost for a
-    minimization, the minimum reward for a maximization) -- *cannot* be obtained
-    from a relaxation, which would only tell you the relaxed problem's worst
-    case. To bound how bad the true (integer) problem can get you must solve the
-    **MIP**. We only need a valid bound, not the exact worst case, so the MIP is
-    run with a **loose** gap (``--cvar-eta-mipgap``) and we read its **dual
-    bound**, which is valid at any gap -- a loose gap just makes it looser, never
-    invalid.
+    minimization, the minimum reward for a maximization) -- *cannot* come from
+    maximizing the cost over the feasible region: that is unbounded whenever the
+    model can act arbitrarily wastefully (any big-M formulation, or farmer's
+    unlimited purchases). Instead we evaluate the cost at a single **feasible
+    point** -- the *risk-neutral solution* :math:`x^{\mathrm{RN}}`, which
+    minimizes :math:`\mathbb{E}[\text{Cost}]` -- and take
+    :math:`\max_s \text{Cost}_s(x^{\mathrm{RN}})` (min for a maximization). This
+    is finite and never cuts the optimum, because
+    :math:`\eta^\star = \text{VaR}(x^\star) \le \text{CVaR}(x^\star) \le
+    \text{CVaR}(x^{\mathrm{RN}}) \le \max_s \text{Cost}_s(x^{\mathrm{RN}})`, where
+    the middle step uses :math:`\mathbb{E}(x^{\mathrm{RN}}) \le
+    \mathbb{E}(x^\star)`.
 
-Either way, mpi-sppy reduces the per-scenario cost ranges to the global
-``[min cost, max cost]`` across *all* scenarios (an MPI reduction) and sets
-:math:`\eta`'s bounds from it. Both ends *enclose* the true range, so the box
-always contains the VaR and can never cut off the optimum.
+  Finding :math:`x^{\mathrm{RN}}` is a **coupled** solve -- a single first-stage
+  decision shared by all scenarios -- so ``solve`` builds and solves the
+  risk-neutral **extensive form**. That is only tractable when the EF is, which
+  is exactly when you would not need decomposition, so ``solve`` is a convenience
+  for **small/medium** models where ``fbbt`` leaves the worst-case side unbounded
+  but one EF solve is affordable. It is **gated** by
+  ``--cvar-eta-solve-max-scenarios``; above the gate the worst-case side is left
+  free. For a genuinely large model, use ``fbbt`` or an explicit
+  ``--cvar-eta-ub`` / ``--cvar-eta-lb`` instead.
+
+The easy side reduces the per-scenario relaxation values to a global
+enclosing value across *all* scenarios (an MPI reduction); the worst-case side
+is already global (one EF over all scenarios). Both ends *enclose* the true
+range, so the box always contains the VaR and can never cut off the optimum.
 
 .. note::
 
@@ -183,51 +203,53 @@ always contains the VaR and can never cut off the optimum.
    :math:`\eta` is a single non-anticipative variable, so in the extensive form
    the per-scenario copies are tied together; a bound taken from one scenario's
    cost range could exclude the true VaR (which may sit in a *different*
-   scenario's range) and would then cut off the optimum. mpi-sppy therefore
-   reduces the per-scenario cost ranges to a single global box before bounding.
+   scenario's range) and would then cut off the optimum. The easy side is
+   therefore reduced to a single global value before bounding, and the
+   worst-case side is evaluated on the whole (coupled) extensive form.
 
-**When the automatic bound does nothing.** A bound only exists on a side where
-the cost is actually bounded. Many models (the classic ``farmer`` among them,
-whose purchase quantities are unbounded above) have a structurally unbounded
-cost, so *no* method can bound that side and :math:`\eta` is left free there.
-``fbbt`` is also weaker than ``solve``: on the farmer it finds *nothing*, while
-``solve`` still bounds the profit (lower) side. On a side that remains unbounded
-you can supply a bound *by hand* from what you know about the model, with
-``--cvar-eta-lb`` / ``--cvar-eta-ub``. Under ``solve``, ``generic_cylinders``
-prints the bounds it computed and, for any side it had to leave free, names the
-flag that would bound it, e.g.::
+**When the automatic bound does nothing.** ``fbbt`` bounds a side only where the
+cost is *structurally* bounded; on models with a structurally unbounded cost
+(the classic ``farmer``, whose purchases are unbounded above) it leaves that side
+free. ``solve`` goes further -- it bounds the worst-case side from the
+risk-neutral solution -- but only up to its gate; above the gate, or with
+``fbbt`` / ``none``, that side is again free. On a side that is left free you can
+supply a bound *by hand* with ``--cvar-eta-lb`` / ``--cvar-eta-ub``. Under
+``solve``, ``generic_cylinders`` prints the bounds it computed and, for any side
+it had to leave free, names the flag that would bound it, e.g. (here from the
+gate)::
 
+   CVaR --cvar-eta-bound-method solve: 2000 scenarios exceeds --cvar-eta-solve-max-scenarios (1000); the risk-neutral EF solve for the worst-case side is skipped and that side of eta is left free.  Use --cvar-eta-bound-method fbbt or set --cvar-eta-lb/ub.
    CVaR --cvar-eta-bound-method solve computed eta bounds: lower=-167667, upper=unbounded
      eta is unbounded above and left free; supply --cvar-eta-ub to bound it
 
 *Worked example -- the farmer.* The farmer minimizes total cost = planting cost
 :math:`+` purchase cost :math:`-` sales revenue, on 500 acres. Its cost is
-unbounded above (nothing stops the model from buying arbitrarily much), so the
-upper side cannot be bounded automatically, but the lower (profit) side can:
+unbounded above, so ``fbbt`` cannot bound the upper side; three scenarios,
+however, are far below the gate, so ``solve`` bounds *both* sides
+automatically:
 
-* **Lower bound**, automatically with ``--cvar-eta-bound-method solve``: the LPs
-  find the most profitable plan per scenario, giving :math:`\eta \gtrsim
-  -167{,}667` here -- no hand computation needed.
-* **Upper bound**, by hand: planting is at most all 500 acres in the most
-  expensive crop, sugar beets at ``$260``/acre :math:`\Rightarrow 500 \times 260
-  = 130{,}000`; at an optimum the farmer never buys more than the cattle-feed
-  requirement (buying more only wastes money), so purchases cost at most
-  :math:`200 \times 238 + 240 \times 210 = 98{,}000`; sales revenue is
-  non-negative. Hence :math:`\eta \le 228{,}000`; round up to
-  ``--cvar-eta-ub 250000``.
+* **Lower (profit) side**: the LP relaxations find the most profitable plan,
+  giving :math:`\eta \gtrsim -167{,}667` here.
+* **Upper (worst-case) side**: the worst-scenario cost at the risk-neutral
+  solution, computed from the small EF -- no hand computation needed.
 
 .. code-block:: bash
 
-   # solve for the (finite) lower bound; supply the unbounded upper side by hand
+   # small farmer: solve bounds both sides automatically
    python ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 \
        --EF --EF-solver-name gurobi --cvar --cvar-weight 2.0 --cvar-alpha 0.8 \
-       --cvar-eta-bound-method solve --cvar-eta-ub 250000
+       --cvar-eta-bound-method solve
 
-For this instance the optimal :math:`\eta^\star` is about ``-56800``, comfortably
-inside the resulting box, so the bound tightens the model without changing the
-answer. That is the goal: choose bounds you are confident *bracket* the
-Value-at-Risk. ``--cvar-eta-lb`` and ``--cvar-eta-ub`` *override* the automatic
-bound on their side (so you can tighten it or fill in an unbounded side), and
+*When the EF is too big to solve* (above ``--cvar-eta-solve-max-scenarios``, or
+whenever you would rather not pay for it), supply the worst-case side by hand
+from what you know about the model. For the farmer: planting is at most all 500
+acres in the most expensive crop, sugar beets at ``$260``/acre
+:math:`\Rightarrow 500 \times 260 = 130{,}000`; at an optimum the farmer never
+buys more than the cattle-feed requirement (buying more only wastes money), so
+purchases cost at most :math:`200 \times 238 + 240 \times 210 = 98{,}000`; sales
+revenue is non-negative. Hence :math:`\eta \le 228{,}000`; round up to
+``--cvar-eta-ub 250000``. ``--cvar-eta-lb`` and ``--cvar-eta-ub`` *override* the
+automatic bound on their side (so you can tighten it or fill in a free side), and
 ``--cvar-eta-bound-method none`` turns the automatic bound off entirely. An
 explicit bound is your responsibility: set it tighter than the true VaR and you
 will change the answer, exactly as any incorrect variable bound would.

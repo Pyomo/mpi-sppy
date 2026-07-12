@@ -100,10 +100,12 @@ if __name__ == "__main__":
         eta_lb = cfg.get("cvar_eta_lb", ifmissing=None)
         eta_ub = cfg.get("cvar_eta_ub", ifmissing=None)
         if method == "solve":
-            # Solve for a valid bound (a relaxation on the "how cheap/good" side,
-            # a MIP on the worst-case side), computed once here distributed over
-            # COMM_WORLD on the risk-neutral scenario_creator, then injected as
-            # eta bounds.  An explicit --cvar-eta-lb/ub still wins on its side.
+            # Compute a valid bound up front on the risk-neutral scenario_creator,
+            # then inject it as eta bounds.  The easy side is an LP relaxation
+            # (distributed over COMM_WORLD); the worst-case side is the cost range
+            # at the risk-neutral solution, which needs a coupled EF solve and is
+            # gated by --cvar-eta-solve-max-scenarios.  An explicit --cvar-eta-lb/ub
+            # still wins on its side.
             all_scenario_names, _ = name_lists(module, cfg)
             solver_name = cfg.get("solver_name", ifmissing=None) \
                 or cfg.get("EF_solver_name", ifmissing=None)
@@ -111,10 +113,19 @@ if __name__ == "__main__":
                 raise RuntimeError(
                     "--cvar-eta-bound-method solve needs a solver; set "
                     "--solver-name (or --EF-solver-name)")
+            eta_gate = cfg.get("cvar_eta_solve_max_scenarios", ifmissing=1000)
+            if len(all_scenario_names) > eta_gate:
+                global_toc(
+                    f"CVaR --cvar-eta-bound-method solve: {len(all_scenario_names)} "
+                    f"scenarios exceeds --cvar-eta-solve-max-scenarios ({eta_gate}); "
+                    "the risk-neutral EF solve for the worst-case side is skipped "
+                    "and that side of eta is left free.  Use "
+                    "--cvar-eta-bound-method fbbt or set --cvar-eta-lb/ub.")
             solved_lb, solved_ub = compute_cvar_eta_bounds_by_solve(
                 all_scenario_names, scenario_creator, solver_name,
                 scenario_creator_kwargs=scenario_creator_kwargs,
-                mipgap=cfg.get("cvar_eta_mipgap", ifmissing=0.5))
+                mipgap=cfg.get("cvar_eta_mipgap", ifmissing=1e-4),
+                max_ef_scenarios=eta_gate)
             # Report (rank 0) what the solve produced, and flag any side that
             # came back unbounded and is therefore left free -- unless the user
             # pinned that side with --cvar-eta-lb/ub.

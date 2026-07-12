@@ -79,29 +79,15 @@ def tiny_max_scenario_creator(sname, **kwargs):
 
 
 def unbounded_cost_scenario_creator(sname, **kwargs):
-    # cost = 5 + x with x >= 0 unbounded above: min cost = 5, max cost = +inf
+    # cost = 5 + x with x >= 0 unbounded above: maximizing cost over the feasible
+    # region is +inf, but the risk-neutral solution is x = 0 with cost 5, so the
+    # risk-neutral-point tail is a finite 5.
     model = pyo.ConcreteModel(name=sname)
     model.x = pyo.Var(domain=pyo.NonNegativeReals)
     cost = 5.0 + model.x
     model.cost = pyo.Objective(expr=cost, sense=pyo.minimize)
     model._mpisppy_probability = 1.0
     sputils.attach_root_node(model, cost, [model.x])
-    return model
-
-
-def integer_tail_scenario_creator(sname, **kwargs):
-    # minimize cost = 10 y + 3 x, y binary with 3y <= 2 (so y = 0 in the MIP),
-    # x in [0, 2].  The MIP cost range is [0, 6]; the LP relaxation would let
-    # y = 2/3 and report a max of 10*(2/3) + 6 = 12.67, so the worst-case (upper)
-    # bound distinguishes the MIP tail solve from a mere relaxation.
-    model = pyo.ConcreteModel(name=sname)
-    model.y = pyo.Var(domain=pyo.Binary)
-    model.x = pyo.Var(bounds=(0.0, 2.0))
-    model.con = pyo.Constraint(expr=3 * model.y <= 2)
-    cost = 10 * model.y + 3 * model.x
-    model.cost = pyo.Objective(expr=cost, sense=pyo.minimize)
-    model._mpisppy_probability = 1.0
-    sputils.attach_root_node(model, cost, [model.y, model.x])
     return model
 
 
@@ -363,8 +349,9 @@ class EFEtaBoundTests(unittest.TestCase):
 
 @unittest.skipIf(not solver_available, "no solver is available")
 class SolveBoundTests(unittest.TestCase):
-    """compute_cvar_eta_bounds_by_solve: relaxation on the slack side, MIP (loose
-    gap, dual bound) on the worst-case tail."""
+    """compute_cvar_eta_bounds_by_solve: LP relaxation on the easy side, cost at
+    the risk-neutral EF solution on the worst-case (tail) side, gated by EF
+    size."""
 
     def test_solve_matches_cost_range_on_tiny(self):
         lb, ub = cvar.compute_cvar_eta_bounds_by_solve(
@@ -382,35 +369,46 @@ class SolveBoundTests(unittest.TestCase):
         self.assertAlmostEqual(lb, 10.0, places=4)
         self.assertAlmostEqual(ub, 40.0, places=4)
 
-    def test_tail_solves_the_mip_not_the_relaxation(self):
-        # With a tight gap the worst-case (upper) bound is the MIP max (6.0),
-        # NOT the LP relaxation value (12.67); the slack (lower) side is 0.
+    def test_tail_is_finite_at_risk_neutral_point(self):
+        # cost = 5 + x, x >= 0: maximizing cost over the feasible region is
+        # unbounded (the old tail method), but at the risk-neutral solution
+        # (x = 0) the cost is 5, so the tail is a finite 5.0.
         lb, ub = cvar.compute_cvar_eta_bounds_by_solve(
-            ["s0"], integer_tail_scenario_creator, solver_name,
-            comm=MPI.COMM_SELF, mipgap=0.0)
-        self.assertAlmostEqual(lb, 0.0, places=4)
-        self.assertAlmostEqual(ub, 6.0, places=4)
+            ["s0"], unbounded_cost_scenario_creator, solver_name,
+            comm=MPI.COMM_SELF)
+        self.assertAlmostEqual(lb, 5.0, places=4)
+        self.assertAlmostEqual(ub, 5.0, places=4)      # finite, not unbounded
 
-    def test_loose_gap_tail_bound_is_valid(self):
-        # A loose gap only makes the dual bound looser, never invalid: it must
-        # still enclose the true MIP max of 6.0 and stay finite.
+    def test_gate_leaves_tail_free(self):
+        # With the gate below the scenario count the coupled EF solve is skipped,
+        # so the worst-case (upper, for a minimize) side is left free; the easy
+        # (lower) side is still the finite LP relaxation.
+        names = farmer.scenario_names_creator(3)
         lb, ub = cvar.compute_cvar_eta_bounds_by_solve(
-            ["s0"], integer_tail_scenario_creator, solver_name,
-            comm=MPI.COMM_SELF, mipgap=0.9)
-        self.assertGreaterEqual(ub, 6.0 - 1e-6)
-        self.assertTrue(ub < float("inf"))
+            names, farmer.scenario_creator, solver_name,
+            scenario_creator_kwargs={"num_scens": 3}, comm=MPI.COMM_SELF,
+            max_ef_scenarios=2)
+        self.assertIsNotNone(lb)          # slack side still computed
+        self.assertIsNone(ub)             # tail skipped by the gate
 
-    def test_solve_bounds_profit_side_of_farmer(self):
-        # farmer's cost is unbounded above (unlimited purchases), so the tail MIP
-        # is unbounded and there is no upper bound; the "how cheap" (profit) side
-        # is a finite LP relaxation, which FBBT cannot find at all.
+    def test_solve_bounds_both_sides_of_farmer(self):
+        # farmer's cost is unbounded above, so maximizing over the region gives no
+        # upper bound (and FBBT finds nothing), but evaluating at the risk-neutral
+        # solution does: the tail equals that solution's worst-scenario cost.
         names = farmer.scenario_names_creator(3)
         lb, ub = cvar.compute_cvar_eta_bounds_by_solve(
             names, farmer.scenario_creator, solver_name,
             scenario_creator_kwargs={"num_scens": 3}, comm=MPI.COMM_SELF)
-        self.assertIsNotNone(lb)          # a finite profit bound exists
-        self.assertLess(lb, 0.0)
-        self.assertIsNone(ub)             # buying is unbounded, so no upper bound
+        self.assertIsNotNone(lb)
+        self.assertLess(lb, 0.0)          # a finite profit (lower) bound
+        self.assertIsNotNone(ub)          # now finite via the risk-neutral point
+        # ub == max_s Cost_s(x^RN) from an independent risk-neutral EF solve
+        ef = sputils.create_EF(names, farmer.scenario_creator,
+                               scenario_creator_kwargs={"num_scens": 3},
+                               suppress_warnings=True)
+        _solve(ef)
+        worst = _farmer_worst_cost(ef, names)
+        self.assertAlmostEqual(ub, worst, delta=max(1.0, abs(worst) * 1e-4))
 
 
 @unittest.skipIf(not solver_available, "no solver is available")

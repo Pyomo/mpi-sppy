@@ -704,21 +704,32 @@ class Config(pyofig.ConfigDict):
 
         self.add_to_config("cvar_eta_bound_method",
                            description="how to automatically bound the CVaR "
-                                       "Value-at-Risk variable eta by the global "
-                                       "cost range: 'fbbt' (structural, no solves; "
-                                       "default), 'solve' (per scenario, relax the "
-                                       "'how cheap/good' side and solve a MIP for "
-                                       "the worst-case side), or 'none'",
+                                       "Value-at-Risk variable eta: 'fbbt' "
+                                       "(structural, no solves; default), 'solve' "
+                                       "(relax the easy side; for the worst-case "
+                                       "side solve the risk-neutral EF and take the "
+                                       "cost range at that solution -- a coupled "
+                                       "solve, only for small/medium models), or "
+                                       "'none'",
                            domain=pyofig.In(['none', 'fbbt', 'solve']),
                            default='fbbt')
 
         self.add_to_config("cvar_eta_mipgap",
-                           description="loose relative mip gap for the worst-case "
-                                       "MIP solves in --cvar-eta-bound-method solve; "
-                                       "only the (valid) dual bound is used, so a "
-                                       "loose gap keeps it cheap (default 0.5)",
+                           description="relative mip gap for the solves in "
+                                       "--cvar-eta-bound-method solve; for the "
+                                       "worst-case side it is the risk-neutral EF "
+                                       "solve gap, so keep it tight (default 1e-4)",
                            domain=float,
-                           default=0.5)
+                           default=1e-4)
+
+        self.add_to_config("cvar_eta_solve_max_scenarios",
+                           description="gate for --cvar-eta-bound-method solve: if "
+                                       "there are more scenarios than this, skip the "
+                                       "(coupled) risk-neutral EF solve and leave "
+                                       "the worst-case side of eta free (default "
+                                       "1000)",
+                           domain=int,
+                           default=1000)
 
         self.add_to_config("cvar_eta_lb",
                            description="explicit lower bound for the CVaR "
