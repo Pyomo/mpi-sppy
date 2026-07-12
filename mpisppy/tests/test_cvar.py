@@ -379,17 +379,17 @@ class SolveBoundTests(unittest.TestCase):
         self.assertAlmostEqual(lb, 5.0, places=4)
         self.assertAlmostEqual(ub, 5.0, places=4)      # finite, not unbounded
 
-    def test_gate_leaves_tail_free(self):
-        # With the gate below the scenario count the coupled EF solve is skipped,
-        # so the worst-case (upper, for a minimize) side is left free; the easy
-        # (lower) side is still the finite LP relaxation.
+    def test_zero_time_limit_skips_tail(self):
+        # time_limit <= 0 skips the coupled EF solve, so the worst-case (upper,
+        # for a minimize) side is left free; the easy (lower) side is still the
+        # finite LP relaxation.
         names = farmer.scenario_names_creator(3)
         lb, ub = cvar.compute_cvar_eta_bounds_by_solve(
             names, farmer.scenario_creator, solver_name,
             scenario_creator_kwargs={"num_scens": 3}, comm=MPI.COMM_SELF,
-            max_ef_scenarios=2)
+            time_limit=0.0)
         self.assertIsNotNone(lb)          # slack side still computed
-        self.assertIsNone(ub)             # tail skipped by the gate
+        self.assertIsNone(ub)             # tail skipped (no time budget)
 
     def test_solve_bounds_both_sides_of_farmer(self):
         # farmer's cost is unbounded above, so maximizing over the region gives no

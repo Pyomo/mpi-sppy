@@ -103,9 +103,9 @@ if __name__ == "__main__":
             # Compute a valid bound up front on the risk-neutral scenario_creator,
             # then inject it as eta bounds.  The easy side is an LP relaxation
             # (distributed over COMM_WORLD); the worst-case side is the cost range
-            # at the risk-neutral solution, which needs a coupled EF solve and is
-            # gated by --cvar-eta-solve-max-scenarios.  An explicit --cvar-eta-lb/ub
-            # still wins on its side.
+            # at the risk-neutral solution, a coupled EF solve time-boxed by
+            # --cvar-eta-solve-time-limit (left free if it does not finish in
+            # time).  An explicit --cvar-eta-lb/ub still wins on its side.
             all_scenario_names, _ = name_lists(module, cfg)
             solver_name = cfg.get("solver_name", ifmissing=None) \
                 or cfg.get("EF_solver_name", ifmissing=None)
@@ -113,32 +113,24 @@ if __name__ == "__main__":
                 raise RuntimeError(
                     "--cvar-eta-bound-method solve needs a solver; set "
                     "--solver-name (or --EF-solver-name)")
-            eta_gate = cfg.get("cvar_eta_solve_max_scenarios", ifmissing=1000)
-            if len(all_scenario_names) > eta_gate:
-                global_toc(
-                    f"CVaR --cvar-eta-bound-method solve: {len(all_scenario_names)} "
-                    f"scenarios exceeds --cvar-eta-solve-max-scenarios ({eta_gate}); "
-                    "the risk-neutral EF solve for the worst-case side is skipped "
-                    "and that side of eta is left free.  Use "
-                    "--cvar-eta-bound-method fbbt or set --cvar-eta-lb/ub.")
             solved_lb, solved_ub = compute_cvar_eta_bounds_by_solve(
                 all_scenario_names, scenario_creator, solver_name,
                 scenario_creator_kwargs=scenario_creator_kwargs,
                 mipgap=cfg.get("cvar_eta_mipgap", ifmissing=1e-4),
-                max_ef_scenarios=eta_gate)
-            # Report (rank 0) what the solve produced, and flag any side that
-            # came back unbounded and is therefore left free -- unless the user
+                time_limit=cfg.get("cvar_eta_solve_time_limit", ifmissing=60.0))
+            # Report (rank 0) what the solve produced, and flag any side left
+            # free (unbounded slack, or a tail that timed out) -- unless the user
             # pinned that side with --cvar-eta-lb/ub.
-            lo = "unbounded" if solved_lb is None else f"{solved_lb:.6g}"
-            hi = "unbounded" if solved_ub is None else f"{solved_ub:.6g}"
+            lo = "free" if solved_lb is None else f"{solved_lb:.6g}"
+            hi = "free" if solved_ub is None else f"{solved_ub:.6g}"
             global_toc("CVaR --cvar-eta-bound-method solve computed eta bounds: "
                        f"lower={lo}, upper={hi}")
             if solved_lb is None and eta_lb is None:
-                global_toc("  eta is unbounded below and left free; supply "
-                           "--cvar-eta-lb to bound it")
+                global_toc("  eta has no automatic lower bound and is left free; "
+                           "supply --cvar-eta-lb to bound it")
             if solved_ub is None and eta_ub is None:
-                global_toc("  eta is unbounded above and left free; supply "
-                           "--cvar-eta-ub to bound it")
+                global_toc("  eta has no automatic upper bound and is left free; "
+                           "supply --cvar-eta-ub to bound it")
             if eta_lb is None:
                 eta_lb = solved_lb
             if eta_ub is None:

@@ -1027,6 +1027,15 @@ _SOLVER_OPTION_TRANSLATIONS = {
         "gurobi": "Threads",
         "appsi_gurobi": "Threads",
     },
+    "time_limit": {
+        # seconds; HiGHS already uses "time_limit" so it passes through.
+        "gurobi": "TimeLimit",
+        "appsi_gurobi": "TimeLimit",
+        "cplex": "timelimit",
+        "appsi_cplex": "timelimit",
+        "xpress": "maxtime",
+        "appsi_xpress": "maxtime",
+    },
 }
 
 
@@ -1034,8 +1043,8 @@ def translate_solver_options(opts, solver_name):
     """Return a copy of *opts* with canonical option keys renamed to
     the solver's native key, where they differ.
 
-    Currently translates only ``mipgap`` and ``threads``; all other
-    keys pass through unchanged. If the user already supplied the
+    Currently translates ``mipgap``, ``threads`` and ``time_limit``; all
+    other keys pass through unchanged. If the user already supplied the
     solver-native key alongside the canonical key, the
     solver-native key wins and the canonical key is dropped (so the
     solver does not receive both forms).

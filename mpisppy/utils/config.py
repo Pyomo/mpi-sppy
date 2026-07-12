@@ -722,14 +722,15 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=1e-4)
 
-        self.add_to_config("cvar_eta_solve_max_scenarios",
-                           description="gate for --cvar-eta-bound-method solve: if "
-                                       "there are more scenarios than this, skip the "
-                                       "(coupled) risk-neutral EF solve and leave "
-                                       "the worst-case side of eta free (default "
-                                       "1000)",
-                           domain=int,
-                           default=1000)
+        self.add_to_config("cvar_eta_solve_time_limit",
+                           description="seconds allowed for the (coupled) "
+                                       "risk-neutral EF solve in "
+                                       "--cvar-eta-bound-method solve; if it does "
+                                       "not reach optimality in time the worst-case "
+                                       "side of eta is left free.  <= 0 skips the EF "
+                                       "solve entirely (default 60)",
+                           domain=float,
+                           default=60.0)
 
         self.add_to_config("cvar_eta_lb",
                            description="explicit lower bound for the CVaR "

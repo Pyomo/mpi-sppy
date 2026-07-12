@@ -33,7 +33,7 @@ from pyomo.contrib.fbbt.fbbt import compute_bounds_on_expr
 from pyomo.opt import TerminationCondition
 
 import mpisppy.utils.sputils as sputils
-from mpisppy import MPI
+from mpisppy import MPI, global_toc
 
 
 def add_cvar(scenario, *, cvar_weight, cvar_alpha, cvar_mean_weight=1.0,
@@ -297,7 +297,7 @@ def _ef_scenario_costs(ef, scenario_names):
 
 def compute_cvar_eta_bounds_by_solve(scenario_names, scenario_creator, solver_name,
                                      scenario_creator_kwargs=None, comm=None,
-                                     mipgap=1e-4, max_ef_scenarios=1000):
+                                     mipgap=1e-4, time_limit=60.0):
     """Compute a valid global bound on the CVaR VaR variable eta by solving.
 
     eta must be enclosed so the box contains the VaR and never cuts the optimum.
@@ -321,8 +321,10 @@ def compute_cvar_eta_bounds_by_solve(scenario_names, scenario_creator, solver_na
 
     Getting ``x^RN`` is a **coupled** solve -- a common first-stage decision --
     so this builds and solves the risk-neutral extensive form.  That is only
-    tractable when the EF is; it is **gated** by ``max_ef_scenarios`` and left
-    free above the gate.  A genuinely large model should therefore use
+    tractable when the EF is, so the solve is **time-boxed** by ``time_limit``:
+    if it does not reach optimality in time (or ``time_limit <= 0``) the tail
+    side is left free -- a timed-out solution is discarded, never used, so the
+    bound can never be invalid.  A genuinely large model should therefore use
     ``--cvar-eta-bound-method fbbt`` or an explicit ``--cvar-eta-lb/ub`` for the
     tail; this ``solve`` path is a convenience for small/medium models where the
     structural (``fbbt``) bound is unbounded but one EF solve is affordable.
@@ -340,12 +342,13 @@ def compute_cvar_eta_bounds_by_solve(scenario_names, scenario_creator, solver_na
         mipgap (float): relative mip gap for the risk-neutral EF solve; keep it
             tight so ``x^RN`` is near-optimal (a loose gap slightly weakens the
             tail bound's validity).
-        max_ef_scenarios (int): gate; if there are more scenarios than this the
-            risk-neutral EF solve is skipped and the tail side is left free.
+        time_limit (float or None): seconds for the risk-neutral EF solve; if it
+            does not finish in time the tail side is left free.  ``None`` means no
+            limit; ``<= 0`` skips the EF solve entirely.
 
     Returns:
         tuple: ``(lb, ub)`` as floats, or ``None`` on a side left free (unbounded
-        slack, or a tail skipped by the gate).
+        slack, or a tail whose EF solve was skipped or timed out).
     """
     if comm is None:
         comm = MPI.COMM_WORLD
@@ -364,9 +367,13 @@ def compute_cvar_eta_bounds_by_solve(scenario_names, scenario_creator, solver_na
             f"solver '{solver_name}' is not available for the CVaR eta "
             "bound solves (--cvar-eta-bound-method solve)")
     # tight gap so the risk-neutral EF solution is near-optimal, single-threaded
-    # so distributed slack solves do not oversubscribe; native names per solver
-    solver.options.update(sputils.translate_solver_options(
-        {"mipgap": mipgap, "threads": 1}, solver_name))
+    # so distributed slack solves do not oversubscribe; native names per solver.
+    # A positive time_limit is the EF-solve budget (harmless on the fast slack
+    # LPs); it is omitted when None or <= 0 so we never pass 0 to a solver.
+    solver_opts = {"mipgap": mipgap, "threads": 1}
+    if time_limit is not None and time_limit > 0:
+        solver_opts["time_limit"] = time_limit
+    solver.options.update(sputils.translate_solver_options(solver_opts, solver_name))
     relax = pyo.TransformationFactory("core.relax_integer_vars")
 
     # The objective sense is needed on every rank (including ranks with no
@@ -407,10 +414,11 @@ def compute_cvar_eta_bounds_by_solve(scenario_names, scenario_creator, solver_na
     slack = float(slack_buf[0])
 
     # ---- Worst-case (tail) side: cost at the risk-neutral solution x^RN ----
-    # Gated: it is a coupled (EF) solve, so only attempted when the EF is small
-    # enough.  Solved on rank 0 and broadcast; None (left free) otherwise.
+    # A coupled (EF) solve, time-boxed by time_limit.  Solved on rank 0 and
+    # broadcast; left free (None) if skipped or not solved to optimality in time
+    # (a timed-out incumbent is not near-optimal, so it is discarded, not used).
     tail = None
-    if rank == 0 and len(scenario_names) <= max_ef_scenarios:
+    if rank == 0 and (time_limit is None or time_limit > 0):
         ef = sputils.create_EF(scenario_names, scenario_creator,
                                scenario_creator_kwargs=scenario_creator_kwargs,
                                suppress_warnings=True)
@@ -419,13 +427,21 @@ def compute_cvar_eta_bounds_by_solve(scenario_names, scenario_creator, solver_na
             results = solver.solve(ef, load_solutions=False)
         else:
             results = solver.solve(ef, load_solutions=False)
-        if results.solver.termination_condition == TerminationCondition.optimal:
+        tc = results.solver.termination_condition
+        if tc == TerminationCondition.optimal:
             if "_persistent" in solver_name:
                 solver.load_vars()
             else:
                 ef.solutions.load_from(results)
             costs = _ef_scenario_costs(ef, scenario_names)
             tail = max(costs) if minimizing else min(costs)
+        else:
+            global_toc(
+                "CVaR --cvar-eta-bound-method solve: the risk-neutral EF solve "
+                f"did not reach optimality within {time_limit}s (status: {tc}); "
+                "the worst-case side of eta is left free.  Raise "
+                "--cvar-eta-solve-time-limit or set --cvar-eta-lb/ub.",
+                cond=(rank == 0))
     tail = comm.bcast(tail, root=0)
 
     if minimizing:

@@ -70,9 +70,9 @@ The flags are:
 * ``--cvar-eta-mipgap`` -- the mip gap for the solves under
   ``--cvar-eta-bound-method solve`` (default ``1e-4``); for the worst-case side it
   is the risk-neutral EF solve gap, so keep it tight.
-* ``--cvar-eta-solve-max-scenarios`` -- gate for ``--cvar-eta-bound-method
-  solve`` (default ``1000``): above this many scenarios the coupled EF solve is
-  skipped and the worst-case side is left free.
+* ``--cvar-eta-solve-time-limit`` -- seconds for the coupled risk-neutral EF
+  solve under ``--cvar-eta-bound-method solve`` (default ``60``); if it does not
+  finish in time the worst-case side is left free (``<= 0`` skips it entirely).
 
 Using it programmatically
 -------------------------
@@ -187,10 +187,11 @@ subproblem is easily unbounded (its solves then simply fail).
   risk-neutral **extensive form**. That is only tractable when the EF is, which
   is exactly when you would not need decomposition, so ``solve`` is a convenience
   for **small/medium** models where ``fbbt`` leaves the worst-case side unbounded
-  but one EF solve is affordable. It is **gated** by
-  ``--cvar-eta-solve-max-scenarios``; above the gate the worst-case side is left
-  free. For a genuinely large model, use ``fbbt`` or an explicit
-  ``--cvar-eta-ub`` / ``--cvar-eta-lb`` instead.
+  but one EF solve is affordable. The solve is **time-boxed** by
+  ``--cvar-eta-solve-time-limit``; if it does not reach optimality in time the
+  worst-case side is left free (the timed-out solution is discarded, never used,
+  so the bound can never be invalid). For a genuinely large model, use ``fbbt``
+  or an explicit ``--cvar-eta-ub`` / ``--cvar-eta-lb`` instead.
 
 The easy side reduces the per-scenario relaxation values to a global
 enclosing value across *all* scenarios (an MPI reduction); the worst-case side
@@ -211,22 +212,22 @@ range, so the box always contains the VaR and can never cut off the optimum.
 cost is *structurally* bounded; on models with a structurally unbounded cost
 (the classic ``farmer``, whose purchases are unbounded above) it leaves that side
 free. ``solve`` goes further -- it bounds the worst-case side from the
-risk-neutral solution -- but only up to its gate; above the gate, or with
-``fbbt`` / ``none``, that side is again free. On a side that is left free you can
-supply a bound *by hand* with ``--cvar-eta-lb`` / ``--cvar-eta-ub``. Under
-``solve``, ``generic_cylinders`` prints the bounds it computed and, for any side
-it had to leave free, names the flag that would bound it, e.g. (here from the
-gate)::
+risk-neutral solution -- but only if that EF solve finishes within
+``--cvar-eta-solve-time-limit``; if it times out, or with ``fbbt`` / ``none``,
+that side is again free. On a side that is left free you can supply a bound *by
+hand* with ``--cvar-eta-lb`` / ``--cvar-eta-ub``. Under ``solve``,
+``generic_cylinders`` prints the bounds it computed and, for any side it had to
+leave free, names the flag that would bound it, e.g. (here the worst-case EF
+solve did not finish in time)::
 
-   CVaR --cvar-eta-bound-method solve: 2000 scenarios exceeds --cvar-eta-solve-max-scenarios (1000); the risk-neutral EF solve for the worst-case side is skipped and that side of eta is left free.  Use --cvar-eta-bound-method fbbt or set --cvar-eta-lb/ub.
-   CVaR --cvar-eta-bound-method solve computed eta bounds: lower=-167667, upper=unbounded
-     eta is unbounded above and left free; supply --cvar-eta-ub to bound it
+   CVaR --cvar-eta-bound-method solve: the risk-neutral EF solve did not reach optimality within 60.0s (status: maxTimeLimit); the worst-case side of eta is left free.  Raise --cvar-eta-solve-time-limit or set --cvar-eta-lb/ub.
+   CVaR --cvar-eta-bound-method solve computed eta bounds: lower=-167667, upper=free
+     eta has no automatic upper bound and is left free; supply --cvar-eta-ub to bound it
 
 *Worked example -- the farmer.* The farmer minimizes total cost = planting cost
 :math:`+` purchase cost :math:`-` sales revenue, on 500 acres. Its cost is
-unbounded above, so ``fbbt`` cannot bound the upper side; three scenarios,
-however, are far below the gate, so ``solve`` bounds *both* sides
-automatically:
+unbounded above, so ``fbbt`` cannot bound the upper side; the three-scenario EF,
+however, solves instantly, so ``solve`` bounds *both* sides automatically:
 
 * **Lower (profit) side**: the LP relaxations find the most profitable plan,
   giving :math:`\eta \gtrsim -167{,}667` here.
@@ -240,9 +241,9 @@ automatically:
        --EF --EF-solver-name gurobi --cvar --cvar-weight 2.0 --cvar-alpha 0.8 \
        --cvar-eta-bound-method solve
 
-*When the EF is too big to solve* (above ``--cvar-eta-solve-max-scenarios``, or
-whenever you would rather not pay for it), supply the worst-case side by hand
-from what you know about the model. For the farmer: planting is at most all 500
+*When the EF is too big to solve in time* (it exceeds
+``--cvar-eta-solve-time-limit``, or you would rather not pay for it), supply the
+worst-case side by hand from what you know about the model. For the farmer: planting is at most all 500
 acres in the most expensive crop, sugar beets at ``$260``/acre
 :math:`\Rightarrow 500 \times 260 = 130{,}000`; at an optimum the farmer never
 buys more than the cattle-feed requirement (buying more only wastes money), so
