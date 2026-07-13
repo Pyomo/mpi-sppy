@@ -247,26 +247,53 @@ violated:
 
 ```python
 def set_scenario_probabilities(self, prob_map):
-    # prob_map: {scenario_name: float}
+    # prob_map: {scenario_name: float}  (must keep the full set summing to 1)
+    _validate_sum_to_one(prob_map_applied_to_all_scenarios)   # §5.1, §8.5
     for sname, p in prob_map.items():
         self.ef._mpisppy_model.prob[sname].value = p
-    self.ef._mpisppy_model.prob_sum.value = sum(...)   # option (A)
-    if sputils.is_persistent(self.solver):
-        self.solver.set_objective(self.ef.EF_Obj)      # re-push only the objective
+        getattr(self.ef, sname)._mpisppy_probability = p      # §5.3
+    if <persistent> and hasattr(self.solver, "set_objective"):
+        self.solver.set_objective(self.ef.EF_Obj)   # re-push objective coefficients
 ```
 
-For a persistent solver this is the key win: `set_objective` re-extracts the
-objective coefficients from the (already-updated) Param values without
-touching constraints or variables — far cheaper than `set_instance`.
-Non-persistent solvers need no special step; the next `solve` reads the new
-Param values.
+Under option (B) there is no `prob_sum` to update — just the per-scenario
+Params. `set_objective` re-extracts the objective coefficients from the
+(already-updated) Param values without touching constraints or variables —
+far cheaper than `set_instance`.
 
-Note `solve_extensive_form` currently calls `self.solver.set_instance(self.ef)`
-on every call for persistent solvers (ef.py:117-118). For the rolling-horizon
+**Cross-solver behavior (verified by experiment, see §8.3).** Two persistent
+families behave differently, and calling `set_objective` unconditionally on
+the persistent path is correct for both:
+
+- *APPSI / `pyomo.contrib.solver` (e.g. `appsi_highs`, the issue's solver).*
+  The wrapper auto-tracks model changes on the next `solve()` — its
+  `update_config.update_params` and `update_objective` default to `True` — so
+  a mutable-Param objective change is picked up automatically even *without*
+  `set_objective`. Calling `set_objective` is redundant but harmless.
+- *Legacy `PersistentSolver` (e.g. `gurobi_persistent`, `cplex_persistent`).*
+  These do **not** auto-track model changes; `set_objective` (or an explicit
+  coefficient update) is **required**, or the solver re-solves the stale
+  objective.
+
+**Reuse guard.** `solve_extensive_form` currently re-instances on every call
+for solvers it considers persistent (ef.py:117-118). For the rolling-horizon
 reuse case we want to **skip** re-instancing when the instance is already
-loaded and only the objective changed. Add a guard (e.g. a
-`self._instance_loaded` flag, or a `reuse_instance=True` argument to
-`solve_extensive_form`) so the second and later solves take the cheap path.
+loaded and only the objective changed. *Resolved (§8.2):* add an explicit
+`reuse_instance=False` argument to `solve_extensive_form`; when `True`, skip
+`set_instance` and rely on the loaded instance plus the re-pushed objective.
+
+**Detection caveat (found by experiment, see §8.3).** mpi-sppy does not currently
+recognize `appsi_highs` as persistent at all: `ef.py:117` tests the substring
+`"persistent" in solver_name` (false for `"appsi_highs"`), and
+`sputils.is_persistent` tests `isinstance(solver, <legacy> PersistentSolver)`
+(also false — APPSI solvers are `LegacySolver` wrappers, not that base class).
+So today `ExtensiveForm` treats `appsi_highs` like a non-persistent solver and
+never takes the `set_instance` / `load_vars` path. This feature must therefore
+extend persistence detection to the APPSI / `pyomo.contrib.solver` interfaces
+(e.g. duck-type on `set_instance`/`set_objective`/`load_vars`, or check for the
+contrib base classes) — otherwise the `reuse_instance` path is unreachable for
+exactly the solver in the issue. This is a prerequisite for phase 1, not a
+nice-to-have.
 
 ### 5.3 Keeping `_mpisppy_probability` consistent
 
@@ -317,13 +344,27 @@ sync and there is one method name across both.
    tolerance for the sum-to-1 check, and that no in-tree caller builds a
    *bundle* with `mutable_probability` set (the guard in §5.1 should make that
    an explicit error).
-2. **Persistent re-instancing guard** — is a `reuse_instance` argument to
-   `solve_extensive_form` preferable to an internal `_instance_loaded` flag?
-   The former is explicit; the latter is invisible to callers.
-3. **HiGHS `set_objective` support** — verify the appsi/persistent HiGHS
-   interface actually re-extracts objective coefficients from mutable Params
-   on `set_objective` (Gurobi/CPLEX persistent do). If HiGHS does not, we may
-   need `update_config` toggles or a targeted coefficient update.
+2. **Persistent re-instancing guard** — *resolved:* an explicit
+   `reuse_instance=False` argument to `solve_extensive_form`. When `True`,
+   skip the `set_instance` at ef.py:117 and rely on the already-loaded
+   instance plus the updated objective. Explicit over an invisible internal
+   flag so the reuse contract is visible at the call site.
+3. **HiGHS `set_objective` support** — *resolved by experiment*
+   (appsi_highs / highspy 1.15.1). Findings:
+   (a) `set_objective(EF_Obj)` **does** re-extract objective coefficients from
+   mutable Params — re-solve moved the shared first-stage var to the new
+   optimum after only re-pushing the objective, no `set_instance`.
+   (b) Stronger: appsi_highs **auto-tracks** the change on the next `solve()`
+   even without `set_objective` (`update_config.update_params` /
+   `update_objective` default `True`), and retains its instance across
+   `.solve()` calls. So the mutable-Param objective "just works" for
+   appsi_highs; `set_objective` is redundant-but-safe there and *required* for
+   legacy persistent solvers (see §5.2).
+   (c) *New prerequisite surfaced:* mpi-sppy classifies `appsi_highs` as
+   **non-persistent** — `sputils.is_persistent` returns `False` and the
+   `"persistent" in solver_name` check at ef.py:117 is also `False` — so the
+   reuse path is currently unreachable for it. Persistence detection must be
+   extended to APPSI / `pyomo.contrib.solver` interfaces (§5.2).
 4. **Scope of a probability change** — do we ever need to change the *number*
    of scenarios or the tree structure between rolls? Declared out of scope
    here; if the user's rolling horizon changes the scenario set, that is a
@@ -339,9 +380,12 @@ sync and there is one method name across both.
 
 ## 9. Suggested implementation phases
 
+0. Prerequisite: extend persistence detection to APPSI / `pyomo.contrib.solver`
+   interfaces so `appsi_highs` (the issue's solver) is recognized as persistent
+   (§5.2, §8.3c). Without this the reuse path is unreachable for it.
 1. EF-only, two-stage: `mutable_probability` flag, Param objective with
    option-(B) normalization (require sum-to-1, no divisor),
-   `set_scenario_probabilities`, persistent-reuse guard in
+   `set_scenario_probabilities`, explicit `reuse_instance` argument to
    `solve_extensive_form`. Closes the issue.
 2. PH path: `SPBase.set_scenario_probabilities` + `prob_coeff` refresh.
 3. Multistage node probabilities and variable-probability interaction.
