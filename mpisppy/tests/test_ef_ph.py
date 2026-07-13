@@ -804,8 +804,101 @@ class Test_hydro(unittest.TestCase):
         obj2 = round_pos_sig(obj, 2)
         self.assertEqual(210, obj2)
 
-        
+
 # MultRhoUpdater
-        
+
+
+class Test_mutable_probability(unittest.TestCase):
+    """ Mutable scenario probabilities on the ExtensiveForm (issue #797). """
+
+    def setUp(self):
+        import mpisppy.tests.examples.farmer as farmer
+        from mpisppy.opt.ef import ExtensiveForm
+        self.farmer = farmer
+        self.ExtensiveForm = ExtensiveForm
+        self.snames = ["scen0", "scen1", "scen2"]
+        self.sck = {"num_scens": 3, "sense": pyo.minimize}
+
+    def _pv(self, p_bad):
+        rest = (1.0 - p_bad) / 2.0
+        return {"scen0": p_bad, "scen1": rest, "scen2": rest}
+
+    def _make_ef(self, mutable_probability=False):
+        return self.ExtensiveForm(
+            options={"solver": solver_name},
+            all_scenario_names=self.snames,
+            scenario_creator=self.farmer.scenario_creator,
+            scenario_creator_kwargs=self.sck,
+            mutable_probability=mutable_probability,
+        )
+
+    def _rebuild_obj(self, pv):
+        # baked-in EF at the given probabilities (correctness oracle)
+        scen_dict = {sn: self.farmer.scenario_creator(sn, **self.sck)
+                     for sn in self.snames}
+        for sn, scen in scen_dict.items():
+            scen._mpisppy_probability = pv[sn]
+        ef = sputils._create_EF_from_scen_dict(scen_dict, EF_name="oracle")
+        solver = pyo.SolverFactory(solver_name)
+        if '_persistent' in solver_name:
+            solver.set_instance(ef)
+        solver.solve(ef)
+        return pyo.value(ef.EF_Obj)
+
+    def test_mutable_prob_builds_param(self):
+        ef = self._make_ef(mutable_probability=True)
+        self.assertTrue(ef.mutable_probability)
+        self.assertTrue(hasattr(ef.ef._mpisppy_model, "prob"))
+        # defaults to the scenario_creator probabilities (uniform here)
+        for sn in self.snames:
+            self.assertAlmostEqual(pyo.value(ef.ef._mpisppy_model.prob[sn]),
+                                   1.0 / 3.0)
+
+    @unittest.skipIf(not solver_available, "no solver is available")
+    def test_matches_rebuild_across_sweep(self):
+        ef = self._make_ef(mutable_probability=True)
+        for i, p_bad in enumerate([0.0, 0.2, 0.5, 0.9]):
+            pv = self._pv(p_bad)
+            ef.set_scenario_probabilities(pv)
+            ef.solve_extensive_form(reuse_instance=(i > 0))
+            self.assertAlmostEqual(ef.get_objective_value(),
+                                   self._rebuild_obj(pv), places=4)
+
+    @unittest.skipIf(not persistent_available,
+                     "no persistent solver is available")
+    def test_reuse_instance_loads_once(self):
+        options = {"solver": persistent_solver_name}
+        ef = self.ExtensiveForm(
+            options=options, all_scenario_names=self.snames,
+            scenario_creator=self.farmer.scenario_creator,
+            scenario_creator_kwargs=self.sck, mutable_probability=True)
+        calls = {"n": 0}
+        orig = ef.solver.set_instance
+        def counting(*a, **k):
+            calls["n"] += 1
+            return orig(*a, **k)
+        ef.solver.set_instance = counting
+        for i, p_bad in enumerate([0.2, 0.5, 0.9]):
+            ef.set_scenario_probabilities(self._pv(p_bad))
+            ef.solve_extensive_form(reuse_instance=(i > 0))
+        self.assertEqual(calls["n"], 1)
+
+    def test_guards(self):
+        ef = self._make_ef(mutable_probability=True)
+        # non-mutable EF rejects the setter
+        plain = self._make_ef(mutable_probability=False)
+        with self.assertRaises(RuntimeError):
+            plain.set_scenario_probabilities(self._pv(0.2))
+        # unknown scenario name
+        with self.assertRaises(KeyError):
+            ef.set_scenario_probabilities({"nope": 0.5})
+        # probabilities not summing to 1, and the failed call is transactional
+        before = pyo.value(ef.ef._mpisppy_model.prob["scen0"])
+        with self.assertRaises(ValueError):
+            ef.set_scenario_probabilities({"scen0": before + 0.25})
+        self.assertAlmostEqual(pyo.value(ef.ef._mpisppy_model.prob["scen0"]),
+                               before)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -1,9 +1,20 @@
 # Mutable scenario probabilities
 
-Status: design proposal (addresses issue #797). Covers the current behavior
-(§1), the use case and goals (§2–3), the design (§4), the EF path in detail
-(§5), the PH/decomposition path (§6), API and compatibility (§7), and open
-questions (§8).
+Status: phases 0–1 implemented and verified (addresses issue #797); phases
+2–4 remain (§9). Covers the current behavior (§1), the use case and goals
+(§2–3), the design (§4), the EF path in detail (§5), the PH/decomposition
+path (§6), API and compatibility (§7), and open questions (§8).
+
+Implemented so far (EF path, the issue's request):
+`sputils.has_persistent_solve_api` (recognizes APPSI / `pyomo.contrib.solver`
+as persistent for the EF workflow); `mutable_probability` option on
+`_create_EF_from_scen_dict` and `ExtensiveForm` (option-B Param objective);
+`ExtensiveForm.set_scenario_probabilities`; and a `reuse_instance` argument to
+`solve_extensive_form`. Verified end-to-end on the farmer example against a
+rebuild oracle — machine-precision agreement across a probability sweep, with
+`set_instance` called once — for **both** `appsi_highs` (auto-tracks the
+change) and `gurobi_persistent` (requires the explicit `set_objective`
+re-push). Tests: `Test_mutable_probability` in `mpisppy/tests/test_ef_ph.py`.
 
 ---
 
@@ -369,24 +380,29 @@ sync and there is one method name across both.
    of scenarios or the tree structure between rolls? Declared out of scope
    here; if the user's rolling horizon changes the scenario set, that is a
    rebuild, not a probability update.
-5. **Validation** — under option (B), `set_scenario_probabilities` requires
-   full scenario coverage and a sum of 1, and **raises** on violation (no
-   silent renormalization, which would reintroduce the divisor B removes). To
-   confirm: the sum-to-1 tolerance, and whether partial-mapping updates (only
-   some scenarios supplied, rest unchanged) are allowed as long as the
-   resulting total still sums to 1.
+5. **Validation** — *resolved in the implementation.* Under option (B),
+   `set_scenario_probabilities` **raises** if the resulting full probability
+   vector does not sum to 1 (tolerance `1e-9`), with no silent renormalization
+   (which would reintroduce the divisor B removes). Partial-mapping updates
+   **are** allowed: scenarios omitted from the mapping keep their current
+   probability, as long as the resulting total still sums to 1. The check runs
+   *before* any value is written, so a rejected call leaves the model
+   unchanged (transactional).
 
 ---
 
 ## 9. Suggested implementation phases
 
-0. Prerequisite: extend persistence detection to APPSI / `pyomo.contrib.solver`
-   interfaces so `appsi_highs` (the issue's solver) is recognized as persistent
-   (§5.2, §8.3c). Without this the reuse path is unreachable for it.
-1. EF-only, two-stage: `mutable_probability` flag, Param objective with
-   option-(B) normalization (require sum-to-1, no divisor),
+0. **[done]** Prerequisite: extend persistence detection to APPSI /
+   `pyomo.contrib.solver` interfaces so `appsi_highs` (the issue's solver) is
+   recognized as persistent (§5.2, §8.3c). Implemented as
+   `sputils.has_persistent_solve_api`; `ExtensiveForm.solve_extensive_form`
+   uses it in place of the old `"persistent" in name` / `is_persistent` checks.
+1. **[done]** EF-only, two-stage: `mutable_probability` flag, Param objective
+   with option-(B) normalization (require sum-to-1, no divisor),
    `set_scenario_probabilities`, explicit `reuse_instance` argument to
-   `solve_extensive_form`. Closes the issue.
+   `solve_extensive_form`. Closes the issue. Verified against a rebuild oracle
+   on farmer for `appsi_highs` and `gurobi_persistent`.
 2. PH path: `SPBase.set_scenario_probabilities` + `prob_coeff` refresh.
 3. Multistage node probabilities and variable-probability interaction.
 4. CLI exposure + docs + a rolling-horizon example under `examples/`.
