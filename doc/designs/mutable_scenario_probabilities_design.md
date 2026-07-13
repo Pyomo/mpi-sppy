@@ -321,20 +321,44 @@ change. Today `_compute_unconditional_node_probabilities` only computes
 `prob_coeff` if it is missing (`if not hasattr(...)`), so it will not pick up
 an updated `_mpisppy_probability` on its own.
 
-Design: add `SPBase.set_scenario_probabilities(mapping)` that
+Design (implemented, phase 2): `SPBase.set_scenario_probabilities(prob_map,
+check_sum=True, reset_ph_duals=True)` that
 
-1. updates `_mpisppy_probability` (and, for multistage, the relevant
-   `ScenarioNode.cond_prob`) on each local scenario,
-2. forces recomputation of `uncond_prob` and `prob_coeff` (drop the
-   `hasattr` short-circuit, or clear the cached dict first),
-3. preserves any `has_variable_probability` overrides (re-apply
-   `_use_variable_probability_setter` after the refresh).
+1. updates `_mpisppy_probability` on each local scenario named in `prob_map`
+   (two-stage only for now; a multistage `_mpisppy_node_list` raises
+   `NotImplementedError` — updating `ScenarioNode.cond_prob` is a later phase),
+2. forces recomputation of `uncond_prob` and `prob_coeff` via a new `force`
+   flag on `_compute_unconditional_node_probabilities` that bypasses the
+   `hasattr` compute-once short-circuit,
+3. preserves any `has_variable_probability` overrides (re-applies
+   `_use_variable_probability_setter` after the refresh),
+4. zeroes the PH multipliers `W` on each local scenario (`reset_ph_duals`,
+   default True; no-op for objects without PH `W` terms), and
+5. optionally checks (default) with an MPI reduction that the resulting
+   probabilities sum to 1 (option B).
 
 Because xbar/W/rho all read `prob_coeff` fresh each iteration, refreshing that
-dict is sufficient for the next PH iteration to be correct. This is a
-lower-priority companion to the EF work — the issue is specifically about the
-EF — but it belongs in the same design so the two representations stay in
-sync and there is one method name across both.
+dict is sufficient for the next PH iteration to be correct.
+
+**Warm-start caveat (motivates step 4).** At a converged PH solution every
+scenario sits at the same nonanticipative point, so the probability-weighted
+`xbar` equals that point *regardless of the weights*. Re-solving from there
+with new probabilities but stale `W` leaves `xbar` unmoved and PH reports
+immediate (false) convergence at the old solution — the exact
+probability-sweep use case would silently return the wrong answer. Zeroing `W`
+(step 4) breaks that consensus so the next `ph_main()` re-converges for the new
+problem. Verified on farmer: fresh PH at a skewed vector and an in-place
+`set_scenario_probabilities` + re-solve both reach the EF-oracle solution,
+while `reset_ph_duals=False` after convergence stays stuck at the old optimum
+(`test_ph_reuse_after_prob_change` / `..._without_dual_reset_stays_stuck` in
+`test_ef_ph.py`). Note the EF's persistent-solver reuse (avoiding a monolithic
+rebuild) is the real payoff of this feature; PH subproblems already persist
+across iterations, so reusing a PH object across a sweep saves only scenario
+construction — rebuilding per vector is also fine.
+
+This is a lower-priority companion to the EF work — the issue is specifically
+about the EF — but it belongs in the same design so the two representations
+stay in sync and there is one method name across both.
 
 ## 7. API and backward compatibility
 
@@ -403,6 +427,8 @@ sync and there is one method name across both.
    `set_scenario_probabilities`, explicit `reuse_instance` argument to
    `solve_extensive_form`. Closes the issue. Verified against a rebuild oracle
    on farmer for `appsi_highs` and `gurobi_persistent`.
-2. PH path: `SPBase.set_scenario_probabilities` + `prob_coeff` refresh.
+2. **[done]** PH path: `SPBase.set_scenario_probabilities` + `prob_coeff`
+   refresh (with `reset_ph_duals` for the consensus warm-start caveat, §6).
+   Verified on farmer against the EF oracle.
 3. Multistage node probabilities and variable-probability interaction.
 4. CLI exposure + docs + a rolling-horizon example under `examples/`.

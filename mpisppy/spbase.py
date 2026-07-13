@@ -411,20 +411,133 @@ class SPBase:
                         raise RuntimeError(f"For the node {nodename}, the scenario {sname} has the rank {rank} from scenario_names_to_rank and {comm.Get_rank()} from its comm.")
 
 
-    def _compute_unconditional_node_probabilities(self):
+    def _compute_unconditional_node_probabilities(self, force=False):
         """ calculates unconditional node probabilities and prob_coeff
-            and prob0_mask is set to a scalar 1 (used by variable_probability)"""
+            and prob0_mask is set to a scalar 1 (used by variable_probability)
+
+            Args:
+                force (bool): if True, rebuild prob_coeff/prob0_mask even when
+                    they already exist. Used by set_scenario_probabilities to
+                    pick up updated _mpisppy_probability values; the default
+                    (False) keeps the compute-once behavior relied on at setup.
+        """
         for k,s in self.local_scenarios.items():
             root = s._mpisppy_node_list[0]
             root.uncond_prob = 1.0
             for parent,child in zip(s._mpisppy_node_list[:-1],s._mpisppy_node_list[1:]):
                 child.uncond_prob = parent.uncond_prob * child.cond_prob
-            if not hasattr(s._mpisppy_data, 'prob_coeff'):
+            if force or not hasattr(s._mpisppy_data, 'prob_coeff'):
                 s._mpisppy_data.prob_coeff = dict()
                 s._mpisppy_data.prob0_mask = dict()
                 for node in s._mpisppy_node_list:
                     s._mpisppy_data.prob_coeff[node.name] = (s._mpisppy_probability / node.uncond_prob)
                     s._mpisppy_data.prob0_mask[node.name] = 1.0  # needs to be a float
+
+
+    def set_scenario_probabilities(self, prob_map, check_sum=True,
+                                   reset_ph_duals=True):
+        """ Update scenario probabilities in place for the PH / decomposition
+            path and refresh the derived ``prob_coeff`` so the next iteration
+            (xbar, W, rho) uses the new values.
+
+            Unlike the EF, PH does not bake probabilities into a Pyomo
+            objective, so there is no Param to update and no persistent-solver
+            objective to re-push: the aggregation code reads
+            ``_mpisppy_data.prob_coeff`` fresh each iteration. This method
+            updates ``_mpisppy_probability`` on the local scenarios named in
+            ``prob_map`` and forces ``prob_coeff`` to be recomputed.
+
+            Two-stage only for now (multistage node ``cond_prob`` handling is a
+            later phase; a multistage tree raises). Any variable-probability
+            overrides are re-applied after the refresh.
+
+            Warm-start caveat (why ``reset_ph_duals`` defaults to True): at a
+            converged PH solution every scenario sits at the same
+            (nonanticipative) point, so the probability-weighted ``xbar`` equals
+            that point *regardless of the weights*. Re-solving from there with
+            new probabilities but stale W leaves ``xbar`` unmoved and PH reports
+            immediate (false) convergence at the old solution. Zeroing W breaks
+            that consensus so the next solve converges to the new problem. Pass
+            ``reset_ph_duals=False`` only to deliberately keep the current W
+            (e.g. a small mid-run perturbation before the run has converged).
+
+            Args:
+                prob_map (dict):
+                    Maps scenario name to its new probability. May be the full
+                    set or a partial update; names not present keep their
+                    current probability. Each rank applies only the scenarios
+                    it owns, so the same full map may be passed on every rank.
+                check_sum (bool, optional):
+                    If True (default), verify with an MPI reduction that the
+                    resulting probabilities over all scenarios sum to 1
+                    (option B; see the design doc). Pass False to skip the
+                    collective (e.g. when the caller has already validated).
+                reset_ph_duals (bool, optional):
+                    If True (default), zero the PH multipliers (``W``) on each
+                    local scenario so a subsequent solve re-converges for the
+                    new probabilities (see the warm-start caveat). No-op for
+                    objects without PH ``W`` terms (e.g. a plain EF).
+
+            Raises:
+                KeyError:
+                    If ``prob_map`` contains a name not in
+                    ``all_scenario_names``.
+                NotImplementedError:
+                    If any local scenario has more than the root and a single
+                    leaf node (multistage is a later phase).
+                ValueError:
+                    If ``check_sum`` and the resulting probabilities do not
+                    sum to 1 within ``E1_tolerance``.
+        """
+        unknown = [sn for sn in prob_map if sn not in self.all_scenario_names]
+        if unknown:
+            raise KeyError(
+                f"set_scenario_probabilities got unknown scenario name(s): "
+                f"{unknown}")
+
+        for k, s in self.local_scenarios.items():
+            # Two-stage only: root plus one leaf. Multistage would need the
+            # relevant ScenarioNode.cond_prob updated as well (later phase).
+            if len(s._mpisppy_node_list) > 1:
+                raise NotImplementedError(
+                    "set_scenario_probabilities currently supports two-stage "
+                    "problems only; multistage node probabilities are a later "
+                    "phase.")
+            if k in prob_map:
+                s._mpisppy_probability = prob_map[k]
+
+        # Force recomputation of uncond_prob and prob_coeff; the setup-time
+        # compute-once short-circuit would otherwise ignore the new values.
+        self._compute_unconditional_node_probabilities(force=True)
+
+        # Rebuilding prob_coeff above reset any per-variable overrides to the
+        # scalar node coefficient, so re-apply them.
+        if self.variable_probability is not None:
+            self._use_variable_probability_setter()
+
+        # Break a stale consensus so a re-solve tracks the new probabilities
+        # (see the warm-start caveat above). Guarded because SPBase subclasses
+        # without PH terms have no W.
+        if reset_ph_duals:
+            for s in self.local_scenarios.values():
+                if hasattr(s, "_mpisppy_model") and \
+                        hasattr(s._mpisppy_model, "W"):
+                    for idx in s._mpisppy_model.W:
+                        s._mpisppy_model.W[idx]._value = 0.0
+
+        if check_sum:
+            localP = np.zeros(1, dtype='d')
+            for s in self.local_scenarios.values():
+                localP[0] += s._mpisppy_probability
+            globalP = np.zeros(1, dtype='d')
+            self.mpicomm.Allreduce([localP, MPI.DOUBLE],
+                                   [globalP, MPI.DOUBLE],
+                                   op=MPI.SUM)
+            total = float(globalP[0])
+            if abs(total - 1.0) > self.E1_tolerance:
+                raise ValueError(
+                    f"scenario probabilities must sum to 1; got {total} "
+                    f"(E1_tolerance={self.E1_tolerance}).")
 
 
     def _use_variable_probability_setter(self, verbose=False):
