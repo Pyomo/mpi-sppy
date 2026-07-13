@@ -182,21 +182,66 @@ EF_instance.EF_Obj.expr += EF_instance._mpisppy_model.prob[sname] * obj_func.exp
 ```
 
 Normalization (`/= sum`) is the subtlety: the current code divides the whole
-objective by the probability sum as a constant. With mutable params the
-normalizer must also be mutable so it tracks updates. Two options:
+objective by the accumulated probability sum. That division only does real
+work for **bundles**, where member probabilities sum to <1 and the divisor
+rescales the bundle objective into a proper within-bundle conditional
+expectation. For a standalone **full EF** — the issue's use case — the
+probabilities already sum to 1, so the division is a no-op.
 
-- **(A) Normalize outside the expression.** Store an unnormalized objective
-  `sum_s prob[s] * obj_s` and a separate mutable Param `prob_sum`; write the
-  objective as `(sum_s prob[s]*obj_s) / prob_sum`. `set_scenario_probabilities`
-  updates both `prob[*]` and `prob_sum`. Keeps a single division node.
-- **(B) Require normalized input.** Document that supplied probabilities must
-  sum to 1 (full EF already expects this); skip the divide when
-  `mutable_probability` and the caller asserts normalized. Simpler, but
-  changes bundle semantics — bundles rely on the normalizer — so (A) is the
-  safe default and (B) only for the full-EF case.
+The two considered options:
 
-Recommendation: **(A)**, because it preserves the existing bundle scaling
-behavior and is correct for both full EF and single-bundle EFs.
+- **(A) Normalize inside the expression with a mutable divisor.** Store an
+  unnormalized objective `sum_s prob[s] * obj_s` and a separate mutable Param
+  `prob_sum`; write the objective as `(sum_s prob[s]*obj_s) / prob_sum`, and
+  have `set_scenario_probabilities` update both `prob[*]` and `prob_sum`.
+  General (handles sum != 1) but carries a division node and an extra Param.
+- **(B) Require normalized input and drop the divisor.** Impose that the
+  supplied probabilities sum to 1 whenever `mutable_probability` is set, and
+  build the objective as just `sum_s prob[s] * obj_s` with no division.
+
+**Recommendation: (B).** The requirement is cheap to impose *only* on the
+mutable path because the mutable and needs-a-divisor regimes are disjoint in
+practice: mutable probability is a full-EF feature, and bundles (the only
+sum != 1 case) are built by this same function but never set the flag. So a
+single branch at construction covers both without touching existing behavior:
+
+```python
+if mutable_probability:
+    _validate_sum_to_one(scen_dict)            # raise on violation (see §8.5)
+    EF_instance._mpisppy_model.prob = pyo.Param(
+        EF_instance._ef_scenario_names, mutable=True, within=pyo.NonNegativeReals,
+        initialize={sname: scen._mpisppy_probability for sname, scen in scen_dict.items()},
+    )
+    for (sname, scenario_instance) in scen_dict.items():
+        ...
+        EF_instance.EF_Obj.expr += EF_instance._mpisppy_model.prob[sname] * obj_func.expr
+    # no /= sum
+else:
+    # unchanged float-coefficient path, including the /= accumulated-sum
+    # normalization that bundles rely on
+    ...
+```
+
+The same `_validate_sum_to_one` runs inside `set_scenario_probabilities`, so
+the "mutable ⇒ normalized" contract holds at build time and on every update.
+
+Why (B) is not just simpler but genuinely better here:
+
+- **No `prob_sum` Param and no division node.** This matters for the
+  persistent path (§5.2): re-pushing via `set_objective` becomes a plain
+  linear combination of Params, with nothing for the solver to re-derive
+  around a division.
+- **Nothing existing changes.** The requirement is gated on the opt-in flag,
+  so the float path — and bundle scaling in particular — is untouched.
+
+Two guards close the one case where the disjointness assumption could be
+violated:
+
+1. **Bad input on the mutable path.** Reject (raise) rather than silently
+   renormalizing — silent renormalization would secretly reintroduce the
+   divisor B is trying to avoid. See §8.5.
+2. **Mutable probabilities requested for a bundle.** Disallow explicitly
+   (raise) rather than silently skipping the divisor a bundle needs.
 
 ### 5.2 Update + re-solve
 
@@ -267,8 +312,11 @@ sync and there is one method name across both.
 
 ## 8. Open questions
 
-1. **Normalization** — confirm option (A) is acceptable for bundles, and
-   whether `prob_sum` should be exposed or kept internal.
+1. **Normalization** — design settles on option (B) (require sum-to-1 on the
+   mutable path, drop the divisor; see §5.1). Remaining to confirm: the exact
+   tolerance for the sum-to-1 check, and that no in-tree caller builds a
+   *bundle* with `mutable_probability` set (the guard in §5.1 should make that
+   an explicit error).
 2. **Persistent re-instancing guard** — is a `reuse_instance` argument to
    `solve_extensive_form` preferable to an internal `_instance_loaded` flag?
    The former is explicit; the latter is invisible to callers.
@@ -280,18 +328,21 @@ sync and there is one method name across both.
    of scenarios or the tree structure between rolls? Declared out of scope
    here; if the user's rolling horizon changes the scenario set, that is a
    rebuild, not a probability update.
-5. **Validation** — should `set_scenario_probabilities` require the mapping to
-   cover all scenarios / sum to 1, warn, or silently renormalize? Proposed:
-   require full coverage, renormalize via `prob_sum`, warn if the raw sum is
-   far from 1.
+5. **Validation** — under option (B), `set_scenario_probabilities` requires
+   full scenario coverage and a sum of 1, and **raises** on violation (no
+   silent renormalization, which would reintroduce the divisor B removes). To
+   confirm: the sum-to-1 tolerance, and whether partial-mapping updates (only
+   some scenarios supplied, rest unchanged) are allowed as long as the
+   resulting total still sums to 1.
 
 ---
 
 ## 9. Suggested implementation phases
 
 1. EF-only, two-stage: `mutable_probability` flag, Param objective with
-   option-(A) normalization, `set_scenario_probabilities`, persistent-reuse
-   guard in `solve_extensive_form`. Closes the issue.
+   option-(B) normalization (require sum-to-1, no divisor),
+   `set_scenario_probabilities`, persistent-reuse guard in
+   `solve_extensive_form`. Closes the issue.
 2. PH path: `SPBase.set_scenario_probabilities` + `prob_coeff` refresh.
 3. Multistage node probabilities and variable-probability interaction.
 4. CLI exposure + docs + a rolling-horizon example under `examples/`.
