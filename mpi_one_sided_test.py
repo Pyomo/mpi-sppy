@@ -64,7 +64,7 @@ def main():
     del buff # Important!
     win.Free()
     if (rank == 1):
-        print("Test passed. You might have an MPI installation that will work well.")
+        print("Test passed. You might have an MPI installation that will work.")
 
 if __name__=='__main__':
     main()
