@@ -747,11 +747,19 @@ class SPBase:
             # (SUM broken on this comm), or duplicate world ranks
             # (group membership corrupted), or some rank packing >1
             # (non-boolean input — only possible under memory aliasing).
+            #
+            # MPISPPY_LOR_DUMP_NONZERO restores the original (pre-3d38b250)
+            # behavior: also dump the per-rank rows whenever the LOR result
+            # is nonzero, i.e. whenever *anyone* sent a nonzero. Off by
+            # default because it fires on every legitimate shutdown signal
+            # and floods the logs at cylinder finalization.
+            dump_nonzero = os.environ.get("MPISPPY_LOR_DUMP_NONZERO")
             bad = (
                 int(rank_out[0]) != expected_rank_sum
                 or int(sum_out[0]) != gather_sum
                 or len(set(wr)) != len(wr)
                 or int(max_out[0]) > 1
+                or (dump_nonzero and int(lor_out[0]) != 0)
             )
             if bad:
                 limit = min(64, len(nonzero_rows))
