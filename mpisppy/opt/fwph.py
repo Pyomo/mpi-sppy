@@ -223,7 +223,7 @@ class FWPH(mpisppy.phbase.PHBase):
         max_iterations = int(self.options["PHIterLimit"])
 
         # The body of the algorithm
-        while (self._PHIter < max_iterations):
+        for self._PHIter in range(1, max_iterations+1):
             iteration_start_time = time.perf_counter()
             if dprogress:
                 global_toc(f"Initiating FWPH Major Iteration {self._PHIter+1}\n", self.cylinder_rank == 0)
@@ -342,12 +342,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 self._local_bound += self.local_scenarios[name]._mpisppy_probability * \
                                      dual_bound
             self._update_dual_bounds()
-            self._PHIter += 1
-            if self._PHIter == max_iterations:
-                stop = True
-            if self._sync_after_mip_solve():
-                stop = True
-            stop = self.allreduce_or(stop)
+            stop = False
             while not stop:
                 stop = False
                 for col_generator in _sdm_generators.values():
@@ -355,14 +350,9 @@ class FWPH(mpisppy.phbase.PHBase):
                         next(col_generator)
                     except StopIteration:
                        stop = True
-                self._PHIter += 1
-                if self._PHIter == max_iterations:
-                    stop = True
-                if self._sync_after_mip_solve():
-                    stop = True
-                stop = self.allreduce_or(stop)
             # tsdm = time.perf_counter() - tbsdm
             # print(f"PH iter {self._PHIter}, total SDM time: {tsdm}")
+            self._sync_after_mip_solve()
 
             # Re-set the mip._mpisppy_model.W so that the QP objective
             # is correct in the next major iteration
