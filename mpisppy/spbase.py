@@ -707,12 +707,38 @@ class SPBase:
         self._lor_diag_count = getattr(self, "_lor_diag_count", 0) + 1
         call_n = self._lor_diag_count
 
+        # Per-rank view: every rank has the full Allgather, so it can compare
+        # the total input (gather_sum_all) against its OWN lor_out.
+        rows = all_reports.reshape(sz, 3)
+        gather_sum_all = int(rows[:, 2].sum())
+        cls = type(self).__name__
+
+        # THE LOR_bug: all ranks sent zero (gather_sum_all == 0) yet this rank
+        # sees a nonzero LOR. MPI must hand every rank the same reduction and
+        # LOR of all-zeros is zero, so this is never legitimate -- report it
+        # from whichever rank sees it (cyl_rk 0 may correctly see zero, so the
+        # cyl_rk==0 block below would miss it). It cannot flood: it only fires
+        # on the corruption. Under MPISPPY_LOR_DUMP_NONZERO we ALSO report the
+        # ordinary case (nonzero LOR with a genuine nonzero input, i.e. the
+        # normal shutdown signal); that fires on every finalization and floods
+        # 150+ ranks, hence opt-in.
+        dump_nonzero = os.environ.get("MPISPPY_LOR_DUMP_NONZERO")
+        lor_nonzero = int(lor_out[0]) != 0
+        inputs_all_zero = gather_sum_all == 0
+        if lor_nonzero and (inputs_all_zero or dump_nonzero):
+            tag = "ALL-INPUTS-ZERO(BUG)" if inputs_all_zero else "inputs-nonzero"
+            print(
+                f"[LOR_bug DUMP_NONZERO {tag} call={call_n} cls={cls} "
+                f"world_rk={world_rk} cyl_rk={cyl_rk} host={host} pid={pid}] "
+                f"lor={int(lor_out[0])} sum={int(sum_out[0])} "
+                f"gather_sum={gather_sum_all} size={sz}",
+                flush=True,
+            )
+
         if cyl_rk == 0:
-            rows = all_reports.reshape(sz, 3)
             wr = rows[:, 0].tolist()
             nonzero_rows = rows[rows[:, 2] != 0]
-            gather_sum = int(rows[:, 2].sum())
-            cls = type(self).__name__
+            gather_sum = gather_sum_all
             try:
                 comm_name = self.mpicomm.Get_name()
             except Exception:
@@ -746,22 +772,21 @@ class SPBase:
             # (the reducer lying), or the rank-sum sanity check failing
             # (SUM broken on this comm), or duplicate world ranks
             # (group membership corrupted), or some rank packing >1
-            # (non-boolean input — only possible under memory aliasing).
-            #
-            # MPISPPY_LOR_DUMP_NONZERO restores the original (pre-3d38b250)
-            # behavior: also dump the per-rank rows whenever the LOR result
-            # is nonzero, i.e. whenever *anyone* sent a nonzero. Off by
-            # default because it fires on every legitimate shutdown signal
-            # and floods the logs at cylinder finalization.
-            dump_nonzero = os.environ.get("MPISPPY_LOR_DUMP_NONZERO")
+            # (non-boolean input — only possible under memory aliasing), or a
+            # nonzero LOR from all-zero input (the LOR_bug, also reported
+            # per-rank above).
             bad = (
                 int(rank_out[0]) != expected_rank_sum
                 or int(sum_out[0]) != gather_sum
                 or len(set(wr)) != len(wr)
                 or int(max_out[0]) > 1
-                or (dump_nonzero and int(lor_out[0]) != 0)
+                or (lor_nonzero and inputs_all_zero)
             )
-            if bad:
+            # Dump the per-rank allgather rows on any invariant violation, and
+            # also any time the gather itself is nonzero -- someone genuinely
+            # signaled, which should be very rare (a real shutdown) and is
+            # worth logging exactly who, unconditionally.
+            if bad or gather_sum_all != 0:
                 limit = min(64, len(nonzero_rows))
                 for w, c, v in nonzero_rows[:limit].tolist():
                     print(
