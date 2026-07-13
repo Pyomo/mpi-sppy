@@ -368,9 +368,13 @@ stay in sync and there is one method name across both.
   Purely additive.
 - `_mpisppy_probability` remains a float attribute and is still the read API;
   the Param is an internal, opt-in representation, not a replacement.
-- CLI: expose `--mutable-probability` via a `config.py` arg if we want it
-  reachable from `generic_cylinders.py`; not required for the programmatic
-  use case in the issue.
+- CLI: a `--mutable-probability` `config.py` arg was considered but not added.
+  `generic_cylinders.py` has no EF-construction path that would consume it, and
+  a probability *sweep* is inherently a driver loop (change the vector,
+  re-solve) that a single CLI invocation cannot express. The CLI exposure of
+  the feature is instead the runnable driver script
+  `examples/farmer/farmer_prob_sensitivity.py`, which has its own argparse
+  (`--solver-name`, `--num-scens`).
 
 ## 8. Open questions
 
@@ -431,4 +435,8 @@ stay in sync and there is one method name across both.
    refresh (with `reset_ph_duals` for the consensus warm-start caveat, §6).
    Verified on farmer against the EF oracle.
 3. Multistage node probabilities and variable-probability interaction.
-4. CLI exposure + docs + a rolling-horizon example under `examples/`.
+4. **[done]** Docs + a probability-sensitivity example under `examples/`.
+   `examples/farmer/farmer_prob_sensitivity.py` (sweeps the weight on one
+   scenario, reuses the persistent instance across the sweep) and
+   `doc/src/mutable_probability.rst` (linked from `index.rst` after `ef.rst`).
+   A dedicated `generic_cylinders` CLI flag was intentionally omitted — see §7.
