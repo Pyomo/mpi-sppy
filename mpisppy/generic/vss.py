@@ -11,8 +11,10 @@
 VSS = EEV - RP  (minimization; VSS = RP - EEV for maximization), where
 
   RP  = the stochastic-program optimum -- the here-and-now solution the run
-        already computed: exact from an --EF run, or the decomposition
-        incumbent (BestInnerBound), with a bracket from BestOuterBound.
+        already computed: from an --EF run it is exact when the EF is solved
+        to zero gap (always so for an LP), otherwise the incumbent bracketed
+        by the solver's dual bound; from a decomposition run it is the
+        incumbent (BestInnerBound) bracketed by BestOuterBound.
   EV  = the mean-value (expected-value) problem: replace the random data by
         its average and solve. x_bar is its first-stage solution.
   EEV = x_bar fixed in the first stage and evaluated honestly across every
@@ -113,12 +115,27 @@ def do_vss(module, cfg, scenario_creator, scenario_creator_kwargs,
         solver_name, solver_options, scenario_creator,
         scenario_creator_kwargs, all_scenario_names, x_bar)
 
-    # RP: exact from EF, or incumbent (+ bracket) from the wheel.
+    # RP: from EF (exact when solved to zero gap; otherwise the incumbent with
+    # a bracket from the solver's dual bound), or the incumbent (+ bracket)
+    # from the wheel.
     if ef is not None:
-        rp_point = comm.bcast(ef.get_objective_value() if comm.Get_rank() == 0
-                              else None, root=0)
-        rp_source = "EF, exact"
-        inner = outer = None
+        if comm.Get_rank() == 0:
+            payload = (ef.get_objective_value(), _ef_dual_bound(ef, is_min))
+        else:
+            payload = None
+        incumbent, dual = comm.bcast(payload, root=0)
+        rp_point = incumbent
+        # A MIP left with a nonzero gap makes the incumbent only known to within
+        # [dual, incumbent]; relabel and bracket so the "exact" claim is not
+        # overstated. An LP (or a MIP solved to zero gap) reports dual==incumbent.
+        if (dual is not None and incumbent is not None
+                and math.isfinite(incumbent)
+                and _rel_gap(dual, incumbent) > _EF_EXACT_RELGAP):
+            inner, outer = incumbent, dual
+            rp_source = f"EF incumbent, gap={_rel_gap(dual, incumbent):.2g}"
+        else:
+            rp_source = "EF, exact"
+            inner = outer = None
     else:
         inner, outer = _reduce_bounds(comm, wheel.BestInnerBound,
                                       wheel.BestOuterBound, is_min)
@@ -238,6 +255,31 @@ def _compute_eev(solver_name, solver_options, scenario_creator,
 
     # All feasible: Eobjective is collective, so every rank calls it.
     return ev.Eobjective(), []
+
+
+# Relative gap at or below which an EF RP is reported as exact (an LP, or a
+# MIP solved to a negligible gap, reports dual bound == incumbent).
+_EF_EXACT_RELGAP = 1e-9
+
+
+def _ef_dual_bound(ef, is_min):
+    """The EF solver's best objective (dual) bound for the run's sense, or
+    None if unavailable. do_EF stashes (lower_bound, upper_bound) as
+    ef.ef_objective_bounds; the sense-appropriate one brackets the incumbent.
+    """
+    bounds = getattr(ef, "ef_objective_bounds", None)
+    if bounds is None:
+        return None
+    val = bounds[0] if is_min else bounds[1]
+    if val is None or not math.isfinite(val):
+        return None
+    return val
+
+
+def _rel_gap(dual, incumbent):
+    """Relative gap between the dual bound and the incumbent objective."""
+    denom = abs(incumbent) if incumbent != 0 else 1.0
+    return abs(incumbent - dual) / denom
 
 
 def _reduce_bounds(comm, best_inner, best_outer, is_min):

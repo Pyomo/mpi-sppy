@@ -35,8 +35,10 @@ Write the two-stage program with first-stage vector :math:`x`, random data
    RP = \min_x \; \big\{\, c\cdot x + \mathbb{E}_\xi[\,Q(x,\xi)\,] \,\big\}.
 
 - **RP** — the *Recourse Problem* optimum: the here-and-now solution the run
-  already computes. It is **exact** from an ``--EF`` run and the
-  **incumbent** (with a bracket) from a decomposition run.
+  already computes. From an ``--EF`` run it is **exact** when the EF is solved
+  to a zero gap — always the case for an LP — and otherwise the **incumbent**
+  bracketed by the solver's dual bound (see *Exact vs. bracketed RP* below).
+  From a decomposition run it is the **incumbent** (with a bracket).
 - **EV** — the *mean-value problem*
   :math:`\min_x \{ c\cdot x + Q(x,\bar\xi)\}` with :math:`\bar\xi` the
   average of the data over the scenario set. Its first-stage solution is
@@ -102,19 +104,24 @@ inherits only the solver-options *string*; it does not read the separate
 Exact vs. bracketed RP
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-From an ``--EF`` run, ``RP`` is exact. From a decomposition (cylinders) run
-that did not close the optimality gap, ``RP`` is only known to lie between
-the outer and inner bounds, so VSS is reported both as a conservative point
-value (against the incumbent) and as a bracket::
+From an ``--EF`` run that reaches a zero gap, ``RP`` is exact. But an EF MIP
+solved to a *nonzero* mipgap returns only an incumbent, known to lie between
+the solver's dual bound and that incumbent — so ``RP`` is then reported the
+same way as the decomposition case: a conservative point value (the
+incumbent) plus a bracket, with the label naming the gap::
 
-     RP  (stochastic solution, here-and-now):        -108389   [decomposition incumbent]
+     RP  (stochastic solution, here-and-now):        -108389   [EF incumbent, gap=0.001]
          optimality bracket [outer, inner]  : [-108508, -108389]
      ...
      VSS = EEV - RP (sense=min)             :        1149.33   (1.06% of |RP|)
          VSS bracket from RP bracket        : [1149.33, 1268.39]
 
-The width of the VSS bracket is exactly the unclosed optimality gap; tighten
-the run (or use ``--EF``) for a sharper VSS.
+A decomposition (cylinders) run that did not close its optimality gap
+brackets ``RP`` the same way (labelled ``[decomposition incumbent]``). In
+both cases the width of the VSS bracket is exactly the unclosed optimality
+gap; solve the EF to a tighter mipgap (or an LP) for a sharper VSS. When the
+solver reports no dual bound, ``RP`` is labelled ``[EF, exact]`` and no
+bracket is shown.
 
 Infeasible mean-value solution
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

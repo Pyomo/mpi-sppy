@@ -116,6 +116,24 @@ class TestVssHelpers(unittest.TestCase):
         inner, outer = vss._reduce_bounds(MPI.COMM_WORLD, 5.0, 7.0, is_min=False)
         self.assertEqual((inner, outer), (5.0, 7.0))
 
+    def test_ef_dual_bound_picks_by_sense(self):
+        ef = types.SimpleNamespace(ef_objective_bounds=(3.0, 7.0))
+        self.assertEqual(vss._ef_dual_bound(ef, is_min=True), 3.0)   # lower
+        self.assertEqual(vss._ef_dual_bound(ef, is_min=False), 7.0)  # upper
+
+    def test_ef_dual_bound_missing_or_infinite(self):
+        self.assertIsNone(vss._ef_dual_bound(types.SimpleNamespace(), is_min=True))
+        ef_none = types.SimpleNamespace(ef_objective_bounds=None)
+        self.assertIsNone(vss._ef_dual_bound(ef_none, is_min=True))
+        ef_inf = types.SimpleNamespace(ef_objective_bounds=(-math.inf, math.inf))
+        self.assertIsNone(vss._ef_dual_bound(ef_inf, is_min=True))
+        self.assertIsNone(vss._ef_dual_bound(ef_inf, is_min=False))
+
+    def test_rel_gap(self):
+        self.assertAlmostEqual(vss._rel_gap(-108500.0, -108390.0),
+                               110.0 / 108390.0)
+        self.assertEqual(vss._rel_gap(0.0, 0.0), 0.0)  # denom guard, no div0
+
 
 @unittest.skipIf(not solver_available, "no solver is available")
 class TestVssEndToEnd(unittest.TestCase):
@@ -168,6 +186,52 @@ class TestVssEndToEnd(unittest.TestCase):
         # maximize: VSS = RP - EEV, still >= 0
         self.assertAlmostEqual(res["VSS"], res["RP"] - res["EEV"], places=3)
         self.assertGreaterEqual(res["VSS"], -1e-6)
+
+    def test_ef_exact_when_no_bound_reported(self):
+        # An EF object without ef_objective_bounds (or with none reported) is
+        # labelled exact and carries no bracket -- the back-compat default.
+        cfg = _make_cfg(["--EF", "--EF-solver-name", solver_name])
+        kwargs = farmer.kw_creator(cfg)
+        ef = self._ef(kwargs)  # solve_extensive_form doesn't set the bounds
+        res = vss.do_vss(farmer, cfg, farmer.scenario_creator, kwargs,
+                         farmer.scenario_denouement, ef=ef)
+        self.assertEqual(res["rp_source"], "EF, exact")
+        self.assertIsNone(res["inner"])
+        self.assertIsNone(res["outer"])
+        self.assertIsNone(res["vss_bracket"])
+
+    def test_ef_nonzero_gap_brackets_rp(self):
+        # A MIP left with a nonzero gap: the incumbent is bracketed by the
+        # solver's dual bound, so RP is relabelled and a VSS bracket appears.
+        cfg = _make_cfg(["--EF", "--EF-solver-name", solver_name])
+        kwargs = farmer.kw_creator(cfg)
+        ef = self._ef(kwargs)
+        incumbent = ef.get_objective_value()               # ~ -108390 (min)
+        dual = incumbent - 110.0                            # dual bound below it
+        ef.ef_objective_bounds = (dual, incumbent)          # (lower, upper)
+        res = vss.do_vss(farmer, cfg, farmer.scenario_creator, kwargs,
+                         farmer.scenario_denouement, ef=ef)
+        self.assertIn("gap=", res["rp_source"])
+        self.assertEqual(res["RP"], incumbent)              # point value = incumbent
+        self.assertEqual(res["inner"], incumbent)
+        self.assertEqual(res["outer"], dual)
+        self.assertIsNotNone(res["vss_bracket"])
+        lo, hi = res["vss_bracket"]
+        self.assertAlmostEqual(lo, res["EEV"] - res["inner"], places=4)
+        self.assertAlmostEqual(hi, res["EEV"] - res["outer"], places=4)
+        self.assertLessEqual(lo, hi)
+
+    def test_ef_zero_gap_stays_exact(self):
+        # dual bound == incumbent (an LP, or a MIP solved tight) => exact label.
+        cfg = _make_cfg(["--EF", "--EF-solver-name", solver_name])
+        kwargs = farmer.kw_creator(cfg)
+        ef = self._ef(kwargs)
+        incumbent = ef.get_objective_value()
+        ef.ef_objective_bounds = (incumbent, incumbent)
+        res = vss.do_vss(farmer, cfg, farmer.scenario_creator, kwargs,
+                         farmer.scenario_denouement, ef=ef)
+        self.assertEqual(res["rp_source"], "EF, exact")
+        self.assertIsNone(res["vss_bracket"])
 
     def test_decomposition_bracket(self):
         # A stub wheel exercises the incumbent+bracket branch without cylinders.
