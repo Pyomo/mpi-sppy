@@ -451,6 +451,25 @@ class TestTranslateSolverOptions(unittest.TestCase):
                 },
                 f"failed for solver_name={name!r}")
 
+    def test_scip_maps_threads_to_lp_threads(self):
+        for name in ("scip", "scip_direct", "scip_persistent"):
+            self.assertEqual(
+                self._t({"threads": 8}, name),
+                {"lp/threads": 8, "parallel/maxnthreads": 8},
+                f"failed for solver_name={name!r}")
+
+    def test_mosek_maps_threads_to_num_threads(self):
+        for name in ("mosek", "mosek_persistent"):
+            self.assertEqual(
+                self._t({"threads": 8}, name),
+                {"num_threads": 8},
+                f"failed for solver_name={name!r}")
+
+    def test_glpk_threads_raises(self):
+        for name in ("glpk", "glpk_persistent"):
+            with self.assertRaises(ValueError):
+                self._t({"threads": 8, "logfile": "x.log"}, name)
+
     def test_gurobi_renames_threads(self):
         for name in ("gurobi", "gurobi_persistent", "appsi_gurobi", "gurobi_direct"):
             self.assertEqual(

@@ -1046,6 +1046,7 @@ def fold_solver_options_layers(layers, k):
 #   - a dict mapping target key -> value spec, where the value spec is
 #     either the string "same" (use the canonical value) or a literal
 #     replacement value.
+#   - None, meaning the canonical option cannot be mapped for that solver.
 _SOLVER_OPTION_TRANSLATIONS = {
     "mipgap": {
         # HiGHS uses its native option name.
@@ -1060,6 +1061,15 @@ _SOLVER_OPTION_TRANSLATIONS = {
     "threads": {
         # Gurobi parameter is conventionally capitalized.
         "gurobi": "Threads",
+        # SCIP uses both LP and parallel thread controls.
+        "scip": ("lp/threads", "parallel/maxnthreads"),
+        # MOSEK uses a different name for solver threads.
+        "mosek": "num_threads",
+        # These solvers already use the canonical mpi-sppy spelling.
+        "cplex": "threads",
+        "cbc": "threads",
+        # GLPK does not support threads.
+        "glpk": None,
     },
 }
 
@@ -1075,8 +1085,10 @@ def _target_option_names(target):
         return tuple(target)
     if isinstance(target, dict):
         return target
+    if target is None:
+        return None
     raise TypeError(
-        "solver-option translation targets must be a string, tuple/list of strings, or dict")
+        "solver-option translation targets must be a string, tuple/list of strings, dict, or None")
 
 
 def translate_solver_options(opts, solver_name):
@@ -1110,14 +1122,19 @@ def translate_solver_options(opts, solver_name):
         if canonical not in out:
             continue
         target = None
+        matched = False
         for key, value in mapping.items():
             if _solver_name_matches(solver_name, key):
                 target = value
+                matched = True
                 break
-        if target is None or target == canonical:
+        if not matched or target == canonical:
             continue
         value = out.pop(canonical)
         target_names = _target_option_names(target)
+        if target_names is None:
+            raise ValueError(
+                f"Cannot translate option {canonical!r} for solver {solver_name!r}")
         if isinstance(target_names, dict):
             for target_name, target_value in target_names.items():
                 if target_name in out:
