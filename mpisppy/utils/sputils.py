@@ -1035,23 +1035,48 @@ def fold_solver_options_layers(layers, k):
 # mpi-sppy stores internally. Keys not in this table are passed
 # through unchanged by translate_solver_options.
 #
-# Entries map (canonical_key, solver_name) → solver-native key when
+# Entries map (canonical_key, solver_name) → solver-native key(s) when
 # the solver names the option differently. Solver names not listed
 # under a canonical key use the canonical name itself (no rename).
-# Persistent variants (e.g. gurobi_persistent) are normalized to the
-# base name before lookup.
+# Solver names are matched by substring, so a mapping for "gurobi"
+# applies to gurobi, gurobi_persistent, appsi_gurobi, etc. A mapping
+# value may be:
+#   - a string (single target key)
+#   - a tuple/list of strings (same value fanout to several keys)
+#   - a dict mapping target key -> value spec, where the value spec is
+#     either the string "same" (use the canonical value) or a literal
+#     replacement value.
 _SOLVER_OPTION_TRANSLATIONS = {
     "mipgap": {
         # HiGHS uses its native option name.
         "highs": "mip_rel_gap",
-        "appsi_highs": "mip_rel_gap",
+        # FICO Xpress expresses the same concept with a trio of controls.
+        "xpress": {
+            "miprelstop": "same",
+            "miprelcutoff": 0.0,
+            "mipaddcutoff": 0.0,
+        },
     },
     "threads": {
         # Gurobi parameter is conventionally capitalized.
         "gurobi": "Threads",
-        "appsi_gurobi": "Threads",
     },
 }
+
+
+def _solver_name_matches(solver_name, token):
+    return bool(solver_name) and token in solver_name
+
+
+def _target_option_names(target):
+    if isinstance(target, str):
+        return (target,)
+    if isinstance(target, (tuple, list)):
+        return tuple(target)
+    if isinstance(target, dict):
+        return target
+    raise TypeError(
+        "solver-option translation targets must be a string, tuple/list of strings, or dict")
 
 
 def translate_solver_options(opts, solver_name):
@@ -1059,10 +1084,10 @@ def translate_solver_options(opts, solver_name):
     the solver's native key, where they differ.
 
     Currently translates only ``mipgap`` and ``threads``; all other
-    keys pass through unchanged. If the user already supplied the
-    solver-native key alongside the canonical key, the
-    solver-native key wins and the canonical key is dropped (so the
-    solver does not receive both forms).
+    keys pass through unchanged. A translation may fan out to multiple
+    solver-native keys. If the user already supplied one of the
+    solver-native keys alongside the canonical key, that explicit value
+    wins and the canonical value is only used for the missing targets.
 
     Args:
         opts (dict | None): solver options. ``None`` returns ``None``;
@@ -1081,23 +1106,32 @@ def translate_solver_options(opts, solver_name):
     out = dict(opts)
     if not solver_name:
         return out
-    # gurobi_persistent → gurobi; appsi_highs stays as appsi_highs;
-    # cplex_persistent → cplex; xpress_persistent → xpress.
-    base_name = solver_name
-    if base_name.endswith("_persistent"):
-        base_name = base_name[:-len("_persistent")]
     for canonical, mapping in _SOLVER_OPTION_TRANSLATIONS.items():
         if canonical not in out:
             continue
-        target = mapping.get(solver_name) or mapping.get(base_name)
+        target = None
+        for key, value in mapping.items():
+            if _solver_name_matches(solver_name, key):
+                target = value
+                break
         if target is None or target == canonical:
             continue
-        if target in out:
-            # User explicitly supplied the solver-native key; respect
-            # it and drop the canonical to avoid sending duplicates.
-            del out[canonical]
+        value = out.pop(canonical)
+        target_names = _target_option_names(target)
+        if isinstance(target_names, dict):
+            for target_name, target_value in target_names.items():
+                if target_name in out:
+                    # User explicitly supplied the solver-native key; respect
+                    # it and leave that value in place.
+                    continue
+                out[target_name] = value if target_value == "same" else target_value
         else:
-            out[target] = out.pop(canonical)
+            for target_name in target_names:
+                if target_name in out:
+                    # User explicitly supplied the solver-native key; respect
+                    # it and leave that value in place.
+                    continue
+                out[target_name] = value
     return out
 
 
@@ -1732,4 +1766,3 @@ if __name__ == "__main__":
         print(ndn, v)
     print(f"slices: {slices}")
     check4losses(numscens, branching_factors, sntr, slices, ranks_per_scenario)
-

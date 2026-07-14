@@ -439,14 +439,20 @@ class TestTranslateSolverOptions(unittest.TestCase):
                 self._t({"mipgap": 0.01, "threads": 4}, name),
                 {"mipgap": 0.01, "threads": 4})
 
-    def test_xpress_needs_no_rename(self):
+    def test_xpress_fans_out_mipgap_to_three_native_keys(self):
         for name in ("xpress", "xpress_persistent"):
             self.assertEqual(
                 self._t({"mipgap": 0.01, "threads": 4}, name),
-                {"mipgap": 0.01, "threads": 4})
+                {
+                    "miprelstop": 0.01,
+                    "miprelcutoff": 0.0,
+                    "mipaddcutoff": 0.0,
+                    "threads": 4,
+                },
+                f"failed for solver_name={name!r}")
 
     def test_gurobi_renames_threads(self):
-        for name in ("gurobi", "gurobi_persistent", "appsi_gurobi"):
+        for name in ("gurobi", "gurobi_persistent", "appsi_gurobi", "gurobi_direct"):
             self.assertEqual(
                 self._t({"mipgap": 0.01, "threads": 4}, name),
                 {"mipgap": 0.01, "Threads": 4},
@@ -482,6 +488,35 @@ class TestTranslateSolverOptions(unittest.TestCase):
         opts = {"mip_tolerances_mipgap": 0.001, "Cuts": 2}
         self.assertEqual(self._t(opts, "cplex"), opts)
         self.assertEqual(self._t(opts, "gurobi"), opts)
+
+    def test_xpress_collision_keeps_explicit_native_values(self):
+        result = self._t(
+            {"mipgap": 0.01, "miprelcutoff": 0.2, "mipaddcutoff": 0.3},
+            "xpress",
+        )
+        self.assertEqual(
+            result,
+            {"miprelstop": 0.01, "miprelcutoff": 0.2, "mipaddcutoff": 0.3},
+        )
+
+    def test_one_to_many_mapping_fans_out_to_multiple_native_keys(self):
+        import mpisppy.utils.sputils as sputils
+
+        original = sputils._SOLVER_OPTION_TRANSLATIONS["mipgap"]
+        try:
+            sputils._SOLVER_OPTION_TRANSLATIONS["mipgap"] = {
+                "example": ("alpha", "beta", "gamma")
+            }
+            self.assertEqual(
+                self._t({"mipgap": 0.25}, "example"),
+                {"alpha": 0.25, "beta": 0.25, "gamma": 0.25},
+            )
+            self.assertEqual(
+                self._t({"mipgap": 0.25, "beta": 0.1}, "example"),
+                {"alpha": 0.25, "beta": 0.1, "gamma": 0.25},
+            )
+        finally:
+            sputils._SOLVER_OPTION_TRANSLATIONS["mipgap"] = original
 
 
 class TestDynamicGapperLayer(unittest.TestCase):
