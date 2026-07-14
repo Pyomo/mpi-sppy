@@ -45,6 +45,12 @@ if __name__ == "__main__":
     if hasattr(module, "get_mpisppy_helper_object"):
         module = module.get_mpisppy_helper_object(cfg)
 
+    # Fail fast (before the main solve) if a --vss report was requested but
+    # cannot be produced for this model/config.
+    if cfg.get("vss", ifmissing=False):
+        from mpisppy.generic.vss import vss_prep
+        vss_prep(module, cfg)
+
     bundle_wrapper = None  # the default
     if proper_bundles(cfg):
         # Nonant name validation will fail with proper bundles because
@@ -136,12 +142,20 @@ if __name__ == "__main__":
             bundle_wrapper=bundle_wrapper,
         )
     elif cfg.EF:
-        do_EF(module, cfg, scenario_creator, scenario_creator_kwargs,
-              scenario_denouement, bundle_wrapper=bundle_wrapper)
+        ef = do_EF(module, cfg, scenario_creator, scenario_creator_kwargs,
+                   scenario_denouement, bundle_wrapper=bundle_wrapper)
+        if cfg.get("vss", ifmissing=False):
+            from mpisppy.generic.vss import do_vss
+            do_vss(module, cfg, scenario_creator, scenario_creator_kwargs,
+                   scenario_denouement, ef=ef)
         if mmw_requested(cfg) and cfg.get("mmw_xhat_input_file_name") is not None:
             do_mmw(fname, cfg)
     else:
         wheel = do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs,
                           scenario_denouement, bundle_wrapper=bundle_wrapper)
+        if cfg.get("vss", ifmissing=False):
+            from mpisppy.generic.vss import do_vss
+            do_vss(module, cfg, scenario_creator, scenario_creator_kwargs,
+                   scenario_denouement, wheel=wheel)
         if mmw_requested(cfg):
             do_mmw(fname, cfg, wheel=wheel)

@@ -137,6 +137,9 @@ run_phase "test_w_oscillation (serial)" \
 run_phase "test_jensens (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_jensens.py -v
 
+run_phase "test_vss (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_vss.py -v
+
 run_phase "test_feasible_xhat (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_feasible_xhat.py -v
 

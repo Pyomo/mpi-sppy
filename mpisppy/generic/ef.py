@@ -72,6 +72,16 @@ def do_EF(module, cfg, scenario_creator, scenario_creator_kwargs,
     if not pyo.check_optimal_termination(results):
         print("Warning: non-optimal solver termination")
 
+    # Stash the solver's objective (dual) bound alongside the incumbent so a
+    # VSS report can tell whether RP is exact or only known to within the MIP
+    # gap -- get_objective_value() returns only the incumbent. For an LP the
+    # bound equals the objective; None if the solver reported no bound.
+    try:
+        ef.ef_objective_bounds = (results.problem.lower_bound,
+                                  results.problem.upper_bound)
+    except (AttributeError, KeyError):
+        ef.ef_objective_bounds = None
+
     global_toc(f"EF objective: {ef.get_objective_value()}")
 
     if ef.extensions is not None:
