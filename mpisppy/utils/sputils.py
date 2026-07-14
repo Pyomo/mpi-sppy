@@ -79,6 +79,7 @@ def not_good_enough_results(results):
         (results.solution(0).status == SolutionStatus.unknown) or \
         (results.solver.termination_condition == TerminationCondition.infeasible) or \
         (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
+        (results.solver.termination_condition == TerminationCondition.error) or \
         (results.solver.termination_condition == TerminationCondition.unbounded)
 
 
