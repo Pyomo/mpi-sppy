@@ -913,6 +913,38 @@ class Config(pyofig.ConfigDict):
                            domain=str,
                            default=None)
 
+        self.add_to_config('fwph_objgap_rank_ratio',
+                           description="MPI ranks for the fwph spoke "
+                                       "relative to the hub (flexible rank "
+                                       "assignments; default 1.0 = equal)",
+                           domain=float,
+                           default=1.0)
+
+        self.add_to_config(name="fwph_objgap_hub",
+                           description="Use FWPH hub instead of PH (default False)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("fwph_objgap_start_weight",
+                            description="FWPH start weight -- a value of 0 starts at xbar, a value of 1 starts at the prior MIP solution (default 0)",
+                            domain=float,
+                            default=0.0)
+
+        self.add_to_config("fwph_objgap_mip_fw_effort_balance",
+                           description="FWPH effort balance: values closer to 1 put less pressure on the MILP solver, but require more accuracy from Frank-Wolfe. Values near 0 demand high accuracy from the MILP solver but lower accuracy from the FW procedure.",
+                           domain=float,
+                           default=0.5)
+
+        self.add_to_config("fwph_objgap_decrease_base",
+                           description="FWPH accuracy base: this number raised to the iteration number, times fwph_objgap_decrease_coeff, will be the accuracy required to terminate an iteration of the FW proceedure. Needs to be in (0,1).",
+                           domain=float,
+                           default=0.9)
+
+        self.add_to_config("fwph_objgap_decrease_coeff",
+                           description="FWPH accuracy base: this number raised to the iteration number, times fwph_objgap_decrease_coeff, will be the accuracy required to terminate an iteration of the FW proceedure. Needs to be greater than 0.",
+                           domain=float,
+                           default=3)
+
     def cg_args(self):
 
         self.add_to_config(name="cg_hub",

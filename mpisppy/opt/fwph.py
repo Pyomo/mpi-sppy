@@ -118,6 +118,8 @@ class FWPH(mpisppy.phbase.PHBase):
         self._output(trivial_bound, trivial_bound, np.nan, secs)
         self._fwph_best_bound = trivial_bound
 
+        self._record_initial_mip_gaps()
+
         # Lines 2 and 3 of Algorithm 3 in Boland
         # Now done a the beginning of the first iteration
         # self.Compute_Xbar(self.options['verbose'])
@@ -321,7 +323,7 @@ class FWPH(mpisppy.phbase.PHBase):
             FW_conv_thresh=None,
         ):
             if sdm_iter_limit is None:
-                sdm_iter_limit = self.FW_options["FW_iter_limit"]
+                sdm_iter_limit = self.FW_options["FW_iter_limit"] if not self.FW_options["objgap_mode"] else 100000
             if FW_conv_thresh is None:
                 FW_conv_thresh = self.FW_options["FW_conv_thresh"]
             max_iterations = int(self.options["PHIterLimit"])
@@ -333,6 +335,9 @@ class FWPH(mpisppy.phbase.PHBase):
             stop = False
             best_bound_update = self._can_update_best_bound()
             for name in self.local_scenarios:
+                if self.FW_options["objgap_mode"]:
+                    self._set_objgap_mip_solver_options(mip_solver_options)
+                    FW_conv_thresh = self._get_objgap_FW_conv_thresh(self, sn)
                 _sdm_generators[name] = self.SDM(name, mip_solver_options, dtiming, tee, verbose, sdm_iter_limit, FW_conv_thresh, best_bound_update)
                 try:
                     dual_bound = next(_sdm_generators[name])
@@ -391,18 +396,18 @@ class FWPH(mpisppy.phbase.PHBase):
         qp  = self.local_QP_subproblems[model_name]
     
         # Set the QP dual weights to the correct values.
-        arb_scen_mip = self.local_scenarios[model_name]
+        scen_mip = self.local_scenarios[model_name]
 
-        for (node_name, ix) in arb_scen_mip._mpisppy_data.nonant_indices:
+        for (node_name, ix) in scen_mip._mpisppy_data.nonant_indices:
             qp._mpisppy_model.W[node_name, ix]._value = \
-                arb_scen_mip._mpisppy_model.W[node_name, ix].value
+                scen_mip._mpisppy_model.W[node_name, ix].value
 
         alpha = self.FW_options['FW_weight']
         # Algorithm 3 line 6
         xt = {ndn_i:
-            (1 - alpha) * arb_scen_mip._mpisppy_model.xbars[ndn_i]._value
+            (1 - alpha) * scen_mip._mpisppy_model.xbars[ndn_i]._value
             + alpha * xvar._value
-            for ndn_i, xvar in arb_scen_mip._mpisppy_data.nonant_indices.items()
+            for ndn_i, xvar in scen_mip._mpisppy_data.nonant_indices.items()
             }
 
         for itr in range(sdm_iter_limit):
@@ -487,7 +492,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 yield dual_bound
 
             # reset for next loop
-            for ndn_i, xvar in arb_scen_mip._mpisppy_data.nonant_indices.items():
+            for ndn_i, xvar in scen_mip._mpisppy_data.nonant_indices.items():
                 xt[ndn_i] = xvar._value
 
 
@@ -969,6 +974,9 @@ class FWPH(mpisppy.phbase.PHBase):
         if ('time_limit' not in self.FW_options or self.FW_options['time_limit'] is None):
             self.FW_options['time_limit'] = np.inf
 
+        if "objgap_mode" not in self.FW_options:
+            self.FW_options["objgap_mode"] = False
+
     def _output(self, bound, best_bound, diff, secs):
         if (self.cylinder_rank == 0 and self.vb):
             print('{itr:3d} {bound:12.4f} {best_bound:12.4f} {diff:12.4e} {secs:11.1f}s'.format(
@@ -1155,6 +1163,26 @@ class FWPH(mpisppy.phbase.PHBase):
                     if v not in self._initial_fixed_varibles:
                         return False
         return True
+
+    def _record_initial_mip_gaps(self):
+        self._scenario_initial_gap = {}
+        for sn, s in self.local_scenarios.items():
+            if self.is_minimizing:
+                self._scenario_initial_gap[sn] = s._mpisppy_data.inner_bound - s._mpisppy_data.outer_bound
+            else:
+                self._scenario_initial_gap[sn] = s._mpisppy_data.outer_bound - s._mpisppy_data.inner_bound
+
+    def _get_objgap_FW_conv_thresh(self, sn):
+        k = self._PHIter
+        alpha = self.FW_options.get("objgap_decrease_base", 0.9)
+        beta = self.FW_options.get("objgap_decrease_coeff", 3)
+
+        return beta * self._scenario_initial_gap[sn] * (alpha ** k)
+
+    def _set_objgap_mip_solver_options(self, mip_solver_options, sn):
+        absolute_gap = self.FW_options.get("mip_fw_effort_balance", 0.5) * self._scenario_initial_gap[sn]
+        mip_solver_options["mipgap"] = 0
+        mip_solver_options["absgap"] = absolute_gap
 
 if __name__=='__main__':
     print('fwph.py has no main()')
