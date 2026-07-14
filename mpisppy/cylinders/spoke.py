@@ -28,6 +28,10 @@ class Spoke(SPCommunicator):
         """ Spoke should call this method at least every iteration
             to see if the Hub terminated
         """
+        # DEBUG (LOR_bug): sweep all field-buffer canaries once per iteration,
+        # before allreduce_or runs (whose allocations otherwise trip the
+        # already-corrupted heap). A breach names the over-written field.
+        self.check_buffer_canaries("got_kill_signal")
         shutdown_buf = self.receive_buffers[self._make_key(Field.SHUTDOWN, 0)]
         self.get_receive_buffer(shutdown_buf, Field.SHUTDOWN, 0, synchronize=False)
         fired = bool(shutdown_buf[0] == 1.0)

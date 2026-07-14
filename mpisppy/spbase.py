@@ -642,10 +642,172 @@ class SPBase:
 
 
     def allreduce_or(self, val):
-        local_val = np.array([val], dtype='int8')
-        global_val = np.zeros(1, dtype='int8')
-        self.mpicomm.Allreduce(local_val, global_val, op=MPI.LOR)
-        if global_val[0] > 0:
+        # ====== CONTROL toggle (LOR_bug) ======
+        # When MPISPPY_LOR_CONTROL is set in the environment, bypass the
+        # instrumentation below (4 extra Allreduces + 1 Allgather + ~9 numpy
+        # allocations per call) and run the original minimal path. This lets
+        # the single PR branch produce a control data point -- to tell whether
+        # the heap corruption is real or an artifact of the diagnostic's
+        # collective volume -- without re-pushing. Canary guards and the
+        # teardown fixes are unaffected (they live elsewhere). See PR #717.
+        import os
+        if os.environ.get("MPISPPY_LOR_CONTROL"):
+            local_val = np.array([val], dtype='int8')
+            global_val = np.zeros(1, dtype='int8')
+            self.mpicomm.Allreduce(local_val, global_val, op=MPI.LOR)
+            return bool(global_val[0] > 0)
+        # ====== END CONTROL toggle ======
+        # ====== DEBUG: LOR_bug instrumentation ======
+        # Yields per call (on cyl_rk == 0 of self.mpicomm) the full picture
+        # needed to localize an Allreduce(LOR) returning nonzero when every
+        # rank intends a zero. Probes four axes:
+        #   1. comm membership          (world ranks participating, size, uniqueness)
+        #   2. data going in            (Allgather of every rank's local_val)
+        #   3. reduction sanity         (SUM/MAX/LOR + a rank-sum check whose
+        #                                expected value is n*(n-1)/2)
+        #   4. consistency              (compare Allgather sum to Allreduce SUM
+        #                                to tell "input was wrong" from
+        #                                "Allreduce is wrong")
+        # Remove before merging to main. See PR description for hypothesis tree.
+        import os
+        import socket
+        import sys
+        sz = self.mpicomm.Get_size()
+        cyl_rk = self.mpicomm.Get_rank()
+        world_rk = MPI.COMM_WORLD.Get_rank()
+        host = socket.gethostname()
+        pid = os.getpid()
+
+        local_int = 1 if val else 0
+        local_int32 = np.array([local_int], dtype='int32')
+        local_int8 = np.array([local_int], dtype='int8')
+
+        # (3) Reductions — three ops in parallel, plus a rank-sum sanity check.
+        sum_out = np.zeros(1, dtype='int32')
+        self.mpicomm.Allreduce(local_int32, sum_out, op=MPI.SUM)
+
+        max_out = np.zeros(1, dtype='int32')
+        self.mpicomm.Allreduce(local_int32, max_out, op=MPI.MAX)
+
+        lor_out = np.zeros(1, dtype='int8')
+        self.mpicomm.Allreduce(local_int8, lor_out, op=MPI.LOR)
+
+        rank_in = np.array([cyl_rk], dtype='int32')
+        rank_out = np.zeros(1, dtype='int32')
+        self.mpicomm.Allreduce(rank_in, rank_out, op=MPI.SUM)
+        expected_rank_sum = sz * (sz - 1) // 2
+
+        # (1) + (2) Allgather of (world_rk, cyl_rk, local_int) so we see
+        # exactly which ranks participated and what each one contributed.
+        report = np.array([world_rk, cyl_rk, local_int], dtype='int32')
+        all_reports = np.zeros(3 * sz, dtype='int32')
+        self.mpicomm.Allgather(report, all_reports)
+
+        # Track a per-instance call counter so logs are correlatable.
+        self._lor_diag_count = getattr(self, "_lor_diag_count", 0) + 1
+        call_n = self._lor_diag_count
+
+        # Per-rank view: every rank has the full Allgather, so it can compare
+        # the total input (gather_sum_all) against its OWN lor_out.
+        rows = all_reports.reshape(sz, 3)
+        gather_sum_all = int(rows[:, 2].sum())
+        cls = type(self).__name__
+
+        # THE LOR_bug: all ranks sent zero (gather_sum_all == 0) yet this rank
+        # sees a nonzero LOR. MPI must hand every rank the same reduction and
+        # LOR of all-zeros is zero, so this is never legitimate -- report it
+        # from whichever rank sees it (cyl_rk 0 may correctly see zero, so the
+        # cyl_rk==0 block below would miss it). It cannot flood: it only fires
+        # on the corruption. Under MPISPPY_LOR_DUMP_NONZERO we ALSO report the
+        # ordinary case (nonzero LOR with a genuine nonzero input, i.e. the
+        # normal shutdown signal); that fires on every finalization and floods
+        # 150+ ranks, hence opt-in.
+        dump_nonzero = os.environ.get("MPISPPY_LOR_DUMP_NONZERO")
+        lor_nonzero = int(lor_out[0]) != 0
+        inputs_all_zero = gather_sum_all == 0
+        if lor_nonzero and (inputs_all_zero or dump_nonzero):
+            tag = "ALL-INPUTS-ZERO(BUG)" if inputs_all_zero else "inputs-nonzero"
+            print(
+                f"[LOR_bug DUMP_NONZERO {tag} call={call_n} cls={cls} "
+                f"world_rk={world_rk} cyl_rk={cyl_rk} host={host} pid={pid}] "
+                f"lor={int(lor_out[0])} sum={int(sum_out[0])} "
+                f"gather_sum={gather_sum_all} size={sz}",
+                flush=True,
+            )
+
+        if cyl_rk == 0:
+            wr = rows[:, 0].tolist()
+            nonzero_rows = rows[rows[:, 2] != 0]
+            gather_sum = gather_sum_all
+            try:
+                comm_name = self.mpicomm.Get_name()
+            except Exception:
+                comm_name = "<unknown>"
+            print(
+                f"[LOR_bug call={call_n} cls={cls} "
+                f"world_rk={world_rk} host={host} pid={pid}] "
+                f"mpicomm size={sz} name={comm_name!r}",
+                flush=True,
+            )
+            print(
+                f"  world_ranks: min={min(wr)} max={max(wr)} "
+                f"count={len(wr)} unique={len(set(wr))}",
+                flush=True,
+            )
+            print(
+                f"  reductions: sum={int(sum_out[0])} max={int(max_out[0])} "
+                f"lor={int(lor_out[0])} rank_sum={int(rank_out[0])} "
+                f"expected_rank_sum={expected_rank_sum}",
+                flush=True,
+            )
+            print(
+                f"  gather: gather_sum={gather_sum} "
+                f"nonzero_reports={len(nonzero_rows)}",
+                flush=True,
+            )
+            # "Bad" = invariant-violating, NOT just "nonzero result." A
+            # legitimate shutdown signal returns sum=lor=1 with
+            # gather_sum=1 (consistent), which is fine. The real bug
+            # signature is gather_sum disagreeing with the Allreduce SUM
+            # (the reducer lying), or the rank-sum sanity check failing
+            # (SUM broken on this comm), or duplicate world ranks
+            # (group membership corrupted), or some rank packing >1
+            # (non-boolean input — only possible under memory aliasing), or a
+            # nonzero LOR from all-zero input (the LOR_bug, also reported
+            # per-rank above).
+            bad = (
+                int(rank_out[0]) != expected_rank_sum
+                or int(sum_out[0]) != gather_sum
+                or len(set(wr)) != len(wr)
+                or int(max_out[0]) > 1
+                or (lor_nonzero and inputs_all_zero)
+            )
+            # Dump the per-rank allgather rows on any invariant violation, and
+            # also any time the gather itself is nonzero -- someone genuinely
+            # signaled, which should be very rare (a real shutdown) and is
+            # worth logging exactly who, unconditionally.
+            if bad or gather_sum_all != 0:
+                limit = min(64, len(nonzero_rows))
+                for w, c, v in nonzero_rows[:limit].tolist():
+                    print(
+                        f"  nonzero: world_rk={w} cyl_rk={c} local_val={v}",
+                        flush=True,
+                    )
+                if len(nonzero_rows) > limit:
+                    print(
+                        f"  (... {len(nonzero_rows) - limit} more nonzero rows truncated ...)",
+                        flush=True,
+                    )
+                # Also dump the full world-rank list once so we can see exactly
+                # who is participating in this comm.
+                print(
+                    f"  ALL world_ranks: {wr}",
+                    flush=True,
+                )
+            sys.stdout.flush()
+        # ====== END DEBUG ======
+
+        if lor_out[0] > 0:
             return True
         else:
             return False
