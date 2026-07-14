@@ -150,7 +150,7 @@ outer-bound spokes: a Lagrangian or subgradient relaxation dualizes the
 non-anticipativity of :math:`\eta`, and with :math:`\eta` free that relaxed
 subproblem is easily unbounded (its solves then simply fail).
 
-**This is on by default, with two methods** selected by
+**Bounding** :math:`\eta` **is on by default**, with two methods selected by
 ``--cvar-eta-bound-method``:
 
 * ``fbbt`` (the default) -- for every scenario, compute the range of the cost
