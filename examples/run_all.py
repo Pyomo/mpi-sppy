@@ -315,22 +315,8 @@ if run_second_part:
     do_one("sizes", "../../mpisppy/generic_cylinders.py", 1,
            "--module-name sizes --num-scens=3 --EF "
            "--EF-solver-name={}".format(solver_name))
-    do_one("sslp",
-           "sslp_cylinders.py",
-           4,
-           "--instance-name=sslp_15_45_10 "
-           "--integer-relax-then-enforce "
-           "--integer-relax-then-enforce-ratio=0.8 "
-           "--lagrangian "
-           "--max-iterations=20 --default-rho=1e-6 "
-           "--reduced-costs --rc-fixer --xhatshuffle "
-           "--linearize-proximal-terms "
-           "--rel-gap=0.0 --surrogate-nonant "
-           "--use-primal-dual-rho-updater --primal-dual-rho-update-threshold=10 "
-           "--solver-name={}".format(solver_name))
-
-    # Same sslp run via the generic driver (sslp.py exposes the same
-    # --instance-name, --sslp-data-path, --surrogate-nonant options).
+    # sslp via the generic driver (sslp.py exposes --instance-name,
+    # --sslp-data-path, and --surrogate-nonant through its inparser_adder).
     do_one("sslp", "../../mpisppy/generic_cylinders.py", 4,
            "--module-name sslp --instance-name=sslp_15_45_10 "
            "--sslp-data-path=./data "
