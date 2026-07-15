@@ -202,6 +202,7 @@ class SPOpt(SPBase):
                   disable_pyomo_signal_handling=False,
                   update_objective=True,
                   need_solution=True,
+                  outer_bound_only=False,
                   warmstart=sputils.WarmstartStatus.FALSE,
                   ):
         """ Solve one subproblem.
@@ -230,6 +231,10 @@ class SPOpt(SPBase):
             need_solution (boolean, optional):
                 If True, raises an exception if a solution is not available.
                 Default True
+            outer_bound_only (boolean, optional):
+                If True, populates outer_bound *only* and raises an exception
+                if the bound is not available.
+                Default False
             warmstart (bool, optional):
                 If True, warmstart the subproblem solves. Default False.
 
@@ -242,7 +247,8 @@ class SPOpt(SPBase):
         def _vb(msg):
             if verbose and self.cylinder_rank == 0:
                 print ("(rank0) " + msg)
-
+        assert (not (need_solution and outer_bound_only),
+            "If you only need the outer, you don't the solution")
         # if using a persistent solver plugin,
         # re-compile the objective due to changed weights and x-bars
         # high variance in set objective time (Feb 2023)?
@@ -327,7 +333,20 @@ class SPOpt(SPBase):
                 results = None
                 solver_exception = e
 
-            if sputils.not_good_enough_results(results):
+            if outer_bound_only:
+                try:
+                    if self.is_minimizing:
+                        s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
+                    else:
+                        s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
+                except Exception as e:
+                    print (f"[{self._get_cylinder_name()}] Outer bound not found for scenario {s.name}")
+                    if results is not None:
+                        print ("status=", results.solver.status)
+                        print ("TerminationCondition=",
+                               results.solver.termination_condition)
+                    raise e
+            elif sputils.not_good_enough_results(results):
                 s._mpisppy_data.solution_available = False
 
                 if gripe:
