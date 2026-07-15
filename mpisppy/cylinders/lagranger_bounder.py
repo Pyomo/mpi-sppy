@@ -40,6 +40,11 @@ class LagrangerOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinders
         if self.rho_rescale_factors is not None\
            and iternum in self.rho_rescale_factors:
             self._rescale_rho(self.rho_rescale_factors[iternum])
+        # Until the first nonants arrive, _update_weights_and_solve computes
+        # xbar from the x values left behind by this solve, so we cannot skip
+        # loading the solution. Once they have arrived they never go back to
+        # nan, and xbar comes from the hub's nonants instead.
+        self.outer_bound_only = not np.isnan(self.localnonants[0])
         return self.lagrangian()
 
     def _rescale_rho(self,rf):

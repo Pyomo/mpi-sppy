@@ -12,6 +12,12 @@ from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
 
 class _LagrangianMixin:
 
+    # A Lagrangian solve is only ever asked for its outer bound, so by default
+    # we don't pay to load a solution. Spokes that also need the x (or rc)
+    # values off the solved subproblems set this to False; see
+    # ReducedCostsSpoke and the subgradient_while_waiting option.
+    outer_bound_only = True
+
     def lagrangian_prep(self):
         # Split up PH_Prep? Prox option is important for APH.
         # Seems like we shouldn't need the Lagrangian stuff, so attach_prox=False
@@ -24,7 +30,7 @@ class _LagrangianMixin:
         self.opt._reenable_W()
         self.opt._create_solvers()
 
-    def lagrangian(self, need_solution=True, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
+    def lagrangian(self, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
         # update the nonant bounds, if possible, for a tighter relaxation
         self.receive_nonant_bounds()
         verbose = self.opt.options['verbose']
@@ -41,7 +47,8 @@ class _LagrangianMixin:
             gripe=True,
             tee=teeme,
             verbose=verbose,
-            need_solution=need_solution,
+            need_solution=not self.outer_bound_only,
+            outer_bound_only=self.outer_bound_only,
             warmstart=warmstart,
         )
         ''' DTM (dlw edits): This is where PHBase Iter0 checks for scenario
@@ -63,22 +70,27 @@ class LagrangianOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinder
 
     converger_spoke_char = 'L'
 
-    def _set_weights_and_solve(self, need_solution, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
+    def _set_weights_and_solve(self, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
         self.opt.W_from_flat_list(self.localWs) # Sets the weights
-        return self.lagrangian(need_solution=need_solution, warmstart=warmstart)
+        return self.lagrangian(warmstart=warmstart)
 
-    def do_while_waiting_for_new_Ws(self, need_solution, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
+    def do_while_waiting_for_new_Ws(self, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
         if self.opt.options.get("subgradient_while_waiting", False):
             # compute a subgradient step
             self.opt.Compute_Xbar(self.verbose)
             self.opt.Update_W(self.verbose)
-            bound = self.lagrangian(need_solution=need_solution, warmstart=warmstart)
+            bound = self.lagrangian(warmstart=warmstart)
             if bound is not None:
                 self.send_bound(bound)
 
-    def main(self, need_solution=False):
+    def main(self):
         self.verbose = self.opt.options['verbose']
         extensions = self.opt.extensions is not None
+
+        if self.opt.options.get("subgradient_while_waiting", False):
+            # Compute_Xbar reads the x values left behind by the previous
+            # solve, so every solve has to load its solution.
+            self.outer_bound_only = False
 
         self.lagrangian_prep()
 
@@ -93,7 +105,7 @@ class LagrangianOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinder
 
         # setting this for PH extensions used by this Spoke
         self.opt._PHIter = 0
-        self.trivial_bound = self.lagrangian(need_solution=need_solution, warmstart=sputils.WarmstartStatus.USER_SOLUTION)
+        self.trivial_bound = self.lagrangian(warmstart=sputils.WarmstartStatus.USER_SOLUTION)
 
         if extensions:
             self.opt.extobject.post_iter0()
@@ -111,7 +123,7 @@ class LagrangianOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinder
             if self.update_Ws():
                 if extensions:
                     self.opt.extobject.miditer()
-                bound = self._set_weights_and_solve(need_solution=need_solution, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION)
+                bound = self._set_weights_and_solve(warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION)
                 if extensions:
                     self.opt.extobject.enditer()
                 if bound is not None:
@@ -120,4 +132,4 @@ class LagrangianOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinder
                     self.opt.extobject.enditer_after_sync()
                 self.opt._PHIter += 1
             else:
-                self.do_while_waiting_for_new_Ws(need_solution=need_solution, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION)
+                self.do_while_waiting_for_new_Ws(warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION)

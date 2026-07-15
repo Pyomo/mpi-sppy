@@ -233,7 +233,8 @@ class SPOpt(SPBase):
                 Default True
             outer_bound_only (boolean, optional):
                 If True, populates outer_bound *only* and raises an exception
-                if the bound is not available.
+                if the bound is not available. No solution is loaded, so
+                need_solution must be False.
                 Default False
             warmstart (bool, optional):
                 If True, warmstart the subproblem solves. Default False.
@@ -247,8 +248,8 @@ class SPOpt(SPBase):
         def _vb(msg):
             if verbose and self.cylinder_rank == 0:
                 print ("(rank0) " + msg)
-        assert (not (need_solution and outer_bound_only),
-            "If you only need the outer, you don't the solution")
+        assert not (need_solution and outer_bound_only), \
+            "If you only need the outer bound, you don't need the solution"
         # if using a persistent solver plugin,
         # re-compile the objective due to changed weights and x-bars
         # high variance in set objective time (Feb 2023)?
@@ -334,6 +335,12 @@ class SPOpt(SPBase):
                 solver_exception = e
 
             if outer_bound_only:
+                # No solution is loaded, so the Vars still hold whatever
+                # they held before this solve.
+                s._mpisppy_data.solution_available = False
+                if solver_exception is not None:
+                    print (f"[{self._get_cylinder_name()}] Solve failed for scenario {s.name}")
+                    raise solver_exception
                 try:
                     if self.is_minimizing:
                         s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
@@ -406,6 +413,7 @@ class SPOpt(SPBase):
                    tee=False,
                    verbose=False,
                    need_solution=True,
+                   outer_bound_only=False,
                    warmstart=sputils.WarmstartStatus.FALSE,
                    ):
         """ Loop over `local_scenarios` and solve them in a manner
@@ -432,6 +440,11 @@ class SPOpt(SPBase):
             need_solution (boolean, optional):
                 If True, raises an exception if a solution is not available.
                 Default True
+            outer_bound_only (boolean, optional):
+                If True, populates outer_bound *only* and raises an exception
+                if the bound is not available. No solution is loaded, so
+                need_solution must be False.
+                Default False
             warmstart (bool, optional):
                 If True, warmstart the subproblem solves. Default False.
         """
@@ -471,6 +484,7 @@ class SPOpt(SPBase):
                     gripe=gripe,
                     disable_pyomo_signal_handling=disable_pyomo_signal_handling,
                     need_solution=need_solution,
+                    outer_bound_only=outer_bound_only,
                     warmstart=warmstart,
                 )
             )

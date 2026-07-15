@@ -599,6 +599,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                    tee=False,
                    verbose=False,
                    need_solution=True,
+                   outer_bound_only=False,
                    warmstart=sputils.WarmstartStatus.FALSE):
         """ Loop over `local_scenarios` and solve them in a manner
         dictated by the arguments.
@@ -630,6 +631,11 @@ class PHBase(mpisppy.spopt.SPOpt):
             need_solution (boolean, optional):
                 If True, raises an exception if a solution is not available.
                 Default True
+            outer_bound_only (boolean, optional):
+                If True, populates outer_bound *only* and raises an exception
+                if the bound is not available. No solution is loaded, so
+                need_solution must be False.
+                Default False
             warmstart (bool, optional):
                 If True, warmstart the subproblem solves. Default False.
         """
@@ -662,6 +668,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             tee=tee,
             verbose=verbose,
             need_solution=need_solution,
+            outer_bound_only=outer_bound_only,
             warmstart=warmstart,
         )
 
