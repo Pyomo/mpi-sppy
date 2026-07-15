@@ -248,8 +248,15 @@ class SPOpt(SPBase):
         def _vb(msg):
             if verbose and self.cylinder_rank == 0:
                 print ("(rank0) " + msg)
-        assert not (need_solution and outer_bound_only), \
-            "If you only need the outer bound, you don't need the solution"
+        # Not an assert: python -O strips those, and this guard earns its keep
+        # exactly there. It is what catches a caller that slid an argument into
+        # outer_bound_only, whose silent form is bound-only solves in code that
+        # needs the solution.
+        if need_solution and outer_bound_only:
+            raise ValueError(
+                f"solve_one for scenario {s.name} got outer_bound_only=True "
+                "with need_solution=True; if you only need the outer bound, "
+                "you don't need the solution, so pass need_solution=False")
         # if using a persistent solver plugin,
         # re-compile the objective due to changed weights and x-bars
         # high variance in set objective time (Feb 2023)?
