@@ -334,7 +334,41 @@ class SPOpt(SPBase):
                 results = None
                 solver_exception = e
 
-            if sputils.not_good_enough_results(results):
+            if outer_bound_only:
+                # No solution is loaded, so the Vars still hold whatever they
+                # held before this solve; say so, or the staleness check and a
+                # PRIOR_SOLUTION warmstart would read them as a solution.
+                s._mpisppy_data.solution_available = False
+
+                # Note the gate is no_outer_bound_results and not
+                # not_good_enough_results: a subproblem stopped by a time
+                # limit or a gap can have no solution and still report the
+                # bound we are here for.
+                if sputils.no_outer_bound_results(results):
+                    outer_bound = None
+                elif self.is_minimizing:
+                    outer_bound = results.Problem[0].Lower_bound
+                else:
+                    outer_bound = results.Problem[0].Upper_bound
+
+                if outer_bound is None:
+                    # Leave outer_bound at its previous value rather than
+                    # publish whatever the solver left in the results object.
+                    # The stale bound is still a valid outer bound (any
+                    # Lagrangian dual value bounds the original problem),
+                    # which is what the pre-outer_bound_only path did here.
+                    if gripe:
+                        print (f"[{self._get_cylinder_name()}] No outer bound for scenario {s.name}")
+                        if results is not None:
+                            print ("status=", results.solver.status)
+                            print ("TerminationCondition=",
+                                   results.solver.termination_condition)
+                    if solver_exception is not None:
+                        raise solver_exception
+                else:
+                    s._mpisppy_data.outer_bound = outer_bound
+
+            elif sputils.not_good_enough_results(results):
                 s._mpisppy_data.solution_available = False
 
                 if gripe:
@@ -352,25 +386,6 @@ class SPOpt(SPBase):
 
                 if solver_exception is not None:
                     raise solver_exception
-
-            elif outer_bound_only:
-                # No solution is loaded, so the Vars still hold whatever they
-                # held before this solve; say so, or the staleness check and a
-                # PRIOR_SOLUTION warmstart would read them as a solution.
-                s._mpisppy_data.solution_available = False
-                if self.is_minimizing:
-                    outer_bound = results.Problem[0].Lower_bound
-                else:
-                    outer_bound = results.Problem[0].Upper_bound
-                if outer_bound is None:
-                    print (f"[{self._get_cylinder_name()}] Outer bound not found for scenario {s.name}")
-                    print ("status=", results.solver.status)
-                    print ("TerminationCondition=",
-                           results.solver.termination_condition)
-                    raise RuntimeError(
-                        f"No outer bound available for scenario {s.name} "
-                        "after an otherwise usable solve")
-                s._mpisppy_data.outer_bound = outer_bound
 
             else:
                 try:

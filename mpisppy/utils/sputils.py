@@ -83,6 +83,26 @@ def not_good_enough_results(results):
         (results.solver.termination_condition == TerminationCondition.unbounded)
 
 
+def no_outer_bound_results(results):
+    """True when `results` cannot carry a usable outer bound.
+
+    The bound-only analog of not_good_enough_results, for callers that want a
+    bound and never a solution. Deliberately says nothing about whether a
+    solution is present: a subproblem stopped by a time limit or a gap may
+    have no incumbent at all and still report a perfectly good outer bound,
+    and that bound is exactly what such a caller is after.
+
+    What remains disqualifying is a solve with no meaningful bound to report:
+    infeasible or unbounded (the "bound" is then +/-inf and solvers variously
+    return None, a sentinel, or garbage) and outright solver error.
+    """
+    return (results is None) or \
+        (results.solver.termination_condition == TerminationCondition.infeasible) or \
+        (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
+        (results.solver.termination_condition == TerminationCondition.error) or \
+        (results.solver.termination_condition == TerminationCondition.unbounded)
+
+
 _spin_the_wheel_move_msg = \
         "spin_the_wheel should now be used as the class "\
         "mpisppy.spin_the_wheel.WheelSpinner using the method `spin()`. Output "\
