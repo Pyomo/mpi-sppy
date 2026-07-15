@@ -344,12 +344,21 @@ class SPOpt(SPBase):
                 # not_good_enough_results: a subproblem stopped by a time
                 # limit or a gap can have no solution and still report the
                 # bound we are here for.
-                if sputils.no_outer_bound_results(results):
-                    outer_bound = None
-                elif self.is_minimizing:
-                    outer_bound = results.Problem[0].Lower_bound
-                else:
-                    outer_bound = results.Problem[0].Upper_bound
+                outer_bound = None
+                if not sputils.no_outer_bound_results(results):
+                    try:
+                        if self.is_minimizing:
+                            outer_bound = results.Problem[0].Lower_bound
+                        else:
+                            outer_bound = results.Problem[0].Upper_bound
+                    except Exception as e:
+                        # Not a solve we already know to be bound-less, so
+                        # this is a surprise and not a routine outcome.
+                        print (f"[{self._get_cylinder_name()}] Outer bound not found for scenario {s.name}")
+                        print ("status=", results.solver.status)
+                        print ("TerminationCondition=",
+                               results.solver.termination_condition)
+                        raise e
 
                 if outer_bound is None:
                     # Leave outer_bound at its previous value rather than
