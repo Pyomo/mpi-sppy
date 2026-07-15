@@ -7,6 +7,7 @@
 # full copyright and license information.
 ###############################################################################
 
+import math
 import time
 import pyomo.environ as pyo
 
@@ -411,8 +412,13 @@ class CGBase(mpisppy.spopt.SPOpt):
         red_cost=None
         if hasattr(model, "base_obj_expr"):
             scen_cost = pyo.value(model.base_obj_expr)
-        if hasattr(model._mpisppy_data, "outer_bound"):
-            red_cost = model._mpisppy_data.outer_bound
+        # Subproblems now start life holding the vacuous outer bound rather
+        # than no attribute at all, so test the value: an infinite bound means
+        # the solve reported none, and the caller sums these into
+        # sum_redcosts, where an infinity would quietly poison the total.
+        outer_bound = getattr(model._mpisppy_data, "outer_bound", None)
+        if outer_bound is not None and math.isfinite(outer_bound):
+            red_cost = outer_bound
         x_vec = {ndn_i: pyo.value(xvar) for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items()}
         return sname, red_cost, scen_cost,x_vec
 
