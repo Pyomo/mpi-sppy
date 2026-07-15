@@ -437,7 +437,7 @@ class TestTranslateSolverOptions(unittest.TestCase):
         for name in ("cplex", "cplex_persistent"):
             self.assertEqual(
                 self._t({"mipgap": 0.01, "threads": 4}, name),
-                {"mipgap": 0.01, "threads": 4})
+                {"mip.tolerances.mipgap": 0.01, "threads": 4})
 
     def test_xpress_fans_out_mipgap_to_three_native_keys(self):
         for name in ("xpress", "xpress_persistent"):
@@ -482,6 +482,34 @@ class TestTranslateSolverOptions(unittest.TestCase):
             self.assertEqual(
                 self._t({"mipgap": 0.01, "threads": 4}, name),
                 {"mip_rel_gap": 0.01, "threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_cbc_renames_mipgap(self):
+        for name in ("cbc", "cbc_persistent"):
+            self.assertEqual(
+                self._t({"mipgap": 0.01, "threads": 4}, name),
+                {"ratioGap": 0.01, "threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_scip_renames_mipgap(self):
+        for name in ("scip", "scip_direct", "scip_persistent"):
+            self.assertEqual(
+                self._t({"mipgap": 0.01, "threads": 4}, name),
+                {
+                    "limits/gap": 0.01,
+                    "lp/threads": 4,
+                    "parallel/maxnthreads": 4,
+                },
+                f"failed for solver_name={name!r}")
+
+    def test_mosek_renames_mipgap(self):
+        for name in ("mosek", "mosek_persistent"):
+            self.assertEqual(
+                self._t({"mipgap": 0.01, "threads": 4}, name),
+                {
+                    "mio_tol_rel_gap": 0.01,
+                    "num_threads": 4,
+                },
                 f"failed for solver_name={name!r}")
 
     # --- collision rule ---

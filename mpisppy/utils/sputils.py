@@ -1049,8 +1049,17 @@ def fold_solver_options_layers(layers, k):
 #   - None, meaning the canonical option cannot be mapped for that solver.
 _SOLVER_OPTION_TRANSLATIONS = {
     "mipgap": {
+        # CPLEX uses the native dotted parameter name.
+        "cplex": "mip.tolerances.mipgap",
+        "glpk": "mipgap",
         # HiGHS uses its native option name.
         "highs": "mip_rel_gap",
+        # CBC uses ratioGap for the relative MIP gap.
+        "cbc": "ratioGap",
+        # SCIP uses a limits/gap control.
+        "scip": "limits/gap",
+        # MOSEK uses a dparam for the relative MIP gap.
+        "mosek": "mio_tol_rel_gap",
         # FICO Xpress expresses the same concept with a trio of controls.
         "xpress": {
             "miprelstop": "same",
