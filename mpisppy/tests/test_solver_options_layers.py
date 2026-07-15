@@ -512,6 +512,75 @@ class TestTranslateSolverOptions(unittest.TestCase):
                 },
                 f"failed for solver_name={name!r}")
 
+    def test_cplex_renames_absgap(self):
+        for name in ("cplex", "cplex_persistent"):
+            self.assertEqual(
+                self._t({"absgap": 1.5, "threads": 4}, name),
+                {"mip.tolerances.absmipgap": 1.5, "threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_highs_renames_absgap(self):
+        for name in ("highs", "appsi_highs"):
+            self.assertEqual(
+                self._t({"absgap": 1.5, "threads": 4}, name),
+                {"mip_abs_gap": 1.5, "threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_cbc_renames_absgap(self):
+        for name in ("cbc", "cbc_persistent"):
+            self.assertEqual(
+                self._t({"absgap": 1.5, "threads": 4}, name),
+                {"gapAbs": 1.5, "threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_scip_renames_absgap(self):
+        for name in ("scip", "scip_direct", "scip_persistent"):
+            self.assertEqual(
+                self._t({"absgap": 1.5, "threads": 4}, name),
+                {
+                    "limits/absgap": 1.5,
+                    "lp/threads": 4,
+                    "parallel/maxnthreads": 4,
+                },
+                f"failed for solver_name={name!r}")
+
+    def test_mosek_renames_absgap(self):
+        for name in ("mosek", "mosek_persistent"):
+            self.assertEqual(
+                self._t({"absgap": 1.5, "threads": 4}, name),
+                {"mio_tol_abs_gap": 1.5, "num_threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_xpress_fans_out_absgap_to_three_native_keys(self):
+        for name in ("xpress", "xpress_persistent"):
+            self.assertEqual(
+                self._t({"absgap": 1.5, "threads": 4}, name),
+                {
+                    "mipabscutoff": 1.5,
+                    "miprelcutoff": 0.0,
+                    "mipaddcutoff": 0.0,
+                    "threads": 4,
+                },
+                f"failed for solver_name={name!r}")
+
+    def test_xpress_can_translate_mipgap_and_absgap_together(self):
+        for name in ("xpress", "xpress_persistent"):
+            self.assertEqual(
+                self._t({"mipgap": 0.01, "absgap": 1.5, "threads": 4}, name),
+                {
+                    "miprelstop": 0.01,
+                    "miprelcutoff": 0.0,
+                    "mipabscutoff": 1.5,
+                    "mipaddcutoff": 0.0,
+                    "threads": 4,
+                },
+                f"failed for solver_name={name!r}")
+
+    def test_glpk_absgap_raises(self):
+        for name in ("glpk", "glpk_persistent"):
+            with self.assertRaises(ValueError):
+                self._t({"absgap": 1.5}, name)
+
     # --- collision rule ---
 
     def test_highs_collision_keeps_native_drops_canonical(self):

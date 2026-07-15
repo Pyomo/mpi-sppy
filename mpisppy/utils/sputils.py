@@ -1067,6 +1067,26 @@ _SOLVER_OPTION_TRANSLATIONS = {
             "mipaddcutoff": 0.0,
         },
     },
+    "absgap": {
+        # CPLEX uses the native dotted parameter name.
+        "cplex": "mip.tolerances.absmipgap",
+        # HiGHS uses its native option name.
+        "highs": "mip_abs_gap",
+        # CBC uses gapAbs for the absolute MIP gap.
+        "cbc": "gapAbs",
+        # SCIP uses a limits/absgap control.
+        "scip": "limits/absgap",
+        # MOSEK uses a dparam for the absolute MIP gap.
+        "mosek": "mio_tol_abs_gap",
+        # FICO Xpress uses the absolute-gap counterparts.
+        "xpress": {
+            "mipabscutoff": "same",
+            "miprelcutoff": 0.0,
+            "mipaddcutoff": 0.0,
+        },
+        # GLPK does not support absolute gap control.
+        "glpk": None,
+    },
     "threads": {
         # Gurobi parameter is conventionally capitalized.
         "gurobi": "Threads",
@@ -1104,7 +1124,7 @@ def translate_solver_options(opts, solver_name):
     """Return a copy of *opts* with canonical option keys renamed to
     the solver's native key, where they differ.
 
-    Currently translates only ``mipgap`` and ``threads``; all other
+    Currently translates only ``mipgap``, ``absgap`` and ``threads``; all other
     keys pass through unchanged. A translation may fan out to multiple
     solver-native keys. If the user already supplied one of the
     solver-native keys alongside the canonical key, that explicit value
