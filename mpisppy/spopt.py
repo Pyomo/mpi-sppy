@@ -334,26 +334,7 @@ class SPOpt(SPBase):
                 results = None
                 solver_exception = e
 
-            if outer_bound_only:
-                # No solution is loaded, so the Vars still hold whatever
-                # they held before this solve.
-                s._mpisppy_data.solution_available = False
-                if solver_exception is not None:
-                    print (f"[{self._get_cylinder_name()}] Solve failed for scenario {s.name}")
-                    raise solver_exception
-                try:
-                    if self.is_minimizing:
-                        s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
-                    else:
-                        s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
-                except Exception as e:
-                    print (f"[{self._get_cylinder_name()}] Outer bound not found for scenario {s.name}")
-                    if results is not None:
-                        print ("status=", results.solver.status)
-                        print ("TerminationCondition=",
-                               results.solver.termination_condition)
-                    raise e
-            elif sputils.not_good_enough_results(results):
+            if sputils.not_good_enough_results(results):
                 s._mpisppy_data.solution_available = False
 
                 if gripe:
@@ -371,6 +352,25 @@ class SPOpt(SPBase):
 
                 if solver_exception is not None:
                     raise solver_exception
+
+            elif outer_bound_only:
+                # No solution is loaded, so the Vars still hold whatever they
+                # held before this solve; say so, or the staleness check and a
+                # PRIOR_SOLUTION warmstart would read them as a solution.
+                s._mpisppy_data.solution_available = False
+                if self.is_minimizing:
+                    outer_bound = results.Problem[0].Lower_bound
+                else:
+                    outer_bound = results.Problem[0].Upper_bound
+                if outer_bound is None:
+                    print (f"[{self._get_cylinder_name()}] Outer bound not found for scenario {s.name}")
+                    print ("status=", results.solver.status)
+                    print ("TerminationCondition=",
+                           results.solver.termination_condition)
+                    raise RuntimeError(
+                        f"No outer bound available for scenario {s.name} "
+                        "after an otherwise usable solve")
+                s._mpisppy_data.outer_bound = outer_bound
 
             else:
                 try:

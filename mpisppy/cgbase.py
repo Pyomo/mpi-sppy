@@ -519,14 +519,14 @@ class CGBase(mpisppy.spopt.SPOpt):
         self.update_subproblem_duals_from_mp(self.pi_values, self.mu_values)
         
         super().solve_loop(
-            solver_options,
-            dtiming,
-            gripe,
-            disable_pyomo_signal_handling,
-            tee,
-            verbose,
-            need_solution,
-            warmstart,
+            solver_options=solver_options,
+            dtiming=dtiming,
+            gripe=gripe,
+            disable_pyomo_signal_handling=disable_pyomo_signal_handling,
+            tee=tee,
+            verbose=verbose,
+            need_solution=need_solution,
+            warmstart=warmstart,
         )
 
 
