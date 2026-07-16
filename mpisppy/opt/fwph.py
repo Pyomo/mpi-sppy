@@ -330,14 +330,14 @@ class FWPH(mpisppy.phbase.PHBase):
             # print(f"{sdm_iter_limit=}")
             self._swap_nonant_vars()
             self._local_bound = 0
-            # tbsdm = time.perf_counter()
+            tbsdm = time.perf_counter()
             _sdm_generators = {}
             stop = False
             best_bound_update = self._can_update_best_bound()
             for name in self.local_scenarios:
                 if self.FW_options["objgap_mode"]:
-                    self._set_objgap_mip_solver_options(mip_solver_options)
-                    FW_conv_thresh = self._get_objgap_FW_conv_thresh(self, sn)
+                    self._set_objgap_mip_solver_options(mip_solver_options, name)
+                    FW_conv_thresh = self._get_objgap_FW_conv_thresh(name)
                 _sdm_generators[name] = self.SDM(name, mip_solver_options, dtiming, tee, verbose, sdm_iter_limit, FW_conv_thresh, best_bound_update)
                 try:
                     dual_bound = next(_sdm_generators[name])
@@ -355,7 +355,7 @@ class FWPH(mpisppy.phbase.PHBase):
                         next(col_generator)
                     except StopIteration:
                        stop = True
-            # tsdm = time.perf_counter() - tbsdm
+            tsdm = time.perf_counter() - tbsdm
             # print(f"PH iter {self._PHIter}, total SDM time: {tsdm}")
             self._sync_after_mip_solve()
 
@@ -446,8 +446,12 @@ class FWPH(mpisppy.phbase.PHBase):
                 # Algorithm 2 line 9 (compute \Gamma^t)
                 inner_bound = mip._mpisppy_data.inner_bound
                 # print(f"{model_name=}, {inner_bound=}")
-                gamma_t = self._compute_gamma_t(cutoff, inner_bound)
-                # print(f"{itr=}, {model_name=}, {gamma_t=}")
+                if self.FW_options["objgap_mode"]:
+                    outer_bound = mip._mpisppy_data.outer_bound
+                    gamma_t = self._compute_gamma_t_objgap(cutoff, inner_bound, outer_bound)
+                else:
+                    gamma_t = self._compute_gamma_t(cutoff, inner_bound)
+                print(f"{model_name=}, {itr=}, {gamma_t=:.2e}, {FW_conv_thresh=:.2e}")
 
                 # tbcol = time.perf_counter()
                 self._add_QP_column(model_name)
@@ -595,7 +599,24 @@ class FWPH(mpisppy.phbase.PHBase):
             print('Warning (fwph): convergence quantity Gamma^t = '
                  '{sc:.2e} (should be non-positive)'.format(sc=stop_check))
             print('Try decreasing the MIP gap tolerance and re-solving')
-        return stop_check
+        if self.is_minimizing:
+            return float(stop_check)
+        else:
+            return float(-stop_check)
+
+    def _compute_gamma_t_objgap(self, cutoff, inner_bound, outer_bound):
+        if self.is_minimizing:
+            stop_check = cutoff - inner_bound + (inner_bound - outer_bound) # \Gamma^t in Eckstein
+        else:
+            stop_check = inner_bound - cutoff + (outer_bound - inner_bound) # \Gamma^t in Eckstein
+        # print(f"{model_name}, Gamma^t = {stop_check}")
+        stop_check_tol = self.FW_options.get("stop_check_tol", 1e-4)
+        if (self.is_minimizing and stop_check < -stop_check_tol):
+            print('Warning (fwph): convergence quantity Gamma^t = '
+                 '{sc:.2e} (should be non-negative)'.format(sc=stop_check))
+            print('Something is wrong with the automatic gap settings in fwph_objgap')
+        return float(stop_check)
+
 
     def _add_objective_cutoff(self, mip, qp, model_name, best_bound_update, FW_conv_thresh):
         """ Add a constraint to the MIP objective ensuring
@@ -1171,6 +1192,8 @@ class FWPH(mpisppy.phbase.PHBase):
                 self._scenario_initial_gap[sn] = s._mpisppy_data.inner_bound - s._mpisppy_data.outer_bound
             else:
                 self._scenario_initial_gap[sn] = s._mpisppy_data.outer_bound - s._mpisppy_data.inner_bound
+            self._scenario_initial_gap[sn] = max(self._scenario_initial_gap[sn], self.FW_options.get("objgap_initial_floor"))
+            # print(f"{sn}, {self._scenario_initial_gap[sn]=}")
 
     def _get_objgap_FW_conv_thresh(self, sn):
         k = self._PHIter
