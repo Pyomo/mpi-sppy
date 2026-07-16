@@ -335,26 +335,25 @@ class FWPH(mpisppy.phbase.PHBase):
             stop = False
             best_bound_update = self._can_update_best_bound()
             for name in self.local_scenarios:
+                stop = False
                 if self.FW_options["objgap_mode"]:
                     self._set_objgap_mip_solver_options(mip_solver_options, name)
                     FW_conv_thresh = self._get_objgap_FW_conv_thresh(name)
-                _sdm_generators[name] = self.SDM(name, mip_solver_options, dtiming, tee, verbose, sdm_iter_limit, FW_conv_thresh, best_bound_update)
+                _sdm_generator = self.SDM(name, mip_solver_options, dtiming, tee, verbose, sdm_iter_limit, FW_conv_thresh, best_bound_update)
                 try:
-                    dual_bound = next(_sdm_generators[name])
+                    dual_bound = next(_sdm_generator)
                 except StopIteration as e:
                     dual_bound = e.value
                     stop = True
                 self._local_bound += self.local_scenarios[name]._mpisppy_probability * \
                                      dual_bound
-            self._update_dual_bounds()
-            stop = False
-            while not stop:
-                stop = False
-                for col_generator in _sdm_generators.values():
+                while not stop:
                     try:
-                        next(col_generator)
+                        next(_sdm_generator)
                     except StopIteration:
-                       stop = True
+                        stop = True
+
+            self._update_dual_bounds()
             tsdm = time.perf_counter() - tbsdm
             # print(f"PH iter {self._PHIter}, total SDM time: {tsdm}")
             self._sync_after_mip_solve()
@@ -491,6 +490,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 dual_bound = mip._mpisppy_data.outer_bound
 
             if itr + 1 == sdm_iter_limit or not mip._mpisppy_data.solution_available or gamma_t < FW_conv_thresh:
+                print(f"\tSTOPPING: {model_name=}, {itr=}, {gamma_t=:.2e}, {FW_conv_thresh=:.2e}")
                 return dual_bound
             else:
                 yield dual_bound
