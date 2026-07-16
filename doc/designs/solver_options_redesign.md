@@ -387,14 +387,19 @@ remains:
    are both supplied, who wins? Proposal to discuss: file is the base,
    inline string overlays. (CLI overlays file feels right because the
    inline string is the more "immediate" surface.)
-DLW: CLI overlays
+DLW: CLI overlays. **Resolved:** JSON only (no YAML); the inline
+`--solver-options` string overlays the options-file. Implemented in
+`load_solver_options_file` (json.load) and the file→inline ordering in
+`cfg_vanilla`.
 
 
 2. **Spoke-override merge depth.** Flat dict union, or anything more
    structured? Today's surface is flat (`{key: value}`), so a flat
    union is the minimum-change implementation. Anything richer would
    only matter if we add nested per-iteration sub-dicts (see #3).
-DLW: flat union makes sense
+DLW: flat union makes sense. **Resolved:** per-spoke options are a flat
+key-level `dict.update()` onto the global set (implemented in
+`cfg_vanilla`); the spoke wins on the keys it names and adds new ones.
 
 3. **"After-iteration-N" surface.** How does the user specify N? Two
    sketches:
