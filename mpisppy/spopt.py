@@ -202,8 +202,9 @@ class SPOpt(SPBase):
                   disable_pyomo_signal_handling=False,
                   update_objective=True,
                   need_solution=True,
-                  outer_bound_only=False,
                   warmstart=sputils.WarmstartStatus.FALSE,
+                  *,
+                  outer_bound_only=False,
                   ):
         """ Solve one subproblem.
 
@@ -231,13 +232,13 @@ class SPOpt(SPBase):
             need_solution (boolean, optional):
                 If True, raises an exception if a solution is not available.
                 Default True
-            outer_bound_only (boolean, optional):
-                If True, populates outer_bound *only* and raises an exception
-                if the bound is not available. No solution is loaded, so
-                need_solution must be False.
-                Default False
             warmstart (bool, optional):
                 If True, warmstart the subproblem solves. Default False.
+            outer_bound_only (boolean, optional):
+                If True, populate outer_bound *only*; no solution is loaded, so
+                need_solution must be False. If the solve reports no bound, the
+                previous outer bound is kept (a valid, if vacuous, outer bound).
+                Keyword-only. Default False.
 
         Returns:
             float:
@@ -358,14 +359,14 @@ class SPOpt(SPBase):
                             outer_bound = results.Problem[0].Lower_bound
                         else:
                             outer_bound = results.Problem[0].Upper_bound
-                    except Exception as e:
+                    except Exception:
                         # Not a solve we already know to be bound-less, so
                         # this is a surprise and not a routine outcome.
                         print (f"[{self._get_cylinder_name()}] Outer bound not found for scenario {s.name}")
                         print ("status=", results.solver.status)
                         print ("TerminationCondition=",
                                results.solver.termination_condition)
-                        raise e
+                        raise
 
                 if outer_bound is None:
                     # Leave outer_bound at its previous value rather than
@@ -444,8 +445,9 @@ class SPOpt(SPBase):
                    tee=False,
                    verbose=False,
                    need_solution=True,
-                   outer_bound_only=False,
                    warmstart=sputils.WarmstartStatus.FALSE,
+                   *,
+                   outer_bound_only=False,
                    ):
         """ Loop over `local_scenarios` and solve them in a manner
         dictated by the arguments.
@@ -471,13 +473,13 @@ class SPOpt(SPBase):
             need_solution (boolean, optional):
                 If True, raises an exception if a solution is not available.
                 Default True
-            outer_bound_only (boolean, optional):
-                If True, populates outer_bound *only* and raises an exception
-                if the bound is not available. No solution is loaded, so
-                need_solution must be False.
-                Default False
             warmstart (bool, optional):
                 If True, warmstart the subproblem solves. Default False.
+            outer_bound_only (boolean, optional):
+                If True, populate outer_bound *only*; no solution is loaded, so
+                need_solution must be False. If the solve reports no bound, the
+                previous outer bound is kept (a valid, if vacuous, outer bound).
+                Keyword-only. Default False.
         """
 
         """ Developer notes:

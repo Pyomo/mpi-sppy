@@ -484,8 +484,9 @@ class CGBase(mpisppy.spopt.SPOpt):
                    tee=False,
                    verbose=False,
                    need_solution=True,
-                   outer_bound_only=False,
-                   warmstart=sputils.WarmstartStatus.FALSE):
+                   warmstart=sputils.WarmstartStatus.FALSE,
+                   *,
+                   outer_bound_only=False):
         """ Loop over `local_subproblems` and solve them in a manner
         dicated by the arguments.
 
@@ -511,16 +512,15 @@ class CGBase(mpisppy.spopt.SPOpt):
             need_solution (boolean, optional):
                 If True, raises an exception if a solution is not available.
                 Default True
+            warmstart (bool, optional):
+                If True, warmstart the subproblem solves. Default False.
             outer_bound_only (boolean, optional):
-                If True, populates outer_bound *only* and raises an exception
-                if the bound is not available. No solution is loaded, so
+                If True, populate outer_bound *only*; no solution is loaded, so
                 need_solution must be False. Column generation builds its
                 columns from the subproblem solutions, so this is here to keep
                 the signature honest with the base class rather than because
-                it is useful: asking for it raises out of solve_one.
-                Default False
-            warmstart (bool, optional):
-                If True, warmstart the subproblem solves. Default False.
+                it is useful: asking for it (with the default need_solution)
+                raises out of solve_one. Keyword-only. Default False.
         """
 
         """ Developer notes:
