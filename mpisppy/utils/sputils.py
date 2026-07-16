@@ -83,6 +83,34 @@ def not_good_enough_results(results):
         (results.solver.termination_condition == TerminationCondition.unbounded)
 
 
+def no_outer_bound_results(results):
+    """True when `results` cannot carry a usable outer bound.
+
+    The bound-only analog of not_good_enough_results, for callers that want a
+    bound and never a solution. Screen as little as possible here: anything
+    disqualified is a bound thrown away, and a bound from a solve that went
+    badly is the whole point of asking for a bound only.
+
+    So this says nothing about whether a solution is present, and nothing
+    about a solve merely going badly. A subproblem stopped by a time limit
+    with no incumbent still reports the bound the caller is after, and
+    solvers describe that outcome in unflattering terms: xpress calls it
+    status=aborted, TerminationCondition=error (mip_no_sol_found in
+    xpress_direct.py) and then hands over xprob_attrs.bestbound anyway.
+
+    Only two outcomes really have no bound to report, and both are dangerous
+    rather than merely useless, because solvers do not agree on how to say
+    "none": for an unbounded LP gurobi leaves lower_bound None while cplex
+    fills in the last iterate's objective, a plausible finite number that is
+    not a bound at all. Hence infeasible and unbounded are screened on the
+    termination condition, never on the value.
+    """
+    return (results is None) or \
+        (results.solver.termination_condition == TerminationCondition.infeasible) or \
+        (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
+        (results.solver.termination_condition == TerminationCondition.unbounded)
+
+
 _spin_the_wheel_move_msg = \
         "spin_the_wheel should now be used as the class "\
         "mpisppy.spin_the_wheel.WheelSpinner using the method `spin()`. Output "\
