@@ -589,9 +589,26 @@ class SPOpt(SPBase):
                 sum reduction
 
         Returns:
-            float:
-                The expected objective outer bound.
+            float or None:
+                The expected objective outer bound, or None if any scenario is
+                missing its outer bound (see below).
         """
+        # A subproblem whose latest solve produced no outer bound holds None
+        # ("not computed"), not a number. The expectation over scenarios cannot
+        # be formed if any scenario is missing its bound, so report None -- which
+        # callers treat as "no bound to offer" -- rather than folding a
+        # placeholder into the sum. The check is collective: a missing bound on
+        # any rank spoils the global expectation, and every rank must agree to
+        # return None (or not) so the Allreduce below stays matched.
+        local_missing = np.array(
+            [any(s._mpisppy_data.outer_bound is None
+                 for s in self.local_scenarios.values())],
+            dtype='d')
+        global_missing = np.zeros(1)
+        self.mpicomm.Allreduce(local_missing, global_missing, op=MPI.MAX)
+        if global_missing[0]:
+            return (None, None) if extra_sum_terms is not None else None
+
         local_Ebounds = []
         for k,s in self.local_scenarios.items():
             logger.debug("  in loop Ebound k={}, rank={}".format(k, self.cylinder_rank))

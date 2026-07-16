@@ -110,7 +110,10 @@ class LagrangerOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinders
             self.opt.extobject.post_iter0()
         self.opt._PHIter = 1
 
-        self.send_bound(self.trivial_bound)
+        # trivial_bound is None if the iter0 solve produced no outer bound;
+        # there is nothing to send in that case.
+        if self.trivial_bound is not None:
+            self.send_bound(self.trivial_bound)
         if extensions:
             self.opt.extobject.post_iter0_after_sync()
 
