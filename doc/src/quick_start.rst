@@ -350,13 +350,13 @@ top of the cloned ``mpi-sppy`` repository; step 1 changes into
    You should see the solver print progress and the script print an
    optimal objective value. This check does *not* use MPI.
 
-3. **MPI works** (only if you installed MPI and ``mpi4py``). Still in
-   ``examples/farmer``, run the bundled one-sided MPI test (its path is
-   given relative to ``examples/farmer``):
+3. **MPI works** (only if you installed MPI and ``mpi4py``). Run the
+   bundled one-sided MPI test (the console script is on your ``PATH``
+   after installation, so no path is needed):
 
    .. code-block:: text
 
-      mpiexec -n 2 python -m mpi4py ../../mpi_one_sided_test.py
+      mpiexec -n 2 mpi-sppy-one-sided-test
 
    If you see no error messages, your MPI installation should be
    suitable. Then confirm the full hub-and-spoke flow with a short PH

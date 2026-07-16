@@ -27,7 +27,7 @@ from mpisppy.generic.mmw import mmw_requested
 
 
 ##########################################################################
-if __name__ == "__main__":
+def main():
     if len(sys.argv) == 1:
         print("The python model file module name (no .py) must be given.")
         print("usage, e.g.: python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --help")
@@ -145,3 +145,7 @@ if __name__ == "__main__":
                           scenario_denouement, bundle_wrapper=bundle_wrapper)
         if mmw_requested(cfg):
             do_mmw(fname, cfg, wheel=wheel)
+
+
+if __name__ == "__main__":
+    main()
