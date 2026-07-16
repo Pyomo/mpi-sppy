@@ -410,6 +410,10 @@ key-level `dict.update()` onto the global set (implemented in
    File-only keeps the CLI surface flat and avoids inventing many new
    flags. Probably the right call if the file format lands first.
 DLW: File only. But the file will have to override iterk values or it won't make sense, right?
+**Resolved:** file-only (a `starting_at_iter` section in the options-file;
+no CLI flag). For iterations k >= N, `starting_at_iter:N` overrides `iterk`
+on the keys it names (fold order default -> iter0/iterk -> starting_at_iter,
+last-write-wins per key).
 
 4. **Lagranger deprecation specifics.** Direction agreed: lagranger's
    custom iter0/iterk handling is deprecated; it routes through the
@@ -419,6 +423,11 @@ DLW: File only. But the file will have to override iterk values or it won't make
    Open: warning message text and removal timeline.
 DLW: Open timeline. Just say that Lagranger will be deprecated in the future because it does not seem to
 work as well as other outer bound options.
+**Resolved:** shipped (PR #699). `lagranger_spoke()` emits a rank-0-gated
+`DeprecationWarning` at setup -- lagranger is slated for removal because it
+underperforms the other outer-bound options (`--lagrangian`, `--ph-dual`,
+`--subgradient`, `--fwph`); no removal timeline is committed. Timeline
+intentionally left open per this decision.
 
 5. **Per-spoke `--mipgaps-json` variants.** Today only the global
    `--mipgaps-json` flag is registered (config.py:616, gated on
