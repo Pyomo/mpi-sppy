@@ -950,6 +950,11 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=1)
 
+        self.add_to_config("fwph_add_cylinder_columns",
+                           description="Inject columns calculated by xhat spokes into the FWPH algorithm",
+                           domain=bool,
+                           default=False)
+
     def cg_args(self):
 
         self.add_to_config(name="cg_hub",

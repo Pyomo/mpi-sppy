@@ -373,7 +373,7 @@ class FWPH(mpisppy.phbase.PHBase):
         # add columns from cylinder(s)
         self._swap_nonant_vars_back()
         # spoke or hub (FWPH_Cylinder)
-        if hasattr(self.spcomm, "add_cylinder_columns"):
+        if self.FW_options.get("add_cylinder_columns", False) and hasattr(self.spcomm, "add_cylinder_columns"):
             self.spcomm.add_cylinder_columns()
         # hub
         if hasattr(self.spcomm, "sync_bounds"):
@@ -450,7 +450,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     gamma_t = self._compute_gamma_t_objgap(cutoff, inner_bound, outer_bound)
                 else:
                     gamma_t = self._compute_gamma_t(cutoff, inner_bound)
-                print(f"{model_name=}, {itr=}, {gamma_t=:.2e}, {FW_conv_thresh=:.2e}")
+                # print(f"{model_name=}, {itr=}, {gamma_t=:.2e}, {FW_conv_thresh=:.2e}")
 
                 # tbcol = time.perf_counter()
                 self._add_QP_column(model_name)
@@ -490,7 +490,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 dual_bound = mip._mpisppy_data.outer_bound
 
             if itr + 1 == sdm_iter_limit or not mip._mpisppy_data.solution_available or gamma_t < FW_conv_thresh:
-                print(f"\tSTOPPING: {model_name=}, {itr=}, {gamma_t=:.2e}, {FW_conv_thresh=:.2e}")
+                # print(f"\tSTOPPING: {model_name=}, {itr=}, {gamma_t=:.2e}, {FW_conv_thresh=:.2e}")
                 return dual_bound
             else:
                 yield dual_bound
@@ -912,8 +912,10 @@ class FWPH(mpisppy.phbase.PHBase):
         self._xhatter.post_iter0()
 
     def _generate_initial_columns_if_needed(self):
+        if self.FW_options["objgap_mode"]:
+            return
         if self.spcomm is not None:
-            if self.spcomm.receive_field_spcomms[Field.BEST_XHAT]:
+            if self.FW_options.get("add_cylinder_columns", False) and self.spcomm.receive_field_spcomms[Field.BEST_XHAT]:
                 # we'll get the initial columns from the incumbent finder spoke
                 return
         number_initial_column_tries = self.options.get("FW_initialization_attempts", 10)

@@ -991,6 +991,7 @@ def _fwph_options(cfg):
         "objgap_decrease_base" : cfg.fwph_objgap_decrease_base,
         "objgap_decrease_coeff" : cfg.fwph_objgap_decrease_coeff,
         "objgap_initial_floor" : cfg.fwph_objgap_initial_gap_floor,
+        "add_cylinder_columns" : cfg.fwph_add_cylinder_columns,
     }
 
     # Separate MIP/QP solvers (issue #712). FWPH falls back to solver_name
