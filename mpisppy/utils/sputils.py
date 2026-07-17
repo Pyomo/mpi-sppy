@@ -944,13 +944,8 @@ def option_dict_to_string(odict):
     """
     if odict is None:
         return None
-    ostr = ""
-    for i, v in odict.items():
-        if v is None:
-            ostr += "{i} "
-        else:
-            ostr += f"{i}={v} "
-    return ostr
+    return "".join(f"{k} " if v is None else f"{k}={v} "
+                   for k, v in odict.items())
 
 
 # Solver-options layered representation. See
