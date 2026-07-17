@@ -59,6 +59,7 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         suppress_warnings=False,
         extensions=None,
         extension_kwargs=None,
+        mutable_probability=None,
     ):
         """ Create the EF and associated solver. """
         super().__init__(
@@ -75,6 +76,16 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         required = ["solver"]
         self._options_check(required, self.options)
         self.solver = pyo.SolverFactory(self.options["solver"])
+
+        # When True, scenario probabilities are stored as mutable Pyomo Params
+        # so they can be updated in place (see set_scenario_probabilities).
+        # Falls back to the "mutable_probability" option key for convenience.
+        if mutable_probability is None:
+            mutable_probability = self.options.get("mutable_probability", False)
+        self.mutable_probability = mutable_probability
+        # Tracks whether a persistent solver already has this EF loaded, so
+        # solve_extensive_form(reuse_instance=True) can skip set_instance.
+        self._instance_loaded = False
 
         self.extensions = extensions
         self.extension_kwargs = extension_kwargs
@@ -97,25 +108,40 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
                     raise FileExistsError(f"solver-log-dir={directory} already exists!")
         
         self.ef = sputils._create_EF_from_scen_dict(self.local_scenarios,
-                EF_name=model_name)
+                EF_name=model_name,
+                mutable_probability=self.mutable_probability)
 
-    def solve_extensive_form(self, solver_options=None, tee=False):
+    def solve_extensive_form(self, solver_options=None, tee=False,
+                             reuse_instance=False):
         """ Solve the extensive form.
-            
+
             Args:
                 solver_options (dict, optional):
                     Dictionary of solver-specific options (e.g. Gurobi options,
                     CPLEX options, etc.).
                 tee (bool, optional):
                     If True, displays solver output. Default False.
+                reuse_instance (bool, optional):
+                    If True and this EF has already been loaded into a
+                    persistent solver, skip re-loading the instance
+                    (``set_instance``) and re-solve the already-loaded model.
+                    Use this to re-solve cheaply after updating mutable data
+                    such as scenario probabilities (see
+                    set_scenario_probabilities). Ignored for non-persistent
+                    solvers. Default False.
 
             Returns:
                 :class:`pyomo.opt.results.results_.SolverResults`:
                     Result returned by the Pyomo solve method.
-                
+
         """
-        if "persistent" in self.options["solver"]:
+        # Recognizes both legacy PersistentSolver and APPSI /
+        # pyomo.contrib.solver interfaces (e.g. appsi_highs); see
+        # sputils.has_persistent_solve_api for why this is not is_persistent.
+        persistent = sputils.has_persistent_solve_api(self.solver)
+        if persistent and not (reuse_instance and self._instance_loaded):
             self.solver.set_instance(self.ef)
+            self._instance_loaded = True
 
 
         solve_keyword_args = dict()            
@@ -142,15 +168,67 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             # this should catch infeasible and unbounded cases
             return results
         
-        if sputils.is_persistent(self.solver):
+        if persistent:
             self.solver.load_vars()
         else:
             self.ef.solutions.load_from(results)
 
         self.first_stage_solution_available = True
         self.tree_solution_available = True
-        
+
         return results
+
+    def set_scenario_probabilities(self, prob_map):
+        """ Update scenario probabilities on a mutable-probability EF in place.
+
+            Requires the EF to have been created with
+            ``mutable_probability=True``. The supplied probabilities replace the
+            current values; the full set of scenario probabilities must sum to
+            1 after the update (this is a full EF). If a persistent solver has
+            already been loaded, the objective is re-pushed so a subsequent
+            ``solve_extensive_form(reuse_instance=True)`` re-solves with the new
+            probabilities without rebuilding the model.
+
+            Args:
+                prob_map (dict):
+                    Maps scenario name to its new probability. Names not present
+                    are left unchanged.
+
+            Raises:
+                RuntimeError:
+                    If the EF was not built with ``mutable_probability=True``.
+                KeyError:
+                    If ``prob_map`` contains an unknown scenario name.
+                ValueError:
+                    If the resulting probabilities do not sum to 1.
+        """
+        if not self.mutable_probability:
+            raise RuntimeError(
+                "set_scenario_probabilities requires the ExtensiveForm to be "
+                "created with mutable_probability=True.")
+        prob = self.ef._mpisppy_model.prob
+        # Validate before applying so a bad call leaves the model unchanged.
+        # Unmentioned scenarios keep their current probability (partial updates
+        # are allowed as long as the resulting full vector still sums to 1).
+        for sname in prob_map:
+            if sname not in prob:
+                raise KeyError(f"Unknown scenario name '{sname}' in prob_map.")
+        resulting = {sn: prob_map.get(sn, pyo.value(prob[sn]))
+                     for sn in self.ef._ef_scenario_names}
+        total = sum(resulting.values())
+        if abs(total - 1.0) > 1e-9:
+            raise ValueError(
+                f"scenario probabilities must sum to 1; got {total}.")
+        for sname, p in prob_map.items():
+            prob[sname].value = p
+            # keep _mpisppy_probability consistent for downstream readers
+            getattr(self.ef, sname)._mpisppy_probability = p
+        # Re-push the objective so a persistent solver picks up the new
+        # coefficients. Required for legacy persistent solvers; harmless (and
+        # redundant with auto-tracking) for APPSI / pyomo.contrib.solver.
+        if self._instance_loaded and \
+                sputils.has_persistent_solve_api(self.solver):
+            self.solver.set_objective(self.ef.EF_Obj)
 
     def get_objective_value(self):
         """ Retrieve the objective value.

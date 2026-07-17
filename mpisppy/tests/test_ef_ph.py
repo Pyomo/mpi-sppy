@@ -804,8 +804,214 @@ class Test_hydro(unittest.TestCase):
         obj2 = round_pos_sig(obj, 2)
         self.assertEqual(210, obj2)
 
-        
+
 # MultRhoUpdater
-        
+
+
+class Test_mutable_probability(unittest.TestCase):
+    """ Mutable scenario probabilities on the ExtensiveForm (issue #797). """
+
+    def setUp(self):
+        import mpisppy.tests.examples.farmer as farmer
+        from mpisppy.opt.ef import ExtensiveForm
+        self.farmer = farmer
+        self.ExtensiveForm = ExtensiveForm
+        self.snames = ["scen0", "scen1", "scen2"]
+        self.sck = {"num_scens": 3, "sense": pyo.minimize}
+
+    def _pv(self, p_bad):
+        rest = (1.0 - p_bad) / 2.0
+        return {"scen0": p_bad, "scen1": rest, "scen2": rest}
+
+    def _make_ef(self, mutable_probability=False):
+        return self.ExtensiveForm(
+            options={"solver": solver_name},
+            all_scenario_names=self.snames,
+            scenario_creator=self.farmer.scenario_creator,
+            scenario_creator_kwargs=self.sck,
+            mutable_probability=mutable_probability,
+        )
+
+    def _rebuild_obj(self, pv):
+        # baked-in EF at the given probabilities (correctness oracle)
+        scen_dict = {sn: self.farmer.scenario_creator(sn, **self.sck)
+                     for sn in self.snames}
+        for sn, scen in scen_dict.items():
+            scen._mpisppy_probability = pv[sn]
+        ef = sputils._create_EF_from_scen_dict(scen_dict, EF_name="oracle")
+        solver = pyo.SolverFactory(solver_name)
+        if '_persistent' in solver_name:
+            solver.set_instance(ef)
+        solver.solve(ef)
+        return pyo.value(ef.EF_Obj)
+
+    def test_mutable_prob_builds_param(self):
+        ef = self._make_ef(mutable_probability=True)
+        self.assertTrue(ef.mutable_probability)
+        self.assertTrue(hasattr(ef.ef._mpisppy_model, "prob"))
+        # defaults to the scenario_creator probabilities (uniform here)
+        for sn in self.snames:
+            self.assertAlmostEqual(pyo.value(ef.ef._mpisppy_model.prob[sn]),
+                                   1.0 / 3.0)
+
+    @unittest.skipIf(not solver_available, "no solver is available")
+    def test_matches_rebuild_across_sweep(self):
+        ef = self._make_ef(mutable_probability=True)
+        for i, p_bad in enumerate([0.0, 0.2, 0.5, 0.9]):
+            pv = self._pv(p_bad)
+            ef.set_scenario_probabilities(pv)
+            ef.solve_extensive_form(reuse_instance=(i > 0))
+            self.assertAlmostEqual(ef.get_objective_value(),
+                                   self._rebuild_obj(pv), places=4)
+
+    @unittest.skipIf(not persistent_available,
+                     "no persistent solver is available")
+    def test_reuse_instance_loads_once(self):
+        options = {"solver": persistent_solver_name}
+        ef = self.ExtensiveForm(
+            options=options, all_scenario_names=self.snames,
+            scenario_creator=self.farmer.scenario_creator,
+            scenario_creator_kwargs=self.sck, mutable_probability=True)
+        calls = {"n": 0}
+        orig = ef.solver.set_instance
+        def counting(*a, **k):
+            calls["n"] += 1
+            return orig(*a, **k)
+        ef.solver.set_instance = counting
+        for i, p_bad in enumerate([0.2, 0.5, 0.9]):
+            ef.set_scenario_probabilities(self._pv(p_bad))
+            ef.solve_extensive_form(reuse_instance=(i > 0))
+        self.assertEqual(calls["n"], 1)
+
+    def test_guards(self):
+        ef = self._make_ef(mutable_probability=True)
+        # non-mutable EF rejects the setter
+        plain = self._make_ef(mutable_probability=False)
+        with self.assertRaises(RuntimeError):
+            plain.set_scenario_probabilities(self._pv(0.2))
+        # unknown scenario name
+        with self.assertRaises(KeyError):
+            ef.set_scenario_probabilities({"nope": 0.5})
+        # probabilities not summing to 1, and the failed call is transactional
+        before = pyo.value(ef.ef._mpisppy_model.prob["scen0"])
+        with self.assertRaises(ValueError):
+            ef.set_scenario_probabilities({"scen0": before + 0.25})
+        self.assertAlmostEqual(pyo.value(ef.ef._mpisppy_model.prob["scen0"]),
+                               before)
+
+
+class Test_mutable_probability_ph(unittest.TestCase):
+    """ Mutable scenario probabilities on the PH path (issue #797, phase 2). """
+
+    def setUp(self):
+        import mpisppy.tests.examples.farmer as farmer
+        self.farmer = farmer
+        self.snames = ["scen0", "scen1", "scen2"]
+        self.sck = {"num_scens": 3, "sense": pyo.minimize}
+
+    def _pv(self, p0):
+        rest = (1.0 - p0) / 2.0
+        return {"scen0": p0, "scen1": rest, "scen2": rest}
+
+    def _denouement(self, *a, **k):
+        pass
+
+    def _make_ph(self, iters=0):
+        options = _get_ph_base_options()
+        options["PHIterLimit"] = iters
+        return mpisppy.opt.ph.PH(
+            options, self.snames, self.farmer.scenario_creator,
+            self._denouement, scenario_creator_kwargs=self.sck)
+
+    def _ef_first_stage(self, pv):
+        # solved EF at the given probabilities: the nonanticipative first-stage
+        # DevotedAcreage (independent oracle; the EF path is verified in
+        # Test_mutable_probability against a rebuild).
+        scen_dict = {sn: self.farmer.scenario_creator(sn, **self.sck)
+                     for sn in self.snames}
+        for sn, scen in scen_dict.items():
+            scen._mpisppy_probability = pv[sn]
+        ef = sputils._create_EF_from_scen_dict(scen_dict, EF_name="oracle")
+        solver = pyo.SolverFactory(solver_name)
+        if '_persistent' in solver_name:
+            solver.set_instance(ef)
+        solver.solve(ef)
+        block = getattr(ef, self.snames[0])
+        return {c: pyo.value(block.DevotedAcreage[c])
+                for c in block.DevotedAcreage}
+
+    def _ph_first_stage(self, ph):
+        # xbar is the consensus first-stage value; read it off any local scenario
+        s = ph.local_scenarios[self.snames[0]]
+        return {c: pyo.value(v) for c, v in
+                zip(s.DevotedAcreage, s.DevotedAcreage.values())}
+
+    def test_prob_coeff_refreshes(self):
+        # Two-stage: prob_coeff["ROOT"] == _mpisppy_probability after an update.
+        ph = self._make_ph(iters=0)
+        for s in ph.local_scenarios.values():
+            self.assertAlmostEqual(s._mpisppy_data.prob_coeff["ROOT"], 1.0 / 3.0)
+        pv = self._pv(0.5)
+        ph.set_scenario_probabilities(pv)
+        for sname, s in ph.local_scenarios.items():
+            self.assertAlmostEqual(s._mpisppy_probability, pv[sname])
+            self.assertAlmostEqual(s._mpisppy_data.prob_coeff["ROOT"], pv[sname])
+
+    def test_guards(self):
+        ph = self._make_ph(iters=0)
+        with self.assertRaises(KeyError):
+            ph.set_scenario_probabilities({"nope": 0.5})
+        with self.assertRaises(ValueError):
+            ph.set_scenario_probabilities({"scen0": 0.9})  # sum != 1
+
+    @unittest.skipIf(not solver_available, "no solver is available")
+    def test_ph_matches_ef_oracle(self):
+        # A fresh PH at each probability vector should converge to the EF
+        # solution at that vector, whether the vector was set at construction
+        # (uniform) or via set_scenario_probabilities before the first solve.
+        for p0 in (1.0 / 3.0, 0.6):
+            pv = self._pv(p0)
+            ph = self._make_ph(iters=100)
+            if abs(p0 - 1.0 / 3.0) > 1e-12:
+                ph.set_scenario_probabilities(pv)
+            ph.ph_main()
+            got = self._ph_first_stage(ph)
+            want = self._ef_first_stage(pv)
+            for c in want:
+                self.assertAlmostEqual(got[c], want[c], places=2)
+
+    @unittest.skipIf(not solver_available, "no solver is available")
+    def test_ph_reuse_after_prob_change(self):
+        # In-place probability change on an already-solved PH object: re-solving
+        # must track the new probabilities (the probability-sensitivity use
+        # case). The default reset_ph_duals=True breaks the stale consensus.
+        ph = self._make_ph(iters=100)
+        ph.ph_main()
+        pv = self._pv(0.6)
+        ph.set_scenario_probabilities(pv)
+        ph.ph_main()
+        got = self._ph_first_stage(ph)
+        want = self._ef_first_stage(pv)
+        for c in want:
+            self.assertAlmostEqual(got[c], want[c], places=2)
+
+    @unittest.skipIf(not solver_available, "no solver is available")
+    def test_ph_reuse_without_dual_reset_stays_stuck(self):
+        # Documents the warm-start caveat: keeping stale W (reset_ph_duals=False)
+        # after convergence leaves PH at the old consensus, wrong for new probs.
+        ph = self._make_ph(iters=100)
+        ph.ph_main()
+        uniform = self._ph_first_stage(ph)
+        pv = self._pv(0.6)
+        ph.set_scenario_probabilities(pv, reset_ph_duals=False)
+        ph.ph_main()
+        stuck = self._ph_first_stage(ph)
+        want = self._ef_first_stage(pv)
+        # still at the uniform solution, not the (different) skewed optimum
+        self.assertNotAlmostEqual(stuck["WHEAT0"], want["WHEAT0"], places=2)
+        for c in uniform:
+            self.assertAlmostEqual(stuck[c], uniform[c], places=2)
+
+
 if __name__ == '__main__':
     unittest.main()
