@@ -24,7 +24,7 @@ import sys
 def main():
     if mpi.COMM_WORLD.Get_size() == 1:
         print("ERROR: This script must be run with multiple MPI processes using mpirun or mpiexec, e.g.:", file=sys.stderr)
-        print("       mpirun -n 2 python -m mpi4py mpi_one_sided_test.py", file=sys.stderr)
+        print("       mpirun -n 2 mpi-sppy-one-sided-test", file=sys.stderr)
         sys.exit(2) # Exit status 2: command line usage error
     
     rank = mpi.COMM_WORLD.Get_rank()
