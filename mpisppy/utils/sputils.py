@@ -1031,7 +1031,7 @@ def fold_solver_options_layers(layers, k):
     return folded
 
 
-# Solver-name-aware translation for the two canonical option keys
+# Solver-name-aware translation for the canonical option keys
 # mpi-sppy stores internally. Keys not in this table are passed
 # through unchanged by translate_solver_options.
 #
