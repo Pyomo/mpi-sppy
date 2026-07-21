@@ -1,10 +1,15 @@
 # Solver-options redesign
 
-Status: design complete; phased implementation in progress. This document
-covers the current state (§1), goals and non-goals (§2–3), resolved open
-questions (§4), the proposed design (§5), and the migration / compatibility
-plan (§6). Phase 1 (dormant layered representation) lands with this doc;
-phases 2–8 are scheduled per §6.4.
+Status: design complete; implementation shipped. This document covers the
+solver-options surface as it stands today (§1), goals and non-goals
+(§2–3), resolved open questions (§4), the design (§5), and the migration /
+compatibility plan (§6). All eight rollout phases in §6.4 have landed: the
+layered representation (`solver_options_layers`) is live and consumed via
+`_effective_solver_options`, and solver-name translation (`mipgap` /
+`threads`), per-spoke overlay merge, the mipgap-schedule-as-layer path, the
+options-file loader, and the lagranger / programmatic-API deprecation
+warnings are all in the code. §1 is kept current as phases land; §6.4
+carries the per-phase detail.
 
 Backward-compatibility constraint: every CLI flag and CLI value-syntax that
 works today must continue to work after the redesign. Programmatic-API
@@ -117,6 +122,14 @@ The flags actually exposed today, by group:
 - `--ph-dual-solver-name`, `--ph-dual-solver-options`
 - `--lagranger-solver-name`, `--lagranger-solver-options` (lagranger
   has its own ad-hoc iter0/iterk wiring; see §1.5)
+- `--xhatlooper-solver-name`, `--xhatlooper-solver-options`
+- `--xhatshuffle-solver-name`, `--xhatshuffle-solver-options`
+- `--xhatspecific-solver-name`, `--xhatspecific-solver-options`
+- `--xhatxbar-solver-name`, `--xhatxbar-solver-options`
+- `--xhatlshaped-solver-name`, `--xhatlshaped-solver-options` (the five
+  xhat inner-bound spokes now carry the same per-spoke
+  `--{name}-solver-name` / `--{name}-solver-options` pair as the
+  outer-bound spokes; their factories apply it via `apply_solver_specs`)
 - `--obbt-solver-options` — config.py:325, OBBT presolve only
 - `--pickle-solver-name`, `--pickle-solver-options` —
   config.py:1256/1263, used for the iter0 solve done at pickle time
@@ -289,6 +302,16 @@ on, and ideally fix:
    global flag is registered); (c) automatic-gapper mode is genuinely
    adaptive — it reads the hub/spoke bound gap each iteration — so it
    cannot be expressed as a static layer.
+
+Implementation status of these pitfalls: items 3, 4, and 9 have since been
+addressed by the shipped redesign and are retained here as the motivation
+that drove it — solver-name-aware translation for `mipgap` / `threads`
+(item 3; §5, phase 3), per-spoke overlay-instead-of-replace merge (item 4;
+§6.2, phase 4), and the `--mipgaps-json` schedule folded into
+`solver_options_layers` (item 9; phase 5). Lagranger (item 7) now emits a
+rank-0-gated `DeprecationWarning` (§5.8, phase 7), though its ad-hoc
+iter0/iterk wiring is intentionally left in place (§6.7). The remaining
+items still describe live behavior.
 
 ### 1.6 Representative current usage
 
