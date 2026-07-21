@@ -118,8 +118,8 @@ class FWPH(mpisppy.phbase.PHBase):
         self._output(trivial_bound, trivial_bound, np.nan, secs)
         self._fwph_best_bound = trivial_bound
 
-        self._record_initial_mip_gaps()
-
+        if self.FW_options.get("objgap_mode", False):
+            self._record_initial_mip_gaps()
         # Lines 2 and 3 of Algorithm 3 in Boland
         # Now done a the beginning of the first iteration
         # self.Compute_Xbar(self.options['verbose'])
@@ -1193,7 +1193,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 self._scenario_initial_gap[sn] = s._mpisppy_data.inner_bound - s._mpisppy_data.outer_bound
             else:
                 self._scenario_initial_gap[sn] = s._mpisppy_data.outer_bound - s._mpisppy_data.inner_bound
-            self._scenario_initial_gap[sn] = max(self._scenario_initial_gap[sn], self.FW_options.get("objgap_initial_floor"))
+            self._scenario_initial_gap[sn] = max(self._scenario_initial_gap[sn], self.FW_options.get("objgap_initial_floor", 1.0))
             # print(f"{sn}, {self._scenario_initial_gap[sn]=}")
 
     def _get_objgap_FW_conv_thresh(self, sn):

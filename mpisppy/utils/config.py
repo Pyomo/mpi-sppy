@@ -936,20 +936,19 @@ class Config(pyofig.ConfigDict):
                            default=0.5)
 
         self.add_to_config("fwph_objgap_decrease_base",
-                           description="FWPH accuracy base: this number raised to the iteration number, times fwph_objgap_decrease_coeff, will be the accuracy required to terminate an iteration of the FW proceedure. Needs to be in (0,1).",
+                           description="FWPH accuracy base: this number raised to the iteration number, times fwph_objgap_decrease_coeff, will be the accuracy required to terminate an iteration of the FW procedure. Needs to be in (0,1).",
                            domain=float,
                            default=0.9)
 
         self.add_to_config("fwph_objgap_decrease_coeff",
-                           description="FWPH accuracy coefficient: this number raised to the iteration number, times fwph_objgap_decrease_coeff, will be the accuracy required to terminate an iteration of the FW proceedure. Needs to be greater than 0.",
+                           description="FWPH accuracy coefficient: this number raised to the iteration number, times fwph_objgap_decrease_coeff, will be the accuracy required to terminate an iteration of the FW procedure. Needs to be greater than 0.",
                            domain=float,
-                           default=3)
+                           default=3.0)
 
         self.add_to_config("fwph_objgap_initial_gap_floor",
                            description="FWPH accuracy initial minimum value: this number is the lowest initial value for the FW convergence criterion, in absolute terms",
                            domain=float,
-                           default=1)
-
+                           default=1.0)
         self.add_to_config("fwph_add_cylinder_columns",
                            description="Inject columns calculated by xhat spokes into the FWPH algorithm",
                            domain=bool,
