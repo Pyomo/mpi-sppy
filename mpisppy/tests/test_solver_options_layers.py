@@ -516,7 +516,7 @@ class TestTranslateSolverOptions(unittest.TestCase):
         for name in ("cplex", "cplex_persistent"):
             self.assertEqual(
                 self._t({"absgap": 1.5, "threads": 4}, name),
-                {"mip.tolerances.absmipgap": 1.5, "threads": 4},
+                {"mip_tolerances_absmipgap": 1.5, "threads": 4},
                 f"failed for solver_name={name!r}")
 
     def test_highs_renames_absgap(self):

@@ -913,10 +913,10 @@ class Config(pyofig.ConfigDict):
                            domain=str,
                            default=None)
 
-        self.add_to_config(name="fwph_objgap_hub",
-                           description="Use FWPH hub instead of PH (default False)",
-                           domain=bool,
-                           default=False)
+         self.add_to_config(name="fwph_objgap_hub",
+                            description="Enable FWPH objective-gap (ObjGap) mode on the hub (default False)",
+                            domain=bool,
+                            default=False)
 
         self.add_to_config("fwph_objgap_start_weight",
                             description="FWPH start weight -- a value of 0 starts at xbar, a value of 1 starts at the prior MIP solution (default 0)",
