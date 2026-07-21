@@ -333,7 +333,7 @@ if run_second_part:
     do_one("sslp", "../../mpisppy/generic_cylinders.py", 4,
            "--module-name sslp --instance-name=sslp_15_45_10 "
            "--sslp-data-path=./data "
-           "--fwph-objgap-hub --rel-gap=0.0"
+           "--fwph-objgap-hub --rel-gap=0.0 "
            "--max-iterations=10 --default-rho=10 "
            "--xhatshuffle --xhatshuffle-rank-ratio=0.01 "
            "--sep-rho --surrogate-nonant "
