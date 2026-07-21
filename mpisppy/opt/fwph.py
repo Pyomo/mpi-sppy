@@ -228,7 +228,7 @@ class FWPH(mpisppy.phbase.PHBase):
         for self._PHIter in range(1, max_iterations+1):
             iteration_start_time = time.perf_counter()
             if dprogress:
-                global_toc(f"Initiating FWPH Major Iteration {self._PHIter+1}\n", self.cylinder_rank == 0)
+                global_toc(f"Initiating FWPH Major Iteration {self._PHIter}\n", self.cylinder_rank == 0)
 
             # tbphloop = time.perf_counter()
             # TODO: should implement our own Xbar / W computation
