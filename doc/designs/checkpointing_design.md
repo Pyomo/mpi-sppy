@@ -51,6 +51,12 @@ lighter, leaf-data-only checkpoint (still supported; §4, §11 Phase 6).
   (welded to the current Pyomo/mpi-sppy/model code) is acceptable. Cross-version
   resume is out of scope.
 - APH. A C++ APH is expected to replace the Python `opt/aph.py`; PH-family only.
+- **Catching external OS signals** (SIGTERM/SIGUSR1 from a scheduler, Ctrl-C) to
+  trigger a checkpoint. The terminal checkpoint (§8) fires on the run's *own*
+  termination — including hitting `--time-limit` — which covers the planned-stop
+  use case. A scheduler that hard-kills mid-solve is covered only insofar as the
+  previous checkpoint is preserved by atomic publication (§9), not by catching the
+  signal and checkpointing in response.
 
 ---
 
@@ -391,22 +397,47 @@ resuming a MIP is not mistaken for a bug.
 
 ## 8. Configuration and semantics
 
-Checkpointing is **opt-in** and adds nothing when off.
+Checkpointing is **opt-in** and adds nothing when off. It is enabled by
+`--checkpoint-dir`; with a directory set, the triggers below decide *when* a
+checkpoint is written. They **compose** — whichever fires writes a checkpoint, all
+sharing the same atomic publish (§9). With no `--checkpoint-dir` the `Checkpointer`
+extension is not attached at all — zero overhead, no files.
 
-- **Trigger — end-of-run / on-signal (primary).** The use case stops on a
-  schedule, so the natural trigger is "checkpoint and exit cleanly at the end of
-  the run or on a signal" — after a fixed number of iterations
-  (`--max-iterations`), on a wall-clock budget, or on `SIGTERM`/`SIGUSR1`. This
-  writes one complete, resumable checkpoint per planned stop.
-- **`--checkpoint-every k` (optional insurance).** Also checkpoint every `k` PH
-  iterations for unplanned-crash coverage. `k` unset/`0` ⇒ disabled (the
-  `Checkpointer` extension is not attached; zero overhead, no files). `k ≥ 1` ⇒
-  every `k` iterations **and always at the end of iteration 0** (which establishes
+**Triggers**
+
+- **`--checkpoint-at-termination` (terminal checkpoint; default on).** Write one
+  complete, resumable checkpoint when the run terminates for *any* internal reason
+  — convergence, `--max-iterations`, cylinder convergence, or hitting
+  `--time-limit`. This is the primary trigger for the planned-stop use case: set
+  `--time-limit` to the daily budget and the run stops itself and checkpoints,
+  ready to resume the next morning. Nearly free — it fires in the hub's existing
+  `post_everything` hook (`phbase.py`), which runs once after the PH loop
+  regardless of *why* it exited, capturing the state of the last completed solve.
+  Turn it off (`--checkpoint-at-termination=False`) for a run that only wants
+  periodic insurance. It is *not* driven by external OS signals (a non-goal, §1);
+  the run's own termination — including `--time-limit` — is the trigger.
+- **`--checkpoint-every-seconds S` (optional insurance).** Also checkpoint roughly
+  every `S` wall-clock seconds, for crash coverage during a long run. Checked at
+  each `enditer` as `allreduce_or(now − last_checkpoint ≥ S)` — the same
+  collective-decision pattern the existing `--time-limit` termination uses
+  (`phbase.py`), so every rank agrees and none writes at the barrier while others
+  sail past (a deadlock). Because it is tested only at iteration boundaries, the
+  guarantee is "the first boundary at least `S` seconds after the previous
+  checkpoint"; for large MIPs one solve can exceed `S`, which is expected — a
+  checkpoint cannot be taken mid-solve. Distinct from `--time-limit`, which *stops*
+  the run: this keeps it running and snapshots.
+- **`--checkpoint-every-iterations K` (optional insurance).** Also checkpoint every
+  `K` PH iterations, **and always at the end of iteration 0** (which establishes
   the resume baseline — solvers created, trivial bound computed, initial `W = 0`
-  solve done — and composes with `--iter0-from-pickle`). Given infrequent planned
-  stops, most runs will leave this off or large.
+  solve done — and composes with `--iter0-from-pickle`). Checked at `enditer`.
+  (This is the former `--checkpoint-every k`, renamed for symmetry with
+  `--checkpoint-every-seconds`.) Given infrequent planned stops, most runs leave
+  the periodic triggers off and rely on the terminal checkpoint alone.
+
+**Other options**
+
 - **`--checkpoint-dir <dir>`** — where per-rank files and the manifest are written
-  (§10).
+  (§10); its presence is what enables checkpointing.
 - **`--checkpoint-backend {dill-reload, leaf}`** — how scenario-model state is
   restored (§2.2). Default `dill-reload` (captures the warm start + cuts, dodges an
   expensive `scenario_creator` re-run). `leaf` is the **low-cost** option — tiny,
@@ -494,12 +525,25 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
    previous checkpoint, a kill after it keeps the new one. The prior generation can
    be deleted once the manifest is in place. Keeping a few older generations is
    optional convenience, not a kill-safety requirement.
-8. **A `Checkpointer` extension** (write at `enditer` / on trigger, restore at
-   `post_iter0_after_sync`). For spokes, the xhatter `main()` loop calls no
-   per-iteration extension hook — add a single `self.opt.extobject.enditer()` (or a
-   dedicated checkpoint hook) inside it so **one `Checkpointer` serves hub and
-   xhatter uniformly** (restore already has a home: `pre_iter0`/`post_iter0` fire
-   once in `xhat_prep` in `xhatbase.py`).
+8. **A `Checkpointer` extension** that writes on its active triggers and restores
+   at `post_iter0_after_sync`:
+   - *periodic* (`--checkpoint-every-iterations` / `--checkpoint-every-seconds`) —
+     at `enditer`. The seconds trigger tests
+     `allreduce_or(now − last_checkpoint ≥ S)` so all ranks decide together
+     (mirroring the `time_limit` check in `phbase.py`), avoiding a rank-skew
+     deadlock at the write barrier.
+   - *terminal* (`--checkpoint-at-termination`, default on) — in `post_everything`
+     (`phbase.py`), which fires once after the PH loop however it exited
+     (convergence, `--max-iterations`, `--time-limit`), capturing the last
+     completed solve. Caveat: `post_everything` runs *after* `scenario_denouement`;
+     standard denouements only report, but one that re-solves or mutates a model
+     would be captured — call this out in user docs.
+
+   For spokes, the xhatter `main()` loop calls no per-iteration extension hook —
+   add a single `self.opt.extobject.enditer()` (or a dedicated checkpoint hook)
+   inside it so **one `Checkpointer` serves hub and xhatter uniformly** (restore
+   already has a home: `pre_iter0`/`post_iter0` fire once in `xhat_prep` in
+   `xhatbase.py`).
 
 ---
 
@@ -537,9 +581,11 @@ value. New tests are wired into `run_coverage.bash` **and**
 - **Phase 1 — Serial hub checkpoint/resume, dill-reload backend.** `Checkpointer`
   extension; global iteration counter / resume offset; reload-model resume branch
   (skip `attach_PH_to_objective`, rebuild `_solver_plugin`, set warm start);
-  geometry+cfg fingerprint; atomic per-rank writes + manifest; end-of-run/on-signal
-  trigger (+ optional `--checkpoint-every k`); CLI flags `--checkpoint-dir`,
-  `--checkpoint-backend`, `--resume-from`/`--resume`. Test: serial **MIP** (e.g.
+  geometry+cfg fingerprint; atomic per-rank writes + manifest; terminal checkpoint
+  (`--checkpoint-at-termination`, default on) + optional periodic triggers
+  (`--checkpoint-every-iterations` / `--checkpoint-every-seconds`); CLI flags
+  `--checkpoint-dir`, `--checkpoint-at-termination`, `--checkpoint-backend`,
+  `--resume-from`/`--resume`. Test: serial **MIP** (e.g.
   `sizes`) stop+resume — run continues correctly, incumbent preserved, warm start
   taken (mid-run model dill round-trip proven, §6).
 - **Phase 2 — Multi-rank + bundles.** Barriers, rank-tagged files, single-generation
