@@ -913,13 +913,6 @@ class Config(pyofig.ConfigDict):
                            domain=str,
                            default=None)
 
-        self.add_to_config('fwph_objgap_rank_ratio',
-                           description="MPI ranks for the fwph spoke "
-                                       "relative to the hub (flexible rank "
-                                       "assignments; default 1.0 = equal)",
-                           domain=float,
-                           default=1.0)
-
         self.add_to_config(name="fwph_objgap_hub",
                            description="Use FWPH hub instead of PH (default False)",
                            domain=bool,
