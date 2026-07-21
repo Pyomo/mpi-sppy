@@ -18,7 +18,8 @@ are planned, not crash-driven. The scenarios are **large MIPs**.
 That regime drives the design decisions below (dill the scenario models, restore
 a MIP warm start), and it is worth stating up front because a *different* use
 case — frequent checkpoints purely for hard-kill safety — would push toward a
-lighter, leaf-data-only checkpoint (still supported; §4, §11 Phase 6).
+lighter, leaf-data-only checkpoint — the leaf-rebuild backend, kept in this design
+as a future option but **not currently planned** (§4, §11 Phase 6).
 
 **Goals**
 
@@ -116,8 +117,8 @@ three days is negligible. And it *avoids re-running an expensive `scenario_creat
 on every resume, which for large models is itself a real saving.
 
 The alternative — rebuild each model via `scenario_creator` and overlay the state
-as leaf data (arrays/name→value maps) — remains available as the **low-cost
-backend**:
+as leaf data (arrays/name→value maps) — is the **low-cost backend**, designed here
+but **not currently planned** (§11 Phase 6):
 its checkpoints are tiny and fast (a handful of `O(first-stage)` arrays, no model
 structure) and version-robust (plain numbers, not pickled classes). That makes it
 the right choice for small scenarios, cheap creators, or *frequent* kill-safety
@@ -439,10 +440,12 @@ extension is not attached at all — zero overhead, no files.
 - **`--checkpoint-dir <dir>`** — where per-rank files and the manifest are written
   (§10); its presence is what enables checkpointing.
 - **`--checkpoint-backend {dill-reload, leaf}`** — how scenario-model state is
-  restored (§2.2). Default `dill-reload` (captures the warm start + cuts, dodges an
-  expensive `scenario_creator` re-run). `leaf` is the **low-cost** option — tiny,
-  fast, version-robust checkpoints — for small/cheap-creator runs or frequent
-  kill-safety writes.
+  restored (§2.2). `dill-reload` is the default and the only backend implemented in
+  the planned phases (captures the warm start + cuts, dodges an expensive
+  `scenario_creator` re-run). `leaf` — the **low-cost** option (tiny, fast,
+  version-robust checkpoints, for small/cheap-creator runs or frequent kill-safety
+  writes) — is designed but **not currently planned** (§11 Phase 6); until that
+  phase lands, `dill-reload` is the only valid value.
 - **`--resume-from <dir>`** (or `--resume`, auto-selecting the latest *complete*
   checkpoint from the manifest) — reconstruct the wheel and restore. Resume
   requires identical geometry (§5.7); a mismatch is refused with a clear error.
@@ -604,11 +607,16 @@ value. New tests are wired into `run_coverage.bash` **and**
   continues, best xhat preserved.
 - **Phase 5 — Exact spoke continuity (optional).** Hoist `ScenarioCycler`/`xh_iter`
   onto `self`; checkpoint the cursor (+ RNG getstate if a stream becomes stateful).
-- **Phase 6 — Leaf-rebuild backend + broader coverage.** The lighter,
-  version-robust `--checkpoint-backend leaf` path (rebuild via `scenario_creator`,
-  overlay W/rho/nonants/fixedness, replay prox `cut_values`, optional all-var warm
-  start); this is what the PoC prototyped. Plus lagranger, FWPH, subgradient
-  spokes.
+- **Phase 6 — Leaf-rebuild backend + broader coverage (not currently planned).**
+  A possible future phase, deferred: the primary use case is fully served by the
+  dill-reload backend (Phases 1–4), so this is recorded for when a lighter,
+  version-robust checkpoint is actually needed rather than scheduled now. It would
+  add the `--checkpoint-backend leaf` path (rebuild via `scenario_creator`, overlay
+  W/rho/nonants/fixedness, replay prox `cut_values`, optional all-var warm start —
+  what the PoC prototyped) plus lagranger, FWPH, and subgradient spoke coverage.
+  The design deliberately keeps this backend's hooks and the shared
+  framework/manifest (§2.2) so it can be added later without disturbing the shipped
+  dill-reload path.
 
 ---
 
