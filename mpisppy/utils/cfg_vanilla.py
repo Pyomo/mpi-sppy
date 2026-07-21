@@ -988,10 +988,10 @@ def _fwph_options(cfg):
         "FW_LP_start_iterations": cfg.fwph_lp_start_iterations,
         "objgap_mode": cfg.fwph_objgap_hub,
         "mip_fw_effort_balance": cfg.fwph_objgap_mip_fw_effort_balance,
-        "objgap_decrease_base" : cfg.fwph_objgap_decrease_base,
-        "objgap_decrease_coeff" : cfg.fwph_objgap_decrease_coeff,
-        "objgap_initial_floor" : cfg.fwph_objgap_initial_gap_floor,
-        "add_cylinder_columns" : cfg.fwph_add_cylinder_columns,
+        "objgap_decrease_base": cfg.fwph_objgap_decrease_base,
+        "objgap_decrease_coeff": cfg.fwph_objgap_decrease_coeff,
+        "objgap_initial_floor": cfg.fwph_objgap_initial_gap_floor,
+        "add_cylinder_columns": cfg.fwph_add_cylinder_columns,
     }
 
     # Separate MIP/QP solvers (issue #712). FWPH falls back to solver_name
