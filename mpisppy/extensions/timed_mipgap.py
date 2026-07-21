@@ -7,22 +7,25 @@
 # full copyright and license information.
 ###############################################################################
 '''
-This class is implemented as an extension to be used in mpi-sppy to add a callback to a persistent
-solver to implement a time-dependent target MIP gap.
-For now, the only solver supported is GurobiPersistent.
+This class is implemented as an extension to be used in mpi-sppy to add a termination callback to a
+persistent solver and implement a time-dependent target MIP gap.
 '''
+
+import math
 
 import mpisppy.extensions.extension
 import mpisppy.utils.sputils as sputils
-from pyomo.solvers.plugins.solvers.gurobi_persistent import GurobiPersistent
-
-from gurobipy import GRB
+from mpisppy.utils.callbacks.termination import (
+    set_termination_callback,
+    supports_termination_callback,
+)
 
 class TimedMIPGapCB(mpisppy.extensions.extension.Extension):
     '''
-    This extension adds a solver callback function that implements a time-dependent target MIP gap.
-    The curve is defined by a sequence of (time,gap) pairs, monotonically increasing in both dimensions.
-    For each (t,g) pair, when the solver reaches time t, it relaxes the target MIP gap to g.
+    This extension adds a solver termination callback that implements a time-dependent target MIP gap.
+    The curve is defined by an ordered mapping of gap:time pairs, monotonically increasing in both
+    dimensions. For each (t,g) pair, when the solver reaches time t, it terminates if the relative gap
+    has already improved below g.
 
     This class requires the following options:
     'timed_mipgap':
@@ -30,19 +33,12 @@ class TimedMIPGapCB(mpisppy.extensions.extension.Extension):
 
     Attributes
     ----------
-    timecurve: dict of {gap:time} with sequence of (time,gap) pairs.
-
-    Reference
-    ---------
-    Based on post found at:
-    https://support.gurobi.com/hc/en-us/articles/360047717291-How-do-I-use-callbacks-to-terminate-the-solver-
-    (Oct 2023)
+    timecurve: ordered dict of {gap:time} pairs.
     '''
 
     def __init__(self, ph):
-
+        super().__init__(ph)
         self.ph = ph
-
         self._set_options()
 
     def _set_options(self):
@@ -50,53 +46,83 @@ class TimedMIPGapCB(mpisppy.extensions.extension.Extension):
         if 'timed_mipgap' not in ph.options:
             raise RuntimeError('Did not find "timed_mipgap" options')
         timecurve_str = ph.options['timed_mipgap']['timecurve']
-        self.timecurve = {float(ent.split(':')[0]):float(ent.split(':')[1]) for ent in timecurve_str.split(' ')}
+        self.timecurve = dict()
+        prev_gap = None
+        prev_time = None
+        for entry in timecurve_str.split():
+            try:
+                gap_str, time_str = entry.split(':', 1)
+                gap = float(gap_str)
+                solve_time = float(time_str)
+            except ValueError as exc:
+                raise RuntimeError(
+                    'Timed MIP gap option "timecurve" entries must have format "gap:time"'
+                ) from exc
+
+            if not math.isfinite(gap) or not math.isfinite(solve_time):
+                raise RuntimeError(
+                    'Timed MIP gap option "timecurve" entries must use finite gap and time values'
+                )
+            if gap in self.timecurve:
+                raise RuntimeError(
+                    f'Timed MIP gap option "timecurve" has duplicate gap entry {gap}'
+                )
+            if prev_gap is not None and (gap <= prev_gap or solve_time <= prev_time):
+                raise RuntimeError(
+                    'Timed MIP gap option "timecurve" must be strictly increasing in both gap and time'
+                )
+
+            self.timecurve[gap] = solve_time
+            prev_gap = gap
+            prev_time = solve_time
+
+        if not self.timecurve:
+            raise RuntimeError('Timed MIP gap option "timecurve" must not be empty')
+
+    @staticmethod
+    def _compute_relative_gap(best_obj, best_bound):
+        '''Return relative gap or None if a bound is unavailable.'''
+        if best_obj is None or best_bound is None:
+            return None
+        if not math.isfinite(best_obj) or not math.isfinite(best_bound):
+            return None
+
+        return abs(best_obj - best_bound) / max(
+            1e-10,
+            abs(best_obj),
+            abs(best_bound),
+        )
+
+    def _should_terminate(self, runtime, best_obj, best_bound):
+        '''Return True when the timecurve says to terminate.'''
+        if runtime is None or not math.isfinite(runtime):
+            return False
+
+        gap = self._compute_relative_gap(best_obj, best_bound)
+        if gap is None:
+            return False
+
+        for tc_gap, tc_t in self.timecurve.items():
+            if runtime > tc_t and gap < tc_gap:
+                return True
+
+        return False
 
     def iter0_post_solver_creation(self):
         ph = self.ph
-        for sname, s in ph.local_scenarios.items():
+        for s in ph.local_scenarios.values():
             if not hasattr(s, '_solver_plugin'):
                 raise RuntimeError('Solver must be created before calling callback extension')
             if not (sputils.is_persistent(s._solver_plugin)):
                 raise RuntimeError('Solvers must be persistent for callback definition')
             if not s._solver_plugin.has_instance():
                 raise RuntimeError('Solver must be instantiated before calling callback extension')
-            if not isinstance(s._solver_plugin,GurobiPersistent):
-                raise RuntimeError('Currently, only GurobiPersistent solver is supported.')
-            
-            def cb_fun(cb_m,cb_opt,cb_wh):
-                '''
-                callback function
-                '''
-                return self._timecurve_cb(cb_m,cb_opt,cb_wh,self.timecurve)
-            s._solver_plugin.set_callback(cb_fun)
+            if not supports_termination_callback(s._solver_plugin):
+                raise RuntimeError(
+                    'Timed MIP gap requires a persistent solver with supported termination callbacks'
+                )
 
-    @staticmethod
-    def _timecurve_cb(cb_model, cb_opt, cb_where,
-                     timecurve_dict):
-        '''
-        Inputs
-        ------
-        cb_model: Pyomo ConcreteModel
-        cb_opt: SolverFactory model of gurobi_persistent type
-        cb_where: argument that indicates where in the algorith the callback is being called from
+            def cb_fun(runtime, best_obj, best_bound):
+                return self._should_terminate(runtime, best_obj, best_bound)
 
-        timecurve_dict: dict of {gap:time} with:
-            time: time in sec
-            gap: target MIP gap (in p.u.)
-        Note that (time,gap) only define a meaningful timecurve if there is monotonicity, so monotonicity
-        is assumed. However, it is not verified.
-
-        '''
-
-        if cb_where == GRB.Callback.MIP:
-            grb_m = cb_opt._solver_model # gurobipy model
-            runtime = grb_m.cbGet(GRB.Callback.RUNTIME)
-            objbst = grb_m.cbGet(GRB.Callback.MIP_OBJBST)
-            objbnd = grb_m.cbGet(GRB.Callback.MIP_OBJBND)
-            gap = abs((objbst - objbnd) / objbst)
-
-            for tc_gap,tc_t in timecurve_dict.items():
-                if runtime > tc_t and gap < tc_gap:
-                    grb_m.terminate()
-    
+            set_termination_callback(s._solver_plugin, cb_fun)

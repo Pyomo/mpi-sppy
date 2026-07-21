@@ -8,6 +8,7 @@
 ###############################################################################
 import pytest
 
+import mpisppy.utils.callbacks.termination.termination_callbacks as termination_callbacks_module
 from mpisppy.utils.callbacks.termination.termination_callbacks import (
     set_termination_callback,
     supports_termination_callback,
@@ -36,6 +37,12 @@ class _TestTermination:
         set_termination_callback(self._solver, self.solver_terminate)
         self._set_time_limit()
         self._solver.solve(tee=True)
+
+    def solve_without_loading(self):
+        assert supports_termination_callback(self._solver)
+        set_termination_callback(self._solver, self.solver_terminate)
+        self._set_time_limit()
+        return self._solver.solve(tee=False, load_solutions=False)
 
 
 class CPLEXTermination(_TestTermination):
@@ -69,10 +76,7 @@ def test_cplex_termination_callback():
     
     st = time.time()
     cplextest = CPLEXTermination()
-    try:
-        cplextest.solve()
-    except ValueError:
-        pass
+    cplextest.solve()
     end = time.time()
     assert end - st < 5
 
@@ -89,6 +93,19 @@ def test_gurobi_termination_callback():
     end = time.time()
     assert end - st < 5
 
+
+@pytest.mark.skipif(
+    not SolverFactory("gurobi_persistent").available(exception_flag=False),
+    reason="gurobi_persistent not available",
+)
+def test_gurobi_termination_callback_status():
+
+    gurobitest = GurobiTermination()
+    results = gurobitest.solve_without_loading()
+    assert str(results.solver.status) == "aborted"
+    assert str(results.solver.termination_condition) == "userInterrupt"
+    assert str(results.solution[0].status) == "stoppedByLimit"
+
     
 @pytest.mark.skipif(
     not SolverFactory("xpress_persistent").available(exception_flag=False),
@@ -102,6 +119,19 @@ def test_xpress_termination_callback():
     end = time.time()
     assert end - st < 5
 
+
+@pytest.mark.skipif(
+    not SolverFactory("xpress_persistent").available(exception_flag=False),
+    reason="xpress_persistent not available",
+)
+def test_xpress_termination_callback_status():
+
+    xpresstest = XpressTermination()
+    results = xpresstest.solve_without_loading()
+    assert str(results.solver.status) == "warning"
+    assert str(results.solver.termination_condition) == "other"
+    assert str(results.solution[0].status) == "feasible"
+
     
 def test_unsupported():
     
@@ -109,3 +139,50 @@ def test_unsupported():
 
     assert not supports_termination_callback("xpress_persistent")
     assert not supports_termination_callback(cbc)
+
+
+def test_subclass_dispatch(monkeypatch):
+
+    calls = []
+
+    class BaseSolver:
+        pass
+
+    class ChildSolver(BaseSolver):
+        pass
+
+    monkeypatch.setattr(
+        termination_callbacks_module,
+        "_termination_callback_solvers_to_setters",
+        {BaseSolver: lambda solver, cb: calls.append((solver, cb))},
+    )
+
+    solver = ChildSolver()
+
+    def termination_callback(runtime, best_obj, best_bound):
+        return False
+
+    assert supports_termination_callback(solver)
+    set_termination_callback(solver, termination_callback)
+    assert calls == [(solver, termination_callback)]
+
+
+def test_unsupported_error_message(monkeypatch):
+
+    class UnsupportedSolver:
+        pass
+
+    monkeypatch.setattr(
+        termination_callbacks_module,
+        "_termination_callback_solvers_to_setters",
+        {},
+    )
+
+    def termination_callback(runtime, best_obj, best_bound):
+        return False
+
+    with pytest.raises(
+        RuntimeError,
+        match="solver UnsupportedSolver termination callback is not currently supported",
+    ):
+        set_termination_callback(UnsupportedSolver(), termination_callback)

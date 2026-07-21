@@ -29,6 +29,9 @@ command-line flags:
 - ``--interrupt-W-oscillations <file>`` -- activates W-oscillation
   interruption (slamming; implies detection; see :ref:`w_oscillation`)
 - ``--mipgaps-json <file>`` -- activates the mipgapper extension
+- ``--timed-mipgap`` -- activates the timed MIP gap extension
+- ``--timed-mipgap-options <curve>`` -- sets the timed MIP gap curve as
+  ``gap:time`` pairs (e.g., ``"0.02:100 0.05:200"``)
 - ``--user-defined-extensions <module>`` -- loads a custom extension
 - ``--grad-rho`` -- activates gradient-based rho (see :ref:`rho_setting`)
 - ``--use-norm-rho-updater`` -- activates the norm rho updater
@@ -94,6 +97,34 @@ the ``problem_ratio`` is the relative optimality gap on the overall problem
 as computed by the cylinders.
 
 This extension can also be used with the Lagrangian and subgradient spokes.
+
+timed_mipgap.py
+^^^^^^^^^^^^^^^^
+
+This extension installs a solver termination callback that stops a persistent
+MIP solve once a user-specified run time has been reached *and* the current
+relative gap is already below a target threshold. The option is given as a
+string of ordered ``gap:time`` pairs in
+``options["timed_mipgap"]["timecurve"]``. For example,
+``"0.02:100 0.05:200"`` means: after 100 seconds, stop if the relative gap is
+below 2%; after 200 seconds, stop if it is below 5%.
+
+This is a soft, time-dependent stopping rule: it does not force termination at
+the specified times unless the incumbent and bound are already close enough.
+It is useful when early PH iterations do not need tight subproblem solves, but
+later iterations may still benefit from stronger solves when the solver is
+making progress.
+
+When using ``generic_cylinders.py``, enable it with:
+
+- ``--timed-mipgap``
+- ``--timed-mipgap-options "0.02:100 0.05:200"``
+
+The extension currently requires a persistent solver with supported termination
+callbacks; at present this includes CPLEX, Gurobi, and Xpress persistent
+interfaces. The ``gap:time`` pairs are validated in the order provided and
+must be strictly increasing in both gap and time; duplicate gap entries are
+rejected.
 
 fixer.py
 ^^^^^^^^

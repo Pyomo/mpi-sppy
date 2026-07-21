@@ -20,6 +20,13 @@ _termination_callback_solvers_to_setters = {
     XpressPersistent: tc.set_xpress_callback,
 }
 
+
+def _get_termination_callback_setter(solver_instance):
+    for solver_class, setter in _termination_callback_solvers_to_setters.items():
+        if isinstance(solver_instance, solver_class):
+            return setter
+    return None
+
 def supports_termination_callback(solver_instance):
     """
     Determines if this module supports a solver instance
@@ -33,9 +40,7 @@ def supports_termination_callback(solver_instance):
     bool : True if this module can set a termination callback on the solver instance
 
     """
-    return isinstance(
-        solver_instance, tuple(_termination_callback_solvers_to_setters.keys())
-    )
+    return _get_termination_callback_setter(solver_instance) is not None
 
 
 def set_termination_callback(solver_instance, termination_callback):
@@ -59,12 +64,10 @@ def set_termination_callback(solver_instance, termination_callback):
             "Provided user termination callback did not match expected signature with 3 positional arguments"
             )
 
-    try:
-        _termination_callback_solvers_to_setters[solver_instance.__class__](
-            solver_instance, termination_callback
-        )
-    except KeyError:
+    setter = _get_termination_callback_setter(solver_instance)
+    if setter is None:
         raise RuntimeError(
-            f"solver {solver_instance.__class__.__name___} termination callback "
+            f"solver {solver_instance.__class__.__name__} termination callback "
             "is not currently supported."
         )
+    setter(solver_instance, termination_callback)
