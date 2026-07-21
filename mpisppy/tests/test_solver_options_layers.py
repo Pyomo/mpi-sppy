@@ -433,11 +433,11 @@ class TestTranslateSolverOptions(unittest.TestCase):
 
     # --- per-solver translation correctness ---
 
-    def test_cplex_needs_no_rename(self):
+    def test_cplex_mipgap_rename(self):
         for name in ("cplex", "cplex_persistent"):
             self.assertEqual(
                 self._t({"mipgap": 0.01, "threads": 4}, name),
-                {"mip.tolerances.mipgap": 0.01, "threads": 4})
+                {"mip_tolerances_mipgap": 0.01, "threads": 4})
 
     def test_xpress_fans_out_mipgap_to_three_native_keys(self):
         for name in ("xpress", "xpress_persistent"):
