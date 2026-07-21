@@ -193,6 +193,15 @@ if run_first_part:
            "--ph-primal-hub --ph-dual --ph-dual-rescale-rho-factor=0.1 --ph-dual-rho-multiplier 0.2 "
            "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
 
+    # dcap (SIPLIB) read from SMPS files via the generic driver. Passing
+    # --smps-dir selects mpisppy.problem_io.smps_module automatically, so no
+    # model module is needed. dcap233_200 is the full 200-scenario instance.
+    do_one("dcap", "../../mpisppy/generic_cylinders.py", 3,
+           "--smps-dir dcap233_200 --solver-name={} "
+           "--max-iterations=5 --default-rho=1 "
+           "--lagrangian --xhatshuffle --rel-gap=1e-4 "
+           "--intra-hub-conv-thresh=-0.1".format(solver_name))
+
     do_one("farmer/from_pysp", "concrete_ampl.py", 1, solver_name)
     do_one("farmer/from_pysp", "abstract.py", 1, solver_name)
 
