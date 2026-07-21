@@ -1050,7 +1050,7 @@ def fold_solver_options_layers(layers, k):
 _SOLVER_OPTION_TRANSLATIONS = {
     "mipgap": {
         # CPLEX uses the native dotted parameter name.
-        "cplex": "mip.tolerances.mipgap",
+        "cplex": "mip_tolerances_mipgap",
         "glpk": "mipgap",
         # HiGHS uses its native option name.
         "highs": "mip_rel_gap",
