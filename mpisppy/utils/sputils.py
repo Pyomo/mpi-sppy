@@ -1070,6 +1070,8 @@ _SOLVER_OPTION_TRANSLATIONS = {
     "absgap": {
         # CPLEX uses Pyomo's underscore form of the native parameter name.
         "cplex": "mip_tolerances_absmipgap",
+        # Gurobi uses its native parameter name.
+        "gurobi": "MIPGapAbs",
         # HiGHS uses its native option name.
         "highs": "mip_abs_gap",
         # CBC uses gapAbs for the absolute MIP gap.

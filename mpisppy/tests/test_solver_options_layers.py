@@ -551,6 +551,13 @@ class TestTranslateSolverOptions(unittest.TestCase):
                 {"mio_tol_abs_gap": 1.5, "num_threads": 4},
                 f"failed for solver_name={name!r}")
 
+    def test_gurobi_renames_absgap(self):
+        for name in ("gurobi", "gurobi_persistent", "appsi_gurobi", "gurobi_direct"):
+            self.assertEqual(
+                self._t({"absgap": 1.5, "threads": 4}, name),
+                {"MIPGapAbs": 1.5, "Threads": 4},
+                f"failed for solver_name={name!r}")
+
     def test_xpress_fans_out_absgap_to_three_native_keys(self):
         for name in ("xpress", "xpress_persistent"):
             self.assertEqual(
