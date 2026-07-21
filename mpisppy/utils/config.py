@@ -913,7 +913,7 @@ class Config(pyofig.ConfigDict):
                            domain=str,
                            default=None)
 
-         self.add_to_config(name="fwph_objgap_hub",
+        self.add_to_config(name="fwph_objgap_hub",
                             description="Enable FWPH objective-gap (ObjGap) mode on the hub (default False)",
                             domain=bool,
                             default=False)

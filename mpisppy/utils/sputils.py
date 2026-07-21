@@ -1049,7 +1049,7 @@ def fold_solver_options_layers(layers, k):
 #   - None, meaning the canonical option cannot be mapped for that solver.
 _SOLVER_OPTION_TRANSLATIONS = {
     "mipgap": {
-        # CPLEX uses the native dotted parameter name.
+        # CPLEX uses Pyomo's underscore form of the native parameter name.
         "cplex": "mip_tolerances_mipgap",
         "glpk": "mipgap",
         # HiGHS uses its native option name.
