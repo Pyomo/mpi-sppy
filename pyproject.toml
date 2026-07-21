@@ -34,6 +34,17 @@ download = "https://github.com/Pyomo/mpi-sppy"
 documentation = "https://mpi-sppy.readthedocs.io"
 tracker = "https://github.com/Pyomo/mpi-sppy/issues"
 
+# Console entry points: pip creates a launcher on the user's PATH for each,
+# so pip-installed users can run these drivers without knowing where the
+# files landed in site-packages.  Each target is an importable module:callable.
+# For real multi-rank parallel runs the module form is still recommended so
+# the mpi4py runner installs its abort-on-exception handler, e.g.:
+#   mpiexec -np 3 python -m mpi4py -m mpisppy.generic_cylinders --module-name farmer ...
+[project.scripts]
+mpi-sppy-generic-cylinders = "mpisppy.generic_cylinders:main"
+mpi-sppy-mrp-generic = "mpisppy.mrp_generic:main"
+mpi-sppy-one-sided-test = "mpi_one_sided_test:main"
+
 [project.optional-dependencies]
 doc = [
     "sphinx",
@@ -52,3 +63,13 @@ pandas = [
 plot = [
     "matplotlib",
 ]
+
+# Explicit package/module declaration.  Matches the previous find_packages()
+# result (only the mpisppy package and its subpackages) and additionally
+# installs the top-level mpi_one_sided_test.py so its console script can
+# import it.
+[tool.setuptools]
+py-modules = ["mpi_one_sided_test"]
+
+[tool.setuptools.packages.find]
+include = ["mpisppy", "mpisppy.*"]

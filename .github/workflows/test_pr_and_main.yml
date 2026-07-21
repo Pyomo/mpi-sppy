@@ -188,6 +188,8 @@ jobs:
           pip install xpress coverage
           # usar runs in first-part and imports matplotlib + scipy at module load
           pip install matplotlib scipy
+          # dcap (SMPS) runs in first-part; its reader needs python-mip
+          pip install mip
 
       - name: Build pyomo extensions
         run: |
@@ -272,6 +274,8 @@ jobs:
           pip install xpress coverage
           # usar runs in first-part and imports matplotlib + scipy at module load
           pip install matplotlib scipy
+          # dcap (SMPS) runs in first-part; its reader needs python-mip
+          pip install mip
 
       - name: Build pyomo extensions
         run: |
