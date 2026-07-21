@@ -1251,7 +1251,7 @@ class TestXhatSpokePerSpokeSolver(unittest.TestCase):
         cfg.xhatshuffle_solver_name = "xpress"               # override
         cfg.xhatshuffle_solver_options = "mipgap=0.001 threads=2"
 
-        def _sc(*a, **k):  # the foundation packages, never calls, this
+        def _sc(*a, **k):  # spoke factory only packages config; never calls this
             raise AssertionError("scenario_creator should not be called")
 
         spoke = xhatshuffle_spoke(cfg, _sc, None, ["scen0", "scen1", "scen2"])
