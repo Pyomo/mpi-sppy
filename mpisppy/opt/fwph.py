@@ -326,11 +326,10 @@ class FWPH(mpisppy.phbase.PHBase):
                 sdm_iter_limit = self.FW_options["FW_iter_limit"] if not self.FW_options["objgap_mode"] else 100000
             if FW_conv_thresh is None:
                 FW_conv_thresh = self.FW_options["FW_conv_thresh"]
-            max_iterations = int(self.options["PHIterLimit"])
             # print(f"{sdm_iter_limit=}")
             self._swap_nonant_vars()
             self._local_bound = 0
-            tbsdm = time.perf_counter()
+            # tbsdm = time.perf_counter()
             _sdm_generators = {}
             stop = False
             best_bound_update = self._can_update_best_bound()
@@ -354,7 +353,7 @@ class FWPH(mpisppy.phbase.PHBase):
                         stop = True
 
             self._update_dual_bounds()
-            tsdm = time.perf_counter() - tbsdm
+            # tsdm = time.perf_counter() - tbsdm
             # print(f"PH iter {self._PHIter}, total SDM time: {tsdm}")
             self._sync_after_mip_solve()
 
