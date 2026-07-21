@@ -330,7 +330,6 @@ class FWPH(mpisppy.phbase.PHBase):
             self._swap_nonant_vars()
             self._local_bound = 0
             # tbsdm = time.perf_counter()
-            _sdm_generators = {}
             stop = False
             best_bound_update = self._can_update_best_bound()
             for name in self.local_scenarios:
