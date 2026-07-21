@@ -71,6 +71,9 @@ run_phase "test_maximization (serial)" \
 run_phase "test_cvar (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_cvar.py -v
 
+run_phase "test_outer_bound_only (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_outer_bound_only.py -v
+
 run_phase "test_chance_constraint (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_chance_constraint.py -v
 
