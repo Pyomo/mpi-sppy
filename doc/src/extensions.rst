@@ -28,7 +28,9 @@ command-line flags:
   (see :ref:`w_oscillation`)
 - ``--interrupt-W-oscillations <file>`` -- activates W-oscillation
   interruption (slamming; implies detection; see :ref:`w_oscillation`)
-- ``--mipgaps-json <file>`` -- activates the mipgapper extension
+- ``--mipgaps-json <file>`` -- activates the legacy mipgapper schedule mode
+- ``--starting-mipgap <float>`` (required; ``--mipgap-ratio`` defaults to
+  ``0.1``) -- activates the mipgapper's auto-gap mode for cylinders
 - ``--timed-mipgap <curve>`` -- activates the timed MIP gap extension and sets
   the timed MIP gap curve as ``gap:time`` pairs (e.g., ``"0.02:100 0.05:200"``)
 - ``--user-defined-extensions <module>`` -- loads a custom extension
@@ -81,19 +83,21 @@ now describe a few of the extensions in the release.
 mipgapper.py
 ^^^^^^^^^^^^
 
-This is a good extension to look at as a first example. It takes a
-dictionary with iteration numbers and mipgaps as input and changes the
-mipgap at the corresponding iterations. The dictionary is provided in
-the options dictionary in ``["gapperoptions"]["mipgapdict"]``.  There
-is an example of its use in ``examples.sizes.sizes_demo.py``.
+This is a good extension to look at as a first example. It can either take a
+dictionary with iteration numbers and mipgaps as input, or it can run in
+auto-gap mode when used from ``generic_cylinders``.
 
-Instead of an options dictionary, when run with cylinders the options
-``["gapperoptions"]["starting_mipgap"]`` and ``["gapperoptions"]["mipgap_ratio"]``
-can be set. The ``starting_mipgap`` will be the initial value used,
-and as the cylinders close the relative optimality gap the extension will set the subproblem
-mipgaps as the ``min(starting_mipgap, mipgap_ratio * problem_ratio)``, where
-the ``problem_ratio`` is the relative optimality gap on the overall problem
-as computed by the cylinders.
+The dictionary form is provided in the options dictionary in
+``["gapperoptions"]["mipgapdict"]``. There is an example of its use in
+``examples.sizes.sizes_demo.py``.
+
+When run with cylinders, the options ``["gapperoptions"]["starting_mipgap"]``
+and ``["gapperoptions"]["mipgap_ratio"]`` can be set instead. The
+``starting_mipgap`` is the initial value used, and as the cylinders close the
+relative optimality gap the extension sets the subproblem mipgaps as
+``min(starting_mipgap, mipgap_ratio * problem_ratio)``, where
+``problem_ratio`` is the relative optimality gap on the overall problem as
+computed by the cylinders.
 
 This extension can also be used with the Lagrangian and subgradient spokes.
 
