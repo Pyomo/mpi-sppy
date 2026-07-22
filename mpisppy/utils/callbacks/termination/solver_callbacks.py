@@ -67,20 +67,24 @@ def set_cplex_callback(solver, user_termination_callback):
 
 def set_gurobi_callback(solver, user_termination_callback):
     
-    gurobi_model = solver._solver_model
-    gurobi_model._terminate_function = user_termination_callback
-
     # TBD - best placement? For speeed...
     from gurobipy import GRB
 
-    def gurobi_callback(gurobi_model, where):
-        if where == GRB.Callback.MIP:
-            runtime = gurobi_model.cbGet(GRB.Callback.RUNTIME)
-            obj_best = gurobi_model.cbGet(GRB.Callback.MIP_OBJBST)
-            obj_bound = gurobi_model.cbGet(GRB.Callback.MIP_OBJBND)
-            if gurobi_model._terminate_function(runtime, obj_best, obj_bound):
-                gurobi_model.terminate()
+    class GurobiCallback:
 
+        # Store the user callback as a staticmethod so Gurobi callback instances
+        # do not bind ``self`` and accidentally pass a fourth positional arg.
+        _tc = staticmethod(user_termination_callback)
+
+        def __call__(self, gurobi_model, where):
+            if where == GRB.Callback.MIP:
+                runtime = gurobi_model.cbGet(GRB.Callback.RUNTIME)
+                obj_best = gurobi_model.cbGet(GRB.Callback.MIP_OBJBST)
+                obj_bound = gurobi_model.cbGet(GRB.Callback.MIP_OBJBND)
+                if self._tc(runtime, obj_best, obj_bound):
+                    gurobi_model.terminate()
+
+    gurobi_callback = GurobiCallback()
     # This overwrites GurobiPersistent's
     # existing callback. gurobipy callbacks
     # are set by gurobi_model.solve, so we
