@@ -57,7 +57,7 @@ class _TimedMIPGapIntegration:
         self._solver.options[self._time_limit_option] = 20
 
     def solve(self):
-        self._ext.iter0_post_solver_creation()
+        self._ext.pre_solve(self._ph.local_scenarios["Scenario1"])
         self._set_time_limit()
         return self._solver.solve(tee=False, load_solutions=False)
 
@@ -136,10 +136,11 @@ def test_should_terminate_uses_runtime_and_relative_gap():
     assert ext._should_terminate(101.0, 0.0, 0.0)
 
 
-def test_iter0_post_solver_creation_registers_generic_callback(monkeypatch):
+def test_pre_solve_registers_generic_callback(monkeypatch):
     calls = []
     solver_plugin = _MockSolver()
     ext = TimedMIPGapCB(_make_ph(solver_plugin=solver_plugin))
+    scenario = _MockScenario(solver_plugin)
 
     monkeypatch.setattr(timed_mipgap_module.sputils, "is_persistent", lambda solver: True)
     monkeypatch.setattr(timed_mipgap_module, "supports_termination_callback", lambda solver: True)
@@ -149,7 +150,7 @@ def test_iter0_post_solver_creation_registers_generic_callback(monkeypatch):
         lambda solver, cb: calls.append((solver, cb)),
     )
 
-    ext.iter0_post_solver_creation()
+    ext.pre_solve(scenario)
 
     assert len(calls) == 1
     assert calls[0][0] is solver_plugin
