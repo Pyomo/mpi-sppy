@@ -583,6 +583,7 @@ def subgradient_hub(cfg,
     }
     add_wxbar_read_write(hub_dict, cfg)
     add_ph_tracking(hub_dict, cfg)
+    add_timed_mipgap(hub_dict, cfg)
     return hub_dict
 
 def fwph_hub(cfg,

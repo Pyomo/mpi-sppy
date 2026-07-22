@@ -144,6 +144,7 @@ def add_decomp_args(cfg):
     cfg.coeff_rho_args()
     cfg.sensi_rho_args()
     cfg.reduced_costs_rho_args()
+    cfg.timed_mipgap_args()
 
     cfg.add_to_config("user_defined_extensions",
                       description="Space-delimited module names for user extensions",
