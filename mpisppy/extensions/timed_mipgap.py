@@ -108,21 +108,19 @@ class TimedMIPGapCB(mpisppy.extensions.extension.Extension):
 
         return False
 
-    def iter0_post_solver_creation(self):
-        ph = self.ph
-        for s in ph.local_scenarios.values():
-            if not hasattr(s, '_solver_plugin'):
-                raise RuntimeError('Solver must be created before calling callback extension')
-            if not (sputils.is_persistent(s._solver_plugin)):
-                raise RuntimeError('Solvers must be persistent for callback definition')
-            if not s._solver_plugin.has_instance():
-                raise RuntimeError('Solver must be instantiated before calling callback extension')
-            if not supports_termination_callback(s._solver_plugin):
-                raise RuntimeError(
-                    'Timed MIP gap requires a persistent solver with supported termination callbacks'
-                )
+    def pre_solve(self, s):
+        if not hasattr(s, '_solver_plugin'):
+            raise RuntimeError('Solver must be created before calling callback extension')
+        if not (sputils.is_persistent(s._solver_plugin)):
+            raise RuntimeError('Solvers must be persistent for callback definition')
+        if not s._solver_plugin.has_instance():
+            raise RuntimeError('Solver must be instantiated before calling callback extension')
+        if not supports_termination_callback(s._solver_plugin):
+            raise RuntimeError(
+                'Timed MIP gap requires a persistent solver with supported termination callbacks'
+            )
 
-            def cb_fun(runtime, best_obj, best_bound):
-                return self._should_terminate(runtime, best_obj, best_bound)
+        def cb_fun(runtime, best_obj, best_bound):
+            return self._should_terminate(runtime, best_obj, best_bound)
 
-            set_termination_callback(s._solver_plugin, cb_fun)
+        set_termination_callback(s._solver_plugin, cb_fun)
