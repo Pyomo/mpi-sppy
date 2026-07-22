@@ -29,9 +29,8 @@ command-line flags:
 - ``--interrupt-W-oscillations <file>`` -- activates W-oscillation
   interruption (slamming; implies detection; see :ref:`w_oscillation`)
 - ``--mipgaps-json <file>`` -- activates the mipgapper extension
-- ``--timed-mipgap`` -- activates the timed MIP gap extension
-- ``--timed-mipgap-options <curve>`` -- sets the timed MIP gap curve as
-  ``gap:time`` pairs (e.g., ``"0.02:100 0.05:200"``)
+- ``--timed-mipgap <curve>`` -- activates the timed MIP gap extension and sets
+  the timed MIP gap curve as ``gap:time`` pairs (e.g., ``"0.02:100 0.05:200"``)
 - ``--user-defined-extensions <module>`` -- loads a custom extension
 - ``--grad-rho`` -- activates gradient-based rho (see :ref:`rho_setting`)
 - ``--use-norm-rho-updater`` -- activates the norm rho updater
@@ -117,8 +116,7 @@ making progress.
 
 When using ``generic_cylinders.py``, enable it with:
 
-- ``--timed-mipgap``
-- ``--timed-mipgap-options "0.02:100 0.05:200"``
+- ``--timed-mipgap "0.02:100 0.05:200"``
 
 The extension currently requires a persistent solver with supported termination
 callbacks; at present this includes CPLEX, Gurobi, and Xpress persistent

@@ -230,8 +230,8 @@ Some extensions can be activated directly from the command line:
 
 - ``--fixer`` -- Fix variables that have converged
 - ``--mipgaps-json <file>`` -- MIP gap schedule from a JSON file
-- ``--timed-mipgap`` -- Enable time-dependent MIP gap termination
-- ``--timed-mipgap-options <curve>`` -- Timed gap curve as ``gap:time`` pairs
+- ``--timed-mipgap <curve>`` -- Time-dependent MIP gap termination
+  curve as ``gap:time`` pairs
 - ``--user-defined-extensions <module>`` -- Load a custom extension module
 - ``--wtracker`` -- Track W (Lagrange-multiplier) values per iteration
   and write a convergence report at the end of the run

@@ -961,10 +961,10 @@ def add_ph_tracking(cylinder_dict, cfg, spoke=False):
     return cylinder_dict
 
 def add_timed_mipgap(cylinder_dict, cfg):
-    if getattr(cfg, "timed_mipgap", False):
+    if getattr(cfg, "timed_mipgap", None) is not None:
         from mpisppy.extensions.timed_mipgap import TimedMIPGapCB
         cylinder_dict = extension_adder(cylinder_dict, TimedMIPGapCB)
-        cylinder_dict['opt_kwargs']['options']['timed_mipgap']= {'timecurve':cfg.timed_mipgap_options}
+        cylinder_dict['opt_kwargs']['options']['timed_mipgap']= {'timecurve':cfg.timed_mipgap}
 
     return cylinder_dict        
 
