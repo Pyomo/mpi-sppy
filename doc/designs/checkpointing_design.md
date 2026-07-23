@@ -525,9 +525,10 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
    checkpoint by atomically rewriting `manifest.json` (itself temp-then-rename) to
    point at the new complete generation (§10). That flip is the single commit
    point, so **one committed generation is enough**: a kill before it keeps the
-   previous checkpoint, a kill after it keeps the new one. The prior generation can
-   be deleted once the manifest is in place. Keeping a few older generations is
-   optional convenience, not a kill-safety requirement.
+   previous checkpoint, a kill after it keeps the new one. The prior generation is
+   deleted once the manifest is in place. Retaining more than one checkpoint is
+   **not supported**: exactly one committed generation exists at any time (plus
+   the in-progress one transiently during a publish).
 8. **A `Checkpointer` extension** that writes on its active triggers and restores
    at `post_iter0_after_sync`:
    - *periodic* (`--checkpoint-every-iterations` / `--checkpoint-every-seconds`) —
@@ -564,7 +565,8 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
                                       #   overwritten asynchronously on improvement (§9, item 6)
 ```
 
-The hub writes iteration-tagged generations under `hub/`; each spoke keeps a
+The hub writes each checkpoint as an iteration-tagged generation under `hub/`,
+deleting the prior one after the manifest flip (§9, item 7); each spoke keeps a
 single latest-wins file under `spokes/` that it overwrites atomically on
 improvement — the two are deliberately *not* aligned (§9, item 6).
 `manifest.json` is the single commit point: it names the latest *complete* hub
@@ -631,8 +633,8 @@ Resolved (given the §1 use case):
 - **Warm start.** Worthwhile for MIPs (branch-and-bound benefits), free via the
   dilled model, fed through the existing `warmstart_subproblems` /
   `solution_available` path.
-- **Checkpoint retention** (§9, item 7): a single manifest-published generation
-  suffices; older generations are optional history.
+- **Checkpoint retention** (§9, item 7): exactly one manifest-published
+  generation is kept; retaining older generations is not supported.
 - **Spoke snapshot coordination** (§9, item 6): resolved by *not* coordinating.
 - **Mid-run MIP model dill round-trip** — was the load-bearing unvalidated
   assumption; **validated by the MIP dill-reload PoC** (§6), including the
@@ -641,9 +643,9 @@ Resolved (given the §1 use case):
 
 Still open:
 
-- **Disk footprint.** Dilled large MIP models × scenarios/rank × a few generations
-  can be large; the single-generation policy (§9, item 7) keeps only one live, but
-  document the peak (two generations during a publish).
+- **Disk footprint.** Dilled large MIP models × scenarios/rank can be large; the
+  single-generation policy (§9, item 7) keeps only one checkpoint live, but
+  document the peak (two generations transiently during a publish).
 - **variable_probability / surrogate vars.** mpi-sppy masks `W` (not prox) for
   zero-probability nonants and assumes each surrogate var is fixed at 0. Restore
   must **reproduce that invariant**: dill-reload preserves the mask and fixedness
