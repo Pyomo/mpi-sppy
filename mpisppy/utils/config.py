@@ -161,7 +161,8 @@ class Config(pyofig.ConfigDict):
             )
 
         # remember that True is 1 and False is 0
-        if (self.get("APH",0) + self.get("subgradient_hub",0) + self.get("fwph_hub",0) + self.get("ph_primal_hub",0) + self.get("lshaped_hub",0) + self.get("cg_hub",0) + self.get("dualcg_hub",0)) > 1:
+        HUBS = ["APH", "subgradient_hub", "fwph_hub", "ph_primal_hub", "lshaped_hub", "cg_hub", "dualcg_hub", "fwph_objgap_hub"]
+        if sum(self.get(hub_name,0) for hub_name in HUBS) > 1:
             _bad_options("Only one hub can be active.")
 
         # remember that True is 1 and False is 0
@@ -697,6 +698,50 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=1.0)
 
+        self.add_to_config("cvar_eta_bound_method",
+                           description="how to automatically bound the CVaR "
+                                       "Value-at-Risk variable eta: 'fbbt' "
+                                       "(structural, no solves; default), 'solve' "
+                                       "(relax the easy side; for the worst-case "
+                                       "side solve the risk-neutral EF and take the "
+                                       "cost range at that solution -- a coupled "
+                                       "solve, only for small/medium models), or "
+                                       "'none'",
+                           domain=pyofig.In(['none', 'fbbt', 'solve']),
+                           default='fbbt')
+
+        self.add_to_config("cvar_eta_mipgap",
+                           description="relative mip gap for the solves in "
+                                       "--cvar-eta-bound-method solve; for the "
+                                       "worst-case side it is the risk-neutral EF "
+                                       "solve gap, so keep it tight (default 1e-4)",
+                           domain=float,
+                           default=1e-4)
+
+        self.add_to_config("cvar_eta_solve_time_limit",
+                           description="seconds allowed for the (coupled) "
+                                       "risk-neutral EF solve in "
+                                       "--cvar-eta-bound-method solve; if it does "
+                                       "not reach optimality in time the worst-case "
+                                       "side of eta is left free.  <= 0 skips the EF "
+                                       "solve entirely (default 60)",
+                           domain=float,
+                           default=60.0)
+
+        self.add_to_config("cvar_eta_lb",
+                           description="explicit lower bound for the CVaR "
+                                       "Value-at-Risk variable eta; overrides the "
+                                       "automatic lower bound (default None)",
+                           domain=float,
+                           default=None)
+
+        self.add_to_config("cvar_eta_ub",
+                           description="explicit upper bound for the CVaR "
+                                       "Value-at-Risk variable eta; overrides the "
+                                       "automatic upper bound (default None)",
+                           domain=float,
+                           default=None)
+
     def relaxed_ph_fixer_args(self):
 
         self.add_to_config('relaxed_ph_fixer',
@@ -907,6 +952,40 @@ class Config(pyofig.ConfigDict):
                                        "--fwph-mip-solver-name is an LP/MIP-only solver.",
                            domain=str,
                            default=None)
+
+        self.add_to_config(name="fwph_objgap_hub",
+                            description="Enable FWPH objective-gap (ObjGap) mode on the hub (default False)",
+                            domain=bool,
+                            default=False)
+
+        self.add_to_config("fwph_objgap_start_weight",
+                            description="FWPH start weight -- a value of 0 starts at xbar, a value of 1 starts at the prior MIP solution (default 0)",
+                            domain=float,
+                            default=0.0)
+
+        self.add_to_config("fwph_objgap_mip_fw_effort_balance",
+                           description="FWPH effort balance: values closer to 1 put less pressure on the MILP solver, but require more accuracy from Frank-Wolfe. Values near 0 demand high accuracy from the MILP solver but lower accuracy from the FW procedure.",
+                           domain=float,
+                           default=0.5)
+
+        self.add_to_config("fwph_objgap_decrease_base",
+                           description="FWPH accuracy base: this number raised to the iteration number, times fwph_objgap_decrease_coeff, will be the accuracy required to terminate an iteration of the FW procedure. Needs to be in (0,1).",
+                           domain=float,
+                           default=0.9)
+
+        self.add_to_config("fwph_objgap_decrease_coeff",
+                           description="FWPH accuracy coefficient: multiplier in beta * initial_gap * (alpha ** k) for the FW convergence threshold. Needs to be greater than 0.",
+                           domain=float,
+                           default=3.0)
+
+        self.add_to_config("fwph_objgap_initial_gap_floor",
+                           description="FWPH accuracy initial minimum value: this number is the lowest initial value for the FW convergence criterion, in absolute terms",
+                           domain=float,
+                           default=1.0)
+        self.add_to_config("fwph_add_cylinder_columns",
+                           description="Inject columns calculated by xhat spokes into the FWPH algorithm",
+                           domain=bool,
+                           default=False)
 
     def cg_args(self):
 
