@@ -1102,6 +1102,26 @@ _SOLVER_OPTION_TRANSLATIONS = {
         # GLPK does not support threads.
         "glpk": None,
     },
+    "time_limit": {
+        # seconds; HiGHS's native name is time_limit, so it passes through.
+        # Gurobi parameter is conventionally capitalized.
+        "gurobi": "TimeLimit",
+        # CPLEX accepts the timelimit parameter alias (shell and persistent).
+        "cplex": "timelimit",
+        # FICO Xpress MAXTIME: a positive value is a soft stop for MIPs
+        # (the solver keeps going until a first feasible solution exists);
+        # a hard stop would need a negative value, which a same-value
+        # rename cannot express.
+        "xpress": "maxtime",
+        # CBC names its time limit "seconds".
+        "cbc": "seconds",
+        # SCIP uses a limits/time control.
+        "scip": "limits/time",
+        # MOSEK uses a dparam for the overall solver time limit.
+        "mosek": "optimizer_max_time",
+        # GLPK's tmlim is in seconds for the glpsol interface.
+        "glpk": "tmlim",
+    },
 }
 
 
@@ -1126,7 +1146,8 @@ def translate_solver_options(opts, solver_name):
     """Return a copy of *opts* with canonical option keys renamed to
     the solver's native key, where they differ.
 
-    Currently translates only ``mipgap``, ``absgap`` and ``threads``; all other
+    Currently translates only ``mipgap``, ``absgap``, ``threads`` and
+    ``time_limit``; all other
     keys pass through unchanged. A translation may fan out to multiple
     solver-native keys. If the user already supplied one of the
     solver-native keys alongside the canonical key, that explicit value

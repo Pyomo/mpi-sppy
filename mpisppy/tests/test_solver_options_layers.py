@@ -395,7 +395,8 @@ class TestAddGapperMipgapsJsonLayers(unittest.TestCase):
 
 class TestTranslateSolverOptions(unittest.TestCase):
     """translate_solver_options renames mpi-sppy's canonical option
-    keys (currently mipgap and threads) to the target solver's
+    keys (currently mipgap, absgap, threads and time_limit) to the
+    target solver's
     native key, and passes everything else through unchanged.
     Stored options remain solver-agnostic; translation is the very
     last step before the keys hit the Pyomo solver plugin.
@@ -588,7 +589,69 @@ class TestTranslateSolverOptions(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self._t({"absgap": 1.5}, name)
 
+    def test_gurobi_renames_time_limit(self):
+        for name in ("gurobi", "gurobi_persistent", "appsi_gurobi", "gurobi_direct"):
+            self.assertEqual(
+                self._t({"time_limit": 60.0, "threads": 4}, name),
+                {"TimeLimit": 60.0, "Threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_cplex_renames_time_limit(self):
+        for name in ("cplex", "cplex_persistent"):
+            self.assertEqual(
+                self._t({"time_limit": 60.0, "threads": 4}, name),
+                {"timelimit": 60.0, "threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_xpress_renames_time_limit(self):
+        for name in ("xpress", "xpress_persistent"):
+            self.assertEqual(
+                self._t({"time_limit": 60.0, "threads": 4}, name),
+                {"maxtime": 60.0, "threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_cbc_renames_time_limit(self):
+        for name in ("cbc", "cbc_persistent"):
+            self.assertEqual(
+                self._t({"time_limit": 60.0, "threads": 4}, name),
+                {"seconds": 60.0, "threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_scip_renames_time_limit(self):
+        for name in ("scip", "scip_direct", "scip_persistent"):
+            self.assertEqual(
+                self._t({"time_limit": 60.0}, name),
+                {"limits/time": 60.0},
+                f"failed for solver_name={name!r}")
+
+    def test_mosek_renames_time_limit(self):
+        for name in ("mosek", "mosek_persistent"):
+            self.assertEqual(
+                self._t({"time_limit": 60.0}, name),
+                {"optimizer_max_time": 60.0},
+                f"failed for solver_name={name!r}")
+
+    def test_glpk_renames_time_limit(self):
+        for name in ("glpk", "glpk_persistent"):
+            self.assertEqual(
+                self._t({"time_limit": 60.0}, name),
+                {"tmlim": 60.0},
+                f"failed for solver_name={name!r}")
+
+    def test_highs_time_limit_passthrough(self):
+        # time_limit is HiGHS's native spelling, so no rename happens.
+        for name in ("highs", "appsi_highs"):
+            self.assertEqual(
+                self._t({"time_limit": 60.0}, name),
+                {"time_limit": 60.0},
+                f"failed for solver_name={name!r}")
+
     # --- collision rule ---
+
+    def test_gurobi_time_limit_collision_keeps_native(self):
+        result = self._t(
+            {"time_limit": 60.0, "TimeLimit": 30.0}, "gurobi")
+        self.assertEqual(result, {"TimeLimit": 30.0})
 
     def test_highs_collision_keeps_native_drops_canonical(self):
         # User passed mip_rel_gap directly *and* --iter0-mipgap turned

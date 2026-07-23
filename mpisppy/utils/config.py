@@ -703,6 +703,50 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=1.0)
 
+        self.add_to_config("cvar_eta_bound_method",
+                           description="how to automatically bound the CVaR "
+                                       "Value-at-Risk variable eta: 'fbbt' "
+                                       "(structural, no solves; default), 'solve' "
+                                       "(relax the easy side; for the worst-case "
+                                       "side solve the risk-neutral EF and take the "
+                                       "cost range at that solution -- a coupled "
+                                       "solve, only for small/medium models), or "
+                                       "'none'",
+                           domain=pyofig.In(['none', 'fbbt', 'solve']),
+                           default='fbbt')
+
+        self.add_to_config("cvar_eta_mipgap",
+                           description="relative mip gap for the solves in "
+                                       "--cvar-eta-bound-method solve; for the "
+                                       "worst-case side it is the risk-neutral EF "
+                                       "solve gap, so keep it tight (default 1e-4)",
+                           domain=float,
+                           default=1e-4)
+
+        self.add_to_config("cvar_eta_solve_time_limit",
+                           description="seconds allowed for the (coupled) "
+                                       "risk-neutral EF solve in "
+                                       "--cvar-eta-bound-method solve; if it does "
+                                       "not reach optimality in time the worst-case "
+                                       "side of eta is left free.  <= 0 skips the EF "
+                                       "solve entirely (default 60)",
+                           domain=float,
+                           default=60.0)
+
+        self.add_to_config("cvar_eta_lb",
+                           description="explicit lower bound for the CVaR "
+                                       "Value-at-Risk variable eta; overrides the "
+                                       "automatic lower bound (default None)",
+                           domain=float,
+                           default=None)
+
+        self.add_to_config("cvar_eta_ub",
+                           description="explicit upper bound for the CVaR "
+                                       "Value-at-Risk variable eta; overrides the "
+                                       "automatic upper bound (default None)",
+                           domain=float,
+                           default=None)
+
     def relaxed_ph_fixer_args(self):
 
         self.add_to_config('relaxed_ph_fixer',
