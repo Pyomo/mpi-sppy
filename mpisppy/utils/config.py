@@ -161,7 +161,8 @@ class Config(pyofig.ConfigDict):
             )
 
         # remember that True is 1 and False is 0
-        if (self.get("APH",0) + self.get("subgradient_hub",0) + self.get("fwph_hub",0) + self.get("ph_primal_hub",0) + self.get("lshaped_hub",0) + self.get("cg_hub",0) + self.get("dualcg_hub",0)) > 1:
+        HUBS = ["APH", "subgradient_hub", "fwph_hub", "ph_primal_hub", "lshaped_hub", "cg_hub", "dualcg_hub", "fwph_objgap_hub"]
+        if sum(self.get(hub_name,0) for hub_name in HUBS) > 1:
             _bad_options("Only one hub can be active.")
 
         # remember that True is 1 and False is 0
