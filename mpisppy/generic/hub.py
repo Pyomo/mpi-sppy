@@ -46,7 +46,7 @@ def build_hub_dict(cfg, beans, scenario_creator_kwargs,
                        variable_probability=variable_probability,
                        all_nodenames=all_nodenames,
                    )
-    elif cfg.fwph_hub:
+    elif cfg.fwph_hub or cfg.fwph_objgap_hub:
         hub_dict = vanilla.fwph_hub(
                        *beans,
                        scenario_creator_kwargs=scenario_creator_kwargs,

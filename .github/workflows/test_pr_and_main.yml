@@ -26,7 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: chartboost/ruff-action@v1
+      # Pin the ruff version: an unpinned linter means an upstream release
+      # can turn every PR red overnight (ruff 0.16.0 did exactly that by
+      # expanding the default rule set).  Bump deliberately.
+      - uses: astral-sh/ruff-action@v3
+        with:
+          version: "0.15.21"
 
   nompi4py:
     name: no mpi4py
@@ -147,6 +152,10 @@ jobs:
       - name: Test xhat from file
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_xhat_from_file.py -v
+
+      - name: Test xhat feasibility cuts
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_xhat_feasibility_cuts.py -v
 
       - name: Test feasible_xhat
         run: |

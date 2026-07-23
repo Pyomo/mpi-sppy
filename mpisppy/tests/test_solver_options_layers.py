@@ -400,7 +400,8 @@ class TestAddGapperMipgapsJsonLayers(unittest.TestCase):
 
 class TestTranslateSolverOptions(unittest.TestCase):
     """translate_solver_options renames mpi-sppy's canonical option
-    keys (currently mipgap and threads) to the target solver's
+    keys (currently mipgap, absgap, threads and time_limit) to the
+    target solver's
     native key, and passes everything else through unchanged.
     Stored options remain solver-agnostic; translation is the very
     last step before the keys hit the Pyomo solver plugin.
@@ -438,20 +439,45 @@ class TestTranslateSolverOptions(unittest.TestCase):
 
     # --- per-solver translation correctness ---
 
-    def test_cplex_needs_no_rename(self):
+    def test_cplex_mipgap_rename(self):
         for name in ("cplex", "cplex_persistent"):
             self.assertEqual(
                 self._t({"mipgap": 0.01, "threads": 4}, name),
-                {"mipgap": 0.01, "threads": 4})
+                {"mip_tolerances_mipgap": 0.01, "threads": 4})
 
-    def test_xpress_needs_no_rename(self):
+    def test_xpress_fans_out_mipgap_to_three_native_keys(self):
         for name in ("xpress", "xpress_persistent"):
             self.assertEqual(
                 self._t({"mipgap": 0.01, "threads": 4}, name),
-                {"mipgap": 0.01, "threads": 4})
+                {
+                    "miprelstop": 0.01,
+                    "miprelcutoff": 0.0,
+                    "mipaddcutoff": 0.0,
+                    "threads": 4,
+                },
+                f"failed for solver_name={name!r}")
+
+    def test_scip_maps_threads_to_lp_threads(self):
+        for name in ("scip", "scip_direct", "scip_persistent"):
+            self.assertEqual(
+                self._t({"threads": 8}, name),
+                {"lp/threads": 8, "parallel/maxnthreads": 8},
+                f"failed for solver_name={name!r}")
+
+    def test_mosek_maps_threads_to_num_threads(self):
+        for name in ("mosek", "mosek_persistent"):
+            self.assertEqual(
+                self._t({"threads": 8}, name),
+                {"num_threads": 8},
+                f"failed for solver_name={name!r}")
+
+    def test_glpk_threads_raises(self):
+        for name in ("glpk", "glpk_persistent"):
+            with self.assertRaises(ValueError):
+                self._t({"threads": 8, "logfile": "x.log"}, name)
 
     def test_gurobi_renames_threads(self):
-        for name in ("gurobi", "gurobi_persistent", "appsi_gurobi"):
+        for name in ("gurobi", "gurobi_persistent", "appsi_gurobi", "gurobi_direct"):
             self.assertEqual(
                 self._t({"mipgap": 0.01, "threads": 4}, name),
                 {"mipgap": 0.01, "Threads": 4},
@@ -464,7 +490,173 @@ class TestTranslateSolverOptions(unittest.TestCase):
                 {"mip_rel_gap": 0.01, "threads": 4},
                 f"failed for solver_name={name!r}")
 
+    def test_cbc_renames_mipgap(self):
+        for name in ("cbc", "cbc_persistent"):
+            self.assertEqual(
+                self._t({"mipgap": 0.01, "threads": 4}, name),
+                {"ratioGap": 0.01, "threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_scip_renames_mipgap(self):
+        for name in ("scip", "scip_direct", "scip_persistent"):
+            self.assertEqual(
+                self._t({"mipgap": 0.01, "threads": 4}, name),
+                {
+                    "limits/gap": 0.01,
+                    "lp/threads": 4,
+                    "parallel/maxnthreads": 4,
+                },
+                f"failed for solver_name={name!r}")
+
+    def test_mosek_renames_mipgap(self):
+        for name in ("mosek", "mosek_persistent"):
+            self.assertEqual(
+                self._t({"mipgap": 0.01, "threads": 4}, name),
+                {
+                    "mio_tol_rel_gap": 0.01,
+                    "num_threads": 4,
+                },
+                f"failed for solver_name={name!r}")
+
+    def test_cplex_renames_absgap(self):
+        for name in ("cplex", "cplex_persistent"):
+            self.assertEqual(
+                self._t({"absgap": 1.5, "threads": 4}, name),
+                {"mip_tolerances_absmipgap": 1.5, "threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_highs_renames_absgap(self):
+        for name in ("highs", "appsi_highs"):
+            self.assertEqual(
+                self._t({"absgap": 1.5, "threads": 4}, name),
+                {"mip_abs_gap": 1.5, "threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_cbc_renames_absgap(self):
+        for name in ("cbc", "cbc_persistent"):
+            self.assertEqual(
+                self._t({"absgap": 1.5, "threads": 4}, name),
+                {"gapAbs": 1.5, "threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_scip_renames_absgap(self):
+        for name in ("scip", "scip_direct", "scip_persistent"):
+            self.assertEqual(
+                self._t({"absgap": 1.5, "threads": 4}, name),
+                {
+                    "limits/absgap": 1.5,
+                    "lp/threads": 4,
+                    "parallel/maxnthreads": 4,
+                },
+                f"failed for solver_name={name!r}")
+
+    def test_mosek_renames_absgap(self):
+        for name in ("mosek", "mosek_persistent"):
+            self.assertEqual(
+                self._t({"absgap": 1.5, "threads": 4}, name),
+                {"mio_tol_abs_gap": 1.5, "num_threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_gurobi_renames_absgap(self):
+        for name in ("gurobi", "gurobi_persistent", "appsi_gurobi", "gurobi_direct"):
+            self.assertEqual(
+                self._t({"absgap": 1.5, "threads": 4}, name),
+                {"MIPGapAbs": 1.5, "Threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_xpress_fans_out_absgap_to_three_native_keys(self):
+        for name in ("xpress", "xpress_persistent"):
+            self.assertEqual(
+                self._t({"absgap": 1.5, "threads": 4}, name),
+                {
+                    "mipabscutoff": 1.5,
+                    "miprelcutoff": 0.0,
+                    "mipaddcutoff": 0.0,
+                    "threads": 4,
+                },
+                f"failed for solver_name={name!r}")
+
+    def test_xpress_can_translate_mipgap_and_absgap_together(self):
+        for name in ("xpress", "xpress_persistent"):
+            self.assertEqual(
+                self._t({"mipgap": 0.01, "absgap": 1.5, "threads": 4}, name),
+                {
+                    "miprelstop": 0.01,
+                    "miprelcutoff": 0.0,
+                    "mipabscutoff": 1.5,
+                    "mipaddcutoff": 0.0,
+                    "threads": 4,
+                },
+                f"failed for solver_name={name!r}")
+
+    def test_glpk_absgap_raises(self):
+        for name in ("glpk", "glpk_persistent"):
+            with self.assertRaises(ValueError):
+                self._t({"absgap": 1.5}, name)
+
+    def test_gurobi_renames_time_limit(self):
+        for name in ("gurobi", "gurobi_persistent", "appsi_gurobi", "gurobi_direct"):
+            self.assertEqual(
+                self._t({"time_limit": 60.0, "threads": 4}, name),
+                {"TimeLimit": 60.0, "Threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_cplex_renames_time_limit(self):
+        for name in ("cplex", "cplex_persistent"):
+            self.assertEqual(
+                self._t({"time_limit": 60.0, "threads": 4}, name),
+                {"timelimit": 60.0, "threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_xpress_renames_time_limit(self):
+        for name in ("xpress", "xpress_persistent"):
+            self.assertEqual(
+                self._t({"time_limit": 60.0, "threads": 4}, name),
+                {"maxtime": 60.0, "threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_cbc_renames_time_limit(self):
+        for name in ("cbc", "cbc_persistent"):
+            self.assertEqual(
+                self._t({"time_limit": 60.0, "threads": 4}, name),
+                {"seconds": 60.0, "threads": 4},
+                f"failed for solver_name={name!r}")
+
+    def test_scip_renames_time_limit(self):
+        for name in ("scip", "scip_direct", "scip_persistent"):
+            self.assertEqual(
+                self._t({"time_limit": 60.0}, name),
+                {"limits/time": 60.0},
+                f"failed for solver_name={name!r}")
+
+    def test_mosek_renames_time_limit(self):
+        for name in ("mosek", "mosek_persistent"):
+            self.assertEqual(
+                self._t({"time_limit": 60.0}, name),
+                {"optimizer_max_time": 60.0},
+                f"failed for solver_name={name!r}")
+
+    def test_glpk_renames_time_limit(self):
+        for name in ("glpk", "glpk_persistent"):
+            self.assertEqual(
+                self._t({"time_limit": 60.0}, name),
+                {"tmlim": 60.0},
+                f"failed for solver_name={name!r}")
+
+    def test_highs_time_limit_passthrough(self):
+        # time_limit is HiGHS's native spelling, so no rename happens.
+        for name in ("highs", "appsi_highs"):
+            self.assertEqual(
+                self._t({"time_limit": 60.0}, name),
+                {"time_limit": 60.0},
+                f"failed for solver_name={name!r}")
+
     # --- collision rule ---
+
+    def test_gurobi_time_limit_collision_keeps_native(self):
+        result = self._t(
+            {"time_limit": 60.0, "TimeLimit": 30.0}, "gurobi")
+        self.assertEqual(result, {"TimeLimit": 30.0})
 
     def test_highs_collision_keeps_native_drops_canonical(self):
         # User passed mip_rel_gap directly *and* --iter0-mipgap turned
@@ -487,6 +679,35 @@ class TestTranslateSolverOptions(unittest.TestCase):
         opts = {"mip_tolerances_mipgap": 0.001, "Cuts": 2}
         self.assertEqual(self._t(opts, "cplex"), opts)
         self.assertEqual(self._t(opts, "gurobi"), opts)
+
+    def test_xpress_collision_keeps_explicit_native_values(self):
+        result = self._t(
+            {"mipgap": 0.01, "miprelcutoff": 0.2, "mipaddcutoff": 0.3},
+            "xpress",
+        )
+        self.assertEqual(
+            result,
+            {"miprelstop": 0.01, "miprelcutoff": 0.2, "mipaddcutoff": 0.3},
+        )
+
+    def test_one_to_many_mapping_fans_out_to_multiple_native_keys(self):
+        import mpisppy.utils.sputils as sputils
+
+        original = sputils._SOLVER_OPTION_TRANSLATIONS["mipgap"]
+        try:
+            sputils._SOLVER_OPTION_TRANSLATIONS["mipgap"] = {
+                "example": ("alpha", "beta", "gamma")
+            }
+            self.assertEqual(
+                self._t({"mipgap": 0.25}, "example"),
+                {"alpha": 0.25, "beta": 0.25, "gamma": 0.25},
+            )
+            self.assertEqual(
+                self._t({"mipgap": 0.25, "beta": 0.1}, "example"),
+                {"alpha": 0.25, "beta": 0.1, "gamma": 0.25},
+            )
+        finally:
+            sputils._SOLVER_OPTION_TRANSLATIONS["mipgap"] = original
 
 
 class TestDynamicGapperLayer(unittest.TestCase):

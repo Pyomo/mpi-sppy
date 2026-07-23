@@ -12,6 +12,7 @@
 #   - pure CVaR (cvar_mean_weight == 0)
 #   - cvar_weight == 0 reproduces the risk-neutral EF (regression guard)
 
+import math
 import unittest
 import pyomo.environ as pyo
 
@@ -19,6 +20,7 @@ import mpisppy.opt.ph
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.cvar as cvar
 import mpisppy.tests.examples.farmer as farmer
+from mpisppy import MPI
 from mpisppy.tests.utils import get_solver, limit_solver_threads
 
 solver_available, solver_name, persistent_available, persistent_solver_name = \
@@ -73,6 +75,19 @@ def tiny_max_scenario_creator(sname, **kwargs):
     model.reward = pyo.Objective(expr=reward_expr, sense=pyo.maximize)
     model._mpisppy_probability = 1.0 / len(TINY_COSTS)
     sputils.attach_root_node(model, reward_expr, [model.x])
+    return model
+
+
+def unbounded_cost_scenario_creator(sname, **kwargs):
+    # cost = 5 + x with x >= 0 unbounded above: maximizing cost over the feasible
+    # region is +inf, but the risk-neutral solution is x = 0 with cost 5, so the
+    # risk-neutral-point tail is a finite 5.
+    model = pyo.ConcreteModel(name=sname)
+    model.x = pyo.Var(domain=pyo.NonNegativeReals)
+    cost = 5.0 + model.x
+    model.cost = pyo.Objective(expr=cost, sense=pyo.minimize)
+    model._mpisppy_probability = 1.0
+    sputils.attach_root_node(model, cost, [model.x])
     return model
 
 
@@ -184,6 +199,88 @@ class StructureTests(unittest.TestCase):
         self.assertFalse(m.reward.active)
 
 
+class EtaBoundTests(unittest.TestCase):
+    """The eta bound machinery; these do not need a solver.
+
+    add_cvar stashes each scenario's cost range (FBBT) and applies any explicit
+    override immediately; set_cvar_eta_bounds reduces the stashed ranges to a
+    global [lb, ub] and bounds eta.  The tiny scenarios have a constant cost
+    (x is fixed to 0), so each scenario's FBBT cost range is a single point equal
+    to its cost.
+    """
+
+    def _tiny_dict(self, **cvar_kwargs):
+        wrapped = cvar.cvar_scenario_creator(
+            tiny_scenario_creator, cvar_weight=1.0, cvar_alpha=TINY_ALPHA,
+            **cvar_kwargs)
+        return {sname: wrapped(sname) for sname in TINY_COSTS}
+
+    def test_add_cvar_stashes_fbbt_cost_range(self):
+        s = tiny_scenario_creator("s2")            # constant cost 30
+        cvar.add_cvar(s, cvar_weight=1.0, cvar_alpha=TINY_ALPHA)
+        self.assertEqual(s._mpisppy_cvar_eta_cost_bounds, (30.0, 30.0))
+        # eta itself is not bounded yet (that is the reduction's job)
+        self.assertIsNone(s._mpisppy_cvar_eta.lb)
+        self.assertIsNone(s._mpisppy_cvar_eta.ub)
+
+    def test_auto_eta_bound_off_stashes_infinite(self):
+        s = tiny_scenario_creator("s2")
+        cvar.add_cvar(s, cvar_weight=1.0, cvar_alpha=TINY_ALPHA,
+                      auto_eta_bound=False)
+        lb, ub = s._mpisppy_cvar_eta_cost_bounds
+        self.assertEqual(lb, -math.inf)
+        self.assertEqual(ub, math.inf)
+
+    def test_user_override_applied_immediately(self):
+        s = tiny_scenario_creator("s2")
+        cvar.add_cvar(s, cvar_weight=1.0, cvar_alpha=TINY_ALPHA,
+                      eta_lb=-5.0, eta_ub=99.0)
+        self.assertEqual(s._mpisppy_cvar_eta.lb, -5.0)
+        self.assertEqual(s._mpisppy_cvar_eta.ub, 99.0)
+
+    def test_set_bounds_reduces_to_global_cost_range(self):
+        scendict = self._tiny_dict()               # costs {10,20,30,40}
+        cvar.set_cvar_eta_bounds(scendict, MPI.COMM_SELF)
+        for s in scendict.values():
+            self.assertEqual(s._mpisppy_cvar_eta.bounds, (10.0, 40.0))
+
+    def test_user_bound_survives_reduction(self):
+        # an explicit ub must win over the (looser) auto ub of 40
+        scendict = self._tiny_dict(eta_ub=25.0)
+        cvar.set_cvar_eta_bounds(scendict, MPI.COMM_SELF)
+        for s in scendict.values():
+            self.assertEqual(s._mpisppy_cvar_eta.bounds, (10.0, 25.0))
+
+    def test_auto_off_leaves_eta_free(self):
+        scendict = self._tiny_dict(auto_eta_bound=False)
+        cvar.set_cvar_eta_bounds(scendict, MPI.COMM_SELF)
+        for s in scendict.values():
+            self.assertEqual(s._mpisppy_cvar_eta.bounds, (None, None))
+
+    def test_unbounded_cost_leaves_side_free(self):
+        # a scenario whose cost can grow without bound gets no finite auto bound
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var(domain=pyo.NonNegativeReals)   # unbounded above
+        cost = 5.0 + m.x
+        m.cost = pyo.Objective(expr=cost, sense=pyo.minimize)
+        m._mpisppy_probability = 1.0
+        sputils.attach_root_node(m, cost, [m.x])
+        cvar.add_cvar(m, cvar_weight=1.0, cvar_alpha=TINY_ALPHA)
+        lb, ub = m._mpisppy_cvar_eta_cost_bounds
+        self.assertEqual(lb, 5.0)
+        self.assertEqual(ub, math.inf)
+        cvar.set_cvar_eta_bounds({"s": m}, MPI.COMM_SELF)
+        # lower bound set (5.0); upper stays free
+        self.assertEqual(m._mpisppy_cvar_eta.lb, 5.0)
+        self.assertIsNone(m._mpisppy_cvar_eta.ub)
+
+    def test_set_bounds_noop_without_cvar(self):
+        # a plain scenario (no eta) must be left untouched
+        s = tiny_scenario_creator("s0")
+        cvar.set_cvar_eta_bounds({"s0": s}, MPI.COMM_SELF)  # must not raise
+        self.assertFalse(hasattr(s, "_mpisppy_cvar_eta"))
+
+
 @unittest.skipIf(not solver_available, "no solver is available")
 class EFClosedFormTests(unittest.TestCase):
     """EF-CVaR on the tiny instance vs the closed-form CVaR."""
@@ -226,6 +323,92 @@ class EFClosedFormTests(unittest.TestCase):
             suppress_warnings=True)
         _solve(ef)
         self.assertAlmostEqual(pyo.value(ef.EF_Obj), TINY_EXPECTED_COST, places=4)
+
+
+@unittest.skipIf(not solver_available, "no solver is available")
+class EFEtaBoundTests(unittest.TestCase):
+    """The full ExtensiveForm path (through SPBase) bounds eta without changing
+    the optimum."""
+
+    def test_ef_bounds_eta_and_keeps_optimum(self):
+        from mpisppy.opt.ef import ExtensiveForm
+        names = list(TINY_COSTS.keys())
+        creator = cvar.cvar_scenario_creator(
+            tiny_scenario_creator, cvar_weight=1.0, cvar_alpha=TINY_ALPHA)
+        ef = ExtensiveForm({"solver": solver_name}, names, creator)
+        # SPBase set a valid global bound on every scenario's eta
+        for s in ef.local_scenarios.values():
+            self.assertEqual(s._mpisppy_cvar_eta.bounds, (10.0, 40.0))
+        ef.solve_extensive_form()
+        self.assertAlmostEqual(pyo.value(ef.ef.EF_Obj),
+                               TINY_EXPECTED_COST + TINY_CVAR, places=4)
+        self.assertAlmostEqual(
+            pyo.value(ef.local_scenarios["s0"]._mpisppy_cvar_eta),
+            TINY_VAR, places=4)
+
+
+@unittest.skipIf(not solver_available, "no solver is available")
+class SolveBoundTests(unittest.TestCase):
+    """compute_cvar_eta_bounds_by_solve: LP relaxation on the easy side, cost at
+    the risk-neutral EF solution on the worst-case (tail) side, gated by EF
+    size."""
+
+    def test_solve_matches_cost_range_on_tiny(self):
+        lb, ub = cvar.compute_cvar_eta_bounds_by_solve(
+            list(TINY_COSTS.keys()), tiny_scenario_creator, solver_name,
+            comm=MPI.COMM_SELF)
+        self.assertAlmostEqual(lb, 10.0, places=4)
+        self.assertAlmostEqual(ub, 40.0, places=4)
+
+    def test_solve_on_maximize(self):
+        # For a maximize the tail is the LOW (reward) side and the slack is the
+        # high side; the global reward range is still [10, 40].
+        lb, ub = cvar.compute_cvar_eta_bounds_by_solve(
+            list(TINY_COSTS.keys()), tiny_max_scenario_creator, solver_name,
+            comm=MPI.COMM_SELF)
+        self.assertAlmostEqual(lb, 10.0, places=4)
+        self.assertAlmostEqual(ub, 40.0, places=4)
+
+    def test_tail_is_finite_at_risk_neutral_point(self):
+        # cost = 5 + x, x >= 0: maximizing cost over the feasible region is
+        # unbounded (the old tail method), but at the risk-neutral solution
+        # (x = 0) the cost is 5, so the tail is a finite 5.0.
+        lb, ub = cvar.compute_cvar_eta_bounds_by_solve(
+            ["s0"], unbounded_cost_scenario_creator, solver_name,
+            comm=MPI.COMM_SELF)
+        self.assertAlmostEqual(lb, 5.0, places=4)
+        self.assertAlmostEqual(ub, 5.0, places=4)      # finite, not unbounded
+
+    def test_zero_time_limit_skips_tail(self):
+        # time_limit <= 0 skips the coupled EF solve, so the worst-case (upper,
+        # for a minimize) side is left free; the easy (lower) side is still the
+        # finite LP relaxation.
+        names = farmer.scenario_names_creator(3)
+        lb, ub = cvar.compute_cvar_eta_bounds_by_solve(
+            names, farmer.scenario_creator, solver_name,
+            scenario_creator_kwargs={"num_scens": 3}, comm=MPI.COMM_SELF,
+            time_limit=0.0)
+        self.assertIsNotNone(lb)          # slack side still computed
+        self.assertIsNone(ub)             # tail skipped (no time budget)
+
+    def test_solve_bounds_both_sides_of_farmer(self):
+        # farmer's cost is unbounded above, so maximizing over the region gives no
+        # upper bound (and FBBT finds nothing), but evaluating at the risk-neutral
+        # solution does: the tail equals that solution's worst-scenario cost.
+        names = farmer.scenario_names_creator(3)
+        lb, ub = cvar.compute_cvar_eta_bounds_by_solve(
+            names, farmer.scenario_creator, solver_name,
+            scenario_creator_kwargs={"num_scens": 3}, comm=MPI.COMM_SELF)
+        self.assertIsNotNone(lb)
+        self.assertLess(lb, 0.0)          # a finite profit (lower) bound
+        self.assertIsNotNone(ub)          # now finite via the risk-neutral point
+        # ub == max_s Cost_s(x^RN) from an independent risk-neutral EF solve
+        ef = sputils.create_EF(names, farmer.scenario_creator,
+                               scenario_creator_kwargs={"num_scens": 3},
+                               suppress_warnings=True)
+        _solve(ef)
+        worst = _farmer_worst_cost(ef, names)
+        self.assertAlmostEqual(ub, worst, delta=max(1.0, abs(worst) * 1e-4))
 
 
 @unittest.skipIf(not solver_available, "no solver is available")

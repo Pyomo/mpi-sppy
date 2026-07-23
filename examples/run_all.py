@@ -236,6 +236,18 @@ if run_first_part:
            f"--num-scens=3 --solver-name={solver_name} "
            f"--max-iterations=3 --default-rho=1 --lagrangian --xhatshuffle "
            f"--output-dir=solutions_ws {usar_problem_args}")
+    # usar has a binary first-stage (is_active_depot), so it exercises
+    # --xhat-feasibility-cuts-count end-to-end: buffer registration on
+    # the xhatter spoke, the hub extension's binary-only startup check,
+    # and the sync loop. The xhatter may or may not actually hit an
+    # infeasibility on this small instance — the cut-emission path is
+    # unit-tested separately in test_xhat_feasibility_cuts.py — but this
+    # smoke entry guards the full-run plumbing from regressions.
+    do_one("usar", "wheel_spinner.py", 3,
+           f"--num-scens=3 --solver-name={solver_name} "
+           f"--max-iterations=3 --default-rho=1 --lagrangian --xhatshuffle "
+           f"--xhat-feasibility-cuts-count=3 "
+           f"--output-dir=solutions_ws_feas {usar_problem_args}")
 
     # netdes
     # NOTE: Pyomo OBBT does not support persistent solvers as of Aug 2025
@@ -338,6 +350,16 @@ if run_second_part:
            "--rel-gap=0.0 --surrogate-nonant "
            "--use-primal-dual-rho-updater --primal-dual-rho-update-threshold=10 "
            "--solver-name={}".format(solver_name))
+
+    do_one("sslp", "../../mpisppy/generic_cylinders.py", 4,
+           "--module-name sslp --instance-name=sslp_15_45_10 "
+           "--sslp-data-path=./data "
+           "--fwph-objgap-hub --rel-gap=0.0 "
+           "--max-iterations=10 --default-rho=10 "
+           "--xhatshuffle --xhatshuffle-rank-ratio=0.01 "
+           "--sep-rho --surrogate-nonant "
+           "--solver-name={}".format(solver_name))
+
     do_one("hydro", "hydro_cylinders.py", 3,
            "--branching-factors \'3 3\' --max-iterations=100 "
            "--default-rho=1 --xhatshuffle --lagrangian "
