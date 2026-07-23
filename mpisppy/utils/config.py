@@ -161,7 +161,8 @@ class Config(pyofig.ConfigDict):
             )
 
         # remember that True is 1 and False is 0
-        if (self.get("APH",0) + self.get("subgradient_hub",0) + self.get("fwph_hub",0) + self.get("ph_primal_hub",0) + self.get("lshaped_hub",0) + self.get("cg_hub",0) + self.get("dualcg_hub",0)) > 1:
+        HUBS = ["APH", "subgradient_hub", "fwph_hub", "ph_primal_hub", "lshaped_hub", "cg_hub", "dualcg_hub", "fwph_objgap_hub"]
+        if sum(self.get(hub_name,0) for hub_name in HUBS) > 1:
             _bad_options("Only one hub can be active.")
 
         # remember that True is 1 and False is 0
@@ -912,6 +913,40 @@ class Config(pyofig.ConfigDict):
                                        "--fwph-mip-solver-name is an LP/MIP-only solver.",
                            domain=str,
                            default=None)
+
+        self.add_to_config(name="fwph_objgap_hub",
+                            description="Enable FWPH objective-gap (ObjGap) mode on the hub (default False)",
+                            domain=bool,
+                            default=False)
+
+        self.add_to_config("fwph_objgap_start_weight",
+                            description="FWPH start weight -- a value of 0 starts at xbar, a value of 1 starts at the prior MIP solution (default 0)",
+                            domain=float,
+                            default=0.0)
+
+        self.add_to_config("fwph_objgap_mip_fw_effort_balance",
+                           description="FWPH effort balance: values closer to 1 put less pressure on the MILP solver, but require more accuracy from Frank-Wolfe. Values near 0 demand high accuracy from the MILP solver but lower accuracy from the FW procedure.",
+                           domain=float,
+                           default=0.5)
+
+        self.add_to_config("fwph_objgap_decrease_base",
+                           description="FWPH accuracy base: this number raised to the iteration number, times fwph_objgap_decrease_coeff, will be the accuracy required to terminate an iteration of the FW procedure. Needs to be in (0,1).",
+                           domain=float,
+                           default=0.9)
+
+        self.add_to_config("fwph_objgap_decrease_coeff",
+                           description="FWPH accuracy coefficient: multiplier in beta * initial_gap * (alpha ** k) for the FW convergence threshold. Needs to be greater than 0.",
+                           domain=float,
+                           default=3.0)
+
+        self.add_to_config("fwph_objgap_initial_gap_floor",
+                           description="FWPH accuracy initial minimum value: this number is the lowest initial value for the FW convergence criterion, in absolute terms",
+                           domain=float,
+                           default=1.0)
+        self.add_to_config("fwph_add_cylinder_columns",
+                           description="Inject columns calculated by xhat spokes into the FWPH algorithm",
+                           domain=bool,
+                           default=False)
 
     def cg_args(self):
 
