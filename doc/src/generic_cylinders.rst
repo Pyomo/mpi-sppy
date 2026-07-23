@@ -230,6 +230,10 @@ Some extensions can be activated directly from the command line:
 
 - ``--fixer`` -- Fix variables that have converged
 - ``--mipgaps-json <file>`` -- MIP gap schedule from a JSON file
+- ``--starting-mipgap <float>`` (required; ``--mipgap-ratio`` defaults to
+  ``0.1``) -- auto MIP gap mode for cylinders
+- ``--timed-mipgap <curve>`` -- Time-dependent MIP gap termination
+  curve as ``gap:time`` pairs
 - ``--user-defined-extensions <module>`` -- Load a custom extension module
 - ``--wtracker`` -- Track W (Lagrange-multiplier) values per iteration
   and write a convergence report at the end of the run
@@ -390,7 +394,9 @@ any ``mipgap`` set elsewhere.
 
 For iteration-aware mipgap, use ``--iter0-mipgap`` and
 ``--iterk-mipgap`` (plus their per-spoke variants), or
-``--mipgaps-json <path>`` for a mipgap-only schedule.
+``--mipgaps-json <path>`` for a mipgap-only schedule. For
+auto-tuning mipgap during decomposition, use ``--starting-mipgap``;
+``--mipgap-ratio`` defaults to ``0.1``.
 ``--max-solver-threads`` sets a system-level thread cap that wins
 over any inline ``threads`` value; use it on shared HPC nodes.
 
