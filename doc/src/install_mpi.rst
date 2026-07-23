@@ -54,9 +54,21 @@ Further, without this setting and in situations with a large number of ranks (e.
 Other pip extras
 ^^^^^^^^^^^^^^^^
 
-In addition to ``[mpi]``, mpi-sppy declares a couple of other ``pip``
-extras that can be combined with it (with commas, e.g.
-``pip install -e ".[mpi,doc]"``):
+In addition to ``[mpi]``, mpi-sppy declares other ``pip`` extras that can
+be combined with it (with commas, e.g. ``pip install -e ".[mpi,dev]"``):
 
-* ``doc`` -- installs Sphinx and the theme used to build the documentation.
-* ``scipy`` -- installs SciPy, used by a few utilities.
+* ``extras`` -- every pip-installable optional feature of the library
+  itself: ``scipy`` (confidence intervals, quadratic prox approximation,
+  kkt utilities), ``pandas`` (rho CSV utilities, W tracking),
+  ``matplotlib`` (plotting), ``dill`` (pickled scenario bundles), and
+  ``mip`` (MPS/LP/SMPS file input).
+* ``test`` -- everything in ``extras`` plus the tools the test suite and
+  the examples need beyond a solver (``pytest``, ``coverage``,
+  ``addheader``, and ``gridx-egret`` for the unit commitment examples).
+* ``doc`` -- Sphinx and the theme used to build the documentation.
+* ``dev`` -- the one-stop shop for contributors: everything in ``test``
+  and ``doc`` plus ``ruff`` (linting).
+
+Solvers (e.g. cplex, gurobipy, xpress) are deliberately in no extra:
+which one to install is a licensing decision, so install your solver of
+choice separately.
