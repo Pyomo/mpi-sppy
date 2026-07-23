@@ -1277,6 +1277,8 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_solver_specs("xhatlooper")
+
     def xhatshuffle_args(self):
 
         self.add_to_config('xhatshuffle',
@@ -1321,6 +1323,8 @@ class Config(pyofig.ConfigDict):
                            default=False)
 
         self.add_stage2_ef_solver_name_arg()
+
+        self.add_solver_specs("xhatshuffle")
 
 
     def mult_rho_args(self):
@@ -1382,6 +1386,8 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_solver_specs("xhatspecific")
+
 
     def xhatxbar_args(self):
 
@@ -1416,6 +1422,8 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_solver_specs("xhatxbar")
+
 
     def xhatlshaped_args(self):
         # we will not try to get the specification from the command line
@@ -1424,6 +1432,8 @@ class Config(pyofig.ConfigDict):
                               description="have an xhatlshaped spoke",
                               domain=bool,
                               default=False)
+
+        self.add_solver_specs("xhatlshaped")
 
     def xhat_from_file_args(self):
         # Supply an initial xhat candidate from a file. Every xhat spoke
