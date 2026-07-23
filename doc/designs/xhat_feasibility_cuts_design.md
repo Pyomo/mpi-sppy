@@ -1,0 +1,511 @@
+# Design: Optional Feasibility Cuts from Xhatters
+
+**Status:** V1 implemented on branch `xhat_feasibility_cuts_design`
+([PR #671](https://github.com/Pyomo/mpi-sppy/pull/671), open). V2/V3 and
+multi-stage remain future milestones. See "Implementation status (V1 as
+shipped)" below for what actually landed and where it diverged from the
+original proposal.
+**Addresses:** [issue #601](https://github.com/Pyomo/mpi-sppy/issues/601)
+**Author:** dlw (captured with Claude Code assistance)
+**Last updated:** 2026-07-09
+
+## Motivation
+
+For two-stage problems **without complete recourse**, an xhatter (an xhat
+spoke such as `xhatlooper`, `xhatshufflelooper`, `xhatspecific`) can
+propose a first-stage candidate `xhat` that is infeasible in one or more
+of the rank-local scenarios. Today the xhatter just discards `xhat` and
+moves on — but nothing prevents the hub (or a later xhatter call) from
+trying the same `xhat` again a few iterations down the road.
+
+Issue #601 proposes: when an xhatter discovers infeasibility, **optionally
+generate a feasibility cut** and push it into **every scenario** so the
+same `xhat` (and a neighborhood of it, for continuous variables) does
+not get revisited. This is a classic no-good / Farkas-dual
+feasibility-cut pattern from Benders-style decomposition, applied
+inside the mpi-sppy xhat evaluation loop.
+
+## Non-goals
+
+- Replacing the main `lshaped` / `fwph` cut machinery. We add feasibility
+  cuts on the PH side; we do not change how L-shaped itself produces
+  its optimality cuts.
+- Changing default behavior. The feature is off by default
+  (`--xhat-feasibility-cuts-count 0`).
+
+## Implementation status (V1 as shipped)
+
+V1 is implemented on branch `xhat_feasibility_cuts_design` (PR #671).
+The sections below record the original design thinking; this section
+records what actually landed and, importantly, **where the build
+diverged from the proposal**. Where the two disagree, this section is
+authoritative.
+
+**As built, V1 delivers:**
+
+- CLI flag `--xhat-feasibility-cuts-count N` (default 0 = off),
+  registered in `Config.xhat_feasibility_cut_args()` and — post the
+  upstream `add_decomp_args` refactor — exposed by both
+  `generic_cylinders` and `mrp_generic`.
+- Shared-memory field `Field.XHAT_FEASIBILITY_CUT = 700` in
+  `spwindow.py`, sized `N × (nonant_len + 1) + 1` (rows of
+  `[rhs_constant, nonant_coefs...]` plus a trailing valid-count slot).
+- Hub extension
+  `mpisppy/extensions/xhat_feasibility_cut_extension.py`
+  (`XhatFeasibilityCutExtension`), wired by
+  `cfg_vanilla.add_xhat_feasibility_cuts` and
+  `mpisppy/generic/extensions.py`.
+- No-good cut emission for an all-binary first stage; two-stage-only
+  and binary-only preconditions enforced at `setup_hub` (hard
+  `RuntimeError`, not a silent no-op).
+- Tests in `mpisppy/tests/test_xhat_feasibility_cuts.py` (wired into
+  `run_coverage.bash` and the CI workflow), a user page at
+  `doc/src/xhat_feasibility_cuts.rst`, and a full-run smoke entry on
+  the binary-first-stage `usar` example in `examples/run_all.py`.
+
+**Where the build diverged from the original proposal below:**
+
+1. **Emission is centralized, not per-spoke.** The "Spoke-side
+   generation" and "Plumbing touchpoints" sections proposed editing
+   each xhatter spoke (`xhatlooper_bounder`, `xhatshufflelooper_bounder`,
+   `xhatspecific_bounder`). Instead, a single shared helper
+   `pack_no_good_feasibility_cut(opt)` lives in
+   `mpisppy/extensions/xhatbase.py` and is called from exactly two
+   places that every xhat spoke already flows through:
+   `XhatBase._try_one` (via `_maybe_emit_feasibility_cut`, the in-loop
+   path) and `XhatInnerBoundBase._try_file_xhat` (the file-fed path).
+   The send buffer is advertised once on `XhatInnerBoundBase.send_fields`
+   (`mpisppy/cylinders/xhatbase.py`), so all xhat inner-bound spokes
+   inherit it. No individual `*_bounder.py` file was modified.
+2. **xhat-from-file participates.** Not in the original design: a
+   candidate supplied via `--xhat-from-file` that proves infeasible now
+   emits a cut through the same helper.
+3. **Bundle install uses the consolidated nonant set.** The proposal
+   said to push the cut into each per-scenario block inside a bundle.
+   As built, the cut is installed once against the bundle's canonical
+   `s._mpisppy_data.nonant_indices`, relying on intra-bundle
+   nonanticipativity — the same approach the cross-scenario machinery
+   uses. The binary precondition is validated against that same
+   consolidated set.
+4. **Constraint container.** Cuts accumulate in a
+   `pyo.Constraint(pyo.Any)` keyed by a monotonic integer, rather than
+   the `ConstraintList` / tuple-keyed `IndexedConstraint` the proposal
+   floated.
+5. **Integer [0,1] counts as binary.** The binary-only check accepts an
+   integer variable bounded to `[0, 1]`, not just a declared `Binary`
+   domain, so a common modeling style is not rejected.
+6. **Robustness.** Both call sites wrap emission so a failure logs
+   (rank 0) and never breaks the xhatter; the hub extension's
+   `sync_with_spokes` is a no-op when no spoke advertises the field.
+
+## Stage support
+
+The two-stage-only restriction in `cross_scen_extension` and
+`lshaped_cuts` is about the L-shaped **cut structure**
+(`eta_s >= const + coef · x_root`, one scalar recourse cost per
+scenario) — that formulation breaks when the recourse cost is spread
+across a tree of per-node contributions.
+
+A **no-good cut** (first-milestone scope here) carries none of that
+structure: it is just
+
+```
+sum_{i: xhat_i = 1} (1 - x_i) + sum_{i: xhat_i = 0} x_i >= 1
+```
+
+over whichever binary nonants the xhatter fixed. The *cut form* itself
+is valid in any number of stages and does not depend on the
+recourse-cost formulation. **The implementation in V1 is two-stage
+only**, however, because of how the cut is installed.
+
+The hub installer (`XhatFeasibilityCutExtension._install_cuts`) takes
+the flat coefficient row produced by the spoke and applies it
+positionally against every local scenario's
+`s._mpisppy_data.nonant_indices`. In two-stage every scenario shares
+the same ROOT nonants under nonanticipativity, so the same row applied
+to every scenario is mathematically consistent. In multi-stage,
+scenarios on different branches have different per-stage-2+ variables
+at the deeper indices, so the same row applied positionally lands
+coefficients on unrelated variables — the resulting "cut" on a
+divergent scenario is meaningless. A multi-stage-correct installer
+must group each cut by the source scenario's branch and install it
+only on scenarios sharing that branch through the cut's deepest node.
+That work is deferred to a follow-up milestone alongside V2.
+
+V1 therefore hard-fails at hub setup time when
+`opt.multistage` is true:
+
+```
+RuntimeError: --xhat-feasibility-cuts-count > 0 is two-stage only
+in V1. Multi-stage support is planned as a follow-up milestone
+(the install side needs to group cuts by scenario branch).
+```
+
+## Blueprint: cross-scenario cuts
+
+We already have a working precedent for "spoke generates cuts, hub
+installs them into every scenario". The relevant pieces:
+
+### Flat serialization over the shared-memory window
+
+- `Field.CROSS_SCENARIO_CUT = 300` in `mpisppy/cylinders/spwindow.py`,
+  pre-sized as `nscen × (nonant_len + 2)`.
+- Row format: `[constant, eta_coef, nonant_coefs...]` — one row per
+  target scenario, fixed width `1 + 1 + nonant_len`.
+- The spoke writes the whole `all_coefs` buffer per iteration;
+  the hub-side consumer checks `is_new()` and unpacks.
+
+### Dedicated spoke: `CrossScenarioCutSpoke`
+
+- Declares `send_fields = (..., CROSS_SCENARIO_CUT)` and
+  `receive_fields = (..., NONANT, CROSS_SCENARIO_COST)`.
+- Builds a pseudo-root `ConcreteModel` with first-stage variable copies,
+  attaches an `LShapedCutGenerator` (thin wrapper over
+  `pyomo.contrib.benders.benders_cuts.BendersCutGeneratorData`), adds
+  every scenario as a Benders subproblem, and reuses the Benders
+  `generate_cut()` output.
+- On each iteration it reads the current nonants and etas broadcast by
+  the hub, computes the "farthest" xhat, and emits cuts.
+
+### Hub-side extension: `CrossScenarioExtension`
+
+- `sync_with_spokes()` pulls the cut buffer, calls `make_cuts(coefs)`.
+- `make_cuts` iterates rows, builds a `pyomo.core.expr.numeric_expr
+  .LinearExpression`, and appends to
+  `s._mpisppy_model.benders_cuts[outer_iter, scen_name]` (an
+  `IndexedConstraint`).
+- Persistent-solver awareness: `persistent_solver.add_constraint(...)`
+  for every added cut, so the underlying solver state stays current.
+- Tracks a best-bound constraint (`inner_bound_constr`) alongside the
+  cuts; that part is cross-scen-specific and does **not** apply here.
+
+## The pyomo Benders gap
+
+`pyomo.contrib.benders.benders_cuts.BendersCutGeneratorData.generate_cut()`
+**hard-errors** when a subproblem is not optimal:
+
+```python
+if res.solver.termination_condition != pyo.TerminationCondition.optimal:
+    raise RuntimeError('Unable to generate cut because subproblem failed
+                        to converge.')
+```
+
+This is **not** a restriction to optimality cuts. `_setup_subproblem`
+relaxes every subproblem constraint with a nonnegative violation
+variable `_z` (the GLM99 "note on feasibility in Benders" formulation
+the module cites) and minimizes `_z`, so the subproblem is always
+feasible by construction. The single cut `generate_cut()` returns is
+therefore **blended**: when `_z = 0` the recourse is feasible and the
+cut behaves as an optimality cut; when `_z > 0` the recourse is
+infeasible and the same cut certifies and cuts off that infeasibility.
+The `RuntimeError` fires only on a genuine solver failure
+(unbounded/error), not on recourse infeasibility.
+`mpisppy/utils/lshaped_cuts.py` inherits this blended behavior — its
+`LShapedCutGenerator` is a thin subclass of pyomo's
+`BendersCutGeneratorData`.
+
+Issue #601 is fundamentally about the **infeasibility** case — that's
+where we want the cut. Reusing `lshaped_cuts` therefore already gives
+us a valid cut for the infeasibility case, but with two caveats:
+
+- The blended cut is dual-based, so it is valid only for **continuous
+  (LP) recourse**. A model with integer second-stage variables gets an
+  invalid cut.
+- It is the L1-penalty (GLM99) style rather than a dedicated Farkas
+  feasibility cut, so its strength is worth revisiting before we lean
+  on it.
+
+So for the general case we still want one of:
+
+1. **Use / revisit pyomo's blended cut** for LP-recourse models —
+   possibly tightening it, or replacing the L1 relaxation with a
+   dedicated Farkas feasibility cut from the infeasible subproblem's
+   dual ray. No new Pyomo feature is required for the LP-recourse
+   infeasibility case; pyomo already produces a valid cut.
+2. **mpi-sppy-side extraction** — drop down to solver-specific APIs
+   (`gurobipy.Model.FarkasProof`, `cplex.solution.get_status`,
+   `xpress.getdualray`) inside mpi-sppy and build the cut ourselves,
+   bypassing pyomo Benders for the feasibility branch. Faster to land,
+   but fragile across solver versions and adds a new solver-sniffing
+   surface.
+3. **Scope-limited first version** — start with **no-good cuts,
+   valid only when every first-stage (nonant) variable is binary**.
+   That needs no dual information at all: the infeasible `xhat_bin`
+   yields the cut
+   `sum_{i: xhat_i = 1} (1 - x_i) + sum_{i: xhat_i = 0} x_i >= 1`.
+   Trivial to code, covers UC / scheduling / lot-sizing. If any
+   first-stage nonant is integer or continuous, the no-good cut is
+   invalid — so enabling the feature on such a model is a hard
+   error, not a silent no-op (see "Startup check" below). The
+   integer case needs a different cut form (e.g. `|x - xhat| >= 1`
+   with auxiliary binaries) and the continuous case needs Farkas
+   duals; both are out of scope for the first milestone.
+
+**Recommendation:** pursue (1) as the north star but ship (3) as the
+first deliverable so the plumbing lands independently of the Pyomo
+review cycle. (2) is a trap — avoid.
+
+### Scope across milestones
+
+It helps to be explicit about *which variables* each approach can
+handle. The Farkas cut (V2) is linear in the first-stage (complicating)
+variables, so their domain does not affect the cut's validity — only
+the outer solver's convergence behavior. The real restriction in V2
+is on the **second stage**: Farkas duality requires an LP recourse.
+Integer recourse needs a further generalization (integer L-shaped /
+Laporte-Louveaux / combinatorial Benders), which is a separate
+milestone on top of V2.
+
+| | V1: no-good | V2: Farkas (pyomo extension) | V3: integer L-shaped |
+|---|---|---|---|
+| 1st-stage **binary**     | ✓ | ✓ | ✓ |
+| 1st-stage **integer**    | ✗ | ✓ | ✓ |
+| 1st-stage **continuous** | ✗ | ✓ | ✓ |
+| 2nd-stage **LP**         | ✓ | ✓ | ✓ |
+| 2nd-stage **MIP**        | ✓ | ✗ | ✓ |
+| **Multi-stage**          | ✗ | ✗ | ? |
+
+V1 tolerates MIP recourse because the no-good cut depends only on the
+first-stage `xhat` values, not on any recourse dual. V2 lifts the
+first-stage restriction but requires LP recourse. V3 is out of scope
+for this design; it is mentioned only so the boundary is clear.
+**Multi-stage support is orthogonal to V1/V2/V3** — the cut form is
+fine but the installer must group cuts by branch (see "Stage support"
+above). Tracked as a separate follow-up; the V1 setup_hub gate makes
+sure no run silently produces invalid multi-stage cuts in the
+meantime.
+
+## Proposed architecture
+
+Match the cross-scen split: one new shared-memory field, spoke-side
+generation, hub-side extension for installation.
+
+### New shared-memory field
+
+`Field.XHAT_FEASIBILITY_CUT` in `spwindow.py`, pre-sized as
+`cuts_per_iter × (1 + nonant_len) + 1`:
+
+- Row format: `[rhs_constant, nonant_coef_1, ..., nonant_coef_N]`.
+  No eta column — feasibility cuts do not involve the recourse-cost
+  variable.
+- Trailing slot: the number of cuts actually written this round
+  (so unused rows are ignored).
+
+`cuts_per_iter` is set by `cfg.xhat_feasibility_cuts_count` at buffer
+registration time.
+
+### CLI
+
+```
+--xhat-feasibility-cuts-count INT   (default 0, meaning off)
+```
+
+Interpretation: maximum number of feasibility cuts generated per
+xhatter iteration. Zero disables the whole feature. The flag
+doubles as on/off switch and buffer sizer.
+
+### Spoke-side generation
+
+> **As built (V1):** the per-spoke edits described here were replaced by
+> a single shared helper `pack_no_good_feasibility_cut(opt)` called from
+> `XhatBase._try_one` and `XhatInnerBoundBase._try_file_xhat`; no
+> individual `*_bounder.py` was modified. See "Implementation status"
+> above. The logic below is otherwise accurate.
+
+The original plan was to modify the **existing** xhatter spokes
+(`xhatlooper_bounder`, `xhatshufflelooper_bounder`,
+`xhatspecific_bounder`). They already know when their candidate is
+infeasible in a scenario; the small path is:
+
+1. If `cfg.xhat_feasibility_cuts_count > 0`, register
+   `Field.XHAT_FEASIBILITY_CUT` as a send field at startup.
+2. On a `solve_loop` termination whose `termination_condition` is one
+   of `infeasible` or `infeasibleOrUnbounded` for some scenario,
+   build a cut row for that scenario:
+   - **Version 1 (binary no-good)**: produce the no-good row directly
+     from the `xhat` values. The "all nonants are binary" precondition
+     is enforced at setup time (see Startup check below), so by the
+     time we reach this path we can rely on it — no per-iteration
+     re-check, no silent skip.
+   - **Version 2 (pyomo-upstream Farkas)**: call the (to-be-added)
+     infeasibility branch of pyomo Benders to get Farkas duals and
+     pack them into the same row format.
+3. Pack up to `cuts_per_iter` rows into the send buffer; write the
+   actual count into the trailing slot; `put_send_buffer(...)`.
+
+Most of the "set up a pseudo-root model with first-stage copies" code
+from `CrossScenarioCutSpoke.prep_cs_cuts` is reusable.
+
+### Hub-side extension
+
+New `XhatFeasibilityCutExtension` in
+`mpisppy/extensions/xhat_feasibility_cut_extension.py`, modeled on
+`CrossScenarioExtension` but stripped of the eta / inner-bound
+bookkeeping:
+
+- `register_send_fields` / `register_receive_fields`: register
+  receive of `Field.XHAT_FEASIBILITY_CUT` from the xhatter spoke.
+- `setup_hub`: on each local scenario, attach an empty
+  `pyo.ConstraintList` (or `IndexedConstraint` keyed by
+  `(cut_batch_iter, cut_row_idx)`) named
+  `s._mpisppy_model.xhat_feasibility_cuts`.
+- `sync_with_spokes`: read the buffer. If `is_new()`, unpack the
+  count-header and the rows, build `LinearExpression` per row,
+  append the **same cut to every local scenario's**
+  `xhat_feasibility_cuts`, and call
+  `persistent_solver.add_constraint(...)` as cross-scen does. Because
+  the cut is on first-stage (nonant) variables, nonanticipativity
+  makes it valid globally — there is no version that cuts only the
+  infeasible scenario.
+- Bundle-safe: **as built**, the cut is installed once against the
+  bundle's consolidated `s._mpisppy_data.nonant_indices` (the canonical
+  nonant set), relying on intra-bundle nonanticipativity to make it
+  effective on every per-scenario block — the same approach the
+  cross-scenario machinery uses. (The original design proposed pushing
+  a copy into each per-scenario block; the consolidated-set install
+  supersedes that.)
+
+### Startup check: first-stage must be fully binary
+
+The first-milestone no-good cut is only valid when **every** first-stage
+nonant is binary. A mix of binary and continuous nonants is not safe
+to treat as "no-good on the binary part only": the continuous part can
+be perturbed, so such a cut does not actually exclude the infeasible
+xhat — it would silently produce an invalid relaxation.
+
+To prevent misuse, `XhatFeasibilityCutExtension.setup_hub` scans
+`s._mpisppy_data.nonant_indices` on an arbitrary local scenario and
+confirms that every variable is binary (`v.is_binary()` or
+`v.domain in {Binary, BooleanSet}`). The scan covers every node in
+`_mpisppy_node_list` — though in V1 a separate prior check (see
+"Stage support" above) rejects multi-stage entirely, so the per-node
+scan is mostly defensive against a future V1 extension. If any
+non-binary nonant is present, raise
+
+```
+RuntimeError(
+    "--xhat-feasibility-cuts-count > 0 requires every first-stage "
+    "(nonant) variable to be binary; found non-binary nonant "
+    f"{v.name!r} with domain {v.domain}. The first-milestone "
+    "feasibility-cut generator is no-good-only. Support for integer "
+    "and continuous first-stage variables is planned as a follow-up "
+    "milestone (pyomo Benders / Farkas extension)."
+)
+```
+
+Fail fast at setup time rather than at the first infeasibility — the
+user sees the error before any work is done.
+
+### Plumbing touchpoints
+
+As built (V1):
+
+- `mpisppy/utils/config.py` — new `cfg.xhat_feasibility_cut_args()`
+  registering `xhat_feasibility_cuts_count`.
+- `mpisppy/utils/cfg_vanilla.py` — `add_xhat_feasibility_cuts(hub_dict,
+  cfg)` attaches the hub extension and propagates the cap; the count is
+  also carried in `shared_options` so the spoke/window see it.
+- `mpisppy/cylinders/spwindow.py` — new `Field.XHAT_FEASIBILITY_CUT`
+  enum value and its length formula.
+- `mpisppy/extensions/xhat_feasibility_cut_extension.py` — new hub
+  extension.
+- `mpisppy/extensions/xhatbase.py` — the shared
+  `pack_no_good_feasibility_cut(opt)` helper and
+  `XhatBase._maybe_emit_feasibility_cut`, gated on
+  `cfg.xhat_feasibility_cuts_count > 0`.
+- `mpisppy/cylinders/xhatbase.py` — advertises the send field on
+  `XhatInnerBoundBase.send_fields` and emits from the file-fed path.
+- `mpisppy/generic/parsing.py` + `mpisppy/generic/extensions.py` — CLI
+  registration (inside `add_decomp_args`) and hub wiring for the
+  generic drivers.
+
+(The individual `*_bounder.py` files were **not** touched — emission is
+centralized; see "Implementation status" above.)
+
+## Code sharing / refactoring opportunities
+
+The user asked explicitly: can we share code with the cross-scen path?
+Three candidates, in descending value:
+
+1. **Cut installation into scenarios, with persistent-solver and
+   bundle awareness.** Today this logic is inline in
+   `CrossScenarioExtension.make_cuts`; the xhat-feas version will want
+   the same behavior. Factor into
+   `mpisppy.utils.cut_installer.install_linear_cut(scenario, expr,
+   key, persistent_solver=...)`. Both extensions call it. High
+   payoff: it's the trickiest bit (persistent-solver management plus
+   the bundle duplication).
+
+2. **Pseudo-root model construction.** `CrossScenarioCutSpoke
+   .prep_cs_cuts` builds a `ConcreteModel` with first-stage-variable
+   copies keyed by an "index against later" map. Xhat-feas spoke side
+   needs the same kind of harness if/when we pursue the pyomo-Benders
+   route. Factor into
+   `mpisppy.utils.pseudo_root.build_root_from_nonants(opt) -> (root,
+   root_vars, nonant_vid_to_copy_map)`.
+
+3. **Flat-buffer packer/unpacker.** Both cross-scen and xhat-feas use
+   `[constant, ...coefs]` rows. A small
+   `mpisppy.utils.cut_buffer.pack_rows(...) / unpack_rows(...)`
+   helper de-duplicates the row arithmetic. Lower payoff — the
+   arithmetic is straightforward and inlined it is arguably more
+   readable — but it's essentially free to write if we do (1).
+
+Recommended refactoring sequence: land the new xhat-feas feature first
+(without factoring), **then** do a follow-up PR that extracts the
+shared helpers and updates cross-scen to use them. This avoids
+bundling a behavior change with a refactor.
+
+## Open questions
+
+- **Cut pool management.** Every xhatter iteration can emit cuts;
+  without pruning the subproblems accumulate constraints indefinitely
+  and solver times eventually bloat. `CrossScenarioExtension` has the
+  same unbounded-growth behavior today (its `benders_cuts` are keyed
+  by `(outer_iter, scen_name)` and never removed). Tracked as a
+  separate item, scoped to both features so they share one strategy:
+  **[issue #670](https://github.com/Pyomo/mpi-sppy/issues/670)**. For
+  this milestone we rely on the per-iter cap in
+  `--xhat-feasibility-cuts-count` to keep growth linear.
+
+## First-milestone scope (what a PR would actually deliver)
+
+1. CLI flag + buffer registration + send/receive field — wired end to
+   end but with the emit path producing zero cuts.
+2. No-good-cut emission for problems whose first-stage (nonant)
+   variables are **all binary**. Setup-time check raises `RuntimeError`
+   otherwise, so the feature never silently produces an invalid cut.
+3. Hub-side install of cuts into every local scenario / bundle block.
+   Two-stage only in V1; the install loop applies one row positionally
+   to every scenario's nonants, which is correct under
+   nonanticipativity for two-stage but not for multi-stage. A
+   multi-stage-correct installer (group cuts by branch) is a follow-up
+   milestone; in the meantime `setup_hub` raises if `opt.multistage`.
+4. Regression tests:
+   (a) a two-stage model with a binary first-stage where one specific
+       xhat is infeasible — verify the cut is added and the infeasible
+       xhat is not revisited;
+   (b) a bundled version of the same;
+   (c) a negative test: enabling the feature on a multi-stage model
+       raises the expected `RuntimeError` at setup;
+   (d) a negative test: enabling the feature on a model with a
+       continuous nonant raises the expected `RuntimeError` at setup.
+5. Documentation: a **new** user-facing page at
+   `doc/src/xhat_feasibility_cuts.rst`, added to `doc/src/index.rst`'s
+   toctree next to the other cylinder / extension pages. The page
+   must cover:
+   - What the feature does and when to use it (non-complete-recourse
+     problems with binary first-stage).
+   - The CLI flag `--xhat-feasibility-cuts-count`.
+   - The binary-only restriction, with the exact `RuntimeError` text
+     users will see if they enable the feature on a non-binary model.
+   - A brief note on interaction with proper bundles.
+   - Forward pointer to issue #670 for cut-pool management.
+
+   Also add a one-sentence cross-reference from each of the xhatter
+   cylinder docs (wherever those live today) pointing at the new
+   page, so readers browsing xhatter options discover it.
+
+That is a discrete, reviewable PR. The pyomo-Benders Farkas extension
+(which lifts the binary-only restriction, two-stage-only) and the
+cross-scen refactor are natural follow-ups.

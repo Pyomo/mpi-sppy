@@ -179,6 +179,9 @@ run_phase "test_flex_xhat_assembly (serial)" \
 run_phase "test_xhat_from_file (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_xhat_from_file.py -v
 
+run_phase "test_xhat_feasibility_cuts (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_xhat_feasibility_cuts.py -v
+
 run_phase "test_incumbent_writing (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_incumbent_writing.py -v
 
