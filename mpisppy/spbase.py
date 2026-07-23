@@ -129,6 +129,7 @@ class SPBase:
         self._set_sense()
         self._use_variable_probability_setter()
         self._set_solution_cache()
+        self._set_initial_bounds()   # None until the first solve writes a bound
         self._set_cvar_eta_bounds()
 
         ## SPCommunicator object
@@ -590,6 +591,24 @@ class SPBase:
         for k,s in self.local_scenarios.items():
             s._mpisppy_data.best_solution_cache = None
             s._mpisppy_data.latest_nonant_solution_cache = np.full(len(s._mpisppy_data.nonant_indices), np.nan)
+
+    def _set_initial_bounds(self):
+        """Give every subproblem the "not computed yet" bounds it holds before
+        its first solve.
+
+        Only solve_one ever writes these, so until it does there is nothing to
+        read: Ebound would die with "'ScalarBlock' object has no attribute
+        'outer_bound'" whenever a first solve reports no bound (a subproblem
+        that times out with no bound to show for it, say). None says exactly
+        that -- the bound has not been computed -- rather than dressing the
+        absence up as a number. Ebound propagates the None (the expected bound
+        is unavailable if any scenario is missing its bound) and the bound
+        spokes decline to send it, so a missing bound is never mistaken for a
+        real one at the hub.
+        """
+        for k,s in self.local_scenarios.items():
+            s._mpisppy_data.outer_bound = None
+            s._mpisppy_data.inner_bound = None
 
     def update_best_solution_if_improving(self, obj_val):
         """ Call if the variable values have a nonanticipative solution

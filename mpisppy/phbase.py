@@ -586,7 +586,9 @@ class PHBase(mpisppy.spopt.SPOpt):
         self._reenable_prox()
 
         if (verbose and self.cylinder_rank == 0):
-            print(f'Post-solve Lagrangian bound: {bound:.4f}')
+            # bound is None if any subproblem produced no outer bound.
+            shown = "not available" if bound is None else f"{bound:.4f}"
+            print(f'Post-solve Lagrangian bound: {shown}')
         return bound
 
 
@@ -599,7 +601,9 @@ class PHBase(mpisppy.spopt.SPOpt):
                    tee=False,
                    verbose=False,
                    need_solution=True,
-                   warmstart=sputils.WarmstartStatus.FALSE):
+                   warmstart=sputils.WarmstartStatus.FALSE,
+                   *,
+                   outer_bound_only=False):
         """ Loop over `local_scenarios` and solve them in a manner
         dictated by the arguments.
 
@@ -632,6 +636,11 @@ class PHBase(mpisppy.spopt.SPOpt):
                 Default True
             warmstart (bool, optional):
                 If True, warmstart the subproblem solves. Default False.
+            outer_bound_only (boolean, optional):
+                If True, populate outer_bound *only*; no solution is loaded, so
+                need_solution must be False. If the solve reports no bound, the
+                previous outer bound is kept (a valid, if vacuous, outer bound).
+                Keyword-only. Default False.
         """
 
         """ Developer notes:
@@ -662,6 +671,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             tee=tee,
             verbose=verbose,
             need_solution=need_solution,
+            outer_bound_only=outer_bound_only,
             warmstart=warmstart,
         )
 
@@ -1224,7 +1234,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             self.extobject.post_iter0()
 
         self.trivial_bound = self.Ebound(verbose)
-        if self._can_update_best_bound():
+        if self.trivial_bound is not None and self._can_update_best_bound():
             self.best_bound_obj_val = self.trivial_bound
 
         if hasattr(self.spcomm, "sync_nonants"):
