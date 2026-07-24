@@ -18,12 +18,12 @@ other features without requiring you to write a driver program.
 
        mpi-sppy-generic-cylinders --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi
 
-   For multi-rank parallel runs, prefer the ``python -m mpi4py`` module
-   form shown below (``mpiexec -np 3 python -m mpi4py -m
-   mpisppy.generic_cylinders ...``): mpi4py's runner aborts all ranks if
-   one raises an exception, whereas a bare
-   ``mpiexec -np 3 mpi-sppy-generic-cylinders ...`` runs but may leave
-   the other ranks hanging when one fails.
+   The console script installs the same abort-on-exception protection
+   as mpi4py's runner, so for multi-rank parallel runs
+   ``mpiexec -np 3 mpi-sppy-generic-cylinders ...`` and the
+   ``mpiexec -np 3 python -m mpi4py -m mpisppy.generic_cylinders ...``
+   module form shown below are equally safe: if one rank raises an
+   exception, all ranks are aborted rather than leaving the job hung.
 
 Your Model File (Module)
 ------------------------
@@ -154,7 +154,7 @@ two-stage problems:
 
 .. code-block:: bash
 
-    mpiexec -np 2 python -m mpisppy.generic_cylinders \
+    mpiexec -np 2 python -m mpi4py -m mpisppy.generic_cylinders \
         --module-name farmer --num-scens 3 \
         --solver-name gurobi --lshaped-hub --xhatlshaped \
         --max-iterations 100 --rel-gap 1e-4

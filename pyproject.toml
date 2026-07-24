@@ -37,13 +37,15 @@ tracker = "https://github.com/Pyomo/mpi-sppy/issues"
 # Console entry points: pip creates a launcher on the user's PATH for each,
 # so pip-installed users can run these drivers without knowing where the
 # files landed in site-packages.  Each target is an importable module:callable.
-# For real multi-rank parallel runs the module form is still recommended so
-# the mpi4py runner installs its abort-on-exception handler, e.g.:
-#   mpiexec -np 3 python -m mpi4py -m mpisppy.generic_cylinders --module-name farmer ...
+# The mpisppy.entry_points wrappers replicate the mpi4py runner's
+# abort-on-exception behavior, so multi-rank runs of these scripts
+# (e.g. mpiexec -np 3 mpi-sppy-generic-cylinders ...) cannot hang on an
+# uncaught exception; the python -m mpi4py module form remains equivalent
+# for running from a checkout.
 [project.scripts]
-mpi-sppy-generic-cylinders = "mpisppy.generic_cylinders:main"
-mpi-sppy-mrp-generic = "mpisppy.mrp_generic:main"
-mpi-sppy-one-sided-test = "mpi_one_sided_test:main"
+mpi-sppy-generic-cylinders = "mpisppy.entry_points:generic_cylinders_main"
+mpi-sppy-mrp-generic = "mpisppy.entry_points:mrp_generic_main"
+mpi-sppy-one-sided-test = "mpisppy.entry_points:one_sided_test_main"
 
 [project.optional-dependencies]
 doc = [
