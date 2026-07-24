@@ -50,10 +50,6 @@ def empirical_main_routine(cfg, module):
         ci_optimal, ci_upper, ci_gap, center_optimal, center_upper, center_gap = \
             boot_sp.compute_ci(cfg, module, xhat)
 
-        # the last candidate_sample_size samples are already used to compute the
-        # candidate solution, so when applying bootstrap we only use
-        # max_count-candidate_sample_size samples
-
         if my_rank == 0:
             if cfg.trace_fname is not None:
                 with open(cfg.trace_fname, "a+") as f:

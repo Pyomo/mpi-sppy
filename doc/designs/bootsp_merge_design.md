@@ -247,6 +247,28 @@ Behavior-preserving unless noted.
    digits and assume `cwd == tests dir`. Ported tests use the
    `test_conf_int_farmer.py` template: `get_solver()`, `skipIf`,
    `round_pos_sig` comparisons, paths relative to `__file__`.
+8. **Disjoint candidate/estimation split (behavior change).** boot-sp
+   draws every bootstrap/bagging pool from all `max_count` scenarios,
+   which overlaps the `candidate_sample_size` scenarios used to compute
+   `xhat` (a boot-sp comment claimed otherwise). The port excludes the
+   reserved candidate block
+   `[sample_size, sample_size + candidate_sample_size)` from all
+   confidence-interval sampling (`boot_sp.eligible_scenarios`), so
+   samples used to find `xhat` are never used to assess it; it follows
+   that `sample_size + candidate_sample_size <= max_count` is required.
+   `boot_general_prep.find_candidate` now uses that same reserved block
+   (boot-sp used the *last* `candidate_sample_size` scenarios, which
+   coincides exactly when `max_count = sample_size +
+   candidate_sample_size`).
+9. **xhat broadcast (behavior change, robustness).** boot-sp calls the
+   module's xhat generator independently on every rank; with alternative
+   optima or solver nondeterminism, ranks could adopt different
+   candidate solutions and the gathered statistics would silently mix
+   them. The port computes `xhat` on rank 0 only and broadcasts it.
+10. **Two-stage guard fixed.** boot-sp's `check_BFs` looks up
+    `cfg.get("Branching_factors")` (capital B), but modules declare the
+    lowercase `branching_factors`, so the "two-stage only" error could
+    never fire. The port checks the lowercase name.
 
 ---
 

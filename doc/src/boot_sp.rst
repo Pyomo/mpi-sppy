@@ -174,10 +174,10 @@ option. The dataset defines the "population" the estimators work from:
 ``max_count`` is the number of rows, ``xhat`` is computed from
 ``candidate_sample_size`` of them (the scenarios
 ``[sample_size : sample_size + candidate_sample_size]``), and the bootstrap
-draws a pool of ``sample_size`` rows from the whole dataset and resamples it
-for its batches. (The pool is drawn from all ``max_count`` rows, so it can
-overlap the candidate rows; a strictly disjoint candidate/estimation split
-arrives with the ``generic_cylinders`` integration.) For example:
+draws a pool of ``sample_size`` rows from the rest of the dataset and
+resamples it for its batches. The rows used to compute ``xhat`` are excluded
+from the confidence-interval sampling, so ``sample_size`` plus
+``candidate_sample_size`` must be at most ``max_count``. For example:
 
 .. code-block:: bash
 

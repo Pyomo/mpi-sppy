@@ -11,8 +11,8 @@
 #   python -m mpisppy.confidence_intervals.bootsp.boot_general_prep <json>
 #
 # Compute the optimal function value with max_count scenarios (or read it from
-# a file), then find a candidate solution using the last candidate_sample_size
-# scenarios and compute the corresponding optimality gap.
+# a file), then find a candidate solution using the reserved
+# candidate_sample_size scenarios and compute the corresponding optimality gap.
 
 import sys
 import json
@@ -32,7 +32,10 @@ def find_optimal(cfg, module):
 
 
 def find_candidate(cfg, module):
-    scenarios = range(cfg.max_count - cfg.candidate_sample_size, cfg.max_count)
+    # the same scenario block that boot_utils.compute_xhat reserves (and that
+    # boot_sp.eligible_scenarios excludes from confidence-interval sampling)
+    scenarios = range(cfg.sample_size,
+                      cfg.sample_size + cfg.candidate_sample_size)
     if len(scenarios) == 1:
         print(f"only one scenario, {scenarios},  for candidate solution")
     candidate_ef = boot_sp.solve_routine(cfg, module, scenarios, num_threads=2, duplication=False)

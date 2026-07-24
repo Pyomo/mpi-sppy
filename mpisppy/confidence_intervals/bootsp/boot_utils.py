@@ -269,6 +269,10 @@ def compute_xhat(cfg, module):
         confidence-interval code uses the fixed name ``xhat_generator``; the
         boot-sp convention was the module-specific ``xhat_generator_<module>``.
         We look for the fixed name first and fall back to the legacy name.
+
+        Only rank 0 calls the generator; the result is broadcast so that
+        every rank works with the same xhat even when the problem has
+        alternative optima or the solver is nondeterministic.
     """
     fixed_name = "xhat_generator"
     legacy_name = f"xhat_generator_{cfg.module_name}"
@@ -294,12 +298,17 @@ def compute_xhat(cfg, module):
     xgo.pop("solver_name", None)  # it will be given explicitly
     xgo.pop("num_scens", None)
     xgo.pop("scenario_names", None)  # given explicitly
-    xhat_k = xhat_fct(xhat_scenario_names, solver_name=cfg.solver_name, **xgo)
+    if my_rank == 0:
+        xhat_k = xhat_fct(xhat_scenario_names, solver_name=cfg.solver_name, **xgo)
+    else:
+        xhat_k = None
+    if n_proc > 1:
+        xhat_k = comm.bcast(xhat_k, root=0)
     return xhat_k
 
 
 def check_BFs(cfg):
-    BFs = cfg.get("Branching_factors", [0])
+    BFs = cfg.get("branching_factors") or [0]
     if len(BFs) > 1:
         raise ValueError("Only two-stage problems are presently supported.\n"
                          f"branching_factors was {BFs}")

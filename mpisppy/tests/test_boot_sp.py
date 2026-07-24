@@ -55,17 +55,17 @@ empirical_methods = ["Classical_gaussian",
 
 # ci_optimal locked at these params with seed_offset=100 (serial, one MPI rank)
 locked_ci_optimal = {
-    "Classical_gaussian": [-55.15313724796903, -49.780196085364324],
-    "Classical_quantile": [-54.94166666666668, -50.03166666666667],
+    "Classical_gaussian": [-54.88235197935663, -49.18431468731008],
+    "Classical_quantile": [-54.0116666666667, -49.7366666666667],
 }
 
 # same, for the data-file example (schultz_data), serial, seed_offset=100
 locked_ci_optimal_data = {
-    "Classical_gaussian": [-68.27054940987843, -66.1294505901215],
-    "Classical_quantile": [-68.08299999999997, -66.22149999999996],
+    "Classical_gaussian": [-68.35794769780962, -65.18205230219043],
+    "Classical_quantile": [-68.53850000000004, -65.47000000000006],
 }
 # coverage harness (rate, length) for schultz_data, serial, seed base 0, 4 reps
-locked_coverage_data = (1.0, 2.5269999999999975)
+locked_coverage_data = (1.0, 2.105875000000008)
 
 
 def _make_cfg(method="Classical_quantile"):
@@ -135,6 +135,19 @@ class Test_boot_sp(unittest.TestCase):
         self.assertTrue(boot_utils.is_smoothed("Smoothed_bagging"))
         self.assertFalse(boot_utils.is_smoothed("Classical_quantile"))
         self.assertEqual(len(boot_utils.empirical_members()), 6)
+
+    def test_eligible_scenarios_excludes_candidate_block(self):
+        # the scenarios used to compute xhat must not be used for the
+        # confidence intervals
+        cfg = _make_cfg()
+        eligible = boot_sp.eligible_scenarios(cfg)
+        self.assertEqual(len(eligible), cfg.max_count - cfg.candidate_sample_size)
+        for s in range(cfg.sample_size,
+                       cfg.sample_size + cfg.candidate_sample_size):
+            self.assertNotIn(s, eligible)
+        cfg.sample_size = cfg.max_count  # no room left for the candidate block
+        with self.assertRaises(RuntimeError):
+            boot_sp.eligible_scenarios(cfg)
 
     def test_compute_xhat_requires_generator(self):
         # a module with no xhat_generator (fixed or legacy) must raise, and the

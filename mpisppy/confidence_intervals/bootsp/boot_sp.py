@@ -62,6 +62,28 @@ def slice_lens(nB):
     return slice_lens
 
 
+def eligible_scenarios(cfg):
+    """ The scenario numbers usable for confidence-interval sampling.
+
+    Args:
+        cfg (Config): parameters
+    Returns:
+        numpy array of scenario numbers
+
+    The candidate_sample_size scenarios starting at sample_size are reserved
+    for computing xhat (see boot_utils.compute_xhat and
+    boot_general_prep.find_candidate), so the confidence-interval sampling
+    must not touch them; this returns all the other scenario numbers.
+    """
+    if cfg.sample_size + cfg.candidate_sample_size > cfg.max_count:
+        raise RuntimeError(
+            "sample_size plus candidate_sample_size must be at most max_count "
+            f"(got {cfg.sample_size} + {cfg.candidate_sample_size} > {cfg.max_count})")
+    return np.concatenate([np.arange(cfg.sample_size),
+                           np.arange(cfg.sample_size + cfg.candidate_sample_size,
+                                     cfg.max_count)])
+
+
 def process_optimal(cfg, module):
     """ For simulations we need a known or assumed z*
         Args:
@@ -253,7 +275,7 @@ def classical_bootstrap(cfg, module, xhat, quantile=True):
     """
     rng = default_rng(cfg.seed_offset)
 
-    scenario_pool = rng.choice(cfg.max_count, size=cfg.sample_size, replace=False)
+    scenario_pool = rng.choice(eligible_scenarios(cfg), size=cfg.sample_size, replace=False)
     dag_upper = evaluate_scenarios(cfg, module, scenario_pool, xhat, duplication=False)
     dag_ef = solve_routine(cfg, module, scenario_pool, num_threads=2, duplication=False)
 
@@ -362,7 +384,7 @@ def subsampling(cfg, module, xhat):
     """
     rng = default_rng(cfg.seed_offset)
 
-    scenario_pool = rng.choice(cfg.max_count, size=cfg.sample_size, replace=False)
+    scenario_pool = rng.choice(eligible_scenarios(cfg), size=cfg.sample_size, replace=False)
     dag_upper = evaluate_scenarios(cfg, module, scenario_pool, xhat, duplication=False)
     dag_ef = solve_routine(cfg, module, scenario_pool, num_threads=2, duplication=False)
     dag_optimal = pyo.value(dag_ef.EF_Obj)
@@ -430,8 +452,9 @@ def _extended_resample(cfg, module, xhat, serial=False):
     local_boot_uppers_diff = np.empty(local_nB, dtype=np.float64)
     local_boot_gaps_diff = np.empty(local_nB, dtype=np.float64)
 
+    eligible = eligible_scenarios(cfg)
     for iter in range(local_nB):
-        scenario_pool = rng.choice(cfg.max_count, size=cfg.sample_size, replace=True)
+        scenario_pool = rng.choice(eligible, size=cfg.sample_size, replace=True)
         dag_optimal_ef = solve_routine(cfg, module, scenario_pool, num_threads=2, duplication=True)
         dag_upper = evaluate_scenarios(cfg, module, scenario_pool, xhat, duplication=True)
 
@@ -485,12 +508,13 @@ def extended_bootstrap(cfg, module, xhat):
     if my_rank == 0:
 
         # get center
-        scenarios = rng.choice(cfg.max_count, size=cfg.sample_size, replace=True)
+        eligible = eligible_scenarios(cfg)
+        scenarios = rng.choice(eligible, size=cfg.sample_size, replace=True)
         dag_optimal_ef = solve_routine(cfg, module, scenarios, num_threads=2, duplication=True)
         dag_optimal = pyo.value(dag_optimal_ef.EF_Obj)
         dag_upper = evaluate_scenarios(cfg, module, scenarios, xhat, duplication=True)
 
-        scenarios_ = rng.choice(cfg.max_count, size=cfg.sample_size, replace=True)
+        scenarios_ = rng.choice(eligible, size=cfg.sample_size, replace=True)
         scenarios_combined = np.concatenate([scenarios, scenarios_])
 
         dag_optimal_ef_combined = solve_routine(cfg, module, scenarios_combined, num_threads=2, duplication=True)
@@ -568,7 +592,7 @@ def bagging_bootstrap(cfg, module, xhat, replacement=True):
     """
 
     rng = default_rng(cfg.seed_offset)
-    scenario_pool = rng.choice(cfg.max_count, size=cfg.sample_size, replace=False)
+    scenario_pool = rng.choice(eligible_scenarios(cfg), size=cfg.sample_size, replace=False)
 
     # bootstrap from pool
     local_boot_gaps, local_boot_optimals, local_boot_uppers, local_boot_counts = _bagging_resample(cfg, module, scenario_pool, xhat, serial=False, replacement=replacement)
