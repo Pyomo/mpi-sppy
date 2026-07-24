@@ -154,6 +154,17 @@ _doone(cmdstr)
 
 
 #####################################################
+# mrp_generic: cylinder xhat generator (farmer, PH + lagrangian)
+mrp_cyl_path = os.path.abspath(os.path.join(_tests_dir, "test_mrp_cylinders.py"))
+
+cmdstr = (
+    f"mpiexec -np 3 {pyexe} {python_args} -m mpi4py {shlex.quote(mrp_cyl_path)}"
+)
+
+_doone(cmdstr)
+
+
+#####################################################
 # generic_cylinders with both Jensen's flags (farmer)
 # Exercises the outer-bound and xhat Jensen's paths inside the
 # lagrangian and xhatshuffle spokes' main() bodies.

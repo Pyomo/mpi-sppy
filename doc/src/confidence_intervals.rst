@@ -3,13 +3,28 @@
 MMW confidence intervals:
 =========================
 
-If we want to assess the quality of a given candidate solution ``xhat_one`` 
-(a first stage solution), we could try and evaluate the optimality gap, i.e. 
+mpi-sppy supports two approaches to computing confidence intervals on the
+optimality gap of a candidate solution:
+
+- **MMW** (Mak, Morton, and Wood [mmw1999]_): evaluates a *given*
+  candidate solution.  Can be run as part of a ``generic_cylinders``
+  decomposition run or standalone.  See below.
+
+- **Sequential sampling (MRP)**: *finds* a candidate solution and a
+  confidence interval simultaneously, using increasing sample sizes.
+  Use ``mrp_generic`` for this.
+  See :ref:`Sequential Sampling Confidence Intervals`.
+
+MMW confidence intervals
+-------------------------
+
+If we want to assess the quality of a given candidate solution ``xhat_one``
+(a first stage solution), we could try and evaluate the optimality gap, i.e.
 the gap between the value of the objective function
 at ``xhat_one`` and the value of the solution to the problem.
 The class ``MMWConfidenceIntervals`` computes an estimator of the optimality gap
 as described in [mmw1999]_ (Section 3.2) and an asymptotic confidence interval for
-this gap. 
+this gap.
 
 Inclusion in generic_cylinders
 ------------------------------
@@ -44,10 +59,8 @@ must be present.  None of the mmw options have a default value.
 For Programmers
 ---------------
 
-We will document two steps in the process : finding a candidate solution 
+We will document two steps in the process : finding a candidate solution
 ``xhat_one``, and evaluating it.
-
-Sequential sampling is also supported; see :ref:`Sequential Sampling Confidence Intervals`
 
 .. note :: At the time of this writing, the confidence interval
    software assumes that the scenarios are presented in random order

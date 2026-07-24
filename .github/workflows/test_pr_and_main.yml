@@ -98,6 +98,10 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_cvar.py -v
 
+      - name: Test outer_bound_only
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_outer_bound_only.py -v
+
       - name: Test chance_constraint
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_chance_constraint.py -v
@@ -144,6 +148,10 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_xhat_from_file.py -v
 
+      - name: Test xhat feasibility cuts
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_xhat_feasibility_cuts.py -v
+
       - name: Test feasible_xhat
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_feasible_xhat.py -v
@@ -184,6 +192,8 @@ jobs:
           pip install xpress coverage
           # usar runs in first-part and imports matplotlib + scipy at module load
           pip install matplotlib scipy
+          # dcap (SMPS) runs in first-part; its reader needs python-mip
+          pip install mip
 
       - name: Build pyomo extensions
         run: |
@@ -268,6 +278,8 @@ jobs:
           pip install xpress coverage
           # usar runs in first-part and imports matplotlib + scipy at module load
           pip install matplotlib scipy
+          # dcap (SMPS) runs in first-part; its reader needs python-mip
+          pip install mip
 
       - name: Build pyomo extensions
         run: |
@@ -827,6 +839,18 @@ jobs:
         run: |
           cd mpisppy/tests
           coverage run $COV_ARGS test_conf_int_aircond.py
+
+      - name: run mrp tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          coverage run $COV_ARGS test_mrp_generic.py
+
+      - name: run farmer_mrp_generic.bash
+        timeout-minutes: 10
+        run: |
+          cd examples/farmer/CI
+          bash farmer_mrp_generic.bash
 
       - name: run bootstrap CI tests (serial)
         timeout-minutes: 10

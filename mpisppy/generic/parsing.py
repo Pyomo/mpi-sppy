@@ -92,6 +92,66 @@ def load_module(model_fname):
     return importlib.import_module(fname)
 
 
+def add_decomp_args(cfg):
+    """Register every CLI arg consumed by hub-and-spoke decomposition.
+
+    This is the single source of truth for the decomposition (cylinder and
+    spoke) options.  Both generic_cylinders (via parse_args) and mrp_generic
+    (via parse_mrp_args, used when --xhat-method=cylinders) call it, so a
+    command line accepted by one driver is accepted by the other.  Every option
+    read by mpisppy.generic.decomp.do_decomp and the hub/spoke builders it calls
+    must be registered here.
+    """
+    # There are some arguments here that will not make sense for all models
+    cfg.popular_args()
+    cfg.two_sided_args()
+    cfg.lshaped_args()
+    cfg.xhatlshaped_args()    
+    cfg.ph_args()
+    cfg.aph_args()
+    cfg.cg_args()
+    cfg.dualcg_args()
+    cfg.subgradient_args()
+    cfg.fixer_args()
+    cfg.cvar_args()
+    cfg.relaxed_ph_fixer_args()
+    cfg.integer_relax_then_enforce_args()
+    cfg.slamming_args()
+    cfg.w_oscillation_args()
+    cfg.gapper_args()
+    cfg.gapper_args(name="lagrangian")
+    cfg.ph_primal_args()
+    cfg.ph_dual_args()
+    cfg.relaxed_ph_args()
+    cfg.ph_xfeas_spoke_args()
+    cfg.fwph_args()
+    cfg.lagrangian_args()
+    cfg.subgradient_bounder_args()
+    cfg.xhatshuffle_args()
+    cfg.xhatxbar_args()
+    cfg.xhat_from_file_args()
+    cfg.write_xhat_file_args()
+    cfg.xhat_feasibility_cut_args()
+    cfg.norm_rho_args()
+    cfg.primal_dual_rho_args()
+    cfg.converger_args()
+    cfg.wxbar_read_write_args()
+    cfg.wtracker_args()
+    cfg.tracking_args()
+    cfg.gradient_args()
+    cfg.dynamic_rho_args()
+    cfg.reduced_costs_args()
+    cfg.sep_rho_args()
+    cfg.coeff_rho_args()
+    cfg.sensi_rho_args()
+    cfg.reduced_costs_rho_args()
+
+    cfg.add_to_config("user_defined_extensions",
+                      description="Space-delimited module names for user extensions",
+                      domain=pyofig.ListOf(str),
+                      default=None)
+
+
 def parse_args(m):
     """Parse CLI args given the model module m. Returns a Config object."""
     cfg = config.Config()
@@ -123,53 +183,8 @@ def parse_args(m):
 
     cfg.EF_base()  # If EF is slected, most other options will be moot
     cfg.chance_constraint_args()  # EF-only (see config.checker)
-    # There are some arguments here that will not make sense for all models
-    cfg.popular_args()
-    cfg.two_sided_args()
-    cfg.lshaped_args()
-    cfg.xhatlshaped_args()    
-    cfg.ph_args()
-    cfg.aph_args()
-    cfg.cg_args()
-    cfg.dualcg_args()
-    cfg.subgradient_args()
-    cfg.fixer_args()
-    cfg.cvar_args()
-    cfg.relaxed_ph_fixer_args()
-    cfg.integer_relax_then_enforce_args()
-    cfg.slamming_args()
-    cfg.w_oscillation_args()
-    cfg.gapper_args()
-    cfg.gapper_args(name="lagrangian")
-    cfg.ph_primal_args()
-    cfg.ph_dual_args()
-    cfg.relaxed_ph_args()
-    cfg.ph_xfeas_spoke_args()
-    cfg.fwph_args()
-    cfg.lagrangian_args()
-    cfg.subgradient_bounder_args()
-    cfg.xhatshuffle_args()
-    cfg.xhatxbar_args()
-    cfg.xhat_from_file_args()
-    cfg.write_xhat_file_args()
-    cfg.norm_rho_args()
-    cfg.primal_dual_rho_args()
-    cfg.converger_args()
-    cfg.wxbar_read_write_args()
-    cfg.wtracker_args()
-    cfg.tracking_args()
-    cfg.gradient_args()
-    cfg.dynamic_rho_args()
-    cfg.reduced_costs_args()
-    cfg.sep_rho_args()
-    cfg.coeff_rho_args()
-    cfg.sensi_rho_args()
-    cfg.reduced_costs_rho_args()
-
-    cfg.add_to_config("user_defined_extensions",
-                      description="Space-delimited module names for user extensions",
-                      domain=pyofig.ListOf(str),
-                      default=None)
+    # Hub-and-spoke decomposition args (shared with mrp_generic)
+    add_decomp_args(cfg)
     # TBD - think about adding directory for json options files
 
     cfg.mmw_args()

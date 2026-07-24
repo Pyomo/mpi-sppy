@@ -79,6 +79,35 @@ def not_good_enough_results(results):
         (results.solution(0).status == SolutionStatus.unknown) or \
         (results.solver.termination_condition == TerminationCondition.infeasible) or \
         (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
+        (results.solver.termination_condition == TerminationCondition.error) or \
+        (results.solver.termination_condition == TerminationCondition.unbounded)
+
+
+def no_outer_bound_results(results):
+    """True when `results` cannot carry a usable outer bound.
+
+    The bound-only analog of not_good_enough_results, for callers that want a
+    bound and never a solution. Screen as little as possible here: anything
+    disqualified is a bound thrown away, and a bound from a solve that went
+    badly is the whole point of asking for a bound only.
+
+    So this says nothing about whether a solution is present, and nothing
+    about a solve merely going badly. A subproblem stopped by a time limit
+    with no incumbent still reports the bound the caller is after, and
+    solvers describe that outcome in unflattering terms: xpress calls it
+    status=aborted, TerminationCondition=error (mip_no_sol_found in
+    xpress_direct.py) and then hands over xprob_attrs.bestbound anyway.
+
+    Only two outcomes really have no bound to report, and both are dangerous
+    rather than merely useless, because solvers do not agree on how to say
+    "none": for an unbounded LP gurobi leaves lower_bound None while cplex
+    fills in the last iterate's objective, a plausible finite number that is
+    not a bound at all. Hence infeasible and unbounded are screened on the
+    termination condition, never on the value.
+    """
+    return (results is None) or \
+        (results.solver.termination_condition == TerminationCondition.infeasible) or \
+        (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
         (results.solver.termination_condition == TerminationCondition.unbounded)
 
 
@@ -915,13 +944,8 @@ def option_dict_to_string(odict):
     """
     if odict is None:
         return None
-    ostr = ""
-    for i, v in odict.items():
-        if v is None:
-            ostr += "{i} "
-        else:
-            ostr += f"{i}={v} "
-    return ostr
+    return "".join(f"{k} " if v is None else f"{k}={v} "
+                   for k, v in odict.items())
 
 
 # Solver-options layered representation. See
@@ -1007,38 +1031,127 @@ def fold_solver_options_layers(layers, k):
     return folded
 
 
-# Solver-name-aware translation for the two canonical option keys
+# Solver-name-aware translation for the canonical option keys
 # mpi-sppy stores internally. Keys not in this table are passed
 # through unchanged by translate_solver_options.
 #
-# Entries map (canonical_key, solver_name) → solver-native key when
+# Entries map (canonical_key, solver_name) → solver-native key(s) when
 # the solver names the option differently. Solver names not listed
 # under a canonical key use the canonical name itself (no rename).
-# Persistent variants (e.g. gurobi_persistent) are normalized to the
-# base name before lookup.
+# Solver names are matched by substring, so a mapping for "gurobi"
+# applies to gurobi, gurobi_persistent, appsi_gurobi, etc. A mapping
+# value may be:
+#   - a string (single target key)
+#   - a tuple/list of strings (same value fanout to several keys)
+#   - a dict mapping target key -> value spec, where the value spec is
+#     either the string "same" (use the canonical value) or a literal
+#     replacement value.
+#   - None, meaning the canonical option cannot be mapped for that solver.
 _SOLVER_OPTION_TRANSLATIONS = {
     "mipgap": {
+        # CPLEX uses Pyomo's underscore form of the native parameter name.
+        "cplex": "mip_tolerances_mipgap",
+        "glpk": "mipgap",
         # HiGHS uses its native option name.
         "highs": "mip_rel_gap",
-        "appsi_highs": "mip_rel_gap",
+        # CBC uses ratioGap for the relative MIP gap.
+        "cbc": "ratioGap",
+        # SCIP uses a limits/gap control.
+        "scip": "limits/gap",
+        # MOSEK uses a dparam for the relative MIP gap.
+        "mosek": "mio_tol_rel_gap",
+        # FICO Xpress expresses the same concept with a trio of controls.
+        "xpress": {
+            "miprelstop": "same",
+            "miprelcutoff": 0.0,
+            "mipaddcutoff": 0.0,
+        },
+    },
+    "absgap": {
+        # CPLEX uses Pyomo's underscore form of the native parameter name.
+        "cplex": "mip_tolerances_absmipgap",
+        # Gurobi uses its native parameter name.
+        "gurobi": "MIPGapAbs",
+        # HiGHS uses its native option name.
+        "highs": "mip_abs_gap",
+        # CBC uses gapAbs for the absolute MIP gap.
+        "cbc": "gapAbs",
+        # SCIP uses a limits/absgap control.
+        "scip": "limits/absgap",
+        # MOSEK uses a dparam for the absolute MIP gap.
+        "mosek": "mio_tol_abs_gap",
+        # FICO Xpress uses the absolute-gap counterparts.
+        "xpress": {
+            "mipabscutoff": "same",
+            "miprelcutoff": 0.0,
+            "mipaddcutoff": 0.0,
+        },
+        # GLPK does not support absolute gap control.
+        "glpk": None,
     },
     "threads": {
         # Gurobi parameter is conventionally capitalized.
         "gurobi": "Threads",
-        "appsi_gurobi": "Threads",
+        # SCIP uses both LP and parallel thread controls.
+        "scip": ("lp/threads", "parallel/maxnthreads"),
+        # MOSEK uses a different name for solver threads.
+        "mosek": "num_threads",
+        # These solvers already use the canonical mpi-sppy spelling.
+        "cplex": "threads",
+        "cbc": "threads",
+        # GLPK does not support threads.
+        "glpk": None,
+    },
+    "time_limit": {
+        # seconds; HiGHS's native name is time_limit, so it passes through.
+        # Gurobi parameter is conventionally capitalized.
+        "gurobi": "TimeLimit",
+        # CPLEX accepts the timelimit parameter alias (shell and persistent).
+        "cplex": "timelimit",
+        # FICO Xpress MAXTIME: a positive value is a soft stop for MIPs
+        # (the solver keeps going until a first feasible solution exists);
+        # a hard stop would need a negative value, which a same-value
+        # rename cannot express.
+        "xpress": "maxtime",
+        # CBC names its time limit "seconds".
+        "cbc": "seconds",
+        # SCIP uses a limits/time control.
+        "scip": "limits/time",
+        # MOSEK uses a dparam for the overall solver time limit.
+        "mosek": "optimizer_max_time",
+        # GLPK's tmlim is in seconds for the glpsol interface.
+        "glpk": "tmlim",
     },
 }
+
+
+def _solver_name_matches(solver_name, token):
+    return bool(solver_name) and token in solver_name
+
+
+def _target_option_names(target):
+    if isinstance(target, str):
+        return (target,)
+    if isinstance(target, (tuple, list)):
+        return tuple(target)
+    if isinstance(target, dict):
+        return target
+    if target is None:
+        return None
+    raise TypeError(
+        "solver-option translation targets must be a string, tuple/list of strings, dict, or None")
 
 
 def translate_solver_options(opts, solver_name):
     """Return a copy of *opts* with canonical option keys renamed to
     the solver's native key, where they differ.
 
-    Currently translates only ``mipgap`` and ``threads``; all other
-    keys pass through unchanged. If the user already supplied the
-    solver-native key alongside the canonical key, the
-    solver-native key wins and the canonical key is dropped (so the
-    solver does not receive both forms).
+    Currently translates only ``mipgap``, ``absgap``, ``threads`` and
+    ``time_limit``; all other
+    keys pass through unchanged. A translation may fan out to multiple
+    solver-native keys. If the user already supplied one of the
+    solver-native keys alongside the canonical key, that explicit value
+    wins and the canonical value is only used for the missing targets.
 
     Args:
         opts (dict | None): solver options. ``None`` returns ``None``;
@@ -1057,23 +1170,37 @@ def translate_solver_options(opts, solver_name):
     out = dict(opts)
     if not solver_name:
         return out
-    # gurobi_persistent → gurobi; appsi_highs stays as appsi_highs;
-    # cplex_persistent → cplex; xpress_persistent → xpress.
-    base_name = solver_name
-    if base_name.endswith("_persistent"):
-        base_name = base_name[:-len("_persistent")]
     for canonical, mapping in _SOLVER_OPTION_TRANSLATIONS.items():
         if canonical not in out:
             continue
-        target = mapping.get(solver_name) or mapping.get(base_name)
-        if target is None or target == canonical:
+        target = None
+        matched = False
+        for key, value in mapping.items():
+            if _solver_name_matches(solver_name, key):
+                target = value
+                matched = True
+                break
+        if not matched or target == canonical:
             continue
-        if target in out:
-            # User explicitly supplied the solver-native key; respect
-            # it and drop the canonical to avoid sending duplicates.
-            del out[canonical]
+        value = out.pop(canonical)
+        target_names = _target_option_names(target)
+        if target_names is None:
+            raise ValueError(
+                f"Cannot translate option {canonical!r} for solver {solver_name!r}")
+        if isinstance(target_names, dict):
+            for target_name, target_value in target_names.items():
+                if target_name in out:
+                    # User explicitly supplied the solver-native key; respect
+                    # it and leave that value in place.
+                    continue
+                out[target_name] = value if target_value == "same" else target_value
         else:
-            out[target] = out.pop(canonical)
+            for target_name in target_names:
+                if target_name in out:
+                    # User explicitly supplied the solver-native key; respect
+                    # it and leave that value in place.
+                    continue
+                out[target_name] = value
     return out
 
 
@@ -1708,4 +1835,3 @@ if __name__ == "__main__":
         print(ndn, v)
     print(f"slices: {slices}")
     check4losses(numscens, branching_factors, sntr, slices, ranks_per_scenario)
-

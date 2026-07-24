@@ -162,6 +162,11 @@ def shared_options(cfg, is_hub=False):
         # Optional initial xhat candidate file (.npy); None disables.
         # Consumed by XhatInnerBoundBase._try_file_xhat.
         "xhat_from_file" : cfg.get("xhat_from_file", None),
+        # Cap for feasibility cuts emitted by xhat spokes. The hub
+        # extension reads this (when attached); each xhat spoke reads
+        # it to gate _maybe_emit_feasibility_cut; spwindow.FieldLengths
+        # reads it to size the shared-memory buffer. Default 0 disables.
+        "xhat_feasibility_cuts_count" : cfg.get("xhat_feasibility_cuts_count", 0) or 0,
         "inspect_buffers_on_shutdown" : cfg.get("inspect_buffers_on_shutdown", False),
         # IIS-on-xhatter-infeasibility (issue #356); consumed by
         # SPOpt.write_iis_on_xhatter_infeasible. See doc/src/iis.rst.
@@ -812,6 +817,26 @@ def add_cross_scenario_cuts(hub_dict,
             = {"check_bound_improve_iterations" : cfg.cross_scenario_iter_cnt}
     return hub_dict
 
+
+def add_xhat_feasibility_cuts(hub_dict, cfg):
+    """Wire the hub-side receiver for xhat feasibility cuts.
+
+    No-op if ``cfg.xhat_feasibility_cuts_count`` is zero. Otherwise
+    attaches ``XhatFeasibilityCutExtension`` to the hub; the hub
+    extension's ``setup_hub`` hard-fails if any first-stage nonant is
+    not binary. Propagates the cap into hub options so the extension
+    sees it. See ``doc/src/xhat_feasibility_cuts.rst``.
+    """
+    n = cfg.get("xhat_feasibility_cuts_count", 0) or 0
+    if n <= 0:
+        return hub_dict
+    from mpisppy.extensions.xhat_feasibility_cut_extension import (
+        XhatFeasibilityCutExtension,
+    )
+    hub_dict = extension_adder(hub_dict, XhatFeasibilityCutExtension)
+    hub_dict["opt_kwargs"]["options"]["xhat_feasibility_cuts_count"] = n
+    return hub_dict
+
 def add_reduced_costs_fixer(hub_dict,
                             cfg,
                             ):
@@ -870,12 +895,14 @@ def add_slammer(hub_dict,
     return hub_dict
 
 def add_w_oscillation(hub_dict, cfg):
-    # W-oscillation detection/reporting; activated only when the detect JSON
-    # control file is supplied (see doc/designs/w_oscillation_design.md).
+    # W-oscillation detection/reporting and (optionally) interruption; activated
+    # when either JSON control file is supplied (see
+    # doc/designs/w_oscillation_design.md).
     from mpisppy.extensions.w_oscillation import WOscillationMonitor
     hub_dict = extension_adder(hub_dict, WOscillationMonitor)
     hub_dict["opt_kwargs"]["options"]["w_oscillation_options"] = {
         "detect_json": cfg.detect_W_oscillations,
+        "interrupt_json": cfg.interrupt_W_oscillations,
         "verbose": cfg.verbose,
     }
     return hub_dict
@@ -976,7 +1003,7 @@ def _fwph_options(cfg):
 
     fw_options = {
         "FW_iter_limit": cfg.fwph_sdm_iter_limit,
-        "FW_weight": cfg.fwph_weight,
+        "FW_weight": cfg.fwph_weight if not cfg.fwph_objgap_hub else cfg.fwph_objgap_start_weight,
         "FW_conv_thresh": cfg.fwph_conv_thresh,
         "stop_check_tol": cfg.fwph_stop_check_tol,
         "solver_name": cfg.solver_name,
@@ -984,6 +1011,12 @@ def _fwph_options(cfg):
         "mip_solver_options": mip_solver_options,
         "qp_solver_options": qp_solver_options,
         "FW_LP_start_iterations": cfg.fwph_lp_start_iterations,
+        "objgap_mode": cfg.fwph_objgap_hub,
+        "mip_fw_effort_balance": cfg.fwph_objgap_mip_fw_effort_balance,
+        "objgap_decrease_base": cfg.fwph_objgap_decrease_base,
+        "objgap_decrease_coeff": cfg.fwph_objgap_decrease_coeff,
+        "objgap_initial_floor": cfg.fwph_objgap_initial_gap_floor,
+        "add_cylinder_columns": cfg.fwph_add_cylinder_columns,
     }
 
     # Separate MIP/QP solvers (issue #712). FWPH falls back to solver_name
