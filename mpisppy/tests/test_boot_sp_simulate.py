@@ -49,14 +49,14 @@ MODULE_NAME = "unique_schultz"
 
 # classical_bootstrap ci_optimal (seed_offset=100), keyed by number of ranks
 locked_ci_optimal = {
-    1: [-54.0116666666667, -49.7366666666667],
-    2: [-52.27666666666669, -47.55166666666669],
+    1: [-53.855000000000025, -48.95166666666669],
+    2: [-54.26333333333335, -48.53000000000002],
 }
 # coverage harness result (rate, length) with seed base 0 and 4 replications,
 # keyed by number of ranks
 locked_coverage = {
-    1: (1.0, 5.574166666666672),
-    2: (1.0, 5.241250000000003),
+    1: (1.0, 5.000000000000005),
+    2: (1.0, 5.60000000000001),
 }
 
 

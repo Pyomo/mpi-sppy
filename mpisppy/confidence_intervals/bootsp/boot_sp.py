@@ -84,6 +84,23 @@ def eligible_scenarios(cfg):
                                      cfg.max_count)])
 
 
+def _pool_rng(cfg):
+    """ The random stream for pool and center draws.
+
+    Streams are seeded with a (seed_offset, word) pair, which numpy's
+    SeedSequence hashes, so no two streams coincide either within a run
+    (the second word separates this stream from every rank's batch stream)
+    or across seed_offsets (e.g. the sequential offsets used by the
+    coverage simulations); summing the words instead can collide.
+    """
+    return default_rng([cfg.seed_offset, 0])
+
+
+def _batch_rng(cfg):
+    """ The per-rank random stream for batch resampling (see _pool_rng). """
+    return default_rng([cfg.seed_offset, my_rank + 1])
+
+
 def process_optimal(cfg, module):
     """ For simulations we need a known or assumed z*
         Args:
@@ -240,7 +257,7 @@ def _bootstrap_resample(cfg, module, scenario_pool, xhat, serial=False):
     """
     # loop over batches
 
-    rng = default_rng(cfg.seed_offset + my_rank)
+    rng = _batch_rng(cfg)
     if serial:
         local_nB = cfg.nB
     else:
@@ -273,7 +290,7 @@ def classical_bootstrap(cfg, module, xhat, quantile=True):
         tuple with confidence interval if on MPI rank 0
 
     """
-    rng = default_rng(cfg.seed_offset)
+    rng = _pool_rng(cfg)
 
     scenario_pool = rng.choice(eligible_scenarios(cfg), size=cfg.sample_size, replace=False)
     dag_upper = evaluate_scenarios(cfg, module, scenario_pool, xhat, duplication=False)
@@ -347,7 +364,7 @@ def _sub_resample(cfg, module, scenario_pool, xhat, serial=False):
     # loop over batches
     # only difference between this and bootstrap_sampling is the size of the scenarios: one is subsample_size, the other is sample_size
 
-    rng = default_rng(cfg.seed_offset + my_rank)
+    rng = _batch_rng(cfg)
     if serial:
         local_nB = cfg.nB
     else:
@@ -382,7 +399,7 @@ def subsampling(cfg, module, xhat):
         tuple with confidence interval if on MPI rank 0
 
     """
-    rng = default_rng(cfg.seed_offset)
+    rng = _pool_rng(cfg)
 
     scenario_pool = rng.choice(eligible_scenarios(cfg), size=cfg.sample_size, replace=False)
     dag_upper = evaluate_scenarios(cfg, module, scenario_pool, xhat, duplication=False)
@@ -442,7 +459,7 @@ def _extended_resample(cfg, module, xhat, serial=False):
     """
     # loop over batches
 
-    rng = default_rng(cfg.seed_offset + my_rank + 1)
+    rng = _batch_rng(cfg)
     if serial:
         local_nB = cfg.nB
     else:
@@ -483,7 +500,7 @@ def extended_bootstrap(cfg, module, xhat):
         tuple with confidence interval if on MPI rank 0
 
     """
-    rng = default_rng(cfg.seed_offset)
+    rng = _pool_rng(cfg)
 
     # extended bootstrap
     local_boot_gaps_diff, local_boot_optimals_diff, local_boot_uppers_diff = _extended_resample(cfg, module, xhat, serial=False)
@@ -550,7 +567,7 @@ def _bagging_resample(cfg, module, scenario_pool, xhat, serial=False, replacemen
     """
     # loop over batches
 
-    rng = default_rng(cfg.seed_offset + my_rank)
+    rng = _batch_rng(cfg)
     if serial:
         local_nB = cfg.nB
     else:
@@ -591,7 +608,7 @@ def bagging_bootstrap(cfg, module, xhat, replacement=True):
         tuple with confidence interval if on MPI rank 0
     """
 
-    rng = default_rng(cfg.seed_offset)
+    rng = _pool_rng(cfg)
     scenario_pool = rng.choice(eligible_scenarios(cfg), size=cfg.sample_size, replace=False)
 
     # bootstrap from pool

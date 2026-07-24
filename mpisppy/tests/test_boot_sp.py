@@ -18,7 +18,9 @@
 
 import os
 import sys
+import json
 import types
+import tempfile
 import unittest
 
 import mpisppy.utils.sputils as sputils
@@ -55,17 +57,17 @@ empirical_methods = ["Classical_gaussian",
 
 # ci_optimal locked at these params with seed_offset=100 (serial, one MPI rank)
 locked_ci_optimal = {
-    "Classical_gaussian": [-54.88235197935663, -49.18431468731008],
-    "Classical_quantile": [-54.0116666666667, -49.7366666666667],
+    "Classical_gaussian": [-54.796284027848245, -49.27038263881846],
+    "Classical_quantile": [-53.855000000000025, -48.95166666666669],
 }
 
 # same, for the data-file example (schultz_data), serial, seed_offset=100
 locked_ci_optimal_data = {
-    "Classical_gaussian": [-68.35794769780962, -65.18205230219043],
-    "Classical_quantile": [-68.53850000000004, -65.47000000000006],
+    "Classical_gaussian": [-67.67550923965139, -65.86449076034866],
+    "Classical_quantile": [-67.52250000000001, -65.94600000000001],
 }
 # coverage harness (rate, length) for schultz_data, serial, seed base 0, 4 reps
-locked_coverage_data = (1.0, 2.105875000000008)
+locked_coverage_data = (1.0, 2.63187499999999)
 
 
 def _make_cfg(method="Classical_quantile"):
@@ -148,6 +150,46 @@ class Test_boot_sp(unittest.TestCase):
         cfg.sample_size = cfg.max_count  # no room left for the candidate block
         with self.assertRaises(RuntimeError):
             boot_sp.eligible_scenarios(cfg)
+
+    def test_cfg_from_json_booleans(self):
+        # real json booleans (true/false) and boot-sp's legacy "True"/"False"
+        # strings must both work for a module's bool options, and a json
+        # missing boot_method must raise a friendly error
+        fake = types.ModuleType("json_bool_module")
+        def inparser_adder(cfg):
+            cfg.add_to_config("use_integer", description="a bool option",
+                              domain=bool, default=False)
+            cfg.add_to_config("aux_flag", description="another bool option",
+                              domain=bool, default=True)
+        fake.inparser_adder = inparser_adder
+        sys.modules["json_bool_module"] = fake
+        try:
+            opts = {"module_name": "json_bool_module",
+                    "max_count": 50, "candidate_sample_size": 1,
+                    "sample_size": 30, "subsample_size": 10, "nB": 20,
+                    "alpha": 0.1, "seed_offset": 100,
+                    "optimal_fname": "None", "xhat_fname": "None",
+                    "solver_name": "nosolver",
+                    "boot_method": "Classical_quantile",
+                    "trace_fname": "None", "coverage_replications": 4,
+                    "use_integer": True,     # a real json boolean
+                    "aux_flag": "False"}     # boot-sp style string
+            with tempfile.TemporaryDirectory() as tdir:
+                fname = os.path.join(tdir, "opts.json")
+                with open(fname, "w") as f:
+                    json.dump(opts, f)
+                cfg = boot_utils.cfg_from_json(fname)
+                self.assertTrue(cfg.use_integer)
+                self.assertFalse(cfg.aux_flag)
+
+                del opts["boot_method"]
+                with open(fname, "w") as f:
+                    json.dump(opts, f)
+                with self.assertRaises(RuntimeError) as ctx:
+                    boot_utils.cfg_from_json(fname)
+                self.assertIn("boot_method", str(ctx.exception))
+        finally:
+            del sys.modules["json_bool_module"]
 
     def test_compute_xhat_requires_generator(self):
         # a module with no xhat_generator (fixed or legacy) must raise, and the

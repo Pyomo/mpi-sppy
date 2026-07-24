@@ -193,40 +193,43 @@ def cfg_from_json(json_fname):
     assert "module_name" in options, "The json file must include module_name"
     cfg = _process_module(options["module_name"])
 
+    boot_method = options.get("boot_method")
+    if boot_method is None:
+        raise RuntimeError(f"boot_method must be in the json file: {json_fname}")
+    BootMethods.check_for_it(boot_method)
+
     badtrip = False
 
     def _dobool(idx):
         nonlocal badtrip
-        if idx not in options:
-            badtrip = True
-            # such an index will raise two complaints...
-            print(f"ERROR: {idx} must be in json {json_fname}")
+        # real json booleans (true/false) arrive as Python bools and are used
+        # as-is; the strings "True"/"False" are retained for boot-sp files
+        if isinstance(options[idx], bool):
             return
-        if options[idx].lower().capitalize() == "True":
+        if str(options[idx]).lower().capitalize() == "True":
             options[idx] = True
-        elif options[idx].lower().capitalize() == "False":
+        elif str(options[idx]).lower().capitalize() == "False":
             options[idx] = False
         else:
             badtrip = True
-            print(f"ERROR: Needed 'True' or 'False', got {options[idx]} for {idx}")
+            print(f"ERROR: Needed a boolean, got {options[idx]} for {idx}")
 
     # get every cfg index from the json
     for idx in cfg:
         if idx not in options:
-            if "smoothed" in idx and "Smoothed" not in cfg.boot_method:
+            if "smoothed" in idx and "Smoothed" not in boot_method:
                 continue
             badtrip = True
             print(f"ERROR: {idx} not in the options read from {json_fname}")
             continue
         if options[idx] != "None":
-            # TBD: query the cfg to see if it is bool
-            if str(options[idx]).lower().capitalize() == "True" or str(options[idx]).lower().capitalize() == "False":
+            if isinstance(options[idx], bool) \
+               or str(options[idx]).lower().capitalize() in ("True", "False"):
                 _dobool(idx)  # do not return options, just modify cfg
             cfg[idx] = options[idx]
         else:
             cfg[idx] = None
 
-    BootMethods.check_for_it(options["boot_method"])
     if badtrip:
         raise RuntimeError(f"There were missing options in the json file: {json_fname}")
     else:

@@ -269,6 +269,23 @@ Behavior-preserving unless noted.
     `cfg.get("Branching_factors")` (capital B), but modules declare the
     lowercase `branching_factors`, so the "two-stage only" error could
     never fire. The port checks the lowercase name.
+11. **Independent random streams (behavior change).** boot-sp seeds the
+    batch stream of rank r with `seed_offset + r` and the pool/center
+    stream with `seed_offset`, so rank 0's batch stream duplicates the
+    pool stream, and the sequential seed offsets used by the coverage
+    simulation reuse batch streams across replications (replication k on
+    rank r has the same stream as replication k+1 on rank r-1). The port
+    seeds every stream with a `(seed_offset, word)` pair
+    (`boot_sp._pool_rng` / `_batch_rng`), which numpy's `SeedSequence`
+    hashes into independent streams; no two streams coincide within a
+    run or across seed offsets, and `_extended_resample`'s special
+    `+ my_rank + 1` offset is retired.
+12. **Real json booleans.** boot-sp's `cfg_from_json` accepts only the
+    strings `"True"`/`"False"` for bool options and crashes with an
+    `AttributeError` on a real json `true`/`false`; a json missing
+    `boot_method` dies with a raw `TypeError` instead of a friendly
+    message. The port accepts real json booleans (keeping the strings
+    for boot-sp files) and reports a missing `boot_method` clearly.
 
 ---
 
