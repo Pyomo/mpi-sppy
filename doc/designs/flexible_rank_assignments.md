@@ -377,24 +377,25 @@ window creation.  Cons:
   over one anchor rank per cylinder — rather than a single
   `fullcomm.allgather`, which scales worse at N=thousands.
 
-  *What the communication-layer cut actually ships, and the release
-  gate.*  The first cut uses a single `fullcomm.allgather` for the
-  unequal-rank layout exchange.  This is deliberate but interim: it is
-  effectively zero new code (the existing `SPWindow` exchange run on
-  `fullcomm` instead of `strata_comm`), it is a one-time *startup* cost
-  on a cold path — not the RMA hot path — and at development/test scale
-  (a handful of ranks) it is free.  It is **not** the end state.
-  Because total rank counts in the thousands are a real operating
-  regime here, the O(N) startup allgather and its O(N)-per-rank layout
-  storage must be replaced by the two-level (or local-compute) scheme
-  **before flexible ranks is documented or recommended for production
-  use** (it can land on `main` before then, since it is inert until a
-  non-default ratio).  That replacement is its own focused change — it
-  touches only how
-  `strata_buffer_layouts` is populated at startup, not the multi-source
-  reader — so it is tracked as a release-gate item rather than folded
-  into the feature phases, letting it be reviewed and scale-tested on
-  its own.  See §Gate reliance on the feature with an MPI CI matrix.
+  *What the unequal-rank path actually ships.*  The first cut used a
+  single `fullcomm.allgather` (the existing `SPWindow` exchange run on
+  `fullcomm` instead of `strata_comm`) — deliberately interim, because
+  total rank counts in the thousands are a real operating regime and an
+  O(N) startup allgather must not be the production exchange.  That
+  interim exchange has since been replaced (Pyomo/mpi-sppy#726) by the
+  **two-level scheme** (`two_level_layout_exchange` in
+  `spcommunicator.py`): an allgather *within* each cylinder, an
+  allgather across one anchor rank per cylinder (the base rank, on a
+  temporary `fullcomm.Split` comm of just the anchors — a handful of
+  ranks), and a broadcast of the assembled result within each cylinder.
+  The two-level exchange was chosen over local-compute because field
+  registration is dynamic (extensions register extra send fields), so
+  layouts cannot be reconstructed from static information alone.  Every
+  rank still *stores* all N layouts — each is a small dict of 3-int
+  tuples, and a reader legitimately needs the layout of any peer rank
+  its overlap maps touch — only the exchange pattern changed.  The
+  change is localized to how `strata_buffer_layouts` is populated at
+  startup; the multi-source reader is untouched.
 
   *Lock granularity.*  `MPI_Win_lock(rank=target, ...)` is per-
   target-rank in the MPI spec, not per-window — a writer's exclusive
@@ -578,6 +579,28 @@ two code paths in the multi-source reader.  No cylinder-wide iteration
 counter (it would add synchronization the async design avoids and is
 unnecessary given the per-field analysis).
 
+#### Read-outcome diagnostic
+
+An always-on, per-field counter at the multi-source reader
+(Pyomo/mpi-sppy#742; `_count_coherence_read` in `spcommunicator.py`)
+buckets every multi-source read (>= 2 sources) as `new_accepted` /
+`not_new` / `rejected_incoherent` / `rejected_cross_reader` /
+`accepted_mixed`.  This lets an infrequently-reporting bounds cylinder
+be diagnosed as a coherence problem (reads rejected because sources
+disagree on `write_id`, or blended on a relaxed field) vs. a slow
+upstream sender (no new data), and measures how often a multi-source
+read actually straddles a publish — the empirical basis for the
+strict-vs-relaxed choices above, especially under an asynchronous APH
+sender.  Cost is two integer increments per multi-source read, so
+counting is unconditional; each cylinder prints a per-field summary at
+finalization (`report_coherence_diagnostics`, aggregated across the
+cylinder's ranks, rank-0-gated, only for fields that did multi-source
+reads — so equal-rank runs print nothing), and an opt-in periodic line
+(`coherence_diagnostics_period` in the spcomm options: print local
+counters every N multi-source reads) supports live debugging.  The
+counters are exposed programmatically as
+`SPCommunicator.coherence_counters`.
+
 
 ### Impact on Existing Components
 
@@ -697,12 +720,11 @@ the first pass bundled into "Phase 0" has already landed separately.
 **Phase 2: Communication layer** (additive; reached only when a ratio
 differs from 1.0)
 
-- Add the `fullcomm.allgather` layout exchange for the unequal-rank
-  path (Option D's addressing), *alongside* the existing
-  `strata_comm`-based exchange, which the equal-rank path keeps using.
-  This is the interim exchange; the scalable replacement is a release
-  gate, not a feature phase (see the Option D layout-exchange note and
-  §Gate reliance on the feature with an MPI CI matrix).
+- Add the layout exchange for the unequal-rank path (Option D's
+  addressing), *alongside* the existing `strata_comm`-based exchange,
+  which the equal-rank path keeps using.  (The first cut's interim
+  `fullcomm.allgather` has since been replaced by the scalable
+  two-level exchange — see the Option D layout-exchange note.)
 - Implement multi-source `get_receive_buffer()` using overlap maps, as
   a path taken only under non-default ratios; the single-source reader
   is unchanged for the equal-rank case.
@@ -905,13 +927,13 @@ two MPI implementations (e.g. OpenMPI and MPICH) and more than one
 mpi4py / MPI version, since that path is where the RMA-portability risk
 lives.
 
-The same "finish before recommending it" list carries the **scalable
-layout exchange**: the interim `fullcomm.allgather` (see the Option D
-layout-exchange note) must be replaced by the two-level or local-compute
-scheme before the feature is documented or recommended for production
-use, because total rank counts in the thousands are a real operating
-regime here.  Both are prerequisites for recommending the feature, not
-for landing the intervening phases on `main`.
+The **scalable layout exchange** used to sit on this same "finish
+before recommending it" list; it is now done — the interim
+`fullcomm.allgather` was replaced by the two-level exchange
+(Pyomo/mpi-sppy#726; see the Option D layout-exchange note) — leaving
+the MPI-implementation matrix above as the remaining prerequisite for
+recommending the feature (not for landing the intervening phases on
+`main`).
 
 
 ### Possible future work (out of scope)
@@ -925,17 +947,6 @@ optimization could store it once per non-leaf node instead of once per
 scenario, saving storage and bandwidth on those fields.  This is *only*
 valid for the Category-2 fields — never for the Category-1 per-scenario
 fields — and is explicitly **not** required for flexible ranks.
-
-**Coherence read-outcome diagnostic** (Pyomo/mpi-sppy#742).  An
-always-on, per-field counter at the multi-source reader breaking each
-read into `not_new` / `new_accepted` / `rejected_incoherent` /
-`accepted_mixed`.  This lets an infrequently-reporting bounds cylinder be
-diagnosed as a coherence problem (reads rejected because sources disagree
-on `write_id`) vs. a slow upstream sender (no new data), and measures how
-often a multi-source read straddles a publish — the empirical basis for
-the strict-vs-relaxed choices above, especially under an asynchronous APH
-sender.
-
 
 ### Backward Compatibility
 

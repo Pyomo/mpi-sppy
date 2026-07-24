@@ -126,12 +126,20 @@ def padded_len_n_doubles(logical_len: int) -> int:
 
 class SPWindow:
 
-    def __init__(self, my_fields: dict, strata_comm: MPI.Comm, field_order=None):
+    def __init__(self, my_fields: dict, strata_comm: MPI.Comm, field_order=None,
+                 layout_exchanger=None):
         """
         Design A (padded transfers):
           - Layout tuple is (offset, logical_len, padded_len) and offset advances by padded_len.
           - put/get always transfer padded_len doubles.
           - ID slot is at (offset + logical_len - 1).
+
+        ``layout_exchanger``, when given, is a callable mapping this rank's
+        ``buffer_layout`` to the list of every window rank's layout (indexed by
+        rank on ``strata_comm``); it replaces the default
+        ``strata_comm.allgather``.  The unequal-rank path passes a two-level
+        exchange here because its window comm is ``fullcomm``, where a flat
+        allgather does not scale to total rank counts in the thousands.
         """
         self.strata_comm = strata_comm
         self.strata_rank = strata_comm.Get_rank()
@@ -184,7 +192,10 @@ class SPWindow:
             self.buff[off + logical_len - 1] = 0.0
 
         # Gather layouts across ranks
-        self.strata_buffer_layouts = strata_comm.allgather(self.buffer_layout)
+        if layout_exchanger is None:
+            self.strata_buffer_layouts = strata_comm.allgather(self.buffer_layout)
+        else:
+            self.strata_buffer_layouts = layout_exchanger(self.buffer_layout)
 
     def free(self):
         if self.window is not None:

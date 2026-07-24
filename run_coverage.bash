@@ -265,6 +265,9 @@ run_phase "test_dualcg_with_cylinders (mpiexec -np 2)" \
 run_phase "test_spwindow_multisource (mpiexec -np 6)" \
     mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_spwindow_multisource.py
 
+run_phase "test_flex_layout_exchange (mpiexec -np 6)" \
+    mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flex_layout_exchange.py
+
 run_phase "test_flexible_rank_cylinders (mpiexec -np 6)" \
     mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_cylinders.py
 
