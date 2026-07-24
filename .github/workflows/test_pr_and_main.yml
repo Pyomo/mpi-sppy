@@ -857,6 +857,19 @@ jobs:
           cd examples/farmer/CI
           bash farmer_mrp_generic.bash
 
+      - name: run bootstrap CI tests (serial)
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          coverage run $COV_ARGS test_boot_sp.py
+          coverage run $COV_ARGS test_boot_sp_simulate.py
+
+      - name: run bootstrap CI tests (mpiexec -np 2)
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          mpiexec -np 2 coverage run $COV_ARGS -m mpi4py test_boot_sp_simulate.py
+
       - name: Upload coverage data
         if: always()
         uses: actions/upload-artifact@v4

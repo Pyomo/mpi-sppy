@@ -134,8 +134,26 @@ def do_one_mmw(dirname, modname, runefstring, npyfile, mmwargstring):
     os.chdir("..")
     os.chdir("..")  # moved to CI directory
 
+def do_one_boot(dirname, module, boot_method, size_args, np=2):
+    # A small bootstrap confidence-interval run on a statdist-free example
+    # (the other bootstrap examples need statdist, which is merged separately).
+    # xhat is computed by the model's xhat_generator (no npy file needed).
+    argstring = (f"{module} {size_args} --alpha 0.1 --seed-offset 100 "
+                 f"--solver-name {solver_name} --boot-method {boot_method}")
+    return do_one(f"bootsp/{dirname}",
+                  "-m mpisppy.confidence_intervals.bootsp.user_boot",
+                  np, argstring)
+
 # -------- First part: farmer family, usar, netdes --------
 if run_first_part:
+    # schultz: data generated on the fly from the scenario number
+    do_one_boot("schultz", "unique_schultz", "Classical_quantile",
+                "--max-count 50 --candidate-sample-size 1 --sample-size 30 "
+                "--subsample-size 10 --nB 20", np=2)
+    # schultz_data: same model, data read from a committed csv dataset
+    do_one_boot("schultz_data", "schultz_data", "Bagging_with_replacement",
+                "--max-count 200 --candidate-sample-size 5 --sample-size 100 "
+                "--subsample-size 20 --nB 20", np=2)
     do_one("farmer/CI", "farmer_ef.py", 1,
            "1 3 {}".format(solver_name))
     # for farmer_cylinders, the first arg is num_scens and is required
