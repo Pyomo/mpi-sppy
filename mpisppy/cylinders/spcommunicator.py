@@ -111,6 +111,54 @@ def reduce_source_write_ids(source_ids, strict: bool) -> int:
         return source_ids[0] if len(set(source_ids)) == 1 else -1
     return min(source_ids)
 
+
+def two_level_layout_exchange(my_layout, fullcomm, cylinder_comm, cylinder_bases):
+    """Exchange every rank's buffer layout on the unequal-rank path, where the
+    window lives on ``fullcomm``, without a flat ``fullcomm.allgather`` (an
+    O(N) startup collective that must not be the exchange at total rank counts
+    in the thousands).  Three scalable steps instead:
+
+      1. allgather within each cylinder (size = that cylinder's rank count);
+      2. allgather across one anchor rank per cylinder (the base rank,
+         ``cylinder_comm`` rank 0) on a temporary comm of just the anchors
+         (size = the number of cylinders, a small constant);
+      3. broadcast the assembled result within each cylinder.
+
+    Every rank still *stores* all N layouts (each is a small dict of
+    3-int tuples), because a reader legitimately needs the layout of any
+    peer rank its overlap maps touch; only the exchange pattern changes.
+
+    Args:
+        my_layout: this rank's ``SPWindow.buffer_layout``.
+        fullcomm: the window comm spanning all ranks.
+        cylinder_comm: this rank's within-cylinder comm, rank-ordered by
+            global rank (so its rank 0 is the cylinder's base rank).
+        cylinder_bases: each cylinder's base (lowest) global rank, in
+            cylinder order.
+
+    Returns:
+        list: every rank's layout, indexed by global rank on ``fullcomm``.
+    """
+    cylinder_layouts = cylinder_comm.allgather(my_layout)
+    # anchor comm: cylinder base ranks only; Split is collective on fullcomm
+    is_anchor = cylinder_comm.Get_rank() == 0
+    anchor_comm = fullcomm.Split(
+        color=0 if is_anchor else MPI.UNDEFINED, key=fullcomm.Get_rank()
+    )
+    if is_anchor:
+        # anchors are ordered by global rank, i.e. in cylinder order
+        per_cylinder_layouts = anchor_comm.allgather(cylinder_layouts)
+        anchor_comm.Free()
+    else:
+        per_cylinder_layouts = None
+    per_cylinder_layouts = cylinder_comm.bcast(per_cylinder_layouts, root=0)
+
+    layouts = [None] * fullcomm.Get_size()
+    for base, one_cylinder in zip(cylinder_bases, per_cylinder_layouts):
+        layouts[base : base + len(one_cylinder)] = one_cylinder
+    assert None not in layouts
+    return layouts
+
 def communicator_array(data_length: int):
     """
     Allocate an MPI memory region with a padded length (multiple of 8 doubles = 64B),
@@ -347,6 +395,18 @@ class SPCommunicator:
         self.overlap_maps = {}            # -> list[OverlapSegment] (global ranks)
         self._overlap_source_ranks = {}   # -> sorted distinct source global ranks
 
+        # Per-field read-outcome counters for the unequal-rank multi-source
+        # reader (see _count_coherence_read); always accumulated (two integer
+        # increments per multi-source read), reported at finalization by
+        # report_coherence_diagnostics. Empty on the equal-rank path and for
+        # single-source reads, which cannot straddle a publish.
+        self.coherence_counters = {}
+        # opt-in periodic per-field line for live debugging: print local
+        # counters every N multi-source reads (0 = off)
+        self._coherence_report_period = int(
+            self.options.get("coherence_diagnostics_period", 0)
+        )
+
         # setup FieldLengths which calculates
         # the length of each buffer type based
         # on the problem data
@@ -541,9 +601,13 @@ class SPCommunicator:
         window_spec = self._build_window_spec()
         # Equal-rank: window on strata_comm (rank i of every cylinder),
         # addressed by strata_rank. Unequal-rank: window on fullcomm,
-        # addressed by global rank via overlap maps (strata_comm is None).
+        # addressed by global rank via overlap maps (strata_comm is None);
+        # the layout exchange then must not be a flat allgather on fullcomm,
+        # so pass the two-level exchange (see two_level_layout_exchange).
         window_comm = self.fullcomm if self._flex_ranks else self.strata_comm
-        self.window = SPWindow(window_spec, window_comm)
+        layout_exchanger = self._flex_layout_exchange if self._flex_ranks else None
+        self.window = SPWindow(window_spec, window_comm,
+                               layout_exchanger=layout_exchanger)
 
         self._create_field_rank_mappings()
         self.register_receive_fields()
@@ -697,6 +761,13 @@ class SPCommunicator:
     # Unequal-rank (Option D) helpers. These are reached only when
     # self._flex_ranks is True; the equal-rank path above never calls them.
     # ------------------------------------------------------------------
+
+    def _flex_layout_exchange(self, my_layout):
+        """The unequal-rank window's layout exchange: two-level instead of a
+        flat allgather on fullcomm (see two_level_layout_exchange)."""
+        return two_level_layout_exchange(
+            my_layout, self.fullcomm, self.cylinder_comm, self._cylinder_bases
+        )
 
     def _items_per_scen_for_field(self, field: Field):
         """Number of field items each scenario contributes, indexed by global
@@ -893,15 +964,32 @@ class SPCommunicator:
             source_snapshots[r] = snapshot
             source_ids.append(int(snapshot[logical_len - 1]))
 
-        new_id = reduce_source_write_ids(
-            source_ids, strict=field in _STRICT_COHERENCE_FIELDS
-        )
+        strict = field in _STRICT_COHERENCE_FIELDS
+        new_id = reduce_source_write_ids(source_ids, strict=strict)
+
+        # Read-outcome diagnostic: count genuinely multi-source reads (>= 2
+        # sources; a single source cannot straddle a publish). The outcome
+        # buckets let a user tell a coherence problem (reads rejected or
+        # blended) from a slow upstream sender (nothing new to read) when a
+        # consumer appears to report infrequently.
+        counters = None
+        if len(source_ids) >= 2:
+            counters = self._count_coherence_read(field)
+            mixed = len(set(source_ids)) > 1
 
         if not self._write_ids_agree(new_id, synchronize):
+            if counters is not None:
+                # a strict local-source mismatch is the fundamental coherence
+                # miss; otherwise this rank's sources agreed and the collective
+                # cross-reader check rejected the read
+                counters["rejected_incoherent" if strict and mixed
+                         else "rejected_cross_reader"] += 1
             buf._is_new = False
             return False
 
         if new_id > last_id:
+            if counters is not None:
+                counters["accepted_mixed" if mixed else "new_accepted"] += 1
             # assemble the accepted data into buf, then commit via the shared
             # _mark_new (which stamps the id slot the assembly does not touch)
             data_view = buf.value_array()
@@ -910,8 +998,84 @@ class SPCommunicator:
                 data_view[seg.local_offset : seg.local_offset + seg.count] = \
                     snapshot[seg.remote_offset : seg.remote_offset + seg.count]
             return self._mark_new(buf, new_id)
+        if counters is not None:
+            # strict + mixed lands here when every reader rank computed the
+            # sentinel -1, so cross-reader agreement held but the id cannot
+            # advance -- still a coherence rejection, not a slow sender
+            counters["rejected_incoherent" if strict and mixed
+                     else "not_new"] += 1
         buf._is_new = False
         return False
+
+    def _count_coherence_read(self, field: Field) -> dict:
+        """Count one multi-source read of ``field`` and return its outcome
+        counters (created on first use) for the caller to bucket:
+
+          * ``new_accepted`` -- sources agreed on an advanced write_id; used.
+          * ``not_new`` -- coherent, but the write_id did not advance (the
+            sender has not published since the last accepted read).
+          * ``rejected_incoherent`` -- a strict field's sources disagreed, so
+            the read was rejected and will be retried (the fundamental
+            coherence miss: the read straddled a publish).
+          * ``rejected_cross_reader`` -- this rank's sources agreed, but the
+            collective cross-reader write_id check rejected the read (some
+            other rank of this cylinder saw a different id).
+          * ``accepted_mixed`` -- a relaxed field's sources disagreed and the
+            blended assembly was used anyway.
+
+        The buckets partition ``total``. The coherence miss rate is
+        ``(rejected_incoherent + accepted_mixed) / total``; if ``not_new``
+        dominates instead, the upstream sender is just slow.
+        """
+        counters = self.coherence_counters.setdefault(field, {
+            "total": 0,
+            "new_accepted": 0,
+            "not_new": 0,
+            "rejected_incoherent": 0,
+            "rejected_cross_reader": 0,
+            "accepted_mixed": 0,
+        })
+        counters["total"] += 1
+        if self._coherence_report_period > 0 and self.cylinder_rank == 0 \
+                and counters["total"] % self._coherence_report_period == 0:
+            # live-debugging line: this rank's counts only (the current
+            # read's outcome bucket is not yet incremented)
+            print(f"coherence diagnostic [{self.__class__.__name__}] "
+                  f"{field.name}: "
+                  + ", ".join(f"{k}={v}" for k, v in counters.items()),
+                  flush=True)
+        return counters
+
+    def report_coherence_diagnostics(self):
+        """Print a per-field summary of the multi-source read outcomes
+        accumulated in ``coherence_counters`` (see _count_coherence_read for
+        the buckets and their diagnosis). Collective on ``cylinder_comm``:
+        every rank of the cylinder must call it (different ranks can have
+        different multi-source fields, or none, so the counters are gathered
+        rather than reduced); rank 0 prints. Inert -- no output, one gather --
+        at equal ranks or when no multi-source reads happened.
+        """
+        if not self._flex_ranks:
+            return
+        all_counters = self.cylinder_comm.gather(self.coherence_counters, root=0)
+        if self.cylinder_rank != 0:
+            return
+        totals = {}
+        for rank_counters in all_counters:
+            for field, counters in rank_counters.items():
+                aggregate = totals.setdefault(field, dict.fromkeys(counters, 0))
+                for outcome, count in counters.items():
+                    aggregate[outcome] += count
+        for field in sorted(totals):
+            counters = totals[field]
+            if counters["total"] == 0:
+                continue
+            misses = counters["rejected_incoherent"] + counters["accepted_mixed"]
+            print(f"coherence diagnostic [{self.__class__.__name__}] "
+                  f"{field.name}: "
+                  + ", ".join(f"{k}={v}" for k, v in counters.items())
+                  + f", miss rate={misses / counters['total']:.2%}",
+                  flush=True)
 
     def receive_nonant_bounds(self):
         """ receive the bounds on the nonanticipative variables based on

@@ -170,6 +170,9 @@ def _make_reader():
         (Field.DUALS, peer): _SEGMENTS,
         (Field.NONANTS_VALS, peer): _SEGMENTS,
     }
+    # read-outcome diagnostic state (set by __init__ in the real class)
+    sp.coherence_counters = {}
+    sp._coherence_report_period = 0
     return sp, peer
 
 
@@ -232,6 +235,56 @@ class TestMultiSourceReaderRetry(unittest.TestCase):
         self.assertTrue(buf.is_new())
         self.assertEqual(buf.id(), 5)
         np.testing.assert_allclose(buf.value_array(), _ASSEMBLED)
+
+
+class TestCoherenceCounters(unittest.TestCase):
+    """The read-outcome diagnostic, driven deterministically through the same
+    stub: each read outcome must land in exactly one counter bucket, so the
+    buckets partition the total and the miss rate is computable after the run.
+    (synchronize is False throughout, so rejected_cross_reader stays 0; that
+    bucket needs the collective check the MPI integration test exercises.)"""
+
+    def _read(self, sp, buf, field, peer):
+        return sp._flex_get_multi_source(buf, field, peer, synchronize=False)
+
+    def _counters(self, sp, field):
+        return sp.coherence_counters[field]
+
+    def test_outcomes_bucketed_and_partition_total(self):
+        sp, peer = _make_reader()
+        buf = RecvArray(_DATA_LEN * 2)
+
+        # strict + mixed -> rejected_incoherent (the fundamental miss)
+        sp.window.set_write_ids(5, 4)
+        self._read(sp, buf, Field.DUALS, peer)
+        # coherent + advanced -> new_accepted
+        sp.window.set_write_ids(6, 6)
+        self._read(sp, buf, Field.DUALS, peer)
+        # coherent, id unchanged -> not_new (a slow sender, not a miss)
+        self._read(sp, buf, Field.DUALS, peer)
+
+        counters = self._counters(sp, Field.DUALS)
+        self.assertEqual(counters["rejected_incoherent"], 1)
+        self.assertEqual(counters["new_accepted"], 1)
+        self.assertEqual(counters["not_new"], 1)
+        self.assertEqual(counters["accepted_mixed"], 0)
+        self.assertEqual(counters["rejected_cross_reader"], 0)
+        self.assertEqual(counters["total"], 3)
+
+    def test_relaxed_mixed_counts_as_accepted_mixed(self):
+        sp, peer = _make_reader()
+        buf = RecvArray(_DATA_LEN * 2)
+
+        sp.window.set_write_ids(7, 5)  # mixed; relaxed accepts at the floor
+        self._read(sp, buf, Field.NONANTS_VALS, peer)
+        # mixed again but the floor has not advanced -> not_new, not a miss
+        self._read(sp, buf, Field.NONANTS_VALS, peer)
+
+        counters = self._counters(sp, Field.NONANTS_VALS)
+        self.assertEqual(counters["accepted_mixed"], 1)
+        self.assertEqual(counters["not_new"], 1)
+        self.assertEqual(counters["rejected_incoherent"], 0)
+        self.assertEqual(counters["total"], 2)
 
 
 if __name__ == "__main__":
