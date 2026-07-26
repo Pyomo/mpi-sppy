@@ -51,8 +51,13 @@ def fit_distribution(sample_data, distr_type='univariate-epispline'):
     return fitted_distr
 
 
-def center_smoothed(cfg, module, xhat, mpicomm):
-    """ Estimate the CI center (the optimality gap) from the fitted distribution. """
+def center_smoothed(cfg, module, xhat):
+    """ Estimate the CI center (the optimality gap) from the fitted distribution.
+
+    The smoothed methods are single-rank-per-solve, so the solves here go to the
+    module globals' view; there is no communicator to thread through (an earlier
+    signature took one and ignored it).
+    """
     assert cfg.smoothed_center_sample_size is not None, \
         "need a sample size for smoothed bootstrap center estimation"
     scenario_pool = list(range(cfg.seed_offset,
@@ -136,7 +141,7 @@ def smoothed_bootstrap(cfg, module, xhat, distr_type='univariate-epispline', qua
 
     # the center: one replication at a large resample size
     # (smoothed_center_sample_size) drawn from the fitted distribution
-    dag_gap = center_smoothed(cfg, module, xhat, mpicomm=comm)
+    dag_gap = center_smoothed(cfg, module, xhat)
     comm.Barrier()
 
     # each batch is a fresh set of cfg.sample_size draws from the same fitted
@@ -206,7 +211,14 @@ def smoothed_bagging(cfg, module, xhat, distr_type='univariate-kernel', serial=F
         all_gaps = None
         avg_gaps = None
 
-    assert cfg.smoothed_B_I is not None, "B_I required for smoothed bagging"
+    # B_I is the number of initial seed points; s1 below is the variance *among*
+    # their averages, so fewer than two of them leaves it undefined
+    if cfg.smoothed_B_I is None or cfg.smoothed_B_I < 2:
+        raise ValueError(
+            "smoothed_B_I (the number of initial seed points) must be at least "
+            f"2 for smoothed bagging; got {cfg.smoothed_B_I}. The variance of "
+            "the per-seed-point averages is what estimates the between-point "
+            "term of the interval width.")
 
     B_I = cfg.smoothed_B_I
     for i in range(B_I):
@@ -234,8 +246,11 @@ def smoothed_bagging(cfg, module, xhat, distr_type='univariate-kernel', serial=F
 
         dag_gap = np.mean(avg_gaps)
 
-        s1 = np.var(avg_gaps)
-        s2 = np.var(all_gaps)
+        # sample variances (ddof=1), as the algorithm specifies and as the
+        # empirical estimators already use for their Gaussian half-width;
+        # ddof=0 understates s1 by (B_I-1)/B_I, which is a third at B_I=3
+        s1 = np.var(avg_gaps, ddof=1)
+        s2 = np.var(all_gaps, ddof=1)
         ppf = NormalDist().inv_cdf(1 - cfg.alpha / 2)
         s_g_2 = (cfg.subsample_size**2) * s1 / cfg.sample_size + s2 / (B_I * cfg.nB)
         error = np.sqrt(s_g_2) * ppf

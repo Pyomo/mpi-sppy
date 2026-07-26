@@ -135,8 +135,9 @@ def do_one_mmw(dirname, modname, runefstring, npyfile, mmwargstring):
     os.chdir("..")  # moved to CI directory
 
 def do_one_boot(dirname, module, boot_method, size_args, np=2):
-    # A small bootstrap confidence-interval run on a statdist-free example
-    # (the other bootstrap examples need statdist, which is merged separately).
+    # A small bootstrap confidence-interval run. schultz/schultz_data need only
+    # numpy; farmer/cvar/multi_knapsack pull in statdist (and so scipy), and a
+    # Smoothed_* method fits a distribution with it.
     # xhat is computed by the model's xhat_generator (no npy file needed).
     argstring = (f"{module} {size_args} --alpha 0.1 --seed-offset 100 "
                  f"--solver-name {solver_name} --boot-method {boot_method}")

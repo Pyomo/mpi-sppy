@@ -303,14 +303,17 @@ class Test_smoothed(unittest.TestCase):
         real_eval = boot_sp.evaluate_scenarios
         real_center = smoothed_boot_sp.center_smoothed
 
-        def spy_eval(cfg_, module_, scenarios, xhat_, duplication=True, mpicomm=None):
+        # the smoothed callers never pass a communicator, so the spy does not
+        # need one either -- and not taking one keeps this working whether or
+        # not evaluate_scenarios has grown an mpicomm argument
+        def spy_eval(cfg_, module_, scenarios, xhat_, duplication=True):
             pools.append(list(scenarios))
             return real_eval(cfg_, module_, scenarios, xhat_,
-                             duplication=duplication, mpicomm=mpicomm)
+                             duplication=duplication)
 
-        def spy_center(cfg_, module_, xhat_, mpicomm):
+        def spy_center(cfg_, module_, xhat_):
             fitted_at_center.append(cfg_.use_fitted)
-            return real_center(cfg_, module_, xhat_, mpicomm)
+            return real_center(cfg_, module_, xhat_)
 
         boot_sp.evaluate_scenarios = spy_eval
         smoothed_boot_sp.center_smoothed = spy_center
