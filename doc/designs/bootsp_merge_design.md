@@ -286,6 +286,33 @@ Behavior-preserving unless noted.
     `boot_method` dies with a raw `TypeError` instead of a friendly
     message. The port accepts real json booleans (keeping the strings
     for boot-sp files) and reports a missing `boot_method` clearly.
+13. **Independent smoothed-bootstrap batches (behavior change, from
+    broken to working).** `smoothed_resample_helper` advanced the record
+    index by one per batch while taking a block of `subsample_size`
+    consecutive records, so consecutive batches shared all but one of
+    their draws — a sliding window, not independent resamples. Chen &
+    Woodruff (2024, Algorithm 3) draws a fresh set of `N` points from the
+    fitted distribution for each of the `B` batches. The port strides by
+    the batch size, as `smoothed_bagging` already did, so the blocks are
+    pairwise disjoint. The estimated spread was badly understated before:
+    on the `cvar` example (`N = 20`, `nB = 10`) the interval widens about
+    fivefold. `simulate_boot` spaces its coverage replications to match:
+    the ported spacing was a hard-coded `nB * 100` unrelated to how many
+    record numbers a replication actually consumes, and is now exactly
+    that footprint. (The empirical harness needs no such spacing at all,
+    because item 11 gave it independent numpy streams; the smoothed path
+    addresses its draws by record number, since that is what the model
+    seeds each draw with, so its replications are separated by giving
+    each one a disjoint block of record numbers.)
+14. **Smoothed center from the fitted distribution (behavior change,
+    from broken to working).** `smoothed_bootstrap` called
+    `center_smoothed` while `use_fitted` was still `False`, so the center
+    was the purely empirical gap. Algorithm 3 takes the center from
+    Algorithm 2 run on the *fitted* distribution, and that smoothed center
+    is the paper's leading conclusion, so `use_fitted` is now set before
+    the center is estimated (`smoothed_bagging` already did this). The
+    center block of the index space is reserved ahead of the batch blocks,
+    since both now sample the same fitted distribution.
 
 ---
 

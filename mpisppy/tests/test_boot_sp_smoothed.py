@@ -284,6 +284,55 @@ class Test_smoothed(unittest.TestCase):
         else:
             self.assertEqual(result, (None, None, None, None))
 
+    @unittest.skipIf(not solver_available, "no solver is available")
+    def test_smoothed_bootstrap_draws_are_disjoint_and_fitted(self):
+        # Two properties of the smoothed bootstrap that are easy to lose:
+        #  (1) every batch is an independent set of draws from the fitted
+        #      distribution, so the per-batch record blocks are pairwise
+        #      disjoint and disjoint from the center's block. Overlapping
+        #      blocks reuse draws and collapse the estimated spread.
+        #  (2) the center is drawn from the *fitted* distribution, not from
+        #      the raw sample; drawing it raw makes it the purely empirical
+        #      point estimate.
+        module = boot_utils.module_name_to_module("cvar")
+        cfg = _make_cvar_cfg("Smoothed_boot_kernel")
+        xhat = boot_utils.compute_xhat(cfg, module)
+
+        pools = []
+        fitted_at_center = []
+        real_eval = boot_sp.evaluate_scenarios
+        real_center = smoothed_boot_sp.center_smoothed
+
+        def spy_eval(cfg_, module_, scenarios, xhat_, duplication=True, mpicomm=None):
+            pools.append(list(scenarios))
+            return real_eval(cfg_, module_, scenarios, xhat_,
+                             duplication=duplication, mpicomm=mpicomm)
+
+        def spy_center(cfg_, module_, xhat_, mpicomm):
+            fitted_at_center.append(cfg_.use_fitted)
+            return real_center(cfg_, module_, xhat_, mpicomm)
+
+        boot_sp.evaluate_scenarios = spy_eval
+        smoothed_boot_sp.center_smoothed = spy_center
+        try:
+            smoothed_boot_sp.compute_smoothed_ci(cfg, module, xhat)
+        finally:
+            boot_sp.evaluate_scenarios = real_eval
+            smoothed_boot_sp.center_smoothed = real_center
+
+        self.assertEqual(fitted_at_center, [True])  # (2)
+
+        # pools[0] is the center; the rest are this rank's batches
+        center_pool, batch_pools = set(pools[0]), [set(p) for p in pools[1:]]
+        self.assertEqual(len(center_pool), cfg.smoothed_center_sample_size)
+        for i, bp in enumerate(batch_pools):                                # (1)
+            self.assertEqual(len(bp), cfg.sample_size)
+            self.assertEqual(bp & center_pool, set(),
+                             msg=f"batch {i} reuses the center's draws")
+            for j, other in enumerate(batch_pools[i + 1:], start=i + 1):
+                self.assertEqual(bp & other, set(),
+                                 msg=f"batches {i} and {j} share draws")
+
     @unittest.skipIf(not ipopt_available, "ipopt (nonlinear solver) not available")
     @unittest.skipIf(not solver_available, "no solver is available")
     def test_cvar_smoothed_epi(self):

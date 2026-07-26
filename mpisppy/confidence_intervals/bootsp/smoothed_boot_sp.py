@@ -71,7 +71,18 @@ def center_smoothed(cfg, module, xhat, mpicomm):
 
 def smoothed_resample_helper(cfg, module, xhat, serial=False):
     """ Get local gaps for the smoothed bootstrap (the fitted-distribution
-        analog of boot_sp._bootstrap_resample). """
+        analog of boot_sp._bootstrap_resample).
+
+    Every batch is an *independent* set of cfg.subsample_size draws from the
+    fitted distribution, so the batches take disjoint blocks of the draw index
+    space: batch b covers [start + b*m, start + (b+1)*m). A record number is
+    the draw's seed, so striding by anything less than m (the batch size) would
+    hand consecutive batches most of the same draws and collapse the spread the
+    interval is built from. The block the center estimate draws from,
+    [seed_offset, seed_offset + smoothed_center_sample_size) (see
+    center_smoothed), is reserved ahead of the batches because it samples the
+    same fitted distribution and must not reuse their draws.
+    """
     if serial:
         local_nB = cfg.nB
     else:
@@ -79,19 +90,14 @@ def smoothed_resample_helper(cfg, module, xhat, serial=False):
 
     local_boot_gaps = np.empty(local_nB, dtype=np.float64)
 
-    boot_cfg = cfg()  # for ephemeral changes to deal with seed_offset
-    boot_cfg.use_fitted = True
+    m = cfg.subsample_size
+    start = cfg.seed_offset + (cfg.smoothed_center_sample_size or 0)
+    # this rank's first batch in the global 0..nB-1 numbering
+    first_batch = 0 if serial else sum(boot_sp.slice_lens(cfg.nB)[:my_rank])
 
     for iter in range(local_nB):
-        # seed_offset makes unique samples
-        if serial:
-            seed_offset = iter
-        else:
-            seed_offset = sum(boot_sp.slice_lens(boot_cfg.nB)[:my_rank]) + iter
-        boot_cfg.seed_offset = cfg.seed_offset + seed_offset
-
-        scenario_pool = list(range(boot_cfg.seed_offset,
-                                   boot_cfg.seed_offset + cfg.subsample_size))
+        b = first_batch + iter
+        scenario_pool = list(range(start + b * m, start + (b + 1) * m))
 
         local_boot_upper = boot_sp.evaluate_scenarios(cfg, module, scenario_pool, xhat, duplication=False)
         local_boot_ef = boot_sp.solve_routine(cfg, module, scenario_pool, num_threads=2, duplication=False)
@@ -102,7 +108,8 @@ def smoothed_resample_helper(cfg, module, xhat, serial=False):
 
 
 def smoothed_bootstrap(cfg, module, xhat, distr_type='univariate-epispline', quantile=False, serial=False):
-    """ use the original data to estimate the center, then perform a smoothed estimation of width of confidence intervals
+    """ fit a distribution to the sample, then draw both the center and the
+        batches from it to get a smoothed point estimate and interval width
     Args:
         cfg (Config): parameters
         module (Python module): contains the scenario creator function and helpers
@@ -121,13 +128,19 @@ def smoothed_bootstrap(cfg, module, xhat, distr_type='univariate-epispline', qua
     cfg.use_fitted = False
     sample_data = [module.data_sampler(scenario, cfg) for scenario in scenario_pool]
     cfg.fitted_distribution = fit_distribution(sample_data, distr_type=distr_type)
-
-    # estimation of CI center
-    dag_gap = center_smoothed(cfg, module, xhat, mpicomm=comm)
-    comm.Barrier()
+    # From here on both the center and the batches draw from the fitted
+    # distribution. Estimating the center from the raw sample instead would
+    # make it the purely empirical point estimate and give up the smoothing
+    # that is the whole point of these methods.
     cfg.use_fitted = True
 
-    # conduct an m out of n bootstrap, with B = cfg.nB
+    # the center: one replication at a large resample size
+    # (smoothed_center_sample_size) drawn from the fitted distribution
+    dag_gap = center_smoothed(cfg, module, xhat, mpicomm=comm)
+    comm.Barrier()
+
+    # each batch is a fresh set of cfg.sample_size draws from the same fitted
+    # distribution, so the bootstrap batch size is the full sample size
     cfg.subsample_size = cfg.sample_size
     local_boot_gaps = smoothed_resample_helper(cfg, module, xhat, serial)
     comm.Barrier()

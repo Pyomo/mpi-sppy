@@ -107,7 +107,18 @@ def smoothed_main_routine(cfg, module):
     ci_len = []
     run_time = []
     seed_offset = cfg.seed_offset  # store the original offset
-    seed_list = [i * cfg.nB * 100 + seed_offset for i in range(cfg.coverage_replications)]
+    # Replications must not share draws. Unlike the empirical methods, which
+    # get independent streams straight from numpy (default_rng([seed_offset,
+    # word]) and so can step the offset by 1), the smoothed methods address
+    # their draws by record number -- the model seeds each draw with it -- so
+    # replications are separated by giving each one its own block of record
+    # numbers. The stride is therefore exactly what one replication consumes:
+    # the center block plus one block per batch (smoothed bootstrap), or B_I
+    # groups of nB bags (smoothed bagging). Take the larger of the two so the
+    # stride covers whichever method is running.
+    stride = max((cfg.smoothed_center_sample_size or 0) + cfg.nB * cfg.sample_size,
+                 (cfg.smoothed_B_I or 1) * cfg.nB * cfg.subsample_size)
+    seed_list = [i * stride + seed_offset for i in range(cfg.coverage_replications)]
 
     for seed in seed_list:
         cfg.seed_offset = seed
