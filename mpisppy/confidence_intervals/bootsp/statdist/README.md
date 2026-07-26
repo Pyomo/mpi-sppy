@@ -17,8 +17,10 @@ Only the **univariate** distributions and their support modules:
 
 ## What was dropped
 
-The multivariate machinery — `copula.py`, `vine.py`, `bicop.py`, and the
-multivariate distribution classes in `distributions.py` — is **not** included.
+The multivariate machinery — `copula.py`, `vine.py`, `bicop.py`, the
+multivariate distribution classes in `distributions.py`, and the
+`MultivariateDistribution` base class and its decorators in
+`base_distribution.py` — is **not** included.
 Dropping it also removes the `from scipy.stats import mvn` import (removed in
 scipy 1.14) and the optional `gosm` hook, neither of which the smoothed
 bootstrap methods use. scipy is imported lazily (via
