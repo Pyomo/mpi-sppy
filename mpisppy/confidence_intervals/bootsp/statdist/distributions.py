@@ -300,7 +300,7 @@ class UnivariateGaussianKernelDistribution(UnivariateDistribution):
         Returns:
             UnivariateEmpiricalDistribution: The fitted distribution
         """
-        return UnivariateGaussianKernelDistribution(data, bw_method=None)
+        return UnivariateGaussianKernelDistribution(data, bw_method=bw_method)
 
     def pdf(self, x):
         """
@@ -328,8 +328,10 @@ class UnivariateGaussianKernelDistribution(UnivariateDistribution):
 
     #use the cdf_inverse function in base_distribution
 
-    def generate_X(self, n=1, seed=0):
-        return self.kernel.resample([n, seed])
+    def generates_X(self, n=1, seed=None):
+        # gaussian_kde.resample takes the sample size and the seed as two
+        # separate arguments
+        return self.kernel.resample(n, seed)
 
    
 
@@ -585,6 +587,11 @@ class UnivariateEmpiricalDistribution(UnivariateDistribution):
                 x1 = self.input_data[0]
                 index1 = self._count_less_than_or_equal(self.input_data, x1)
 
+                if index1 == n:
+                    # every record has the same value, so there is no second
+                    # point to extrapolate along; x is below the lone mass point
+                    return 0
+
                 x2 = self.input_data[index1]
                 index2 = self._count_less_than_or_equal(self.input_data, x2)
 
@@ -605,6 +612,10 @@ class UnivariateEmpiricalDistribution(UnivariateDistribution):
 
         elif upper_neighbor is None:  # x is greater than all of the values
             if upper_bound is None:
+                if self.input_data[0] == self.input_data[n - 1]:
+                    # every record has the same value, so there is no second
+                    # point to extrapolate along; x is above the lone mass point
+                    return 1
                 j = n - 1
                 while self.input_data[j] == self.input_data[n - 1]:
                     j -= 1
@@ -654,6 +665,11 @@ class UnivariateEmpiricalDistribution(UnivariateDistribution):
         n = len(self.input_data)
         if x < 0 or x > 1:
             raise ValueError('x must be between 0 and 1!')
+        if self.input_data[0] == self.input_data[n - 1]:
+            # every record has the same value (this includes a one-record
+            # sample): that value is every quantile, and neither extrapolation
+            # below nor above has a second point to find a slope from
+            return self.input_data[0]
         # compute 'index' of this x
         index = x * (n + 1) - 1
         first_index = self._count_less_than_or_equal(
@@ -682,13 +698,11 @@ class UnivariateEmpiricalDistribution(UnivariateDistribution):
                 # (n-1, input_data[n-1])
                 # NOTE: input_data[n-1] could occur several times,
                 # so find lowest index j with input_data[j] = input_data[n-1]
+                # the all-equal case returned above, so this walk down the run
+                # of largest values always stops with j >= 1
                 j = n - 1
                 while self.input_data[j] == self.input_data[j - 1]:
                     j -= 1
-                    if j - 1 == -len(self.input_data):
-                        print("Warning: all input values are the same (",
-                              self.input_data[j], ")")
-                        return self.input_data[j]
                 # g(x) = a*x + b
                 a = self.input_data[j] - self.input_data[j - 1]
                 b = self.input_data[j - 1] - (self.input_data[j]
@@ -787,8 +801,10 @@ class UnivariateDiscrete(UnivariateDistribution):
             if val < lastval:
                 raise RuntimeError("DiscreteDistribution dict must be ordered by val:"+str(val)+" < "+str(lastval))
             lastval = val
-        self.var = self.mean*self.mean - Esqsum
-        if sumprob - 1 > tol: # could use gosm_options.cdf_tolerance
+        self.var = Esqsum - self.mean*self.mean
+        # the probabilities have to sum to one from *either* side: a set of
+        # breakpoints summing to (say) 0.5 is not a distribution
+        if abs(sumprob - 1) > tol: # could use gosm_options.cdf_tolerance
             raise ValueError("Discrete distribution with total prob="
                              +str(sumprob)+" tolerance="+str(tol))
         super(UnivariateDiscrete, self).__init__()
@@ -825,7 +841,7 @@ class UnivariateDiscrete(UnivariateDistribution):
         Evaluates the inverse of the cdf at probability value x, but
         that does not really fly for discrete distrs...
         """
-        raise RuntimeError("cdf called for a discrete distribution.")
+        raise RuntimeError("cdf_inverse called for a discrete distribution.")
 
     def sample_one(self):
         """

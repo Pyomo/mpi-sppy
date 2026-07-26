@@ -50,7 +50,9 @@ class Parameter:
         """
         self.name = name
         self.value = value
-        self.instantiated = value is None
+        # a parameter is instantiated once it has a value (the docstring above:
+        # "if None, the parameter is not instantiated")
+        self.instantiated = value is not None
         self.bounds = bounds
         self.kind = kind
 
@@ -61,6 +63,7 @@ class Parameter:
             value: The value to set the parameter to
         """
         self.value = value
+        self.instantiated = value is not None
 
     def __repr__(self):
         return "Parameter({},{})".format(self.name, self.value)

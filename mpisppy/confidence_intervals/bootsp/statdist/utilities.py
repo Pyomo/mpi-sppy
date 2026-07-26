@@ -94,9 +94,9 @@ class memoize_method:
     with the instance meaning that once the instance goes out of scope, the
     cache will be garbage collected and this will not lead to memory leaks.
 
-    In general, any objects passed to a memoized method should be hashable,
-    however this will convert any lists or dictionaries passed in to hashable
-    tuples to store their values in the cache.
+    Any objects passed to a memoized method should be hashable; a call with an
+    unhashable argument (a list or a dictionary, say) cannot be cached, so it
+    is simply passed through to the method every time.
 
     This will internally store in any object which has a method decorated
     with this class a dictionary with the name _memoize_method__cache which
@@ -150,12 +150,18 @@ class memoize_method:
         else:
             cache = obj.__cache = {}
 
-        key = (self.func, pargs[1:], frozenset(kwargs))
+        # the keyword *values* have to be part of the key: cdf(x, epsabs=1e-4)
+        # and cdf(x, epsabs=1e-9) are different questions
+        key = (self.func, pargs[1:], frozenset(kwargs.items()))
 
         try:
             value = cache[key]
         except KeyError:
             value = cache[key] = self.func(*pargs, **kwargs)
+        except TypeError:
+            # an unhashable argument: call through rather than hiding the
+            # method's own behavior behind "unhashable type: 'list'"
+            value = self.func(*pargs, **kwargs)
         return value
 
 
