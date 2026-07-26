@@ -829,6 +829,25 @@ jobs:
           conda install mpi4py "numpy" setuptools
           pip install pyomo pandas xpress cplex scipy sympy dill packaging coverage
 
+      # the bootstrap epi-spline distributions fit with a nonlinear solver, so
+      # without ipopt those tests skip; this is how Pyomo's own CI gets ipopt
+      - name: Install Ipopt
+        run: |
+          # the ipopt binary links against these; Pyomo's CI installs the same
+          sudo apt-get update -q
+          sudo apt-get install -y libopenblas-dev gfortran liblapack-dev
+          IPOPT_DIR=$HOME/ipopt
+          mkdir -p "$IPOPT_DIR"
+          echo "$IPOPT_DIR" >> $GITHUB_PATH
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$IPOPT_DIR" >> $GITHUB_ENV
+          URL=https://github.com/IDAES/idaes-ext
+          VER=$(curl -sL -H 'Accept: application/json' $URL/releases/latest \
+                | sed -e 's/.*"tag_name":"\([^"]*\)".*/\1/')
+          if test -z "$VER"; then echo "FAILED identifying the ipopt release"; exit 1; fi
+          curl -fL $URL/releases/download/$VER/idaes-solvers-ubuntu2204-x86_64.tar.gz \
+            | tar -xz -C "$IPOPT_DIR"
+          "$IPOPT_DIR"/ipopt -v
+
       - name: setup the program
         run: |
           pip install -e .
