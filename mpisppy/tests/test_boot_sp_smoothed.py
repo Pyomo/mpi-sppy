@@ -226,29 +226,49 @@ class Test_statdist(unittest.TestCase):
         self.assertEqual(len(draws), 1000)
         self.assertLess(abs(float(np.mean(draws))), 0.25)
 
-    def test_student_fit_uses_the_documented_df(self):
+    def test_student_fit_matches_the_data_moments(self):
+        # the fit promises the distribution's mean and variance are the data's;
+        # passing sqrt(var) to scipy as the *scale* would instead give a
+        # variance of var*df/(df-2), i.e. var**2 under the df rule below
         data = list(np.random.RandomState(4).normal(0.0, 2.0, size=500))
         var = float(np.var(data))
         self.assertGreater(var, 1.0)
         st = distribution_factory("univariate-student").fit(data)
-        self.assertAlmostEqual(st.mean, float(np.mean(data)))
-        self.assertAlmostEqual(st.var, var)
+        self.assertAlmostEqual(st.distribution.mean(), float(np.mean(data)))
+        self.assertAlmostEqual(st.distribution.var(), var)
         self.assertAlmostEqual(st.df, 2*var/(var - 1))
+        # that df is exactly the one at which a t of scale one has variance var
+        self.assertAlmostEqual(st.df / (st.df - 2), var)
 
-    def test_student_fit_falls_back_to_one_df(self):
-        # 2v/(v-1) is not a usable number of degrees of freedom once v <= 1
+    def test_student_variance_is_honored_for_any_df(self):
+        for df in (2.5, 4.0, 30.0):
+            st = distribution_factory("univariate-student")(
+                df=df, mean=-2.0, var=9.0)
+            self.assertAlmostEqual(st.distribution.var(), 9.0, msg=f"df={df}")
+            self.assertAlmostEqual(st.distribution.mean(), -2.0)
+
+    def test_student_needs_a_df_that_has_a_variance(self):
+        for df in (1, 2.0):
+            with self.assertRaises(ValueError):
+                distribution_factory("univariate-student")(
+                    df=df, mean=0.0, var=1.0)
+
+    def test_student_fit_refuses_low_variance_data(self):
+        # 2v/(v-1) is not a usable number of degrees of freedom once v <= 1,
+        # and what to do instead is the caller's decision
         data = list(np.random.RandomState(5).normal(0.0, 0.1, size=200))
         self.assertLessEqual(float(np.var(data)), 1.0)
-        st = distribution_factory("univariate-student").fit(data)
-        self.assertEqual(st.df, 1)
+        with self.assertRaises(ValueError):
+            distribution_factory("univariate-student").fit(data)
 
     def test_student_is_symmetric_with_heavier_tails(self):
         st = distribution_factory("univariate-student")(df=3.0, mean=1.0, var=4.0)
         self.assertAlmostEqual(st.cdf(1.0), 0.5)
         self.assertAlmostEqual(st.pdf(0.0), st.pdf(2.0))       # symmetry
         self.assertAlmostEqual(st.cdf(st.cdf_inverse(0.9)), 0.9)
-        # same location and scale as a normal, but with the fatter tails
+        # same mean and variance as a normal, but with the fatter tails
         norm = distribution_factory("univariate-normal")(var=4.0, mean=1.0)
+        self.assertAlmostEqual(st.distribution.var(), norm.var)
         self.assertLess(st.cdf_inverse(0.01), norm.cdf_inverse(0.01))
         self.assertGreater(st.cdf_inverse(0.99), norm.cdf_inverse(0.99))
 

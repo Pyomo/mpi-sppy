@@ -183,24 +183,34 @@ class UnivariateStudentDistribution(UnivariateDistribution):
         degrees of freedom, the mean, and the variance of the distribution.
 
         Args:
-            df (int): The number of degrees of freedom
+            df (int): The number of degrees of freedom, which must be more
+                than 2: a t distribution with df <= 2 has no finite variance,
+                so it cannot be given one here
             mean (float): The mean parameter
             var (float): The variance parameter
         """
+        if df <= 2:
+            raise ValueError("A student's t distribution with df={} has no "
+                             "finite variance, so it cannot be given the "
+                             "variance {}.".format(df, var))
         self.df = df
         self.mean = mean
         self.var = var
 
-        # We make the lower bound a very small number to exclude the
-        # possibility of 0 for the degrees of freedom.
+        # The degrees of freedom have to exceed 2 for the variance to exist.
         params = [Parameter('mean', mean),
                   Parameter('variance', var, (0, None)),
-                  Parameter('df', df, bounds=(epsilon, None))]
+                  Parameter('df', df, bounds=(2, None))]
 
         UnivariateDistribution.__init__(self, params)
 
+        # scipy parameterizes the t by a scale, not by its variance: a t with
+        # scale s has variance s**2 * df/(df-2), so solve that for s. Passing
+        # sqrt(var) as the scale instead would give a distribution whose
+        # variance is var * df/(df-2), not var.
+        scale = np.sqrt(self.var * (self.df - 2) / self.df)
         self.distribution = scipy.stats.t(df=self.df, loc=self.mean,
-                                   scale=np.sqrt(self.var))
+                                   scale=scale)
 
     @classmethod
     def fit(cls, data):
@@ -209,19 +219,26 @@ class UnivariateStudentDistribution(UnivariateDistribution):
         This will estimate the mean and variance of the distribution as
         the mean and variance of the data.
 
+        The degrees of freedom are taken to be 2v/(v-1) for a sample variance
+        v, which is the value at which a t of scale one has variance v; the
+        constructor then derives that scale of one. A sample variance of one or
+        less has no such value (a t of scale one always has variance above
+        one), and it is the caller who has to decide what to do about that, so
+        it is an error rather than a silent substitution.
+
         Args:
             data (List[float]): The list of values to fit the data to
         Returns:
             UnivariateStudentDistribution: The fitted student's t distribution
         """
-        var =  np.var(data)
+        var = np.var(data)
         if var <= 1:
-            print('input_data gives Var < 1: '
-                  'Impossible to define a student distribution')
-            print('Degree of freedom is by default set to 1')
-            df=1
-        else:
-            df = 2*var/(var-1)
+            raise ValueError(
+                "The data have variance {}, and a student's t distribution "
+                "cannot be fit to a variance of one or less by this rule. "
+                "Either construct one directly with a chosen df > 2, or fit a "
+                "different distribution.".format(var))
+        df = 2*var/(var-1)
         mean = np.mean(data)
 
         return UnivariateStudentDistribution(df, mean, var)
