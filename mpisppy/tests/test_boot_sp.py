@@ -205,6 +205,42 @@ class Test_boot_sp(unittest.TestCase):
         self.assertIn("xhat_generator", msg)
         self.assertIn("xhat_generator_no_generator_module", msg)
 
+    def test_solve_routine_rejects_maximization(self):
+        # The estimators form the gap as (value at xhat) - (optimal), which is
+        # non-positive for a maximization, and the drivers floor the reported
+        # interval at 0 -- so a maximization run would silently report [0, 0].
+        # It must raise instead (maximization either works or errors).
+        import pyomo.environ as pyo
+        import mpisppy.scenario_tree as scenario_tree
+
+        def _make(sense):
+            def scenario_creator(scenario_name, **kwargs):
+                m = pyo.ConcreteModel()
+                m.x = pyo.Var(within=pyo.NonNegativeReals, bounds=(0, 1))
+                m.obj_expr = pyo.Expression(expr=m.x)
+                m.obj = pyo.Objective(expr=m.obj_expr, sense=sense)
+                m._mpisppy_probability = "uniform"
+                m._mpisppy_node_list = [scenario_tree.ScenarioNode(
+                    name="ROOT", cond_prob=1.0, stage=1,
+                    cost_expression=m.obj_expr, nonant_list=[m.x], scen_model=m)]
+                return m
+            fake = types.ModuleType(f"sense_module_{sense}")
+            fake.scenario_creator = scenario_creator
+            fake.kw_creator = lambda cfg: {}
+            return fake
+
+        cfg = _make_cfg()
+        cfg.solver_name = "nosolver"   # must raise before any solve is attempted
+        with self.assertRaises(ValueError) as ctx:
+            boot_sp.solve_routine(cfg, _make(pyo.maximize), range(2))
+        self.assertIn("minimization-only", str(ctx.exception))
+
+        # the same model as a minimization gets past the guard (and then fails
+        # on the bogus solver name, proving the guard was not what stopped it)
+        with self.assertRaises(Exception) as ctx:
+            boot_sp.solve_routine(cfg, _make(pyo.minimize), range(2))
+        self.assertNotIn("minimization-only", str(ctx.exception))
+
     def test_compute_ci_rejects_smoothed(self):
         # compute_ci is the empirical dispatch; a smoothed method is routed to
         # smoothed_boot_sp.compute_smoothed_ci instead and must be rejected here

@@ -27,6 +27,28 @@ my_rank = boot_utils.my_rank
 rankcomm = boot_utils.rankcomm
 
 
+_MAXIMIZATION_MSG = (
+    "the bootstrap confidence intervals are minimization-only, but {what} has a "
+    "maximization objective. The estimators form every gap as (value at xhat) "
+    "minus the optimal, which is non-positive for a maximization, and the "
+    "drivers floor the reported interval's lower end at 0 -- so a maximization "
+    "run would not merely be wrong, it would report [0, 0]. Supporting "
+    "maximization means deciding how the gap is reported (mpi-sppy's MMW "
+    "estimator reports its magnitude) and threading the sense through every "
+    "estimator, the interval floors and the coverage checks.")
+
+
+def _require_minimization(is_minimizing, what):
+    """Refuse a maximization model instead of reporting a wrong interval.
+
+    Per the repo-wide rule that maximization either works or raises, this is
+    the raise. It is checked in solve_routine, which every extensive form goes
+    through.
+    """
+    if not is_minimizing:
+        raise ValueError(_MAXIMIZATION_MSG.format(what=what))
+
+
 def _scenario_creator_w_mapping(scenario_name, module=None, mapping=None, **kwargs):
     """ A wrapper to allow for bootstrap samples to map to actual samples
     Args:
@@ -160,6 +182,7 @@ def solve_routine(cfg, module, scenarios, num_threads=None, duplication=False):
         scenario_creator,
         scenario_creator_kwargs=scenario_creator_kwargs,
     )
+    _require_minimization(ef.EF_Obj.sense == pyo.minimize, "this model")
 
     solver = pyo.SolverFactory(cfg.solver_name)
     solver.options["threads"] = num_threads
