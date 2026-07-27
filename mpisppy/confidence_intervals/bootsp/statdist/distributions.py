@@ -212,34 +212,46 @@ class UnivariateStudentDistribution(UnivariateDistribution):
         self.distribution = scipy.stats.t(df=self.df, loc=self.mean,
                                    scale=scale)
 
+    # df selection for fit(): a student's t with df > 4 has excess kurtosis
+    # 6/(df-4), so method of moments gives df = 4 + 6/excess_kurtosis. Data
+    # with excess kurtosis at or below zero (tails no heavier than the normal)
+    # cannot be matched by any finite-variance t, so df falls back to this
+    # large value, which is numerically indistinguishable from the normal.
+    _FIT_DF_MAX = 1.0e6
+    _FIT_KURT_TOL = 1.0e-12
+
     @classmethod
     def fit(cls, data):
         """
-        This will fit a student's distribution to the passed in data.
-        This will estimate the mean and variance of the distribution as
-        the mean and variance of the data.
+        Fit a student's t distribution to the passed-in data.
 
-        The degrees of freedom are taken to be 2v/(v-1) for a sample variance
-        v, which is the value at which a t of scale one has variance v; the
-        constructor then derives that scale of one. A sample variance of one or
-        less has no such value (a t of scale one always has variance above
-        one), and it is the caller who has to decide what to do about that, so
-        it is an error rather than a silent substitution.
+        The mean and variance are taken to be the sample mean and variance.
+        The degrees of freedom are estimated by method of moments on the
+        excess kurtosis: a t with df > 4 has excess kurtosis 6/(df-4), so
+        df = 4 + 6/excess_kurtosis. The constructor then derives the scale
+        from (variance, df), so this rule is scale-free -- unlike the old
+        2v/(v-1), it does not change when the data are rescaled, and any
+        variance v > 0 can be fit (the old v <= 1 restriction is gone).
+
+        A sample whose excess kurtosis is zero or negative (tails no heavier
+        than the normal) has no finite-variance t that matches it, so df
+        falls back to a large value (effectively the normal). Because sample
+        excess kurtosis is always finite, this rule always yields df > 4 and
+        so cannot reach the heavy-tailed 2 < df <= 4 regime; construct such a
+        distribution directly if it is needed.
 
         Args:
             data (List[float]): The list of values to fit the data to
         Returns:
             UnivariateStudentDistribution: The fitted student's t distribution
         """
-        var = np.var(data)
-        if var <= 1:
-            raise ValueError(
-                "The data have variance {}, and a student's t distribution "
-                "cannot be fit to a variance of one or less by this rule. "
-                "Either construct one directly with a chosen df > 2, or fit a "
-                "different distribution.".format(var))
-        df = 2*var/(var-1)
         mean = np.mean(data)
+        var = np.var(data)
+        excess_kurt = scipy.stats.kurtosis(data, fisher=True)
+        if not np.isfinite(excess_kurt) or excess_kurt <= cls._FIT_KURT_TOL:
+            df = cls._FIT_DF_MAX
+        else:
+            df = min(4.0 + 6.0 / excess_kurt, cls._FIT_DF_MAX)
 
         return UnivariateStudentDistribution(df, mean, var)
 

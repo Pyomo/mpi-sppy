@@ -29,6 +29,7 @@ import unittest
 from collections import OrderedDict
 
 import numpy as np
+from pyomo.common.dependencies import scipy
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 from mpisppy.tests.utils import get_solver, round_pos_sig
@@ -228,17 +229,38 @@ class Test_statdist(unittest.TestCase):
 
     def test_student_fit_matches_the_data_moments(self):
         # the fit promises the distribution's mean and variance are the data's;
-        # passing sqrt(var) to scipy as the *scale* would instead give a
-        # variance of var*df/(df-2), i.e. var**2 under the df rule below
+        # the constructor derives scipy's scale from (var, df), so the reported
+        # variance is var -- not var*df/(df-2), which is what passing sqrt(var)
+        # as the scale would have produced
         data = list(np.random.RandomState(4).normal(0.0, 2.0, size=500))
         var = float(np.var(data))
-        self.assertGreater(var, 1.0)
         st = distribution_factory("univariate-student").fit(data)
         self.assertAlmostEqual(st.distribution.mean(), float(np.mean(data)))
         self.assertAlmostEqual(st.distribution.var(), var)
-        self.assertAlmostEqual(st.df, 2*var/(var - 1))
-        # that df is exactly the one at which a t of scale one has variance var
-        self.assertAlmostEqual(st.df / (st.df - 2), var)
+
+    def test_student_fit_sets_df_from_kurtosis(self):
+        # df is method of moments on the excess kurtosis: a t with df > 4 has
+        # excess kurtosis 6/(df-4), so df = 4 + 6/excess_kurtosis. Data drawn
+        # from a t with df=5 (excess kurtosis 6) should recover a df near 5.
+        data = list(scipy.stats.t(df=5).rvs(size=3000, random_state=7))
+        ek = float(scipy.stats.kurtosis(data, fisher=True))
+        self.assertGreater(ek, 0.0)                     # heavier than normal
+        st = distribution_factory("univariate-student").fit(data)
+        self.assertAlmostEqual(st.df, 4.0 + 6.0/ek)     # the rule, exactly
+        self.assertGreater(st.df, 4.0)
+        self.assertLess(st.df, 10.0)                    # sane recovery of df=5
+        self.assertAlmostEqual(st.distribution.var(), float(np.var(data)))
+
+    def test_student_fit_falls_back_to_normal_for_light_tails(self):
+        # data with tails no heavier than the normal (here uniform, whose
+        # excess kurtosis is negative) has no finite-variance t that matches
+        # it, so df falls back to the large "effectively normal" value
+        data = list(np.random.RandomState(5).uniform(0.0, 1.0, size=1000))
+        self.assertLess(float(scipy.stats.kurtosis(data, fisher=True)), 0.0)
+        st = distribution_factory("univariate-student").fit(data)
+        self.assertEqual(st.df, statdist_distributions.
+                         UnivariateStudentDistribution._FIT_DF_MAX)
+        self.assertAlmostEqual(st.distribution.var(), float(np.var(data)))
 
     def test_student_variance_is_honored_for_any_df(self):
         for df in (2.5, 4.0, 30.0):
@@ -253,13 +275,17 @@ class Test_statdist(unittest.TestCase):
                 distribution_factory("univariate-student")(
                     df=df, mean=0.0, var=1.0)
 
-    def test_student_fit_refuses_low_variance_data(self):
-        # 2v/(v-1) is not a usable number of degrees of freedom once v <= 1,
-        # and what to do instead is the caller's decision
+    def test_student_fit_accepts_low_variance_data(self):
+        # because the scale is derived from (var, df), a variance of one or
+        # less is no longer special: the old 2v/(v-1) rule could not fit it,
+        # but the kurtosis rule can, and the fitted moments still match
         data = list(np.random.RandomState(5).normal(0.0, 0.1, size=200))
-        self.assertLessEqual(float(np.var(data)), 1.0)
-        with self.assertRaises(ValueError):
-            distribution_factory("univariate-student").fit(data)
+        var = float(np.var(data))
+        self.assertLessEqual(var, 1.0)
+        st = distribution_factory("univariate-student").fit(data)
+        self.assertGreater(st.df, 2.0)
+        self.assertAlmostEqual(st.distribution.mean(), float(np.mean(data)))
+        self.assertAlmostEqual(st.distribution.var(), var)
 
     def test_student_is_symmetric_with_heavier_tails(self):
         st = distribution_factory("univariate-student")(df=3.0, mean=1.0, var=4.0)
