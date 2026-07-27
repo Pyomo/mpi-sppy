@@ -33,6 +33,9 @@ import mpisppy.confidence_intervals.bootsp.simulate_boot as simulate_boot
 
 sputils.disable_tictoc_output()
 
+my_rank = boot_utils.my_rank
+n_proc = boot_utils.n_proc
+
 solver_available, solver_name, persistent_available, persistent_solver_name = get_solver()
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
@@ -55,19 +58,37 @@ empirical_methods = ["Classical_gaussian",
                      "Bagging_without_replacement",
                      "Extended"]
 
-# ci_optimal locked at these params with seed_offset=100 (serial, one MPI rank)
+# ci_optimal locked at these params with seed_offset=100, keyed by the number
+# of MPI ranks: each rank seeds its own bootstrap stream, so the assembled
+# rank-0 result depends on the rank count (as in test_boot_sp_simulate.py).
 locked_ci_optimal = {
-    "Classical_gaussian": [-54.796284027848245, -49.27038263881846],
-    "Classical_quantile": [-53.855000000000025, -48.95166666666669],
+    "Classical_gaussian": {
+        1: [-54.796284027848245, -49.27038263881846],
+        2: [-55.201543917203715, -48.86512274946299],
+    },
+    "Classical_quantile": {
+        1: [-53.855000000000025, -48.95166666666669],
+        2: [-54.26333333333335, -48.53000000000002],
+    },
 }
 
-# same, for the data-file example (schultz_data), serial, seed_offset=100
+# same, for the data-file example (schultz_data), seed_offset=100
 locked_ci_optimal_data = {
-    "Classical_gaussian": [-67.67550923965139, -65.86449076034866],
-    "Classical_quantile": [-67.52250000000001, -65.94600000000001],
+    "Classical_gaussian": {
+        1: [-67.67550923965139, -65.86449076034866],
+        2: [-67.9851379789408, -65.55486202105925],
+    },
+    "Classical_quantile": {
+        1: [-67.52250000000001, -65.94600000000001],
+        2: [-67.88150000000006, -65.42500000000004],
+    },
 }
-# coverage harness (rate, length) for schultz_data, serial, seed base 0, 4 reps
-locked_coverage_data = (1.0, 2.63187499999999)
+# coverage harness (rate, length) for schultz_data, seed base 0, 4 reps,
+# keyed by number of MPI ranks
+locked_coverage_data = {
+    1: (1.0, 2.63187499999999),
+    2: (1.0, 2.344749999999987),
+}
 
 
 def _make_cfg(method="Classical_quantile"):
@@ -230,32 +251,46 @@ class Test_boot_sp(unittest.TestCase):
         xhat = boot_utils.compute_xhat(_make_cfg(), module)
         for method in empirical_methods:
             cfg = _make_cfg(method)
-            res = boot_sp.compute_ci(cfg, module, xhat)
-            self.assertEqual(len(res), 6)
-            ci_optimal, ci_upper, ci_gap = res[0], res[1], res[2]
-            # confidence intervals must be ordered (low, high)
-            self.assertLessEqual(ci_optimal[0], ci_optimal[1], msg=method)
-            self.assertLessEqual(ci_upper[0], ci_upper[1], msg=method)
-            self.assertLessEqual(ci_gap[0], ci_gap[1], msg=method)
+            res = boot_sp.compute_ci(cfg, module, xhat)  # collective on all ranks
+            if my_rank == 0:
+                self.assertEqual(len(res), 6)
+                ci_optimal, ci_upper, ci_gap = res[0], res[1], res[2]
+                # confidence intervals must be ordered (low, high)
+                self.assertLessEqual(ci_optimal[0], ci_optimal[1], msg=method)
+                self.assertLessEqual(ci_upper[0], ci_upper[1], msg=method)
+                self.assertLessEqual(ci_gap[0], ci_gap[1], msg=method)
+            else:
+                self.assertEqual(res, (None, None, None, None, None, None))
 
     @unittest.skipIf(not solver_available, "no solver is available")
     def test_empirical_locked_values(self):
         module = boot_utils.module_name_to_module(MODULE_NAME)
         xhat = boot_utils.compute_xhat(_make_cfg(), module)
-        for method, expected in locked_ci_optimal.items():
+        for method, expected_by_np in locked_ci_optimal.items():
             cfg = _make_cfg(method)
-            res = boot_sp.compute_ci(cfg, module, xhat)
-            self._assert_close_list(res[0], expected)
+            res = boot_sp.compute_ci(cfg, module, xhat)  # collective on all ranks
+            if my_rank == 0:
+                ci_optimal = list(res[0])
+                self.assertLessEqual(ci_optimal[0], ci_optimal[1], msg=method)
+                if n_proc in expected_by_np:
+                    self._assert_close_list(ci_optimal, expected_by_np[n_proc])
+            else:
+                self.assertEqual(res, (None, None, None, None, None, None))
 
     @unittest.skipIf(not solver_available, "no solver is available")
     def test_user_boot_main_routine(self):
         # the end-user entry point returns the 6-tuple and clamps ci_gap[0]>=0
         module = boot_utils.module_name_to_module(MODULE_NAME)
         cfg = _make_cfg("Classical_quantile")
-        res = user_boot.main_routine(cfg, module)
-        self.assertEqual(len(res), 6)
-        self._assert_close_list(res[0], locked_ci_optimal["Classical_quantile"])
-        self.assertGreaterEqual(res[2][0], 0.0)  # ci_gap[0] clamped to >= 0
+        res = user_boot.main_routine(cfg, module)  # collective on all ranks
+        if my_rank == 0:
+            self.assertEqual(len(res), 6)
+            self.assertGreaterEqual(res[2][0], 0.0)  # ci_gap[0] clamped to >= 0
+            expected_by_np = locked_ci_optimal["Classical_quantile"]
+            if n_proc in expected_by_np:
+                self._assert_close_list(res[0], expected_by_np[n_proc])
+        else:
+            self.assertEqual(res, (None, None, None, None, None, None))
 
     @unittest.skipIf(not solver_available, "no solver is available")
     def test_user_boot_smoothed_raises(self):
@@ -296,9 +331,16 @@ class Test_boot_sp_data(unittest.TestCase):
     def test_data_file_locked_values(self):
         module = boot_utils.module_name_to_module(DATA_MODULE_NAME)
         xhat = boot_utils.compute_xhat(_make_data_cfg(), module)
-        for method, expected in locked_ci_optimal_data.items():
+        for method, expected_by_np in locked_ci_optimal_data.items():
+            # compute_ci is collective on all ranks
             res = boot_sp.compute_ci(_make_data_cfg(method), module, xhat)
-            self._assert_close_list(res[0], expected)
+            if my_rank == 0:
+                ci_optimal = list(res[0])
+                self.assertLessEqual(ci_optimal[0], ci_optimal[1], msg=method)
+                if n_proc in expected_by_np:
+                    self._assert_close_list(ci_optimal, expected_by_np[n_proc])
+            else:
+                self.assertEqual(res, (None, None, None, None, None, None))
 
     @unittest.skipIf(not solver_available, "no solver is available")
     def test_data_file_coverage(self):
@@ -311,10 +353,19 @@ class Test_boot_sp_data(unittest.TestCase):
         # smaller and solve fine. The stored value is exactly what process_optimal
         # would compute, so the coverage result is unchanged.
         cfg.optimal_fname = os.path.join(data_example_dir, "schultz_data_optimal.npy")
-        rate, length = simulate_boot.main(cfg, module)
-        self.assertEqual(rate, locked_coverage_data[0])
-        self.assertEqual(round_pos_sig(length, 4),
-                         round_pos_sig(locked_coverage_data[1], 4))
+        coverage = simulate_boot.main(cfg, module)  # collective on all ranks
+        if my_rank == 0:
+            rate, length = coverage
+            self.assertGreaterEqual(rate, 0.0)
+            self.assertLessEqual(rate, 1.0)
+            self.assertGreater(length, 0.0)
+            if n_proc in locked_coverage_data:
+                exp_rate, exp_length = locked_coverage_data[n_proc]
+                self.assertEqual(rate, exp_rate)
+                self.assertEqual(round_pos_sig(length, 4),
+                                 round_pos_sig(exp_length, 4))
+        else:
+            self.assertEqual(coverage, (None, None))
 
 
 if __name__ == '__main__':
