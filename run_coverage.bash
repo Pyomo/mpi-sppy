@@ -71,6 +71,9 @@ run_phase "test_maximization (serial)" \
 run_phase "test_cvar (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_cvar.py -v
 
+run_phase "test_outer_bound_only (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_outer_bound_only.py -v
+
 run_phase "test_chance_constraint (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_chance_constraint.py -v
 
@@ -176,6 +179,9 @@ run_phase "test_flex_xhat_assembly (serial)" \
 run_phase "test_xhat_from_file (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_xhat_from_file.py -v
 
+run_phase "test_xhat_feasibility_cuts (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_xhat_feasibility_cuts.py -v
+
 run_phase "test_incumbent_writing (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_incumbent_writing.py -v
 
@@ -214,6 +220,12 @@ run_phase "test_mrp_generic (serial)" \
 run_phase "farmer_mrp_generic.bash (spawns mpiexec)" \
     bash -c "cd '$PROJ_DIR/examples/farmer/CI' && bash farmer_mrp_generic.bash '$SOLVER'"
 
+run_phase "test_boot_sp (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/test_boot_sp.py
+
+run_phase "test_boot_sp_simulate (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/test_boot_sp_simulate.py
+
 run_phase "test_gradient_rho (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_gradient_rho.py
 
@@ -230,6 +242,12 @@ run_phase "pysp_model pytest (serial)" \
 
 run_phase "test_with_cylinders (mpiexec -np 2)" \
     mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_with_cylinders.py
+
+run_phase "test_boot_sp (mpiexec -np 2)" \
+    mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_boot_sp.py
+
+run_phase "test_boot_sp_simulate (mpiexec -np 2)" \
+    mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_boot_sp_simulate.py
 
 run_phase "test_cg_main (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_cg_main.py

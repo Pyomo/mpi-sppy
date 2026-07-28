@@ -19,6 +19,15 @@ The recommended way to run sequential sampling is with
 ``mpisppy.mrp_generic``.  Like ``generic_cylinders.py``, it takes
 a ``--module-name`` argument pointing to your model module.
 
+.. note::
+   Installing mpi-sppy (with ``pip install mpi-sppy`` or with
+   ``pip install -e .`` from a clone) puts the console script
+   ``mpi-sppy-mrp-generic`` on your ``PATH``; it is equivalent to
+   ``python -m mpisppy.mrp_generic`` and can be used in place of that
+   prefix in the examples below. For the ``--xhat-method cylinders``
+   (multi-rank) case, prefer the ``python -m mpi4py`` module form so
+   that mpi4py's abort-on-exception handler is installed.
+
 Your model module must provide the same functions required by
 ``generic_cylinders``: ``scenario_creator``, ``scenario_names_creator``,
 ``kw_creator``, ``inparser_adder``, and ``scenario_denouement``.

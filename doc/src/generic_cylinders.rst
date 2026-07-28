@@ -8,6 +8,23 @@ run mpi-sppy. It provides command-line access to the hub-and-spoke
 system, the extensive form solver, confidence intervals, and many
 other features without requiring you to write a driver program.
 
+.. note::
+   Installing mpi-sppy (with ``pip install mpi-sppy`` or with
+   ``pip install -e .`` from a clone) puts a console script named
+   ``mpi-sppy-generic-cylinders`` on your ``PATH``. It is equivalent to
+   ``python -m mpisppy.generic_cylinders``, so in every example below you
+   can substitute ``mpi-sppy-generic-cylinders`` for the
+   ``python -m mpisppy.generic_cylinders`` prefix, e.g.::
+
+       mpi-sppy-generic-cylinders --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi
+
+   For multi-rank parallel runs, prefer the ``python -m mpi4py`` module
+   form shown below (``mpiexec -np 3 python -m mpi4py -m
+   mpisppy.generic_cylinders ...``): mpi4py's runner aborts all ranks if
+   one raises an exception, whereas a bare
+   ``mpiexec -np 3 mpi-sppy-generic-cylinders ...`` runs but may leave
+   the other ranks hanging when one fails.
+
 Your Model File (Module)
 ------------------------
 
@@ -219,6 +236,10 @@ Some extensions can be activated directly from the command line:
   (see :ref:`wtracker_extension`)
 - ``--detect-W-oscillations <file>`` -- Detect oscillation/cycling in the
   W vector and report it to a CSV (see :ref:`w_oscillation`)
+- ``--interrupt-W-oscillations <file>`` -- Act on detected W oscillation
+  (slamming) to break the cycle; runs the detection engine to drive the
+  action, but CSV reporting stays opt-in (via ``--detect-W-oscillations``
+  or a ``detect`` block) (see :ref:`w_oscillation`)
 
 See :ref:`Extensions` for details on available extensions.
 

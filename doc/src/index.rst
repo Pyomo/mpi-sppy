@@ -37,6 +37,7 @@ MPI is used.
    hubs.rst
    spokes.rst
    extensions.rst
+   w_oscillation.rst
    rho_setting.rst
 
 .. toctree::
@@ -49,6 +50,7 @@ MPI is used.
    zhat.rst
    risk_management.rst
    seqsamp.rst
+   boot_sp.rst
 
 .. toctree::
    :maxdepth: 2
@@ -59,6 +61,7 @@ MPI is used.
    jensens.rst
    feasible_xhat.rst
    xhat_from_file.rst
+   xhat_feasibility_cuts.rst
    iis.rst
    smps.rst
    agnostic.rst

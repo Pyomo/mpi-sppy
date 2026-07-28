@@ -20,11 +20,10 @@ Here are two methods that seem to work well for installation, at least when cons
 
    * ``pip install -e .[mpi]`` (after cloning and moving to the repo root directory)
 
-To test
-your installation, cd to the directory where you installed mpi-sppy
-(it is called ``mpi-sppy``) and then give this command.
+To test your installation, give this command (once mpi-sppy is
+installed it works from any directory):
 
-``mpirun -n 2 python -m mpi4py mpi_one_sided_test.py``
+``mpirun -n 2 mpi-sppy-one-sided-test``
 
 If you don't see any error messages, you might have an MPI
 installation that will work well. Note that even if there is

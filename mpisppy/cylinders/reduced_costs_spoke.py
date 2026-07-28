@@ -89,6 +89,10 @@ class ReducedCostsSpoke(LagrangianOuterBound):
 
     converger_spoke_char = 'R'
 
+    # unlike a plain Lagrangian spoke, this one reads the x values and the rc
+    # suffix off the solved subproblems, so the solves have to load a solution
+    outer_bound_only = False
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.bound_tol = self.opt.options['rc_bound_tol']
@@ -201,10 +205,8 @@ class ReducedCostsSpoke(LagrangianOuterBound):
             s.rc = pyo.Suffix(direction=pyo.Suffix.IMPORT)
         super().lagrangian_prep()
 
-    def lagrangian(self, need_solution=True, warmstart=False):
-        if not need_solution:
-            raise RuntimeError("ReducedCostsSpoke always needs a solution to work")
-        bound = super().lagrangian(need_solution=need_solution, warmstart=False)
+    def lagrangian(self, warmstart=False):
+        bound = super().lagrangian(warmstart=False)
         if bound is not None:
             self.extract_and_store_reduced_costs()
             self.update_bounding_functions(bound)
@@ -436,15 +438,11 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         if bounds_modified > 0:
             global_toc(f"{self.__class__.__name__}: tightened {int(bounds_modified)} variable bounds", self.cylinder_rank == 0)
 
-    def do_while_waiting_for_new_Ws(self, need_solution, warmstart=False):
+    def do_while_waiting_for_new_Ws(self, warmstart=False):
         # RC is an LP, should not need a warmstart with _value
-        super().do_while_waiting_for_new_Ws(need_solution=need_solution, warmstart=False)
+        super().do_while_waiting_for_new_Ws(warmstart=False)
         # might as well see if a tighter upper bound has come along
         self.extract_and_store_updated_nonant_bounds(new_dual=False)
-
-    def main(self):
-        # need the solution for ReducedCostsSpoke
-        super().main(need_solution=True)
 
 
 def _lb_generator(var_iterable):

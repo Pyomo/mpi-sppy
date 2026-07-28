@@ -35,24 +35,45 @@ Here are two methods that seem to work well for installation, at least when cons
    ```
    Run the line aborve after cloning and moving to the repo root directory.
 
-To test your installation, cd to the directory where you installed mpi-sppy
-(it is called ``mpi-sppy``) and then give this command.
+To test your installation, give this command (once mpi-sppy is installed
+it works from any directory):
 
 ```
-mpirun -n 2 python -m mpi4py mpi_one_sided_test.py
+mpirun -n 2 mpi-sppy-one-sided-test
 ```
 
 If you don't see any error messages, you might have an MPI
-installation that will work well. Note that even if there is
+installation that will work. Note that even if there is
 an error message, mpi-sppy may still execute and return correct
 results. Per the comment below, the run-times may just be 
-unnecessarily inflated.
+unnecessarily inflated. If you're on an HPC, run this across two
+nodes, with one rank on each node.
 
 Installing mpi-sppy
 -------------------
 
 It is possible to pip install mpi-sppy; however, most users are better off
 getting the software from Github because it is under active development.
+
+Command-line programs
+---------------------
+
+Installing mpi-sppy — whether with `pip install mpi-sppy` or with
+`pip install -e .` from a clone (the recommended way to work from source) —
+puts a few console scripts on your `PATH`, so you can run the main drivers
+without locating the files in your environment:
+
+- `mpi-sppy-generic-cylinders` — the general-purpose driver, equivalent to
+  `python -m mpisppy.generic_cylinders` (see the `generic_cylinders` docs).
+- `mpi-sppy-mrp-generic` — the sequential-sampling (MRP) driver, equivalent
+  to `python -m mpisppy.mrp_generic`.
+- `mpi-sppy-one-sided-test` — the MPI one-sided diagnostic shown above.
+
+For multi-rank parallel runs, the `python -m mpi4py` module form is still
+recommended (e.g. `mpiexec -np 3 python -m mpi4py -m
+mpisppy.generic_cylinders ...`) so that mpi4py installs its
+abort-on-exception handler; a bare `mpiexec -np 3 mpi-sppy-generic-cylinders
+...` runs, but a failure on one rank may leave the others hanging.
 
 Citing mpi-sppy
 ---------------

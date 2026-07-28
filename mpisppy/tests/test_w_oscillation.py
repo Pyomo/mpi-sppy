@@ -6,13 +6,18 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-"""Tests for the W-oscillation detection extension (PR1).
+"""Tests for the W-oscillation detection and interruption extension.
 
 The pure detector logic (zero-crossing counting, the W-vector signature, and the
-recurrence tracker) is tested directly with no MPI; an end-to-end test confirms
-the ``--detect-W-oscillations`` flag wires the extension in and writes the CSV.
+recurrence tracker) and the config validators (detection and interruption) are
+tested directly with no MPI; end-to-end tests confirm that
+``--detect-W-oscillations`` wires the extension in and writes the CSV (PR1) and
+that ``--interrupt-W-oscillations`` drives the slam action through a real PH run
+(PR2).
 """
+import contextlib
 import csv
+import io
 import json
 import os
 import sys
@@ -196,6 +201,214 @@ class TestEndToEnd(unittest.TestCase):
                 self.assertIn(row[3], wosc.VALID_METHODS)
                 # full variable name, not an index tuple
                 self.assertIn("DevotedAcreage", row[2])
+
+
+class TestInterruptConfigValidation(unittest.TestCase):
+    def test_action_required_and_known(self):
+        with self.assertRaises(ValueError):
+            wosc.validate_interrupt_config({})
+        with self.assertRaises(ValueError):
+            wosc.validate_interrupt_config({"action": "bogus"})
+
+    def test_slam_requires_directives_file(self):
+        with self.assertRaises(ValueError):
+            wosc.validate_interrupt_config({"action": "slam"})
+        with self.assertRaises(ValueError):
+            wosc.validate_interrupt_config({"action": "slam", "slam": {}})
+
+    def test_slam_cooldown_defaults_and_validation(self):
+        # default fills in; explicit value is kept; < 1 is rejected.
+        cfg = wosc.validate_interrupt_config(
+            {"action": "slam", "slam": {"directives_file": "d.csv"}})
+        self.assertEqual(cfg["slam"]["iters_between_slams"], 3)
+        cfg = wosc.validate_interrupt_config(
+            {"action": "slam",
+             "slam": {"directives_file": "d.csv", "iters_between_slams": 10}})
+        self.assertEqual(cfg["slam"]["iters_between_slams"], 10)
+        for bad in (0, -2):
+            with self.assertRaises(ValueError):
+                wosc.validate_interrupt_config(
+                    {"action": "slam",
+                     "slam": {"directives_file": "d.csv",
+                              "iters_between_slams": bad}})
+
+    def test_slam_due_cooldown(self):
+        # No slam yet: always due (start_iter alone gates the first slam).
+        self.assertTrue(wosc.slam_due(5, None, 3))
+        # Slammed at 7 with cooldown 3: not due at 8, 9; due again at 10.
+        self.assertFalse(wosc.slam_due(8, 7, 3))
+        self.assertFalse(wosc.slam_due(9, 7, 3))
+        self.assertTrue(wosc.slam_due(10, 7, 3))
+        # Cooldown 1 reproduces the every-iteration behavior.
+        self.assertTrue(wosc.slam_due(8, 7, 1))
+
+    def test_trigger_defaults_and_validation(self):
+        cfg = wosc.validate_interrupt_config(
+            {"action": "slam", "slam": {"directives_file": "d.csv"}})
+        self.assertEqual(cfg["trigger"]["start_iter"], 5)
+        # the global inter-action cadence knob was dropped (the slam-specific
+        # cooldown lives in the slam block as iters_between_slams)
+        self.assertNotIn("iters_between_actions", cfg["trigger"])
+        with self.assertRaises(ValueError):
+            wosc.validate_interrupt_config(
+                {"action": "slam", "slam": {"directives_file": "d.csv"},
+                 "trigger": {"min_scenarios_flagged": 0}})
+        # a negative start_iter would make interruption eligible from
+        # iteration 0 (_act_due is phiter >= start_iter) -- reject it
+        with self.assertRaises(ValueError):
+            wosc.validate_interrupt_config(
+                {"action": "slam", "slam": {"directives_file": "d.csv"},
+                 "trigger": {"start_iter": -1}})
+
+    def test_detect_block_parsed(self):
+        cfg = wosc.validate_interrupt_config({
+            "action": "slam",
+            "slam": {"directives_file": "d.csv"},
+            "detect": {"output_csv": "x.csv",
+                       "methods": {"zero_crossings": {}}},
+        })
+        self.assertIn("detect", cfg)
+        self.assertEqual(cfg["detect"]["output_csv"], "x.csv")
+
+    def test_default_detect_config(self):
+        d = wosc.default_detect_config()
+        self.assertEqual(d["output_csv"], "w_oscillations.csv")
+        self.assertIn("zero_crossings", d["methods"])
+        self.assertIn("w_hash_recurrence", d["methods"])
+
+    def test_non_object_subblock_rejected(self):
+        # a sub-block supplied as something other than a JSON object must give a
+        # clear ValueError (naming the field), not a low-level TypeError from
+        # the subsequent dict.update()
+        for action, key, block in (
+            ("slam", "trigger", [1, 2]),
+            ("slam", "slam", ["file.txt"]),
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                wosc.validate_interrupt_config({"action": action, key: block})
+            self.assertIn(key, str(ctx.exception))
+
+
+@unittest.skipIf(not solver_available, "no MIP solver available")
+class TestEndToEndInterrupt(unittest.TestCase):
+    """--interrupt-W-oscillations drives the slam action.
+
+    Uses only the interrupt flag (no --detect-W-oscillations) with an inline
+    ``detect`` block, so it also exercises the "interruption implies detection"
+    path.  Thresholds are set low so the detector flags the acreage nonants
+    early; the slam directive targets a single crop and fixes it to its lower
+    bound (0 acres), which is always feasible for farmer."""
+
+    def test_interrupt_flag_slams(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_csv = os.path.join(tmp, "wosc.csv")
+            slam_csv = os.path.join(tmp, "slam.csv")
+            # farmer's crop names carry a group suffix (SUGAR_BEETS0, ...), so
+            # match with a wildcard ('[' / ']' are literal in slam globs).
+            with open(slam_csv, "w") as f:
+                f.write("name,can_slam,directions,priority\n")
+                f.write("DevotedAcreage[SUGAR_BEETS*],1,lb,1\n")
+            ctrl = os.path.join(tmp, "interrupt.json")
+            with open(ctrl, "w") as f:
+                json.dump({
+                    "action": "slam",
+                    "trigger": {"min_scenarios_flagged": 1, "start_iter": 3},
+                    "slam": {"directives_file": slam_csv,
+                             "iters_between_slams": 5},
+                    "detect": {
+                        "output_csv": out_csv,
+                        "warmup_iters": 2,
+                        "report_mode": "every_check",
+                        "methods": {
+                            "zero_crossings": {"thresh_w_crossings": 1,
+                                               "thresh_diff_crossings": 1,
+                                               "thresh_diffs_ratio": 0.0},
+                        },
+                    },
+                }, f)
+
+            argv = [
+                "generic_cylinders",
+                "--module-name", "mpisppy.tests.examples.farmer",
+                "--num-scens", "3",
+                "--solver-name", solver_name,
+                "--max-solver-threads", "1",
+                "--max-iterations", "8",
+                "--default-rho", "1",
+                "--verbose",
+                "--interrupt-W-oscillations", ctrl,
+            ]
+            buf = io.StringIO()
+            with patch.object(sys, "argv", argv), \
+                    contextlib.redirect_stdout(buf):
+                runpy.run_module("mpisppy.generic_cylinders",
+                                 run_name="__main__")
+            out = buf.getvalue()
+
+            # Detection still happened (implied by interruption): CSV written.
+            self.assertTrue(os.path.exists(out_csv),
+                            "detection CSV not written under interrupt mode")
+            with open(out_csv) as f:
+                rows = list(csv.reader(f))
+            self.assertEqual(rows[0], wosc._AGG_COLUMNS)
+            self.assertTrue(any("DevotedAcreage" in r[2] for r in rows[1:]))
+
+            # The slam action fired: the Slammer slammed the targeted crop.
+            self.assertIn("Slammer: slammed", out)
+            self.assertIn("DevotedAcreage[SUGAR_BEETS", out)
+            # slam fixes at most one nonant per slam event, and the cooldown
+            # (iters_between_slams=5 > the remaining iterations) then suppresses
+            # further slams, so exactly one successful slam occurs.
+            self.assertIn("slammed 1 nonant(s)", out)
+            self.assertEqual(out.count("slammed 1 nonant(s)"), 1)
+
+    def test_interrupt_without_request_writes_no_report(self):
+        """A pure --interrupt-W-oscillations run (no --detect flag, no detect
+        block) runs the detection engine to drive the actions but writes **no**
+        cycling report CSV; the report is opt-in."""
+        with tempfile.TemporaryDirectory() as tmp:
+            slam_csv = os.path.join(tmp, "slam.csv")
+            with open(slam_csv, "w") as f:
+                f.write("name,can_slam,directions,priority\n")
+                f.write("DevotedAcreage[SUGAR_BEETS*],1,lb,1\n")
+            ctrl = os.path.join(tmp, "interrupt.json")
+            with open(ctrl, "w") as f:
+                json.dump({
+                    "action": "slam",
+                    "trigger": {"start_iter": 3},
+                    "slam": {"directives_file": slam_csv},
+                }, f)
+
+            argv = [
+                "generic_cylinders",
+                "--module-name", "mpisppy.tests.examples.farmer",
+                "--num-scens", "3",
+                "--solver-name", solver_name,
+                "--max-solver-threads", "1",
+                "--max-iterations", "6",
+                "--default-rho", "1",
+                "--verbose",
+                "--interrupt-W-oscillations", ctrl,
+            ]
+            # The default detector's output_csv is a bare filename, so run from
+            # the temp dir and confirm no such file is created there.
+            cwd = os.getcwd()
+            buf = io.StringIO()
+            try:
+                os.chdir(tmp)
+                with patch.object(sys, "argv", argv), \
+                        contextlib.redirect_stdout(buf):
+                    runpy.run_module("mpisppy.generic_cylinders",
+                                     run_name="__main__")
+            finally:
+                os.chdir(cwd)
+            out = buf.getvalue()
+
+            self.assertFalse(
+                os.path.exists(os.path.join(tmp, "w_oscillations.csv")),
+                "report CSV was written without an explicit detection request")
+            # The opt-in report being off is reported in the verbose summary.
+            self.assertIn("report disabled", out)
 
 
 if __name__ == "__main__":
