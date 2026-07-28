@@ -1,12 +1,16 @@
 # Bootstrap/bagging for data-based stochastic programming in mpi-sppy — design
 
-**Status:** design captured and decisions ratified 2026-07-02; PR-1
-(empirical core + schultz, incl. a data-file example) implemented and open
-upstream as draft [Pyomo/mpi-sppy#783](https://github.com/Pyomo/mpi-sppy/pull/783);
-extended 2026-07-03 to state the end goal
-(`generic_cylinders` integration) and a stacked, multi-PR roadmap (§6, §9).
+**Status:** design captured and decisions ratified 2026-07-02; extended
+2026-07-03 to state the end goal (`generic_cylinders` integration) and a
+stacked, multi-PR roadmap (§6, §9). PR-1 (empirical core + schultz, incl. a
+data-file example) merged 2026-07-24 as
+[Pyomo/mpi-sppy#783](https://github.com/Pyomo/mpi-sppy/pull/783), followed by
+a `test_boot_sp.py` `np=2` fix merged 2026-07-28 as
+[#820](https://github.com/Pyomo/mpi-sppy/pull/820). PR-2 (statdist + smoothed
+methods) is this branch, open upstream as
+[#818](https://github.com/Pyomo/mpi-sppy/pull/818); PR-3 not yet started.
 **Author:** dlw (captured with Claude Code assistance)
-**Last updated:** 2026-07-03
+**Last updated:** 2026-07-28
 
 **Ultimate goal.** The end state this design builds toward is *bootstrap and
 bagging confidence intervals, computed from a given dataset, available
