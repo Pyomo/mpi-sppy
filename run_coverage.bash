@@ -243,6 +243,9 @@ run_phase "pysp_model pytest (serial)" \
 run_phase "test_with_cylinders (mpiexec -np 2)" \
     mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_with_cylinders.py
 
+run_phase "test_boot_sp (mpiexec -np 2)" \
+    mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_boot_sp.py
+
 run_phase "test_boot_sp_simulate (mpiexec -np 2)" \
     mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_boot_sp_simulate.py
 

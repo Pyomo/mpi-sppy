@@ -868,6 +868,7 @@ jobs:
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
+          mpiexec -np 2 coverage run $COV_ARGS -m mpi4py test_boot_sp.py
           mpiexec -np 2 coverage run $COV_ARGS -m mpi4py test_boot_sp_simulate.py
 
       - name: Upload coverage data
