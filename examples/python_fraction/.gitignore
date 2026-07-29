@@ -1,0 +1,12 @@
+# run_experiments.bash writes profiles here by default; they are large
+# (several MB per rank per repetition) and are not worth versioning.
+results/
+
+# Scratch left behind by the cylinders and by LaTeX.
+*.log
+*.aux
+*.out
+__pycache__/
+
+# Built from python_fraction.tex; not versioned.
+*.pdf

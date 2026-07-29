@@ -21,26 +21,30 @@ Outputs:
     - Run parameters extracted from JSON argv (best-effort)
     - A per-rank table with:
         Wall (s): elapsed_time_sec from JSON
-        Python (s), Native (s), System (s): derived by parsing `scalene view --cli --reduced`
-          and summing per-line percentage columns (Time Python / native / system), then
-          multiplying by wall time.
+        Python (s), Native (s), System (s): wall time times the summed per-line
+          percentages taken straight out of the JSON (see scalene_totals.py)
+        Python (%): Python as a percent of the time Scalene attributed to a line
 
 Totals row:
   - Job wall time = max wall time across ranks
-  - Sum(Python seconds), Sum(Native seconds), Sum(System seconds) across ranks (if available)
+  - Sum(Python seconds), Sum(Native seconds), Sum(System seconds) across ranks
 
-Why this approach:
-  With Scalene 2.0.1, `scalene run` emits JSON profiles whose CPU summary fields may be null.
-  The `scalene view --cli` output contains per-line "% of time" columns; summing those
-  percentages yields overall percent-of-wall-time totals.
+Why read the JSON:
+  Earlier versions of this script parsed `scalene view --cli --reduced` and summed the
+  per-line percent columns off the screen. That is fragile: the CLI rounds to whole
+  percents, --reduced hides low-usage lines so the sums undercount, and the output now
+  carries ANSI colour codes that broke the row regex outright. The same numbers are in
+  the JSON at full precision, so that is the default. --from-cli still runs the old path
+  (with the colour codes stripped) if you want to cross-check the two.
 
 Usage:
   python make_scalene_latex_table.py --glob "scalene_rank_*.json" --out scalene_summary.tex
 
 Options:
+  --from-cli      Parse `scalene view --cli` instead of reading the JSON directly
   --cache-cli     Cache CLI output as <json>.cli.txt (reused if present)
-  --no-view       Don't run scalene view (wall time only)
-  --reduced       Pass --reduced to scalene view (recommended)
+  --no-view       Report wall time only, no Python/native/system breakdown
+  --reduced       Pass --reduced to scalene view (only affects --from-cli)
   --columns N     Set terminal width (COLUMNS) for scalene view output (default 200)
 """
 
@@ -56,6 +60,8 @@ import subprocess
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
+from scalene_totals import consistency_error, totals_from_json
+
 
 @dataclass
 class RankRow:
@@ -65,6 +71,8 @@ class RankRow:
     python_time: Optional[float]
     native_time: Optional[float]
     system_time: Optional[float]
+    python_pct: Optional[float] = None
+    accounted_pct: Optional[float] = None
 
 
 # ---------------------------
@@ -388,12 +396,22 @@ def _run_scalene_view_cli(json_path: str, reduced: bool, columns: int) -> str:
     return p.stdout
 
 
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def _strip_ansi(s: str) -> str:
+    return _ANSI_RE.sub("", s)
+
+
 def _parse_cli_percent_totals(cli_text: str) -> Tuple[Optional[float], Optional[float], Optional[float]]:
     """
     Parse totals by summing per-line percent columns from Scalene `view --cli` output.
 
     We match table rows like:
        15 │    2% │   24% │   2%  │ ...
+
+    Scalene colourizes this table even when its output is a pipe, so the escape
+    sequences have to come out before the row pattern will match anything.
 
     Returns: (python_percent, native_percent, system_percent)
     """
@@ -407,7 +425,7 @@ def _parse_cli_percent_totals(cli_text: str) -> Tuple[Optional[float], Optional[
     )
 
     for line in cli_text.splitlines():
-        m = row_re.match(line)
+        m = row_re.match(_strip_ansi(line))
         if not m:
             continue
         saw_any = True
@@ -439,9 +457,11 @@ def main() -> None:
     ap.add_argument("--caption", default="Scalene timing summary by MPI rank", help="Table caption")
     ap.add_argument("--label", default="tab:scalene-summary", help="LaTeX label")
     ap.add_argument("--no-totals", action="store_true", help="Do not add totals row")
-    ap.add_argument("--no-view", action="store_true", help="Do not run `scalene view --cli` (wall only)")
+    ap.add_argument("--no-view", action="store_true", help="Report wall time only, no breakdown")
+    ap.add_argument("--from-cli", action="store_true",
+                    help="Parse `scalene view --cli` instead of reading the JSON directly")
     ap.add_argument("--cache-cli", action="store_true", help="Cache CLI output to <json>.cli.txt and reuse")
-    ap.add_argument("--reduced", action="store_true", help="Pass --reduced to scalene view --cli (recommended)")
+    ap.add_argument("--reduced", action="store_true", help="Pass --reduced to scalene view --cli (--from-cli only)")
     ap.add_argument("--columns", type=int, default=200, help="Set COLUMNS for scalene view output (default 200)")
     args = ap.parse_args()
 
@@ -465,23 +485,39 @@ def main() -> None:
         wall = _coerce_float(j.get("elapsed_time_sec"))
 
         python_s = native_s = system_s = None
+        python_pct = accounted_pct = None
 
         if not args.no_view and wall is not None:
-            cache_path = f"{f}.cli.txt"
-            if args.cache_cli and os.path.exists(cache_path):
-                with open(cache_path, "r", encoding="utf-8") as cf:
-                    cli_text = cf.read()
-            else:
-                cli_text = _run_scalene_view_cli(f, reduced=args.reduced, columns=args.columns)
-                if args.cache_cli:
-                    with open(cache_path, "w", encoding="utf-8") as cf:
-                        cf.write(cli_text)
+            if args.from_cli:
+                cache_path = f"{f}.cli.txt"
+                if args.cache_cli and os.path.exists(cache_path):
+                    with open(cache_path, "r", encoding="utf-8") as cf:
+                        cli_text = cf.read()
+                else:
+                    cli_text = _run_scalene_view_cli(f, reduced=args.reduced, columns=args.columns)
+                    if args.cache_cli:
+                        with open(cache_path, "w", encoding="utf-8") as cf:
+                            cf.write(cli_text)
 
-            py_pct, nat_pct, sys_pct = _parse_cli_percent_totals(cli_text)
-            if py_pct is not None and nat_pct is not None and sys_pct is not None:
-                python_s = wall * (py_pct / 100.0)
-                native_s = wall * (nat_pct / 100.0)
-                system_s = wall * (sys_pct / 100.0)
+                py_pct, nat_pct, sys_pct = _parse_cli_percent_totals(cli_text)
+                if py_pct is not None and nat_pct is not None and sys_pct is not None:
+                    python_s = wall * (py_pct / 100.0)
+                    native_s = wall * (nat_pct / 100.0)
+                    system_s = wall * (sys_pct / 100.0)
+                    accounted_pct = py_pct + nat_pct + sys_pct
+                    if accounted_pct > 0.0:
+                        python_pct = 100.0 * py_pct / accounted_pct
+            else:
+                bad = consistency_error(f)
+                if bad:
+                    raise SystemExit(
+                        "Scalene JSON failed its internal consistency check, so its "
+                        "layout has probably changed:\n  " + bad
+                    )
+                t = totals_from_json(f)
+                python_s, native_s, system_s = t.python_sec, t.native_sec, t.system_sec
+                python_pct = t.python_fraction
+                accounted_pct = t.accounted_pct
 
         rows.append(
             RankRow(
@@ -491,6 +527,8 @@ def main() -> None:
                 python_time=python_s,
                 native_time=native_s,
                 system_time=system_s,
+                python_pct=python_pct,
+                accounted_pct=accounted_pct,
             )
         )
 
@@ -580,33 +618,50 @@ def main() -> None:
 
     if args.no_view:
         lines.append(
-            r"\noindent\emph{Note: Time breakdown requires parsing \texttt{python -m scalene view --cli --reduced <profile.json>}.}"
+            r"\noindent\emph{Note: --no-view was given, so only wall time is reported.}"
         )
         lines.append("")
     elif not any_time_breakdown:
         lines.append(
-            r"\noindent\emph{Note: No per-line time percentages were found in the output of \texttt{scalene view --cli}.}"
+            r"\noindent\emph{Note: No per-line time percentages were found in the profiles.}"
+        )
+        lines.append("")
+
+    vals_acct = [r.accounted_pct for r in rows if r.accounted_pct is not None]
+    if vals_acct:
+        lines.append(
+            r"\noindent\emph{Scalene attributed "
+            rf"{min(vals_acct):.1f}--{max(vals_acct):.1f}\% "
+            r"of wall time to a source line; the Python (\%) column is Python as a "
+            r"percent of that attributed time.}"
         )
         lines.append("")
 
     # Table
     lines.append(r"\begin{table}[ht]")
     lines.append(r"\centering")
-    lines.append(r"\begin{tabular}{r l r r r r}")
+    lines.append(r"\begin{tabular}{r l r r r r r}")
     lines.append(r"\hline")
-    lines.append(r"Rank & File & Wall (s) & Python (s) & Native (s) & System (s) \\")
+    lines.append(r"Rank & File & Wall (s) & Python (s) & Native (s) & System (s) & Python (\%) \\")
     lines.append(r"\hline")
 
     for r in rows:
         rank_str = "" if r.rank is None else str(r.rank)
         lines.append(
-            rf"{rank_str} & {_latex_escape(r.filename)} & {_fmt(r.wall_time)} & {_fmt(r.python_time)} & {_fmt(r.native_time)} & {_fmt(r.system_time)} \\"
+            rf"{rank_str} & {_latex_escape(r.filename)} & {_fmt(r.wall_time)} & {_fmt(r.python_time)} & {_fmt(r.native_time)} & {_fmt(r.system_time)} & {_fmt(r.python_pct, 1)} \\"
         )
 
     if not args.no_totals:
+        # The job-level Python percent is computed from the summed seconds, so
+        # that ranks are weighted by how long they actually ran.
+        job_py_pct = None
+        if sum_py is not None and sum_nat is not None and sum_sys is not None:
+            denom = sum_py + sum_nat + sum_sys
+            if denom > 0.0:
+                job_py_pct = 100.0 * sum_py / denom
         lines.append(r"\hline")
         lines.append(
-            rf"\textbf{{Job wall (max)}} &  & \textbf{{{_fmt(job_wall)}}} & \textbf{{{_fmt(sum_py)}}} & \textbf{{{_fmt(sum_nat)}}} & \textbf{{{_fmt(sum_sys)}}} \\"
+            rf"\textbf{{Job wall (max)}} &  & \textbf{{{_fmt(job_wall)}}} & \textbf{{{_fmt(sum_py)}}} & \textbf{{{_fmt(sum_nat)}}} & \textbf{{{_fmt(sum_sys)}}} & \textbf{{{_fmt(job_py_pct, 1)}}} \\"
         )
 
     lines.append(r"\hline")
