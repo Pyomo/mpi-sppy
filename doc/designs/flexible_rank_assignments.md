@@ -388,9 +388,16 @@ window creation.  Cons:
   allgather across one anchor rank per cylinder (the base rank, on a
   temporary `fullcomm.Split` comm of just the anchors — a handful of
   ranks), and a broadcast of the assembled result within each cylinder.
-  The two-level exchange was chosen over local-compute because field
-  registration is dynamic (extensions register extra send fields), so
-  layouts cannot be reconstructed from static information alone.  Every
+  The two-level exchange was chosen over local-compute because the
+  library has no static declaration surface for fields: layouts exist
+  only as the side effect of runtime `register_send_field` calls made
+  by cylinder classes and extensions.  The cfg cannot serve as that
+  surface — drivers that build their own hub/spoke dicts need not use
+  `Config` at all — so computing remote layouts locally would require
+  a new mandatory declare-your-fields API for cylinders, extensions,
+  and custom drivers, plus re-deriving each remote rank's scenario
+  slice.  A startup-only two-level exchange is cheap and stays correct
+  by construction.  Every
   rank still *stores* all N layouts — each is a small dict of 3-int
   tuples, and a reader legitimately needs the layout of any peer rank
   its overlap maps touch — only the exchange pattern changed.  The
