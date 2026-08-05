@@ -42,10 +42,22 @@ class LShapedCutGeneratorData(bc.BendersCutGeneratorData):
 
     def set_ls(self, ls):
         self.ls = ls
-        self.global_subproblem_count = len(self.ls.all_scenario_names)
-        self._subproblem_ndx_map = dict.fromkeys(range(len(self.ls.local_scenario_names)))
-        for s in self._subproblem_ndx_map.keys():
-            self._subproblem_ndx_map[s] = self.ls.all_scenario_names.index(self.ls.local_scenario_names[s])
+        # scenarios built into the root problem (root_scenarios) have no eta
+        # variable and no Benders subproblem, so all of the global indexing
+        # here is over the non-root scenarios only
+        if getattr(self.ls, "has_root_scens", False):
+            root_scenarios = self.ls.root_scenarios
+        else:
+            root_scenarios = ()
+        sub_scenario_names = [s for s in self.ls.all_scenario_names
+                              if s not in root_scenarios]
+        self.global_subproblem_count = len(sub_scenario_names)
+        local_sub_scenario_names = [s for s in self.ls.local_scenario_names
+                                    if s not in root_scenarios]
+        self._subproblem_ndx_map = {
+            ndx: sub_scenario_names.index(name)
+            for ndx, name in enumerate(local_sub_scenario_names)
+        }
         # print(self._subproblem_ndx_map)
         self.all_root_etas = list(self.ls.root.eta.values())
 

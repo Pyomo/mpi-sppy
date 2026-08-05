@@ -183,6 +183,28 @@ cmdstr = (
 _doone(cmdstr)
 
 
+#####################################################
+# L-shaped with a multi-rank hub (regression test for issue #551).
+# farmer_lshapedhub.py builds the middle scenario into the root problem
+# (root_scenarios), so with one scenario per rank this exercises the
+# subproblem index bookkeeping in mpisppy.utils.lshaped_cuts.set_ls.
+lshaped_path = os.path.abspath(
+    os.path.join(_tests_dir, "..", "..", "examples", "farmer", "farmer_lshapedhub.py")
+)
+
+cmdstr = (
+    f"mpiexec -np 3 {pyexe} {python_args} -m mpi4py {shlex.quote(lshaped_path)} "
+    f"--num-scens 3 "
+    f"--bundles-per-rank=0 "
+    f"--max-iterations=50 "
+    f"--solver-name={shlex.quote(solver_name)} "
+    f"--max-solver-threads 1 "
+    f"--rel-gap=0.0"
+)
+
+_doone(cmdstr)
+
+
 #######################################################
 if badguys:
     print("\nstraight_tests.py failed commands:")
