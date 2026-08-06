@@ -50,6 +50,7 @@ MPI is used.
    zhat.rst
    risk_management.rst
    seqsamp.rst
+   boot_sp.rst
 
 .. toctree::
    :maxdepth: 2
@@ -61,6 +62,7 @@ MPI is used.
    vss.rst
    feasible_xhat.rst
    xhat_from_file.rst
+   xhat_feasibility_cuts.rst
    iis.rst
    smps.rst
    agnostic.rst

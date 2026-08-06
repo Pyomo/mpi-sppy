@@ -379,10 +379,11 @@ sslp
 ----
 
 This is a classic problem from Ntaimo and Sen with data in PySP format.
-``sslp.py`` provides the model-module hooks so most runs go through
-``mpisppy/generic_cylinders.py``. ``sslp_cylinders.py`` is retained as
-a worked example of the hand-rolled cylinders driver; it is similar to
-the hydro example except sslp is simpler because it is just two stages.
+``sslp.py`` provides the model-module hooks so runs go through
+``mpisppy/generic_cylinders.py`` (see ``sslp_demo.bash`` for an example).
+An older hand-rolled cylinders driver is preserved under
+``examples/sslp/archive/sslp_cylinders.py`` for reference; new code
+should use ``generic_cylinders.py``.
 
 UC
 --

@@ -73,7 +73,7 @@ def parse_mrp_args(m):
 
 
 ##########################################################################
-if __name__ == "__main__":
+def main():
     if len(sys.argv) == 1:
         print("The python model file module name (no .py) must be given.")
         print("usage, e.g.: python -m mpisppy.mrp_generic --module-name farmer"
@@ -101,3 +101,7 @@ if __name__ == "__main__":
             root_nonants = np.array(xhat["ROOT"])
             np.save(f"{cfg.solution_base_name}.npy", root_nonants)
             print(f"Wrote xhat to {cfg.solution_base_name}.npy")
+
+
+if __name__ == "__main__":
+    main()
