@@ -1,0 +1,16 @@
+{
+    "module_name": "nonunique_schultz",
+    "max_count": 121,
+    "candidate_sample_size": 1,
+    "sample_size": 40,
+    "subsample_size": 10,
+    "nB": 20,
+    "alpha": 0.1,
+    "seed_offset": 100,
+    "optimal_fname": "None",
+    "xhat_fname": "None",
+    "solver_name": "gurobi_direct",
+    "boot_method": "Classical_gaussian",
+    "trace_fname": "None",
+    "coverage_replications": 5
+}

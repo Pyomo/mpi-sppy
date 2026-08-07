@@ -33,7 +33,10 @@ Here are two methods that seem to work well for installation, at least when cons
    ```shell
    pip install -e .[mpi]
    ```
-   Run the line aborve after cloning and moving to the repo root directory.
+   Run the line above after cloning and moving to the repo root directory.
+   If you plan to run the tests or contribute, use `pip install -e ".[mpi,dev]"`
+   instead to also get every optional feature package plus the test,
+   documentation, and linting tools (the docs describe all of the extras).
 
 To test your installation, give this command (once mpi-sppy is installed
 it works from any directory):
