@@ -16,7 +16,13 @@ import copy
 import unittest
 
 from mpisppy.utils import config
-from mpisppy.utils.cfg_vanilla import shared_options, apply_solver_specs
+from mpisppy.utils.cfg_vanilla import (
+    shared_options,
+    apply_solver_specs,
+    xhatlshaped_spoke,
+    xhatshuffle_spoke,
+)
+from mpisppy.generic.parsing import add_decomp_args
 from mpisppy.utils.sputils import (
     fold_solver_options_layers,
     solver_options_layer,
@@ -1423,6 +1429,90 @@ class TestProgrammaticAPIDeprecation(unittest.TestCase):
             "read; got "
             f"{[(w.category.__name__, str(w.message)) for w in caught]}",
         )
+
+
+class TestXhatSpokePerSpokeSolver(unittest.TestCase):
+    """The xhat (inner-bound) spokes expose and consume the same
+    per-spoke solver surface as the outer-bound spokes: each xhat
+    *_args helper registers the --<spoke>-solver-{name,options,
+    options-file} trio, and each xhat spoke factory routes those
+    values into the spoke via apply_solver_specs.
+    """
+
+    XHAT_ARGS = [
+        ("xhatlooper", "xhatlooper_args"),
+        ("xhatshuffle", "xhatshuffle_args"),
+        ("xhatspecific", "xhatspecific_args"),
+        ("xhatxbar", "xhatxbar_args"),
+        ("xhatlshaped", "xhatlshaped_args"),
+    ]
+
+    def test_xhat_args_register_full_solver_trio(self):
+        for prefix, argfn in self.XHAT_ARGS:
+            cfg = config.Config()
+            cfg.popular_args()
+            getattr(cfg, argfn)()
+            for suffix in ("_solver_name", "_solver_options",
+                           "_solver_options_file"):
+                self.assertIn(
+                    prefix + suffix, cfg,
+                    f"{argfn} did not register {prefix + suffix}",
+                )
+
+    def test_xhatshuffle_spoke_routes_per_spoke_solver(self):
+        # The spoke factory must call apply_solver_specs so the per-spoke
+        # solver name and options actually reach the spoke's option dict
+        # (and the nested xhat_solver_options that references iterk).
+        cfg = config.Config()
+        cfg.popular_args()
+        add_decomp_args(cfg)
+        cfg.default_rho = 1.0
+        cfg.solver_name = "gurobi"          # hub / global
+        cfg.solver_options = "mipgap=0.1"   # global options
+        cfg.xhatshuffle = True
+        cfg.xhatshuffle_solver_name = "xpress"               # override
+        cfg.xhatshuffle_solver_options = "mipgap=0.001 threads=2"
+
+        def _sc(*a, **k):  # spoke factory only packages config; never calls this
+            raise AssertionError("scenario_creator should not be called")
+
+        spoke = xhatshuffle_spoke(cfg, _sc, None, ["scen0", "scen1", "scen2"])
+        opts = spoke["opt_kwargs"]["options"]
+        self.assertEqual(opts["solver_name"], "xpress")
+        self.assertEqual(opts["iterk_solver_options"]["mipgap"], 0.001)
+        self.assertEqual(opts["iterk_solver_options"]["threads"], 2)
+        # the nested reference must see the per-spoke options too
+        self.assertEqual(
+            opts["xhat_looper_options"]["xhat_solver_options"]["mipgap"],
+            0.001,
+        )
+
+    def test_xhatlshaped_spoke_routes_per_spoke_solver(self):
+        # xhatlshaped is the one xhat factory with no nested
+        # xhat_solver_options dict -- it applies the specs and returns --
+        # so it gets its own routing check rather than riding on the
+        # xhatshuffle case above.
+        cfg = config.Config()
+        cfg.popular_args()
+        add_decomp_args(cfg)
+        cfg.default_rho = 1.0
+        cfg.solver_name = "gurobi"              # hub / global
+        cfg.solver_options = "presolve=2"       # global options
+        cfg.xhatlshaped = True
+        cfg.xhatlshaped_solver_name = "xpress"  # override
+        cfg.xhatlshaped_solver_options = "mipgap=0.001"
+
+        def _sc(*a, **k):  # spoke factory only packages config; never calls this
+            raise AssertionError("scenario_creator should not be called")
+
+        spoke = xhatlshaped_spoke(cfg, _sc, None, ["scen0", "scen1", "scen2"])
+        opts = spoke["opt_kwargs"]["options"]
+        self.assertEqual(opts["solver_name"], "xpress")
+        for when in ("iter0_solver_options", "iterk_solver_options"):
+            # per-spoke options overlay the global set: the spoke's
+            # mipgap lands and the global presolve survives
+            self.assertEqual(opts[when]["mipgap"], 0.001)
+            self.assertEqual(opts[when]["presolve"], 2)
 
 
 if __name__ == "__main__":
