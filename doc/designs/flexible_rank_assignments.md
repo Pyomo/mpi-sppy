@@ -367,42 +367,37 @@ window creation.  Cons:
 - Requires rewriting `SPCommunicator` and `SPWindow` to work without
   `strata_comm`.
 - The buffer layout exchange (currently `strata_comm.allgather`) needs
-  a replacement.  The cheapest option is to compute layouts locally on
-  every rank: per-cylinder rank count, the output of
-  `_calculate_scenario_ranks`, and field-registration order are all
-  static and deterministic at startup, so no communication is
-  required.  If a runtime exchange is genuinely needed (e.g., dynamic
-  field registration), prefer a two-level scheme —
-  `cylinder_comm.allgather` followed by a small cross-cylinder gather
-  over one anchor rank per cylinder — rather than a single
-  `fullcomm.allgather`, which scales worse at N=thousands.
+  a replacement on the unequal-rank path, where the window comm is
+  `fullcomm`.
 
-  *What the unequal-rank path actually ships.*  The first cut used a
-  single `fullcomm.allgather` (the existing `SPWindow` exchange run on
-  `fullcomm` instead of `strata_comm`) — deliberately interim, because
-  total rank counts in the thousands are a real operating regime and an
-  O(N) startup allgather must not be the production exchange.  That
-  interim exchange has since been replaced (Pyomo/mpi-sppy#726) by the
-  **two-level scheme** (`two_level_layout_exchange` in
-  `spcommunicator.py`): an allgather *within* each cylinder, an
-  allgather across one anchor rank per cylinder (the base rank, on a
-  temporary `fullcomm.Split` comm of just the anchors — a handful of
-  ranks), and a broadcast of the assembled result within each cylinder.
-  The two-level exchange was chosen over local-compute because the
-  library has no static declaration surface for fields: layouts exist
-  only as the side effect of runtime `register_send_field` calls made
-  by cylinder classes and extensions.  The cfg cannot serve as that
-  surface — drivers that build their own hub/spoke dicts need not use
-  `Config` at all — so computing remote layouts locally would require
-  a new mandatory declare-your-fields API for cylinders, extensions,
-  and custom drivers, plus re-deriving each remote rank's scenario
-  slice.  A startup-only two-level exchange is cheap and stays correct
-  by construction.  Every
-  rank still *stores* all N layouts — each is a small dict of 3-int
-  tuples, and a reader legitimately needs the layout of any peer rank
-  its overlap maps touch — only the exchange pattern changed.  The
-  change is localized to how `strata_buffer_layouts` is populated at
-  startup; the multi-source reader is untouched.
+  *What the unequal-rank path ships: the flat `fullcomm.allgather`,
+  permanently.*  The exchange is the existing `SPWindow` allgather run
+  on `fullcomm` instead of `strata_comm`.  This was first framed as
+  interim, with a "scalable" replacement (two-level or local-compute)
+  gating production use; that replacement was examined and rejected
+  (Pyomo/mpi-sppy#726, closed won't-fix).  The scaling analysis does
+  not support it: the exchange runs once, at startup, inside window
+  creation; an allgather's latency is O(log N) rounds in any production
+  MPI implementation, and its O(N) per-rank data volume is the *result*
+  — every rank legitimately needs the layout of any peer rank its
+  overlap maps touch, so any replacement scheme still delivers all N
+  layouts to every rank and cannot beat O(N) per-rank data.  Each
+  layout is a small dict of 3-int tuples; at even 10,000 total ranks
+  the flat exchange moves a few MB per rank — milliseconds, against a
+  startup that builds Pyomo scenario models and a run that solves
+  optimization problems for hours.  A two-level scheme (allgather
+  within each cylinder, allgather across one anchor rank per cylinder,
+  broadcast of the assembled table) changes only the collective's
+  participant pattern, not the asymptotics, and adds code to the
+  unequal-rank path for a constant-factor effect on a cold path.
+  Local-compute is further foreclosed structurally: the library has no
+  static declaration surface for fields — layouts exist only as the
+  side effect of runtime `register_send_field` calls made by cylinder
+  classes and extensions, and the cfg cannot serve as that surface
+  (drivers that build their own hub/spoke dicts need not use `Config`
+  at all) — so computing remote layouts locally would require a new
+  mandatory declare-your-fields API for cylinders, extensions, and
+  custom drivers, plus re-deriving each remote rank's scenario slice.
 
   *Lock granularity.*  `MPI_Win_lock(rank=target, ...)` is per-
   target-rank in the MPI spec, not per-window — a writer's exclusive
@@ -727,11 +722,12 @@ the first pass bundled into "Phase 0" has already landed separately.
 **Phase 2: Communication layer** (additive; reached only when a ratio
 differs from 1.0)
 
-- Add the layout exchange for the unequal-rank path (Option D's
-  addressing), *alongside* the existing `strata_comm`-based exchange,
-  which the equal-rank path keeps using.  (The first cut's interim
-  `fullcomm.allgather` has since been replaced by the scalable
-  two-level exchange — see the Option D layout-exchange note.)
+- Add the `fullcomm.allgather` layout exchange for the unequal-rank
+  path (Option D's addressing), *alongside* the existing
+  `strata_comm`-based exchange, which the equal-rank path keeps using.
+  (This flat allgather is the permanent exchange, not an interim one —
+  see the Option D layout-exchange note for why a "scalable"
+  replacement was rejected.)
 - Implement multi-source `get_receive_buffer()` using overlap maps, as
   a path taken only under non-default ratios; the single-source reader
   is unchanged for the equal-rank case.
@@ -934,13 +930,13 @@ two MPI implementations (e.g. OpenMPI and MPICH) and more than one
 mpi4py / MPI version, since that path is where the RMA-portability risk
 lives.
 
-The **scalable layout exchange** used to sit on this same "finish
-before recommending it" list; it is now done — the interim
-`fullcomm.allgather` was replaced by the two-level exchange
-(Pyomo/mpi-sppy#726; see the Option D layout-exchange note) — leaving
-the MPI-implementation matrix above as the remaining prerequisite for
-recommending the feature (not for landing the intervening phases on
-`main`).
+A **scalable layout exchange** used to sit on this same "finish
+before recommending it" list; it was removed after the scaling
+analysis showed the flat `fullcomm.allgather` is fine at any realistic
+rank count (Pyomo/mpi-sppy#726, closed won't-fix; see the Option D
+layout-exchange note) — leaving the MPI-implementation matrix above as
+the remaining prerequisite for recommending the feature (not for
+landing the intervening phases on `main`).
 
 
 ### Possible future work (out of scope)

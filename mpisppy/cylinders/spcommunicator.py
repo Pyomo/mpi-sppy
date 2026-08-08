@@ -112,53 +112,6 @@ def reduce_source_write_ids(source_ids, strict: bool) -> int:
     return min(source_ids)
 
 
-def two_level_layout_exchange(my_layout, fullcomm, cylinder_comm, cylinder_bases):
-    """Exchange every rank's buffer layout on the unequal-rank path, where the
-    window lives on ``fullcomm``, without a flat ``fullcomm.allgather`` (an
-    O(N) startup collective that must not be the exchange at total rank counts
-    in the thousands).  Three scalable steps instead:
-
-      1. allgather within each cylinder (size = that cylinder's rank count);
-      2. allgather across one anchor rank per cylinder (the base rank,
-         ``cylinder_comm`` rank 0) on a temporary comm of just the anchors
-         (size = the number of cylinders, a small constant);
-      3. broadcast the assembled result within each cylinder.
-
-    Every rank still *stores* all N layouts (each is a small dict of
-    3-int tuples), because a reader legitimately needs the layout of any
-    peer rank its overlap maps touch; only the exchange pattern changes.
-
-    Args:
-        my_layout: this rank's ``SPWindow.buffer_layout``.
-        fullcomm: the window comm spanning all ranks.
-        cylinder_comm: this rank's within-cylinder comm, rank-ordered by
-            global rank (so its rank 0 is the cylinder's base rank).
-        cylinder_bases: each cylinder's base (lowest) global rank, in
-            cylinder order.
-
-    Returns:
-        list: every rank's layout, indexed by global rank on ``fullcomm``.
-    """
-    cylinder_layouts = cylinder_comm.allgather(my_layout)
-    # anchor comm: cylinder base ranks only; Split is collective on fullcomm
-    is_anchor = cylinder_comm.Get_rank() == 0
-    anchor_comm = fullcomm.Split(
-        color=0 if is_anchor else MPI.UNDEFINED, key=fullcomm.Get_rank()
-    )
-    if is_anchor:
-        # anchors are ordered by global rank, i.e. in cylinder order
-        per_cylinder_layouts = anchor_comm.allgather(cylinder_layouts)
-        anchor_comm.Free()
-    else:
-        per_cylinder_layouts = None
-    per_cylinder_layouts = cylinder_comm.bcast(per_cylinder_layouts, root=0)
-
-    layouts = [None] * fullcomm.Get_size()
-    for base, one_cylinder in zip(cylinder_bases, per_cylinder_layouts):
-        layouts[base : base + len(one_cylinder)] = one_cylinder
-    assert None not in layouts
-    return layouts
-
 def communicator_array(data_length: int):
     """
     Allocate an MPI memory region with a padded length (multiple of 8 doubles = 64B),
@@ -601,13 +554,9 @@ class SPCommunicator:
         window_spec = self._build_window_spec()
         # Equal-rank: window on strata_comm (rank i of every cylinder),
         # addressed by strata_rank. Unequal-rank: window on fullcomm,
-        # addressed by global rank via overlap maps (strata_comm is None);
-        # the layout exchange then must not be a flat allgather on fullcomm,
-        # so pass the two-level exchange (see two_level_layout_exchange).
+        # addressed by global rank via overlap maps (strata_comm is None).
         window_comm = self.fullcomm if self._flex_ranks else self.strata_comm
-        layout_exchanger = self._flex_layout_exchange if self._flex_ranks else None
-        self.window = SPWindow(window_spec, window_comm,
-                               layout_exchanger=layout_exchanger)
+        self.window = SPWindow(window_spec, window_comm)
 
         self._create_field_rank_mappings()
         self.register_receive_fields()
@@ -761,13 +710,6 @@ class SPCommunicator:
     # Unequal-rank (Option D) helpers. These are reached only when
     # self._flex_ranks is True; the equal-rank path above never calls them.
     # ------------------------------------------------------------------
-
-    def _flex_layout_exchange(self, my_layout):
-        """The unequal-rank window's layout exchange: two-level instead of a
-        flat allgather on fullcomm (see two_level_layout_exchange)."""
-        return two_level_layout_exchange(
-            my_layout, self.fullcomm, self.cylinder_comm, self._cylinder_bases
-        )
 
     def _items_per_scen_for_field(self, field: Field):
         """Number of field items each scenario contributes, indexed by global
