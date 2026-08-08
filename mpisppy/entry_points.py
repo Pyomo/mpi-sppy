@@ -38,16 +38,26 @@ def _run_with_mpi_abort(real_main):
         raise
 
 
+# The target-module imports live inside the wrapped callables so that an
+# exception raised while importing (which need not strike every rank,
+# e.g. flaky shared filesystems) also aborts instead of hanging.
+
 def generic_cylinders_main():
-    from mpisppy.generic_cylinders import main
-    _run_with_mpi_abort(main)
+    def _main():
+        from mpisppy.generic_cylinders import main
+        main()
+    _run_with_mpi_abort(_main)
 
 
 def mrp_generic_main():
-    from mpisppy.mrp_generic import main
-    _run_with_mpi_abort(main)
+    def _main():
+        from mpisppy.mrp_generic import main
+        main()
+    _run_with_mpi_abort(_main)
 
 
 def one_sided_test_main():
-    from mpi_one_sided_test import main
-    _run_with_mpi_abort(main)
+    def _main():
+        from mpi_one_sided_test import main
+        main()
+    _run_with_mpi_abort(_main)

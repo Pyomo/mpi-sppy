@@ -54,12 +54,15 @@ class TestEntryPoints(unittest.TestCase):
         MPI.COMM_WORLD = self._saved_comm
 
     def _run_failing_main(self, comm, exc=ValueError):
+        """Returns whatever the wrapper wrote to stderr."""
         MPI.COMM_WORLD = comm
         def failing_main():
             raise exc("boom")
-        with contextlib.redirect_stderr(io.StringIO()):
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
             with self.assertRaises(exc):
                 entry_points._run_with_mpi_abort(failing_main)
+        return stderr.getvalue()
 
     def test_serial_reraises_without_abort(self):
         comm = _FakeComm(1)
@@ -68,7 +71,18 @@ class TestEntryPoints(unittest.TestCase):
 
     def test_multirank_aborts(self):
         comm = _FakeComm(3)
-        self._run_failing_main(comm)
+        stderr = self._run_failing_main(comm)
+        self.assertEqual(comm.abort_code, 1)
+        # the wrapper must print the traceback before aborting, or the
+        # user never learns why the job died
+        self.assertIn("ValueError: boom", stderr)
+
+    def test_keyboard_interrupt_aborts(self):
+        # KeyboardInterrupt is a BaseException, not an Exception: this
+        # pins the wrapper's except clause to the broader class, matching
+        # mpi4py's runner (Ctrl-C on one rank must not strand the others)
+        comm = _FakeComm(3)
+        self._run_failing_main(comm, exc=KeyboardInterrupt)
         self.assertEqual(comm.abort_code, 1)
 
     def test_mock_comm_without_abort_reraises(self):
