@@ -366,6 +366,28 @@ flag adds ``mipgap`` and leaves the global ``presolve`` and
 ``threads`` in place. The hub and the other spokes see the
 global dict ``{presolve=2, threads=4}`` unchanged.
 
+Each spoke also takes ``--<spoke>-solver-name``, so a spoke can run
+on a different solver from the hub. This covers the xhat inner-bound
+spokes (``--xhatshuffle-solver-name``, ``--xhatxbar-solver-name``,
+``--xhatlshaped-solver-name``) as well as the outer-bound ones:
+
+.. code-block:: bash
+
+    --solver-name gurobi --xhatshuffle --xhatshuffle-solver-name xpress
+
+Here the PH hub solves on Gurobi and the xhatshuffle spoke's
+incumbent-finding solves go to Xpress. ``--<spoke>-solver-name``
+falls back to ``--solver-name`` when it is not given, and the name
+and options flags are independent — supply only
+``--<spoke>-solver-options`` to keep the inherited solver but change
+its options.
+
+.. note::
+   FWPH is the exception to the ``--<spoke>-solver-name`` pattern:
+   it solves two kinds of subproblem and so takes
+   ``--fwph-mip-solver-name`` and ``--fwph-qp-solver-name``
+   instead. See :ref:`Hubs`.
+
 .. warning::
 
    Behavior change in 2026: per-spoke solver-options flags
