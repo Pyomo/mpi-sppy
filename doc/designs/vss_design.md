@@ -69,9 +69,16 @@ VSS = EEV − RP        (minimization; VSS ≥ 0 always)
 necessarily optimal, so evaluating it can only do worse than `RP`.
 
 For a **maximization** model every inequality flips and the definition is
-`VSS = RP − EEV` (still `≥ 0`). The implementation reads
-`is_minimizing` off the scenarios and picks the sign; VSS is always
-reported as a non-negative "cost of using the average."
+`VSS = RP − EEV` (again `≥ 0`). The implementation reads `is_minimizing`
+off the scenarios and picks the sign.
+
+The `≥ 0` guarantee is against the true optimum. When RP is only an
+incumbent — a MIP left with a nonzero gap, or a decomposition run stopped
+early — the evaluated `x̄` can beat it and the computed VSS can be slightly
+negative. We report the signed value rather than clamping at zero: clamping
+would hide the one case the number is telling you about, namely that RP was
+not solved tightly enough to resolve the VSS. The `VSS bracket` printed
+whenever the run left a gap is what makes that visible.
 
 ### 0.2 Not to be confused with EVPI
 
@@ -456,4 +463,3 @@ All resolved; implementation can proceed.
 3. **EVPI (§0.2):** **VSS only** in V1, for a review-sized PR. EVPI is a
    natural follow-on (it reuses the same evaluate plumbing, with WS =
    per-scenario perfect-foresight solves) and is left to a later PR.
-```

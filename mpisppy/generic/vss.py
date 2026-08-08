@@ -72,6 +72,23 @@ def vss_prep(module, cfg):
         raise RuntimeError("--vss cannot (yet) be combined with ADMM.")
     if cfg.get("cvar", ifmissing=False):
         raise RuntimeError("--vss cannot (yet) be combined with --cvar.")
+    if cfg.get("cc_indicator_var", None) is not None:
+        raise RuntimeError(
+            "--vss cannot (yet) be combined with --cc-indicator-var. The "
+            "chance constraint couples all scenarios and is added to the EF "
+            "only, but EEV evaluates the scenarios independently with the "
+            "first stage fixed, so it would not enforce the constraint. RP "
+            "and EEV would not be comparable and the reported VSS could "
+            "credit a policy that violates the chance constraint."
+        )
+    if cfg.get("unpickle_scenarios_dir", None) is not None:
+        raise RuntimeError(
+            "--vss cannot (yet) be combined with --unpickle-scenarios-dir. "
+            "In that mode the scenario kwargs are {'cfg': cfg}, which the "
+            "module's average_scenario_creator does not accept, and building "
+            "the mean-value scenario from cfg instead could disagree with "
+            "the pickled scenarios it must be averaged over."
+        )
 
 
 def do_vss(module, cfg, scenario_creator, scenario_creator_kwargs,
@@ -113,7 +130,7 @@ def do_vss(module, cfg, scenario_creator, scenario_creator_kwargs,
     # EEV: fix x_bar in the first stage, evaluate across all scenarios.
     eev, infeasible_names = _compute_eev(
         solver_name, solver_options, scenario_creator,
-        scenario_creator_kwargs, all_scenario_names, x_bar)
+        scenario_creator_kwargs, all_scenario_names, x_bar, is_min)
 
     # RP: from EF (exact when solved to zero gap; otherwise the incumbent with
     # a bracket from the solver's dual bound), or the incumbent (+ bracket)
@@ -125,12 +142,16 @@ def do_vss(module, cfg, scenario_creator, scenario_creator_kwargs,
             payload = None
         incumbent, dual = comm.bcast(payload, root=0)
         rp_point = incumbent
-        # A MIP left with a nonzero gap makes the incumbent only known to within
-        # [dual, incumbent]; relabel and bracket so the "exact" claim is not
-        # overstated. An LP (or a MIP solved to zero gap) reports dual==incumbent.
-        if (dual is not None and incumbent is not None
-                and math.isfinite(incumbent)
-                and _rel_gap(dual, incumbent) > _EF_EXACT_RELGAP):
+        # Only claim exactness when the solver actually established it. Three
+        # cases: no usable dual bound (exactness unknown -- do_EF keeps going
+        # after a non-optimal termination, so this is reachable); a nonzero
+        # gap, where the incumbent is only known to within [dual, incumbent];
+        # or dual == incumbent, which an LP (or a MIP solved to zero gap)
+        # reports and which is the only genuinely exact case.
+        if dual is None or incumbent is None or not math.isfinite(incumbent):
+            rp_source = "EF incumbent, bound unavailable"
+            inner = outer = None
+        elif _rel_gap(dual, incumbent) > _EF_EXACT_RELGAP:
             inner, outer = incumbent, dual
             rp_source = f"EF incumbent, gap={_rel_gap(dual, incumbent):.2g}"
         else:
@@ -182,7 +203,12 @@ def _solve_average_scenario(module, solver_name, solver_options,
             "model with exactly one tree node (ROOT)."
         )
     solver = pyo.SolverFactory(solver_name)
-    for k, v in (solver_options or {}).items():
+    # Translate canonical keys (mipgap, threads, ...) to this solver's native
+    # spelling, exactly as SPOpt.solve_one does for the EEV pass. Without it
+    # the same option string would be applied two different ways within one
+    # report.
+    translated = sputils.translate_solver_options(solver_options, solver_name)
+    for k, v in (translated or {}).items():
         solver.options[k] = v
     if sputils.is_persistent(solver):
         solver.set_instance(avg)
@@ -203,11 +229,25 @@ def _solve_average_scenario(module, solver_name, solver_options,
     return ev_obj, x_bar, is_min
 
 
+# Termination conditions that mean the fixed first stage is genuinely
+# infeasible in that scenario, as opposed to a solve that merely did not
+# finish. Compared as strings; see SPOpt.solve_one, which records them.
+_INFEASIBLE_TERMINATIONS = frozenset(("infeasible", "infeasibleOrUnbounded"))
+
+
 def _compute_eev(solver_name, solver_options, scenario_creator,
-                 scenario_creator_kwargs, all_scenario_names, x_bar):
+                 scenario_creator_kwargs, all_scenario_names, x_bar,
+                 is_min=True):
     """Fix x_bar in the first stage and evaluate expected cost across all
-    scenarios. Return (EEV, infeasible_scenario_names). EEV is math.inf if
-    the mean-value first stage is infeasible in any scenario.
+    scenarios. Return (EEV, infeasible_scenario_names).
+
+    If the mean-value first stage is genuinely infeasible in any scenario,
+    EEV is the worst possible value for the sense -- +inf minimizing, -inf
+    maximizing -- so that an unusable policy never reads as a good one.
+
+    A scenario that failed to solve for any other reason (time limit,
+    solver error) is NOT infeasibility and must not be reported as such;
+    it raises, because EEV is then simply unknown.
 
     MPI-collective: every rank builds its share of scenarios, so all ranks
     must call this together.
@@ -237,21 +277,43 @@ def _compute_eev(solver_name, solver_options, scenario_creator,
     ev.solve_loop(solver_options=solver_options, gripe=True, tee=False,
                   compute_val_at_nonant=False)
 
-    local_infeasible = [
-        k for k, s in ev.local_scenarios.items()
-        if not getattr(s._mpisppy_data, "solution_available", False)
-    ]
-    n_local = np.array([float(len(local_infeasible))])
-    n_global = np.zeros(1)
-    ev.mpicomm.Allreduce(n_local, n_global, op=MPI.SUM)
+    # Split the scenarios that produced no solution into the two cases that
+    # mean very different things for the report.
+    local_infeasible, local_failed = [], []
+    for k, s in ev.local_scenarios.items():
+        if getattr(s._mpisppy_data, "solution_available", False):
+            continue
+        tc = getattr(s._mpisppy_data, "termination_condition", None)
+        if tc in _INFEASIBLE_TERMINATIONS:
+            local_infeasible.append(k)
+        else:
+            local_failed.append((k, tc))
 
-    if n_global[0] > 0:
-        gathered = ev.mpicomm.gather(local_infeasible, root=0)
-        names = []
-        if ev.mpicomm.Get_rank() == 0:
-            for lst in gathered:
-                names.extend(lst)
-        return math.inf, names
+    # One Allreduce for both counts: every rank must reach the same verdict
+    # or the collectives below would deadlock.
+    counts = np.array([float(len(local_infeasible)), float(len(local_failed))])
+    totals = np.zeros(2)
+    ev.mpicomm.Allreduce(counts, totals, op=MPI.SUM)
+
+    if totals[1] > 0:
+        # Not infeasibility -- EEV is unknown, so refuse rather than report a
+        # number. allgather (not gather) so every rank raises the same thing.
+        failed = [pair for lst in ev.mpicomm.allgather(local_failed)
+                  for pair in lst]
+        shown = ", ".join(f"{k} ({tc or 'no results'})" for k, tc in failed[:8])
+        more = "" if len(failed) <= 8 else f" (+{len(failed) - 8} more)"
+        raise RuntimeError(
+            f"--vss: the EEV evaluation did not finish for {len(failed)} "
+            f"scenario(s): {shown}{more}. These solves did not report "
+            "infeasibility, so the mean-value first stage may well be "
+            "usable -- EEV is simply unknown, and VSS cannot be computed. "
+            "Loosen any time limit or fix the solver failure and re-run."
+        )
+
+    if totals[0] > 0:
+        names = [k for lst in ev.mpicomm.allgather(local_infeasible)
+                 for k in lst]
+        return (math.inf if is_min else -math.inf), names
 
     # All feasible: Eobjective is collective, so every rank calls it.
     return ev.Eobjective(), []
@@ -303,7 +365,13 @@ def _reduce_bounds(comm, best_inner, best_outer, is_min):
 
 
 def _vss_value(is_min, rp, eev):
-    """VSS with the sign convention; math.inf if EEV is infinite."""
+    """VSS with the sign convention.
+
+    An infinite EEV means the mean-value first stage is unusable somewhere.
+    _compute_eev signs that infinity for the sense (+inf minimizing, -inf
+    maximizing), so VSS is +inf either way: EEV - RP = +inf minimizing,
+    RP - EEV = +inf maximizing.
+    """
     if math.isinf(eev):
         return math.inf
     return (eev - rp) if is_min else (rp - eev)
@@ -348,9 +416,10 @@ def _print_report(result):
         names = result["infeasible_scenarios"]
         shown = names[:8]
         more = "" if len(names) <= 8 else f" (+{len(names) - 8} more)"
-        lines.append(_row("EEV (EV first stage over scenarios)", "+inf",
+        lines.append(_row("EEV (EV first stage over scenarios)", _f(eev),
                           f"   infeasible in: {', '.join(shown)}{more}"))
-        lines.append(_row(f"VSS = {formula} (sense={sense})", "+inf",
+        lines.append(_row(f"VSS = {formula} (sense={sense})",
+                          _f(result["VSS"]),
                           "   (mean-value first stage not usable everywhere)"))
         lines.append("=============================================")
         print("\n".join(lines))

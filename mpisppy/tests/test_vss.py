@@ -18,6 +18,7 @@ import os
 import sys
 import types
 import unittest
+import unittest.mock
 
 import numpy as np
 import pyomo.environ as pyo
@@ -91,6 +92,21 @@ class TestVssPrep(unittest.TestCase):
         with self.assertRaises(RuntimeError) as ctx:
             vss.vss_prep(farmer, _FakeCfg({"scenarios_per_bundle": 2}))
         self.assertIn("bundles", str(ctx.exception))
+
+    def test_chance_constraint_rejected(self):
+        # The cc couples all scenarios and is added to the EF only, so an
+        # uncoupled EEV pass would not enforce it and VSS would be bogus.
+        with self.assertRaises(RuntimeError) as ctx:
+            vss.vss_prep(farmer, _FakeCfg({"cc_indicator_var": "delta"}))
+        self.assertIn("cc-indicator-var", str(ctx.exception))
+
+    def test_unpickle_scenarios_dir_rejected(self):
+        # In that mode scenario kwargs are {"cfg": cfg}, which
+        # average_scenario_creator does not accept; reject up front rather
+        # than TypeError after the whole run.
+        with self.assertRaises(RuntimeError) as ctx:
+            vss.vss_prep(farmer, _FakeCfg({"unpickle_scenarios_dir": "/tmp/x"}))
+        self.assertIn("unpickle-scenarios-dir", str(ctx.exception))
 
 
 class TestVssHelpers(unittest.TestCase):
@@ -187,15 +203,16 @@ class TestVssEndToEnd(unittest.TestCase):
         self.assertAlmostEqual(res["VSS"], res["RP"] - res["EEV"], places=3)
         self.assertGreaterEqual(res["VSS"], -1e-6)
 
-    def test_ef_exact_when_no_bound_reported(self):
-        # An EF object without ef_objective_bounds (or with none reported) is
-        # labelled exact and carries no bracket -- the back-compat default.
+    def test_no_bound_reported_is_not_called_exact(self):
+        # An EF object with no dual bound has not established optimality --
+        # do_EF continues after a non-optimal termination -- so RP must not
+        # be labelled exact. No bound means no bracket either.
         cfg = _make_cfg(["--EF", "--EF-solver-name", solver_name])
         kwargs = farmer.kw_creator(cfg)
         ef = self._ef(kwargs)  # solve_extensive_form doesn't set the bounds
         res = vss.do_vss(farmer, cfg, farmer.scenario_creator, kwargs,
                          farmer.scenario_denouement, ef=ef)
-        self.assertEqual(res["rp_source"], "EF, exact")
+        self.assertEqual(res["rp_source"], "EF incumbent, bound unavailable")
         self.assertIsNone(res["inner"])
         self.assertIsNone(res["outer"])
         self.assertIsNone(res["vss_bracket"])
@@ -254,21 +271,139 @@ class TestVssEndToEnd(unittest.TestCase):
     def test_eev_infeasible_gives_inf(self):
         # Fixing the first stage x=5 is infeasible in the scenario whose
         # demand is 50, so EEV (hence VSS) is +inf.
-        def _infeas_creator(sname, **kw):
-            m = pyo.ConcreteModel()
-            m.x = pyo.Var(bounds=(0, 100))
-            demand = 5.0 if sputils.extract_num(sname) == 0 else 50.0
-            m.meet = pyo.Constraint(expr=m.x >= demand)
-            m.obj = pyo.Objective(expr=m.x, sense=pyo.minimize)
-            m._mpisppy_probability = 0.5
-            sputils.attach_root_node(m, m.x, [m.x])
-            return m
-
         eev, names = vss._compute_eev(
             solver_name, None, _infeas_creator, {},
-            ["Scenario0", "Scenario1"], np.array([5.0]))
-        self.assertTrue(math.isinf(eev))
+            ["Scenario0", "Scenario1"], np.array([5.0]), is_min=True)
+        self.assertEqual(eev, math.inf)
         self.assertIn("Scenario1", names)
+
+    def test_eev_infeasible_is_minus_inf_for_maximize(self):
+        # An unusable first stage must never read as infinitely GOOD: for a
+        # maximization model the worst possible value is -inf, and VSS is
+        # still +inf because VSS = RP - EEV.
+        eev, names = vss._compute_eev(
+            solver_name, None, _max_infeas_creator, {},
+            ["Scenario0", "Scenario1"], np.array([5.0]), is_min=False)
+        self.assertEqual(eev, -math.inf)
+        self.assertIn("Scenario1", names)
+        self.assertEqual(vss._vss_value(False, rp=10.0, eev=eev), math.inf)
+
+
+def _infeas_creator(sname, **kw):
+    """x >= demand, minimize x; demand 50 in Scenario1 makes x=5 infeasible."""
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(bounds=(0, 100))
+    demand = 5.0 if sputils.extract_num(sname) == 0 else 50.0
+    m.meet = pyo.Constraint(expr=m.x >= demand)
+    m.obj = pyo.Objective(expr=m.x, sense=pyo.minimize)
+    m._mpisppy_probability = 0.5
+    sputils.attach_root_node(m, m.x, [m.x])
+    return m
+
+
+def _max_infeas_creator(sname, **kw):
+    """Maximization twin of _infeas_creator, same infeasibility at x=5."""
+    m = _infeas_creator(sname, **kw)
+    m.del_component(m.obj)
+    m.obj = pyo.Objective(expr=m.x, sense=pyo.maximize)
+    return m
+
+
+class _FakeEvalFactory:
+    """Stand in for Xhat_Eval so the post-solve classification in
+    _compute_eev can be exercised without a solver.
+
+    scen_states maps scenario name -> (solution_available, termination_condition).
+    """
+
+    def __init__(self, scen_states, eobjective=42.0):
+        self._states = scen_states
+        self._eobjective = eobjective
+
+    def __call__(self, *args, **kwargs):
+        outer = self
+
+        class _Scen:
+            def __init__(self, avail, tc):
+                self._mpisppy_data = types.SimpleNamespace(
+                    solution_available=avail, termination_condition=tc)
+
+        class _Eval:
+            def __init__(self):
+                self.local_scenarios = {
+                    n: _Scen(a, t) for n, (a, t) in outer._states.items()}
+                self.mpicomm = MPI.COMM_WORLD
+
+            def _lazy_create_solvers(self):
+                pass
+
+            def _fix_nonants(self, _):
+                pass
+
+            def solve_loop(self, **kwargs):
+                pass
+
+            def Eobjective(self):
+                return outer._eobjective
+
+        return _Eval()
+
+
+class TestEevOutcomeClassification(unittest.TestCase):
+    """A scenario with no solution is not automatically infeasible.
+
+    SPOpt.solve_one clears solution_available for a time limit or a solver
+    error too, so _compute_eev must read the recorded termination condition
+    and only call genuine infeasibility infinite. No solver needed.
+    """
+
+    def _run(self, states, is_min=True):
+        fake = _FakeEvalFactory(states)
+        with unittest.mock.patch.object(vss.xhat_eval, "Xhat_Eval", fake):
+            return vss._compute_eev(
+                "gurobi", None, None, {}, list(states), np.array([1.0]),
+                is_min=is_min)
+
+    def test_all_solved_returns_eobjective(self):
+        eev, names = self._run({"Scenario0": (True, "optimal"),
+                                "Scenario1": (True, "optimal")})
+        self.assertEqual(eev, 42.0)
+        self.assertEqual(names, [])
+
+    def test_genuine_infeasibility_is_infinite(self):
+        eev, names = self._run({"Scenario0": (True, "optimal"),
+                                "Scenario1": (False, "infeasible")})
+        self.assertEqual(eev, math.inf)
+        self.assertEqual(names, ["Scenario1"])
+
+    def test_infeasible_or_unbounded_counts_as_infeasible(self):
+        eev, names = self._run({"Scenario0": (False, "infeasibleOrUnbounded")})
+        self.assertEqual(eev, math.inf)
+        self.assertEqual(names, ["Scenario0"])
+
+    def test_time_limit_raises_rather_than_reporting_infeasible(self):
+        with self.assertRaises(RuntimeError) as ctx:
+            self._run({"Scenario0": (True, "optimal"),
+                       "Scenario1": (False, "maxTimeLimit")})
+        msg = str(ctx.exception)
+        self.assertIn("did not finish", msg)
+        self.assertIn("maxTimeLimit", msg)
+        self.assertNotIn("infeasible in", msg)
+
+    def test_solver_error_raises(self):
+        with self.assertRaises(RuntimeError):
+            self._run({"Scenario0": (False, "error")})
+
+    def test_missing_termination_condition_is_treated_as_failure(self):
+        # No recorded condition means we cannot claim infeasibility.
+        with self.assertRaises(RuntimeError):
+            self._run({"Scenario0": (False, None)})
+
+    def test_failure_wins_over_infeasibility(self):
+        # A run with both must refuse: EEV is unknown, not infinite.
+        with self.assertRaises(RuntimeError):
+            self._run({"Scenario0": (False, "infeasible"),
+                       "Scenario1": (False, "maxTimeLimit")})
 
 
 if __name__ == "__main__":

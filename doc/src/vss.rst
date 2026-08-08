@@ -51,11 +51,23 @@ Then
 
 .. math::
 
-   VSS = EEV - RP \;\; (\ge 0).
+   VSS = EEV - RP \;\; (\ge 0 \text{ at optimality}).
 
-For a **maximization** model the sign flips: :math:`VSS = RP - EEV`
-(still :math:`\ge 0`). ``mpi-sppy`` reads the model sense and reports VSS as
-a non-negative "cost of using the average."
+For a **maximization** model the sign flips: :math:`VSS = RP - EEV` (again
+:math:`\ge 0` at optimality). ``mpi-sppy`` reads the model sense and reports
+VSS as the "cost of using the average."
+
+.. note::
+   The :math:`\ge 0` guarantee holds when RP is the true optimum. When RP is
+   only an **incumbent** — a MIP left with a nonzero gap, or a decomposition
+   run stopped before convergence — the evaluated mean-value policy can beat
+   that incumbent, and the reported VSS can come out slightly negative. That
+   is a statement about the run, not about the model: it means RP was not
+   solved tightly enough for the VSS to be resolved. ``mpi-sppy`` reports the
+   signed value as computed rather than clamping it at zero, and prints the
+   ``VSS bracket`` alongside it whenever the run left a gap, so the
+   uncertainty is visible. A negative point value with a bracket that
+   straddles zero is the signal to tighten the gap and re-run.
 
 VSS is not EVPI (Expected Value of Perfect Information,
 :math:`RP - WS`), which measures the value of *knowing* the future rather
