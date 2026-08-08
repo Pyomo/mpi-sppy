@@ -19,6 +19,7 @@ from mpisppy.utils import config
 from mpisppy.utils.cfg_vanilla import (
     shared_options,
     apply_solver_specs,
+    xhatlshaped_spoke,
     xhatshuffle_spoke,
 )
 from mpisppy.generic.parsing import add_decomp_args
@@ -1485,6 +1486,33 @@ class TestXhatSpokePerSpokeSolver(unittest.TestCase):
             opts["xhat_looper_options"]["xhat_solver_options"]["mipgap"],
             0.001,
         )
+
+    def test_xhatlshaped_spoke_routes_per_spoke_solver(self):
+        # xhatlshaped is the one xhat factory with no nested
+        # xhat_solver_options dict -- it applies the specs and returns --
+        # so it gets its own routing check rather than riding on the
+        # xhatshuffle case above.
+        cfg = config.Config()
+        cfg.popular_args()
+        add_decomp_args(cfg)
+        cfg.default_rho = 1.0
+        cfg.solver_name = "gurobi"              # hub / global
+        cfg.solver_options = "presolve=2"       # global options
+        cfg.xhatlshaped = True
+        cfg.xhatlshaped_solver_name = "xpress"  # override
+        cfg.xhatlshaped_solver_options = "mipgap=0.001"
+
+        def _sc(*a, **k):  # spoke factory only packages config; never calls this
+            raise AssertionError("scenario_creator should not be called")
+
+        spoke = xhatlshaped_spoke(cfg, _sc, None, ["scen0", "scen1", "scen2"])
+        opts = spoke["opt_kwargs"]["options"]
+        self.assertEqual(opts["solver_name"], "xpress")
+        for when in ("iter0_solver_options", "iterk_solver_options"):
+            # per-spoke options overlay the global set: the spoke's
+            # mipgap lands and the global presolve survives
+            self.assertEqual(opts[when]["mipgap"], 0.001)
+            self.assertEqual(opts[when]["presolve"], 2)
 
 
 if __name__ == "__main__":

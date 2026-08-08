@@ -240,12 +240,14 @@ previous one, so later steps win:
 5. If `--iterk-mipgap`, write `iterk_solver_options["mipgap"]`
    (cfg_vanilla.py:88-89).
 
-`apply_solver_specs(name, spoke, cfg)` (cfg_vanilla.py:113–129) then runs
-*per spoke that opted in*, with the same shape but reading
-`{name}_solver_options`, `{name}_iter0_mipgap`, etc. Important quirk:
-after potentially overwriting iter0/iterk dicts wholesale at line 119-120,
-it **re-applies** `--max-solver-threads` at lines 127-129 to keep the
-global thread cap honored.
+`apply_solver_specs(name, spoke, cfg)` then runs *per spoke that opted
+in*, with the same shape but reading `{name}_solver_options`,
+`{name}_iter0_mipgap`, etc. It **overlays** those onto the iter0/iterk
+dicts `shared_options` already built — a key-level `dict.update()`, so
+the spoke wins on the keys it names and inherits the rest. (Before the
+redesign it replaced those dicts wholesale; see §1.5 item 4.) It
+re-applies `--max-solver-threads` last, so the global thread cap wins
+even when a spoke names its own `threads`.
 
 ### 1.5 Asymmetries and pitfalls already in the as-is
 
@@ -889,9 +891,9 @@ that will need migration.
 
 ### 6.4 Phased rollout
 
-The redesign is large enough that it should land in review-sized
-phases, each independently testable. Suggested order — each phase is
-green-on-its-own:
+The redesign was large enough to land in review-sized phases, each
+independently testable and green on its own. All eight phases below
+have shipped; they landed in this order:
 
 1. **Layer data model (no behavior change) + this design document.**
    Add `solver_options_layers` to `PHBase` alongside the existing
@@ -921,7 +923,7 @@ green-on-its-own:
    spoke variants); add `load_solver_options_file`; plumb file layers
    in `shared_options` / `apply_solver_specs`.
 7. **Lagranger deprecation warning** (§5.8). Single-line addition.
-8. **Programmatic-API deprecation warnings** (§6.3). **Shipped.**
+8. **Programmatic-API deprecation warnings** (§6.3).
    `options["iter0_solver_options"]` / `options["iterk_solver_options"]`
    dict input and `PHBase.iter0_solver_options` /
    `iterk_solver_options` attribute reads now emit
@@ -929,10 +931,10 @@ green-on-its-own:
    until the spokes that still read it migrate to the layer
    system.
 
-Phases 1–2 land internally with no surface change. Phase 4 is the only
-phase with a release-notes-worthy behavior change. Phases 6 and 7 add
-new surface (new flag, new warning); phases 3 and 5 add new behavior
-that improves on quietly-broken cases.
+Phases 1–2 landed internally with no surface change. Phase 4 was the
+only phase with a release-notes-worthy behavior change. Phases 6 and 7
+added new surface (new flag, new warning); phases 3 and 5 added new
+behavior that improves on quietly-broken cases.
 
 ### 6.5 Test coverage
 
