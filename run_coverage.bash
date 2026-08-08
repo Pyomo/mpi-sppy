@@ -206,6 +206,7 @@ run_phase "serial unit tests (serial)" \
         mpisppy/tests/test_buffer_inspect.py \
         mpisppy/tests/test_comm_lor_check.py \
         mpisppy/tests/test_ciutils.py \
+        mpisppy/tests/test_lshaped_cuts.py \
         mpisppy/tests/test_prox_approx.py \
         mpisppy/tests/test_sep_rho.py \
         mpisppy/tests/test_reduced_costs_fixer.py \
@@ -223,6 +224,12 @@ run_phase "test_mrp_generic (serial)" \
 run_phase "farmer_mrp_generic.bash (spawns mpiexec)" \
     bash -c "cd '$PROJ_DIR/examples/farmer/CI' && bash farmer_mrp_generic.bash '$SOLVER'"
 
+run_phase "test_boot_sp (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/test_boot_sp.py
+
+run_phase "test_boot_sp_simulate (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/test_boot_sp_simulate.py
+
 run_phase "test_gradient_rho (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_gradient_rho.py
 
@@ -239,6 +246,12 @@ run_phase "pysp_model pytest (serial)" \
 
 run_phase "test_with_cylinders (mpiexec -np 2)" \
     mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_with_cylinders.py
+
+run_phase "test_boot_sp (mpiexec -np 2)" \
+    mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_boot_sp.py
+
+run_phase "test_boot_sp_simulate (mpiexec -np 2)" \
+    mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_boot_sp_simulate.py
 
 run_phase "test_cg_main (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_cg_main.py
