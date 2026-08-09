@@ -7,6 +7,3 @@ results/
 *.aux
 *.out
 __pycache__/
-
-# Built from python_fraction.tex; not versioned.
-*.pdf
