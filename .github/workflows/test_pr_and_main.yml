@@ -1037,47 +1037,99 @@ jobs:
           include-hidden-files: true
 
   test-cylinders:
-    name: tests on some cylinders
+    name: tests on some cylinders (${{ matrix.label }})
     runs-on: ubuntu-latest
     needs: [ruff]
+    strategy:
+      # One cell failing must not cancel the others: the point of the matrix
+      # is to learn *which* MPI builds the RMA path works on, so every cell
+      # has to report.
+      fail-fast: false
+      matrix:
+        # The flexible (unequal) rank path is the only place mpi-sppy uses
+        # passive-target MPI RMA (Lock/Get/Put), the least portable corner of
+        # the spec, and it is where a portability regression would first show.
+        # It is therefore exercised on both major open-source implementations
+        # and on more than one mpi4py version.  A bare `conda install mpi4py`
+        # resolves to MPICH, which is what this job used to test alone.
+        include:
+          - label: mpich
+            mpi: mpich
+            mpi4py: "mpi4py"
+            artifact: mpich
+          - label: openmpi
+            mpi: openmpi
+            mpi4py: "mpi4py"
+            artifact: openmpi
+          - label: mpich, mpi4py 3.1
+            mpi: mpich
+            mpi4py: "mpi4py=3.1"
+            artifact: mpich-mpi4py31
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
+          # conda-forge, exclusively: it is the channel that actually
+          # maintains per-implementation MPI variants.  Asking for `openmpi`
+          # there also pulls the openmpi-flavored mpi4py (via the `mpi`
+          # metapackage), so each cell really does exercise the MPI it names;
+          # on the defaults channel the mpi4py build is not variant-selected
+          # and an "openmpi" cell could silently keep linking MPICH.
+          channels: conda-forge
+          conda-remove-defaults: "true"
       - name: Install dependencies
         run: |
-          conda install mpi4py "numpy" setuptools
+          conda install ${{ matrix.mpi }} "${{ matrix.mpi4py }}" "numpy" setuptools
           pip install cplex xpress
 
       - name: setup the program
         run: |
           pip install -e ".[test]"
 
+      - name: Record the MPI build under test
+        run: |
+          # The log is the evidence for "exercised on two MPI implementations
+          # and more than one mpi4py/MPI version".
+          mpiexec --version || true
+          python -c "import mpi4py; from mpi4py import MPI; print('mpi4py', mpi4py.__version__); print(MPI.Get_library_version())"
+          # -oversubscribe is OpenMPI-only (MPICH rejects it) and the np=6 runs
+          # below ask for more ranks than the runner has cores.  Ask mpi4py
+          # which library it is linked against rather than parsing the mpiexec
+          # banner: OpenMPI 5 launches through PRRTE and its banner no longer
+          # reliably says "Open MPI"/"OpenRTE".  Detected rather than taken
+          # from the matrix label, so this stays correct if conda ever resolves
+          # something other than the label claims.
+          if python -c "import sys; from mpi4py import MPI; sys.exit(0 if 'open mpi' in MPI.Get_library_version().lower() else 1)"; then
+            echo "OVERSUBSCRIBE=-oversubscribe" >> $GITHUB_ENV
+          else
+            echo "OVERSUBSCRIBE=" >> $GITHUB_ENV
+          fi
+
       - name: run tests
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          mpiexec -np 2 coverage run $COV_ARGS -m mpi4py test_with_cylinders.py
+          mpiexec -np 2 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_with_cylinders.py
 
       - name: run flexible (unequal) rank tests
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_spwindow_multisource.py
-          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_cylinders.py
-          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_duals.py
-          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat.py
-          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xfeas.py
-          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat_multistage.py
-          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_extension_fields.py
+          mpiexec -np 6 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_spwindow_multisource.py
+          mpiexec -np 6 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_flexible_rank_cylinders.py
+          mpiexec -np 6 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_flexible_rank_duals.py
+          mpiexec -np 6 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat.py
+          mpiexec -np 6 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_flexible_rank_xfeas.py
+          mpiexec -np 6 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat_multistage.py
+          mpiexec -np 6 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_flexible_rank_extension_fields.py
 
       - name: Upload coverage data
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-cylinders
+          name: coverage-cylinders-${{ matrix.artifact }}
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
           include-hidden-files: true
