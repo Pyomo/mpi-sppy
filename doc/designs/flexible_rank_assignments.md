@@ -598,10 +598,23 @@ counting is unconditional; each cylinder prints a per-field summary at
 finalization (`report_coherence_diagnostics`, aggregated across the
 cylinder's ranks, rank-0-gated, only for fields that did multi-source
 reads — so equal-rank runs print nothing), and an opt-in periodic line
-(`coherence_diagnostics_period` in the spcomm options: print local
-counters every N multi-source reads) supports live debugging.  The
-counters are exposed programmatically as
+(`coherence_diagnostics_period` in the cylinder's `opt_kwargs` options:
+print local counters every N multi-source reads) supports live
+debugging.  The counters are exposed programmatically as
 `SPCommunicator.coherence_counters`.
+
+The two rejection buckets split on whether *this* rank's own sources
+disagreed, not on the field's policy: a relaxed field can straddle a
+publish too (its floor then differs from a peer reader's and the
+collective check rejects), and that is this rank's coherence miss.
+`rejected_cross_reader` is the shadow such a miss casts on the other
+reader ranks, so the summary's `miss rate`
+(`coherence_miss_rate`) counts `rejected_incoherent` **and**
+`rejected_cross_reader` and `accepted_mixed` — equivalently, every read
+that was neither a clean accept nor a clean nothing-to-take.  Counting
+only the locally-detected misses would divide the rate by the number of
+reader ranks, since one straddle on an R-rank reader records one
+`rejected_incoherent` and R-1 `rejected_cross_reader`.
 
 
 ### Impact on Existing Components

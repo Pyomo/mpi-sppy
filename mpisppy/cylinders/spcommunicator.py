@@ -112,6 +112,27 @@ def reduce_source_write_ids(source_ids, strict: bool) -> int:
     return min(source_ids)
 
 
+def coherence_miss_rate(counters) -> float:
+    """Fraction of the multi-source reads in ``counters`` that a straddled
+    publish cost something (see SPCommunicator._count_coherence_read).
+
+    All three non-clean outcomes count, not just the locally-detected one: a
+    read this rank rejected because its own sources disagreed
+    (``rejected_incoherent``), one rejected because a *peer* reader rank
+    straddled and broke cross-reader agreement (``rejected_cross_reader``), and
+    one accepted with a blended assembly (``accepted_mixed``). Counting only
+    the first would divide by the number of reader ranks: one straddle on an
+    R-rank reader records 1 ``rejected_incoherent`` and R-1
+    ``rejected_cross_reader``.
+    """
+    if counters["total"] == 0:
+        return 0.0
+    misses = (counters["rejected_incoherent"]
+              + counters["rejected_cross_reader"]
+              + counters["accepted_mixed"])
+    return misses / counters["total"]
+
+
 def communicator_array(data_length: int):
     """
     Allocate an MPI memory region with a padded length (multiple of 8 doubles = 64B),
@@ -355,9 +376,16 @@ class SPCommunicator:
         # single-source reads, which cannot straddle a publish.
         self.coherence_counters = {}
         # opt-in periodic per-field line for live debugging: print local
-        # counters every N multi-source reads (0 = off)
+        # counters every N multi-source reads (0 = off). Read from the
+        # underlying SPBase options, not this object's `options`: the bound
+        # spoke constructors take no `communicators` argument, so the cylinder
+        # list WheelSpinner passes positionally lands in their `options`
+        # parameter and `SPCommunicator.options` is always empty on a spoke.
+        # opt.options is set from opt_kwargs for every cylinder, and is where
+        # the sibling cylinder-wide debug switches (`trace_prefix`,
+        # `inspect_buffers_on_shutdown`) already live.
         self._coherence_report_period = int(
-            self.options.get("coherence_diagnostics_period", 0)
+            self.opt.options.get("coherence_diagnostics_period", 0)
         )
 
         # setup FieldLengths which calculates
@@ -921,10 +949,11 @@ class SPCommunicator:
 
         if not self._write_ids_agree(new_id, synchronize):
             if counters is not None:
-                # a strict local-source mismatch is the fundamental coherence
-                # miss; otherwise this rank's sources agreed and the collective
-                # cross-reader check rejected the read
-                counters["rejected_incoherent" if strict and mixed
+                # this rank's own sources disagreeing is the fundamental
+                # coherence miss (the read straddled a publish) whatever the
+                # field's policy; otherwise its sources agreed and it was the
+                # collective cross-reader check that rejected the read
+                counters["rejected_incoherent" if mixed
                          else "rejected_cross_reader"] += 1
             buf._is_new = False
             return False
@@ -943,7 +972,9 @@ class SPCommunicator:
         if counters is not None:
             # strict + mixed lands here when every reader rank computed the
             # sentinel -1, so cross-reader agreement held but the id cannot
-            # advance -- still a coherence rejection, not a slow sender
+            # advance -- still a coherence rejection, not a slow sender. A
+            # *relaxed* mixed read that gets here is the slow-sender case
+            # proper: the floor did not move because one source is behind.
             counters["rejected_incoherent" if strict and mixed
                      else "not_new"] += 1
         buf._is_new = False
@@ -954,20 +985,26 @@ class SPCommunicator:
         counters (created on first use) for the caller to bucket:
 
           * ``new_accepted`` -- sources agreed on an advanced write_id; used.
-          * ``not_new`` -- coherent, but the write_id did not advance (the
-            sender has not published since the last accepted read).
-          * ``rejected_incoherent`` -- a strict field's sources disagreed, so
-            the read was rejected and will be retried (the fundamental
-            coherence miss: the read straddled a publish).
+          * ``not_new`` -- the write_id did not advance, so there was nothing
+            to take (the sender has not published since the last accepted
+            read). A relaxed field whose sources disagree but whose floor has
+            not moved lands here too: some source has not published yet, which
+            is the same diagnosis.
+          * ``rejected_incoherent`` -- this rank's sources disagreed and the
+            read was rejected, so it will be retried (the fundamental coherence
+            miss: the read straddled a publish).
           * ``rejected_cross_reader`` -- this rank's sources agreed, but the
             collective cross-reader write_id check rejected the read (some
-            other rank of this cylinder saw a different id).
+            other rank of this cylinder saw a different id -- typically because
+            *it* straddled the publish, and records the miss itself).
           * ``accepted_mixed`` -- a relaxed field's sources disagreed and the
             blended assembly was used anyway.
 
         The buckets partition ``total``. The coherence miss rate is
-        ``(rejected_incoherent + accepted_mixed) / total``; if ``not_new``
-        dominates instead, the upstream sender is just slow.
+        ``coherence_miss_rate(counters)`` -- every read that a straddled
+        publish cost something, whether it was rejected here, rejected because
+        a peer reader straddled, or accepted blended. If ``not_new`` dominates
+        instead, the upstream sender is just slow.
         """
         counters = self.coherence_counters.setdefault(field, {
             "total": 0,
@@ -1012,11 +1049,10 @@ class SPCommunicator:
             counters = totals[field]
             if counters["total"] == 0:
                 continue
-            misses = counters["rejected_incoherent"] + counters["accepted_mixed"]
             print(f"coherence diagnostic [{self.__class__.__name__}] "
                   f"{field.name}: "
                   + ", ".join(f"{k}={v}" for k, v in counters.items())
-                  + f", miss rate={misses / counters['total']:.2%}",
+                  + f", miss rate={coherence_miss_rate(counters):.2%}",
                   flush=True)
 
     def receive_nonant_bounds(self):
