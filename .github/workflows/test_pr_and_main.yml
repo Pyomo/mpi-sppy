@@ -1114,6 +1114,12 @@ jobs:
           mpiexec -np 2 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_with_cylinders.py
 
       - name: run flexible (unequal) rank tests
+        # Runs even when the equal-rank step above failed.  This step is the
+        # whole reason the matrix exists, and a failure in the pre-existing
+        # equal-rank tests would otherwise skip it and leave the question the
+        # matrix is asking -- does the RMA path work on this MPI build? --
+        # unanswered.  Both still fail the job.
+        if: ${{ !cancelled() }}
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
