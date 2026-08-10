@@ -494,6 +494,23 @@ extension is not attached at all — zero overhead, no files.
   if it were the raw walltime is the one way this option quietly fails to do its
   job.
 
+  **What the clock measures.** `elapsed` is `time.perf_counter() − self.start_time`,
+  and `start_time` is stamped in `SPBase.__init__` (`spbase.py`) — *not* at job
+  submission and not at process launch. Everything before the SP object is
+  constructed is outside `S`: queue wait, interpreter startup, imports (over a
+  shared filesystem on a cluster, not always fast), MPI initialization at high rank
+  counts, and module/`cfg` setup. Scenario construction *is* inside it
+  (`_create_scenarios` is called later in the same `__init__`), as is the dill reload
+  on a resumed run (it happens in `Iter0`, §5.1). So `S` is measured on mpi-sppy's
+  clock, which starts *after* the scheduler's; a user aiming at a walltime must
+  subtract that startup gap as well — the same way they subtract the write cost.
+  The `toc` line mpi-sppy already emits at import (`global_toc("Initializing
+  mpi-sppy")`) versus the first checkpoint-related `toc` gives a usable read on how
+  large the gap is for a given cluster. Cylinders each construct their own
+  `SPBase`, so their `start_time`s differ slightly; this trigger is decided over
+  the hub's ranks alone, where the skew is a construction-time difference, not a
+  concern.
+
   **First arming.** At the `enditer` of iteration 1 the most recently *completed*
   iteration is iteration 0, so its duration is the seed; no special case is needed
   provided PH records iteration 0's duration alongside the later ones (§9 item 9).
