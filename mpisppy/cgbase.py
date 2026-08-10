@@ -7,6 +7,7 @@
 # full copyright and license information.
 ###############################################################################
 
+import math
 import time
 import pyomo.environ as pyo
 
@@ -411,8 +412,13 @@ class CGBase(mpisppy.spopt.SPOpt):
         red_cost=None
         if hasattr(model, "base_obj_expr"):
             scen_cost = pyo.value(model.base_obj_expr)
-        if hasattr(model._mpisppy_data, "outer_bound"):
-            red_cost = model._mpisppy_data.outer_bound
+        # Subproblems now start life holding the vacuous outer bound rather
+        # than no attribute at all, so test the value: an infinite bound means
+        # the solve reported none, and the caller sums these into
+        # sum_redcosts, where an infinity would quietly poison the total.
+        outer_bound = getattr(model._mpisppy_data, "outer_bound", None)
+        if outer_bound is not None and math.isfinite(outer_bound):
+            red_cost = outer_bound
         x_vec = {ndn_i: pyo.value(xvar) for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items()}
         return sname, red_cost, scen_cost,x_vec
 
@@ -478,7 +484,9 @@ class CGBase(mpisppy.spopt.SPOpt):
                    tee=False,
                    verbose=False,
                    need_solution=True,
-                   warmstart=sputils.WarmstartStatus.FALSE):
+                   warmstart=sputils.WarmstartStatus.FALSE,
+                   *,
+                   outer_bound_only=False):
         """ Loop over `local_subproblems` and solve them in a manner
         dicated by the arguments.
 
@@ -506,6 +514,13 @@ class CGBase(mpisppy.spopt.SPOpt):
                 Default True
             warmstart (bool, optional):
                 If True, warmstart the subproblem solves. Default False.
+            outer_bound_only (boolean, optional):
+                If True, populate outer_bound *only*; no solution is loaded, so
+                need_solution must be False. Column generation builds its
+                columns from the subproblem solutions, so this is here to keep
+                the signature honest with the base class rather than because
+                it is useful: asking for it (with the default need_solution)
+                raises out of solve_one. Keyword-only. Default False.
         """
 
         """ Developer notes:
@@ -519,14 +534,15 @@ class CGBase(mpisppy.spopt.SPOpt):
         self.update_subproblem_duals_from_mp(self.pi_values, self.mu_values)
         
         super().solve_loop(
-            solver_options,
-            dtiming,
-            gripe,
-            disable_pyomo_signal_handling,
-            tee,
-            verbose,
-            need_solution,
-            warmstart,
+            solver_options=solver_options,
+            dtiming=dtiming,
+            gripe=gripe,
+            disable_pyomo_signal_handling=disable_pyomo_signal_handling,
+            tee=tee,
+            verbose=verbose,
+            need_solution=need_solution,
+            outer_bound_only=outer_bound_only,
+            warmstart=warmstart,
         )
 
 

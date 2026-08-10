@@ -85,6 +85,9 @@ dual-bound extension itself is not reproduced.
 computes the VSS / evaluates the expected-value solution across scenarios.
 mpi-sppy has `average_scenario_creator` (an EV building block) but no dedicated
 VSS/EEV computation utility.
+**Addressed (two-stage):** `generic_cylinders --vss` now reports RP/EV/EEV/VSS
+after a run (`mpisppy/generic/vss.py`; see `doc/src/vss.rst` and
+`doc/designs/vss_design.md`). Multistage VSS is still a gap.
 
 ## B. PH algorithmic knobs that are missing
 

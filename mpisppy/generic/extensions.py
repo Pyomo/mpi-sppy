@@ -36,6 +36,9 @@ def configure_extensions(hub_dict, module, cfg):
     if cfg.rc_fixer:
         vanilla.add_reduced_costs_fixer(hub_dict, cfg)
 
+    if cfg.get("xhat_feasibility_cuts_count", 0) or 0:
+        vanilla.add_xhat_feasibility_cuts(hub_dict, cfg)
+
     if cfg.relaxed_ph_fixer:
         vanilla.add_relaxed_ph_fixer(hub_dict, cfg)
 

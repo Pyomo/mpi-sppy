@@ -1,0 +1,155 @@
+NAME          dcap342_300
+ROWS
+ N  obj     
+ L  c_1     
+ L  c_2     
+ L  c_3     
+ L  c_4     
+ L  c_5     
+ L  c_6     
+ L  dem_1_1 
+ L  dem_1_2 
+ L  dem_2_1 
+ L  dem_2_2 
+ L  dem_3_1 
+ L  dem_3_2 
+ E  c_13    
+ E  c_14    
+ E  c_15    
+ E  c_16    
+ E  c_17    
+ E  c_18    
+ E  c_19    
+ E  c_20    
+COLUMNS
+    x_1_1     obj           8.485255   c_1                  1
+    x_1_1     dem_1_1             -1   dem_1_2             -1
+    MARK0000  'MARKER'                 'INTORG'
+    u_1_1     obj          23.831796   c_1                 -1
+    MARK0001  'MARKER'                 'INTEND'
+    x_2_1     obj            8.26924   c_3                  1
+    x_2_1     dem_2_1             -1   dem_2_2             -1
+    MARK0002  'MARKER'                 'INTORG'
+    u_2_1     obj          45.943689   c_3                 -1
+    MARK0003  'MARKER'                 'INTEND'
+    x_3_1     obj           8.375323   c_5                  1
+    x_3_1     dem_3_1             -1   dem_3_2             -1
+    MARK0004  'MARKER'                 'INTORG'
+    u_3_1     obj          11.697047   c_5                 -1
+    MARK0005  'MARKER'                 'INTEND'
+    x_1_2     obj           8.984589   c_2                  1
+    x_1_2     dem_1_2             -1
+    MARK0006  'MARKER'                 'INTORG'
+    u_1_2     obj          10.771692   c_2                 -1
+    MARK0007  'MARKER'                 'INTEND'
+    x_2_2     obj           5.679603   c_4                  1
+    x_2_2     dem_2_2             -1
+    MARK0008  'MARKER'                 'INTORG'
+    u_2_2     obj           10.80112   c_4                 -1
+    MARK0009  'MARKER'                 'INTEND'
+    x_3_2     obj           6.907533   c_6                  1
+    x_3_2     dem_3_2             -1
+    MARK0010  'MARKER'                 'INTORG'
+    u_3_2     obj           38.03386   c_6                 -1
+    y_1_1_1   obj           9.330004   dem_1_1        1.28372
+    y_1_1_1   c_13                 1
+    y_2_1_1   obj           9.724385   dem_2_1        1.28372
+    y_2_1_1   c_13                 1
+    y_3_1_1   obj           9.768454   dem_3_1        1.28372
+    y_3_1_1   c_13                 1
+    z_1_1     obj         886.119862   c_13                 1
+    y_1_2_1   obj           8.620467   dem_1_1       0.553269
+    y_1_2_1   c_15                 1
+    y_2_2_1   obj           5.772496   dem_2_1       0.553269
+    y_2_2_1   c_15                 1
+    y_3_2_1   obj           8.027491   dem_3_1       0.553269
+    y_3_2_1   c_15                 1
+    z_2_1     obj         728.326047   c_15                 1
+    y_1_3_1   obj           8.541607   dem_1_1       1.363443
+    y_1_3_1   c_17                 1
+    y_2_3_1   obj           9.170097   dem_2_1       1.363443
+    y_2_3_1   c_17                 1
+    y_3_3_1   obj           5.024941   dem_3_1       1.363443
+    y_3_3_1   c_17                 1
+    z_3_1     obj         957.364292   c_17                 1
+    y_1_4_1   obj           6.935288   dem_1_1       1.103901
+    y_1_4_1   c_19                 1
+    y_2_4_1   obj           9.762764   dem_2_1       1.103901
+    y_2_4_1   c_19                 1
+    y_3_4_1   obj           8.907913   dem_3_1       1.103901
+    y_3_4_1   c_19                 1
+    z_4_1     obj         850.786227   c_19                 1
+    y_1_1_2   obj           6.296015   dem_1_2       0.688201
+    y_1_1_2   c_14                 1
+    y_2_1_2   obj           8.860358   dem_2_2       0.688201
+    y_2_1_2   c_14                 1
+    y_3_1_2   obj            7.80849   dem_3_2       0.688201
+    y_3_1_2   c_14                 1
+    z_1_2     obj          906.63326   c_14                 1
+    y_1_2_2   obj           9.952905   dem_1_2       1.020329
+    y_1_2_2   c_16                 1
+    y_2_2_2   obj           8.359752   dem_2_2       1.020329
+    y_2_2_2   c_16                 1
+    y_3_2_2   obj           8.632192   dem_3_2       1.020329
+    y_3_2_2   c_16                 1
+    z_2_2     obj         667.051856   c_16                 1
+    y_1_3_2   obj           6.684276   dem_1_2       1.019109
+    y_1_3_2   c_18                 1
+    y_2_3_2   obj           8.583218   dem_2_2       1.019109
+    y_2_3_2   c_18                 1
+    y_3_3_2   obj           9.522662   dem_3_2       1.019109
+    y_3_3_2   c_18                 1
+    z_3_2     obj         952.171274   c_18                 1
+    y_1_4_2   obj            6.69192   dem_1_2       0.502249
+    y_1_4_2   c_20                 1
+    y_2_4_2   obj            5.51712   dem_2_2       0.502249
+    y_2_4_2   c_20                 1
+    y_3_4_2   obj           8.410413   dem_3_2       0.502249
+    y_3_4_2   c_20                 1
+    z_4_2     obj         524.414268   c_20                 1
+    MARK0011  'MARKER'                 'INTEND'
+RHS
+    rhs       c_13                 1   c_14                 1
+    rhs       c_15                 1   c_16                 1
+    rhs       c_17                 1   c_18                 1
+    rhs       c_19                 1   c_20                 1
+BOUNDS
+ UP bnd       u_1_1                1
+ UP bnd       u_2_1                1
+ UP bnd       u_3_1                1
+ UP bnd       u_1_2                1
+ UP bnd       u_2_2                1
+ UP bnd       u_3_2                1
+ UP bnd       y_1_1_1              1
+ UP bnd       y_2_1_1              1
+ UP bnd       y_3_1_1              1
+ UP bnd       z_1_1                1
+ UP bnd       y_1_2_1              1
+ UP bnd       y_2_2_1              1
+ UP bnd       y_3_2_1              1
+ UP bnd       z_2_1                1
+ UP bnd       y_1_3_1              1
+ UP bnd       y_2_3_1              1
+ UP bnd       y_3_3_1              1
+ UP bnd       z_3_1                1
+ UP bnd       y_1_4_1              1
+ UP bnd       y_2_4_1              1
+ UP bnd       y_3_4_1              1
+ UP bnd       z_4_1                1
+ UP bnd       y_1_1_2              1
+ UP bnd       y_2_1_2              1
+ UP bnd       y_3_1_2              1
+ UP bnd       z_1_2                1
+ UP bnd       y_1_2_2              1
+ UP bnd       y_2_2_2              1
+ UP bnd       y_3_2_2              1
+ UP bnd       z_2_2                1
+ UP bnd       y_1_3_2              1
+ UP bnd       y_2_3_2              1
+ UP bnd       y_3_3_2              1
+ UP bnd       z_3_2                1
+ UP bnd       y_1_4_2              1
+ UP bnd       y_2_4_2              1
+ UP bnd       y_3_4_2              1
+ UP bnd       z_4_2                1
+ENDATA
