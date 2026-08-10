@@ -70,6 +70,7 @@ MPI is used.
    admmWrapper.rst
    stoch_admmWrapper.rst
    aph.rst
+   flexible_ranks.rst
    nompi4py.rst
    secretmenu.rst
    pysp.rst

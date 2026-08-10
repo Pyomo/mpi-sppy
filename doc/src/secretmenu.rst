@@ -1,3 +1,5 @@
+.. _secretmenu:
+
 Secret Menu Items
 =================
 
