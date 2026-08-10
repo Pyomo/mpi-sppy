@@ -342,6 +342,18 @@ class SPOpt(SPBase):
                 results = None
                 solver_exception = e
 
+            # Record how this solve ended, so a caller that sees
+            # solution_available == False can tell a genuine infeasibility
+            # from a solve that merely did not finish (time limit, solver
+            # error). Stored as a string rather than the enum so it costs
+            # nothing to carry around and survives pickling.
+            try:
+                s._mpisppy_data.termination_condition = (
+                    None if results is None
+                    else str(results.solver.termination_condition))
+            except (AttributeError, KeyError, IndexError):
+                s._mpisppy_data.termination_condition = None
+
             if outer_bound_only:
                 # No solution is loaded, so the Vars still hold whatever they
                 # held before this solve; say so, or the staleness check and a

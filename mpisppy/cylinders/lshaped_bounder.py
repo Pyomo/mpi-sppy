@@ -36,17 +36,13 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
         )
         self.opt._update_E1()  # Apologies for doing this after the solves...
         if abs(1 - self.opt.E1) > self.opt.E1_tolerance:
-            if self.opt.cylinder_rank == 0:
-                print("ERROR")
-                print("Total probability of scenarios was ", self.opt.E1)
-                print("E1_tolerance = ", self.opt.E1_tolerance)
-            quit()
+            raise RuntimeError(
+                f"Total probability of scenarios was {self.opt.E1}; "
+                f"E1_tolerance = {self.opt.E1_tolerance}")
         infeasP = self.opt.no_incumbent_prob()
         if infeasP != 0.:
-            if self.opt.cylinder_rank == 0:
-                print("ERROR")
-                print("Infeasibility detected; E_infeas, E1=", infeasP, self.opt.E1)
-            quit()
+            raise RuntimeError(
+                f"Infeasibility detected; E_infeas = {infeasP}, E1 = {self.opt.E1}")
 
         self.opt._save_nonants() # make the cache
 
