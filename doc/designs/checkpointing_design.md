@@ -57,7 +57,9 @@ as a future option but **not currently planned** (§4, §11 Phase 6).
   termination — including hitting `--time-limit` — which covers the planned-stop
   use case. A scheduler that hard-kills mid-solve is covered only insofar as the
   previous checkpoint is preserved by atomic publication (§9), not by catching the
-  signal and checkpointing in response.
+  signal and checkpointing in response. Where a known walltime is the hazard,
+  `--checkpoint-before-seconds` (§8) is the answer instead of a signal handler:
+  it writes at the last iteration boundary preceding a user-supplied deadline.
 
 ---
 
@@ -451,6 +453,50 @@ extension is not attached at all — zero overhead, no files.
   checkpoint"; for large MIPs one solve can exceed `S`, which is expected — a
   checkpoint cannot be taken mid-solve. Distinct from `--time-limit`, which *stops*
   the run: this keeps it running and snapshots.
+- **`--checkpoint-before-seconds S` (one-shot, anticipated).** Write **one**
+  checkpoint at the last iteration boundary that precedes `S` wall-clock seconds,
+  and keep running. Where `--checkpoint-every-seconds` is *reactive* — it fires at
+  the first boundary at or after its interval, so the write lands up to a full
+  iteration **late** — this trigger is *anticipatory*: at each `enditer` it asks
+  whether another boundary will arrive before `S`, estimating the next iteration
+  by the duration of the most recently completed one, and writes now if the answer
+  is no:
+
+  ```
+  allreduce_or(elapsed + last_iteration_seconds >= S)
+  ```
+
+  Same collective-decision pattern as the `time_limit` check in `phbase.py`, so
+  every rank decides together and none writes at the barrier while others sail
+  past. The motivating case is a scheduler walltime: the run will be hard-killed at
+  a known wall-clock time, and the user wants the checkpoint as late as possible
+  while still landing *before* the axe. This trigger **never terminates
+  anything**; the run continues and is killed, converges, or hits `--time-limit`
+  on its own.
+
+  **One-shot.** Once the checkpoint is written the trigger is disarmed for the rest
+  of the run — it does not re-arm at `2S`. If the run outlives `S`, any later
+  checkpoints come from the other triggers, which are OR'd with this one as usual
+  (two triggers firing at the same `enditer` produce one write, §9 item 7).
+
+  **No implicit safety margin.** `S` is used exactly as given: mpi-sppy applies no
+  fudge factor to the iteration estimate and does not attempt to predict how long
+  the checkpoint write itself will take. Both effects run the same direction and
+  matter to the user's choice of `S`: PH iteration times *sometimes grow*
+  (prox-approx cuts accumulate, `W` tightens, subproblem MIPs get harder), so the
+  last iteration can be an optimistic estimate of the next; and the write —
+  dilling large MIP models under the `dill-reload` backend — begins at the decision
+  point and is not free. The user supplies an `S` that already discounts for both.
+  To calibrate: run once
+  with checkpointing enabled and read the write duration off the bracketing `toc`
+  lines (§9 item 10), then set `S` to the walltime minus that duration minus the
+  user's own margin. **This must be prominent in the user docs** — an `S` chosen as
+  if it were the raw walltime is the one way this option quietly fails to do its
+  job.
+
+  **First arming.** At the `enditer` of iteration 1 the most recently *completed*
+  iteration is iteration 0, so its duration is the seed; no special case is needed
+  provided PH records iteration 0's duration alongside the later ones (§9 item 9).
 - **`--checkpoint-every-iterations K` (optional insurance).** Also checkpoint every
   `K` PH iterations. Checked at `enditer`. (This is the former
   `--checkpoint-every k`, renamed for symmetry with
@@ -640,6 +686,11 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
      `allreduce_or(now − last_checkpoint ≥ S)` so all ranks decide together
      (mirroring the `time_limit` check in `phbase.py`), avoiding a rank-skew
      deadlock at the write barrier.
+   - *anticipated one-shot* (`--checkpoint-before-seconds`) — also at `enditer`,
+     testing `allreduce_or(elapsed + last_iteration_seconds ≥ S)` with the same
+     collective pattern, then latching so it fires at most once (§8). It needs the
+     most-recent iteration duration (item 9); everything else it shares with the
+     periodic path.
    - *terminal* (`--checkpoint-at-termination`, default on) — in `post_everything`
      (`phbase.py`), which fires once after the PH loop however it exited
      (convergence, `--max-iterations`, `--time-limit`), capturing the last
@@ -652,6 +703,21 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
    inside it so **one `Checkpointer` serves hub and xhatter uniformly** (restore
    already has a home: `pre_iter0`/`post_iter0` fire once in `xhat_prep` in
    `xhatbase.py`).
+9. **Most-recent iteration duration kept on `self`.** `iterk_loop` (`phbase.py`)
+   times each iteration into a *local* `iteration_start_time`, used only by the
+   `display_progress` print. `--checkpoint-before-seconds` needs that duration at
+   `enditer`, so record it on the object (e.g. `self._last_iteration_seconds`) as
+   each iteration completes — and record iteration 0's duration the same way, since
+   it is the seed the first time the trigger is tested (§8). Nothing else in PH
+   changes: no new hook, no change to the loop's control flow.
+10. **`toc` on both ends of every checkpoint write.** The `Checkpointer` emits a
+    `global_toc` when a write begins and another when it completes — on every
+    trigger, hub and spokes alike, gated on `cylinder_rank == 0` so a multi-rank
+    cylinder prints one pair rather than one per rank. Because `tt_timer.toc`
+    stamps absolute elapsed time, the pair *is* the measured write duration, which
+    is what a user needs to choose `S` for `--checkpoint-before-seconds` — mpi-sppy
+    deliberately does not estimate that cost for them (§8). It also makes an
+    otherwise invisible multi-minute stall in a long run legible in the log.
 
 ---
 
@@ -747,8 +813,11 @@ Phase 4: cylinders, including a stoch-ADMM configuration).
   throwaway solve); geometry+cfg fingerprint; atomic per-rank writes + manifest;
   terminal checkpoint (`--checkpoint-at-termination`, default on) + optional
   periodic triggers (`--checkpoint-every-iterations` /
-  `--checkpoint-every-seconds`); CLI flags `--checkpoint-dir`,
-  `--checkpoint-at-termination`, `--checkpoint-backend`,
+  `--checkpoint-every-seconds`) + the one-shot anticipated trigger
+  (`--checkpoint-before-seconds`, §8, with the most-recent iteration duration
+  hoisted onto `self`, §9 item 9) + `toc` on both ends of every write (§9 item 10);
+  CLI flags `--checkpoint-dir`, `--checkpoint-at-termination`,
+  `--checkpoint-before-seconds`, `--checkpoint-backend`,
   `--resume-from`/`--resume`. Tests (the §11.1 A/B harness, serial): **farmer**
   and **farmer + `--cvar`** bit-identical A vs B; **`sizes`** (MIP) —
   bit-identical under deterministic solver settings, and under default settings
