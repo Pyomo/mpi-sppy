@@ -14,9 +14,14 @@ For the ADMM vocabulary used below (before-wrap scenario, wrapped
 scenario, wrap, ADMM subproblem, ...), see the module docstring of
 mpisppy.utils.admmWrapper.
 """
+import ast
+import inspect
+import io
 import unittest
 import subprocess
 import sys
+
+import pytest
 import mpisppy.tests.examples.stoch_distr.stoch_distr_admm_cylinders as stoch_distr_admm_cylinders
 import mpisppy.tests.examples.stoch_distr.stoch_distr as stoch_distr
 from mpisppy.utils import config
@@ -1246,6 +1251,70 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
         self.assertIn("fake_module", msg)
         self.assertIn("first_stage_surrogate_nonant_list", msg)
         self.assertIn("first_stage_cost", msg)
+
+
+class TestStochDistrIsSerializable(unittest.TestCase):
+    """stoch_distr scenario models must survive a dill round trip.
+
+    Several mpi-sppy features serialize scenario models with dill
+    (--pickle-scenarios-dir and --pickle-bundles-dir via
+    utils/pickle_bundle.py, and checkpoint/resume). A Pyomo rule written as
+    a nested function closing over ``cfg`` silently breaks all of them: the
+    closure pulls the Config into the model's serialization graph, and a
+    Pyomo ConfigDict cannot be dilled (it pickles fine with the stdlib).
+    The rules here read what they need into plain locals instead; this test
+    keeps the anti-pattern from creeping back. See issue #829.
+    """
+
+    def _cfg(self, num_stoch_scens=4, num_admm_subproblems=2):
+        cfg = config.Config()
+        stoch_distr.inparser_adder(cfg)
+        cfg.num_stoch_scens = num_stoch_scens
+        cfg.num_admm_subproblems = num_admm_subproblems
+        return cfg
+
+    def test_scenario_model_round_trips_through_dill(self):
+        dill = pytest.importorskip("dill")
+        cfg = self._cfg()
+        sname = stoch_distr.combining_names("Region1", "StochasticScenario1")
+        model = stoch_distr.scenario_creator(sname, **stoch_distr.kw_creator(cfg))
+
+        buf = io.BytesIO()
+        dill.dump(model, buf)
+        self.assertGreater(buf.tell(), 0)
+
+        buf.seek(0)
+        reloaded = dill.load(buf)
+        self.assertTrue(hasattr(reloaded, "MinCost"))
+        self.assertEqual(len(list(reloaded.flow)), len(list(model.flow)))
+
+    def test_no_pyomo_rule_closes_over_cfg(self):
+        """The structural guard: catches the pattern even if dill changes."""
+        source = inspect.getsource(stoch_distr)
+        tree = ast.parse(source)
+        offenders = []
+
+        class Visitor(ast.NodeVisitor):
+            def __init__(self):
+                self.depth = 0
+
+            def visit_FunctionDef(self, node):
+                self.depth += 1
+                if self.depth > 1:
+                    names = {n.id for n in ast.walk(node)
+                             if isinstance(n, ast.Name)}
+                    bound = {a.arg for a in node.args.args}
+                    if "cfg" in names and "cfg" not in bound:
+                        offenders.append(f"{node.name} (line {node.lineno})")
+                self.generic_visit(node)
+                self.depth -= 1
+
+        Visitor().visit(tree)
+        self.assertEqual(
+            offenders, [],
+            msg="nested function(s) close over cfg, which makes the scenario "
+                "model undillable: " + ", ".join(offenders) + ". Read the "
+                "values into plain locals before defining the rule.")
 
 
 class TestStochAdmmDefaultNaming(unittest.TestCase):
