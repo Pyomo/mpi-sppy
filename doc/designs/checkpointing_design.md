@@ -141,10 +141,12 @@ A checkpoint is **not** a snapshot of the object graph. On resume:
    windows, and persistent solvers. This is exactly what a fresh run already does.
 2. **Restore the scenario-model state** via the chosen backend:
    - **dill-reload (recommended here):** load each rank's dilled mid-run scenario
-     models; rebuild `_solver_plugin` (`set_instance`) and mark
-     `solution_available` so the first solve warm-starts (§5.2). Because the
-     reloaded model already carries the spliced W/prox objective and the prox
-     cuts, startup must **skip** re-attaching them (§9, item 2).
+     models and swap them in ahead of solver creation, so `_solver_plugin` is
+     attached (`set_instance`) to the reloaded model rather than to one about to
+     be discarded; mark `solution_available` so the first solve warm-starts
+     (§5.2). Because the reloaded model already carries the spliced W/prox
+     objective and the prox cuts, the deferred objective attach must be disarmed
+     so it does not run again downstream (§9, item 2).
    - **leaf-rebuild (alternative):** rebuild each model via `scenario_creator`,
      then overlay W / rho / nonant values+fixedness / prox `cut_values` from the
      checkpoint.
@@ -213,25 +215,46 @@ already exist: `_populate_W_cache`/`W_from_flat_list` (`phbase.py`),
 **Restore point: a resume branch inside `Iter0`, in place of the iter-0 solve.**
 `Iter0` (`phbase.py`) already contains the structural precedent: the
 `iter0_from_pickle` option replaces the iter-0 `solve_loop` with
-`_iter0_use_pickled_solution()`. Resume is a third branch at the same spot —
-after `_create_solvers()`, *instead of* the solve loop — that loads the
-checkpoint and proceeds to `iterk_loop`. This matters for the target use case:
-restoring in a *post*-iter0 extension hook (what the PoC did, to avoid core
-changes) would first solve every fresh model with `W = 0` and then throw those
-solutions away — one discarded full MIP solve per scenario per resume,
-plausibly hours. The design therefore specifies the core branch, not the hook
-(§9, item 2): the PoC's `post_iter0_after_sync` restore was a
-zero-core-change validation crutch and is **not** the design.
+`_iter0_use_pickled_solution()`. Resume is a third branch in the same method,
+*instead of* the solve loop, that loads the checkpoint and proceeds to
+`iterk_loop`. This matters for the target use case: restoring in a *post*-iter0
+extension hook (what the PoC did, to avoid core changes) would first solve every
+fresh model with `W = 0` and then throw those solutions away — one discarded
+full MIP solve per scenario per resume, plausibly hours. The design therefore
+specifies the core branch, not the hook (§9, item 2): the PoC's
+`post_iter0_after_sync` restore was a zero-core-change validation crutch and is
+**not** the design.
+
+**The model swap goes *before* `_create_solvers()`, not after.**
+`_create_solvers` (`spopt.py`) walks `local_scenarios` attaching a
+`_solver_plugin` and, for a persistent solver, calling `set_instance_retry` —
+which builds the whole model inside the solver. If the reload happened after it,
+every scenario would pay `set_instance` **twice** per resume: once on the fresh
+model that is about to be discarded, once on the reloaded one. At this design's
+target scale that is precisely the cost §2.2 sets out to avoid. Reloading first
+lets the existing `_create_solvers` call attach the solver to the right model,
+once, with no strip-and-rebuild dance. Nothing between the top of `Iter0` and
+`_create_solvers` depends on the fresh models' identity.
 
 On the resume branch, the rest of `Iter0` adjusts as follows: the feasibility
 check reads the restored per-scenario feasibility flags; `trivial_bound` /
 `best_bound_obj_val` are restored from the checkpoint's leaf data rather than
 recomputed via `Ebound`; the spoke sync still runs (publishing the *restored*
 W/xbar/nonants to the spokes — they start from checkpointed state
-immediately); the `rho_setter` and the deferred
-`_attach_PH_to_objective_after_iter0` are skipped (rho and the spliced
-objective ride in the reloaded model); the converger is constructed as usual
-and extension `restore_state` hooks (§9, item 3) fire before `iterk_loop`.
+immediately); the `rho_setter` is skipped (rho rides in the reloaded model); the
+converger is constructed as usual and extension `restore_state` hooks (§9, item
+3) fire before `iterk_loop`.
+
+**The deferred objective attach must be disarmed, not "skipped".** Iteration-0
+deferral (`_deferred_ph_attach`) splices the W/prox terms into the objective at
+the *end* of `Iter0` — after the resume branch has already run — and re-runs
+`set_instance` on persistent solvers. On a reloaded model that would duplicate
+the prox components and double the W terms, so the resume branch clears the flag
+rather than relying on control flow to miss it. Note that the *other* attach,
+`attach_Ws_and_prox`, runs earlier still, in `PH_Prep`, and therefore cannot be
+skipped from a branch inside `Iter0` at all; it is harmless (it decorates fresh
+models that the swap discards), which is why disarming the deferred attach is
+the requirement and the earlier call is not (§9, item 2).
 
 ### 5.2 Recourse variable values — *warm start, in the dilled model*
 
@@ -302,6 +325,12 @@ None of this lives on a hub scenario model, so it is restored as leaf data under
   `_maybe_write_incumbent_on_improvement`, independent of the hub checkpoint (§9,
   item 6). Serialize the `ComponentMap` **by variable name** (`{var.name: value}`)
   and rebuild by name lookup on the reconstructed model.
+- **The initially-fixed-nonant baseline** (`opt._initial_fixed_varibles`), which
+  gates whether the outer bound may be updated at all. It lives on the opt object
+  and is keyed by variable *identity*, so it neither rides in the dill nor
+  survives the model swap; it is checkpointed **by variable name** and rebuilt
+  against the reloaded models. Getting this wrong quietly breaks the bound in one
+  direction or the other — see §9, item 11.
 
 ### 5.5 Stateful extensions — *split: object state is leaf data, model state rides in the dill*
 
@@ -640,27 +669,39 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
    so checkpoint numbering is the global iteration and termination honors the
    original `max_iterations`.
 2. **A reload-model resume branch, in `Iter0`, replacing the iter-0 solve.**
-   The branch lives where `iter0_from_pickle` already branches (§5.1): after
-   `_create_solvers()`, instead of the iter-0 `solve_loop` — so a resume never
-   pays a throwaway `W = 0` solve of the fresh models. When restoring via
-   dill-reload, startup must reconstruct comms/windows/solvers but **skip both
-   `attach_Ws_and_prox` and `attach_PH_to_objective`** — the reloaded model
-   already carries the W/rho/xbars params, the spliced objective, and the prox
-   cuts, so re-running either would duplicate components or double the terms.
-   Then strip/rebuild `_solver_plugin` (`set_instance`) and set
-   `solution_available` for the warm start (§5.2). Details the PoC and the ADMM
-   analysis surfaced: **refresh `saved_objectives[sname]`** for each reloaded
-   model — `Eobjective` reads those objective handles and they otherwise dangle
-   to the discarded fresh model; swap the reloaded model into `local_scenarios`
-   (which `SPOpt.solve_loop` iterates); where the `local_subproblems` alias
-   exists, refresh it too — a plain PH keeps no `local_subproblems`, but the
-   **generic file-based path** the dill-reload backend builds on
-   (`scenario_io.py` sets `sp.local_subproblems = sp.local_scenarios`)
-   maintains it, and `CGBase.solve_loop` iterates it; and on ADMM runs,
-   **release or replace the fresh models held by the wrapper**
-   (`local_admm_stoch_subproblem_scenarios` and the
-   `cfg._admm_variable_probability` closure), or the run keeps two copies of
-   every local scenario alive for its whole life (§8.2, item 2). This is a
+   The branch lives where `iter0_from_pickle` already branches (§5.1), instead
+   of the iter-0 `solve_loop` — so a resume never pays a throwaway `W = 0` solve
+   of the fresh models — and the **model swap itself happens before
+   `_create_solvers()`**, so the existing solver creation attaches a
+   `_solver_plugin` (and calls `set_instance` once) to the reloaded model rather
+   than to a model about to be discarded (§5.1). Set `solution_available` for
+   the warm start (§5.2).
+
+   Two attaches must be handled, and they are not symmetric. The deferred
+   objective attach (`_attach_PH_to_objective_after_iter0`, driven by
+   `_deferred_ph_attach`) runs at the **end** of `Iter0`, downstream of the
+   branch, and on a reloaded model would duplicate the prox components and
+   double the W terms — the branch **clears the flag** rather than relying on
+   control flow to miss it. `attach_Ws_and_prox`, by contrast, runs in
+   `PH_Prep`, *upstream* of `Iter0` entirely, so it cannot be skipped from this
+   branch; it is also harmless, since it decorates the fresh models that the
+   swap discards.
+
+   Details the PoC and the ADMM analysis surfaced: **refresh
+   `saved_objectives[sname]`** for each reloaded model — `Eobjective` reads
+   those objective handles (populated by `_save_active_objectives` in
+   `SPOpt.__init__`) and they otherwise dangle to the discarded fresh model;
+   swap the reloaded model into `local_scenarios` (which `SPOpt.solve_loop`
+   iterates); where the `local_subproblems` alias exists, refresh it too — a
+   plain PH keeps no `local_subproblems`, but the **generic file-based path**
+   the dill-reload backend builds on (`scenario_io.py` sets
+   `sp.local_subproblems = sp.local_scenarios`) maintains it, and
+   `CGBase.solve_loop` iterates it; and on ADMM runs, **release or replace the
+   fresh models held by the wrapper** (`local_admm_stoch_subproblem_scenarios`
+   and the `cfg._admm_variable_probability` closure), or the run keeps two
+   copies of every local scenario alive for its whole life (§8.2, item 2). See
+   also item 11 for the one piece of *opt-object* state that is keyed by
+   variable identity and so cannot survive the swap untouched. This is a
    distinct branch from the leaf-rebuild "build fresh, overlay values" path;
    the `Checkpointer` picks the branch from `--checkpoint-backend`.
 3. **Extension `checkpoint_state` / `restore_state` contract** on `Extension`
@@ -735,6 +776,30 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
     is what a user needs to choose `S` for `--checkpoint-before-seconds` — mpi-sppy
     deliberately does not estimate that cost for them (§8). It also makes an
     otherwise invisible multi-minute stall in a long run legible in the log.
+11. **Restore the initially-fixed-nonant baseline, by name.** `SPOpt.__init__`
+    builds `_initial_fixed_varibles`, a `ComponentSet` of the nonant *vardata
+    objects* that were already fixed when the run started (`spopt.py`), and
+    `_can_update_best_bound` refuses to update `best_bound_obj_val` whenever a
+    nonant is fixed that is not in that set — because fixing a nonant mid-run
+    invalidates the outer bound. This is **opt-object state keyed by variable
+    identity**, so the model swap (item 2) breaks it in both directions and
+    neither is acceptable:
+
+    - *Left alone*, the set holds vardata from the discarded fresh models. Every
+      reloaded nonant is a different object, so any run with a fixed nonant —
+      including one the user fixed in `scenario_creator`, no extension involved —
+      **silently stops updating its best bound** for the whole resumed run.
+    - *Naively rebuilt after the swap*, it absorbs whatever `fixer`/`slammer`
+      pinned before the stop, so those mid-run fixings look original and the
+      resumed run **accepts a bound the uninterrupted run would have refused.**
+
+    The checkpoint therefore records the originally-fixed nonants **by variable
+    name** (the same by-name discipline §5.4 uses for the incumbent cache), and
+    the resume branch rebuilds `_initial_fixed_varibles` from those names against
+    the reloaded models. This is the same identity-keying hazard §8.2 item 3
+    catches for ADMM's `varprob_dict`, in the core PH path; it belongs in the
+    first phase, not with the fixing extensions, because a plain PH run with a
+    user-fixed nonant hits it.
 
 ---
 
@@ -819,27 +884,41 @@ CI solvers:
   wrapper-held fresh models.
 - **`sizes`** — the MIP target: warm start taken on resume, incumbent carried.
 
-The phase bullets below say where each instance enters (Phase 1: serial
-farmer / farmer+CVaR / `sizes`; Phase 2: multi-rank, bundles, stoch-ADMM;
-Phase 4: cylinders, including a stoch-ADMM configuration).
+The phase bullets below say where each instance enters (Phase 1a: serial
+farmer; Phase 1b: farmer+CVaR and `sizes`; Phase 2: multi-rank, bundles,
+stoch-ADMM; Phase 4: cylinders, including a stoch-ADMM configuration).
 
-- **Phase 1 — Serial hub checkpoint/resume, dill-reload backend.** `Checkpointer`
-  extension; global iteration counter / resume offset; reload-model resume branch
-  **in `Iter0`, replacing the iter-0 solve** (§5.1, §9 item 2 — skip
-  `attach_PH_to_objective`, rebuild `_solver_plugin`, set warm start, no
-  throwaway solve); geometry+cfg fingerprint; atomic per-rank writes + manifest;
-  terminal checkpoint (`--checkpoint-at-termination`, default on) + optional
-  periodic triggers (`--checkpoint-every-iterations` /
-  `--checkpoint-every-seconds`) + the one-shot anticipated trigger
-  (`--checkpoint-before-seconds`, §8, with the most-recent iteration duration
-  hoisted onto `self`, §9 item 9) + `toc` on both ends of every write (§9 item 10);
-  CLI flags `--checkpoint-dir`, `--checkpoint-at-termination`,
-  `--checkpoint-before-seconds`, `--checkpoint-backend`,
-  `--resume-from`/`--resume`. Tests (the §11.1 A/B harness, serial): **farmer**
-  and **farmer + `--cvar`** bit-identical A vs B; **`sizes`** (MIP) —
-  bit-identical under deterministic solver settings, and under default settings
-  run continues correctly, incumbent preserved, warm start taken (mid-run model
-  dill round-trip proven, §6); no iter-0 subproblem solve occurs on resume.
+Phase 1 is split into two review-sized PRs. Phase 1a is the whole serial
+stop-and-resume story with the single trigger the primary use case actually
+needs; Phase 1b adds the optional triggers and the harder test instances on top.
+Each is green on its own, and 1a is independently useful — a run that stops at
+`--time-limit` and resumes the next morning needs nothing from 1b.
+
+- **Phase 1a — Serial hub checkpoint/resume, terminal trigger only.** The
+  framework: `Checkpointer` extension; global iteration counter / resume offset
+  (§9 item 1); reload-model resume branch **in `Iter0`, replacing the iter-0
+  solve**, with the swap ahead of `_create_solvers()`, the deferred objective
+  attach disarmed, `saved_objectives` refreshed, and the warm start set (§5.1, §9
+  item 2); restore of the initially-fixed-nonant baseline by name (§9 item 11);
+  geometry+cfg fingerprint (§5.7); atomic per-rank writes + manifest publish (§9
+  item 7); the terminal checkpoint (`--checkpoint-at-termination`, default on)
+  from `post_everything`; `toc` on both ends of every write (§9 item 10). CLI
+  flags `--checkpoint-dir`, `--checkpoint-at-termination`,
+  `--checkpoint-backend`, `--resume-from`/`--resume`, with a clear error when
+  `dill` is not installed (it is an optional `extras` dependency). Tests (the
+  §11.1 A/B harness, serial): **farmer** bit-identical A vs B; no iter-0
+  subproblem solve occurs on resume; geometry/cfg mismatch refused.
+- **Phase 1b — The optional triggers and the harder instances.**
+  `--checkpoint-every-iterations` / `--checkpoint-every-seconds` and the one-shot
+  anticipated `--checkpoint-before-seconds` (§8), all decided collectively at
+  `enditer`, with the most-recent iteration duration hoisted onto `self` (§9 item
+  9). Tests: trigger semantics (fires once and latches; two triggers at one
+  `enditer` produce one write); **farmer + `--cvar`** bit-identical A vs B — the
+  mutate-after-creation case, where the resume branch's `saved_objectives`
+  refresh must resolve to `WITH_CVAR` and not the deactivated original;
+  **`sizes`** (MIP) — bit-identical under deterministic solver settings, and
+  under default settings run continues correctly, incumbent preserved, warm start
+  taken (mid-run model dill round-trip proven, §6).
 - **Phase 2 — Multi-rank + bundles + stoch-ADMM.** Barriers, rank-tagged files,
   single-generation atomic publish. Validate with **proper bundles** (§8.1) and
   refresh the stale `_restore_nonants` comment. Validate **stoch-ADMM** (§8.2):
