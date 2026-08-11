@@ -149,14 +149,15 @@ def require_dill(backend):
 
 UNDILLABLE_MODEL_HINT = (
     "A scenario model can be made undillable by what the scenario_creator "
-    "closes over. The known case is a Pyomo rule defined as a nested function "
+    "closes over. One known case is a Pyomo rule defined as a nested function "
     "that references the mpi-sppy Config object (commonly named 'cfg'): the "
-    "closure drags the Config into the model's serialization graph, and "
-    "Pyomo's ConfigDict does not survive dill (it does survive stdlib "
-    "pickle). The fix is in the model: read the values the rule needs into "
-    "plain local variables before defining it, e.g. 'ensure_feas = "
+    "closure drags the Config into the model's serialization graph, and a "
+    "populated Pyomo ConfigDict does not survive serialization. The fix for "
+    "that case is in the model: read the values the rule needs into plain "
+    "local variables before defining it, e.g. 'ensure_feas = "
     "cfg.ensure_xhat_feas' outside the rule, so the closure captures a bool "
-    "rather than the Config."
+    "rather than the Config. Other causes are possible; the exception above "
+    "often names the offending type."
 )
 
 
