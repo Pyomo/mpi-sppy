@@ -1262,6 +1262,25 @@ class SPOpt(SPBase):
                 if v.fixed:
                     self._initial_fixed_varibles.add(v)
 
+    def _restore_fixed_nonant_baseline(self, names):
+        """Rebuild `_initial_fixed_varibles` from checkpointed variable names.
+
+        `_create_fixed_nonant_cache` records vardata *objects*, so the cache
+        does not survive a resume that replaces the scenario models: every
+        reloaded nonant is a different object, and `_can_update_best_bound`
+        would treat each one as newly fixed and refuse to update the bound for
+        the rest of the run. Rebuilding by name restores the original meaning
+        -- which nonants were already fixed when the run first started -- so a
+        nonant that a fixing extension pinned mid-run is still correctly
+        recognized as *not* part of the baseline.
+        """
+        wanted = set(names)
+        self._initial_fixed_varibles = ComponentSet()
+        for s in self.local_scenarios.values():
+            for v in s._mpisppy_data.nonant_indices.values():
+                if v.name in wanted:
+                    self._initial_fixed_varibles.add(v)
+
     def _can_update_best_bound(self):
         for s in self.local_scenarios.values():
             for v in s._mpisppy_data.nonant_indices.values():

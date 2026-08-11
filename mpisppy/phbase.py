@@ -18,6 +18,7 @@ import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils
 import mpisppy.spopt
+import mpisppy.utils.checkpointing as checkpointing
 
 from mpisppy.utils.prox_approx import ProxApproxManager
 from mpisppy.utils.rho_utils import check_rhos_positive
@@ -251,6 +252,14 @@ class PHBase(mpisppy.spopt.SPOpt):
                 Function to set variable specific probabilities.
 
     """
+
+    # Resume state, set by _restore_from_checkpoint_if_resuming when
+    # --resume-from is given. Class-level defaults so every other code path
+    # -- including runs with no checkpointing at all -- reads sane values.
+    _resumed_from_checkpoint = False
+    _resume_iteration = 0
+    _checkpoint_leaf_state = None
+
     def __init__(
         self,
         options,
@@ -1151,6 +1160,54 @@ class PHBase(mpisppy.spopt.SPOpt):
             s._mpisppy_data.outer_bound = md["iter0_outer_bound"]
             s._mpisppy_data.inner_bound = md["iter0_inner_bound"]
 
+    def _restore_from_checkpoint_if_resuming(self):
+        """Splice a checkpoint's scenario models into this run, if resuming.
+
+        Called from ``Iter0`` before ``_create_solvers``. A no-op unless
+        ``--resume-from`` was given. See
+        ``doc/designs/checkpointing_design.md`` sections 5.1 and 9.
+        """
+        ckpt_dir = self.options.get("resume_from", None)
+        if not ckpt_dir:
+            return
+
+        leaf, models = checkpointing.load_checkpoint(self, ckpt_dir)
+
+        for sname, model in models.items():
+            self.local_scenarios[sname] = model
+            # Eobjective/Ebound read these objective handles; left alone they
+            # would dangle to the fresh model we just replaced.
+            self.saved_objectives[sname] = sputils.find_active_objective(model)
+            # The recourse values that came back with the model are a warm
+            # start for the first resumed solve.
+            model._mpisppy_data.solution_available = True
+        # The generic file-based path keeps this alias and CGBase.solve_loop
+        # iterates it; a plain PH has no such attribute.
+        if getattr(self, "local_subproblems", None) is not None:
+            self.local_subproblems = self.local_scenarios
+
+        # _initial_fixed_varibles is a ComponentSet of vardata belonging to the
+        # models we just discarded, so every reloaded nonant would look
+        # unrecognized and _can_update_best_bound would refuse to update the
+        # bound for the rest of the run. Rebuilding it from the checkpointed
+        # *names* also keeps nonants that a fixing extension pinned mid-run
+        # from passing as originally fixed, which would let through a bound the
+        # uninterrupted run would have refused.
+        self._restore_fixed_nonant_baseline(leaf["initially_fixed_nonants"])
+
+        # The deferred attach runs at the end of Iter0, downstream of here. The
+        # reloaded model already carries the spliced objective and the prox
+        # cuts, so letting it run would double the W terms and duplicate the
+        # prox components.
+        self._deferred_ph_attach = False
+
+        self._checkpoint_leaf_state = leaf
+        self._resumed_from_checkpoint = True
+        self._resume_iteration = int(leaf["generation"])
+        global_toc(f"Resuming from checkpoint in {ckpt_dir} "
+                   f"(iteration {self._resume_iteration})",
+                   self.cylinder_rank == 0)
+
     def Iter0(self):
         """ Create solvers and perform the initial PH solve (with no dual
         weights or prox terms).
@@ -1185,6 +1242,14 @@ class PHBase(mpisppy.spopt.SPOpt):
         self._PHIter = 0
         self._save_original_nonants()
 
+        # Resume, if asked: swap the checkpointed models in *before* solvers
+        # are created, so _create_solvers attaches a solver (and, for a
+        # persistent solver, calls set_instance) to the reloaded model rather
+        # than to one we are about to discard. Doing it the other way round
+        # makes every scenario pay set_instance twice per resume, which for
+        # large MIPs is exactly the cost checkpointing is meant to avoid.
+        self._restore_from_checkpoint_if_resuming()
+
         global_toc("Creating solvers")
         self._create_solvers()
 
@@ -1196,7 +1261,13 @@ class PHBase(mpisppy.spopt.SPOpt):
                  and self.cylinder_rank == 0
                  )
 
-        if self.options.get("iter0_from_pickle", False):
+        if self._resumed_from_checkpoint:
+            # The reloaded models already carry a solved iterate; re-solving
+            # them here with W = 0 would discard it. Bookkeeping that
+            # solve_loop would have set was restored with the models.
+            global_toc("Skipping PHBase.Iter0 solve loop (--resume-from); "
+                       "continuing from the checkpointed iterate")
+        elif self.options.get("iter0_from_pickle", False):
             self._iter0_use_pickled_solution()
         else:
             if self.options["verbose"]:
@@ -1233,9 +1304,18 @@ class PHBase(mpisppy.spopt.SPOpt):
         if have_extensions:
             self.extobject.post_iter0()
 
-        self.trivial_bound = self.Ebound(verbose)
-        if self.trivial_bound is not None and self._can_update_best_bound():
-            self.best_bound_obj_val = self.trivial_bound
+        if self._resumed_from_checkpoint:
+            # The trivial bound belongs to iteration 0 of the original run;
+            # recomputing it here would use the checkpointed (W-laden) iterate
+            # and produce something that is not the trivial bound at all.
+            self.trivial_bound = self._checkpoint_leaf_state["trivial_bound"]
+            restored_bound = self._checkpoint_leaf_state["best_bound_obj_val"]
+            if restored_bound is not None:
+                self.best_bound_obj_val = restored_bound
+        else:
+            self.trivial_bound = self.Ebound(verbose)
+            if self.trivial_bound is not None and self._can_update_best_bound():
+                self.best_bound_obj_val = self.trivial_bound
 
         if hasattr(self.spcomm, "sync_nonants"):
             self.spcomm.sync_nonants()
@@ -1246,7 +1326,10 @@ class PHBase(mpisppy.spopt.SPOpt):
         if have_extensions:
             self.extobject.post_iter0_after_sync()
 
-        if self.rho_setter is not None:
+        # On a resume, rho rides in the reloaded model -- including whatever a
+        # rho updater had done to it by the time of the checkpoint -- so
+        # re-running the setter would silently undo that.
+        if self.rho_setter is not None and not self._resumed_from_checkpoint:
             if self.cylinder_rank == 0:
                 self._use_rho_setter(verbose)
             else:
@@ -1330,7 +1413,11 @@ class PHBase(mpisppy.spopt.SPOpt):
                 global_toc("Cylinder convergence", self.cylinder_rank == 0)
                 return
 
-        for self._PHIter in range(1, max_iterations+1):
+        # _PHIter is the *global* iteration number: on a resume it picks up
+        # where the checkpoint left off, so checkpoint generations do not
+        # collide with the pre-stop ones and max_iterations stays a limit on
+        # the run as a whole rather than on this leg of it.
+        for self._PHIter in range(self._resume_iteration + 1, max_iterations+1):
             iteration_start_time = time.time()
 
             if dprogress:

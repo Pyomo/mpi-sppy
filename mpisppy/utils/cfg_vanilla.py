@@ -386,6 +386,7 @@ def ph_hub(
     add_wxbar_read_write(hub_dict, cfg)
     add_ph_tracking(hub_dict, cfg)
     add_timed_mipgap(hub_dict, cfg)
+    add_checkpointing(hub_dict, cfg)
     return hub_dict
 
 def cg_hub(
@@ -931,6 +932,42 @@ def add_wxbar_read_write(hub_dict, cfg):
              "Xbar_fname" : cfg.Xbar_fname,
              "separate_W_files" : cfg.separate_W_files
             })
+    return hub_dict
+
+def add_checkpointing(hub_dict, cfg):
+    """Attach the Checkpointer extension and forward its options.
+
+    Both --checkpoint-dir (write) and --resume-from (read) are handled here.
+    Resuming does not need the extension -- the resume branch lives in
+    PHBase.Iter0 -- but it does need resume_from in the options dict, so a
+    resume-only run (stop today, resume tomorrow with a fresh checkpoint dir)
+    still works.
+
+    See doc/designs/checkpointing_design.md.
+    """
+    from mpisppy.utils.checkpointing import STRUCTURAL_CFG_KEYS
+
+    if _hasit(cfg, 'checkpoint_dir'):
+        from mpisppy.extensions.checkpointer import Checkpointer
+        hub_dict = extension_adder(hub_dict, Checkpointer)
+        hub_dict["opt_kwargs"]["options"].update(
+            {"checkpoint_dir": cfg.checkpoint_dir,
+             "checkpoint_at_termination": cfg.checkpoint_at_termination,
+             "checkpoint_backend": cfg.checkpoint_backend,
+            })
+
+    if _hasit(cfg, 'resume_from'):
+        hub_dict["opt_kwargs"]["options"]["resume_from"] = cfg.resume_from
+
+    if _hasit(cfg, 'checkpoint_dir') or _hasit(cfg, 'resume_from'):
+        # Structural settings PH itself never reads -- they act on the model
+        # before PH sees it, or describe the scenario tree -- but which must
+        # match for a checkpoint to be resumable. Collected here so the
+        # fingerprint can cover them without the extension needing the cfg.
+        hub_dict["opt_kwargs"]["options"]["checkpoint_structural_cfg"] = {
+            k: cfg.get(k, None) for k in STRUCTURAL_CFG_KEYS if k in cfg
+        }
+
     return hub_dict
 
 def add_ph_tracking(cylinder_dict, cfg, spoke=False):

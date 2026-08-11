@@ -92,11 +92,28 @@ That is not negotiable and not something a checkpoint can carry.
 The narrower idea — dill each **scenario Pyomo model** — is not only viable, it is
 the right backend for this use case. The repo already dills *clean* scenario
 models for the scenario-pickle path (§4); the only extension is to dill them
-**mid-run**. The single non-serializable attribute on a scenario model is
-`s._solver_plugin`, which we drop before writing and rebuild with `set_instance`
-on resume (a dance we already do — the reconstruct step needs it regardless);
-`_mpisppy_data` is a `pyo.Block` on the model with **no** back-references to the
-comms or opt object.
+**mid-run**. The non-serializable attribute mpi-sppy itself puts on a scenario
+model is `s._solver_plugin`, which we drop before writing and rebuild with
+`set_instance` on resume (a dance we already do — the reconstruct step needs it
+regardless); `_mpisppy_data` is a `pyo.Block` on the model with **no**
+back-references to the comms or opt object.
+
+**But the model can also be made undillable by the user's own modeling code,**
+and that is not something checkpointing can strip. The known case: a Pyomo rule
+written as a nested function that closes over the `Config` object (`cfg`). The
+closure drags the `Config` into the model's serialization graph, and Pyomo's
+`ConfigDict` does not survive dill — although it *does* survive stdlib pickle.
+`examples/stoch_distr/stoch_distr.py` has exactly this shape, so its scenario
+models cannot be dilled at all, wrapper or no wrapper (issue #828). This is not
+specific to checkpointing: the existing `--pickle-scenarios-dir` path would fail
+the same way on such a model. Two consequences for this design:
+
+- The dill-reload backend cannot promise to checkpoint an *arbitrary* model; it
+  requires a dill-serializable one. The implementation therefore **probes one
+  local scenario at setup** and fails immediately with an actionable message
+  rather than discovering the problem at a terminal checkpoint hours in.
+- The workaround lives in the model (hoist the value out of the closure before
+  defining the rule), so the user-facing docs must say so.
 
 Dilling the mid-run model captures, in one shot and mutually consistent,
 everything that lives *on* the scenario model:
@@ -329,8 +346,8 @@ None of this lives on a hub scenario model, so it is restored as leaf data under
   gates whether the outer bound may be updated at all. It lives on the opt object
   and is keyed by variable *identity*, so it neither rides in the dill nor
   survives the model swap; it is checkpointed **by variable name** and rebuilt
-  against the reloaded models. Getting this wrong quietly breaks the bound in one
-  direction or the other — see §9, item 11.
+  against the reloaded models. A plain PH hub happens to be insulated from
+  getting this wrong, but `Subgradient` and `FWPH` are not — see §9, item 11.
 
 ### 5.5 Stateful extensions — *split: object state is leaf data, model state rides in the dill*
 
@@ -636,7 +653,15 @@ be honored or checkpointing will not work for ADMM:
    the ADMM resume test must assert both survive. (A leaf-rebuild ADMM resume
    would have to re-apply the mask and re-fix the dummies explicitly — one
    more reason that backend is deferred, §11 Phase 6.)
-4. **The dill round-trip is unvalidated for a wrapper-mutated model.** The MIP
+4. **The dill round-trip is unvalidated for a wrapper-mutated model, and the
+   intended vehicle cannot currently test it.** `stoch_distr` scenario models
+   do not dill *at all* — not because of the wrapper, but because the model
+   defines a Pyomo rule closing over `cfg` (§2.2, issue #828). A bare
+   `scenario_creator` result fails identically, so the wrapper is exonerated
+   and simultaneously untested. Validating this item needs either a fix to
+   `stoch_distr` or a different stoch-ADMM model, and that is now a
+   prerequisite of Phase 2 rather than a step within it. The rest of this item
+   describes what still has to be proven once a vehicle exists. The MIP
    PoC (§6) dilled a plain `sizes` model. A stoch-ADMM scenario is stranger:
    inline dummy `pyo.Var()`s added post-construction with bracket-mangled
    names, rewritten `ScenarioNode`s carrying *unattached*
@@ -786,20 +811,31 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
     neither is acceptable:
 
     - *Left alone*, the set holds vardata from the discarded fresh models. Every
-      reloaded nonant is a different object, so any run with a fixed nonant —
-      including one the user fixed in `scenario_creator`, no extension involved —
-      **silently stops updating its best bound** for the whole resumed run.
+      reloaded nonant is a different object, so a fixed nonant reads as
+      unrecognized and the gate refuses to update the bound.
     - *Naively rebuilt after the swap*, it absorbs whatever `fixer`/`slammer`
       pinned before the stop, so those mid-run fixings look original and the
-      resumed run **accepts a bound the uninterrupted run would have refused.**
+      gate admits a bound the uninterrupted run would have refused.
+
+    **How much this bites depends on the hub, and for a plain PH hub it is
+    currently masked.** `PHBase._can_update_best_bound` first returns `False`
+    whenever the proximal term is enabled, so PH consults the fixedness check
+    only with prox off — which happens at exactly one place, the iteration-0
+    trivial bound, and that is the path the resume branch replaces anyway. The
+    hubs that consult the fixedness gate on their own terms are `Subgradient`
+    (which calls the `SPOpt` version directly, every iteration, bypassing the
+    prox short-circuit) and `FWPH` (its own override over the same set). Those
+    are where a stale baseline would actually change results.
 
     The checkpoint therefore records the originally-fixed nonants **by variable
     name** (the same by-name discipline §5.4 uses for the incumbent cache), and
     the resume branch rebuilds `_initial_fixed_varibles` from those names against
     the reloaded models. This is the same identity-keying hazard §8.2 item 3
-    catches for ADMM's `varprob_dict`, in the core PH path; it belongs in the
-    first phase, not with the fixing extensions, because a plain PH run with a
-    user-fixed nonant hits it.
+    catches for ADMM's `varprob_dict`. It belongs in the first phase not because
+    plain PH is currently broken by it, but because it is the correct restore of
+    opt-object state, it costs nothing, and it is load-bearing the moment resume
+    covers a hub that consults the gate per iteration — leaving a knowingly stale
+    ComponentSet behind for a later phase to trip over is the worse trade.
 
 ---
 
@@ -878,10 +914,12 @@ CI solvers:
   and the eta var appended to the root nonants must all survive the dill
   round-trip, and the resume branch's `saved_objectives` refresh (§9, item 2)
   must resolve to `WITH_CVAR`, not the deactivated original.
-- **stoch-distr (`--stoch-admm`)** — exercises everything in §8.2: wrapped
-  names in file discovery, variable-probability masks and fixed-at-0 dummy
-  vars, the wrapper-mutated model dill round-trip, and release of the
-  wrapper-held fresh models.
+- **stoch-distr (`--stoch-admm`)** — intended to exercise everything in §8.2:
+  wrapped names in file discovery, variable-probability masks and fixed-at-0
+  dummy vars, the wrapper-mutated model dill round-trip, and release of the
+  wrapper-held fresh models. **Blocked**: `stoch_distr`'s models are not
+  dill-serializable (§2.2, issue #828), so this instance cannot be used until
+  the model is fixed or another stoch-ADMM model is chosen.
 - **`sizes`** — the MIP target: warm start taken on resume, incumbent carried.
 
 The phase bullets below say where each instance enters (Phase 1a: serial

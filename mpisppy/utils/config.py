@@ -771,6 +771,39 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=0.5)
 
+    def checkpoint_args(self):
+        # Checkpoint/resume (see doc/designs/checkpointing_design.md). The
+        # Checkpointer extension is attached iff checkpoint_dir is set, so a
+        # run that does not ask for checkpointing pays nothing.
+        self.add_to_config("checkpoint_dir",
+                           description="directory for checkpoint files; its "
+                           "presence enables checkpointing (default None)",
+                           domain=str,
+                           default=None)
+
+        self.add_to_config("checkpoint_at_termination",
+                           description="write a checkpoint when the run ends "
+                           "for any internal reason, including reaching "
+                           "--time-limit (default True); requires "
+                           "--checkpoint-dir",
+                           domain=bool,
+                           default=True)
+
+        self.add_to_config("checkpoint_backend",
+                           description="how scenario-model state is saved and "
+                           "restored; 'dill-reload' is the only implemented "
+                           "backend (default dill-reload)",
+                           domain=str,
+                           default="dill-reload")
+
+        self.add_to_config("resume_from",
+                           description="resume from the checkpoint in this "
+                           "directory; requires the same rank count and "
+                           "scenario-to-rank distribution as the run that "
+                           "wrote it (default None)",
+                           domain=str,
+                           default=None)
+
     def slamming_args(self):
         # Phase-1 preference-driven slamming (see doc/designs/slamming_design.md).
         # The Slammer extension is activated iff slamming_directives_file is set;

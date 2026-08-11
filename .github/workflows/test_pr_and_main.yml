@@ -174,6 +174,10 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_vss.py -v
 
+      - name: Test checkpoint/resume
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_checkpoint.py -v
+
       - name: Test prox_approx end-to-end
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_prox_approx_e2e.py -v
@@ -1234,6 +1238,7 @@ jobs:
             mpisppy/tests/test_feasible_xhat.py \
             mpisppy/tests/test_proper_bundler.py \
             mpisppy/tests/test_incumbent_writing.py \
+            mpisppy/tests/test_checkpoint.py \
             mpisppy/tests/test_iis_on_infeasible.py \
             mpisppy/tests/test_grad_rho_bundles.py \
             mpisppy/tests/test_sensi_rho_bundles.py \
