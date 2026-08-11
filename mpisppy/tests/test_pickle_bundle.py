@@ -16,8 +16,8 @@ import sys
 import tempfile
 import unittest
 
-import pytest
 import pyomo.environ as pyo
+from pyomo.common.dependencies import DeferredImportError
 
 import mpisppy.utils.pickle_bundle as pickle_bundle
 from mpisppy.utils.config import Config
@@ -105,6 +105,8 @@ class Test_pickle_bundles(unittest.TestCase):
         if ret != 0:
             raise RuntimeError(f"cylinders part of test run failed with code {ret}")
 
+@unittest.skipUnless(pickle_bundle.dill_available,
+                     "dill is not installed")
 class Test_dill_failure_diagnostics(unittest.TestCase):
     """A model that cannot be dilled must say *why*, not just that it failed.
 
@@ -118,7 +120,8 @@ class Test_dill_failure_diagnostics(unittest.TestCase):
     """
 
     def setUp(self):
-        self.dill = pytest.importorskip("dill")
+        import dill
+        self.dill = dill
 
     @staticmethod
     def _model_with_cfg_in_bounds_rule():
@@ -231,6 +234,152 @@ class Test_dill_failure_diagnostics(unittest.TestCase):
             with self.assertRaises(RuntimeError) as ctx:
                 pickle_bundle.dill_unpickle(fname)
             self.assertIn("truncated.dill", str(ctx.exception))
+
+    def test_io_errors_are_not_dressed_up_as_serialization_failures(self):
+        """A bad path speaks for itself; do not lecture about rule closures."""
+        model = self._clean_model()
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = os.path.join(tmp, "no_such_dir", "scen.dill")
+            with self.assertRaises(OSError):
+                pickle_bundle.dill_pickle(model, missing)
+        with self.assertRaises(OSError):
+            pickle_bundle.dill_unpickle(
+                os.path.join(tempfile.gettempdir(), "mpisppy_no_such_file.dill"))
+
+    def test_failed_open_does_not_delete_a_pre_existing_file(self):
+        """The cleanup must only remove a file this call actually wrote."""
+        model = self._model_with_cfg_in_bounds_rule()
+        with tempfile.TemporaryDirectory() as tmp:
+            fname = os.path.join(tmp, "precious.dill")
+            with open(fname, "wb") as f:
+                f.write(b"someone else's bytes")
+            os.chmod(fname, 0o400)          # unwritable file, writable dir
+            try:
+                with self.assertRaises(OSError):
+                    pickle_bundle.dill_pickle(model, fname)
+                self.assertTrue(
+                    os.path.exists(fname),
+                    msg="a file this call never wrote to was deleted")
+            finally:
+                os.chmod(fname, 0o600)
+
+    def test_duplicate_captures_are_reported_once(self):
+        """A bundle carries one copy of each rule per scenario."""
+        def build_block(cfg):
+            blk = pyo.Block(concrete=True)
+            blk.x = pyo.Var([1, 2])
+
+            def con_rule(b, i):
+                return b.x[i] >= (1 if cfg.max_iterations else 0)
+
+            blk.c = pyo.Constraint([1, 2], rule=con_rule)
+            return blk
+
+        cfg = Config()
+        cfg.popular_args()
+        model = pyo.ConcreteModel()
+        for i in range(5):                  # five "scenarios", one shared cfg
+            setattr(model, f"s{i}", build_block(cfg))
+
+        found = pickle_bundle.find_undillable_closures(model)
+        self.assertEqual(
+            found, [("con_rule", "cfg", "Config")],
+            msg="the same capture was reported once per scenario")
+
+    def test_bound_method_rule_is_diagnosed(self):
+        """A class-based builder reaches its config through self, not a cell."""
+        class Builder:
+            def __init__(self):
+                self.cfg = Config()
+                self.cfg.popular_args()
+
+            def con_rule(self, m, i):
+                return m.x[i] >= (1 if self.cfg.max_iterations else 0)
+
+        builder = Builder()
+        model = pyo.ConcreteModel()
+        model.x = pyo.Var([1, 2])
+        model.c = pyo.Constraint([1, 2], rule=builder.con_rule)
+
+        with self.assertRaises(Exception):
+            self.dill.dumps(model)
+        found = pickle_bundle.find_undillable_closures(model)
+        self.assertTrue(found, msg="bound-method rule was not diagnosed")
+        self.assertIn("self.cfg", [varname for _, varname, _ in found])
+
+
+class Test_dill_diagnostics_without_dill(unittest.TestCase):
+    """With dill absent the diagnostic must not invent a culprit.
+
+    dill is optional and reached through Pyomo's attempt_import, so calling it
+    raises DeferredImportError -- an ordinary Exception. Without a guard, the
+    serializability probe treats every closure value as unserializable and
+    tells the user to rewrite a scenario_creator over, say, an int.
+    """
+
+    def test_find_returns_nothing_when_dill_is_missing(self):
+        """Simulate a genuinely absent dill, not just a lowered flag.
+
+        attempt_import hands back a module proxy that raises on first use, so
+        every serializability probe raises rather than returning False. Merely
+        setting dill_available = False while dill is still importable would not
+        reproduce the bug this guards.
+        """
+        model = pyo.ConcreteModel()
+        limit = 10                      # perfectly serializable
+
+        def bounds_rule(m, i):
+            return (0, limit)
+
+        model.v = pyo.Var([1, 2], bounds=bounds_rule)
+
+        class _AbsentDill:
+            def dumps(self, *args, **kwargs):
+                raise DeferredImportError(
+                    "The dill module (an optional mpi-sppy dependency) failed "
+                    "to import: No module named 'dill'")
+
+        saved_flag = pickle_bundle.dill_available
+        saved_mod = pickle_bundle.dill
+        try:
+            pickle_bundle.dill_available = False
+            pickle_bundle.dill = _AbsentDill()
+            self.assertEqual(
+                pickle_bundle.find_undillable_closures(model), [],
+                msg="with dill absent, every closure value was misreported "
+                    "as the culprit")
+        finally:
+            pickle_bundle.dill_available = saved_flag
+            pickle_bundle.dill = saved_mod
+
+    def test_description_says_dill_is_missing(self):
+        model = pyo.ConcreteModel()
+        saved = pickle_bundle.dill_available
+        try:
+            pickle_bundle.dill_available = False
+            msg = pickle_bundle.describe_dill_failure(
+                model, RuntimeError("boom"))
+        finally:
+            pickle_bundle.dill_available = saved
+        self.assertIn("dill is not installed", msg)
+        self.assertNotIn("closes over", msg)
+
+    def test_broken_diagnostic_is_disclosed_not_hidden(self):
+        """If the walk itself breaks, say so instead of claiming it ran clean."""
+        model = pyo.ConcreteModel()
+        saved = pickle_bundle.find_undillable_closures
+
+        def boom(_model):
+            raise TypeError("diagnostic itself is broken")
+
+        try:
+            pickle_bundle.find_undillable_closures = boom
+            msg = pickle_bundle.describe_dill_failure(
+                model, RuntimeError("original failure"))
+        finally:
+            pickle_bundle.find_undillable_closures = saved
+        self.assertIn("closure diagnostic itself failed", msg)
+        self.assertIn("diagnostic itself is broken", msg)
 
 
 if __name__ == '__main__':

@@ -48,9 +48,13 @@ def _attributes_of(obj):
 def _closures_reachable_from(root):
     """Yield functions that carry a closure, reachable from root.
 
-    Walks a bounded neighborhood rather than the whole object graph: we only
-    descend into plain helper objects (Pyomo initializers and the like), never
-    into other model components, and stop at a fixed depth and visit count.
+    Walks a bounded neighborhood of `root` -- following both __dict__ and
+    __slots__ attributes, whatever they hold -- and stops at a fixed depth and
+    visit count. It does descend into whatever it finds, model components
+    included; the caps, not the object kind, are what bound it. The visit cap
+    can truncate the walk on a very large subproblem, which is harmless here
+    because find_undillable_closures re-roots at every component, so a rule
+    missed from one starting point is reached from its own.
     """
     seen = set()
     visits = 0
@@ -66,7 +70,10 @@ def _closures_reachable_from(root):
         if visits > _DIAGNOSTIC_MAX_VISITS:
             return
         if inspect.isfunction(obj) or inspect.ismethod(obj):
-            if getattr(obj, "__closure__", None):
+            # Bound methods are yielded whether or not they close over
+            # anything: for a class-based model builder the culprit is
+            # typically an attribute of __self__, not a closure cell.
+            if inspect.ismethod(obj) or getattr(obj, "__closure__", None):
                 yield obj
             continue
         if isinstance(obj, (str, bytes, int, float, bool, type(None))):
@@ -75,8 +82,34 @@ def _closures_reachable_from(root):
             stack.append((value, depth + 1))
 
 
-def _unserializable_closure_cells(func):
-    """Yield (freevar_name, value) for closure cells dill cannot serialize."""
+def _is_dillable(value, memo):
+    """Test whether dill can serialize `value`, memoized by object identity.
+
+    A proper bundle is an EF over many scenarios, each carrying its own copy of
+    the rule functions, so the same large closure value is reached again and
+    again; without the memo a big dillable dataset gets re-serialized once per
+    scenario. The memo maps id -> (value, result) and holds the value, both to
+    keep the answer and to keep the object alive so its id cannot be recycled.
+    """
+    key = id(value)
+    if key in memo:
+        return memo[key][1]
+    try:
+        dill.dumps(value)
+        result = True
+    except Exception:
+        result = False
+    memo[key] = (value, result)
+    return result
+
+
+def _unserializable_captures(func, memo):
+    """Yield (description, value) for things `func` carries that dill rejects.
+
+    Covers both closure cells and, for a bound method, the attributes of the
+    instance it is bound to -- a rule written as a method on a model-builder
+    class reaches its configuration through ``self``, not through a closure.
+    """
     cells = getattr(func, "__closure__", None) or ()
     names = getattr(getattr(func, "__code__", None), "co_freevars", ()) or ()
     for name, cell in zip(names, cells):
@@ -84,35 +117,58 @@ def _unserializable_closure_cells(func):
             value = cell.cell_contents
         except ValueError:
             continue  # empty cell
-        try:
-            dill.dumps(value)
-        except Exception:
+        if not _is_dillable(value, memo):
             yield name, value
+
+    owner = getattr(func, "__self__", None)
+    if owner is not None and not _is_dillable(owner, memo):
+        reported = False
+        for attr, value in _attributes_of(owner):
+            if not _is_dillable(value, memo):
+                yield f"self.{attr}", value
+                reported = True
+        if not reported:
+            # Nothing individually unserializable; the instance itself is.
+            yield "self", owner
 
 
 def find_undillable_closures(model):
     """Locate closure variables on `model` that dill cannot serialize.
 
-    Returns a list of (rule_name, freevar_name, value_type_name). Pyomo keeps a
-    reference to each rule function on the component it built, so anything a
-    rule closed over is reachable from the model and has to be serializable
-    too -- which is how an otherwise ordinary model becomes unpicklable.
+    Returns a list of (rule_name, freevar_name, value_type_name), deduplicated:
+    a bundle holds one copy of each rule per scenario, and reporting the same
+    capture hundreds of times helps nobody.
+
+    Pyomo keeps a reference to each rule function on the component it built, so
+    anything a rule closed over is reachable from the model and has to be
+    serializable too -- which is how an otherwise ordinary model becomes
+    unpicklable.
+
+    Known limitation: this looks at rule *closures*. An unserializable object
+    stored directly on the model (``model._handle = ...``) or inside a plain
+    container is not reported, though it fails just the same.
     """
+    if not dill_available:
+        # Without dill every serialization test below would raise, and every
+        # closure cell would be misreported as the culprit.
+        return []
     found = []
-    seen_rules = set()
+    seen_funcs = set()
+    memo = {}
     try:
         components = list(model.component_objects(descend_into=True))
     except Exception:
         components = []
     for comp in [model] + components:
         for func in _closures_reachable_from(comp):
-            key = (getattr(func, "__qualname__", repr(func)), id(func))
-            if key in seen_rules:
+            if id(func) in seen_funcs:
                 continue
-            seen_rules.add(key)
-            for varname, value in _unserializable_closure_cells(func):
-                found.append((getattr(func, "__name__", "<unknown>"),
-                              varname, type(value).__name__))
+            seen_funcs.add(id(func))
+            for varname, value in _unserializable_captures(func, memo):
+                entry = (getattr(func, "__name__", "<unknown>"),
+                         varname, type(value).__name__)
+                if entry not in found:
+                    found.append(entry)
     return found
 
 
@@ -126,10 +182,20 @@ def describe_dill_failure(model, exc, what="model"):
     """
     lines = [f"Could not serialize the {what} with dill: "
              f"{type(exc).__name__}: {exc}"]
+
+    if not dill_available:
+        lines.append("")
+        lines.append(
+            "dill is not installed. It is an optional dependency; install it "
+            "with 'pip install mpi-sppy[extras]' (or 'pip install dill').")
+        return "\n".join(lines)
+
+    diagnostic_error = None
     try:
         culprits = find_undillable_closures(model)
-    except Exception:
+    except Exception as diag_exc:
         culprits = []
+        diagnostic_error = f"{type(diag_exc).__name__}: {diag_exc}"
 
     if culprits:
         lines.append("")
@@ -147,31 +213,48 @@ def describe_dill_failure(model, exc, what="model"):
             "local variables before defining it, so the closure captures those "
             "values rather than the object holding them. For example, "
             "'seed = cfg.initial_seed' outside the rule, using 'seed' inside "
-            "it. (An mpi-sppy Config is a Pyomo ConfigDict, which dill cannot "
-            "serialize even though the standard pickle module can.)")
+            "it. (An mpi-sppy Config is a Pyomo ConfigDict, and a populated "
+            "ConfigDict does not survive serialization -- by dill or by the "
+            "standard pickle module.)")
     else:
         lines.append("")
         lines.append(
             "No unserializable value was found in a Pyomo rule closure, so "
             "something else reachable from the model cannot be serialized: an "
-            "object stored on the model itself, or on one of its components. "
-            "The exception above often names the offending type; dill handles "
-            "more than the standard pickle module does, so what fails here is "
-            "usually a live handle on something outside the process rather "
-            "than ordinary data. Note that mpi-sppy strips the solver plugin "
-            "it attaches before serializing, so an attached solver is only an "
-            "issue if the model holds one of its own.")
+            "object stored on the model itself, or on one of its components, "
+            "or held inside a plain container. The exception above often names "
+            "the offending type. Note that a live handle on something outside "
+            "the process -- a solver interface, a connection, an open "
+            "resource -- is the usual culprit; keep such things off the model "
+            "if it has to be serialized.")
+        if diagnostic_error is not None:
+            lines.append("")
+            lines.append(
+                f"(The closure diagnostic itself failed with "
+                f"{diagnostic_error}, so it could not rule that cause in or "
+                f"out. This is a bug in mpi-sppy, not in your model.)")
     return "\n".join(lines)
 
 
 def dill_pickle(model, fname):
     """ serialize model using dill to file name"""
     # global_toc(f"about to pickle to {fname}")
+    # Opening is deliberately outside the try below: an OSError here (missing
+    # directory, unwritable path) is self-explanatory and must not be dressed
+    # up as a serialization failure -- nor must it trigger the cleanup, which
+    # would delete a pre-existing file this call never wrote to.
+    f = open(fname, "wb")
     try:
-        with open(fname, "wb") as f:
+        try:
             dill.dump(model, f)
+        finally:
+            f.close()
+    except OSError:
+        raise
     except Exception as exc:
-        # Do not leave a truncated file that a later run would try to load.
+        # We truncated this file on open, so the only thing on disk now is our
+        # own partial write; remove it rather than leave something a later run
+        # would try to load.
         try:
             os.remove(fname)
         except OSError:
@@ -187,16 +270,25 @@ def dill_unpickle(fname):
     """ load a model from fname"""
 
     # global_toc(f"about to unpickle {fname}")
+    # As in dill_pickle: a missing or unreadable file speaks for itself, and
+    # saying "this is from a different environment" about a path that does not
+    # exist would be actively misleading. Bundle file names are constructed by
+    # name (see proper_bundler), so a naming mismatch lands here routinely.
+    f = open(fname, "rb")
     try:
-        with open(fname, "rb") as f:
+        try:
             m = dill.load(f)
+        finally:
+            f.close()
+    except OSError:
+        raise
     except Exception as exc:
         raise RuntimeError(
             f"Could not load the dilled model in '{fname}' "
             f"({type(exc).__name__}: {exc}). A dilled model is only readable "
             f"by the same environment that wrote it -- the same Python, "
             f"Pyomo, dill, and model code -- so this usually means the file "
-            f"is from a different environment, or is truncated."
+            f"was written by a different environment, or is truncated."
         ) from exc
     # global_toc(f"done with unpickle {fname}")
     return m
