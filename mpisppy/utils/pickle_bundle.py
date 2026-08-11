@@ -26,6 +26,8 @@ dill, dill_available = attempt_import("dill")
 # BoundInitializer._initializer._fcn), so a shallow depth suffices.
 _DIAGNOSTIC_MAX_DEPTH = 4
 _DIAGNOSTIC_MAX_VISITS = 20000
+# Bound on how many attributes of a bound method's owner get reported.
+_DIAGNOSTIC_MAX_SELF_ATTRS = 5
 
 
 def _attributes_of(obj):
@@ -104,9 +106,12 @@ def _is_dillable(value, memo):
 
 
 def _unserializable_captures(func, memo):
-    """Yield (description, value) for things `func` carries that dill rejects.
+    """Yield (kind, description, value) for what `func` carries that dill rejects.
 
-    Covers both closure cells and, for a bound method, the attributes of the
+    `kind` is "closure" or "self", so the caller can give advice that matches
+    how the value was actually captured.
+
+    Covers closure cells and, for a bound method, the attributes of the
     instance it is bound to -- a rule written as a method on a model-builder
     class reaches its configuration through ``self``, not through a closure.
     """
@@ -118,35 +123,68 @@ def _unserializable_captures(func, memo):
         except ValueError:
             continue  # empty cell
         if not _is_dillable(value, memo):
-            yield name, value
+            yield "closure", name, value
 
     owner = getattr(func, "__self__", None)
-    if owner is not None and not _is_dillable(owner, memo):
-        reported = False
-        for attr, value in _attributes_of(owner):
-            if not _is_dillable(value, memo):
-                yield f"self.{attr}", value
-                reported = True
-        if not reported:
-            # Nothing individually unserializable; the instance itself is.
-            yield "self", owner
+    if owner is None or _is_owner_uninteresting(owner):
+        return
+    if _is_dillable(owner, memo):
+        return
+    # Expanding a large owner is both slow and misleading: every attribute
+    # that merely *reaches* the real culprit tests as unserializable too, so
+    # a model-sized owner buries the answer in red herrings. Report a bounded
+    # number of specific attributes, and fall back to naming the instance.
+    reported = 0
+    for attr, value in _attributes_of(owner):
+        if reported >= _DIAGNOSTIC_MAX_SELF_ATTRS:
+            break
+        if not _is_dillable(value, memo):
+            yield "self", f"self.{attr}", value
+            reported += 1
+    if not reported:
+        yield "self", "self", owner
+
+
+def _is_owner_uninteresting(owner):
+    """True when a bound method's owner is not a model-builder object.
+
+    The case this diagnostic wants is a small class that builds models and
+    holds configuration. A Pyomo component -- most often the model itself,
+    reached through something like ``model._helper = model.clone`` -- is not
+    that, and expanding it produces pages of attributes that are unserializable
+    only because they transitively reach the same real culprit.
+    """
+    try:
+        from pyomo.core.base.component import ComponentBase
+    except ImportError:      # pragma: no cover - very old Pyomo
+        return False
+    return isinstance(owner, ComponentBase)
 
 
 def find_undillable_closures(model):
-    """Locate closure variables on `model` that dill cannot serialize.
+    """Locate values a rule on `model` carries that dill cannot serialize.
 
-    Returns a list of (rule_name, freevar_name, value_type_name), deduplicated:
-    a bundle holds one copy of each rule per scenario, and reporting the same
-    capture hundreds of times helps nobody.
+    Returns a deduplicated list of
+    (rule_name, capture_name, value_type_name, kind), where `kind` is
+    "closure" for a value in a rule's closure cell and "self" for one reached
+    through the instance a bound-method rule belongs to. Deduplication matters
+    because a bundle holds one copy of each rule per scenario.
 
     Pyomo keeps a reference to each rule function on the component it built, so
-    anything a rule closed over is reachable from the model and has to be
+    anything a rule captured is reachable from the model and has to be
     serializable too -- which is how an otherwise ordinary model becomes
     unpicklable.
 
-    Known limitation: this looks at rule *closures*. An unserializable object
-    stored directly on the model (``model._handle = ...``) or inside a plain
-    container is not reported, though it fails just the same.
+    Known limitation: only what a *rule* carries is inspected. An
+    unserializable object stored directly on the model
+    (``model._handle = ...``) or inside a plain container is not reported,
+    though it fails just the same; the caller says so when nothing is found.
+
+    Not idempotent, by nature: probing a value serializes it, and serializing
+    a Pyomo ConfigValue resolves its default and changes its class. Calling
+    this repeatedly on one model can therefore report fewer culprits each
+    time. It runs on a failure path where the run is ending anyway, and
+    resolving a default is semantically a no-op.
     """
     if not dill_available:
         # Without dill every serialization test below would raise, and every
@@ -164,9 +202,9 @@ def find_undillable_closures(model):
             if id(func) in seen_funcs:
                 continue
             seen_funcs.add(id(func))
-            for varname, value in _unserializable_captures(func, memo):
+            for kind, varname, value in _unserializable_captures(func, memo):
                 entry = (getattr(func, "__name__", "<unknown>"),
-                         varname, type(value).__name__)
+                         varname, type(value).__name__, kind)
                 if entry not in found:
                     found.append(entry)
     return found
@@ -204,18 +242,33 @@ def describe_dill_failure(model, exc, what="model"):
             "Pyomo rule. Pyomo keeps the rule function on the component it "
             "built, so whatever the rule closed over must be serializable "
             "too. Found:")
-        for rule, varname, typename in culprits:
-            lines.append(f"  - rule {rule}() closes over '{varname}' "
+        for rule, varname, typename, kind in culprits:
+            verb = "closes over" if kind == "closure" else "reaches"
+            lines.append(f"  - rule {rule}() {verb} '{varname}' "
                          f"of type {typename}")
         lines.append("")
+        if any(kind == "closure" for *_, kind in culprits):
+            lines.append(
+                "For a rule defined as a nested function, fix this in the "
+                "model: read the values the rule needs into plain local "
+                "variables before defining it, so the closure captures those "
+                "values rather than the object holding them. For example, "
+                "'seed = cfg.initial_seed' outside the rule, using 'seed' "
+                "inside it.")
+        if any(kind == "self" for *_, kind in culprits):
+            lines.append(
+                "For a rule defined as a method, the value is reached through "
+                "the instance the method is bound to, not through a closure. "
+                "Either keep the unserializable attribute off that instance, "
+                "or have the method read from plain data copied onto it "
+                "during construction.")
         lines.append(
-            "Fix this in the model: read the values the rule needs into plain "
-            "local variables before defining it, so the closure captures those "
-            "values rather than the object holding them. For example, "
-            "'seed = cfg.initial_seed' outside the rule, using 'seed' inside "
-            "it. (An mpi-sppy Config is a Pyomo ConfigDict, and a populated "
-            "ConfigDict does not survive serialization -- by dill or by the "
-            "standard pickle module.)")
+            "(An mpi-sppy Config is a Pyomo ConfigDict. A ConfigDict whose "
+            "entries still hold unresolved defaults fails the first time it "
+            "is serialized -- a Pyomo lazy-initialization quirk, not "
+            "something dill does differently: reading an entry flips its "
+            "class, and that happens while the pickler is already reading "
+            "its state.)")
     else:
         lines.append("")
         lines.append(
@@ -236,12 +289,27 @@ def describe_dill_failure(model, exc, what="model"):
     return "\n".join(lines)
 
 
+def _remove_quietly(fname):
+    try:
+        os.remove(fname)
+    except OSError:
+        pass
+
+
 def dill_pickle(model, fname):
     """ serialize model using dill to file name"""
     # global_toc(f"about to pickle to {fname}")
+    if not dill_available:
+        # Check before opening: otherwise we truncate the target on the way to
+        # discovering we cannot write it.
+        raise RuntimeError(
+            "dill is required to pickle scenarios and bundles but is not "
+            "installed. It is an optional dependency; install it with "
+            "'pip install mpi-sppy[extras]' (or 'pip install dill')."
+        )
     # Opening is deliberately outside the try below: an OSError here (missing
-    # directory, unwritable path) is self-explanatory and must not be dressed
-    # up as a serialization failure -- nor must it trigger the cleanup, which
+    # directory, unwritable path) is self-explanatory, must not be dressed up
+    # as a serialization failure, and must not trigger the cleanup -- that
     # would delete a pre-existing file this call never wrote to.
     f = open(fname, "wb")
     try:
@@ -250,15 +318,13 @@ def dill_pickle(model, fname):
         finally:
             f.close()
     except OSError:
+        # An OSError from here is a write failure (disk full, quota, NFS),
+        # not an open failure -- the file exists and holds our own truncated
+        # write. Clean it up, then let the error speak for itself.
+        _remove_quietly(fname)
         raise
     except Exception as exc:
-        # We truncated this file on open, so the only thing on disk now is our
-        # own partial write; remove it rather than leave something a later run
-        # would try to load.
-        try:
-            os.remove(fname)
-        except OSError:
-            pass
+        _remove_quietly(fname)
         raise RuntimeError(
             describe_dill_failure(model, exc,
                                   what=f"model destined for '{fname}'")

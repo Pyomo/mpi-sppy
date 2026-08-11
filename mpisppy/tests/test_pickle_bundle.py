@@ -166,15 +166,17 @@ class Test_dill_failure_diagnostics(unittest.TestCase):
         found = pickle_bundle.find_undillable_closures(
             self._model_with_cfg_in_bounds_rule())
         self.assertEqual(len(found), 1)
-        rule, varname, typename = found[0]
+        rule, varname, typename, kind = found[0]
         self.assertEqual(rule, "bounds_rule")
         self.assertEqual(varname, "cfg")
         self.assertEqual(typename, "Config")
+        self.assertEqual(kind, "closure")
 
     def test_finds_cfg_captured_by_a_constraint_rule(self):
         found = pickle_bundle.find_undillable_closures(
             self._model_with_cfg_in_constraint_rule())
-        self.assertEqual([(r, v) for r, v, _ in found], [("con_rule", "cfg")])
+        self.assertEqual([(r, v) for r, v, _, _ in found],
+                         [("con_rule", "cfg")])
 
     def test_clean_model_has_no_findings(self):
         self.assertEqual(
@@ -263,6 +265,69 @@ class Test_dill_failure_diagnostics(unittest.TestCase):
             finally:
                 os.chmod(fname, 0o600)
 
+    def test_write_error_does_not_leave_a_truncated_pickle(self):
+        """A write failure (disk full, quota) must not leave a partial file.
+
+        open() succeeded and truncated the target, so what is on disk is our
+        own partial write -- exactly the thing a later --unpickle-* run would
+        try to load.
+        """
+        class _FailingDill:
+            def dump(self, model, f):
+                f.write(b"x" * 200)
+                raise OSError(28, "No space left on device")
+
+        model = self._clean_model()
+        saved = pickle_bundle.dill
+        with tempfile.TemporaryDirectory() as tmp:
+            fname = os.path.join(tmp, "scen.dill")
+            try:
+                pickle_bundle.dill = _FailingDill()
+                with self.assertRaises(OSError):
+                    pickle_bundle.dill_pickle(model, fname)
+            finally:
+                pickle_bundle.dill = saved
+            self.assertFalse(
+                os.path.exists(fname),
+                msg="a truncated pickle survived a write failure")
+
+    def test_missing_dill_does_not_truncate_the_target(self):
+        """Refuse before opening, or we destroy a file we cannot rewrite."""
+        model = self._clean_model()
+        with tempfile.TemporaryDirectory() as tmp:
+            fname = os.path.join(tmp, "existing.dill")
+            with open(fname, "wb") as f:
+                f.write(b"previous contents")
+            saved = pickle_bundle.dill_available
+            try:
+                pickle_bundle.dill_available = False
+                with self.assertRaises(RuntimeError) as ctx:
+                    pickle_bundle.dill_pickle(model, fname)
+            finally:
+                pickle_bundle.dill_available = saved
+            self.assertIn("dill is required", str(ctx.exception))
+            with open(fname, "rb") as f:
+                self.assertEqual(f.read(), b"previous contents")
+
+    def test_large_bound_method_owner_is_not_expanded(self):
+        """A Pyomo component owner would bury the answer in red herrings."""
+        cfg = Config()
+        cfg.popular_args()
+        model = pyo.ConcreteModel()
+        model.x = pyo.Var([1, 2])
+
+        def con_rule(m, i):
+            return m.x[i] >= (1 if cfg.max_iterations else 0)
+
+        model.c = pyo.Constraint([1, 2], rule=con_rule)
+        model._helper = model.clone       # bound method owned by the model
+
+        found = pickle_bundle.find_undillable_closures(model)
+        self.assertTrue(found)
+        self.assertEqual(
+            [varname for _, varname, _, kind in found if kind == "self"], [],
+            msg="expanded a Pyomo component as if it were a model builder")
+
     def test_duplicate_captures_are_reported_once(self):
         """A bundle carries one copy of each rule per scenario."""
         def build_block(cfg):
@@ -283,7 +348,7 @@ class Test_dill_failure_diagnostics(unittest.TestCase):
 
         found = pickle_bundle.find_undillable_closures(model)
         self.assertEqual(
-            found, [("con_rule", "cfg", "Config")],
+            found, [("con_rule", "cfg", "Config", "closure")],
             msg="the same capture was reported once per scenario")
 
     def test_bound_method_rule_is_diagnosed(self):
@@ -305,7 +370,7 @@ class Test_dill_failure_diagnostics(unittest.TestCase):
             self.dill.dumps(model)
         found = pickle_bundle.find_undillable_closures(model)
         self.assertTrue(found, msg="bound-method rule was not diagnosed")
-        self.assertIn("self.cfg", [varname for _, varname, _ in found])
+        self.assertIn("self.cfg", [varname for _, varname, _, _ in found])
 
 
 class Test_dill_diagnostics_without_dill(unittest.TestCase):
