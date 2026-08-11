@@ -68,6 +68,19 @@ def min_cost_distr_problem(local_dict, cfg, stoch_scenario_name, sense=pyo.minim
     """
     scennum = sputils.extract_num(stoch_scenario_name)
 
+    # Read every cfg value the Pyomo rules below need into plain locals, so
+    # that the rules close over ints/floats/bools rather than over cfg itself.
+    # Pyomo keeps a reference to a rule function on the model, so a rule that
+    # closes over cfg drags the whole Config into the model's serialization
+    # graph -- and a Pyomo ConfigDict cannot be serialized with dill, which
+    # makes the scenario model unusable with --pickle-scenarios-dir and with
+    # checkpointing. See issue #829.
+    ensure_xhat_feas = cfg.ensure_xhat_feas
+    mnpr = cfg.mnpr
+    initial_seed = cfg.initial_seed
+    spm = cfg.spm
+    cv = cfg.cv
+
     # Assert sense == pyo.minimize, "sense should be equal to pyo.minimize"
     # First, make the special In, Out arc lists for each node
     arcsout = {n: list() for n in local_dict["nodes"]}
@@ -89,7 +102,7 @@ def min_cost_distr_problem(local_dict, cfg, stoch_scenario_name, sense=pyo.minim
         elif n in local_dict["buyer nodes"]:
             return (local_dict["supply"][n], 0)
         elif n in local_dict["distribution center nodes"]:
-            if cfg.ensure_xhat_feas:
+            if ensure_xhat_feas:
                 # Should be (0,0) but to avoid infeasibility we add a negative slack variable
                 return (None, 0)
             else:
@@ -108,7 +121,7 @@ def min_cost_distr_problem(local_dict, cfg, stoch_scenario_name, sense=pyo.minim
     model.FirstStageCost = pyo.Expression(expr=\
                     sum(local_dict["production costs"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["factory nodes"]))
     
-    if cfg.ensure_xhat_feas:
+    if ensure_xhat_feas:
         # too big penalty to allow the stack to be non-zero
         model.SecondStageCost = pyo.Expression(expr=\
                         sum(local_dict["flow costs"][a]*model.flow[a] for a in local_dict["arcs"]) \
@@ -128,12 +141,12 @@ def min_cost_distr_problem(local_dict, cfg, stoch_scenario_name, sense=pyo.minim
         if n in local_dict["factory nodes"]:
             # We generate pseudo randomly the loss on each factory node
             node_type, region_num, count = distr_data.parse_node_name(n)
-            node_num = distr_data._node_num(cfg.mnpr, node_type, region_num, count)
-            np.random.seed(node_num+cfg.initial_seed+(scennum+1)*2**20) #2**20 avoids the correlation with the scalable example data
+            node_num = distr_data._node_num(mnpr, node_type, region_num, count)
+            np.random.seed(node_num+initial_seed+(scennum+1)*2**20) #2**20 avoids the correlation with the scalable example data
             return sum(m.flow[a] for a in arcsout[n])\
             - sum(m.flow[a] for a in arcsin[n])\
             + m.inventory[n] \
-            == (local_dict["supply"][n] - m.y[n]) * min(1,max(0,1-np.random.normal(cfg.spm,cfg.cv)/100)) # We add the loss
+            == (local_dict["supply"][n] - m.y[n]) * min(1,max(0,1-np.random.normal(spm,cv)/100)) # We add the loss
         else:
             return sum(m.flow[a] for a in arcsout[n])\
             - sum(m.flow[a] for a in arcsin[n])\
