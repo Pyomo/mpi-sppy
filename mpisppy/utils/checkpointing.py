@@ -35,6 +35,8 @@ import hashlib
 
 from pyomo.common.dependencies import attempt_import
 
+import mpisppy.utils.pickle_bundle as pickle_bundle
+
 dill, dill_available = attempt_import("dill")
 
 # Bump when the on-disk layout changes in a way older readers cannot handle.
@@ -147,18 +149,6 @@ def require_dill(backend):
         )
 
 
-UNDILLABLE_MODEL_HINT = (
-    "A scenario model can be made undillable by what the scenario_creator "
-    "closes over. One known case is a Pyomo rule defined as a nested function "
-    "that references the mpi-sppy Config object (commonly named 'cfg'): the "
-    "closure drags the Config into the model's serialization graph, and a "
-    "populated Pyomo ConfigDict does not survive serialization. The fix for "
-    "that case is in the model: read the values the rule needs into plain "
-    "local variables before defining it, e.g. 'ensure_feas = "
-    "cfg.ensure_xhat_feas' outside the rule, so the closure captures a bool "
-    "rather than the Config. Other causes are possible; the exception above "
-    "often names the offending type."
-)
 
 
 def probe_model_is_dillable(opt):
@@ -181,9 +171,10 @@ def probe_model_is_dillable(opt):
         dill.dumps(s)
     except Exception as exc:
         raise RuntimeError(
-            f"Checkpointing is enabled, but scenario '{sname}' cannot be "
-            f"serialized with dill, so no checkpoint could ever be written "
-            f"({type(exc).__name__}: {exc}).\n\n{UNDILLABLE_MODEL_HINT}"
+            "Checkpointing is enabled, but no checkpoint could ever be "
+            "written.\n\n"
+            + pickle_bundle.describe_dill_failure(
+                s, exc, what=f"scenario '{sname}'")
         ) from exc
     finally:
         if solver_plugin is not None:
@@ -243,10 +234,14 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
         shutil.rmtree(staging_dir, ignore_errors=True)
         if isinstance(exc, ValueError):
             raise
+        first = next(iter(opt.local_scenarios.values()), None)
+        detail = (pickle_bundle.describe_dill_failure(first, exc,
+                                                      what="scenario model")
+                  if first is not None
+                  else f"{type(exc).__name__}: {exc}")
         raise RuntimeError(
-            f"Failed to write the checkpoint to '{ckpt_dir}' "
-            f"({type(exc).__name__}: {exc}). Any previously published "
-            f"checkpoint is untouched.\n\n{UNDILLABLE_MODEL_HINT}"
+            f"Failed to write the checkpoint to '{ckpt_dir}'. Any previously "
+            f"published checkpoint is untouched.\n\n" + detail
         ) from exc
 
     leaf = {
