@@ -58,6 +58,7 @@ MPI is used.
 
    properbundles.rst
    pickling.rst
+   checkpointing.rst
    jensens.rst
    vss.rst
    feasible_xhat.rst
