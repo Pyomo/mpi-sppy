@@ -66,20 +66,34 @@ STRUCTURAL_OPTION_KEYS = (
     "defaultPHbeta",
 )
 
-# Structural values that do not appear in ``opt.options`` because PH itself
-# never reads them -- they act on the model before PH sees it, or describe the
-# scenario tree. ``cfg_vanilla.add_checkpointing`` collects these into
-# ``options["checkpoint_structural_cfg"]`` so the fingerprint can cover them.
-STRUCTURAL_CFG_KEYS = (
-    "module_name",
-    "num_scens",
-    "branching_factors",
-    "scenarios_per_bundle",
-    "cvar",
-    "cvar_weight",
-    "cvar_alpha",
-    "cvar_mean_weight",
-)
+# Configuration entries a resume may legitimately differ on. Everything else
+# in the cfg is folded into the fingerprint, so this is a *denylist*: a new
+# option is checked by default, and only becomes exempt when someone decides it
+# cannot make a restored checkpoint describe a different problem. The opposite
+# policy -- naming the structural options -- silently missed everything a
+# model's own inparser_adder registers, so a farmer checkpoint could be resumed
+# with --farmer-with-integers and quietly answer the LP.
+NON_STRUCTURAL_CFG_KEYS = frozenset({
+    # How long to run. Resuming with a different budget is the point.
+    "max_iterations", "time_limit", "intra_hub_conv_thresh", "rel_gap",
+    "abs_gap", "max_stalled_iters",
+    # Checkpoint plumbing itself.
+    "checkpoint_dir", "checkpoint_at_termination", "checkpoint_backend",
+    "resume_from",
+    # Display, logging and output destinations.
+    "verbose", "display_progress", "display_timing",
+    "display_convergence_detail", "tee_rank0_solves", "trace_prefix",
+    "solution_base_name", "write_xhat_file", "xhat_from_file",
+    "solver_log_dir", "incumbent_on_improvement_filename_prefix",
+    "W_fname", "Xbar_fname", "init_W_fname", "init_Xbar_fname",
+    "separate_W_files", "init_separate_W_files",
+    "wtracker", "wtracker_file_prefix", "wtracker_wlen",
+    "wtracker_reportlen", "wtracker_stdevthresh",
+    # Which solver and how it is driven: a different solver continues the same
+    # problem, it does not redefine it.
+    "solver_name", "solver_options", "max_solver_threads",
+    "iter0_solver_options", "iterk_solver_options", "presolve",
+})
 
 
 class CheckpointMismatch(RuntimeError):
@@ -101,9 +115,8 @@ def structural_fingerprint(options):
     """Hash the structural subset of ``options`` (see STRUCTURAL_OPTION_KEYS)."""
     payload = {k: _canonical(options.get(k)) for k in STRUCTURAL_OPTION_KEYS}
     extras = options.get("checkpoint_structural_cfg") or {}
-    for k in STRUCTURAL_CFG_KEYS:
-        if k in extras:
-            payload[f"cfg:{k}"] = _canonical(extras[k])
+    for k, v in sorted(extras.items()):
+        payload[f"cfg:{k}"] = _canonical(v)
     blob = json.dumps(payload, sort_keys=True).encode("utf-8")
     return hashlib.sha256(blob).hexdigest()
 
@@ -406,10 +419,13 @@ def load_checkpoint(opt, ckpt_dir):
     if manifest.get("structural_fingerprint") != expected_fp:
         raise CheckpointMismatch(
             f"The checkpoint in '{ckpt_dir}' was written by a run whose "
-            f"structural options differ from this one. The options that must "
-            f"match are {', '.join(STRUCTURAL_OPTION_KEYS)} plus "
-            f"{', '.join(STRUCTURAL_CFG_KEYS)}; the iteration limit, time "
-            f"limit, and display options may be changed freely on a resume."
+            f"configuration differs from this one in a way that could make "
+            f"the checkpoint describe a different problem. Everything is "
+            f"compared except a short list of entries a resume may change "
+            f"freely -- the iteration and time limits, display and output "
+            f"options, checkpoint plumbing, and solver selection. Anything "
+            f"else, including options your model's own inparser_adder "
+            f"registers, must match the run that wrote the checkpoint."
         )
 
     if int(manifest.get("n_proc", -1)) != int(opt.n_proc):

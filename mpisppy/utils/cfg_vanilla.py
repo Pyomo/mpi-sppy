@@ -945,7 +945,7 @@ def add_checkpointing(hub_dict, cfg):
 
     See doc/designs/checkpointing_design.md.
     """
-    from mpisppy.utils.checkpointing import STRUCTURAL_CFG_KEYS
+    from mpisppy.utils.checkpointing import NON_STRUCTURAL_CFG_KEYS
 
     if _hasit(cfg, 'checkpoint_dir'):
         from mpisppy.extensions.checkpointer import Checkpointer
@@ -960,12 +960,13 @@ def add_checkpointing(hub_dict, cfg):
         hub_dict["opt_kwargs"]["options"]["resume_from"] = cfg.resume_from
 
     if _hasit(cfg, 'checkpoint_dir') or _hasit(cfg, 'resume_from'):
-        # Structural settings PH itself never reads -- they act on the model
-        # before PH sees it, or describe the scenario tree -- but which must
-        # match for a checkpoint to be resumable. Collected here so the
-        # fingerprint can cover them without the extension needing the cfg.
+        # Every cfg entry except the ones a resume may legitimately differ on.
+        # Checking by default is what catches the options a model's own
+        # inparser_adder registers -- those never appear in opt.options, and an
+        # allowlist silently missed them.
         hub_dict["opt_kwargs"]["options"]["checkpoint_structural_cfg"] = {
-            k: cfg.get(k, None) for k in STRUCTURAL_CFG_KEYS if k in cfg
+            k: cfg.get(k, None) for k in cfg
+            if k not in NON_STRUCTURAL_CFG_KEYS
         }
 
     return hub_dict

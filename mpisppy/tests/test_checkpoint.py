@@ -266,7 +266,7 @@ class TestResumeRefusesMismatch(unittest.TestCase):
         options = _options(4, resume_from=self.ckpt_dir, defaultPHrho=2.0)
         with self.assertRaises(checkpointing.CheckpointMismatch) as ctx:
             _make_ph(options).ph_main()
-        self.assertIn("structural options", str(ctx.exception))
+        self.assertIn("describe a different problem", str(ctx.exception))
 
     def test_scenario_distribution_mismatch_is_refused(self):
         """Resuming with a different scenario set is refused, not guessed at."""
@@ -363,6 +363,46 @@ class TestStructuralFingerprint(unittest.TestCase):
         without = self._fingerprint(
             checkpoint_structural_cfg={"cvar": False, "cvar_alpha": 0.95})
         self.assertNotEqual(with_cvar, without)
+
+    def test_model_specific_options_are_covered_by_default(self):
+        """The denylist inversion: an option the fingerprint never heard of.
+
+        Options a model's own inparser_adder registers -- farmer's
+        use_integer, say -- never appear in opt.options, so the previous
+        allowlist missed them and a farmer LP checkpoint could be resumed as a
+        MIP without complaint.
+        """
+        lp = self._fingerprint(
+            checkpoint_structural_cfg={"module_name": "farmer",
+                                       "use_integer": False})
+        mip = self._fingerprint(
+            checkpoint_structural_cfg={"module_name": "farmer",
+                                       "use_integer": True})
+        self.assertNotEqual(lp, mip)
+
+    def test_denylisted_entries_are_excluded_from_the_cfg_fold(self):
+        """Whatever cfg_vanilla omits must not affect the hash."""
+        import mpisppy.utils.cfg_vanilla as vanilla
+        from mpisppy.utils.config import Config
+
+        def built(max_iters):
+            cfg = Config()
+            cfg.popular_args()
+            cfg.checkpoint_args()
+            cfg.max_iterations = max_iters
+            cfg.checkpoint_dir = "/tmp/whatever"
+            hub_dict = {"opt_kwargs": {"options": {}}}
+            vanilla.add_checkpointing(hub_dict, cfg)
+            return hub_dict["opt_kwargs"]["options"][
+                "checkpoint_structural_cfg"]
+
+        self.assertNotIn("max_iterations", built(10))
+        self.assertNotIn("checkpoint_dir", built(10))
+        self.assertEqual(
+            checkpointing.structural_fingerprint(
+                {"checkpoint_structural_cfg": built(10)}),
+            checkpointing.structural_fingerprint(
+                {"checkpoint_structural_cfg": built(999)}))
 
 
 class TestConfigRegistration(unittest.TestCase):
