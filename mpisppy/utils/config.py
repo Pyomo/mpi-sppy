@@ -781,14 +781,6 @@ class Config(pyofig.ConfigDict):
                            domain=str,
                            default=None)
 
-        self.add_to_config("checkpoint_at_termination",
-                           description="write a checkpoint when the run ends "
-                           "for any internal reason, including reaching "
-                           "--time-limit (default True); requires "
-                           "--checkpoint-dir",
-                           domain=bool,
-                           default=True)
-
         self.add_to_config("checkpoint_backend",
                            description="how scenario-model state is saved and "
                            "restored; 'dill-reload' is the only implemented "

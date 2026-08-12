@@ -952,7 +952,6 @@ def add_checkpointing(hub_dict, cfg):
         hub_dict = extension_adder(hub_dict, Checkpointer)
         hub_dict["opt_kwargs"]["options"].update(
             {"checkpoint_dir": cfg.checkpoint_dir,
-             "checkpoint_at_termination": cfg.checkpoint_at_termination,
              "checkpoint_backend": cfg.checkpoint_backend,
             })
 

@@ -62,7 +62,6 @@ def _options(max_iters, ckpt_dir=None, resume_from=None, **overrides):
     }
     if ckpt_dir is not None:
         options["checkpoint_dir"] = ckpt_dir
-        options["checkpoint_at_termination"] = True
         options["checkpoint_backend"] = checkpointing.DILL_RELOAD_BACKEND
     if resume_from is not None:
         options["resume_from"] = resume_from
@@ -542,8 +541,7 @@ class TestSetupRefusals(unittest.TestCase):
         import types
         return types.SimpleNamespace(
             options={"checkpoint_dir": tempfile.mkdtemp(),
-                     "checkpoint_backend": backend,
-                     "checkpoint_at_termination": True},
+                     "checkpoint_backend": backend},
             n_proc=n_proc, cylinder_rank=0, local_scenarios={})
 
     def test_unimplemented_backend_is_refused_at_setup(self):
@@ -655,16 +653,23 @@ class TestConfigRegistration(unittest.TestCase):
         self.cfg.checkpoint_args()
 
     def test_flags_are_registered(self):
-        for name in ("checkpoint_dir", "checkpoint_at_termination",
-                     "checkpoint_backend", "resume_from"):
+        for name in ("checkpoint_dir", "checkpoint_backend",
+                     "resume_from"):
             self.assertIn(name, self.cfg)
 
     def test_checkpointing_is_off_by_default(self):
         self.assertIsNone(self.cfg.checkpoint_dir)
         self.assertIsNone(self.cfg.resume_from)
 
-    def test_terminal_checkpoint_defaults_on(self):
-        self.assertTrue(self.cfg.checkpoint_at_termination)
+    def test_obsolete_termination_flag_is_gone(self):
+        """It described a trigger that no longer exists.
+
+        Checkpoints are written at every completed iteration now, so there is
+        no terminal checkpoint to enable or disable. Leaving the flag
+        registered would have meant a documented option that silently did
+        nothing -- which is how it was found.
+        """
+        self.assertNotIn("checkpoint_at_termination", self.cfg)
 
     def test_backend_defaults_to_dill_reload(self):
         self.assertEqual(self.cfg.checkpoint_backend,

@@ -78,7 +78,7 @@ NON_STRUCTURAL_CFG_KEYS = frozenset({
     "max_iterations", "time_limit", "intra_hub_conv_thresh", "rel_gap",
     "abs_gap", "max_stalled_iters",
     # Checkpoint plumbing itself.
-    "checkpoint_dir", "checkpoint_at_termination", "checkpoint_backend",
+    "checkpoint_dir", "checkpoint_backend",
     "resume_from",
     # Display, logging and output destinations.
     "verbose", "display_progress", "display_timing",
