@@ -945,7 +945,7 @@ def add_checkpointing(hub_dict, cfg):
 
     See doc/designs/checkpointing_design.md.
     """
-    from mpisppy.utils.checkpointing import NON_STRUCTURAL_CFG_KEYS
+    from mpisppy.utils.checkpointing import _is_non_structural
 
     if _hasit(cfg, 'checkpoint_dir'):
         from mpisppy.extensions.checkpointer import Checkpointer
@@ -966,7 +966,7 @@ def add_checkpointing(hub_dict, cfg):
         # allowlist silently missed them.
         hub_dict["opt_kwargs"]["options"]["checkpoint_structural_cfg"] = {
             k: cfg.get(k, None) for k in cfg
-            if k not in NON_STRUCTURAL_CFG_KEYS
+            if not _is_non_structural(k)
         }
 
     return hub_dict

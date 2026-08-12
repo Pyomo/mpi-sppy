@@ -92,8 +92,41 @@ NON_STRUCTURAL_CFG_KEYS = frozenset({
     # Which solver and how it is driven: a different solver continues the same
     # problem, it does not redefine it.
     "solver_name", "solver_options", "max_solver_threads",
-    "iter0_solver_options", "iterk_solver_options", "presolve",
+    "presolve", "user_warmstart", "warmstart_subproblems",
+    # Per-cylinder solver selection and gap control. Tightening a mipgap on day
+    # two of a multi-day study is the most ordinary adjustment there is, and it
+    # continues the same problem rather than redefining it.
+    "starting_mipgap", "mipgap_ratio", "mipgaps_json",
+    # Diagnostics, tracing and IIS output: they observe a run, never shape it.
+    "track_convergence", "track_duals", "track_nonants", "track_xbars",
+    "track_reduced_costs", "tracking_folder", "ph_track_progress",
+    "xhatter_write_iis", "xhatter_iis_method", "xhatter_iis_dir",
+    "rc_debug", "rc_verbose", "tee_EF", "hub_only_solver_logs",
+    "inspect_buffers_on_shutdown", "fwph_save_file",
+    "write_scenario_lp_mps_files_dir", "config_file",
+    # Which cylinders run. The hub's primal trajectory does not depend on the
+    # spokes, so a checkpoint stays valid across a different spoke set -- and
+    # cylinder support will need this to be allowed.
+    "lagrangian", "lagranger", "xhatshuffle", "xhatxbar", "xhatspecific",
+    "xhatlshaped", "fwph", "subgradient", "ph_primal", "ph_dual",
+    "relaxed_ph", "reduced_costs", "cross_scenario_cuts",
 })
+
+
+def _is_non_structural(key):
+    """True when a cfg entry may differ between the write and the resume.
+
+    Beyond the explicit names above, every per-cylinder solver knob follows a
+    naming convention (``<cylinder>_solver_name``, ``_solver_options``,
+    ``_solver_options_file``, ``_mipgap``, ``_rank_ratio``), and enumerating
+    them by hand would go stale the moment a cylinder is added.
+    """
+    if key in NON_STRUCTURAL_CFG_KEYS:
+        return True
+    return key.endswith((
+        "_solver_name", "_solver_options", "_solver_options_file",
+        "_mipgap", "_rank_ratio", "_solver_log_dir",
+    ))
 
 
 class CheckpointMismatch(RuntimeError):
@@ -194,47 +227,6 @@ def probe_model_is_dillable(opt):
             s._solver_plugin = solver_plugin
 
 
-# The per-nonant Params that the pre-solve half of a PH iteration advances.
-# Caching these at enditer is O(nonants) -- cheap next to a model dill -- and
-# is enough to rewind an interrupted iteration to its last completed one.
-COHERENT_ITERATE_PARAMS = ("W", "xbars", "xsqbars", "z")
-
-
-def capture_iterate_params(opt):
-    """Snapshot the iterate Params that Compute_Xbar/Update_W/Update_z advance.
-
-    Returns a plain nested dict of floats -- no Pyomo objects -- so holding one
-    across an iteration costs nothing worth measuring.
-    """
-    cache = {}
-    for sname, s in opt.local_scenarios.items():
-        per_scenario = {}
-        for pname in COHERENT_ITERATE_PARAMS:
-            param = getattr(s._mpisppy_model, pname, None)
-            if param is None:
-                continue
-            per_scenario[pname] = {
-                ndn_i: param[ndn_i]._value
-                for ndn_i in s._mpisppy_data.nonant_indices
-            }
-        cache[sname] = per_scenario
-    return cache
-
-
-def restore_iterate_params(opt, cache):
-    """Write a snapshot from capture_iterate_params back onto the models."""
-    for sname, per_scenario in cache.items():
-        s = opt.local_scenarios.get(sname)
-        if s is None:
-            continue
-        for pname, values in per_scenario.items():
-            param = getattr(s._mpisppy_model, pname, None)
-            if param is None:
-                continue
-            for ndn_i, value in values.items():
-                param[ndn_i]._value = value
-
-
 def geometry(opt):
     """The rank layout a resume must reproduce (see design section 5.7)."""
     return {
@@ -317,11 +309,25 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
         lambda f: pickle.dump(leaf, f),
     )
 
-    if os.path.isdir(final_dir):
-        shutil.rmtree(final_dir)
-    os.replace(staging_dir, final_dir)
+
+    # Publishing order matters. The manifest is the commit point, so the
+    # generation it currently names must stay on disk and intact until the
+    # replacement is fully published -- otherwise a kill in between destroys
+    # the only checkpoint. Stage under a name nothing points at, publish, then
+    # sweep. Writing the same generation number twice therefore lands in a
+    # scratch directory first rather than deleting the live one.
+    scratch_dir = f"{final_dir}.incoming"
+    if os.path.isdir(scratch_dir):
+        shutil.rmtree(scratch_dir)
+    os.replace(staging_dir, scratch_dir)
 
     previous = _read_manifest(ckpt_dir, missing_ok=True)
+    # The old generation is still whole and still named by the old manifest;
+    # if we die here, that is what a resume finds.
+    if os.path.isdir(final_dir):
+        shutil.rmtree(final_dir, ignore_errors=True)
+    os.replace(scratch_dir, final_dir)
+
     _publish_manifest(ckpt_dir, {
         "format_version": FORMAT_VERSION,
         "backend": backend,
@@ -330,15 +336,29 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
         "structural_fingerprint": structural_fingerprint(opt.options),
     })
 
-    # Exactly one committed generation is kept; retaining more is not
-    # supported. Two exist only transiently, between the generation rename
-    # above and this delete.
-    if previous is not None and previous.get("generation") != int(generation):
-        stale = os.path.join(hub_dir, _generation_dirname(previous["generation"]))
-        if os.path.isdir(stale):
-            shutil.rmtree(stale, ignore_errors=True)
+    # Sweep everything the manifest does not name, rather than only the
+    # generation the previous manifest did. A kill between any two steps above
+    # can leave a directory behind, and deleting just the known predecessor
+    # would let those accumulate for the life of the run.
+    _sweep_stale_generations(hub_dir, keep=int(generation))
+    del previous
 
     return final_dir
+
+
+def _sweep_stale_generations(hub_dir, keep):
+    """Delete every generation directory except the one the manifest names."""
+    keep_name = _generation_dirname(keep)
+    try:
+        entries = os.listdir(hub_dir)
+    except OSError:
+        return
+    for name in entries:
+        if name == keep_name or not name.startswith("gen_"):
+            continue
+        path = os.path.join(hub_dir, name)
+        if os.path.isdir(path):
+            shutil.rmtree(path, ignore_errors=True)
 
 
 def _write_models(opt, staging_dir, rank, backend):

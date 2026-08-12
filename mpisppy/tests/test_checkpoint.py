@@ -21,13 +21,16 @@ producing nonsense, and that the initially-fixed-nonant baseline survives the
 model swap -- without it a resumed run silently stops updating its best bound.
 """
 
+import json
 import os
+import shutil
 import tempfile
 import unittest
 
 import mpisppy.utils.checkpointing as checkpointing
 import mpisppy.tests.examples.farmer as farmer
 from mpisppy.extensions.checkpointer import Checkpointer
+from mpisppy.extensions.extension import Extension
 from mpisppy.opt.ph import PH
 from mpisppy.tests.utils import get_solver
 from mpisppy.utils.config import Config
@@ -67,8 +70,107 @@ def _options(max_iters, ckpt_dir=None, resume_from=None, **overrides):
     return options
 
 
-def _make_ph(options, scenario_names=None):
-    extensions = Checkpointer if "checkpoint_dir" in options else None
+#: Long enough that iteration 1 always completes, short enough that the run
+#: stops well before the iteration limit. Farmer iterations are milliseconds.
+_LATE_TIME_LIMIT = 0.25
+
+
+def _published_generation(ckpt_dir):
+    """The generation the manifest names, or None if nothing was published."""
+    path = os.path.join(ckpt_dir, "manifest.json")
+    if not os.path.exists(path):
+        return None
+    with open(path) as f:
+        return json.load(f)["generation"]
+
+
+class StateRecorder(Extension):
+    """Record the primal state at exactly the points a checkpoint is written.
+
+    Lets a test say what the checkpoint *should* contain without reaching into
+    the Checkpointer, and without assuming the run's final state is the
+    checkpointed one -- for an early-break exit it deliberately is not.
+    """
+
+    def __init__(self, opt):
+        super().__init__(opt)
+        self.latest = None
+        self.latest_iteration = None
+
+    def _record(self):
+        self.latest = _primal_snapshot(self.opt)
+        self.latest_iteration = int(getattr(self.opt, "_PHIter", 0))
+
+    def post_iter0_after_sync(self):
+        self._record()
+
+    def enditer(self):
+        self._record()
+
+
+class MidIterMutator(Extension):
+    """Mutate model state in miditer, the way shipped extensions do.
+
+    `miditer` runs before every early break in `iterk_loop`, and real
+    extensions use it to change rho (the rho updaters), fix nonants (`fixer`,
+    `relaxed_ph_fixer`) or relax domains (`integer_relax_then_enforce`). Any
+    of those makes the pre-solve half of an iteration observable in the model.
+
+    Using a purpose-built extension rather than a shipped one keeps this test
+    about the *behavior* -- state moving mid-iteration -- instead of about a
+    particular extension's option schema, and makes it deterministic.
+    """
+
+    def miditer(self):
+        for s in self.opt.local_scenarios.values():
+            for ndn_i in s._mpisppy_data.nonant_indices:
+                s._mpisppy_model.rho[ndn_i]._value *= 1.05
+            if self.opt._PHIter == 2:
+                first = next(iter(s._mpisppy_data.nonant_indices.values()))
+                first.fix(first._value)
+
+
+def _extension_class(name):
+    if name is None:
+        return None
+    if name == "norm_rho":
+        from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
+        return NormRhoUpdater
+    if name == "miditer_mutator":
+        return MidIterMutator
+    if name == "recorder":
+        return StateRecorder
+    raise ValueError(name)
+
+
+def _make_ph(options, scenario_names=None, extension_name=None,
+             extra_names=()):
+    classes = []
+    if "checkpoint_dir" in options:
+        classes.append(Checkpointer)
+    for name in (extension_name,) + tuple(extra_names):
+        cls = _extension_class(name)
+        if cls is not None:
+            classes.append(cls)
+
+    extensions = None
+    extension_kwargs = None
+    if len(classes) == 1:
+        extensions = classes[0]
+    elif len(classes) > 1:
+        from mpisppy.extensions.extension import MultiExtension
+        extensions = MultiExtension
+        extension_kwargs = {"ext_classes": classes}
+    if extension_kwargs is not None:
+        return PH(
+            options,
+            scenario_names if scenario_names is not None else SCENARIO_NAMES,
+            farmer.scenario_creator,
+            farmer.scenario_denouement,
+            scenario_creator_kwargs=CREATOR_KWARGS,
+            extensions=extensions,
+            extension_kwargs=extension_kwargs,
+        )
     return PH(
         options,
         scenario_names if scenario_names is not None else SCENARIO_NAMES,
@@ -77,6 +179,16 @@ def _make_ph(options, scenario_names=None):
         scenario_creator_kwargs=CREATOR_KWARGS,
         extensions=extensions,
     )
+
+
+def _find_recorder(ph):
+    ext = ph.extobject
+    for candidate in getattr(ext, "extdict", {}).values():
+        if isinstance(candidate, StateRecorder):
+            return candidate
+    if isinstance(ext, StateRecorder):
+        return ext
+    raise AssertionError("no StateRecorder attached")
 
 
 def _primal_snapshot(ph):
@@ -291,6 +403,136 @@ class TestResumeRefusesMismatch(unittest.TestCase):
         resumed = _make_ph(options)
         resumed.ph_main()
         self.assertEqual(resumed._PHIter, 4)
+
+
+@unittest.skipIf(not solver_available,
+                 "no solver is available for the acceptance matrix")
+class TestResumeAcceptanceMatrix(unittest.TestCase):
+    """Every way a run can end, crossed with what can mutate state mid-loop.
+
+    This is the gate for the feature, not a spot check. The mechanism writes
+    only at iteration boundaries precisely so that none of these combinations
+    needs special handling -- so if any cell fails, the invariant is broken and
+    the answer is to fix the mechanism or refuse the configuration, not to add
+    a case to it.
+
+    Exit paths matter because `iterk_loop` can break *before* the solve (user
+    converger, convergence threshold, --time-limit) or after it (iteration
+    limit, cylinder convergence). Extensions matter because `miditer` runs
+    before those breaks and can change rho, fix variables, or relax domains.
+    """
+
+    N = 6
+
+    #: (label, option overrides, whether a checkpoint should be published)
+    #:
+    #: A checkpoint describes a completed PH iteration, so a run that ends
+    #: before finishing iteration 1 publishes nothing -- there is no iterate to
+    #: resume from. That is a guarantee worth pinning, not an accident.
+    EXITS = (
+        ("iteration limit", {}, True),
+        ("convergence", {"convthresh": 20.0}, True),
+        ("time limit, iteration 1", {"time_limit": 0.0}, False),
+        ("time limit, later", {"time_limit": _LATE_TIME_LIMIT}, True),
+    )
+
+    #: (label, option overrides, extension name or None, reproducible)
+    #:
+    #: `reproducible` says whether a resumed run can be expected to match an
+    #: uninterrupted one. It cannot when a stateful extension is attached: the
+    #: extension's own accumulated state is not part of the checkpoint (the
+    #: design schedules that separately, as the Extension
+    #: checkpoint_state/restore_state contract), so the resumed run's extension
+    #: starts fresh and the trajectories legitimately part company. Those cells
+    #: still assert the property this phase *does* guarantee -- that the
+    #: checkpoint round-trips exactly -- which is what tests the mechanism.
+    CONFIGS = (
+        ("plain PH", {}, None, True),
+        ("smoothing", {"smoothed": 2, "defaultPHp": 0.1, "defaultPHbeta": 0.1},
+         None, True),
+        ("linearized prox", {"linearize_proximal_terms": True}, None, True),
+        ("norm rho updater", {}, "norm_rho", False),
+        ("miditer rho + fixing", {}, "miditer_mutator", False),
+    )
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_matrix(self):
+        for exit_label, exit_opts, expect_ckpt in self.EXITS:
+            for cfg_label, cfg_opts, ext, reproducible in self.CONFIGS:
+                with self.subTest(exit=exit_label, config=cfg_label):
+                    self._one_cell(exit_opts, cfg_opts, ext, reproducible,
+                                   expect_ckpt)
+
+    def _one_cell(self, exit_opts, cfg_opts, ext, reproducible, expect_ckpt):
+        shutil.rmtree(self.ckpt_dir, ignore_errors=True)
+
+        stop_opts = _options(self.N, ckpt_dir=self.ckpt_dir, **cfg_opts)
+        stop_opts.update(exit_opts)
+        stopped = _make_ph(stop_opts, extension_name=ext,
+                           extra_names=("recorder",))
+        stopped.ph_main()
+        recorded = _find_recorder(stopped)
+
+        generation = _published_generation(self.ckpt_dir)
+        if not expect_ckpt:
+            self.assertIsNone(
+                generation,
+                msg="a checkpoint was published for a run that completed no "
+                    "PH iteration; there is no coherent iterate to save")
+            return
+        self.assertIsNotNone(
+            generation,
+            msg="the run ended without publishing any checkpoint")
+
+        # 1. The checkpoint must round-trip exactly. Resuming with no budget
+        #    left runs no iteration, so whatever state comes back is precisely
+        #    what was written -- which is the mechanism under test, and holds
+        #    whether or not any extension is stateful.
+        rt_opts = _options(generation, resume_from=self.ckpt_dir, **cfg_opts)
+        roundtrip = _make_ph(rt_opts, extension_name=ext)
+        roundtrip.ph_main()
+        self.assertEqual(roundtrip._PHIter, generation)
+
+        self.assertEqual(
+            recorded.latest_iteration, generation,
+            msg="the published generation is not the last completed iteration")
+        got = _primal_snapshot(roundtrip)
+        self.assertEqual(set(recorded.latest), set(got))
+        worst = max((abs(recorded.latest[k] - got[k])
+                     for k in recorded.latest), default=0.0)
+        self.assertEqual(
+            worst, 0.0,
+            msg=f"the checkpoint did not round-trip: restored state differs "
+                f"from what was written by {worst:.6e}")
+
+        if not reproducible:
+            return
+
+        # 2. With no stateful extension in play, a resumed run must also be
+        #    indistinguishable from one that was never interrupted.
+        resume_opts = _options(self.N, resume_from=self.ckpt_dir, **cfg_opts)
+        resumed = _make_ph(resume_opts, extension_name=ext)
+        resumed.ph_main()
+
+        ref_opts = _options(resumed._PHIter, **cfg_opts)
+        reference = _make_ph(ref_opts, extension_name=ext)
+        reference.ph_main()
+
+        want = _primal_snapshot(reference)
+        got = _primal_snapshot(resumed)
+        self.assertEqual(set(want), set(got))
+        worst = max((abs(want[k] - got[k]) for k in want), default=0.0)
+        self.assertEqual(
+            worst, 0.0,
+            msg=f"resumed run diverged from the uninterrupted reference by "
+                f"{worst:.6e}; the checkpoint did not describe a completed "
+                f"iteration")
 
 
 class TestSetupRefusals(unittest.TestCase):

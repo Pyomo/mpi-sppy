@@ -26,11 +26,23 @@ Give a directory and the run writes one checkpoint when it terminates::
       --time-limit 28800 \
       --checkpoint-dir ./ckpt
 
-``--checkpoint-at-termination`` is on by default, so the checkpoint is written
-when the run ends for *any* internal reason: convergence, ``--max-iterations``,
-or hitting ``--time-limit``. Pairing it with ``--time-limit`` is the planned-stop
-recipe above -- set the day's budget and the run stops itself and checkpoints.
-Turn it off with ``--disable-checkpoint-at-termination``.
+A checkpoint is written at the end of every completed PH iteration, and only
+one is kept, so the file on disk always describes the most recent *completed*
+iteration. Pairing ``--checkpoint-dir`` with ``--time-limit`` is the
+planned-stop recipe -- set the day's budget and the run stops itself with a
+resumable checkpoint in place.
+
+Writing only at iteration boundaries is deliberate. PH computes xbar, updates
+the dual weights, gives extensions their mid-iteration hook, and only then
+solves; a run that stops on ``--time-limit`` or on convergence stops *before*
+that solve, leaving the model describing half an iteration. Rather than try to
+unwind that -- an open-ended problem, since any extension may have changed rho,
+fixed variables or added cuts -- the checkpoint is simply taken at the last
+point where everything agrees.
+
+One consequence: **a run that ends before finishing iteration 1 publishes no
+checkpoint at all.** No iteration completed, so there is no iterate to resume
+from.
 
 Each write is bracketed by a pair of timestamped ``toc`` lines, so the log shows
 how long it took::
@@ -56,25 +68,30 @@ thrown away. Iteration numbering continues where it left off, so
 What must match, and what may change
 ------------------------------------
 
-A checkpoint records the layout it was written with and refuses to load into a
-run that does not match, rather than producing a subtly wrong answer. Resuming
-requires:
+A checkpoint records the configuration it was written with and refuses to load
+into a run that differs, rather than producing a subtly wrong answer. Resuming
+requires the same number of MPI ranks with the same scenarios on each, and a
+configuration that matches everywhere except a short list of settings a resume
+may legitimately change:
 
-* the same number of MPI ranks, and the same scenarios on each rank;
-* the same **structural** options -- the ones that change the shape of the
-  scenario models or the meaning of the state stored in them:
-  ``--default-rho``, ``--linearize-proximal-terms``,
-  ``--linearize-binary-proximal-terms``,
-  ``--proximal-linearization-tolerance``, the ``--smoothing`` settings, the
-  ``--cvar`` settings, ``--module-name``, ``--num-scens``,
-  ``--branching-factors``, and ``--scenarios-per-bundle``.
+* **the budget** -- ``--max-iterations``, ``--time-limit``, the gap and
+  stalling thresholds;
+* **solver choice and how it is driven** -- ``--solver-name``, solver options
+  and thread counts, mipgaps, and every per-cylinder solver setting. Tightening
+  a mipgap on day two continues the same problem rather than redefining it;
+* **display, tracking and output destinations**, and the checkpoint options
+  themselves;
+* **which cylinders run.** The hub's primal trajectory does not depend on the
+  spokes.
 
-Everything else is free to change. In particular **the iteration limit, the
-time limit, and the display/verbosity options may all differ** on a resume --
-picking a run back up with a different budget is the whole point, so those are
-deliberately outside the check.
+Everything else must match -- including options your own model module
+registers. That is deliberate: checking by default is what stops a farmer
+checkpoint from being resumed with ``--farmer-with-integers`` and quietly
+answering the linear program.
 
-A mismatch is reported with an explicit message naming what differs.
+The practical consequence is that a checkpoint is tied to the mpi-sppy and
+model version that wrote it. Adding a new option to your model module will
+cause existing checkpoints to be refused.
 
 What resume guarantees
 ----------------------
@@ -122,6 +139,8 @@ the pattern and the fix. Checkpointing checks one scenario at setup rather than
 discovering the problem hours later at the terminal checkpoint, and the error
 names the offending rule.
 
-**The terminal checkpoint runs after ``scenario_denouement``.** Standard
-denouement functions only report, but one that re-solves or mutates a model
-would have those changes captured in the checkpoint.
+**Extension state is not yet part of a checkpoint.** Extensions that
+accumulate their own state across iterations -- the rho updaters, ``fixer``,
+``slammer`` -- start fresh on a resumed run. The restored *model* state is
+correct, and the run continues correctly from it, but a resumed run using one
+of these will not follow the same trajectory as an uninterrupted one.
