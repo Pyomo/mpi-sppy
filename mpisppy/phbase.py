@@ -1160,6 +1160,32 @@ class PHBase(mpisppy.spopt.SPOpt):
             s._mpisppy_data.outer_bound = md["iter0_outer_bound"]
             s._mpisppy_data.inner_bound = md["iter0_inner_bound"]
 
+    def _restore_prox_approx_state(self):
+        """Set the prox-approximation state that the skipped attach would have.
+
+        ``attach_PH_to_objective`` does two separable things: it mutates the
+        subproblem objectives, and it records on *this object* whether the
+        proximal term is being linearized and at what tolerance. A resume must
+        skip the first (the reloaded model already carries the spliced
+        objective and its cuts) but still needs the second: ``_prox_approx``
+        gates ``_update_prox_approx``, so leaving it False means no new cut is
+        ever added and the resumed run stays frozen on the checkpoint's cut
+        set, drifting further out of tune as x moves. It also feeds
+        ``_prox_is_quadratic``, which decides whether to reject an LP-only
+        solver -- exactly the solver a linearized run is likely using.
+
+        Kept in step with the corresponding block of ``attach_PH_to_objective``.
+        """
+        if not self.options.get("linearize_proximal_terms", False):
+            self._prox_approx = False
+            return
+        self._prox_approx = True
+        self.prox_approx_tol = self.options.get(
+            "proximal_linearization_tolerance", 1.e-1)
+        # The tolerance is applied to x-coordinates, so it is the square root
+        # of the y-coordinate tolerance the user supplied.
+        self.prox_approx_tol = math.sqrt(self.prox_approx_tol)
+
     def _restore_from_checkpoint_if_resuming(self):
         """Splice a checkpoint's scenario models into this run, if resuming.
 
@@ -1200,10 +1226,21 @@ class PHBase(mpisppy.spopt.SPOpt):
         # cuts, so letting it run would double the W terms and duplicate the
         # prox components.
         self._deferred_ph_attach = False
+        # But that call also sets state on *this object*, not just on the
+        # models, and skipping it would leave the run without it: _prox_approx
+        # gates whether new proximal-approximation cuts get added at all, so a
+        # resumed run would be frozen on the checkpoint's cut set for good.
+        self._restore_prox_approx_state()
 
         self._checkpoint_leaf_state = leaf
         self._resumed_from_checkpoint = True
         self._resume_iteration = int(leaf["generation"])
+        # Start the counter at the checkpointed iteration rather than 0. If the
+        # resumed loop turns out to have nothing to do -- the user resumed
+        # without raising --max-iterations -- _PHIter must still read as the
+        # iteration we are actually at, or a terminal write would republish the
+        # run as generation 0 and delete the real checkpoint.
+        self._PHIter = self._resume_iteration
         global_toc(f"Resuming from checkpoint in {ckpt_dir} "
                    f"(iteration {self._resume_iteration})",
                    self.cylinder_rank == 0)
@@ -1312,6 +1349,14 @@ class PHBase(mpisppy.spopt.SPOpt):
             restored_bound = self._checkpoint_leaf_state["best_bound_obj_val"]
             if restored_bound is not None:
                 self.best_bound_obj_val = restored_bound
+            # Without this the incumbent objective reads as None, which
+            # update_best_solution_if_improving treats as "accept anything" --
+            # so the first xhat after a resume, however bad, would replace the
+            # checkpointed best solution.
+            restored_incumbent = \
+                self._checkpoint_leaf_state["best_solution_obj_val"]
+            if restored_incumbent is not None:
+                self.best_solution_obj_val = restored_incumbent
         else:
             self.trivial_bound = self.Ebound(verbose)
             if self.trivial_bound is not None and self._can_update_best_bound():
@@ -1340,7 +1385,10 @@ class PHBase(mpisppy.spopt.SPOpt):
         check_rhos_positive(self, source="after Iter0 rho setup")
 
         ## If ratio: Add reset p according to rho
-        if smooth_type == 2:
+        # Skipped on a resume for the same reason as the rho_setter above: the
+        # reloaded model already carries the scaled p, and rescaling would
+        # compound it by a further factor of rho on every resume.
+        if smooth_type == 2 and not self._resumed_from_checkpoint:
             for _, scenario in self.local_scenarios.items():
                 for ndn_i, _ in scenario._mpisppy_data.nonant_indices.items():
                         scenario._mpisppy_model.p[ndn_i] *= scenario._mpisppy_model.rho[ndn_i]

@@ -168,6 +168,67 @@ class TestResumeABFarmer(unittest.TestCase):
         _, resumed = self._run_b()
         self.assertEqual(reference.trivial_bound, resumed.trivial_bound)
 
+    def test_early_break_exit_resumes_coherently(self):
+        """The exit the planned-stop recipe actually takes.
+
+        iterk_loop computes xbar, updates W, *may break* (user converger,
+        convergence threshold, --time-limit), and only then solves. Exiting
+        through one of those breaks leaves W at iteration k while the nonants
+        are still at k-1. Checkpointing that state and resuming applies the
+        dual update to the same iterate twice and skips a solve.
+
+        The other A/B tests here set convthresh = -1.0 so the run never
+        converges, which means they only ever exercise the clean
+        iteration-limit exit. This one converges on purpose.
+        """
+        stopped = _make_ph(_options(20, ckpt_dir=self.ckpt_dir,
+                                    convthresh=20.0))
+        stopped.ph_main()
+        self.assertLess(stopped._PHIter, 20,
+                        msg="test did not exit through an early break")
+
+        resumed = _make_ph(_options(self.N, resume_from=self.ckpt_dir))
+        resumed.ph_main()
+
+        reference = _make_ph(_options(self.N))
+        reference.ph_main()
+
+        want = _primal_snapshot(reference)
+        got = _primal_snapshot(resumed)
+        for key in want:
+            self.assertEqual(
+                want[key], got[key],
+                msg=f"{key} differs after resuming a run that exited through "
+                    f"an early break: {want[key]} vs {got[key]}")
+
+    def test_empty_resume_does_not_republish_as_generation_zero(self):
+        """Resuming without raising --max-iterations must not destroy state.
+
+        The resumed loop has nothing to do, so _PHIter would otherwise stay at
+        its initial 0, and a terminal write would publish generation 0 and
+        delete the real checkpoint -- losing the run.
+        """
+        _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir)).ph_main()
+
+        resumed = _make_ph(_options(self.STOP, resume_from=self.ckpt_dir,
+                                    ckpt_dir=self.ckpt_dir))
+        resumed.ph_main()
+        self.assertEqual(resumed._PHIter, self.STOP)
+        generations = os.listdir(os.path.join(self.ckpt_dir, "hub"))
+        self.assertEqual(generations, [f"gen_{self.STOP:04d}"])
+
+    def test_incumbent_objective_is_restored(self):
+        """Otherwise it reads as None and any later xhat is accepted."""
+        stopped = _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir))
+        stopped.ph_main()
+        stopped.best_solution_obj_val = -110000.0
+        checkpointing.write_checkpoint(stopped, self.ckpt_dir, self.STOP)
+
+        resumed = _make_ph(_options(self.N, resume_from=self.ckpt_dir))
+        resumed.ph_main()
+        self.assertEqual(resumed._checkpoint_leaf_state["best_solution_obj_val"],
+                         -110000.0)
+
     def test_writes_one_generation_and_a_manifest(self):
         """Retention is exactly one published generation."""
         _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir)).ph_main()
@@ -175,6 +236,14 @@ class TestResumeABFarmer(unittest.TestCase):
             os.path.exists(os.path.join(self.ckpt_dir, "manifest.json")))
         generations = os.listdir(os.path.join(self.ckpt_dir, "hub"))
         self.assertEqual(generations, [f"gen_{self.STOP:04d}"])
+
+    def test_retention_deletes_the_previous_generation(self):
+        """Writing a second generation must remove the first, not accumulate."""
+        opt = _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir))
+        opt.ph_main()
+        checkpointing.write_checkpoint(opt, self.ckpt_dir, self.STOP + 1)
+        generations = sorted(os.listdir(os.path.join(self.ckpt_dir, "hub")))
+        self.assertEqual(generations, [f"gen_{self.STOP + 1:04d}"])
 
 
 @unittest.skipIf(not solver_available,
@@ -222,6 +291,44 @@ class TestResumeRefusesMismatch(unittest.TestCase):
         resumed = _make_ph(options)
         resumed.ph_main()
         self.assertEqual(resumed._PHIter, 4)
+
+
+class TestSetupRefusals(unittest.TestCase):
+    """Unsupported configurations must fail at setup, not hours in."""
+
+    def _stub(self, n_proc=1, backend=checkpointing.DILL_RELOAD_BACKEND):
+        import types
+        return types.SimpleNamespace(
+            options={"checkpoint_dir": tempfile.mkdtemp(),
+                     "checkpoint_backend": backend,
+                     "checkpoint_at_termination": True},
+            n_proc=n_proc, cylinder_rank=0, local_scenarios={})
+
+    def test_unimplemented_backend_is_refused_at_setup(self):
+        with self.assertRaises(RuntimeError) as ctx:
+            Checkpointer(self._stub(backend="leaf"))
+        self.assertIn("not implemented", str(ctx.exception))
+
+    def test_multirank_is_refused_at_setup(self):
+        with self.assertRaises(RuntimeError) as ctx:
+            Checkpointer(self._stub(n_proc=2))
+        self.assertIn("single rank", str(ctx.exception))
+
+    def test_unwritable_directory_is_refused_at_setup(self):
+        stub = self._stub()
+        stub.options["checkpoint_dir"] = os.path.join(
+            tempfile.gettempdir(), "mpisppy_no_such_parent", "x", "y")
+        os.makedirs(os.path.dirname(os.path.dirname(
+            stub.options["checkpoint_dir"])), exist_ok=True)
+        ro = os.path.dirname(stub.options["checkpoint_dir"])
+        os.makedirs(ro, exist_ok=True)
+        os.chmod(ro, 0o500)
+        try:
+            with self.assertRaises(RuntimeError) as ctx:
+                Checkpointer(stub)
+            self.assertIn("Cannot write", str(ctx.exception))
+        finally:
+            os.chmod(ro, 0o700)
 
 
 class TestStructuralFingerprint(unittest.TestCase):

@@ -47,9 +47,41 @@ class Checkpointer(Extension):
                 "Checkpointer was attached without a checkpoint directory. "
                 "It should only be attached when --checkpoint-dir is set."
             )
-        # Fail at setup rather than after a multi-hour run reaches its first
-        # write and discovers the backend is unusable.
+        # Everything below fails at setup rather than after a multi-hour run
+        # reaches its first write and discovers it cannot finish one.
+        if self.backend != ckpt.DILL_RELOAD_BACKEND:
+            raise RuntimeError(
+                f"--checkpoint-backend '{self.backend}' is not implemented. "
+                f"The only supported backend is "
+                f"'{ckpt.DILL_RELOAD_BACKEND}'."
+            )
         ckpt.require_dill(self.backend)
+
+        # Multi-rank writing is not implemented: every rank would compute the
+        # same staging and generation directory and race to create, replace and
+        # delete it, so ranks destroy each other's files. Refuse rather than
+        # abort the job at its very end with a half-published generation.
+        if getattr(opt, "n_proc", 1) > 1:
+            raise RuntimeError(
+                f"Checkpointing currently supports a single rank, but this "
+                f"run has {opt.n_proc}. Multi-rank checkpointing is planned; "
+                f"until then, drop --checkpoint-dir or run on one rank."
+            )
+
+        # Create and probe the directory now. Discovering at the terminal
+        # write that the path is unwritable would raise out of finalization
+        # and take the run's other output (solution files) with it.
+        try:
+            os.makedirs(self.ckpt_dir, exist_ok=True)
+            probe = os.path.join(self.ckpt_dir, ".mpisppy_write_probe")
+            with open(probe, "w"):
+                pass
+            os.remove(probe)
+        except OSError as exc:
+            raise RuntimeError(
+                f"Cannot write to the checkpoint directory "
+                f"'{self.ckpt_dir}' ({type(exc).__name__}: {exc})."
+            ) from exc
 
     def _write(self, why):
         """Write one generation, bracketed by toc so the cost is legible.
@@ -74,10 +106,25 @@ class Checkpointer(Extension):
         # state it was trying to preserve.
         ckpt.probe_model_is_dillable(self.opt)
 
-    def post_everything(self):
+    def enditer(self):
+        """Snapshot at the one point in the iteration where state is coherent.
+
+        ``iterk_loop`` runs Compute_Xbar, then Update_W, then *may break* --
+        on the user converger, the convergence threshold, or ``--time-limit``
+        -- and only then solves. An exit through any of those breaks leaves the
+        dual weights advanced to iteration k while the nonanticipative values
+        are still those of iteration k-1's solve. Checkpointing that state and
+        resuming from it would apply the dual update to the same iterate twice
+        and skip iteration k's solve entirely.
+
+        ``enditer`` fires after the solve, so W and the nonants are both at
+        iteration k. Writing here means the checkpoint always describes a
+        completed iteration, whatever the run exits on -- which matters most
+        for the planned-stop recipe, since ``--time-limit`` exits through
+        exactly one of those early breaks.
+
+        Retention is a single generation, so each write replaces the last.
+        """
         if not self.at_termination:
             return
-        # post_everything runs after scenario_denouement. Standard denouements
-        # only report, but one that re-solves or mutates a model would be
-        # captured in this checkpoint.
-        self._write("termination")
+        self._write("iteration complete")
