@@ -41,6 +41,10 @@ class Checkpointer(Extension):
         self.backend = options.get("checkpoint_backend",
                                    ckpt.DILL_RELOAD_BACKEND)
         self.at_termination = options.get("checkpoint_at_termination", True)
+        # Iterate Params as of the last *completed* iteration, plus which
+        # iteration that was. See enditer.
+        self._coherent = None
+        self._coherent_iteration = None
 
         if self.ckpt_dir is None:
             raise RuntimeError(
@@ -83,7 +87,35 @@ class Checkpointer(Extension):
                 f"'{self.ckpt_dir}' ({type(exc).__name__}: {exc})."
             ) from exc
 
-    def _write(self, why):
+    def post_everything(self):
+        if not self.at_termination:
+            return
+
+        # If the loop broke after Update_W but before the solve, the live
+        # models describe half an iteration. Rewind to the last completed one
+        # for the duration of the write, then put the live values back --
+        # post_loops computes Eobjective after this hook, and it should report
+        # the run's actual final state.
+        current = self._PHIter_now()
+        rewound = (self._coherent is not None
+                   and self._coherent_iteration is not None
+                   and current > self._coherent_iteration)
+        live = None
+        if rewound:
+            live = ckpt.capture_iterate_params(self.opt)
+            ckpt.restore_iterate_params(self.opt, self._coherent)
+        try:
+            self._write("termination",
+                        generation=(self._coherent_iteration if rewound
+                                    else current))
+        finally:
+            if live is not None:
+                ckpt.restore_iterate_params(self.opt, live)
+
+    def _PHIter_now(self):
+        return int(getattr(self.opt, "_PHIter", 0))
+
+    def _write(self, why, generation):
         """Write one generation, bracketed by toc so the cost is legible.
 
         The pair of timestamps *is* the measured write duration, which is what
@@ -91,7 +123,6 @@ class Checkpointer(Extension):
         trigger -- mpi-sppy deliberately does not estimate that cost for them.
         """
         rank0 = self.opt.cylinder_rank == 0
-        generation = int(getattr(self.opt, "_PHIter", 0))
         os.makedirs(self.ckpt_dir, exist_ok=True)
         global_toc(f"Writing checkpoint ({why}) at iteration {generation} "
                    f"to {self.ckpt_dir}", rank0)
@@ -107,24 +138,23 @@ class Checkpointer(Extension):
         ckpt.probe_model_is_dillable(self.opt)
 
     def enditer(self):
-        """Snapshot at the one point in the iteration where state is coherent.
+        """Cache the iterate at the one point in the loop where it is coherent.
 
-        ``iterk_loop`` runs Compute_Xbar, then Update_W, then *may break* --
-        on the user converger, the convergence threshold, or ``--time-limit``
-        -- and only then solves. An exit through any of those breaks leaves the
+        ``iterk_loop`` runs Compute_Xbar, then Update_W, then *may break* -- on
+        the user converger, the convergence threshold, or ``--time-limit`` --
+        and only then solves. An exit through any of those breaks leaves the
         dual weights advanced to iteration k while the nonanticipative values
-        are still those of iteration k-1's solve. Checkpointing that state and
-        resuming from it would apply the dual update to the same iterate twice
-        and skip iteration k's solve entirely.
+        are still those of iteration k-1's solve. Checkpointing that and
+        resuming would apply the dual update to the same iterate twice and skip
+        iteration k's solve entirely. ``--time-limit`` -- the planned-stop
+        recipe -- exits through one of those breaks every time.
 
-        ``enditer`` fires after the solve, so W and the nonants are both at
-        iteration k. Writing here means the checkpoint always describes a
-        completed iteration, whatever the run exits on -- which matters most
-        for the planned-stop recipe, since ``--time-limit`` exits through
-        exactly one of those early breaks.
-
-        Retention is a single generation, so each write replaces the last.
+        ``enditer`` fires after the solve, so W and the nonants agree here.
+        Rather than write a full checkpoint every iteration, which for large
+        MIP models would mean dilling every scenario on every iteration, this
+        caches only the per-nonant Params the pre-solve half of the loop
+        advances. That is O(nonants) of plain floats, and it is everything the
+        terminal write needs to rewind an interrupted iteration.
         """
-        if not self.at_termination:
-            return
-        self._write("iteration complete")
+        self._coherent = ckpt.capture_iterate_params(self.opt)
+        self._coherent_iteration = int(getattr(self.opt, "_PHIter", 0))

@@ -181,6 +181,47 @@ def probe_model_is_dillable(opt):
             s._solver_plugin = solver_plugin
 
 
+# The per-nonant Params that the pre-solve half of a PH iteration advances.
+# Caching these at enditer is O(nonants) -- cheap next to a model dill -- and
+# is enough to rewind an interrupted iteration to its last completed one.
+COHERENT_ITERATE_PARAMS = ("W", "xbars", "xsqbars", "z")
+
+
+def capture_iterate_params(opt):
+    """Snapshot the iterate Params that Compute_Xbar/Update_W/Update_z advance.
+
+    Returns a plain nested dict of floats -- no Pyomo objects -- so holding one
+    across an iteration costs nothing worth measuring.
+    """
+    cache = {}
+    for sname, s in opt.local_scenarios.items():
+        per_scenario = {}
+        for pname in COHERENT_ITERATE_PARAMS:
+            param = getattr(s._mpisppy_model, pname, None)
+            if param is None:
+                continue
+            per_scenario[pname] = {
+                ndn_i: param[ndn_i]._value
+                for ndn_i in s._mpisppy_data.nonant_indices
+            }
+        cache[sname] = per_scenario
+    return cache
+
+
+def restore_iterate_params(opt, cache):
+    """Write a snapshot from capture_iterate_params back onto the models."""
+    for sname, per_scenario in cache.items():
+        s = opt.local_scenarios.get(sname)
+        if s is None:
+            continue
+        for pname, values in per_scenario.items():
+            param = getattr(s._mpisppy_model, pname, None)
+            if param is None:
+                continue
+            for ndn_i, value in values.items():
+                param[ndn_i]._value = value
+
+
 def geometry(opt):
     """The rank layout a resume must reproduce (see design section 5.7)."""
     return {
