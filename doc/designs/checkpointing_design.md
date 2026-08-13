@@ -7,6 +7,15 @@ a design that was tried, failed, and was replaced. Scope: checkpoint a
 running mpi-sppy job so it can be stopped and resumed later. Must work on multiple
 MPI ranks and for cylinder (hub-and-spoke) runs.
 
+**Companion notes** (`notes/`):
+
+- [`checkpointing_decisions.md`](notes/checkpointing_decisions.md) — what was
+  tried and rejected, with the measurements. Read this before proposing a
+  simplification; several of the obvious ones were built and removed.
+- [`pyomo_configvalue_pickle.md`](notes/pyomo_configvalue_pickle.md) — the
+  upstream Pyomo bug that makes some scenario models unserializable, and why
+  it is not a dill quirk.
+
 ---
 
 ## 1. Goals and non-goals
