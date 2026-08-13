@@ -11,7 +11,9 @@
 The load-bearing test is the A/B harness: run A is an uninterrupted run of N
 iterations; run B stops at k < N with a checkpoint, then resumes and continues
 to N. On farmer -- a deterministic LP -- the two must agree bit-for-bit, which
-is the strong "nothing was lost" check.
+is the strong "nothing was lost" check. (The acceptance matrix, whose stop
+generation is timing-dependent, allows last-bit solver noise; see the comment
+at its final assertion.)
 
 The rest pin the things that would make a resume quietly wrong rather than
 loudly broken: that resume does not solve the fresh models at iteration 0
@@ -26,6 +28,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 
 import mpisppy.utils.checkpointing as checkpointing
 import mpisppy.tests.examples.farmer as farmer
@@ -129,6 +132,16 @@ class MidIterMutator(Extension):
                 first.fix(first._value)
 
 
+class PreIter0Tagger(Extension):
+    """Tag the models pre_iter0 sees, so a test can tell whether the hook ran
+    on the models the run actually iterates or on fresh ones a resume splice
+    discarded."""
+
+    def pre_iter0(self):
+        for s in self.opt.local_scenarios.values():
+            s._pre_iter0_saw_this_model = True
+
+
 def _extension_class(name):
     if name is None:
         return None
@@ -139,6 +152,11 @@ def _extension_class(name):
         return MidIterMutator
     if name == "recorder":
         return StateRecorder
+    if name == "coeff_rho":
+        from mpisppy.extensions.coeff_rho import CoeffRho
+        return CoeffRho
+    if name == "pre_tagger":
+        return PreIter0Tagger
     raise ValueError(name)
 
 
@@ -574,8 +592,15 @@ class TestResumeAcceptanceMatrix(unittest.TestCase):
         got = _primal_snapshot(resumed)
         self.assertEqual(set(want), set(got))
         worst = max((abs(want[k] - got[k]) for k in want), default=0.0)
-        self.assertEqual(
-            worst, 0.0,
+        # Not exactly 0.0: a persistent solver that was set_instance'd fresh
+        # (the resumed leg) can return a last-bit-different vertex than one
+        # updated in place (the reference), measured at 8e-13 on farmer with
+        # linearized prox resumed from generation 5. The broken-checkpoint
+        # failures this cell exists to catch measured 37.8 and 330, so 1e-9
+        # separates the two cleanly. The round-trip check above stays exact:
+        # serialization has no solver in the loop.
+        self.assertLessEqual(
+            worst, 1e-9,
             msg=f"resumed run diverged from the uninterrupted reference by "
                 f"{worst:.6e}; the checkpoint did not describe a completed "
                 f"iteration")
@@ -626,6 +651,34 @@ class TestSetupRefusals(unittest.TestCase):
         with self.assertRaises(RuntimeError) as ctx:
             Checkpointer(NotPH())
         self.assertIn("synchronous PH hub", str(ctx.exception))
+
+    def test_non_ph_hub_resume_is_refused(self):
+        """The read-side counterpart of the write-side hub-type refusal.
+
+        A resume-only run never constructs a Checkpointer, so without this
+        check `--APH --resume-from` would splice a PH checkpoint into APH --
+        which attaches its own Params to the models the splice discards and
+        iterates a hardcoded range(1, ...) that ignores the resume offset --
+        with no error at startup.
+        """
+        import mpisppy.phbase
+
+        class NotPH(mpisppy.phbase.PHBase):
+            def __init__(self):        # the refusal fires before any load
+                self.options = {"resume_from": tempfile.mkdtemp()}
+
+        self.assertNotIsInstance(NotPH(), PH)
+        with self.assertRaises(RuntimeError) as ctx:
+            NotPH()._restore_from_checkpoint_if_resuming()
+        self.assertIn("synchronous PH hub", str(ctx.exception))
+
+    def test_colliding_scenario_filenames_are_refused_at_setup(self):
+        stub = self._stub()
+        model = next(iter(stub.local_scenarios.values()))
+        stub.local_scenarios = {"scen 1": model, "scen_1": model}
+        with self.assertRaises(RuntimeError) as ctx:
+            Checkpointer(stub)
+        self.assertIn("checkpoint file names", str(ctx.exception))
 
     def test_unimplemented_backend_is_refused_at_setup(self):
         with self.assertRaises(RuntimeError) as ctx:
@@ -833,6 +886,17 @@ class TestFilenameSanitizing(unittest.TestCase):
     def test_path_separators_are_removed(self):
         self.assertNotIn("/", checkpointing.sanitize_for_filename("a/b c"))
 
+    def test_colliding_names_are_refused(self):
+        """'scen 1' and 'scen_1' both sanitize to 'scen_1'; writing both would
+        silently land in one file and a resume would restore one scenario's
+        model for both."""
+        with self.assertRaises(RuntimeError) as ctx:
+            checkpointing.check_filename_collisions(["scen 1", "scen_1"])
+        self.assertIn("scen_1", str(ctx.exception))
+
+    def test_distinct_names_pass(self):
+        checkpointing.check_filename_collisions(SCENARIO_NAMES)
+
 
 class TestFixedNonantBaseline(unittest.TestCase):
     """The initially-fixed baseline must survive the model swap, by name.
@@ -860,12 +924,12 @@ class TestFixedNonantBaseline(unittest.TestCase):
         # gate is actually consulted in.
         self.ph = _make_ph(_options(1))
         self.ph.PH_Prep()
-        scenario = next(iter(self.ph.local_scenarios.values()))
+        self.sname, scenario = next(iter(self.ph.local_scenarios.items()))
         self.nonant = next(iter(scenario._mpisppy_data.nonant_indices.values()))
         self.nonant.fix(self.nonant._value if self.nonant._value else 0.0)
 
     def test_baseline_by_name_allows_bound_updates(self):
-        self.ph._restore_fixed_nonant_baseline([self.nonant.name])
+        self.ph._restore_fixed_nonant_baseline({self.sname: [self.nonant.name]})
         self.assertTrue(
             self.ph._can_update_best_bound(),
             msg="a nonant fixed before the run started must stay part of the "
@@ -873,7 +937,7 @@ class TestFixedNonantBaseline(unittest.TestCase):
 
     def test_lost_baseline_would_block_bound_updates(self):
         """What an identity-keyed cache degrades to after a swap."""
-        self.ph._restore_fixed_nonant_baseline([])
+        self.ph._restore_fixed_nonant_baseline({})
         self.assertFalse(self.ph._can_update_best_bound())
 
     def test_midrun_fixings_are_not_absorbed_into_the_baseline(self):
@@ -885,19 +949,191 @@ class TestFixedNonantBaseline(unittest.TestCase):
         midrun.fix(midrun._value if midrun._value else 0.0)
 
         # Only the original is in the checkpointed baseline.
-        self.ph._restore_fixed_nonant_baseline([self.nonant.name])
+        self.ph._restore_fixed_nonant_baseline({self.sname: [self.nonant.name]})
         self.assertFalse(
             self.ph._can_update_best_bound(),
             msg="a mid-run fixing was treated as originally fixed, which "
                 "would admit a bound the uninterrupted run would refuse")
 
+    def test_baseline_does_not_smear_across_scenarios(self):
+        """Pyomo component names are not scenario-qualified: every scenario's
+        first-stage x is literally named the same. The baseline must key by
+        scenario, or one scenario's initial fixing would absorb the same-named
+        nonant of every other scenario."""
+        other_sname, other_scen = next(
+            (k, s) for k, s in self.ph.local_scenarios.items()
+            if k != self.sname)
+        twin = next(v for v in other_scen._mpisppy_data.nonant_indices.values()
+                    if v.name == self.nonant.name)
+        self.assertIsNot(twin, self.nonant)
+        twin.fix(twin._value if twin._value else 0.0)
+
+        # The checkpoint recorded the fixing in self.sname only.
+        self.ph._restore_fixed_nonant_baseline({self.sname: [self.nonant.name]})
+        self.assertFalse(
+            self.ph._can_update_best_bound(),
+            msg="a nonant fixed in one scenario passed as originally fixed "
+                "in another, which would admit a bound the uninterrupted run "
+                "would refuse")
+
     def test_rebuilt_baseline_holds_current_model_objects(self):
         """Rebuilt by name means the objects belong to the live models."""
-        self.ph._restore_fixed_nonant_baseline([self.nonant.name])
+        self.ph._restore_fixed_nonant_baseline({self.sname: [self.nonant.name]})
         live = {id(v) for s in self.ph.local_scenarios.values()
                 for v in s._mpisppy_data.nonant_indices.values()}
         for v in self.ph._initial_fixed_varibles:
             self.assertIn(id(v), live)
+
+
+class TestProxCapabilityChecksOnResume(unittest.TestCase):
+    """The issue-#762 checks must fire on the first solve of a resumed leg.
+
+    ``solver_name`` is deliberately exempt from the resume fingerprint, so a
+    resume is exactly when a quadratic-prox run may find itself on an LP-only
+    solver. Gated on iteration 1 alone, the checks would never fire on a
+    resumed run (its loop starts at ``_resume_iteration + 1 >= 2``) and the
+    user would get the cryptic solver failure the checks exist to replace.
+    """
+
+    def setUp(self):
+        self.ph = _make_ph(_options(1))
+        self.ph.PH_Prep()
+        # The gate under test is the iteration condition; force the
+        # quadratic-prox condition true and the solve outcome to "no solution
+        # anywhere", the state an LP-only solver leaves behind.
+        self.ph._prox_is_quadratic = lambda: True
+        for s in self.ph.local_scenarios.values():
+            s._mpisppy_data.solution_available = False
+        self.ph._resume_iteration = 3
+
+    def test_reactive_check_fires_on_first_resumed_iteration(self):
+        self.ph._PHIter = 4
+        with self.assertRaises(RuntimeError) as ctx:
+            self.ph._check_prox_solve_succeeded()
+        self.assertIn("quadratic", str(ctx.exception))
+
+    def test_reactive_check_is_quiet_after_the_first_leg_solve(self):
+        self.ph._PHIter = 5
+        self.ph._check_prox_solve_succeeded()  # must not raise
+
+    def test_reraise_wrap_fires_on_first_resumed_iteration(self):
+        self.ph._PHIter = 4
+        with self.assertRaises(RuntimeError) as ctx:
+            self.ph._reraise_as_prox_capability_error(ValueError("boom"))
+        self.assertIn("quadratic", str(ctx.exception))
+
+
+class TestConfigureExtensionsComposes(unittest.TestCase):
+    """configure_extensions must compose with what is already attached.
+
+    It used to rebuild the extension list from scratch whenever one of its
+    own flags was set, silently dropping anything attached earlier -- the
+    Checkpointer included, which turned --checkpoint-dir plus --wtracker into
+    a startup refusal (or, off the guarded path, a run that wrote nothing).
+    """
+
+    def test_checkpointer_survives_ext_class_flags(self):
+        from mpisppy.generic.parsing import add_decomp_args
+        from mpisppy.generic.extensions import configure_extensions
+        from mpisppy.generic.decomp import _check_checkpointing_survived
+        from mpisppy.extensions.extension import MultiExtension
+        from mpisppy.extensions.wtracker_extension import Wtracker_extension
+
+        cfg = Config()
+        add_decomp_args(cfg)
+        # Registered by parsing outside add_decomp_args; configure_extensions
+        # reads it, so the test supplies it the way the driver does.
+        cfg.add_to_config(name="write_scenario_lp_mps_files_dir",
+                          description="", domain=str, default=None)
+        cfg.checkpoint_dir = "/tmp/whatever"
+        cfg.wtracker = True
+
+        hub_dict = {"opt_kwargs": {"options": {},
+                                   "extensions": Checkpointer,
+                                   "extension_kwargs": None}}
+        configure_extensions(hub_dict, None, cfg)
+
+        self.assertIs(hub_dict["opt_kwargs"]["extensions"], MultiExtension)
+        classes = hub_dict["opt_kwargs"]["extension_kwargs"]["ext_classes"]
+        self.assertIn(Checkpointer, classes)
+        self.assertIn(Wtracker_extension, classes)
+        _check_checkpointing_survived(hub_dict, cfg)  # the guard agrees
+
+
+@unittest.skipIf(not solver_available,
+                 "no solver is available for the resume behavior tests")
+class TestResumeExtensionBehavior(unittest.TestCase):
+    """Extension hooks at the resume boundary act on the checkpointed state."""
+
+    STOP = 3
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_rho_extension_keeps_checkpointed_rho(self):
+        """CoeffRho stands in for the rho-setting extensions: its post_iter0
+        recomputes rho from the objective coefficients, which on a resume
+        would clobber the adapted rho the checkpoint carries (the mutator's
+        compounding scaling makes the two distinguishable)."""
+        stopped = _make_ph(
+            _options(self.STOP, ckpt_dir=self.ckpt_dir),
+            extension_name="coeff_rho", extra_names=("miditer_mutator",))
+        stopped.ph_main()
+
+        # max_iterations == STOP makes this an empty resume: Iter0 restores,
+        # the loop body never runs, so what remains is exactly the splice.
+        resumed = _make_ph(_options(self.STOP, resume_from=self.ckpt_dir),
+                           extension_name="coeff_rho")
+        resumed.ph_main()
+
+        self.assertEqual(
+            _primal_snapshot(resumed), _primal_snapshot(stopped),
+            msg="the resumed state differs from the checkpointed state; a "
+                "rho extension recomputed rho across the resume")
+
+    def test_pre_iter0_runs_on_the_restored_models(self):
+        stopped = _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir))
+        stopped.ph_main()
+
+        resumed = _make_ph(_options(self.STOP, resume_from=self.ckpt_dir),
+                           extension_name="pre_tagger")
+        resumed.ph_main()
+
+        for sname, s in resumed.local_scenarios.items():
+            self.assertTrue(
+                getattr(s, "_pre_iter0_saw_this_model", False),
+                msg=f"pre_iter0 ran on a model that the resume splice then "
+                    f"discarded (scenario {sname}), so its effects were lost")
+
+    def test_midrun_write_failure_does_not_kill_the_run(self):
+        """A transient write failure warns and continues; the previously
+        published generation stays resumable and later iterations retry."""
+        calls = {"n": 0}
+        real = checkpointing.write_checkpoint
+
+        def flaky(opt, ckpt_dir, generation, backend):
+            calls["n"] += 1
+            if calls["n"] > 1:
+                raise RuntimeError("synthetic ENOSPC")
+            return real(opt, ckpt_dir, generation, backend=backend)
+
+        with mock.patch.object(checkpointing, "write_checkpoint",
+                               side_effect=flaky):
+            ph = _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir))
+            ph.ph_main()    # must not raise
+
+        self.assertEqual(calls["n"], self.STOP,
+                         msg="every iteration boundary must retry the write")
+        self.assertEqual(_published_generation(self.ckpt_dir), 1)
+
+        # And the surviving generation is genuinely resumable.
+        resumed = _make_ph(_options(1, resume_from=self.ckpt_dir))
+        resumed.ph_main()
+        self.assertEqual(resumed._resume_iteration, 1)
 
 
 class TestUnknownBackend(unittest.TestCase):

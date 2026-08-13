@@ -811,15 +811,19 @@ class PHBase(mpisppy.spopt.SPOpt):
         actionable message instead of leaving the user with the cryptic
         ``TerminationCondition=unknown`` from the failed solve.
 
-        Restricted to iteration 1: if the first quadratic solve succeeds, the
-        solver supports quadratic objectives, so any later failure is a genuine
+        Restricted to the first iterk solve of this process -- iteration 1,
+        or the first iteration after a resume, which may legitimately be
+        running a different solver (``solver_name`` is deliberately exempt
+        from the resume fingerprint). If that solve succeeds, the solver
+        supports quadratic objectives, so any later failure is a genuine
         optimization issue rather than a capability problem. The "no solution
         anywhere" test is reduced across ranks with ``allreduce_or`` so the
         raise decision is identical on every rank (no MPI desynchronization);
         a partial failure (some subproblems still solve) falls through to the
         existing behavior.
         """
-        if self._PHIter != 1 or not self._prox_is_quadratic():
+        if (self._PHIter != self._resume_iteration + 1
+                or not self._prox_is_quadratic()):
             return
         local_any_solution = any(
             s._mpisppy_data.solution_available
@@ -847,14 +851,17 @@ class PHBase(mpisppy.spopt.SPOpt):
         ``has_capability`` probe does not always catch them (the capability is
         reported inconsistently across Pyomo versions / solver interfaces).
 
-        Only the first quadratic solve is treated this way; a raise at a later
-        iteration is a genuine solve error and is left to propagate unchanged.
-        When applicable this raises a new ``RuntimeError`` chained from ``exc``
+        Only the first quadratic solve of this process is treated this way --
+        iteration 1, or the first iteration after a resume, where a solver
+        switch is expressly permitted; a raise at a later iteration is a
+        genuine solve error and is left to propagate unchanged. When
+        applicable this raises a new ``RuntimeError`` chained from ``exc``
         (so the original traceback is preserved); otherwise it returns and the
         caller re-raises ``exc`` as-is. The guard matches the reactive check, so
         MPI synchronization is unchanged beyond the raise that already occurred.
         """
-        if self._PHIter != 1 or not self._prox_is_quadratic():
+        if (self._PHIter != self._resume_iteration + 1
+                or not self._prox_is_quadratic()):
             return
         raise RuntimeError(
             f"Solver '{self.options.get('solver_name')}' raised an error on the "
@@ -1197,6 +1204,20 @@ class PHBase(mpisppy.spopt.SPOpt):
         if not ckpt_dir:
             return
 
+        # The write side refuses non-PH hubs (Checkpointer.__init__), and this
+        # is its read-side counterpart. Without it, `--APH --resume-from`
+        # splices a PH checkpoint into APH with no error at startup: APH has
+        # already attached its own y/ybars/z Params to the models this splice
+        # discards, and its loop iterates a hardcoded range(1, ...) that
+        # ignores the resume offset.
+        from mpisppy.opt.ph import PH
+        if not isinstance(self, PH):
+            raise RuntimeError(
+                f"--resume-from currently supports the synchronous PH hub "
+                f"only, but this hub is {type(self).__name__}. Remove "
+                f"--resume-from, or run PH."
+            )
+
         leaf, models = checkpointing.load_checkpoint(self, ckpt_dir)
 
         for sname, model in models.items():
@@ -1245,6 +1266,17 @@ class PHBase(mpisppy.spopt.SPOpt):
                    f"(iteration {self._resume_iteration})",
                    self.cylinder_rank == 0)
 
+        if self.ph_converger is not None:
+            # No converger state rides in a checkpoint; Iter0 constructs the
+            # converger fresh, downstream of this splice, so one that
+            # accumulates history restarts empty at iteration N+1.
+            global_toc(
+                "WARNING: converger state is not part of a checkpoint. The "
+                "converger starts fresh on this resumed run, so one that "
+                "accumulates history across iterations may terminate the run "
+                "at a different iteration than an uninterrupted run would.",
+                self.cylinder_rank == 0)
+
     def Iter0(self):
         """ Create solvers and perform the initial PH solve (with no dual
         weights or prox terms).
@@ -1260,9 +1292,6 @@ class PHBase(mpisppy.spopt.SPOpt):
                 stochastic program with the nonanticipativity constraints
                 removed.
         """
-
-        if (self.extensions is not None):
-            self.extobject.pre_iter0()
 
         verbose = self.options["verbose"]
         dprogress = self.options["display_progress"]
@@ -1286,6 +1315,14 @@ class PHBase(mpisppy.spopt.SPOpt):
         # makes every scenario pay set_instance twice per resume, which for
         # large MIPs is exactly the cost checkpointing is meant to avoid.
         self._restore_from_checkpoint_if_resuming()
+
+        # pre_iter0 runs after the restore so extensions act on the models the
+        # run will actually iterate. Before the splice, anything a hook did to
+        # the fresh models -- WXBarReader loading --init-W-fname, say -- was
+        # silently discarded with them, and any bookkeeping the hook kept
+        # pointed at dead models.
+        if have_extensions:
+            self.extobject.pre_iter0()
 
         global_toc("Creating solvers")
         self._create_solvers()
@@ -1521,10 +1558,12 @@ class PHBase(mpisppy.spopt.SPOpt):
                 and self.cylinder_rank == 0
             )
 
-            # Before the first proximal (quadratic) solve, fail fast with
-            # guidance if the solver reports it cannot handle a quadratic
-            # objective; see issue #762.
-            if self._PHIter == 1:
+            # Before the first proximal (quadratic) solve of this process,
+            # fail fast with guidance if the solver reports it cannot handle
+            # a quadratic objective; see issue #762. The gate is the first
+            # iteration of this leg rather than iteration 1: a resumed run
+            # starts past 1 and may legitimately have switched solvers.
+            if self._PHIter == self._resume_iteration + 1:
                 self._check_prox_solver_capability()
 
             try:

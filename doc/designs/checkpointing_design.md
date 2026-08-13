@@ -275,9 +275,15 @@ check reads the restored per-scenario feasibility flags; `trivial_bound` /
 `best_bound_obj_val` are restored from the checkpoint's leaf data rather than
 recomputed via `Ebound`; the spoke sync still runs (publishing the *restored*
 W/xbar/nonants to the spokes — they start from checkpointed state
-immediately); the `rho_setter` is skipped (rho rides in the reloaded model); the
-converger is constructed as usual and extension `restore_state` hooks (§9, item
-3) fire before `iterk_loop`.
+immediately); the `rho_setter` is skipped, as are the `post_iter0` rho
+recomputations of the rho-setting extensions (rho rides in the reloaded model,
+and recomputing it at the splice would clobber whatever adaptation had happened
+by the checkpoint); the converger is constructed as usual, and since no
+converger state rides in a checkpoint, the resume warns that a
+history-accumulating converger restarts empty (the `checkpoint_state` /
+`restore_state` contract of §9, item 3, has not shipped). `pre_iter0` fires
+*after* the splice, so extension hooks act on the models the run will actually
+iterate rather than on fresh models the splice discards.
 
 **The deferred objective attach must be disarmed, not "skipped".** Iteration-0
 deferral (`_deferred_ph_attach`) splices the W/prox terms into the objective at
@@ -537,6 +543,14 @@ Consequences, all deliberate:
   disarms the deferred attach, so a resume from it would have no prox term at
   all (measured: 330 divergence). Preserving iteration 0's work would need a new
   core hook at the true end of `Iter0`; that was considered and declined.
+- **A mid-run write failure warns and continues; it does not kill the run.**
+  Conditions detectable at setup (unwritable directory, undillable model,
+  unknown backend, colliding sanitized scenario names) fail loudly before any
+  solving. A *transient* failure at an iteration boundary — disk full, an NFS
+  hiccup — is different: the previously published generation is untouched and
+  remains resumable, while the optimization progress a raise would destroy
+  lives only in memory. So `Checkpointer.enditer` catches the write error,
+  reports it loudly, and retries at the next iteration boundary.
 - The **incidental benefit**: because every write now precedes any
   `post_everything`, an xhat evaluation can no longer contaminate a checkpoint,
   which closes §9 item 4 without separate machinery.

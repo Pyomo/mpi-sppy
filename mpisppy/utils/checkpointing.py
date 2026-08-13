@@ -167,6 +167,28 @@ def sanitize_for_filename(name):
     return re.sub(r"[^A-Za-z0-9_.-]", "_", str(name))
 
 
+def check_filename_collisions(scenario_names):
+    """Refuse scenario names whose sanitized file names collide.
+
+    Two distinct names that sanitize to the same fragment (``scen 1`` and
+    ``scen_1``, say) would write to the same model file -- the second
+    silently overwriting the first -- and a resume would then restore one
+    scenario's model for both, with no error anywhere.
+    """
+    seen = {}
+    for sname in scenario_names:
+        key = sanitize_for_filename(sname)
+        other = seen.get(key)
+        if other is not None:
+            raise RuntimeError(
+                f"Scenario names '{other}' and '{sname}' both map to "
+                f"'{key}' in checkpoint file names once unsafe characters "
+                f"are replaced, so their checkpoints would overwrite each "
+                f"other. Rename the scenarios so the names stay distinct."
+            )
+        seen[key] = sname
+
+
 def _generation_dirname(generation):
     return f"gen_{generation:04d}"
 
@@ -187,6 +209,29 @@ def _atomic_write_bytes(path, write_callback):
         f.flush()
         os.fsync(f.fileno())
     os.replace(tmp, path)
+
+
+def _fsync_dir(path):
+    """fsync a directory so the renames recorded in it survive a power loss.
+
+    The per-file fsync in ``_atomic_write_bytes`` makes file *contents*
+    durable, but the publish sequence commits by renames, and rename metadata
+    lives in the parent directory -- without syncing that too, a power loss
+    can leave the manifest naming a generation whose directory did not
+    survive. Kill-safety never depends on this, only power-loss safety does,
+    so platforms where a directory cannot be opened or synced (e.g. Windows)
+    skip it silently.
+    """
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
 
 
 def require_dill(backend):
@@ -241,18 +286,29 @@ def geometry(opt):
 
 
 def initially_fixed_nonant_names(opt):
-    """Names of the nonants that were already fixed when the run first started.
+    """Per-scenario names of the nonants already fixed when the run started.
 
     This is the baseline ``_can_update_best_bound`` compares against, and it is
     the one piece of opt-object state that is keyed by variable *identity* --
     a ``ComponentSet`` of vardata belonging to models that a resume replaces.
     Recording it by name is what lets the resume rebuild it correctly; see
     design section 9, item 11, for what goes wrong otherwise.
+
+    The names are keyed by scenario because Pyomo component names are not
+    scenario-qualified -- every scenario's ``x[3]`` is named ``x[3]`` -- so a
+    flat name list would smear a nonant fixed in one scenario onto all of
+    them, and a resumed run would admit best-bound updates the uninterrupted
+    run refuses.
     """
     baseline = getattr(opt, "_initial_fixed_varibles", None)
     if baseline is None:
-        return []
-    return sorted(v.name for v in baseline)
+        return {}
+    return {
+        sname: sorted(v.name
+                      for v in s._mpisppy_data.nonant_indices.values()
+                      if v in baseline)
+        for sname, s in opt.local_scenarios.items()
+    }
 
 
 def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
@@ -263,9 +319,12 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
     temp-then-rename) to point at the new generation. That manifest flip is the
     single commit point, so a kill before it leaves the previous checkpoint
     intact and a kill after it leaves the new one. The prior generation is
-    deleted once the manifest names its replacement.
+    deleted once the manifest names its replacement. Each rename step is
+    followed by an fsync of the directory that recorded it, so the commit
+    point holds across a power loss and not just a kill.
     """
     require_dill(backend)
+    check_filename_collisions(opt.local_scenarios)
 
     rank = int(opt.cylinder_rank)
     hub_dir = os.path.join(ckpt_dir, HUB_SUBDIR)
@@ -312,7 +371,7 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
         os.path.join(staging_dir, _leaf_filename(rank)),
         lambda f: pickle.dump(leaf, f),
     )
-
+    _fsync_dir(staging_dir)
 
     # Publishing order matters. The manifest is the commit point, so the
     # generation it currently names must stay on disk and intact until the
@@ -341,6 +400,7 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
             shutil.rmtree(retiring_dir, ignore_errors=True)
         os.replace(final_dir, retiring_dir)
     os.replace(scratch_dir, final_dir)
+    _fsync_dir(hub_dir)
 
     _publish_manifest(ckpt_dir, {
         "format_version": FORMAT_VERSION,
@@ -406,13 +466,10 @@ def _as_float_or_none(value):
 
 
 def _publish_manifest(ckpt_dir, manifest):
-    path = os.path.join(ckpt_dir, MANIFEST_NAME)
-    tmp = f"{path}.tmp"
-    with open(tmp, "w") as f:
-        json.dump(manifest, f, indent=2, sort_keys=True)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(tmp, path)
+    blob = json.dumps(manifest, indent=2, sort_keys=True).encode("utf-8")
+    _atomic_write_bytes(os.path.join(ckpt_dir, MANIFEST_NAME),
+                        lambda f: f.write(blob))
+    _fsync_dir(ckpt_dir)
 
 
 def _read_manifest(ckpt_dir, missing_ok=False):

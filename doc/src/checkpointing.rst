@@ -50,6 +50,13 @@ how long it took::
   [ 1234.56] Writing checkpoint at iteration 42 to ./ckpt
   [ 1261.03] Checkpoint written at iteration 42
 
+A write that fails mid-run -- the disk filling up, a network filesystem
+hiccup -- does not stop the optimization. The failure is reported loudly in
+the log, the previously published checkpoint stays intact and resumable, and
+the next iteration boundary tries again. Conditions detectable at setup (an
+unwritable directory, a model that cannot be serialized) still stop the run
+at startup, before any solving is done.
+
 Resuming
 --------
 
@@ -169,14 +176,21 @@ discovering the problem at the first write, and the error
 names the offending rule.
 
 **The synchronous PH hub only.** ``--APH`` and the other hub types are refused
-at startup when ``--checkpoint-dir`` is given, as is a hub with more than one
-rank, an unwritable directory, an unimplemented backend, and any configuration
-where the checkpointing extension would not actually be attached. The intent is
-that checkpointing either works or says so at startup, rather than running for
-hours and writing nothing.
+at startup when either ``--checkpoint-dir`` or ``--resume-from`` is given, as
+is a hub with more than one rank, an unwritable directory, an unimplemented
+backend, scenario names that would collide once made filename-safe, and any
+configuration where the checkpointing extension would not actually be
+attached. The intent is that checkpointing either works or says so at startup,
+rather than running for hours and writing nothing.
 
-**Extension state is not yet part of a checkpoint.** Extensions that
-accumulate their own state across iterations -- the rho updaters, ``fixer``,
-``slammer`` -- start fresh on a resumed run. The restored *model* state is
-correct, and the run continues correctly from it, but a resumed run using one
-of these will not follow the same trajectory as an uninterrupted one.
+**Extension and converger state is not yet part of a checkpoint.** Extensions
+that accumulate their own state across iterations -- the rho updaters,
+``fixer``, ``slammer`` -- start fresh on a resumed run, and so does a
+converger given with ``ph_converger`` (the resume warns about the latter in
+the log). The restored *model* state is correct, and the run continues
+correctly from it, but a resumed run using one of these will not follow the
+same trajectory as an uninterrupted one. The rho-setting extensions
+(``--sep-rho``, ``--coeff-rho``, ``--sensi-rho``, ``--grad-rho``) do not
+recompute rho at the resume itself: the checkpointed rho -- including
+whatever adaptation had happened by the write -- carries over, and the
+extensions resume their per-iteration updates from there.

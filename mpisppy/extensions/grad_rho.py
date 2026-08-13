@@ -345,6 +345,15 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         pass
 
     def post_iter0(self):
+        if getattr(self.opt, "_resumed_from_checkpoint", False):
+            # rho rides in the reloaded models -- including whatever
+            # adaptation had happened by the checkpoint -- so recomputing it
+            # from scratch here would clobber it (the same reason Iter0 skips
+            # the rho_setter on a resume). There is also no iteration-0 solve
+            # behind this hook on a resume for the gradients to describe.
+            global_toc("GradRho: resuming from a checkpoint; keeping the "
+                       "checkpointed rho", self.opt.cylinder_rank == 0)
+            return
         global_toc("Using grad-rho rho setter")
         # PHBase.Iter0 runs the iter0 solve loop before this hook but does not
         # compute xbar (Compute_Xbar is first called in iterk_loop, i.e. at

@@ -1262,7 +1262,7 @@ class SPOpt(SPBase):
                 if v.fixed:
                     self._initial_fixed_varibles.add(v)
 
-    def _restore_fixed_nonant_baseline(self, names):
+    def _restore_fixed_nonant_baseline(self, names_by_scenario):
         """Rebuild `_initial_fixed_varibles` from checkpointed variable names.
 
         `_create_fixed_nonant_cache` records vardata *objects*, so the cache
@@ -1273,10 +1273,16 @@ class SPOpt(SPBase):
         -- which nonants were already fixed when the run first started -- so a
         nonant that a fixing extension pinned mid-run is still correctly
         recognized as *not* part of the baseline.
+
+        `names_by_scenario` maps scenario name to that scenario's fixed-nonant
+        names. Pyomo component names are not scenario-qualified -- every
+        scenario's ``x[3]`` is named ``x[3]`` -- so matching against a flat
+        name set would smear a nonant fixed in one scenario onto all of them,
+        admitting best-bound updates the uninterrupted run refuses.
         """
-        wanted = set(names)
         self._initial_fixed_varibles = ComponentSet()
-        for s in self.local_scenarios.values():
+        for sname, s in self.local_scenarios.items():
+            wanted = set(names_by_scenario.get(sname, ()))
             for v in s._mpisppy_data.nonant_indices.values():
                 if v.name in wanted:
                     self._initial_fixed_varibles.add(v)

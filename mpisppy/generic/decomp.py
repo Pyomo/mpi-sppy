@@ -154,16 +154,12 @@ def _write_solutions(wheel, module, cfg):
 def _check_checkpointing_survived(hub_dict, cfg):
     """Refuse to start if checkpointing was asked for but is not attached.
 
-    Two things can leave the Checkpointer out of a hub that was given
-    --checkpoint-dir: a hub type that add_checkpointing does not wire, and
-    configure_extensions rebuilding the extension list from scratch (it
-    assigns opt_kwargs['extensions'] rather than composing with what is already
-    there, so anything attached earlier is dropped).
-
-    Either way the run used to proceed with exit code 0 and write nothing, and
-    the user found out the next morning that a multi-day study had no
-    checkpoint. Whether the underlying wiring gets fixed is a separate
-    question; failing at startup is not.
+    add_checkpointing only wires hubs built through ph_hub, so another hub
+    type given --checkpoint-dir would proceed with exit code 0 and write
+    nothing, and the user would find out the next morning that a multi-day
+    study had no checkpoint. It also backstops any future code that rebuilds
+    the hub's extension list without composing -- configure_extensions did
+    exactly that until it was changed to go through extension_adder.
     """
     if not cfg.get("checkpoint_dir") and not cfg.get("resume_from"):
         return
@@ -181,9 +177,9 @@ def _check_checkpointing_survived(hub_dict, cfg):
         raise RuntimeError(
             "--checkpoint-dir was given, but the checkpointing extension is "
             "not attached to this hub, so no checkpoint would ever be "
-            "written. Checkpointing currently supports the PH hub without "
-            "the extensions that rebuild the hub's extension list. Remove "
-            "--checkpoint-dir, or run a configuration that supports it."
+            "written. Checkpointing currently supports the PH hub only. "
+            "Remove --checkpoint-dir, or run a configuration that supports "
+            "it."
         )
 
     if cfg.get("resume_from") and "resume_from" not in (

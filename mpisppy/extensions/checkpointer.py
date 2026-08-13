@@ -118,9 +118,13 @@ class Checkpointer(Extension):
                 f"single rank."
             )
 
-        # Create and probe the directory now. Discovering at write time that
-        # the path is unwritable would raise out of the iteration loop and take
-        # the run with it.
+        # Two scenario names that sanitize to the same file name would
+        # silently overwrite each other's model files; refuse now rather than
+        # at the first write.
+        ckpt.check_filename_collisions(opt.local_scenarios)
+
+        # Create and probe the directory now. Discovering only at write time
+        # that the path is unwritable would mean the run never checkpoints.
         try:
             os.makedirs(self.ckpt_dir, exist_ok=True)
             probe = os.path.join(self.ckpt_dir, ".mpisppy_write_probe")
@@ -140,8 +144,25 @@ class Checkpointer(Extension):
         ckpt.probe_model_is_dillable(self.opt)
 
     def enditer(self):
-        """Write the checkpoint. See the module docstring for why it is here."""
-        self._write()
+        """Write the checkpoint. See the module docstring for why it is here.
+
+        A mid-run write failure -- disk full, an NFS hiccup -- is warned
+        about, not raised: the previously published generation is untouched
+        and remains resumable, while the optimization progress that a raise
+        would destroy lives only in memory. The next iteration boundary tries
+        again. Conditions detectable at setup (unwritable directory,
+        undillable model, unknown backend) still fail loudly in ``__init__``
+        and ``pre_iter0``.
+        """
+        try:
+            self._write()
+        except RuntimeError as exc:
+            global_toc(
+                f"WARNING: checkpoint write failed at iteration "
+                f"{int(getattr(self.opt, '_PHIter', 0))}; the run continues, "
+                f"the previously published checkpoint (if any) is intact, "
+                f"and the next iteration will try again.\n{exc}",
+                self.opt.cylinder_rank == 0)
 
     def _write(self):
         """Write one generation, bracketed by toc so the cost is legible.
