@@ -1,7 +1,9 @@
 # Checkpoint / Resume for mpi-sppy — Design
 
-Status: **draft** (framework and dill-reload backend both PoC-validated — the
-latter on a serial MIP; multi-rank and cylinders pending). Scope: checkpoint a
+Status: **phase 1a implemented** (serial PH hub; see §11). Phases 2 onward are
+still design. Where this document and the shipped code have disagreed, the code
+is authoritative and this document has been corrected — §8 in particular records
+a design that was tried, failed, and was replaced. Scope: checkpoint a
 running mpi-sppy job so it can be stopped and resumed later. Must work on multiple
 MPI ranks and for cylinder (hub-and-spoke) runs.
 
@@ -53,7 +55,7 @@ as a future option but **not currently planned** (§4, §11 Phase 6).
   resume is out of scope.
 - APH. A C++ APH is expected to replace the Python `opt/aph.py`; PH-family only.
 - **Catching external OS signals** (SIGTERM/SIGUSR1 from a scheduler, Ctrl-C) to
-  trigger a checkpoint. The terminal checkpoint (§8) fires on the run's *own*
+  trigger a checkpoint. Checkpoints are written at iteration boundaries (§8)
   termination — including hitting `--time-limit` — which covers the planned-stop
   use case. A scheduler that hard-kills mid-solve is covered only insofar as the
   previous checkpoint is preserved by atomic publication (§9), not by catching the
@@ -102,7 +104,13 @@ back-references to the comms or opt object.
 and that is not something checkpointing can strip. The known case: a Pyomo rule
 written as a nested function that closes over the `Config` object (`cfg`). The
 closure drags the `Config` into the model's serialization graph, and Pyomo's
-`ConfigDict` does not survive dill — although it *does* survive stdlib pickle.
+`ConfigDict` whose entries still hold unresolved defaults fails the *first*
+time it is serialized — under dill and the standard `pickle` module alike. The
+cause is upstream: Pyomo's `UninitializedMixin` sets `self.__class__` while
+`__getstate__` is reading `_data`, so the pickler has already captured the old
+class when the consistency check runs. Each failed attempt resolves one entry,
+so a real model can need many attempts; it is intra-process only, so a fresh
+run fails deterministically on the first.
 `examples/stoch_distr/stoch_distr.py` has exactly this shape, so its scenario
 models cannot be dilled at all, wrapper or no wrapper (issue #828). This is not
 specific to checkpointing: the existing `--pickle-scenarios-dir` path would fail
@@ -111,7 +119,7 @@ the same way on such a model. Two consequences for this design:
 - The dill-reload backend cannot promise to checkpoint an *arbitrary* model; it
   requires a dill-serializable one. The implementation therefore **probes one
   local scenario at setup** and fails immediately with an actionable message
-  rather than discovering the problem at a terminal checkpoint hours in.
+  rather than discovering the problem at the first write, hours in.
 - The workaround lives in the model (hoist the value out of the closure before
   defining the rule), so the user-facing docs must say so.
 
@@ -476,98 +484,64 @@ checkpoint is written. They **compose** — whichever fires writes a checkpoint,
 sharing the same atomic publish (§9). With no `--checkpoint-dir` the `Checkpointer`
 extension is not attached at all — zero overhead, no files.
 
-**Triggers**
+**When a checkpoint is written**
 
-- **`--checkpoint-at-termination` (terminal checkpoint; default on).** Write one
-  complete, resumable checkpoint when the run terminates for *any* internal reason
-  — convergence, `--max-iterations`, cylinder convergence, or hitting
-  `--time-limit`. This is the primary trigger for the planned-stop use case: set
-  `--time-limit` to the daily budget and the run stops itself and checkpoints,
-  ready to resume the next morning. Nearly free — it fires in the hub's existing
-  `post_everything` hook (`phbase.py`), which runs once after the PH loop
-  regardless of *why* it exited, capturing the state of the last completed solve.
-  Turn it off (`--checkpoint-at-termination=False`) for a run that only wants
-  periodic insurance. It is *not* driven by external OS signals (a non-goal, §1);
-  the run's own termination — including `--time-limit` — is the trigger.
-- **`--checkpoint-every-seconds S` (optional insurance).** Also checkpoint roughly
-  every `S` wall-clock seconds, for crash coverage during a long run. Checked at
-  each `enditer` as `allreduce_or(now − last_checkpoint ≥ S)` — the same
-  collective-decision pattern the existing `--time-limit` termination uses
-  (`phbase.py`), so every rank agrees and none writes at the barrier while others
-  sail past (a deadlock). Because it is tested only at iteration boundaries, the
-  guarantee is "the first boundary at least `S` seconds after the previous
-  checkpoint"; for large MIPs one solve can exceed `S`, which is expected — a
-  checkpoint cannot be taken mid-solve. Distinct from `--time-limit`, which *stops*
-  the run: this keeps it running and snapshots.
-- **`--checkpoint-before-seconds S` (one-shot, anticipated).** Write **one**
-  checkpoint at the last iteration boundary that precedes `S` wall-clock seconds,
-  and keep running. Where `--checkpoint-every-seconds` is *reactive* — it fires at
-  the first boundary at or after its interval, so the write lands up to a full
-  iteration **late** — this trigger is *anticipatory*: at each `enditer` it asks
-  whether another boundary will arrive before `S`, estimating the next iteration
-  by the duration of the most recently completed one, and writes now if the answer
-  is no:
+**At the end of every completed PH iteration, and only there.** This replaced an
+earlier design in which a single checkpoint was written at termination, from
+`post_everything`. That approach does not work, and the reason is worth
+recording because it is not obvious and it cost three review rounds to settle.
 
-  ```
-  allreduce_or(elapsed + last_iteration_seconds >= S)
-  ```
+`iterk_loop` computes xbar, updates `W`, runs the `miditer` extension hook, and
+*may break* — user converger, convergence threshold, `--time-limit` — and only
+then solves. A run ending through one of those breaks leaves the models
+describing half an iteration: `W` at iteration *k*, nonants still at *k−1*'s
+solve. `--time-limit`, the planned-stop trigger this design exists for, exits
+that way every time. Resuming from such a state applies the dual update to the
+same iterate twice and skips a solve outright (measured: 37.8 divergence on
+farmer against an uninterrupted run).
 
-  Same collective-decision pattern as the `time_limit` check in `phbase.py`, so
-  every rank decides together and none writes at the barrier while others sail
-  past. The motivating case is a scheduler walltime: the run will be hard-killed at
-  a known wall-clock time, and the user wants the checkpoint as late as possible
-  while still landing *before* the axe. This trigger **never terminates
-  anything**; the run continues and is killed, converges, or hits `--time-limit`
-  on its own.
+Reconstructing a coherent iterate from that state is unbounded work.
+`miditer` gives every extension a chance to change `rho`, fix nonants, relax
+domains or add cuts, so any list of things to rewind is a list of the extensions
+someone has thought about so far — an implementation attempt unwound `W`, then
+needed `rho`, then nonant fixedness, with domains and cuts next.
 
-  **One-shot.** Once the checkpoint is written the trigger is disarmed for the rest
-  of the run — it does not re-arm at `2S`. If the run outlives `S`, any later
-  checkpoints come from the other triggers, which are OR'd with this one as usual
-  (two triggers firing at the same `enditer` produce one write, §9 item 7).
+Writing at `enditer`, after the solve, sidesteps all of it: the checkpoint
+always describes a *completed* iteration, whatever extensions are loaded and
+whatever they touched. The invariant is one sentence and holds by construction.
 
-  **No implicit safety margin.** `S` is used exactly as given: mpi-sppy applies no
-  fudge factor to the iteration estimate and does not attempt to predict how long
-  the checkpoint write itself will take. Both effects run the same direction and
-  matter to the user's choice of `S`: PH iteration times *sometimes grow*
-  (prox-approx cuts accumulate, `W` tightens, subproblem MIPs get harder), so the
-  last iteration can be an optimistic estimate of the next; and the write —
-  dilling large MIP models under the `dill-reload` backend — begins at the decision
-  point and is not free. The user supplies an `S` that already discounts for both.
-  To calibrate: run once
-  with checkpointing enabled and read the write duration off the bracketing `toc`
-  lines (§9 item 10), then set `S` to the walltime minus that duration minus the
-  user's own margin. **This must be prominent in the user docs** — an `S` chosen as
-  if it were the raw walltime is the one way this option quietly fails to do its
-  job.
+Consequences, all deliberate:
 
-  **What the clock measures.** `elapsed` is `time.perf_counter() − self.start_time`,
-  and `start_time` is stamped in `SPBase.__init__` (`spbase.py`) — *not* at job
-  submission and not at process launch. Everything before the SP object is
-  constructed is outside `S`: queue wait, interpreter startup, imports (over a
-  shared filesystem on a cluster, not always fast), MPI initialization at high rank
-  counts, and module/`cfg` setup. Scenario construction *is* inside it
-  (`_create_scenarios` is called later in the same `__init__`), as is the dill reload
-  on a resumed run (it happens in `Iter0`, §5.1). So `S` is measured on mpi-sppy's
-  clock, which starts *after* the scheduler's; a user aiming at a walltime must
-  subtract that startup gap as well — the same way they subtract the write cost.
-  The `toc` line mpi-sppy already emits at import (`global_toc("Initializing
-  mpi-sppy")`) versus the first checkpoint-related `toc` gives a usable read on how
-  large the gap is for a given cluster. Cylinders each construct their own
-  `SPBase`, so their `start_time`s differ slightly; this trigger is decided over
-  the hub's ranks alone, where the skew is a construction-time difference, not a
-  concern.
+- **The cost is one model serialization per iteration** rather than one per
+  run, paid only when `--checkpoint-dir` is given (with no checkpoint directory
+  the `Checkpointer` is never constructed and none of its hooks exist).
+  Measured: 38–48% on MIP instances, and 262% on a 50-scenario farmer where the
+  solves are trivially cheap. For the large-MIP target this is negligible; for
+  many cheap scenarios it dominates. Retention is a single generation, so disk
+  does not grow with the iteration count.
+- **A run that ends before completing iteration 1 publishes nothing.** No
+  iteration completed, so there is no iterate to resume from.
+- **Iteration 0 is not a checkpoint point.** `Iter0` splices the `W`/prox terms
+  into the objective *after* the last extension hook available
+  (`post_iter0_after_sync`), so a checkpoint taken during it captures a model
+  whose objective is not the one PH goes on to iterate — and the resume branch
+  disarms the deferred attach, so a resume from it would have no prox term at
+  all (measured: 330 divergence). Preserving iteration 0's work would need a new
+  core hook at the true end of `Iter0`; that was considered and declined.
+- The **incidental benefit**: because every write now precedes any
+  `post_everything`, an xhat evaluation can no longer contaminate a checkpoint,
+  which closes §9 item 4 without separate machinery.
 
-  **First arming.** At the `enditer` of iteration 1 the most recently *completed*
-  iteration is iteration 0, so its duration is the seed; no special case is needed
-  provided PH records iteration 0's duration alongside the later ones (§9 item 9).
-- **`--checkpoint-every-iterations K` (optional insurance).** Also checkpoint every
-  `K` PH iterations. Checked at `enditer`. (This is the former
-  `--checkpoint-every k`, renamed for symmetry with
-  `--checkpoint-every-seconds`.) There is no special iteration-0 checkpoint:
-  resume is an in-core branch that restores any checkpointed iteration directly
-  (§5.1), so iteration 0 is not a privileged baseline. Given infrequent planned
-  stops, most runs leave the periodic triggers off and rely on the terminal
-  checkpoint alone.
+**Deferred triggers.** The periodic and anticipated triggers below were designed
+against the terminal-checkpoint model and are *not* implemented. Writing every
+iteration subsumes most of what they were for — a checkpoint from the last
+completed iteration always exists, so `--checkpoint-every-seconds` and the
+anticipatory `--checkpoint-before-seconds` no longer have a gap to fill. What
+remains genuinely useful is the opposite of insurance: a way to write **less**
+often, to buy back the per-iteration cost on models with many cheap scenarios.
+`--checkpoint-every-iterations K` is therefore the one trigger still worth
+adding, and its meaning has inverted — it is now a cost control, not a safety
+net. The original rationale for the other two is preserved below for the record.
 
 **Other options**
 
@@ -774,12 +748,12 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
      collective pattern, then latching so it fires at most once (§8). It needs the
      most-recent iteration duration (item 9); everything else it shares with the
      periodic path.
-   - *terminal* (`--checkpoint-at-termination`, default on) — in `post_everything`
-     (`phbase.py`), which fires once after the PH loop however it exited
-     (convergence, `--max-iterations`, `--time-limit`), capturing the last
-     completed solve. Caveat: `post_everything` runs *after* `scenario_denouement`;
-     standard denouements only report, but one that re-solves or mutates a model
-     would be captured — call this out in user docs.
+   - *at each completed iteration* — in `enditer`, which fires after the
+     subproblem solve and is therefore the only point in the loop where the
+     dual weights and the nonants describe the same iteration (§8). There is
+     no terminal trigger and no `--checkpoint-at-termination` flag: the flag
+     was removed when the write moved, having briefly survived as a registered,
+     documented option that nothing read.
 
    For spokes, the xhatter `main()` loop calls no per-iteration extension hook —
    add a single `self.opt.extobject.enditer()` (or a dedicated checkpoint hook)
@@ -917,8 +891,10 @@ CI solvers:
 - **stoch-distr (`--stoch-admm`)** — intended to exercise everything in §8.2:
   wrapped names in file discovery, variable-probability masks and fixed-at-0
   dummy vars, the wrapper-mutated model dill round-trip, and release of the
-  wrapper-held fresh models. **Blocked**: `stoch_distr`'s models are not
-  dill-serializable (§2.2, issue #828), so this instance cannot be used until
+  wrapper-held fresh models. **Unblocked**: `stoch_distr`'s rules previously
+  closed over `cfg`, which made its models unserializable; fixed and merged
+  (#830), and a structural guard in `test_stoch_admmWrapper.py` keeps the
+  pattern from returning.
   the model is fixed or another stoch-ADMM model is chosen.
 - **`sizes`** — the MIP target: warm start taken on resume, incumbent carried.
 
@@ -939,9 +915,12 @@ Each is green on its own, and 1a is independently useful — a run that stops at
   attach disarmed, `saved_objectives` refreshed, and the warm start set (§5.1, §9
   item 2); restore of the initially-fixed-nonant baseline by name (§9 item 11);
   geometry+cfg fingerprint (§5.7); atomic per-rank writes + manifest publish (§9
-  item 7); the terminal checkpoint (`--checkpoint-at-termination`, default on)
-  from `post_everything`; `toc` on both ends of every write (§9 item 10). CLI
-  flags `--checkpoint-dir`, `--checkpoint-at-termination`,
+  item 7); the write at each completed iteration from `enditer` (§8); `toc` on
+  both ends of every write (§9 item 10); and setup-time refusal of every
+  configuration not supported — a non-PH hub (APH inherits this wiring through
+  `aph_hub`), more than one rank, an unimplemented backend, an unwritable
+  directory, and any run where the extension would not actually be attached.
+  CLI flags `--checkpoint-dir`,
   `--checkpoint-backend`, `--resume-from`/`--resume`, with a clear error when
   `dill` is not installed (it is an optional `extras` dependency). Tests (the
   §11.1 A/B harness, serial): **farmer** bit-identical A vs B; no iter-0
