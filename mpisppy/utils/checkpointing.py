@@ -93,6 +93,10 @@ NON_STRUCTURAL_CFG_KEYS = frozenset({
     # problem, it does not redefine it.
     "solver_name", "solver_options", "max_solver_threads",
     "presolve", "user_warmstart", "warmstart_subproblems",
+    # Every per-cylinder *_solver_options_file is exempt via the suffix rule
+    # below; the global one has no prefix to match, and the same setting
+    # should not become structural merely by being written in a file.
+    "solver_options_file",
     # Per-cylinder solver selection and gap control. Tightening a mipgap on day
     # two of a multi-day study is the most ordinary adjustment there is, and it
     # continues the same problem rather than redefining it.
@@ -100,6 +104,7 @@ NON_STRUCTURAL_CFG_KEYS = frozenset({
     # Diagnostics, tracing and IIS output: they observe a run, never shape it.
     "track_convergence", "track_duals", "track_nonants", "track_xbars",
     "track_reduced_costs", "tracking_folder", "ph_track_progress",
+    "track_scen_gaps",
     "xhatter_write_iis", "xhatter_iis_method", "xhatter_iis_dir",
     "rc_debug", "rc_verbose", "tee_EF", "hub_only_solver_logs",
     "inspect_buffers_on_shutdown", "fwph_save_file",
@@ -107,10 +112,8 @@ NON_STRUCTURAL_CFG_KEYS = frozenset({
     # Which cylinders run. The hub's primal trajectory does not depend on the
     # spokes, so a checkpoint stays valid across a different spoke set -- and
     # cylinder support will need this to be allowed.
-    "lagrangian", "lagranger", "xhatshuffle", "xhatxbar", "xhatspecific",
-    "xhatlshaped", "fwph", "subgradient", "ph_primal", "ph_dual",
-    "relaxed_ph", "reduced_costs", "cross_scenario_cuts",
-})
+    "lagrangian", "xhatshuffle", "xhatxbar",     "xhatlshaped", "fwph", "subgradient", "ph_primal_hub", "ph_dual",
+    "relaxed_ph", "reduced_costs", })
 
 
 def _is_non_structural(key):
@@ -321,11 +324,17 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
         shutil.rmtree(scratch_dir)
     os.replace(staging_dir, scratch_dir)
 
-    previous = _read_manifest(ckpt_dir, missing_ok=True)
-    # The old generation is still whole and still named by the old manifest;
-    # if we die here, that is what a resume finds.
+    # Retire the old generation by *renaming* it rather than deleting it, so
+    # that at no instant does the manifest name a directory that is not there.
+    # Writing the same generation number twice would otherwise have a window
+    # where the live checkpoint is gone and its replacement is not yet in
+    # place; re-running the same command into the same directory hits exactly
+    # that. The sweep below reclaims the retired copy.
+    retiring_dir = f"{final_dir}.retiring"
+    if os.path.isdir(retiring_dir):
+        shutil.rmtree(retiring_dir, ignore_errors=True)
     if os.path.isdir(final_dir):
-        shutil.rmtree(final_dir, ignore_errors=True)
+        os.replace(final_dir, retiring_dir)
     os.replace(scratch_dir, final_dir)
 
     _publish_manifest(ckpt_dir, {
@@ -341,7 +350,6 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
     # can leave a directory behind, and deleting just the known predecessor
     # would let those accumulate for the life of the run.
     _sweep_stale_generations(hub_dir, keep=int(generation))
-    del previous
 
     return final_dir
 

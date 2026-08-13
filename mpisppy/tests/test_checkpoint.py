@@ -190,16 +190,24 @@ def _find_recorder(ph):
     raise AssertionError("no StateRecorder attached")
 
 
+#: Per-nonant Params compared by _primal_snapshot. Beyond x/W/rho these cover
+#: the smoothing state, which a rho-scaled smoothing run would otherwise never
+#: check.
+_SNAPSHOT_PARAMS = ("W", "rho", "xbars", "z", "p")
+
+
 def _primal_snapshot(ph):
-    """W, rho and nonant values for every local scenario, keyed by name."""
+    """Nonant values, fixedness, and the iterate Params, keyed by name."""
     snap = {}
     for sname, s in ph.local_scenarios.items():
         for ndn_i, v in s._mpisppy_data.nonant_indices.items():
             snap[(sname, "x", v.name)] = v._value
-            snap[(sname, "W", str(ndn_i))] = \
-                float(s._mpisppy_model.W[ndn_i]._value)
-            snap[(sname, "rho", str(ndn_i))] = \
-                float(s._mpisppy_model.rho[ndn_i]._value)
+            snap[(sname, "fixed", v.name)] = float(v.is_fixed())
+            for pname in _SNAPSHOT_PARAMS:
+                param = getattr(s._mpisppy_model, pname, None)
+                if param is None:
+                    continue
+                snap[(sname, pname, str(ndn_i))] = float(param[ndn_i]._value)
     return snap
 
 
@@ -337,8 +345,12 @@ class TestResumeABFarmer(unittest.TestCase):
 
         resumed = _make_ph(_options(self.N, resume_from=self.ckpt_dir))
         resumed.ph_main()
-        self.assertEqual(resumed._checkpoint_leaf_state["best_solution_obj_val"],
-                         -110000.0)
+        self.assertEqual(resumed.best_solution_obj_val, -110000.0)
+        # And the guarantee that value exists to provide: a worse candidate
+        # must now be rejected rather than accepted over the checkpointed one.
+        self.assertFalse(
+            resumed.update_best_solution_if_improving(-100000.0),
+            msg="a worse incumbent was accepted after a resume")
 
     def test_writes_one_generation_and_a_manifest(self):
         """Retention is exactly one published generation."""
@@ -447,8 +459,10 @@ class TestResumeAcceptanceMatrix(unittest.TestCase):
     #: checkpoint round-trips exactly -- which is what tests the mechanism.
     CONFIGS = (
         ("plain PH", {}, None, True),
-        ("smoothing", {"smoothed": 2, "defaultPHp": 0.1, "defaultPHbeta": 0.1},
-         None, True),
+        # rho != 1 on purpose: the smoothing rescale is p *= rho, which at
+        # rho = 1 is the identity and would hide a double-application.
+        ("smoothing", {"smoothed": 2, "defaultPHp": 0.1, "defaultPHbeta": 0.1,
+                       "defaultPHrho": 2.0}, None, True),
         ("linearized prox", {"linearize_proximal_terms": True}, None, True),
         ("norm rho updater", {}, "norm_rho", False),
         ("miditer rho + fixing", {}, "miditer_mutator", False),
@@ -538,11 +552,35 @@ class TestSetupRefusals(unittest.TestCase):
     """Unsupported configurations must fail at setup, not hours in."""
 
     def _stub(self, n_proc=1, backend=checkpointing.DILL_RELOAD_BACKEND):
+        """A real PH object: the Checkpointer refuses anything else outright.
+
+        Building one costs a scenario_creator call and no solve, which is
+        cheap, and it keeps these tests honest -- a hand-rolled stub would sail
+        past the hub-type check that exists precisely to reject non-PH hubs.
+        """
+        opt = _make_ph(_options(1))
+        opt.options["checkpoint_dir"] = tempfile.mkdtemp()
+        opt.options["checkpoint_backend"] = backend
+        opt.n_proc = n_proc
+        return opt
+
+    def test_non_ph_hub_is_refused_at_setup(self):
+        """APH inherits ph_hub's wiring but breaks the design's invariant.
+
+        Its loop dispatches a fraction of the scenarios per pass, keeps its own
+        hardcoded iteration range that no resume offset touches, and runs on a
+        worker thread -- so a checkpoint written from it would not describe a
+        completed iteration, and a resume would renumber from 1 and overwrite
+        the checkpoint it resumed from.
+        """
         import types
-        return types.SimpleNamespace(
+        not_ph = types.SimpleNamespace(
             options={"checkpoint_dir": tempfile.mkdtemp(),
-                     "checkpoint_backend": backend},
-            n_proc=n_proc, cylinder_rank=0, local_scenarios={})
+                     "checkpoint_backend": checkpointing.DILL_RELOAD_BACKEND},
+            n_proc=1, cylinder_rank=0, local_scenarios={})
+        with self.assertRaises(RuntimeError) as ctx:
+            Checkpointer(not_ph)
+        self.assertIn("synchronous PH hub", str(ctx.exception))
 
     def test_unimplemented_backend_is_refused_at_setup(self):
         with self.assertRaises(RuntimeError) as ctx:
@@ -569,6 +607,63 @@ class TestSetupRefusals(unittest.TestCase):
             self.assertIn("Cannot write", str(ctx.exception))
         finally:
             os.chmod(ro, 0o700)
+
+
+class TestCheckpointingSurvivedGuard(unittest.TestCase):
+    """A guard whose only job is to fire is exactly what silently stops firing.
+
+    Several hub types never wire the Checkpointer, and configure_extensions
+    rebuilds the hub's extension list from scratch, dropping whatever was
+    attached earlier. Either way --checkpoint-dir used to produce a run that
+    exited 0 having written nothing.
+    """
+
+    def _cfg(self, **overrides):
+        cfg = Config()
+        cfg.checkpoint_args()
+        for k, v in overrides.items():
+            setattr(cfg, k, v)
+        return cfg
+
+    def _hub_dict(self, extensions=None, ext_classes=None, options=None):
+        opt_kwargs = {"options": options or {}}
+        if extensions is not None:
+            opt_kwargs["extensions"] = extensions
+        if ext_classes is not None:
+            opt_kwargs["extension_kwargs"] = {"ext_classes": ext_classes}
+        return {"opt_kwargs": opt_kwargs}
+
+    def test_refuses_when_the_extension_was_dropped(self):
+        from mpisppy.generic.decomp import _check_checkpointing_survived
+        with self.assertRaises(RuntimeError) as ctx:
+            _check_checkpointing_survived(
+                self._hub_dict(), self._cfg(checkpoint_dir="/tmp/x"))
+        self.assertIn("not attached", str(ctx.exception))
+
+    def test_accepts_when_the_extension_is_attached_directly(self):
+        from mpisppy.generic.decomp import _check_checkpointing_survived
+        _check_checkpointing_survived(
+            self._hub_dict(extensions=Checkpointer),
+            self._cfg(checkpoint_dir="/tmp/x"))
+
+    def test_accepts_when_composed_under_multiextension(self):
+        from mpisppy.generic.decomp import _check_checkpointing_survived
+        from mpisppy.extensions.extension import MultiExtension
+        _check_checkpointing_survived(
+            self._hub_dict(extensions=MultiExtension,
+                           ext_classes=[Checkpointer, StateRecorder]),
+            self._cfg(checkpoint_dir="/tmp/x"))
+
+    def test_refuses_resume_when_the_hub_ignores_it(self):
+        from mpisppy.generic.decomp import _check_checkpointing_survived
+        with self.assertRaises(RuntimeError) as ctx:
+            _check_checkpointing_survived(
+                self._hub_dict(), self._cfg(resume_from="/tmp/x"))
+        self.assertIn("silently start from scratch", str(ctx.exception))
+
+    def test_silent_when_checkpointing_was_not_requested(self):
+        from mpisppy.generic.decomp import _check_checkpointing_survived
+        _check_checkpointing_survived(self._hub_dict(), self._cfg())
 
 
 class TestStructuralFingerprint(unittest.TestCase):
@@ -638,6 +733,10 @@ class TestStructuralFingerprint(unittest.TestCase):
 
         self.assertNotIn("max_iterations", built(10))
         self.assertNotIn("checkpoint_dir", built(10))
+        self.assertNotIn("solver_options_file", built(10))
+        self.assertNotIn("lagrangian_solver_name", built(10))
+        # ... but structural entries must still be folded in.
+        self.assertIn("default_rho", built(10))
         self.assertEqual(
             checkpointing.structural_fingerprint(
                 {"checkpoint_structural_cfg": built(10)}),

@@ -19,7 +19,7 @@ not attached at all, and a run that does not ask for it pays nothing.
 Writing a checkpoint
 --------------------
 
-Give a directory and the run writes one checkpoint when it terminates::
+Give a directory and the run keeps a checkpoint up to date as it goes::
 
   python -m mpisppy.generic_cylinders --module-name farmer --num-scens 3 \
       --solver-name cplex --max-iterations 100 --default-rho 1.0 \
@@ -47,8 +47,8 @@ from.
 Each write is bracketed by a pair of timestamped ``toc`` lines, so the log shows
 how long it took::
 
-  [ 1234.56] Writing checkpoint (termination) at iteration 42 to ./ckpt
-  [ 1261.03] Checkpoint written (termination) at iteration 42
+  [ 1234.56] Writing checkpoint at iteration 42 to ./ckpt
+  [ 1261.03] Checkpoint written at iteration 42
 
 Resuming
 --------
@@ -118,9 +118,38 @@ The new checkpoint is written in full before the old one is deleted, so the
 Under the default ``dill-reload`` backend a checkpoint holds a serialized copy
 of every local scenario model, which for large MIPs is not small.
 
-Publication is atomic: the files are written, then a manifest is rewritten to
-point at them. A run killed during a write leaves the previous complete
-checkpoint intact and referenced, never a half-written one.
+Publication is atomic: the new generation is staged, moved into place, and only
+then does a manifest rewrite commit it. A run killed at any point leaves a
+complete, resumable checkpoint referenced -- never a half-written one -- and
+the next successful write reclaims anything the interrupted one left behind.
+
+Use one checkpoint directory per run. Two runs sharing one share a manifest and
+will overwrite each other.
+
+What it costs
+-------------
+
+A checkpoint is written at every completed iteration, so the cost is one model
+serialization per iteration. Measured over ten iterations, against the same run
+without ``--checkpoint-dir``:
+
+===========================  ==========  ============  ==========
+instance                     no ckpt     with ckpt     overhead
+===========================  ==========  ============  ==========
+farmer, 3 scenarios (LP)       0.62 s        0.88 s        43%
+farmer, 50 scenarios (LP)      1.34 s        4.85 s       262%
+sizes, 3 scenarios (MIP)       2.28 s        3.15 s        38%
+sizes, 10 scenarios (MIP)      5.05 s        7.46 s        48%
+===========================  ==========  ============  ==========
+
+Roughly 7-25 ms per scenario per iteration. For the case this is designed for
+-- large MIP subproblems where a single solve takes minutes -- that is
+negligible. For many cheap scenarios it dominates, and the 50-scenario farmer
+run above takes over three times as long.
+
+The bracketing ``toc`` lines are an honest report of it: their difference is
+essentially the whole overhead, so a calibration run tells you the cost on your
+own models. There is currently no way to write less often.
 
 Requirements and limitations
 ----------------------------
@@ -138,6 +167,13 @@ the whole configuration object into the model. See :ref:`scenario_creator` for
 the pattern and the fix. Checkpointing checks one scenario at setup rather than
 discovering the problem hours later at the terminal checkpoint, and the error
 names the offending rule.
+
+**The synchronous PH hub only.** ``--APH`` and the other hub types are refused
+at startup when ``--checkpoint-dir`` is given, as is a hub with more than one
+rank, an unwritable directory, an unimplemented backend, and any configuration
+where the checkpointing extension would not actually be attached. The intent is
+that checkpointing either works or says so at startup, rather than running for
+hours and writing nothing.
 
 **Extension state is not yet part of a checkpoint.** Extensions that
 accumulate their own state across iterations -- the rho updaters, ``fixer``,

@@ -88,6 +88,23 @@ class Checkpointer(Extension):
             )
         ckpt.require_dill(self.backend)
 
+        # The invariant this design rests on -- enditer fires after the solve,
+        # so W and the nonants agree -- is a property of the *synchronous*
+        # iterk_loop. APH inherits this wiring because aph_hub is built by
+        # calling ph_hub, but its loop dispatches a fraction of the scenarios
+        # per pass, keeps its own hardcoded iteration range that no resume
+        # offset touches, and runs on a worker thread under the listener. A
+        # checkpoint written there would not describe a completed iteration
+        # and a resumed run would renumber from 1, overwriting the checkpoint
+        # it resumed from.
+        from mpisppy.opt.ph import PH
+        if not isinstance(opt, PH):
+            raise RuntimeError(
+                f"Checkpointing currently supports the synchronous PH hub "
+                f"only, but this hub is {type(opt).__name__}. Remove "
+                f"--checkpoint-dir, or run PH."
+            )
+
         # Multi-rank writing is not implemented: every rank would compute the
         # same staging and generation directory and race to create, replace and
         # delete it, so ranks destroy each other's files. Refuse rather than
