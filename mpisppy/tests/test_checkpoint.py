@@ -360,6 +360,39 @@ class TestResumeABFarmer(unittest.TestCase):
         generations = os.listdir(os.path.join(self.ckpt_dir, "hub"))
         self.assertEqual(generations, [f"gen_{self.STOP:04d}"])
 
+    def test_sweep_reclaims_interrupted_write_artifacts(self):
+        """Leftovers from a killed write must not accumulate.
+
+        A write that dies partway leaves a `.incoming` or `.retiring`
+        directory. They are what make the interrupted generation recoverable,
+        and the next successful write is what reclaims them -- so if the sweep
+        ever stopped matching them, a long-running job would grow a directory
+        of dead generations without anything failing.
+        """
+        opt = _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir))
+        opt.ph_main()
+        hub = os.path.join(self.ckpt_dir, "hub")
+        os.makedirs(os.path.join(hub, "gen_0001.incoming"), exist_ok=True)
+        os.makedirs(os.path.join(hub, "gen_0002.retiring"), exist_ok=True)
+        os.makedirs(os.path.join(hub, "gen_0009"), exist_ok=True)
+
+        checkpointing.write_checkpoint(opt, self.ckpt_dir, self.STOP + 1)
+        self.assertEqual(sorted(os.listdir(hub)),
+                         [f"gen_{self.STOP + 1:04d}"])
+
+    def test_interrupted_same_generation_write_is_still_loadable(self):
+        """The retired copy is the manifest's generation, intact."""
+        opt = _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir))
+        opt.ph_main()
+        hub = os.path.join(self.ckpt_dir, "hub")
+        live = os.path.join(hub, f"gen_{self.STOP:04d}")
+        # Exactly the state a kill between the two renames leaves behind.
+        os.rename(live, f"{live}.retiring")
+
+        leaf, models = checkpointing.load_checkpoint(opt, self.ckpt_dir)
+        self.assertEqual(leaf["generation"], self.STOP)
+        self.assertEqual(sorted(models), sorted(opt.local_scenarios))
+
     def test_retention_deletes_the_previous_generation(self):
         """Writing a second generation must remove the first, not accumulate."""
         opt = _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir))
@@ -573,13 +606,25 @@ class TestSetupRefusals(unittest.TestCase):
         completed iteration, and a resume would renumber from 1 and overwrite
         the checkpoint it resumed from.
         """
-        import types
-        not_ph = types.SimpleNamespace(
-            options={"checkpoint_dir": tempfile.mkdtemp(),
-                     "checkpoint_backend": checkpointing.DILL_RELOAD_BACKEND},
-            n_proc=1, cylinder_rank=0, local_scenarios={})
+        import mpisppy.phbase
+
+        # Must be a real PHBase subclass that is not PH: asserting against a
+        # bare stub would also pass if the check were widened to PHBase, which
+        # is the single most plausible future edit (to admit Subgradient or
+        # FWPH) and would silently readmit APH.
+        class NotPH(mpisppy.phbase.PHBase):
+            def __init__(self):          # no scenarios needed for this check
+                self.options = {
+                    "checkpoint_dir": tempfile.mkdtemp(),
+                    "checkpoint_backend": checkpointing.DILL_RELOAD_BACKEND,
+                }
+                self.n_proc = 1
+                self.cylinder_rank = 0
+                self.local_scenarios = {}
+
+        self.assertNotIsInstance(NotPH(), PH)
         with self.assertRaises(RuntimeError) as ctx:
-            Checkpointer(not_ph)
+            Checkpointer(NotPH())
         self.assertIn("synchronous PH hub", str(ctx.exception))
 
     def test_unimplemented_backend_is_refused_at_setup(self):

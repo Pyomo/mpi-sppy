@@ -165,7 +165,7 @@ unserializable by what its ``scenario_creator`` closes over -- most commonly a
 Pyomo rule written as a nested function that reads ``cfg`` directly, which pulls
 the whole configuration object into the model. See :ref:`scenario_creator` for
 the pattern and the fix. Checkpointing checks one scenario at setup rather than
-discovering the problem hours later at the terminal checkpoint, and the error
+discovering the problem at the first write, and the error
 names the offending rule.
 
 **The synchronous PH hub only.** ``--APH`` and the other hub types are refused
