@@ -985,42 +985,9 @@ class TestFixedNonantBaseline(unittest.TestCase):
             self.assertIn(id(v), live)
 
 
-class TestProxCapabilityChecksOnResume(unittest.TestCase):
-    """The issue-#762 checks must fire on the first solve of a resumed leg.
-
-    ``solver_name`` is deliberately exempt from the resume fingerprint, so a
-    resume is exactly when a quadratic-prox run may find itself on an LP-only
-    solver. Gated on iteration 1 alone, the checks would never fire on a
-    resumed run (its loop starts at ``_resume_iteration + 1 >= 2``) and the
-    user would get the cryptic solver failure the checks exist to replace.
-    """
-
-    def setUp(self):
-        self.ph = _make_ph(_options(1))
-        self.ph.PH_Prep()
-        # The gate under test is the iteration condition; force the
-        # quadratic-prox condition true and the solve outcome to "no solution
-        # anywhere", the state an LP-only solver leaves behind.
-        self.ph._prox_is_quadratic = lambda: True
-        for s in self.ph.local_scenarios.values():
-            s._mpisppy_data.solution_available = False
-        self.ph._resume_iteration = 3
-
-    def test_reactive_check_fires_on_first_resumed_iteration(self):
-        self.ph._PHIter = 4
-        with self.assertRaises(RuntimeError) as ctx:
-            self.ph._check_prox_solve_succeeded()
-        self.assertIn("quadratic", str(ctx.exception))
-
-    def test_reactive_check_is_quiet_after_the_first_leg_solve(self):
-        self.ph._PHIter = 5
-        self.ph._check_prox_solve_succeeded()  # must not raise
-
-    def test_reraise_wrap_fires_on_first_resumed_iteration(self):
-        self.ph._PHIter = 4
-        with self.assertRaises(RuntimeError) as ctx:
-            self.ph._reraise_as_prox_capability_error(ValueError("boom"))
-        self.assertIn("quadratic", str(ctx.exception))
+#: The resume side of the issue-#762 prox/solver capability checks -- they
+#: must fire on the first solve of a resumed leg, not only at iteration 1 --
+#: is covered in test_prox_solver_compat.py, next to the rest of those checks.
 
 
 class TestConfigureExtensionsComposes(unittest.TestCase):
