@@ -70,6 +70,9 @@ def wheel_spinner(
     vanilla_fn = vanilla.aph_hub if cnfg["run_async"] else vanilla.ph_hub
     hub_dict = vanilla_fn(*vanilla_args, **vanilla_kwargs)
 
+    # Optional feasibility cuts from xhatters (requires binary first-stage).
+    hub_dict = vanilla.add_xhat_feasibility_cuts(hub_dict, cnfg)
+
     spoke_dicts = []
     for spoke_name in SUPPORTED_SPOKES:
         if getattr(cnfg, spoke_name):
@@ -90,6 +93,7 @@ def main() -> None:
     cnfg.aph_args()
     for spoke_name in SUPPORTED_SPOKES:
         getattr(cnfg, spoke_name + "_args")()
+    cnfg.xhat_feasibility_cut_args()
     add_common_args(cnfg)
     cnfg.parse_command_line()
 

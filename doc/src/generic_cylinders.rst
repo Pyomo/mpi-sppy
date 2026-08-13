@@ -18,12 +18,12 @@ other features without requiring you to write a driver program.
 
        mpi-sppy-generic-cylinders --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi
 
-   For multi-rank parallel runs, prefer the ``python -m mpi4py`` module
-   form shown below (``mpiexec -np 3 python -m mpi4py -m
-   mpisppy.generic_cylinders ...``): mpi4py's runner aborts all ranks if
-   one raises an exception, whereas a bare
-   ``mpiexec -np 3 mpi-sppy-generic-cylinders ...`` runs but may leave
-   the other ranks hanging when one fails.
+   The console script installs the same abort-on-exception protection
+   as mpi4py's runner, so for multi-rank parallel runs
+   ``mpiexec -np 3 mpi-sppy-generic-cylinders ...`` and the
+   ``mpiexec -np 3 python -m mpi4py -m mpisppy.generic_cylinders ...``
+   module form shown below are equally safe: if one rank raises an
+   exception, all ranks are aborted rather than leaving the job hung.
 
 Your Model File (Module)
 ------------------------
@@ -154,7 +154,7 @@ two-stage problems:
 
 .. code-block:: bash
 
-    mpiexec -np 2 python -m mpisppy.generic_cylinders \
+    mpiexec -np 2 python -m mpi4py -m mpisppy.generic_cylinders \
         --module-name farmer --num-scens 3 \
         --solver-name gurobi --lshaped-hub --xhatlshaped \
         --max-iterations 100 --rel-gap 1e-4
@@ -365,6 +365,28 @@ options are ``{presolve=2, threads=4, mipgap=0.01}``: the spoke
 flag adds ``mipgap`` and leaves the global ``presolve`` and
 ``threads`` in place. The hub and the other spokes see the
 global dict ``{presolve=2, threads=4}`` unchanged.
+
+Each spoke also takes ``--<spoke>-solver-name``, so a spoke can run
+on a different solver from the hub. This covers the xhat inner-bound
+spokes (``--xhatshuffle-solver-name``, ``--xhatxbar-solver-name``,
+``--xhatlshaped-solver-name``) as well as the outer-bound ones:
+
+.. code-block:: bash
+
+    --solver-name gurobi --xhatshuffle --xhatshuffle-solver-name xpress
+
+Here the PH hub solves on Gurobi and the xhatshuffle spoke's
+incumbent-finding solves go to Xpress. ``--<spoke>-solver-name``
+falls back to ``--solver-name`` when it is not given, and the name
+and options flags are independent — supply only
+``--<spoke>-solver-options`` to keep the inherited solver but change
+its options.
+
+.. note::
+   FWPH is the exception to the ``--<spoke>-solver-name`` pattern:
+   it solves two kinds of subproblem and so takes
+   ``--fwph-mip-solver-name`` and ``--fwph-qp-solver-name``
+   instead. See :ref:`Hubs`.
 
 .. warning::
 

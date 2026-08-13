@@ -179,6 +179,10 @@ class WheelSpinner:
         # Anything that's left to do
         spcomm.finalize()
 
+        # Unequal-rank runs: per-field multi-source read-outcome summary
+        # (collective on cylinder_comm; inert at equal ranks)
+        spcomm.report_coherence_diagnostics()
+
         # to ensure the messages below are True
         cylinder_comm.Barrier()
         global_toc(f"Hub algorithm {opt_class.__name__} complete, waiting for spoke finalization", comm_world.rank == 0)
