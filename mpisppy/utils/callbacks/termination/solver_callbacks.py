@@ -130,6 +130,20 @@ def set_xpress_callback(solver, user_termination_callback):
     # Per the Xpress documentation, this callback is invoked every time the
     # Optimizer checks if the time limit has been reached. This is broader than
     # what is presently needed for our MIP-based use cases.
-    xpress_problem.addCheckTimeCallback(
-        cbchecktime_callback, user_termination_callback, 0
+    callback_method = getattr(
+        xpress_problem,
+        "addCheckTimeCallback",
+        getattr(xpress_problem, "addcbchecktime", None), # <- for older xpress APIs
     )
+
+    if not callable(callback_method):
+        raise RuntimeError(
+            "Could not find a valid Xpress API callback registration method"
+        )
+
+    callback_method(
+        cbchecktime_callback,
+        user_termination_callback,
+        0,
+    )
+
