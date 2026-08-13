@@ -7,17 +7,20 @@
 # full copyright and license information.
 ###############################################################################
 import unittest
-import os
 
 import pyomo.environ as pyo
 
 from mpisppy.opt.lshaped import LShapedMethod
 from mpisppy.utils.lshaped_cuts import StandardLPL1CutGenerator
 from mpisppy.tests.examples import farmer
+from mpisppy.tests.utils import get_solver
 
 
-XPRESS_SOLVER = os.environ.get("MPISPPY_XPRESS_TEST_SOLVER", "xpress_persistent")
-RUN_XPRESS_TESTS = os.environ.get("MPISPPY_RUN_XPRESS_TESTS") == "1"
+solver_available, solver_name, _, _ = get_solver()
+standard_lp_l1_solver_available = (
+    solver_available
+    and solver_name in StandardLPL1CutGenerator._solver_dual_sign_convention
+)
 
 
 class TestStandardLPL1CutGenerator(unittest.TestCase):
@@ -60,8 +63,8 @@ class TestStandardLPL1CutGenerator(unittest.TestCase):
     def test_unknown_lshaped_cut_generator_option_errors(self):
         names = farmer.scenario_names_creator(3)
         options = {
-            "root_solver": "xpress_persistent",
-            "sp_solver": "xpress_persistent",
+            "root_solver": solver_name,
+            "sp_solver": solver_name,
             "sp_solver_options": {},
             "valid_eta_lb": {name: -1e6 for name in names},
             "lshaped_cut_generator": "not_a_generator",
@@ -84,14 +87,15 @@ class TestStandardLPL1CutGenerator(unittest.TestCase):
 
 class TestStandardLPL1LShapedSolve(unittest.TestCase):
     @unittest.skipUnless(
-        RUN_XPRESS_TESTS,
-        "set MPISPPY_RUN_XPRESS_TESTS=1 to run xpress-dependent tests",
+        standard_lp_l1_solver_available,
+        "%s solver is not available or is not supported by standard_lp_l1"
+        % (solver_name,),
     )
     def test_farmer_lshaped_standard_lp_l1(self):
         names = farmer.scenario_names_creator(3)
         options = {
-            "root_solver": XPRESS_SOLVER,
-            "sp_solver": XPRESS_SOLVER,
+            "root_solver": solver_name,
+            "sp_solver": solver_name,
             "sp_solver_options": {},
             "valid_eta_lb": {name: -1e6 for name in names},
             "lshaped_cut_generator": "standard_lp_l1",
