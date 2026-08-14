@@ -66,6 +66,7 @@ def _options(max_iters, ckpt_dir=None, resume_from=None, **overrides):
     if ckpt_dir is not None:
         options["checkpoint_dir"] = ckpt_dir
         options["checkpoint_backend"] = checkpointing.DILL_RELOAD_BACKEND
+        options["checkpoint_every_iterations"] = 1
     if resume_from is not None:
         options["resume_from"] = resume_from
     options.update(overrides)
@@ -851,8 +852,11 @@ class TestConfigRegistration(unittest.TestCase):
 
     def test_flags_are_registered(self):
         for name in ("checkpoint_dir", "checkpoint_backend",
-                     "resume_from"):
+                     "checkpoint_every_iterations", "resume_from"):
             self.assertIn(name, self.cfg)
+
+    def test_cadence_defaults_to_every_iteration(self):
+        self.assertEqual(self.cfg.checkpoint_every_iterations, 1)
 
     def test_checkpointing_is_off_by_default(self):
         self.assertIsNone(self.cfg.checkpoint_dir)
@@ -988,6 +992,165 @@ class TestFixedNonantBaseline(unittest.TestCase):
 #: The resume side of the issue-#762 prox/solver capability checks -- they
 #: must fire on the first solve of a resumed leg, not only at iteration 1 --
 #: is covered in test_prox_solver_compat.py, next to the rest of those checks.
+
+
+@unittest.skipIf(not solver_available,
+                 "no solver is available for the write-cadence tests")
+class TestCheckpointEveryIterations(unittest.TestCase):
+    """--checkpoint-every-iterations K trades lost iterations for write cost.
+
+    The cadence must not disturb what a checkpoint *means*: writes still land
+    only on iteration boundaries, so whatever is published is still a
+    completed iteration and still resumes exactly.
+    """
+
+    N = 6
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _run(self, max_iters, every, **overrides):
+        opts = _options(max_iters, ckpt_dir=self.ckpt_dir, **overrides)
+        opts["checkpoint_every_iterations"] = every
+        ph = _make_ph(opts)
+        ph.ph_main()
+        return ph
+
+    def test_writes_are_skipped_between_checkpoint_points(self):
+        """K=3 over 6 iterations writes at 3 and 6, not six times."""
+        writes = []
+        real = checkpointing.write_checkpoint
+
+        def counting(opt, ckpt_dir, generation, backend):
+            writes.append(generation)
+            return real(opt, ckpt_dir, generation, backend=backend)
+
+        with mock.patch.object(checkpointing, "write_checkpoint",
+                               side_effect=counting):
+            self._run(self.N, 3)
+        self.assertEqual(writes, [3, 6])
+
+    def test_a_cadence_checkpoint_resumes(self):
+        """What K changes is which generation is published; that generation
+        must still resume into an indistinguishable continuation."""
+        self._run(3, 3)
+        self.assertEqual(_published_generation(self.ckpt_dir), 3)
+
+        resumed = _make_ph(_options(self.N, resume_from=self.ckpt_dir))
+        resumed.ph_main()
+        self.assertEqual(resumed._resume_iteration, 3)
+        self.assertEqual(resumed._PHIter, self.N)
+
+        reference = _make_ph(_options(self.N))
+        reference.ph_main()
+        want = _primal_snapshot(reference)
+        got = _primal_snapshot(resumed)
+        worst = max((abs(want[k] - got[k]) for k in want), default=0.0)
+        self.assertLessEqual(worst, 1e-9)
+
+    def test_final_iteration_is_written_even_off_cadence(self):
+        """Iteration 5 is not a multiple of 3, but it exhausts the limit --
+        and resuming with a raised limit is how a study gets extended."""
+        writes = []
+        real = checkpointing.write_checkpoint
+
+        def counting(opt, ckpt_dir, generation, backend):
+            writes.append(generation)
+            return real(opt, ckpt_dir, generation, backend=backend)
+
+        with mock.patch.object(checkpointing, "write_checkpoint",
+                               side_effect=counting):
+            self._run(5, 3, PHIterLimit=5)
+        self.assertEqual(writes, [3, 5])
+        self.assertEqual(_published_generation(self.ckpt_dir), 5)
+
+    def test_default_writes_every_iteration(self):
+        writes = []
+        real = checkpointing.write_checkpoint
+
+        def counting(opt, ckpt_dir, generation, backend):
+            writes.append(generation)
+            return real(opt, ckpt_dir, generation, backend=backend)
+
+        with mock.patch.object(checkpointing, "write_checkpoint",
+                               side_effect=counting):
+            self._run(4, 1)
+        self.assertEqual(writes, [1, 2, 3, 4])
+
+
+class TestCheckpointCadenceDecision(unittest.TestCase):
+    """`_should_write` in isolation: which completed iterations are
+    checkpoint points, without depending on when a real run happens to stop.
+
+    A stop that is not the iteration limit -- convergence, the user converger,
+    --time-limit -- is decided in the *next* iteration's top half, so the
+    iterations after the last checkpoint point are simply lost. That is the
+    trade K buys, and it is stated here rather than inferred from a timed run.
+    """
+
+    def _checkpointer(self, every, phiter, limit):
+        opt = _make_ph(_options(limit))
+        opt.options["checkpoint_dir"] = tempfile.mkdtemp()
+        opt.options["checkpoint_backend"] = checkpointing.DILL_RELOAD_BACKEND
+        opt.options["checkpoint_every_iterations"] = every
+        ext = Checkpointer(opt)
+        opt._PHIter = phiter
+        return ext
+
+    def test_on_cadence_iteration_is_a_checkpoint_point(self):
+        self.assertTrue(self._checkpointer(3, phiter=6, limit=100)._should_write())
+
+    def test_off_cadence_iteration_is_skipped(self):
+        for phiter in (4, 5, 7, 8):
+            with self.subTest(phiter=phiter):
+                self.assertFalse(
+                    self._checkpointer(3, phiter=phiter, limit=100)._should_write())
+
+    def test_final_iteration_is_a_checkpoint_point_off_cadence(self):
+        self.assertTrue(self._checkpointer(3, phiter=100, limit=100)._should_write())
+
+    def test_every_one_writes_at_every_iteration(self):
+        for phiter in (1, 2, 3, 4, 5):
+            with self.subTest(phiter=phiter):
+                self.assertTrue(
+                    self._checkpointer(1, phiter=phiter, limit=100)._should_write())
+
+    def test_cadence_counts_absolute_iterations_across_a_resume(self):
+        """The counter is global, so a resume does not shift the cadence --
+        generations stay on the same multiples whether or not the run stopped.
+        """
+        ext = self._checkpointer(5, phiter=10, limit=100)
+        ext.opt._resume_iteration = 7
+        self.assertTrue(ext._should_write())
+        ext.opt._PHIter = 12
+        self.assertFalse(ext._should_write())
+
+
+class TestCheckpointEveryIterationsValidation(unittest.TestCase):
+    def test_zero_is_refused_at_setup(self):
+        opt = _make_ph(_options(1))
+        opt.options["checkpoint_dir"] = tempfile.mkdtemp()
+        opt.options["checkpoint_backend"] = checkpointing.DILL_RELOAD_BACKEND
+        opt.options["checkpoint_every_iterations"] = 0
+        with self.assertRaises(RuntimeError) as ctx:
+            Checkpointer(opt)
+        self.assertIn("at least 1", str(ctx.exception))
+
+    def test_cadence_is_not_structural(self):
+        """Changing K must not block a resume: it is a cadence knob, like the
+        iteration limit, not a description of the problem."""
+        base = {"defaultPHrho": 1.0}
+        self.assertEqual(
+            checkpointing.structural_fingerprint(
+                {**base, "checkpoint_every_iterations": 1}),
+            checkpointing.structural_fingerprint(
+                {**base, "checkpoint_every_iterations": 25}))
+        self.assertTrue(
+            checkpointing._is_non_structural("checkpoint_every_iterations"))
 
 
 class TestConfigureExtensionsComposes(unittest.TestCase):

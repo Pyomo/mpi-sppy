@@ -32,6 +32,28 @@ iteration. Pairing ``--checkpoint-dir`` with ``--time-limit`` is the
 planned-stop recipe -- set the day's budget and the run stops itself with a
 resumable checkpoint in place.
 
+Checkpointing less often
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Serializing every scenario every iteration costs roughly 7--25 ms per
+scenario per iteration. Against a MIP whose solves take minutes that is
+noise, but on many cheap scenarios it can dominate the run. ``--checkpoint-
+every-iterations K`` writes at every K-th completed iteration instead::
+
+  python -m mpisppy.generic_cylinders --module-name farmer --num-scens 50 \
+      --solver-name cplex --max-iterations 100 --default-rho 1.0 \
+      --checkpoint-dir ./ckpt --checkpoint-every-iterations 10
+
+The trade is explicit: a stop that is not at a checkpoint point loses the
+iterations since the last one -- up to K-1 of them. Nothing else changes,
+because writes still happen only at iteration boundaries, which is what makes
+a checkpoint coherent in the first place.
+
+One exception: the final iteration of an exhausted ``--max-iterations`` budget
+is always written, whatever K is. Raising the limit and resuming is a normal
+way to extend a study, and that last iterate is known-good and already in
+memory, so it is not worth discarding to save one write.
+
 Writing only at iteration boundaries is deliberate. PH computes xbar, updates
 the dual weights, gives extensions their mid-iteration hook, and only then
 solves; a run that stops on ``--time-limit`` or on convergence stops *before*

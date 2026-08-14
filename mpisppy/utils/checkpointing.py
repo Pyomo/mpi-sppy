@@ -77,8 +77,10 @@ NON_STRUCTURAL_CFG_KEYS = frozenset({
     # How long to run. Resuming with a different budget is the point.
     "max_iterations", "time_limit", "intra_hub_conv_thresh", "rel_gap",
     "abs_gap", "max_stalled_iters",
-    # Checkpoint plumbing itself.
-    "checkpoint_dir", "checkpoint_backend",
+    # Checkpoint plumbing itself. How often a checkpoint is written is a
+    # cadence knob like the iteration limit: it changes what a stop costs, not
+    # what problem the checkpoint describes.
+    "checkpoint_dir", "checkpoint_backend", "checkpoint_every_iterations",
     "resume_from",
     # Display, logging and output destinations.
     "verbose", "display_progress", "display_timing",

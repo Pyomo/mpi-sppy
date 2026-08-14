@@ -555,16 +555,35 @@ Consequences, all deliberate:
   `post_everything`, an xhat evaluation can no longer contaminate a checkpoint,
   which closes §9 item 4 without separate machinery.
 
-**Deferred triggers.** The periodic and anticipated triggers below were designed
-against the terminal-checkpoint model and are *not* implemented. Writing every
-iteration subsumes most of what they were for — a checkpoint from the last
-completed iteration always exists, so `--checkpoint-every-seconds` and the
-anticipatory `--checkpoint-before-seconds` no longer have a gap to fill. What
-remains genuinely useful is the opposite of insurance: a way to write **less**
-often, to buy back the per-iteration cost on models with many cheap scenarios.
-`--checkpoint-every-iterations K` is therefore the one trigger still worth
-adding, and its meaning has inverted — it is now a cost control, not a safety
-net. The original rationale for the other two is preserved below for the record.
+**Triggers.** The periodic and anticipated triggers below were designed against
+the terminal-checkpoint model. Writing at completed iterations subsumes most of
+what they were for — a checkpoint from a recent completed iteration always
+exists, so `--checkpoint-every-seconds` and the anticipatory
+`--checkpoint-before-seconds` have no gap left to fill, and neither is
+implemented. What remained genuinely useful was the opposite of insurance: a
+way to write **less** often, to buy back the per-iteration cost on models with
+many cheap scenarios.
+
+`--checkpoint-every-iterations K` **is implemented** and is that control; its
+meaning inverted along the way — it is a cost control, not a safety net. Writes
+happen at every K-th completed iteration by *absolute* iteration number, so the
+cadence is unaffected by a resume (which continues the global counter). An
+unplanned stop therefore loses up to K−1 completed iterations, which is the
+whole trade. It moves *which* boundaries are checkpoint points and never moves
+a write off a boundary, so the coherence argument above is untouched.
+
+The one iteration written regardless of K is the last one of an exhausted
+`PHIterLimit`, which `Checkpointer._is_final_iteration` detects from the loop
+bound. Resuming with a raised `--max-iterations` is an explicitly supported
+workflow (`max_iterations` is non-structural), and that final iterate is
+coherent and already in memory; discarding it to save a single write would be
+a real loss for the most ordinary way a study gets extended. The limit is the
+only stop knowable at `enditer` — convergence, the user converger and
+`--time-limit` are all decided in the *next* iteration's top half, and the
+cylinder-convergence test fires after the hook.
+
+The original rationale for the other two triggers is preserved below for the
+record.
 
 **Other options**
 

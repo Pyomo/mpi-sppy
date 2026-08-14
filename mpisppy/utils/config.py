@@ -788,6 +788,16 @@ class Config(pyofig.ConfigDict):
                            domain=str,
                            default="dill-reload")
 
+        self.add_to_config("checkpoint_every_iterations",
+                           description="write a checkpoint every K completed "
+                           "iterations instead of every one, trading up to "
+                           "K-1 iterations of lost work for a smaller share "
+                           "of the run spent serializing models; the last "
+                           "iteration of an exhausted iteration limit is "
+                           "always written (default 1)",
+                           domain=int,
+                           default=1)
+
         self.add_to_config("resume_from",
                            description="resume from the checkpoint in this "
                            "directory; requires the same rank count and "

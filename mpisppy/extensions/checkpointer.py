@@ -38,12 +38,20 @@ so a checkpoint written there always describes a *completed* iteration, no
 matter which extensions are loaded or what they touched. The invariant is one
 sentence and it holds by construction.
 
-The cost is a model serialization per iteration rather than one per run. That
+The cost is a model serialization per checkpoint rather than one per run. That
 is the deliberate trade: correctness that needs no knowledge of any extension.
 Retention is a single generation, so each write replaces the last, and the disk
 footprint does not grow with the iteration count. Each write is bracketed by
-``global_toc`` so the per-iteration cost is visible in the log rather than
-guessed at.
+``global_toc`` so the cost is visible in the log rather than guessed at.
+
+``--checkpoint-every-iterations K`` buys that cost back on models whose solves
+are cheap enough for serialization to dominate: writes happen at every K-th
+completed iteration instead of every one, so an unplanned stop loses up to
+K-1 iterations. It moves *which* boundaries are checkpoint points; it does not
+move the write off an iteration boundary, so the coherence argument above is
+untouched. The last iteration of an exhausted iteration limit is always
+written, because raising ``--max-iterations`` and resuming is a supported
+workflow and that iterate is known-good and already in memory.
 
 A checkpoint therefore describes a *completed PH iteration*. A run that ends
 before finishing iteration 1 publishes nothing: no iteration completed, so
@@ -72,6 +80,14 @@ class Checkpointer(Extension):
         self.ckpt_dir = options.get("checkpoint_dir", None)
         self.backend = options.get("checkpoint_backend",
                                    ckpt.DILL_RELOAD_BACKEND)
+        every = options.get("checkpoint_every_iterations", 1)
+        self.every = 1 if every is None else int(every)
+        if self.every < 1:
+            raise RuntimeError(
+                f"--checkpoint-every-iterations must be at least 1, got "
+                f"{self.every}. It counts completed iterations between "
+                f"writes; 1 writes at every iteration."
+            )
 
         if self.ckpt_dir is None:
             raise RuntimeError(
@@ -143,17 +159,49 @@ class Checkpointer(Extension):
         # checkpointing exists to preserve.
         ckpt.probe_model_is_dillable(self.opt)
 
+    def _is_final_iteration(self):
+        """True when the loop bound says this completed iteration is the last.
+
+        ``iterk_loop`` runs ``range(_resume_iteration + 1, PHIterLimit + 1)``,
+        so at ``enditer`` of the limit iteration there is no next pass. Only
+        the iteration limit is knowable here: convergence, the user converger
+        and ``--time-limit`` are all decided in the *next* iteration's top
+        half, and the cylinder-convergence test fires after this hook.
+        """
+        limit = self.opt.options.get("PHIterLimit", None)
+        if limit is None:
+            return False
+        return int(getattr(self.opt, "_PHIter", 0)) >= int(limit)
+
+    def _should_write(self):
+        """Whether this completed iteration is a checkpoint point.
+
+        Every K-th iteration by absolute number, so the cadence is unchanged
+        by a resume (which picks the global counter up where it left off).
+        The final iteration of an exhausted iteration limit is always written:
+        raising ``--max-iterations`` and resuming is an explicitly supported
+        workflow, and dropping the last K-1 iterations of a run that ended by
+        finishing its budget would lose work that is known to be coherent and
+        is sitting in memory.
+        """
+        iteration = int(getattr(self.opt, "_PHIter", 0))
+        return iteration % self.every == 0 or self._is_final_iteration()
+
     def enditer(self):
-        """Write the checkpoint. See the module docstring for why it is here.
+        """Write the checkpoint if this iteration is a checkpoint point.
+
+        See the module docstring for why the write lives here.
 
         A mid-run write failure -- disk full, an NFS hiccup -- is warned
         about, not raised: the previously published generation is untouched
         and remains resumable, while the optimization progress that a raise
-        would destroy lives only in memory. The next iteration boundary tries
+        would destroy lives only in memory. The next checkpoint point tries
         again. Conditions detectable at setup (unwritable directory,
         undillable model, unknown backend) still fail loudly in ``__init__``
         and ``pre_iter0``.
         """
+        if not self._should_write():
+            return
         try:
             self._write()
         except RuntimeError as exc:
@@ -161,7 +209,7 @@ class Checkpointer(Extension):
                 f"WARNING: checkpoint write failed at iteration "
                 f"{int(getattr(self.opt, '_PHIter', 0))}; the run continues, "
                 f"the previously published checkpoint (if any) is intact, "
-                f"and the next iteration will try again.\n{exc}",
+                f"and the next checkpoint point will try again.\n{exc}",
                 self.opt.cylinder_rank == 0)
 
     def _write(self):

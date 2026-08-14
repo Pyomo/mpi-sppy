@@ -953,6 +953,7 @@ def add_checkpointing(hub_dict, cfg):
         hub_dict["opt_kwargs"]["options"].update(
             {"checkpoint_dir": cfg.checkpoint_dir,
              "checkpoint_backend": cfg.checkpoint_backend,
+             "checkpoint_every_iterations": cfg.checkpoint_every_iterations,
             })
 
     if _hasit(cfg, 'resume_from'):

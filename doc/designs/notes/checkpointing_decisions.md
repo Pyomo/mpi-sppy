@@ -95,7 +95,12 @@ Writing every iteration **subsumes** `--checkpoint-every-seconds` and the
 anticipatory `--checkpoint-before-seconds`: a checkpoint from the last
 completed iteration always exists, so neither has a gap left to fill.
 
-The trigger still worth building is `--checkpoint-every-iterations K`, and its
-meaning has **inverted**. It was designed as insurance — write *more* often. It
+The trigger still worth building was `--checkpoint-every-iterations K`, and its
+meaning had **inverted**. It was designed as insurance — write *more* often. It
 is now a cost control — write *less* often, to buy back the overhead above on
-models with many cheap scenarios.
+models with many cheap scenarios. It has since been implemented on exactly
+those terms: every K-th completed iteration by absolute number, losing up to
+K−1 iterations on an unplanned stop, plus an unconditional write at the last
+iteration of an exhausted iteration limit (that iterate is coherent, already in
+memory, and resuming with a raised limit is the ordinary way to extend a
+study).
