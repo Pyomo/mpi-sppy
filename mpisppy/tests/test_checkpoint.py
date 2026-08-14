@@ -23,6 +23,7 @@ producing nonsense, and that the initially-fixed-nonant baseline survives the
 model swap -- without it a resumed run silently stops updating its best bound.
 """
 
+import errno
 import json
 import os
 import shutil
@@ -1239,7 +1240,7 @@ class TestResumeExtensionBehavior(unittest.TestCase):
                 msg=f"pre_iter0 ran on a model that the resume splice then "
                     f"discarded (scenario {sname}), so its effects were lost")
 
-    def test_midrun_write_failure_does_not_kill_the_run(self):
+    def _assert_write_failure_is_survived(self, exc):
         """A transient write failure warns and continues; the previously
         published generation stays resumable and later iterations retry."""
         calls = {"n": 0}
@@ -1248,7 +1249,7 @@ class TestResumeExtensionBehavior(unittest.TestCase):
         def flaky(opt, ckpt_dir, generation, backend):
             calls["n"] += 1
             if calls["n"] > 1:
-                raise RuntimeError("synthetic ENOSPC")
+                raise exc
             return real(opt, ckpt_dir, generation, backend=backend)
 
         with mock.patch.object(checkpointing, "write_checkpoint",
@@ -1264,6 +1265,17 @@ class TestResumeExtensionBehavior(unittest.TestCase):
         resumed = _make_ph(_options(1, resume_from=self.ckpt_dir))
         resumed.ph_main()
         self.assertEqual(resumed._resume_iteration, 1)
+
+    def test_midrun_write_failure_does_not_kill_the_run(self):
+        self._assert_write_failure_is_survived(RuntimeError("synthetic ENOSPC"))
+
+    def test_midrun_oserror_does_not_kill_the_run(self):
+        """Only the model dump is wrapped as a RuntimeError; the leaf write,
+        the publishing renames and the manifest write all raise a bare
+        OSError, so a disk that fills between the last model file and the leaf
+        must not take the run down."""
+        self._assert_write_failure_is_survived(
+            OSError(errno.ENOSPC, "No space left on device"))
 
 
 class TestUnknownBackend(unittest.TestCase):

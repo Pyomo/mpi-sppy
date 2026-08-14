@@ -199,17 +199,28 @@ class Checkpointer(Extension):
         again. Conditions detectable at setup (unwritable directory,
         undillable model, unknown backend) still fail loudly in ``__init__``
         and ``pre_iter0``.
+
+        Every exception is caught, not just the ``RuntimeError`` that
+        ``write_checkpoint`` raises for a failed model dump: only the model
+        dump is wrapped, so the leaf write, the publishing renames and the
+        manifest write all surface a bare ``OSError``, and ENOSPC between the
+        last model file and the leaf would otherwise take the run down by the
+        exact route this is here to prevent. Continuing is safe at every one
+        of those points -- each is either pre-commit (the manifest still
+        names the previous generation, which is intact) or the atomic
+        manifest flip itself.
         """
         if not self._should_write():
             return
         try:
             self._write()
-        except RuntimeError as exc:
+        except Exception as exc:
             global_toc(
                 f"WARNING: checkpoint write failed at iteration "
-                f"{int(getattr(self.opt, '_PHIter', 0))}; the run continues, "
-                f"the previously published checkpoint (if any) is intact, "
-                f"and the next checkpoint point will try again.\n{exc}",
+                f"{int(getattr(self.opt, '_PHIter', 0))} "
+                f"({type(exc).__name__}); the run continues, the previously "
+                f"published checkpoint (if any) is intact, and the next "
+                f"checkpoint point will try again.\n{exc}",
                 self.opt.cylinder_rank == 0)
 
     def _write(self):

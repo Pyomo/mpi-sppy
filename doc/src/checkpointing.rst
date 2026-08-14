@@ -181,9 +181,9 @@ will overwrite each other.
 What it costs
 -------------
 
-A checkpoint is written at every completed iteration, so the cost is one model
-serialization per iteration. Measured over ten iterations, against the same run
-without ``--checkpoint-dir``:
+By default a checkpoint is written at every completed iteration, so the cost is
+one model serialization per iteration. Measured over ten iterations, against
+the same run without ``--checkpoint-dir``:
 
 ===========================  ==========  ============  ==========
 instance                     no ckpt     with ckpt     overhead
@@ -201,7 +201,9 @@ run above takes over three times as long.
 
 The bracketing ``toc`` lines are an honest report of it: their difference is
 essentially the whole overhead, so a calibration run tells you the cost on your
-own models. There is currently no way to write less often.
+own models. If that cost is too high, ``--checkpoint-every-iterations`` buys
+most of it back in exchange for repeating some iterations after a stop; see
+`Checkpointing less often`_ above.
 
 Requirements and limitations
 ----------------------------
