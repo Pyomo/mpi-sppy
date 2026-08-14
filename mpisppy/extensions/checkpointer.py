@@ -61,6 +61,26 @@ objective after the last extension hook available to us, so a checkpoint taken
 during it would capture a model whose objective is not yet the one PH iterates
 on.
 
+**Extension order matters, and this one is attached first.**
+``MultiExtension`` dispatches ``enditer`` in the order extensions were
+attached, and ``add_checkpointing`` runs at the end of ``ph_hub`` -- before
+``configure_extensions`` appends anything else -- so the Checkpointer's
+``enditer`` fires before the others'. Any extension whose ``enditer`` *changes
+a scenario model* (rho, nonant fixedness, domains, cuts) therefore makes that
+change after the checkpoint for that iteration has been written: the change is
+absent from the checkpoint, and a resume from it never re-applies the change,
+because ``enditer`` for that iteration has already run.
+
+No shipped extension is affected -- every ``enditer`` in the tree is a no-op or
+read-only (the xhat evaluators do their work in ``post_everything``, which is
+also why an xhat evaluation cannot contaminate a checkpoint). The exposure is a
+user extension supplied with ``--user-defined-extensions``, which is appended
+after the Checkpointer: if its ``enditer`` mutates models, attach it *before*
+the Checkpointer so its changes land in the checkpoint. The durable fix is to
+stop depending on dispatch order at all, by writing from a dedicated hook in
+``iterk_loop``; that is scheduled with the cylinders work, which needs the same
+hook for the xhatter loop (design section 9, item 8, and section 11 phase 4).
+
 See ``doc/designs/checkpointing_design.md``.
 """
 

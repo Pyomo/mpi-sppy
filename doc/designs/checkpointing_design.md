@@ -996,6 +996,20 @@ Each is green on its own, and 1a is independently useful — a run that stops at
 - **Phase 4 — Cylinders / spokes.** One-line xhatter write hook; unified
   `Checkpointer` on spoke opts; each spoke checkpoints its own **best xhat** (by
   name) asynchronously on improvement — no hub↔spoke coordination (§9, item 6).
+  **Also move the hub write onto that same dedicated hook.** Phase 1a writes
+  from the `Checkpointer`'s `enditer`, and `MultiExtension` dispatches
+  `enditer` in attach order with the `Checkpointer` first (`add_checkpointing`
+  runs at the end of `ph_hub`, before `configure_extensions` appends the rest),
+  so a *user* extension whose `enditer` mutates models does so after that
+  iteration's checkpoint was written, and a resume never re-applies it. No
+  shipped extension is affected — every `enditer` in the tree is a no-op or
+  read-only — so phase 1a documents the constraint instead of reordering. A
+  dedicated call in `iterk_loop` removes the dispatch-order dependency for
+  every driver at once, not just the `do_decomp` path, and this phase is
+  already adding the equivalent hook to the xhatter loop, so the two land
+  together. Note `enditer_after_sync` is *not* a substitute: it fires after the
+  `spcomm.is_converged()` break, so a run ending on cylinder convergence would
+  write nothing.
   Tests (the §11.1 A/B harness on cylinders): farmer/`sizes`
   (hub+lagrangian+xhatshuffle) stop+resume — hub primal trajectory compared A
   vs B (bit-identical for farmer, per the §6 PoC), best xhat preserved, bounds
