@@ -28,6 +28,7 @@ import numpy as np
 from mpisppy.cylinders.spcommunicator import (
     SPCommunicator,
     RecvArray,
+    coherence_miss_rate,
     reduce_source_write_ids,
     _STRICT_COHERENCE_FIELDS,
 )
@@ -156,11 +157,34 @@ class _StubWindow:
         out_arr[:] = self.sources[rank]
 
 
+class _StubCylinderComm:
+    """Stands in for cylinder_comm inside _write_ids_agree: emulates a
+    two-rank cylinder whose *other* reader rank computed ``peer_id``. Leaving
+    peer_id None makes that rank agree with whatever this one computed; setting
+    it makes the collective cross-reader check reject, which is the only way to
+    reach the rejected_cross_reader bucket without a live MPI run."""
+
+    size = 2
+
+    def __init__(self):
+        self.peer_id = None
+
+    def Barrier(self):
+        pass
+
+    def Allreduce(self, sendbuf, recvbuf, op=None):
+        local = int(sendbuf[0][0])
+        peer = local if self.peer_id is None else self.peer_id
+        recvbuf[0][0] = local + peer
+
+
 def _make_reader():
     """A minimal SPCommunicator stand-in carrying just what
-    _flex_get_multi_source touches (with synchronize=False)."""
+    _flex_get_multi_source touches."""
     sp = SPCommunicator.__new__(SPCommunicator)
     sp.window = _StubWindow()
+    sp.cylinder_comm = _StubCylinderComm()
+    sp.cylinder_rank = 0
     peer = 1
     sp._overlap_source_ranks = {
         (Field.DUALS, peer): [0, 1],
@@ -170,6 +194,9 @@ def _make_reader():
         (Field.DUALS, peer): _SEGMENTS,
         (Field.NONANTS_VALS, peer): _SEGMENTS,
     }
+    # read-outcome diagnostic state (set by __init__ in the real class)
+    sp.coherence_counters = {}
+    sp._coherence_report_period = 0
     return sp, peer
 
 
@@ -232,6 +259,121 @@ class TestMultiSourceReaderRetry(unittest.TestCase):
         self.assertTrue(buf.is_new())
         self.assertEqual(buf.id(), 5)
         np.testing.assert_allclose(buf.value_array(), _ASSEMBLED)
+
+
+class TestCoherenceCounters(unittest.TestCase):
+    """The read-outcome diagnostic, driven deterministically through the same
+    stub: each read outcome must land in exactly one counter bucket, so the
+    buckets partition the total and the miss rate is computable after the run.
+    (synchronize is False throughout, so rejected_cross_reader stays 0; that
+    bucket needs the collective check the MPI integration test exercises.)"""
+
+    def _read(self, sp, buf, field, peer):
+        return sp._flex_get_multi_source(buf, field, peer, synchronize=False)
+
+    def _counters(self, sp, field):
+        return sp.coherence_counters[field]
+
+    def test_outcomes_bucketed_and_partition_total(self):
+        sp, peer = _make_reader()
+        buf = RecvArray(_DATA_LEN * 2)
+
+        # strict + mixed -> rejected_incoherent (the fundamental miss)
+        sp.window.set_write_ids(5, 4)
+        self._read(sp, buf, Field.DUALS, peer)
+        # coherent + advanced -> new_accepted
+        sp.window.set_write_ids(6, 6)
+        self._read(sp, buf, Field.DUALS, peer)
+        # coherent, id unchanged -> not_new (a slow sender, not a miss)
+        self._read(sp, buf, Field.DUALS, peer)
+
+        counters = self._counters(sp, Field.DUALS)
+        self.assertEqual(counters["rejected_incoherent"], 1)
+        self.assertEqual(counters["new_accepted"], 1)
+        self.assertEqual(counters["not_new"], 1)
+        self.assertEqual(counters["accepted_mixed"], 0)
+        self.assertEqual(counters["rejected_cross_reader"], 0)
+        self.assertEqual(counters["total"], 3)
+
+    def test_relaxed_mixed_counts_as_accepted_mixed(self):
+        sp, peer = _make_reader()
+        buf = RecvArray(_DATA_LEN * 2)
+
+        sp.window.set_write_ids(7, 5)  # mixed; relaxed accepts at the floor
+        self._read(sp, buf, Field.NONANTS_VALS, peer)
+        # mixed again but the floor has not advanced -> not_new, not a miss
+        self._read(sp, buf, Field.NONANTS_VALS, peer)
+
+        counters = self._counters(sp, Field.NONANTS_VALS)
+        self.assertEqual(counters["accepted_mixed"], 1)
+        self.assertEqual(counters["not_new"], 1)
+        self.assertEqual(counters["rejected_incoherent"], 0)
+        self.assertEqual(counters["total"], 2)
+
+
+class TestRejectionAttribution(unittest.TestCase):
+    """The two rejection buckets answer *which* rank straddled the publish, so
+    they must split on this rank's own sources disagreeing -- not on the
+    field's coherence policy. A relaxed field can straddle too (its floor then
+    differs from a peer reader's, and the collective check rejects), and that
+    is a coherence miss on this rank, not a peer's."""
+
+    def _read(self, sp, buf, field, peer):
+        return sp._flex_get_multi_source(buf, field, peer, synchronize=True)
+
+    def test_local_mismatch_is_incoherent_on_a_relaxed_field(self):
+        sp, peer = _make_reader()
+        buf = RecvArray(_DATA_LEN * 2)
+        # This rank's sources straddle a publish (floor 5); the peer reader
+        # rank got a clean pair at 7, so the cross-reader check rejects.
+        sp.window.set_write_ids(7, 5)
+        sp.cylinder_comm.peer_id = 7
+
+        self.assertFalse(self._read(sp, buf, Field.NONANTS_VALS, peer))
+        counters = sp.coherence_counters[Field.NONANTS_VALS]
+        self.assertEqual(counters["rejected_incoherent"], 1)
+        self.assertEqual(counters["rejected_cross_reader"], 0)
+
+    def test_agreeing_sources_rejected_by_a_peer_are_cross_reader(self):
+        sp, peer = _make_reader()
+        buf = RecvArray(_DATA_LEN * 2)
+        # This rank's sources agree; the *peer* reader rank is the one that
+        # straddled, and it records the miss itself.
+        sp.window.set_write_ids(7, 7)
+        sp.cylinder_comm.peer_id = 5
+
+        self.assertFalse(self._read(sp, buf, Field.DUALS, peer))
+        counters = sp.coherence_counters[Field.DUALS]
+        self.assertEqual(counters["rejected_cross_reader"], 1)
+        self.assertEqual(counters["rejected_incoherent"], 0)
+
+
+class TestCoherenceMissRate(unittest.TestCase):
+    """The reported rate must count every read a straddled publish cost,
+    including the cross-reader rejections a peer rank's straddle causes.
+    Counting only the locally-detected ones divides the answer by the number
+    of reader ranks: one straddle on an R-rank reader records 1
+    rejected_incoherent and R-1 rejected_cross_reader."""
+
+    def test_counts_all_three_non_clean_outcomes(self):
+        counters = {"total": 200, "new_accepted": 100, "not_new": 74,
+                    "rejected_incoherent": 12, "rejected_cross_reader": 12,
+                    "accepted_mixed": 2}
+        self.assertAlmostEqual(coherence_miss_rate(counters), 26 / 200)
+        # equivalently: everything that was neither a clean accept nor a
+        # clean nothing-to-take, since the buckets partition the total
+        self.assertAlmostEqual(
+            coherence_miss_rate(counters),
+            1 - (counters["new_accepted"] + counters["not_new"]) / 200,
+        )
+
+    def test_clean_and_empty_runs_are_zero(self):
+        clean = {"total": 50, "new_accepted": 20, "not_new": 30,
+                 "rejected_incoherent": 0, "rejected_cross_reader": 0,
+                 "accepted_mixed": 0}
+        self.assertEqual(coherence_miss_rate(clean), 0.0)
+        empty = dict.fromkeys(clean, 0)
+        self.assertEqual(coherence_miss_rate(empty), 0.0)
 
 
 if __name__ == "__main__":

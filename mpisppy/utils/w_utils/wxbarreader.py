@@ -76,18 +76,14 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
 
         if w_fname is not None:
             if (not os.path.exists(w_fname)):
-                if (rank == 0):
-                    if (sep_files):
-                        print('Cannot find path', w_fname)
-                    else:
-                        print('Cannot find file', w_fname)
-                quit()
+                if (sep_files):
+                    raise RuntimeError(f'Cannot find path {w_fname}')
+                else:
+                    raise RuntimeError(f'Cannot find file {w_fname}')
 
         if x_fname is not None:
             if (not os.path.exists(x_fname)):
-                if (rank == 0):
-                    print('Cannot find file', x_fname)
-                quit()
+                raise RuntimeError(f'Cannot find file {x_fname}')
 
         if (x_fname is None and w_fname is None and rank==0):
             print('Warning: no input files provided to WXBarReader. '
