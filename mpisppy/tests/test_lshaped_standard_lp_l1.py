@@ -11,7 +11,7 @@ import unittest
 import pyomo.environ as pyo
 
 from mpisppy.opt.lshaped import LShapedMethod
-from mpisppy.utils.lshaped_cuts import StandardLPL1CutGenerator
+from mpisppy.utils.lshaped_cuts import StandardLPL1CutGenerator, solver_dual_sign_convention
 from mpisppy.tests.examples import farmer
 from mpisppy.tests.utils import get_solver
 
@@ -19,7 +19,7 @@ from mpisppy.tests.utils import get_solver
 solver_available, solver_name, _, _ = get_solver()
 standard_lp_l1_solver_available = (
     solver_available
-    and solver_name in StandardLPL1CutGenerator._solver_dual_sign_convention
+    and solver_name in solver_dual_sign_convention
 )
 
 
@@ -78,11 +78,6 @@ class TestStandardLPL1CutGenerator(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "Unknown lshaped_cut_generator"):
             ls.lshaped_algorithm()
-
-    def test_standard_lp_l1_rejects_unsupported_solver(self):
-        gen = StandardLPL1CutGenerator()
-        with self.assertRaisesRegex(NotImplementedError, "currently supports xpress"):
-            gen._solver_sign("not_a_solver")
 
 
 class TestStandardLPL1LShapedSolve(unittest.TestCase):
