@@ -35,24 +35,47 @@ resumable checkpoint in place.
 Checkpointing less often
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-Serializing every scenario every iteration costs roughly 7--25 ms per
-scenario per iteration. Against a MIP whose solves take minutes that is
-noise, but on many cheap scenarios it can dominate the run. ``--checkpoint-
-every-iterations K`` writes at every K-th completed iteration instead::
+Serializing every scenario every iteration costs roughly 7--25 ms per scenario
+per iteration. Against a MIP whose solves take minutes that is noise, but on
+many cheap scenarios it can dominate the run.
+``--checkpoint-every-iterations K`` writes less often::
 
   python -m mpisppy.generic_cylinders --module-name farmer --num-scens 50 \
       --solver-name cplex --max-iterations 100 --default-rho 1.0 \
       --checkpoint-dir ./ckpt --checkpoint-every-iterations 10
 
-The trade is explicit: a stop that is not at a checkpoint point loses the
-iterations since the last one -- up to K-1 of them. Nothing else changes,
-because writes still happen only at iteration boundaries, which is what makes
-a checkpoint coherent in the first place.
+**What K means.** A checkpoint is written at the end of a completed iteration
+whose number is a multiple of K. The numbers are the PH iteration numbers you
+see in the log, counted from the start of the study, so with ``K = 10`` the
+checkpoints are iterations 10, 20, 30, and so on. K is not a countdown from
+whenever the current run happened to begin: it does not restart at a resume,
+and there is no drift. The default is ``1``, which writes at every iteration.
 
-One exception: the final iteration of an exhausted ``--max-iterations`` budget
-is always written, whatever K is. Raising the limit and resuming is a normal
-way to extend a study, and that last iterate is known-good and already in
-memory, so it is not worth discarding to save one write.
+**What it costs you.** Only one checkpoint is kept, so at any moment the
+directory holds the most recent multiple of K that completed. If the run stops
+anywhere else -- a time limit, convergence, a crash -- the iterations after
+that point are gone and the resumed run redoes them. That is at most K-1
+iterations, and it is the whole trade: you are buying back write time with
+work you are willing to repeat.
+
+For example, with ``K = 10`` a run that stops at iteration 34 leaves a
+checkpoint of iteration 30, and iterations 31 through 34 are lost. Resuming
+picks up at 31 and the next checkpoint is iteration 40 -- not 41, because the
+count follows the study, not the resumed leg.
+
+**The one exception.** The final iteration of an exhausted ``--max-iterations``
+budget is always written, whatever K is. With ``--max-iterations 100`` and
+``K = 30`` the checkpoints are iterations 30, 60, 90 and 100. Raising the limit
+and resuming is a normal way to extend a study, and that last iterate is
+known-good and already in memory, so it is not worth discarding to save one
+write. No other kind of stop can be caught this way: a time limit, the
+convergence threshold and a user converger are all tested partway through the
+*next* iteration, by which point there is nothing coherent left to write.
+
+Changing K between a stop and a resume is allowed; like the iteration limit,
+it describes how the run is managed rather than what problem is being solved,
+so it is not part of the check that decides whether a checkpoint may be
+resumed.
 
 Writing only at iteration boundaries is deliberate. PH computes xbar, updates
 the dual weights, gives extensions their mid-iteration hook, and only then
