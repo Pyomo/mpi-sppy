@@ -58,7 +58,7 @@ class StandardLPL1CutGenerator:
     ``     x_s = xbar``.
 
     When this LP is optimal, the dual multipliers on the temporary fixing
-    constraints define an optimality cut. After applying the Xpress dual sign
+    constraints define an optimality cut. After applying the dual sign
     multiplier used by this implementation, the generated cut has the form
 
     ``Q_s(xbar) - pi_s^T (x - xbar) <= eta_s``.
@@ -91,12 +91,6 @@ class StandardLPL1CutGenerator:
     That is the main formulation difference from Pyomo's generic feasibility
     subproblem transformation used by the default cut generator.
     """
-
-    _solver_dual_sign_convention = {
-        "xpress": -1,
-        "xpress_direct": -1,
-        "xpress_persistent": -1,
-    }
 
     _optimal_tc = {pe.TerminationCondition.optimal}
     _infeasible_tc = {
@@ -271,7 +265,7 @@ class StandardLPL1CutGenerator:
         subproblem = self.subproblems[local_ndx]
         solver = self.subproblem_solvers[local_ndx]
         solver_name = self.subproblem_solver_names[local_ndx]
-        sign = self._solver_sign(solver_name)
+        sign = solver_dual_sign_convention[solver_name]
         fix_cons = self._add_fixing_constraints(subproblem, self.complicating_vars_maps[local_ndx])
         try:
             res = self._solve_model(subproblem, solver, solver_name, fix_cons.values())
@@ -329,7 +323,7 @@ class StandardLPL1CutGenerator:
             raise RuntimeError(f"L1 feasibility subproblem did not solve to optimality: {tc}")
         zval = pe.value(subproblem._mpisppy_l1_z)
         coeffs = self._fixing_dual_coefficients(
-            subproblem, fix_cons, self._solver_sign(solver_name)
+            subproblem, fix_cons, solver_dual_sign_convention[solver_name]
         )
         return {
             "constant": zval,
@@ -485,26 +479,6 @@ class StandardLPL1CutGenerator:
             for k, v in solver_options.items():
                 solver.options[k] = v
         return solver, solver_name
-
-    def _solver_sign(self, solver_name):
-        """Return the dual sign multiplier for the supported Xpress interfaces.
-
-        Args:
-            solver_name (str): Pyomo solver interface name.
-
-        Returns:
-            int: Multiplier applied to imported fixing-constraint duals.
-
-        Raises:
-            NotImplementedError: If ``solver_name`` is not a supported Xpress
-            interface.
-        """
-        if solver_name not in self._solver_dual_sign_convention:
-            raise NotImplementedError(
-                "standard_lp_l1 currently supports xpress, xpress_direct, "
-                f"and xpress_persistent; got {solver_name}"
-            )
-        return self._solver_dual_sign_convention[solver_name]
 
     def _validate_linear_subproblem(self, subproblem):
         """Raise if the active objective or constraints are not linear.
