@@ -950,6 +950,22 @@ needs; Phase 1b adds the optional triggers and the harder test instances on top.
 Each is green on its own, and 1a is independently useful — a run that stops at
 `--time-limit` and resumes the next morning needs nothing from 1b.
 
+**The numbering is not a dependency chain, and phase 4 in particular can be
+pulled forward.** The phases are ordered by how much machinery each adds, not
+by what each requires, and cylinders is the phase that decides whether anyone
+can use this at all: mpi-sppy is run as hub-and-spoke, so a serial-hub-only
+feature has few real users. Phase 4 depends on neither phase 2 nor phase 3.
+Not phase 2, because `n_proc` is `self.mpicomm.Get_size()` on the *cylinder's*
+comm rather than `COMM_WORLD` (`global_rank` is tracked separately), so a
+hub+lagrangian+xhatshuffle run with one rank per cylinder already has
+`n_proc == 1` everywhere and passes the phase-1a multi-rank guard untouched —
+phase 2 is multi-rank *within* a cylinder, phase 4 is *multiple* cylinders, and
+the two are orthogonal. Not phase 3, because each spoke checkpoints its own
+best xhat asynchronously on improvement with no hub↔spoke coordination (§9,
+item 6), which is spoke-specific machinery rather than the general extension
+`checkpoint_state`/`restore_state` contract. So phase 4 may follow 1a directly,
+as a branch stacked on the 1a PR.
+
 - **Phase 1a — Serial hub checkpoint/resume, terminal trigger only.** The
   framework: `Checkpointer` extension; global iteration counter / resume offset
   (§9 item 1); reload-model resume branch **in `Iter0`, replacing the iter-0
