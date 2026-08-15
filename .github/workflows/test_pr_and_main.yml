@@ -78,9 +78,10 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
+
           # pyomo + pybind11 explicit: the build-extensions step below runs
           # before the editable install; solvers are in no extra (licensing)
-          pip install pyomo pybind11 cplex xpress
+          pip install pyomo pybind11 cplex gurobipy xpress
 
       - name: Build pyomo extensions
         run: |
@@ -181,6 +182,14 @@ jobs:
       - name: Test prox_approx end-to-end
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_prox_approx_e2e.py -v
+
+      - name: Test timed mipgap
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_timed_mipgap.py -v
+
+      - name: Test termination callback
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/utils/callbacks/termination/tests/test_termination.py -v
 
       - name: Test docs
         run: |
