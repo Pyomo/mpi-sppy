@@ -1225,8 +1225,12 @@ class PHBase(mpisppy.spopt.SPOpt):
             # Eobjective/Ebound read these objective handles; left alone they
             # would dangle to the fresh model we just replaced.
             self.saved_objectives[sname] = sputils.find_active_objective(model)
-            # The recourse values that came back with the model are a warm
-            # start for the first resumed solve.
+            # The recourse values came back with the model, so the first
+            # resumed solve can warm-start from them -- but only if the run
+            # asked for warm starts at all: solve_one consults this flag only
+            # when options["warmstart_subproblems"] is set, and that defaults
+            # to False. Setting it here is what makes --warmstart-subproblems
+            # work across a resume; on its own it changes nothing.
             model._mpisppy_data.solution_available = True
         # The generic file-based path keeps this alias and CGBase.solve_loop
         # iterates it; a plain PH has no such attribute.

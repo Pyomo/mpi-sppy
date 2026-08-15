@@ -249,33 +249,40 @@ def require_dill(backend):
 
 
 def probe_model_is_dillable(opt):
-    """Serialize one local scenario to memory to prove checkpointing will work.
+    """Serialize every local scenario to memory to prove checkpointing works.
 
-    Called once at setup. A run that only discovers at its terminal checkpoint
-    -- possibly many hours in -- that its models cannot be dilled would lose
-    exactly the state checkpointing exists to preserve, so this trades one
-    model serialization up front for a failure that arrives immediately and
-    says what to do about it. The probe runs at iteration 0, when the model is
-    at its smallest (no accumulated prox-approximation cuts).
+    Called once at setup. A run that only discovers at its first checkpoint --
+    possibly many hours in -- that its models cannot be dilled would lose
+    exactly the state checkpointing exists to preserve, so this trades the
+    serializations up front for a failure that arrives immediately and says
+    what to do about it. The probe runs at iteration 0, when the models are at
+    their smallest (no accumulated prox-approximation cuts).
+
+    Every scenario, not just the first: what makes a model undillable is
+    usually something its ``scenario_creator`` closed over, and a creator that
+    closes over something unserializable for *one* scenario -- a solver
+    handle, a file object, a rule that reads a scenario-specific object -- is
+    exactly the case a one-scenario probe waves through. The run would then
+    fail at every write, survive each failure by design, and finish having
+    published nothing at all, which is the outcome the setup-time refusal
+    exists to rule out.
     """
-    if not opt.local_scenarios:
-        return
-    sname, s = next(iter(opt.local_scenarios.items()))
-    solver_plugin = getattr(s, "_solver_plugin", None)
-    if solver_plugin is not None:
-        del s._solver_plugin
-    try:
-        dill.dumps(s)
-    except Exception as exc:
-        raise RuntimeError(
-            "Checkpointing is enabled, but no checkpoint could ever be "
-            "written.\n\n"
-            + pickle_bundle.describe_dill_failure(
-                s, exc, what=f"scenario '{sname}'")
-        ) from exc
-    finally:
+    for sname, s in opt.local_scenarios.items():
+        solver_plugin = getattr(s, "_solver_plugin", None)
         if solver_plugin is not None:
-            s._solver_plugin = solver_plugin
+            del s._solver_plugin
+        try:
+            dill.dumps(s)
+        except Exception as exc:
+            raise RuntimeError(
+                "Checkpointing is enabled, but no checkpoint could ever be "
+                "written.\n\n"
+                + pickle_bundle.describe_dill_failure(
+                    s, exc, what=f"scenario '{sname}'")
+            ) from exc
+        finally:
+            if solver_plugin is not None:
+                s._solver_plugin = solver_plugin
 
 
 def geometry(opt):

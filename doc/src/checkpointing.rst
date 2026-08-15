@@ -149,8 +149,13 @@ What resume guarantees
 ----------------------
 
 For the target case -- large MIP subproblems -- a resumed run **continues
-correctly and warm-started**, and never loses or regresses the best solution
-found so far. It is **not** bit-for-bit reproducible against a hypothetical
+correctly**, and never loses or regresses the best solution found so far.
+
+The reloaded models carry the recourse values from the last solve before the
+stop, so the first resumed solve *can* warm-start from them -- but only with
+``--warmstart-subproblems``, which is off by default and which mpi-sppy does
+not turn on for you. Without it that first solve is cold, exactly as every
+other solve in the run is. It is **not** bit-for-bit reproducible against a hypothetical
 uninterrupted run: multi-threaded MIP solves are not deterministic and admit
 multiple optima, so the resumed iterates may differ. That is expected, not a
 bug.

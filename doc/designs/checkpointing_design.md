@@ -178,7 +178,8 @@ A checkpoint is **not** a snapshot of the object graph. On resume:
      models and swap them in ahead of solver creation, so `_solver_plugin` is
      attached (`set_instance`) to the reloaded model rather than to one about to
      be discarded; mark `solution_available` so the first solve warm-starts
-     (§5.2). Because the reloaded model already carries the spliced W/prox
+     when `warmstart_subproblems` is on -- it is off by default, and the flag
+     is inert without it (§5.2). Because the reloaded model already carries the spliced W/prox
      objective and the prox cuts, the deferred objective attach must be disarmed
      so it does not run again downstream (§9, item 2).
    - **leaf-rebuild (alternative):** rebuild each model via `scenario_creator`,
@@ -937,7 +938,6 @@ CI solvers:
   closed over `cfg`, which made its models unserializable; fixed and merged
   (#830), and a structural guard in `test_stoch_admmWrapper.py` keeps the
   pattern from returning.
-  the model is fixed or another stoch-ADMM model is chosen.
 - **`sizes`** — the MIP target: warm start taken on resume, incumbent carried.
 
 The phase bullets below say where each instance enters (Phase 1a: serial
@@ -966,14 +966,18 @@ item 6), which is spoke-specific machinery rather than the general extension
 `checkpoint_state`/`restore_state` contract. So phase 4 may follow 1a directly,
 as a branch stacked on the 1a PR.
 
-- **Phase 1a — Serial hub checkpoint/resume, terminal trigger only.** The
+- **Phase 1a — Serial hub checkpoint/resume, writing at completed iterations.**
+  (Titled "terminal trigger only" while that was the plan; the terminal
+  trigger was removed once the write moved to iteration boundaries, and
+  `--checkpoint-every-iterations` shipped here instead of in 1b — see §8.) The
   framework: `Checkpointer` extension; global iteration counter / resume offset
   (§9 item 1); reload-model resume branch **in `Iter0`, replacing the iter-0
   solve**, with the swap ahead of `_create_solvers()`, the deferred objective
   attach disarmed, `saved_objectives` refreshed, and the warm start set (§5.1, §9
   item 2); restore of the initially-fixed-nonant baseline by name (§9 item 11);
   geometry+cfg fingerprint (§5.7); atomic per-rank writes + manifest publish (§9
-  item 7); the write at each completed iteration from `enditer` (§8); `toc` on
+  item 7); the write at each completed iteration (§8), paced by
+  `--checkpoint-every-iterations`; `toc` on
   both ends of every write (§9 item 10); and setup-time refusal of every
   configuration not supported — a non-PH hub (APH inherits this wiring through
   `aph_hub`), more than one rank, an unimplemented backend, an unwritable
@@ -983,12 +987,13 @@ as a branch stacked on the 1a PR.
   `dill` is not installed (it is an optional `extras` dependency). Tests (the
   §11.1 A/B harness, serial): **farmer** bit-identical A vs B; no iter-0
   subproblem solve occurs on resume; geometry/cfg mismatch refused.
-- **Phase 1b — The optional triggers and the harder instances.**
-  `--checkpoint-every-iterations` / `--checkpoint-every-seconds` and the one-shot
-  anticipated `--checkpoint-before-seconds` (§8), all decided collectively at
-  `enditer`, with the most-recent iteration duration hoisted onto `self` (§9 item
-  9). Tests: trigger semantics (fires once and latches; two triggers at one
-  `enditer` produce one write); **farmer + `--cvar`** bit-identical A vs B — the
+- **Phase 1b — The harder instances (the triggers are gone).**
+  `--checkpoint-every-iterations` shipped in 1a, and `--checkpoint-every-seconds`
+  and the anticipated one-shot `--checkpoint-before-seconds` are **not
+  implemented and not planned**: §8 records why writing at every completed
+  iteration subsumes them. What is left of this phase is the harder test
+  instances, which the phase that needs them should absorb rather than wait
+  for. Tests: **farmer + `--cvar`** bit-identical A vs B — the
   mutate-after-creation case, where the resume branch's `saved_objectives`
   refresh must resolve to `WITH_CVAR` and not the deactivated original;
   **`sizes`** (MIP) — bit-identical under deterministic solver settings, and

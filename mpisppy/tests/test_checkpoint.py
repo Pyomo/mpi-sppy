@@ -27,6 +27,8 @@ import errno
 import json
 import os
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -74,9 +76,8 @@ def _options(max_iters, ckpt_dir=None, resume_from=None, **overrides):
     return options
 
 
-#: Long enough that iteration 1 always completes, short enough that the run
-#: stops well before the iteration limit. Farmer iterations are milliseconds.
-_LATE_TIME_LIMIT = 0.25
+#: The iteration at which ClockRewinder trips the --time-limit break.
+_LATE_STOP_ITERATION = 3
 
 
 def _published_generation(ckpt_dir):
@@ -134,6 +135,28 @@ class MidIterMutator(Extension):
                 first.fix(first._value)
 
 
+class ClockRewinder(Extension):
+    """Trip the --time-limit break at a chosen iteration, without a clock race.
+
+    The matrix needs a cell that exits through `--time-limit` *after* some
+    iterations have completed. Setting a small wall-clock limit and trusting
+    farmer to be fast does not give that: the limit also covers model
+    construction, solver startup and Iter0, so on a slow enough host the run
+    trips it in iteration 1 and the cell silently becomes the "no checkpoint
+    published" case -- inverting what it asserts.
+
+    Rewinding `start_time` instead makes the elapsed time whatever this test
+    wants it to be. `miditer` runs immediately before the time-limit check in
+    the same iteration, so the break happens in `_LATE_STOP_ITERATION` with
+    the iterations before it completed. The real check, allreduce and break
+    all still run; only the clock is under control.
+    """
+
+    def miditer(self):
+        if self.opt._PHIter == _LATE_STOP_ITERATION:
+            self.opt.start_time -= (self.opt.options["time_limit"] + 1.0)
+
+
 class PreIter0Tagger(Extension):
     """Tag the models pre_iter0 sees, so a test can tell whether the hook ran
     on the models the run actually iterates or on fresh ones a resume splice
@@ -159,6 +182,8 @@ def _extension_class(name):
         return CoeffRho
     if name == "pre_tagger":
         return PreIter0Tagger
+    if name == "clock_rewinder":
+        return ClockRewinder
     raise ValueError(name)
 
 
@@ -198,6 +223,32 @@ def _make_ph(options, scenario_names=None, extension_name=None,
         scenario_creator_kwargs=CREATOR_KWARGS,
         extensions=extensions,
     )
+
+
+def _flat_snapshot(ph):
+    """_primal_snapshot with JSON-safe keys, for crossing a process boundary."""
+    return {"|".join(str(part) for part in key): value
+            for key, value in _primal_snapshot(ph).items()}
+
+
+def _resume_and_dump(ckpt_dir, max_iters, out_path):
+    """Resume in this process and write the final state to out_path.
+
+    The entry point test_resume_survives_a_fresh_process runs in a subprocess;
+    it lives at module scope because that subprocess imports this module by
+    name to reach it.
+    """
+    ph = _make_ph(_options(max_iters, resume_from=ckpt_dir))
+    ph.ph_main()
+    with open(out_path, "w") as f:
+        json.dump({
+            # Matching state is not by itself evidence of a resume: farmer is
+            # deterministic, so a run that ignored the checkpoint entirely and
+            # did all N iterations from scratch lands on the same answer.
+            "resumed": bool(getattr(ph, "_resumed_from_checkpoint", False)),
+            "resume_iteration": int(getattr(ph, "_resume_iteration", 0)),
+            "state": _flat_snapshot(ph),
+        }, f)
 
 
 def _find_recorder(ph):
@@ -266,6 +317,50 @@ class TestResumeABFarmer(unittest.TestCase):
             self.assertEqual(
                 want[key], got[key],
                 msg=f"{key} differs after resume: {want[key]} vs {got[key]}")
+
+    def test_resume_survives_a_fresh_process(self):
+        """The acceptance gate the design actually asks for (section 11.1).
+
+        Every other A/B test here resumes in the interpreter that wrote the
+        checkpoint, where module state, registrations and dill's own caches
+        are already warm. The real use case is a new job on a new day, so the
+        resumed leg runs in a subprocess that shares nothing with the writer
+        but the files on disk.
+        """
+        _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir)).ph_main()
+
+        out_path = os.path.join(self._tmp.name, "resumed_state.json")
+        call_args = json.dumps([self.ckpt_dir, self.N, out_path])
+        result = subprocess.run(
+            [sys.executable, "-c",
+             "import json, mpisppy.tests.test_checkpoint as t; "
+             f"t._resume_and_dump(*json.loads({call_args!r}))"],
+            capture_output=True, text=True, timeout=900, check=False,
+        )
+        self.assertEqual(
+            result.returncode, 0,
+            msg=f"the resumed run failed in a fresh process:\n{result.stderr}")
+
+        with open(out_path) as f:
+            payload = json.load(f)
+
+        self.assertTrue(
+            payload["resumed"],
+            msg="the fresh process ran without resuming; matching state "
+                "would then only show that farmer is deterministic")
+        self.assertEqual(payload["resume_iteration"], self.STOP)
+        got = payload["state"]
+
+        reference = _make_ph(_options(self.N))
+        reference.ph_main()
+        want = _flat_snapshot(reference)
+
+        self.assertEqual(set(want), set(got))
+        for key in want:
+            self.assertEqual(
+                want[key], got[key],
+                msg=f"{key} differs after resuming in a fresh process: "
+                    f"{want[key]} vs {got[key]}")
 
     def test_iteration_numbering_is_global(self):
         """A resumed run continues the count instead of restarting at 1."""
@@ -493,11 +588,14 @@ class TestResumeAcceptanceMatrix(unittest.TestCase):
     #: A checkpoint describes a completed PH iteration, so a run that ends
     #: before finishing iteration 1 publishes nothing -- there is no iterate to
     #: resume from. That is a guarantee worth pinning, not an accident.
+    #: The fourth element is an extension the exit path needs, or None.
     EXITS = (
-        ("iteration limit", {}, True),
-        ("convergence", {"convthresh": 20.0}, True),
-        ("time limit, iteration 1", {"time_limit": 0.0}, False),
-        ("time limit, later", {"time_limit": _LATE_TIME_LIMIT}, True),
+        ("iteration limit", {}, True, None),
+        ("convergence", {"convthresh": 20.0}, True, None),
+        # 0.0 trips on the first test, whatever the host: no clock control
+        # needed, and no iteration completes.
+        ("time limit, iteration 1", {"time_limit": 0.0}, False, None),
+        ("time limit, later", {"time_limit": 3600.0}, True, "clock_rewinder"),
     )
 
     #: (label, option overrides, extension name or None, reproducible)
@@ -529,21 +627,30 @@ class TestResumeAcceptanceMatrix(unittest.TestCase):
         self._tmp.cleanup()
 
     def test_matrix(self):
-        for exit_label, exit_opts, expect_ckpt in self.EXITS:
+        for exit_label, exit_opts, expect_ckpt, exit_ext in self.EXITS:
             for cfg_label, cfg_opts, ext, reproducible in self.CONFIGS:
                 with self.subTest(exit=exit_label, config=cfg_label):
                     self._one_cell(exit_opts, cfg_opts, ext, reproducible,
-                                   expect_ckpt)
+                                   expect_ckpt, exit_ext)
 
-    def _one_cell(self, exit_opts, cfg_opts, ext, reproducible, expect_ckpt):
+    def _one_cell(self, exit_opts, cfg_opts, ext, reproducible, expect_ckpt,
+                  exit_ext=None):
         shutil.rmtree(self.ckpt_dir, ignore_errors=True)
 
         stop_opts = _options(self.N, ckpt_dir=self.ckpt_dir, **cfg_opts)
         stop_opts.update(exit_opts)
-        stopped = _make_ph(stop_opts, extension_name=ext,
-                           extra_names=("recorder",))
+        extras = ("recorder",) if exit_ext is None else ("recorder", exit_ext)
+        stopped = _make_ph(stop_opts, extension_name=ext, extra_names=extras)
         stopped.ph_main()
         recorded = _find_recorder(stopped)
+
+        if exit_ext == "clock_rewinder":
+            # Without this the cell still passes when the rewinder never
+            # fires -- the run just ends on the iteration limit instead, and
+            # the matrix quietly stops covering the --time-limit exit.
+            self.assertEqual(
+                stopped._PHIter, _LATE_STOP_ITERATION,
+                msg="the run did not exit through the --time-limit break")
 
         generation = _published_generation(self.ckpt_dir)
         if not expect_ckpt:
@@ -707,6 +814,61 @@ class TestSetupRefusals(unittest.TestCase):
             self.assertIn("Cannot write", str(ctx.exception))
         finally:
             os.chmod(ro, 0o700)
+
+
+class TestDillabilityProbe(unittest.TestCase):
+    """Setup refuses a run whose models cannot be checkpointed.
+
+    The guarantee is that checkpointing either works or says so at startup.
+    A run that got past setup would fail at every write, survive each failure
+    by design, and finish hours later having published nothing.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _ph_with_unserializable_scenario(self, target):
+        """farmer, with one scenario carrying something dill cannot handle.
+
+        A generator is the payload because dill serializes most of the
+        obvious candidates -- thread locks and open files included -- so they
+        would not exercise the probe at all.
+        """
+        def creator(sname, **kwargs):
+            model = farmer.scenario_creator(sname, **kwargs)
+            if sname == target:
+                model._unserializable = (i for i in range(3))
+            return model
+
+        return PH(
+            _options(1, ckpt_dir=self.ckpt_dir), SCENARIO_NAMES, creator,
+            farmer.scenario_denouement,
+            scenario_creator_kwargs=CREATOR_KWARGS,
+            extensions=Checkpointer,
+        )
+
+    def test_refuses_when_the_first_scenario_is_the_bad_one(self):
+        with self.assertRaises(RuntimeError) as ctx:
+            self._ph_with_unserializable_scenario("scen0").ph_main()
+        self.assertIn("no checkpoint could ever be written",
+                      str(ctx.exception))
+
+    def test_refuses_when_a_later_scenario_is_the_bad_one(self):
+        """Probing only the first scenario waves this through.
+
+        What makes a model undillable is usually something the
+        scenario_creator closed over, and a creator that does it for one
+        scenario is exactly the case a single-scenario probe misses.
+        """
+        with self.assertRaises(RuntimeError) as ctx:
+            self._ph_with_unserializable_scenario("scen2").ph_main()
+        message = str(ctx.exception)
+        self.assertIn("no checkpoint could ever be written", message)
+        self.assertIn("scen2", message)
 
 
 class TestCheckpointingSurvivedGuard(unittest.TestCase):
