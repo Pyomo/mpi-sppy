@@ -1262,13 +1262,103 @@ jobs:
             mpisppy/tests/test_prox_approx.py \
             mpisppy/tests/test_sep_rho.py \
             mpisppy/tests/test_reduced_costs_fixer.py \
-            mpisppy/tests/test_slammer.py
+            mpisppy/tests/test_slammer.py \
+            mpisppy/tests/test_dual_certificate.py
 
       - name: Upload coverage data
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-unit-tests
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
+  ipopt-tests:
+    name: Ipopt tests (idaes-ext build, with HSL)
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+
+      - name: Install Ipopt's system libraries
+        # The idaes-ext binary carries no RPATH and resolves libgfortran,
+        # liblapack and libblas from the system.  A bare runner has none of
+        # them, and the failure surfaces as an unhelpful load error at first
+        # solve rather than at install.  Pyomo's workflow installs the same
+        # three for the same reason.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libopenblas-dev gfortran liblapack-dev
+
+      - name: Install Ipopt from idaes-ext
+        # The pip/conda ipopt is built against MUMPS only.  The idaes-ext
+        # release bundle additionally carries the HSL linear solvers (ma27,
+        # ma57, ma97), which is what makes it usable on real NLPs.  This is the
+        # same source Pyomo's and Egret's own CI pull from.
+        run: |
+          SOLVER_DIR="${GITHUB_WORKSPACE}/cache/solvers"
+          mkdir -p "$SOLVER_DIR"
+          echo "$SOLVER_DIR" >> $GITHUB_PATH
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SOLVER_DIR" >> $GITHUB_ENV
+          URL=https://github.com/IDAES/idaes-ext
+          RELEASE=$(curl --max-time 150 --retry 8 -L -s \
+              -H 'Accept: application/json' ${URL}/releases/latest)
+          VER=$(echo $RELEASE | sed -e 's/.*"tag_name":"\([^"]*\)".*/\1/')
+          # Fall back to a known-good release if the API is unavailable or
+          # rate-limited, so a GitHub hiccup does not read as a test failure.
+          if test -z "$VER" -o "$VER" = "$RELEASE"; then VER=3.4.2; fi
+          echo "idaes-ext version: $VER"
+          curl --max-time 300 --retry 8 -L \
+              ${URL}/releases/download/$VER/idaes-solvers-ubuntu2204-x86_64.tar.gz \
+              > solvers.tar.gz
+          tar -xzf solvers.tar.gz -C "$SOLVER_DIR"
+          "$SOLVER_DIR/ipopt" -v
+
+      - name: setup the program
+        run: |
+          pip install -e ".[test]"
+
+      - name: confirm the HSL linear solvers are really present
+        # Guards against silently falling back to a MUMPS-only build: a missing
+        # HSL solver makes ipopt exit abnormally rather than warn.
+        run: |
+          python -c "
+          import pyomo.environ as pyo
+          for ls in ('ma27', 'ma57', 'ma97'):
+              m = pyo.ConcreteModel()
+              m.x = pyo.Var(bounds=(-10, 10), initialize=0.0)
+              m.o = pyo.Objective(expr=(m.x - 3)**2)
+              m.c = pyo.Constraint(expr=m.x <= 1)
+              opt = pyo.SolverFactory('ipopt')
+              opt.options['linear_solver'] = ls
+              opt.solve(m)
+              assert abs(pyo.value(m.x) - 1.0) < 1e-6, ls
+              print(ls, 'OK')
+          "
+
+      - name: run ipopt-dependent tests
+        timeout-minutes: 5
+        run: |
+          coverage run $COV_ARGS -m pytest -v \
+            mpisppy/tests/test_dual_certificate.py
+
+      - name: List coverage files (debug)
+        if: always()
+        run: ls -la ${{ github.workspace }}/.coverage* || echo "No .coverage files found"
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-ipopt-tests
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
           include-hidden-files: true
@@ -1303,6 +1393,7 @@ jobs:
       - test-cg
       - test-agnostic
       - unit-tests
+      - ipopt-tests
     if: always()
     steps:
       - uses: actions/checkout@v3

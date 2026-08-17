@@ -213,7 +213,8 @@ run_phase "serial unit tests (serial)" \
         mpisppy/tests/test_prox_approx.py \
         mpisppy/tests/test_sep_rho.py \
         mpisppy/tests/test_reduced_costs_fixer.py \
-        mpisppy/tests/test_slammer.py
+        mpisppy/tests/test_slammer.py \
+        mpisppy/tests/test_dual_certificate.py
 
 run_phase "test_conf_int_farmer (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_conf_int_farmer.py
