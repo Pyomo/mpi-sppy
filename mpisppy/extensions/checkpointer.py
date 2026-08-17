@@ -182,16 +182,29 @@ class Checkpointer(Extension):
     def _is_final_iteration(self):
         """True when the loop bound says this completed iteration is the last.
 
-        ``iterk_loop`` runs ``range(_resume_iteration + 1, PHIterLimit + 1)``,
-        so at ``enditer`` of the limit iteration there is no next pass. Only
-        the iteration limit is knowable here: convergence, the user converger
-        and ``--time-limit`` are all decided in the *next* iteration's top
-        half, and the cylinder-convergence test fires after this hook.
+        ``iterk_loop`` works out the absolute number of its last iteration
+        from the two bounds -- ``--max-iterations`` over this run and
+        ``--stop-at-iteration-number`` over the study -- and leaves it in
+        ``_stop_iteration``, so at the end of that iteration there is no next
+        pass. Reading the answer rather than ``PHIterLimit`` is what makes the
+        rule hold on a resumed run, where the limit counts this run's
+        iterations and ``_PHIter`` counts the study's.
+
+        Only the iteration bounds are knowable here: convergence, the user
+        converger and ``--time-limit`` are all decided in the *next*
+        iteration's top half, and the cylinder-convergence test fires after
+        this hook.
         """
-        limit = self.opt.options.get("PHIterLimit", None)
-        if limit is None:
-            return False
-        return int(getattr(self.opt, "_PHIter", 0)) >= int(limit)
+        stop = getattr(self.opt, "_stop_iteration", None)
+        if stop is None:
+            # Called from outside iterk_loop, which is where that attribute is
+            # set. Fall back to what the loop would have computed from the
+            # per-run limit alone.
+            limit = self.opt.options.get("PHIterLimit", None)
+            if limit is None:
+                return False
+            stop = int(getattr(self.opt, "_resume_iteration", 0)) + int(limit)
+        return int(getattr(self.opt, "_PHIter", 0)) >= int(stop)
 
     def _should_write(self):
         """Whether this completed iteration is a checkpoint point.

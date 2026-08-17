@@ -260,6 +260,13 @@ class PHBase(mpisppy.spopt.SPOpt):
     _resume_iteration = 0
     _checkpoint_leaf_state = None
 
+    #: Absolute number of the last iteration this run may perform, set by
+    #: iterk_loop from --max-iterations (which bounds the run) and
+    #: --stop-at-iteration-number (which bounds the study). Kept on the object
+    #: because the Checkpointer has to recognize the final iteration to write
+    #: it whatever the checkpoint cadence says.
+    _stop_iteration = None
+
     def __init__(
         self,
         options,
@@ -1504,9 +1511,27 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         # _PHIter is the *global* iteration number: on a resume it picks up
         # where the checkpoint left off, so checkpoint generations do not
-        # collide with the pre-stop ones and max_iterations stays a limit on
-        # the run as a whole rather than on this leg of it.
-        for self._PHIter in range(self._resume_iteration + 1, max_iterations+1):
+        # collide with the pre-stop ones. The two bounds are counted
+        # differently on purpose. PHIterLimit (--max-iterations) bounds this
+        # run, so resuming with 2 does two more iterations whatever number the
+        # checkpoint stopped at, while stop_at_iteration_number bounds the
+        # whole study as an absolute iteration number. Whichever arrives first
+        # ends the run.
+        self._stop_iteration = self._resume_iteration + max_iterations
+        stop_at = self.options.get("stop_at_iteration_number", None)
+        if stop_at is not None:
+            stop_at = int(stop_at)
+            self._stop_iteration = min(self._stop_iteration, stop_at)
+            if stop_at <= self._resume_iteration:
+                # The loop below is simply empty in this case. Announcing it
+                # is what keeps a finished study from looking like a run that
+                # started up, did nothing and gave no reason.
+                global_toc(f"Nothing to do: --stop-at-iteration-number "
+                           f"{stop_at} was already reached at iteration "
+                           f"{self._resume_iteration}",
+                           self.cylinder_rank == 0)
+        for self._PHIter in range(self._resume_iteration + 1,
+                                  self._stop_iteration + 1):
             iteration_start_time = time.time()
 
             if dprogress:
@@ -1621,14 +1646,26 @@ class PHBase(mpisppy.spopt.SPOpt):
             if dconvergence_detail:
                 self.report_var_values_at_rank0(header="Convergence detail:", fixed_vars=False)
 
-        else: # no break, (self._PHIter == max_iterations)
+        else: # no break, (self._PHIter == self._stop_iteration)
             # NOTE: If we return for any other reason things are reasonably in-sync.
             #       due to the convergence check. However, here we return we'll be
             #       out-of-sync because of the solve_loop could take vasty different
             #       times on different threads. This can especially mess up finalization.
             #       As a guard, we'll put a barrier here.
             self.mpicomm.Barrier()
-            global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.cylinder_rank == 0)
+            # Name the bound that actually ended the run: on a resume the two
+            # are different numbers, and reporting the wrong one sends the
+            # reader looking for the wrong option.
+            if self._stop_iteration <= self._resume_iteration:
+                # The loop was empty. Its reason was reported before it, and
+                # announcing a bound as "reached" here would be a second,
+                # contradictory account of the same non-event.
+                pass
+            elif stop_at is not None and self._stop_iteration == stop_at:
+                global_toc("Reached user-specified stop_at_iteration_number=%d, "
+                           "ending the study" % stop_at, self.cylinder_rank == 0)
+            else:
+                global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.cylinder_rank == 0)
 
 
     def post_loops(self, extensions=None):

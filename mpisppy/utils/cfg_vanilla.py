@@ -957,6 +957,13 @@ def add_checkpointing(hub_dict, cfg):
              "checkpoint_every_iterations": cfg.checkpoint_every_iterations,
             })
 
+    # Outside the guard above: --stop-at-iteration-number bounds the study,
+    # and a study is one or more runs, so it is meaningful on its own. A run
+    # that sets it without asking for checkpointing gets a plain "stop at this
+    # iteration number" rather than an option that is silently dropped.
+    hub_dict["opt_kwargs"]["options"]["stop_at_iteration_number"] = \
+        cfg.get("stop_at_iteration_number", None)
+
     if _hasit(cfg, 'resume_from'):
         hub_dict["opt_kwargs"]["options"]["resume_from"] = cfg.resume_from
 

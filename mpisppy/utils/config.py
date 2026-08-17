@@ -793,6 +793,15 @@ class Config(pyofig.ConfigDict):
                            domain=int,
                            default=1)
 
+        self.add_to_config("stop_at_iteration_number",
+                           description="absolute iteration number at which to "
+                           "stop, counted across every run linked by "
+                           "checkpoints; --max-iterations bounds one run, this "
+                           "bounds the whole study, and a run ends at "
+                           "whichever comes first (default None)",
+                           domain=int,
+                           default=None)
+
         self.add_to_config("resume_from",
                            description="resume from the checkpoint in this "
                            "directory; requires the same rank count and "

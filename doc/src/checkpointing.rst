@@ -7,6 +7,14 @@ A long Progressive Hedging run can be stopped and picked up later. The intended
 use is a planned stop: a multi-day study that ends each day and resumes the next
 morning on the same cluster, without losing the work done so far.
 
+Two words are used precisely throughout this page. A **run** is one execution of
+the software. A **study** is the whole piece of work: one run, or several linked
+by checkpoints. Iteration *numbers* belong to the study and carry across a
+resume, while the two ways to bound the work are named for what each one
+counts: ``--max-iterations`` bounds the run being started, and
+``--stop-at-iteration-number`` bounds the study. A run ends at whichever of
+them arrives first.
+
 Checkpointing is entirely opt-in. With no ``--checkpoint-dir`` the machinery is
 not attached at all, and a run that does not ask for it pays nothing.
 
@@ -24,13 +32,18 @@ Give a directory and the run keeps a checkpoint up to date as it goes::
   python -m mpisppy.generic_cylinders --module-name farmer --num-scens 3 \
       --solver-name cplex --max-iterations 100 --default-rho 1.0 \
       --time-limit 28800 \
-      --checkpoint-dir ./ckpt
+      --checkpoint-dir ./ckpt --checkpoint-every-iterations 10
 
-A checkpoint is written at the end of every completed PH iteration, and only
-one is kept, so the file on disk always describes the most recent *completed*
-iteration. Pairing ``--checkpoint-dir`` with ``--time-limit`` is the
-planned-stop recipe -- set the day's budget and the run stops itself with a
-resumable checkpoint in place.
+A checkpoint is written at the end of every completed PH iteration whose number
+is a multiple of K, and only one is kept, so the file on disk always describes
+the most recent *completed* iteration that was due a write. ``K = 1`` is the
+default and writes every iteration; on a real model you will want it higher
+(`Checkpointing less often`_). Pairing ``--checkpoint-dir`` with
+``--time-limit`` is the planned-stop recipe -- set the day's budget and the run
+stops itself with a resumable checkpoint in place. Any other stopping criterion
+does the same thing: ``--rel-gap``, ``--abs-gap`` or the convergence threshold
+each end the run just as cleanly, they are simply harder to schedule a day
+around.
 
 Checkpointing less often
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -61,16 +74,17 @@ work you are willing to repeat.
 For example, with ``K = 10`` a run that stops at iteration 34 leaves a
 checkpoint of iteration 30, and iterations 31 through 34 are lost. Resuming
 picks up at 31 and the next checkpoint is iteration 40 -- not 41, because the
-count follows the study, not the resumed leg.
+count follows the study, not the run that resumes it.
 
-**The one exception.** The final iteration of an exhausted ``--max-iterations``
-budget is always written, whatever K is. With ``--max-iterations 100`` and
-``K = 30`` the checkpoints are iterations 30, 60, 90 and 100. Raising the limit
-and resuming is a normal way to extend a study, and that last iterate is
-known-good and already in memory, so it is not worth discarding to save one
-write. No other kind of stop can be caught this way: a time limit, the
-convergence threshold and a user converger are all tested partway through the
-*next* iteration, by which point there is nothing coherent left to write.
+**The one exception.** The final iteration of an exhausted iteration budget is
+always written, whatever K is -- either budget, whichever ended the run. With
+``--max-iterations 100`` and ``K = 30`` the checkpoints are iterations 30, 60,
+90 and 100. Resuming to carry a study further is ordinary, and that last
+iterate is known-good and already in memory, so it is not worth discarding to
+save one write. No other kind of stop can be caught this way: a time limit,
+``--rel-gap``, the convergence threshold and a user converger are all tested
+partway through the *next* iteration, by which point there is nothing coherent
+left to write.
 
 Changing K between a stop and a resume is allowed; like the iteration limit,
 it describes how the run is managed rather than what problem is being solved,
@@ -114,8 +128,23 @@ Point a new run at the directory::
 The resumed run continues from the checkpointed iterate rather than starting
 over. It does **not** re-solve the subproblems at iteration 0 -- for large MIPs
 that solve is often the most expensive in the run, and its answer would be
-thrown away. Iteration numbering continues where it left off, so
-``--max-iterations`` bounds the run as a whole rather than each leg of it.
+thrown away. Iteration numbering continues where it left off, but the budget
+does not: ``--max-iterations`` bounds the run you are starting. To resume a run
+that stopped at iteration 4 and do two more, pass ``--max-iterations 2``, and
+the study ends at iteration 6.
+
+Say where the *study* should end and mpi-sppy will work the rest out::
+
+  python -m mpisppy.generic_cylinders --module-name farmer --num-scens 3 \
+      --solver-name cplex --max-iterations 100 --default-rho 1.0 \
+      --stop-at-iteration-number 500 --resume-from ./ckpt
+
+That run does at most 100 iterations, and stops earlier if it reaches
+iteration 500 of the study. Submitting the same command each morning walks a
+500-iteration study forward in 100-iteration days without anyone having to
+subtract. ``--stop-at-iteration-number`` is unset by default. A run that starts
+from a checkpoint at or past it reports that the study is already finished and
+does nothing, rather than quietly running on.
 
 What must match, and what may change
 ------------------------------------
@@ -126,8 +155,13 @@ requires the same number of MPI ranks with the same scenarios on each, and a
 configuration that matches everywhere except a short list of settings a resume
 may legitimately change:
 
-* **the budget** -- ``--max-iterations``, ``--time-limit``, the gap and
-  stalling thresholds;
+* **the budget, and every termination criterion** -- ``--max-iterations``,
+  ``--stop-at-iteration-number``, ``--time-limit``, ``--rel-gap``,
+  ``--abs-gap``, ``--intra-hub-conv-thresh`` and ``--max-stalled-iters``.
+  All of them say when to stop rather than what is being solved, so all of
+  them may differ: deciding over breakfast that the study should end at 500
+  rather than 400, or that a 1% gap is close enough after all, continues the
+  same problem;
 * **solver choice and how it is driven** -- ``--solver-name``, solver options
   and thread counts, mipgaps, and every per-cylinder solver setting. Tightening
   a mipgap on day two continues the same problem rather than redefining it;

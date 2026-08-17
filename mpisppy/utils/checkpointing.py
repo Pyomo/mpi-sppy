@@ -74,9 +74,11 @@ STRUCTURAL_OPTION_KEYS = (
 # model's own inparser_adder registers, so a farmer checkpoint could be resumed
 # with --farmer-with-integers and quietly answer the LP.
 NON_STRUCTURAL_CFG_KEYS = frozenset({
-    # How long to run. Resuming with a different budget is the point.
-    "max_iterations", "time_limit", "intra_hub_conv_thresh", "rel_gap",
-    "abs_gap", "max_stalled_iters",
+    # How long to run. Resuming with a different budget is the point, and
+    # that goes for both bounds: --max-iterations sizes the run being started
+    # and --stop-at-iteration-number sizes the study it belongs to.
+    "max_iterations", "stop_at_iteration_number", "time_limit",
+    "intra_hub_conv_thresh", "rel_gap", "abs_gap", "max_stalled_iters",
     # Checkpoint plumbing itself. How often a checkpoint is written is a
     # cadence knob like the iteration limit: it changes what a stop costs, not
     # what problem the checkpoint describes.

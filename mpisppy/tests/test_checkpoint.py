@@ -231,14 +231,14 @@ def _flat_snapshot(ph):
             for key, value in _primal_snapshot(ph).items()}
 
 
-def _resume_and_dump(ckpt_dir, max_iters, out_path):
+def _resume_and_dump(ckpt_dir, iters_this_run, out_path):
     """Resume in this process and write the final state to out_path.
 
     The entry point test_resume_survives_a_fresh_process runs in a subprocess;
     it lives at module scope because that subprocess imports this module by
     name to reach it.
     """
-    ph = _make_ph(_options(max_iters, resume_from=ckpt_dir))
+    ph = _make_ph(_options(iters_this_run, resume_from=ckpt_dir))
     ph.ph_main()
     with open(out_path, "w") as f:
         json.dump({
@@ -289,6 +289,10 @@ class TestResumeABFarmer(unittest.TestCase):
 
     N = 6
     STOP = 3
+    #: PHIterLimit (--max-iterations) bounds the run being started, not the
+    #: study, so the resumed leg asks for the iterations that are left rather
+    #: than for N. Only --stop-at-iteration-number counts absolutely.
+    REMAINING = N - STOP
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -301,7 +305,7 @@ class TestResumeABFarmer(unittest.TestCase):
         """Stop at STOP with a checkpoint, then resume and finish."""
         stopped = _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir))
         stopped.ph_main()
-        resumed = _make_ph(_options(self.N, resume_from=self.ckpt_dir))
+        resumed = _make_ph(_options(self.REMAINING, resume_from=self.ckpt_dir))
         resumed.ph_main()
         return stopped, resumed
 
@@ -330,7 +334,7 @@ class TestResumeABFarmer(unittest.TestCase):
         _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir)).ph_main()
 
         out_path = os.path.join(self._tmp.name, "resumed_state.json")
-        call_args = json.dumps([self.ckpt_dir, self.N, out_path])
+        call_args = json.dumps([self.ckpt_dir, self.REMAINING, out_path])
         result = subprocess.run(
             [sys.executable, "-c",
              "import json, mpisppy.tests.test_checkpoint as t; "
@@ -378,7 +382,7 @@ class TestResumeABFarmer(unittest.TestCase):
         """
         _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir)).ph_main()
 
-        resumed = _make_ph(_options(self.N, resume_from=self.ckpt_dir))
+        resumed = _make_ph(_options(self.REMAINING, resume_from=self.ckpt_dir))
         calls = []
         original = resumed.solve_loop
 
@@ -421,8 +425,13 @@ class TestResumeABFarmer(unittest.TestCase):
         self.assertLess(stopped._PHIter, 20,
                         msg="test did not exit through an early break")
 
-        resumed = _make_ph(_options(self.N, resume_from=self.ckpt_dir))
+        # An early break stops at an iteration this test does not know, so the
+        # remaining work cannot be counted out as a per-run limit. The study
+        # bound says where to end absolutely, whatever the checkpoint holds.
+        resumed = _make_ph(_options(self.N, resume_from=self.ckpt_dir,
+                                    stop_at_iteration_number=self.N))
         resumed.ph_main()
+        self.assertEqual(resumed._PHIter, self.N)
 
         reference = _make_ph(_options(self.N))
         reference.ph_main()
@@ -436,7 +445,7 @@ class TestResumeABFarmer(unittest.TestCase):
                     f"an early break: {want[key]} vs {got[key]}")
 
     def test_empty_resume_does_not_republish_as_generation_zero(self):
-        """Resuming without raising --max-iterations must not destroy state.
+        """A resume with no iterations to do must not destroy state.
 
         The resumed loop has nothing to do, so _PHIter would otherwise stay at
         its initial 0, and a terminal write would publish generation 0 and
@@ -444,8 +453,21 @@ class TestResumeABFarmer(unittest.TestCase):
         """
         _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir)).ph_main()
 
-        resumed = _make_ph(_options(self.STOP, resume_from=self.ckpt_dir,
+        resumed = _make_ph(_options(0, resume_from=self.ckpt_dir,
                                     ckpt_dir=self.ckpt_dir))
+        resumed.ph_main()
+        self.assertEqual(resumed._PHIter, self.STOP)
+        generations = os.listdir(os.path.join(self.ckpt_dir, "hub"))
+        self.assertEqual(generations, [f"gen_{self.STOP:04d}"])
+
+    def test_a_finished_study_does_not_republish_as_generation_zero(self):
+        """The same guarantee by the other route to an empty loop: the study
+        bound has already been reached, so there is nothing left to do."""
+        _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir)).ph_main()
+
+        resumed = _make_ph(_options(self.N, resume_from=self.ckpt_dir,
+                                    ckpt_dir=self.ckpt_dir,
+                                    stop_at_iteration_number=self.STOP))
         resumed.ph_main()
         self.assertEqual(resumed._PHIter, self.STOP)
         generations = os.listdir(os.path.join(self.ckpt_dir, "hub"))
@@ -458,7 +480,7 @@ class TestResumeABFarmer(unittest.TestCase):
         stopped.best_solution_obj_val = -110000.0
         checkpointing.write_checkpoint(stopped, self.ckpt_dir, self.STOP)
 
-        resumed = _make_ph(_options(self.N, resume_from=self.ckpt_dir))
+        resumed = _make_ph(_options(self.REMAINING, resume_from=self.ckpt_dir))
         resumed.ph_main()
         self.assertEqual(resumed.best_solution_obj_val, -110000.0)
         # And the guarantee that value exists to provide: a worse candidate
@@ -518,6 +540,87 @@ class TestResumeABFarmer(unittest.TestCase):
 
 
 @unittest.skipIf(not solver_available,
+                 "no solver is available to run the iteration bounds")
+class TestIterationBounds(unittest.TestCase):
+    """The two bounds, and which of them ends a run.
+
+    --max-iterations counts the iterations of the run being started, so
+    resuming with 2 does two more whatever number the checkpoint stopped at.
+    --stop-at-iteration-number counts the study, as an absolute iteration
+    number across every run linked by checkpoints. A run ends at whichever
+    arrives first.
+    """
+
+    STOP = 3
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
+        _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir)).ph_main()
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _resume(self, max_iters, **overrides):
+        ph = _make_ph(_options(max_iters, resume_from=self.ckpt_dir,
+                               **overrides))
+        ph.ph_main()
+        self.assertEqual(ph._resume_iteration, self.STOP)
+        return ph
+
+    def test_max_iterations_counts_this_run_not_the_study(self):
+        """Two more iterations, not two in total: passing the study total is
+        the mistake the old reading of this flag invited."""
+        self.assertEqual(self._resume(2)._PHIter, self.STOP + 2)
+
+    def test_the_study_bound_can_end_the_run_first(self):
+        ph = self._resume(10, stop_at_iteration_number=self.STOP + 1)
+        self.assertEqual(ph._PHIter, self.STOP + 1)
+
+    def test_the_per_run_bound_can_end_the_run_first(self):
+        ph = self._resume(1, stop_at_iteration_number=self.STOP + 99)
+        self.assertEqual(ph._PHIter, self.STOP + 1)
+
+    def test_a_study_bound_already_reached_runs_nothing(self):
+        """The study is over; the run must not quietly do another iteration."""
+        ph = self._resume(10, stop_at_iteration_number=self.STOP)
+        self.assertEqual(ph._PHIter, self.STOP)
+
+    def test_a_study_bound_behind_the_checkpoint_runs_nothing(self):
+        ph = self._resume(10, stop_at_iteration_number=self.STOP - 1)
+        self.assertEqual(ph._PHIter, self.STOP)
+
+    def test_the_study_bound_is_not_structural(self):
+        """Deciding tomorrow morning where the study should end is a budget
+        change like any other, so it must not refuse the checkpoint."""
+        base = {"defaultPHrho": 1.0}
+        self.assertEqual(
+            checkpointing.structural_fingerprint(
+                {**base, "stop_at_iteration_number": None}),
+            checkpointing.structural_fingerprint(
+                {**base, "stop_at_iteration_number": 40}))
+        self.assertTrue(
+            checkpointing._is_non_structural("stop_at_iteration_number"))
+
+    def test_the_last_iteration_is_written_when_the_study_bound_ends_it(self):
+        """The always-write rule follows whichever bound stopped the run: off
+        cadence, the study's final iterate is exactly the one worth keeping."""
+        writes = []
+        real = checkpointing.write_checkpoint
+
+        def counting(opt, ckpt_dir, generation, backend):
+            writes.append(generation)
+            return real(opt, ckpt_dir, generation, backend=backend)
+
+        with mock.patch.object(checkpointing, "write_checkpoint",
+                               side_effect=counting):
+            self._resume(10, ckpt_dir=self.ckpt_dir,
+                         stop_at_iteration_number=self.STOP + 2,
+                         checkpoint_every_iterations=5)
+        self.assertEqual(writes, [self.STOP + 2])
+
+
+@unittest.skipIf(not solver_available,
                  "no solver is available to write a checkpoint to refuse")
 class TestResumeRefusesMismatch(unittest.TestCase):
     """A checkpoint that does not fit the current run must be refused."""
@@ -561,7 +664,8 @@ class TestResumeRefusesMismatch(unittest.TestCase):
         options = _options(4, resume_from=self.ckpt_dir, time_limit=3600)
         resumed = _make_ph(options)
         resumed.ph_main()
-        self.assertEqual(resumed._PHIter, 4)
+        # The budget is this run's, so four more on top of the checkpoint.
+        self.assertEqual(resumed._PHIter, self.STOP + 4)
 
 
 @unittest.skipIf(not solver_available,
@@ -663,11 +767,11 @@ class TestResumeAcceptanceMatrix(unittest.TestCase):
             generation,
             msg="the run ended without publishing any checkpoint")
 
-        # 1. The checkpoint must round-trip exactly. Resuming with no budget
-        #    left runs no iteration, so whatever state comes back is precisely
-        #    what was written -- which is the mechanism under test, and holds
-        #    whether or not any extension is stateful.
-        rt_opts = _options(generation, resume_from=self.ckpt_dir, **cfg_opts)
+        # 1. The checkpoint must round-trip exactly. Resuming with a per-run
+        #    budget of zero runs no iteration, so whatever state comes back is
+        #    precisely what was written -- which is the mechanism under test,
+        #    and holds whether or not any extension is stateful.
+        rt_opts = _options(0, resume_from=self.ckpt_dir, **cfg_opts)
         roundtrip = _make_ph(rt_opts, extension_name=ext)
         roundtrip.ph_main()
         self.assertEqual(roundtrip._PHIter, generation)
@@ -689,7 +793,8 @@ class TestResumeAcceptanceMatrix(unittest.TestCase):
 
         # 2. With no stateful extension in play, a resumed run must also be
         #    indistinguishable from one that was never interrupted.
-        resume_opts = _options(self.N, resume_from=self.ckpt_dir, **cfg_opts)
+        resume_opts = _options(self.N - generation, resume_from=self.ckpt_dir,
+                               **cfg_opts)
         resumed = _make_ph(resume_opts, extension_name=ext)
         resumed.ph_main()
 
@@ -1015,7 +1120,8 @@ class TestConfigRegistration(unittest.TestCase):
 
     def test_flags_are_registered(self):
         for name in ("checkpoint_dir", "checkpoint_backend",
-                     "checkpoint_every_iterations", "resume_from"):
+                     "checkpoint_every_iterations", "resume_from",
+                     "stop_at_iteration_number"):
             self.assertIn(name, self.cfg)
 
     def test_cadence_defaults_to_every_iteration(self):
@@ -1203,7 +1309,7 @@ class TestCheckpointEveryIterations(unittest.TestCase):
         self._run(3, 3)
         self.assertEqual(_published_generation(self.ckpt_dir), 3)
 
-        resumed = _make_ph(_options(self.N, resume_from=self.ckpt_dir))
+        resumed = _make_ph(_options(self.N - 3, resume_from=self.ckpt_dir))
         resumed.ph_main()
         self.assertEqual(resumed._resume_iteration, 3)
         self.assertEqual(resumed._PHIter, self.N)
@@ -1377,9 +1483,9 @@ class TestResumeExtensionBehavior(unittest.TestCase):
             extension_name="coeff_rho", extra_names=("miditer_mutator",))
         stopped.ph_main()
 
-        # max_iterations == STOP makes this an empty resume: Iter0 restores,
+        # A per-run budget of zero makes this an empty resume: Iter0 restores,
         # the loop body never runs, so what remains is exactly the splice.
-        resumed = _make_ph(_options(self.STOP, resume_from=self.ckpt_dir),
+        resumed = _make_ph(_options(0, resume_from=self.ckpt_dir),
                            extension_name="coeff_rho")
         resumed.ph_main()
 
@@ -1392,7 +1498,7 @@ class TestResumeExtensionBehavior(unittest.TestCase):
         stopped = _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir))
         stopped.ph_main()
 
-        resumed = _make_ph(_options(self.STOP, resume_from=self.ckpt_dir),
+        resumed = _make_ph(_options(0, resume_from=self.ckpt_dir),
                            extension_name="pre_tagger")
         resumed.ph_main()
 

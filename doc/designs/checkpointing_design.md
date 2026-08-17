@@ -574,9 +574,11 @@ whole trade. It moves *which* boundaries are checkpoint points and never moves
 a write off a boundary, so the coherence argument above is untouched.
 
 The one iteration written regardless of K is the last one of an exhausted
-`PHIterLimit`, which `Checkpointer._is_final_iteration` detects from the loop
-bound. Resuming with a raised `--max-iterations` is an explicitly supported
-workflow (`max_iterations` is non-structural), and that final iterate is
+iteration budget, which `Checkpointer._is_final_iteration` detects from the
+loop bound `iterk_loop` computed (`_stop_iteration`, the earlier of this run's
+`PHIterLimit` and the study's `stop_at_iteration_number`). Resuming for more
+iterations is an explicitly supported workflow (both bounds are
+non-structural, so either may change at a resume), and that final iterate is
 coherent and already in memory; discarding it to save a single write would be
 a real loss for the most ordinary way a study gets extended. The limit is the
 only stop knowable at `enditer` — convergence, the user converger and
@@ -708,8 +710,10 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
 1. **Global iteration counter / resume offset.** `iterk_loop` hardcodes
    `for _PHIter in range(1, max+1)` (in `iterk_loop`, `phbase.py`), so a resumed run renumbers
    from 1 and its checkpoints collide with the pre-crash ones. Add a resume offset
-   so checkpoint numbering is the global iteration and termination honors the
-   original `max_iterations`.
+   so checkpoint numbering is the global iteration. Termination is then counted
+   two ways: `max_iterations` bounds the run being started, and the study bound
+   `stop_at_iteration_number` (default unset) bounds the study across every run
+   linked by checkpoints, whichever arrives first.
 2. **A reload-model resume branch, in `Iter0`, replacing the iter-0 solve.**
    The branch lives where `iter0_from_pickle` already branches (§5.1), instead
    of the iter-0 `solve_loop` — so a resume never pays a throwaway `W = 0` solve
