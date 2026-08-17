@@ -220,9 +220,10 @@ will overwrite each other.
 What it costs
 -------------
 
-By default a checkpoint is written at every completed iteration, so the cost is
-one model serialization per iteration. Measured over ten iterations, against
-the same run without ``--checkpoint-dir``:
+The cost is one model serialization per checkpoint, so what it comes to per
+iteration is that divided by K. The figures below are the default ``K = 1``,
+the worst case, measured over ten iterations against the same run without
+``--checkpoint-dir``:
 
 ===========================  ==========  ============  ==========
 instance                     no ckpt     with ckpt     overhead
