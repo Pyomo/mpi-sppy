@@ -175,9 +175,23 @@ registers. That is deliberate: checking by default is what stops a farmer
 checkpoint from being resumed with ``--farmer-with-integers`` and quietly
 answering the linear program.
 
-The practical consequence is that a checkpoint is tied to the mpi-sppy and
-model version that wrote it. Adding a new option to your model module will
-cause existing checkpoints to be refused.
+There are two practical consequences, and they come from different places.
+
+**Editing your model module invalidates the checkpoints you already have.**
+Registering one more option in ``inparser_adder`` changes the configuration
+being compared, so the next resume stops at startup with
+``CheckpointMismatch`` naming the directory. That is the check doing its job
+rather than a defect -- it cannot tell a harmless new option from one that
+changes the problem -- but it does mean a study wants to reach its end before
+the module is edited under it.
+
+**A checkpoint is only as portable as the pickles inside it.** Under
+``dill-reload`` it holds serialized Pyomo models, so upgrading mpi-sppy, Pyomo
+or Python between the write and the resume can leave them unreadable even when
+every option still matches. The on-disk layout carries a format version and is
+checked, but that only catches layout changes mpi-sppy made deliberately; it
+promises nothing about yesterday's pickles loading into today's libraries.
+Finish a study on the software stack it started on.
 
 What resume guarantees
 ----------------------
