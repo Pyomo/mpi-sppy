@@ -2,6 +2,12 @@
 
 Status: draft for review. Branch `ipopt-outer-bound` (off Pyomo/mpi-sppy `main`).
 
+The mathematics is set out separately, with proofs, in
+[`ipopt_outer_bound_certificate.tex`](ipopt_outer_bound_certificate.pdf) —
+weak duality, the box underestimator, exactness at a KKT point, the canonical-form
+sign condition, and the aggregation hypothesis. This document covers the design
+decisions and the implementation; that one covers why the bound is valid.
+
 ## 1. Goal
 
 Give mpi-sppy an outer bound for stochastic programs whose scenario subproblems are
