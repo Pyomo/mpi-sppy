@@ -534,9 +534,10 @@ New `mpisppy/tests/test_*.py` files go into `run_coverage.bash` **and**
 `.github/workflows/test_pr_and_main.yml` in the same commit, or codecov reports 0% on
 the patch.
 
-## 12. Decisions and remaining open question
+## 12. Decisions
 
-Resolved:
+Every question this design opened is now settled; item 4 turned out to be a bug in
+shipped code rather than a design choice.
 
 1. **Cushion default — on.** `ε_rel = 1e-9`, `--ipopt-outer-bound-cushion` to change,
    0 to disable. See §5.2 for what it is and is not worth.
@@ -546,10 +547,14 @@ Resolved:
 3. **Naming — neutral engine, Ipopt cylinder.** `utils/dual_certificate.py` takes the
    sign convention as an argument; `cylinders/ipopt_outer_bound.py` is the Ipopt-scoped
    consumer. See §9.
-
-Still open:
-
-4. **Pre-existing stale-bound exposure.** Does the existing Lagrangian spoke's
-   stale-`outer_bound` fallback admit the §8 mixed-`W` case in practice? This is a
-   question about *shipped* code, not about this design, so it belongs in its own
-   GitHub issue and must not gate any phase here.
+4. **Pre-existing stale-bound exposure — confirmed, and fixed separately.** The
+   question was whether the existing stale-`outer_bound` fallback admits the §8
+   mixed-`W` case in practice. It does. `solve_one` left a subproblem's previous
+   bound in place when a solve produced no bound, so `Ebound` could form a sum
+   mixing one scenario's stale bound with the others' fresh ones — not a bound at
+   all, and invisible to `Ebound`'s missing-bound check, which tests for `None` and
+   sees a number. The same exposure existed on the ordinary failed-solve path.
+   Reproduced and fixed in **PR #839**, based on `main` rather than stacked here,
+   since it is a soundness bug in shipped code and independent of this design.
+   Ipopt itself never reaches that path (it reports `Lower_bound = -inf`, not
+   `None`), so nothing in this design depends on the outcome.
