@@ -10,6 +10,7 @@ MPI is used.
    :caption: Getting Started
 
    quick_start.rst
+   console_scripts.rst
    install_mpi.rst
 
 .. toctree::
