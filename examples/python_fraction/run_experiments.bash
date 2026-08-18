@@ -144,7 +144,7 @@ for c in "${CASES[@]}"; do
         # Same case, no profiler: record wall time only.
         /usr/bin/time -f "%e" -o "${outdir}/wall.txt" \
           mpiexec --oversubscribe -np "${NP}" \
-          python -m mpi4py "${DRIVER}" "${cargs[@]}" "${COMMON[@]}" \
+          python3 -m mpi4py "${DRIVER}" "${cargs[@]}" "${COMMON[@]}" \
           > "${outdir}/run.log" 2>&1 || true
         if grep -q 'Cylinder finalization complete' "${outdir}/run.log"; then
           n_found="${NP}"

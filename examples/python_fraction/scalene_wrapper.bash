@@ -35,6 +35,6 @@ fi
 
 cd "${OUTDIR}"
 
-exec python -m scalene run \
+exec python3 -m scalene run \
   --outfile "scalene_rank_${RANK}.json" \
   "$@"

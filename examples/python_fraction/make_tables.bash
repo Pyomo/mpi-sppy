@@ -28,7 +28,7 @@ CASES=(farmer3 farmer60 farmer240 farmer240_bun10
        sslp_15_45_10 sslp_15_45_15 sslp_15_45_15_bun3 sslp_5_25_50)
 
 # Primary results: the persistent interface.
-python "${HERE}/summarize_reps.py" \
+python3 "${HERE}/summarize_reps.py" \
   --results "${RESULTS}" \
   --solvers gurobi_persistent \
   --cases "${CASES[@]}" \
@@ -37,7 +37,7 @@ python "${HERE}/summarize_reps.py" \
 
 # Secondary: the file-based interface, for the contrast noted in the writeup.
 if [[ -d "${RESULTS}/gurobi" ]]; then
-  python "${HERE}/summarize_reps.py" \
+  python3 "${HERE}/summarize_reps.py" \
     --results "${RESULTS}" \
     --solvers gurobi \
     --cases "${CASES[@]}" \

@@ -38,7 +38,7 @@ Why read the JSON:
   (with the colour codes stripped) if you want to cross-check the two.
 
 Usage:
-  python make_scalene_latex_table.py --glob "scalene_rank_*.json" --out scalene_summary.tex
+  python3 make_scalene_latex_table.py --glob "scalene_rank_*.json" --out scalene_summary.tex
 
 Options:
   --from-cli      Parse `scalene view --cli` instead of reading the JSON directly
@@ -57,6 +57,7 @@ import os
 import platform
 import re
 import subprocess
+import sys
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -202,7 +203,7 @@ def _extract_params_from_argv(argv: List[str]) -> Dict[str, str]:
 
 
 # ---------------------------
-# System info collection (Unix/bash assumptions)
+# System info collection (Unix assumptions)
 # ---------------------------
 
 def _run_cmd(cmd: List[str]) -> Optional[str]:
@@ -272,7 +273,7 @@ def _collect_system_info() -> Dict[str, str]:
     info["cpu_logical"] = str(logical) if logical is not None else "unknown"
 
     # lscpu (Linux)
-    lscpu = _run_cmd(["bash", "-lc", "lscpu"])
+    lscpu = _run_cmd(["lscpu"])
     cpu_model = None
     cpu_mhz = None
     cpu_max_mhz = None
@@ -301,7 +302,7 @@ def _collect_system_info() -> Dict[str, str]:
 
     # sysctl (macOS / BSD)
     if cpu_model is None:
-        cpu_model = _run_cmd(["bash", "-lc", "sysctl -n machdep.cpu.brand_string 2>/dev/null"]) or None
+        cpu_model = _run_cmd(["sysctl", "-n", "machdep.cpu.brand_string"]) or None
 
     # Physical cores (best-effort)
     physical_cores = None
@@ -312,7 +313,7 @@ def _collect_system_info() -> Dict[str, str]:
             physical_cores = None
     if physical_cores is None:
         # macOS
-        pc = _run_cmd(["bash", "-lc", "sysctl -n hw.physicalcpu 2>/dev/null"])
+        pc = _run_cmd(["sysctl", "-n", "hw.physicalcpu"])
         if pc and pc.isdigit():
             physical_cores = int(pc)
 
@@ -345,11 +346,11 @@ def _collect_system_info() -> Dict[str, str]:
         info["mem_available"] = _format_bytes(mem_avail_bytes)
     else:
         # macOS total
-        mt = _run_cmd(["bash", "-lc", "sysctl -n hw.memsize 2>/dev/null"])
+        mt = _run_cmd(["sysctl", "-n", "hw.memsize"])
         if mt and mt.isdigit():
             info["mem_total"] = _format_bytes(int(mt))
         # macOS available is trickier; best-effort via vm_stat
-        vm = _run_cmd(["bash", "-lc", "vm_stat 2>/dev/null"])
+        vm = _run_cmd(["vm_stat"])
         if vm:
             # Parse page size and free/inactive/speculative, etc.
             page_size = 4096
@@ -377,7 +378,7 @@ def _collect_system_info() -> Dict[str, str]:
 # ---------------------------
 
 def _run_scalene_view_cli(json_path: str, reduced: bool, columns: int) -> str:
-    cmd = ["python", "-m", "scalene", "view", "--cli"]
+    cmd = [sys.executable, "-m", "scalene", "view", "--cli"]
     if reduced:
         cmd.append("--reduced")
     cmd.append(json_path)

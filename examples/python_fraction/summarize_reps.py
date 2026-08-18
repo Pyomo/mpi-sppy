@@ -33,16 +33,16 @@ Two tables are produced:
             a column reports scalene's overhead, since the profiler's own cost
             falls mostly on Python and therefore inflates the Python share.
 
-  Per-rank  one row per (case, rank): the Python percentage for that cylinder,
-            averaged over repetitions with its range. This is the table that
-            shows whether a particular cylinder is an outlier.
+  Per-rank  one row per case and one column per rank: the Python percentage for
+            that cylinder, averaged over repetitions with its range. This is the
+            table that shows whether a particular cylinder is an outlier.
 
 The job-level percentage for one repetition is computed from summed seconds
 across ranks, not by averaging per-rank percentages, so that ranks are weighted
 by how long they actually ran.
 
 Usage:
-  python summarize_reps.py --results results --out scalene_summary.tex
+  python3 summarize_reps.py --results results --out scalene_summary.tex
 """
 
 from __future__ import annotations
