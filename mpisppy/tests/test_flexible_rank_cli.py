@@ -28,6 +28,7 @@ def _full_cfg():
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.gapper_args("lagrangian")
+    cfg.ipopt_outer_bound_args()
     cfg.ph_dual_args()
     cfg.relaxed_ph_args()
     cfg.ph_xfeas_spoke_args()
