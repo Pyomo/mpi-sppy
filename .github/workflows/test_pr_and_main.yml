@@ -1344,6 +1344,13 @@ jobs:
               assert abs(pyo.value(m.x) - 1.0) < 1e-6, ls
               print(ls, 'OK')
           "
+          echo ""
+          echo "=============================================================================="
+          echo "This build of Ipopt links HSL, and defaults to the ma27 linear solver, so"
+          echo "the tests below solve with HSL rather than with MUMPS."
+          echo "HSL, a collection of Fortran codes for large-scale scientific computation."
+          echo "See https://www.hsl.rl.ac.uk/"
+          echo "=============================================================================="
 
       - name: run ipopt-dependent tests
         timeout-minutes: 10

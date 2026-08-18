@@ -90,6 +90,19 @@ against floating point, not a proof-carrying margin; pass ``0`` to disable it.
 
 Maximization is not supported and raises at setup.
 
+.. note::
+   Ipopt builds obtained from the IDAES ``idaes-ext`` distribution (the usual way
+   to get one with good linear solvers, and what mpi-sppy's CI installs) link the
+   Harwell Subroutine Library and **default to the** ``ma27`` **linear solver**
+   rather than to MUMPS. That is worth knowing because results can differ
+   slightly between them, and because HSL asks that its use be acknowledged:
+
+      HSL, a collection of Fortran codes for large-scale scientific computation.
+      See https://www.hsl.rl.ac.uk/
+
+   Pass ``--ipopt-outer-bound-solver-options "linear_solver=mumps"`` to choose
+   otherwise.
+
 
 Subgradient
 ^^^^^^^^^^^

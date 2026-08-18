@@ -25,14 +25,36 @@ import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.utils import config
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils.dual_certificate import CertificateError
-from mpisppy.tests.utils import get_solver
+from mpisppy.tests.utils import announce_hsl_if_used, get_solver
 
 from mpi4py import MPI
 
 comm = MPI.COMM_WORLD
 
 ipopt_available = pyo.SolverFactory("ipopt").available(exception_flag=False)
+
+if ipopt_available:
+    announce_hsl_if_used()
 mip_available, mip_solver_name, *_ = get_solver()
+
+
+def _dual_bound_solver():
+    """A solver that actually reports a dual bound, for the Lagrangian spoke.
+
+    Ipopt reports none -- that is the entire reason this spoke exists -- so the
+    comparison in TestAgreesWithLagrangian needs a second solver. cbc is the
+    fallback because it ships inside the same idaes-ext bundle that supplies
+    Ipopt, so this test runs rather than skips in CI, where no commercial
+    solver is installed.
+    """
+    if mip_available:
+        return mip_solver_name
+    if pyo.SolverFactory("cbc").available(exception_flag=False):
+        return "cbc"
+    return None
+
+
+dual_bound_solver_name = _dual_bound_solver()
 
 # The three-scenario farmer optimum, from an EF solve. farmer is linear, hence
 # convex, so it is inside this spoke's assumptions and its bound must not exceed
@@ -221,6 +243,62 @@ class TestAgainstEFOptimum(unittest.TestCase):
         # exchange of W and bounds. Here the hub runs a MIP solver while the
         # spoke runs Ipopt.
         self._assert_valid_and_useful(self._spin(mip_solver_name))
+
+
+@unittest.skipUnless(ipopt_available, "ipopt is not available")
+@unittest.skipUnless(comm.size == 2, "needs exactly two ranks")
+@unittest.skipUnless(dual_bound_solver_name, "no dual-bound-reporting solver")
+class TestAgreesWithLagrangian(unittest.TestCase):
+    """The strongest correctness check available: on a linear problem, compare
+    this spoke's bound against the ordinary Lagrangian spoke's.
+
+    farmer is an LP, so an LP solver's dual bound *is* the Lagrangian dual value
+    -- exact, and arrived at by a completely different route than the tangent
+    plane over the variable box that this spoke computes from Ipopt's duals.
+    Two independent computations of the same quantity is a much sharper test
+    than "the bound does not exceed the optimum", which a badly broken
+    certificate could still pass by being very negative.
+
+    Both legs use the same hub, same rho and same iteration count, so the hub
+    walks the same W trajectory and the two spokes are asked for a bound on the
+    same relaxations. Spoke bounds do not feed back into W.
+    """
+
+    TOL = 1e-2   # measured agreement is ~1.2e-4
+
+    def _bound_from(self, spoke_factory, **cfg_overrides):
+        cfg = _cfg(hub_solver="ipopt")
+        for k, v in cfg_overrides.items():
+            setattr(cfg, k, v)
+        beans, kwargs = _beans(cfg)
+        hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=kwargs)
+        spoke = spoke_factory(*beans, scenario_creator_kwargs=kwargs)
+        wheel = WheelSpinner(hub_dict, [spoke])
+        wheel.spin()
+        return wheel
+
+    def test_certificate_reproduces_the_lagrangian_bound(self):
+        lag = self._bound_from(vanilla.lagrangian_spoke,
+                               lagrangian_solver_name=dual_bound_solver_name)
+        cert = self._bound_from(vanilla.ipopt_outer_bound_spoke)
+
+        if lag.global_rank != 1:
+            return
+        lag_bound, cert_bound = lag.spcomm.bound, cert.spcomm.bound
+        self.assertIsNotNone(lag_bound)
+        self.assertIsNotNone(cert_bound)
+
+        # Two independent computations of the same number.
+        self.assertAlmostEqual(cert_bound, lag_bound, delta=self.TOL)
+
+        # And in the safe direction: the certificate carries the box-correction
+        # term and the cushion, so it may be slightly looser than the exact LP
+        # dual bound but must never be more optimistic than it.
+        self.assertLessEqual(cert_bound, lag_bound + self.TOL)
+
+        # Both remain valid outer bounds.
+        self.assertLessEqual(cert_bound, FARMER_EF_OPT + 1e-6)
+        self.assertLessEqual(lag_bound, FARMER_EF_OPT + 1e-6)
 
 
 if __name__ == "__main__":

@@ -8,6 +8,9 @@
 ###############################################################################
 
 
+import os
+import tempfile
+
 import pyomo.environ as pyo
 from math import log10, floor
 
@@ -50,3 +53,84 @@ def get_solver(persistent_OK=True):
 
 def round_pos_sig(x, sig=1):
     return round(x, sig-int(floor(log10(abs(x))))-1)
+
+
+# --- HSL acknowledgement -----------------------------------------------------
+#
+# Ipopt builds that link the Harwell Subroutine Library print, in their own
+# banner, that "any publicity material resulting from use of the HSL codes
+# within IPOPT must contain the acknowledgement: HSL, a collection of Fortran
+# codes for large-scale scientific computation."  Our test solves run with
+# tee=False, so that banner never reaches the screen.  These helpers put the
+# acknowledgement back, and say which linear solver is actually in use --
+# worth knowing anyway, since the idaes-ext build defaults to ma27 rather than
+# to MUMPS, and results can differ between the two.
+
+_HSL_ACK = (
+    "HSL, a collection of Fortran codes for large-scale scientific "
+    "computation. See https://www.hsl.rl.ac.uk/"
+)
+
+_hsl_probe_result = None       # cache: (linear_solver_name, uses_hsl)
+_hsl_announced = False
+
+
+def ipopt_linear_solver():
+    """Return (linear_solver_name, uses_hsl) for the ipopt on PATH.
+
+    Ipopt names its linear solver in the banner it writes at the start of every
+    solve, so one trivial solve into a logfile is enough. Returns (None, False)
+    when ipopt is unavailable or the banner cannot be read.
+    """
+    global _hsl_probe_result
+    if _hsl_probe_result is not None:
+        return _hsl_probe_result
+
+    result = (None, False)
+    try:
+        if pyo.SolverFactory("ipopt").available(exception_flag=False):
+            m = pyo.ConcreteModel()
+            m.x = pyo.Var(bounds=(-10, 10), initialize=0.0)
+            m.o = pyo.Objective(expr=(m.x - 3) ** 2)
+            m.c = pyo.Constraint(expr=m.x <= 1)
+            fd, path = tempfile.mkstemp(suffix=".log")
+            os.close(fd)
+            try:
+                pyo.SolverFactory("ipopt").solve(m, logfile=path)
+                with open(path) as f:
+                    text = f.read()
+            finally:
+                if os.path.exists(path):
+                    os.remove(path)
+            name = None
+            for line in text.splitlines():
+                if "running with linear solver" in line:
+                    name = line.split("running with linear solver")[1]
+                    name = name.strip().rstrip(".").split()[0]
+                    break
+            result = (name, "compiled using HSL" in text)
+    except Exception:
+        # Never let a courtesy message break a test run.
+        result = (None, False)
+
+    _hsl_probe_result = result
+    return result
+
+
+def announce_hsl_if_used():
+    """Print the HSL acknowledgement, once per process, if ipopt links HSL."""
+    global _hsl_announced
+    if _hsl_announced:
+        return
+    _hsl_announced = True
+    name, uses_hsl = ipopt_linear_solver()
+    if not uses_hsl:
+        return
+    bar = "=" * 78
+    print(
+        f"\n{bar}\n"
+        f"These tests solve with Ipopt built against HSL"
+        + (f" (linear solver: {name})" if name else "")
+        + f".\n{_HSL_ACK}\n{bar}",
+        flush=True,
+    )

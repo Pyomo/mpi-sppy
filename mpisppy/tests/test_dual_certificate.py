@@ -25,6 +25,7 @@ import unittest
 
 import pyomo.environ as pyo
 
+from mpisppy.tests.utils import announce_hsl_if_used
 from mpisppy.utils.dual_certificate import (
     CertificateError,
     certified_lower_bound,
@@ -36,6 +37,9 @@ OPT = 8.0          # analytic optimum of the running example
 MULTIPLIER = 4.0   # analytic multiplier of the active constraint
 
 ipopt_available = pyo.SolverFactory("ipopt").available(exception_flag=False)
+
+if ipopt_available:
+    announce_hsl_if_used()
 
 
 def _model(kind="le", bounds=(-10, 10), y_bounds=None):
