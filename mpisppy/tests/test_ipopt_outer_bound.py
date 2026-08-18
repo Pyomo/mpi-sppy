@@ -1,0 +1,227 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
+# Tests for the ipopt_outer_bound spoke.
+#
+#     python -m pytest mpisppy/tests/test_ipopt_outer_bound.py
+#     mpiexec -np 2 python -m mpi4py -m pytest mpisppy/tests/test_ipopt_outer_bound.py
+#
+# The wiring tests need neither a solver nor MPI: option routing is the part
+# most likely to break silently, and it is checkable by inspecting the spoke
+# dict the factory builds. The end-to-end test needs both Ipopt and two ranks
+# and skips cleanly without them.
+
+import unittest
+
+import pyomo.environ as pyo
+
+import mpisppy.tests.examples.farmer as farmer
+import mpisppy.utils.cfg_vanilla as vanilla
+from mpisppy.utils import config
+from mpisppy.spin_the_wheel import WheelSpinner
+from mpisppy.utils.dual_certificate import CertificateError
+from mpisppy.tests.utils import get_solver
+
+from mpi4py import MPI
+
+comm = MPI.COMM_WORLD
+
+ipopt_available = pyo.SolverFactory("ipopt").available(exception_flag=False)
+mip_available, mip_solver_name, *_ = get_solver()
+
+# The three-scenario farmer optimum, from an EF solve. farmer is linear, hence
+# convex, so it is inside this spoke's assumptions and its bound must not exceed
+# this value.
+FARMER_EF_OPT = -108390.0
+
+
+def _cfg(num_scens=3, hub_solver="ipopt"):
+    cfg = config.Config()
+    cfg.num_scens_required()
+    cfg.popular_args()
+    cfg.two_sided_args()
+    cfg.ph_args()
+    cfg.lagrangian_args()
+    cfg.ipopt_outer_bound_args()
+    cfg.num_scens = num_scens
+    cfg.max_iterations = 5
+    cfg.default_rho = 1.0
+    cfg.solver_name = hub_solver
+    return cfg
+
+
+def _beans(cfg):
+    all_scenario_names = farmer.scenario_names_creator(cfg.num_scens)
+    kwargs = farmer.kw_creator(cfg)
+    beans = (cfg, farmer.scenario_creator, farmer.scenario_denouement,
+             all_scenario_names)
+    return beans, kwargs
+
+
+def _spoke_options(cfg, **kw):
+    beans, kwargs = _beans(cfg)
+    spoke = vanilla.ipopt_outer_bound_spoke(*beans,
+                                            scenario_creator_kwargs=kwargs, **kw)
+    return spoke["opt_kwargs"]["options"]
+
+
+class TestConfigSurface(unittest.TestCase):
+
+    def test_flags_exist_with_expected_defaults(self):
+        cfg = _cfg()
+        self.assertFalse(cfg.ipopt_outer_bound)
+        self.assertEqual(cfg.ipopt_outer_bound_rank_ratio, 1.0)
+        self.assertEqual(cfg.ipopt_outer_bound_cushion, 1e-9)
+        # Scoped to Ipopt, but the name is still overridable.
+        self.assertIn("ipopt_outer_bound_solver_name", cfg)
+
+    def test_no_mipgap_flags(self):
+        # Ipopt is not a branch-and-bound solver; offering mipgap flags would
+        # imply otherwise.
+        cfg = _cfg()
+        self.assertNotIn("ipopt_outer_bound_starting_mipgap", cfg)
+        self.assertNotIn("ipopt_outer_bound_iter0_mipgap", cfg)
+
+
+class TestFactoryWiring(unittest.TestCase):
+
+    def test_solver_defaults_to_ipopt(self):
+        # Even when the hub runs something else entirely, the spoke must land
+        # on ipopt rather than inheriting -- its own setup guard would reject
+        # anything else.
+        options = _spoke_options(_cfg(hub_solver="gurobi"))
+        self.assertEqual(options["solver_name"], "ipopt")
+
+    def test_explicit_solver_name_is_honored(self):
+        cfg = _cfg()
+        cfg.ipopt_outer_bound_solver_name = "ipopt_v2"
+        self.assertEqual(_spoke_options(cfg)["solver_name"], "ipopt_v2")
+
+    def test_cushion_is_threaded_through(self):
+        cfg = _cfg()
+        cfg.ipopt_outer_bound_cushion = 1e-7
+        self.assertEqual(
+            _spoke_options(cfg)["ipopt_outer_bound_cushion"], 1e-7)
+
+    def test_global_solver_options_do_not_leak(self):  # noqa: D401
+        # The point of this test: Ipopt hard-fails on an unrecognized keyword
+        # rather than ignoring it, so inheriting the global --solver-options
+        # (meant for the hub's MIP solver) would kill this spoke on its first
+        # solve, with an error naming Ipopt rather than the option routing.
+        cfg = _cfg()
+        cfg.solver_options = "mipgap=0.01"
+        options = _spoke_options(cfg)
+        self.assertNotIn("mipgap", options["iter0_solver_options"])
+        self.assertNotIn("mipgap", options["iterk_solver_options"])
+        self.assertEqual(options["solver_options_layers"], [])
+
+    def test_other_spokes_still_inherit_global_options(self):
+        # The contrast that makes the previous test meaningful: not inheriting
+        # is special to this spoke, not a change in how spokes work.
+        cfg = _cfg()
+        cfg.solver_options = "mipgap=0.01"
+        beans, kwargs = _beans(cfg)
+        lag = vanilla.lagrangian_spoke(*beans, scenario_creator_kwargs=kwargs)
+        self.assertIn("mipgap",
+                      lag["opt_kwargs"]["options"]["iter0_solver_options"])
+
+    def test_per_spoke_solver_options_do_apply(self):
+        # Not inheriting the global layer must not mean ignoring the spoke's
+        # own options, which is how Ipopt settings are meant to arrive.
+        cfg = _cfg()
+        cfg.solver_options = "mipgap=0.01"
+        cfg.ipopt_outer_bound_solver_options = "max_iter=42"
+        options = _spoke_options(cfg)
+        self.assertEqual(options["iterk_solver_options"].get("max_iter"), 42)
+        self.assertNotIn("mipgap", options["iterk_solver_options"])
+
+
+class TestSetupGuards(unittest.TestCase):
+    """The guards that belong to the spoke rather than the certificate engine.
+
+    Constructed without running a wheel: the guard reads self.opt.options, so a
+    lightweight stand-in exercises it without a solve.
+    """
+
+    def _guard_with_solver(self, solver_name):
+        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+
+        class _Stub:
+            options = {"solver_name": solver_name}
+            local_scenarios = {}
+
+        spoke = IpoptOuterBound.__new__(IpoptOuterBound)
+        spoke.opt = _Stub()
+        spoke.cylinder_rank = 0
+        return spoke
+
+    def test_non_ipopt_solver_is_rejected(self):
+        spoke = self._guard_with_solver("gurobi")
+        with self.assertRaisesRegex(CertificateError, "scoped to Ipopt"):
+            spoke._check_setup_guards()
+
+    def test_ipopt_variants_are_accepted(self):
+        # ipopt_v2 and similar names still name Ipopt.
+        for name in ("ipopt", "ipopt_v2"):
+            with self.subTest(name=name):
+                self._guard_with_solver(name)._check_setup_guards()
+
+    def test_missing_solver_name_is_rejected(self):
+        spoke = self._guard_with_solver(None)
+        with self.assertRaisesRegex(CertificateError, "scoped to Ipopt"):
+            spoke._check_setup_guards()
+
+
+@unittest.skipUnless(ipopt_available, "ipopt is not available")
+@unittest.skipUnless(comm.size == 2, "needs exactly two ranks")
+class TestAgainstEFOptimum(unittest.TestCase):
+    """End-to-end: a PH hub on a MIP solver, this spoke on Ipopt.
+
+    This also exercises the routing claim in the design -- the hub and the spoke
+    really do run different solvers on their own copies of the models -- and the
+    Ebound reduction across the spoke's rank.
+    """
+
+    def _spin(self, hub_solver):
+        cfg = _cfg(hub_solver=hub_solver)
+        beans, kwargs = _beans(cfg)
+        hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=kwargs)
+        spoke = vanilla.ipopt_outer_bound_spoke(
+            *beans, scenario_creator_kwargs=kwargs)
+        wheel = WheelSpinner(hub_dict, [spoke])
+        wheel.spin()
+        return wheel
+
+    def _assert_valid_and_useful(self, wheel):
+        if wheel.global_rank != 1:
+            return
+        bound = wheel.spcomm.bound
+        self.assertIsNotNone(bound)
+        # An outer bound on a minimization must not exceed the optimum.
+        self.assertLessEqual(bound, FARMER_EF_OPT + 1e-6)
+        # And it must be useful, not merely valid: farmer's Lagrangian bound
+        # sits in the same neighborhood as the optimum, so a wildly negative
+        # number would mean the certificate had collapsed.
+        self.assertGreater(bound, 2.0 * FARMER_EF_OPT)
+
+    def test_bound_does_not_exceed_the_ef_optimum(self):
+        # farmer is an LP, so Ipopt can drive the hub too; this keeps the test
+        # runnable anywhere Ipopt is, with no MIP solver needed.
+        self._assert_valid_and_useful(self._spin("ipopt"))
+
+    @unittest.skipUnless(mip_available, "no MIP solver available")
+    def test_hub_and_spoke_can_use_different_solvers(self):
+        # The routing claim in the design: each cylinder solves its own copy of
+        # the models with its own solver, and the only coupling is the numeric
+        # exchange of W and bounds. Here the hub runs a MIP solver while the
+        # spoke runs Ipopt.
+        self._assert_valid_and_useful(self._spin(mip_solver_name))
+
+
+if __name__ == "__main__":
+    unittest.main()

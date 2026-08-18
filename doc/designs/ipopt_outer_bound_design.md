@@ -410,11 +410,13 @@ noted in §12.
 |---|---|
 | `mpisppy/utils/dual_certificate.py` | **Landed (Phase 1).** Pure function of a solved Pyomo model + its `dual` suffix → certified lower bound. No MPI, no cylinder, no PH. Named neutrally because only the §5 sign table is Ipopt-specific; the convention is a `sign_convention="ipopt"` argument rather than a hard-coded assumption. API: `check_model_is_certifiable`, `unbounded_variables`, `certified_lower_bound`, `CertificateError`. |
 | `mpisppy/tests/test_dual_certificate.py` | **Landed (Phase 1).** Wired into `run_coverage.bash` and the `unit-tests` CI job. |
-| `mpisppy/cylinders/ipopt_outer_bound.py` | New. `IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke)`; `outer_bound_only = False` (duals and primals are both needed); per-scenario certificate → `_mpisppy_data.outer_bound` → `Ebound()`. |
-| `mpisppy/utils/config.py` | `--ipopt-outer-bound` and its options. |
-| `mpisppy/utils/cfg_vanilla.py` | `ipopt_outer_bound_spoke()` factory, alongside `lagrangian_spoke()`. |
-| `mpisppy/generic_cylinders.py` | Driver wiring. |
-| `doc/src/spokes.rst` | User-facing page. |
+| `mpisppy/cylinders/ipopt_outer_bound.py` | **Landed.** `IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke)`; `outer_bound_only = False` (duals and primals are both needed); per-scenario certificate → `_mpisppy_data.outer_bound` → `Ebound()`. |
+| `mpisppy/utils/config.py` | **Landed.** `ipopt_outer_bound_args()`. |
+| `mpisppy/utils/cfg_vanilla.py` | **Landed.** `ipopt_outer_bound_spoke()` factory, alongside `lagrangian_spoke()`. |
+| `mpisppy/generic/spokes.py` | **Landed.** Spoke registry. Note this is *not* `generic_cylinders.py`, where an earlier draft of this table put it — the driver delegates spoke construction to `generic/spokes.py`, and the arg registration to `generic/parsing.py`. |
+| `mpisppy/generic/parsing.py` | **Landed.** Registers `ipopt_outer_bound_args()`. |
+| `mpisppy/tests/test_ipopt_outer_bound.py` | **Landed.** Wiring tests (no solver, no MPI) plus an end-to-end run against the EF optimum. |
+| `doc/src/spokes.rst` | **Landed.** User-facing page. |
 
 Prep attaches a `dual` Suffix (IMPORT) to each scenario. The objective expression after
 `PH_Prep(attach_prox=False)` is already `f_s + W_sᵀx`, so `φ_s` builds directly on top
@@ -432,14 +434,25 @@ Each phase is its own review-sized PR and is green on its own.
 - **Phase 1 — certificate engine. DONE, in this design branch.**
   `utils/dual_certificate.py` plus the §6 model guards plus
   `tests/test_dual_certificate.py`. No cylinder, no MPI, no config surface.
-- **Phase 2 — the cylinder.** `IpoptOuterBound`, config flag, `cfg_vanilla` factory,
-  `generic_cylinders` wiring; serial (single-rank) run on a convex example.
-- **Phase 3 — parallel + docs.** Multi-rank cylinder test exercising the `Ebound`
-  reduction and the write-id agreement path; `doc/src/spokes.rst`; `run_all.py` entry.
-- **Phase 4 — optional tightening re-solve.** Re-solve `min_{v∈B} φ_s(v)` when the
-  correction exceeds a threshold, and re-certify at the new point. Opt-in; this is the
-  only part that costs a second solve.
-- **Phase 5 — maximization** through the concave mirror.
+- **Phase 2 — the cylinder. DONE.** `IpoptOuterBound`, config surface, `cfg_vanilla`
+  factory, driver wiring.
+- **Phase 3 — parallel + docs. DONE.** Two-rank test exercising the `Ebound`
+  reduction; `doc/src/spokes.rst`; a driver command-line smoke run.
+
+**Phases 1–3 ship as a single PR**, revising the "each phase its own PR" plan above.
+The reason is review latency rather than principle: with no reviewer available in this
+area for some time, splitting buys nothing and costs coherence — and Phase 1 on its own
+is arguably *harder* to review, being a mathematical argument with no consumer. Together,
+a reviewer can watch the bound get produced against a known EF optimum.
+
+Deferred, and possibly forever — neither is needed for the feature to be complete, so
+both are better filed as issues than kept as planned phases:
+
+- **Optional tightening re-solve.** Re-solve `min_{v∈B} φ_s(v)` when the correction
+  exceeds a threshold, and re-certify at the new point. By §3.4's own argument the
+  correction is ~0 at a converged solve, so this may never be worth building.
+- **Maximization** through the concave mirror. A hard error today, which is a fine
+  permanent state unless someone actually needs it.
 
 ### 10.1 Ipopt in CI — done, and it is the good build
 
@@ -528,7 +541,21 @@ optimum 8 at `(1, 0)` and multiplier 4, all analytic.
   `1e-9·(1+|q̂|)` and never turns a valid bound invalid.
 - **Integration**: `farmer` is linear, hence convex, and Ipopt solves it; compare the
   cylinder's bound against the EF optimum.
-- **MPI**: 2-rank cylinder, same comparison, exercising `Ebound`'s reduction.
+- **MPI**: 2-rank cylinder, same comparison, exercising `Ebound`'s reduction. The hub
+  runs Ipopt too by default so the test needs no MIP solver; a second case runs the hub
+  on a MIP solver and skips when none is available, which is what actually demonstrates
+  the §7 routing claim.
+- **Option routing** (no solver, no MPI): that the global `--solver-options` layer does
+  *not* reach this spoke while the per-spoke layer does, and — the assertion that makes
+  that meaningful — that `lagrangian_spoke` still *does* inherit the global layer. This
+  is the §7.1 decision, and it is the part most likely to break silently.
+
+**No `run_all.py` entry.** The usual home for "the documented command line still works"
+is `run_all.py`, but `do_one` has no skip machinery, so an entry there would force an
+Ipopt install into both `run_all` CI jobs, which have no other use for one. The same
+coverage is bought far more cheaply by a driver smoke run inside the `ipopt-tests` job,
+which already has Ipopt. Worth revisiting if Ipopt ever lands in those jobs for another
+reason.
 
 New `mpisppy/tests/test_*.py` files go into `run_coverage.bash` **and**
 `.github/workflows/test_pr_and_main.yml` in the same commit, or codecov reports 0% on

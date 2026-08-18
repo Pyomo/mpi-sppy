@@ -1040,6 +1040,38 @@ class Config(pyofig.ConfigDict):
                            default=False)
 
 
+    def ipopt_outer_bound_args(self):
+
+        self.add_to_config('ipopt_outer_bound',
+                              description="have an ipopt_outer_bound spoke "
+                                          "(certified Lagrangian outer bound for "
+                                          "convex NLP subproblems; see spokes.rst)",
+                              domain=bool,
+                              default=False)
+
+        self.add_to_config('ipopt_outer_bound_rank_ratio',
+                              description="MPI ranks for the ipopt_outer_bound "
+                                          "spoke relative to the hub (flexible rank "
+                                          "assignments; default 1.0 = equal)",
+                              domain=float,
+                              default=1.0)
+
+        # No add_mipgap_specs: Ipopt is not a branch-and-bound solver and has no
+        # mip gap. Offering the flags would suggest otherwise.
+        # The spoke is scoped to Ipopt, so its solver defaults to ipopt when
+        # this is left unset (applied in cfg_vanilla.ipopt_outer_bound_spoke;
+        # add_solver_specs itself defaults every solver name to None).
+        self.add_solver_specs("ipopt_outer_bound")
+
+        self.add_to_config('ipopt_outer_bound_cushion',
+                           description="relative cushion subtracted from the "
+                                       "certified bound: report q - eps*(1+|q|). "
+                                       "Last-bit hygiene against floating point, "
+                                       "not a proof-carrying margin; 0 disables",
+                           domain=float,
+                           default=1e-9)
+
+
     def reduced_costs_args(self):
 
         self.add_to_config('reduced_costs',

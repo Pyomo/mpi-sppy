@@ -1263,7 +1263,8 @@ jobs:
             mpisppy/tests/test_sep_rho.py \
             mpisppy/tests/test_reduced_costs_fixer.py \
             mpisppy/tests/test_slammer.py \
-            mpisppy/tests/test_dual_certificate.py
+            mpisppy/tests/test_dual_certificate.py \
+            mpisppy/tests/test_ipopt_outer_bound.py
 
       - name: Upload coverage data
         if: always()
@@ -1345,10 +1346,30 @@ jobs:
           "
 
       - name: run ipopt-dependent tests
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
           coverage run $COV_ARGS -m pytest -v \
-            mpisppy/tests/test_dual_certificate.py
+            mpisppy/tests/test_dual_certificate.py \
+            mpisppy/tests/test_ipopt_outer_bound.py
+
+      - name: run the ipopt_outer_bound spoke on two ranks
+        timeout-minutes: 10
+        run: |
+          mpiexec -np 2 coverage run $COV_ARGS -m mpi4py -m pytest -v \
+            mpisppy/tests/test_ipopt_outer_bound.py
+
+      - name: smoke-test the driver command line
+        # Stands in for a run_all.py entry: it exercises the same thing (the
+        # documented command line still works end to end) without forcing an
+        # ipopt install into the two run_all CI jobs, which have no other use
+        # for one.
+        timeout-minutes: 10
+        run: |
+          cd examples/farmer
+          mpiexec -np 2 coverage run $COV_ARGS -m mpi4py \
+            ../../mpisppy/generic_cylinders.py \
+            --module-name farmer --num-scens 3 --solver-name ipopt \
+            --max-iterations 5 --default-rho 1.0 --ipopt-outer-bound
 
       - name: List coverage files (debug)
         if: always()

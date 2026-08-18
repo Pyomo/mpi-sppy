@@ -34,6 +34,63 @@ hedging algorithm for stochastic mixed-integer programs` by Gade et al
 [gade2016]_. It takes W values from the hub and uses them to compute a bound.
 
 
+ipopt_outer_bound
+^^^^^^^^^^^^^^^^^
+
+An outer bound for problems whose scenario subproblems are **convex NLPs solved
+with Ipopt**, enabled with ``--ipopt-outer-bound``.
+
+The Lagrangian spoke gets its bound from the solver's dual bound. Ipopt is not a
+branch-and-bound solver and reports none, so on a convex NLP that spoke produces
+nothing usable. This one computes the bound itself, from the subproblem's own
+duals.
+
+It does not simply report the solved objective value. That is the value *at a
+point*, hence an inner bound for a minimization -- the wrong direction. What it
+computes instead is a Lagrangian weak-duality bound, corrected by a tangent-plane
+underestimator minimized in closed form over the variable box. The result is
+valid for *any* multipliers, so no assumption that Ipopt converged is needed: a
+truncated or sloppy solve gives a loose bound rather than a wrong one. At an
+exact KKT point the correction vanishes and the bound equals the subproblem
+optimum.
+
+Cost is one solve per scenario per iteration, the same as the Lagrangian spoke.
+
+.. warning::
+   **Convexity is assumed and mostly cannot be checked.** If the objective or an
+   inequality body is non-convex, the bound is simply wrong. What *is* checked,
+   as a hard error at setup: discrete variables, nonlinear equality constraints,
+   a maximization objective, and a solver that is not Ipopt.
+
+Two things determine whether the bound is any good:
+
+**Variable bounds.** The certificate minimizes over the box of variable bounds,
+so its looseness is roughly ``sum_i |d_i phi| * (width of the box in the
+descending direction)``. Tight bounds give a tight bound; enormous ones give a
+valid but useless number. ``fbbt`` runs first to recover bounds implied by the
+constraints. A variable still unbounded afterwards produces a warning at setup,
+and the spoke reports nothing on iterations where that variable's gradient
+component is nonzero -- it stays quiet rather than sending a wrong number.
+
+**Solver options.** Unlike every other spoke, this one does **not** inherit the
+global ``--solver-options``. Ipopt hard-fails on an unrecognized keyword rather
+than ignoring it, so a perfectly ordinary run (a MIP solver and its options for
+the hub, this spoke attached alongside) would otherwise kill the spoke on its
+first solve. Pass Ipopt settings through ``--ipopt-outer-bound-solver-options``.
+
+The hub and the other spokes keep whatever ``--solver-name`` selects; only this
+spoke is pinned to Ipopt, via ``--ipopt-outer-bound-solver-name`` (default
+``ipopt``). Note that this routing lets Ipopt coexist with a MIP solver on a
+*convex* model -- it does not let it certify a non-convex one. If the model has
+integer variables this spoke is inapplicable no matter what anything else runs.
+
+``--ipopt-outer-bound-cushion`` (default ``1e-9``) subtracts a small relative
+amount, ``q - eps*(1+|q|)``, from the reported bound. This is last-bit hygiene
+against floating point, not a proof-carrying margin; pass ``0`` to disable it.
+
+Maximization is not supported and raises at setup.
+
+
 Subgradient
 ^^^^^^^^^^^
 
