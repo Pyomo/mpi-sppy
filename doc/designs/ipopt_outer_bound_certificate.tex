@@ -29,12 +29,14 @@
 \maketitle
 
 \begin{abstract}
-Progressive hedging needs an outer bound on the optimal value.  The usual device
-is to read the dual bound off the subproblem solver, which fails for Ipopt:
-Ipopt is not a branch-and-bound solver and reports no dual bound.  This note
+The usual device for getting outer bounds in mip-sppy is to read the dual bound off the subproblem solver, which fails for Ipopt, which reports no dual bound.  This note
 derives the bound that the \texttt{ipopt\_outer\_bound} spoke computes instead.
 The construction is Lagrangian weak duality combined with a tangent-plane
-underestimator minimised in closed form over the variable box.  Its defining
+underestimator minimised in closed form over the variable box.  \emph{None of the
+mathematics is new}: Theorem~\ref{thm:main} is the Frank--Wolfe duality gap on a
+box, and Section~\ref{sec:literature} places each result against the
+literature.  The derivation is written out because the hypotheses are what
+matter in practice, and one of them is easy to get backwards.  Its defining
 property is that it requires \emph{no} assumption about the accuracy of the
 solve: a truncated or sloppy solve yields a loose bound rather than an invalid
 one.  Convexity, by contrast, is genuinely load-bearing, and
@@ -44,13 +46,14 @@ backwards.
 
 \section{Setting}
 
+We assume minimization. 
 Fix a scenario $s$ with probability $p_s$, $\sum_s p_s = 1$.  Let
 $v \in \R^{n}$ collect \emph{all} variables of the scenario subproblem --- the
 nonanticipative variables $x(v)$ together with the recourse variables --- and let
 \[
   B \;=\; \prod_{i=1}^{n} [\,l_i, u_i\,]
 \]
-be the box of variable bounds.  With hub weights $\W_s$, the subproblem the
+be the box of variable bounds.  With hub weights $\W_s$, the subproblem an outer bound
 spoke solves is
 \begin{equation}\label{eq:sub}
   L_s(\W_s) \;=\; \min_{v} \;\bigl\{\, f_s(v) + \W_s^{\top} x(v)
@@ -317,6 +320,44 @@ cushion, reporting $\qhat_s - \varepsilon(1 + |\qhat_s|)$, is nevertheless cheap
 insurance against last-bit effects in the gradient and the sum; it is hygiene,
 not part of the argument.
 
+\section{Relation to known results}\label{sec:literature}
+
+Nothing in Sections~2--6 is new, and it is worth saying which wheel each result
+re-uses.
+
+\paragraph{Lemma~\ref{lem:weak}} is textbook Lagrangian weak duality, stated for
+an arbitrary multiplier pair rather than an optimal one.
+
+\paragraph{Theorem~\ref{thm:main}} is the \emph{Frank--Wolfe duality gap},
+sometimes called the Wolfe gap or the linearisation gap.  For a convex $f$ on a
+compact convex $D$, evaluating the linear minimisation oracle at $x$ gives
+\[
+  f(x) + \min_{y \in D} \nabla f(x)^{\top}(y - x) \;\le\; \min_{D} f ,
+\]
+which is \eqref{eq:qhat} with $D = B$.  The bound is as old as the Frank--Wolfe
+algorithm itself \cite{frankwolfe1956}; its modern reading as a \emph{certificate}
+computable at any iterate, rather than as a step-size device, is the framing in
+\cite{jaggi2013}.  The only specialisation here is that a box makes the oracle
+separable and closed-form, so the certificate costs one gradient evaluation and
+no optimisation at all.
+
+\paragraph{Proposition~\ref{prop:agg}} is the standard argument by which
+progressive hedging weights yield a lower bound on the optimal value, as in
+\cite{gade2016}.
+
+\paragraph{The combination} of progressive hedging with Frank--Wolfe machinery to
+obtain Lagrangian dual bounds is itself established \cite{boland2018}, and
+mpi-sppy already ships an FWPH cylinder on that basis.
+
+What is specific here is therefore an assembly rather than a result: the
+multipliers are the ones Ipopt already returns, the linearisation point is the
+iterate it already stopped at, and the box is the model's own variable bounds ---
+so a valid outer bound is obtained from the solve the spoke was going to perform
+anyway, with no second optimisation and no assumption that the first one
+converged.  The wider question of extracting valid dual bounds from an inexact
+oracle is treated at length in the inexact bundle-method literature, which this
+note does not attempt to survey.
+
 \section{Correspondence with the implementation}
 
 \begin{center}
@@ -337,5 +378,34 @@ Remark~\ref{rem:mixed} safeguard   & a \texttt{None} bound, propagated collectiv
 \noindent
 The first four live in \texttt{mpisppy/utils/dual\_certificate.py}; the spoke
 that drives them is \texttt{mpisppy/cylinders/ipopt\_outer\_bound.py}.
+
+\begin{thebibliography}{9}
+
+\bibitem{frankwolfe1956}
+Frank, M. and Wolfe, P.:
+\newblock An algorithm for quadratic programming.
+\newblock \emph{Naval Research Logistics Quarterly} \textbf{3}(1--2), 95--110 (1956).
+
+\bibitem{jaggi2013}
+Jaggi, M.:
+\newblock Revisiting Frank--Wolfe: projection-free sparse convex optimization.
+\newblock \emph{Proceedings of the 30th International Conference on Machine
+Learning (ICML)}, 427--435 (2013).
+
+\bibitem{gade2016}
+Gade, D., Hackebeil, G., Ryan, S.M., Watson, J.-P., Wets, R.J.-B. and
+Woodruff, D.L.:
+\newblock Obtaining lower bounds from the progressive hedging algorithm for
+stochastic mixed-integer programs.
+\newblock \emph{Mathematical Programming} \textbf{157}(1), 47--67 (2016).
+
+\bibitem{boland2018}
+Boland, N., Christiansen, J., Dandurand, B., Eberhard, A., Linderoth, J.,
+Luedtke, J. and Oliveira, F.:
+\newblock Combining progressive hedging with a Frank--Wolfe method to compute
+Lagrangian dual bounds in stochastic mixed-integer programming.
+\newblock \emph{SIAM Journal on Optimization} \textbf{28}(2), 1312--1336 (2018).
+
+\end{thebibliography}
 
 \end{document}
