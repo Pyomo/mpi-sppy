@@ -85,7 +85,7 @@ row, so it is not the same as "the constraint body is convex":
 | `lo ≤ body ≤ up` | both rows | affine |
 | `body == rhs` | `body − rhs` | affine |
 
-`x² ≤ 4` is inside the theorem and `x² ≥ 1` is not, though both are written with a
+The theorem applies to `x² ≤ 4` but not to `x² ≥ 1`, though both are written with a
 convex body — and the feasible set of the second is not convex at all. This is worth
 stating loudly because it is easy to read the wrong way: a code review of this branch
 turned up that the guard, the unit test and `spokes.rst` had all settled on "only
@@ -334,7 +334,7 @@ returns `None` collectively and nothing is sent to the hub.
 Rationale for warning rather than erroring: this cylinder is an *optional* source of a
 bound. A model that is merely under-bounded is not a broken model, and killing a whole
 parallel run over a spoke that could have sat quiet is the wrong trade — unlike the
-guards above, where the model is genuinely outside the theorem and any number the
+guards above, where the model genuinely violates an assumption and any number the
 cylinder produced would be wrong. The warning is what keeps the quiet case from being
 silent.
 

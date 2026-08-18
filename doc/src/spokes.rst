@@ -73,7 +73,7 @@ Cost is one solve per scenario per iteration, the same as the Lagrangian spoke.
    ``body == rhs``             ``body - rhs``        affine
    ==========================  ====================  ==========================
 
-   So ``x**2 <= 4`` is inside the theorem and ``x**2 >= 1`` is not, even though
+   So the theorem applies to ``x**2 <= 4`` but not to ``x**2 >= 1``, even though
    both are written with a convex body -- and the feasible set of the latter is
    not convex at all. Getting this wrong yields an outer bound that can exceed
    the true optimum.

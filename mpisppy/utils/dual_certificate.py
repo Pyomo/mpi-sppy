@@ -83,7 +83,7 @@ __all__ = [
 
 
 class CertificateError(RuntimeError):
-    """The model is outside the theorem this module certifies."""
+    """The model violates an assumption the certified bound depends on."""
 
 
 # How a solver's Pyomo `dual` suffix maps onto canonical multipliers for
@@ -115,7 +115,8 @@ def _active_objective(model):
 
 
 def check_model_is_certifiable(model):
-    """Raise CertificateError if `model` is outside the theorem.
+    """Raise CertificateError if `model` violates an assumption the
+    certificate depends on.
 
     Checks only what is mechanically checkable.  Convexity of the objective and
     of one-sided nonlinear inequality bodies is the caller's assertion and is
