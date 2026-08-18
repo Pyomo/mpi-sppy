@@ -1,0 +1,249 @@
+\documentclass{article}
+
+% Language setting
+% Replace `english' with e.g. `spanish' to change the document language
+\usepackage[english]{babel}
+
+% Set page size and margins
+% Replace `letterpaper' with`a4paper' for UK/EU standard size
+\usepackage[letterpaper,top=2cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
+
+% Useful packages
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{amsfonts}
+\usepackage{graphicx}
+\usepackage{algorithm2e}
+\usepackage{enumitem}
+\usepackage{comment}
+\usepackage{natbib}
+
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+
+\newcommand{\sdag}[1]{{#1}^{\dag}}
+
+\title{Fraction of Time MPI-SPPY spends in Python}
+\author{ David L Woodruff\\
+  Graduate School of Management\\
+  \\
+  University of California Davis\\
+  Davis CA 95616 USA}
+\date{\today}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+
+\begin{document}
+\maketitle
+
+When considering applications in practice, or when comparing to other
+packages, a question arises concerning the fraction of time that
+mpi-sppy spends ``in Python'' as opposed to compiled code written in
+other languages such as C and Fortran.  Since solvers, numpy, and MPI
+are all in the latter category, {\em a priori} one expects that the
+fraction spent in Python will be small.
+
+We have used the tool called {\em scalene}, which is designed to
+attribute time to Python vs native (it can estimate time spent in
+compiled code called from Python, which it calls ``native''). It works
+by sampling.
+
+The short answer is: for hard problems, not much.
+The longer answer is that there is no single number: the fraction
+depends almost entirely on how much work the solver does per
+subproblem. When the subproblems are even somewhat substantial, as in the
+\texttt{sslp\_15\_45} instances, about 9\% of the time is spent in
+Python, which matches the {\em a priori} expectation. For harder subproblems,
+the fraction can be smaller. When the
+subproblems are small enough that the solver returns almost
+immediately, as in farmer, the majority of the time is spent in Python
+--- 76\% in the most extreme case measured here. The crossover is not
+subtle and it is not a sampling artifact.
+
+The practical consequences are:
+
+\begin{itemize}
+  \item If your subproblems keep the solver busy, you cannot get much
+    speed-up just by using another language. Maybe another language
+    will make it easier for you to do your work.
+  \item If your subproblems are small, the per-solve Python cost is
+    what you are paying for, and the fix is to give the solver more
+    work per call rather than to rewrite anything. Bundling is the
+    obvious lever, and it is examined below.
+\end{itemize}
+
+\section{Method}
+
+Every case runs the same three cylinders --- a PH hub, a lagrangian
+spoke and an xhatshuffle spoke, one MPI rank each --- so that only the
+model and the instance change between cases. The convergence tolerance
+is set to zero so that runs end on the iteration limit rather than on a
+gap, which keeps the amount of work per case predictable.
+
+Because scalene samples, every case is run three times and the tables
+report the mean over repetitions with the observed min--max range. The
+spread turns out to be small for runs of a minute or so (typically a
+few tenths of a percentage point) and much larger for the deliberately
+short \texttt{farmer3} case, which is why that case is kept: it shows
+what the numbers look like when there is not enough run time to sample
+properly.
+
+The numbers are read out of scalene's JSON profile rather than scraped
+from the output of \texttt{scalene view --cli}. Summing the per-line
+percentages in the JSON gives the same quantities at full precision,
+and avoids three problems with scraping the terminal output: it rounds
+each line to a whole percent, its \texttt{--reduced} form omits
+low-usage lines so the sums undercount, and it is colourized, which
+silently broke the row-matching in the earlier version of this code.
+Scalene attributes 91--99\% of wall time to some source line; the
+percentages below are shares of that attributed time, so the
+unattributed remainder is divided out rather than being silently
+credited to one of the buckets.
+
+All runs are on a single machine with homogeneous cores, which avoids a
+difficulty that affected an earlier version of these experiments: on a
+machine with a mixture of fast and slow cores, ranks landing on slow
+cores showed inflated Python fractions.
+
+\noindent\textbf{System and software:}\\
+\begin{itemize}
+  \item \texttt{os}={Linux 7.0.0-28-generic (x86\_64)}
+  \item \texttt{cpu\_model}={AMD Ryzen 7 7840HS}
+  \item \texttt{cpu\_physical\_cores}={8}, \texttt{cpu\_logical}={16},
+        \texttt{threads\_per\_core}={2}
+  \item \texttt{cpu\_max\_mhz}={5137.9}
+  \item \texttt{mem\_total}={14.31 GiB}
+  \item \texttt{python}={3.11.13}, \texttt{scalene}={2.0.1},
+        \texttt{pyomo}={6.9.5.dev0}, \texttt{mpi4py}={4.1.0},
+        \texttt{gurobipy}={13.0.2}
+  \item solver interface: \texttt{gurobi\_persistent},
+        \texttt{--max-solver-threads 2}
+\end{itemize}
+
+\section{Results}
+
+Table~\ref{tab:python-fraction-summary} gives the split by case and
+Table~\ref{tab:python-fraction-by-rank} breaks the Python percentage
+out by cylinder. The cases are:
+
+\begin{itemize}
+  \item \texttt{farmer3} --- 3 scenarios, 100 iterations. Deliberately
+    short: about two seconds unprofiled, five under scalene.
+  \item \texttt{farmer60}, \texttt{farmer240} --- 60 and 240
+    scenarios, 400 and 200 iterations. Many trivially small LP
+    subproblems.
+  \item \texttt{farmer240\_bun10} --- \texttt{farmer240} with ten
+    scenarios gathered into each proper bundle, so 24 subproblems
+    instead of 240.
+  \item \texttt{sslp\_15\_45\_10}, \texttt{sslp\_15\_45\_15} --- 10 and
+    15 scenarios, 50 iterations. MIP subproblems that keep the solver
+    busy.
+  \item \texttt{sslp\_15\_45\_15\_bun3} ---
+    \texttt{sslp\_15\_45\_15} with three scenarios per bundle, so 5
+    subproblems instead of 15.
+  \item \texttt{sslp\_5\_25\_50} --- 50 scenarios, 150 iterations. Many
+    small MIP subproblems.
+\end{itemize}
+
+\input{scalene_summary_persistent}
+
+The ordering is by subproblem difficulty, not by instance size. The two
+\texttt{sslp\_15\_45} cases sit at 8.7\% and 9.6\% Python; every case
+whose subproblems are small sits far above that, from 58\% for
+\texttt{sslp\_5\_25\_50} up to 76\% for \texttt{farmer240}. Note that
+\texttt{sslp\_5\_25\_50} has more scenarios than
+\texttt{sslp\_15\_45\_15} and yet spends six times the fraction of its
+time in Python: what matters is the size of each subproblem, not how
+many there are.
+
+Looking at where the samples land makes the mechanism explicit. In both
+regimes essentially all of the time is attributed to one line,
+\texttt{spopt.py:337}, which is the Pyomo \texttt{solve} call. For
+\texttt{sslp\_15\_45\_15} that line is 6.6\% Python and 88.2\% native
+--- the solver is doing the work. For \texttt{farmer60} the same line
+is 48.2\% Python and 5.8\% native, and a further 9.4\% of the run is
+Python time in \texttt{spopt.py:267}, where the proximal objective is
+handed to the solver on each iteration. That objective work scales with
+the size of the model rather than with the difficulty of the solve,
+which is exactly why it is invisible for sslp and dominant for farmer.
+
+The per-cylinder table shows the PH hub and the lagrangian spoke
+agreeing closely within every case, as they should, since they solve
+the same subproblems with different objectives. The xhatshuffle spoke
+is consistently the most Python-heavy of the three, and the gap widens
+as the hub's own Python share falls: 6.8\% against 13.0\% for
+\texttt{sslp\_15\_45\_10}, and 5.1\% against 25.3\% for
+\texttt{sslp\_15\_45\_15\_bun3}. This is expected rather than
+anomalous. The xhatshuffle spoke is looking for a feasible incumbent
+rather than solving the subproblem to optimality, so much of its work
+is Python bookkeeping --- shuffling the scenario order, fixing
+candidate nonanticipative values, and checking the result --- with
+comparatively little time left inside the solver. It is a small
+fraction of total work, since it is one rank of three, but it is worth
+knowing that the cylinders are not interchangeable for this
+measurement.
+
+\subsection{Bundles}
+
+Bundling gives the solver more work per call, so it is the natural
+response to a high Python fraction. It helps, but not reliably, and it
+is worth being clear about why.
+
+For farmer, bundling ten scenarios per subproblem takes the Python
+share from 76.1\% down to 62.6\% and cuts wall time by a factor of
+four, from 82.9 to 20.9 seconds. Fewer, larger solves means fewer
+round trips through Pyomo, and the wall-clock gain is large. The Python
+share nonetheless stays high, because a bundle of ten farmer scenarios
+is still a trivial LP.
+
+For \texttt{sslp\_15\_45\_15}, bundling three scenarios per subproblem
+moves the Python share the other way, from 9.6\% up to 12.5\%, while
+also cutting wall time from 104.8 to 73.7 seconds. Both numbers moved
+in the direction that makes sense once the effect is separated into its
+two parts: bundling reduced the total solver work more than it reduced
+the total Python work, so Python's {\em share} rose even though the run
+got faster.
+
+So bundling should be judged on wall time, where it won in both cases,
+and not on the Python fraction, which it can move either way. A high
+Python fraction is a symptom worth investigating, but driving it down
+is not itself the objective.
+
+\subsection{Caveats}
+
+Scalene's instrumentation is not free, and its cost falls mostly on
+Python, so these Python percentages are upper bounds. The overhead
+column in Table~\ref{tab:python-fraction-summary} is the ratio of
+profiled to unprofiled wall time for the same case, and it lines up
+with the Python column: the solver-bound sslp cases run at
+0.99--1.11$\times$, essentially unaffected, while the Python-heavy
+farmer cases run at 1.42--1.55$\times$. So the true Python fractions
+for the farmer cases are somewhat lower than the table reports. The
+exception is \texttt{farmer3} at 2.36$\times$, which is not a
+Python-share effect at all: the profiler's fixed startup cost is simply
+large next to a two-second run, which is another reason not to trust
+that row for anything but its variability.
+
+The gap between the two regimes is far too large to be an artifact of
+this overhead --- 9\% against 76\% will not be closed by a factor of
+1.5 --- but the individual percentages should be read as approximate.
+
+Two further limits are worth stating. These are Pyomo models and the
+Pyomo time is included in the Python total, so a good deal of what is
+labelled Python here is Pyomo rather than mpi-sppy. And all of this is
+one machine, one solver, and three repetitions per case.
+
+\subsection{A note on non-persistent solvers}
+
+All of the above uses \texttt{gurobi\_persistent}. If you use a
+non-persistent interface instead --- \texttt{--solver-name gurobi} is
+Pyomo's file-based interface, which writes an LP file and parses a
+solution file on every solve --- then Pyomo does a great deal of extra
+Python work per solve, which matters most when the subproblems are
+small: \texttt{sslp\_5\_25\_50} goes from 58.1\% to 75.4\% Python and
+from 74 to 124 seconds, and even the solver-bound
+\texttt{sslp\_15\_45\_10}, whose wall time barely moves, goes from
+8.7\% to 31.8\% Python. Use a persistent interface if you have one.
+
+\end{document}
