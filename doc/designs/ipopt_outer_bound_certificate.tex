@@ -333,9 +333,10 @@ compact convex $D$, evaluating the linear minimisation oracle at $x$ gives
 \[
   f(x) + \min_{y \in D} \nabla f(x)^{\top}(y - x) \;\le\; \min_{D} f ,
 \]
-which is \eqref{eq:qhat} with $D = B$.  The bound is as old as the Frank--Wolfe
-algorithm itself \cite{frankwolfe1956}; its modern reading as a \emph{certificate}
-computable at any iterate, rather than as a step-size device, is the framing in
+which is \eqref{eq:qhat} with $D = B$.  The bound is used in the Frank--Wolfe
+algorithm \cite{frankwolfe1956}, where the same oracle evaluation that produces
+it also supplies the search direction; reading it instead as a
+\emph{certificate} computable at any iterate is the framing in
 \cite{jaggi2013}.  The only specialisation here is that a box makes the oracle
 separable and closed-form, so the certificate costs one gradient evaluation and
 no optimisation at all.
