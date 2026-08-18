@@ -45,14 +45,14 @@ branch-and-bound solver and reports none, so on a convex NLP that spoke produces
 nothing usable. This one computes the bound itself, from the subproblem's own
 duals.
 
-It does not simply report the solved objective value. That is the value *at a
-point*, hence an inner bound for a minimization -- the wrong direction. What it
-computes instead is a Lagrangian weak-duality bound, corrected by a tangent-plane
-underestimator minimized in closed form over the variable box. The result is
-valid for *any* multipliers, so no assumption that Ipopt converged is needed: a
-truncated or sloppy solve gives a loose bound rather than a wrong one. At an
-exact KKT point the correction vanishes and the bound equals the subproblem
-optimum.
+This spoke does not simply report the solved objective value. That value is
+measured *at a point*, hence an inner bound for a minimization -- the wrong
+direction. The spoke instead computes a Lagrangian weak-duality bound, corrected
+by a tangent-plane underestimator minimized in closed form over the variable box.
+The result is valid for *any* multipliers, so no assumption that Ipopt converged
+is needed: a truncated or sloppy solve gives a loose bound rather than a wrong
+bound. At an exact KKT point the correction vanishes and the bound equals the
+subproblem optimum.
 
 Cost is one solve per scenario per iteration, the same as the Lagrangian spoke.
 
@@ -82,7 +82,7 @@ Cost is one solve per scenario per iteration, the same as the Lagrangian spoke.
    equality constraints, nonlinear two-sided (ranged) constraints, a
    maximization objective, and a solver that is not Ipopt. The affine cases are
    decidable, so they are enforced; convexity of a one-sided nonlinear body is
-   not, so it remains your assertion.
+   not, so convexity remains a user assertion.
 
 Two things determine whether the bound is any good:
 
