@@ -65,7 +65,11 @@ plus a few helpers used by the bootstrap code:
 * ``data_sampler(record_num, cfg)`` — return the data for one record (a scalar,
   or a dict keyed by variable name for multivariate data). This is used by the
   *smoothed* methods to build the sample that a distribution is fitted to; the
-  empirical methods do not need it.
+  empirical methods do not need it. Every record it returns must be a genuine
+  draw from the distribution being fitted. If the ``scenario_creator`` treats
+  some records specially (say, an unperturbed baseline scenario), that is a
+  statement about those *scenarios*; reporting a constant for them here puts a
+  spurious point mass in the fitted distribution.
 
 Methods
 -------
@@ -129,7 +133,10 @@ command line (with dashes). The main options are:
 * ``xhat_fname`` / ``--xhat-fname`` — npy file with a precomputed ``xhat``, or
   the string ``"None"`` to compute it with ``xhat_generator``.
 * ``optimal_fname`` (simulation only) — npy file with a (presumed) optimal
-  value, or ``"None"`` to compute it from ``max_count`` scenarios.
+  value and the gap at ``xhat``, or ``"None"`` to compute both from
+  ``max_count`` scenarios. The smoothed methods report a gap interval, so their
+  coverage simulations score against the gap; supplying the file (written by
+  ``boot_general_prep``) saves recomputing it for every run.
 * ``coverage_replications`` (simulation only) — number of coverage replications.
 * ``boot_method`` / ``--boot-method`` — one of the tokens above.
 
@@ -232,7 +239,9 @@ which is imported lazily so that the empirical methods remain scipy-free.
 
 To use a smoothed method the model module must supply ``data_sampler`` (see
 above): the smoothed estimator calls it for each sampled record to assemble the
-data that ``statdist`` fits. The kernel-density methods
+data that ``statdist`` fits. That sample is drawn from the same pool the
+empirical methods use, so it too excludes the records reserved for computing
+``xhat``. The kernel-density methods
 (``Smoothed_boot_kernel``, ``Smoothed_boot_kernel_quantile``,
 ``Smoothed_bagging``) fit with a Gaussian kernel and need only scipy; the
 epi-spline methods (``Smoothed_boot_epi``, ``Smoothed_boot_epi_quantile``) fit

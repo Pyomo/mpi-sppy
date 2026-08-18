@@ -69,18 +69,22 @@ def data_sampler(record_num, cfg):
     return xi
 
 
-def scenario_creator(scenario_name, cfg):
+def scenario_creator(scenario_name, cfg, seed_offset=None, num_scens=None):
     """ Create a CVaR scenario.
 
     Args:
         scenario_name (str):
             Name of the scenario to construct.
         cfg (Config): the control parameters
+        seed_offset (int or None): overrides cfg.seed_offset (sample_tree_scen_creator
+            passes the sample tree's seed here)
+        num_scens (int or None): overrides cfg.num_scens
     """
     # scenario_name has the form <str><int> e.g. scen12, foobar7
     # The digits are scraped off the right of scenario_name using regex.
     scennum = sputils.extract_num(scenario_name)
-    sstream.seed(scennum + cfg.seed_offset)  # allows for resampling easily
+    seed_offset = cfg.get("seed_offset", 0) if seed_offset is None else seed_offset
+    sstream.seed(scennum + seed_offset)  # allows for resampling easily
 
     if getattr(cfg, "use_fitted", False):
         # sampler works with a list
@@ -88,7 +92,7 @@ def scenario_creator(scenario_name, cfg):
         xi = sampler.sample_one()[0]
     else:
         xi = sstream.normal(0, 1)
-    num_scens = cfg.get('num_scens', None)
+    num_scens = cfg.get('num_scens', None) if num_scens is None else num_scens
     return make_model(xi, num_scens, alpha=0.1)
 
 

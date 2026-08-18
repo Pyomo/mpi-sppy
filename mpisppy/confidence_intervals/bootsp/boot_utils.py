@@ -62,11 +62,6 @@ def empirical_members():
     return [m for m in BootMethods.list_of_members() if not is_smoothed(m)]
 
 
-def smoothed_members():
-    """ The BootMethods tokens that use the statdist smoothed code. """
-    return [m for m in BootMethods.list_of_members() if is_smoothed(m)]
-
-
 def module_name_to_module(module_name):
     if inspect.ismodule(module_name):
         module = module_name

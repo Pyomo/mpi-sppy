@@ -11,10 +11,9 @@
 # statdist library and then resample from the fitted distribution. They are the
 # counterpart to the empirical methods in boot_sp.py.
 
-import json
+from contextlib import contextmanager
 
 import numpy as np
-from numpy.random import default_rng
 from statistics import NormalDist
 import pyomo.environ as pyo
 
@@ -112,6 +111,42 @@ def smoothed_resample_helper(cfg, module, xhat, serial=False):
     return local_boot_gaps
 
 
+@contextmanager
+def _fitted_on_cfg(cfg, module, scenario_pool, distr_type):
+    """ Fit a distribution to the sampled data and expose it on cfg, then put
+        cfg back the way it was found.
+
+    Args:
+        cfg (Config): parameters (temporarily modified)
+        module (Python module): supplies data_sampler
+        scenario_pool (iterable): the records to fit to
+        distr_type (str): a statdist univariate distribution token
+
+    The estimators flip ``use_fitted`` so the module's scenario_creator draws
+    from the fitted distribution rather than the real data, and the bootstrap
+    also overwrites ``subsample_size``. The cfg belongs to the caller, and every
+    example guards on ``getattr(cfg, "use_fitted", False)``, so leaving either
+    behind would silently make some later model build -- a second interval, a
+    zhat evaluation, the caller's own scenario_creator call -- sample from a
+    distribution fitted for something else.
+    """
+    saved = {"use_fitted": cfg.use_fitted,
+             "fitted_distribution": cfg.fitted_distribution,
+             "subsample_size": cfg.subsample_size}
+    try:
+        cfg.use_fitted = False
+        sample_data = [module.data_sampler(scenario, cfg) for scenario in scenario_pool]
+        cfg.fitted_distribution = fit_distribution(sample_data, distr_type=distr_type)
+        # From here on the draws come from the fitted distribution. Estimating
+        # from the raw sample instead would give up the smoothing that is the
+        # whole point of these methods.
+        cfg.use_fitted = True
+        yield
+    finally:
+        for name, value in saved.items():
+            setattr(cfg, name, value)
+
+
 def smoothed_bootstrap(cfg, module, xhat, distr_type='univariate-epispline', quantile=False, serial=False):
     """ fit a distribution to the sample, then draw both the center and the
         batches from it to get a smoothed point estimate and interval width
@@ -127,38 +162,35 @@ def smoothed_bootstrap(cfg, module, xhat, distr_type='univariate-epispline', qua
         tuple (ci_gap_two_sided, center_gap) if on MPI rank 0, else None
 
     """
-    rng = default_rng(cfg.seed_offset)
-    scenario_pool = rng.choice(cfg.max_count, size=cfg.sample_size, replace=False)
+    scenario_pool = boot_sp.draw_scenario_pool(cfg)
 
-    cfg.use_fitted = False
-    sample_data = [module.data_sampler(scenario, cfg) for scenario in scenario_pool]
-    cfg.fitted_distribution = fit_distribution(sample_data, distr_type=distr_type)
-    # From here on both the center and the batches draw from the fitted
-    # distribution. Estimating the center from the raw sample instead would
-    # make it the purely empirical point estimate and give up the smoothing
-    # that is the whole point of these methods.
-    cfg.use_fitted = True
+    with _fitted_on_cfg(cfg, module, scenario_pool, distr_type):
+        # the center: one replication at a large resample size
+        # (smoothed_center_sample_size) drawn from the fitted distribution
+        dag_gap = center_smoothed(cfg, module, xhat)
+        comm.Barrier()
 
-    # the center: one replication at a large resample size
-    # (smoothed_center_sample_size) drawn from the fitted distribution
-    dag_gap = center_smoothed(cfg, module, xhat)
-    comm.Barrier()
+        # each batch is a fresh set of cfg.sample_size draws from the same
+        # fitted distribution, so the bootstrap batch size is the full sample
+        # size (restored on the way out by _fitted_on_cfg)
+        cfg.subsample_size = cfg.sample_size
+        local_boot_gaps = smoothed_resample_helper(cfg, module, xhat, serial)
+        comm.Barrier()
 
-    # each batch is a fresh set of cfg.sample_size draws from the same fitted
-    # distribution, so the bootstrap batch size is the full sample size
-    cfg.subsample_size = cfg.sample_size
-    local_boot_gaps = smoothed_resample_helper(cfg, module, xhat, serial)
-    comm.Barrier()
-
-    # do analysis only on rank 0
-    if my_rank == 0:
-        boot_gap = np.empty(cfg.nB, dtype=np.float64)
+    if serial:
+        # one rank did every batch, so there is nothing to gather (and the
+        # collective below would hang waiting for ranks that never call it)
+        boot_gap = local_boot_gaps
     else:
-        boot_gap = None
+        # do analysis only on rank 0
+        if my_rank == 0:
+            boot_gap = np.empty(cfg.nB, dtype=np.float64)
+        else:
+            boot_gap = None
 
-    # but everyone needs to send to the gather
-    lenlist = boot_sp.slice_lens(cfg.nB)
-    comm.Gatherv(sendbuf=local_boot_gaps, recvbuf=(boot_gap, lenlist), root=0)
+        # but everyone needs to send to the gather
+        lenlist = boot_sp.slice_lens(cfg.nB)
+        comm.Gatherv(sendbuf=local_boot_gaps, recvbuf=(boot_gap, lenlist), root=0)
 
     if my_rank == 0:
         global_toc("Done smoothed bootstrap")
@@ -172,7 +204,6 @@ def smoothed_bootstrap(cfg, module, xhat, distr_type='univariate-epispline', qua
             alpha = cfg.alpha / 2
             eps = np.quantile(boot_gap - dag_gap, [alpha, 1 - alpha])
             ci_gap_two_sided = [dag_gap - eps[1], dag_gap - eps[0]]
-        print(f"{ci_gap_two_sided = }")
         return ci_gap_two_sided, dag_gap
     else:
         # non-root ranks return a matching arity so callers can unpack safely
@@ -191,15 +222,27 @@ def smoothed_bagging(cfg, module, xhat, distr_type='univariate-kernel', serial=F
     Returns:
         tuple (ci_gap_two_sided, center_gap) if on MPI rank 0, else None
     """
-    rng = default_rng(cfg.seed_offset)
-    scenario_pool = rng.choice(cfg.max_count, size=cfg.sample_size, replace=False)
+    scenario_pool = boot_sp.draw_scenario_pool(cfg)
 
-    cfg.use_fitted = False
-    sample_data = [module.data_sampler(scenario, cfg) for scenario in scenario_pool]
-    cfg.fitted_distribution = fit_distribution(sample_data, distr_type=distr_type)
-    cfg.use_fitted = True
+    with _fitted_on_cfg(cfg, module, scenario_pool, distr_type):
+        return _bagging_from_fitted(cfg, module, xhat, serial)
 
-    local_nB = boot_sp.slice_lens(cfg.nB)[my_rank]
+
+def _bagging_from_fitted(cfg, module, xhat, serial):
+    """ The bagging replications, with the fitted distribution already on cfg.
+
+    Args:
+        cfg (Config): parameters
+        module (Python module): contains the scenario creator function and helpers
+        xhat (dict): a candidate solution in mpi-sppy nonant format
+        serial (bool): this rank does every bag, with no collectives
+    Returns:
+        tuple (ci_gap_two_sided, center_gap) if on MPI rank 0, else None
+    """
+    # serial means this rank does all nB bags itself, so it neither slices the
+    # work nor takes part in the collectives below
+    local_nB = cfg.nB if serial else boot_sp.slice_lens(cfg.nB)[my_rank]
+    first_bag = 0 if serial else sum(boot_sp.slice_lens(cfg.nB)[:my_rank])
     local_gaps = np.empty(local_nB, dtype=np.float64)
 
     if my_rank == 0:
@@ -225,7 +268,7 @@ def smoothed_bagging(cfg, module, xhat, distr_type='univariate-kernel', serial=F
         seed_offset_base = cfg.seed_offset + cfg.nB * cfg.subsample_size * i
 
         for j in range(local_nB):
-            seed_offset = seed_offset_base + (sum(boot_sp.slice_lens(cfg.nB)[:my_rank]) + j) * cfg.subsample_size
+            seed_offset = seed_offset_base + (first_bag + j) * cfg.subsample_size
             scenario_pool = list(range(seed_offset, seed_offset + cfg.subsample_size))
             scenario_pool[0] = seed_offset_base
 
@@ -233,9 +276,12 @@ def smoothed_bagging(cfg, module, xhat, distr_type='univariate-kernel', serial=F
             local_ef = boot_sp.solve_routine(cfg, module, scenario_pool, num_threads=2, duplication=False)
             local_optimal = pyo.value(local_ef.EF_Obj)
             local_gaps[j] = local_upper - local_optimal
-        comm.Barrier()
-        lenlist = boot_sp.slice_lens(cfg.nB)
-        comm.Gatherv(sendbuf=local_gaps, recvbuf=(bagging_gap, lenlist), root=0)
+        if serial:
+            bagging_gap = local_gaps
+        else:
+            comm.Barrier()
+            lenlist = boot_sp.slice_lens(cfg.nB)
+            comm.Gatherv(sendbuf=local_gaps, recvbuf=(bagging_gap, lenlist), root=0)
 
         if my_rank == 0:
             all_gaps = all_gaps + bagging_gap.tolist()
@@ -256,7 +302,6 @@ def smoothed_bagging(cfg, module, xhat, distr_type='univariate-kernel', serial=F
         error = np.sqrt(s_g_2) * ppf
         ci_gap_two_sided = [dag_gap - error, dag_gap + error]
 
-        print(f"{ci_gap_two_sided = }")
         return ci_gap_two_sided, dag_gap
     else:
         # non-root ranks return a matching arity so callers can unpack safely
@@ -267,10 +312,12 @@ def _ensure_smoothed_cfg(cfg):
     """ Idempotently attach the run-time config entries the smoothed methods need.
 
     The smoothed estimators toggle ``use_fitted`` and stash a
-    ``fitted_distribution`` on the cfg; a module may also supply deterministic
-    data via a json file named by ``deterministic_data_json``. This may be
-    called repeatedly (e.g. once per replication in a coverage simulation), so
-    every add is guarded.
+    ``fitted_distribution`` on the cfg. This may be called repeatedly (e.g.
+    once per replication in a coverage simulation), so every add is guarded.
+
+    Reading a module's own data is deliberately not done here: a module that
+    needs deterministic data knows its own option name and where the file
+    lives relative to itself, which this cannot.
     """
     if "use_fitted" not in cfg:
         cfg.add_to_config(name="use_fitted",
@@ -285,18 +332,6 @@ def _ensure_smoothed_cfg(cfg):
                           domain=None,
                           default=None,
                           argparse=False)
-    if "deterministic_data_json" in cfg and "detdata" not in cfg:
-        json_fname = cfg.deterministic_data_json
-        try:
-            with open(json_fname, "r") as read_file:
-                detdata = json.load(read_file)
-        except Exception:
-            print(f"Could not read the json file: {json_fname}")
-            raise
-        cfg.add_to_config("detdata",
-                          description="deterministic data from json file",
-                          domain=dict,
-                          default=detdata)
 
 
 def compute_smoothed_ci(cfg, module, xhat):

@@ -44,12 +44,20 @@ def _read_detdata(cfg):
     return detdata
 
 
+_detdata_cache = {}
+
+
 def _detdata_for(cfg):
     # the smoothed driver stashes the parsed data on cfg.detdata; otherwise read
-    # it from the file (this makes the empirical path work without that stash)
+    # it from the file (this makes the empirical path work without that stash).
+    # Every scenario build asks for this, and a bagging run builds thousands of
+    # them from the one file, so the parse is cached per file name.
     if "detdata" in cfg and cfg.detdata is not None:
         return cfg.detdata
-    return _read_detdata(cfg)
+    key = cfg.deterministic_data_json
+    if key not in _detdata_cache:
+        _detdata_cache[key] = _read_detdata(cfg)
+    return _detdata_cache[key]
 
 
 def _get_distr_dict(cfg, detdata):
@@ -67,11 +75,12 @@ def _get_distr_dict(cfg, detdata):
     return distr_dict
 
 
-def data_sampler(record_num, cfg):
+def data_sampler(record_num, cfg, seed_offset=None):
     detdata = _detdata_for(cfg)
 
     distr_dict = _get_distr_dict(cfg, detdata)
-    sstream.seed(record_num+cfg.seed_offset)
+    seed_offset = cfg.get("seed_offset", 0) if seed_offset is None else seed_offset
+    sstream.seed(record_num+seed_offset)
 
     # this part of the code is the same as in the scenario creator
     data = {}
@@ -95,7 +104,8 @@ def scenario_creator(scenario_name, cfg=None, seed_offset=None, num_scens=None):
         scenario_name (str):
             Name of the scenario to construct.
         cfg (Config): the control parameters
-        seed_offset (int): used by confidence interval code
+        seed_offset (int): used by confidence interval code (overrides cfg)
+        num_scens (int): used by confidence interval code (overrides cfg)
     Returns:
         model (ConcreteModel): the Pyomo model
     """
@@ -105,7 +115,7 @@ def scenario_creator(scenario_name, cfg=None, seed_offset=None, num_scens=None):
 
     seed_offset = cfg.get("seed_offset", 0) if seed_offset is None else seed_offset
     sstream.seed(scennum+seed_offset)  # allows for resampling easily
-    num_scens = cfg.get('num_scens', None)
+    num_scens = cfg.get('num_scens', None) if num_scens is None else num_scens
 
     # Create the concrete model object
     model = pyo.ConcreteModel(f"multi-knapsack {scenario_name}")
@@ -126,7 +136,9 @@ def scenario_creator(scenario_name, cfg=None, seed_offset=None, num_scens=None):
     model.zt = pyo.Var(model.I, within=pyo.NonNegativeReals, initialize=0)
     model.w = pyo.Var(model.I, within=pyo.NonNegativeReals, initialize=0)
 
-    d = data_sampler(scennum, cfg)
+    # the caller's seed_offset has to reach the data too, or the scenario is
+    # seeded from it while its demands are not
+    d = data_sampler(scennum, cfg, seed_offset=seed_offset)
 
     # note: the json indexes are strings
 

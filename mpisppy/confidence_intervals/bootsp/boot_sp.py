@@ -123,14 +123,41 @@ def _batch_rng(cfg):
     return default_rng([cfg.seed_offset, my_rank + 1])
 
 
-def process_optimal(cfg, module):
+def draw_scenario_pool(cfg):
+    """ Draw the pool of scenarios the confidence interval is built from.
+
+    Args:
+        cfg (Config): parameters
+    Returns:
+        numpy array of sample_size scenario numbers
+
+    The draw is without replacement from eligible_scenarios, so the block
+    reserved for computing xhat is never in the pool, and it comes from the
+    pool stream (see _pool_rng) so it does not collide with the per-rank
+    batch streams.
+    """
+    return _pool_rng(cfg).choice(eligible_scenarios(cfg),
+                                 size=cfg.sample_size, replace=False)
+
+
+def process_optimal(cfg, module, xhat=None):
     """ For simulations we need a known or assumed z*
         Args:
             cfg (Config): parameters
             module (Python module): contains the scenario creator function and helpers
+            xhat (dict or None): a candidate solution; when there is no
+                pre-computed optimal file, giving it here makes the returned
+                gap the real z(xhat) - z* instead of a placeholder
         Returns:
             opt_obj (float): z*
-            opt_gap (float): gap if provided by solver
+            opt_gap (float): z(xhat) - z*, or a zero placeholder (see below)
+
+        Note:
+            Without a pre-computed file and without xhat there is nothing to
+            evaluate a gap at, so the returned gap is zero. That zero stands in
+            for the *solver* gap; it is not an optimality gap, and anything
+            scoring a gap interval against it (as the coverage simulations do)
+            must pass xhat.
     """
 
     if cfg.optimal_fname is not None and cfg.optimal_fname != "None":
@@ -148,8 +175,15 @@ def process_optimal(cfg, module):
         print("Computing optimal function value on Rank 0 only")
         opt_ef = solve_routine(cfg, module, range(cfg.max_count), num_threads=2)
         opt_obj = pyo.value(opt_ef.EF_Obj)
-        print(f"optimal EF objective: {opt_obj}; using zero gap (this should be verified visually)")
-        opt_gap = 0
+        if xhat is None:
+            print(f"optimal EF objective: {opt_obj}; using zero gap (this should be verified visually)")
+            opt_gap = 0
+        else:
+            # the same quantity boot_general_prep.find_gap stores in the npy
+            obj_hat = evaluate_scenarios(cfg, module, range(cfg.max_count),
+                                         xhat, duplication=False)
+            opt_gap = obj_hat - opt_obj
+            print(f"optimal EF objective: {opt_obj}; optimality gap at xhat: {opt_gap}")
     return opt_obj, opt_gap
 
 
@@ -313,9 +347,7 @@ def classical_bootstrap(cfg, module, xhat, quantile=True):
         tuple with confidence interval if on MPI rank 0
 
     """
-    rng = _pool_rng(cfg)
-
-    scenario_pool = rng.choice(eligible_scenarios(cfg), size=cfg.sample_size, replace=False)
+    scenario_pool = draw_scenario_pool(cfg)
     dag_upper = evaluate_scenarios(cfg, module, scenario_pool, xhat, duplication=False)
     dag_ef = solve_routine(cfg, module, scenario_pool, num_threads=2, duplication=False)
 
@@ -422,9 +454,7 @@ def subsampling(cfg, module, xhat):
         tuple with confidence interval if on MPI rank 0
 
     """
-    rng = _pool_rng(cfg)
-
-    scenario_pool = rng.choice(eligible_scenarios(cfg), size=cfg.sample_size, replace=False)
+    scenario_pool = draw_scenario_pool(cfg)
     dag_upper = evaluate_scenarios(cfg, module, scenario_pool, xhat, duplication=False)
     dag_ef = solve_routine(cfg, module, scenario_pool, num_threads=2, duplication=False)
     dag_optimal = pyo.value(dag_ef.EF_Obj)
@@ -631,8 +661,7 @@ def bagging_bootstrap(cfg, module, xhat, replacement=True):
         tuple with confidence interval if on MPI rank 0
     """
 
-    rng = _pool_rng(cfg)
-    scenario_pool = rng.choice(eligible_scenarios(cfg), size=cfg.sample_size, replace=False)
+    scenario_pool = draw_scenario_pool(cfg)
 
     # bootstrap from pool
     local_boot_gaps, local_boot_optimals, local_boot_uppers, local_boot_counts = _bagging_resample(cfg, module, scenario_pool, xhat, serial=False, replacement=replacement)

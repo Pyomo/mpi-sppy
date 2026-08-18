@@ -12,79 +12,10 @@ utilities.py
 This module will contain any miscellaneous utilities for processing data
 or enhancing functions or anything else.
 
-This currently exports tools for memoizing functions and a context manager
-which enables the use of changing the program level arguments.
+This currently exports a decorator for memoizing methods.
 """
 
-import sys
-import inspect
-from functools import partial, wraps
-from contextlib import contextmanager
-
-def normalize_args(func, pargs, kwargs):
-    """
-    This function puts the arguments into a dictionary mapping
-    keywords to arguments. To do this it must look up the function spec
-    for positional arguments.
-    """
-
-    # This should be a list of the names of the arguments
-    spec = inspect.getargs(func.__code__).args
-
-    # Convert pargs to a list temporarily if need to change any mutable
-    # types to immutable types
-    pargs = list(pargs)
-    # We normalize any list or dictionary arguments to tuples
-    for i, parg in enumerate(pargs):
-        if isinstance(parg, list):
-            pargs[i] = tuple(parg)
-        elif isinstance(parg, dict):
-            pargs[i] = tuple(sorted(parg.items()))
-
-    for key, value in kwargs.items():
-        if isinstance(value, list):
-            kwargs[key] = tuple(value)
-        elif isinstance(value, dict):
-            kwargs[key] = tuple(sorted(value.items()))
-
-    return dict(list(kwargs.items()) + list(zip(spec, pargs)))
-
-def memoize(func):
-    """
-    This function implements memoization of a function by internally
-    storing a dictionary which stores argument-return value pairs. This
-    is to be used as a function decorator.
-
-    Note that this only works with functions which has hashable types as
-    arguments. This function is designed in particular
-    to work with functions which have referential transparency and thus, the
-    calculation of a function with the same arguments should be the same every
-    time.
-
-    This will convert any list or dictionary arguments to tuples so that
-    they can be stored in a dictionary
-
-    Warning: If this function is used over a long period of time with a variety
-        of arguments, it can use up a large amount of memory. Do not use this
-        with class methods as the cache will exist beyond the life of the
-        instance.
-
-    Args:
-        func: The function to be memoized
-    """
-
-    results = {}
-
-    @wraps(func)
-    def f(*pargs, **kwargs):
-        args = normalize_args(func, pargs, kwargs)
-        arg_key = tuple(sorted(args.items()))
-        if arg_key not in results:
-            results[arg_key] = func(*pargs, **kwargs)
-        return results[arg_key]
-
-    return f
-
+from functools import partial
 
 class memoize_method:
     """
@@ -165,36 +96,4 @@ class memoize_method:
         return value
 
 
-@contextmanager
-def set_arguments(args):
-    """
-    This function will act as a context manager and will set the sys.argv
-    variable to the list of arguments passed in. This will enable calling
-    other scripts from within python as if they were called from the command
-    line.
 
-    Example:
-        Say you had a script which simply printed out the system arguments
-        defined like such in the file print_args.py:
-            import sys 
-            def main():
-                print(sys.argv)
-
-        Then in a separate file, you could call this function and set the
-        system arguments to whatever you want for the entirety of the with
-        block and the arguments would be restored at the end.
-
-        In call_print_args.py called like python call_print_args.py 1 2,
-            import print_args
-            if __name__ == '__main__':
-                print(sys.argv) # ['call_print_args.py', '1', '2']
-                with set_arguments(['arg1', 'arg2', 'arg3']):
-                    print_args.main() # ['arg1', 'arg2', 'arg3'] 
-                print(sys.argv) # ['call_print_args.py', '1', '2']
-    Args:
-        args (List[str]): A list of strings which will become the arguments
-    """
-    sys.argv_ = sys.argv
-    sys.argv = args
-    yield
-    sys.argv = sys.argv_

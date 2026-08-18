@@ -90,18 +90,22 @@ def smoothed_main_routine(cfg, module):
         coverage counts are against opt_gap (from process_optimal) rather than
         against z* as in the empirical harness.
     """
-    if my_rank == 0:
-        # only opt_gap is used by the smoothed coverage counting
-        _, opt_gap = boot_sp.process_optimal(cfg, module)
-    else:
-        opt_gap = None
-
     if cfg["xhat_fname"] is not None and cfg["xhat_fname"] != "None":
         xhat = ciutils.read_xhat(cfg["xhat_fname"])
     else:
         # boot-sp called an undefined fit_resample_utils.compute_xhat here; the
         # intended call is boot_utils.compute_xhat (design doc section 4.3).
         xhat = boot_utils.compute_xhat(cfg, module)
+
+    if my_rank == 0:
+        # Only opt_gap is used by the smoothed coverage counting, and it is the
+        # quantity the interval is scored against, so it has to be the real
+        # z(xhat) - z*. That is why xhat is resolved first and passed in:
+        # without it process_optimal reports a zero placeholder, and every
+        # coverage count taken against that zero would be meaningless.
+        _, opt_gap = boot_sp.process_optimal(cfg, module, xhat=xhat)
+    else:
+        opt_gap = None
 
     coverage_cnt_one_sided, coverage_cnt_two_sided = 0, 0
     ci_len = []
@@ -120,24 +124,29 @@ def smoothed_main_routine(cfg, module):
                  (cfg.smoothed_B_I or 1) * cfg.nB * cfg.subsample_size)
     seed_list = [i * stride + seed_offset for i in range(cfg.coverage_replications)]
 
-    for seed in seed_list:
-        cfg.seed_offset = seed
-        if my_rank == 0:
-            st_time = time.time()
-        ci_gap_two_sided, _ = smoothed_boot_sp.compute_smoothed_ci(cfg, module, xhat)
-        if my_rank == 0:
-            en_time = time.time()
-            if cfg.trace_fname is not None:
-                with open(cfg.trace_fname, "a+") as f:
-                    f.write(f"seed: {cfg.seed_offset}\n")
-                    f.write(f"optimality gap: {opt_gap}\n")
-                    f.write(f"ci for optimality gap: {ci_gap_two_sided}\n")
-            if (ci_gap_two_sided[0] <= opt_gap) and (opt_gap <= ci_gap_two_sided[1]):
-                coverage_cnt_two_sided += 1
-            if (opt_gap <= ci_gap_two_sided[1]):
-                coverage_cnt_one_sided += 1
-            ci_len.append(ci_gap_two_sided[1] - ci_gap_two_sided[0])
-            run_time.append(en_time - st_time)
+    try:
+        for seed in seed_list:
+            cfg.seed_offset = seed
+            if my_rank == 0:
+                st_time = time.time()
+            ci_gap_two_sided, _ = smoothed_boot_sp.compute_smoothed_ci(cfg, module, xhat)
+            if my_rank == 0:
+                en_time = time.time()
+                if cfg.trace_fname is not None:
+                    with open(cfg.trace_fname, "a+") as f:
+                        f.write(f"seed: {cfg.seed_offset}\n")
+                        f.write(f"optimality gap: {opt_gap}\n")
+                        f.write(f"ci for optimality gap: {ci_gap_two_sided}\n")
+                if (ci_gap_two_sided[0] <= opt_gap) and (opt_gap <= ci_gap_two_sided[1]):
+                    coverage_cnt_two_sided += 1
+                if (opt_gap <= ci_gap_two_sided[1]):
+                    coverage_cnt_one_sided += 1
+                ci_len.append(ci_gap_two_sided[1] - ci_gap_two_sided[0])
+                run_time.append(en_time - st_time)
+    finally:
+        # the loop walks cfg.seed_offset across the replications; the cfg is the
+        # caller's, so hand it back on the offset it arrived with
+        cfg.seed_offset = seed_offset
 
     if my_rank == 0:
         assert cfg.coverage_replications != 0

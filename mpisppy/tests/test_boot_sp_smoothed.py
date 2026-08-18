@@ -22,10 +22,12 @@
 import os
 import sys
 import math
+import inspect
 import importlib.util
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 from collections import OrderedDict
 
 import numpy as np
@@ -62,12 +64,40 @@ my_rank = boot_utils.my_rank
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
 bootsp_examples = os.path.join(module_dir, "..", "..", "examples", "bootsp")
-for _sub in ("farmer", "cvar", "multi_knapsack"):
-    _d = os.path.join(bootsp_examples, _sub)
-    if not os.path.exists(_d):
-        raise RuntimeError(f"Directory not found: {_d}")
-    if _d not in sys.path:
-        sys.path.insert(0, _d)
+
+
+def _load_example(sub):
+    """ Load an examples/bootsp module under a name of its own.
+
+    These examples are farmer.py, cvar.py and multi_knapsack.py, and
+    examples/farmer/farmer.py -- a different model, used by other test files in
+    this directory -- would answer to a plain "farmer" import just as well.
+    Whichever of the two reached sys.modules first would win, so running this
+    file alongside those (as a whole-directory pytest run does) would hand
+    boot_utils.module_name_to_module the wrong model. Registering these under a
+    bootsp_ prefix means the two never contend for the same name.
+
+    Args:
+        sub (str): the examples/bootsp subdirectory, which is also the file stem
+    Returns:
+        str: the name to hand boot_utils (module_name_to_module resolves it)
+    """
+    path = os.path.join(bootsp_examples, sub, f"{sub}.py")
+    if not os.path.exists(path):
+        raise RuntimeError(f"File not found: {path}")
+    name = f"bootsp_{sub}"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, path)
+        mod = importlib.util.module_from_spec(spec)
+        # register before exec so a partially-imported module is still findable
+        sys.modules[name] = mod
+        spec.loader.exec_module(mod)
+    return name
+
+
+FARMER = _load_example("farmer")
+CVAR = _load_example("cvar")
+MULTI_KNAPSACK = _load_example("multi_knapsack")
 
 MK_DATA = os.path.abspath(
     os.path.join(bootsp_examples, "multi_knapsack", "multi_knapsack_data.json"))
@@ -78,8 +108,8 @@ univariate_tokens = ["univariate-unif", "univariate-normal", "univariate-student
 
 
 def _make_cvar_cfg(method="Smoothed_bagging", seed=42, reps=2):
-    cfg = boot_utils._process_module("cvar")
-    cfg.module_name = "cvar"
+    cfg = boot_utils._process_module(CVAR)
+    cfg.module_name = CVAR
     cfg.max_count = 200
     cfg.candidate_sample_size = 5
     cfg.sample_size = 20
@@ -99,8 +129,8 @@ def _make_cvar_cfg(method="Smoothed_bagging", seed=42, reps=2):
 
 
 def _make_farmer_cfg(method="Classical_quantile", seed=100):
-    cfg = boot_utils._process_module("farmer")
-    cfg.module_name = "farmer"
+    cfg = boot_utils._process_module(FARMER)
+    cfg.module_name = FARMER
     cfg.max_count = 200
     cfg.candidate_sample_size = 5
     cfg.sample_size = 30
@@ -668,44 +698,6 @@ class Test_statdist_utilities(unittest.TestCase):
     """ The memoization helpers and the argv context manager in
     statdist/utilities.py. """
 
-    def test_memoize_caches_by_value(self):
-        calls = []
-
-        @statdist_utilities.memoize
-        def total(xs, offset=0):
-            calls.append(1)
-            return sum(xs) + offset
-
-        self.assertEqual(total([1, 2, 3]), 6)
-        self.assertEqual(total([1, 2, 3]), 6)
-        self.assertEqual(len(calls), 1)          # the second call was cached
-        # an unhashable list argument normalizes to the tuple's key
-        self.assertEqual(total((1, 2, 3)), 6)
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(total([1, 2, 3], offset=10), 16)
-        self.assertEqual(len(calls), 2)
-
-    def test_memoize_normalizes_dictionary_arguments(self):
-        calls = []
-
-        @statdist_utilities.memoize
-        def size(mapping):
-            calls.append(1)
-            return len(mapping)
-
-        self.assertEqual(size({"a": 1, "b": 2}), 2)
-        self.assertEqual(size({"b": 2, "a": 1}), 2)   # equal dict, new object
-        self.assertEqual(len(calls), 1)
-
-    def test_normalize_args_maps_positionals_to_names(self):
-        def f(a, b, c=0):
-            return a
-
-        args = statdist_utilities.normalize_args(f, (1, [2, 3]), {"c": {"k": 4}})
-        self.assertEqual(args["a"], 1)
-        self.assertEqual(args["b"], (2, 3))           # list -> tuple
-        self.assertEqual(args["c"], (("k", 4),))      # dict -> sorted pairs
-
     def test_memoize_method_caches_per_instance(self):
         class Counter:
             def __init__(self):
@@ -763,24 +755,8 @@ class Test_statdist_utilities(unittest.TestCase):
             s.size([1, 2, 3])
         self.assertEqual(s.calls, 2)
 
-    def test_set_arguments_restores_argv(self):
-        saved = list(sys.argv)
-        with statdist_utilities.set_arguments(["prog", "--flag"]):
-            self.assertEqual(sys.argv, ["prog", "--flag"])
-        self.assertEqual(sys.argv, saved)
-
-
-#*****************************************************************************
-class Test_empirical_examples(unittest.TestCase):
-    """ Empirical methods on the statdist-dependent examples (farmer, cvar).
-
-    These could not live in test_boot_sp.py because importing farmer/cvar pulls
-    in statdist; the methods themselves are the empirical ones.
-    """
-
-    @unittest.skipIf(not solver_available, "no solver is available")
     def test_farmer_empirical_wellformed(self):
-        module = boot_utils.module_name_to_module("farmer")
+        module = boot_utils.module_name_to_module(FARMER)
         xhat = boot_utils.compute_xhat(_make_farmer_cfg(), module)
         self.assertIn("ROOT", xhat)
         for method in ["Classical_quantile", "Bagging_with_replacement"]:
@@ -795,7 +771,7 @@ class Test_empirical_examples(unittest.TestCase):
 
     @unittest.skipIf(not solver_available, "no solver is available")
     def test_cvar_empirical_wellformed(self):
-        module = boot_utils.module_name_to_module("cvar")
+        module = boot_utils.module_name_to_module(CVAR)
         cfg = _make_cvar_cfg("Classical_quantile")
         xhat = boot_utils.compute_xhat(cfg, module)
         self.assertIn("ROOT", xhat)
@@ -810,7 +786,7 @@ class Test_empirical_examples(unittest.TestCase):
     @unittest.skipIf(not solver_available, "no solver is available")
     def test_cvar_empirical_deterministic(self):
         # same cfg twice must give the same interval (seeded streams)
-        module = boot_utils.module_name_to_module("cvar")
+        module = boot_utils.module_name_to_module(CVAR)
         xhat = boot_utils.compute_xhat(_make_cvar_cfg("Classical_gaussian"), module)
         # both runs are collectives on every rank; only rank 0 gets real values
         r1 = boot_sp.compute_ci(_make_cvar_cfg("Classical_gaussian"), module, xhat)
@@ -836,7 +812,7 @@ class Test_smoothed(unittest.TestCase):
 
     @unittest.skipIf(not solver_available, "no solver is available")
     def test_cvar_smoothed_bagging(self):
-        module = boot_utils.module_name_to_module("cvar")
+        module = boot_utils.module_name_to_module(CVAR)
         cfg = _make_cvar_cfg("Smoothed_bagging")
         xhat = boot_utils.compute_xhat(cfg, module)
         result = smoothed_boot_sp.compute_smoothed_ci(cfg, module, xhat)
@@ -844,7 +820,7 @@ class Test_smoothed(unittest.TestCase):
 
     @unittest.skipIf(not solver_available, "no solver is available")
     def test_cvar_smoothed_kernel(self):
-        module = boot_utils.module_name_to_module("cvar")
+        module = boot_utils.module_name_to_module(CVAR)
         cfg = _make_cvar_cfg("Smoothed_boot_kernel")
         xhat = boot_utils.compute_xhat(cfg, module)
         result = smoothed_boot_sp.compute_smoothed_ci(cfg, module, xhat)
@@ -852,7 +828,7 @@ class Test_smoothed(unittest.TestCase):
 
     @unittest.skipIf(not solver_available, "no solver is available")
     def test_cvar_smoothed_kernel_quantile(self):
-        module = boot_utils.module_name_to_module("cvar")
+        module = boot_utils.module_name_to_module(CVAR)
         cfg = _make_cvar_cfg("Smoothed_boot_kernel_quantile")
         xhat = boot_utils.compute_xhat(cfg, module)
         result = smoothed_boot_sp.compute_smoothed_ci(cfg, module, xhat)
@@ -861,7 +837,7 @@ class Test_smoothed(unittest.TestCase):
     @unittest.skipIf(not solver_available, "no solver is available")
     def test_user_boot_smoothed(self):
         # the end-user entry point routes smoothed methods and clamps ci_gap[0]
-        module = boot_utils.module_name_to_module("cvar")
+        module = boot_utils.module_name_to_module(CVAR)
         cfg = _make_cvar_cfg("Smoothed_bagging")
         result = user_boot.main_routine(cfg, module)
         if my_rank == 0:
@@ -875,7 +851,7 @@ class Test_smoothed(unittest.TestCase):
     def test_simulate_smoothed_coverage(self):
         # the smoothed coverage harness (this exercises the section-4.3
         # compute_xhat fix: no xhat file, so it computes xhat internally)
-        module = boot_utils.module_name_to_module("cvar")
+        module = boot_utils.module_name_to_module(CVAR)
         cfg = _make_cvar_cfg("Smoothed_bagging", reps=2)
         result = simulate_boot.main(cfg, module)
         if my_rank == 0:
@@ -897,7 +873,7 @@ class Test_smoothed(unittest.TestCase):
         #  (2) the center is drawn from the *fitted* distribution, not from
         #      the raw sample; drawing it raw makes it the purely empirical
         #      point estimate.
-        module = boot_utils.module_name_to_module("cvar")
+        module = boot_utils.module_name_to_module(CVAR)
         cfg = _make_cvar_cfg("Smoothed_boot_kernel")
         xhat = boot_utils.compute_xhat(cfg, module)
 
@@ -942,7 +918,7 @@ class Test_smoothed(unittest.TestCase):
     @unittest.skipIf(not ipopt_available, "ipopt (nonlinear solver) not available")
     @unittest.skipIf(not solver_available, "no solver is available")
     def test_cvar_smoothed_epi(self):
-        module = boot_utils.module_name_to_module("cvar")
+        module = boot_utils.module_name_to_module(CVAR)
         cfg = _make_cvar_cfg("Smoothed_boot_epi")
         xhat = boot_utils.compute_xhat(cfg, module)
         result = smoothed_boot_sp.compute_smoothed_ci(cfg, module, xhat)
@@ -954,16 +930,16 @@ class Test_multi_knapsack(unittest.TestCase):
     """ Smoke test the multi_knapsack example (deterministic-data-json path). """
 
     def test_import_and_data(self):
-        module = boot_utils.module_name_to_module("multi_knapsack")
+        module = boot_utils.module_name_to_module(MULTI_KNAPSACK)
         self.assertTrue(hasattr(module, "scenario_creator"))
         self.assertTrue(hasattr(module, "data_sampler"))
         self.assertTrue(hasattr(module, "xhat_generator"))
 
     @unittest.skipIf(not solver_available, "no solver is available")
     def test_multi_knapsack_empirical(self):
-        module = boot_utils.module_name_to_module("multi_knapsack")
-        cfg = boot_utils._process_module("multi_knapsack")
-        cfg.module_name = "multi_knapsack"
+        module = boot_utils.module_name_to_module(MULTI_KNAPSACK)
+        cfg = boot_utils._process_module(MULTI_KNAPSACK)
+        cfg.module_name = MULTI_KNAPSACK
         cfg.max_count = 60
         cfg.candidate_sample_size = 3
         cfg.sample_size = 15
@@ -982,6 +958,314 @@ class Test_multi_knapsack(unittest.TestCase):
         self.assertIn("ROOT", xhat)
         res = boot_sp.compute_ci(cfg, module, xhat)
         self.assertEqual(len(res), 6)
+
+
+#*****************************************************************************
+class Test_review_regressions(unittest.TestCase):
+    """ Solver-free regressions for defects found reviewing the smoothed work.
+
+    Each one failed before the corresponding fix; they are grouped here because
+    they share nothing but their origin.
+    """
+
+    def test_pool_draw_avoids_the_xhat_block(self):
+        # the smoothed estimators used to draw from range(max_count), which
+        # overlaps the block reserved for choosing xhat
+        cfg = _make_farmer_cfg()
+        cfg.max_count = 40
+        cfg.sample_size = 20
+        cfg.candidate_sample_size = 5
+        reserved = set(range(cfg.sample_size,
+                             cfg.sample_size + cfg.candidate_sample_size))
+        for seed in range(30):
+            cfg.seed_offset = seed
+            pool = boot_sp.draw_scenario_pool(cfg)
+            self.assertEqual(len(pool), cfg.sample_size)
+            self.assertEqual(len(set(pool)), cfg.sample_size)  # no replacement
+            self.assertEqual(reserved & set(int(p) for p in pool), set(),
+                             msg=f"seed {seed} drew a reserved scenario")
+
+    def test_pool_draw_uses_the_pool_stream(self):
+        # the pool stream is seeded with a (seed_offset, word) pair so it can
+        # not collide with the per-rank batch streams
+        cfg = _make_farmer_cfg()
+        cfg.max_count = 60
+        cfg.sample_size = 10
+        cfg.candidate_sample_size = 5
+        cfg.seed_offset = 7
+        expected = boot_sp._pool_rng(cfg).choice(
+            boot_sp.eligible_scenarios(cfg), size=cfg.sample_size, replace=False)
+        np.testing.assert_array_equal(boot_sp.draw_scenario_pool(cfg), expected)
+
+    def test_pool_draw_honors_the_max_count_guard(self):
+        cfg = _make_farmer_cfg()
+        cfg.max_count = 20
+        cfg.sample_size = 18
+        cfg.candidate_sample_size = 5
+        with self.assertRaisesRegex(RuntimeError, "at most max_count"):
+            boot_sp.draw_scenario_pool(cfg)
+
+    def test_smoothed_fitting_sample_avoids_the_xhat_block(self):
+        # the defect this guards: the smoothed estimators drew their fitting
+        # sample from range(max_count), so it could include the records xhat
+        # was chosen on, biasing the gap they estimate
+        module = boot_utils.module_name_to_module(FARMER)
+        cfg = _make_farmer_cfg()
+        cfg.max_count = 40
+        cfg.sample_size = 20
+        cfg.candidate_sample_size = 5
+        reserved = set(range(cfg.sample_size,
+                             cfg.sample_size + cfg.candidate_sample_size))
+        # the estimators are entered through compute_smoothed_ci in real runs,
+        # which is what declares use_fitted and friends on the cfg
+        smoothed_boot_sp._ensure_smoothed_cfg(cfg)
+
+        class _Stop(Exception):
+            """ Cuts each estimator off once the fitting sample is drawn. """
+
+        seen = []
+
+        def _record(record_num, _cfg):
+            seen.append(int(record_num))
+            return 1.0
+
+        for estimator in (smoothed_boot_sp.smoothed_bootstrap,
+                          smoothed_boot_sp.smoothed_bagging):
+            with mock.patch.object(module, "data_sampler", _record), \
+                 mock.patch.object(smoothed_boot_sp, "fit_distribution",
+                                   side_effect=_Stop):
+                for seed in range(20):
+                    cfg.seed_offset = seed
+                    with self.assertRaises(_Stop):
+                        estimator(cfg, module, {"ROOT": []})
+        self.assertTrue(seen)
+        self.assertEqual(reserved & set(seen), set(),
+                         msg="the fitting sample reached into the xhat block")
+
+    def test_estimators_hand_cfg_back_unchanged(self):
+        # use_fitted used to be left True and subsample_size overwritten, so a
+        # later model build with the same cfg would silently sample from a
+        # stale fitted distribution
+        module = boot_utils.module_name_to_module(FARMER)
+        cfg = _make_farmer_cfg()
+        smoothed_boot_sp._ensure_smoothed_cfg(cfg)
+        before = (cfg.use_fitted, cfg.fitted_distribution, cfg.subsample_size)
+
+        class _Stop(Exception):
+            """ Cuts the estimator off after the fit, where the flags are set. """
+
+        for estimator in (smoothed_boot_sp.smoothed_bootstrap,
+                          smoothed_boot_sp.smoothed_bagging):
+            with mock.patch.object(smoothed_boot_sp, "center_smoothed",
+                                   side_effect=_Stop), \
+                 mock.patch.object(smoothed_boot_sp, "_bagging_from_fitted",
+                                   side_effect=_Stop), \
+                 mock.patch.object(smoothed_boot_sp, "fit_distribution",
+                                   return_value="fitted"):
+                with self.assertRaises(_Stop):
+                    estimator(cfg, module, {"ROOT": []})
+            self.assertEqual((cfg.use_fitted, cfg.fitted_distribution,
+                              cfg.subsample_size), before,
+                             msg=f"{estimator.__name__} left cfg modified")
+
+    def test_smoothed_main_routine_restores_seed_offset(self):
+        cfg = _make_farmer_cfg()
+        cfg.coverage_replications = 3
+        before = cfg.seed_offset
+        with mock.patch.object(boot_sp, "process_optimal", return_value=(1.0, 0.5)), \
+             mock.patch.object(boot_utils, "compute_xhat", return_value={"ROOT": [1.0]}), \
+             mock.patch.object(simulate_boot.smoothed_boot_sp, "compute_smoothed_ci",
+                               return_value=([0.0, 1.0], 0.5)):
+            simulate_boot.smoothed_main_routine(cfg, None)
+        self.assertEqual(cfg.seed_offset, before)
+
+    def test_bagging_serial_covers_every_bag(self):
+        # smoothed_bagging accepted and documented serial but ignored it, so a
+        # serial caller silently got nB/n_proc bags and hit the collectives
+        cfg = _make_farmer_cfg()
+        cfg.nB = 6
+        cfg.smoothed_B_I = 2
+        cfg.subsample_size = 4
+        smoothed_boot_sp._ensure_smoothed_cfg(cfg)
+        pools = []
+
+        def _fake_evaluate(_cfg, _module, scenario_pool, _xhat, duplication=False):
+            pools.append(tuple(scenario_pool))
+            return 1.0
+
+        # this test process is a single rank, where a sliced local_nB and the
+        # serial one coincide; pretend the run is split over two ranks so the
+        # two are actually distinguishable
+        with mock.patch.object(boot_sp, "evaluate_scenarios", _fake_evaluate), \
+             mock.patch.object(boot_sp, "solve_routine",
+                               side_effect=lambda *a, **k: _ef_with_obj(0.5)), \
+             mock.patch.object(boot_sp, "slice_lens", return_value=[3, 3]):
+            smoothed_boot_sp._bagging_from_fitted(cfg, None, {"ROOT": []}, serial=True)
+        # serial means this rank does all nB bags in each of the B_I rounds,
+        # not the 3 that its slice would have given it
+        self.assertEqual(len(pools), cfg.smoothed_B_I * cfg.nB)
+        starts = [p[1] for p in pools]  # p[0] is overwritten with the seed base
+        self.assertEqual(len(set(starts)), len(starts))
+
+    def test_multi_knapsack_honors_its_own_arguments(self):
+        # num_scens was overwritten from cfg, and seed_offset never reached
+        # data_sampler, so both arguments were dead
+        module = boot_utils.module_name_to_module(MULTI_KNAPSACK)
+        cfg = boot_utils._process_module(MULTI_KNAPSACK)
+        cfg.module_name = MULTI_KNAPSACK
+        cfg.seed_offset = 0
+        cfg.deterministic_data_json = MK_DATA
+        model = module.scenario_creator("scen3", cfg, num_scens=10)
+        self.assertAlmostEqual(model._mpisppy_probability, 1 / 10)
+        # the demands must follow the seed_offset the caller passed
+        base = module.data_sampler(3, cfg, seed_offset=0)
+        shifted = module.data_sampler(3, cfg, seed_offset=500)
+        self.assertNotEqual(base, shifted)
+
+    def test_multi_knapsack_reads_its_json_once(self):
+        module = boot_utils.module_name_to_module(MULTI_KNAPSACK)
+        cfg = boot_utils._process_module(MULTI_KNAPSACK)
+        cfg.seed_offset = 0
+        cfg.deterministic_data_json = MK_DATA
+        module._detdata_cache.clear()
+        with mock.patch.object(module, "_read_detdata",
+                               wraps=module._read_detdata) as read:
+            for record in range(25):
+                module.data_sampler(record, cfg)
+        self.assertEqual(read.call_count, 1,
+                         msg="the deterministic data file is re-parsed per call")
+
+    def test_module_resolves_its_data_from_any_directory(self):
+        # the library used to read this json itself, without the module's
+        # path fallback, so a run started from anywhere else failed
+        module = boot_utils.module_name_to_module(MULTI_KNAPSACK)
+        cfg = boot_utils._process_module(MULTI_KNAPSACK)
+        cfg.seed_offset = 0
+        cfg.deterministic_data_json = "multi_knapsack_data.json"  # bare name
+        module._detdata_cache.clear()
+        cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as elsewhere:
+            try:
+                os.chdir(elsewhere)
+                detdata = module._detdata_for(cfg)
+            finally:
+                os.chdir(cwd)
+        self.assertIn("num_prods", detdata)
+
+    def test_ensure_smoothed_cfg_leaves_module_data_to_the_module(self):
+        # this used to read the json in library code, hard-coding one example's
+        # option name, and to raise TypeError from open(None) when it was unset
+        cfg = boot_utils._process_module(MULTI_KNAPSACK)
+        cfg.deterministic_data_json = None
+        smoothed_boot_sp._ensure_smoothed_cfg(cfg)
+        self.assertNotIn("detdata", cfg)
+        self.assertIn("use_fitted", cfg)
+
+    def test_farmer_data_sampler_has_no_spurious_zeros(self):
+        # the first group is the unperturbed *scenario*; the perturbation
+        # distribution this samples has no mass at zero
+        module = boot_utils.module_name_to_module(FARMER)
+        cfg = _make_farmer_cfg()
+        for record in range(9):
+            data = module.data_sampler(record, cfg)
+            for crop, value in data.items():
+                self.assertNotEqual(value, 0,
+                                    msg=f"record {record}, {crop} reported an exact zero")
+                self.assertGreater(value, 0, msg=f"record {record}, {crop}")
+
+    def test_farmer_integer_option_is_read(self):
+        # the option is declared farmer_with_integers; reading "use_integer"
+        # silently produced the LP relaxation
+        module = boot_utils.module_name_to_module(FARMER)
+        cfg = _make_farmer_cfg()
+        cfg.farmer_with_integers = True
+        model = module.scenario_creator("scen5", cfg)
+        self.assertIs(model.DevotedAcreage["WHEAT0"].domain, pyo.NonNegativeIntegers)
+        cfg.farmer_with_integers = False
+        model = module.scenario_creator("scen5", cfg)
+        self.assertIs(model.DevotedAcreage["WHEAT0"].domain, pyo.Reals)
+
+    def test_sample_tree_scen_creators_accept_their_own_kwargs(self):
+        # sample_tree_scen_creator passes seed_offset and num_scens through to
+        # scenario_creator, which has to accept both
+        for name in (FARMER, CVAR):
+            module = boot_utils.module_name_to_module(name)
+            cfg = _make_farmer_cfg() if name == FARMER else _make_cvar_cfg()
+            # num_scens is not a bootstrap option; sample_tree_scen_creator
+            # supplies it from the branching factors
+            model = module.sample_tree_scen_creator(
+                "scen1", 2, [3], 5, **module.kw_creator(cfg))
+            self.assertAlmostEqual(model._mpisppy_probability, 1 / 3, msg=name)
+
+    def test_epispline_fit_rejects_degenerate_data(self):
+        # this used to return a still-abstract model, so the caller died on
+        # model.tau rather than hearing anything about the data
+        from mpisppy.confidence_intervals.bootsp.statdist import splines
+        with self.assertRaisesRegex(RuntimeError, "degenerate data"):
+            splines.fit_distribution([2.5] * 10)
+
+    def test_splines_specific_prob_constraint_path_imports(self):
+        # this branch referenced a bare `numpy`, which the module does not bind
+        from mpisppy.confidence_intervals.bootsp.statdist import splines
+        source = inspect.getsource(splines)
+        self.assertNotIn("numpy.", source,
+                         msg="splines.py imports numpy as np; a bare numpy. is a NameError")
+
+
+#*****************************************************************************
+def _ef_with_obj(val):
+    """ A stand-in for the EF that solve_routine returns, with a known value. """
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(initialize=val)
+    m.x.fix(val)
+    m.EF_Obj = pyo.Objective(expr=m.x)
+    return m
+
+
+#*****************************************************************************
+class Test_process_optimal(unittest.TestCase):
+    """ The gap a coverage simulation scores its intervals against. """
+
+    def test_gap_is_zero_placeholder_without_xhat(self):
+        cfg = _make_farmer_cfg()
+        cfg.optimal_fname = "None"
+        with mock.patch.object(boot_sp, "solve_routine") as solve:
+            solve.return_value = _ef_with_obj(10.0)
+            opt_obj, opt_gap = boot_sp.process_optimal(cfg, None)
+        self.assertEqual(opt_obj, 10.0)
+        self.assertEqual(opt_gap, 0)
+
+    def test_gap_is_real_when_xhat_is_given(self):
+        # the smoothed coverage harness scores its gap interval against this,
+        # so a zero placeholder would make every coverage count meaningless
+        cfg = _make_farmer_cfg()
+        cfg.optimal_fname = "None"
+        with mock.patch.object(boot_sp, "solve_routine") as solve, \
+             mock.patch.object(boot_sp, "evaluate_scenarios") as evaluate:
+            solve.return_value = _ef_with_obj(10.0)
+            evaluate.return_value = 12.5
+            opt_obj, opt_gap = boot_sp.process_optimal(cfg, None, xhat={"ROOT": []})
+        self.assertEqual(opt_obj, 10.0)
+        self.assertAlmostEqual(opt_gap, 2.5)
+
+    def test_smoothed_harness_asks_for_the_real_gap(self):
+        # regression on the ordering: xhat has to be resolved before the gap
+        cfg = _make_farmer_cfg()
+        cfg.coverage_replications = 1
+        seen = {}
+
+        def _fake_process_optimal(c, m, xhat=None):
+            seen["xhat"] = xhat
+            return 10.0, 0.0
+
+        with mock.patch.object(boot_sp, "process_optimal", _fake_process_optimal), \
+             mock.patch.object(boot_utils, "compute_xhat", return_value={"ROOT": [1.0]}), \
+             mock.patch.object(simulate_boot.smoothed_boot_sp, "compute_smoothed_ci",
+                               return_value=([0.0, 1.0], 0.5)):
+            simulate_boot.smoothed_main_routine(cfg, None)
+        if my_rank == 0:
+            self.assertEqual(seen.get("xhat"), {"ROOT": [1.0]},
+                             msg="smoothed_main_routine must pass xhat to process_optimal")
 
 
 if __name__ == '__main__':

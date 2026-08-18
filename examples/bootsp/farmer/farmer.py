@@ -45,7 +45,7 @@ def _get_distr_dict(cfg):
 
 
 def scenario_creator(
-    scenario_name, cfg, sense=pyo.minimize, seed_offset=None
+    scenario_name, cfg, sense=pyo.minimize, seed_offset=None, num_scens=None
 ):
     """ Create a scenario for the (scalable) farmer example.
     Args:
@@ -77,9 +77,11 @@ def scenario_creator(
 
     farmerstream.seed(scennum+seed_offset)
 
-    use_integer = cfg.get('use_integer', False)
+    # the option is declared as farmer_with_integers (see inparser_adder), the
+    # same name the non-bootstrap farmer example uses on the command line
+    use_integer = cfg.get('farmer_with_integers', False)
     crops_multiplier = cfg.get('crops_multiplier', 1)
-    num_scens = cfg.get('num_scens', None)
+    num_scens = cfg.get('num_scens', None) if num_scens is None else num_scens
 
     # Check for minimization vs. maximization
     if sense not in [pyo.minimize, pyo.maximize]:
@@ -104,28 +106,21 @@ def data_sampler(record_num, cfg):
     # return the fluctuation data around the baseline from a sample
     # Note: we are syncronizing using the seed
     # yield as in "crop yield"
-
+    #
+    # Every record is a draw from the perturbation distribution. The scenario
+    # creator leaves the first group unperturbed because that group *is* the
+    # baseline scenario, but that is a statement about the scenario, not about
+    # the distribution being sampled here: reporting a zero for those records
+    # would put a spurious point mass at zero in whatever the smoothed methods
+    # fit to this data.
     distr_dict = _get_distr_dict(cfg)
     farmerstream.seed(record_num+cfg.seed_offset)
-    groupnum  = record_num // 3
-
-    sampler_dict = {}
-    for i in range(cfg.crops_multiplier):
-        if groupnum != 0:
-            sampler_dict[f"WHEAT{i}"] = Sampler([distr_dict[f"WHEAT{i}"]], farmerstream)
-            sampler_dict[f"CORN{i}"] = Sampler([distr_dict[f"CORN{i}"]], farmerstream)
-            sampler_dict[f"SUGAR_BEETS{i}"] = Sampler([distr_dict[f"SUGAR_BEETS{i}"]], farmerstream)
 
     data = {}
     for i in range(cfg.crops_multiplier):
-        if groupnum != 0:
-            data[f"WHEAT{i}"] = sampler_dict[f"WHEAT{i}"].sample_one()[0]
-            data[f"CORN{i}"] = sampler_dict[f"CORN{i}"].sample_one()[0]
-            data[f"SUGAR_BEETS{i}"] = sampler_dict[f"SUGAR_BEETS{i}"].sample_one()[0]
-        else:
-            data[f"WHEAT{i}"] = 0
-            data[f"CORN{i}"] = 0
-            data[f"SUGAR_BEETS{i}"] = 0
+        for cropname in (f"WHEAT{i}", f"CORN{i}", f"SUGAR_BEETS{i}"):
+            sampler = Sampler([distr_dict[cropname]], farmerstream)
+            data[cropname] = sampler.sample_one()[0]
     return data
 
 

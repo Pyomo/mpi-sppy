@@ -19,245 +19,6 @@ from collections import OrderedDict
 import numpy as np
 from pyomo.environ import *
 
-class Spline:
-    """
-    This fits a epi-spline to the data passed in the lists x and y.
-    This has functions for evaluating the spline and computing the derivative
-    of the spline, evaluate and derivative, respectively.
-
-    Args:
-        x (List[float]): A list of numbers
-        y (List[float]): A list of numbers where y = f(x)
-        positiveness_constraint (bool): Set to True if spline values should be
-                                        positive
-        increasingness_constraint (bool): Set to True if spline should be
-                                          increasing
-        seg_N (int): The desired number of knots for the spline
-        seg_kappa (float): The bound on the curvature of the spline
-        L1Linf_solver (str): The solver for the L1 norm minimizer
-        L2Norm_solver (str): The solver for the L2 norm minimizer
-    """
-    def __init__(self, x, y, positiveness_constraint=False,
-                 epifit_error_norm='L2',
-                 seg_N=20, seg_kappa=100, L1Linf_solver='gurobi',
-                 increasingness_constraint=False, L2Norm_solver='gurobi'):
-        self.model = fit_epispline(x, y, positiveness_constraint,
-                                   epifit_error_norm,
-                                   seg_N, seg_kappa, L1Linf_solver,
-                                   increasingness_constraint, L2Norm_solver)
-        self.alpha = self.model.alpha.value
-        self.beta = self.model.beta.value
-        self.delta = self.model.delta.value
-
-    def _interval_index(self, x):
-        """
-        Compute the index of the interval x is in in the spline.
-
-        Args:
-            x (float): The value x
-        """
-        l = int(math.ceil(float(x-self.alpha)/self.delta))
-        if l == 0:
-            l = 1
-
-        return l
-
-    def evaluate(self, x):
-        """
-        Evaluates the spline at a point x
-
-        Args:
-            x (float): The point to evaluate the spline at
-        """
-        if x < self.alpha or x > self.beta:
-            raise ValueError("This spline is only defined on [{}, {}]".format(
-                self.alpha, self.beta))
-
-        m = self.model
-
-        s0 = value(m.s0)
-        v0 = value(m.v0)
-        delta = value(m.delta)
-
-        # We find what interval x is in
-        l = self._interval_index(x)
-
-        return (s0 + v0 * x + delta * sum(
-                (x - j * delta + 0.5 * delta)
-                * value(m.a[j]) for j in range(1, l))
-                + 0.5 * value(m.a[l]) * (x - (l - 1) * delta) ** 2)
-
-    __call__ = evaluate
-
-    def derivative(self, x):
-        """
-        Evaluates the derivative of the spline at a point x
-
-        Args:
-            x (float): The point to evaluate the derivative at
-        """
-        l = self._interval_index(x)
-        m = self.model
-
-        v0 = value(m.v0)
-        delta = value(m.delta)
-
-
-        return (v0 + delta*sum(value(m.a[j]) for j in range(1,l))
-                + value(m.a[l])*(x-(l-1)*delta))
-
-
-def fit_epispline(x, y, positiveness_constraint=False, error_norm='L2',
-                 seg_N=20, seg_kappa=100, L1Linf_solver='gurobi',
-                 increasingness_constraint=False, L2Norm_solver='gurobi'):
-    """
-    This functions fits an epispline to the function based on passed in input.
-    This approximates the function f(x) = y where x and y are passed in lists
-    of data.
-
-    Args:
-        x (List[float]): A list of numbers
-        y (List[float]): A list of numbers where y = f(x)
-        positiveness_constraint (bool): Set to True if spline values should be
-                                        positive
-        increasingness_constraint (bool): Set to True if spline should be
-                                          increasing
-        seg_N (int): The desired number of knots for the spline
-        seg_kappa (float): The bound on the curvature of the spline
-        L1Linf_solver (str): The solver for the L1 norm minimizer
-        L2Norm_solver (str): The solver for the L2 norm minimizer
-    """
-    if len(x) != len(y):
-        raise RuntimeError('***ERROR: x and y must have the same length.')
-
-    # We first create a new model
-    model = ConcreteModel()
-
-    # Sets
-    model.I = Set(initialize=list(range(len(x))))
-    model.intervals = RangeSet(int(seg_N))
-
-    # Parameters
-    model.N = Param(initialize=int(seg_N))
-    model.kappa = Param(initialize=float(seg_kappa))
-
-    model.alpha = Param(initialize=min(x))
-    model.beta = Param(initialize=max(x))
-
-    def x_init(m, i):
-        return x[i]
-
-    model.x = Param(model.I, initialize=x_init)
-
-    def fx_init(m, i):
-        return y[i]
-
-    model.fx = Param(model.I, initialize=fx_init)
-
-    model.delta = Param(initialize=float(model.beta - model.alpha) / model.N)
-
-    def k_init(m, i):
-        aux = int(math.ceil(float(m.x[i] - m.alpha.value) / m.delta))
-        if aux == 0:
-            aux = 1
-        return aux
-
-    model.k = Param(model.I, initialize=k_init)
-
-    # Variables
-    model.e = Var(model.I, within=Reals)
-    model.s = Var(model.I, within=Reals)
-
-    model.s0 = Var(within=Reals, initialize=0.0)
-    model.v0 = Var(within=Reals, initialize=0.0)
-    model.a = Var(model.intervals, bounds=(-model.kappa, model.kappa), initialize=0.0)
-
-    # Constraints
-    def compute_spline(m, i):
-        return m.s[i] == m.s0 + m.v0 * m.x[i] + m.delta * sum(
-            (m.x[i] - j * m.delta + 0.5 * m.delta) * m.a[j] for j in range(1, m.k[i])) \
-                         + 0.5 * m.a[m.k[i]] * (m.x[i] - (m.k[i] - 1) * m.delta) ** 2
-
-    model.ComputeSpline = Constraint(model.I, rule=compute_spline)
-
-    # Positiveness
-    if positiveness_constraint is True:
-        eps = 0.01
-        w = [float(i) for i in np.arange(min(x), max(x), eps)]
-        model.J = Set(initialize=list(range(len(w))))
-
-        def positive_spline(m, i):
-            l = int(math.ceil(float(w[i] - m.alpha) / m.delta))
-            if l == 0:
-                l = 1
-            return m.s0 + m.v0 * w[i] + m.delta * sum(
-                (w[i] - j * m.delta + 0.5 * m.delta) * m.a[j] for j in
-                range(1, l)) + 0.5 * m.a[l] * (w[i] - (l - 1) * m.delta) ** 2 >= 0
-
-        model.PositiveSpline = Constraint(model.J, rule=positive_spline)
-
-        # Increasingness
-    if increasingness_constraint is True:
-
-        # First derivative
-        def increasing_spline(m, i):
-
-            l = int(math.ceil(float(w[i] - m.alpha) / m.delta))
-            if l == 0:
-                l = 1
-            return m.v0 + m.delta * sum(m.a[j] for j in
-                                        range(1, l)) + m.a[l] * (w[i] - 2 * (l - 1) * m.delta) >= 0
-
-        model.IncreasingSpline = Constraint(model.J, rule=increasing_spline)
-
-    if error_norm == "L1":
-        def ePositiveSide_rule(m, i):
-            return m.e[i] >= m.fx[i] - m.s[i]
-
-        model.eDefPos = Constraint(model.I, rule=ePositiveSide_rule)
-
-        def eNegativeSide_rule(m, i):
-            return m.e[i] >= - m.fx[i] + m.s[i]
-
-        model.eDefNeg = Constraint(model.I, rule=eNegativeSide_rule)
-    elif error_norm == "L2":
-        def compute_error_rule(m, i):
-            return m.e[i] == m.fx[i] - m.s[i]
-
-        model.ComputeError = Constraint(model.I, rule=compute_error_rule)
-    else:
-        raise RuntimeError("***ERROR: Unknown error norm=" + error_norm + " selected")
-
-    # Objective function
-    if error_norm == 'L1':
-        def Obj_rule(m):
-            return summation(m.e)
-
-        model.Obj = Objective(rule=Obj_rule)
-    elif error_norm == 'L2':
-        def Obj_rule(m):
-            return sum(m.e[i] ** 2 for i in m.I)
-
-        model.Obj = Objective(rule=Obj_rule, sense=minimize)
-    else:
-        raise RuntimeError("***ERROR: Unknown error norm=" + error_norm + " selected")
-
-    # Instance creation and optimization
-    model.preprocess()
-    if error_norm == "L1":
-        opt = SolverFactory(L1Linf_solver)
-        opt.options.mip_tolerances_absmipgap = 0
-        opt.options.mip_tolerances_mipgap = 0
-        opt.options.mip_tolerances_integrality = 1e-9
-    elif error_norm == 'L2':
-        opt = SolverFactory(L2Norm_solver)
-    else:
-        raise RuntimeError("***ERROR: Unknown error norm=" + error_norm + " selected")
-
-    opt.solve(model, tee=False)
-    return model
-
-
 def error_domain(e, dom=None):
     """
     This computes the parameters alpha and beta
@@ -431,7 +192,14 @@ def fit_distribution(x, dom=None, specific_prob_constraint=None,
             raise RuntimeError('***ERROR: specific_prob_constraint has either to be a tuple or a list of length 2.')
 
     if alpha == beta:  # this means there is only a CONSTANT bias
-        return model, alpha, beta
+        # A degenerate sample: there is no domain to spread a density over. The
+        # model is still abstract at this point -- returning it only defers the
+        # failure to the caller, which reads model.tau and gets an
+        # AttributeError instead of anything describing the data.
+        raise RuntimeError(
+            "Cannot fit an epi-spline distribution to degenerate data: the "
+            f"error domain collapsed to the single point {alpha}, i.e. every "
+            "observation in the sample is the same value.")
 
     # Here we normalize the data. Then, m.et is in [0,1].
     def et_init(modelo, j, k=None):
@@ -477,7 +245,7 @@ def fit_distribution(x, dom=None, specific_prob_constraint=None,
         def prob_rule(modelo):  # The sum of the probabilities over all the domain must be 1.
             if specific_prob_constraint is not None:
                 s = 0.01
-                samp = numpy.arange(0.0, 1.0 + s, s)
+                samp = np.arange(0.0, 1.0 + s, s)
                 aux = 0
                 for x in samp:
                     x = float(x)

@@ -19,5 +19,4 @@ extend-exclude = [
     "E741",  # ambiguous variable name (math notation, e.g. l)
     "F403",  # star import (pyomo.environ)
     "F405",  # name may be from star import
-    "F821",  # undefined name (in retained multivariate base class)
 ]
