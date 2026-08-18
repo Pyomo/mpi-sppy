@@ -71,8 +71,9 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
                 if seed is None:
                     snumlists[ndn] = [i % nsize for i in range(llim)]
                 else:
-                    print ("need a random permutation in snumlist xxxx quitting")
-                    quit()
+                    raise RuntimeError("XhatLooper does not support a seed: "
+                                       "a random permutation in snumlist "
+                                       "is not implemented")
         
         self.opt._save_nonants() # to cache for use in fixing
         # for the moment (dec 2019) treat two-stage as special

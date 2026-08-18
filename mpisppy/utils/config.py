@@ -606,18 +606,13 @@ class Config(pyofig.ConfigDict):
                             default=100)
 
     def timed_mipgap_args(self):
-        self.add_to_config('timed_mipgap',
-                           description="use a time-dependent target mip gap",
-                           domain=bool,
-                           default=False)
-
-        self.add_to_config("timed_mipgap_options",
+        self.add_to_config("timed_mipgap",
                            description=
                            "Should be a string with the following format: 'gap1:time1 gap2:time2 ... gapN:timeN'."
                            "Each pair defines a soft solver time limit, i.e. time limit only applied to solver "
-                           "if MIP gap is below specified threshold. Default: 0.05:600",
+                           "if MIP gap is below specified threshold. Default: None (not enabled)",
                            domain=str,
-                           default="0.05:600")
+                           default=None)
 
     def mip_options(self):
         self.add_mipgap_specs()
@@ -1277,6 +1272,8 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_solver_specs("xhatlooper")
+
     def xhatshuffle_args(self):
 
         self.add_to_config('xhatshuffle',
@@ -1321,6 +1318,8 @@ class Config(pyofig.ConfigDict):
                            default=False)
 
         self.add_stage2_ef_solver_name_arg()
+
+        self.add_solver_specs("xhatshuffle")
 
 
     def mult_rho_args(self):
@@ -1382,6 +1381,8 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_solver_specs("xhatspecific")
+
 
     def xhatxbar_args(self):
 
@@ -1416,6 +1417,8 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_solver_specs("xhatxbar")
+
 
     def xhatlshaped_args(self):
         # we will not try to get the specification from the command line
@@ -1424,6 +1427,8 @@ class Config(pyofig.ConfigDict):
                               description="have an xhatlshaped spoke",
                               domain=bool,
                               default=False)
+
+        self.add_solver_specs("xhatlshaped")
 
     def xhat_from_file_args(self):
         # Supply an initial xhat candidate from a file. Every xhat spoke
@@ -1787,6 +1792,20 @@ class Config(pyofig.ConfigDict):
             description="First scenario number used by MMW (default None)",
             domain=int,
             default=None,
+        )
+
+    def vss_args(self):
+        self.add_to_config(
+            "vss",
+            description="After the run, report the Value of the Stochastic "
+            "Solution (VSS = EEV - RP). Requires the scenario module to define "
+            "average_scenario_creator. Computing EEV re-solves every scenario "
+            "once with the first stage fixed; the added time depends on the "
+            "model and can be significant for some problems. The EV/EEV solves "
+            "reuse the run's solver options (--EF-solver-options for --EF, else "
+            "--solver-options), including mipgap. Two-stage only.",
+            domain=bool,
+            default=False,
         )
 
     #================

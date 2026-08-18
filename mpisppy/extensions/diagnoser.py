@@ -26,10 +26,8 @@ class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
     def __init__(self, ph):
         dirname = ph.options["diagnoser_options"]["diagnoser_outdir"]
         if os.path.exists(dirname):
-            if ph.cylinder_rank == 0:
-                print ("Shutting down because Diagnostic directory exists:",
-                       dirname)
-            quit()
+            raise RuntimeError(
+                f"Diagnostic directory already exists: {dirname}")
         if ph.cylinder_rank == 0:
             os.mkdir(dirname) # just let it crash
 

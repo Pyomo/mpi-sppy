@@ -588,6 +588,7 @@ def subgradient_hub(cfg,
     }
     add_wxbar_read_write(hub_dict, cfg)
     add_ph_tracking(hub_dict, cfg)
+    add_timed_mipgap(hub_dict, cfg)
     return hub_dict
 
 def fwph_hub(cfg,
@@ -985,10 +986,10 @@ def add_ph_tracking(cylinder_dict, cfg, spoke=False):
     return cylinder_dict
 
 def add_timed_mipgap(cylinder_dict, cfg):
-    if getattr(cfg, "timed_mipgap", False):
+    if getattr(cfg, "timed_mipgap", None) is not None:
         from mpisppy.extensions.timed_mipgap import TimedMIPGapCB
         cylinder_dict = extension_adder(cylinder_dict, TimedMIPGapCB)
-        cylinder_dict['opt_kwargs']['options']['timed_mipgap']= {'timecurve':cfg.timed_mipgap_options}
+        cylinder_dict['opt_kwargs']['options']['timed_mipgap']= {'timecurve':cfg.timed_mipgap}
 
     return cylinder_dict        
 
@@ -1452,6 +1453,8 @@ def xhatlooper_spoke(
         extension_kwargs=extension_kwargs,
     )
 
+    apply_solver_specs("xhatlooper", xhatlooper_dict, cfg)
+
     xhatlooper_dict["opt_kwargs"]["options"]["xhat_looper_options"] = {
         "xhat_solver_options": xhatlooper_dict["opt_kwargs"]["options"]["iterk_solver_options"],
         "scen_limit": cfg.xhat_scen_limit,
@@ -1491,6 +1494,8 @@ def xhatxbar_spoke(
         extension_kwargs=extension_kwargs,
         all_nodenames=all_nodenames,
     )
+
+    apply_solver_specs("xhatxbar", xhatxbar_dict, cfg)
 
     xhatxbar_dict["opt_kwargs"]["options"]["xhat_xbar_options"] = {
         "xhat_solver_options": xhatxbar_dict["opt_kwargs"]["options"]["iterk_solver_options"],
@@ -1532,6 +1537,8 @@ def xhatshuffle_spoke(
         ph_extensions=ph_extensions,
         extension_kwargs=extension_kwargs,
     )
+    apply_solver_specs("xhatshuffle", xhatshuffle_dict, cfg)
+
     xhatshuffle_dict["opt_kwargs"]["options"]["xhat_looper_options"] = {
         "xhat_solver_options": xhatshuffle_dict["opt_kwargs"]["options"]["iterk_solver_options"],
         "dump_prefix": "delme",
@@ -1575,6 +1582,8 @@ def xhatspecific_spoke(
         ph_extensions=ph_extensions,
         extension_kwargs=extension_kwargs,
     )
+    apply_solver_specs("xhatspecific", xhatspecific_dict, cfg)
+
     xhatspecific_dict["opt_kwargs"]["options"]["xhat_specific_options"] = {
         "xhat_solver_options": xhatspecific_dict["opt_kwargs"]["options"]["iterk_solver_options"],
         "xhat_scenario_dict": scenario_dict,
@@ -1607,6 +1616,7 @@ def xhatlshaped_spoke(
         ph_extensions=ph_extensions,
         extension_kwargs=extension_kwargs,
     )
+    apply_solver_specs("xhatlshaped", xhatlshaped_dict, cfg)
     return xhatlshaped_dict
 
 def slammax_spoke(

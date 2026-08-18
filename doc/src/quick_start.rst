@@ -68,6 +68,10 @@ Install from GitHub on Linux
 
       pip install -e ".[mpi]"
 
+   If you plan to run the tests or contribute, ``pip install -e ".[mpi,dev]"``
+   also installs every optional feature package plus the test, documentation,
+   and linting tools (see :ref:`Install mpi4py` for the full list of extras).
+
 4. Install a solver of your choice (e.g. ``pip install gurobipy``; commercial
    solvers also need a license).
 
