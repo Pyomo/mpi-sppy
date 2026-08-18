@@ -63,7 +63,7 @@ with $f_s : \R^n \to \R$, $g_s : \R^n \to \R^{m}$ and $h_s : \R^n \to \R^{k}$.
 This is exactly the problem the ordinary Lagrangian spoke builds, with the
 proximal term switched off.
 
-\paragraph{Why the returned objective value is useless here.}
+\paragraph{Why the returned objective value is not a bound here.}
 For a minimisation, the value the solver reports is the objective evaluated at
 the point it stopped at.  Any such value is $\ge$ the minimum, so it is an
 \emph{inner} bound: the wrong direction.  Nor does Ipopt's convergence tolerance
@@ -302,8 +302,8 @@ at a converged solve are small but generically nonzero, so a box of width $10$
 costs little while a box of width $10^{10}$ can cost a substantial fraction of
 the objective.  Tightening bounds before certifying --- for instance by
 feasibility-based bounds tightening, which shrinks $B$ without removing feasible
-points and therefore only raises $\qhat_s$ --- is the single most effective
-lever on quality.
+points and therefore only raises $\qhat_s$ --- is the most effective way to
+improve the bound.
 
 \paragraph{Unbounded variables.}
 If $l_i = -\infty$ and $\partial_i \varphi_s(\vhat) > 0$, or $u_i = +\infty$ and
@@ -317,8 +317,8 @@ $-\infty$, so that Remark~\ref{rem:mixed} is respected.
 \paragraph{Floating point.}
 Nothing in Theorem~\ref{thm:main} requires a tolerance.  A small relative
 cushion, reporting $\qhat_s - \varepsilon(1 + |\qhat_s|)$, is nevertheless cheap
-insurance against last-bit effects in the gradient and the sum; it is hygiene,
-not part of the argument.
+insurance against last-bit effects in the gradient and the sum; it is a
+numerical safeguard, not part of the argument.
 
 \section{Relation to known results}\label{sec:literature}
 
