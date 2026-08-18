@@ -75,6 +75,23 @@ spoke already builds and solves, prox term off — is
 component of `g_s` convex, `h_s` affine, all over `B`. §6 lists the parts of this that
 *are* mechanically checkable; the rest is a user assertion.
 
+Note that the requirement is on the **canonical** `g`, which negates the body of a `>=`
+row, so it is not the same as "the constraint body is convex":
+
+| as written | canonical `g` | requirement on the body |
+|---|---|---|
+| `body ≤ upper` | `body − upper` | convex |
+| `body ≥ lower` | `lower − body` | **concave** |
+| `lo ≤ body ≤ up` | both rows | affine |
+| `body == rhs` | `body − rhs` | affine |
+
+`x² ≤ 4` is inside the theorem and `x² ≥ 1` is not, though both are written with a
+convex body — and the feasible set of the second is not convex at all. This is worth
+stating loudly because it is easy to read the wrong way: a code review of this branch
+turned up that the guard, the unit test and `spokes.rst` had all settled on "only
+equalities need to be affine", which let `min x s.t. x² ≥ 1, x ∈ [0, 1.5]` through and
+certified 1.25 for a problem whose optimum is 1.0 — an outer bound above the optimum.
+
 ### 3.2 The dual function and the trap
 
 For multipliers `λ ≥ 0` and free `μ`, define
@@ -269,6 +286,13 @@ Checkable at setup, hard error (following the repo's fail-loudly convention):
   accident.
 - **Any equality constraint with `polynomial_degree() != 1`.** A nonlinear equality
   makes `μᵀh` non-convex for one sign of `μ`, breaking §3.3.
+- **Any two-sided (ranged) constraint with `polynomial_degree() != 1`.** It splits into
+  `g = body − upper` *and* `g = lower − body`, so its body would have to be both convex
+  and concave — affine. Like the equality case this is decidable, so it is enforced
+  rather than assumed. One-sided nonlinear rows are *not* rejected: whether the body is
+  convex (for `≤`) or concave (for `≥`) is not decidable here, and is the user's
+  assertion. See the table in §3.1 — the direction of that assertion flips with the
+  orientation, which is the part most likely to be got wrong.
 - **Prox term attached.** With a prox term the subproblem is not the Lagrangian
   relaxation and the bound is not a Lagrangian bound. `lagrangian_prep` already passes
   `attach_prox=False`; assert it.

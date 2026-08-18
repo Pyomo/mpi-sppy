@@ -1212,6 +1212,23 @@ def ipopt_outer_bound_spoke(
     options["solver_options_layers"] = []
 
     apply_solver_specs("ipopt_outer_bound", ipopt_ob_spoke, cfg)
+
+    # apply_solver_specs ends by re-applying --max-solver-threads as a
+    # system-level cap, *after* the reset above, so clearing the layers first is
+    # not enough. Ipopt has no `threads` option and translate_solver_options has
+    # no mapping for it, so it would reach the solver verbatim and hard-fail the
+    # spoke's first solve -- exactly the leak this factory is trying to prevent,
+    # reintroduced by a later step. Strip it here, where it is unambiguously
+    # wrong: the cap is meaningful for the MIP solvers it was written for.
+    for _key in ("iter0_solver_options", "iterk_solver_options"):
+        options[_key].pop("threads", None)
+    _stripped = []
+    for _layer in options["solver_options_layers"]:
+        _layer["options"].pop("threads", None)
+        if _layer["options"]:
+            _stripped.append(_layer)
+    options["solver_options_layers"] = _stripped
+
     # apply_solver_specs only sets solver_name when the per-spoke flag was
     # given; without this the spoke would silently inherit the global solver,
     # which the setup guard then rejects. The spoke is Ipopt-scoped, so ipopt

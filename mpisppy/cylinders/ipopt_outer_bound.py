@@ -38,7 +38,10 @@ from mpisppy.utils.dual_certificate import (
 
 class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
 
-    converger_spoke_char = 'I'
+    # 'N' for NLP. Not 'I': that is InnerBoundSpoke's character, and the hub
+    # prints the outer and inner chars side by side, so an 'I' in the outer
+    # column would read as an inner bound.
+    converger_spoke_char = 'N'
 
     # The certificate reads the point *and* the duals off the solved model, so
     # unlike the Lagrangian spoke this one cannot skip loading the solution.
@@ -50,19 +53,36 @@ class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
         self.lagrangian_prep()
 
         # PH_Prep(attach_prox=False) is what makes this the Lagrangian
-        # relaxation rather than a proximal subproblem. Assert rather than
-        # trust: with a prox term the number below is not a Lagrangian bound.
-        if not getattr(self.opt, "prox_disabled", True) and not self.opt.W_disabled:
+        # relaxation rather than a proximal subproblem, so check that the prox
+        # term is not switched on. prox_on is created by attach_Ws_and_prox and
+        # starts at 0, so this normally passes; it is here to catch a future
+        # path that enables it, in which case the number below would not be a
+        # Lagrangian bound at all.
+        first = next(iter(self.opt.local_scenarios.values()), None)
+        if (first is not None
+                and hasattr(first._mpisppy_model, "prox_on")
+                and not self.opt.prox_disabled):
             raise CertificateError(
-                "ipopt_outer_bound requires the proximal term to be absent; "
+                "ipopt_outer_bound requires the proximal term to be off; "
                 "the bound it computes is a Lagrangian bound and a proximal "
                 "subproblem is not the Lagrangian relaxation"
             )
 
         for s in self.opt.local_scenarios.values():
-            if not hasattr(s, "dual"):
+            # Existence is not enough: a scenario_creator may already attach an
+            # EXPORT or LOCAL `dual` suffix (a common way to supply dual warm
+            # starts), and reusing that would import nothing.
+            existing = getattr(s, "dual", None)
+            if existing is None:
                 s.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
+            elif not existing.import_enabled():
+                raise CertificateError(
+                    f"scenario {s.name} already has a `dual` Suffix that does "
+                    "not import; the certificate needs the solver's duals. Use "
+                    "Suffix.IMPORT or Suffix.IMPORT_EXPORT."
+                )
 
+        self._warned = set()
         self._check_setup_guards()
 
         # Snapshot which nonants are fixed now, so a fixing extension that
@@ -116,22 +136,39 @@ class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
                 "makes this spoke useful."
             )
 
-    def _assert_nonants_not_newly_fixed(self):
+    def _warn_once(self, key, message):
+        """Rank-0, once-per-run warning. This spoke is an optional source of a
+        bound, so it complains and stands down rather than taking the run with
+        it -- an exception here would propagate out of the iteration loop and
+        MPI_Abort the hub and every other spoke."""
+        if key in self._warned:
+            return
+        self._warned.add(key)
+        if self.cylinder_rank == 0:
+            warnings.warn(message)
+
+    def _nonants_newly_fixed(self):
+        """True if anything fixed a nonant since setup, in which case no bound
+        can be reported: fixing restricts the subproblem, so its minimum bounds
+        the restricted problem and not the original."""
         newly = [
             f"{sname}:{ndn_i}"
             for sname, s in self.opt.local_scenarios.items()
             for ndn_i, xvar in s._mpisppy_data.nonant_indices.items()
             if xvar.fixed and not self._fixed_at_setup[(sname, ndn_i)]
         ]
-        if newly:
-            raise CertificateError(
-                "ipopt_outer_bound: nonanticipative variables were fixed after "
-                f"setup ({', '.join(newly[:5])}"
-                f"{' ...' if len(newly) > 5 else ''}). Fixing restricts the "
-                "subproblem, so its minimum is a bound on the restricted "
-                "problem and not on the original. Remove the fixing extension "
-                "from this spoke."
-            )
+        if not newly:
+            return False
+        self._warn_once(
+            "fixed_nonants",
+            "ipopt_outer_bound: nonanticipative variables were fixed after "
+            f"setup ({', '.join(newly[:5])}"
+            f"{' ...' if len(newly) > 5 else ''}). Fixing restricts the "
+            "subproblem, so its minimum is a bound on the restricted problem "
+            "and not on the original. This spoke will report no bound until "
+            "they are unfixed; remove the fixing extension from this spoke."
+        )
+        return True
 
     def _solve_and_certify(self, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
         """Solve every subproblem, then replace the solver's (useless) bound
@@ -150,7 +187,10 @@ class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
             warmstart=warmstart,
         )
 
-        self._assert_nonants_not_newly_fixed()
+        if self._nonants_newly_fixed():
+            for s in self.opt.local_scenarios.values():
+                s._mpisppy_data.outer_bound = None
+            return self.opt.Ebound(verbose)
 
         for s in self.opt.local_scenarios.values():
             # solve_loop has just written results.Problem[0].Lower_bound here,
@@ -160,8 +200,19 @@ class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
             if not s._mpisppy_data.solution_available:
                 s._mpisppy_data.outer_bound = None
                 continue
-            s._mpisppy_data.outer_bound = certified_lower_bound(
-                s, sign_convention="ipopt", eps_rel=self._cushion)
+            try:
+                s._mpisppy_data.outer_bound = certified_lower_bound(
+                    s, sign_convention="ipopt", eps_rel=self._cushion)
+            except CertificateError as e:
+                # Routine solver outcomes can leave a constraint without a dual.
+                # Report no bound, as the module's contract says, rather than
+                # taking down the hub and every other spoke from inside the
+                # iteration loop.
+                self._warn_once(
+                    "certificate_failed",
+                    f"ipopt_outer_bound: no certificate for {s.name} ({e}); "
+                    "reporting no bound this iteration.")
+                s._mpisppy_data.outer_bound = None
 
         return self.opt.Ebound(verbose)
 

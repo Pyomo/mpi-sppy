@@ -41,8 +41,23 @@
 #
 # CONVEXITY IS LOAD-BEARING.  If f or any component of g is non-convex over B,
 # the tangent is not an underestimator and the returned number is simply wrong.
-# check_model_is_certifiable() rejects the parts of that which are mechanically
-# checkable; the rest is the caller's assertion.
+#
+# Note carefully that the requirement is on the CANONICAL g, not on the
+# constraint body as written, and the two differ by a sign on a `>=` row:
+#
+#     body <= upper   ->  g = body - upper    needs the body CONVEX
+#     body >= lower   ->  g = lower - body    needs the body CONCAVE
+#     lo <= body <= up->  both of the above   needs the body AFFINE
+#     body == rhs     ->  h = body - rhs      needs the body AFFINE
+#
+# So `x**2 <= 4` is fine and `x**2 >= 1` is not, even though both are written
+# with a convex body.  This is easy to get backwards: `x**2 >= 1` looks like an
+# ordinary convex constraint and its feasible set is not convex at all.
+#
+# check_model_is_certifiable() rejects what is mechanically checkable -- the
+# affine cases, since polynomial degree is decidable -- but convexity of a
+# general nonlinear body is not, so on one-sided nonlinear rows it is the
+# caller's assertion.
 #
 # By contrast a wrong multiplier -- bad sign convention, stale dual, clipped
 # value -- can only make the bound loose, never wrong, because weak duality
@@ -103,7 +118,10 @@ def check_model_is_certifiable(model):
     """Raise CertificateError if `model` is outside the theorem.
 
     Checks only what is mechanically checkable.  Convexity of the objective and
-    of the inequality bodies is the caller's assertion and is *not* checked.
+    of one-sided nonlinear inequality bodies is the caller's assertion and is
+    *not* checked -- including the direction of it: a `<=` row needs a convex
+    body and a `>=` row needs a CONCAVE one, because the canonical g negates
+    the body on a `>=`. See the module docstring.
     """
     obj = _active_objective(model)
     if obj.sense != pyo.minimize:
@@ -124,21 +142,36 @@ def check_model_is_certifiable(model):
             + (" ..." if len(discrete) > 10 else "")
         )
 
+    # Both cases below need the body affine, and polynomial degree decides that,
+    # so these are real checks rather than assertions. A one-sided nonlinear row
+    # is left to the caller: whether its body is convex (for <=) or concave (for
+    # >=) is not decidable here.
     nonlinear_eq = []
+    nonlinear_ranged = []
     for con in model.component_data_objects(
         pyo.Constraint, active=True, descend_into=True
     ):
-        if not con.equality:
+        two_sided = (not con.equality) and con.has_lb() and con.has_ub()
+        if not (con.equality or two_sided):
             continue
         degree = con.body.polynomial_degree()
         if degree is None or degree > 1:
-            nonlinear_eq.append(con.name)
+            (nonlinear_eq if con.equality else nonlinear_ranged).append(con.name)
     if nonlinear_eq:
         raise CertificateError(
             "a nonlinear equality makes mu^T h non-convex for one sign of mu, "
             "which breaks the underestimator; offending constraints: "
             f"{', '.join(sorted(nonlinear_eq)[:10])}"
             + (" ..." if len(nonlinear_eq) > 10 else "")
+        )
+    if nonlinear_ranged:
+        raise CertificateError(
+            "a two-sided constraint splits into g = body - upper AND "
+            "g = lower - body, so its body would have to be both convex and "
+            "concave -- i.e. affine -- for the underestimator to hold on both "
+            "rows; offending constraints: "
+            f"{', '.join(sorted(nonlinear_ranged)[:10])}"
+            + (" ..." if len(nonlinear_ranged) > 10 else "")
         )
 
 

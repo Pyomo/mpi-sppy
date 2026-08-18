@@ -230,11 +230,39 @@ class TestGuards(unittest.TestCase):
         with self.assertRaisesRegex(CertificateError, "nonlinear equality"):
             check_model_is_certifiable(m)
 
-    def test_nonlinear_inequality_is_allowed(self):
-        # Convex inequalities are the point of the exercise; only equalities
-        # have to be affine.
+    def test_nonlinear_le_inequality_is_allowed(self):
+        # Convex inequalities are the point of the exercise. For a `<=` row the
+        # canonical g is body - upper, so a convex body is what the theorem
+        # wants -- and convexity is the caller's assertion, not checkable here.
         m = _model("le")
         m.ok = pyo.Constraint(expr=m.x**2 + m.y**2 <= 100)
+        check_model_is_certifiable(m)   # must not raise
+
+    def test_nonlinear_ge_inequality_is_allowed_but_needs_a_concave_body(self):
+        # The sign trap. For a `>=` row the canonical g is lower - body, so the
+        # BODY must be concave, not convex. That is still the caller's
+        # assertion, so the guard lets it through -- but a convex body here
+        # (x**2 >= 1, which looks perfectly ordinary) makes phi non-convex and
+        # the certificate can then exceed the true optimum. The rule is stated
+        # in the module docstring and in spokes.rst; this test exists to pin
+        # down that the guard does NOT claim to catch it.
+        m = _model("le")
+        m.ok = pyo.Constraint(expr=m.x**2 >= 1)
+        check_model_is_certifiable(m)   # must not raise
+
+    def test_nonlinear_ranged_constraint_is_rejected(self):
+        # A two-sided row splits into both g = body - upper and
+        # g = lower - body, so the body would have to be convex AND concave --
+        # affine. Unlike one-sided convexity, that IS decidable, so it is a
+        # hard error rather than an assertion.
+        m = _model("le")
+        m.bad = pyo.Constraint(expr=pyo.inequality(1, m.x**2, 100))
+        with self.assertRaisesRegex(CertificateError, "two-sided"):
+            check_model_is_certifiable(m)
+
+    def test_affine_ranged_constraint_is_allowed(self):
+        m = _model("le")
+        m.ok = pyo.Constraint(expr=pyo.inequality(1, 2 * m.x + m.y, 100))
         check_model_is_certifiable(m)   # must not raise
 
     def test_maximize(self):

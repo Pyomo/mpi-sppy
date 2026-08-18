@@ -118,11 +118,22 @@ def ipopt_linear_solver():
 
 
 def announce_hsl_if_used():
-    """Print the HSL acknowledgement, once per process, if ipopt links HSL."""
+    """Print the HSL acknowledgement, once per run, if ipopt links HSL.
+
+    Gated on MPI rank: these tests also run under mpiexec, and the project
+    convention is that such output comes from rank 0 only -- otherwise the
+    banner is emitted once per rank and interleaves with itself.
+    """
     global _hsl_announced
     if _hsl_announced:
         return
     _hsl_announced = True
+    try:
+        from mpi4py import MPI
+        if MPI.COMM_WORLD.Get_rank() != 0:
+            return
+    except ImportError:
+        pass
     name, uses_hsl = ipopt_linear_solver()
     if not uses_hsl:
         return

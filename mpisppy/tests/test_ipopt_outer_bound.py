@@ -184,6 +184,29 @@ class TestFactoryWiring(unittest.TestCase):
         self.assertIn("mipgap",
                       lag["opt_kwargs"]["options"]["iter0_solver_options"])
 
+    def test_max_solver_threads_does_not_leak(self):
+        # --max-solver-threads is re-applied by apply_solver_specs *after* the
+        # factory clears the global layers, so clearing alone is not enough.
+        # Ipopt has no `threads` option and translate_solver_options has no
+        # mapping for it, so it would reach the solver verbatim and hard-fail
+        # the spoke's first solve -- taking the whole run with it.
+        cfg = _cfg()
+        cfg.max_solver_threads = 2
+        options = _spoke_options(cfg)
+        self.assertNotIn("threads", options["iter0_solver_options"])
+        self.assertNotIn("threads", options["iterk_solver_options"])
+        for layer in options["solver_options_layers"]:
+            self.assertNotIn("threads", layer["options"])
+
+    def test_max_solver_threads_stripped_but_spoke_options_kept(self):
+        # Stripping the cap must not take the spoke's own options with it.
+        cfg = _cfg()
+        cfg.max_solver_threads = 2
+        cfg.ipopt_outer_bound_solver_options = "max_iter=42"
+        options = _spoke_options(cfg)
+        self.assertNotIn("threads", options["iterk_solver_options"])
+        self.assertEqual(options["iterk_solver_options"].get("max_iter"), 42)
+
     def test_per_spoke_solver_options_do_apply(self):
         # Not inheriting the global layer must not mean ignoring the spoke's
         # own options, which is how Ipopt settings are meant to arrive.

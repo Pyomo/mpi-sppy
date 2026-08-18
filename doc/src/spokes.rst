@@ -57,10 +57,32 @@ optimum.
 Cost is one solve per scenario per iteration, the same as the Lagrangian spoke.
 
 .. warning::
-   **Convexity is assumed and mostly cannot be checked.** If the objective or an
-   inequality body is non-convex, the bound is simply wrong. What *is* checked,
-   as a hard error at setup: discrete variables, nonlinear equality constraints,
-   a maximization objective, and a solver that is not Ipopt.
+   **Convexity is assumed and mostly cannot be checked.** If the objective is
+   non-convex, or an inequality is non-convex *in canonical form*, the bound is
+   simply wrong rather than merely loose.
+
+   Canonical form matters, and it is easy to get backwards. Every inequality is
+   rewritten as ``g(v) <= 0``, which negates the body of a ``>=`` row:
+
+   ==========================  ====================  ==========================
+   as written                  canonical ``g``       requirement on the body
+   ==========================  ====================  ==========================
+   ``body <= upper``           ``body - upper``      convex
+   ``body >= lower``           ``lower - body``      **concave**
+   ``lo <= body <= up``        both of the above     affine
+   ``body == rhs``             ``body - rhs``        affine
+   ==========================  ====================  ==========================
+
+   So ``x**2 <= 4`` is inside the theorem and ``x**2 >= 1`` is not, even though
+   both are written with a convex body -- and the feasible set of the latter is
+   not convex at all. Getting this wrong yields an outer bound that can exceed
+   the true optimum.
+
+   What *is* checked, as a hard error at setup: discrete variables, nonlinear
+   equality constraints, nonlinear two-sided (ranged) constraints, a
+   maximization objective, and a solver that is not Ipopt. The affine cases are
+   decidable, so they are enforced; convexity of a one-sided nonlinear body is
+   not, so it remains your assertion.
 
 Two things determine whether the bound is any good:
 
