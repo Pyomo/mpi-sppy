@@ -381,11 +381,19 @@ class SPOpt(SPBase):
                         raise
 
                 if outer_bound is None:
-                    # Leave outer_bound at its previous value rather than
-                    # publish whatever the solver left in the results object.
-                    # The stale bound is still a valid outer bound (any
-                    # Lagrangian dual value bounds the original problem),
-                    # which is what the pre-outer_bound_only path did here.
+                    # This solve produced no bound, so say so. Keeping the
+                    # previous value would be wrong, even though each stale
+                    # value was a valid bound when it was computed: Ebound
+                    # sums p_s * outer_bound_s across scenarios, and a
+                    # Lagrangian bound is only valid as a *sum* when every
+                    # scenario uses weights from one generation satisfying
+                    # sum_s p_s W_s = 0. Mixing a stale bound with fresh ones
+                    # gives sum_s p_s L_s(W'_s) <= OPT + (sum_s p_s W'_s)^T xbar*,
+                    # whose trailing term does not vanish -- so the result is
+                    # not an outer bound at all, and nothing downstream can
+                    # tell. None instead lets Ebound's missing-bound check fire
+                    # and the spoke decline to send.
+                    s._mpisppy_data.outer_bound = None
                     if gripe:
                         print (f"[{self._get_cylinder_name()}] No outer bound for scenario {s.name}")
                         if results is not None:
@@ -399,6 +407,10 @@ class SPOpt(SPBase):
 
             elif sputils.not_good_enough_results(results):
                 s._mpisppy_data.solution_available = False
+                # Same reasoning as the outer_bound_only branch above: a failed
+                # solve computed no bound, and leaving the previous one in place
+                # lets Ebound form a mixed-generation sum that is not a bound.
+                s._mpisppy_data.outer_bound = None
 
                 if gripe:
                     print (f"[{self._get_cylinder_name()}] Solve failed for scenario {s.name}")

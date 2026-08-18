@@ -547,8 +547,10 @@ class PHBase(mpisppy.spopt.SPOpt):
                 If True, displays verbose output. Default False.
 
         Returns:
-            float:
-                An outer bound on the optimal objective function value.
+            float or None:
+                An outer bound on the optimal objective function value, or
+                None if any subproblem solve produced no bound (the
+                expectation cannot be formed if a scenario is missing one).
 
         Note:
             This function overwrites current variable values. This is only
