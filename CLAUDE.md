@@ -12,7 +12,9 @@ mpi-sppy is a parallel stochastic programming library built on [Pyomo](https://p
 pip install -e .[mpi]
 ```
 
-Requires a working MPI installation (OpenMPI or MPICH) and mpi4py. Also requires a Pyomo-compatible MIP solver (cplex, gurobi, or xpress).
+Requires a working MPI installation (OpenMPI or MPICH) and mpi4py. Also requires a Pyomo-compatible MIP solver (cplex, gurobi, or xpress) — solvers are deliberately in no extra (licensing decision).
+
+For development, `pip install -e ".[mpi,dev]"` additionally installs every optional feature package (`extras` = scipy, pandas, matplotlib, dill, mip), the test tools (pytest, coverage, addheader, gridx-egret), the doc tools, and ruff. The extras nest: `dev` includes `test`, which includes `extras`.
 
 ## Commands
 

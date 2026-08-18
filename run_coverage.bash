@@ -71,6 +71,9 @@ run_phase "test_maximization (serial)" \
 run_phase "test_cvar (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_cvar.py -v
 
+run_phase "test_entry_points (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_entry_points.py -v
+
 run_phase "test_outer_bound_only (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_outer_bound_only.py -v
 
@@ -140,6 +143,9 @@ run_phase "test_w_oscillation (serial)" \
 run_phase "test_jensens (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_jensens.py -v
 
+run_phase "test_vss (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_vss.py -v
+
 run_phase "test_feasible_xhat (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_feasible_xhat.py -v
 
@@ -203,6 +209,7 @@ run_phase "serial unit tests (serial)" \
         mpisppy/tests/test_buffer_inspect.py \
         mpisppy/tests/test_comm_lor_check.py \
         mpisppy/tests/test_ciutils.py \
+        mpisppy/tests/test_lshaped_cuts.py \
         mpisppy/tests/test_prox_approx.py \
         mpisppy/tests/test_sep_rho.py \
         mpisppy/tests/test_reduced_costs_fixer.py \

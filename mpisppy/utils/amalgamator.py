@@ -328,12 +328,14 @@ class Amalgamator():
             
             self.is_minimizing = objs[0].is_minimizing
             #TBD : Write a function doing this
+            # The solver's Lower and Upper bounds bracket the optimal value, so
+            # which one is the outer (relaxation) bound depends on the sense.
             if self.is_minimizing:
                 self.best_outer_bound = results.Problem[0]['Lower bound']
                 self.best_inner_bound = results.Problem[0]['Upper bound']
             else:
-                self.best_inner_bound = results.Problem[0]['Upper bound']
-                self.best_outer_bound = results.Problem[0]['Lower bound']
+                self.best_outer_bound = results.Problem[0]['Upper bound']
+                self.best_inner_bound = results.Problem[0]['Lower bound']
             self.ef = ef
             
             if 'write_solution' in self.cfg:
