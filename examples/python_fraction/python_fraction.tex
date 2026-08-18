@@ -49,30 +49,24 @@ attribute time to Python vs native (it can estimate time spent in
 compiled code called from Python, which it calls ``native''). It works
 by sampling.
 
-The short answer is that there is no single number: the fraction
+The short answer is: for hard problems, not much.
+The longer answer is that there is no single number: the fraction
 depends almost entirely on how much work the solver does per
-subproblem. When the subproblems are substantial, as in the
+subproblem. When the subproblems are even somewhat substantial, as in the
 \texttt{sslp\_15\_45} instances, about 9\% of the time is spent in
-Python, which matches the {\em a priori} expectation. When the
+Python, which matches the {\em a priori} expectation. For harder subproblems,
+the fraction can be smaller. When the
 subproblems are small enough that the solver returns almost
 immediately, as in farmer, the majority of the time is spent in Python
 --- 76\% in the most extreme case measured here. The crossover is not
 subtle and it is not a sampling artifact.
-
-The reason is that each subproblem solve costs a roughly fixed amount
-of Python work regardless of how hard the subproblem is: the proximal
-objective has to be rebuilt and handed to the solver, and the solution
-has to be read back. That cost is amortized over the solver's work, so
-it is invisible when the solver is busy for a while and dominant when
-the solver is not.
 
 The practical consequences are:
 
 \begin{itemize}
   \item If your subproblems keep the solver busy, you cannot get much
     speed-up just by using another language. Maybe another language
-    will make it easier for you to do something sophisticated and
-    algorithmic.
+    will make it easier for you to do your work.
   \item If your subproblems are small, the per-solve Python cost is
     what you are paying for, and the fix is to give the solver more
     work per call rather than to rewrite anything. Bundling is the
