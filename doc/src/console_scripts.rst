@@ -46,8 +46,8 @@ What each one does
 
 ``mpi-sppy-one-sided-test``
     A small MPI one-sided-communication test used to check that your MPI
-    installation is suitable for mpi-sppy. It takes no arguments and is
-    meant to be run under ``mpiexec``. See :ref:`Install mpi4py`.
+    installation might be suitable for mpi-sppy. It takes no arguments
+    and is meant to be run under ``mpiexec``. See :ref:`Install mpi4py`.
 
 Running in parallel
 -------------------
@@ -94,10 +94,16 @@ Troubleshooting
     Windows).
 
 Running from a clone without installing
-    If you are working from a checkout and have not run ``pip install``,
-    the console scripts do not exist. Use the file form from the top of
-    the clone instead, e.g.
-    ``mpiexec -np 3 python -m mpi4py mpisppy/generic_cylinders.py ...``.
+    If you are working from a checkout and have not installed it with
+
+    .. code-block:: bash
+
+       pip install -e ".[mpi]"
+
+    then the console scripts do not exist. Either run that command from
+    the top of the clone, or use the file form instead, e.g.
+    ``mpiexec -np 3 python -m mpi4py mpisppy/generic_cylinders.py ...``,
+    also from the top of the clone.
 
 Stale scripts after moving or renaming the clone
     An editable install records the path to the clone. If you move or
