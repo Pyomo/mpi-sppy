@@ -1298,6 +1298,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libopenblas-dev gfortran liblapack-dev
+          # glpk is not needed by Ipopt; it gives the certificate a second,
+          # independent opinion to be checked against. See
+          # TestAgreesWithLagrangian -- the Lagrangian spoke needs a solver that
+          # reports a dual bound, which Ipopt by definition does not, and which
+          # the bundle's cbc turns out not to do on this runner.
+          sudo apt-get install -y glpk-utils
 
       - name: Install Ipopt from idaes-ext
         # The pip/conda ipopt is built against MUMPS only.  The idaes-ext

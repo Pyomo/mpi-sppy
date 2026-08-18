@@ -16,6 +16,7 @@
 # dict the factory builds. The end-to-end test needs both Ipopt and two ranks
 # and skips cleanly without them.
 
+import math
 import unittest
 
 import pyomo.environ as pyo
@@ -38,19 +39,50 @@ if ipopt_available:
 mip_available, mip_solver_name, *_ = get_solver()
 
 
+def _reports_dual_bound(name):
+    """True if `name` actually fills in a dual bound on a solved LP.
+
+    Being available is not enough, and neither is solving to optimality. cbc on
+    the CI runner returns `status=ok, TerminationCondition=optimal` and leaves
+    Problem[0].Lower_bound empty, so the Lagrangian spoke gets nothing to send
+    and its reported bound stays nan. Asking the solver directly is the only
+    honest test; anything else guesses.
+    """
+    try:
+        if not pyo.SolverFactory(name).available(exception_flag=False):
+            return False
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var(bounds=(0, 10), initialize=0.0)
+        m.o = pyo.Objective(expr=2.0 * m.x, sense=pyo.minimize)
+        m.c = pyo.Constraint(expr=m.x >= 1)
+        results = pyo.SolverFactory(name).solve(m, load_solutions=False)
+        bound = results.Problem[0].Lower_bound
+        return bound is not None and float(bound) == float(bound)  # not NaN
+    except Exception:
+        return False
+
+
 def _dual_bound_solver():
     """A solver that actually reports a dual bound, for the Lagrangian spoke.
 
     Ipopt reports none -- that is the entire reason this spoke exists -- so the
-    comparison in TestAgreesWithLagrangian needs a second solver. cbc is the
-    fallback because it ships inside the same idaes-ext bundle that supplies
-    Ipopt, so this test runs rather than skips in CI, where no commercial
-    solver is installed.
+    comparison in TestAgreesWithLagrangian needs a second solver. cbc is tried
+    as a fallback because it ships in the same idaes-ext bundle that supplies
+    Ipopt, but it is only used if it demonstrably reports a bound here.
     """
+    candidates = []
     if mip_available:
-        return mip_solver_name
-    if pyo.SolverFactory("cbc").available(exception_flag=False):
-        return "cbc"
+        # The persistent interfaces need set_instance before a solve, which the
+        # probe below does not do, so try the plain name as well.
+        candidates += [mip_solver_name, mip_solver_name.replace("_persistent", "")]
+    # glpk and cbc are both plausible in CI: glpk is a small apt package and cbc
+    # ships in the idaes-ext bundle alongside Ipopt. Neither is assumed to work
+    # -- each is probed. (glpk cannot handle a PH proximal term, but the
+    # Lagrangian spoke runs with attach_prox=False, so it is fine here.)
+    candidates += ["glpk", "cbc"]
+    for name in candidates:
+        if name and _reports_dual_bound(name):
+            return name
     return None
 
 
@@ -287,6 +319,16 @@ class TestAgreesWithLagrangian(unittest.TestCase):
         lag_bound, cert_bound = lag.spcomm.bound, cert.spcomm.bound
         self.assertIsNotNone(lag_bound)
         self.assertIsNotNone(cert_bound)
+        # A spoke that never sent anything leaves its bound at nan. That means
+        # the comparison solver produced no dual bound after all, which is a
+        # broken premise for this test rather than a failure of the spoke under
+        # test -- say so instead of reporting a bogus mismatch.
+        if math.isnan(lag_bound):
+            self.skipTest(
+                f"{dual_bound_solver_name} reported no dual bound for the "
+                "Lagrangian spoke, so there is nothing to compare against")
+        self.assertFalse(math.isnan(cert_bound),
+                         "ipopt_outer_bound sent no bound at all")
 
         # Two independent computations of the same number.
         self.assertAlmostEqual(cert_bound, lag_bound, delta=self.TOL)
