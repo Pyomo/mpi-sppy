@@ -6,6 +6,8 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-# Bootstrap and bagging confidence intervals for data-based, two-stage
-# stochastic programs: the empirical methods (numpy only) and the smoothed
-# methods (which fit a distribution with the bundled statdist library).
+# Trimmed statdist: univariate distributions only (see README.md). The
+# distribution_factory re-export lets callers write statdist.distribution_factory(...).
+
+from mpisppy.confidence_intervals.bootsp.statdist.distribution_factory import distribution_factory  # noqa: F401
+from mpisppy.confidence_intervals.bootsp.statdist.distributions import *  # noqa: F401,F403
