@@ -382,8 +382,13 @@ saved objective, leaving the first term live and anchored to the stale `xbar`.
 Until that was fixed, `mutable_probability_ph_dual_carryover` had no effect on
 the `ph_main()`-twice path at all: W was zeroed before iteration 1 either way,
 which made an alpha sweep look like it passed while testing nothing. It now
-reuses the existing components and refuses a re-prep that asks for different
-`(add_duals, add_prox, add_smooth)` flags. Because `Iter0` is defined to solve
+reuses the existing components, and `attach_PH_to_objective` masks off terms
+that are already attached instead of re-adding them. Masking rather than
+refusing matters: FWPH deliberately attaches in two steps — W at `PH_Prep`,
+then the prox term later for its LP start (`fwph.py`) — and an all-or-nothing
+guard breaks it. Nothing in the test suite covers that path (it needs
+`FW_LP_start_iterations > 0`; the one test touching the option sets it to 0),
+so `test_two_step_attach_still_works` now does. Because `Iter0` is defined to solve
 with no dual or prox contribution, a re-prep also gates the terms off with
 `disable_W_and_prox()`; `Iter0` re-enables them at the end as usual. Tests in
 `TestPHPrepIsIdempotent` (`test_ph_main.py`).

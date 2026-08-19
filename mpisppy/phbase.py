@@ -300,10 +300,12 @@ class PHBase(mpisppy.spopt.SPOpt):
         # flags to complete the invariant
         self.convobject = None  # PH converger
         self.attach_xbars()
-        # (add_duals, add_prox, add_smooth) once attach_PH_to_objective
-        # has spliced the PH terms in; None until then. Guards a second
-        # PH_Prep against double-augmenting the saved objectives.
-        self._PH_objective_attachment = None
+        # Which PH terms attach_PH_to_objective has spliced into the saved
+        # objectives. Tracked per term, not as one flag: a repeat call is
+        # either a re-entered PH_Prep (nothing new to add) or FWPH adding its
+        # prox term on top of the W term it attached earlier.
+        self._PH_duals_attached = False
+        self._PH_prox_attached = False
 
     @property
     def iter0_solver_options(self):
@@ -897,21 +899,18 @@ class PHBase(mpisppy.spopt.SPOpt):
         else:
             self._prox_approx = False
 
-        if self._PH_objective_attachment is not None:
-            # Already spliced into saved_objectives on an earlier PH_Prep. The
-            # terms reference Params that attach_Ws_and_prox preserved, so they
-            # are still live; appending again would put a second (stale-xbar)
-            # PH term in every subproblem objective.
-            if self._PH_objective_attachment != (add_duals, add_prox,
-                                                 add_smooth):
-                raise RuntimeError(
-                    "PH terms were already attached to the objective as "
-                    f"(add_duals, add_prox, add_smooth)="
-                    f"{self._PH_objective_attachment}; they cannot be "
-                    f"re-attached as {(add_duals, add_prox, add_smooth)} on "
-                    "the same object. Build a new PH object instead.")
+        # Attach only what is not in the objective yet. Anything already there
+        # is still live -- attach_Ws_and_prox preserves the Params it was built
+        # against -- so re-adding it would put a second, stale-xbar copy in
+        # every subproblem objective. Masking rather than refusing keeps FWPH's
+        # deliberate two-step attach working (W at PH_Prep, prox later for the
+        # LP start; see fwph.py).
+        add_duals = add_duals and not self._PH_duals_attached
+        add_prox = add_prox and not self._PH_prox_attached
+        if (not add_duals) and (not add_prox):
             return
-        self._PH_objective_attachment = (add_duals, add_prox, add_smooth)
+        self._PH_duals_attached = self._PH_duals_attached or add_duals
+        self._PH_prox_attached = self._PH_prox_attached or add_prox
 
         for (sname, scenario) in self.local_scenarios.items():
             """Attach the dual and prox terms to the objective.
@@ -1048,7 +1047,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             at the time the PH object was created.
         """
 
-        reprepping = self._PH_objective_attachment is not None
+        reprepping = self._PH_duals_attached or self._PH_prox_attached
         self.attach_Ws_and_prox()
         if attach_smooth:
             self.attach_smoothing()

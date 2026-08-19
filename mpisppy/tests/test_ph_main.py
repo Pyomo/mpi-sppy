@@ -459,11 +459,29 @@ class TestPHPrepIsIdempotent(unittest.TestCase):
                              "a second PH term was spliced into the objective")
             self.assertEqual(str(obj.expr).count("W_on"), 1)
 
-    def test_reprep_with_different_flags_is_refused(self):
+    def test_two_step_attach_still_works(self):
+        # FWPH attaches W at PH_Prep and the prox term later, for its LP start
+        # (fwph.py). Guarding the objective must not break that: the second
+        # call has to add the prox term it asks for.
+        ph = self._make_ph()
+        ph.PH_Prep(attach_duals=True, attach_prox=False, defer_attach=False)
+        after_W = {k: str(o.expr) for k, o in ph.saved_objectives.items()}
+        for k, expr in after_W.items():
+            self.assertEqual(expr.count("W_on"), 1)
+            self.assertEqual(expr.count("prox_on"), 0, "prox attached early")
+        ph.attach_PH_to_objective(add_duals=False, add_prox=True)
+        for k, o in ph.saved_objectives.items():
+            expr = str(o.expr)
+            self.assertEqual(expr.count("prox_on"), 1, "prox term not added")
+            self.assertEqual(expr.count("W_on"), 1, "W term duplicated")
+
+    def test_repeat_attach_of_the_same_term_is_a_noop(self):
         ph = self._make_ph()
         ph.PH_Prep(defer_attach=False)
-        with self.assertRaises(RuntimeError):
-            ph.PH_Prep(attach_prox=False, defer_attach=False)
+        before = {k: str(o.expr) for k, o in ph.saved_objectives.items()}
+        ph.attach_PH_to_objective(add_duals=True, add_prox=True)
+        for k, o in ph.saved_objectives.items():
+            self.assertEqual(str(o.expr), before[k])
 
     @unittest.skipIf(not solver_available,
                      "%s solver is not available" % (solver_name,))
