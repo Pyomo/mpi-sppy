@@ -356,8 +356,10 @@ Behavior-preserving unless noted.
     way the empirical side already separates its pool and batch streams by
     seeding on a `(seed_offset, word)` pair (item 11). That would remove the
     need for any offset arithmetic. It is a larger change than this port
-    wanted to take on, and it is worth doing if the smoothed draw addressing
-    is ever revisited.
+    wanted to take on -- the model modules seed each draw from the record
+    number they are handed, so it changes the contract with every model module
+    -- and it is tracked as
+    [Pyomo/mpi-sppy#845](https://github.com/Pyomo/mpi-sppy/issues/845).
 
 ---
 
