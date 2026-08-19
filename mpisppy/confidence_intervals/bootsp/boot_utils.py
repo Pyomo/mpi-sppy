@@ -297,12 +297,25 @@ def compute_xhat(cfg, module):
     xgo.pop("solver_name", None)  # it will be given explicitly
     xgo.pop("num_scens", None)
     xgo.pop("scenario_names", None)  # given explicitly
+    # The candidate solve runs on rank 0 alone and can fail: an infeasible
+    # candidate EF, a missing solver or license, a bad kw_creator kwarg. Rank 0
+    # raising by itself would leave the others in the bcast below with nobody
+    # ever sending, so the outcome travels with the result and everyone raises.
     if my_rank == 0:
-        xhat_k = xhat_fct(xhat_scenario_names, solver_name=cfg.solver_name, **xgo)
+        try:
+            xhat_k = xhat_fct(xhat_scenario_names, solver_name=cfg.solver_name,
+                              **xgo)
+            failure = None
+        except Exception as e:
+            xhat_k, failure = None, f"{type(e).__name__}: {e}"
     else:
-        xhat_k = None
+        xhat_k, failure = None, None
     if n_proc > 1:
-        xhat_k = comm.bcast(xhat_k, root=0)
+        xhat_k, failure = comm.bcast((xhat_k, failure), root=0)
+    if failure is not None:
+        raise RuntimeError(
+            f"computing the candidate xhat failed on rank 0 ({failure}); "
+            "every rank is stopping so the run does not hang")
     return xhat_k
 
 

@@ -1120,6 +1120,7 @@ class Test_review_regressions(unittest.TestCase):
         cfg.candidate_sample_size = 5
         reserved = set(range(cfg.sample_size,
                              cfg.sample_size + cfg.candidate_sample_size))
+        cfg.smoothed_B_I = 3      # bagging validates this before it fits now
         # the estimators are entered through compute_smoothed_ci in real runs,
         # which is what declares use_fitted and friends on the cfg
         smoothed_boot_sp._ensure_smoothed_cfg(cfg)
@@ -1160,6 +1161,7 @@ class Test_review_regressions(unittest.TestCase):
         # stale fitted distribution
         module = boot_utils.module_name_to_module(FARMER)
         cfg = _make_farmer_cfg()
+        cfg.smoothed_B_I = 3      # bagging validates this before it fits now
         smoothed_boot_sp._ensure_smoothed_cfg(cfg)
         before = (cfg.use_fitted, cfg.fitted_distribution, cfg.subsample_size)
 
@@ -1470,8 +1472,10 @@ class Test_review_regressions(unittest.TestCase):
         cfg.subsample_size = None
         cfg.smoothed_B_I = 3          # so the B_I check is not what fires
         smoothed_boot_sp._ensure_smoothed_cfg(cfg)
+        # the public entry validates before it fits, so module can be None:
+        # reaching the fit at all would be the bug
         with self.assertRaisesRegex(ValueError, "subsample_size"):
-            smoothed_boot_sp._bagging_from_fitted(cfg, None, {"ROOT": []}, False)
+            smoothed_boot_sp.smoothed_bagging(cfg, None, {"ROOT": []})
 
     def test_smoothed_bootstrap_requires_two_batches(self):
         # nB == 1 made np.std(..., ddof=1) nan, and user_boot's max(0, nan)

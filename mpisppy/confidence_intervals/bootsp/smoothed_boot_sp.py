@@ -256,7 +256,8 @@ def smoothed_bootstrap(cfg, module, xhat, distr_type='univariate-epispline', qua
         quantile (bool): use the quantile method (else the gaussian method)
         serial (bool): indicates that only one MPI rank should be used
     Returns:
-        tuple (ci_gap_two_sided, center_gap) if on MPI rank 0, else None
+        tuple (ci_gap_two_sided, center_gap) on MPI rank 0, else
+        (None, None) -- the arity matches so callers can unpack either way
 
     """
     # the interval width comes from the spread *among* the batches, so one
@@ -327,8 +328,31 @@ def smoothed_bagging(cfg, module, xhat, distr_type='univariate-kernel', serial=F
         distr_type (str): a statdist univariate distribution token to fit
         serial (bool): indicates that only one MPI rank should be used
     Returns:
-        tuple (ci_gap_two_sided, center_gap) if on MPI rank 0, else None
+        tuple (ci_gap_two_sided, center_gap) on MPI rank 0, else
+        (None, None) -- the arity matches so callers can unpack either way
     """
+    # Validate before anything is fitted: on the epi-spline path a fit is an
+    # ipopt solve plus a broadcast, and a config typo should not cost that.
+    # nB is dereferenced first of all (slice_lens divides by it), so it is
+    # checked first.
+    if cfg.nB is None or cfg.nB < 1:
+        raise ValueError(
+            "nB (the number of bags per seed point) must be a positive "
+            f"integer for smoothed bagging; got {cfg.nB}.")
+    # B_I is the number of initial seed points; s1 in the width is the variance
+    # *among* their averages, so fewer than two of them leaves it undefined
+    if cfg.smoothed_B_I is None or cfg.smoothed_B_I < 2:
+        raise ValueError(
+            "smoothed_B_I (the number of initial seed points) must be at least "
+            f"2 for smoothed bagging; got {cfg.smoothed_B_I}. The variance of "
+            "the per-seed-point averages is what estimates the between-point "
+            "term of the interval width.")
+    if cfg.subsample_size is None:
+        raise ValueError(
+            "subsample_size (the number of draws per bag) is required for "
+            "smoothed bagging; it is unset. Only the smoothed bootstrap may "
+            "leave it out, because it uses the full sample size per batch.")
+
     scenario_pool = boot_sp.draw_scenario_pool(cfg)
 
     with _fitted_on_cfg(cfg, module, scenario_pool, distr_type, serial):
@@ -344,7 +368,8 @@ def _bagging_from_fitted(cfg, module, xhat, serial):
         xhat (dict): a candidate solution in mpi-sppy nonant format
         serial (bool): this rank does every bag, with no collectives
     Returns:
-        tuple (ci_gap_two_sided, center_gap) if on MPI rank 0, else None
+        tuple (ci_gap_two_sided, center_gap) on MPI rank 0, else
+        (None, None) -- the arity matches so callers can unpack either way
     """
     # serial means this rank does all nB bags itself, so it neither slices the
     # work nor takes part in the collectives below
@@ -360,21 +385,6 @@ def _bagging_from_fitted(cfg, module, xhat, serial):
         bagging_gap = None
         all_gaps = None
         avg_gaps = None
-
-    # B_I is the number of initial seed points; s1 below is the variance *among*
-    # their averages, so fewer than two of them leaves it undefined
-    if cfg.smoothed_B_I is None or cfg.smoothed_B_I < 2:
-        raise ValueError(
-            "smoothed_B_I (the number of initial seed points) must be at least "
-            f"2 for smoothed bagging; got {cfg.smoothed_B_I}. The variance of "
-            "the per-seed-point averages is what estimates the between-point "
-            "term of the interval width.")
-
-    if cfg.subsample_size is None:
-        raise ValueError(
-            "subsample_size (the number of draws per bag) is required for "
-            "smoothed bagging; it is unset. Only the smoothed bootstrap may "
-            "leave it out, because it uses the full sample size per batch.")
 
     B_I = cfg.smoothed_B_I
     for i in range(B_I):
@@ -455,7 +465,7 @@ def compute_smoothed_ci(cfg, module, xhat):
         module (Python module): contains the scenario creator function and helpers
         xhat (dict): a candidate solution in mpi-sppy nonant format
     Returns:
-        (ci_gap_two_sided, center_gap) on MPI rank 0, else None
+        (ci_gap_two_sided, center_gap) on MPI rank 0, else (None, None)
 
     Note:
         This is the single smoothed-dispatch point shared by user_boot and
@@ -474,6 +484,8 @@ def compute_smoothed_ci(cfg, module, xhat):
             f"to use a smoothed method ({method}); it is what supplies the "
             "sample the distribution is fitted to. The empirical methods do "
             "not need it.")
+    # on every rank, before any rank-dependent work: see the docstring there
+    boot_sp.require_minimizing_module(cfg, module)
     if method == "Smoothed_boot_epi":
         return smoothed_bootstrap(cfg, module, xhat, distr_type='univariate-epispline')
     elif method == "Smoothed_boot_kernel":
