@@ -8,7 +8,7 @@
 ###############################################################################
 # General-purpose bootstrap code for data-based, two-stage stochastic programs.
 # These are the empirical methods (classical, extended, subsampling, bagging);
-# the smoothed methods arrive in a follow-on merge.
+# the smoothed methods live in smoothed_boot_sp.py.
 
 import os
 from statistics import NormalDist
@@ -42,8 +42,10 @@ def _require_minimization(is_minimizing, what):
     """Refuse a maximization model instead of reporting a wrong interval.
 
     Per the repo-wide rule that maximization either works or raises, this is
-    the raise. It is checked in solve_routine, which every extensive form goes
-    through.
+    the raise. solve_routine checks it, which covers every extensive form the
+    bootstrap code builds itself -- but not the candidate xhat EF on the
+    default path, which the module's own xhat_generator builds and solves. So
+    a maximization model is refused only after that first solve has run.
     """
     if not is_minimizing:
         raise ValueError(_MAXIMIZATION_MSG.format(what=what))

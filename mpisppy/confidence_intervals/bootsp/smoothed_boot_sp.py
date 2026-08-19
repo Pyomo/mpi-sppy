@@ -60,7 +60,12 @@ def fit_distribution(sample_data, distr_type='univariate-epispline',
         the fitted distribution (or a dict of them, keyed as the input dicts)
     """
     distr_func = statdist.distribution_factory(distr_type)
-    if isinstance(sample_data[0], (float, int)):  # 1-dim
+    # Test for the dict, not for float/int: numpy scalars are the ordinary
+    # return type of a data_sampler and only some of them subclass the python
+    # builtins (np.float64 does, np.int64 and np.float32 do not), so an
+    # integer-valued sampler would fall into the multivariate branch and fail
+    # inside the library with no hint that its return type was the cause.
+    if not isinstance(sample_data[0], dict):  # 1-dim
         fitted_distr = distr_func.fit(sample_data, **distr_options)
     else:
         fitted_distr = {}
@@ -113,8 +118,12 @@ def center_smoothed(cfg, module, xhat):
     module globals' view; there is no communicator to thread through (an earlier
     signature took one and ignored it).
     """
-    assert cfg.smoothed_center_sample_size is not None, \
-        "need a sample size for smoothed bootstrap center estimation"
+    if cfg.smoothed_center_sample_size is None:
+        # an assert here would vanish under python -O, and the next line would
+        # then add None to an int somewhere inside the library
+        raise ValueError(
+            "smoothed_center_sample_size is required for the smoothed methods; "
+            "it is the number of draws the gap center is estimated from.")
     origin = draw_space_origin(cfg)
     scenario_pool = list(range(origin,
                                origin + cfg.smoothed_center_sample_size))

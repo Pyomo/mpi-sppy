@@ -133,10 +133,14 @@ command line (with dashes). The main options are:
 * ``xhat_fname`` / ``--xhat-fname`` — npy file with a precomputed ``xhat``, or
   the string ``"None"`` to compute it with ``xhat_generator``.
 * ``optimal_fname`` (simulation only) — npy file with a (presumed) optimal
-  value and the gap at ``xhat``, or ``"None"`` to compute both from
-  ``max_count`` scenarios. The smoothed methods report a gap interval, so their
-  coverage simulations score against the gap; supplying the file (written by
-  ``boot_general_prep``) saves recomputing it for every run.
+  value and the gap at ``xhat``, written by ``boot_general_prep``, or
+  ``"None"``. With ``"None"`` the optimal value is computed from all
+  ``max_count`` scenarios. The gap is computed too, but only where it is
+  used: the smoothed coverage simulations score their interval against it, so
+  they evaluate ``xhat`` to get the real ``z(xhat) - z*``. The empirical
+  harness scores against ``z*`` itself and never needs the gap, so it reports
+  a zero placeholder for it — a stand-in for the *solver* gap, not an
+  optimality gap. Supplying the file saves recomputing any of this per run.
 * ``coverage_replications`` (simulation only) — number of coverage replications.
 * ``boot_method`` / ``--boot-method`` — one of the tokens above.
 

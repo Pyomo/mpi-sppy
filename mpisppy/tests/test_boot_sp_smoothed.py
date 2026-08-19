@@ -1428,6 +1428,24 @@ class Test_review_regressions(unittest.TestCase):
         # and the nan it was protecting against really does survive the clamp
         self.assertEqual(max(0, float("nan")), 0)
 
+    def test_epispline_fit_checks_the_solve(self):
+        # the caller reads model.a/w0/u0 straight off the instance, so a solve
+        # that stopped early used to yield a density built from a partial
+        # iterate, and one that loaded nothing surfaced far away as a TypeError
+        from mpisppy.confidence_intervals.bootsp.statdist import splines
+        from pyomo.opt import TerminationCondition
+
+        class _Results:
+            class solver:
+                termination_condition = TerminationCondition.maxIterations
+                status = "warning"
+
+        fake_opt = mock.Mock()
+        fake_opt.solve.return_value = _Results()
+        with mock.patch.object(splines, "SolverFactory", return_value=fake_opt):
+            with self.assertRaisesRegex(RuntimeError, "did not solve to optimality"):
+                splines.fit_distribution([1.0, 2.0, 3.0, 4.0, 5.0])
+
     def test_uniform_rejects_reversed_support(self):
         # a > b was accepted silently and answered nonsense (cdf_inverse of a
         # negative-width support), instead of being refused

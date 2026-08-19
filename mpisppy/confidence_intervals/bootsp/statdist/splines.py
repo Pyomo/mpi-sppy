@@ -18,6 +18,9 @@ from collections import OrderedDict
 
 import numpy as np
 from pyomo.environ import *
+# named explicitly rather than relying on the star import above: the per-file
+# F405 suppression for this directory would hide it if pyomo ever moved it
+from pyomo.opt import TerminationCondition
 
 def error_domain(e, dom=None):
     """
@@ -305,7 +308,21 @@ def fit_distribution(x, dom=None, specific_prob_constraint=None,
     # -------------------------------------------------------
     instance = model.create_instance()
     opt = SolverFactory(nonlinear_solver)
-    opt.solve(instance, tee=False)
+    results = opt.solve(instance, tee=False)
+
+    # Check the solve. The caller reads model.a, w0 and u0 straight off the
+    # instance to build a density, so a solve that stopped early hands back a
+    # partial iterate that looks like a fit, and one that loaded nothing at all
+    # leaves those values None -- which surfaces much later, and far away, as a
+    # TypeError inside the density evaluation.
+    solver = results.solver
+    status = str(solver.termination_condition)
+    if status != str(TerminationCondition.optimal):
+        raise RuntimeError(
+            f"the epi-spline fit did not solve to optimality: {nonlinear_solver} "
+            f"reported termination_condition={status}"
+            f" (solver status {solver.status}). The distribution built from this "
+            "solve would not be the fitted density.")
 
     return instance, alpha, beta
 

@@ -10,13 +10,17 @@ extend-exclude = [
 [lint.per-file-ignores]
 # The bootsp/statdist/ subpackage is a faithful port of the (legacy) statdist
 # distribution library; relax the style rules it predates rather than rewrite
-# its numerics. splines.py builds a Pyomo model with `from pyomo.environ import *`
-# (like the excluded Pyomo model files above), hence F403/F405.
-"mpisppy/confidence_intervals/bootsp/statdist/*" = [
+# its numerics.  Scoped to the two files that actually trip them, and listing
+# only rules with live violations, so a new one is not silenced by accident.
+# splines.py builds a Pyomo model with `from pyomo.environ import *` (like the
+# excluded Pyomo model files above), hence F403/F405.
+"mpisppy/confidence_intervals/bootsp/statdist/splines.py" = [
     "E711",  # comparison to None
     "E722",  # bare except
     "E731",  # lambda assignment
-    "E741",  # ambiguous variable name (math notation, e.g. l)
     "F403",  # star import (pyomo.environ)
     "F405",  # name may be from star import
+]
+"mpisppy/confidence_intervals/bootsp/statdist/base_distribution.py" = [
+    "E731",  # lambda assignment
 ]
