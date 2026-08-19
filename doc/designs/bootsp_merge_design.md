@@ -317,6 +317,35 @@ Behavior-preserving unless noted.
     the center is estimated (`smoothed_bagging` already did this). The
     center block of the index space is reserved ahead of the batch blocks,
     since both now sample the same fitted distribution.
+15. **Fitted draws live past the data (behavior change, from broken to
+    working).** Item 13 made the batch blocks disjoint from each other and
+    from the center block, but every one of those blocks was still numbered
+    from `seed_offset` — the same integers the *data* records occupy. A
+    record number is the seed the model gives a draw, and the fitted
+    distribution is by construction close to the one the data came from, so
+    a draw taken at a data record number is the same uniform variate pushed
+    through two nearly identical inverse CDFs: it reproduces that data point
+    rather than being independent of it. On the shipped `smoothed_farmer.json`
+    nine of the twenty fitting records were reused as draw records, and the
+    reproduced values track the originals closely (record 135, WHEAT: data
+    0.5024 against a "draw" of 0.4569). Batches built from those draws are
+    correlated with the very sample whose spread they are measuring, which
+    understates the interval — the same failure mode as item 13, one level
+    up. `draw_space_origin` starts the draw space at
+    `max_count + seed_offset`, which keeps the two spaces disjoint for any
+    offset; a test asserts that disjointness directly, over the shipped
+    configs and a spread of awkward offsets, so folding the origin back to
+    `seed_offset` fails loudly.
+
+    The offset is the cheap enforcement of the real invariant, which is that
+    **the fitted-draw record space and the data record space must not
+    intersect**. The structurally cleaner alternative is to stop addressing
+    fitted draws by record number at all and give them their own stream, the
+    way the empirical side already separates its pool and batch streams by
+    seeding on a `(seed_offset, word)` pair (item 11). That would remove the
+    need for any offset arithmetic. It is a larger change than this port
+    wanted to take on, and it is worth doing if the smoothed draw addressing
+    is ever revisited.
 
 ---
 

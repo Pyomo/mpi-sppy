@@ -70,6 +70,28 @@ def fit_distribution(sample_data, distr_type='univariate-epispline',
     return fitted_distr
 
 
+def draw_space_origin(cfg):
+    """ The first record number the fitted-distribution draws may use.
+
+    Args:
+        cfg (Config): parameters
+    Returns:
+        int
+
+    The draws must not reuse the record numbers the data occupies. A record
+    number is the seed the model gives a draw, and the fitted distribution is
+    close to the one the data came from, so a draw at a data record number is
+    the same uniform variate pushed through two nearly identical inverse CDFs:
+    it reproduces that data point instead of being independent of it. Batches
+    built from such draws are correlated with the sample the interval is
+    measuring spread around, which understates the width.
+
+    Starting the draw space past max_count keeps the two spaces disjoint for
+    any seed_offset. Do not fold this back to seed_offset alone.
+    """
+    return cfg.max_count + cfg.seed_offset
+
+
 def center_smoothed(cfg, module, xhat):
     """ Estimate the CI center (the optimality gap) from the fitted distribution.
 
@@ -79,8 +101,9 @@ def center_smoothed(cfg, module, xhat):
     """
     assert cfg.smoothed_center_sample_size is not None, \
         "need a sample size for smoothed bootstrap center estimation"
-    scenario_pool = list(range(cfg.seed_offset,
-                               cfg.seed_offset + cfg.smoothed_center_sample_size))
+    origin = draw_space_origin(cfg)
+    scenario_pool = list(range(origin,
+                               origin + cfg.smoothed_center_sample_size))
 
     center_upper = boot_sp.evaluate_scenarios(cfg, module, scenario_pool, xhat, duplication=False)
     center_ef = boot_sp.solve_routine(cfg, module, scenario_pool, num_threads=2, duplication=False)
@@ -115,7 +138,7 @@ def smoothed_resample_helper(cfg, module, xhat, serial=False):
     local_boot_gaps = np.empty(local_nB, dtype=np.float64)
 
     m = cfg.subsample_size
-    start = cfg.seed_offset + (cfg.smoothed_center_sample_size or 0)
+    start = draw_space_origin(cfg) + (cfg.smoothed_center_sample_size or 0)
     # this rank's first batch in the global 0..nB-1 numbering
     first_batch = 0 if serial else sum(boot_sp.slice_lens(cfg.nB)[:my_rank])
 
@@ -286,7 +309,7 @@ def _bagging_from_fitted(cfg, module, xhat, serial):
 
     B_I = cfg.smoothed_B_I
     for i in range(B_I):
-        seed_offset_base = cfg.seed_offset + cfg.nB * cfg.subsample_size * i
+        seed_offset_base = draw_space_origin(cfg) + cfg.nB * cfg.subsample_size * i
 
         for j in range(local_nB):
             seed_offset = seed_offset_base + (first_bag + j) * cfg.subsample_size

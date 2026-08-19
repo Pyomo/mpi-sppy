@@ -24,6 +24,7 @@ import sys
 import math
 import inspect
 import glob
+import json
 import importlib.util
 import subprocess
 import tempfile
@@ -1270,6 +1271,49 @@ class Test_review_regressions(unittest.TestCase):
                                        _resolve):
                     cfg = boot_utils.cfg_from_json(path)
                 self.assertIsNotNone(cfg.boot_method)
+
+    def test_draw_space_is_disjoint_from_the_data(self):
+        """ Fitted draws must never land on a data record number.
+
+        A record number is the seed the model gives a draw, and the fitted
+        distribution is close to the one the data came from, so a draw at a
+        data record reproduces that data point rather than being independent of
+        it -- which correlates the batches with the sample whose spread they
+        are measuring. This checks the property directly, for the shipped
+        smoothed configs and for offsets chosen to be awkward.
+        """
+        for name in ("smoothed_farmer.json", "smoothed_cvar.json",
+                     "smoothed_multi_knapsack.json"):
+            sub = {"smoothed_farmer.json": "farmer",
+                   "smoothed_cvar.json": "cvar",
+                   "smoothed_multi_knapsack.json": "multi_knapsack"}[name]
+            path = os.path.join(bootsp_examples, sub, name)
+            with open(path) as f:
+                shipped = json.load(f)
+            for seed_offset in (0, 1, 111, 299, 300, 5000):
+                with self.subTest(json=name, seed_offset=seed_offset):
+                    cfg = boot_utils.cfg_for_boot()
+                    for k, v in shipped.items():
+                        if k in cfg:
+                            cfg[k] = None if v == "None" else v
+                    cfg.seed_offset = seed_offset
+                    data_records = set(int(x) for x in
+                                       boot_sp.eligible_scenarios(cfg))
+                    origin = smoothed_boot_sp.draw_space_origin(cfg)
+                    m, nB = cfg.subsample_size, cfg.nB
+                    draws = set()
+                    # the center block
+                    draws.update(range(origin,
+                                       origin + (cfg.smoothed_center_sample_size or 0)))
+                    # the smoothed-bootstrap batch blocks
+                    start = origin + (cfg.smoothed_center_sample_size or 0)
+                    draws.update(range(start, start + nB * m))
+                    # the bagging blocks
+                    for i in range(cfg.smoothed_B_I or 1):
+                        base = origin + nB * m * i
+                        draws.update(range(base, base + nB * m))
+                    self.assertEqual(data_records & draws, set(),
+                                     msg="a fitted draw reused a data record")
 
     def test_uniform_rejects_reversed_support(self):
         # a > b was accepted silently and answered nonsense (cdf_inverse of a
