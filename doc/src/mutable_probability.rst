@@ -95,13 +95,23 @@ are therefore re-projected under the new probabilities and scaled:
 default 0.5. ``0`` discards the duals and ``1`` keeps the full re-projected
 warm start.
 
-The re-projection also matters when re-solving from a *converged* PH solution:
-there, every scenario sits at the same nonanticipative point, so the
-probability-weighted ``xbar`` is independent of the weights, and unmodified
-``W`` would leave PH exactly where it was, reporting immediate (false)
-convergence at the old solution. Subtracting the re-weighted mean shifts every
-subproblem's linear term by a common vector; the scenario objectives differ, so
-the scenarios move apart again and PH re-converges for the new probabilities.
+The re-projection is not optional. Nothing later in PH corrects the imbalance:
+``Update_W`` adds ``rho (x_s - xbar)``, which contributes zero to the
+probability-weighted sum, so an imbalance introduced by a re-weight persists
+for the whole run and biases the aggregate objective. On farmer, carrying the
+duals unmodified at :math:`\alpha = 1` converges to a point 70 acres away from
+the correct solution.
+
+Carrying more of the duals is faster. On farmer, a re-weight followed by
+``ph_main()`` took 25, 21 and 18 iterations at :math:`\alpha` of 0, 0.5 and
+1.0, all reaching the same solution.
+
+.. note::
+
+   Re-solving in place relies on ``PH_Prep`` being re-entrant, which it became
+   as part of this work: it now reuses the existing ``W``/``prox`` components
+   rather than re-declaring them, and does not splice a second PH term into an
+   already-augmented objective.
 
 .. note::
 

@@ -1051,6 +1051,23 @@ class Test_mutable_probability_ph(unittest.TestCase):
                 self.assertAlmostEqual(got[c], want[c], places=2)
 
     @unittest.skipIf(not solver_available, "no solver is available")
+    def test_carryover_survives_into_the_next_run(self):
+        # PH_Prep used to re-declare W, so the re-projected duals never
+        # reached the second run and every alpha behaved like 0. Guard that.
+        ph = self._make_ph(iters=100)
+        ph.ph_main()
+        ph.set_scenario_probabilities(
+            self._pv(0.6), mutable_probability_ph_dual_carryover=1.0)
+        s = ph.local_scenarios["scen0"]
+        after_set = {idx: pyo.value(s._mpisppy_model.W[idx])
+                     for idx in s._mpisppy_model.W}
+        self.assertTrue(any(abs(v) > 1e-6 for v in after_set.values()),
+                        "no nonzero duals to carry; test is vacuous")
+        ph.PH_Prep()   # what the next ph_main() does first
+        for idx, v in after_set.items():
+            self.assertAlmostEqual(pyo.value(s._mpisppy_model.W[idx]), v)
+
+    @unittest.skipIf(not solver_available, "no solver is available")
     def test_ph_reuse_after_prob_change(self):
         # In-place probability change on an already-solved PH object: re-solving
         # must track the new probabilities (the probability-sensitivity use

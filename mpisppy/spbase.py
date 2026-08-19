@@ -482,13 +482,17 @@ class SPBase:
 
             ``alpha = 0`` discards the duals entirely, ``alpha = 1`` keeps the
             full re-projected warm start, and the default 0.5 splits the
-            difference. The re-projection also breaks the stale consensus: at a
-            converged PH solution every scenario sits at the same point, so
-            ``xbar`` is the same regardless of the weights, and unmodified W
-            would leave the next solve exactly where it was. Subtracting the
-            re-weighted mean shifts every subproblem's linear term by a common
-            vector, and since the scenario objectives differ, the scenarios move
-            apart again.
+            difference. Carrying more is faster: on farmer, a re-weight plus
+            re-solve took 25, 21 and 18 iterations at alpha of 0, 0.5 and 1.0,
+            all reaching the same solution.
+
+            The re-projection is not optional. Without it the imbalance
+            ``sum_s p_s W_s = c != 0`` is never corrected -- ``Update_W`` adds
+            ``rho (x_s - xbar)``, which contributes nothing to the weighted sum
+            -- so the spurious ``c.x`` term biases the aggregate objective for
+            the whole run and PH converges to the wrong point. On farmer,
+            keeping the unmodified duals at ``alpha = 1`` lands 70 acres away
+            from the correct solution.
 
             Args:
                 prob_map (dict):

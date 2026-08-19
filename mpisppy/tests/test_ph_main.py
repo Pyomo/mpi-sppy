@@ -401,5 +401,95 @@ class TestPHMainSizes(unittest.TestCase):
                            "Fixer should have fixed at least one variable")
 
 
+class TestPHPrepIsIdempotent(unittest.TestCase):
+    """ PH_Prep may be re-entered (a second ph_main() on the same object).
+
+        It used to re-declare W/rho -- silently discarding whatever was in
+        them -- and append a second PH term to the already-augmented saved
+        objective, leaving the first term live and anchored to the stale xbar.
+    """
+
+    def setUp(self):
+        self.options = {
+            "solver_name": solver_name,
+            "PHIterLimit": 50,
+            "defaultPHrho": 1,
+            "convthresh": 1e-8,
+            "verbose": False,
+            "display_timing": False,
+            "display_progress": False,
+            "smoothed": 0,
+            "toc": False,
+        }
+        self.scenario_names = [f"Scenario{i+1}" for i in range(3)]
+
+    def _make_ph(self):
+        return mpisppy.opt.ph.PH(
+            dict(self.options), self.scenario_names, farmer.scenario_creator,
+            farmer.scenario_denouement,
+            scenario_creator_kwargs={"crops_multiplier": 1})
+
+    def test_second_prep_keeps_W_and_rho(self):
+        ph = self._make_ph()
+        ph.PH_Prep()
+        marks = {}
+        for k, s in ph.local_scenarios.items():
+            for idx in s._mpisppy_model.W:
+                s._mpisppy_model.W[idx]._value = 7.0
+                s._mpisppy_model.rho[idx] = 3.0
+            marks[k] = id(s._mpisppy_model.W)
+        ph.PH_Prep()
+        for k, s in ph.local_scenarios.items():
+            self.assertEqual(id(s._mpisppy_model.W), marks[k],
+                             "PH_Prep replaced the W Param")
+            for idx in s._mpisppy_model.W:
+                self.assertEqual(pyo.value(s._mpisppy_model.W[idx]), 7.0)
+                self.assertEqual(pyo.value(s._mpisppy_model.rho[idx]), 3.0)
+
+    def test_second_prep_does_not_double_augment_objective(self):
+        ph = self._make_ph()
+        # defer_attach=False splices the PH terms in during PH_Prep itself,
+        # so this needs no solve.
+        ph.PH_Prep(defer_attach=False)
+        before = {k: str(obj.expr)
+                  for k, obj in ph.saved_objectives.items()}
+        ph.PH_Prep(defer_attach=False)
+        for k, obj in ph.saved_objectives.items():
+            self.assertEqual(str(obj.expr), before[k],
+                             "a second PH term was spliced into the objective")
+            self.assertEqual(str(obj.expr).count("W_on"), 1)
+
+    def test_reprep_with_different_flags_is_refused(self):
+        ph = self._make_ph()
+        ph.PH_Prep(defer_attach=False)
+        with self.assertRaises(RuntimeError):
+            ph.PH_Prep(attach_prox=False, defer_attach=False)
+
+    @unittest.skipIf(not solver_available,
+                     "%s solver is not available" % (solver_name,))
+    def test_ph_main_twice_matches_ph_main_once(self):
+        # Re-running to convergence on an unchanged problem must not move the
+        # answer. Note this one passed even before PH_Prep was made
+        # idempotent -- on farmer the doubled objective happened not to shift
+        # the converged point -- so it guards the property, not the old bug.
+        # Both runs have to actually converge for this to mean anything -- at
+        # the class-level PHIterLimit neither does, and the two stopping points
+        # differ by ~0.2 acres for that reason alone.
+        self.options["PHIterLimit"] = 300
+        self.options["convthresh"] = 1e-4
+        ph = self._make_ph()
+        ph.ph_main()
+        self.assertLess(ph.conv, self.options["convthresh"],
+                        "first run hit the iteration limit; test is vacuous")
+        s = ph.local_scenarios[self.scenario_names[0]]
+        once = {c: pyo.value(v) for c, v in s.DevotedAcreage.items()}
+        ph.ph_main()
+        twice = {c: pyo.value(v) for c, v in s.DevotedAcreage.items()}
+        self.assertLess(ph.conv, self.options["convthresh"],
+                        "second run hit the iteration limit; test is vacuous")
+        for c in once:
+            self.assertAlmostEqual(once[c], twice[c], places=2)
+
+
 if __name__ == '__main__':
     unittest.main()

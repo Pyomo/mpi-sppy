@@ -364,27 +364,38 @@ result. The reduction is the one `_Compute_Xbar` already performs
 (`phbase.py:94-104`) with `W` in place of the nonant values: same comms, same
 `prob_coeff` weights, one extra Allreduce per node per re-weight.
 
-The re-projection also resolves a separate problem. At a converged PH solution
-every scenario sits at the same nonanticipative point, so the
-probability-weighted `xbar` equals that point *regardless of the weights*.
-Re-solving from there with unmodified `W` leaves `xbar` unmoved and PH reports
-immediate (false) convergence at the old solution — the exact
-probability-sweep use case would silently return the wrong answer. Subtracting
-the re-weighted mean shifts every subproblem's linear term by a common vector,
-and since the scenario objectives differ, the scenarios move apart again.
-Verified on farmer: after an in-place `set_scenario_probabilities` and
-re-solve, `alpha` of 0 (discard), 0.5 (default) and 1.0 (full carryover) all
-reach the EF-oracle solution at the new vector, and the arithmetic and restored
-invariant are checked directly (`test_ph_reuse_after_prob_change` /
-`test_dual_carryover_reprojects` in `test_ef_ph.py`).
+**The re-projection is not optional.** Nothing later in PH corrects the
+imbalance: `Update_W` adds `rho (x_s - xbar)`, which contributes zero to the
+probability-weighted sum, so an imbalance `sum_s p_s W_s = c != 0` introduced
+by a re-weight persists for the whole run, and the spurious `c.x` term biases
+the aggregate objective. Measured on farmer at `alpha = 1`: with the
+re-projection, 18 iterations to the EF-oracle solution; without it, 87
+iterations to a point **70 acres away**. Carrying more is also faster — 25, 21
+and 18 iterations at `alpha` of 0, 0.5 and 1.0, all landing on the oracle
+(`test_ph_reuse_after_prob_change` / `test_dual_carryover_reprojects` in
+`test_ef_ph.py`).
+
+**Prerequisite: `PH_Prep` had to be made re-entrant** (Copilot's review point
+on PR #799). It re-declared `W`/`rho` as fresh Params — silently discarding
+whatever was in them — and appended a second PH term to the already-augmented
+saved objective, leaving the first term live and anchored to the stale `xbar`.
+Until that was fixed, `mutable_probability_ph_dual_carryover` had no effect on
+the `ph_main()`-twice path at all: W was zeroed before iteration 1 either way,
+which made an alpha sweep look like it passed while testing nothing. It now
+reuses the existing components and refuses a re-prep that asks for different
+`(add_duals, add_prox, add_smooth)` flags. Because `Iter0` is defined to solve
+with no dual or prox contribution, a re-prep also gates the terms off with
+`disable_W_and_prox()`; `Iter0` re-enables them at the end as usual. Tests in
+`TestPHPrepIsIdempotent` (`test_ph_main.py`).
+
+One consequence: on the `ph_main()` path the false-convergence trap that
+originally motivated zeroing W cannot occur, because `Iter0` re-solves the
+pristine objective and scatters the scenarios before iteration 1. It remains a
+live concern for a *mid-run* re-weight, which never re-enters `Iter0`.
 
 An earlier draft also bypassed PH's convergence test for one iteration after a
-re-weight, on the theory that scenario disagreement is unchanged by a re-weight
-and would trip termination before the duals could move. On farmer it never
-fired — the re-projection shift alone always pushed the metric back above
-`convthresh` — so it was dropped rather than shipped untested. It may still be
-worth revisiting for models whose first stage is integer, where a small dual
-shift can leave every `x_s` at the same point. Note the EF's persistent-solver reuse (avoiding a monolithic
+re-weight. It never fired on farmer, so it was dropped rather than shipped
+untested. Note the EF's persistent-solver reuse (avoiding a monolithic
 rebuild) is the real payoff of this feature; PH subproblems already persist
 across iterations, so reusing a PH object across a sweep saves only scenario
 construction — rebuilding per vector is also fine.
