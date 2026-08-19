@@ -12,11 +12,76 @@
 #   python -m mpisppy.confidence_intervals.bootsp.simulate_boot <json>
 
 import sys
+import time
 import mpisppy.confidence_intervals.ciutils as ciutils
 import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
 import mpisppy.confidence_intervals.bootsp.boot_sp as boot_sp
+import mpisppy.confidence_intervals.bootsp.smoothed_boot_sp as smoothed_boot_sp
 
 my_rank = boot_utils.my_rank
+comm = boot_utils.comm
+
+
+def replication_stride(cfg):
+    """ How far apart to place the coverage replications, in record numbers.
+
+    Args:
+        cfg (Config): parameters
+    Returns:
+        int
+
+    A replication occupies its data records and its fitted draws, which
+    draw_space_origin puts at max_count + seed_offset. Striding by the draw
+    footprint alone advances the two spaces at different rates, so the next
+    replication's data records land on this one's draw records -- the same
+    collision draw_space_origin exists to prevent, one level up. The stride is
+    therefore the whole footprint of a replication: its data, then its draws.
+
+    subsample_size is a bagging option that the smoothed bootstrap overwrites,
+    so a Smoothed_boot_* config may reasonably leave it unset; the same goes
+    for the two other optional fields here.
+    """
+    draw_footprint = max(
+        (cfg.smoothed_center_sample_size or 0) + cfg.nB * cfg.sample_size,
+        (cfg.smoothed_B_I or 1) * cfg.nB * (cfg.subsample_size or 0))
+    return cfg.max_count + draw_footprint
+
+
+def _rank0_optimal(cfg, module, xhat=None):
+    """ Run process_optimal on rank 0 and let every rank hear how it went.
+
+    Args:
+        cfg (Config): parameters
+        module (Python module): contains the scenario creator and helpers
+        xhat (dict or None): passed through to process_optimal
+    Returns:
+        (opt_obj, opt_gap) on rank 0; (None, None) elsewhere
+    Raises:
+        RuntimeError on every rank if rank 0 failed
+
+    process_optimal runs on rank 0 alone, and it can fail: a maximization
+    model, a missing optimal file, a solve with no solution. Left to itself
+    rank 0 would raise and leave, while the others walk on into the next
+    collective and block there forever -- a hang instead of the clear error the
+    checks inside it exist to give. So the outcome is broadcast and everyone
+    raises together.
+    """
+    if my_rank == 0:
+        try:
+            opt_obj, opt_gap = boot_sp.process_optimal(cfg, module, xhat=xhat)
+            failure = None
+        except Exception as e:
+            opt_obj, opt_gap = None, None
+            failure = f"{type(e).__name__}: {e}"
+    else:
+        opt_obj, opt_gap, failure = None, None, None
+
+    failure = comm.bcast(failure, root=0)
+    if failure is not None:
+        raise RuntimeError(
+            "the optimal value could not be computed on rank 0 "
+            f"({failure}); every rank is stopping so the run does not hang")
+    return opt_obj, opt_gap
 
 
 def empirical_main_routine(cfg, module):
@@ -30,11 +95,8 @@ def empirical_main_routine(cfg, module):
         average_length (float): the average width of the interval around z*
         (both None on MPI ranks other than 0)
     """
-    if my_rank == 0:
-        opt_obj, opt_gap = boot_sp.process_optimal(cfg, module)
-    else:
-        opt_obj = None  # only rank 0 should use the opt_obj in analysis anyway
-        opt_gap = None
+    # only rank 0 uses opt_obj/opt_gap in the analysis below
+    opt_obj, opt_gap = _rank0_optimal(cfg, module)
 
     if cfg["xhat_fname"] is not None and cfg["xhat_fname"] != "None":
         xhat = ciutils.read_xhat(cfg["xhat_fname"])
@@ -73,14 +135,93 @@ def empirical_main_routine(cfg, module):
         return None, None
 
 
+def smoothed_main_routine(cfg, module):
+    """ The smoothed-method coverage harness; called by main() and test drivers.
+
+    Args:
+        cfg (Config): parameters
+        module (Python module): contains the scenario creator function and helpers
+    Returns:
+        (coverage_two_sided, coverage_one_sided, ci_lengths, run_times);
+        all None on MPI ranks other than 0.
+
+    Note:
+        The smoothed estimators report only the optimality-gap interval, so the
+        coverage counts are against opt_gap (from process_optimal) rather than
+        against z* as in the empirical harness.
+    """
+    if cfg["xhat_fname"] is not None and cfg["xhat_fname"] != "None":
+        xhat = ciutils.read_xhat(cfg["xhat_fname"])
+    else:
+        # boot-sp called an undefined fit_resample_utils.compute_xhat here; the
+        # intended call is boot_utils.compute_xhat (design doc section 4.3).
+        xhat = boot_utils.compute_xhat(cfg, module)
+
+    # Only opt_gap is used by the smoothed coverage counting, and it is the
+    # quantity the interval is scored against, so it has to be the real
+    # z(xhat) - z*. That is why xhat is resolved first and passed in: without
+    # it process_optimal reports a zero placeholder, and every coverage count
+    # taken against that zero would be meaningless.
+    _, opt_gap = _rank0_optimal(cfg, module, xhat=xhat)
+
+    coverage_cnt_one_sided, coverage_cnt_two_sided = 0, 0
+    ci_len = []
+    run_time = []
+    seed_offset = cfg.seed_offset  # store the original offset
+    # Replications must not share draws. Unlike the empirical methods, which
+    # get independent streams straight from numpy (default_rng([seed_offset,
+    # word]) and so can step the offset by 1), the smoothed methods address
+    # their draws by record number -- the model seeds each draw with it -- so
+    # replications are separated by giving each one its own block of record
+    # numbers. The stride is therefore exactly what one replication consumes:
+    # the center block plus one block per batch (smoothed bootstrap), or B_I
+    # groups of nB bags (smoothed bagging). Take the larger of the two so the
+    # stride covers whichever method is running.
+    stride = replication_stride(cfg)
+    seed_list = [i * stride + seed_offset for i in range(cfg.coverage_replications)]
+
+    try:
+        for seed in seed_list:
+            cfg.seed_offset = seed
+            if my_rank == 0:
+                st_time = time.time()
+            ci_gap_two_sided, _ = smoothed_boot_sp.compute_smoothed_ci(cfg, module, xhat)
+            if my_rank == 0:
+                en_time = time.time()
+                if cfg.trace_fname is not None:
+                    with open(cfg.trace_fname, "a+") as f:
+                        f.write(f"seed: {cfg.seed_offset}\n")
+                        f.write(f"optimality gap: {opt_gap}\n")
+                        f.write(f"ci for optimality gap: {ci_gap_two_sided}\n")
+                if (ci_gap_two_sided[0] <= opt_gap) and (opt_gap <= ci_gap_two_sided[1]):
+                    coverage_cnt_two_sided += 1
+                if (opt_gap <= ci_gap_two_sided[1]):
+                    coverage_cnt_one_sided += 1
+                ci_len.append(ci_gap_two_sided[1] - ci_gap_two_sided[0])
+                run_time.append(en_time - st_time)
+    finally:
+        # the loop walks cfg.seed_offset across the replications; the cfg is the
+        # caller's, so hand it back on the offset it arrived with
+        cfg.seed_offset = seed_offset
+
+    if my_rank == 0:
+        assert cfg.coverage_replications != 0
+        return (coverage_cnt_two_sided / cfg.coverage_replications,
+                coverage_cnt_one_sided / cfg.coverage_replications,
+                ci_len, run_time)
+    else:
+        return None, None, None, None
+
+
 def main(cfg, module):
     """ Dispatch to the appropriate coverage harness for cfg.boot_method.
 
-    A smoothed method raises a friendly "not yet merged" error; the empirical
-    methods run the empirical coverage harness.
+    The empirical methods run the empirical coverage harness (returns a
+    (rate, length) pair); the smoothed methods run the smoothed harness
+    (returns a (cov_two, cov_one, ci_lengths, run_times) tuple).
     """
     if boot_utils.is_smoothed(cfg.boot_method):
-        boot_utils.smoothed_not_yet_merged(cfg.boot_method)
+        return smoothed_main_routine(cfg, module)
     return empirical_main_routine(cfg, module)
 
 
