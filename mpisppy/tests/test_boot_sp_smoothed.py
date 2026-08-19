@@ -23,6 +23,7 @@ import os
 import sys
 import math
 import inspect
+import glob
 import importlib.util
 import subprocess
 import tempfile
@@ -67,7 +68,7 @@ module_dir = os.path.dirname(os.path.abspath(__file__))
 bootsp_examples = os.path.join(module_dir, "..", "..", "examples", "bootsp")
 
 
-def _load_example(sub):
+def _load_example(sub, stem=None):
     """ Load an examples/bootsp module under a name of its own.
 
     These examples are farmer.py, cvar.py and multi_knapsack.py, and
@@ -79,14 +80,18 @@ def _load_example(sub):
     bootsp_ prefix means the two never contend for the same name.
 
     Args:
-        sub (str): the examples/bootsp subdirectory, which is also the file stem
+        sub (str): the examples/bootsp subdirectory
+        stem (str or None): the module file stem, when it differs from sub
+            (examples/bootsp/schultz holds unique_schultz.py and
+            nonunique_schultz.py)
     Returns:
         str: the name to hand boot_utils (module_name_to_module resolves it)
     """
-    path = os.path.join(bootsp_examples, sub, f"{sub}.py")
+    stem = sub if stem is None else stem
+    path = os.path.join(bootsp_examples, sub, f"{stem}.py")
     if not os.path.exists(path):
         raise RuntimeError(f"File not found: {path}")
-    name = f"bootsp_{sub}"
+    name = f"bootsp_{stem}"
     if name not in sys.modules:
         spec = importlib.util.spec_from_file_location(name, path)
         mod = importlib.util.module_from_spec(spec)
@@ -99,6 +104,9 @@ def _load_example(sub):
 FARMER = _load_example("farmer")
 CVAR = _load_example("cvar")
 MULTI_KNAPSACK = _load_example("multi_knapsack")
+UNIQUE_SCHULTZ = _load_example("schultz", "unique_schultz")
+NONUNIQUE_SCHULTZ = _load_example("schultz", "nonunique_schultz")
+SCHULTZ_DATA = _load_example("schultz_data")
 
 MK_DATA = os.path.abspath(
     os.path.join(bootsp_examples, "multi_knapsack", "multi_knapsack_data.json"))
@@ -1231,6 +1239,37 @@ class Test_review_regressions(unittest.TestCase):
         smoothed_boot_sp._ensure_smoothed_cfg(cfg)
         self.assertNotIn("detdata", cfg)
         self.assertIn("use_fitted", cfg)
+
+    def test_every_shipped_json_loads(self):
+        """ Each examples/bootsp config must survive cfg_from_json.
+
+        Nothing else in the suite reads these files -- the tests build their
+        cfg programmatically -- so adding a required option to cfg_for_boot
+        could (and did) break every shipped example and .bash script with CI
+        still green.
+        """
+        # the jsons name their module as a bare "farmer" / "cvar" / ...; map
+        # those to the copies this file already loaded under bootsp_ names
+        by_bare_name = {"farmer": FARMER, "cvar": CVAR,
+                        "multi_knapsack": MULTI_KNAPSACK,
+                        "unique_schultz": UNIQUE_SCHULTZ,
+                        "nonunique_schultz": NONUNIQUE_SCHULTZ,
+                        "schultz_data": SCHULTZ_DATA}
+
+        def _resolve(name):
+            return _orig_resolve(by_bare_name.get(name, name))
+
+        _orig_resolve = boot_utils.module_name_to_module
+        pattern = os.path.join(bootsp_examples, "*", "*.json")
+        configs = [f for f in sorted(glob.glob(pattern))
+                   if not f.endswith("multi_knapsack_data.json")]  # data, not config
+        self.assertGreaterEqual(len(configs), 9, msg=f"found only {configs}")
+        for path in configs:
+            with self.subTest(json=os.path.basename(path)):
+                with mock.patch.object(boot_utils, "module_name_to_module",
+                                       _resolve):
+                    cfg = boot_utils.cfg_from_json(path)
+                self.assertIsNotNone(cfg.boot_method)
 
     def test_uniform_rejects_reversed_support(self):
         # a > b was accepted silently and answered nonsense (cdf_inverse of a
