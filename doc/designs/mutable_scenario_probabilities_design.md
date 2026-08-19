@@ -19,7 +19,9 @@ re-push).
 
 Implemented so far, PH path: `SPBase.set_scenario_probabilities` (two-stage),
 which refreshes `prob_coeff` and re-projects the PH multipliers `W` onto the
-new probabilities, keeping the fraction `ph_dual_carryover` of them (§6). Plus docs (`doc/src/mutable_probability.rst`) and a runnable example
+new probabilities, keeping the fraction
+`mutable_probability_ph_dual_carryover` of them (§6). Plus docs
+(`doc/src/mutable_probability.rst`) and a runnable example
 (`examples/farmer/farmer_prob_sensitivity.py`).
 
 Tests: `Test_mutable_probability` and `Test_mutable_probability_ph` in
@@ -331,7 +333,7 @@ change. Today `_compute_unconditional_node_probabilities` only computes
 an updated `_mpisppy_probability` on its own.
 
 Design (implemented, phase 2): `SPBase.set_scenario_probabilities(prob_map,
-check_sum=True, ph_dual_carryover=0.5)` that
+check_sum=True, mutable_probability_ph_dual_carryover=0.5)` that
 
 1. updates `_mpisppy_probability` on each local scenario named in `prob_map`
    (two-stage only for now; a multistage `_mpisppy_node_list` raises
@@ -342,7 +344,8 @@ check_sum=True, ph_dual_carryover=0.5)` that
 3. preserves any `has_variable_probability` overrides (re-applies
    `_use_variable_probability_setter` after the refresh),
 4. re-projects and scales the PH multipliers `W` on each scenario,
-   `W_s <- alpha (W_s - sum_t p_t W_t)` with `alpha = ph_dual_carryover`
+   `W_s <- alpha (W_s - sum_t p_t W_t)` with
+   `alpha = mutable_probability_ph_dual_carryover`
    (default 0.5; no-op for objects without PH `W` terms), and
 5. optionally checks (default) with an MPI reduction that the resulting
    probabilities sum to 1 (option B).
@@ -462,7 +465,8 @@ stay in sync and there is one method name across both.
    `solve_extensive_form`. Closes the issue. Verified against a rebuild oracle
    on farmer for `appsi_highs` and `gurobi_persistent`.
 2. **[done]** PH path: `SPBase.set_scenario_probabilities` + `prob_coeff`
-   refresh (with `ph_dual_carryover` re-projecting the duals, §6).
+   refresh (with `mutable_probability_ph_dual_carryover` re-projecting the
+   duals, §6).
    Verified on farmer against the EF oracle.
 3. Multistage node probabilities and variable-probability interaction.
 4. **[done]** Docs + a probability-sensitivity example under `examples/`.

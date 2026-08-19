@@ -78,7 +78,8 @@ recomputed so the next iteration uses the new weights:
 
 .. code-block:: python
 
-   ph.set_scenario_probabilities(prob_map, ph_dual_carryover=0.5)
+   ph.set_scenario_probabilities(
+       prob_map, mutable_probability_ph_dual_carryover=0.5)
 
 The PH multipliers ``W`` need attention when re-solving in place. PH maintains
 ``sum_s p_s W_s == 0``, since each ``W`` update adds ``rho (x_s - xbar)``,
@@ -90,8 +91,9 @@ are therefore re-projected under the new probabilities and scaled:
 
    W_s \leftarrow \alpha \left( W_s - \sum_t p_t W_t \right)
 
-``ph_dual_carryover`` is :math:`\alpha`, in [0, 1], default 0.5. ``0`` discards
-the duals and ``1`` keeps the full re-projected warm start.
+``mutable_probability_ph_dual_carryover`` is :math:`\alpha`, in [0, 1],
+default 0.5. ``0`` discards the duals and ``1`` keeps the full re-projected
+warm start.
 
 The re-projection also matters when re-solving from a *converged* PH solution:
 there, every scenario sits at the same nonanticipative point, so the

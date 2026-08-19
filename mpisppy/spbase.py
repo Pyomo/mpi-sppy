@@ -454,7 +454,7 @@ class SPBase:
 
 
     def set_scenario_probabilities(self, prob_map, check_sum=True,
-                                   ph_dual_carryover=0.5):
+                                   mutable_probability_ph_dual_carryover=0.5):
         """ Update scenario probabilities in place for the PH / decomposition
             path and refresh the derived ``prob_coeff`` so the next iteration
             (xbar, W, rho) uses the new values.
@@ -470,8 +470,8 @@ class SPBase:
             later phase; a multistage tree raises). Any variable-probability
             overrides are re-applied after the refresh.
 
-            Dual handling (``ph_dual_carryover``): PH maintains
-            ``sum_s p_s W_s == 0`` by induction, since each ``Update_W`` adds
+            Dual handling (``mutable_probability_ph_dual_carryover``):
+            PH maintains ``sum_s p_s W_s == 0`` by induction, since each ``Update_W`` adds
             ``rho (x_s - xbar)`` whose probability-weighted sum is zero. Change
             the probabilities and that invariant breaks, so the carried-over W
             is not a valid dual for the new problem. The W are therefore
@@ -501,7 +501,7 @@ class SPBase:
                     resulting probabilities over all scenarios sum to 1
                     (option B; see the design doc). Pass False to skip the
                     collective (e.g. when the caller has already validated).
-                ph_dual_carryover (float, optional):
+                mutable_probability_ph_dual_carryover (float, optional):
                     Fraction of the re-projected PH multipliers (``W``) to keep,
                     in [0, 1]; default 0.5. See the dual-handling note above.
                     No-op for objects without PH ``W`` terms (e.g. a plain EF).
@@ -515,9 +515,9 @@ class SPBase:
                     a later phase).
                 ValueError:
                     If a supplied probability is not a finite, nonnegative
-                    number, if ``ph_dual_carryover`` is outside [0, 1], or if
-                    ``check_sum`` and the resulting probabilities do not sum to
-                    1 within ``E1_tolerance``.
+                    number, if ``mutable_probability_ph_dual_carryover`` is
+                    outside [0, 1], or if ``check_sum`` and the resulting
+                    probabilities do not sum to 1 within ``E1_tolerance``.
         """
         # Validate everything before mutating anything, so a rejected call
         # leaves the object exactly as it was.
@@ -533,11 +533,11 @@ class SPBase:
                     f"probability for scenario '{sname}' must be a finite, "
                     f"nonnegative number; got {p!r}.")
 
-        if not isinstance(ph_dual_carryover, numbers.Real) or \
-                not 0.0 <= ph_dual_carryover <= 1.0:
+        alpha = mutable_probability_ph_dual_carryover
+        if not isinstance(alpha, numbers.Real) or not 0.0 <= alpha <= 1.0:
             raise ValueError(
-                f"ph_dual_carryover must be in [0, 1]; got "
-                f"{ph_dual_carryover!r}.")
+                f"mutable_probability_ph_dual_carryover must be in [0, 1]; "
+                f"got {alpha!r}.")
 
         for s in self.local_scenarios.values():
             # Two-stage only: the root node alone (a two-stage node list has no
@@ -583,7 +583,7 @@ class SPBase:
 
         # Restore sum_s p_s W_s == 0 for the new probabilities and keep the
         # requested fraction of the duals (see the dual-handling note above).
-        self._reweight_ph_duals(ph_dual_carryover)
+        self._reweight_ph_duals(alpha)
 
     def _reweight_ph_duals(self, alpha):
         """ Re-project the PH multipliers onto ``sum_s p_s W_s == 0`` for the

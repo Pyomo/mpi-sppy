@@ -980,8 +980,9 @@ class Test_mutable_probability_ph(unittest.TestCase):
         # carryover fraction out of range
         for bad_alpha in (-0.1, 1.5):
             with self.assertRaises(ValueError):
-                ph.set_scenario_probabilities(self._pv(0.5),
-                                              ph_dual_carryover=bad_alpha)
+                ph.set_scenario_probabilities(
+                    self._pv(0.5),
+                    mutable_probability_ph_dual_carryover=bad_alpha)
 
     def test_rejected_call_leaves_ph_unchanged(self):
         # Every rejected call above must be transactional: probabilities,
@@ -1018,7 +1019,8 @@ class Test_mutable_probability_ph(unittest.TestCase):
                 before[k] = {idx: s._mpisppy_model.W[idx]._value
                              for idx in s._mpisppy_model.W}
             pv = self._pv(0.6)
-            ph.set_scenario_probabilities(pv, ph_dual_carryover=alpha)
+            ph.set_scenario_probabilities(
+                pv, mutable_probability_ph_dual_carryover=alpha)
 
             idxs = list(next(iter(ph.local_scenarios.values()))._mpisppy_model.W)
             for idx in idxs:
@@ -1061,7 +1063,8 @@ class Test_mutable_probability_ph(unittest.TestCase):
             if alpha is None:
                 ph.set_scenario_probabilities(pv)
             else:
-                ph.set_scenario_probabilities(pv, ph_dual_carryover=alpha)
+                ph.set_scenario_probabilities(
+                    pv, mutable_probability_ph_dual_carryover=alpha)
             ph.ph_main()
             got = self._ph_first_stage(ph)
             want = self._ef_first_stage(pv)
