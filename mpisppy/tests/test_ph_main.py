@@ -485,6 +485,54 @@ class TestPHPrepIsIdempotent(unittest.TestCase):
 
     @unittest.skipIf(not solver_available,
                      "%s solver is not available" % (solver_name,))
+    def test_fwph_lp_start_end_to_end(self):
+        # FWPH's LP start is the real consumer of the two-step attach, and
+        # nothing else in the suite runs it: the branch needs
+        # FW_LP_start_iterations > 0 and the only other test setting the
+        # option uses 0. Run it for real.
+        #
+        # Note this passes on unfixed mpi-sppy too: FWPH preps once, so the
+        # double-augmentation bug never bites it. What it guards is the
+        # reverse -- that guarding PH_Prep does not break FWPH, which an
+        # all-or-nothing signature check on the attach flags does.
+        from mpisppy.opt.fwph import FWPH
+        import mpisppy.utils.sputils as sputils
+
+        kwargs = {"crops_multiplier": 1}
+        ef = sputils.create_EF(self.scenario_names, farmer.scenario_creator,
+                               scenario_creator_kwargs=kwargs)
+        solver = pyo.SolverFactory(solver_name)
+        if '_persistent' in solver_name:
+            solver.set_instance(ef)
+        solver.solve(ef)
+        ef_opt = pyo.value(ef.EF_Obj)
+
+        options = dict(self.options)
+        options.update({
+            "PHIterLimit": 10, "convthresh": 1e-6,
+            "FW_iter_limit": 20, "FW_weight": 0.0, "FW_conv_thresh": 1e-5,
+            "stop_check_tol": 1e-5, "FW_LP_start_iterations": 3,
+            "FW_verbose": False, "mip_solver_options": {},
+            "qp_solver_options": {}, "iter0_solver_options": None,
+            "iterk_solver_options": None,
+        })
+        fw = FWPH(options, self.scenario_names, farmer.scenario_creator,
+                  farmer.scenario_denouement,
+                  scenario_creator_kwargs=kwargs)
+        fw.fwph_main()
+
+        # the LP start attaches prox on top of the W term PH_Prep attached;
+        # each has to appear exactly once
+        for sname in self.scenario_names:
+            expr = str(fw.saved_objectives[sname].expr)
+            self.assertEqual(expr.count("W_on"), 1, "W term duplicated")
+            self.assertEqual(expr.count("prox_on"), 1,
+                             "prox term missing or duplicated")
+        # and the run has to produce a valid outer bound (farmer minimizes)
+        self.assertLessEqual(fw.best_bound_obj_val, ef_opt + 1e-6)
+
+    @unittest.skipIf(not solver_available,
+                     "%s solver is not available" % (solver_name,))
     def test_ph_main_twice_matches_ph_main_once(self):
         # Re-running to convergence on an unchanged problem must not move the
         # answer. Note this one passed even before PH_Prep was made
