@@ -898,6 +898,16 @@ class Test_mutable_probability(unittest.TestCase):
             ef.set_scenario_probabilities({"scen0": before + 0.25})
         self.assertAlmostEqual(pyo.value(ef.ef._mpisppy_model.prob["scen0"]),
                                before)
+        # a negative entry is rejected even though the vector sums to 1, and
+        # the scenario listed ahead of it is not left written
+        with self.assertRaises(ValueError):
+            ef.set_scenario_probabilities(
+                {"scen0": 1.2, "scen1": -0.2, "scen2": 0.0})
+        for sname in ("scen0", "scen1", "scen2"):
+            self.assertAlmostEqual(
+                pyo.value(ef.ef._mpisppy_model.prob[sname]), 1.0 / 3.0)
+            self.assertAlmostEqual(
+                getattr(ef.ef, sname)._mpisppy_probability, 1.0 / 3.0)
 
 
 class Test_mutable_probability_ph(unittest.TestCase):
@@ -963,6 +973,64 @@ class Test_mutable_probability_ph(unittest.TestCase):
             ph.set_scenario_probabilities({"nope": 0.5})
         with self.assertRaises(ValueError):
             ph.set_scenario_probabilities({"scen0": 0.9})  # sum != 1
+        # negative entry, even though this vector sums to 1
+        with self.assertRaises(ValueError):
+            ph.set_scenario_probabilities(
+                {"scen0": 1.2, "scen1": -0.2, "scen2": 0.0})
+        # carryover fraction out of range
+        for bad_alpha in (-0.1, 1.5):
+            with self.assertRaises(ValueError):
+                ph.set_scenario_probabilities(self._pv(0.5),
+                                              ph_dual_carryover=bad_alpha)
+
+    def test_rejected_call_leaves_ph_unchanged(self):
+        # Every rejected call above must be transactional: probabilities,
+        # prob_coeff and W are all read by the next iteration.
+        ph = self._make_ph(iters=0)
+        ph.PH_Prep()   # attaches W, which set_scenario_probabilities zeroes
+        for s in ph.local_scenarios.values():
+            for idx in s._mpisppy_model.W:
+                s._mpisppy_model.W[idx]._value = 3.0
+        bad_maps = ({"nope": 0.5},
+                    {"scen0": 0.9},
+                    {"scen0": 1.2, "scen1": -0.2, "scen2": 0.0})
+        for bad in bad_maps:
+            with self.assertRaises((KeyError, ValueError)):
+                ph.set_scenario_probabilities(bad)
+            for s in ph.local_scenarios.values():
+                self.assertAlmostEqual(s._mpisppy_probability, 1.0 / 3.0)
+                self.assertAlmostEqual(s._mpisppy_data.prob_coeff["ROOT"],
+                                       1.0 / 3.0)
+                for idx in s._mpisppy_model.W:
+                    self.assertAlmostEqual(
+                        pyo.value(s._mpisppy_model.W[idx]), 3.0)
+
+    def test_dual_carryover_reprojects(self):
+        # W_s <- alpha (W_s - sum_t p_t W_t) under the NEW probabilities, so
+        # the PH invariant sum_s p_s W_s == 0 holds again afterwards.
+        for alpha in (0.0, 0.5, 1.0):
+            ph = self._make_ph(iters=0)
+            ph.PH_Prep()
+            before = {}
+            for i, (k, s) in enumerate(ph.local_scenarios.items()):
+                for idx in s._mpisppy_model.W:
+                    s._mpisppy_model.W[idx]._value = float(i) - 1.0
+                before[k] = {idx: s._mpisppy_model.W[idx]._value
+                             for idx in s._mpisppy_model.W}
+            pv = self._pv(0.6)
+            ph.set_scenario_probabilities(pv, ph_dual_carryover=alpha)
+
+            idxs = list(next(iter(ph.local_scenarios.values()))._mpisppy_model.W)
+            for idx in idxs:
+                Wbar = sum(pv[k] * before[k][idx] for k in ph.local_scenarios)
+                for k, s in ph.local_scenarios.items():
+                    self.assertAlmostEqual(
+                        pyo.value(s._mpisppy_model.W[idx]),
+                        alpha * (before[k][idx] - Wbar))
+                # invariant restored under the new probabilities
+                self.assertAlmostEqual(
+                    sum(pv[k] * pyo.value(s._mpisppy_model.W[idx])
+                        for k, s in ph.local_scenarios.items()), 0.0)
 
     @unittest.skipIf(not solver_available, "no solver is available")
     def test_ph_matches_ef_oracle(self):
@@ -984,33 +1052,26 @@ class Test_mutable_probability_ph(unittest.TestCase):
     def test_ph_reuse_after_prob_change(self):
         # In-place probability change on an already-solved PH object: re-solving
         # must track the new probabilities (the probability-sensitivity use
-        # case). The default reset_ph_duals=True breaks the stale consensus.
-        ph = self._make_ph(iters=100)
-        ph.ph_main()
-        pv = self._pv(0.6)
-        ph.set_scenario_probabilities(pv)
-        ph.ph_main()
-        got = self._ph_first_stage(ph)
-        want = self._ef_first_stage(pv)
-        for c in want:
-            self.assertAlmostEqual(got[c], want[c], places=2)
-
-    @unittest.skipIf(not solver_available, "no solver is available")
-    def test_ph_reuse_without_dual_reset_stays_stuck(self):
-        # Documents the warm-start caveat: keeping stale W (reset_ph_duals=False)
-        # after convergence leaves PH at the old consensus, wrong for new probs.
-        ph = self._make_ph(iters=100)
-        ph.ph_main()
-        uniform = self._ph_first_stage(ph)
-        pv = self._pv(0.6)
-        ph.set_scenario_probabilities(pv, reset_ph_duals=False)
-        ph.ph_main()
-        stuck = self._ph_first_stage(ph)
-        want = self._ef_first_stage(pv)
-        # still at the uniform solution, not the (different) skewed optimum
-        self.assertNotAlmostEqual(stuck["WHEAT0"], want["WHEAT0"], places=2)
-        for c in uniform:
-            self.assertAlmostEqual(stuck[c], uniform[c], places=2)
+        # case), for any carryover fraction. The default is 0.5.
+        for alpha in (None, 0.0, 1.0):
+            ph = self._make_ph(iters=100)
+            ph.ph_main()
+            uniform = self._ph_first_stage(ph)
+            pv = self._pv(0.6)
+            if alpha is None:
+                ph.set_scenario_probabilities(pv)
+            else:
+                ph.set_scenario_probabilities(pv, ph_dual_carryover=alpha)
+            ph.ph_main()
+            got = self._ph_first_stage(ph)
+            want = self._ef_first_stage(pv)
+            # the re-weighted optimum really is a different point, so this is
+            # not vacuous
+            self.assertNotAlmostEqual(uniform["WHEAT0"], want["WHEAT0"],
+                                      places=2)
+            for c in want:
+                self.assertAlmostEqual(got[c], want[c], places=2,
+                                       msg=f"carryover={alpha}, var={c}")
 
 
 if __name__ == '__main__':

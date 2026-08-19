@@ -9,6 +9,8 @@
 import mpisppy.spbase
 import pyomo.environ as pyo
 import logging
+import math
+import numbers
 import mpisppy.utils.sputils as sputils
 import pathlib
 import os
@@ -200,7 +202,8 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
                 KeyError:
                     If ``prob_map`` contains an unknown scenario name.
                 ValueError:
-                    If the resulting probabilities do not sum to 1.
+                    If a supplied probability is not a finite, nonnegative
+                    number, or if the resulting probabilities do not sum to 1.
         """
         if not self.mutable_probability:
             raise RuntimeError(
@@ -213,6 +216,13 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         for sname in prob_map:
             if sname not in prob:
                 raise KeyError(f"Unknown scenario name '{sname}' in prob_map.")
+        # Check the domain here as well as in the Param: a partial write would
+        # otherwise be left behind when the Param rejects a negative value.
+        for sname, p in prob_map.items():
+            if not isinstance(p, numbers.Real) or not math.isfinite(p) or p < 0:
+                raise ValueError(
+                    f"probability for scenario '{sname}' must be a finite, "
+                    f"nonnegative number; got {p!r}.")
         resulting = {sn: prob_map.get(sn, pyo.value(prob[sn]))
                      for sn in self.ef._ef_scenario_names}
         total = sum(resulting.values())

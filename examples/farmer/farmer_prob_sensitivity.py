@@ -53,8 +53,12 @@ def main():
                              "instance across the sweep. Default: "
                              "gurobi_persistent.")
     parser.add_argument("--num-scens", type=int, default=3,
-                        help="Number of scenarios. Default: 3.")
+                        help="Number of scenarios (at least 2). Default: 3.")
     args = parser.parse_args()
+    if args.num_scens < 2:
+        # The sweep re-weights one scenario against the others, so there has to
+        # be at least one other.
+        parser.error("--num-scens must be at least 2.")
 
     scenario_names = farmer.scenario_names_creator(args.num_scens)
     scenario_creator_kwargs = {"num_scens": args.num_scens}

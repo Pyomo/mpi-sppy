@@ -78,14 +78,28 @@ recomputed so the next iteration uses the new weights:
 
 .. code-block:: python
 
-   ph.set_scenario_probabilities(prob_map, reset_ph_duals=True)
+   ph.set_scenario_probabilities(prob_map, ph_dual_carryover=0.5)
 
-``reset_ph_duals=True`` (the default) zeroes the PH multipliers ``W``. This
-matters when re-solving from a *converged* PH solution: there, every scenario
-sits at the same nonanticipative point, so the probability-weighted ``xbar``
-is independent of the weights and PH would otherwise report immediate (false)
-convergence at the old solution. Zeroing ``W`` breaks that consensus so PH
-re-converges for the new probabilities.
+The PH multipliers ``W`` need attention when re-solving in place. PH maintains
+``sum_s p_s W_s == 0``, since each ``W`` update adds ``rho (x_s - xbar)``,
+whose probability-weighted sum is zero. Changing the probabilities breaks that
+invariant, so the carried-over ``W`` is no longer a valid dual. The multipliers
+are therefore re-projected under the new probabilities and scaled:
+
+.. math::
+
+   W_s \leftarrow \alpha \left( W_s - \sum_t p_t W_t \right)
+
+``ph_dual_carryover`` is :math:`\alpha`, in [0, 1], default 0.5. ``0`` discards
+the duals and ``1`` keeps the full re-projected warm start.
+
+The re-projection also matters when re-solving from a *converged* PH solution:
+there, every scenario sits at the same nonanticipative point, so the
+probability-weighted ``xbar`` is independent of the weights, and unmodified
+``W`` would leave PH exactly where it was, reporting immediate (false)
+convergence at the old solution. Subtracting the re-weighted mean shifts every
+subproblem's linear term by a common vector; the scenario objectives differ, so
+the scenarios move apart again and PH re-converges for the new probabilities.
 
 .. note::
 

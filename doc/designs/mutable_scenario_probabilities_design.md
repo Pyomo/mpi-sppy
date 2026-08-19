@@ -1,11 +1,12 @@
 # Mutable scenario probabilities
 
-Status: phases 0–1 implemented and verified (addresses issue #797); phases
-2–4 remain (§9). Covers the current behavior (§1), the use case and goals
-(§2–3), the design (§4), the EF path in detail (§5), the PH/decomposition
+Status: phases 0, 1, 2 and 4 implemented and verified (addresses issue #797);
+phase 3 (multistage node probabilities and the variable-probability
+interaction) remains (§9). Covers the current behavior (§1), the use case and
+goals (§2–3), the design (§4), the EF path in detail (§5), the PH/decomposition
 path (§6), API and compatibility (§7), and open questions (§8).
 
-Implemented so far (EF path, the issue's request):
+Implemented so far, EF path (the issue's request):
 `sputils.has_persistent_solve_api` (recognizes APPSI / `pyomo.contrib.solver`
 as persistent for the EF workflow); `mutable_probability` option on
 `_create_EF_from_scen_dict` and `ExtensiveForm` (option-B Param objective);
@@ -14,7 +15,15 @@ as persistent for the EF workflow); `mutable_probability` option on
 rebuild oracle — machine-precision agreement across a probability sweep, with
 `set_instance` called once — for **both** `appsi_highs` (auto-tracks the
 change) and `gurobi_persistent` (requires the explicit `set_objective`
-re-push). Tests: `Test_mutable_probability` in `mpisppy/tests/test_ef_ph.py`.
+re-push).
+
+Implemented so far, PH path: `SPBase.set_scenario_probabilities` (two-stage),
+which refreshes `prob_coeff` and re-projects the PH multipliers `W` onto the
+new probabilities, keeping the fraction `ph_dual_carryover` of them (§6). Plus docs (`doc/src/mutable_probability.rst`) and a runnable example
+(`examples/farmer/farmer_prob_sensitivity.py`).
+
+Tests: `Test_mutable_probability` and `Test_mutable_probability_ph` in
+`mpisppy/tests/test_ef_ph.py`.
 
 ---
 
@@ -322,7 +331,7 @@ change. Today `_compute_unconditional_node_probabilities` only computes
 an updated `_mpisppy_probability` on its own.
 
 Design (implemented, phase 2): `SPBase.set_scenario_probabilities(prob_map,
-check_sum=True, reset_ph_duals=True)` that
+check_sum=True, ph_dual_carryover=0.5)` that
 
 1. updates `_mpisppy_probability` on each local scenario named in `prob_map`
    (two-stage only for now; a multistage `_mpisppy_node_list` raises
@@ -332,26 +341,47 @@ check_sum=True, reset_ph_duals=True)` that
    `hasattr` compute-once short-circuit,
 3. preserves any `has_variable_probability` overrides (re-applies
    `_use_variable_probability_setter` after the refresh),
-4. zeroes the PH multipliers `W` on each local scenario (`reset_ph_duals`,
-   default True; no-op for objects without PH `W` terms), and
+4. re-projects and scales the PH multipliers `W` on each scenario,
+   `W_s <- alpha (W_s - sum_t p_t W_t)` with `alpha = ph_dual_carryover`
+   (default 0.5; no-op for objects without PH `W` terms), and
 5. optionally checks (default) with an MPI reduction that the resulting
    probabilities sum to 1 (option B).
 
 Because xbar/W/rho all read `prob_coeff` fresh each iteration, refreshing that
 dict is sufficient for the next PH iteration to be correct.
 
-**Warm-start caveat (motivates step 4).** At a converged PH solution every
-scenario sits at the same nonanticipative point, so the probability-weighted
-`xbar` equals that point *regardless of the weights*. Re-solving from there
-with new probabilities but stale `W` leaves `xbar` unmoved and PH reports
+**Dual invariant and the warm-start caveat (motivate step 4).** PH maintains
+`sum_s p_s W_s == 0` by induction: it holds at `W = 0`, and each `Update_W`
+adds `rho (x_s - xbar)`, whose probability-weighted sum is zero by the
+definition of `xbar`. Re-weighting breaks the invariant, so the carried-over
+`W` is not merely cold but invalid for the new problem — the aggregated
+subproblem objectives pick up a spurious linear term. Step 4 restores the
+invariant under the new probabilities and keeps the fraction `alpha` of the
+result. The reduction is the one `_Compute_Xbar` already performs
+(`phbase.py:94-104`) with `W` in place of the nonant values: same comms, same
+`prob_coeff` weights, one extra Allreduce per node per re-weight.
+
+The re-projection also resolves a separate problem. At a converged PH solution
+every scenario sits at the same nonanticipative point, so the
+probability-weighted `xbar` equals that point *regardless of the weights*.
+Re-solving from there with unmodified `W` leaves `xbar` unmoved and PH reports
 immediate (false) convergence at the old solution — the exact
-probability-sweep use case would silently return the wrong answer. Zeroing `W`
-(step 4) breaks that consensus so the next `ph_main()` re-converges for the new
-problem. Verified on farmer: fresh PH at a skewed vector and an in-place
-`set_scenario_probabilities` + re-solve both reach the EF-oracle solution,
-while `reset_ph_duals=False` after convergence stays stuck at the old optimum
-(`test_ph_reuse_after_prob_change` / `..._without_dual_reset_stays_stuck` in
-`test_ef_ph.py`). Note the EF's persistent-solver reuse (avoiding a monolithic
+probability-sweep use case would silently return the wrong answer. Subtracting
+the re-weighted mean shifts every subproblem's linear term by a common vector,
+and since the scenario objectives differ, the scenarios move apart again.
+Verified on farmer: after an in-place `set_scenario_probabilities` and
+re-solve, `alpha` of 0 (discard), 0.5 (default) and 1.0 (full carryover) all
+reach the EF-oracle solution at the new vector, and the arithmetic and restored
+invariant are checked directly (`test_ph_reuse_after_prob_change` /
+`test_dual_carryover_reprojects` in `test_ef_ph.py`).
+
+An earlier draft also bypassed PH's convergence test for one iteration after a
+re-weight, on the theory that scenario disagreement is unchanged by a re-weight
+and would trip termination before the duals could move. On farmer it never
+fired — the re-projection shift alone always pushed the metric back above
+`convthresh` — so it was dropped rather than shipped untested. It may still be
+worth revisiting for models whose first stage is integer, where a small dual
+shift can leave every `x_s` at the same point. Note the EF's persistent-solver reuse (avoiding a monolithic
 rebuild) is the real payoff of this feature; PH subproblems already persist
 across iterations, so reusing a PH object across a sweep saves only scenario
 construction — rebuilding per vector is also fine.
@@ -432,7 +462,7 @@ stay in sync and there is one method name across both.
    `solve_extensive_form`. Closes the issue. Verified against a rebuild oracle
    on farmer for `appsi_highs` and `gurobi_persistent`.
 2. **[done]** PH path: `SPBase.set_scenario_probabilities` + `prob_coeff`
-   refresh (with `reset_ph_duals` for the consensus warm-start caveat, §6).
+   refresh (with `ph_dual_carryover` re-projecting the duals, §6).
    Verified on farmer against the EF oracle.
 3. Multistage node probabilities and variable-probability interaction.
 4. **[done]** Docs + a probability-sensitivity example under `examples/`.
