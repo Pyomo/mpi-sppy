@@ -19,6 +19,44 @@ import mpisppy.confidence_intervals.bootsp.boot_sp as boot_sp
 import mpisppy.confidence_intervals.bootsp.smoothed_boot_sp as smoothed_boot_sp
 
 my_rank = boot_utils.my_rank
+comm = boot_utils.comm
+
+
+def _rank0_optimal(cfg, module, xhat=None):
+    """ Run process_optimal on rank 0 and let every rank hear how it went.
+
+    Args:
+        cfg (Config): parameters
+        module (Python module): contains the scenario creator and helpers
+        xhat (dict or None): passed through to process_optimal
+    Returns:
+        (opt_obj, opt_gap) on rank 0; (None, None) elsewhere
+    Raises:
+        RuntimeError on every rank if rank 0 failed
+
+    process_optimal runs on rank 0 alone, and it can fail: a maximization
+    model, a missing optimal file, a solve with no solution. Left to itself
+    rank 0 would raise and leave, while the others walk on into the next
+    collective and block there forever -- a hang instead of the clear error the
+    checks inside it exist to give. So the outcome is broadcast and everyone
+    raises together.
+    """
+    if my_rank == 0:
+        try:
+            opt_obj, opt_gap = boot_sp.process_optimal(cfg, module, xhat=xhat)
+            failure = None
+        except Exception as e:
+            opt_obj, opt_gap = None, None
+            failure = f"{type(e).__name__}: {e}"
+    else:
+        opt_obj, opt_gap, failure = None, None, None
+
+    failure = comm.bcast(failure, root=0)
+    if failure is not None:
+        raise RuntimeError(
+            "the optimal value could not be computed on rank 0 "
+            f"({failure}); every rank is stopping so the run does not hang")
+    return opt_obj, opt_gap
 
 
 def empirical_main_routine(cfg, module):
@@ -32,11 +70,8 @@ def empirical_main_routine(cfg, module):
         average_length (float): the average width of the interval around z*
         (both None on MPI ranks other than 0)
     """
-    if my_rank == 0:
-        opt_obj, opt_gap = boot_sp.process_optimal(cfg, module)
-    else:
-        opt_obj = None  # only rank 0 should use the opt_obj in analysis anyway
-        opt_gap = None
+    # only rank 0 uses opt_obj/opt_gap in the analysis below
+    opt_obj, opt_gap = _rank0_optimal(cfg, module)
 
     if cfg["xhat_fname"] is not None and cfg["xhat_fname"] != "None":
         xhat = ciutils.read_xhat(cfg["xhat_fname"])
@@ -97,15 +132,12 @@ def smoothed_main_routine(cfg, module):
         # intended call is boot_utils.compute_xhat (design doc section 4.3).
         xhat = boot_utils.compute_xhat(cfg, module)
 
-    if my_rank == 0:
-        # Only opt_gap is used by the smoothed coverage counting, and it is the
-        # quantity the interval is scored against, so it has to be the real
-        # z(xhat) - z*. That is why xhat is resolved first and passed in:
-        # without it process_optimal reports a zero placeholder, and every
-        # coverage count taken against that zero would be meaningless.
-        _, opt_gap = boot_sp.process_optimal(cfg, module, xhat=xhat)
-    else:
-        opt_gap = None
+    # Only opt_gap is used by the smoothed coverage counting, and it is the
+    # quantity the interval is scored against, so it has to be the real
+    # z(xhat) - z*. That is why xhat is resolved first and passed in: without
+    # it process_optimal reports a zero placeholder, and every coverage count
+    # taken against that zero would be meaningless.
+    _, opt_gap = _rank0_optimal(cfg, module, xhat=xhat)
 
     coverage_cnt_one_sided, coverage_cnt_two_sided = 0, 0
     ci_len = []

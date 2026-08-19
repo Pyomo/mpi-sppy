@@ -1315,6 +1315,59 @@ class Test_review_regressions(unittest.TestCase):
                     self.assertEqual(data_records & draws, set(),
                                      msg="a fitted draw reused a data record")
 
+    def test_serial_mode_calls_no_collectives(self):
+        # serial means the other ranks are not in the call at all, so any
+        # collective on COMM_WORLD blocks forever. The gather was guarded; the
+        # two barriers around it were not.
+        cfg = _make_farmer_cfg()
+        module = boot_utils.module_name_to_module(FARMER)
+        smoothed_boot_sp._ensure_smoothed_cfg(cfg)
+        fake_comm = mock.MagicMock()
+        with mock.patch.object(smoothed_boot_sp, "comm", fake_comm), \
+             mock.patch.object(smoothed_boot_sp, "fit_distribution",
+                               return_value="fitted"), \
+             mock.patch.object(smoothed_boot_sp, "center_smoothed",
+                               return_value=1.0), \
+             mock.patch.object(smoothed_boot_sp, "smoothed_resample_helper",
+                               return_value=np.zeros(cfg.nB)), \
+             mock.patch.object(module, "data_sampler", lambda r, c: 1.0):
+            smoothed_boot_sp.smoothed_bootstrap(cfg, module, {"ROOT": []},
+                                                serial=True)
+        fake_comm.Barrier.assert_not_called()
+        fake_comm.Gatherv.assert_not_called()
+
+    def test_rank0_optimal_failure_reaches_every_rank(self):
+        # rank 0 raising alone used to leave the others blocking in the next
+        # collective; the outcome is broadcast now so everyone stops.
+        # The bcast is stubbed to hand back what rank 0 would have sent, which
+        # is the whole point -- on a non-root rank the local value is None, so
+        # echoing the argument would test nothing.
+        cfg = _make_farmer_cfg()
+        rank0_failure = "ValueError: this model is a max"
+        with mock.patch.object(boot_sp, "process_optimal",
+                               side_effect=ValueError("this model is a max")), \
+             mock.patch.object(simulate_boot, "comm") as fake_comm:
+            fake_comm.bcast.side_effect = lambda v, root=0: rank0_failure
+            with self.assertRaises(RuntimeError) as ctx:
+                simulate_boot._rank0_optimal(cfg, None)
+        # every rank raises, not just the one that did the work
+        self.assertIn("this model is a max", str(ctx.exception))
+        self.assertIn("does not hang", str(ctx.exception))
+        fake_comm.bcast.assert_called_once()
+
+    def test_rank0_optimal_broadcasts_success_too(self):
+        cfg = _make_farmer_cfg()
+        with mock.patch.object(boot_sp, "process_optimal",
+                               return_value=(10.0, 2.5)), \
+             mock.patch.object(simulate_boot, "comm") as fake_comm:
+            fake_comm.bcast.side_effect = lambda v, root=0: None  # no failure
+            opt_obj, opt_gap = simulate_boot._rank0_optimal(cfg, None)
+        if my_rank == 0:
+            self.assertEqual((opt_obj, opt_gap), (10.0, 2.5))
+        else:
+            # the documented contract: only rank 0 computes these
+            self.assertEqual((opt_obj, opt_gap), (None, None))
+
     def test_uniform_rejects_reversed_support(self):
         # a > b was accepted silently and answered nonsense (cdf_inverse of a
         # negative-width support), instead of being refused

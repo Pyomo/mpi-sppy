@@ -70,6 +70,20 @@ def fit_distribution(sample_data, distr_type='univariate-epispline',
     return fitted_distr
 
 
+def _batch_barrier(serial):
+    """ Synchronize the ranks between batch phases, unless this run is serial.
+
+    Args:
+        serial (bool): one rank is doing every batch
+
+    In serial mode the other ranks are not in this call at all, so a collective
+    on COMM_WORLD blocks forever waiting for them -- the same reason the gather
+    that follows is guarded.
+    """
+    if not serial:
+        comm.Barrier()
+
+
 def draw_space_origin(cfg):
     """ The first record number the fitted-distribution draws may use.
 
@@ -212,14 +226,14 @@ def smoothed_bootstrap(cfg, module, xhat, distr_type='univariate-epispline', qua
         # the center: one replication at a large resample size
         # (smoothed_center_sample_size) drawn from the fitted distribution
         dag_gap = center_smoothed(cfg, module, xhat)
-        comm.Barrier()
+        _batch_barrier(serial)
 
         # each batch is a fresh set of cfg.sample_size draws from the same
         # fitted distribution, so the bootstrap batch size is the full sample
         # size (restored on the way out by _fitted_on_cfg)
         cfg.subsample_size = cfg.sample_size
         local_boot_gaps = smoothed_resample_helper(cfg, module, xhat, serial)
-        comm.Barrier()
+        _batch_barrier(serial)
 
     if serial:
         # one rank did every batch, so there is nothing to gather (and the
@@ -320,10 +334,10 @@ def _bagging_from_fitted(cfg, module, xhat, serial):
             local_ef = boot_sp.solve_routine(cfg, module, scenario_pool, num_threads=2, duplication=False)
             local_optimal = pyo.value(local_ef.EF_Obj)
             local_gaps[j] = local_upper - local_optimal
+        _batch_barrier(serial)
         if serial:
             bagging_gap = local_gaps
         else:
-            comm.Barrier()
             lenlist = boot_sp.slice_lens(cfg.nB)
             comm.Gatherv(sendbuf=local_gaps, recvbuf=(bagging_gap, lenlist), root=0)
 
