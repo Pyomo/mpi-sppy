@@ -140,13 +140,16 @@ command line (with dashes). The main options are:
 * ``coverage_replications`` (simulation only) — number of coverage replications.
 * ``boot_method`` / ``--boot-method`` — one of the tokens above.
 
-The smoothed methods use two additional options (ignored, and not required in
-the json, for the empirical methods):
+The smoothed methods use three additional options (ignored, and not required
+in the json, for the empirical methods):
 
 * ``smoothed_center_sample_size`` / ``--smoothed-center-sample-size`` — number
   of points drawn from the fitted distribution to estimate the gap center.
 * ``smoothed_B_I`` / ``--smoothed-B-I`` — number of outer replications for
   smoothed bagging.
+* ``smoothed_nonlinear_solver`` / ``--smoothed-nonlinear-solver`` — the solver
+  for the epi-spline fit (default ``ipopt``). Only the epi-spline methods solve
+  anything; the kernel methods ignore it.
 
 There may also be model-specific options added by ``inparser_adder``.
 
@@ -156,8 +159,11 @@ Batch parallelism
 The bootstrap batches are split across MPI ranks and reassembled on rank 0
 with ``Gatherv``, so a run can be accelerated with, e.g.,
 ``mpiexec -np 2 python -m mpi4py -m mpisppy.confidence_intervals.bootsp.user_boot ...``.
-The estimate on rank 0 depends on the number of ranks because each rank seeds
-its own bootstrap stream.
+For the empirical methods the estimate on rank 0 depends on the number of
+ranks, because each rank seeds its own batch stream (``_batch_rng``, keyed on
+the rank). The smoothed methods do not: they address their draws by global
+batch or bag number, so a given ``seed_offset`` gives the same interval at any
+rank count.
 
 boot_general_prep
 -----------------
@@ -246,7 +252,8 @@ empirical methods use, so it too excludes the records reserved for computing
 ``Smoothed_bagging``) fit with a Gaussian kernel and need only scipy; the
 epi-spline methods (``Smoothed_boot_epi``, ``Smoothed_boot_epi_quantile``) fit
 by solving a small Pyomo nonlinear program and additionally need a nonlinear
-solver such as ``ipopt``.
+solver, ``ipopt`` by default and any other named by
+``--smoothed-nonlinear-solver``.
 
 Three examples that need statdist ship in ``examples/bootsp``:
 

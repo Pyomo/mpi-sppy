@@ -37,11 +37,16 @@ def import_all_classes():
     from . import base_distribution
     from . import distributions
     for mod in (base_distribution, distributions):
-        for var in mod.__dict__:
-            obj = getattr(mod, var)
-            if (hasattr(obj, "is_registered_distribution") and
-                getattr(obj, "is_registered_distribution")):
-
+        for var, obj in list(mod.__dict__.items()):
+            # Only classes are ever registered, and the class test has to come
+            # first: probing an arbitrary binding can have side effects. These
+            # modules bind scipy as a pyomo DeferredImportModule, which resolves
+            # the import it stands for on *any* attribute access, so asking it
+            # about is_registered_distribution would import scipy here -- on the
+            # empirical path too, which is documented to work without it.
+            if not isinstance(obj, type):
+                continue
+            if getattr(obj, "is_registered_distribution", False):
                 distribution_registry[obj.registered_name] = obj
 
 

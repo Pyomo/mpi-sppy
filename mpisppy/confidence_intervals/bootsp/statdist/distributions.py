@@ -49,8 +49,12 @@ class UnivariateUniformDistribution(UnivariateDistribution):
             a (float): The lower bound of the support of the distribution
             b (float): The upper bound of the support of the distribution
         """
-        if a==b:
-            raise ValueError("The bounds should be different")
+        if a >= b:
+            # a == b has no density to spread; a > b is a reversed support,
+            # which every method here (pdf, cdf, cdf_inverse) would answer
+            # nonsense for rather than refuse
+            raise ValueError(
+                f"The support must satisfy a < b (got a={a}, b={b})")
         self.a=a
         self.b=b
         params = [Parameter('a', a), Parameter('b', b)]

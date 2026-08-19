@@ -29,24 +29,44 @@ my_rank = boot_utils.my_rank
 rankcomm = boot_utils.rankcomm
 
 
-def fit_distribution(sample_data, distr_type='univariate-epispline'):
+def fit_options(cfg, distr_type):
+    """ The fit options a distribution type takes from cfg.
+
+    Args:
+        cfg (Config): parameters
+        distr_type (str): a statdist univariate distribution token
+    Returns:
+        dict of keyword arguments for the distribution's fit()
+
+    Only the epi-spline fit solves anything, so it is the only one with a
+    solver to choose; the rest take no options from cfg and would reject them.
+    """
+    if distr_type == "univariate-epispline":
+        return {"nonlinear_solver": cfg.smoothed_nonlinear_solver}
+    return {}
+
+
+def fit_distribution(sample_data, distr_type='univariate-epispline',
+                     **distr_options):
     """ Fit a (univariate) distribution to sample data.
 
     Args:
         sample_data (list or list of dict): a list of scalars (one variable) or
             a list of dicts (multivariate, keyed by variable name)
         distr_type (str): a statdist univariate distribution token
+        distr_options: keyword arguments for the distribution's fit()
+            (see fit_options)
     Returns:
         the fitted distribution (or a dict of them, keyed as the input dicts)
     """
     distr_func = statdist.distribution_factory(distr_type)
     if isinstance(sample_data[0], (float, int)):  # 1-dim
-        fitted_distr = distr_func.fit(sample_data)
+        fitted_distr = distr_func.fit(sample_data, **distr_options)
     else:
         fitted_distr = {}
         for key in sample_data[0]:
             data = [data_dict[key] for data_dict in sample_data]
-            fitted_distr[key] = distr_func.fit(data)
+            fitted_distr[key] = distr_func.fit(data, **distr_options)
     return fitted_distr
 
 
@@ -136,7 +156,8 @@ def _fitted_on_cfg(cfg, module, scenario_pool, distr_type):
     try:
         cfg.use_fitted = False
         sample_data = [module.data_sampler(scenario, cfg) for scenario in scenario_pool]
-        cfg.fitted_distribution = fit_distribution(sample_data, distr_type=distr_type)
+        cfg.fitted_distribution = fit_distribution(
+            sample_data, distr_type=distr_type, **fit_options(cfg, distr_type))
         # From here on the draws come from the fitted distribution. Estimating
         # from the raw sample instead would give up the smoothing that is the
         # whole point of these methods.
@@ -352,6 +373,15 @@ def compute_smoothed_ci(cfg, module, xhat):
     _ensure_smoothed_cfg(cfg)
     method = cfg.boot_method
     boot_utils.BootMethods.check_for_it(method)
+    # every smoothed method fits a distribution to module.data_sampler output.
+    # Checked here, before anything is solved: without it the run dies on a
+    # bare AttributeError, and only after the candidate xhat EF has been solved.
+    if not hasattr(module, "data_sampler"):
+        raise RuntimeError(
+            f"\nModule {cfg.module_name} must contain a function data_sampler "
+            f"to use a smoothed method ({method}); it is what supplies the "
+            "sample the distribution is fitted to. The empirical methods do "
+            "not need it.")
     if method == "Smoothed_boot_epi":
         return smoothed_bootstrap(cfg, module, xhat, distr_type='univariate-epispline')
     elif method == "Smoothed_boot_kernel":

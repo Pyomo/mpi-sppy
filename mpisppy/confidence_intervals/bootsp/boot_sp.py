@@ -747,7 +747,9 @@ def compute_ci(cfg, module, xhat):
         raise ValueError(
             f"boot_method={method} is a smoothed method; it is dispatched by "
             "smoothed_boot_sp.compute_smoothed_ci, not boot_sp.compute_ci "
-            "(the drivers route smoothed methods automatically).")
+            "(the drivers route smoothed methods automatically). The methods "
+            "this function does handle are: "
+            f"{', '.join(boot_utils.empirical_members())}.")
     if method == "Extended":
         return extended_bootstrap(cfg, module, xhat)
     elif method == "Bagging_with_replacement":

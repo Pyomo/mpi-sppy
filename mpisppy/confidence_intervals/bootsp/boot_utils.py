@@ -145,6 +145,11 @@ def cfg_for_boot():
                       description="number of points to sample from the fitted distribution for the gap center.",
                       domain=int,
                       default=None)
+    cfg.add_to_config(name="smoothed_nonlinear_solver",
+                      description="nonlinear solver for the epi-spline fit"
+                      " (the other smoothed distributions need no solver).",
+                      domain=str,
+                      default="ipopt")
     return cfg
 
 

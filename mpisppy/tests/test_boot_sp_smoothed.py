@@ -26,6 +26,7 @@ import inspect
 import importlib.util
 import subprocess
 import tempfile
+import types
 import unittest
 from unittest import mock
 from collections import OrderedDict
@@ -150,7 +151,25 @@ def _make_farmer_cfg(method="Classical_quantile", seed=100):
 
 
 #*****************************************************************************
-class Test_statdist(unittest.TestCase):
+class _RestoresGlobalNumpySeed:
+    """ Puts numpy's global random state back after each test.
+
+    statdist's seed_reset calls np.random.seed, which is process-global. Left
+    alone, a test that seeds it re-seeds the stream for every test that runs
+    later in the same process -- mpisppy/opt/aph.py draws from it. Running this
+    file on its own hides that; a whole-directory pytest run does not.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self._np_random_state = np.random.get_state()
+
+    def tearDown(self):
+        np.random.set_state(self._np_random_state)
+        super().tearDown()
+
+
+class Test_statdist(_RestoresGlobalNumpySeed, unittest.TestCase):
     """ Direct tests of the trimmed statdist univariate distributions. """
 
     def test_factory_resolves_univariate(self):
@@ -187,6 +206,57 @@ class Test_statdist(unittest.TestCase):
         code = ("import sys;"
                 "import mpisppy.confidence_intervals.bootsp.statdist.distributions;"
                 "print('scipy loaded:', 'scipy' in sys.modules)")
+        done = subprocess.run([sys.executable, "-c", code],
+                              capture_output=True, text=True)
+        self.assertEqual(done.returncode, 0, msg=done.stderr)
+        self.assertIn("scipy loaded: False", done.stdout)
+
+    # the subprocess imports mpi-sppy, so it initializes MPI; under an mpiexec
+    # launch it would inherit this job's environment and join it
+    @unittest.skipIf(n_proc > 1, "spawns a plain (non-MPI) python subprocess")
+    def test_scipy_not_imported_by_an_empirical_lookup(self):
+        # Importing the module is the weaker property: the registry scan walks
+        # every binding in these modules, and scipy is bound there as a pyomo
+        # DeferredImportModule that resolves on any attribute access. So the
+        # first distribution_factory() call is where scipy actually leaked in,
+        # for empirical names too -- which the import-only check above cannot
+        # see. Every name here is one the empirical methods use.
+        code = ("import sys;"
+                "from mpisppy.confidence_intervals.bootsp.statdist"
+                ".distribution_factory import distribution_factory;"
+                "[distribution_factory(n) for n in ('univariate-unif',"
+                " 'univariate-normal', 'univariate-empirical',"
+                " 'univariate-discrete', 'univariate-student')];"
+                "print('scipy loaded:', 'scipy' in sys.modules)")
+        done = subprocess.run([sys.executable, "-c", code],
+                              capture_output=True, text=True)
+        self.assertEqual(done.returncode, 0, msg=done.stderr)
+        self.assertIn("scipy loaded: False", done.stdout)
+
+    # the subprocess imports mpi-sppy, so it initializes MPI; under an mpiexec
+    # launch it would inherit this job's environment and join it
+    @unittest.skipIf(n_proc > 1, "spawns a plain (non-MPI) python subprocess")
+    def test_empirical_scenario_builds_without_scipy(self):
+        # the end of the claim: a user who installed without [extras] can run
+        # the empirical methods. Blocks scipy outright and builds a scenario
+        # the way an empirical bootstrap run does.
+        code = (
+            "import sys\n"
+            "class Block:\n"
+            "    def find_spec(self, name, path=None, target=None):\n"
+            "        if name == 'scipy' or name.startswith('scipy.'):\n"
+            "            raise ImportError('scipy blocked')\n"
+            "        return None\n"
+            "sys.meta_path.insert(0, Block())\n"
+            f"sys.path.insert(0, {os.path.join(bootsp_examples, 'farmer')!r})\n"
+            "import farmer\n"
+            "import mpisppy.utils.config as config\n"
+            "cfg = config.Config()\n"
+            "cfg.add_to_config('seed_offset', description='s', domain=int, default=0)\n"
+            "farmer.inparser_adder(cfg)\n"
+            "cfg.yield_cv = 0.1\n"
+            "farmer.scenario_creator('scen3', cfg)\n"
+            "print('scipy loaded:', 'scipy' in sys.modules)\n")
         done = subprocess.run([sys.executable, "-c", code],
                               capture_output=True, text=True)
         self.assertEqual(done.returncode, 0, msg=done.stderr)
@@ -565,11 +635,12 @@ class _Interval:
             self.cutouts = cutouts
 
 
-class Test_statdist_base(unittest.TestCase):
+class Test_statdist_base(_RestoresGlobalNumpySeed, unittest.TestCase):
     """ The generic univariate machinery in base_distribution.py: the numeric
     cdf and its inversion, expectations, sampling and parameter bookkeeping. """
 
     def setUp(self):
+        super().setUp()          # snapshots numpy's global seed
         self.d = _RampDistribution()
 
     def test_support_defaults_to_unbounded(self):
@@ -1160,6 +1231,57 @@ class Test_review_regressions(unittest.TestCase):
         smoothed_boot_sp._ensure_smoothed_cfg(cfg)
         self.assertNotIn("detdata", cfg)
         self.assertIn("use_fitted", cfg)
+
+    def test_uniform_rejects_reversed_support(self):
+        # a > b was accepted silently and answered nonsense (cdf_inverse of a
+        # negative-width support), instead of being refused
+        unif = distribution_factory("univariate-unif")
+        with self.assertRaisesRegex(ValueError, "a < b"):
+            unif(0.0, -28.5)
+        with self.assertRaisesRegex(ValueError, "a < b"):
+            unif(1.0, 1.0)
+
+    def test_farmer_rejects_out_of_range_yield_cv(self):
+        # _get_b has a pole at 1/sqrt(3); at and above it the uniform support
+        # is undefined or reversed, and the run used to die much later in a
+        # raw Pyomo domain error that never mentioned yield_cv
+        module = boot_utils.module_name_to_module(FARMER)
+        cfg = _make_farmer_cfg()
+        for bad in (1.0 / math.sqrt(3.0), 0.7, 0.0, -0.1):
+            cfg.yield_cv = bad
+            with self.assertRaisesRegex(ValueError, "yield_cv"):
+                module.scenario_creator("scen3", cfg)
+        cfg.yield_cv = 0.1  # still fine below the pole
+        self.assertIsNotNone(module.scenario_creator("scen3", cfg))
+
+    def test_epispline_solver_is_configurable(self):
+        # fit_distribution never forwarded **distr_options, so nonlinear_solver
+        # was pinned to ipopt with no way to change it
+        cfg = _make_farmer_cfg()
+        self.assertEqual(cfg.smoothed_nonlinear_solver, "ipopt")
+        self.assertEqual(smoothed_boot_sp.fit_options(cfg, "univariate-epispline"),
+                         {"nonlinear_solver": "ipopt"})
+        cfg.smoothed_nonlinear_solver = "conopt"
+        self.assertEqual(smoothed_boot_sp.fit_options(cfg, "univariate-epispline"),
+                         {"nonlinear_solver": "conopt"})
+        # the others take no solver and would reject one
+        for other in ("univariate-kernel", "univariate-unif"):
+            self.assertEqual(smoothed_boot_sp.fit_options(cfg, other), {})
+
+    def test_smoothed_requires_data_sampler(self):
+        # a module without it used to die on a bare AttributeError, and only
+        # after the candidate xhat EF had been solved
+        cfg = _make_farmer_cfg("Smoothed_bagging")
+        module = types.ModuleType("no_data_sampler")
+        with self.assertRaisesRegex(RuntimeError, "data_sampler"):
+            smoothed_boot_sp.compute_smoothed_ci(cfg, module, {"ROOT": []})
+
+    def test_compute_ci_names_the_empirical_methods(self):
+        cfg = _make_farmer_cfg("Smoothed_bagging")
+        with self.assertRaises(ValueError) as ctx:
+            boot_sp.compute_ci(cfg, None, {"ROOT": []})
+        for method in boot_utils.empirical_members():
+            self.assertIn(method, str(ctx.exception))
 
     def test_farmer_data_sampler_has_no_spurious_zeros(self):
         # the first group is the unperturbed *scenario*; the perturbation

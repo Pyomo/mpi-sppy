@@ -24,13 +24,23 @@ farmerstream = np.random.RandomState()
 
 def _get_distr_dict(cfg):
 
+    # A uniform on (0, b) has coefficient of variation 1/sqrt(3) regardless of
+    # b, so matching a requested cv by scaling b only works below the point
+    # where the denominator vanishes: cv = 2/sqrt(12) = 1/sqrt(3) ~ 0.5774.
+    # At it the width is undefined, above it negative.
+    _CV_LIMIT = 1.0 / np.sqrt(3.0)
+
     def _get_b(c, cv):
         # c is approximately the lower bound of crop yield, cv is approx coefficient of variation
         # if no specified yield_cv, use the original scalable farmer unif(0,1)
         if cv is None:
             return 1
-        else:
-            return c*cv/(1/np.sqrt(12) - cv/2)
+        if cv <= 0 or cv >= _CV_LIMIT:
+            raise ValueError(
+                f"yield_cv must be in (0, {_CV_LIMIT:.4f}); got {cv}. The "
+                "perturbation is uniform on (0, b), whose coefficient of "
+                f"variation cannot reach {_CV_LIMIT:.4f} for any b.")
+        return c*cv/(1/np.sqrt(12) - cv/2)
 
     if not getattr(cfg, "use_fitted", False):
         uunif = statdist.distribution_factory('univariate-unif')
