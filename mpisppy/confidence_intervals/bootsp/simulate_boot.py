@@ -22,6 +22,31 @@ my_rank = boot_utils.my_rank
 comm = boot_utils.comm
 
 
+def replication_stride(cfg):
+    """ How far apart to place the coverage replications, in record numbers.
+
+    Args:
+        cfg (Config): parameters
+    Returns:
+        int
+
+    A replication occupies its data records and its fitted draws, which
+    draw_space_origin puts at max_count + seed_offset. Striding by the draw
+    footprint alone advances the two spaces at different rates, so the next
+    replication's data records land on this one's draw records -- the same
+    collision draw_space_origin exists to prevent, one level up. The stride is
+    therefore the whole footprint of a replication: its data, then its draws.
+
+    subsample_size is a bagging option that the smoothed bootstrap overwrites,
+    so a Smoothed_boot_* config may reasonably leave it unset; the same goes
+    for the two other optional fields here.
+    """
+    draw_footprint = max(
+        (cfg.smoothed_center_sample_size or 0) + cfg.nB * cfg.sample_size,
+        (cfg.smoothed_B_I or 1) * cfg.nB * (cfg.subsample_size or 0))
+    return cfg.max_count + draw_footprint
+
+
 def _rank0_optimal(cfg, module, xhat=None):
     """ Run process_optimal on rank 0 and let every rank hear how it went.
 
@@ -152,11 +177,7 @@ def smoothed_main_routine(cfg, module):
     # the center block plus one block per batch (smoothed bootstrap), or B_I
     # groups of nB bags (smoothed bagging). Take the larger of the two so the
     # stride covers whichever method is running.
-    # all three of these are optional in the json: subsample_size is a bagging
-    # option that the smoothed bootstrap overwrites anyway, so "None" is a
-    # reasonable thing for a Smoothed_boot_* config to say
-    stride = max((cfg.smoothed_center_sample_size or 0) + cfg.nB * cfg.sample_size,
-                 (cfg.smoothed_B_I or 1) * cfg.nB * (cfg.subsample_size or 0))
+    stride = replication_stride(cfg)
     seed_list = [i * stride + seed_offset for i in range(cfg.coverage_replications)]
 
     try:

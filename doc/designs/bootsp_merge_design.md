@@ -337,9 +337,21 @@ Behavior-preserving unless noted.
     configs and a spread of awkward offsets, so folding the origin back to
     `seed_offset` fails loudly.
 
+    The invariant has a second half, missed when item 15 was first written and
+    caught by a later review: it has to hold *across coverage replications*
+    too. `simulate_boot` walks `seed_offset` by a stride, and the data space
+    and the draw space advance together only if the stride covers both. It
+    covered the draws alone, so replication i's draws sat exactly on
+    replication i+1's data records -- measured on `smoothed_farmer.json`, all
+    250 of them -- and the replications a coverage rate averages over were
+    correlated. `replication_stride` is `max_count + draw_footprint` now, and a
+    test walks four replications and asserts every pair is disjoint. That test
+    calls `replication_stride` rather than recomputing it; an earlier version
+    recomputed the stride and so passed against a broken one.
+
     The offset is the cheap enforcement of the real invariant, which is that
     **the fitted-draw record space and the data record space must not
-    intersect**. The structurally cleaner alternative is to stop addressing
+    intersect, within a replication and between replications**. The structurally cleaner alternative is to stop addressing
     fitted draws by record number at all and give them their own stream, the
     way the empirical side already separates its pool and batch streams by
     seeding on a `(seed_offset, word)` pair (item 11). That would remove the

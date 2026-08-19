@@ -1337,15 +1337,63 @@ class Test_review_regressions(unittest.TestCase):
                     # the center block
                     draws.update(range(origin,
                                        origin + (cfg.smoothed_center_sample_size or 0)))
-                    # the smoothed-bootstrap batch blocks
+                    # The smoothed-bootstrap batch blocks. smoothed_bootstrap
+                    # sets subsample_size = sample_size before drawing them, so
+                    # the footprint is nB * sample_size -- using subsample_size
+                    # here would check a smaller set than the run consumes.
                     start = origin + (cfg.smoothed_center_sample_size or 0)
-                    draws.update(range(start, start + nB * m))
+                    draws.update(range(start, start + nB * cfg.sample_size))
                     # the bagging blocks
                     for i in range(cfg.smoothed_B_I or 1):
                         base = origin + nB * m * i
                         draws.update(range(base, base + nB * m))
                     self.assertEqual(data_records & draws, set(),
                                      msg="a fitted draw reused a data record")
+
+    def test_coverage_replications_do_not_share_records(self):
+        """ Replication i's draws must not land on replication j's data.
+
+        draw_space_origin separates the two spaces within one replication. The
+        coverage loop then walks seed_offset by a stride, and the two spaces
+        advance together only if the stride covers both -- otherwise the next
+        replication's data records sit on the previous one's draw records, and
+        the replications a coverage rate averages over are correlated.
+        """
+        path = os.path.join(bootsp_examples, "farmer", "smoothed_farmer.json")
+        with open(path) as f:
+            shipped = json.load(f)
+        cfg = boot_utils.cfg_for_boot()
+        for k, v in shipped.items():
+            if k in cfg:
+                cfg[k] = None if v == "None" else v
+        base, nB, m = cfg.seed_offset, cfg.nB, cfg.subsample_size
+        centre = cfg.smoothed_center_sample_size or 0
+        # the stride the coverage loop actually uses, not a copy of it
+        stride = simulate_boot.replication_stride(cfg)
+
+        def draws_of(offset):
+            cfg.seed_offset = offset
+            origin = smoothed_boot_sp.draw_space_origin(cfg)
+            out = set(range(origin, origin + centre))
+            out.update(range(origin + centre,
+                             origin + centre + nB * cfg.sample_size))
+            for i in range(cfg.smoothed_B_I or 1):
+                b0 = origin + nB * m * i
+                out.update(range(b0, b0 + nB * m))
+            return out
+
+        def data_of(offset):
+            # the model seeds a data record as record_num + seed_offset
+            return set(r + offset for r in range(cfg.max_count))
+
+        reps = [base + i * stride for i in range(4)]
+        for i, oi in enumerate(reps):
+            di = draws_of(oi)
+            for j, oj in enumerate(reps):
+                if i == j:
+                    continue
+                with self.subTest(draws_from=i, data_of=j):
+                    self.assertEqual(di & data_of(oj), set())
 
     def test_serial_mode_calls_no_collectives(self):
         # serial means the other ranks are not in the call at all, so any
