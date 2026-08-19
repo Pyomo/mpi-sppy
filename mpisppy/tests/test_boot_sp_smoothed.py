@@ -1140,11 +1140,19 @@ class Test_review_regressions(unittest.TestCase):
                                    side_effect=_Stop):
                 for seed in range(20):
                     cfg.seed_offset = seed
-                    with self.assertRaises(_Stop):
+                    # the fit runs on rank 0 and its outcome is broadcast, so a
+                    # failure inside it comes back wrapped
+                    with self.assertRaises((_Stop, RuntimeError)):
                         estimator(cfg, module, {"ROOT": []})
-        self.assertTrue(seen)
-        self.assertEqual(reserved & set(seen), set(),
-                         msg="the fitting sample reached into the xhat block")
+        if my_rank == 0:
+            # the fit runs on rank 0 and is broadcast, so only rank 0 draws the
+            # fitting sample at all
+            self.assertTrue(seen)
+            self.assertEqual(reserved & set(seen), set(),
+                             msg="the fitting sample reached into the xhat block")
+        else:
+            self.assertEqual(seen, [],
+                             msg="only rank 0 should draw the fitting sample")
 
     def test_estimators_hand_cfg_back_unchanged(self):
         # use_fitted used to be left True and subsample_size overwritten, so a
@@ -1445,6 +1453,34 @@ class Test_review_regressions(unittest.TestCase):
         with mock.patch.object(splines, "SolverFactory", return_value=fake_opt):
             with self.assertRaisesRegex(RuntimeError, "did not solve to optimality"):
                 splines.fit_distribution([1.0, 2.0, 3.0, 4.0, 5.0])
+
+    def test_kernel_cdf_uses_the_closed_form(self):
+        # the closed form existed but was named _cdf, so the base class never
+        # saw it and ran scipy.integrate.quad over pdf on every draw instead
+        cls = distribution_factory("univariate-kernel")
+        self.assertIn("cdf", cls.__dict__,
+                      msg="the kernel must override cdf, not hide it as _cdf")
+        rng = np.random.default_rng(0)
+        k = cls.fit(list(rng.normal(3.0, 1.0, 25)))
+        # same function as the base class computes, to well inside its tolerance
+        for x in np.linspace(k.alpha - 1.0, k.beta + 1.0, 25):
+            self.assertAlmostEqual(
+                k.cdf(float(x)), UnivariateDistribution.cdf(k, float(x)),
+                places=6, msg=f"x={x}")
+
+    def test_sampling_does_not_grow_a_cache_without_bound(self):
+        # cdf_inverse was memoized on a fresh uniform per draw, so the cache
+        # never hit and grew for as long as the fitted distribution lived
+        rng = np.random.default_rng(0)
+        k = distribution_factory("univariate-kernel").fit(
+            list(rng.normal(3.0, 1.0, 25)))
+        sizes = []
+        for n in (10, 200):
+            for _ in range(n):
+                k.cdf_inverse(float(rng.uniform()))
+            sizes.append(len(getattr(k, "_memoize_method__cache", {})))
+        self.assertLess(sizes[-1], 50,
+                        msg=f"cache grew to {sizes[-1]} entries across draws")
 
     def test_uniform_rejects_reversed_support(self):
         # a > b was accepted silently and answered nonsense (cdf_inverse of a

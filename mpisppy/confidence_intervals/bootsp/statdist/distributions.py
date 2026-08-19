@@ -349,15 +349,29 @@ class UnivariateGaussianKernelDistribution(UnivariateDistribution):
         # array triggers a NumPy>=1.25 "array to scalar" DeprecationWarning).
         return float(self.kernel.evaluate(x)[0])
 
-    def _cdf(self, x):
+    def cdf(self, x, epsabs=1e-4):
         """
         Args:
             x (float): The values where you want to compute the cdf
+            epsabs (float): accepted for signature compatibility with the base
+                class; this closed form is exact, so it is unused
 
         Returns:
             (float) The value of the cumulative density function
+
+        A gaussian_kde integrates in closed form, so there is no reason to run
+        the base class's scipy.integrate.quad over self.pdf -- which is what
+        happens if this is not named `cdf` (it was `_cdf` and therefore
+        invisible to the base class). The bounds match the base class exactly:
+        the support is [alpha, beta], so this is the same quantity, not a
+        different one. cdf_inverse steps over cdf repeatedly, so every draw
+        paid for the quadrature.
         """
-        return self.kernel.integrate_box_1d(self.lower, x)
+        if x <= self.alpha:
+            return 0
+        elif x >= self.beta:
+            return 1
+        return self.kernel.integrate_box_1d(self.alpha, x)
 
     #use the cdf_inverse function in base_distribution
 

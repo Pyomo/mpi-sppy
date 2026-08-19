@@ -178,7 +178,7 @@ def smoothed_resample_helper(cfg, module, xhat, serial=False):
 
 
 @contextmanager
-def _fitted_on_cfg(cfg, module, scenario_pool, distr_type):
+def _fitted_on_cfg(cfg, module, scenario_pool, distr_type, serial=False):
     """ Fit a distribution to the sampled data and expose it on cfg, then put
         cfg back the way it was found.
 
@@ -187,6 +187,8 @@ def _fitted_on_cfg(cfg, module, scenario_pool, distr_type):
         module (Python module): supplies data_sampler
         scenario_pool (iterable): the records to fit to
         distr_type (str): a statdist univariate distribution token
+        serial (bool): this rank is working alone, so it fits for itself and
+            takes part in no collective
 
     The estimators flip ``use_fitted`` so the module's scenario_creator draws
     from the fitted distribution rather than the real data, and the bootstrap
@@ -201,9 +203,37 @@ def _fitted_on_cfg(cfg, module, scenario_pool, distr_type):
              "subsample_size": cfg.subsample_size}
     try:
         cfg.use_fitted = False
-        sample_data = [module.data_sampler(scenario, cfg) for scenario in scenario_pool]
-        cfg.fitted_distribution = fit_distribution(
-            sample_data, distr_type=distr_type, **fit_options(cfg, distr_type))
+        # Fit once and hand the result round. Every rank used to fit the same
+        # data to the same distribution -- n_proc identical ipopt NLPs on the
+        # epi-spline path, for one answer -- and if a solve ever came out
+        # differently on one rank, the batches gathered from them would be
+        # draws from two different densities.
+        def _fit():
+            sample_data = [module.data_sampler(scenario, cfg)
+                           for scenario in scenario_pool]
+            return fit_distribution(sample_data, distr_type=distr_type,
+                                    **fit_options(cfg, distr_type))
+
+        if serial:
+            # no other rank is here to broadcast to
+            cfg.fitted_distribution = _fit()
+        else:
+            if my_rank == 0:
+                try:
+                    fitted, failure = _fit(), None
+                except Exception as e:
+                    fitted, failure = None, f"{type(e).__name__}: {e}"
+            else:
+                fitted, failure = None, None
+            fitted, failure = comm.bcast((fitted, failure), root=0)
+            if failure is not None:
+                # every rank raises: rank 0 leaving alone would strand the
+                # others in the next collective
+                raise RuntimeError(
+                    f"fitting the {distr_type} distribution failed on rank 0 "
+                    f"({failure}); every rank is stopping so the run does not "
+                    "hang")
+            cfg.fitted_distribution = fitted
         # From here on the draws come from the fitted distribution. Estimating
         # from the raw sample instead would give up the smoothing that is the
         # whole point of these methods.
@@ -241,7 +271,7 @@ def smoothed_bootstrap(cfg, module, xhat, distr_type='univariate-epispline', qua
 
     scenario_pool = boot_sp.draw_scenario_pool(cfg)
 
-    with _fitted_on_cfg(cfg, module, scenario_pool, distr_type):
+    with _fitted_on_cfg(cfg, module, scenario_pool, distr_type, serial):
         # the center: one replication at a large resample size
         # (smoothed_center_sample_size) drawn from the fitted distribution
         dag_gap = center_smoothed(cfg, module, xhat)
@@ -301,7 +331,7 @@ def smoothed_bagging(cfg, module, xhat, distr_type='univariate-kernel', serial=F
     """
     scenario_pool = boot_sp.draw_scenario_pool(cfg)
 
-    with _fitted_on_cfg(cfg, module, scenario_pool, distr_type):
+    with _fitted_on_cfg(cfg, module, scenario_pool, distr_type, serial):
         return _bagging_from_fitted(cfg, module, xhat, serial)
 
 
