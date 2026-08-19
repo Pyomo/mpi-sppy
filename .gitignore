@@ -189,6 +189,15 @@ examples/farmer/farmersol.npy
 examples/farmer/farmersol_soldir/
 examples/farmer/archive/farmer_plant.csv
 examples/farmer/archive/results/
+# examples/usar/write_solutions.py writes one directory per --output-dir; the
+# only committed thing beside them is that script, so the wildcard is safe
+examples/usar/solutions_*/
+# the uc EF driver writes one json per scenario here.  Named exactly:
+# examples/uc/3scenarios_r1/ next door is committed input data, so there is
+# deliberately no blanket examples/uc/3scenario* rule
+examples/uc/3scenario_EF_solution/
+# what --solution-base-name leaves behind in examples/farmer/CI
+examples/farmer/CI/farmer_mrp_xhat.*
 
 # examples/run_more.py writes <ID>.perf.csv next to itself
 examples/*.perf.csv
