@@ -118,6 +118,8 @@ class FWPH(mpisppy.phbase.PHBase):
         self._output(trivial_bound, trivial_bound, np.nan, secs)
         self._fwph_best_bound = trivial_bound
 
+        if self.FW_options.get("objgap_mode", False):
+            self._record_initial_mip_gaps()
         # Lines 2 and 3 of Algorithm 3 in Boland
         # Now done a the beginning of the first iteration
         # self.Compute_Xbar(self.options['verbose'])
@@ -223,10 +225,10 @@ class FWPH(mpisppy.phbase.PHBase):
         max_iterations = int(self.options["PHIterLimit"])
 
         # The body of the algorithm
-        while (self._PHIter < max_iterations):
+        for self._PHIter in range(1, max_iterations+1):
             iteration_start_time = time.perf_counter()
             if dprogress:
-                global_toc(f"Initiating FWPH Major Iteration {self._PHIter+1}\n", self.cylinder_rank == 0)
+                global_toc(f"Initiating FWPH Major Iteration {self._PHIter}\n", self.cylinder_rank == 0)
 
             # tbphloop = time.perf_counter()
             # TODO: should implement our own Xbar / W computation
@@ -321,48 +323,38 @@ class FWPH(mpisppy.phbase.PHBase):
             FW_conv_thresh=None,
         ):
             if sdm_iter_limit is None:
-                sdm_iter_limit = self.FW_options["FW_iter_limit"]
+                sdm_iter_limit = self.FW_options["FW_iter_limit"] if not self.FW_options["objgap_mode"] else 100000
             if FW_conv_thresh is None:
                 FW_conv_thresh = self.FW_options["FW_conv_thresh"]
-            max_iterations = int(self.options["PHIterLimit"])
             # print(f"{sdm_iter_limit=}")
             self._swap_nonant_vars()
             self._local_bound = 0
             # tbsdm = time.perf_counter()
-            _sdm_generators = {}
             stop = False
             best_bound_update = self._can_update_best_bound()
             for name in self.local_scenarios:
-                _sdm_generators[name] = self.SDM(name, mip_solver_options, dtiming, tee, verbose, sdm_iter_limit, FW_conv_thresh, best_bound_update)
+                stop = False
+                if self.FW_options["objgap_mode"]:
+                    self._set_objgap_mip_solver_options(mip_solver_options, name)
+                    FW_conv_thresh = self._get_objgap_FW_conv_thresh(name)
+                _sdm_generator = self.SDM(name, mip_solver_options, dtiming, tee, verbose, sdm_iter_limit, FW_conv_thresh, best_bound_update)
                 try:
-                    dual_bound = next(_sdm_generators[name])
+                    dual_bound = next(_sdm_generator)
                 except StopIteration as e:
                     dual_bound = e.value
                     stop = True
                 self._local_bound += self.local_scenarios[name]._mpisppy_probability * \
                                      dual_bound
-            self._update_dual_bounds()
-            self._PHIter += 1
-            if self._PHIter == max_iterations:
-                stop = True
-            if self._sync_after_mip_solve():
-                stop = True
-            stop = self.allreduce_or(stop)
-            while not stop:
-                stop = False
-                for col_generator in _sdm_generators.values():
+                while not stop:
                     try:
-                        next(col_generator)
+                        next(_sdm_generator)
                     except StopIteration:
-                       stop = True
-                self._PHIter += 1
-                if self._PHIter == max_iterations:
-                    stop = True
-                if self._sync_after_mip_solve():
-                    stop = True
-                stop = self.allreduce_or(stop)
+                        stop = True
+
+            self._update_dual_bounds()
             # tsdm = time.perf_counter() - tbsdm
             # print(f"PH iter {self._PHIter}, total SDM time: {tsdm}")
+            self._sync_after_mip_solve()
 
             # Re-set the mip._mpisppy_model.W so that the QP objective
             # is correct in the next major iteration
@@ -379,7 +371,7 @@ class FWPH(mpisppy.phbase.PHBase):
         # add columns from cylinder(s)
         self._swap_nonant_vars_back()
         # spoke or hub (FWPH_Cylinder)
-        if hasattr(self.spcomm, "add_cylinder_columns"):
+        if self.FW_options.get("add_cylinder_columns", False) and hasattr(self.spcomm, "add_cylinder_columns"):
             self.spcomm.add_cylinder_columns()
         # hub
         if hasattr(self.spcomm, "sync_bounds"):
@@ -401,18 +393,18 @@ class FWPH(mpisppy.phbase.PHBase):
         qp  = self.local_QP_subproblems[model_name]
     
         # Set the QP dual weights to the correct values.
-        arb_scen_mip = self.local_scenarios[model_name]
+        scen_mip = self.local_scenarios[model_name]
 
-        for (node_name, ix) in arb_scen_mip._mpisppy_data.nonant_indices:
+        for (node_name, ix) in scen_mip._mpisppy_data.nonant_indices:
             qp._mpisppy_model.W[node_name, ix]._value = \
-                arb_scen_mip._mpisppy_model.W[node_name, ix].value
+                scen_mip._mpisppy_model.W[node_name, ix].value
 
         alpha = self.FW_options['FW_weight']
         # Algorithm 3 line 6
         xt = {ndn_i:
-            (1 - alpha) * arb_scen_mip._mpisppy_model.xbars[ndn_i]._value
+            (1 - alpha) * scen_mip._mpisppy_model.xbars[ndn_i]._value
             + alpha * xvar._value
-            for ndn_i, xvar in arb_scen_mip._mpisppy_data.nonant_indices.items()
+            for ndn_i, xvar in scen_mip._mpisppy_data.nonant_indices.items()
             }
 
         for itr in range(sdm_iter_limit):
@@ -451,8 +443,12 @@ class FWPH(mpisppy.phbase.PHBase):
                 # Algorithm 2 line 9 (compute \Gamma^t)
                 inner_bound = mip._mpisppy_data.inner_bound
                 # print(f"{model_name=}, {inner_bound=}")
-                gamma_t = self._compute_gamma_t(cutoff, inner_bound)
-                # print(f"{itr=}, {model_name=}, {gamma_t=}")
+                if self.FW_options["objgap_mode"]:
+                    outer_bound = mip._mpisppy_data.outer_bound
+                    gamma_t = self._compute_gamma_t_objgap(cutoff, inner_bound, outer_bound)
+                else:
+                    gamma_t = self._compute_gamma_t(cutoff, inner_bound)
+                # print(f"{model_name=}, {itr=}, {gamma_t=:.2e}, {FW_conv_thresh=:.2e}")
 
                 # tbcol = time.perf_counter()
                 self._add_QP_column(model_name)
@@ -492,12 +488,13 @@ class FWPH(mpisppy.phbase.PHBase):
                 dual_bound = mip._mpisppy_data.outer_bound
 
             if itr + 1 == sdm_iter_limit or not mip._mpisppy_data.solution_available or gamma_t < FW_conv_thresh:
+                # print(f"\tSTOPPING: {model_name=}, {itr=}, {gamma_t=:.2e}, {FW_conv_thresh=:.2e}")
                 return dual_bound
             else:
                 yield dual_bound
 
             # reset for next loop
-            for ndn_i, xvar in arb_scen_mip._mpisppy_data.nonant_indices.items():
+            for ndn_i, xvar in scen_mip._mpisppy_data.nonant_indices.items():
                 xt[ndn_i] = xvar._value
 
 
@@ -600,7 +597,24 @@ class FWPH(mpisppy.phbase.PHBase):
             print('Warning (fwph): convergence quantity Gamma^t = '
                  '{sc:.2e} (should be non-positive)'.format(sc=stop_check))
             print('Try decreasing the MIP gap tolerance and re-solving')
-        return stop_check
+        if self.is_minimizing:
+            return float(stop_check)
+        else:
+            return float(-stop_check)
+
+    def _compute_gamma_t_objgap(self, cutoff, inner_bound, outer_bound):
+        if self.is_minimizing:
+            stop_check = cutoff - inner_bound + (inner_bound - outer_bound) # \Gamma^t in Eckstein
+        else:
+            stop_check = inner_bound - cutoff + (outer_bound - inner_bound) # \Gamma^t in Eckstein
+        # print(f"{model_name}, Gamma^t = {stop_check}")
+        stop_check_tol = self.FW_options.get("stop_check_tol", 1e-4)
+        if (self.is_minimizing and stop_check < -stop_check_tol):
+            print('Warning (fwph): convergence quantity Gamma^t = '
+                 '{sc:.2e} (should be non-negative)'.format(sc=stop_check))
+            print('Something is wrong with the automatic gap settings in fwph_objgap')
+        return float(stop_check)
+
 
     def _add_objective_cutoff(self, mip, qp, model_name, best_bound_update, FW_conv_thresh):
         """ Add a constraint to the MIP objective ensuring
@@ -896,8 +910,10 @@ class FWPH(mpisppy.phbase.PHBase):
         self._xhatter.post_iter0()
 
     def _generate_initial_columns_if_needed(self):
+        if self.FW_options["objgap_mode"]:
+            return
         if self.spcomm is not None:
-            if self.spcomm.receive_field_spcomms[Field.BEST_XHAT]:
+            if self.FW_options.get("add_cylinder_columns", False) and self.spcomm.receive_field_spcomms[Field.BEST_XHAT]:
                 # we'll get the initial columns from the incumbent finder spoke
                 return
         number_initial_column_tries = self.options.get("FW_initialization_attempts", 10)
@@ -978,6 +994,9 @@ class FWPH(mpisppy.phbase.PHBase):
         # 4. Provide a time limit of inf if the user did not specify
         if ('time_limit' not in self.FW_options or self.FW_options['time_limit'] is None):
             self.FW_options['time_limit'] = np.inf
+
+        if "objgap_mode" not in self.FW_options:
+            self.FW_options["objgap_mode"] = False
 
     def _output(self, bound, best_bound, diff, secs):
         if (self.cylinder_rank == 0 and self.vb):
@@ -1165,6 +1184,28 @@ class FWPH(mpisppy.phbase.PHBase):
                     if v not in self._initial_fixed_varibles:
                         return False
         return True
+
+    def _record_initial_mip_gaps(self):
+        self._scenario_initial_gap = {}
+        for sn, s in self.local_scenarios.items():
+            if self.is_minimizing:
+                self._scenario_initial_gap[sn] = s._mpisppy_data.inner_bound - s._mpisppy_data.outer_bound
+            else:
+                self._scenario_initial_gap[sn] = s._mpisppy_data.outer_bound - s._mpisppy_data.inner_bound
+            self._scenario_initial_gap[sn] = max(self._scenario_initial_gap[sn], self.FW_options.get("objgap_initial_floor", 1.0))
+            # print(f"{sn}, {self._scenario_initial_gap[sn]=}")
+
+    def _get_objgap_FW_conv_thresh(self, sn):
+        k = self._PHIter
+        alpha = self.FW_options.get("objgap_decrease_base", 0.9)
+        beta = self.FW_options.get("objgap_decrease_coeff", 3)
+
+        return beta * self._scenario_initial_gap[sn] * (alpha ** k)
+
+    def _set_objgap_mip_solver_options(self, mip_solver_options, sn):
+        absolute_gap = self.FW_options.get("mip_fw_effort_balance", 0.5) * self._scenario_initial_gap[sn]
+        mip_solver_options["mipgap"] = 0
+        mip_solver_options["absgap"] = absolute_gap
 
 if __name__=='__main__':
     print('fwph.py has no main()')

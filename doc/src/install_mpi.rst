@@ -20,11 +20,10 @@ Here are two methods that seem to work well for installation, at least when cons
 
    * ``pip install -e .[mpi]`` (after cloning and moving to the repo root directory)
 
-To test
-your installation, cd to the directory where you installed mpi-sppy
-(it is called ``mpi-sppy``) and then give this command.
+To test your installation, give this command (once mpi-sppy is
+installed it works from any directory):
 
-``mpirun -n 2 python -m mpi4py mpi_one_sided_test.py``
+``mpirun -n 2 mpi-sppy-one-sided-test``
 
 If you don't see any error messages, you might have an MPI
 installation that will work well. Note that even if there is
@@ -55,9 +54,21 @@ Further, without this setting and in situations with a large number of ranks (e.
 Other pip extras
 ^^^^^^^^^^^^^^^^
 
-In addition to ``[mpi]``, mpi-sppy declares a couple of other ``pip``
-extras that can be combined with it (with commas, e.g.
-``pip install -e ".[mpi,doc]"``):
+In addition to ``[mpi]``, mpi-sppy declares other ``pip`` extras that can
+be combined with it (with commas, e.g. ``pip install -e ".[mpi,dev]"``):
 
-* ``doc`` -- installs Sphinx and the theme used to build the documentation.
-* ``scipy`` -- installs SciPy, used by a few utilities.
+* ``extras`` -- every pip-installable optional feature of the library
+  itself: ``scipy`` (confidence intervals, quadratic prox approximation,
+  kkt utilities), ``pandas`` (rho CSV utilities, W tracking),
+  ``matplotlib`` (plotting), ``dill`` (pickled scenario bundles), and
+  ``mip`` (MPS/LP/SMPS file input).
+* ``test`` -- everything in ``extras`` plus the tools the test suite and
+  the examples need beyond a solver (``pytest``, ``coverage``,
+  ``addheader``, and ``gridx-egret`` for the unit commitment examples).
+* ``doc`` -- Sphinx and the theme used to build the documentation.
+* ``dev`` -- the one-stop shop for contributors: everything in ``test``
+  and ``doc`` plus ``ruff`` (linting).
+
+Solvers (e.g. cplex, gurobipy, xpress) are deliberately in no extra:
+which one to install is a licensing decision, so install your solver of
+choice separately.

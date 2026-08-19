@@ -131,6 +131,7 @@ def add_decomp_args(cfg):
     cfg.xhatxbar_args()
     cfg.xhat_from_file_args()
     cfg.write_xhat_file_args()
+    cfg.xhat_feasibility_cut_args()
     cfg.norm_rho_args()
     cfg.primal_dual_rho_args()
     cfg.converger_args()
@@ -144,6 +145,7 @@ def add_decomp_args(cfg):
     cfg.coeff_rho_args()
     cfg.sensi_rho_args()
     cfg.reduced_costs_rho_args()
+    cfg.timed_mipgap_args()
 
     cfg.add_to_config("user_defined_extensions",
                       description="Space-delimited module names for user extensions",
@@ -187,6 +189,7 @@ def parse_args(m):
     # TBD - think about adding directory for json options files
 
     cfg.mmw_args()
+    cfg.vss_args()
 
     from mpisppy.generic.admm import admm_args
     admm_args(cfg)

@@ -85,7 +85,14 @@ def _run(num_scens, max_iterations, hub_ratio, spoke_ratio):
         payload = wheel.BestOuterBound
     else:
         payload = None
-    return comm.bcast(payload, root=0)
+    bound = comm.bcast(payload, root=0)
+    # every rank's coherence read-outcome counters (field name -> buckets),
+    # allgathered so each rank can assert on the whole picture
+    local_counters = {
+        field.name: dict(counters)
+        for field, counters in wheel.spcomm.coherence_counters.items()
+    }
+    return bound, comm.allgather(local_counters)
 
 
 @unittest.skipUnless(comm.size == 6, "needs exactly 6 MPI ranks")
@@ -96,8 +103,9 @@ class TestFlexibleRankDuals(unittest.TestCase):
     MAX_ITERS = 50
 
     def test_strict_duals_both_directions_agree_and_bound_valid(self):
-        ob_42 = _run(self.NUM_SCENS, self.MAX_ITERS, 1.0, 0.5)  # 4-rank hub, 2-rank spoke
-        ob_24 = _run(self.NUM_SCENS, self.MAX_ITERS, 1.0, 2.0)  # 2-rank hub, 4-rank spoke
+        # 4-rank hub, 2-rank spoke / 2-rank hub, 4-rank spoke
+        ob_42, counters_42 = _run(self.NUM_SCENS, self.MAX_ITERS, 1.0, 0.5)
+        ob_24, counters_24 = _run(self.NUM_SCENS, self.MAX_ITERS, 1.0, 2.0)
 
         # Finite bound (a broken read would give inf or error out).
         self.assertTrue(abs(ob_42) < float("inf"))
@@ -114,6 +122,31 @@ class TestFlexibleRankDuals(unittest.TestCase):
         # A mixed-iteration W could violate this.
         self.assertLessEqual(ob_42, EF_OPT + 1e-4 * abs(EF_OPT))
         self.assertLessEqual(ob_24, EF_OPT + 1e-4 * abs(EF_OPT))
+
+        # Coherence read-outcome diagnostic. Only reads with >= 2 sources are
+        # counted, so presence depends on the split: in 4+2 each 5-scenario
+        # spoke rank must straddle the 4-rank hub's <=3-scenario slices
+        # (guaranteed multi-source), while in 2+4 the spoke's slices may nest
+        # inside the hub's halves and leave every read single-source.
+        for all_counters in (counters_42, counters_24):
+            for rank_counters in all_counters:
+                for counters in rank_counters.values():
+                    # the outcome buckets partition the total
+                    self.assertGreater(counters["total"], 0)
+                    self.assertEqual(
+                        counters["total"],
+                        counters["new_accepted"] + counters["not_new"]
+                        + counters["rejected_incoherent"]
+                        + counters["rejected_cross_reader"]
+                        + counters["accepted_mixed"],
+                    )
+                # DUALS is strict: a blended assembly must never be accepted
+                if "DUALS" in rank_counters:
+                    self.assertEqual(rank_counters["DUALS"]["accepted_mixed"], 0)
+        duals_42 = [c["DUALS"] for c in counters_42 if "DUALS" in c]
+        self.assertGreater(len(duals_42), 0)
+        # the 4+2 bound can only have come from accepted multi-source reads
+        self.assertGreater(sum(c["new_accepted"] for c in duals_42), 0)
 
 
 if __name__ == "__main__":
