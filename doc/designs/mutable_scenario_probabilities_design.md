@@ -1,31 +1,43 @@
 # Mutable scenario probabilities
 
-Status: phases 0, 1, 2 and 4 implemented and verified (addresses issue #797);
-phase 3 (multistage node probabilities and the variable-probability
-interaction) remains (§9). Covers the current behavior (§1), the use case and
-goals (§2–3), the design (§4), the EF path in detail (§5), the PH/decomposition
-path (§6), API and compatibility (§7), and open questions (§8).
+Status: **extensive-form only, and deliberately so.** The EF path (phases 0-1)
+is implemented and verified; addresses issue #797. Covers the current behavior
+(§1), the use case and goals (§2-3), the design (§4), the EF path in detail
+(§5), the PH/decomposition path (§6 - **not implemented, see below**), API and
+compatibility (§7), and open questions (§8).
 
-Implemented so far, EF path (the issue's request):
-`sputils.has_persistent_solve_api` (recognizes APPSI / `pyomo.contrib.solver`
-as persistent for the EF workflow); `mutable_probability` option on
-`_create_EF_from_scen_dict` and `ExtensiveForm` (option-B Param objective);
-`ExtensiveForm.set_scenario_probabilities`; and a `reuse_instance` argument to
-`solve_extensive_form`. Verified end-to-end on the farmer example against a
-rebuild oracle — machine-precision agreement across a probability sweep, with
-`set_instance` called once — for **both** `appsi_highs` (auto-tracks the
-change) and `gurobi_persistent` (requires the explicit `set_objective`
-re-push).
-
-Implemented so far, PH path: `SPBase.set_scenario_probabilities` (two-stage),
-which refreshes `prob_coeff` and re-projects the PH multipliers `W` onto the
-new probabilities, keeping the fraction
-`mutable_probability_ph_dual_carryover` of them (§6). Plus docs
+Implemented: `sputils.has_persistent_solve_api` (recognizes APPSI /
+`pyomo.contrib.solver` as persistent for the EF workflow); `mutable_probability`
+option on `_create_EF_from_scen_dict` and `ExtensiveForm` (option-B Param
+objective); `ExtensiveForm.set_scenario_probabilities`; a `reuse_instance`
+argument to `solve_extensive_form`; docs
 (`doc/src/mutable_probability.rst`) and a runnable example
-(`examples/farmer/farmer_prob_sensitivity.py`).
-
-Tests: `Test_mutable_probability` and `Test_mutable_probability_ph` in
+(`examples/farmer/farmer_prob_sensitivity.py`). Verified end-to-end on the
+farmer example against a rebuild oracle -- machine-precision agreement across a
+probability sweep, with `set_instance` called once -- for **both**
+`appsi_highs` (auto-tracks the change) and `gurobi_persistent` (requires the
+explicit `set_objective` re-push). Tests: `Test_mutable_probability` in
 `mpisppy/tests/test_ef_ph.py`.
+
+**Scope decision (2026-08-19): the PH path in §6 was built, then dropped.** It
+worked, but it was the wrong trade. The EF's persistent-solver reuse is the
+whole payoff of this feature; PH subproblem solvers already persist across
+iterations, so reusing a PH object across a sweep saves only scenario
+construction, and building a PH per probability vector is fine. Against that
+small gain, the PH path required `SPBase.set_scenario_probabilities` plus a
+dual re-projection with a carryover parameter, and -- to make a second
+`ph_main()` mean anything -- surgery on `PH_Prep`, `attach_Ws_and_prox` and
+`attach_PH_to_objective`. Issue #797 asks for the EF. This feature will be used
+rarely, and rarely-used features should not carry core PH along with them.
+
+The `PH_Prep` work was a genuine bug fix independent of probabilities (a second
+`ph_main()` wiped `W` and double-augmented the objective), so it moved to its
+own branch, `fix/ph-prep-reentrant`, to be reviewed on its own merits. §6 is
+kept below as the record of what a PH path would take, not as a plan.
+
+Multistage is out of scope on the EF path too: `set_scenario_probabilities`
+raises `NotImplementedError` rather than leave every `ScenarioNode.cond_prob`
+stale. See §9.
 
 ---
 
@@ -324,7 +336,12 @@ on the underlying scenario models, so any downstream reader (solution
 reporting, `get_objective_value`, zhat evaluation) sees the same numbers the
 objective used.
 
-## 6. PH / decomposition path
+## 6. PH / decomposition path (NOT IMPLEMENTED)
+
+> Kept as the record of what a PH path would take. It was built and then
+> removed; see the scope decision at the top of this document. Nothing in
+> `mpisppy` implements what follows.
+
 
 The PH path does not bake probabilities into a Pyomo objective, so no Param is
 needed there. What it needs is a way to **recompute `prob_coeff`** after a
@@ -332,7 +349,7 @@ change. Today `_compute_unconditional_node_probabilities` only computes
 `prob_coeff` if it is missing (`if not hasattr(...)`), so it will not pick up
 an updated `_mpisppy_probability` on its own.
 
-Design (implemented, phase 2): `SPBase.set_scenario_probabilities(prob_map,
+Design (was implemented, then removed): `SPBase.set_scenario_probabilities(prob_map,
 check_sum=True, mutable_probability_ph_dual_carryover=0.5)` that
 
 1. updates `_mpisppy_probability` on each local scenario named in `prob_map`
@@ -468,25 +485,22 @@ stay in sync and there is one method name across both.
 
 ---
 
-## 9. Suggested implementation phases
+## 9. Implementation status
 
 0. **[done]** Prerequisite: extend persistence detection to APPSI /
    `pyomo.contrib.solver` interfaces so `appsi_highs` (the issue's solver) is
    recognized as persistent (§5.2, §8.3c). Implemented as
-   `sputils.has_persistent_solve_api`; `ExtensiveForm.solve_extensive_form`
-   uses it in place of the old `"persistent" in name` / `is_persistent` checks.
+   `sputils.has_persistent_solve_api`.
 1. **[done]** EF-only, two-stage: `mutable_probability` flag, Param objective
    with option-(B) normalization (require sum-to-1, no divisor),
    `set_scenario_probabilities`, explicit `reuse_instance` argument to
-   `solve_extensive_form`. Closes the issue. Verified against a rebuild oracle
-   on farmer for `appsi_highs` and `gurobi_persistent`.
-2. **[done]** PH path: `SPBase.set_scenario_probabilities` + `prob_coeff`
-   refresh (with `mutable_probability_ph_dual_carryover` re-projecting the
-   duals, §6).
-   Verified on farmer against the EF oracle.
-3. Multistage node probabilities and variable-probability interaction.
-4. **[done]** Docs + a probability-sensitivity example under `examples/`.
-   `examples/farmer/farmer_prob_sensitivity.py` (sweeps the weight on one
-   scenario, reuses the persistent instance across the sweep) and
-   `doc/src/mutable_probability.rst` (linked from `index.rst` after `ef.rst`).
-   A dedicated `generic_cylinders` CLI flag was intentionally omitted — see §7.
+   `solve_extensive_form`, docs and the farmer sensitivity example. Closes the
+   issue.
+2. **[dropped]** PH path — built and then removed; see the scope decision at
+   the top. §6 records what it would take.
+3. **[not planned]** Multistage node probabilities and the
+   variable-probability interaction. Re-weighting a multistage tree means
+   updating every `ScenarioNode.cond_prob`, since `uncond_prob` and the
+   derived `prob_coeff` come from those; the EF setter raises
+   `NotImplementedError` rather than leave them inconsistent. Rebuild the
+   model to re-weight a multistage problem. No work is scheduled.

@@ -300,12 +300,6 @@ class PHBase(mpisppy.spopt.SPOpt):
         # flags to complete the invariant
         self.convobject = None  # PH converger
         self.attach_xbars()
-        # Which PH terms attach_PH_to_objective has spliced into the saved
-        # objectives. Tracked per term, not as one flag: a repeat call is
-        # either a re-entered PH_Prep (nothing new to add) or FWPH adding its
-        # prox term on top of the W term it attached earlier.
-        self._PH_duals_attached = False
-        self._PH_prox_attached = False
 
     @property
     def iter0_solver_options(self):
@@ -707,12 +701,6 @@ class PHBase(mpisppy.spopt.SPOpt):
         """ Attach the dual and prox terms to the models in `local_scenarios`.
         """
         for (sname, scenario) in self.local_scenarios.items():
-            if hasattr(scenario._mpisppy_model, "W"):
-                # PH_Prep is being re-entered (a second ph_main() on this
-                # object). Re-declaring these Params replaces them, which
-                # silently discards W and rho and orphans the objective terms
-                # built against the old ones, so reuse what is already there.
-                continue
             # these are bound by index to the vardata list at the node
             scenario._mpisppy_model.W = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                         initialize=0.0,
@@ -745,8 +733,6 @@ class PHBase(mpisppy.spopt.SPOpt):
         """ Attach the smoothing terms to the models in `local_scenarios`.
         """
         for (sname, scenario) in self.local_scenarios.items():
-            if hasattr(scenario._mpisppy_model, "z"):
-                continue   # re-entered PH_Prep; see attach_Ws_and_prox
             scenario._mpisppy_model.z = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                         initialize=0.0,
                                         mutable=True)
@@ -899,19 +885,6 @@ class PHBase(mpisppy.spopt.SPOpt):
         else:
             self._prox_approx = False
 
-        # Attach only what is not in the objective yet. Anything already there
-        # is still live -- attach_Ws_and_prox preserves the Params it was built
-        # against -- so re-adding it would put a second, stale-xbar copy in
-        # every subproblem objective. Masking rather than refusing keeps FWPH's
-        # deliberate two-step attach working (W at PH_Prep, prox later for the
-        # LP start; see fwph.py).
-        add_duals = add_duals and not self._PH_duals_attached
-        add_prox = add_prox and not self._PH_prox_attached
-        if (not add_duals) and (not add_prox):
-            return
-        self._PH_duals_attached = self._PH_duals_attached or add_duals
-        self._PH_prox_attached = self._PH_prox_attached or add_prox
-
         for (sname, scenario) in self.local_scenarios.items():
             """Attach the dual and prox terms to the objective.
             """
@@ -1047,16 +1020,9 @@ class PHBase(mpisppy.spopt.SPOpt):
             at the time the PH object was created.
         """
 
-        reprepping = self._PH_duals_attached or self._PH_prox_attached
         self.attach_Ws_and_prox()
         if attach_smooth:
             self.attach_smoothing()
-        if reprepping:
-            # Iter0 solves with no dual or prox contribution. On a first
-            # PH_Prep that holds because the terms are not in the objective
-            # yet; on a re-prep they are already there and enabled from the
-            # previous run, so gate them off. Iter0 re-enables at the end.
-            self.disable_W_and_prox()
         # attach_PH_to_objective sets self._prox_approx; when the attach is
         # deferred it has not run yet, but the iteration-0 solve_loop reads
         # this flag. Prox terms (and any prox approximation) are structurally

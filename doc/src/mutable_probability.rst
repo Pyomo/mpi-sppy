@@ -67,63 +67,27 @@ A complete, runnable example is ``examples/farmer/farmer_prob_sensitivity.py``,
 which sweeps the weight on one farmer scenario and reports how the optimal
 first-stage planting decision responds.
 
-Progressive Hedging and other decomposition
---------------------------------------------
+Scope
+-----
 
-The PH family does not bake probabilities into a Pyomo objective; it weights
-``xbar``/``W``/``rho`` numerically through ``prob_coeff``, read fresh each
-iteration. ``SPBase.set_scenario_probabilities`` updates
-``_mpisppy_probability`` on the scenarios and forces ``prob_coeff`` to be
-recomputed so the next iteration uses the new weights:
-
-.. code-block:: python
-
-   ph.set_scenario_probabilities(
-       prob_map, mutable_probability_ph_dual_carryover=0.5)
-
-The PH multipliers ``W`` need attention when re-solving in place. PH maintains
-``sum_s p_s W_s == 0``, since each ``W`` update adds ``rho (x_s - xbar)``,
-whose probability-weighted sum is zero. Changing the probabilities breaks that
-invariant, so the carried-over ``W`` is no longer a valid dual. The multipliers
-are therefore re-projected under the new probabilities and scaled:
-
-.. math::
-
-   W_s \leftarrow \alpha \left( W_s - \sum_t p_t W_t \right)
-
-``mutable_probability_ph_dual_carryover`` is :math:`\alpha`, in [0, 1],
-default 0.5. ``0`` discards the duals and ``1`` keeps the full re-projected
-warm start.
-
-The re-projection is not optional. Nothing later in PH corrects the imbalance:
-``Update_W`` adds ``rho (x_s - xbar)``, which contributes zero to the
-probability-weighted sum, so an imbalance introduced by a re-weight persists
-for the whole run and biases the aggregate objective. On farmer, carrying the
-duals unmodified at :math:`\alpha = 1` converges to a point 70 acres away from
-the correct solution.
-
-Carrying more of the duals is faster. On farmer, a re-weight followed by
-``ph_main()`` took 25, 21 and 18 iterations at :math:`\alpha` of 0, 0.5 and
-1.0, all reaching the same solution.
+This is an extensive-form feature. Progressive Hedging and the other
+decomposition methods do not bake probabilities into a Pyomo objective -- they
+weight ``xbar``/``W``/``rho`` numerically through ``prob_coeff``, read fresh
+each iteration -- so there is nothing there for a mutable ``Param`` to buy, and
+their subproblem solvers already persist across iterations. To sweep
+probabilities under PH, build a PH object per probability vector.
 
 .. note::
 
-   Re-solving in place relies on ``PH_Prep`` being re-entrant, which it became
-   as part of this work: it now reuses the existing ``W``/``prox`` components
-   rather than re-declaring them, and does not splice a second PH term into an
-   already-augmented objective.
-
-.. note::
-
-   ``SPBase.set_scenario_probabilities`` currently supports two-stage
-   problems. Multistage node probabilities (``ScenarioNode.cond_prob``) are a
-   later phase and raise ``NotImplementedError``.
+   Two-stage only. Re-weighting a multistage tree would also have to update
+   every ``ScenarioNode.cond_prob``, since the unconditional node
+   probabilities -- and the derived ``prob_coeff`` -- come from those;
+   ``set_scenario_probabilities`` raises ``NotImplementedError`` rather than
+   leave them stale. There is no multistage support and none is planned:
+   rebuild the model with the new probabilities instead.
 
 API
 ---
 
 .. automethod:: mpisppy.opt.ef.ExtensiveForm.set_scenario_probabilities
-   :noindex:
-
-.. automethod:: mpisppy.spbase.SPBase.set_scenario_probabilities
    :noindex:

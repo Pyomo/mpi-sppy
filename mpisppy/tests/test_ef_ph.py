@@ -909,189 +909,36 @@ class Test_mutable_probability(unittest.TestCase):
             self.assertAlmostEqual(
                 getattr(ef.ef, sname)._mpisppy_probability, 1.0 / 3.0)
 
+    def test_prob_coeff_tracks_the_update(self):
+        # prob_coeff is derived from _mpisppy_probability and computed once at
+        # setup, so the setter has to force a rebuild.
+        ef = self._make_ef(mutable_probability=True)
+        for scen in ef.local_scenarios.values():
+            self.assertAlmostEqual(scen._mpisppy_data.prob_coeff["ROOT"],
+                                   1.0 / 3.0)
+        ef.set_scenario_probabilities(self._pv(0.6))
+        for sname, scen in ef.local_scenarios.items():
+            want = 0.6 if sname == "scen0" else 0.2
+            self.assertAlmostEqual(scen._mpisppy_data.prob_coeff["ROOT"], want)
 
-class Test_mutable_probability_ph(unittest.TestCase):
-    """ Mutable scenario probabilities on the PH path (issue #797, phase 2). """
-
-    def setUp(self):
-        import mpisppy.tests.examples.farmer as farmer
-        self.farmer = farmer
-        self.snames = ["scen0", "scen1", "scen2"]
-        self.sck = {"num_scens": 3, "sense": pyo.minimize}
-
-    def _pv(self, p0):
-        rest = (1.0 - p0) / 2.0
-        return {"scen0": p0, "scen1": rest, "scen2": rest}
-
-    def _denouement(self, *a, **k):
-        pass
-
-    def _make_ph(self, iters=0):
-        options = _get_ph_base_options()
-        options["PHIterLimit"] = iters
-        return mpisppy.opt.ph.PH(
-            options, self.snames, self.farmer.scenario_creator,
-            self._denouement, scenario_creator_kwargs=self.sck)
-
-    def _ef_first_stage(self, pv):
-        # solved EF at the given probabilities: the nonanticipative first-stage
-        # DevotedAcreage (independent oracle; the EF path is verified in
-        # Test_mutable_probability against a rebuild).
-        scen_dict = {sn: self.farmer.scenario_creator(sn, **self.sck)
-                     for sn in self.snames}
-        for sn, scen in scen_dict.items():
-            scen._mpisppy_probability = pv[sn]
-        ef = sputils._create_EF_from_scen_dict(scen_dict, EF_name="oracle")
-        solver = pyo.SolverFactory(solver_name)
-        if '_persistent' in solver_name:
-            solver.set_instance(ef)
-        solver.solve(ef)
-        block = getattr(ef, self.snames[0])
-        return {c: pyo.value(block.DevotedAcreage[c])
-                for c in block.DevotedAcreage}
-
-    def _ph_first_stage(self, ph):
-        # xbar is the consensus first-stage value; read it off any local scenario
-        s = ph.local_scenarios[self.snames[0]]
-        return {c: pyo.value(v) for c, v in
-                zip(s.DevotedAcreage, s.DevotedAcreage.values())}
-
-    def test_prob_coeff_refreshes(self):
-        # Two-stage: prob_coeff["ROOT"] == _mpisppy_probability after an update.
-        ph = self._make_ph(iters=0)
-        for s in ph.local_scenarios.values():
-            self.assertAlmostEqual(s._mpisppy_data.prob_coeff["ROOT"], 1.0 / 3.0)
-        pv = self._pv(0.5)
-        ph.set_scenario_probabilities(pv)
-        for sname, s in ph.local_scenarios.items():
-            self.assertAlmostEqual(s._mpisppy_probability, pv[sname])
-            self.assertAlmostEqual(s._mpisppy_data.prob_coeff["ROOT"], pv[sname])
-
-    def test_guards(self):
-        ph = self._make_ph(iters=0)
-        with self.assertRaises(KeyError):
-            ph.set_scenario_probabilities({"nope": 0.5})
-        with self.assertRaises(ValueError):
-            ph.set_scenario_probabilities({"scen0": 0.9})  # sum != 1
-        # negative entry, even though this vector sums to 1
-        with self.assertRaises(ValueError):
-            ph.set_scenario_probabilities(
-                {"scen0": 1.2, "scen1": -0.2, "scen2": 0.0})
-        # carryover fraction out of range
-        for bad_alpha in (-0.1, 1.5):
-            with self.assertRaises(ValueError):
-                ph.set_scenario_probabilities(
-                    self._pv(0.5),
-                    mutable_probability_ph_dual_carryover=bad_alpha)
-
-    def test_rejected_call_leaves_ph_unchanged(self):
-        # Every rejected call above must be transactional: probabilities,
-        # prob_coeff and W are all read by the next iteration.
-        ph = self._make_ph(iters=0)
-        ph.PH_Prep()   # attaches W, which set_scenario_probabilities zeroes
-        for s in ph.local_scenarios.values():
-            for idx in s._mpisppy_model.W:
-                s._mpisppy_model.W[idx]._value = 3.0
-        bad_maps = ({"nope": 0.5},
-                    {"scen0": 0.9},
-                    {"scen0": 1.2, "scen1": -0.2, "scen2": 0.0})
-        for bad in bad_maps:
-            with self.assertRaises((KeyError, ValueError)):
-                ph.set_scenario_probabilities(bad)
-            for s in ph.local_scenarios.values():
-                self.assertAlmostEqual(s._mpisppy_probability, 1.0 / 3.0)
-                self.assertAlmostEqual(s._mpisppy_data.prob_coeff["ROOT"],
-                                       1.0 / 3.0)
-                for idx in s._mpisppy_model.W:
-                    self.assertAlmostEqual(
-                        pyo.value(s._mpisppy_model.W[idx]), 3.0)
-
-    def test_dual_carryover_reprojects(self):
-        # W_s <- alpha (W_s - sum_t p_t W_t) under the NEW probabilities, so
-        # the PH invariant sum_s p_s W_s == 0 holds again afterwards.
-        for alpha in (0.0, 0.5, 1.0):
-            ph = self._make_ph(iters=0)
-            ph.PH_Prep()
-            before = {}
-            for i, (k, s) in enumerate(ph.local_scenarios.items()):
-                for idx in s._mpisppy_model.W:
-                    s._mpisppy_model.W[idx]._value = float(i) - 1.0
-                before[k] = {idx: s._mpisppy_model.W[idx]._value
-                             for idx in s._mpisppy_model.W}
-            pv = self._pv(0.6)
-            ph.set_scenario_probabilities(
-                pv, mutable_probability_ph_dual_carryover=alpha)
-
-            idxs = list(next(iter(ph.local_scenarios.values()))._mpisppy_model.W)
-            for idx in idxs:
-                Wbar = sum(pv[k] * before[k][idx] for k in ph.local_scenarios)
-                for k, s in ph.local_scenarios.items():
-                    self.assertAlmostEqual(
-                        pyo.value(s._mpisppy_model.W[idx]),
-                        alpha * (before[k][idx] - Wbar))
-                # invariant restored under the new probabilities
-                self.assertAlmostEqual(
-                    sum(pv[k] * pyo.value(s._mpisppy_model.W[idx])
-                        for k, s in ph.local_scenarios.items()), 0.0)
-
-    @unittest.skipIf(not solver_available, "no solver is available")
-    def test_ph_matches_ef_oracle(self):
-        # A fresh PH at each probability vector should converge to the EF
-        # solution at that vector, whether the vector was set at construction
-        # (uniform) or via set_scenario_probabilities before the first solve.
-        for p0 in (1.0 / 3.0, 0.6):
-            pv = self._pv(p0)
-            ph = self._make_ph(iters=100)
-            if abs(p0 - 1.0 / 3.0) > 1e-12:
-                ph.set_scenario_probabilities(pv)
-            ph.ph_main()
-            got = self._ph_first_stage(ph)
-            want = self._ef_first_stage(pv)
-            for c in want:
-                self.assertAlmostEqual(got[c], want[c], places=2)
-
-    @unittest.skipIf(not solver_available, "no solver is available")
-    def test_carryover_survives_into_the_next_run(self):
-        # PH_Prep used to re-declare W, so the re-projected duals never
-        # reached the second run and every alpha behaved like 0. Guard that.
-        ph = self._make_ph(iters=100)
-        ph.ph_main()
-        ph.set_scenario_probabilities(
-            self._pv(0.6), mutable_probability_ph_dual_carryover=1.0)
-        s = ph.local_scenarios["scen0"]
-        after_set = {idx: pyo.value(s._mpisppy_model.W[idx])
-                     for idx in s._mpisppy_model.W}
-        self.assertTrue(any(abs(v) > 1e-6 for v in after_set.values()),
-                        "no nonzero duals to carry; test is vacuous")
-        ph.PH_Prep()   # what the next ph_main() does first
-        for idx, v in after_set.items():
-            self.assertAlmostEqual(pyo.value(s._mpisppy_model.W[idx]), v)
-
-    @unittest.skipIf(not solver_available, "no solver is available")
-    def test_ph_reuse_after_prob_change(self):
-        # In-place probability change on an already-solved PH object: re-solving
-        # must track the new probabilities (the probability-sensitivity use
-        # case), for any carryover fraction. The default is 0.5.
-        for alpha in (None, 0.0, 1.0):
-            ph = self._make_ph(iters=100)
-            ph.ph_main()
-            uniform = self._ph_first_stage(ph)
-            pv = self._pv(0.6)
-            if alpha is None:
-                ph.set_scenario_probabilities(pv)
-            else:
-                ph.set_scenario_probabilities(
-                    pv, mutable_probability_ph_dual_carryover=alpha)
-            ph.ph_main()
-            got = self._ph_first_stage(ph)
-            want = self._ef_first_stage(pv)
-            # the re-weighted optimum really is a different point, so this is
-            # not vacuous
-            self.assertNotAlmostEqual(uniform["WHEAT0"], want["WHEAT0"],
-                                      places=2)
-            for c in want:
-                self.assertAlmostEqual(got[c], want[c], places=2,
-                                       msg=f"carryover={alpha}, var={c}")
+    def test_multistage_is_refused(self):
+        # A multistage re-weight would leave every ScenarioNode.cond_prob
+        # stale, and prob_coeff is derived from those.
+        import mpisppy.tests.examples.hydro.hydro as hydro
+        bfs = [3, 3]
+        snames = ["Scen%d" % (i + 1) for i in range(9)]
+        ef = self.ExtensiveForm(
+            options={"solver": solver_name, "mutable_probability": True},
+            all_scenario_names=snames,
+            scenario_creator=hydro.scenario_creator,
+            all_nodenames=sputils.create_nodenames_from_branching_factors(bfs),
+            scenario_creator_kwargs={"branching_factors": bfs})
+        node_list = ef.local_scenarios[snames[0]]._mpisppy_node_list
+        self.assertGreater(len(node_list), 1, "hydro should be multistage")
+        before = [n.cond_prob for n in node_list]
+        with self.assertRaises(NotImplementedError):
+            ef.set_scenario_probabilities({snames[0]: 0.2})
+        self.assertEqual([n.cond_prob for n in node_list], before)
 
 
 if __name__ == '__main__':

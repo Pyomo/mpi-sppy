@@ -10,8 +10,6 @@
 
 import os
 import time
-import math
-import numbers
 import hashlib
 import logging
 import weakref
@@ -436,9 +434,10 @@ class SPBase:
 
             Args:
                 force (bool): if True, rebuild prob_coeff/prob0_mask even when
-                    they already exist. Used by set_scenario_probabilities to
-                    pick up updated _mpisppy_probability values; the default
-                    (False) keeps the compute-once behavior relied on at setup.
+                    they already exist. Used by
+                    ExtensiveForm.set_scenario_probabilities to pick up updated
+                    _mpisppy_probability values; the default (False) keeps the
+                    compute-once behavior relied on at setup.
         """
         for k,s in self.local_scenarios.items():
             root = s._mpisppy_node_list[0]
@@ -451,197 +450,6 @@ class SPBase:
                 for node in s._mpisppy_node_list:
                     s._mpisppy_data.prob_coeff[node.name] = (s._mpisppy_probability / node.uncond_prob)
                     s._mpisppy_data.prob0_mask[node.name] = 1.0  # needs to be a float
-
-
-    def set_scenario_probabilities(self, prob_map, check_sum=True,
-                                   mutable_probability_ph_dual_carryover=0.5):
-        """ Update scenario probabilities in place for the PH / decomposition
-            path and refresh the derived ``prob_coeff`` so the next iteration
-            (xbar, W, rho) uses the new values.
-
-            Unlike the EF, PH does not bake probabilities into a Pyomo
-            objective, so there is no Param to update and no persistent-solver
-            objective to re-push: the aggregation code reads
-            ``_mpisppy_data.prob_coeff`` fresh each iteration. This method
-            updates ``_mpisppy_probability`` on the local scenarios named in
-            ``prob_map`` and forces ``prob_coeff`` to be recomputed.
-
-            Two-stage only for now (multistage node ``cond_prob`` handling is a
-            later phase; a multistage tree raises). Any variable-probability
-            overrides are re-applied after the refresh.
-
-            Dual handling (``mutable_probability_ph_dual_carryover``):
-            PH maintains ``sum_s p_s W_s == 0`` by induction, since each ``Update_W`` adds
-            ``rho (x_s - xbar)`` whose probability-weighted sum is zero. Change
-            the probabilities and that invariant breaks, so the carried-over W
-            is not a valid dual for the new problem. The W are therefore
-            re-projected onto the invariant for the new probabilities and then
-            scaled:
-
-                ``W_s <- alpha (W_s - sum_t p_t W_t)``
-
-            ``alpha = 0`` discards the duals entirely, ``alpha = 1`` keeps the
-            full re-projected warm start, and the default 0.5 splits the
-            difference. Carrying more is faster: on farmer, a re-weight plus
-            re-solve took 25, 21 and 18 iterations at alpha of 0, 0.5 and 1.0,
-            all reaching the same solution.
-
-            The re-projection is not optional. Without it the imbalance
-            ``sum_s p_s W_s = c != 0`` is never corrected -- ``Update_W`` adds
-            ``rho (x_s - xbar)``, which contributes nothing to the weighted sum
-            -- so the spurious ``c.x`` term biases the aggregate objective for
-            the whole run and PH converges to the wrong point. On farmer,
-            keeping the unmodified duals at ``alpha = 1`` lands 70 acres away
-            from the correct solution.
-
-            Args:
-                prob_map (dict):
-                    Maps scenario name to its new probability. May be the full
-                    set or a partial update; names not present keep their
-                    current probability. Each rank applies only the scenarios
-                    it owns, so the same full map may be passed on every rank.
-                check_sum (bool, optional):
-                    If True (default), verify with an MPI reduction that the
-                    resulting probabilities over all scenarios sum to 1
-                    (option B; see the design doc). Pass False to skip the
-                    collective (e.g. when the caller has already validated).
-                mutable_probability_ph_dual_carryover (float, optional):
-                    Fraction of the re-projected PH multipliers (``W``) to keep,
-                    in [0, 1]; default 0.5. See the dual-handling note above.
-                    No-op for objects without PH ``W`` terms (e.g. a plain EF).
-
-            Raises:
-                KeyError:
-                    If ``prob_map`` contains a name not in
-                    ``all_scenario_names``.
-                NotImplementedError:
-                    If any scenario has more than the root node (multistage is
-                    a later phase).
-                ValueError:
-                    If a supplied probability is not a finite, nonnegative
-                    number, if ``mutable_probability_ph_dual_carryover`` is
-                    outside [0, 1], or if ``check_sum`` and the resulting
-                    probabilities do not sum to 1 within ``E1_tolerance``.
-        """
-        # Validate everything before mutating anything, so a rejected call
-        # leaves the object exactly as it was.
-        unknown = [sn for sn in prob_map if sn not in self.all_scenario_names]
-        if unknown:
-            raise KeyError(
-                f"set_scenario_probabilities got unknown scenario name(s): "
-                f"{unknown}")
-
-        for sname, p in prob_map.items():
-            if not isinstance(p, numbers.Real) or not math.isfinite(p) or p < 0:
-                raise ValueError(
-                    f"probability for scenario '{sname}' must be a finite, "
-                    f"nonnegative number; got {p!r}.")
-
-        alpha = mutable_probability_ph_dual_carryover
-        if not isinstance(alpha, numbers.Real) or not 0.0 <= alpha <= 1.0:
-            raise ValueError(
-                f"mutable_probability_ph_dual_carryover must be in [0, 1]; "
-                f"got {alpha!r}.")
-
-        for s in self.local_scenarios.values():
-            # Two-stage only: the root node alone (a two-stage node list has no
-            # leaf entry). Multistage would need the relevant
-            # ScenarioNode.cond_prob updated as well (later phase).
-            if len(s._mpisppy_node_list) > 1:
-                raise NotImplementedError(
-                    "set_scenario_probabilities currently supports two-stage "
-                    "problems only; multistage node probabilities are a later "
-                    "phase.")
-
-        if check_sum:
-            # Sum the candidate vector, not the applied one, so a bad total is
-            # caught while the object is still untouched. Every rank reaches
-            # this collective: the checks above are rank-invariant given the
-            # same prob_map, apart from the node-list check, which depends only
-            # on the model's stage count and so fires on every rank at once.
-            localP = np.zeros(1, dtype='d')
-            for k, s in self.local_scenarios.items():
-                localP[0] += prob_map.get(k, s._mpisppy_probability)
-            globalP = np.zeros(1, dtype='d')
-            self.mpicomm.Allreduce([localP, MPI.DOUBLE],
-                                   [globalP, MPI.DOUBLE],
-                                   op=MPI.SUM)
-            total = float(globalP[0])
-            if abs(total - 1.0) > self.E1_tolerance:
-                raise ValueError(
-                    f"scenario probabilities must sum to 1; got {total} "
-                    f"(E1_tolerance={self.E1_tolerance}).")
-
-        for k, s in self.local_scenarios.items():
-            if k in prob_map:
-                s._mpisppy_probability = prob_map[k]
-
-        # Force recomputation of uncond_prob and prob_coeff; the setup-time
-        # compute-once short-circuit would otherwise ignore the new values.
-        self._compute_unconditional_node_probabilities(force=True)
-
-        # Rebuilding prob_coeff above reset any per-variable overrides to the
-        # scalar node coefficient, so re-apply them.
-        if self.variable_probability is not None:
-            self._use_variable_probability_setter()
-
-        # Restore sum_s p_s W_s == 0 for the new probabilities and keep the
-        # requested fraction of the duals (see the dual-handling note above).
-        self._reweight_ph_duals(alpha)
-
-    def _reweight_ph_duals(self, alpha):
-        """ Re-project the PH multipliers onto ``sum_s p_s W_s == 0`` for the
-            current ``prob_coeff`` and scale them by ``alpha``.
-
-            Args:
-                alpha (float):
-                    Fraction of the re-projected duals to keep.
-
-            No-op for objects with no PH ``W`` terms (e.g. a plain EF).
-            PH_Prep attaches W on every rank at once, so the early return below
-            is taken everywhere or nowhere and cannot strand the reduction.
-        """
-        if not any(hasattr(s, "_mpisppy_model") and
-                   hasattr(s._mpisppy_model, "W")
-                   for s in self.local_scenarios.values()):
-            return
-
-        # Probability-weighted mean of W, per node; same reduction shape as
-        # _Compute_Xbar with W in place of the nonant values.
-        local_Wbars, global_Wbars = {}, {}
-        for s in self.local_scenarios.values():
-            nlens = s._mpisppy_data.nlens
-            for node in s._mpisppy_node_list:
-                if node.name not in local_Wbars:
-                    local_Wbars[node.name] = np.zeros(nlens[node.name],
-                                                      dtype='d')
-                    global_Wbars[node.name] = np.zeros(nlens[node.name],
-                                                       dtype='d')
-
-        for s in self.local_scenarios.values():
-            nlens = s._mpisppy_data.nlens
-            for node in s._mpisppy_node_list:
-                ndn = node.name
-                nlen = nlens[ndn]
-                W_array = np.fromiter(
-                    (s._mpisppy_model.W[(ndn, i)]._value for i in range(nlen)),
-                    dtype='d', count=nlen)
-                probs = s._mpisppy_data.prob_coeff[ndn] * np.ones(nlen)
-                local_Wbars[ndn] += probs * W_array
-
-        for ndn in local_Wbars:
-            self.comms[ndn].Allreduce(
-                [local_Wbars[ndn], MPI.DOUBLE],
-                [global_Wbars[ndn], MPI.DOUBLE],
-                op=MPI.SUM)
-
-        for s in self.local_scenarios.values():
-            nlens = s._mpisppy_data.nlens
-            for node in s._mpisppy_node_list:
-                ndn = node.name
-                for i in range(nlens[ndn]):
-                    W = s._mpisppy_model.W[(ndn, i)]
-                    W._value = alpha * (W._value - global_Wbars[ndn][i])
 
 
     def _use_variable_probability_setter(self, verbose=False):

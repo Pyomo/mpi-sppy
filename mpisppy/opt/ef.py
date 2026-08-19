@@ -201,9 +201,18 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
                     If the EF was not built with ``mutable_probability=True``.
                 KeyError:
                     If ``prob_map`` contains an unknown scenario name.
+                NotImplementedError:
+                    If any scenario has more than the root node. Updating a
+                    multistage tree would also have to update every
+                    ``ScenarioNode.cond_prob``; see the note below.
                 ValueError:
                     If a supplied probability is not a finite, nonnegative
                     number, or if the resulting probabilities do not sum to 1.
+
+            Note:
+                Two-stage only. There is no multistage support and none is
+                planned; to re-weight a multistage model, rebuild it with the
+                new probabilities.
         """
         if not self.mutable_probability:
             raise RuntimeError(
@@ -223,6 +232,16 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
                 raise ValueError(
                     f"probability for scenario '{sname}' must be a finite, "
                     f"nonnegative number; got {p!r}.")
+        for sname, scen in self.local_scenarios.items():
+            # Two-stage only: the root node alone (a two-stage node list has
+            # no leaf entry). A multistage re-weight would have to update
+            # ScenarioNode.cond_prob as well, since the unconditional node
+            # probabilities -- and prob_coeff below -- are derived from it.
+            if len(scen._mpisppy_node_list) > 1:
+                raise NotImplementedError(
+                    "set_scenario_probabilities supports two-stage problems "
+                    "only. Rebuild the model with the new probabilities to "
+                    "re-weight a multistage tree.")
         resulting = {sn: prob_map.get(sn, pyo.value(prob[sn]))
                      for sn in self.ef._ef_scenario_names}
         total = sum(resulting.values())
@@ -233,6 +252,9 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             prob[sname].value = p
             # keep _mpisppy_probability consistent for downstream readers
             getattr(self.ef, sname)._mpisppy_probability = p
+        # prob_coeff is derived from _mpisppy_probability and is computed once
+        # at setup, so it needs an explicit rebuild to track the new values.
+        self._compute_unconditional_node_probabilities(force=True)
         # Re-push the objective so a persistent solver picks up the new
         # coefficients. Required for legacy persistent solvers; harmless (and
         # redundant with auto-tracking) for APPSI / pyomo.contrib.solver.
