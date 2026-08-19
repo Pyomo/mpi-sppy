@@ -182,9 +182,33 @@ class Test_statdist(_RestoresGlobalNumpySeed, unittest.TestCase):
     """ Direct tests of the trimmed statdist univariate distributions. """
 
     def test_factory_resolves_univariate(self):
+        # `hasattr(cls, "fit") or callable(cls)` used to stand here, which is a
+        # tautology: callable(cls) is True for every class, so the assertion
+        # could not fail -- and it was the one check that would have caught
+        # univariate-discrete inheriting an unimplemented fit.
         for token in univariate_tokens:
             cls = distribution_factory(token)
-            self.assertTrue(hasattr(cls, "fit") or callable(cls), msg=token)
+            self.assertTrue(inspect.isclass(cls), msg=token)
+            self.assertEqual(cls.registered_name, token)
+
+    def test_every_fittable_token_actually_fits(self):
+        # the tokens the smoothed methods name must return a distribution, not
+        # None and not an unimplemented-fit error
+        fittable = ["univariate-unif", "univariate-normal", "univariate-student",
+                    "univariate-empirical"]
+        data = [0.5, 1.5, 2.5, 3.5, 4.5, 2.0, 3.0]
+        for token in fittable:
+            with self.subTest(token=token):
+                fitted = smoothed_boot_sp.fit_distribution(data, distr_type=token)
+                self.assertIsNotNone(fitted, msg=f"{token} fit returned None")
+                self.assertTrue(hasattr(fitted, "cdf_inverse"), msg=token)
+
+    def test_unfittable_token_says_so(self):
+        # univariate-discrete has no fit; it used to return None silently and
+        # fail far away in the caller's scenario_creator
+        with self.assertRaisesRegex(NotImplementedError, "does not implement fit"):
+            smoothed_boot_sp.fit_distribution([1.0, 2.0, 2.0],
+                                              distr_type="univariate-discrete")
 
     def test_factory_rejects_unknown(self):
         with self.assertRaises(NameError):
@@ -1367,6 +1391,42 @@ class Test_review_regressions(unittest.TestCase):
         else:
             # the documented contract: only rank 0 computes these
             self.assertEqual((opt_obj, opt_gap), (None, None))
+
+    def test_stride_tolerates_an_unset_subsample_size(self):
+        # subsample_size is a bagging option the smoothed bootstrap overwrites,
+        # so "None" is reasonable in a Smoothed_boot_* json; the stride
+        # expression used to multiply it and die with a raw TypeError
+        cfg = _make_farmer_cfg("Smoothed_boot_kernel")
+        cfg.subsample_size = None
+        cfg.smoothed_center_sample_size = 20
+        cfg.smoothed_B_I = 3
+        cfg.coverage_replications = 2
+        with mock.patch.object(boot_sp, "process_optimal", return_value=(1.0, 0.5)), \
+             mock.patch.object(boot_utils, "compute_xhat", return_value={"ROOT": [1.0]}), \
+             mock.patch.object(simulate_boot, "comm") as fake_comm, \
+             mock.patch.object(simulate_boot.smoothed_boot_sp, "compute_smoothed_ci",
+                               return_value=([0.0, 1.0], 0.5)):
+            fake_comm.bcast.side_effect = lambda v, root=0: None
+            simulate_boot.smoothed_main_routine(cfg, None)   # must not raise
+
+    def test_bagging_requires_a_subsample_size(self):
+        cfg = _make_farmer_cfg("Smoothed_bagging")
+        cfg.subsample_size = None
+        cfg.smoothed_B_I = 3          # so the B_I check is not what fires
+        smoothed_boot_sp._ensure_smoothed_cfg(cfg)
+        with self.assertRaisesRegex(ValueError, "subsample_size"):
+            smoothed_boot_sp._bagging_from_fitted(cfg, None, {"ROOT": []}, False)
+
+    def test_smoothed_bootstrap_requires_two_batches(self):
+        # nB == 1 made np.std(..., ddof=1) nan, and user_boot's max(0, nan)
+        # clamp reports that as [0, nan] rather than failing
+        cfg = _make_farmer_cfg("Smoothed_boot_kernel")
+        cfg.nB = 1
+        smoothed_boot_sp._ensure_smoothed_cfg(cfg)
+        with self.assertRaisesRegex(ValueError, "at least 2"):
+            smoothed_boot_sp.smoothed_bootstrap(cfg, None, {"ROOT": []})
+        # and the nan it was protecting against really does survive the clamp
+        self.assertEqual(max(0, float("nan")), 0)
 
     def test_uniform_rejects_reversed_support(self):
         # a > b was accepted silently and answered nonsense (cdf_inverse of a

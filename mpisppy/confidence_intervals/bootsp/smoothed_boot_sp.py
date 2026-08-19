@@ -220,6 +220,16 @@ def smoothed_bootstrap(cfg, module, xhat, distr_type='univariate-epispline', qua
         tuple (ci_gap_two_sided, center_gap) if on MPI rank 0, else None
 
     """
+    # the interval width comes from the spread *among* the batches, so one
+    # batch leaves it undefined: np.std(one element, ddof=1) is nan, and the
+    # nan then survives user_boot's max(0, .) clamp as a reported [0, nan].
+    # Same reasoning as the smoothed_B_I >= 2 check in bagging.
+    if cfg.nB is None or cfg.nB < 2:
+        raise ValueError(
+            "nB (the number of bootstrap batches) must be at least 2 for the "
+            f"smoothed bootstrap; got {cfg.nB}. The interval width is the "
+            "spread among the batch gaps, which a single batch does not have.")
+
     scenario_pool = boot_sp.draw_scenario_pool(cfg)
 
     with _fitted_on_cfg(cfg, module, scenario_pool, distr_type):
@@ -320,6 +330,12 @@ def _bagging_from_fitted(cfg, module, xhat, serial):
             f"2 for smoothed bagging; got {cfg.smoothed_B_I}. The variance of "
             "the per-seed-point averages is what estimates the between-point "
             "term of the interval width.")
+
+    if cfg.subsample_size is None:
+        raise ValueError(
+            "subsample_size (the number of draws per bag) is required for "
+            "smoothed bagging; it is unset. Only the smoothed bootstrap may "
+            "leave it out, because it uses the full sample size per batch.")
 
     B_I = cfg.smoothed_B_I
     for i in range(B_I):

@@ -71,6 +71,12 @@ class Parameter:
 
 
 class BaseDistribution(object):
+    # NOTE: this is the Python 2 spelling and has no effect in Python 3, where
+    # the metaclass belongs in the class bases (metaclass=ABCMeta). It is left
+    # as-is deliberately: switching it on would make UnivariateDiscrete
+    # uninstantiable, since it has no fit() -- and it is legitimately
+    # constructed from explicit breakpoints. The contract is enforced by the
+    # abstract bodies raising instead.
     __metaclass__ = ABCMeta
 
     # --------------------------------------------------------------------
@@ -116,8 +122,20 @@ class BaseDistribution(object):
             data (List[float]): The data the distribution is to be fit to
         Returns:
                 baseDistribution: The fitted distribution
+        Raises:
+            NotImplementedError: if the subclass does not define fit
+
+        The @abstractmethod above does not enforce anything (see the note on
+        __metaclass__ below), so a subclass without its own fit inherits this
+        one. Returning None here, as this used to, hands the caller a
+        non-distribution that fails much later and far away -- statdist's
+        distribution_factory offers every registered name, not just the
+        fittable ones.
         """
-        pass
+        raise NotImplementedError(
+            f"{cls.__name__} does not implement fit(); it cannot be fitted to "
+            "data. Construct it directly if it takes explicit parameters, or "
+            "choose a distribution that supports fitting.")
 
     @staticmethod
     def seed_reset(seed=None):

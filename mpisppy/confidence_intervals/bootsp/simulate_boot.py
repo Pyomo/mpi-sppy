@@ -152,8 +152,11 @@ def smoothed_main_routine(cfg, module):
     # the center block plus one block per batch (smoothed bootstrap), or B_I
     # groups of nB bags (smoothed bagging). Take the larger of the two so the
     # stride covers whichever method is running.
+    # all three of these are optional in the json: subsample_size is a bagging
+    # option that the smoothed bootstrap overwrites anyway, so "None" is a
+    # reasonable thing for a Smoothed_boot_* config to say
     stride = max((cfg.smoothed_center_sample_size or 0) + cfg.nB * cfg.sample_size,
-                 (cfg.smoothed_B_I or 1) * cfg.nB * cfg.subsample_size)
+                 (cfg.smoothed_B_I or 1) * cfg.nB * (cfg.subsample_size or 0))
     seed_list = [i * stride + seed_offset for i in range(cfg.coverage_replications)]
 
     try:
