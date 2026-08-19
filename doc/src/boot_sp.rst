@@ -45,6 +45,23 @@ json file:
 
    $ python -m mpisppy.confidence_intervals.bootsp.simulate_boot instance.json
 
+Each replication is an independent repeat of the whole experiment: it steps
+``seed_offset``, which draws a different sample from the data-generating
+process, builds a confidence interval from it, and asks whether that interval
+covers the truth. The truth is one fixed number — the optimality gap under the
+process — so it is computed once, not per replication.
+
+.. note::
+
+   That fixed number is itself estimated, by solving over ``max_count``
+   records. If ``max_count`` is close to ``sample_size``, the estimate carries
+   about as much sampling error as the intervals being scored against it, and
+   the reported coverage rate inherits that noise. For a coverage study, either
+   set ``max_count`` well above ``sample_size``, or supply ``optimal_fname``
+   (written by ``boot_general_prep``, below) so the truth comes from a separate,
+   larger computation. The shipped example jsons use small values so they run
+   quickly; they are demonstrations, not calibrated studies.
+
 The model module
 ----------------
 
