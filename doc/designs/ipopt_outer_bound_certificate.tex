@@ -157,7 +157,10 @@ $\vhat$ need not be optimal, and need not even be feasible for \eqref{eq:sub}.
 Corollary~\ref{cor:anypoint} is the whole point.  The certificate consumes the
 iterate the solver happened to stop at and the multipliers it happened to
 report, and returns a valid bound regardless.  Computationally it costs one
-gradient evaluation and a loop over the variables --- no second solve.
+gradient evaluation and a loop over the variables --- no second solve.  It is
+worth reading the corollary as covering \emph{ill-conditioned} solves and not
+merely truncated ones; Remark~\ref{rem:conditioning} says why the distinction
+does not arise here.
 
 \begin{remark}[Robustness]\label{rem:robust}
 Because Corollary~\ref{cor:anypoint} holds for arbitrary $\lambda \ge 0$ and
@@ -357,7 +360,7 @@ as $\vhat$ moves away from a KKT point.  By Proposition~\ref{prop:kkt} that term
 vanishes exactly at a KKT point, so the correction is precisely the price of
 inexactness, and it measures itself.
 
-\paragraph{Ill-conditioning.}
+\begin{remark}[Conditioning]\label{rem:conditioning}
 The distinct worry is that \eqref{eq:sub} is badly conditioned, so that the
 solve is not merely truncated but numerically poor.  This affects the tightness
 of $\qhat_s$ and not its validity, for a structural reason: \emph{the
@@ -380,6 +383,7 @@ Conditioning governs how loose the plane is away from $\vhat$; it cannot change
 which side of $\varphi_s$ the plane lies on.  What it does change is the size of
 $\nabla \varphi_s(\vhat)$ and the quality of the multipliers, and both push
 $\qhat_s$ \emph{down}.
+\end{remark}
 
 \paragraph{Floating point.}
 Nothing in Theorem~\ref{thm:main} requires a tolerance.  The arithmetic, being
@@ -498,12 +502,13 @@ Remark~\ref{rem:mixed} safeguard   & a \texttt{None} bound, propagated collectiv
 \end{center}
 
 \noindent
-Everything above the rule is in \texttt{mpisppy/utils/dual\_certificate.py},
+Everything above the rule is in \texttt{utils/dual\_certificate.py},
 whose \texttt{eps\_rel} argument is exposed on the command line as
 \texttt{--ipopt-outer-bound-cushion}.  Below it, the weak-form tightening is in
 \texttt{cylinders/spcommunicator.py} and the sum is in \texttt{spopt.py}, with
-the \texttt{None} propagated across both.  The spoke driving all of it is
-\texttt{mpisppy/cylinders/ipopt\_outer\_bound.py}.
+the \texttt{None} propagated across both.  All paths are relative to
+\texttt{mpisppy/}, and the spoke driving the whole is
+\texttt{cylinders/ipopt\_outer\_bound.py}.
 
 \begin{thebibliography}{9}
 

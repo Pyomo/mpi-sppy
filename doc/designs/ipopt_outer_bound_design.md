@@ -33,6 +33,14 @@ So `Ebound()` sums `-inf` and a user running a convex stochastic NLP gets no bou
 all. This design supplies one that is *certified* — valid by a theorem, not by an
 assertion that the solver converged.
 
+That phrase is meant literally, and the obvious objection to it — *Ipopt is an
+iterative method on a possibly ill-conditioned problem, so how can its output certify
+anything?* — is answered in **§5.3**. The short form: the certificate is an evaluation,
+not a solve, so there is no linear system for a condition number to amplify, and the
+inequality it rests on holds exactly at every point. Ill-conditioning costs tightness.
+The two places where numerics do bear on validity, both of them about scaling rather
+than conditioning, are in §5.2.
+
 Scope is **Ipopt only**, by decision. The mechanism generalizes to any NLP solver
 returning duals, but nothing here is written to be solver-neutral, and the dual sign
 conventions in §5 are measured from Ipopt.
@@ -783,3 +791,16 @@ shipped code rather than a design choice.
    since it is a soundness bug in shipped code and independent of this design.
    Ipopt itself never reaches that path (it reports `Lower_bound = -inf`, not
    `None`), so nothing in this design depends on the outcome.
+5. **Non-finite results — reject, do not return.** A diverged solve can leave NaN in
+   the point or the duals, and an infinite multiplier yields NaN or `±inf`. All of it
+   used to propagate to the caller. The engine now tests `math.isfinite(q̂)` and returns
+   `None`, reusing the disposition it already has for an unbounded direction. The case
+   that makes this necessary rather than tidy is `+inf`: NaN is discarded downstream by
+   accident, since NaN loses every comparison and the hub's update test is `new > old`,
+   but `+inf` would compare as an *improvement* and be latched as an outer bound that is
+   not one. See §5.2.
+6. **Box tightening — two mechanisms, two arguments.** `fbbt` at setup and the
+   nonant-bounds channel each iteration both shrink the box the certificate minimizes
+   over, and they are not sound for the same reason. §3.6 states the condition each has
+   to meet and which one meets which. Recorded as a decision because the tempting
+   one-line justification is wrong in a way that would not show up in any test.
