@@ -51,8 +51,15 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
         if self.opt.options["time_limit"] is not None and ( time.perf_counter() - self.opt.start_time ) > (self.opt.options["time_limit"] * self.ratio):
             global_toc(f"{self.__class__.__name__}: enforcing integrality constraints, ran so far for more than {self.opt.options['time_limit']*self.ratio} seconds", self.opt.cylinder_rank == 0)
             self._unrelax_integers()
-        # iterations are running out
-        if self.opt._PHIter > self.opt.options["PHIterLimit"] * self.ratio:
+        # iterations are running out. Both sides are measured from where this
+        # run started, because _PHIter counts the study: on a resume it is
+        # already past any fraction of this run's iteration budget, and
+        # comparing the two directly would enforce integrality immediately.
+        start = getattr(self.opt, "_resume_iteration", 0)
+        stop = getattr(self.opt, "_stop_iteration", None)
+        if stop is None:
+            stop = start + int(self.opt.options["PHIterLimit"])
+        if (self.opt._PHIter - start) > (stop - start) * self.ratio:
             global_toc(f"{self.__class__.__name__}: enforcing integrality constraints, ran so far for {self.opt._PHIter - 1} iterations", self.opt.cylinder_rank == 0)
             self._unrelax_integers()
         # nearly converged

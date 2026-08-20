@@ -194,6 +194,9 @@ run_phase "test_xhat_feasibility_cuts (serial)" \
 run_phase "test_incumbent_writing (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_incumbent_writing.py -v
 
+run_phase "test_checkpoint (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_checkpoint.py -v
+
 run_phase "test_iis_on_infeasible (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_iis_on_infeasible.py -v
 

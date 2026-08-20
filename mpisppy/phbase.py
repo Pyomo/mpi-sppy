@@ -18,6 +18,7 @@ import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils
 import mpisppy.spopt
+import mpisppy.utils.checkpointing as checkpointing
 
 from mpisppy.utils.prox_approx import ProxApproxManager
 from mpisppy.utils.rho_utils import check_rhos_positive
@@ -251,6 +252,21 @@ class PHBase(mpisppy.spopt.SPOpt):
                 Function to set variable specific probabilities.
 
     """
+
+    # Resume state, set by _restore_from_checkpoint_if_resuming when
+    # --resume-from is given. Class-level defaults so every other code path
+    # -- including runs with no checkpointing at all -- reads sane values.
+    _resumed_from_checkpoint = False
+    _resume_iteration = 0
+    _checkpoint_leaf_state = None
+
+    #: Absolute number of the last iteration this run may perform, set by
+    #: iterk_loop from --max-iterations (which bounds the run) and
+    #: --stop-at-iteration-number (which bounds the study). Kept on the object
+    #: because the Checkpointer has to recognize the final iteration to write
+    #: it whatever the checkpoint cadence says.
+    _stop_iteration = None
+
     def __init__(
         self,
         options,
@@ -802,15 +818,19 @@ class PHBase(mpisppy.spopt.SPOpt):
         actionable message instead of leaving the user with the cryptic
         ``TerminationCondition=unknown`` from the failed solve.
 
-        Restricted to iteration 1: if the first quadratic solve succeeds, the
-        solver supports quadratic objectives, so any later failure is a genuine
+        Restricted to the first iterk solve of this process -- iteration 1,
+        or the first iteration after a resume, which may legitimately be
+        running a different solver (``solver_name`` is deliberately exempt
+        from the resume fingerprint). If that solve succeeds, the solver
+        supports quadratic objectives, so any later failure is a genuine
         optimization issue rather than a capability problem. The "no solution
         anywhere" test is reduced across ranks with ``allreduce_or`` so the
         raise decision is identical on every rank (no MPI desynchronization);
         a partial failure (some subproblems still solve) falls through to the
         existing behavior.
         """
-        if self._PHIter != 1 or not self._prox_is_quadratic():
+        if (self._PHIter != self._resume_iteration + 1
+                or not self._prox_is_quadratic()):
             return
         local_any_solution = any(
             s._mpisppy_data.solution_available
@@ -838,14 +858,17 @@ class PHBase(mpisppy.spopt.SPOpt):
         ``has_capability`` probe does not always catch them (the capability is
         reported inconsistently across Pyomo versions / solver interfaces).
 
-        Only the first quadratic solve is treated this way; a raise at a later
-        iteration is a genuine solve error and is left to propagate unchanged.
-        When applicable this raises a new ``RuntimeError`` chained from ``exc``
+        Only the first quadratic solve of this process is treated this way --
+        iteration 1, or the first iteration after a resume, where a solver
+        switch is expressly permitted; a raise at a later iteration is a
+        genuine solve error and is left to propagate unchanged. When
+        applicable this raises a new ``RuntimeError`` chained from ``exc``
         (so the original traceback is preserved); otherwise it returns and the
         caller re-raises ``exc`` as-is. The guard matches the reactive check, so
         MPI synchronization is unchanged beyond the raise that already occurred.
         """
-        if self._PHIter != 1 or not self._prox_is_quadratic():
+        if (self._PHIter != self._resume_iteration + 1
+                or not self._prox_is_quadratic()):
             return
         raise RuntimeError(
             f"Solver '{self.options.get('solver_name')}' raised an error on the "
@@ -1151,6 +1174,120 @@ class PHBase(mpisppy.spopt.SPOpt):
             s._mpisppy_data.outer_bound = md["iter0_outer_bound"]
             s._mpisppy_data.inner_bound = md["iter0_inner_bound"]
 
+    def _restore_prox_approx_state(self):
+        """Set the prox-approximation state that the skipped attach would have.
+
+        ``attach_PH_to_objective`` does two separable things: it mutates the
+        subproblem objectives, and it records on *this object* whether the
+        proximal term is being linearized and at what tolerance. A resume must
+        skip the first (the reloaded model already carries the spliced
+        objective and its cuts) but still needs the second: ``_prox_approx``
+        gates ``_update_prox_approx``, so leaving it False means no new cut is
+        ever added and the resumed run stays frozen on the checkpoint's cut
+        set, drifting further out of tune as x moves. It also feeds
+        ``_prox_is_quadratic``, which decides whether to reject an LP-only
+        solver -- exactly the solver a linearized run is likely using.
+
+        Kept in step with the corresponding block of ``attach_PH_to_objective``.
+        """
+        if not self.options.get("linearize_proximal_terms", False):
+            self._prox_approx = False
+            return
+        self._prox_approx = True
+        self.prox_approx_tol = self.options.get(
+            "proximal_linearization_tolerance", 1.e-1)
+        # The tolerance is applied to x-coordinates, so it is the square root
+        # of the y-coordinate tolerance the user supplied.
+        self.prox_approx_tol = math.sqrt(self.prox_approx_tol)
+
+    def _restore_from_checkpoint_if_resuming(self):
+        """Splice a checkpoint's scenario models into this run, if resuming.
+
+        Called from ``Iter0`` before ``_create_solvers``. A no-op unless
+        ``--resume-from`` was given. See
+        ``doc/designs/checkpointing_design.md`` sections 5.1 and 9.
+        """
+        ckpt_dir = self.options.get("resume_from", None)
+        if not ckpt_dir:
+            return
+
+        # The write side refuses non-PH hubs (Checkpointer.__init__), and this
+        # is its read-side counterpart. Without it, `--APH --resume-from`
+        # splices a PH checkpoint into APH with no error at startup: APH has
+        # already attached its own y/ybars/z Params to the models this splice
+        # discards, and its loop iterates a hardcoded range(1, ...) that
+        # ignores the resume offset.
+        from mpisppy.opt.ph import PH
+        if not isinstance(self, PH):
+            raise RuntimeError(
+                f"--resume-from currently supports the synchronous PH hub "
+                f"only, but this hub is {type(self).__name__}. Remove "
+                f"--resume-from, or run PH."
+            )
+
+        leaf, models = checkpointing.load_checkpoint(self, ckpt_dir)
+
+        for sname, model in models.items():
+            self.local_scenarios[sname] = model
+            # Eobjective/Ebound read these objective handles; left alone they
+            # would dangle to the fresh model we just replaced.
+            self.saved_objectives[sname] = sputils.find_active_objective(model)
+            # The recourse values came back with the model, so the first
+            # resumed solve can warm-start from them -- but only if the run
+            # asked for warm starts at all: solve_one consults this flag only
+            # when options["warmstart_subproblems"] is set, and that defaults
+            # to False. Setting it here is what makes --warmstart-subproblems
+            # work across a resume; on its own it changes nothing.
+            model._mpisppy_data.solution_available = True
+        # The generic file-based path keeps this alias and CGBase.solve_loop
+        # iterates it; a plain PH has no such attribute.
+        if getattr(self, "local_subproblems", None) is not None:
+            self.local_subproblems = self.local_scenarios
+
+        # _initial_fixed_varibles is a ComponentSet of vardata belonging to the
+        # models we just discarded, so every reloaded nonant would look
+        # unrecognized and _can_update_best_bound would refuse to update the
+        # bound for the rest of the run. Rebuilding it from the checkpointed
+        # *names* also keeps nonants that a fixing extension pinned mid-run
+        # from passing as originally fixed, which would let through a bound the
+        # uninterrupted run would have refused.
+        self._restore_fixed_nonant_baseline(leaf["initially_fixed_nonants"])
+
+        # The deferred attach runs at the end of Iter0, downstream of here. The
+        # reloaded model already carries the spliced objective and the prox
+        # cuts, so letting it run would double the W terms and duplicate the
+        # prox components.
+        self._deferred_ph_attach = False
+        # But that call also sets state on *this object*, not just on the
+        # models, and skipping it would leave the run without it: _prox_approx
+        # gates whether new proximal-approximation cuts get added at all, so a
+        # resumed run would be frozen on the checkpoint's cut set for good.
+        self._restore_prox_approx_state()
+
+        self._checkpoint_leaf_state = leaf
+        self._resumed_from_checkpoint = True
+        self._resume_iteration = int(leaf["generation"])
+        # Start the counter at the checkpointed iteration rather than 0. If the
+        # resumed loop turns out to have nothing to do -- the user resumed
+        # without raising --max-iterations -- _PHIter must still read as the
+        # iteration we are actually at, or a terminal write would republish the
+        # run as generation 0 and delete the real checkpoint.
+        self._PHIter = self._resume_iteration
+        global_toc(f"Resuming from checkpoint in {ckpt_dir} "
+                   f"(iteration {self._resume_iteration})",
+                   self.cylinder_rank == 0)
+
+        if self.ph_converger is not None:
+            # No converger state rides in a checkpoint; Iter0 constructs the
+            # converger fresh, downstream of this splice, so one that
+            # accumulates history restarts empty at iteration N+1.
+            global_toc(
+                "WARNING: converger state is not part of a checkpoint. The "
+                "converger starts fresh on this resumed run, so one that "
+                "accumulates history across iterations may terminate the run "
+                "at a different iteration than an uninterrupted run would.",
+                self.cylinder_rank == 0)
+
     def Iter0(self):
         """ Create solvers and perform the initial PH solve (with no dual
         weights or prox terms).
@@ -1167,9 +1304,6 @@ class PHBase(mpisppy.spopt.SPOpt):
                 removed.
         """
 
-        if (self.extensions is not None):
-            self.extobject.pre_iter0()
-
         verbose = self.options["verbose"]
         dprogress = self.options["display_progress"]
         dtiming = self.options["display_timing"]
@@ -1185,6 +1319,22 @@ class PHBase(mpisppy.spopt.SPOpt):
         self._PHIter = 0
         self._save_original_nonants()
 
+        # Resume, if asked: swap the checkpointed models in *before* solvers
+        # are created, so _create_solvers attaches a solver (and, for a
+        # persistent solver, calls set_instance) to the reloaded model rather
+        # than to one we are about to discard. Doing it the other way round
+        # makes every scenario pay set_instance twice per resume, which for
+        # large MIPs is exactly the cost checkpointing is meant to avoid.
+        self._restore_from_checkpoint_if_resuming()
+
+        # pre_iter0 runs after the restore so extensions act on the models the
+        # run will actually iterate. Before the splice, anything a hook did to
+        # the fresh models -- WXBarReader loading --init-W-fname, say -- was
+        # silently discarded with them, and any bookkeeping the hook kept
+        # pointed at dead models.
+        if have_extensions:
+            self.extobject.pre_iter0()
+
         global_toc("Creating solvers")
         self._create_solvers()
 
@@ -1196,7 +1346,13 @@ class PHBase(mpisppy.spopt.SPOpt):
                  and self.cylinder_rank == 0
                  )
 
-        if self.options.get("iter0_from_pickle", False):
+        if self._resumed_from_checkpoint:
+            # The reloaded models already carry a solved iterate; re-solving
+            # them here with W = 0 would discard it. Bookkeeping that
+            # solve_loop would have set was restored with the models.
+            global_toc("Skipping PHBase.Iter0 solve loop (--resume-from); "
+                       "continuing from the checkpointed iterate")
+        elif self.options.get("iter0_from_pickle", False):
             self._iter0_use_pickled_solution()
         else:
             if self.options["verbose"]:
@@ -1233,9 +1389,26 @@ class PHBase(mpisppy.spopt.SPOpt):
         if have_extensions:
             self.extobject.post_iter0()
 
-        self.trivial_bound = self.Ebound(verbose)
-        if self.trivial_bound is not None and self._can_update_best_bound():
-            self.best_bound_obj_val = self.trivial_bound
+        if self._resumed_from_checkpoint:
+            # The trivial bound belongs to iteration 0 of the original run;
+            # recomputing it here would use the checkpointed (W-laden) iterate
+            # and produce something that is not the trivial bound at all.
+            self.trivial_bound = self._checkpoint_leaf_state["trivial_bound"]
+            restored_bound = self._checkpoint_leaf_state["best_bound_obj_val"]
+            if restored_bound is not None:
+                self.best_bound_obj_val = restored_bound
+            # Without this the incumbent objective reads as None, which
+            # update_best_solution_if_improving treats as "accept anything" --
+            # so the first xhat after a resume, however bad, would replace the
+            # checkpointed best solution.
+            restored_incumbent = \
+                self._checkpoint_leaf_state["best_solution_obj_val"]
+            if restored_incumbent is not None:
+                self.best_solution_obj_val = restored_incumbent
+        else:
+            self.trivial_bound = self.Ebound(verbose)
+            if self.trivial_bound is not None and self._can_update_best_bound():
+                self.best_bound_obj_val = self.trivial_bound
 
         if hasattr(self.spcomm, "sync_nonants"):
             self.spcomm.sync_nonants()
@@ -1246,7 +1419,10 @@ class PHBase(mpisppy.spopt.SPOpt):
         if have_extensions:
             self.extobject.post_iter0_after_sync()
 
-        if self.rho_setter is not None:
+        # On a resume, rho rides in the reloaded model -- including whatever a
+        # rho updater had done to it by the time of the checkpoint -- so
+        # re-running the setter would silently undo that.
+        if self.rho_setter is not None and not self._resumed_from_checkpoint:
             if self.cylinder_rank == 0:
                 self._use_rho_setter(verbose)
             else:
@@ -1257,7 +1433,10 @@ class PHBase(mpisppy.spopt.SPOpt):
         check_rhos_positive(self, source="after Iter0 rho setup")
 
         ## If ratio: Add reset p according to rho
-        if smooth_type == 2:
+        # Skipped on a resume for the same reason as the rho_setter above: the
+        # reloaded model already carries the scaled p, and rescaling would
+        # compound it by a further factor of rho on every resume.
+        if smooth_type == 2 and not self._resumed_from_checkpoint:
             for _, scenario in self.local_scenarios.items():
                 for ndn_i, _ in scenario._mpisppy_data.nonant_indices.items():
                         scenario._mpisppy_model.p[ndn_i] *= scenario._mpisppy_model.rho[ndn_i]
@@ -1330,7 +1509,29 @@ class PHBase(mpisppy.spopt.SPOpt):
                 global_toc("Cylinder convergence", self.cylinder_rank == 0)
                 return
 
-        for self._PHIter in range(1, max_iterations+1):
+        # _PHIter is the *global* iteration number: on a resume it picks up
+        # where the checkpoint left off, so checkpoint generations do not
+        # collide with the pre-stop ones. The two bounds are counted
+        # differently on purpose. PHIterLimit (--max-iterations) bounds this
+        # run, so resuming with 2 does two more iterations whatever number the
+        # checkpoint stopped at, while stop_at_iteration_number bounds the
+        # whole study as an absolute iteration number. Whichever arrives first
+        # ends the run.
+        self._stop_iteration = self._resume_iteration + max_iterations
+        stop_at = self.options.get("stop_at_iteration_number", None)
+        if stop_at is not None:
+            stop_at = int(stop_at)
+            self._stop_iteration = min(self._stop_iteration, stop_at)
+            if stop_at <= self._resume_iteration:
+                # The loop below is simply empty in this case. Announcing it
+                # is what keeps a finished study from looking like a run that
+                # started up, did nothing and gave no reason.
+                global_toc(f"Nothing to do: --stop-at-iteration-number "
+                           f"{stop_at} was already reached at iteration "
+                           f"{self._resume_iteration}",
+                           self.cylinder_rank == 0)
+        for self._PHIter in range(self._resume_iteration + 1,
+                                  self._stop_iteration + 1):
             iteration_start_time = time.time()
 
             if dprogress:
@@ -1386,10 +1587,12 @@ class PHBase(mpisppy.spopt.SPOpt):
                 and self.cylinder_rank == 0
             )
 
-            # Before the first proximal (quadratic) solve, fail fast with
-            # guidance if the solver reports it cannot handle a quadratic
-            # objective; see issue #762.
-            if self._PHIter == 1:
+            # Before the first proximal (quadratic) solve of this process,
+            # fail fast with guidance if the solver reports it cannot handle
+            # a quadratic objective; see issue #762. The gate is the first
+            # iteration of this leg rather than iteration 1: a resumed run
+            # starts past 1 and may legitimately have switched solvers.
+            if self._PHIter == self._resume_iteration + 1:
                 self._check_prox_solver_capability()
 
             try:
@@ -1443,14 +1646,26 @@ class PHBase(mpisppy.spopt.SPOpt):
             if dconvergence_detail:
                 self.report_var_values_at_rank0(header="Convergence detail:", fixed_vars=False)
 
-        else: # no break, (self._PHIter == max_iterations)
+        else: # no break, (self._PHIter == self._stop_iteration)
             # NOTE: If we return for any other reason things are reasonably in-sync.
             #       due to the convergence check. However, here we return we'll be
             #       out-of-sync because of the solve_loop could take vasty different
             #       times on different threads. This can especially mess up finalization.
             #       As a guard, we'll put a barrier here.
             self.mpicomm.Barrier()
-            global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.cylinder_rank == 0)
+            # Name the bound that actually ended the run: on a resume the two
+            # are different numbers, and reporting the wrong one sends the
+            # reader looking for the wrong option.
+            if self._stop_iteration <= self._resume_iteration:
+                # The loop was empty. Its reason was reported before it, and
+                # announcing a bound as "reached" here would be a second,
+                # contradictory account of the same non-event.
+                pass
+            elif stop_at is not None and self._stop_iteration == stop_at:
+                global_toc("Reached user-specified stop_at_iteration_number=%d, "
+                           "ending the study" % stop_at, self.cylinder_rank == 0)
+            else:
+                global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.cylinder_rank == 0)
 
 
     def post_loops(self, extensions=None):
