@@ -310,8 +310,18 @@ class PHBase(mpisppy.spopt.SPOpt):
         # which only attach_PH_to_objective sets: APH calls PH_Prep with both
         # attach flags False and splices its own W/prox terms directly onto
         # saved_objectives (aph.py), so inferring re-entry from those would
-        # never fire for APH.
+        # never fire for APH and its restart would skip the Iter0 gating.
+        #
+        # This makes the gating in PH_Prep fire for every subclass. It does
+        # not make APH itself re-entrant: aph.py runs its own prep after
+        # PH_Prep, re-declaring y/ybars/z and appending its terms to
+        # saved_objectives unconditionally, so a second APH_main() still
+        # doubles them. That is pre-existing (identical on upstream/main:
+        # the W_on term count goes 3 -> 6 either way) and out of scope here.
         self._PH_prep_done = False
+        # What the first PH_Prep asked for, so a re-prep asking for something
+        # different can be refused instead of silently ignored.
+        self._PH_prep_request = None
 
     @property
     def iter0_solver_options(self):
@@ -1072,6 +1082,21 @@ class PHBase(mpisppy.spopt.SPOpt):
         """
 
         reprepping = self._PH_prep_done
+        request = (attach_duals, attach_prox, attach_smooth)
+        if reprepping and request != self._PH_prep_request:
+            # The terms already in the objective cannot be narrowed or swapped
+            # here: attach_PH_to_objective only ever adds, and Iter0 re-enables
+            # W_on/prox_on at the end, so honoring a smaller request would take
+            # detaching. Refuse rather than silently run with the previous
+            # run's terms -- e.g. ph_main(attach_prox=False) after a plain
+            # ph_main() would otherwise still solve with the prox term, and a
+            # changed options["smoothed"] would be a no-op in both directions.
+            raise RuntimeError(
+                "PH_Prep was already run on this object with "
+                f"(attach_duals, attach_prox, attach_smooth)="
+                f"{self._PH_prep_request}; it cannot be re-run as {request}. "
+                "Build a new PH object for a different set of PH terms.")
+        self._PH_prep_request = request
         self._PH_prep_done = True
         self.attach_Ws_and_prox()
         if attach_smooth:

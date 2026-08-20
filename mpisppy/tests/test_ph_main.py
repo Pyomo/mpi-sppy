@@ -505,7 +505,11 @@ class TestPHPrepIsIdempotent(unittest.TestCase):
         ph.ph_main()
         after_two = [pyo.value(s._mpisppy_model.p[k])
                      for k in s._mpisppy_model.p]
-        self.assertEqual(after_one, after_two)
+        # equal to each other is not enough -- both runs could be wrong by the
+        # same factor; p should be defaultPHp scaled by rho exactly once
+        expected = options["defaultPHp"] * options["defaultPHrho"]
+        self.assertEqual(after_one, [expected] * len(after_one))
+        self.assertEqual(after_two, [expected] * len(after_two))
 
     def test_reprep_is_detected_without_the_attach_flags(self):
         # APH calls PH_Prep with both attach flags False and splices its own
@@ -526,6 +530,27 @@ class TestPHPrepIsIdempotent(unittest.TestCase):
         ph.options["defaultPHrho"] = -1
         with self.assertRaises(RuntimeError):
             ph.PH_Prep()
+
+    def test_reprep_with_a_different_term_set_is_refused(self):
+        # attach_PH_to_objective only ever adds, and Iter0 re-enables
+        # W_on/prox_on at the end, so a narrowed request cannot be honored --
+        # ph_main(attach_prox=False) after a plain ph_main() would otherwise
+        # silently keep solving with the prox term.
+        ph = self._make_ph()
+        ph.PH_Prep()
+        with self.assertRaises(RuntimeError):
+            ph.PH_Prep(attach_prox=False)
+        # and the same request is still fine
+        ph.PH_Prep()
+
+    def test_reprep_with_changed_smoothing_is_refused(self):
+        # add_smooth is not part of what attach_PH_to_objective dedups on, so
+        # turning smoothing on or off between runs would be a silent no-op in
+        # both directions.
+        ph = self._make_ph()
+        ph.PH_Prep(attach_smooth=0)
+        with self.assertRaises(RuntimeError):
+            ph.PH_Prep(attach_smooth=2)
 
     def test_attach_reports_whether_it_changed_anything(self):
         ph = self._make_ph()
