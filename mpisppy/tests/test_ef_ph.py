@@ -804,8 +804,263 @@ class Test_hydro(unittest.TestCase):
         obj2 = round_pos_sig(obj, 2)
         self.assertEqual(210, obj2)
 
-        
+
 # MultRhoUpdater
-        
+
+
+class Test_mutable_probability(unittest.TestCase):
+    """ Mutable scenario probabilities on the ExtensiveForm (issue #797). """
+
+    def setUp(self):
+        import mpisppy.tests.examples.farmer as farmer
+        from mpisppy.opt.ef import ExtensiveForm
+        self.farmer = farmer
+        self.ExtensiveForm = ExtensiveForm
+        self.snames = ["scen0", "scen1", "scen2"]
+        self.sck = {"num_scens": 3, "sense": pyo.minimize}
+
+    def _pv(self, p_bad):
+        rest = (1.0 - p_bad) / 2.0
+        return {"scen0": p_bad, "scen1": rest, "scen2": rest}
+
+    def _make_ef(self, mutable_probability=False):
+        return self.ExtensiveForm(
+            options={"solver": solver_name},
+            all_scenario_names=self.snames,
+            scenario_creator=self.farmer.scenario_creator,
+            scenario_creator_kwargs=self.sck,
+            mutable_probability=mutable_probability,
+        )
+
+    def _rebuild_obj(self, pv):
+        # baked-in EF at the given probabilities (correctness oracle)
+        scen_dict = {sn: self.farmer.scenario_creator(sn, **self.sck)
+                     for sn in self.snames}
+        for sn, scen in scen_dict.items():
+            scen._mpisppy_probability = pv[sn]
+        ef = sputils._create_EF_from_scen_dict(scen_dict, EF_name="oracle")
+        solver = pyo.SolverFactory(solver_name)
+        if '_persistent' in solver_name:
+            solver.set_instance(ef)
+        solver.solve(ef)
+        return pyo.value(ef.EF_Obj)
+
+    def test_mutable_prob_builds_param(self):
+        ef = self._make_ef(mutable_probability=True)
+        self.assertTrue(ef.mutable_probability)
+        self.assertTrue(hasattr(ef.ef._mpisppy_model, "prob"))
+        # defaults to the scenario_creator probabilities (uniform here)
+        for sn in self.snames:
+            self.assertAlmostEqual(pyo.value(ef.ef._mpisppy_model.prob[sn]),
+                                   1.0 / 3.0)
+
+    @unittest.skipIf(not solver_available, "no solver is available")
+    def test_matches_rebuild_across_sweep(self):
+        ef = self._make_ef(mutable_probability=True)
+        for i, p_bad in enumerate([0.0, 0.2, 0.5, 0.9]):
+            pv = self._pv(p_bad)
+            ef.set_scenario_probabilities(pv)
+            ef.solve_extensive_form(reuse_instance=(i > 0))
+            self.assertAlmostEqual(ef.get_objective_value(),
+                                   self._rebuild_obj(pv), places=4)
+
+    @unittest.skipIf(not persistent_available,
+                     "no persistent solver is available")
+    def test_reuse_instance_loads_once(self):
+        options = {"solver": persistent_solver_name}
+        ef = self.ExtensiveForm(
+            options=options, all_scenario_names=self.snames,
+            scenario_creator=self.farmer.scenario_creator,
+            scenario_creator_kwargs=self.sck, mutable_probability=True)
+        calls = {"n": 0}
+        orig = ef.solver.set_instance
+        def counting(*a, **k):
+            calls["n"] += 1
+            return orig(*a, **k)
+        ef.solver.set_instance = counting
+        for i, p_bad in enumerate([0.2, 0.5, 0.9]):
+            ef.set_scenario_probabilities(self._pv(p_bad))
+            ef.solve_extensive_form(reuse_instance=(i > 0))
+        self.assertEqual(calls["n"], 1)
+
+    def test_guards(self):
+        ef = self._make_ef(mutable_probability=True)
+        # non-mutable EF rejects the setter
+        plain = self._make_ef(mutable_probability=False)
+        with self.assertRaises(RuntimeError):
+            plain.set_scenario_probabilities(self._pv(0.2))
+        # unknown scenario name
+        with self.assertRaises(KeyError):
+            ef.set_scenario_probabilities({"nope": 0.5})
+        # probabilities not summing to 1, and the failed call is transactional
+        before = pyo.value(ef.ef._mpisppy_model.prob["scen0"])
+        with self.assertRaises(ValueError):
+            ef.set_scenario_probabilities({"scen0": before + 0.25})
+        self.assertAlmostEqual(pyo.value(ef.ef._mpisppy_model.prob["scen0"]),
+                               before)
+        # a negative entry is rejected even though the vector sums to 1, and
+        # the scenario listed ahead of it is not left written
+        with self.assertRaises(ValueError):
+            ef.set_scenario_probabilities(
+                {"scen0": 1.2, "scen1": -0.2, "scen2": 0.0})
+        for sname in ("scen0", "scen1", "scen2"):
+            self.assertAlmostEqual(
+                pyo.value(ef.ef._mpisppy_model.prob[sname]), 1.0 / 3.0)
+            self.assertAlmostEqual(
+                getattr(ef.ef, sname)._mpisppy_probability, 1.0 / 3.0)
+
+    def test_modern_persistent_api_is_recognized(self):
+        # load_vars lives on the solution loader for pyomo.contrib.solver
+        # interfaces, not on the solver, so requiring it would classify
+        # highs / gurobi_persistent_v2 as non-persistent. Stubs keep this
+        # independent of which solvers happen to be installed.
+        class HoldsInstance:
+            def set_instance(self, m): pass
+            def set_objective(self, o): pass
+
+        class LoadsVarsToo(HoldsInstance):
+            def load_vars(self): pass
+
+        class Neither:
+            pass
+
+        self.assertTrue(sputils.has_persistent_solve_api(HoldsInstance()))
+        self.assertTrue(sputils.has_persistent_solve_api(LoadsVarsToo()))
+        self.assertFalse(sputils.has_persistent_solve_api(Neither()))
+
+    def test_suffixes_are_imported_for_non_persistent_solvers(self):
+        # load_vars() loads variable values only; solutions.load_from(results)
+        # also imports Suffix data. Choosing the branch on
+        # hasattr(solver, "load_vars") rather than is_persistent silently
+        # drops duals for gurobi_direct / cplex_direct / xpress / appsi_highs.
+        direct = None
+        for cand in ("gurobi_direct", "appsi_highs", "cplex_direct",
+                     "xpress_direct"):
+            try:
+                if pyo.SolverFactory(cand).available(exception_flag=False):
+                    direct = cand
+                    break
+            except Exception:
+                continue
+        if direct is None:
+            self.skipTest("no non-persistent solver available")
+        ef = self.ExtensiveForm(
+            options={"solver": direct},
+            all_scenario_names=self.snames,
+            scenario_creator=self.farmer.scenario_creator,
+            scenario_creator_kwargs=self.sck)
+        ef.ef.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
+        ef.solve_extensive_form()
+        self.assertGreater(len(ef.ef.dual), 0,
+                           f"{direct} imported no duals")
+
+    @unittest.skipIf(not solver_available, "no solver is available")
+    def test_update_invalidates_the_loaded_solution(self):
+        # The loaded solution belongs to the old probabilities; reading it
+        # back after an update would mix new Params with stale variable
+        # values and report a number that is neither optimum.
+        ef = self._make_ef(mutable_probability=True)
+        ef.solve_extensive_form()
+        self.assertTrue(ef.tree_solution_available)
+        old_obj = ef.get_objective_value()
+        ef.set_scenario_probabilities({"scen0": 0.9, "scen1": 0.05,
+                                       "scen2": 0.05})
+        self.assertFalse(ef.tree_solution_available)
+        self.assertFalse(ef.first_stage_solution_available)
+        self.assertIsNone(ef.get_objective_value())
+        ef.solve_extensive_form(reuse_instance=True)
+        new_obj = ef.get_objective_value()
+        self.assertIsNotNone(new_obj)
+        self.assertNotAlmostEqual(new_obj, old_obj, places=2)
+
+    def test_rejected_build_leaves_the_scenarios_reusable(self):
+        # The build loop deactivates each scenario objective and re-parents
+        # the scenario onto the EF, so the sum check has to come first or a
+        # corrected retry with the same scen_dict is impossible.
+        scen_dict = {sn: self.farmer.scenario_creator(sn, **self.sck)
+                     for sn in self.snames}
+        for scen in scen_dict.values():
+            scen._mpisppy_probability = 0.33          # sums to 0.99
+        with self.assertRaises(RuntimeError):
+            sputils._create_EF_from_scen_dict(scen_dict, EF_name="rejected",
+                                              mutable_probability=True)
+        for scen in scen_dict.values():
+            scen._mpisppy_probability = 1.0 / 3.0     # fix it and retry
+        ef = sputils._create_EF_from_scen_dict(scen_dict, EF_name="retry",
+                                               mutable_probability=True)
+        self.assertIsNotNone(ef)
+
+    def test_unknown_solver_does_not_break_the_persistence_probe(self):
+        # UnknownSolver.__getattr__ raises RuntimeError, not AttributeError,
+        # so a bare hasattr propagates out of a function promising a bool.
+        self.assertFalse(
+            sputils.has_persistent_solve_api(
+                pyo.SolverFactory("no_such_solver_at_all")))
+
+    @unittest.skipIf(not solver_available, "no solver is available")
+    def test_all_solution_accessors_honor_the_invalidation(self):
+        # get_objective_value is not the only way to read the solution back;
+        # get_root_solution and nonants must not hand back the old vector's
+        # answer either.
+        ef = self._make_ef(mutable_probability=True)
+        ef.solve_extensive_form()
+        self.assertIsNotNone(ef.get_root_solution())
+        self.assertGreater(len(list(ef.nonants())), 0)
+        ef.set_scenario_probabilities(self._pv(0.6))
+        self.assertIsNone(ef.get_objective_value())
+        self.assertIsNone(ef.get_root_solution())
+        self.assertEqual(list(ef.nonants()), [])
+        ef.solve_extensive_form(reuse_instance=True)
+        self.assertIsNotNone(ef.get_root_solution())
+        self.assertGreater(len(list(ef.nonants())), 0)
+
+    def test_prob_coeff_tracks_the_update(self):
+        # prob_coeff is derived from _mpisppy_probability and computed once at
+        # setup, so the setter has to force a rebuild.
+        ef = self._make_ef(mutable_probability=True)
+        for scen in ef.local_scenarios.values():
+            self.assertAlmostEqual(scen._mpisppy_data.prob_coeff["ROOT"],
+                                   1.0 / 3.0)
+        ef.set_scenario_probabilities(self._pv(0.6))
+        for sname, scen in ef.local_scenarios.items():
+            want = 0.6 if sname == "scen0" else 0.2
+            self.assertAlmostEqual(scen._mpisppy_data.prob_coeff["ROOT"], want)
+
+    def test_multistage_is_refused_at_construction(self):
+        # A multistage re-weight would leave every ScenarioNode.cond_prob
+        # stale, and prob_coeff is derived from those. The flag exists only to
+        # enable re-weighting, so refuse while the caller can still choose a
+        # different build rather than at the first update.
+        import mpisppy.tests.examples.hydro.hydro as hydro
+        bfs = [3, 3]
+        snames = ["Scen%d" % (i + 1) for i in range(9)]
+        kwargs = dict(
+            options={"solver": solver_name, "mutable_probability": True},
+            all_scenario_names=snames,
+            scenario_creator=hydro.scenario_creator,
+            all_nodenames=sputils.create_nodenames_from_branching_factors(bfs),
+            scenario_creator_kwargs={"branching_factors": bfs})
+        with self.assertRaises(ValueError):
+            self.ExtensiveForm(**kwargs)
+        # and the same model builds fine without the flag
+        kwargs["options"] = {"solver": solver_name}
+        ef = self.ExtensiveForm(**kwargs)
+        self.assertGreater(
+            len(ef.local_scenarios[snames[0]]._mpisppy_node_list), 1,
+            "hydro should be multistage")
+
+    def test_force_refuses_to_drop_variable_probability(self):
+        # The forced rebuild writes a scalar prob_coeff and prob0_mask=1.0 per
+        # node, which would silently discard the per-variable arrays that
+        # _use_variable_probability_setter installs.
+        ef = self._make_ef(mutable_probability=True)
+        # reachable on any SPBase subclass that uses variable probability;
+        # ExtensiveForm does not wire it up, so set the flag directly
+        for scen in ef.local_scenarios.values():
+            scen._mpisppy_data.has_variable_probability = True
+        with self.assertRaises(RuntimeError):
+            ef._compute_unconditional_node_probabilities(force=True)
+
+
 if __name__ == '__main__':
     unittest.main()
