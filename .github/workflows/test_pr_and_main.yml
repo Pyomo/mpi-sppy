@@ -1204,6 +1204,29 @@ jobs:
           if-no-files-found: ignore
           include-hidden-files: true
 
+  test-cylinders-gate:
+    # Branch protection requires a check named "tests on some cylinders",
+    # which is what the job above was called before it became a matrix.  A
+    # matrix reports one context per cell -- "tests on some cylinders
+    # (mpich)" and friends -- so the required name is never reported and
+    # every PR sits waiting on a status that will never arrive.  Reporting
+    # it from a gate keeps that name stable no matter how the matrix is
+    # edited later, and avoids naming individual cells in a setting that
+    # would then block PRs branched before the matrix existed.
+    name: tests on some cylinders
+    runs-on: ubuntu-latest
+    needs: [test-cylinders]
+    # A skipped matrix (ruff red) still has to report, or the required check
+    # hangs; the run is already failing in that case.
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Report the matrix result
+        run: |
+          # `needs.<job>.result` collapses the whole matrix into one verdict:
+          # "success" only when every cell succeeded.
+          echo "cylinder cells: ${{ needs.test-cylinders.result }}"
+          test "${{ needs.test-cylinders.result }}" = "success"
+
   test-cg:
     name: column generation tests
     runs-on: ubuntu-latest
