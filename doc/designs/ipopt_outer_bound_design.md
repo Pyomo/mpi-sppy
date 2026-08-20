@@ -283,6 +283,91 @@ measured above, so it is last-bit hygiene, not a proof-carrying margin. The marg
 itself is not a soundness problem — the theorem in §3.3 needs no tolerance argument —
 and a user who wants to absorb `constr_viol_tol`-scale infeasibility can raise `ε_rel`.
 
+**Where the cushion does not scale with the risk.** `φ(v̂)` is evaluated in double
+precision as `f + Σᵢ λᵢgᵢ + Σⱼ μⱼhⱼ`, and `q̂` adds `−Σᵢ |∂ᵢφ|·dᵢ`, where `dᵢ` is the
+distance from `v̂ᵢ` to the far end of its interval. Rounding gives
+
+```
+    |q̂_computed − q̂_exact|  ≲  u·( |f| + Σᵢ|λᵢgᵢ| + Σⱼ|μⱼhⱼ| )  +  u·Σᵢ (terms of ∂ᵢφ)·dᵢ
+    u = 2⁻⁵³ ≈ 1.1e−16
+```
+
+Both error terms are governed by the size of the **summands**. The cushion
+`ε_rel·(1+|q̂|)` is governed by the size of the **result**. On a well-scaled model those
+track each other and 1e−9 is generous by seven orders of magnitude. Where cancellation
+is severe they come apart: a constraint row scaled by 1e−8 drives its multiplier to
+~1e8 against an objective of order one, so the error floor is ~1e−8 absolute while the
+cushion is ~1e−9.
+
+Note that the second error term is the one that can push `q̂` *up*. The correction is
+`−Σᵢ|∂ᵢφ|dᵢ`, so a gradient component computed slightly too small in magnitude makes
+the correction slightly less negative. Unlike a multiplier error, which §5.1 shows is
+one-directional, a gradient error is not. It is not amplified by anything — see §5.3 —
+but it is not self-protecting either.
+
+**Practical consequence: on a model known to be badly scaled, raise
+`--ipopt-outer-bound-cushion`.** This is the one respect in which numerics bear on
+validity rather than on tightness, and it is the reason the flag exists as a knob
+instead of a constant.
+
+**Non-finite results are screened.** A diverged solve can leave NaN in the point or in
+the duals, and NaN propagates silently through every expression above. An infinite
+multiplier produces NaN (`inf·0`) or `±inf`. `certified_lower_bound` therefore checks
+`math.isfinite(q̂)` before applying the cushion and returns `None` otherwise, reusing the
+word it already has for "no bound this time". Without the check the safety would be
+accidental: NaN loses every comparison, so the hub's `new > old` test in
+`_outer_bound_update` happens to reject it — but `+inf` would compare as an
+*improvement* and be latched as an outer bound that is not one.
+
+### 5.3 Ill-conditioning: why it costs tightness and not validity
+
+Ill-conditioning is the obvious worry for a bound read out of an NLP solver, so it is
+worth saying precisely where it does and does not enter.
+
+**"Sub-optimal" has only one meaning here.** The model is convex by hypothesis, so it
+has no non-global local minima. Ipopt returning a sub-optimal answer can therefore only
+mean it stopped short of converging — an inexact iterate with inexact multipliers. That
+is exactly the case §3.3 was constructed to cover: the corollary holds for *any* `v̂`,
+optimal or not, feasible or not, and for *any* `λ ≥ 0` and *any* `μ`.
+
+**The bounding plane is immune because there is no solve.** A condition number measures
+how much a *linear solve* amplifies error — `κ(H)` bounds the relative error in `d`
+from `Hd = −g`. The certificate inverts nothing. Its entire computation is: evaluate
+`φ` at `v̂`, evaluate `∇φ` at `v̂` by reverse-mode AD, compare each component to zero,
+select an endpoint of that variable's interval, multiply, and add. Every one of those
+is a forward evaluation carrying relative error `O(u)` per operation. `κ` has no route
+in. Correspondingly, the inequality the plane rests on,
+
+```
+    φ(v) ≥ φ(v̂) + ∇φ(v̂)ᵀ(v − v̂)      for all v,
+```
+
+is a pointwise consequence of convexity. It holds exactly, at every `v̂`, with no error
+constant and no dependence on how well-conditioned anything is. Conditioning changes
+how *loose* the plane is away from `v̂`; it cannot change which side of `φ` it lies on.
+
+**Where conditioning does land: the correction term.** A badly conditioned problem
+leaves `v̂` further from optimal and `∇φ(v̂)` correspondingly larger, and the shortfall
+`Σᵢ|∂ᵢφ|·dᵢ` grows with it. It also gives worse multipliers, which weakens `φ` itself.
+Both effects move the bound *down*. This is visible rather than theoretical: in the
+study below the well-scaled Hilbert QP closed to 1e−9 relative, while the same problem
+with a 1e−8 row scaling stalled at 1.8e−2 relative and never closed further. Loose,
+valid, and correctly reported as such.
+
+**Empirical check.** Hilbert-matrix QPs (`H_ij = 1/(i+j+1)`, `cond(H)` ≈ 1.6e13 at
+n=10 and 3.5e17 at n=16), with row scalings of 1e±8 and an objective offset of 1e12,
+solved at `max_iter ∈ {1,2,3,5,10,∞}` and certified at each. Every bound was compared
+against `f` at a point *constructed* to be feasible — not against `f(v̂)`, which is the
+trap: `v̂` carries up to `constr_viol_tol` of infeasibility, so `f(v̂)` can sit below the
+true optimum and manufacture an apparent violation where there is none. No violations at
+any conditioning, scaling, or truncation level. This is `TestIllConditioning` in
+`mpisppy/tests/test_dual_certificate.py`.
+
+**What ill-conditioning *can* break is convexity, not the certificate.** A Hessian that
+is nearly singular and slightly indefinite is non-convex, the tangent is then not an
+underestimator, and §5.1's exception applies with full force. That is a property of the
+model as written, and no guard in §6 catches it.
+
 ## 6. Guards
 
 Checkable at setup, hard error (following the repo's fail-loudly convention):
@@ -569,6 +654,22 @@ optimum 8 at `(1, 0)` and multiplier 4, all analytic.
   by the constraints.
 - **Cushion**: `ε_rel = 0` reproduces `q̂` exactly; the default shaves it by
   `1e-9·(1+|q̂|)` and never turns a valid bound invalid.
+- **Non-finite results** (no solver): a NaN dual, a NaN in the point, and an infinite
+  dual must each yield `None` or a valid number, never a non-finite one. The `+inf` case
+  is the one that matters — NaN is rejected downstream by accident, `+inf` would be
+  latched as an improvement — so it is asserted explicitly rather than left to the
+  general check.
+- **Ill-conditioning** (Ipopt-gated): Hilbert-matrix QPs at `cond(H)` ≈ 1.6e13 and
+  3.5e17, with row scalings of 1e±8 and an objective offset of 1e12, certified at
+  `max_iter ∈ {1,2,3,5,10,∞}`. Each bound is checked against `f` at a point *constructed*
+  to be feasible by bisecting a uniform downshift — comparing against `f(v̂)` from the
+  solver instead is the trap described in §5.3 and produces false violations. Two
+  supporting assertions keep it honest: that the 1e−8 row scaling really does drive the
+  multiplier past 1e6 (or the cancellation variant would silently stop exercising
+  cancellation), and that the well-scaled case closes to 1e−6 relative while the badly
+  scaled one only has to stay valid — pinning §5.3's "tightness, not validity" as a test.
+  Tolerances are a few thousand ulps relative, which is the §5.2 arithmetic allowance;
+  an exact comparison at an offset of 1e12 would be testing the FPU.
 - **Integration**: `farmer` is linear, hence convex, and Ipopt solves it; compare the
   cylinder's bound against the EF optimum.
 - **MPI**: 2-rank cylinder, same comparison, exercising `Ebound`'s reduction. The hub

@@ -106,9 +106,28 @@ spoke is pinned to Ipopt, via ``--ipopt-outer-bound-solver-name`` (default
 *convex* model -- it does not let it certify a non-convex one. If the model has
 integer variables this spoke is inapplicable no matter what anything else runs.
 
+**An inexact or ill-conditioned solve is safe.** The certificate assumes nothing
+about the accuracy of the solve. The model is convex by assumption, so it has no
+non-global local minima, and Ipopt returning a sub-optimal answer can only mean
+it stopped short of converging -- an inexact point with inexact multipliers, both
+of which the underlying theorem admits. Ill-conditioning does not enter either:
+the certificate evaluates the objective and one gradient, and inverts nothing, so
+there is no linear solve for a condition number to amplify. What both cost is
+tightness. The looseness term grows as the point moves away from optimal, so a
+badly conditioned subproblem reports a weak bound, and the hub keeps the best
+outer bound it has seen and ignores it.
+
 ``--ipopt-outer-bound-cushion`` (default ``1e-9``) subtracts a small relative
 amount, ``q - eps*(1+|q|)``, from the reported bound. This is last-bit hygiene
 against floating point, not a proof-carrying margin; pass ``0`` to disable it.
+
+The one case worth raising it for is a badly *scaled* model. The bound is summed
+as ``f + lam^T g + mu^T h``, so its rounding error tracks the size of those terms,
+while the cushion tracks the size of the answer. Multipliers of order ``1e8``
+against an objective of order one put the error floor near ``1e-8`` while the
+default cushion is ``1e-9``. Rescaling the offending constraint rows is the better
+fix; raising the cushion is the cheap one. A solve that diverges outright produces
+no number at all -- a non-finite result is rejected and the spoke stays quiet.
 
 Maximization is not supported and raises at setup.
 

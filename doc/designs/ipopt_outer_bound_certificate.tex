@@ -29,7 +29,7 @@
 \maketitle
 
 \begin{abstract}
-The usual device for getting outer bounds in mip-sppy is to read the dual bound off the subproblem solver, which fails for Ipopt, which reports no dual bound.  This note
+The usual device for getting outer bounds in mpi-sppy is to read the dual bound off the subproblem solver, which fails for Ipopt, which reports no dual bound.  This note
 derives the bound that the \texttt{ipopt\_outer\_bound} spoke computes instead.
 The construction is Lagrangian weak duality combined with a tangent-plane
 underestimator minimised in closed form over the variable box.  \emph{None of the
@@ -39,7 +39,9 @@ literature.  The derivation is written out because the hypotheses are what
 matter in practice, and one of them is easy to get backwards.  Its defining
 property is that it requires \emph{no} assumption about the accuracy of the
 solve: a truncated or sloppy solve yields a loose bound rather than an invalid
-one.  Convexity, by contrast, is genuinely load-bearing, and
+one, and an ill-conditioned one does the same, since the construction evaluates
+rather than solves and so admits no amplification of error by a condition
+number.  Convexity, by contrast, is genuinely load-bearing, and
 Section~\ref{sec:canonical} isolates the one place where it is easy to get
 backwards.
 \end{abstract}
@@ -314,11 +316,91 @@ component is zero by Proposition~\ref{prop:kkt}, but away from one it generally
 is not.  The implementation reports ``no bound'' in that case rather than
 $-\infty$, so that Remark~\ref{rem:mixed} is respected.
 
+\paragraph{Inexact solves.}
+Corollary~\ref{cor:anypoint} already covers these, but it is worth spelling out
+what ``inexact'' can mean.  Problem~\eqref{eq:sub} is convex by hypothesis, so
+it has no non-global local minima.  A solver returning a sub-optimal answer can
+therefore only mean that it stopped short of converging, leaving an inexact
+$\vhat$ and inexact multipliers.  Both are admissible inputs to
+Theorem~\ref{thm:main}: the conclusion $\qhat_s \le L_s(\W_s)$ is unchanged, and
+the entire effect appears in the correction term of \eqref{eq:qhat}, which grows
+as $\vhat$ moves away from a KKT point.  By Proposition~\ref{prop:kkt} that term
+vanishes exactly at a KKT point, so the correction is precisely the price of
+inexactness, and it measures itself.
+
+\paragraph{Ill-conditioning.}
+The distinct worry is that \eqref{eq:sub} is badly conditioned, so that the
+solve is not merely truncated but numerically poor.  This affects the tightness
+of $\qhat_s$ and not its validity, for a structural reason: \emph{the
+certificate is an evaluation, not a solve.}  A condition number quantifies how
+much a linear solve amplifies error --- $\kappa(H)$ bounds the relative error in
+$d$ obtained from $Hd = -g$ --- and no step of \eqref{eq:closed} inverts
+anything.  The computation evaluates $\varphi_s$ at $\vhat$, evaluates
+$\nabla \varphi_s(\vhat)$, compares each component with zero, selects an
+endpoint of the corresponding interval, multiplies and adds.  Each is a forward
+evaluation, and $\kappa$ has no route in.  Correspondingly, the inequality the
+construction rests on,
+\[
+  \varphi_s(v) \;\ge\; \varphi_s(\vhat)
+                     + \nabla \varphi_s(\vhat)^{\top} (v - \vhat)
+  \qquad \text{for all } v,
+\]
+is a pointwise consequence of convexity.  It holds exactly, at every $\vhat$,
+with no error constant and no dependence on the conditioning of anything.
+Conditioning governs how loose the plane is away from $\vhat$; it cannot change
+which side of $\varphi_s$ the plane lies on.  What it does change is the size of
+$\nabla \varphi_s(\vhat)$ and the quality of the multipliers, and both push
+$\qhat_s$ \emph{down}.
+
 \paragraph{Floating point.}
-Nothing in Theorem~\ref{thm:main} requires a tolerance.  A small relative
-cushion, reporting $\qhat_s - \varepsilon(1 + |\qhat_s|)$, is nevertheless cheap
-insurance against last-bit effects in the gradient and the sum; it is a
-numerical safeguard, not part of the argument.
+Nothing in Theorem~\ref{thm:main} requires a tolerance.  The arithmetic, being
+carried out in finite precision, does introduce error, and the previous
+paragraph says only that this error is not amplified by $\kappa$ --- not that it
+is absent.
+
+\begin{remark}[Rounding]\label{rem:rounding}
+Let $u$ denote the unit roundoff.  Evaluating \eqref{eq:qhat} in floating point
+incurs
+\[
+  \bigl| \mathrm{fl}(\qhat_s) - \qhat_s \bigr|
+  \;\lesssim\;
+  u \Bigl( |f_s(\vhat)|
+         + \textstyle\sum_i \lambda_i |g_i(\vhat)|
+         + \sum_j |\mu_j|\,|h_j(\vhat)|
+         + \sum_i T_i \, d_i \Bigr),
+\]
+where $T_i$ bounds the intermediate magnitudes arising in
+$\partial_i \varphi_s(\vhat)$ and $d_i$ is the distance from $\vhat_i$ to the
+far end of $[l_i, u_i]$.  No condition number appears.
+\end{remark}
+
+Remark~\ref{rem:rounding} is governed by the size of the \emph{summands}, so
+cancellation matters: multipliers of order $10^{8}$ against an objective of
+order one put the error floor near $10^{-8}$ even though $|\qhat_s|$ is of order
+one.  The implementation's cushion, reporting
+$\qhat_s - \varepsilon(1 + |\qhat_s|)$, is scaled to the size of the
+\emph{result} instead, and the two agree only on a well-scaled model.  The
+cushion is therefore a numerical safeguard and not part of the argument, and it
+is exposed as a user-settable quantity rather than fixed.
+
+Note also that the final term of Remark~\ref{rem:rounding} is the one that can
+raise $\qhat_s$.  The correction in \eqref{eq:closed} equals
+$-\sum_i |\partial_i \varphi_s(\vhat)|\, d_i$, so a gradient component computed
+slightly small in magnitude makes it slightly less negative.  Remark~\ref{rem:robust}
+gives no protection here: it is a statement about the multipliers, and a
+perturbation of $\nabla \varphi_s$ is not one-directional in the way a
+perturbation of $\lambda$ is.
+
+\paragraph{Non-finite values.}
+A solve that diverges can leave NaN in $\vhat$ or in the reported multipliers,
+and an infinite multiplier yields NaN through $\infty \cdot 0$ or an infinite
+$\varphi_s(\vhat)$.  These propagate silently.  The implementation therefore
+rejects any non-finite $\qhat_s$ and reports ``no bound'', the same disposition
+it takes for an unbounded direction, so that Remark~\ref{rem:mixed} is again
+respected.  The case that makes this necessary rather than cosmetic is
+$+\infty$: a consumer keeping the best outer bound seen would discard NaN by
+accident, since NaN fails every comparison, but would accept $+\infty$ as an
+improvement.
 
 \section{Relation to known results}\label{sec:literature}
 
@@ -371,6 +453,8 @@ decidable hypotheses               & \texttt{check\_model\_is\_certifiable} \\
 box tightening                     & \texttt{unbounded\_variables} \\
 Proposition~\ref{prop:agg} sum     & \texttt{SPOpt.Ebound} \\
 Remark~\ref{rem:mixed} safeguard   & a \texttt{None} bound, propagated collectively \\
+Remark~\ref{rem:rounding} cushion  & \texttt{eps\_rel}, \texttt{--ipopt-outer-bound-cushion} \\
+non-finite rejection               & \texttt{math.isfinite} test on $\qhat_s$ \\
 \bottomrule
 \end{tabular}
 \end{center}

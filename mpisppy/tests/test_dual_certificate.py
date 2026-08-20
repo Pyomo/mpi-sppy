@@ -21,6 +21,7 @@
 # whose optimum is x=1, y=0 with value 8 and multiplier 4 -- all analytic, so
 # every expected number below is exact rather than a recorded observation.
 
+import math
 import unittest
 
 import pyomo.environ as pyo
@@ -175,6 +176,45 @@ class TestCertificateMath(unittest.TestCase):
         self.assertEqual(exact, OPT)
         self.assertLess(cushioned, exact)
         self.assertAlmostEqual(exact - cushioned, 1e-9 * (1.0 + OPT), places=15)
+
+    def test_nan_dual_yields_no_bound(self):
+        # A diverged solve can leave NaN in the `dual` suffix, and NaN
+        # propagates silently through phi and the correction.  The contract is
+        # None, the same word this module already uses for "no bound this time".
+        m = _place(_model("le"), 1.0, 0.0, float("nan"))
+        self.assertIsNone(certified_lower_bound(m, eps_rel=0.0))
+
+    def test_nan_in_the_point_yields_no_bound(self):
+        m = _place(_model("le"), 1.0, 0.0, -4.0)
+        m.x.set_value(float("nan"), skip_validation=True)
+        self.assertIsNone(certified_lower_bound(m, eps_rel=0.0))
+
+    def test_infinite_duals_yield_no_bound_or_a_valid_one(self):
+        # -inf clips to lam = +inf, and inf*0 is NaN; +inf clips to lam = 0,
+        # which just drops the constraint and leaves a loose but valid bound.
+        # Neither may return a number above the optimum.
+        for d in (float("inf"), float("-inf")):
+            with self.subTest(dual=d):
+                q = certified_lower_bound(_place(_model("le"), 1.0, 0.0, d),
+                                          eps_rel=0.0)
+                self.assertTrue(q is None or q <= OPT)
+
+    def test_a_non_finite_bound_never_reaches_the_caller(self):
+        # The guard is on the result, so it catches every route to a non-finite
+        # qhat, not just the ones enumerated above.  +inf matters most: unlike
+        # NaN it would compare as an *improvement* to a hub tracking the best
+        # outer bound seen.
+        for x, y, d in ((float("nan"), 0.0, -4.0),
+                        (1.0, float("nan"), -4.0),
+                        (1.0, 0.0, float("-inf")),
+                        (float("inf"), 0.0, -4.0)):
+            with self.subTest(x=x, y=y, dual=d):
+                m = _model("le")
+                m.x.set_value(x, skip_validation=True)
+                m.y.set_value(y, skip_validation=True)
+                m.dual[m.c] = d
+                q = certified_lower_bound(m, eps_rel=0.0)
+                self.assertTrue(q is None or math.isfinite(q))
 
     def test_fixed_variables_are_constants(self):
         # A fixed variable is not free in the box and must not contribute a
@@ -352,6 +392,164 @@ class TestWithIpopt(unittest.TestCase):
         self.assertGreater(pyo.value(m.obj), OPT)
         q = certified_lower_bound(m, eps_rel=0.0)
         self.assertTrue(q is None or q <= OPT + 1e-9)
+
+
+# ---------------------------------------------------------------------------
+# Ill-conditioning
+#
+# The question this answers is whether a solve that goes badly because the
+# problem is badly conditioned can produce an *invalid* bound rather than
+# merely a loose one.  It cannot, and the reason is structural: the certificate
+# is an evaluation, not a solve.  A condition number measures how much a linear
+# solve amplifies error, and `certified_lower_bound` never solves anything -- it
+# evaluates phi and its gradient at whatever point ipopt stopped at.  The
+# tangent inequality it rests on is pointwise and exact for any convex phi at
+# any vhat, with no error constant, so kappa has nowhere to enter.  What
+# conditioning does change is how far vhat lands from optimal and how large the
+# gradient there is, and both of those show up in the correction term as
+# looseness.
+#
+# The test problem is a Hilbert-matrix QP, the standard ill-conditioned test
+# case:  min 1/2 x'Hx - 1'x  s.t.  sum(x) <= 5,  x in [-10,10]^n,  with
+# H_ij = 1/(i+j+1).  It is convex (H is positive definite) so the hypotheses
+# hold exactly, while cond(H) is about 1.6e13 at n=10 and 3.5e17 at n=16 --
+# past the point where a double-precision solve can converge properly.
+# ---------------------------------------------------------------------------
+
+HILBERT_BOX = 10.0
+HILBERT_RHS = 5.0
+
+
+def _hilbert_qp(n=10, rowscale=1.0, offset=0.0):
+    """min 1/2 x'Hx - 1'x + offset  s.t.  rowscale*sum(x) <= rowscale*5.
+
+    `rowscale` leaves the feasible set alone and rescales the row, which
+    rescales the multiplier ipopt reports by the same factor -- 1e-8 drives it
+    to ~1e8 and makes the `lam^T g` term in phi dominate an objective of order
+    one, which is the cancellation regime.  `offset` does the same to the `f`
+    term.  Both are ways of making the arithmetic hard without touching the
+    mathematics.
+    """
+    m = pyo.ConcreteModel()
+    m.I = pyo.RangeSet(0, n - 1)
+    m.x = pyo.Var(m.I, bounds=(-HILBERT_BOX, HILBERT_BOX), initialize=0.0)
+    m.obj = pyo.Objective(
+        expr=0.5 * sum(m.x[i] * m.x[j] / (i + j + 1) for i in range(n) for j in range(n))
+        - sum(m.x[i] for i in range(n))
+        + offset
+    )
+    m.c = pyo.Constraint(
+        expr=rowscale * sum(m.x[i] for i in range(n)) <= rowscale * HILBERT_RHS
+    )
+    m.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
+    return m
+
+
+def _hilbert_objective(xs, offset):
+    n = len(xs)
+    return (
+        0.5 * sum(xs[i] * xs[j] / (i + j + 1) for i in range(n) for j in range(n))
+        - sum(xs)
+        + offset
+    )
+
+
+def _rigorous_upper_bound(xs, offset):
+    """f at a point PROVABLY in the feasible set, hence >= the true optimum.
+
+    Comparing the certificate against `f(vhat)` from a converged solve is the
+    trap this exists to avoid: ipopt's vhat carries up to `constr_viol_tol` of
+    infeasibility, so `f(vhat)` can sit *below* the optimum and manufacture an
+    apparent violation where there is none.  Here a uniform downshift is
+    bisected until the shifted, clipped point satisfies the constraint exactly
+    as evaluated -- clipping keeps it in the box and the shifted sum is
+    monotone in the shift, so the result is feasible by construction, whatever
+    the solver did.
+    """
+    def clip(t):
+        return [min(HILBERT_BOX, max(-HILBERT_BOX, v - t)) for v in xs]
+
+    lo, hi = 0.0, 2.0 * HILBERT_BOX + abs(HILBERT_RHS) + 1.0
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        if sum(clip(mid)) > HILBERT_RHS:
+            lo = mid
+        else:
+            hi = mid
+    feasible = clip(hi)
+    assert sum(feasible) <= HILBERT_RHS
+    assert max(abs(v) for v in feasible) <= HILBERT_BOX
+    return _hilbert_objective(feasible, offset)
+
+
+@unittest.skipUnless(ipopt_available, "ipopt is not available")
+class TestIllConditioning(unittest.TestCase):
+    """Validity must survive a solve that goes badly for numerical reasons."""
+
+    # (label, n, rowscale, offset)
+    VARIANTS = [
+        ("cond 1.6e13", 10, 1.0, 0.0),
+        ("tiny multiplier", 10, 1e8, 0.0),
+        ("multiplier ~1e8", 10, 1e-8, 0.0),
+        ("cond 3.5e17", 16, 1.0, 0.0),
+        ("offset 1e12", 10, 1.0, 1e12),
+    ]
+    TRUNCATIONS = (1, 2, 3, 5, 10, None)
+
+    @staticmethod
+    def _solve(m, max_iter=None):
+        opt = pyo.SolverFactory("ipopt")
+        if max_iter is not None:
+            opt.options["max_iter"] = max_iter
+        opt.solve(m)
+        return m
+
+    def _reference(self, n, rowscale, offset):
+        m = self._solve(_hilbert_qp(n, rowscale, offset))
+        return _rigorous_upper_bound([pyo.value(m.x[i]) for i in range(n)], offset)
+
+    def test_bound_never_exceeds_a_feasible_objective(self):
+        for label, n, rowscale, offset in self.VARIANTS:
+            upper = self._reference(n, rowscale, offset)
+            # Both sides are computed in double precision, so the comparison
+            # gets a few-thousand-ulp relative allowance.  That is the
+            # arithmetic caveat dual_certificate.py documents, not slack in the
+            # theorem: at an offset of 1e12 a double resolves about 1e-4
+            # absolute, and an exact comparison there would be testing the
+            # floating-point unit rather than the certificate.
+            slop = 1e-12 * (1.0 + abs(upper))
+            for max_iter in self.TRUNCATIONS:
+                with self.subTest(variant=label, max_iter=max_iter):
+                    m = self._solve(_hilbert_qp(n, rowscale, offset), max_iter)
+                    q = certified_lower_bound(m, eps_rel=0.0)
+                    if q is None:
+                        continue
+                    self.assertTrue(math.isfinite(q))
+                    self.assertLessEqual(q, upper + slop)
+
+    def test_severe_row_scaling_really_does_produce_a_huge_multiplier(self):
+        # Without this the cancellation variant above could silently stop
+        # exercising cancellation -- a passing test that tests nothing.
+        m = self._solve(_hilbert_qp(10, rowscale=1e-8))
+        self.assertGreater(abs(pyo.value(m.dual[m.c])), 1e6)
+
+    def test_conditioning_costs_tightness_not_validity(self):
+        # The well-scaled case closes to the last few digits; the badly scaled
+        # one does not close at all.  Both stay valid, which is the whole
+        # claim: conditioning moves the bound down, never up.
+        good_n, good_scale = 10, 1.0
+        good_upper = self._reference(good_n, good_scale, 0.0)
+        good = certified_lower_bound(
+            self._solve(_hilbert_qp(good_n, good_scale)), eps_rel=0.0)
+        self.assertIsNotNone(good)
+        self.assertLessEqual(good, good_upper + 1e-12 * (1.0 + abs(good_upper)))
+        self.assertLess(good_upper - good, 1e-6 * (1.0 + abs(good_upper)))
+
+        bad_upper = self._reference(10, 1e-8, 0.0)
+        bad = certified_lower_bound(
+            self._solve(_hilbert_qp(10, rowscale=1e-8)), eps_rel=0.0)
+        self.assertIsNotNone(bad)
+        self.assertLessEqual(bad, bad_upper + 1e-12 * (1.0 + abs(bad_upper)))
 
 
 if __name__ == "__main__":

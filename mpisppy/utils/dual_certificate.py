@@ -61,13 +61,44 @@
 #
 # By contrast a wrong multiplier -- bad sign convention, stale dual, clipped
 # value -- can only make the bound loose, never wrong, because weak duality
-# holds for any lam >= 0 and any mu.
+# holds for any lam >= 0 and any mu.  In particular an inexact solve costs
+# nothing but tightness: for a convex model there are no non-global local
+# minima, so "the solver returned a sub-optimal answer" can only mean it stopped
+# short of converging, and the theorem above never asked it to converge.
+#
+# THE ARITHMETIC IS A DIFFERENT MATTER, and it is the one place where an
+# ill-conditioned model can hurt.  phi(vhat) is evaluated in double precision as
+# f + sum lam_i g_i + sum mu_j h_j, whose rounding error is on the order of
+# u * (|f| + sum |lam_i g_i| + sum |mu_j h_j|) -- driven by the size of the
+# TERMS.  The eps_rel cushion below is proportional to |qhat| instead, i.e. to
+# the size of the RESULT.  On a well-scaled model those track each other; on one
+# where cancellation is severe -- multipliers of 1e8 against an objective of
+# order one, say -- they do not, and the cushion can be the smaller of the two.
+# Hence the honest description of eps_rel as hygiene rather than proof: a user
+# who needs margin on a badly conditioned model should raise it.
+#
+# The correction term carries the same kind of error, and it is the half that
+# can push the answer UP: the correction is -sum_i |d_i phi| * d_i, so a
+# gradient component computed slightly small in magnitude makes it slightly less
+# negative.  The clipping above gives no protection here -- that argument is
+# about the multipliers, and a perturbed gradient is not one-directional the way
+# a perturbed lam is.
+#
+# None of this is amplified by conditioning as such.  A condition number
+# measures how much a LINEAR SOLVE magnifies error, and nothing here solves
+# anything: phi and its gradient are evaluated at vhat, each component is
+# compared with zero, an endpoint is chosen, and the results are summed.  The
+# tangent inequality itself holds exactly at every vhat with no error constant.
+# So an ill-conditioned subproblem gives a loose bound -- a worse vhat and a
+# bigger gradient both enlarge the correction -- and not a wrong one.
 #
 # The caller is responsible for handing over a model that really is the
 # relaxation it wants bounded.  In particular a Progressive Hedging proximal
 # term, or nonanticipative variables fixed by an extension, make the model
 # something other than the Lagrangian relaxation, and this module cannot detect
 # either.
+
+import math
 
 import pyomo.environ as pyo
 from pyomo.core.expr.calculus.derivatives import differentiate, Modes
@@ -246,7 +277,9 @@ def certified_lower_bound(model, sign_convention="ipopt", eps_rel=1e-9):
 
     Returns None when the box minimization is unbounded below, which happens
     when a variable with an infinite bound has a nonzero gradient component in
-    phi.  None means "no bound this time", never "-inf".
+    phi, and also when the arithmetic produces a non-finite result -- a NaN or
+    an infinity arriving from a diverged solve.  None means "no bound this
+    time", never "-inf".
 
     `eps_rel` shaves a relative cushion off the result.  At the default 1e-9
     this is last-bit hygiene, not a proof-carrying margin; pass 0.0 to get the
@@ -279,4 +312,15 @@ def certified_lower_bound(model, sign_convention="ipopt", eps_rel=1e-9):
             correction += g * (bound - vhat)
 
     qhat = pyo.value(phi) + correction
+
+    # A solve that diverged or failed numerically can leave NaN in the point or
+    # in the duals, and NaN propagates silently through everything above.  It
+    # must not leave this function.  Returning it would be safe today only by
+    # accident -- NaN loses every comparison, so the hub's `new > old` update
+    # test happens to reject it -- and +inf, which an infinite multiplier can
+    # also produce, would be an outright invalid bound if anything ever did
+    # accept it.  Both are "no bound", which this module already has a word for.
+    if not math.isfinite(qhat):
+        return None
+
     return qhat - eps_rel * (1.0 + abs(qhat))
