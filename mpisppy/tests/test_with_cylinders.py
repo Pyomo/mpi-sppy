@@ -121,6 +121,16 @@ class Test_farmer_with_cylinders(unittest.TestCase):
         from helper_extension import TestHelperExtension
 
         self.cfg.xhatxbar_args()
+        # The assertion below compares the value recorded on iteration 0 with
+        # the one recorded on iteration 1, so the hub has to actually run both
+        # iterations.  cfg.rel_gap defaults to 0.05, and the hub stops as soon
+        # as the inter-cylinder gap falls under it -- if the xhatshuffle spoke
+        # lands an incumbent before the iteration-1 convergence check, PH
+        # terminates after one iteration and only one value is recorded.  That
+        # is a race (it depends on how fast the spoke is relative to the hub),
+        # and it fires on some MPI/host combinations and not others.  Pin the
+        # gap to 0 so the two iterations always happen.
+        self.cfg.rel_gap = 0.0
         scenario_creator_kwargs, beans, hub_dict = self._create_stuff(iters=2)
 
         list_of_spoke_dict = list()

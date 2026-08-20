@@ -55,8 +55,11 @@ has_module() {
 
 # -oversubscribe is OpenMPI-only (MPICH rejects it). Some flexible-rank tests
 # need more ranks than the host has cores, so add the flag only under OpenMPI.
+# Ask mpi4py which library it is linked against rather than parsing the mpiexec
+# banner: OpenMPI 5 launches through PRRTE and its banner no longer reliably
+# says "Open MPI"/"OpenRTE".
 OVERSUBSCRIBE=""
-if mpiexec --version 2>&1 | grep -qiE "open[ -]?mpi|open ?rte"; then
+if python -c "import sys; from mpi4py import MPI; sys.exit(0 if 'open mpi' in MPI.Get_library_version().lower() else 1)" 2>/dev/null; then
     OVERSUBSCRIBE="-oversubscribe"
 fi
 
