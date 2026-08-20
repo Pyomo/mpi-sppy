@@ -78,9 +78,10 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
+
           # pyomo + pybind11 explicit: the build-extensions step below runs
           # before the editable install; solvers are in no extra (licensing)
-          pip install pyomo pybind11 cplex xpress
+          pip install pyomo pybind11 cplex gurobipy xpress
 
       - name: Build pyomo extensions
         run: |
@@ -177,6 +178,14 @@ jobs:
       - name: Test prox_approx end-to-end
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_prox_approx_e2e.py -v
+
+      - name: Test timed mipgap
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_timed_mipgap.py -v
+
+      - name: Test termination callback
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/utils/callbacks/termination/tests/test_termination.py -v
 
       - name: Test docs
         run: |
@@ -837,6 +846,50 @@ jobs:
           conda install mpi4py "numpy" setuptools
           pip install cplex xpress
 
+      # the bootstrap epi-spline distributions fit with a nonlinear solver, so
+      # without ipopt those tests skip; this is how Pyomo's own CI gets ipopt
+      - name: Install the Ipopt system libraries
+        run: |
+          # the ipopt binary links against these; Pyomo's CI installs the same
+          sudo apt-get update -q
+          sudo apt-get install -y libopenblas-dev gfortran liblapack-dev
+
+      - name: Identify the Ipopt release
+        id: ipopt-release
+        run: |
+          URL=https://github.com/IDAES/idaes-ext
+          VER=$(curl -sL -H 'Accept: application/json' $URL/releases/latest \
+                | sed -e 's/.*"tag_name":"\([^"]*\)".*/\1/')
+          if test -z "$VER"; then echo "FAILED identifying the ipopt release"; exit 1; fi
+          echo "ver=$VER" >> $GITHUB_OUTPUT
+
+      # Downloading the solvers tarball is the slow part of this job, and it is
+      # the same bytes every run. Keyed on the release tag, so a new IDAES
+      # release fetches once and every run after that restores from the cache.
+      - name: Cache Ipopt
+        id: cache-ipopt
+        uses: actions/cache@v4
+        with:
+          path: ~/ipopt
+          key: ipopt-${{ runner.os }}-${{ steps.ipopt-release.outputs.ver }}
+
+      - name: Install Ipopt
+        run: |
+          IPOPT_DIR=$HOME/ipopt
+          if test "${{ steps.cache-ipopt.outputs.cache-hit }}" != "true"; then
+            echo "cache miss; downloading ${{ steps.ipopt-release.outputs.ver }}"
+            mkdir -p "$IPOPT_DIR"
+            URL=https://github.com/IDAES/idaes-ext
+            curl -fL $URL/releases/download/${{ steps.ipopt-release.outputs.ver }}/idaes-solvers-ubuntu2204-x86_64.tar.gz \
+              | tar -xz -C "$IPOPT_DIR"
+          else
+            echo "cache hit; skipping the download"
+          fi
+          # set on every run: the cache restores the files, not the environment
+          echo "$IPOPT_DIR" >> $GITHUB_PATH
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$IPOPT_DIR" >> $GITHUB_ENV
+          "$IPOPT_DIR"/ipopt -v
+
       - name: setup the program
         run: |
           pip install -e ".[test]"
@@ -871,6 +924,7 @@ jobs:
           cd mpisppy/tests
           coverage run $COV_ARGS test_boot_sp.py
           coverage run $COV_ARGS test_boot_sp_simulate.py
+          coverage run $COV_ARGS test_boot_sp_smoothed.py
 
       - name: run bootstrap CI tests (mpiexec -np 2)
         timeout-minutes: 10
@@ -878,6 +932,7 @@ jobs:
           cd mpisppy/tests
           mpiexec -np 2 coverage run $COV_ARGS -m mpi4py test_boot_sp.py
           mpiexec -np 2 coverage run $COV_ARGS -m mpi4py test_boot_sp_simulate.py
+          mpiexec -np 2 coverage run $COV_ARGS -m mpi4py test_boot_sp_smoothed.py
 
       - name: Upload coverage data
         if: always()

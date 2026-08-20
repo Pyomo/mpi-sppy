@@ -135,13 +135,6 @@ class Test_boot_sp_simulate(unittest.TestCase):
         else:
             self.assertEqual(res, (None, None, None, None, None, None))
 
-    def test_smoothed_not_yet_merged(self):
-        # no solver needed; the guard fires before any solve
-        module = boot_utils.module_name_to_module(MODULE_NAME)
-        cfg = _make_cfg("Smoothed_boot_kernel")
-        with self.assertRaises(RuntimeError):
-            simulate_boot.main(cfg, module)
-
 
 if __name__ == '__main__':
     unittest.main()

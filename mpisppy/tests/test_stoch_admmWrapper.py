@@ -14,9 +14,14 @@ For the ADMM vocabulary used below (before-wrap scenario, wrapped
 scenario, wrap, ADMM subproblem, ...), see the module docstring of
 mpisppy.utils.admmWrapper.
 """
+import tempfile
 import unittest
 import subprocess
 import sys
+
+from pyomo.common.config import ConfigDict
+
+import mpisppy.utils.pickle_bundle as pickle_bundle
 import mpisppy.tests.examples.stoch_distr.stoch_distr_admm_cylinders as stoch_distr_admm_cylinders
 import mpisppy.tests.examples.stoch_distr.stoch_distr as stoch_distr
 from mpisppy.utils import config
@@ -1246,6 +1251,90 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
         self.assertIn("fake_module", msg)
         self.assertIn("first_stage_surrogate_nonant_list", msg)
         self.assertIn("first_stage_cost", msg)
+
+
+class TestStochDistrIsSerializable(unittest.TestCase):
+    """stoch_distr scenario models must survive mpi-sppy's dill round trip.
+
+    Several features serialize scenario models this way
+    (--pickle-scenarios-dir and --pickle-bundles-dir, and checkpoint/resume).
+    A Pyomo rule written as a nested function closing over ``cfg`` silently
+    breaks all of them: the closure pulls the Config into the model's
+    serialization graph, and a Pyomo ConfigDict whose entries still hold
+    unresolved defaults fails the first time it is serialized. The rules here
+    read what they need into plain locals instead. See issue #829.
+
+    This goes through ``pickle_bundle.dill_pickle``/``dill_unpickle`` rather
+    than calling dill directly, so it exercises the path users actually hit
+    and, on failure, gets the diagnostic that names the offending rule.
+    """
+
+    def _cfg(self, num_stoch_scens=4, num_admm_subproblems=2):
+        cfg = config.Config()
+        stoch_distr.inparser_adder(cfg)
+        cfg.num_stoch_scens = num_stoch_scens
+        cfg.num_admm_subproblems = num_admm_subproblems
+        return cfg
+
+    @unittest.skipUnless(pickle_bundle.dill_available, "dill not installed")
+    def test_scenario_model_round_trips(self):
+        cfg = self._cfg()
+        sname = stoch_distr.combining_names("Region1", "StochasticScenario1")
+        model = stoch_distr.scenario_creator(sname,
+                                             **stoch_distr.kw_creator(cfg))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fname = os.path.join(tmp, "scen.dill")
+            # Raises RuntimeError naming the offending rule if a rule ever
+            # closes over cfg again -- no need to pattern-match the source.
+            pickle_bundle.dill_pickle(model, fname)
+            reloaded = pickle_bundle.dill_unpickle(fname)
+
+        self.assertTrue(hasattr(reloaded, "MinCost"))
+        self.assertEqual(len(list(reloaded.flow)), len(list(model.flow)))
+
+    def test_no_rule_captures_the_config(self):
+        """The load-bearing guard: no Pyomo rule may capture a Config.
+
+        A round trip alone is not enough here. Whether a captured Config
+        actually breaks serialization depends on how many of its entries still
+        hold unresolved defaults -- a Pyomo lazy-initialization quirk -- and
+        this module builds a small Config that ends up fully materialized, so
+        the model dills even when a rule does capture it. The examples/ copy,
+        built from a full command line, does fail. So the regression is real
+        but invisible to a round trip from here.
+
+        This checks the structure instead: walk the rule functions Pyomo kept
+        on the model and assert none of them closed over a ConfigDict. That is
+        independent of materialization state and of what the variable happens
+        to be named.
+        """
+        cfg = self._cfg()
+        sname = stoch_distr.combining_names("Region1", "StochasticScenario1")
+        model = stoch_distr.scenario_creator(sname,
+                                             **stoch_distr.kw_creator(cfg))
+
+        offenders = []
+        for comp in [model] + list(model.component_objects(descend_into=True)):
+            for func in pickle_bundle._closures_reachable_from(comp):
+                cells = getattr(func, "__closure__", None) or ()
+                names = getattr(getattr(func, "__code__", None),
+                                "co_freevars", ()) or ()
+                for name, cell in zip(names, cells):
+                    try:
+                        value = cell.cell_contents
+                    except ValueError:
+                        continue
+                    if isinstance(value, ConfigDict):
+                        entry = f"{getattr(func, '__name__', '?')}() -> {name}"
+                        if entry not in offenders:
+                            offenders.append(entry)
+
+        self.assertEqual(
+            offenders, [],
+            msg="Pyomo rule(s) captured a Config, which makes the scenario "
+                "model unserializable: " + ", ".join(offenders) + ". Read the "
+                "values into plain locals before defining the rule.")
 
 
 class TestStochAdmmDefaultNaming(unittest.TestCase):

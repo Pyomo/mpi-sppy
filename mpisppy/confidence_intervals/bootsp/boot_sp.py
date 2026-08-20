@@ -8,7 +8,7 @@
 ###############################################################################
 # General-purpose bootstrap code for data-based, two-stage stochastic programs.
 # These are the empirical methods (classical, extended, subsampling, bagging);
-# the smoothed methods arrive in a follow-on merge.
+# the smoothed methods live in smoothed_boot_sp.py.
 
 import os
 from statistics import NormalDist
@@ -25,6 +25,30 @@ comm = boot_utils.comm
 n_proc = boot_utils.n_proc
 my_rank = boot_utils.my_rank
 rankcomm = boot_utils.rankcomm
+
+
+_MAXIMIZATION_MSG = (
+    "the bootstrap confidence intervals are minimization-only, but {what} has a "
+    "maximization objective. The estimators form every gap as (value at xhat) "
+    "minus the optimal, which is non-positive for a maximization, and the "
+    "drivers floor the reported interval's lower end at 0 -- so a maximization "
+    "run would not merely be wrong, it would report [0, 0]. Supporting "
+    "maximization means deciding how the gap is reported (mpi-sppy's MMW "
+    "estimator reports its magnitude) and threading the sense through every "
+    "estimator, the interval floors and the coverage checks.")
+
+
+def _require_minimization(is_minimizing, what):
+    """Refuse a maximization model instead of reporting a wrong interval.
+
+    Per the repo-wide rule that maximization either works or raises, this is
+    the raise. solve_routine checks it, which covers every extensive form the
+    bootstrap code builds itself -- but not the candidate xhat EF on the
+    default path, which the module's own xhat_generator builds and solves. So
+    a maximization model is refused only after that first solve has run.
+    """
+    if not is_minimizing:
+        raise ValueError(_MAXIMIZATION_MSG.format(what=what))
 
 
 def _scenario_creator_w_mapping(scenario_name, module=None, mapping=None, **kwargs):
@@ -101,14 +125,65 @@ def _batch_rng(cfg):
     return default_rng([cfg.seed_offset, my_rank + 1])
 
 
-def process_optimal(cfg, module):
+def require_minimizing_module(cfg, module):
+    """ Check the model's objective sense on every rank, before any work.
+
+    Args:
+        cfg (Config): parameters
+        module (Python module): contains the scenario creator function and helpers
+
+    solve_routine checks the sense too, but only a rank that solves something
+    reaches it. When nB is smaller than the rank count, slice_lens hands some
+    ranks zero batches -- those ranks never call solve_routine, never raise,
+    and walk into the next collective while the ranks with work are aborting.
+    That turns the deliberate maximization error into a deadlock. Every rank
+    builds one scenario here and reaches the same verdict, so they raise
+    together or not at all.
+    """
+    names = module.scenario_names_creator(1, start=0)
+    probe = module.scenario_creator(names[0], **module.kw_creator(cfg))
+    objs = [o for o in probe.component_data_objects(pyo.Objective, active=True)]
+    if objs:
+        _require_minimization(objs[0].sense == pyo.minimize, "this model")
+
+
+def draw_scenario_pool(cfg):
+    """ Draw the pool of scenarios the confidence interval is built from.
+
+    Args:
+        cfg (Config): parameters
+    Returns:
+        numpy array of sample_size scenario numbers
+
+    The draw is without replacement from eligible_scenarios, so the block
+    reserved for computing xhat is never in the pool, and it comes from the
+    pool stream (see _pool_rng) so it does not collide with the per-rank
+    batch streams.
+    """
+    return _pool_rng(cfg).choice(eligible_scenarios(cfg),
+                                 size=cfg.sample_size, replace=False)
+
+
+def process_optimal(cfg, module, xhat=None):
     """ For simulations we need a known or assumed z*
         Args:
             cfg (Config): parameters
             module (Python module): contains the scenario creator function and helpers
+            xhat (dict or None): a candidate solution. With no pre-computed
+                optimal file, giving it here makes the returned gap the real
+                z(xhat) - z* instead of a placeholder. With one, the stored gap
+                is used and must belong to the same xhat -- passing a freshly
+                computed one is refused rather than silently mismatched
         Returns:
             opt_obj (float): z*
-            opt_gap (float): gap if provided by solver
+            opt_gap (float): z(xhat) - z*, or a zero placeholder (see below)
+
+        Note:
+            Without a pre-computed file and without xhat there is nothing to
+            evaluate a gap at, so the returned gap is zero. That zero stands in
+            for the *solver* gap; it is not an optimality gap, and anything
+            scoring a gap interval against it (as the coverage simulations do)
+            must pass xhat.
     """
 
     if cfg.optimal_fname is not None and cfg.optimal_fname != "None":
@@ -121,13 +196,33 @@ def process_optimal(cfg, module):
         opt_gap = tmp[1]
         print(f"   ...optimal value: {opt_obj}")
         print(f"   ...optimality gap: {opt_gap}")
+        if xhat is not None and (cfg.xhat_fname is None
+                                 or cfg.xhat_fname == "None"):
+            # The stored gap belongs to the xhat boot_general_prep used, which
+            # it wrote alongside this file. Scoring an interval built around a
+            # different, freshly computed xhat against it compares two
+            # unrelated quantities, so say so rather than do it quietly.
+            raise ValueError(
+                f"optimal_fname ({cfg.optimal_fname}) supplies a gap computed "
+                "for the xhat that boot_general_prep wrote with it, but "
+                "xhat_fname is 'None', so a different xhat is being computed "
+                "here. Set xhat_fname to the matching file, or set "
+                "optimal_fname to 'None' to have the gap computed for this "
+                "xhat.")
     else:
         print('No calculated optimal found, starting computing the "actual" optimal')
         print("Computing optimal function value on Rank 0 only")
         opt_ef = solve_routine(cfg, module, range(cfg.max_count), num_threads=2)
         opt_obj = pyo.value(opt_ef.EF_Obj)
-        print(f"optimal EF objective: {opt_obj}; using zero gap (this should be verified visually)")
-        opt_gap = 0
+        if xhat is None:
+            print(f"optimal EF objective: {opt_obj}; using zero gap (this should be verified visually)")
+            opt_gap = 0
+        else:
+            # the same quantity boot_general_prep.find_gap stores in the npy
+            obj_hat = evaluate_scenarios(cfg, module, range(cfg.max_count),
+                                         xhat, duplication=False)
+            opt_gap = obj_hat - opt_obj
+            print(f"optimal EF objective: {opt_obj}; optimality gap at xhat: {opt_gap}")
     return opt_obj, opt_gap
 
 
@@ -160,6 +255,7 @@ def solve_routine(cfg, module, scenarios, num_threads=None, duplication=False):
         scenario_creator,
         scenario_creator_kwargs=scenario_creator_kwargs,
     )
+    _require_minimization(ef.EF_Obj.sense == pyo.minimize, "this model")
 
     solver = pyo.SolverFactory(cfg.solver_name)
     solver.options["threads"] = num_threads
@@ -290,9 +386,7 @@ def classical_bootstrap(cfg, module, xhat, quantile=True):
         tuple with confidence interval if on MPI rank 0
 
     """
-    rng = _pool_rng(cfg)
-
-    scenario_pool = rng.choice(eligible_scenarios(cfg), size=cfg.sample_size, replace=False)
+    scenario_pool = draw_scenario_pool(cfg)
     dag_upper = evaluate_scenarios(cfg, module, scenario_pool, xhat, duplication=False)
     dag_ef = solve_routine(cfg, module, scenario_pool, num_threads=2, duplication=False)
 
@@ -399,9 +493,7 @@ def subsampling(cfg, module, xhat):
         tuple with confidence interval if on MPI rank 0
 
     """
-    rng = _pool_rng(cfg)
-
-    scenario_pool = rng.choice(eligible_scenarios(cfg), size=cfg.sample_size, replace=False)
+    scenario_pool = draw_scenario_pool(cfg)
     dag_upper = evaluate_scenarios(cfg, module, scenario_pool, xhat, duplication=False)
     dag_ef = solve_routine(cfg, module, scenario_pool, num_threads=2, duplication=False)
     dag_optimal = pyo.value(dag_ef.EF_Obj)
@@ -608,8 +700,7 @@ def bagging_bootstrap(cfg, module, xhat, replacement=True):
         tuple with confidence interval if on MPI rank 0
     """
 
-    rng = _pool_rng(cfg)
-    scenario_pool = rng.choice(eligible_scenarios(cfg), size=cfg.sample_size, replace=False)
+    scenario_pool = draw_scenario_pool(cfg)
 
     # bootstrap from pool
     local_boot_gaps, local_boot_optimals, local_boot_uppers, local_boot_counts = _bagging_resample(cfg, module, scenario_pool, xhat, serial=False, replacement=replacement)
@@ -684,14 +775,21 @@ def compute_ci(cfg, module, xhat):
         the ci_* entries are None on MPI ranks other than 0.
 
     Note:
-        This is the single dispatch point shared by user_boot and
-        simulate_boot. A smoothed method raises a friendly "not yet merged"
-        error (the smoothed methods land in a follow-on merge).
+        This is the empirical dispatch point shared by user_boot and
+        simulate_boot. The smoothed methods have a different (gap-only) return
+        signature and are dispatched by smoothed_boot_sp.compute_smoothed_ci;
+        a smoothed method reaching here is an error.
     """
     method = cfg.boot_method
     boot_utils.BootMethods.check_for_it(method)
     if boot_utils.is_smoothed(method):
-        boot_utils.smoothed_not_yet_merged(method)
+        raise ValueError(
+            f"boot_method={method} is a smoothed method; it is dispatched by "
+            "smoothed_boot_sp.compute_smoothed_ci, not boot_sp.compute_ci "
+            "(the drivers route smoothed methods automatically). The methods "
+            "this function does handle are: "
+            f"{', '.join(boot_utils.empirical_members())}.")
+    require_minimizing_module(cfg, module)
     if method == "Extended":
         return extended_bootstrap(cfg, module, xhat)
     elif method == "Bagging_with_replacement":
