@@ -928,6 +928,32 @@ class Test_mutable_probability(unittest.TestCase):
         self.assertTrue(sputils.has_persistent_solve_api(LoadsVarsToo()))
         self.assertFalse(sputils.has_persistent_solve_api(Neither()))
 
+    def test_suffixes_are_imported_for_non_persistent_solvers(self):
+        # load_vars() loads variable values only; solutions.load_from(results)
+        # also imports Suffix data. Choosing the branch on
+        # hasattr(solver, "load_vars") rather than is_persistent silently
+        # drops duals for gurobi_direct / cplex_direct / xpress / appsi_highs.
+        direct = None
+        for cand in ("gurobi_direct", "appsi_highs", "cplex_direct",
+                     "xpress_direct"):
+            try:
+                if pyo.SolverFactory(cand).available(exception_flag=False):
+                    direct = cand
+                    break
+            except Exception:
+                continue
+        if direct is None:
+            self.skipTest("no non-persistent solver available")
+        ef = self.ExtensiveForm(
+            options={"solver": direct},
+            all_scenario_names=self.snames,
+            scenario_creator=self.farmer.scenario_creator,
+            scenario_creator_kwargs=self.sck)
+        ef.ef.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
+        ef.solve_extensive_form()
+        self.assertGreater(len(ef.ef.dual), 0,
+                           f"{direct} imported no duals")
+
     @unittest.skipIf(not solver_available, "no solver is available")
     def test_update_invalidates_the_loaded_solution(self):
         # The loaded solution belongs to the old probabilities; reading it

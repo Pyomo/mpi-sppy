@@ -10,10 +10,13 @@ Implemented: `sputils.has_persistent_solve_api` (recognizes APPSI /
 `pyomo.contrib.solver` as persistent for the EF workflow). Note it duck-types on
 `set_instance`/`set_objective` only: on the modern `pyomo.contrib.solver`
 interfaces `load_vars` lives on the solution loader, not the solver, so
-requiring it would have excluded `highs` and `gurobi_persistent_v2`. Reading
-the solution back is a separate `hasattr(solver, "load_vars")` check. The
+requiring it would have excluded `highs` and `gurobi_persistent_v2`. The
 widened detection is gated so the non-mutable path calls `set_instance`
-exactly where it did before; `mutable_probability`
+exactly where it did before. Reading the solution back keeps using
+`is_persistent`, deliberately: `load_vars()` loads variable values only, while
+`solutions.load_from(results)` also imports `Suffix` data, so widening that
+test too would have silently dropped the duals for `gurobi_direct`,
+`cplex_direct`, `xpress` and `appsi_highs`; `mutable_probability`
 option on `_create_EF_from_scen_dict` and `ExtensiveForm` (option-B Param
 objective); `ExtensiveForm.set_scenario_probabilities`; a `reuse_instance`
 argument to `solve_extensive_form`; docs

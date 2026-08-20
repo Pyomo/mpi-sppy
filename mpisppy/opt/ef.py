@@ -183,10 +183,15 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             # this should catch infeasible and unbounded cases
             return results
         
-        # And how to read the solution back, which is a different question:
-        # the modern interfaces put load_vars on the solution loader, not on
-        # the solver, so ask for the method rather than infer it.
-        if hasattr(self.solver, "load_vars"):
+        # How to read the solution back is a different question, and the
+        # answer is unchanged: load_vars() loads variable values only, while
+        # solutions.load_from(results) also imports Suffix(IMPORT) data such
+        # as duals. Widening this test to hasattr(solver, "load_vars") would
+        # switch gurobi_direct, cplex_direct, xpress and appsi_highs onto
+        # load_vars and silently drop their duals. The solvers this feature
+        # added (highs, gurobi_persistent_v2) have no load_vars anyway, so
+        # they take load_from and get both values and suffixes.
+        if sputils.is_persistent(self.solver):
             self.solver.load_vars()
         else:
             self.ef.solutions.load_from(results)
@@ -217,16 +222,15 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
                     If the EF was not built with ``mutable_probability=True``.
                 KeyError:
                     If ``prob_map`` contains an unknown scenario name.
-                NotImplementedError:
-                    If any scenario has more than the root node. Updating a
-                    multistage tree would also have to update every
-                    ``ScenarioNode.cond_prob``; see the note below.
                 ValueError:
                     If a supplied probability is not a finite, nonnegative
                     number, or if the resulting probabilities do not sum to 1.
 
             Note:
-                Two-stage only. There is no multistage support and none is
+                Two-stage only, and enforced at construction: building an EF
+                with ``mutable_probability=True`` from a multistage tree
+                raises ``ValueError`` there, so no object reaching this method
+                can be multistage. There is no multistage support and none is
                 planned; to re-weight a multistage model, rebuild it with the
                 new probabilities.
         """
@@ -248,22 +252,22 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
                 raise ValueError(
                     f"probability for scenario '{sname}' must be a finite, "
                     f"nonnegative number; got {p!r}.")
-        for sname, scen in self.local_scenarios.items():
-            # Two-stage only: the root node alone (a two-stage node list has
-            # no leaf entry). A multistage re-weight would have to update
-            # ScenarioNode.cond_prob as well, since the unconditional node
-            # probabilities -- and prob_coeff below -- are derived from it.
-            if len(scen._mpisppy_node_list) > 1:
-                raise NotImplementedError(
-                    "set_scenario_probabilities supports two-stage problems "
-                    "only. Rebuild the model with the new probabilities to "
-                    "re-weight a multistage tree.")
         resulting = {sn: prob_map.get(sn, pyo.value(prob[sn]))
                      for sn in self.ef._ef_scenario_names}
         total = sum(resulting.values())
         if abs(total - 1.0) > 1e-9:
             raise ValueError(
                 f"scenario probabilities must sum to 1; got {total}.")
+        # _compute_unconditional_node_probabilities(force=True) below refuses
+        # to run when variable probability is in use. Ask now, while nothing
+        # has been written, so that refusal cannot land mid-update.
+        if any(getattr(scen._mpisppy_data, 'has_variable_probability', False)
+               for scen in self.local_scenarios.values()):
+            raise RuntimeError(
+                "set_scenario_probabilities does not support variable "
+                "probability; the prob_coeff rebuild would discard the "
+                "per-variable weights.")
+
         for sname, p in prob_map.items():
             prob[sname].value = p
             # keep _mpisppy_probability consistent for downstream readers

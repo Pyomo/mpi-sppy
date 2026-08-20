@@ -608,9 +608,13 @@ def has_persistent_solve_api(solver):
     ``pyomo.contrib.solver`` interfaces it lives on the solution loader rather
     than on the solver (e.g. ``GurobiSolutionLoader``), so requiring it would
     classify ``highs`` and ``gurobi_persistent_v2`` as non-persistent even
-    though they load and re-solve an instance perfectly well. Read the
-    solution back with ``hasattr(solver, "load_vars")``, which is a separate
-    question from whether the solver can hold an instance.
+    though they load and re-solve an instance perfectly well.
+
+    Do not reuse this to decide how to read a solution back. That question is
+    answered by :func:`is_persistent`: ``load_vars()`` loads variable values
+    only, while ``solutions.load_from(results)`` also imports ``Suffix``
+    data such as duals, and solvers like ``gurobi_direct`` and ``appsi_highs``
+    need the latter.
     """
     if is_persistent(solver):
         return True
