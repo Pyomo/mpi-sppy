@@ -287,5 +287,89 @@ class TestStaleBoundNotRetained(unittest.TestCase):
         self.assertFalse(s._mpisppy_data.solution_available)
 
 
+class _StubGuest:
+    """An agnostic guest whose solve fails, and nothing else.
+
+    This is what pyomo_guest.py, ampl_guest.py and gams_guest.py all do when a
+    solve fails: mark the solve as having produced no solution and return.
+    None of them touches outer_bound (two clear inner_bound), so a bound left
+    over from an earlier solve is the guest's whole failure behavior. Passing
+    scenarios in `succeed_for` models the success branch instead, where a guest
+    records the bound its solve produced.
+    """
+
+    def __init__(self, succeed_for=(), bound=None):
+        self._succeed_for = [id(s) for s in succeed_for]
+        self._bound = bound
+        self.calls = 0
+
+    def callout_agnostic(self, kws):
+        self.calls += 1
+        s = kws["s"]
+        if id(s) in self._succeed_for:
+            s._mpisppy_data.solution_available = True
+            s._mpisppy_data.outer_bound = self._bound
+        else:
+            s._mpisppy_data.solution_available = False
+
+
+class TestAgnosticFailedSolveClearsBound(unittest.TestCase):
+    """The same invariant on the agnostic path.
+
+    solve_one dispatches to a guest callout instead of a Pyomo solver when the
+    object carries an Ag, and the guest returns from a failed solve without
+    touching outer_bound. The clearing therefore has to happen before the
+    dispatch, or an AMPL/GAMS/Pyomo-guest run with a lagrangian spoke
+    (agnostic_cylinders.py builds one) sums a bound from an earlier generation
+    of weights with fresh ones and reports the total as an outer bound.
+
+    No solver needed: the guest is stubbed, and the agnostic path never reaches
+    a solver plugin.
+    """
+
+    def _agnostic_ph(self, guest, value=-100.0):
+        """A PH object carrying bounds from an earlier iteration, wired to
+        solve through `guest`."""
+        ph = _make_ph()
+        for s in ph.local_scenarios.values():
+            s._mpisppy_data.outer_bound = value
+            # solve_one asks whether the plugin is persistent before it looks
+            # at Ag; on this path nothing else touches it.
+            s._solver_plugin = None
+        ph.Ag = guest
+        return ph
+
+    def test_failed_guest_solve_clears_the_bound(self):
+        guest = _StubGuest()
+        ph = self._agnostic_ph(guest)
+        name = list(ph.local_scenarios)[0]
+        s = ph.local_scenarios[name]
+        ph.solve_one(None, name, s, gripe=False, need_solution=False)
+        self.assertEqual(guest.calls, 1)
+        self.assertIsNone(s._mpisppy_data.outer_bound)
+        self.assertFalse(s._mpisppy_data.solution_available)
+
+    def test_failed_guest_solve_makes_ebound_none(self):
+        # The exposure that matters: one guest solve fails while the others
+        # report fresh bounds. Ebound must decline rather than mix generations.
+        guest = _StubGuest()
+        ph = self._agnostic_ph(guest)
+        names = list(ph.local_scenarios)
+        failed = ph.local_scenarios[names[0]]
+        ph.solve_one(None, names[0], failed, gripe=False, need_solution=False)
+        for n in names[1:]:
+            ph.local_scenarios[n]._mpisppy_data.outer_bound = -50.0
+        self.assertIsNone(ph.Ebound())
+
+    def test_successful_guest_solve_keeps_its_bound(self):
+        # The clear must not cost a guest the bound it did compute.
+        ph = self._agnostic_ph(_StubGuest())
+        ph.Ag = _StubGuest(succeed_for=ph.local_scenarios.values(), bound=-42.0)
+        for name, s in ph.local_scenarios.items():
+            ph.solve_one(None, name, s, gripe=False, need_solution=False)
+            self.assertEqual(s._mpisppy_data.outer_bound, -42.0)
+        self.assertAlmostEqual(ph.Ebound(), -42.0)
+
+
 if __name__ == "__main__":
     unittest.main()
