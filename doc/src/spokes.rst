@@ -80,9 +80,12 @@ Cost is one solve per scenario per iteration, the same as the Lagrangian spoke.
 
    What *is* checked, as a hard error at setup: discrete variables, nonlinear
    equality constraints, nonlinear two-sided (ranged) constraints, a
-   maximization objective, and a solver that is not Ipopt. The affine cases are
-   decidable, so they are enforced; convexity of a one-sided nonlinear body is
-   not, so convexity remains a user assertion.
+   maximization objective, a solver that is not Ipopt, and a ``dual`` Suffix
+   the scenario creator already attached in a direction that does not import
+   (the certificate needs the solver's duals back, so ``Suffix.IMPORT`` or
+   ``Suffix.IMPORT_EXPORT`` is required). The affine cases are decidable, so
+   they are enforced; convexity of a one-sided nonlinear body is not, so
+   convexity remains a user assertion.
 
 Two things determine whether the bound is any good:
 

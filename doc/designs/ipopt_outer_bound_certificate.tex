@@ -291,7 +291,7 @@ scenario whose certificate is unavailable must make the whole expectation
 unavailable rather than contribute a stale value.
 \end{remark}
 
-\section{Practical consequences}
+\section{Practical consequences}\label{sec:practical}
 
 \paragraph{Tightness is governed by the box.}
 By \eqref{eq:closed} the shortfall of $\qhat_s$ below $\varphi_s(\vhat)$ is
@@ -433,7 +433,7 @@ improvement.
 
 \section{Relation to known results}\label{sec:literature}
 
-Nothing in Sections~2--6 is new.  This section attributes each result.
+Nothing in Sections~2--7 is new.  This section attributes each result.
 
 \paragraph{Lemma~\ref{lem:weak}} is textbook Lagrangian weak duality, stated for
 an arbitrary multiplier pair rather than an optimal one.
@@ -455,6 +455,13 @@ no optimisation at all.
 \paragraph{Proposition~\ref{prop:agg}} is the standard argument by which
 progressive hedging weights yield a lower bound on the optimal value, as in
 \cite{gade2016}.
+
+\paragraph{The remarks of Section~\ref{sec:practical}} are elementary rather
+than novel.  Remark~\ref{rem:rounding} is the textbook forward-error bound for a
+floating-point sum, specialised to the summands of \eqref{eq:qhat}, and
+Remark~\ref{rem:boxtighten} is two applications of Lemma~\ref{lem:weak}.  They
+are stated because the hypotheses they turn on are easy to lose sight of in
+implementation, not because they are results.
 
 \paragraph{The combination} of progressive hedging with Frank--Wolfe machinery to
 obtain Lagrangian dual bounds is itself established \cite{boland2018}, and
@@ -480,18 +487,23 @@ $\varphi_s$ in \eqref{eq:phi}      & \texttt{\_lagrangian\_expression} \\
 $\qhat_s$ in \eqref{eq:qhat}       & \texttt{certified\_lower\_bound} \\
 decidable hypotheses               & \texttt{check\_model\_is\_certifiable} \\
 box tightening, strong form        & \texttt{unbounded\_variables} (\texttt{fbbt}) \\
+Remark~\ref{rem:rounding} cushion  & \texttt{eps\_rel} \\
+non-finite rejection               & \texttt{math.isfinite} test on $\qhat_s$ \\
+\midrule
 box tightening, weak form          & \texttt{receive\_nonant\_bounds} \\
 Proposition~\ref{prop:agg} sum     & \texttt{SPOpt.Ebound} \\
 Remark~\ref{rem:mixed} safeguard   & a \texttt{None} bound, propagated collectively \\
-Remark~\ref{rem:rounding} cushion  & \texttt{eps\_rel}, \texttt{--ipopt-outer-bound-cushion} \\
-non-finite rejection               & \texttt{math.isfinite} test on $\qhat_s$ \\
 \bottomrule
 \end{tabular}
 \end{center}
 
 \noindent
-The first four live in \texttt{mpisppy/utils/dual\_certificate.py}; the spoke
-that drives them is \texttt{mpisppy/cylinders/ipopt\_outer\_bound.py}.
+Everything above the rule is in \texttt{mpisppy/utils/dual\_certificate.py},
+whose \texttt{eps\_rel} argument is exposed on the command line as
+\texttt{--ipopt-outer-bound-cushion}.  Below it, the weak-form tightening is in
+\texttt{cylinders/spcommunicator.py} and the sum is in \texttt{spopt.py}, with
+the \texttt{None} propagated across both.  The spoke driving all of it is
+\texttt{mpisppy/cylinders/ipopt\_outer\_bound.py}.
 
 \begin{thebibliography}{9}
 

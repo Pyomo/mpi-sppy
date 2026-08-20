@@ -443,17 +443,28 @@ Checkable at setup, hard error (following the repo's fail-loudly convention):
 - **Prox term attached.** With a prox term the subproblem is not the Lagrangian
   relaxation and the bound is not a Lagrangian bound. `lagrangian_prep` already passes
   `attach_prox=False`; assert it.
-- **Nonanticipative variables fixed by an extension.** Same failure as the prox term and
-  less obvious: PH's variable-fixing extensions (`fixer.py`, the reduced-cost fixers)
-  restrict the subproblem, which can only *raise* its minimum, so the resulting number
-  is a bound on the restricted problem and not on the original. The certificate engine
-  cannot detect this — a fixed variable is simply a constant to it — so the check
-  belongs to the cylinder, in Phase 2. This is a real interaction: fixing extensions are
-  commonly on.
-- **Maximization.** Phase 1 is minimize-only with a hard error; §10 Phase 5 adds max
-  through the concave mirror.
+- **Maximization.** Minimize-only, with a hard error. The concave mirror that would add
+  max support is deferred and may not happen; see §10.
 - **Solver is not Ipopt.** Scope decision; the sign conventions in §5 are measured from
   Ipopt only.
+- **A `dual` Suffix that does not import.** A scenario creator may already have attached
+  one — supplying dual warm starts is a common reason — and silently reusing an
+  `EXPORT` or `LOCAL` suffix would import nothing, leaving the certificate with no
+  multipliers. Existence is therefore not enough; `import_enabled()` is what is checked.
+
+Checked every iteration rather than at setup, and **not** a hard error — warn once on
+rank 0 and report no bound, for the reason in §6.1:
+
+- **Nonanticipative variables fixed after setup.** Same failure as the prox term and
+  less obvious: PH's variable-fixing extensions (`fixer.py`, the reduced-cost fixers)
+  restrict the subproblem, which can only *raise* its minimum, so the resulting number
+  bounds the restricted problem and not the original. The certificate engine cannot see
+  this — a fixed variable is simply a constant to it — so the cylinder snapshots which
+  nonants were fixed at setup and compares each iteration. Nonants the *scenario
+  creator* fixed are part of the problem and are fine; only newly fixed ones suppress
+  the bound. This is a real interaction: fixing extensions are commonly on. It is not a
+  hard error because the fixing may be transient, and because raising from inside the
+  iteration loop would `MPI_Abort` the hub and every other spoke.
 
 ### 6.1 Unbounded variables: warn and stand down, do not fail
 
