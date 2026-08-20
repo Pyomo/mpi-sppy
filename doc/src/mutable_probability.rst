@@ -50,8 +50,15 @@ loaded instance and only the objective coefficients are re-pushed:
 
    for i, prob_map in enumerate(probability_vectors):
        ef.set_scenario_probabilities(prob_map)   # must sum to 1
-       ef.solve_extensive_form(reuse_instance=(i > 0))
+       results = ef.solve_extensive_form(reuse_instance=(i > 0))
+       if sputils.not_good_enough_results(results):
+           continue        # nothing was loaded for this vector
        print(ef.get_objective_value(), ef.get_root_solution())
+
+Updating the probabilities marks the loaded solution stale, so
+``get_objective_value``, ``get_root_solution`` and ``nonants`` report nothing
+until the next successful solve rather than handing back the previous
+vector's answer.
 
 A partial mapping is allowed: scenarios omitted from ``prob_map`` keep their
 current probability, as long as the resulting full vector still sums to 1.

@@ -973,6 +973,47 @@ class Test_mutable_probability(unittest.TestCase):
         self.assertIsNotNone(new_obj)
         self.assertNotAlmostEqual(new_obj, old_obj, places=2)
 
+    def test_rejected_build_leaves_the_scenarios_reusable(self):
+        # The build loop deactivates each scenario objective and re-parents
+        # the scenario onto the EF, so the sum check has to come first or a
+        # corrected retry with the same scen_dict is impossible.
+        scen_dict = {sn: self.farmer.scenario_creator(sn, **self.sck)
+                     for sn in self.snames}
+        for scen in scen_dict.values():
+            scen._mpisppy_probability = 0.33          # sums to 0.99
+        with self.assertRaises(RuntimeError):
+            sputils._create_EF_from_scen_dict(scen_dict, EF_name="rejected",
+                                              mutable_probability=True)
+        for scen in scen_dict.values():
+            scen._mpisppy_probability = 1.0 / 3.0     # fix it and retry
+        ef = sputils._create_EF_from_scen_dict(scen_dict, EF_name="retry",
+                                               mutable_probability=True)
+        self.assertIsNotNone(ef)
+
+    def test_unknown_solver_does_not_break_the_persistence_probe(self):
+        # UnknownSolver.__getattr__ raises RuntimeError, not AttributeError,
+        # so a bare hasattr propagates out of a function promising a bool.
+        self.assertFalse(
+            sputils.has_persistent_solve_api(
+                pyo.SolverFactory("no_such_solver_at_all")))
+
+    @unittest.skipIf(not solver_available, "no solver is available")
+    def test_all_solution_accessors_honor_the_invalidation(self):
+        # get_objective_value is not the only way to read the solution back;
+        # get_root_solution and nonants must not hand back the old vector's
+        # answer either.
+        ef = self._make_ef(mutable_probability=True)
+        ef.solve_extensive_form()
+        self.assertIsNotNone(ef.get_root_solution())
+        self.assertGreater(len(list(ef.nonants())), 0)
+        ef.set_scenario_probabilities(self._pv(0.6))
+        self.assertIsNone(ef.get_objective_value())
+        self.assertIsNone(ef.get_root_solution())
+        self.assertEqual(list(ef.nonants()), [])
+        ef.solve_extensive_form(reuse_instance=True)
+        self.assertIsNotNone(ef.get_root_solution())
+        self.assertGreater(len(list(ef.nonants())), 0)
+
     def test_prob_coeff_tracks_the_update(self):
         # prob_coeff is derived from _mpisppy_probability and computed once at
         # setup, so the setter has to force a rebuild.

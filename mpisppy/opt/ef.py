@@ -127,10 +127,14 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
                     If True and this EF has already been loaded into a
                     persistent solver, skip re-loading the instance
                     (``set_instance``) and re-solve the already-loaded model.
-                    Use this to re-solve cheaply after updating mutable data
-                    such as scenario probabilities (see
-                    set_scenario_probabilities). Ignored for non-persistent
-                    solvers. Default False.
+                    Use this to re-solve cheaply after
+                    ``set_scenario_probabilities``, which re-pushes the
+                    objective so the change reaches the solver. It is *not* a
+                    general "re-solve after editing the model": a legacy
+                    persistent solver does not re-read other mutable ``Param``
+                    values on ``solve()``, so editing one and re-solving with
+                    ``reuse_instance=True`` silently returns the pre-edit
+                    answer. Ignored for non-persistent solvers. Default False.
 
             Returns:
                 :class:`pyomo.opt.results.results_.SolverResults`:
@@ -320,8 +324,13 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         Returns:
             dict:
                 Dictionary mapping variable name (str) to variable value
-                (float) for all variables at the root node.
+                (float) for all variables at the root node, or None if no
+                solution is currently loaded (no successful solve yet, or the
+                model was changed since the last one -- see
+                set_scenario_probabilities).
         """
+        if not self.tree_solution_available:
+            return None
         result = dict()
         for var in self.ef.ref_vars.values():
             var_name = var.name
@@ -338,6 +347,11 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         Yields:
             tree node name, full EF Var name, Var value
         """
+        if not self.tree_solution_available:
+            # the variable values are stale (no successful solve yet, or the
+            # model changed since the last one); yield nothing rather than
+            # hand back a previous solve's answer
+            return
         yield from sputils.ef_nonants(self.ef)
 
 

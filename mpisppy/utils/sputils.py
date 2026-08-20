@@ -405,6 +405,19 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
         except (AttributeError, TypeError, ValueError) as e:
             raise ValueError("mutable_probability requires every scenario to "
                              "have a numeric _mpisppy_probability.") from e
+        # Require a normalized full EF, and check it here: the loop below
+        # deactivates each scenario's objective and re-parents the scenario
+        # onto this EF, so raising afterwards would leave the caller's
+        # scen_dict unusable for a corrected retry.
+        total = sum(prob_init.values())
+        if abs(total - 1.0) > 1e-9:
+            raise RuntimeError(
+                "mutable_probability requires scenario probabilities summing "
+                f"to 1; got {total}. This is a full-EF feature: a scenario "
+                "bundle, or a per-rank subset of the scenarios, sums to less "
+                "than 1 and is intentionally rejected, since the divisor it "
+                "needs cannot be a baked constant when probabilities are "
+                "mutable.")
         EF_instance._mpisppy_model.prob = pyo.Param(
             list(scen_dict.keys()), mutable=True, within=pyo.NonNegativeReals,
             initialize=prob_init)
@@ -425,18 +438,11 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
             raise AttributeError("Scenario " + sname + " has no specified "
                         "probability. Specify a value for the attribute "
                         " _mpisppy_probability and try again.") from e
-    if mutable_probability:
-        # Require a normalized full EF; a bundle (sum < 1) would land here and
-        # is intentionally rejected, since the divisor it needs cannot be a
-        # baked constant when probabilities are mutable.
-        if abs(EF_instance._mpisppy_probability - 1.0) > 1e-9:
-            raise RuntimeError(
-                "mutable_probability requires scenario probabilities summing "
-                f"to 1; got {EF_instance._mpisppy_probability}. "
-                "(mutable_probability is not supported for scenario bundles.)")
-    else:
+    if not mutable_probability:
         # Normalization does nothing when solving the full EF, but is required
-        # for appropriate scaling of EFs used as bundles.
+        # for appropriate scaling of EFs used as bundles. The mutable path
+        # skips it (option B) and had its sum checked above, before any
+        # scenario was touched.
         EF_instance.EF_Obj.expr /= EF_instance._mpisppy_probability
 
     # For each node in the scenario tree, we need to collect the
@@ -618,8 +624,15 @@ def has_persistent_solve_api(solver):
     """
     if is_persistent(solver):
         return True
-    return all(hasattr(solver, name)
-               for name in ("set_instance", "set_objective"))
+    try:
+        return all(hasattr(solver, name)
+                   for name in ("set_instance", "set_objective"))
+    except Exception:
+        # Pyomo's UnknownSolver.__getattr__ raises RuntimeError rather than
+        # AttributeError, so hasattr propagates instead of returning False.
+        # This function promises a bool; let the caller's own solve() call be
+        # what reports the unavailable solver.
+        return False
 
 
 def solver_quadratic_objective_capability(solver_plugin):
