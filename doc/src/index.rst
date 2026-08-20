@@ -28,6 +28,7 @@ MPI is used.
    generic_cylinders.rst
    examples.rst
    ef.rst
+   mutable_probability.rst
    chance_constraints.rst
 
 .. toctree::

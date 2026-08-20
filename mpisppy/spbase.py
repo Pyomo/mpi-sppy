@@ -428,15 +428,38 @@ class SPBase:
                         raise RuntimeError(f"For the node {nodename}, the scenario {sname} has the rank {rank} from scenario_names_to_rank and {comm.Get_rank()} from its comm.")
 
 
-    def _compute_unconditional_node_probabilities(self):
+    def _compute_unconditional_node_probabilities(self, force=False):
         """ calculates unconditional node probabilities and prob_coeff
-            and prob0_mask is set to a scalar 1 (used by variable_probability)"""
+            and prob0_mask is set to a scalar 1 (used by variable_probability)
+
+            Args:
+                force (bool): if True, rebuild prob_coeff/prob0_mask even when
+                    they already exist. Used by
+                    ExtensiveForm.set_scenario_probabilities to pick up updated
+                    _mpisppy_probability values; the default (False) keeps the
+                    compute-once behavior relied on at setup.
+
+            Raises:
+                RuntimeError: if force is True and variable probability is in
+                    use. The rebuild writes a scalar prob_coeff and
+                    prob0_mask=1.0 per node, which would silently throw away
+                    the per-variable arrays and zeroed mask entries that
+                    _use_variable_probability_setter installs.
+        """
+        if force and any(getattr(s._mpisppy_data, 'has_variable_probability',
+                                 False)
+                         for s in self.local_scenarios.values()):
+            raise RuntimeError(
+                "_compute_unconditional_node_probabilities(force=True) would "
+                "discard variable-probability data. Re-apply "
+                "_use_variable_probability_setter after the rebuild, or "
+                "rebuild the object, if this combination is needed.")
         for k,s in self.local_scenarios.items():
             root = s._mpisppy_node_list[0]
             root.uncond_prob = 1.0
             for parent,child in zip(s._mpisppy_node_list[:-1],s._mpisppy_node_list[1:]):
                 child.uncond_prob = parent.uncond_prob * child.cond_prob
-            if not hasattr(s._mpisppy_data, 'prob_coeff'):
+            if force or not hasattr(s._mpisppy_data, 'prob_coeff'):
                 s._mpisppy_data.prob_coeff = dict()
                 s._mpisppy_data.prob0_mask = dict()
                 for node in s._mpisppy_node_list:
