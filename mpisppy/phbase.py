@@ -300,27 +300,33 @@ class PHBase(mpisppy.spopt.SPOpt):
         # flags to complete the invariant
         self.convobject = None  # PH converger
         self.attach_xbars()
-        # Which PH terms attach_PH_to_objective has spliced into the saved
-        # objectives. Tracked per term, not as one flag: a repeat call is
-        # either a re-entered PH_Prep (nothing new to add) or FWPH adding its
-        # prox term on top of the W term it attached earlier.
+        # Three pieces of bookkeeping, all for the case where PH_Prep runs a
+        # second time on this object.
+
+        # Which terms attach_PH_to_objective has already spliced into the
+        # saved objectives, so it never adds a second copy of a term that is
+        # still live. One flag per term because FWPH attaches them at
+        # different times: W during PH_Prep, prox later for its LP start
+        # (fwph.py).
         self._PH_duals_attached = False
         self._PH_prox_attached = False
-        # Whether PH_Prep has run at all. Separate from the two flags above,
-        # which only attach_PH_to_objective sets: APH calls PH_Prep with both
-        # attach flags False and splices its own W/prox terms directly onto
-        # saved_objectives (aph.py), so inferring re-entry from those would
-        # never fire for APH and its restart would skip the Iter0 gating.
-        #
-        # This makes the gating in PH_Prep fire for every subclass. It does
-        # not make APH itself re-entrant: aph.py runs its own prep after
-        # PH_Prep, re-declaring y/ybars/z and appending its terms to
-        # saved_objectives unconditionally, so a second APH_main() still
-        # doubles them. That is pre-existing (identical on upstream/main:
-        # the W_on term count goes 3 -> 6 either way) and out of scope here.
+
+        # Whether PH_Prep has run, which is what distinguishes a re-prep from
+        # a first prep. The two flags above cannot answer that question:
+        # APH passes both attach flags False and splices its own W and prox
+        # terms straight onto saved_objectives (aph.py), so they stay False
+        # however many times APH preps. An APH re-prep would then look like a
+        # first prep and skip the disable_W_and_prox call below, leaving the
+        # previous run's W and prox terms live through an iteration 0 that is
+        # supposed to solve the user's objective alone. Catching APH's
+        # re-prep is not the same as making APH re-entrant, though: its own
+        # prep re-declares y/ybars/z and appends its terms again every time,
+        # so a second APH_main() still doubles them -- on upstream/main as
+        # well as here.
         self._PH_prep_done = False
+
         # What the first PH_Prep asked for, so a re-prep asking for something
-        # different can be refused instead of silently ignored.
+        # different is refused instead of silently ignored.
         self._PH_prep_request = None
 
     @property
