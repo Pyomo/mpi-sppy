@@ -485,6 +485,57 @@ class TestPHPrepIsIdempotent(unittest.TestCase):
 
     @unittest.skipIf(not solver_available,
                      "%s solver is not available" % (solver_name,))
+    def test_smoothing_coefficient_does_not_compound(self):
+        # Iter0 scales p by rho when smoothed == 2. Preserving components on a
+        # re-prep must not preserve an already-scaled p, or run 2 multiplies
+        # it by rho again and silently solves a different smoothing problem.
+        options = dict(self.options)
+        options.update({"PHIterLimit": 3, "defaultPHrho": 5, "smoothed": 2,
+                        "defaultPHp": 1, "defaultPHbeta": 0.1,
+                        "iter0_solver_options": None,
+                        "iterk_solver_options": None})
+        ph = mpisppy.opt.ph.PH(
+            options, self.scenario_names, farmer.scenario_creator,
+            farmer.scenario_denouement,
+            scenario_creator_kwargs={"crops_multiplier": 1})
+        s = ph.local_scenarios[self.scenario_names[0]]
+        ph.ph_main()
+        after_one = [pyo.value(s._mpisppy_model.p[k])
+                     for k in s._mpisppy_model.p]
+        ph.ph_main()
+        after_two = [pyo.value(s._mpisppy_model.p[k])
+                     for k in s._mpisppy_model.p]
+        self.assertEqual(after_one, after_two)
+
+    def test_reprep_is_detected_without_the_attach_flags(self):
+        # APH calls PH_Prep with both attach flags False and splices its own
+        # terms onto saved_objectives, so re-entry cannot be inferred from
+        # what attach_PH_to_objective recorded.
+        ph = self._make_ph()
+        self.assertFalse(ph._PH_prep_done)
+        ph.PH_Prep(attach_duals=False, attach_prox=False)
+        self.assertTrue(ph._PH_prep_done, "re-entry would go undetected")
+        self.assertFalse(ph._PH_duals_attached)
+        self.assertFalse(ph._PH_prox_attached)
+
+    def test_bad_default_rho_is_still_rejected_on_a_reprep(self):
+        # rho is preserved across a re-prep, but a bad option must not be
+        # silently ignored (issue #560).
+        ph = self._make_ph()
+        ph.PH_Prep()
+        ph.options["defaultPHrho"] = -1
+        with self.assertRaises(RuntimeError):
+            ph.PH_Prep()
+
+    def test_attach_reports_whether_it_changed_anything(self):
+        ph = self._make_ph()
+        self.assertIs(ph.attach_PH_to_objective(False, False), False)
+        ph.PH_Prep(defer_attach=False)
+        # everything already spliced in, so a repeat attaches nothing
+        self.assertIs(ph.attach_PH_to_objective(True, True), False)
+
+    @unittest.skipIf(not solver_available,
+                     "%s solver is not available" % (solver_name,))
     def test_fwph_lp_start_end_to_end(self):
         # FWPH's LP start is the real consumer of the two-step attach, and
         # nothing else in the suite runs it: the branch needs
