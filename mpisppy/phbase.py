@@ -1080,7 +1080,9 @@ class PHBase(mpisppy.spopt.SPOpt):
             # Iter0 solves with no dual or prox contribution. On a first
             # PH_Prep that holds because the terms are not in the objective
             # yet; on a re-prep they are already there and enabled from the
-            # previous run, so gate them off. Iter0 re-enables at the end.
+            # previous run, so switch them off via the W_on / prox_on Params
+            # -- the terms stay in the objective but contribute zero. Iter0
+            # re-enables both at the end.
             #
             # This makes a second ph_main() a restart, not a resume: Iter0
             # re-solves the user's objective, the scenarios scatter, and
