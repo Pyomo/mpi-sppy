@@ -401,5 +401,237 @@ class TestPHMainSizes(unittest.TestCase):
                            "Fixer should have fixed at least one variable")
 
 
+class TestPHPrepIsIdempotent(unittest.TestCase):
+    """ PH_Prep may be re-entered (a second ph_main() on the same object).
+
+        It used to re-declare W/rho -- silently discarding whatever was in
+        them -- and append a second PH term to the already-augmented saved
+        objective, leaving the first term live and anchored to the stale xbar.
+    """
+
+    def setUp(self):
+        self.options = {
+            "solver_name": solver_name,
+            "PHIterLimit": 50,
+            "defaultPHrho": 1,
+            "convthresh": 1e-8,
+            "verbose": False,
+            "display_timing": False,
+            "display_progress": False,
+            "smoothed": 0,
+            "toc": False,
+        }
+        self.scenario_names = [f"Scenario{i+1}" for i in range(3)]
+
+    def _make_ph(self):
+        return mpisppy.opt.ph.PH(
+            dict(self.options), self.scenario_names, farmer.scenario_creator,
+            farmer.scenario_denouement,
+            scenario_creator_kwargs={"crops_multiplier": 1})
+
+    def test_second_prep_keeps_W_and_rho(self):
+        ph = self._make_ph()
+        ph.PH_Prep()
+        marks = {}
+        for k, s in ph.local_scenarios.items():
+            for idx in s._mpisppy_model.W:
+                s._mpisppy_model.W[idx]._value = 7.0
+                s._mpisppy_model.rho[idx] = 3.0
+            marks[k] = id(s._mpisppy_model.W)
+        ph.PH_Prep()
+        for k, s in ph.local_scenarios.items():
+            self.assertEqual(id(s._mpisppy_model.W), marks[k],
+                             "PH_Prep replaced the W Param")
+            for idx in s._mpisppy_model.W:
+                self.assertEqual(pyo.value(s._mpisppy_model.W[idx]), 7.0)
+                self.assertEqual(pyo.value(s._mpisppy_model.rho[idx]), 3.0)
+
+    def test_second_prep_does_not_double_augment_objective(self):
+        ph = self._make_ph()
+        # defer_attach=False splices the PH terms in during PH_Prep itself,
+        # so this needs no solve.
+        ph.PH_Prep(defer_attach=False)
+        before = {k: str(obj.expr)
+                  for k, obj in ph.saved_objectives.items()}
+        ph.PH_Prep(defer_attach=False)
+        for k, obj in ph.saved_objectives.items():
+            self.assertEqual(str(obj.expr), before[k],
+                             "a second PH term was spliced into the objective")
+            self.assertEqual(str(obj.expr).count("W_on"), 1)
+
+    def test_two_step_attach_still_works(self):
+        # FWPH attaches W at PH_Prep and the prox term later, for its LP start
+        # (fwph.py). Guarding the objective must not break that: the second
+        # call has to add the prox term it asks for.
+        ph = self._make_ph()
+        ph.PH_Prep(attach_duals=True, attach_prox=False, defer_attach=False)
+        after_W = {k: str(o.expr) for k, o in ph.saved_objectives.items()}
+        for k, expr in after_W.items():
+            self.assertEqual(expr.count("W_on"), 1)
+            self.assertEqual(expr.count("prox_on"), 0, "prox attached early")
+        ph.attach_PH_to_objective(add_duals=False, add_prox=True)
+        for k, o in ph.saved_objectives.items():
+            expr = str(o.expr)
+            self.assertEqual(expr.count("prox_on"), 1, "prox term not added")
+            self.assertEqual(expr.count("W_on"), 1, "W term duplicated")
+
+    def test_repeat_attach_of_the_same_term_is_a_noop(self):
+        ph = self._make_ph()
+        ph.PH_Prep(defer_attach=False)
+        before = {k: str(o.expr) for k, o in ph.saved_objectives.items()}
+        ph.attach_PH_to_objective(add_duals=True, add_prox=True)
+        for k, o in ph.saved_objectives.items():
+            self.assertEqual(str(o.expr), before[k])
+
+    @unittest.skipIf(not solver_available,
+                     "%s solver is not available" % (solver_name,))
+    def test_smoothing_coefficient_does_not_compound(self):
+        # Iter0 scales p by rho when smoothed == 2. Preserving components on a
+        # re-prep must not preserve an already-scaled p, or run 2 multiplies
+        # it by rho again and silently solves a different smoothing problem.
+        options = dict(self.options)
+        options.update({"PHIterLimit": 3, "defaultPHrho": 5, "smoothed": 2,
+                        "defaultPHp": 1, "defaultPHbeta": 0.1,
+                        "iter0_solver_options": None,
+                        "iterk_solver_options": None})
+        ph = mpisppy.opt.ph.PH(
+            options, self.scenario_names, farmer.scenario_creator,
+            farmer.scenario_denouement,
+            scenario_creator_kwargs={"crops_multiplier": 1})
+        s = ph.local_scenarios[self.scenario_names[0]]
+        ph.ph_main()
+        after_one = [pyo.value(s._mpisppy_model.p[k])
+                     for k in s._mpisppy_model.p]
+        ph.ph_main()
+        after_two = [pyo.value(s._mpisppy_model.p[k])
+                     for k in s._mpisppy_model.p]
+        # equal to each other is not enough -- both runs could be wrong by the
+        # same factor; p should be defaultPHp scaled by rho exactly once
+        expected = options["defaultPHp"] * options["defaultPHrho"]
+        self.assertEqual(after_one, [expected] * len(after_one))
+        self.assertEqual(after_two, [expected] * len(after_two))
+
+    def test_reprep_is_detected_without_the_attach_flags(self):
+        # APH calls PH_Prep with both attach flags False and splices its own
+        # terms onto saved_objectives, so re-entry cannot be inferred from
+        # what attach_PH_to_objective recorded.
+        ph = self._make_ph()
+        self.assertFalse(ph._PH_prep_done)
+        ph.PH_Prep(attach_duals=False, attach_prox=False)
+        self.assertTrue(ph._PH_prep_done, "re-entry would go undetected")
+        self.assertFalse(ph._PH_duals_attached)
+        self.assertFalse(ph._PH_prox_attached)
+
+    def test_bad_default_rho_is_still_rejected_on_a_reprep(self):
+        # rho is preserved across a re-prep, but a bad option must not be
+        # silently ignored (issue #560).
+        ph = self._make_ph()
+        ph.PH_Prep()
+        ph.options["defaultPHrho"] = -1
+        with self.assertRaises(RuntimeError):
+            ph.PH_Prep()
+
+    def test_reprep_with_a_different_term_set_is_refused(self):
+        # attach_PH_to_objective only ever adds, and Iter0 re-enables
+        # W_on/prox_on at the end, so a narrowed request cannot be honored --
+        # ph_main(attach_prox=False) after a plain ph_main() would otherwise
+        # silently keep solving with the prox term.
+        ph = self._make_ph()
+        ph.PH_Prep()
+        with self.assertRaises(RuntimeError):
+            ph.PH_Prep(attach_prox=False)
+        # and the same request is still fine
+        ph.PH_Prep()
+
+    def test_reprep_with_changed_smoothing_is_refused(self):
+        # add_smooth is not part of what attach_PH_to_objective dedups on, so
+        # turning smoothing on or off between runs would be a silent no-op in
+        # both directions.
+        ph = self._make_ph()
+        ph.PH_Prep(attach_smooth=0)
+        with self.assertRaises(RuntimeError):
+            ph.PH_Prep(attach_smooth=2)
+
+    def test_attach_reports_whether_it_changed_anything(self):
+        ph = self._make_ph()
+        self.assertIs(ph.attach_PH_to_objective(False, False), False)
+        ph.PH_Prep(defer_attach=False)
+        # everything already spliced in, so a repeat attaches nothing
+        self.assertIs(ph.attach_PH_to_objective(True, True), False)
+
+    @unittest.skipIf(not solver_available,
+                     "%s solver is not available" % (solver_name,))
+    def test_fwph_lp_start_end_to_end(self):
+        # FWPH's LP start is the real consumer of the two-step attach, and
+        # nothing else in the suite runs it: the branch needs
+        # FW_LP_start_iterations > 0 and the only other test setting the
+        # option uses 0. Run it for real.
+        #
+        # Note this passes on unfixed mpi-sppy too: FWPH preps once, so the
+        # double-augmentation bug never bites it. What it guards is the
+        # reverse -- that guarding PH_Prep does not break FWPH, which an
+        # all-or-nothing signature check on the attach flags does.
+        from mpisppy.opt.fwph import FWPH
+        import mpisppy.utils.sputils as sputils
+
+        kwargs = {"crops_multiplier": 1}
+        ef = sputils.create_EF(self.scenario_names, farmer.scenario_creator,
+                               scenario_creator_kwargs=kwargs)
+        solver = pyo.SolverFactory(solver_name)
+        if '_persistent' in solver_name:
+            solver.set_instance(ef)
+        solver.solve(ef)
+        ef_opt = pyo.value(ef.EF_Obj)
+
+        options = dict(self.options)
+        options.update({
+            "PHIterLimit": 10, "convthresh": 1e-6,
+            "FW_iter_limit": 20, "FW_weight": 0.0, "FW_conv_thresh": 1e-5,
+            "stop_check_tol": 1e-5, "FW_LP_start_iterations": 3,
+            "FW_verbose": False, "mip_solver_options": {},
+            "qp_solver_options": {}, "iter0_solver_options": None,
+            "iterk_solver_options": None,
+        })
+        fw = FWPH(options, self.scenario_names, farmer.scenario_creator,
+                  farmer.scenario_denouement,
+                  scenario_creator_kwargs=kwargs)
+        fw.fwph_main()
+
+        # the LP start attaches prox on top of the W term PH_Prep attached;
+        # each has to appear exactly once
+        for sname in self.scenario_names:
+            expr = str(fw.saved_objectives[sname].expr)
+            self.assertEqual(expr.count("W_on"), 1, "W term duplicated")
+            self.assertEqual(expr.count("prox_on"), 1,
+                             "prox term missing or duplicated")
+        # and the run has to produce a valid outer bound (farmer minimizes)
+        self.assertLessEqual(fw.best_bound_obj_val, ef_opt + 1e-6)
+
+    @unittest.skipIf(not solver_available,
+                     "%s solver is not available" % (solver_name,))
+    def test_ph_main_twice_matches_ph_main_once(self):
+        # Re-running to convergence on an unchanged problem must not move the
+        # answer. Note this one passed even before PH_Prep was made
+        # idempotent -- on farmer the doubled objective happened not to shift
+        # the converged point -- so it guards the property, not the old bug.
+        # Both runs have to actually converge for this to mean anything -- at
+        # the class-level PHIterLimit neither does, and the two stopping points
+        # differ by ~0.2 acres for that reason alone.
+        self.options["PHIterLimit"] = 300
+        self.options["convthresh"] = 1e-4
+        ph = self._make_ph()
+        ph.ph_main()
+        self.assertLess(ph.conv, self.options["convthresh"],
+                        "first run hit the iteration limit; test is vacuous")
+        s = ph.local_scenarios[self.scenario_names[0]]
+        once = {c: pyo.value(v) for c, v in s.DevotedAcreage.items()}
+        ph.ph_main()
+        twice = {c: pyo.value(v) for c, v in s.DevotedAcreage.items()}
+        self.assertLess(ph.conv, self.options["convthresh"],
+                        "second run hit the iteration limit; test is vacuous")
+        for c in once:
+            self.assertAlmostEqual(once[c], twice[c], places=2)
+
+
 if __name__ == '__main__':
     unittest.main()
