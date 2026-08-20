@@ -198,6 +198,62 @@ converged first solve. **The cylinder costs the same as the existing Lagrangian 
 does. The re-solve retains value only when the first solve is sloppy, so it becomes an
 opt-in tightening pass (Phase 4) rather than the mechanism.
 
+### 3.6 Which tightenings of the box are admissible
+
+The box is not fixed. Two separate mechanisms shrink it, they shrink it for different
+reasons, and they are **not** sound for the same reason — which is worth stating,
+because the tempting one-line justification ("tightening the box only removes points,
+and fewer points can only raise an infimum") is an argument that the bound gets
+*tighter*, not an argument that it stays *valid*. Raising `q̂_s` is exactly the
+direction that could break it.
+
+What the aggregate bound actually needs is easy to state. Let `x*` be an optimal
+nonanticipative solution of the full problem. For each scenario `s`, if `x* ∈ B_s`
+then
+
+```
+    q̂_s  ≤  inf_{v ∈ B_s} φ_s(v)  ≤  φ_s(x*)  ≤  f_s(x*) + W_sᵀx*
+```
+
+— the last step because `λ ≥ 0`, `g_s(x*) ≤ 0` and `h_s(x*) = 0` — and summing with
+weights `p_s` under `Σ_s p_s W_s = 0` gives `Σ_s p_s q̂_s ≤ OPT`, which is §8. So the
+requirement on the boxes is precisely:
+
+> **every `B_s` must contain one common optimal solution of the full problem.**
+
+Note "common": preserving a *different* optimizer in each scenario would not do, since
+the sum telescopes only at a single `x*`.
+
+**fbbt (setup, once).** `unbounded_variables(s, do_fbbt=True)` runs feasibility-based
+bounds tightening before any certificate is computed. This satisfies the requirement
+in its strong form: fbbt removes no point that satisfies the scenario's constraints,
+so `B_s` still contains *every* feasible point of subproblem `s`, `x*` among them. No
+appeal to optimality is needed, which is why this one is safe to describe as "shrinks
+`B` without removing a feasible point".
+
+**The nonant-bounds channel (every iteration).** `receive_nonant_bounds()` narrows the
+nonanticipative variables' bounds from `Field.NONANT_LOWER/UPPER_BOUNDS`, and in the
+current code base only `reduced_costs_spoke` sends that field. Reduced-cost fixing is
+*optimality*-based: it discards points that are provably no better than an incumbent,
+which does remove feasible points. It therefore does **not** satisfy the strong form,
+and the weak form is what carries it — its contract is that at least one optimal
+solution survives, and because the bounds are broadcast and applied identically to
+every scenario's nonants, the solution that survives is the same one everywhere. That
+is the "common `x*`" the requirement asks for.
+
+Two practical notes. First, this is close to moot today: reduced-cost fixing wants
+discrete variables, which this cylinder rejects as a hard error at setup, so in
+practice the field is not being sent to it. Second, fbbt is deliberately not re-run
+after nonant bounds arrive. That leaves tightness on the table rather than risking
+anything — re-running it would still be sound, since anything fbbt infers from
+constraints and bounds that all hold at `x*` also holds at `x*` — but the setup-time
+pass is where the unbounded-variable warning in §6.1 belongs, and repeating it every
+iteration would buy little.
+
+**Anything else that narrows the box needs one of these two arguments made for it.**
+A tightening that preserves neither all feasible points nor a common optimum breaks the
+bound, and nothing in the code can detect that.
+
 ## 4. Getting the gradient
 
 `∇φ_s(v̂)` comes from Pyomo's reverse-mode differentiation:

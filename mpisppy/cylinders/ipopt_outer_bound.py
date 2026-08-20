@@ -173,6 +173,21 @@ class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
     def _solve_and_certify(self, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
         """Solve every subproblem, then replace the solver's (useless) bound
         with the certificate. Returns the expected outer bound, or None."""
+        # This shrinks the box the certificate minimizes over, so it needs an
+        # argument. Note the tempting one -- "a smaller box removes points, and
+        # fewer points can only raise an infimum" -- is an argument that the
+        # bound gets TIGHTER, which is precisely the direction that could break
+        # it. What is actually needed is that every scenario's box still holds
+        # one COMMON optimal solution x* of the full problem: then the
+        # certificate is below phi_s(x*) <= f_s(x*) + W_s'x* for each s, and the
+        # p-weighted sum is below OPT. The fbbt done at setup gives this the
+        # easy way, by removing no feasible point at all. This channel does not
+        # -- only reduced_costs_spoke sends it, and reduced-cost fixing does
+        # discard feasible points -- so it rests on that spoke's own contract
+        # that an optimal solution survives, plus the fact that the bounds are
+        # broadcast and applied identically to every scenario, which is what
+        # makes the surviving solution common rather than per-scenario. A
+        # sender that guarantees neither would break the bound silently.
         self.receive_nonant_bounds()
         verbose = self.opt.options['verbose']
         teeme = self.opt.options.get('tee-rank0-solves', False)

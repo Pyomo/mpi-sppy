@@ -307,6 +307,35 @@ feasibility-based bounds tightening, which shrinks $B$ without removing feasible
 points and therefore only raises $\qhat_s$ --- is the most effective way to
 improve the bound.
 
+\begin{remark}[Admissible tightenings of the box]\label{rem:boxtighten}
+The box in \eqref{eq:closed} need not be the one the model was written with, and
+the implementation shrinks it by two different mechanisms.  The condition under
+which this is legitimate is not that a smaller box removes points --- that
+argument shows the bound gets tighter, which is the direction that could break
+it --- but the following.  Let $x^{*}$ be an optimal solution of the full
+problem.  If $x^{*} \in B_s$ for every $s$, then for each $s$
+\[
+  \qhat_s \;\le\; \inf_{v \in B_s} \varphi_s(v) \;\le\; \varphi_s(x^{*})
+          \;\le\; f_s(x^{*}) + \W_s^{\top} x^{*},
+\]
+the last step because $\lambda \ge 0$, $g_s(x^{*}) \le 0$ and $h_s(x^{*}) = 0$,
+and Proposition~\ref{prop:agg} goes through unchanged.  The requirement is
+therefore that \emph{every $B_s$ contain one common optimal solution of the full
+problem}; preserving a different optimiser in each scenario does not suffice,
+since the weighted sum telescopes only at a single $x^{*}$.
+
+Two sufficient conditions are used.  Feasibility-based bounds tightening
+satisfies the requirement in the strong form: it removes no point satisfying the
+constraints of subproblem $s$, so $B_s$ retains every feasible point of
+\eqref{eq:sub} and in particular $x^{*}$, with no appeal to optimality.
+Optimality-based tightening --- reduced-cost fixing, which does discard feasible
+points --- satisfies only the weak form, and relies on its own contract that
+some optimal solution survives, together with the fact that the same bounds are
+applied to every scenario, so that the surviving solution is common to all of
+them.  A tightening that guarantees neither is not admissible, and no check in
+the implementation can detect that.
+\end{remark}
+
 \paragraph{Unbounded variables.}
 If $l_i = -\infty$ and $\partial_i \varphi_s(\vhat) > 0$, or $u_i = +\infty$ and
 $\partial_i \varphi_s(\vhat) < 0$, the corresponding term in \eqref{eq:closed} is
@@ -450,7 +479,8 @@ object here & in the code \\
 $\varphi_s$ in \eqref{eq:phi}      & \texttt{\_lagrangian\_expression} \\
 $\qhat_s$ in \eqref{eq:qhat}       & \texttt{certified\_lower\_bound} \\
 decidable hypotheses               & \texttt{check\_model\_is\_certifiable} \\
-box tightening                     & \texttt{unbounded\_variables} \\
+box tightening, strong form        & \texttt{unbounded\_variables} (\texttt{fbbt}) \\
+box tightening, weak form          & \texttt{receive\_nonant\_bounds} \\
 Proposition~\ref{prop:agg} sum     & \texttt{SPOpt.Ebound} \\
 Remark~\ref{rem:mixed} safeguard   & a \texttt{None} bound, propagated collectively \\
 Remark~\ref{rem:rounding} cushion  & \texttt{eps\_rel}, \texttt{--ipopt-outer-bound-cushion} \\
