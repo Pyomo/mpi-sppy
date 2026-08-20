@@ -1,0 +1,16 @@
+{
+    "module_name": "cvar",
+    "max_count": 3000,
+    "candidate_sample_size": 10,
+    "sample_size": 75,
+    "subsample_size": 10,
+    "nB": 20,
+    "alpha": 0.1,
+    "seed_offset": 0,
+    "optimal_fname": "None",
+    "xhat_fname": "None",
+    "solver_name": "cplex_direct",
+    "boot_method": "Bagging_with_replacement",
+    "trace_fname": "None",
+    "coverage_replications": 5
+}

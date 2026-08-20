@@ -11,12 +11,14 @@ mpi-sppy, no distribution of the uncertain data is assumed: the estimators
 work directly from sampled data. The methods and software are described in
 [ChenWoodruff2023]_ and [ChenWoodruff2024]_.
 
-.. note::
-
-   This is the empirical (numpy-only) part of the package: the classical,
-   extended, subsampling, and bagging methods. The *smoothed* methods, which
-   depend on a distribution-fitting library, are merged separately; asking for
-   a ``Smoothed_*`` method raises an informative error until then.
+The package has two families of estimators. The *empirical* methods
+(classical, extended, subsampling, and bagging) resample the observed data
+directly and need only numpy. The *smoothed* methods fit a univariate
+distribution to the sampled data (using the bundled ``statdist`` library) and
+resample from the fitted distribution; they need `scipy
+<https://scipy.org>`_, which mpi-sppy treats as an optional dependency and
+imports lazily. If scipy is not installed, the empirical methods still work
+and a smoothed method fails with an informative import error.
 
 Modes
 -----
@@ -43,6 +45,23 @@ json file:
 
    $ python -m mpisppy.confidence_intervals.bootsp.simulate_boot instance.json
 
+Each replication is an independent repeat of the whole experiment: it steps
+``seed_offset``, which draws a different sample from the data-generating
+process, builds a confidence interval from it, and asks whether that interval
+covers the truth. The truth is one fixed number — the optimality gap under the
+process — so it is computed once, not per replication.
+
+.. note::
+
+   That fixed number is itself estimated, by solving over ``max_count``
+   records. If ``max_count`` is close to ``sample_size``, the estimate carries
+   about as much sampling error as the intervals being scored against it, and
+   the reported coverage rate inherits that noise. For a coverage study, either
+   set ``max_count`` well above ``sample_size``, or supply ``optimal_fname``
+   (written by ``boot_general_prep``, below) so the truth comes from a separate,
+   larger computation. The shipped example jsons use small values so they run
+   quickly; they are demonstrations, not calibrated studies.
+
 The model module
 ----------------
 
@@ -60,6 +79,14 @@ plus a few helpers used by the bootstrap code:
   for this fixed name first and falls back to the legacy
   ``xhat_generator_<module_name>``. If a precomputed ``xhat`` file is given
   (``--xhat-fname``) the generator is not called.
+* ``data_sampler(record_num, cfg)`` — return the data for one record (a scalar,
+  or a dict keyed by variable name for multivariate data). This is used by the
+  *smoothed* methods to build the sample that a distribution is fitted to; the
+  empirical methods do not need it. Every record it returns must be a genuine
+  draw from the distribution being fitted. If the ``scenario_creator`` treats
+  some records specially (say, an unperturbed baseline scenario), that is a
+  statement about those *scenarios*; reporting a constant for them here puts a
+  spurious point mass in the fitted distribution.
 
 Methods
 -------
@@ -84,6 +111,21 @@ The ``--boot-method`` (json ``boot_method``) option selects the estimator:
      - Bagging with replacement [lam2018]_
    * - ``Bagging_without_replacement``
      - Bagging without replacement [lam2018]_
+   * - ``Smoothed_boot_epi``
+     - Smoothed bootstrap, epi-spline fit, Gaussian interval [ChenWoodruff2024]_
+   * - ``Smoothed_boot_kernel``
+     - Smoothed bootstrap, kernel-density fit, Gaussian interval [ChenWoodruff2024]_
+   * - ``Smoothed_boot_epi_quantile``
+     - Smoothed bootstrap, epi-spline fit, quantile interval [ChenWoodruff2024]_
+   * - ``Smoothed_boot_kernel_quantile``
+     - Smoothed bootstrap, kernel-density fit, quantile interval [ChenWoodruff2024]_
+   * - ``Smoothed_bagging``
+     - Smoothed bagging, kernel-density fit [ChenWoodruff2024]_
+
+The ``Smoothed_*`` tokens are the smoothed methods; the others are empirical.
+The epi-spline fit builds a small Pyomo nonlinear program, so those two methods
+additionally need a nonlinear solver (e.g. ``ipopt``); the kernel methods do
+not.
 
 Arguments
 ---------
@@ -108,9 +150,27 @@ command line (with dashes). The main options are:
 * ``xhat_fname`` / ``--xhat-fname`` — npy file with a precomputed ``xhat``, or
   the string ``"None"`` to compute it with ``xhat_generator``.
 * ``optimal_fname`` (simulation only) — npy file with a (presumed) optimal
-  value, or ``"None"`` to compute it from ``max_count`` scenarios.
+  value and the gap at ``xhat``, written by ``boot_general_prep``, or
+  ``"None"``. With ``"None"`` the optimal value is computed from all
+  ``max_count`` scenarios. The gap is computed too, but only where it is
+  used: the smoothed coverage simulations score their interval against it, so
+  they evaluate ``xhat`` to get the real ``z(xhat) - z*``. The empirical
+  harness scores against ``z*`` itself and never needs the gap, so it reports
+  a zero placeholder for it — a stand-in for the *solver* gap, not an
+  optimality gap. Supplying the file saves recomputing any of this per run.
 * ``coverage_replications`` (simulation only) — number of coverage replications.
 * ``boot_method`` / ``--boot-method`` — one of the tokens above.
+
+The smoothed methods use three additional options (ignored, and not required
+in the json, for the empirical methods):
+
+* ``smoothed_center_sample_size`` / ``--smoothed-center-sample-size`` — number
+  of points drawn from the fitted distribution to estimate the gap center.
+* ``smoothed_B_I`` / ``--smoothed-B-I`` — number of outer replications for
+  smoothed bagging.
+* ``smoothed_nonlinear_solver`` / ``--smoothed-nonlinear-solver`` — the solver
+  for the epi-spline fit (default ``ipopt``). Only the epi-spline methods solve
+  anything; the kernel methods ignore it.
 
 There may also be model-specific options added by ``inparser_adder``.
 
@@ -120,8 +180,11 @@ Batch parallelism
 The bootstrap batches are split across MPI ranks and reassembled on rank 0
 with ``Gatherv``, so a run can be accelerated with, e.g.,
 ``mpiexec -np 2 python -m mpi4py -m mpisppy.confidence_intervals.bootsp.user_boot ...``.
-The estimate on rank 0 depends on the number of ranks because each rank seeds
-its own bootstrap stream.
+For the empirical methods the estimate on rank 0 depends on the number of
+ranks, because each rank seeds its own batch stream (``_batch_rng``, keyed on
+the rank). The smoothed methods do not: they address their draws by global
+batch or bag number, so a given ``seed_offset`` gives the same interval at any
+rank count.
 
 boot_general_prep
 -----------------
@@ -189,6 +252,49 @@ from the confidence-interval sampling, so ``sample_size`` plus
 ``schultz_data.csv`` is produced by ``schultz_data_generator.py`` (a fixed seed
 makes it reproducible); replace it with your own two-column dataset, or point
 ``--data-file`` at another file, to run the bootstrap on your own data.
+
+Smoothed methods and statdist
+-----------------------------
+
+The smoothed methods (the ``Smoothed_*`` tokens) fit a univariate distribution
+to the sampled data and then resample from the *fitted* distribution rather
+than from the data directly. The distribution fitting is provided by the
+bundled ``statdist`` library
+(``mpisppy.confidence_intervals.bootsp.statdist``), a trimmed port of the
+univariate distributions from the statdist package; ``statdist`` uses scipy,
+which is imported lazily so that the empirical methods remain scipy-free.
+
+To use a smoothed method the model module must supply ``data_sampler`` (see
+above): the smoothed estimator calls it for each sampled record to assemble the
+data that ``statdist`` fits. That sample is drawn from the same pool the
+empirical methods use, so it too excludes the records reserved for computing
+``xhat``. The kernel-density methods
+(``Smoothed_boot_kernel``, ``Smoothed_boot_kernel_quantile``,
+``Smoothed_bagging``) fit with a Gaussian kernel and need only scipy; the
+epi-spline methods (``Smoothed_boot_epi``, ``Smoothed_boot_epi_quantile``) fit
+by solving a small Pyomo nonlinear program and additionally need a nonlinear
+solver, ``ipopt`` by default and any other named by
+``--smoothed-nonlinear-solver``.
+
+Three examples that need statdist ship in ``examples/bootsp``:
+
+* ``farmer`` — the scalable farmer, with crop yields perturbed by a fitted
+  (or, empirically, a uniform) distribution;
+* ``cvar`` — a CVaR example (Lam & Qian) with standard-normal data;
+* ``multi_knapsack`` — a multi-product knapsack (Vaagen & Wallace) whose
+  deterministic data is read from a json file (``--deterministic-data-json``).
+
+Each has an empirical json/bash and a ``smoothed_*.json``; for instance, from
+``examples/bootsp/cvar``:
+
+.. code-block:: bash
+
+   $ python -m mpisppy.confidence_intervals.bootsp.user_boot cvar \
+       --max-count 3000 --candidate-sample-size 10 --sample-size 75 \
+       --subsample-size 10 --nB 20 --alpha 0.1 --seed-offset 0 \
+       --solver-name cplex_direct --boot-method Bagging_with_replacement
+
+   $ python -m mpisppy.confidence_intervals.bootsp.simulate_boot smoothed_cvar.json
 
 References
 ----------
