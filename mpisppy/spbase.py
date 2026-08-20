@@ -438,7 +438,22 @@ class SPBase:
                     ExtensiveForm.set_scenario_probabilities to pick up updated
                     _mpisppy_probability values; the default (False) keeps the
                     compute-once behavior relied on at setup.
+
+            Raises:
+                RuntimeError: if force is True and variable probability is in
+                    use. The rebuild writes a scalar prob_coeff and
+                    prob0_mask=1.0 per node, which would silently throw away
+                    the per-variable arrays and zeroed mask entries that
+                    _use_variable_probability_setter installs.
         """
+        if force and any(getattr(s._mpisppy_data, 'has_variable_probability',
+                                 False)
+                         for s in self.local_scenarios.values()):
+            raise RuntimeError(
+                "_compute_unconditional_node_probabilities(force=True) would "
+                "discard variable-probability data. Re-apply "
+                "_use_variable_probability_setter after the rebuild, or "
+                "rebuild the object, if this combination is needed.")
         for k,s in self.local_scenarios.items():
             root = s._mpisppy_node_list[0]
             root.uncond_prob = 1.0

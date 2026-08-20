@@ -959,24 +959,40 @@ class Test_mutable_probability(unittest.TestCase):
             want = 0.6 if sname == "scen0" else 0.2
             self.assertAlmostEqual(scen._mpisppy_data.prob_coeff["ROOT"], want)
 
-    def test_multistage_is_refused(self):
+    def test_multistage_is_refused_at_construction(self):
         # A multistage re-weight would leave every ScenarioNode.cond_prob
-        # stale, and prob_coeff is derived from those.
+        # stale, and prob_coeff is derived from those. The flag exists only to
+        # enable re-weighting, so refuse while the caller can still choose a
+        # different build rather than at the first update.
         import mpisppy.tests.examples.hydro.hydro as hydro
         bfs = [3, 3]
         snames = ["Scen%d" % (i + 1) for i in range(9)]
-        ef = self.ExtensiveForm(
+        kwargs = dict(
             options={"solver": solver_name, "mutable_probability": True},
             all_scenario_names=snames,
             scenario_creator=hydro.scenario_creator,
             all_nodenames=sputils.create_nodenames_from_branching_factors(bfs),
             scenario_creator_kwargs={"branching_factors": bfs})
-        node_list = ef.local_scenarios[snames[0]]._mpisppy_node_list
-        self.assertGreater(len(node_list), 1, "hydro should be multistage")
-        before = [n.cond_prob for n in node_list]
-        with self.assertRaises(NotImplementedError):
-            ef.set_scenario_probabilities({snames[0]: 0.2})
-        self.assertEqual([n.cond_prob for n in node_list], before)
+        with self.assertRaises(ValueError):
+            self.ExtensiveForm(**kwargs)
+        # and the same model builds fine without the flag
+        kwargs["options"] = {"solver": solver_name}
+        ef = self.ExtensiveForm(**kwargs)
+        self.assertGreater(
+            len(ef.local_scenarios[snames[0]]._mpisppy_node_list), 1,
+            "hydro should be multistage")
+
+    def test_force_refuses_to_drop_variable_probability(self):
+        # The forced rebuild writes a scalar prob_coeff and prob0_mask=1.0 per
+        # node, which would silently discard the per-variable arrays that
+        # _use_variable_probability_setter installs.
+        ef = self._make_ef(mutable_probability=True)
+        # reachable on any SPBase subclass that uses variable probability;
+        # ExtensiveForm does not wire it up, so set the flag directly
+        for scen in ef.local_scenarios.values():
+            scen._mpisppy_data.has_variable_probability = True
+        with self.assertRaises(RuntimeError):
+            ef._compute_unconditional_node_probabilities(force=True)
 
 
 if __name__ == '__main__':

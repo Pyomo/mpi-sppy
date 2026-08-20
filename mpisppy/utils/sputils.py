@@ -388,6 +388,17 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
     if mutable_probability:
         # Probabilities become mutable Params so they can be updated in place
         # (option B of the design: require a normalized full EF, no divisor).
+        # The flag exists only to enable re-weighting, and re-weighting a
+        # multistage tree is not supported, so refuse here rather than at the
+        # first set_scenario_probabilities call -- the caller can still choose
+        # a different build at this point.
+        for sname, scen in scen_dict.items():
+            if len(scen._mpisppy_node_list) > 1:
+                raise ValueError(
+                    "mutable_probability supports two-stage problems only "
+                    f"(scenario '{sname}' has a multistage node list). "
+                    "Rebuild the model with new probabilities to re-weight a "
+                    "multistage tree.")
         try:
             prob_init = {sname: float(scen._mpisppy_probability)
                          for sname, scen in scen_dict.items()}

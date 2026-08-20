@@ -81,10 +81,11 @@ probabilities under PH, build a PH object per probability vector.
 
    Two-stage only. Re-weighting a multistage tree would also have to update
    every ``ScenarioNode.cond_prob``, since the unconditional node
-   probabilities -- and the derived ``prob_coeff`` -- come from those;
-   ``set_scenario_probabilities`` raises ``NotImplementedError`` rather than
-   leave them stale. There is no multistage support and none is planned:
-   rebuild the model with the new probabilities instead.
+   probabilities -- and the derived ``prob_coeff`` -- come from those.
+   Requesting ``mutable_probability`` for a multistage model raises at
+   construction, so you find out while you can still choose a different build.
+   There is no multistage support and none is planned: rebuild the model with
+   the new probabilities instead.
 
 API
 ---

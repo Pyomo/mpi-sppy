@@ -505,7 +505,12 @@ stay in sync and there is one method name across both.
 2. **[dropped]** PH path — built and then removed; see the scope decision at
    the top. §6 records what it would take.
 3. **[not planned]** Multistage node probabilities and the
-   variable-probability interaction. Re-weighting a multistage tree means
+   variable-probability interaction. Both are refused rather than
+   approximated: `mutable_probability` raises at EF construction for a
+   multistage tree, and `_compute_unconditional_node_probabilities(force=True)`
+   raises when variable probability is in use, since the rebuild writes a
+   scalar `prob_coeff`/`prob0_mask` that would silently discard the
+   per-variable arrays. Re-weighting a multistage tree means
    updating every `ScenarioNode.cond_prob`, since `uncond_prob` and the
    derived `prob_coeff` come from those; the EF setter raises
    `NotImplementedError` rather than leave them inconsistent. Rebuild the
