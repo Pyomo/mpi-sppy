@@ -17,6 +17,15 @@ defaults:
     shell: bash -l {0}
 
 env:
+  # Some GitHub-hosted runners expose an Azure MANA RDMA verbs device
+  # (mana_0).  conda-forge builds MPICH and OpenMPI against UCX, and UCX
+  # probes that device during MPI_Init, fails to create a UD queue pair
+  # ("Operation not supported"), and aborts the whole run before any test
+  # starts.  Which runner a job lands on is luck, so this shows up as a
+  # cell that passes one day and dies at MPI_Init the next.  Every rank
+  # here is on one node, so restrict UCX to the transports that node
+  # actually uses; nothing in mpi-sppy's tests wants a network fabric.
+  UCX_TLS: "self,sm,tcp"
   COV_ARGS: "--parallel-mode --rcfile=${{ github.workspace }}/.coveragerc --data-file=${{ github.workspace }}/.coverage --source=${{ github.workspace }}/mpisppy"
   EX_COV_ARGS: "--parallel-mode --rcfile=${{ github.workspace }}/.coveragerc --data-file=${{ github.workspace }}/.coverage --source=${{ github.workspace }}/mpisppy,${{ github.workspace }}/examples"
 
