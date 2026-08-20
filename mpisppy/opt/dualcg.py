@@ -130,6 +130,13 @@ class DCG(mpisppy.cgbase.CGBase):
         Update the regularization center if the outer bound candidate improved.
         """
 
+        # No bound this iteration means there is nothing to compare against and
+        # nothing to recenter on. Checked first: the comparison below would
+        # otherwise raise on None once a center has been established, which the
+        # old ordering only avoided while the center was still unset.
+        if self.outer_bound_candidate is None:
+            return
+
         if self.dual_center_outer_bound is not None:
             if self.is_minimizing:
                 improved = self.outer_bound_candidate >= self.dual_center_outer_bound
@@ -137,8 +144,6 @@ class DCG(mpisppy.cgbase.CGBase):
                 improved = self.outer_bound_candidate <= self.dual_center_outer_bound
             if not improved:
                 return
-        elif self.outer_bound_candidate is None:
-            return  
 
         m = self.mp  
 
@@ -241,23 +246,31 @@ class DCG(mpisppy.cgbase.CGBase):
                 sum_redcosts=self.add_columns_to_mp_from_results(all_results)
                 self.add_columns_to_mp_from_results(all_results_xhat_recent) 
                 self.add_columns_to_mp_from_results(all_results_xfeas) 
-                self.outer_bound_candidate = self.rmp_obj_val + sum_redcosts
+                # See cgbase.add_columns_to_mp_from_results: None means some
+                # subproblem reported no reduced cost, so there is no outer
+                # bound to form from a partial sum this iteration.
+                if sum_redcosts is None:
+                    self.outer_bound_candidate = None
+                else:
+                    self.outer_bound_candidate = self.rmp_obj_val + sum_redcosts
                 if not hasattr(self, "dual_center_outer_bound"):
                     self.dual_center_outer_bound = None
 
                 self.update_dual_center()
                 
                 # Update outer bound and convergence metric.
-                if self.best_bound_obj_val is None:
-                    self.best_bound_obj_val = self.outer_bound_candidate
-                elif self.is_minimizing:
-                    self.best_bound_obj_val = max(self.outer_bound_candidate, self.best_bound_obj_val)
-                else:
-                    self.best_bound_obj_val = min(self.outer_bound_candidate, self.best_bound_obj_val)
-                if self.is_minimizing:
-                    self.conv=(self.rmp_obj_val-self.best_bound_obj_val)/abs(self.best_bound_obj_val)
-                else:
-                    self.conv=(self.best_bound_obj_val-self.rmp_obj_val)/abs(self.best_bound_obj_val)
+                if self.outer_bound_candidate is not None:
+                    if self.best_bound_obj_val is None:
+                        self.best_bound_obj_val = self.outer_bound_candidate
+                    elif self.is_minimizing:
+                        self.best_bound_obj_val = max(self.outer_bound_candidate, self.best_bound_obj_val)
+                    else:
+                        self.best_bound_obj_val = min(self.outer_bound_candidate, self.best_bound_obj_val)
+                if self.best_bound_obj_val is not None:
+                    if self.is_minimizing:
+                        self.conv=(self.rmp_obj_val-self.best_bound_obj_val)/abs(self.best_bound_obj_val)
+                    else:
+                        self.conv=(self.best_bound_obj_val-self.rmp_obj_val)/abs(self.best_bound_obj_val)
                 
                 if dprogress:
                     print("")
