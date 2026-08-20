@@ -7,7 +7,13 @@ is implemented and verified; addresses issue #797. Covers the current behavior
 compatibility (§7), and open questions (§8).
 
 Implemented: `sputils.has_persistent_solve_api` (recognizes APPSI /
-`pyomo.contrib.solver` as persistent for the EF workflow); `mutable_probability`
+`pyomo.contrib.solver` as persistent for the EF workflow). Note it duck-types on
+`set_instance`/`set_objective` only: on the modern `pyomo.contrib.solver`
+interfaces `load_vars` lives on the solution loader, not the solver, so
+requiring it would have excluded `highs` and `gurobi_persistent_v2`. Reading
+the solution back is a separate `hasattr(solver, "load_vars")` check. The
+widened detection is gated so the non-mutable path calls `set_instance`
+exactly where it did before; `mutable_probability`
 option on `_create_EF_from_scen_dict` and `ExtensiveForm` (option-B Param
 objective); `ExtensiveForm.set_scenario_probabilities`; a `reuse_instance`
 argument to `solve_extensive_form`; docs
@@ -324,7 +330,7 @@ recognize `appsi_highs` as persistent at all: `ef.py:117` tests the substring
 So today `ExtensiveForm` treats `appsi_highs` like a non-persistent solver and
 never takes the `set_instance` / `load_vars` path. This feature must therefore
 extend persistence detection to the APPSI / `pyomo.contrib.solver` interfaces
-(e.g. duck-type on `set_instance`/`set_objective`/`load_vars`, or check for the
+(e.g. duck-type on `set_instance`/`set_objective`, or check for the
 contrib base classes) — otherwise the `reuse_instance` path is unreachable for
 exactly the solver in the issue. This is a prerequisite for phase 1, not a
 nice-to-have.

@@ -137,11 +137,24 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
                     Result returned by the Pyomo solve method.
 
         """
-        # Recognizes both legacy PersistentSolver and APPSI /
-        # pyomo.contrib.solver interfaces (e.g. appsi_highs); see
-        # sputils.has_persistent_solve_api for why this is not is_persistent.
-        persistent = sputils.has_persistent_solve_api(self.solver)
-        if persistent and not (reuse_instance and self._instance_loaded):
+        # Two separate questions here.
+        #
+        # Whether to call set_instance. A legacy PersistentSolver requires it
+        # before every solve. The APPSI / pyomo.contrib.solver interfaces do
+        # not -- solve() loads the model itself -- so for them set_instance is
+        # only worth calling when the loaded instance is going to be reused,
+        # which is what mutable_probability and reuse_instance are for. Keeping
+        # it off the default path leaves non-mutable behavior as it was, and
+        # the name check preserves what this method did before
+        # has_persistent_solve_api existed.
+        holds_instance = sputils.has_persistent_solve_api(self.solver)
+        want_instance = (
+            sputils.is_persistent(self.solver)
+            or "persistent" in self.options["solver"]
+            or (holds_instance
+                and (self.mutable_probability or reuse_instance))
+        )
+        if want_instance and not (reuse_instance and self._instance_loaded):
             self.solver.set_instance(self.ef)
             self._instance_loaded = True
 
@@ -170,7 +183,10 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             # this should catch infeasible and unbounded cases
             return results
         
-        if persistent:
+        # And how to read the solution back, which is a different question:
+        # the modern interfaces put load_vars on the solution loader, not on
+        # the solver, so ask for the method rather than infer it.
+        if hasattr(self.solver, "load_vars"):
             self.solver.load_vars()
         else:
             self.ef.solutions.load_from(results)
@@ -255,6 +271,14 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         # prob_coeff is derived from _mpisppy_probability and is computed once
         # at setup, so it needs an explicit rebuild to track the new values.
         self._compute_unconditional_node_probabilities(force=True)
+        # The loaded solution belongs to the old probabilities. Reading it
+        # back now would mix new Param values with stale variable values and
+        # report a number that is neither optimum, so mark it unavailable
+        # until the next solve. solve_extensive_form also returns early on a
+        # bad termination without setting these, so leaving them True would
+        # silently hand back the previous vector's answer.
+        self.first_stage_solution_available = False
+        self.tree_solution_available = False
         # Re-push the objective so a persistent solver picks up the new
         # coefficients. Required for legacy persistent solvers; harmless (and
         # redundant with auto-tracking) for APPSI / pyomo.contrib.solver.

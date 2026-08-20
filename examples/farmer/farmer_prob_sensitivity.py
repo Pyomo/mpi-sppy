@@ -28,6 +28,7 @@ import argparse
 import farmer
 
 from mpisppy.opt.ef import ExtensiveForm
+import mpisppy.utils.sputils as sputils
 
 
 def make_probability_vector(scenario_names, low_yield_weight):
@@ -90,7 +91,13 @@ def main():
         ef.set_scenario_probabilities(pv)
         # reuse_instance=True after the first solve keeps the persistent
         # solver's instance loaded; only the objective coefficients change.
-        ef.solve_extensive_form(reuse_instance=(i > 0))
+        results = ef.solve_extensive_form(reuse_instance=(i > 0))
+        if sputils.not_good_enough_results(results):
+            # solve_extensive_form returns early here without loading a
+            # solution, so there is nothing to report for this weight.
+            tc = results.solver.termination_condition
+            print(f"{w:8.3f}  {'no solution':>14}   (termination: {tc})")
+            continue
 
         obj = ef.get_objective_value()
         root = ef.get_root_solution()

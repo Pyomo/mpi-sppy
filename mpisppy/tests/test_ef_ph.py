@@ -909,6 +909,44 @@ class Test_mutable_probability(unittest.TestCase):
             self.assertAlmostEqual(
                 getattr(ef.ef, sname)._mpisppy_probability, 1.0 / 3.0)
 
+    def test_modern_persistent_api_is_recognized(self):
+        # load_vars lives on the solution loader for pyomo.contrib.solver
+        # interfaces, not on the solver, so requiring it would classify
+        # highs / gurobi_persistent_v2 as non-persistent. Stubs keep this
+        # independent of which solvers happen to be installed.
+        class HoldsInstance:
+            def set_instance(self, m): pass
+            def set_objective(self, o): pass
+
+        class LoadsVarsToo(HoldsInstance):
+            def load_vars(self): pass
+
+        class Neither:
+            pass
+
+        self.assertTrue(sputils.has_persistent_solve_api(HoldsInstance()))
+        self.assertTrue(sputils.has_persistent_solve_api(LoadsVarsToo()))
+        self.assertFalse(sputils.has_persistent_solve_api(Neither()))
+
+    @unittest.skipIf(not solver_available, "no solver is available")
+    def test_update_invalidates_the_loaded_solution(self):
+        # The loaded solution belongs to the old probabilities; reading it
+        # back after an update would mix new Params with stale variable
+        # values and report a number that is neither optimum.
+        ef = self._make_ef(mutable_probability=True)
+        ef.solve_extensive_form()
+        self.assertTrue(ef.tree_solution_available)
+        old_obj = ef.get_objective_value()
+        ef.set_scenario_probabilities({"scen0": 0.9, "scen1": 0.05,
+                                       "scen2": 0.05})
+        self.assertFalse(ef.tree_solution_available)
+        self.assertFalse(ef.first_stage_solution_available)
+        self.assertIsNone(ef.get_objective_value())
+        ef.solve_extensive_form(reuse_instance=True)
+        new_obj = ef.get_objective_value()
+        self.assertIsNotNone(new_obj)
+        self.assertNotAlmostEqual(new_obj, old_obj, places=2)
+
     def test_prob_coeff_tracks_the_update(self):
         # prob_coeff is derived from _mpisppy_probability and computed once at
         # setup, so the setter has to force a rebuild.

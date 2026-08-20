@@ -579,8 +579,8 @@ def is_persistent(solver):
 
 
 def has_persistent_solve_api(solver):
-    """Return True if the solver object supports the persistent EF workflow:
-    ``set_instance``, ``set_objective``, and ``load_vars``.
+    """Return True if the solver object can hold a loaded instance:
+    it has ``set_instance`` and ``set_objective``.
 
     This recognizes both the legacy ``PersistentSolver`` interface and the
     APPSI / ``pyomo.contrib.solver`` interfaces (e.g. ``appsi_highs``), which
@@ -591,12 +591,20 @@ def has_persistent_solve_api(solver):
     call sites gate ``update_var``/``add_var``/``add_constraint`` on
     ``is_persistent``; the APPSI legacy wrapper does not expose those methods,
     so broadening ``is_persistent`` itself would break those paths. The EF
-    solve path only needs the three methods checked here.
+    solve path only needs the two methods checked here.
+
+    ``load_vars`` is deliberately *not* required. On the modern
+    ``pyomo.contrib.solver`` interfaces it lives on the solution loader rather
+    than on the solver (e.g. ``GurobiSolutionLoader``), so requiring it would
+    classify ``highs`` and ``gurobi_persistent_v2`` as non-persistent even
+    though they load and re-solve an instance perfectly well. Read the
+    solution back with ``hasattr(solver, "load_vars")``, which is a separate
+    question from whether the solver can hold an instance.
     """
     if is_persistent(solver):
         return True
     return all(hasattr(solver, name)
-               for name in ("set_instance", "set_objective", "load_vars"))
+               for name in ("set_instance", "set_objective"))
 
 
 def solver_quadratic_objective_capability(solver_plugin):
