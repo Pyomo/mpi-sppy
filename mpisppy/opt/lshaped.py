@@ -17,7 +17,7 @@ import mpisppy.spbase as spbase
 from mpisppy import MPI
 from pyomo.core.plugins.transform.discrete_vars import RelaxIntegerVars
 from mpisppy.utils.sputils import find_active_objective
-from mpisppy.utils.lshaped_cuts import LShapedCutGenerator
+from mpisppy.utils.lshaped_cuts import LShapedCutGenerator, StandardLPL1CutGenerator
 from mpisppy.spopt import set_instance_retry
 from pyomo.core import (
     SOSConstraint, Constraint, Var
@@ -25,6 +25,7 @@ from pyomo.core import (
 from pyomo.core.expr.visitor import identify_variables
 from pyomo.repn.standard_repn import generate_standard_repn
 from pyomo.core.expr.numeric_expr import LinearExpression
+
 
 class LShapedMethod(spbase.SPBase):
     """ Base class for the L-shaped method for two-stage stochastic programs.
@@ -52,6 +53,10 @@ class LShapedMethod(spbase.SPBase):
               bound on the optimal objective value for each scenario. If none
               are provided, the lower bound is set to -sys.maxsize *
               scenario_prob, which may cause numerical errors.
+            - lshaped_cut_generator (string) - "pyomo_feasibility" keeps the
+              existing Pyomo Benders cut generator; "standard_lp_l1" solves the
+              ordinary recourse LP for optimality cuts and an L1-normalized
+              feasibility LP if recourse is infeasible.
             - indx_to_stage (dict) - Dictionary mapping the index of every
               variable in the model to the stage they belong to.
         all_scenario_names (list):
@@ -541,7 +546,16 @@ class LShapedMethod(spbase.SPBase):
         _init_vars(self.root_vars)
 
         # sets up the BendersCutGenerator object
-        m.bender = LShapedCutGenerator()
+        cut_generator = self.options.get("lshaped_cut_generator", "pyomo_feasibility")
+        if cut_generator == "pyomo_feasibility":
+            m.bender = LShapedCutGenerator()
+        elif cut_generator == "standard_lp_l1":
+            m.bender = StandardLPL1CutGenerator()
+        else:
+            raise ValueError(
+                "Unknown lshaped_cut_generator option "
+                f"{cut_generator!r}; expected 'pyomo_feasibility' or 'standard_lp_l1'"
+            )
 
         m.bender.set_input(root_vars=self.root_vars, tol=tol, comm=self.mpicomm)
 
