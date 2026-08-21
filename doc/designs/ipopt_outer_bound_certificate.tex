@@ -1,0 +1,542 @@
+% Mathematical companion to doc/designs/ipopt_outer_bound_design.md
+% Build:  pdflatex ipopt_outer_bound_certificate.tex
+\documentclass[11pt]{article}
+
+\usepackage[margin=1.1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage[hidelinks]{hyperref}
+
+\theoremstyle{plain}
+\newtheorem{lemma}{Lemma}
+\newtheorem{theorem}[lemma]{Theorem}
+\newtheorem{corollary}[lemma]{Corollary}
+\newtheorem{proposition}[lemma]{Proposition}
+\theoremstyle{remark}
+\newtheorem{remark}[lemma]{Remark}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\W}{W}
+\newcommand{\vhat}{\hat{v}}
+\newcommand{\qhat}{\hat{q}}
+\newcommand{\OPT}{\mathrm{OPT}}
+
+\title{A certified outer bound for convex NLP scenario subproblems}
+\author{mpi-sppy \\ \small companion to \texttt{doc/designs/ipopt\_outer\_bound\_design.md}}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The usual device for getting outer bounds in mpi-sppy is to read the dual bound off the subproblem solver, which fails for Ipopt, which reports no dual bound.  This note
+derives the bound that the \texttt{ipopt\_outer\_bound} spoke computes instead.
+The construction is Lagrangian weak duality combined with a tangent-plane
+underestimator minimised in closed form over the variable box.  \emph{None of the
+mathematics is new}: Theorem~\ref{thm:main} is the Frank--Wolfe duality gap on a
+box, and Section~\ref{sec:literature} places each result against the
+literature.  The derivation is written out because the hypotheses are what
+matter in practice, and one of them is easy to get backwards.  Its defining
+property is that it requires \emph{no} assumption about the accuracy of the
+solve: a truncated or sloppy solve yields a loose bound rather than an invalid
+one, and an ill-conditioned one does the same, since the construction evaluates
+rather than solves and so admits no amplification of error by a condition
+number.  Convexity, by contrast, is genuinely load-bearing, and
+Section~\ref{sec:canonical} isolates the one place where it is easy to get
+backwards.
+\end{abstract}
+
+\section{Setting}
+
+We assume minimization. 
+Fix a scenario $s$ with probability $p_s$, $\sum_s p_s = 1$.  Let
+$v \in \R^{n}$ collect \emph{all} variables of the scenario subproblem --- the
+nonanticipative variables $x(v)$ together with the recourse variables --- and let
+\[
+  B \;=\; \prod_{i=1}^{n} [\,l_i, u_i\,]
+\]
+be the box of variable bounds.  With hub weights $\W_s$, the subproblem an outer bound
+spoke solves is
+\begin{equation}\label{eq:sub}
+  L_s(\W_s) \;=\; \min_{v} \;\bigl\{\, f_s(v) + \W_s^{\top} x(v)
+     \;:\; g_s(v) \le 0,\; h_s(v) = 0,\; v \in B \,\bigr\},
+\end{equation}
+with $f_s : \R^n \to \R$, $g_s : \R^n \to \R^{m}$ and $h_s : \R^n \to \R^{k}$.
+This is exactly the problem the ordinary Lagrangian spoke builds, with the
+proximal term switched off.
+
+\paragraph{Why the returned objective value is not a bound here.}
+For a minimisation, the value the solver reports is the objective evaluated at
+the point it stopped at.  Any such value is $\ge$ the minimum, so it is an
+\emph{inner} bound: the wrong direction.  Nor does Ipopt's convergence tolerance
+close the gap, since it is a relative KKT-residual tolerance rather than a bound
+on the objective error, and the two error sources point opposite ways ---
+optimality error stops slightly above the optimum, while constraint violation
+can place the iterate slightly below it.
+
+\section{Weak duality}
+
+\begin{lemma}[Weak duality]\label{lem:weak}
+Let $\lambda \in \R^{m}_{+}$ and $\mu \in \R^{k}$ be arbitrary.  Define
+\begin{align}
+  \varphi_s(v) &\;=\; f_s(v) + \W_s^{\top} x(v)
+                     + \lambda^{\top} g_s(v) + \mu^{\top} h_s(v),
+     \label{eq:phi}\\
+  q_s(\lambda,\mu) &\;=\; \inf_{v \in B} \varphi_s(v).
+     \label{eq:q}
+\end{align}
+Then $q_s(\lambda,\mu) \le L_s(\W_s)$.
+\end{lemma}
+
+\begin{proof}
+Let $v$ be any point feasible for \eqref{eq:sub}.  Then $v \in B$, so
+$q_s(\lambda,\mu) \le \varphi_s(v)$.  Moreover $g_s(v) \le 0$ and $\lambda \ge 0$
+give $\lambda^{\top} g_s(v) \le 0$, and $h_s(v) = 0$ gives
+$\mu^{\top} h_s(v) = 0$; hence
+$\varphi_s(v) \le f_s(v) + \W_s^{\top} x(v)$.  Chaining the two inequalities,
+$q_s(\lambda,\mu) \le f_s(v) + \W_s^{\top} x(v)$ for every feasible $v$.  Taking
+the infimum over feasible $v$ gives the claim.
+\end{proof}
+
+Note what Lemma~\ref{lem:weak} does \emph{not} require: $\lambda$ and $\mu$ need
+not be optimal, or even good.  Any $\lambda \ge 0$ and any $\mu$ will do.  This
+is the property that makes the whole approach robust, and it is why a mistaken
+sign convention or a stale multiplier can only cost tightness
+(Remark~\ref{rem:robust}).
+
+\paragraph{The trap.}
+Lemma~\ref{lem:weak} is not yet usable, because $q_s$ is defined by an
+\emph{infimum}.  Handing $\varphi_s$ to a nonlinear solver returns a
+\emph{point}, and the value there is $\ge$ the infimum --- an upper bound on
+$q_s$, which is the wrong direction again.  A second NLP solve therefore does
+not by itself certify anything.
+
+\section{The box underestimator}
+
+\begin{theorem}[Certified bound]\label{thm:main}
+Suppose $\varphi_s$ is convex on an open set containing $B$ and differentiable
+at $\vhat$.  Define
+\begin{equation}\label{eq:qhat}
+  \qhat_s(\vhat) \;=\; \varphi_s(\vhat)
+    \;+\; \sum_{i=1}^{n} \; \min_{t \in [l_i,u_i]}
+          \partial_i \varphi_s(\vhat)\,\bigl(t - \vhat_i\bigr).
+\end{equation}
+Then $\qhat_s(\vhat) \le q_s(\lambda,\mu) \le L_s(\W_s)$, and each term of the
+sum is available in closed form:
+\begin{equation}\label{eq:closed}
+  \min_{t \in [l_i,u_i]} \partial_i \varphi_s(\vhat)\,(t - \vhat_i)
+  \;=\;
+  \begin{cases}
+    \partial_i \varphi_s(\vhat)\,(l_i - \vhat_i), & \partial_i \varphi_s(\vhat) > 0,\\[2pt]
+    \partial_i \varphi_s(\vhat)\,(u_i - \vhat_i), & \partial_i \varphi_s(\vhat) < 0,\\[2pt]
+    0, & \partial_i \varphi_s(\vhat) = 0.
+  \end{cases}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Convexity and differentiability at $\vhat$ give the gradient inequality
+\[
+  \varphi_s(v) \;\ge\; \varphi_s(\vhat)
+      + \nabla \varphi_s(\vhat)^{\top} (v - \vhat)
+  \qquad \text{for all } v .
+\]
+Minimising both sides over $v \in B$ preserves the inequality, and the right-hand
+side is separable across coordinates because $B$ is a box, which yields
+\eqref{eq:qhat}.  Each one-dimensional problem minimises a linear function over
+an interval, so the minimum is attained at an endpoint, giving
+\eqref{eq:closed}.  The final inequality is Lemma~\ref{lem:weak}.
+\end{proof}
+
+\begin{corollary}\label{cor:anypoint}
+$\qhat_s(\vhat) \le L_s(\W_s)$ for \emph{any} $\vhat$ at which $\varphi_s$ is
+differentiable, \emph{any} $\lambda \ge 0$ and \emph{any} $\mu$.  In particular
+$\vhat$ need not be optimal, and need not even be feasible for \eqref{eq:sub}.
+\end{corollary}
+
+Corollary~\ref{cor:anypoint} is the whole point.  The certificate consumes the
+iterate the solver happened to stop at and the multipliers it happened to
+report, and returns a valid bound regardless.  Computationally it costs one
+gradient evaluation and a loop over the variables --- no second solve.  It is
+worth reading the corollary as covering \emph{ill-conditioned} solves and not
+merely truncated ones; Remark~\ref{rem:conditioning} says why the distinction
+does not arise here.
+
+\begin{remark}[Robustness]\label{rem:robust}
+Because Corollary~\ref{cor:anypoint} holds for arbitrary $\lambda \ge 0$ and
+$\mu$, an error in the sign convention used to recover the multipliers, a stale
+multiplier, or a multiplier clipped to zero can only make $\qhat_s$ smaller.
+Such an error makes the bound loose, never invalid.  Convexity enjoys no such
+protection; see Section~\ref{sec:canonical}.
+\end{remark}
+
+\section{Exactness at a KKT point}
+
+The correction term in \eqref{eq:qhat} is not merely small in practice: it
+vanishes identically at an exact KKT point, so the certificate degrades
+gracefully and costs nothing when the solve is good.
+
+\begin{proposition}[The correction vanishes]\label{prop:kkt}
+Let $\vhat$ satisfy the KKT conditions of \eqref{eq:sub} with multipliers
+$\lambda \ge 0$ for $g_s \le 0$, $\mu$ for $h_s = 0$, and $z_L, z_U \ge 0$ for
+the bounds $l - v \le 0$ and $v - u \le 0$.  Then every term of the sum in
+\eqref{eq:qhat} is zero, and if in addition $\varphi_s$ is convex then
+$\qhat_s(\vhat) = L_s(\W_s)$.
+\end{proposition}
+
+\begin{proof}
+Stationarity of the full Lagrangian, which is $\varphi_s$ augmented with the
+bound terms, reads
+\begin{equation}\label{eq:stat}
+  \nabla \varphi_s(\vhat) \;=\; z_L - z_U .
+\end{equation}
+Fix a coordinate $i$ and consider the three possible positions of $\vhat_i$.
+
+If $l_i < \vhat_i < u_i$, complementarity gives $z_{L,i} = z_{U,i} = 0$, so
+$\partial_i \varphi_s(\vhat) = 0$ by \eqref{eq:stat} and the term is $0$ by
+\eqref{eq:closed}.
+
+If $\vhat_i = l_i$, complementarity gives $z_{U,i} = 0$, so
+$\partial_i \varphi_s(\vhat) = z_{L,i} \ge 0$.  When the derivative is strictly
+positive \eqref{eq:closed} selects $t = l_i = \vhat_i$, and when it is zero the
+term is zero outright; either way the term is $0$.
+
+If $\vhat_i = u_i$, symmetrically $z_{L,i} = 0$ and
+$\partial_i \varphi_s(\vhat) = -z_{U,i} \le 0$, so \eqref{eq:closed} selects
+$t = u_i = \vhat_i$ and the term is $0$.
+
+Hence $\qhat_s(\vhat) = \varphi_s(\vhat)$.  Complementarity
+$\lambda^{\top} g_s(\vhat) = 0$ and feasibility $h_s(\vhat) = 0$ reduce
+\eqref{eq:phi} to $\varphi_s(\vhat) = f_s(\vhat) + \W_s^{\top} x(\vhat)$.  Under
+convexity the KKT conditions are sufficient for global optimality of
+\eqref{eq:sub}, so that value is $L_s(\W_s)$.
+\end{proof}
+
+Proposition~\ref{prop:kkt} has a practical corollary worth stating plainly: the
+correction term \emph{measures its own inexactness}.  It is zero when the solve
+is exact and grows as the solve degrades, so the reported bound loosens smoothly
+rather than becoming wrong.
+
+\section{Canonical form, and where convexity is easy to get backwards}
+\label{sec:canonical}
+
+Theorem~\ref{thm:main} requires $\varphi_s$ convex, and by \eqref{eq:phi} that
+requires each component of $g_s$ to be convex and each component of $h_s$ to be
+affine, since $\lambda \ge 0$ but $\mu$ is free in sign.
+
+The subtlety is that $g_s$ is the constraint in \emph{canonical} form
+$g_s(v) \le 0$, and putting a $\ge$ row into canonical form negates its body.
+Writing $b(v)$ for the constraint body as the user stated it:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+as written & canonical form & requirement on $b$ \\
+\midrule
+$b(v) \le \beta$              & $g = b - \beta$              & $b$ convex \\
+$b(v) \ge \alpha$             & $g = \alpha - b$             & $b$ \textbf{concave} \\
+$\alpha \le b(v) \le \beta$   & both rows                    & $b$ affine \\
+$b(v) = \beta$                & $h = b - \beta$              & $b$ affine \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+So $x^2 \le 4$ is admissible and $x^2 \ge 1$ is not, though both are written with
+a convex body --- and indeed the feasible set of the second is not convex.  This
+is the one place in the construction where an entirely ordinary-looking model
+silently leaves the hypotheses, and the consequence is not a loose bound but an
+invalid one.  A worked instance: for
+\[
+  \min\; x \quad \text{s.t.} \quad x^2 \ge 1, \quad x \in [0, 1.5],
+\]
+whose optimum is $1$, taking $\vhat = 0.5$ and $\lambda = 1$ in \eqref{eq:qhat}
+yields $\qhat = 1.25 > 1$.
+
+Of the four rows above, three are decidable --- affineness is a question about
+polynomial degree --- and the implementation enforces them.  Convexity or
+concavity of a one-sided nonlinear body is not decidable, and remains a user
+assertion.
+
+\section{Aggregating across scenarios}
+
+The per-scenario bounds are combined by the usual probability-weighted sum, and
+the condition under which that sum is itself a bound deserves care.
+
+\begin{proposition}[Aggregation]\label{prop:agg}
+Let $\OPT$ be the optimal value of the original stochastic program.  If the
+weights satisfy $\sum_s p_s \W_s = 0$, then
+$\sum_s p_s\, L_s(\W_s) \le \OPT$.
+\end{proposition}
+
+\begin{proof}
+Let $x^{*}$ together with the scenario recourse decisions be optimal for the
+original problem, so that $\OPT = \sum_s p_s f_s(v_s^{*})$ where $v_s^{*}$ is the
+optimal decision in scenario $s$ and $x(v_s^{*}) = x^{*}$ for every $s$ by
+nonanticipativity.  Each $v_s^{*}$ is feasible for subproblem \eqref{eq:sub}, so
+$L_s(\W_s) \le f_s(v_s^{*}) + \W_s^{\top} x^{*}$.  Multiplying by $p_s$ and
+summing,
+\[
+  \sum_s p_s L_s(\W_s)
+  \;\le\; \sum_s p_s f_s(v_s^{*}) + \Bigl( \sum_s p_s \W_s \Bigr)^{\!\top} x^{*}
+  \;=\; \OPT + 0 . \qedhere
+\]
+\end{proof}
+
+\begin{remark}[Weights must share a generation]\label{rem:mixed}
+The hypothesis $\sum_s p_s \W_s = 0$ is a \emph{joint} condition on the whole
+weight vector, and progressive hedging maintains it at each iteration.  It is
+not preserved by mixing: if $\W'_s$ takes scenario $s$'s weights from one
+iteration and scenario $t$'s from another, then in general
+$\sum_s p_s \W'_s \ne 0$, the proof above leaves the residual term
+$\bigl(\sum_s p_s \W'_s\bigr)^{\top} x^{*}$ in place, and the resulting number
+is not a bound at all.  Nothing downstream can detect this, which is why a
+scenario whose certificate is unavailable must make the whole expectation
+unavailable rather than contribute a stale value.
+\end{remark}
+
+\section{Practical consequences}\label{sec:practical}
+
+\paragraph{Tightness is governed by the box.}
+By \eqref{eq:closed} the shortfall of $\qhat_s$ below $\varphi_s(\vhat)$ is
+\[
+  \sum_{i=1}^{n} \bigl| \partial_i \varphi_s(\vhat) \bigr| \cdot
+  \bigl( \text{distance from } \vhat_i \text{ to the far end of } [l_i,u_i] \bigr),
+\]
+so the bound is only as tight as the variable bounds are.  Gradient components
+at a converged solve are small but generically nonzero, so a box of width $10$
+costs little while a box of width $10^{10}$ can cost a substantial fraction of
+the objective.  Tightening bounds before certifying --- for instance by
+feasibility-based bounds tightening, which shrinks $B$ without removing feasible
+points and therefore only raises $\qhat_s$ --- is the most effective way to
+improve the bound.
+
+\begin{remark}[Admissible tightenings of the box]\label{rem:boxtighten}
+The box in \eqref{eq:closed} need not be the one the model was written with, and
+the implementation shrinks it by two different mechanisms.  The condition under
+which this is legitimate is not that a smaller box removes points --- that
+argument shows the bound gets tighter, which is the direction that could break
+it --- but the following.  Let $x^{*}$ be an optimal solution of the full
+problem.  If $x^{*} \in B_s$ for every $s$, then for each $s$
+\[
+  \qhat_s \;\le\; \inf_{v \in B_s} \varphi_s(v) \;\le\; \varphi_s(x^{*})
+          \;\le\; f_s(x^{*}) + \W_s^{\top} x^{*},
+\]
+the last step because $\lambda \ge 0$, $g_s(x^{*}) \le 0$ and $h_s(x^{*}) = 0$,
+and Proposition~\ref{prop:agg} goes through unchanged.  The requirement is
+therefore that \emph{every $B_s$ contain one common optimal solution of the full
+problem}; preserving a different optimiser in each scenario does not suffice,
+since the weighted sum telescopes only at a single $x^{*}$.
+
+Two sufficient conditions are used.  Feasibility-based bounds tightening
+satisfies the requirement in the strong form: it removes no point satisfying the
+constraints of subproblem $s$, so $B_s$ retains every feasible point of
+\eqref{eq:sub} and in particular $x^{*}$, with no appeal to optimality.
+Optimality-based tightening --- reduced-cost fixing, which does discard feasible
+points --- satisfies only the weak form, and relies on its own contract that
+some optimal solution survives, together with the fact that the same bounds are
+applied to every scenario, so that the surviving solution is common to all of
+them.  A tightening that guarantees neither is not admissible, and no check in
+the implementation can detect that.
+\end{remark}
+
+\paragraph{Unbounded variables.}
+If $l_i = -\infty$ and $\partial_i \varphi_s(\vhat) > 0$, or $u_i = +\infty$ and
+$\partial_i \varphi_s(\vhat) < 0$, the corresponding term in \eqref{eq:closed} is
+$-\infty$ and no finite bound is available.  Whether this occurs depends on the
+model and on how converged the solve is: at an exact KKT point the offending
+component is zero by Proposition~\ref{prop:kkt}, but away from one it generally
+is not.  The implementation reports ``no bound'' in that case rather than
+$-\infty$, so that Remark~\ref{rem:mixed} is respected.
+
+\paragraph{Inexact solves.}
+Corollary~\ref{cor:anypoint} already covers these, but it is worth spelling out
+what ``inexact'' can mean.  Problem~\eqref{eq:sub} is convex by hypothesis, so
+it has no non-global local minima.  A solver returning a sub-optimal answer can
+therefore only mean that it stopped short of converging, leaving an inexact
+$\vhat$ and inexact multipliers.  Both are admissible inputs to
+Theorem~\ref{thm:main}: the conclusion $\qhat_s \le L_s(\W_s)$ is unchanged, and
+the entire effect appears in the correction term of \eqref{eq:qhat}, which grows
+as $\vhat$ moves away from a KKT point.  By Proposition~\ref{prop:kkt} that term
+vanishes exactly at a KKT point, so the correction is precisely the price of
+inexactness, and it measures itself.
+
+\begin{remark}[Conditioning]\label{rem:conditioning}
+The distinct worry is that \eqref{eq:sub} is badly conditioned, so that the
+solve is not merely truncated but numerically poor.  This affects the tightness
+of $\qhat_s$ and not its validity, for a structural reason: \emph{the
+certificate is an evaluation, not a solve.}  A condition number quantifies how
+much a linear solve amplifies error --- $\kappa(H)$ bounds the relative error in
+$d$ obtained from $Hd = -g$ --- and no step of \eqref{eq:closed} inverts
+anything.  The computation evaluates $\varphi_s$ at $\vhat$, evaluates
+$\nabla \varphi_s(\vhat)$, compares each component with zero, selects an
+endpoint of the corresponding interval, multiplies and adds.  Each is a forward
+evaluation, and $\kappa$ has no route in.  Correspondingly, the inequality the
+construction rests on,
+\[
+  \varphi_s(v) \;\ge\; \varphi_s(\vhat)
+                     + \nabla \varphi_s(\vhat)^{\top} (v - \vhat)
+  \qquad \text{for all } v,
+\]
+is a pointwise consequence of convexity.  It holds exactly, at every $\vhat$,
+with no error constant and no dependence on the conditioning of anything.
+Conditioning governs how loose the plane is away from $\vhat$; it cannot change
+which side of $\varphi_s$ the plane lies on.  What it does change is the size of
+$\nabla \varphi_s(\vhat)$ and the quality of the multipliers, and both push
+$\qhat_s$ \emph{down}.
+\end{remark}
+
+\paragraph{Floating point.}
+Nothing in Theorem~\ref{thm:main} requires a tolerance.  The arithmetic, being
+carried out in finite precision, does introduce error, and the previous
+paragraph says only that this error is not amplified by $\kappa$ --- not that it
+is absent.
+
+\begin{remark}[Rounding]\label{rem:rounding}
+Let $u$ denote the unit roundoff.  Evaluating \eqref{eq:qhat} in floating point
+incurs
+\[
+  \bigl| \mathrm{fl}(\qhat_s) - \qhat_s \bigr|
+  \;\lesssim\;
+  u \Bigl( |f_s(\vhat)|
+         + \textstyle\sum_i \lambda_i |g_i(\vhat)|
+         + \sum_j |\mu_j|\,|h_j(\vhat)|
+         + \sum_i T_i \, d_i \Bigr),
+\]
+where $T_i$ bounds the intermediate magnitudes arising in
+$\partial_i \varphi_s(\vhat)$ and $d_i$ is the distance from $\vhat_i$ to the
+far end of $[l_i, u_i]$.  No condition number appears.
+\end{remark}
+
+Remark~\ref{rem:rounding} is governed by the size of the \emph{summands}, so
+cancellation matters: multipliers of order $10^{8}$ against an objective of
+order one put the error floor near $10^{-8}$ even though $|\qhat_s|$ is of order
+one.  The implementation's cushion, reporting
+$\qhat_s - \varepsilon(1 + |\qhat_s|)$, is scaled to the size of the
+\emph{result} instead, and the two agree only on a well-scaled model.  The
+cushion is therefore a numerical safeguard and not part of the argument, and it
+is exposed as a user-settable quantity rather than fixed.
+
+Note also that the final term of Remark~\ref{rem:rounding} is the one that can
+raise $\qhat_s$.  The correction in \eqref{eq:closed} equals
+$-\sum_i |\partial_i \varphi_s(\vhat)|\, d_i$, so a gradient component computed
+slightly small in magnitude makes it slightly less negative.  Remark~\ref{rem:robust}
+gives no protection here: it is a statement about the multipliers, and a
+perturbation of $\nabla \varphi_s$ is not one-directional in the way a
+perturbation of $\lambda$ is.
+
+\paragraph{Non-finite values.}
+A solve that diverges can leave NaN in $\vhat$ or in the reported multipliers,
+and an infinite multiplier yields NaN through $\infty \cdot 0$ or an infinite
+$\varphi_s(\vhat)$.  These propagate silently.  The implementation therefore
+rejects any non-finite $\qhat_s$ and reports ``no bound'', the same disposition
+it takes for an unbounded direction, so that Remark~\ref{rem:mixed} is again
+respected.  The case that makes this necessary rather than cosmetic is
+$+\infty$: a consumer keeping the best outer bound seen would discard NaN by
+accident, since NaN fails every comparison, but would accept $+\infty$ as an
+improvement.
+
+\section{Relation to known results}\label{sec:literature}
+
+Nothing in Sections~2--7 is new.  This section attributes each result.
+
+\paragraph{Lemma~\ref{lem:weak}} is textbook Lagrangian weak duality, stated for
+an arbitrary multiplier pair rather than an optimal one.
+
+\paragraph{Theorem~\ref{thm:main}} is the \emph{Frank--Wolfe duality gap},
+sometimes called the Wolfe gap or the linearisation gap.  For a convex $f$ on a
+compact convex $D$, evaluating the linear minimisation oracle at $x$ gives
+\[
+  f(x) + \min_{y \in D} \nabla f(x)^{\top}(y - x) \;\le\; \min_{D} f ,
+\]
+which is \eqref{eq:qhat} with $D = B$.  The bound is used in the Frank--Wolfe
+algorithm \cite{frankwolfe1956}, where the same oracle evaluation that produces
+it also supplies the search direction; reading it instead as a
+\emph{certificate} computable at any iterate is the framing in
+\cite{jaggi2013}.  The only specialisation here is that a box makes the oracle
+separable and closed-form, so the certificate costs one gradient evaluation and
+no optimisation at all.
+
+\paragraph{Proposition~\ref{prop:agg}} is the standard argument by which
+progressive hedging weights yield a lower bound on the optimal value, as in
+\cite{gade2016}.
+
+\paragraph{The remarks of Section~\ref{sec:practical}} are elementary rather
+than novel.  Remark~\ref{rem:rounding} is the textbook forward-error bound for a
+floating-point sum, specialised to the summands of \eqref{eq:qhat}, and
+Remark~\ref{rem:boxtighten} is two applications of Lemma~\ref{lem:weak}.  They
+are stated because the hypotheses they turn on are easy to lose sight of in
+implementation, not because they are results.
+
+\paragraph{The combination} of progressive hedging with Frank--Wolfe machinery to
+obtain Lagrangian dual bounds is itself established \cite{boland2018}, and
+mpi-sppy already ships an FWPH cylinder on that basis.
+
+What is specific here is therefore an assembly rather than a result: the
+multipliers are the ones Ipopt already returns, the linearisation point is the
+iterate it already stopped at, and the box is the model's own variable bounds ---
+so a valid outer bound is obtained from the solve the spoke was going to perform
+anyway, with no second optimisation and no assumption that the first one
+converged.  The wider question of extracting valid dual bounds from an inexact
+oracle is treated at length in the inexact bundle-method literature, which this
+note does not attempt to survey.
+
+\section{Correspondence with the implementation}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+object here & in the code \\
+\midrule
+$\varphi_s$ in \eqref{eq:phi}      & \texttt{\_lagrangian\_expression} \\
+$\qhat_s$ in \eqref{eq:qhat}       & \texttt{certified\_lower\_bound} \\
+decidable hypotheses               & \texttt{check\_model\_is\_certifiable} \\
+box tightening, strong form        & \texttt{unbounded\_variables} (\texttt{fbbt}) \\
+Remark~\ref{rem:rounding} cushion  & \texttt{eps\_rel} \\
+non-finite rejection               & \texttt{math.isfinite} test on $\qhat_s$ \\
+\midrule
+box tightening, weak form          & \texttt{receive\_nonant\_bounds} \\
+Proposition~\ref{prop:agg} sum     & \texttt{SPOpt.Ebound} \\
+Remark~\ref{rem:mixed} safeguard   & a \texttt{None} bound, propagated collectively \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+Everything above the rule is in \texttt{utils/dual\_certificate.py},
+whose \texttt{eps\_rel} argument is exposed on the command line as
+\texttt{--ipopt-outer-bound-cushion}.  Below it, the weak-form tightening is in
+\texttt{cylinders/spcommunicator.py} and the sum is in \texttt{spopt.py}, with
+the \texttt{None} propagated across both.  All paths are relative to
+\texttt{mpisppy/}, and the spoke driving the whole is
+\texttt{cylinders/ipopt\_outer\_bound.py}.
+
+\begin{thebibliography}{9}
+
+\bibitem{frankwolfe1956}
+Frank, M. and Wolfe, P.:
+\newblock An algorithm for quadratic programming.
+\newblock \emph{Naval Research Logistics Quarterly} \textbf{3}(1--2), 95--110 (1956).
+
+\bibitem{jaggi2013}
+Jaggi, M.:
+\newblock Revisiting Frank--Wolfe: projection-free sparse convex optimization.
+\newblock \emph{Proceedings of the 30th International Conference on Machine
+Learning (ICML)}, 427--435 (2013).
+
+\bibitem{gade2016}
+Gade, D., Hackebeil, G., Ryan, S.M., Watson, J.-P., Wets, R.J.-B. and
+Woodruff, D.L.:
+\newblock Obtaining lower bounds from the progressive hedging algorithm for
+stochastic mixed-integer programs.
+\newblock \emph{Mathematical Programming} \textbf{157}(1), 47--67 (2016).
+
+\bibitem{boland2018}
+Boland, N., Christiansen, J., Dandurand, B., Eberhard, A., Linderoth, J.,
+Luedtke, J. and Oliveira, F.:
+\newblock Combining progressive hedging with a Frank--Wolfe method to compute
+Lagrangian dual bounds in stochastic mixed-integer programming.
+\newblock \emph{SIAM Journal on Optimization} \textbf{28}(2), 1312--1336 (2018).
+
+\end{thebibliography}
+
+\end{document}

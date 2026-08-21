@@ -56,7 +56,7 @@ def _count_cylinders(cfg):
     """
     count = 1  # the hub
     spoke_flags = [
-        "fwph", "lagrangian", "ph_dual", "relaxed_ph",
+        "fwph", "lagrangian", "ipopt_outer_bound", "ph_dual", "relaxed_ph",
         "subgradient", "xhatshuffle", "xhatxbar", "reduced_costs",
     ]
     for flag in spoke_flags:
