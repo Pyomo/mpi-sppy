@@ -249,9 +249,16 @@ solution survives, and because the bounds are broadcast and applied identically 
 every scenario's nonants, the solution that survives is the same one everywhere. That
 is the "common `x*`" the requirement asks for.
 
-Two practical notes. First, this is close to moot today: reduced-cost fixing wants
-discrete variables, which this cylinder rejects as a hard error at setup, so in
-practice the field is not being sent to it. Second, fbbt is deliberately not re-run
+Two practical notes. First, this channel is live, not hypothetical. It is tempting to
+argue that reduced-cost fixing wants discrete variables, which this cylinder rejects as
+a hard error at setup, so the field is never sent to it in practice — but that is
+false. `reduced_costs_spoke.lagrangian_prep` relaxes integer variables unconditionally
+and consults integrality only to round the bounds it broadcasts; nothing gates the send
+on a discrete model. So the two spokes coexist happily on exactly the all-continuous
+convex NLPs this one targets, and the weak-form argument above is load-bearing rather
+than academic: on those runs the bound is certified *conditional on*
+`reduced_costs_spoke` honoring its contract that an optimal solution survives. Second,
+fbbt is deliberately not re-run
 after nonant bounds arrive. That leaves tightness on the table rather than risking
 anything — re-running it would still be sound, since anything fbbt infers from
 constraints and bounds that all hold at `x*` also holds at `x*` — but the setup-time

@@ -258,10 +258,13 @@ invalid one.  A worked instance: for
 whose optimum is $1$, taking $\vhat = 0.5$ and $\lambda = 1$ in \eqref{eq:qhat}
 yields $\qhat = 1.25 > 1$.
 
-Of the four rows above, three are decidable --- affineness is a question about
-polynomial degree --- and the implementation enforces them.  Convexity or
-concavity of a one-sided nonlinear body is not decidable, and remains a user
-assertion.
+Of the four rows above, \emph{two} are decidable --- the two that demand an
+affine body, since affineness is a question about polynomial degree --- and the
+implementation enforces those two.  The other two rows are the one-sided ones,
+and each asks a question that is not decidable here: whether the body of a
+$\le$ row is convex, and whether the body of a $\ge$ row is concave.  Both
+remain user assertions, and the second is the trap above --- a $\ge$ row with a
+convex body passes every mechanical check and breaks the theorem.
 
 \section{Aggregating across scenarios}
 
@@ -650,13 +653,19 @@ $\|r\|_{\infty}$.
 
 \subsection{Where a saving would actually come from}
 
-The cost the proposal targets is real, but it is the cost of differentiating
-$\varphi_s$, and it is addressable without touching the mathematics.  If that
-sweep ever dominates the spoke, the remedy is a faster \emph{exact} gradient ---
+The cost the proposal targets is real, and it is not negligible: rebuilding
+$\varphi_s$ and walking it takes about $3$ seconds at $10^{5}$ constraint rows,
+growing linearly at roughly $30\,\mu$s per row, so a million-row scenario would
+spend on the order of $30$ seconds per iteration inside the certificate.  (A
+figure from one machine, quoted for its order of magnitude.)  But it is the
+cost of differentiating $\varphi_s$, and it is addressable without touching the
+mathematics.  The remedy is a faster \emph{exact} gradient ---
 forming $\nabla f_s + \W_s + \nabla g_s^{\top}\lambda + \nabla h_s^{\top}\mu$
 through compiled automatic differentiation rather than by walking a Python
-expression tree --- which leaves every hypothesis of Theorem~\ref{thm:main}
-intact.  Cheapening the gradient is safe; approximating it is not.
+expression tree, or caching the expression skeleton across iterations with the
+multipliers held in mutable parameters --- either of which leaves every
+hypothesis of Theorem~\ref{thm:main} intact.  Cheapening the gradient is safe;
+approximating it is not.
 
 \begin{thebibliography}{9}
 

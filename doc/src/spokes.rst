@@ -34,6 +34,8 @@ hedging algorithm for stochastic mixed-integer programs` by Gade et al
 [gade2016]_. It takes W values from the hub and uses them to compute a bound.
 
 
+.. _ipopt-outer-bound-spoke:
+
 ipopt_outer_bound
 ^^^^^^^^^^^^^^^^^
 
@@ -104,8 +106,11 @@ the hub, this spoke attached alongside) would otherwise kill the spoke on its
 first solve. Pass Ipopt settings through ``--ipopt-outer-bound-solver-options``.
 
 The hub and the other spokes keep whatever ``--solver-name`` selects; only this
-spoke is pinned to Ipopt, via ``--ipopt-outer-bound-solver-name`` (default
-``ipopt``). Note that this routing lets Ipopt coexist with a MIP solver on a
+spoke is pinned to Ipopt. The flag ``--ipopt-outer-bound-solver-name`` itself
+defaults to ``None``, like every other per-spoke solver flag; the pin to
+``ipopt`` is applied afterwards by the spoke factory when the flag was left
+unset, so leaving it alone and passing ``ipopt`` explicitly come to the same
+thing. Note that this routing lets Ipopt coexist with a MIP solver on a
 *convex* model -- it does not let it certify a non-convex one. If the model has
 integer variables this spoke is inapplicable no matter what anything else runs.
 
