@@ -18,6 +18,7 @@
 
 import math
 import unittest
+import warnings
 
 import pyomo.environ as pyo
 
@@ -125,6 +126,28 @@ def _spoke_options(cfg, **kw):
 
 
 class TestConfigSurface(unittest.TestCase):
+
+    def test_negative_cushion_is_rejected(self):
+        # The cushion is SUBTRACTED, so a negative one raises the reported
+        # value above the certified quantity and what comes back is not an
+        # outer bound. domain=float allowed it; NonNegativeFloat does not.
+        cfg = _cfg()
+        with self.assertRaisesRegex(ValueError, "non-negative"):
+            cfg.ipopt_outer_bound_cushion = -0.05
+        cfg.ipopt_outer_bound_cushion = 0.0      # zero still disables it
+        self.assertEqual(cfg.ipopt_outer_bound_cushion, 0.0)
+
+    def test_warmstart_does_not_reach_the_spoke(self):
+        # shared_options copies --warmstart-subproblems in and solve_one turns
+        # it into a `warmstart=` keyword the shell Ipopt interface rejects, so
+        # a run that merely asked the HUB's solver to warmstart would kill the
+        # spoke on its first solve. The hub's own setting is untouched.
+        cfg = _cfg(hub_solver="gurobi_persistent")
+        cfg.warmstart_subproblems = True
+        self.assertFalse(_spoke_options(cfg)["warmstart_subproblems"])
+        beans, kwargs = _beans(cfg)
+        hub = vanilla.ph_hub(*beans, scenario_creator_kwargs=kwargs)
+        self.assertTrue(hub["opt_kwargs"]["options"]["warmstart_subproblems"])
 
     def test_flags_exist_with_expected_defaults(self):
         cfg = _cfg()
@@ -242,16 +265,104 @@ class TestSetupGuards(unittest.TestCase):
         with self.assertRaisesRegex(CertificateError, "scoped to Ipopt"):
             spoke._check_setup_guards()
 
-    def test_ipopt_variants_are_accepted(self):
-        # ipopt_v2 and similar names still name Ipopt.
-        for name in ("ipopt", "ipopt_v2"):
+    def test_the_measured_ipopt_is_accepted(self):
+        self._guard_with_solver("ipopt")._check_setup_guards()
+        # and the name is normalized before the test
+        self._guard_with_solver("  IPOPT ")._check_setup_guards()
+
+    def test_unmeasured_ipopt_variants_are_rejected(self):
+        # These all contain "ipopt", which an earlier substring test accepted.
+        # ipopt_v2 and appsi_ipopt run a linear presolve that eliminates rows
+        # and then cannot load their duals; cyipopt's sign convention has never
+        # been measured against this certificate. Each one fails at solve time
+        # with an error naming something other than the solver choice, so the
+        # guard has to catch them here.
+        for name in ("ipopt_v2", "appsi_ipopt", "cyipopt"):
             with self.subTest(name=name):
-                self._guard_with_solver(name)._check_setup_guards()
+                with self.assertRaisesRegex(CertificateError, "scoped to Ipopt"):
+                    self._guard_with_solver(name)._check_setup_guards()
 
     def test_missing_solver_name_is_rejected(self):
         spoke = self._guard_with_solver(None)
         with self.assertRaisesRegex(CertificateError, "scoped to Ipopt"):
             spoke._check_setup_guards()
+
+    def test_fbbt_infeasibility_does_not_take_down_the_run(self):
+        """An infeasible scenario is the model's problem, not this spoke's.
+
+        The setup guard runs fbbt to tighten the box and to build the
+        unbounded-variable diagnostic. fbbt signals infeasibility by raising,
+        and letting that out of a cylinder MPI_Aborts the hub and every other
+        spoke over a call this spoke makes for its own convenience.
+        """
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var(bounds=(0, 1), initialize=0.5)
+        m.c = pyo.Constraint(expr=m.x >= 5)
+        m.obj = pyo.Objective(expr=m.x)
+
+        spoke = self._guard_with_solver("ipopt")
+        spoke.opt.local_scenarios = {"Scen0": m}
+        spoke._warned = set()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            spoke._check_setup_guards()          # must not raise
+        self.assertTrue(any("infeasible" in str(w.message) for w in caught))
+
+
+class TestCertificateFailureStandsDown(unittest.TestCase):
+    """Evaluating phi at the returned point can raise things that are not
+    CertificateError, and none of them is worth aborting the wheel."""
+
+    def _spoke_over(self, scenario):
+        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+
+        class _Opt:
+            options = {"verbose": False, "tee-rank0-solves": False,
+                       "ipopt_outer_bound_cushion": 1e-9}
+            local_scenarios = {"Scen0": scenario}
+            _PHIter = 1
+
+            def _effective_solver_options(self, iteration):
+                return {}
+
+            def solve_loop(self, **kwargs):
+                pass                              # the solve is not under test
+
+            def Ebound(self, verbose):
+                return "EBOUND"
+
+        spoke = IpoptOuterBound.__new__(IpoptOuterBound)
+        spoke.opt = _Opt()
+        spoke.cylinder_rank = 0
+        spoke._warned = set()
+        spoke.receive_nonant_bounds = lambda: None
+        spoke._nonants_newly_fixed = lambda: False
+        return spoke
+
+    def _scenario_with_uninitialized_var(self):
+        # No initialize=, so evaluating phi raises ValueError rather than
+        # CertificateError. bound_relax_factor putting an iterate a hair
+        # outside a log or a sqrt raises the same class.
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var(bounds=(0, 4))
+        m.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
+        m.c = pyo.Constraint(expr=m.x >= 1)
+        m.dual[m.c] = 0.0
+        m.obj = pyo.Objective(expr=m.x)
+        m.name = "Scen0"
+        m._mpisppy_data = type(
+            "_D", (), {"solution_available": True, "outer_bound": "UNSET"})()
+        return m
+
+    def test_value_error_becomes_no_bound(self):
+        scenario = self._scenario_with_uninitialized_var()
+        spoke = self._spoke_over(scenario)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = spoke._solve_and_certify()   # must not raise
+        self.assertEqual(result, "EBOUND")
+        self.assertIsNone(scenario._mpisppy_data.outer_bound)
+        self.assertTrue(any("no certificate" in str(w.message) for w in caught))
 
 
 @unittest.skipUnless(ipopt_available, "ipopt is not available")

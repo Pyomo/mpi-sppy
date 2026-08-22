@@ -224,6 +224,30 @@ class TestCertificateMath(unittest.TestCase):
         self.assertEqual(certified_lower_bound(m, eps_rel=0.0), OPT)
 
 
+class TestCushion(unittest.TestCase):
+    """eps_rel is subtracted, so it is the one argument that can turn a valid
+    bound into an invalid one."""
+
+    def test_negative_cushion_is_rejected(self):
+        m = _model()
+        _place(m, x=0.5, y=0.5, dual=1.0)
+        with self.assertRaisesRegex(CertificateError, "non-negative"):
+            certified_lower_bound(m, eps_rel=-1.0)
+
+    def test_nan_cushion_is_rejected(self):
+        m = _model()
+        _place(m, x=0.5, y=0.5, dual=1.0)
+        with self.assertRaisesRegex(CertificateError, "non-negative"):
+            certified_lower_bound(m, eps_rel=float("nan"))
+
+    def test_zero_cushion_gives_the_theorem_quantity(self):
+        m = _model()
+        _place(m, x=0.5, y=0.5, dual=1.0)
+        exact = certified_lower_bound(m, eps_rel=0.0)
+        shaved = certified_lower_bound(m, eps_rel=1e-9)
+        self.assertLess(shaved, exact)
+
+
 class TestUnboundedVariables(unittest.TestCase):
     def test_reports_variables_without_finite_bounds(self):
         m = _model("le", y_bounds=(None, None))

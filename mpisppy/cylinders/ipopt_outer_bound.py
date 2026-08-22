@@ -25,6 +25,8 @@ import warnings
 
 import pyomo.environ as pyo
 
+from pyomo.contrib.fbbt.fbbt import InfeasibleConstraintException
+
 import mpisppy.utils.sputils as sputils
 from mpisppy.cylinders.lagrangian_bounder import _LagrangianMixin
 from mpisppy.cylinders.spoke import OuterBoundWSpoke
@@ -34,6 +36,15 @@ from mpisppy.utils.dual_certificate import (
     check_model_is_certifiable,
     unbounded_variables,
 )
+
+
+# Solver names whose dual sign conventions have actually been measured against
+# this certificate. A substring test was tried first and was too permissive: it
+# admitted ipopt_v2 and appsi_ipopt, whose writer runs a linear presolve that
+# eliminates rows and then cannot load their duals, and cyipopt, whose
+# convention has never been checked. Each of those fails at solve time with an
+# error that names something other than the solver choice that caused it.
+_MEASURED_IPOPT_SOLVERS = frozenset({"ipopt"})
 
 
 class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
@@ -99,12 +110,13 @@ class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
     def _check_setup_guards(self):
         """Hard errors for the parts of the theorem that are checkable, and a
         warning for the part that only costs tightness."""
-        solver_name = self.opt.options.get("solver_name") or ""
-        if "ipopt" not in solver_name:
+        solver_name = (self.opt.options.get("solver_name") or "").strip().lower()
+        if solver_name not in _MEASURED_IPOPT_SOLVERS:
             raise CertificateError(
                 f"ipopt_outer_bound is scoped to Ipopt, but its solver is "
-                f"{solver_name!r}. The dual sign conventions it relies on are "
-                "measured from Ipopt only. Set --ipopt-outer-bound-solver-name."
+                f"{solver_name!r}. The dual sign conventions it relies on have "
+                f"been measured only for {sorted(_MEASURED_IPOPT_SOLVERS)}. "
+                "Set --ipopt-outer-bound-solver-name."
             )
 
         for sname, s in self.opt.local_scenarios.items():
@@ -119,10 +131,29 @@ class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
         # optional source of a bound, and a model that is merely under-bounded
         # is not a broken model. It may simply report nothing.
         still_unbounded = {}
+        infeasible = []
         for sname, s in self.opt.local_scenarios.items():
-            names = unbounded_variables(s, do_fbbt=True)
+            try:
+                names = unbounded_variables(s, do_fbbt=True)
+            except InfeasibleConstraintException as e:
+                # fbbt proved the scenario infeasible. That is the model's
+                # problem and the subsequent solve will report it; it is not
+                # this spoke's to escalate. Letting it out would MPI_Abort the
+                # hub and every other cylinder from a call made to tighten the
+                # box and build a diagnostic, which is exactly the stand-down
+                # policy stated on _warn_once, inverted.
+                infeasible.append(f"{sname} ({e})")
+                continue
             if names:
                 still_unbounded[sname] = names
+        if infeasible:
+            self._warn_once(
+                "fbbt_infeasible",
+                f"ipopt_outer_bound: bounds tightening found {len(infeasible)} "
+                f"scenario(s) infeasible, for example {infeasible[0]}. This "
+                "spoke will report no bound for them; the solve will report "
+                "the infeasibility itself."
+            )
         if still_unbounded and self.cylinder_rank == 0:
             sname, names = next(iter(still_unbounded.items()))
             warnings.warn(
@@ -218,11 +249,17 @@ class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
             try:
                 s._mpisppy_data.outer_bound = certified_lower_bound(
                     s, sign_convention="ipopt", eps_rel=self._cushion)
-            except CertificateError as e:
-                # Routine solver outcomes can leave a constraint without a dual.
-                # Report no bound, as the module's contract says, rather than
-                # taking down the hub and every other spoke from inside the
-                # iteration loop.
+            except (CertificateError, ValueError, ArithmeticError) as e:
+                # CertificateError is the module's own signal (e.g. a routine
+                # solver outcome leaving a constraint without a dual). The
+                # other two are what evaluating phi and its gradient at the
+                # returned point can raise on the very class of model this
+                # spoke targets: ValueError from an uninitialized Var or from
+                # `math domain error` when bound_relax_factor puts the iterate
+                # a hair outside a bound under a log or a sqrt, ArithmeticError
+                # from an overflow. All three mean the same thing here -- no
+                # certificate this iteration -- and none is worth taking down
+                # the hub and every other spoke from inside the iteration loop.
                 self._warn_once(
                     "certificate_failed",
                     f"ipopt_outer_bound: no certificate for {s.name} ({e}); "

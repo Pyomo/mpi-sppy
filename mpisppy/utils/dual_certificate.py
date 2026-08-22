@@ -283,8 +283,21 @@ def certified_lower_bound(model, sign_convention="ipopt", eps_rel=1e-9):
 
     `eps_rel` shaves a relative cushion off the result.  At the default 1e-9
     this is last-bit hygiene, not a proof-carrying margin; pass 0.0 to get the
-    theorem's quantity exactly.
+    theorem's quantity exactly.  It must be non-negative -- a negative cushion
+    would raise the result above the theorem's quantity, and CertificateError
+    is raised rather than returning something that is not a bound.
     """
+    if not (eps_rel >= 0.0):
+        # The cushion is subtracted at the end.  A negative one would RAISE the
+        # result above the theorem's quantity, so what came back would not be
+        # an outer bound -- the single way this function can return a wrong
+        # answer rather than a loose one.  NaN fails this test too, and must.
+        raise CertificateError(
+            f"eps_rel must be non-negative, got {eps_rel!r}; the cushion is "
+            "subtracted from the bound, so a negative value would raise it "
+            "above the certified quantity and the result would not be a bound"
+        )
+
     try:
         conv = _SIGN_CONVENTIONS[sign_convention]
     except KeyError:

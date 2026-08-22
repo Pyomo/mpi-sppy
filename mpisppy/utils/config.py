@@ -1063,12 +1063,15 @@ class Config(pyofig.ConfigDict):
         # add_solver_specs itself defaults every solver name to None).
         self.add_solver_specs("ipopt_outer_bound")
 
+        # NonNegativeFloat, not float: the cushion is SUBTRACTED, so a
+        # negative value raises the reported bound above the theorem's
+        # quantity and yields a number that is not an outer bound at all.
         self.add_to_config('ipopt_outer_bound_cushion',
                            description="relative cushion subtracted from the "
                                        "certified bound: report q - eps*(1+|q|). "
                                        "Last-bit hygiene against floating point, "
                                        "not a proof-carrying margin; 0 disables",
-                           domain=float,
+                           domain=pyofig.NonNegativeFloat,
                            default=1e-9)
 
 

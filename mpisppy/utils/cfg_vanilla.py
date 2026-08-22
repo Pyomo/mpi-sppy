@@ -1211,6 +1211,16 @@ def ipopt_outer_bound_spoke(
     options["iterk_solver_options"] = dict()
     options["solver_options_layers"] = []
 
+    # Same reasoning one level up from the option dicts: shared_options copies
+    # --warmstart-subproblems in, and solve_one turns it into a `warmstart=`
+    # keyword on the solve call, which the shell Ipopt interface rejects
+    # outright -- an error naming Ipopt rather than the flag that caused it,
+    # from a run that merely asked the HUB's solver to warmstart. Ipopt is an
+    # interior-point method and gains little from a warmstart anyway, so the
+    # spoke declines it rather than routing it. (user_warmstart is only read
+    # inside this branch, so it needs no separate reset.)
+    options["warmstart_subproblems"] = False
+
     apply_solver_specs("ipopt_outer_bound", ipopt_ob_spoke, cfg)
 
     # apply_solver_specs ends by re-applying --max-solver-threads as a
