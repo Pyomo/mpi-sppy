@@ -46,7 +46,7 @@ Section~\ref{sec:canonical} isolates the one place where it is easy to get
 backwards.
 \end{abstract}
 
-\section{Setting}
+\section{Setting}\label{sec:setting}
 
 We assume minimization. 
 Fix a scenario $s$ with probability $p_s$, $\sum_s p_s = 1$.  Let
@@ -515,6 +515,148 @@ whose \texttt{eps\_rel} argument is exposed on the command line as
 the \texttt{None} propagated across both.  All paths are relative to
 \texttt{mpisppy/}, and the spoke driving the whole is
 \texttt{cylinders/ipopt\_outer\_bound.py}.
+
+\appendix
+
+\section{Why the reduced costs are not a shortcut}\label{sec:reducedcost}
+
+Ipopt reports bound multipliers, and a natural proposal is to read the distance
+below the returned objective value off them directly, saving the gradient
+evaluation that Theorem~\ref{thm:main} calls for.  This appendix records why the
+implementation does not do that.  The short version is that the reduced costs
+are not an alternative route to the bound --- they are the same quantity the
+certificate already uses --- and that substituting the reported values for the
+gradient forfeits validity in a way that is systematic rather than occasional.
+
+\subsection{The reduced cost is the gradient}
+
+Equation~\eqref{eq:stat} in the proof of Proposition~\ref{prop:kkt} is exactly
+the identification: at a KKT point,
+$\nabla \varphi_s(\vhat) = z_L - z_U$, so the reduced cost of variable $i$ is
+$\partial_i \varphi_s(\vhat)$, and the distance below $\varphi_s(\vhat)$ that
+must be conceded is the correction term of \eqref{eq:qhat}.  Specialising
+$\varphi_s$ to a linear function turns \eqref{eq:qhat} into the textbook
+reduced-cost dual bound of linear programming,
+\[
+  c^{\top}\hat{x} \;+\; \sum_{j} \min\bigl\{ d_j (l_j - \hat{x}_j),\;
+                                             d_j (u_j - \hat{x}_j) \bigr\},
+\]
+with $d$ the vector of reduced costs; \eqref{eq:qhat} is that bound's nonlinear
+generalisation.  So the proposal is not a cheaper substitute for
+Theorem~\ref{thm:main}.  It is Theorem~\ref{thm:main}, written in multiplier
+variables instead of gradient variables.  In particular there is no second solve
+to be avoided: Corollary~\ref{cor:anypoint} already costs one gradient
+evaluation and a loop over the variables.
+
+What a reduced-cost implementation would genuinely save is that gradient
+evaluation, replaced by a read of the solver's reported bound multipliers.  That
+is a real cost --- it is an automatic-differentiation sweep over $\varphi_s$ ---
+but it is the cost of a gradient, not of a solve.
+
+\subsection{Why the substitution is not valid}
+
+Equation~\eqref{eq:stat} is a property of an exact KKT point, which is a
+hypothesis of Proposition~\ref{prop:kkt} and not a fact about an arbitrary
+iterate.  At a truncated solve the two sides differ by the dual-infeasibility
+residual
+\begin{equation}\label{eq:resid}
+  r \;=\; \nabla \varphi_s(\vhat) \;-\; (z_L - z_U) \;\ne\; 0 .
+\end{equation}
+Theorem~\ref{thm:main} rests on the gradient inequality, which holds for a true
+(sub)gradient of a convex function and for nothing else.  Replacing
+$\nabla \varphi_s(\vhat)$ by $z_L - z_U$ therefore removes the hypothesis the
+proof uses, and Remark~\ref{rem:robust} offers no cover: that remark is a
+statement about $\lambda$ and $\mu$, whereas this is a perturbation of the
+gradient, which Remark~\ref{rem:rounding} already identifies as the one
+perturbation that can raise $\qhat_s$.
+
+\subsection{The failure is systematic, not occasional}
+
+The substitution does not merely risk an invalid bound now and then.  It drives
+the correction term to zero by construction, at every iterate, however
+unconverged.
+
+\begin{proposition}[The substituted correction collapses]\label{prop:collapse}
+Let $\vhat$ satisfy the perturbed complementarity conditions of the barrier
+subproblem with parameter $\tau > 0$, that is
+$z_{L,i}(\vhat_i - l_i) = \tau$ for every finite $l_i$ and
+$z_{U,i}(u_i - \vhat_i) = \tau$ for every finite $u_i$, with $z_{L,i} = 0$ when
+$l_i = -\infty$ and $z_{U,i} = 0$ when $u_i = +\infty$.  Substitute
+$d_i = z_{L,i} - z_{U,i}$ for $\partial_i \varphi_s(\vhat)$ in
+\eqref{eq:closed}.  Then every term of the resulting sum lies in
+$(-\tau, 0\,]$, so the substituted correction lies in $(-n\tau, 0\,]$ and
+\[
+  \qhat_s^{\mathrm{rc}}(\vhat) \;\ge\; \varphi_s(\vhat) - n\tau .
+\]
+\end{proposition}
+
+\begin{proof}
+Fix $i$ and write $\sigma = \vhat_i - l_i > 0$ and $\theta = u_i - \vhat_i > 0$
+in the two-sided case.  Then $d_i = \tau/\sigma - \tau/\theta$, so $d_i > 0$
+exactly when $\sigma < \theta$.  In that case \eqref{eq:closed} selects
+$t = l_i$ and the term is
+\[
+  d_i (l_i - \vhat_i) \;=\; -\sigma\Bigl(\frac{\tau}{\sigma} - \frac{\tau}{\theta}\Bigr)
+  \;=\; -\tau\Bigl(1 - \frac{\sigma}{\theta}\Bigr) \;\in\; (-\tau, 0),
+\]
+using $0 < \sigma < \theta$.  The case $d_i < 0$ is symmetric with $\sigma$ and
+$\theta$ exchanged, and $d_i = 0$ gives the term $0$.  If $u_i = +\infty$ then
+$z_{U,i} = 0$ and $d_i = \tau/\sigma > 0$, so \eqref{eq:closed} selects
+$t = l_i$ and the term is exactly $-\tau$; the case $l_i = -\infty$ is
+symmetric.  Summing over $i$ gives the claim.
+\end{proof}
+
+Two consequences make the proposal worse than merely unsound.
+
+First, the quantity returned is governed by the solver's barrier parameter and
+not by the inexactness of the solve.  As $\tau \to 0$ it converges to
+$\varphi_s(\vhat)$, which under complementarity and feasibility is the returned
+objective value --- the inner bound ruled out under \emph{Why the returned
+objective value is not a bound here} in Section~\ref{sec:setting}.  A
+scheme that reports it is not a certificate; it is the number the certificate
+was built to replace, shaved by $n\tau$.  What is lost is precisely the property
+recorded under \emph{Inexact solves} in Section~\ref{sec:practical}: that
+the correction term measures its own
+inexactness and grows as $\vhat$ moves away from a KKT point.
+
+Second, the substitution silently defeats the unbounded-variable guard.  When
+$u_i = +\infty$ the reported $z_{U,i}$ is zero, so $d_i \ge 0$ and
+\eqref{eq:closed} never selects the infinite endpoint.  The
+$-\infty$ that the honest gradient produces for an unconverged component with a
+missing bound --- the case discussed under \emph{Unbounded variables} in
+Section~\ref{sec:practical}, which the implementation reports as ``no bound'' ---
+can never arise, so a finite value would be returned in exactly the situation
+where no finite bound is available.
+
+\subsection{A valid variant, and why it is dominated}
+
+Validity can be restored by paying for the residual \eqref{eq:resid} explicitly.
+For any $t \in B$,
+$|r^{\top}(t - \vhat)| \le \|r\|_{\infty} \|t - \vhat\|_1
+   \le \|r\|_{\infty} \,\|\mathrm{diam}(B)\|_1$,
+so subtracting $\varepsilon_d \|\mathrm{diam}(B)\|_1$ from
+$\qhat_s^{\mathrm{rc}}$ restores a valid bound whenever
+$\|r\|_{\infty} \le \varepsilon_d$.  Two cautions attach: the box must have
+finite diameter, which Section~\ref{sec:practical} shows is not guaranteed, and
+$\varepsilon_d$ must be the \emph{unscaled} dual infeasibility, since the
+reported convergence measure is scaled by default.
+
+Even so the variant is dominated in both regimes.  Near a KKT point the honest
+correction is already zero by Proposition~\ref{prop:kkt}, so there is no
+tightness to be gained and the safeguard can only subtract.  Away from one, the
+safeguard is loose exactly where the gradient form is loose but correct.  The
+gradient form is at least as tight everywhere, and it needs no estimate of
+$\|r\|_{\infty}$.
+
+\subsection{Where a saving would actually come from}
+
+The cost the proposal targets is real, but it is the cost of differentiating
+$\varphi_s$, and it is addressable without touching the mathematics.  If that
+sweep ever dominates the spoke, the remedy is a faster \emph{exact} gradient ---
+forming $\nabla f_s + \W_s + \nabla g_s^{\top}\lambda + \nabla h_s^{\top}\mu$
+through compiled automatic differentiation rather than by walking a Python
+expression tree --- which leaves every hypothesis of Theorem~\ref{thm:main}
+intact.  Cheapening the gradient is safe; approximating it is not.
 
 \begin{thebibliography}{9}
 
