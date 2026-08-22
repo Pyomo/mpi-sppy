@@ -118,13 +118,13 @@ Suppose $\varphi_s$ is convex on an open set containing $B$ and differentiable
 at $\vhat$.  Define
 \begin{equation}\label{eq:qhat}
   \qhat_s(\vhat) \;=\; \varphi_s(\vhat)
-    \;+\; \sum_{i=1}^{n} \; \min_{t \in [l_i,u_i]}
+    \;+\; \sum_{i=1}^{n} \; \inf_{t \in [l_i,u_i]}
           \partial_i \varphi_s(\vhat)\,\bigl(t - \vhat_i\bigr).
 \end{equation}
 Then $\qhat_s(\vhat) \le q_s(\lambda,\mu) \le L_s(\W_s)$, and each term of the
 sum is available in closed form:
 \begin{equation}\label{eq:closed}
-  \min_{t \in [l_i,u_i]} \partial_i \varphi_s(\vhat)\,(t - \vhat_i)
+  \inf_{t \in [l_i,u_i]} \partial_i \varphi_s(\vhat)\,(t - \vhat_i)
   \;=\;
   \begin{cases}
     \partial_i \varphi_s(\vhat)\,(l_i - \vhat_i), & \partial_i \varphi_s(\vhat) > 0,\\[2pt]
@@ -132,6 +132,10 @@ sum is available in closed form:
     0, & \partial_i \varphi_s(\vhat) = 0.
   \end{cases}
 \end{equation}
+The right-hand side is read in the extended reals: a term is $-\infty$ exactly
+when $l_i = -\infty$ with $\partial_i \varphi_s(\vhat) > 0$, or $u_i = +\infty$
+with $\partial_i \varphi_s(\vhat) < 0$.  The bound is then vacuous rather than
+invalid; Section~\ref{sec:practical} says what the implementation does with it.
 \end{theorem}
 
 \begin{proof}
@@ -144,8 +148,10 @@ Convexity and differentiability at $\vhat$ give the gradient inequality
 Minimising both sides over $v \in B$ preserves the inequality, and the right-hand
 side is separable across coordinates because $B$ is a box, which yields
 \eqref{eq:qhat}.  Each one-dimensional problem minimises a linear function over
-an interval, so the minimum is attained at an endpoint, giving
-\eqref{eq:closed}.  The final inequality is Lemma~\ref{lem:weak}.
+an interval.  When the endpoint the sign of $\partial_i \varphi_s(\vhat)$ selects
+is finite the infimum is attained there; when it is infinite the infimum is
+$-\infty$.  Either way \eqref{eq:closed} holds, read in the extended reals, and
+the final inequality is Lemma~\ref{lem:weak}.
 \end{proof}
 
 \begin{corollary}\label{cor:anypoint}
