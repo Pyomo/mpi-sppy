@@ -347,11 +347,25 @@ class TestGuards(unittest.TestCase):
         with self.assertRaisesRegex(CertificateError, "no `dual` Suffix"):
             certified_lower_bound(m)
 
-    def test_missing_dual_for_a_constraint(self):
+    def test_missing_dual_for_a_constraint_is_reported_not_raised(self):
+        """A dual-less row is lam = 0, which weak duality admits.
+
+        Raising here killed the spoke for a whole run over one structurally
+        dual-less constraint. Dropping the row costs tightness and nothing
+        else, so the bound must still come back and must still be a bound.
+        """
         m = _model("le")          # suffix present but never populated
         m.x.value, m.y.value = 1.0, 0.0
-        with self.assertRaisesRegex(CertificateError, "no dual available"):
-            certified_lower_bound(m)
+        skipped = []
+        q = certified_lower_bound(m, eps_rel=0.0, missing_duals=skipped)
+        self.assertEqual(skipped, ["c"])
+        # The true optimum of the running example is 2.5 (at x=2, y=1).
+        self.assertLessEqual(q, 2.5 + 1e-9)
+        # And dropping the row really is only a loss of tightness: taking the
+        # same point WITH its dual gives a bound at least as good.
+        tight = certified_lower_bound(
+            _place(_model("le"), 1.0, 0.0, -4.0), eps_rel=0.0)
+        self.assertLessEqual(q, tight + 1e-9)
 
     def test_unknown_sign_convention(self):
         m = _place(_model("le"), 1.0, 0.0, -4.0)

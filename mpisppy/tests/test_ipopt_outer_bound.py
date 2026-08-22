@@ -149,6 +149,25 @@ class TestConfigSurface(unittest.TestCase):
         hub = vanilla.ph_hub(*beans, scenario_creator_kwargs=kwargs)
         self.assertTrue(hub["opt_kwargs"]["options"]["warmstart_subproblems"])
 
+    def test_presolve_and_obbt_do_not_reach_the_spoke(self):
+        # SPOpt runs SPPresolve at CONSTRUCTION, before any guard can reject
+        # anything, and shared_options hands obbt_options the GLOBAL solver --
+        # so a MIP solver would be invoked on this spoke's convex NLPs from
+        # inside its constructor. The hub keeps both.
+        cfg = _cfg(hub_solver="gurobi")
+        cfg.presolve_args()
+        cfg.presolve = True
+        cfg.obbt = True
+        spoke_opts = _spoke_options(cfg)
+        self.assertFalse(spoke_opts["presolve"])
+        self.assertNotIn("presolve_options", spoke_opts)
+        beans, kwargs = _beans(cfg)
+        hub = vanilla.ph_hub(*beans, scenario_creator_kwargs=kwargs)
+        self.assertTrue(hub["opt_kwargs"]["options"]["presolve"])
+        self.assertEqual(
+            hub["opt_kwargs"]["options"]["presolve_options"]
+                ["obbt_options"]["solver_name"], "gurobi")
+
     def test_flags_exist_with_expected_defaults(self):
         cfg = _cfg()
         self.assertFalse(cfg.ipopt_outer_bound)
@@ -241,6 +260,22 @@ class TestFactoryWiring(unittest.TestCase):
         self.assertNotIn("mipgap", options["iterk_solver_options"])
 
 
+class _SerialComm:
+    """Stand-in for cylinder_comm on a one-rank stub.
+
+    The spoke's diagnostics are collective by design -- their conditions are
+    rank-local and Ebound is not -- so a stub that exercises them needs a comm.
+    """
+
+    size = 1
+
+    def Get_rank(self):
+        return 0
+
+    def allreduce(self, value, op=None):
+        return value
+
+
 class TestSetupGuards(unittest.TestCase):
     """The guards that belong to the spoke rather than the certificate engine.
 
@@ -258,6 +293,8 @@ class TestSetupGuards(unittest.TestCase):
         spoke = IpoptOuterBound.__new__(IpoptOuterBound)
         spoke.opt = _Stub()
         spoke.cylinder_rank = 0
+        spoke.cylinder_comm = _SerialComm()
+        spoke._warned = set()
         return spoke
 
     def test_non_ipopt_solver_is_rejected(self):
@@ -309,6 +346,60 @@ class TestSetupGuards(unittest.TestCase):
         self.assertTrue(any("infeasible" in str(w.message) for w in caught))
 
 
+class TestCollectiveWarning(unittest.TestCase):
+    """The conditions this spoke warns about are rank-local; Ebound is not.
+
+    Gating on `cylinder_rank == 0` silenced the rank that actually saw the
+    problem, leaving an empty bound column and no explanation.
+    """
+
+    def _spoke(self, rank, size, speaking_rank):
+        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+
+        class _Comm:
+            def __init__(self):
+                self.size = size
+
+            def Get_rank(self):
+                return rank
+
+            def allreduce(self, value, op=None):
+                return speaking_rank
+
+        spoke = IpoptOuterBound.__new__(IpoptOuterBound)
+        spoke.cylinder_rank = rank
+        spoke.cylinder_comm = _Comm()
+        spoke._warned = set()
+        return spoke
+
+    def _warn(self, spoke, local_flag):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            spoke._warn_once_collectively("k", local_flag, lambda: "saw it")
+        return [str(w.message) for w in caught]
+
+    def test_the_rank_that_saw_it_speaks_even_when_it_is_not_rank_zero(self):
+        spoke = self._spoke(rank=1, size=2, speaking_rank=1)
+        self.assertEqual(self._warn(spoke, True), ["saw it"])
+
+    def test_the_other_ranks_stay_quiet(self):
+        spoke = self._spoke(rank=0, size=2, speaking_rank=1)
+        self.assertEqual(self._warn(spoke, False), [])
+
+    def test_silence_when_no_rank_saw_it(self):
+        spoke = self._spoke(rank=0, size=2, speaking_rank=2)   # == size
+        self.assertEqual(self._warn(spoke, False), [])
+        self.assertNotIn("k", spoke._warned)   # not consumed, can still fire
+
+    def test_key_is_consumed_on_every_rank_so_it_fires_only_once(self):
+        spoke = self._spoke(rank=0, size=2, speaking_rank=1)
+        self._warn(spoke, False)
+        self.assertIn("k", spoke._warned)
+        spoke2 = self._spoke(rank=1, size=2, speaking_rank=1)
+        self.assertEqual(self._warn(spoke2, True), ["saw it"])
+        self.assertEqual(self._warn(spoke2, True), [])
+
+
 class TestCertificateFailureStandsDown(unittest.TestCase):
     """Evaluating phi at the returned point can raise things that are not
     CertificateError, and none of them is worth aborting the wheel."""
@@ -334,6 +425,7 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
         spoke = IpoptOuterBound.__new__(IpoptOuterBound)
         spoke.opt = _Opt()
         spoke.cylinder_rank = 0
+        spoke.cylinder_comm = _SerialComm()
         spoke._warned = set()
         spoke.receive_nonant_bounds = lambda: None
         spoke._nonants_newly_fixed = lambda: False

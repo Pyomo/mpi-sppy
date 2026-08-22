@@ -230,7 +230,12 @@ def unbounded_variables(model, do_fbbt=True):
 
 def _lagrangian_expression(model, conv):
     """phi(v) = f(v) + lam^T g(v) + mu^T h(v), with the multipliers read off the
-    model's `dual` suffix and canonicalized."""
+    model's `dual` suffix and canonicalized.
+
+    Returns (expression, names_of_constraints_taken_with_multiplier_zero).  A
+    constraint with no imported dual lands in the second element rather than
+    raising: any lam >= 0 is admissible, so dropping one only costs tightness.
+    """
     if not hasattr(model, "dual"):
         raise CertificateError(
             "model has no `dual` Suffix; attach "
@@ -238,15 +243,19 @@ def _lagrangian_expression(model, conv):
         )
     dual = model.dual
 
+    missing = []
     terms = [_active_objective(model).expr]
     for con in model.component_data_objects(
         pyo.Constraint, active=True, descend_into=True
     ):
         if con not in dual:
-            raise CertificateError(
-                f"no dual available for constraint {con.name}; the solve did not "
-                "import one"
-            )
+            # Weak duality holds for ANY lam >= 0 and any mu, so a constraint
+            # whose dual the solve did not import is simply one taken with
+            # multiplier zero: it drops out of phi and the bound gets looser,
+            # never wrong. Raising here instead used to kill the bound for the
+            # whole run over one structurally dual-less row.
+            missing.append(con.name)
+            continue
         d = float(pyo.value(dual[con]))
         body = con.body
         if con.equality:
@@ -265,10 +274,11 @@ def _lagrangian_expression(model, conv):
             lam = conv["lam_lower"](d)
             if lam != 0.0:
                 terms.append(lam * (pyo.value(con.lower) - body))
-    return sum(terms)
+    return sum(terms), missing
 
 
-def certified_lower_bound(model, sign_convention="ipopt", eps_rel=1e-9):
+def certified_lower_bound(model, sign_convention="ipopt", eps_rel=1e-9,
+                          missing_duals=None):
     """A number guaranteed <= the model's optimal value, or None.
 
     `model` must already be solved, with its `dual` Suffix populated and its
@@ -286,6 +296,10 @@ def certified_lower_bound(model, sign_convention="ipopt", eps_rel=1e-9):
     theorem's quantity exactly.  It must be non-negative -- a negative cushion
     would raise the result above the theorem's quantity, and CertificateError
     is raised rather than returning something that is not a bound.
+
+    Pass a list as `missing_duals` to learn which constraints were taken with
+    multiplier zero because the solve imported no dual for them.  That costs
+    tightness and nothing else, so it is reported rather than raised.
     """
     if not (eps_rel >= 0.0):
         # The cushion is subtracted at the end.  A negative one would RAISE the
@@ -306,7 +320,9 @@ def certified_lower_bound(model, sign_convention="ipopt", eps_rel=1e-9):
             f"{sorted(_SIGN_CONVENTIONS)}"
         )
 
-    phi = _lagrangian_expression(model, conv)
+    phi, skipped = _lagrangian_expression(model, conv)
+    if missing_duals is not None:
+        missing_duals.extend(skipped)
     vlist = list(identify_variables(phi, include_fixed=False))
 
     correction = 0.0

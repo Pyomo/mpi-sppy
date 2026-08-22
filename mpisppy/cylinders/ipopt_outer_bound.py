@@ -27,6 +27,8 @@ import pyomo.environ as pyo
 
 from pyomo.contrib.fbbt.fbbt import InfeasibleConstraintException
 
+from mpisppy import MPI
+
 import mpisppy.utils.sputils as sputils
 from mpisppy.cylinders.lagrangian_bounder import _LagrangianMixin
 from mpisppy.cylinders.spoke import OuterBoundWSpoke
@@ -141,57 +143,98 @@ class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
                 # this spoke's to escalate. Letting it out would MPI_Abort the
                 # hub and every other cylinder from a call made to tighten the
                 # box and build a diagnostic, which is exactly the stand-down
-                # policy stated on _warn_once, inverted.
+                # stand-down policy this spoke states for itself, inverted.
                 infeasible.append(f"{sname} ({e})")
                 continue
             if names:
                 still_unbounded[sname] = names
-        if infeasible:
-            self._warn_once(
-                "fbbt_infeasible",
+        self._warn_once_collectively(
+            "fbbt_infeasible",
+            bool(infeasible),
+            lambda: (
                 f"ipopt_outer_bound: bounds tightening found {len(infeasible)} "
                 f"scenario(s) infeasible, for example {infeasible[0]}. This "
                 "spoke will report no bound for them; the solve will report "
                 "the infeasibility itself."
-            )
-        if still_unbounded and self.cylinder_rank == 0:
+            ),
+        )
+        def _unbounded_message():
             sname, names = next(iter(still_unbounded.items()))
-            warnings.warn(
+            return (
                 f"ipopt_outer_bound: {len(still_unbounded)} scenario(s) have "
                 "variables with no finite bound after fbbt, for example "
                 f"{sname}: {', '.join(names[:5])}"
-                f"{' ...' if len(names) > 5 else ''}. The certificate minimizes "
-                "over the variable box, so an unbounded direction with a "
-                "nonzero gradient yields no bound and this spoke will stay "
-                "quiet on those iterations. Bounding those variables is what "
-                "makes this spoke useful."
+                f"{' ...' if len(names) > 5 else ''}. This is a heads-up, not "
+                "a prediction: the certificate minimizes over the variable "
+                "box, so such a variable costs a bound only on an iteration "
+                "where its gradient component in phi points along the "
+                "unbounded direction. At a KKT point that component is zero, "
+                "so a converging solve typically reports a bound anyway. If "
+                "the 'N' column does come up empty, bounding these is the fix."
             )
 
-    def _warn_once(self, key, message):
-        """Rank-0, once-per-run warning. This spoke is an optional source of a
-        bound, so it complains and stands down rather than taking the run with
-        it -- an exception here would propagate out of the iteration loop and
-        MPI_Abort the hub and every other spoke."""
+        # Collective: a scenario with an unbounded variable sits on one rank,
+        # and warning only when that rank happens to be rank 0 loses the
+        # message on every other layout.
+        self._warn_once_collectively(
+            "unbounded_variables", bool(still_unbounded), _unbounded_message)
+
+    def _warn_once_collectively(self, key, local_flag, message_from_rank):
+        """Warn once, from the lowest rank that saw the condition.
+
+        This spoke is an optional source of a bound, so it complains and stands
+        down rather than taking the run with it -- an exception from inside the
+        iteration loop would MPI_Abort the hub and every other spoke.
+
+        `message_from_rank` is called only on the rank that ends up speaking,
+        so building the message stays cheap on the ranks that do not. The
+        allreduce is what keeps the diagnostic honest: every condition in this
+        class is rank-local while Ebound is collective, so a plain
+        `if cylinder_rank == 0` gate would silence the one rank that saw the
+        problem and leave the user an empty bound column with no explanation.
+
+        EVERY rank must call this, including the ranks with nothing to report
+        -- the allreduce is what makes it work, and a caller that skips it
+        behind a rank-local `if` hangs the run instead of warning.
+        """
         if key in self._warned:
             return
+        speaking_rank = self.cylinder_comm.allreduce(
+            self.cylinder_rank if local_flag else self.cylinder_comm.size,
+            op=MPI.MIN,
+        )
+        if speaking_rank == self.cylinder_comm.size:
+            return                                  # nobody saw it
         self._warned.add(key)
-        if self.cylinder_rank == 0:
-            warnings.warn(message)
+        if self.cylinder_rank == speaking_rank:
+            warnings.warn(message_from_rank())
 
     def _nonants_newly_fixed(self):
         """True if anything fixed a nonant since setup, in which case no bound
         can be reported: fixing restricts the subproblem, so its minimum bounds
-        the restricted problem and not the original."""
+        the restricted problem and not the original.
+
+        Deliberately tests `.fixed` and NOT the variable bounds, though
+        receive_nonant_bounds can narrow a nonant's box all the way to a single
+        point without ever touching `.fixed`. That looks like the same event
+        and is not. Narrowing through that channel carries the weak-form
+        argument set out in _solve_and_certify -- reduced_costs_spoke's
+        contract that an optimal solution survives, applied identically to
+        every scenario -- whereas an extension calling fix() carries no
+        argument at all. Extending this check to the bounds would make the
+        spoke silent whenever --reduced-costs is running, which is the
+        combination the weak-form argument exists to permit.
+        """
         newly = [
             f"{sname}:{ndn_i}"
             for sname, s in self.opt.local_scenarios.items()
             for ndn_i, xvar in s._mpisppy_data.nonant_indices.items()
             if xvar.fixed and not self._fixed_at_setup[(sname, ndn_i)]
         ]
-        if not newly:
-            return False
-        self._warn_once(
+        self._warn_once_collectively(
             "fixed_nonants",
+            bool(newly),
+            lambda:
             "ipopt_outer_bound: nonanticipative variables were fixed after "
             f"setup ({', '.join(newly[:5])}"
             f"{' ...' if len(newly) > 5 else ''}). Fixing restricts the "
@@ -199,7 +242,7 @@ class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
             "and not on the original. This spoke will report no bound until "
             "they are unfixed; remove the fixing extension from this spoke."
         )
-        return True
+        return bool(newly)
 
     def _solve_and_certify(self, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
         """Solve every subproblem, then replace the solver's (useless) bound
@@ -238,6 +281,8 @@ class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
                 s._mpisppy_data.outer_bound = None
             return self.opt.Ebound(verbose)
 
+        failures = []
+        no_dual = []
         for s in self.opt.local_scenarios.values():
             # solve_loop has just written results.Problem[0].Lower_bound here,
             # which for Ipopt is -inf. Overwrite it with the certificate, or
@@ -248,7 +293,8 @@ class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
                 continue
             try:
                 s._mpisppy_data.outer_bound = certified_lower_bound(
-                    s, sign_convention="ipopt", eps_rel=self._cushion)
+                    s, sign_convention="ipopt", eps_rel=self._cushion,
+                    missing_duals=no_dual)
             except (CertificateError, ValueError, ArithmeticError) as e:
                 # CertificateError is the module's own signal (e.g. a routine
                 # solver outcome leaving a constraint without a dual). The
@@ -260,12 +306,28 @@ class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
                 # from an overflow. All three mean the same thing here -- no
                 # certificate this iteration -- and none is worth taking down
                 # the hub and every other spoke from inside the iteration loop.
-                self._warn_once(
-                    "certificate_failed",
-                    f"ipopt_outer_bound: no certificate for {s.name} ({e}); "
-                    "reporting no bound this iteration.")
+                failures.append(f"{s.name} ({e})")
                 s._mpisppy_data.outer_bound = None
 
+        self._warn_once_collectively(
+            "certificate_failed",
+            bool(failures),
+            lambda: (
+                f"ipopt_outer_bound: no certificate for {len(failures)} "
+                f"scenario(s), for example {failures[0]}; reporting no bound "
+                "for them this iteration."
+            ),
+        )
+        self._warn_once_collectively(
+            "missing_duals",
+            bool(no_dual),
+            lambda: (
+                f"ipopt_outer_bound: {len(no_dual)} constraint(s) had no dual "
+                f"imported, for example {no_dual[0]}. They are taken with "
+                "multiplier zero, which weak duality admits, so the bound is "
+                "looser than it could be but still valid."
+            ),
+        )
         return self.opt.Ebound(verbose)
 
     @property

@@ -1221,6 +1221,16 @@ def ipopt_outer_bound_spoke(
     # inside this branch, so it needs no separate reset.)
     options["warmstart_subproblems"] = False
 
+    # Presolve, for the same reason one level further out. SPOpt.__init__ runs
+    # SPPresolve at CONSTRUCTION, before _check_setup_guards can reject
+    # anything, and shared_options hands presolve_options an obbt_options whose
+    # solver_name is the GLOBAL --solver-name. So a MIP solver would be invoked
+    # on this spoke's convex NLPs from inside the constructor, and the pass is
+    # in any case redundant here: the setup guard runs fbbt itself, and does it
+    # where the certificate can reason about the result.
+    options["presolve"] = False
+    options.pop("presolve_options", None)
+
     apply_solver_specs("ipopt_outer_bound", ipopt_ob_spoke, cfg)
 
     # apply_solver_specs ends by re-applying --max-solver-threads as a
