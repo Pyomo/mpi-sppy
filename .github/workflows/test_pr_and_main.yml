@@ -1296,6 +1296,7 @@ jobs:
         # solve rather than at install.  Pyomo's workflow installs the same
         # three for the same reason.
         run: |
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y libopenblas-dev gfortran liblapack-dev
           # glpk is not needed by Ipopt; it gives the certificate a second,
@@ -1311,10 +1312,14 @@ jobs:
         # ma57, ma97), which is what makes it usable on real NLPs.  This is the
         # same source Pyomo's and Egret's own CI pull from.
         run: |
+          set -uo pipefail
           SOLVER_DIR="${GITHUB_WORKSPACE}/cache/solvers"
           mkdir -p "$SOLVER_DIR"
           echo "$SOLVER_DIR" >> $GITHUB_PATH
-          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SOLVER_DIR" >> $GITHUB_ENV
+          # ${VAR:-}, not $VAR: an unset LD_LIBRARY_PATH leaves a leading
+          # empty entry, which the loader reads as the current directory and
+          # keeps for every later step of the job.
+          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}:$SOLVER_DIR" >> $GITHUB_ENV
           URL=https://github.com/IDAES/idaes-ext
           RELEASE=$(curl --max-time 150 --retry 8 -L -s \
               -H 'Accept: application/json' ${URL}/releases/latest)
@@ -1337,6 +1342,11 @@ jobs:
         # Guards against silently falling back to a MUMPS-only build: a missing
         # HSL solver makes ipopt exit abnormally rather than warn.
         run: |
+          # set -e explicitly: the workflow-level `shell: bash -l {0}` drops it,
+          # so without this the step's status is that of the last echo below and
+          # the check could never fail -- while still printing that HSL is
+          # linked. See issue #844 for the same masking elsewhere.
+          set -euo pipefail
           python -c "
           import pyomo.environ as pyo
           for ls in ('ma27', 'ma57', 'ma97'):

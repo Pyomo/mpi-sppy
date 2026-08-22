@@ -30,8 +30,7 @@ from pyomo.contrib.fbbt.fbbt import InfeasibleConstraintException
 from mpisppy import MPI
 
 import mpisppy.utils.sputils as sputils
-from mpisppy.cylinders.lagrangian_bounder import _LagrangianMixin
-from mpisppy.cylinders.spoke import OuterBoundWSpoke
+from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.utils.dual_certificate import (
     CertificateError,
     certified_lower_bound,
@@ -49,7 +48,15 @@ from mpisppy.utils.dual_certificate import (
 _MEASURED_IPOPT_SOLVERS = frozenset({"ipopt"})
 
 
-class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
+class IpoptOuterBound(LagrangianOuterBound):
+    """The Lagrangian outer-bound spoke with the bound computed, not read.
+
+    Subclasses rather than forks: everything about driving the cylinder --
+    iter0, the W loop, extensions, the wait branch, _PreLoopXhatMixin -- is
+    identical, and the single difference is where the number comes from. That
+    difference lives in lagrangian(), which is the one method overridden.
+    """
+
 
     # 'N' for NLP. Not 'I': that is InnerBoundSpoke's character, and the hub
     # prints the outer and inner chars side by side, so an 'I' in the outer
@@ -60,40 +67,15 @@ class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
     # unlike the Lagrangian spoke this one cannot skip loading the solution.
     outer_bound_only = False
 
-    def ipopt_outer_bound_prep(self):
-        """lagrangian_prep plus what the certificate needs: a dual suffix on
-        every subproblem, the setup guards, and the bound tightening."""
-        self.lagrangian_prep()
+    def lagrangian_prep(self):
+        """The base prep plus what the certificate needs: a dual suffix on
+        every subproblem, the setup guards, and the bound tightening.
 
-        # PH_Prep(attach_prox=False) is what makes this the Lagrangian
-        # relaxation rather than a proximal subproblem, so check that the prox
-        # term is not switched on. prox_on is created by attach_Ws_and_prox and
-        # starts at 0, so this normally passes; it is here to catch a future
-        # path that enables it, in which case the number below would not be a
-        # Lagrangian bound at all.
-        first = next(iter(self.opt.local_scenarios.values()), None)
-        if (first is not None
-                and hasattr(first._mpisppy_model, "prox_on")
-                and not self.opt.prox_disabled):
-            raise CertificateError(
-                "ipopt_outer_bound requires the proximal term to be off; "
-                "the bound it computes is a Lagrangian bound and a proximal "
-                "subproblem is not the Lagrangian relaxation"
-            )
+        Overriding the hook rather than adding a second one is what lets main()
+        be inherited unchanged."""
+        super().lagrangian_prep()
 
-        for s in self.opt.local_scenarios.values():
-            # Existence is not enough: a scenario_creator may already attach an
-            # EXPORT or LOCAL `dual` suffix (a common way to supply dual warm
-            # starts), and reusing that would import nothing.
-            existing = getattr(s, "dual", None)
-            if existing is None:
-                s.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
-            elif not existing.import_enabled():
-                raise CertificateError(
-                    f"scenario {s.name} already has a `dual` Suffix that does "
-                    "not import; the certificate needs the solver's duals. Use "
-                    "Suffix.IMPORT or Suffix.IMPORT_EXPORT."
-                )
+        self._attach_dual_suffixes()
 
         self._warned = set()
         self._check_setup_guards()
@@ -109,9 +91,44 @@ class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
             for ndn_i, xvar in s._mpisppy_data.nonant_indices.items()
         }
 
+    def _attach_dual_suffixes(self):
+        """Give every subproblem a dual Suffix that actually imports.
+
+        Its own method so it can be tested without standing up a wheel; the
+        guard below it is the kind that only fails on someone else's model.
+        """
+        for s in self.opt.local_scenarios.values():
+            # Existence is not enough: a scenario_creator may already attach an
+            # EXPORT or LOCAL `dual` suffix (a common way to supply dual warm
+            # starts), and reusing that would import nothing.
+            existing = getattr(s, "dual", None)
+            if existing is None:
+                s.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
+            elif not existing.import_enabled():
+                raise CertificateError(
+                    f"scenario {s.name} already has a `dual` Suffix that does "
+                    "not import; the certificate needs the solver's duals. Use "
+                    "Suffix.IMPORT or Suffix.IMPORT_EXPORT."
+                )
+
     def _check_setup_guards(self):
         """Hard errors for the parts of the theorem that are checkable, and a
         warning for the part that only costs tightness."""
+        # PH_Prep(attach_prox=False) is what makes this the Lagrangian
+        # relaxation rather than a proximal subproblem. The predicate is
+        # _attach_prox, which records whether a prox term was actually spliced
+        # into the objective. Testing prox_on instead does not work: it is a
+        # Param that attach_Ws_and_prox always creates at 0, so the guard could
+        # never fire, and _reenable_prox sets it to 1 whether or not there is a
+        # prox term in the expression, so it would fire on a model whose
+        # objective has none.
+        if getattr(self.opt, "_attach_prox", False):
+            raise CertificateError(
+                "ipopt_outer_bound requires the proximal term to be off; "
+                "the bound it computes is a Lagrangian bound and a proximal "
+                "subproblem is not the Lagrangian relaxation"
+            )
+
         solver_name = (self.opt.options.get("solver_name") or "").strip().lower()
         if solver_name not in _MEASURED_IPOPT_SOLVERS:
             raise CertificateError(
@@ -244,9 +261,13 @@ class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
         )
         return bool(newly)
 
-    def _solve_and_certify(self, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
+    def lagrangian(self, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
         """Solve every subproblem, then replace the solver's (useless) bound
-        with the certificate. Returns the expected outer bound, or None."""
+        with the certificate. Returns the expected outer bound, or None.
+
+        This is the whole of the difference from the base spoke, which reads
+        results.Problem[0].Lower_bound instead -- the number Ipopt does not
+        provide."""
         # This shrinks the box the certificate minimizes over, so it needs an
         # argument. Note the tempting one -- "a smaller box removes points, and
         # fewer points can only raise an infimum" -- is an argument that the
@@ -334,42 +355,13 @@ class IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke):
     def _cushion(self):
         return self.opt.options.get("ipopt_outer_bound_cushion", 1e-9)
 
-    def _set_weights_and_solve(self, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
-        self.opt.W_from_flat_list(self.localWs)
-        return self._solve_and_certify(warmstart=warmstart)
+    def _jensens_enabled(self):
+        """Never, for this spoke.
 
-    def main(self):
-        self.verbose = self.opt.options['verbose']
-        extensions = self.opt.extensions is not None
-
-        self.ipopt_outer_bound_prep()
-
-        if extensions:
-            self.opt.extobject.pre_iter0()
-
-        self.opt._PHIter = 0
-        self.trivial_bound = self._solve_and_certify(
-            warmstart=sputils.WarmstartStatus.USER_SOLUTION)
-
-        if extensions:
-            self.opt.extobject.post_iter0()
-        self.opt._PHIter += 1
-        self.opt.current_solver_options = {}
-
-        if self.trivial_bound is not None:
-            self.send_bound(self.trivial_bound)
-        if extensions:
-            self.opt.extobject.post_iter0_after_sync()
-
-        while not self.got_kill_signal():
-            if self.update_Ws():
-                if extensions:
-                    self.opt.extobject.miditer()
-                bound = self._set_weights_and_solve()
-                if extensions:
-                    self.opt.extobject.enditer()
-                if bound is not None:
-                    self.send_bound(bound)
-                if extensions:
-                    self.opt.extobject.enditer_after_sync()
-                self.opt._PHIter += 1
+        The inherited main() offers a Jensen's bound before the loop, and
+        _jensens_solve takes it from results.problem.lower_bound -- the
+        solver's own dual bound. That is precisely the number Ipopt does not
+        produce, and the reason this spoke exists. Taking it would send a
+        meaningless bound, so the step is declined rather than inherited.
+        """
+        return False

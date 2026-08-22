@@ -105,6 +105,21 @@ from pyomo.core.expr.calculus.derivatives import differentiate, Modes
 from pyomo.core.expr.visitor import identify_variables
 from pyomo.contrib.fbbt.fbbt import fbbt
 
+from mpisppy.utils.sputils import find_active_objective as _find_active_objective
+
+
+def _active_objective(model):
+    """sputils.find_active_objective, restated in this module's error type.
+
+    The finder raises RuntimeError for a missing or ambiguous objective; every
+    other failure here is a CertificateError, and the spoke stands down on that
+    rather than aborting the wheel.
+    """
+    try:
+        return _find_active_objective(model)
+    except RuntimeError as e:
+        raise CertificateError(str(e)) from None
+
 __all__ = [
     "CertificateError",
     "check_model_is_certifiable",
@@ -132,17 +147,6 @@ _SIGN_CONVENTIONS = {
         "mu": lambda d: -d,
     },
 }
-
-
-def _active_objective(model):
-    objs = list(
-        model.component_data_objects(pyo.Objective, active=True, descend_into=True)
-    )
-    if len(objs) != 1:
-        raise CertificateError(
-            f"expected exactly one active Objective, found {len(objs)}"
-        )
-    return objs[0]
 
 
 def check_model_is_certifiable(model):

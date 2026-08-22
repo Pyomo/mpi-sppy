@@ -260,6 +260,15 @@ class TestFactoryWiring(unittest.TestCase):
         self.assertNotIn("mipgap", options["iterk_solver_options"])
 
 
+def _certifiable_scenario(name="Scen0"):
+    """A minimal model that passes check_model_is_certifiable."""
+    m = pyo.ConcreteModel(name=name)
+    m.x = pyo.Var(bounds=(0, 10), initialize=1.0)
+    m.c = pyo.Constraint(expr=m.x >= 1)
+    m.obj = pyo.Objective(expr=m.x, sense=pyo.minimize)
+    return m
+
+
 class _SerialComm:
     """Stand-in for cylinder_comm on a one-rank stub.
 
@@ -283,12 +292,18 @@ class TestSetupGuards(unittest.TestCase):
     lightweight stand-in exercises it without a solve.
     """
 
-    def _guard_with_solver(self, solver_name):
+    def _guard_with_solver(self, solver_name, scenarios=None):
         from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+
+        # A real scenario by default. With local_scenarios = {} both
+        # per-scenario loops in _check_setup_guards have empty bodies, so the
+        # guard tests passed without exercising the guards at all.
+        if scenarios is None:
+            scenarios = {"Scen0": _certifiable_scenario()}
 
         class _Stub:
             options = {"solver_name": solver_name}
-            local_scenarios = {}
+            local_scenarios = scenarios
 
         spoke = IpoptOuterBound.__new__(IpoptOuterBound)
         spoke.opt = _Stub()
@@ -344,6 +359,145 @@ class TestSetupGuards(unittest.TestCase):
             warnings.simplefilter("always")
             spoke._check_setup_guards()          # must not raise
         self.assertTrue(any("infeasible" in str(w.message) for w in caught))
+
+
+class TestInheritsTheLagrangianDriver(unittest.TestCase):
+    """The spoke used to fork LagrangianOuterBound.main() rather than subclass
+    it, and the copy had drifted: it lost _PreLoopXhatMixin, it lost the
+    `else: do_while_waiting_for_new_Ws(...)` branch (which made
+    --subgradient-while-waiting a silent no-op), and its `outer_bound_only`
+    was inert. Assert the wiring, since none of that failed loudly."""
+
+    def test_it_is_a_lagrangian_outer_bound(self):
+        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+        from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
+        from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
+        self.assertTrue(issubclass(IpoptOuterBound, LagrangianOuterBound))
+        self.assertTrue(issubclass(IpoptOuterBound, _PreLoopXhatMixin))
+
+    def test_the_driver_is_not_reimplemented(self):
+        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+        from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
+        for name in ("main", "do_while_waiting_for_new_Ws",
+                     "_set_weights_and_solve"):
+            with self.subTest(name=name):
+                self.assertNotIn(name, IpoptOuterBound.__dict__)
+                self.assertIs(getattr(IpoptOuterBound, name),
+                              getattr(LagrangianOuterBound, name))
+
+    def test_only_the_bound_computation_is_overridden(self):
+        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+        self.assertIn("lagrangian", IpoptOuterBound.__dict__)
+        self.assertIn("lagrangian_prep", IpoptOuterBound.__dict__)
+
+    def test_jensens_is_declined(self):
+        # The inherited main() would offer a Jensen's bound taken from
+        # results.problem.lower_bound -- the solver dual bound Ipopt does not
+        # produce, and the reason this spoke exists.
+        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+        spoke = IpoptOuterBound.__new__(IpoptOuterBound)
+        spoke.opt = type("_O", (), {"options": {"jensens": {}}})()
+        self.assertFalse(spoke._jensens_enabled())
+
+    def test_the_certificate_needs_the_solution_loaded(self):
+        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+        from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
+        # The base spoke skips loading the solution; the certificate reads the
+        # point AND the duals off the solved model, so it cannot.
+        self.assertTrue(LagrangianOuterBound.outer_bound_only)
+        self.assertFalse(IpoptOuterBound.outer_bound_only)
+
+
+class TestDualSuffixGuard(unittest.TestCase):
+    """The certificate reads the solver's duals, so the Suffix has to import."""
+
+    def _spoke_over(self, scenario):
+        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+        spoke = IpoptOuterBound.__new__(IpoptOuterBound)
+        spoke.opt = type("_O", (), {"local_scenarios": {"Scen0": scenario}})()
+        return spoke
+
+    def test_a_suffix_is_attached_when_there_is_none(self):
+        m = _certifiable_scenario()
+        self._spoke_over(m)._attach_dual_suffixes()
+        self.assertTrue(m.dual.import_enabled())
+
+    def test_an_importing_suffix_is_left_alone(self):
+        m = _certifiable_scenario()
+        m.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT_EXPORT)
+        original = m.dual
+        self._spoke_over(m)._attach_dual_suffixes()
+        self.assertIs(m.dual, original)
+
+    def test_an_export_only_suffix_is_rejected(self):
+        # A scenario_creator supplying dual warm starts attaches EXPORT;
+        # reusing it would import nothing and the certificate would see no
+        # multipliers at all.
+        m = _certifiable_scenario()
+        m.dual = pyo.Suffix(direction=pyo.Suffix.EXPORT)
+        with self.assertRaisesRegex(CertificateError, "does not import"):
+            self._spoke_over(m)._attach_dual_suffixes()
+
+
+class TestNewlyFixedNonants(unittest.TestCase):
+    """Fixing a nonant after setup restricts the subproblem, so its minimum
+    bounds the restricted problem and not the original."""
+
+    def _spoke(self, fixed_now, fixed_at_setup):
+        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+        m = _certifiable_scenario()
+        m.x.fixed = fixed_now
+        data = type("_D", (), {})()
+        data.nonant_indices = {("ROOT", 0): m.x}
+        m._mpisppy_data = data
+        spoke = IpoptOuterBound.__new__(IpoptOuterBound)
+        spoke.opt = type("_O", (), {"local_scenarios": {"Scen0": m}})()
+        spoke.cylinder_rank = 0
+        spoke.cylinder_comm = _SerialComm()
+        spoke._warned = set()
+        spoke._fixed_at_setup = {("Scen0", ("ROOT", 0)): fixed_at_setup}
+        return spoke
+
+    def test_newly_fixed_is_detected(self):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            self.assertTrue(self._spoke(True, False)._nonants_newly_fixed())
+        self.assertTrue(any("fixed after" in str(w.message) for w in caught))
+
+    def test_fixed_by_the_scenario_creator_is_fine(self):
+        # Part of the problem as stated, not a restriction of it.
+        self.assertFalse(self._spoke(True, True)._nonants_newly_fixed())
+
+    def test_nothing_fixed_is_fine(self):
+        self.assertFalse(self._spoke(False, False)._nonants_newly_fixed())
+
+
+class TestProxGuard(unittest.TestCase):
+    """The bound is a LAGRANGIAN bound, so a proximal subproblem would not
+    produce it. The old guard tested prox_on, a Param attach_Ws_and_prox
+    always creates at 0, so it could never fire."""
+
+    def _spoke(self, attach_prox):
+        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+
+        class _Opt:
+            options = {"solver_name": "ipopt"}
+            local_scenarios = {}
+
+        spoke = IpoptOuterBound.__new__(IpoptOuterBound)
+        spoke.opt = _Opt()
+        spoke.opt._attach_prox = attach_prox
+        spoke.cylinder_rank = 0
+        spoke.cylinder_comm = _SerialComm()
+        spoke._warned = set()
+        return spoke
+
+    def test_prox_on_is_rejected(self):
+        with self.assertRaisesRegex(CertificateError, "proximal term to be off"):
+            self._spoke(True)._check_setup_guards()
+
+    def test_prox_off_passes(self):
+        self._spoke(False)._check_setup_guards()
 
 
 class TestCollectiveWarning(unittest.TestCase):
@@ -451,7 +605,7 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
         spoke = self._spoke_over(scenario)
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            result = spoke._solve_and_certify()   # must not raise
+            result = spoke.lagrangian()           # must not raise
         self.assertEqual(result, "EBOUND")
         self.assertIsNone(scenario._mpisppy_data.outer_bound)
         self.assertTrue(any("no certificate" in str(w.message) for w in caught))
@@ -469,6 +623,9 @@ class TestAgainstEFOptimum(unittest.TestCase):
 
     def _spin(self, hub_solver):
         cfg = _cfg(hub_solver=hub_solver)
+        if hub_solver in ("glpk", "cbc"):
+            # Neither can handle the PH hub's quadratic proximal term.
+            cfg.linearize_proximal_terms = True
         beans, kwargs = _beans(cfg)
         hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=kwargs)
         spoke = vanilla.ipopt_outer_bound_spoke(
@@ -494,13 +651,20 @@ class TestAgainstEFOptimum(unittest.TestCase):
         # runnable anywhere Ipopt is, with no MIP solver needed.
         self._assert_valid_and_useful(self._spin("ipopt"))
 
-    @unittest.skipUnless(mip_available, "no MIP solver available")
+    @unittest.skipUnless(dual_bound_solver_name, "no second solver available")
     def test_hub_and_spoke_can_use_different_solvers(self):
         # The routing claim in the design: each cylinder solves its own copy of
         # the models with its own solver, and the only coupling is the numeric
-        # exchange of W and bounds. Here the hub runs a MIP solver while the
-        # spoke runs Ipopt.
-        self._assert_valid_and_useful(self._spin(mip_solver_name))
+        # exchange of W and bounds. Here the hub runs something that is not
+        # Ipopt while the spoke runs Ipopt.
+        #
+        # Gated on any working second solver rather than on a commercial MIP
+        # solver. The claim under test is "different solvers", and requiring a
+        # commercial one skipped this everywhere: the ipopt-tests job installs
+        # none. glpk and cbc cannot take the PH hub's quadratic proximal term,
+        # so _spin linearizes it when the hub solver is one of those.
+        self.assertNotEqual(dual_bound_solver_name, "ipopt")
+        self._assert_valid_and_useful(self._spin(dual_bound_solver_name))
 
 
 @unittest.skipUnless(ipopt_available, "ipopt is not available")
