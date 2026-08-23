@@ -305,15 +305,16 @@ def certified_lower_bound(model, sign_convention="ipopt", eps_rel=1e-9,
     multiplier zero because the solve imported no dual for them.  That costs
     tightness and nothing else, so it is reported rather than raised.
     """
-    if not (eps_rel >= 0.0):
+    if not (math.isfinite(eps_rel) and eps_rel >= 0.0):
         # The cushion is subtracted at the end.  A negative one would RAISE the
         # result above the theorem's quantity, so what came back would not be
         # an outer bound -- the single way this function can return a wrong
         # answer rather than a loose one.  NaN fails this test too, and must.
         raise CertificateError(
-            f"eps_rel must be non-negative, got {eps_rel!r}; the cushion is "
-            "subtracted from the bound, so a negative value would raise it "
-            "above the certified quantity and the result would not be a bound"
+            f"eps_rel must be finite and non-negative, got {eps_rel!r}; the "
+            "cushion is subtracted from the bound, so a negative value would "
+            "raise it above the certified quantity and an infinite one would "
+            "drive it to -inf; neither result is a bound"
         )
 
     try:
@@ -345,6 +346,7 @@ def certified_lower_bound(model, sign_convention="ipopt", eps_rel=1e-9,
             correction += g * (bound - vhat)
 
     qhat = pyo.value(phi) + correction
+    qhat -= eps_rel * (1.0 + abs(qhat))
 
     # A solve that diverged or failed numerically can leave NaN in the point or
     # in the duals, and NaN propagates silently through everything above.  It
@@ -353,7 +355,12 @@ def certified_lower_bound(model, sign_convention="ipopt", eps_rel=1e-9,
     # test happens to reject it -- and +inf, which an infinite multiplier can
     # also produce, would be an outright invalid bound if anything ever did
     # accept it.  Both are "no bound", which this module already has a word for.
+    #
+    # The screen is on the RETURNED value, deliberately.  Screening before the
+    # cushion was subtracted let a non-finite eps_rel turn a finite qhat into
+    # -inf and publish it: -inf is a number, so unlike NaN it survives every
+    # downstream test and is folded into Ebound's sum as though it were a bound.
     if not math.isfinite(qhat):
         return None
 
-    return qhat - eps_rel * (1.0 + abs(qhat))
+    return qhat

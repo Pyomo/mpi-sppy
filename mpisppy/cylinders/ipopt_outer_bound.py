@@ -114,14 +114,20 @@ class IpoptOuterBound(LagrangianOuterBound):
     def _check_setup_guards(self):
         """Hard errors for the parts of the theorem that are checkable, and a
         warning for the part that only costs tightness."""
-        # PH_Prep(attach_prox=False) is what makes this the Lagrangian
-        # relaxation rather than a proximal subproblem. The predicate is
-        # _attach_prox, which records whether a prox term was actually spliced
-        # into the objective. Testing prox_on instead does not work: it is a
-        # Param that attach_Ws_and_prox always creates at 0, so the guard could
-        # never fire, and _reenable_prox sets it to 1 whether or not there is a
-        # prox term in the expression, so it would fire on a model whose
-        # objective has none.
+        # A TRIPWIRE, not a runtime check, and it is worth being honest about
+        # which. The bound is a Lagrangian bound, so a proximal subproblem
+        # would not produce it. _attach_prox is the right predicate -- it
+        # records whether a prox term was actually spliced into the objective
+        # -- but the only path here is _LagrangianMixin.lagrangian_prep, which
+        # hardcodes PH_Prep(attach_prox=False), so under the base class as it
+        # stands this cannot fire. It exists to fail loudly if that hardcoded
+        # argument ever changes, which is a real risk on inherited code.
+        #
+        # It replaced a test on prox_on that was wrong rather than merely
+        # unreachable: that Param is created at 0 by attach_Ws_and_prox so it
+        # could never fire either, AND _reenable_prox sets it to 1 whether or
+        # not the objective contains a prox term, so it would also have fired
+        # on models that have none.
         if getattr(self.opt, "_attach_prox", False):
             raise CertificateError(
                 "ipopt_outer_bound requires the proximal term to be off; "
@@ -170,9 +176,12 @@ class IpoptOuterBound(LagrangianOuterBound):
             bool(infeasible),
             lambda: (
                 f"ipopt_outer_bound: bounds tightening found {len(infeasible)} "
-                f"scenario(s) infeasible, for example {infeasible[0]}. This "
-                "spoke will report no bound for them; the solve will report "
-                "the infeasibility itself."
+                f"scenario(s) infeasible on rank {self.cylinder_rank}, for "
+                f"example {infeasible[0]}. An infeasible scenario never yields "
+                "a certificate and Ebound is all-or-nothing, so this spoke "
+                "will report NO bound for the entire run, not just for those "
+                "scenarios. The solve will report the infeasibility itself; "
+                "this message is printed once."
             ),
         )
         def _unbounded_message():
@@ -204,7 +213,10 @@ class IpoptOuterBound(LagrangianOuterBound):
         iteration loop would MPI_Abort the hub and every other spoke.
 
         `message_from_rank` is called only on the rank that ends up speaking,
-        so building the message stays cheap on the ranks that do not. The
+        so building the message stays cheap on the ranks that do not. Note
+        that it therefore reports THAT RANK's counts; the reduction settles
+        who speaks, not what the totals are, so messages say which rank they
+        describe rather than implying a global figure. The
         allreduce is what keeps the diagnostic honest: every condition in this
         class is rank-local while Ebound is collective, so a plain
         `if cylinder_rank == 0` gate would silence the one rank that saw the
@@ -213,23 +225,37 @@ class IpoptOuterBound(LagrangianOuterBound):
         EVERY rank must call this, including the ranks with nothing to report
         -- the allreduce is what makes it work, and a caller that skips it
         behind a rank-local `if` hangs the run instead of warning.
+
+        Returns True if ANY rank saw the condition. That answer is global, so
+        it is safe to branch on; branching on the rank-local flag instead is
+        what puts different ranks into different collectives.
         """
-        if key in self._warned:
-            return
+        # The reduction is unconditional -- not behind the _warned check --
+        # because the return value is a GLOBAL answer that callers branch on.
+        # Skipping it on the second call would both diverge the ranks and hand
+        # back a rank-local answer.
         speaking_rank = self.cylinder_comm.allreduce(
             self.cylinder_rank if local_flag else self.cylinder_comm.size,
             op=MPI.MIN,
         )
-        if speaking_rank == self.cylinder_comm.size:
-            return                                  # nobody saw it
-        self._warned.add(key)
-        if self.cylinder_rank == speaking_rank:
-            warnings.warn(message_from_rank())
+        anyone = speaking_rank < self.cylinder_comm.size
+        if anyone and key not in self._warned:
+            # `anyone` is global, so every rank adds the key together and
+            # _warned stays identical across ranks.
+            self._warned.add(key)
+            if self.cylinder_rank == speaking_rank:
+                warnings.warn(message_from_rank())
+        return anyone
 
     def _nonants_newly_fixed(self):
-        """True if anything fixed a nonant since setup, in which case no bound
+        """True if ANY rank fixed a nonant since setup, in which case no bound
         can be reported: fixing restricts the subproblem, so its minimum bounds
         the restricted problem and not the original.
+
+        The answer is global on purpose. Callers branch on it, and a
+        rank-local answer would send some ranks down a path that skips
+        collectives the others enter -- a hang. Ebound is all-or-nothing
+        anyway, so one rank's fixed nonant already silences the cylinder.
 
         Deliberately tests `.fixed` and NOT the variable bounds, though
         receive_nonant_bounds can narrow a nonant's box all the way to a single
@@ -248,7 +274,7 @@ class IpoptOuterBound(LagrangianOuterBound):
             for ndn_i, xvar in s._mpisppy_data.nonant_indices.items()
             if xvar.fixed and not self._fixed_at_setup[(sname, ndn_i)]
         ]
-        self._warn_once_collectively(
+        return self._warn_once_collectively(
             "fixed_nonants",
             bool(newly),
             lambda:
@@ -259,7 +285,6 @@ class IpoptOuterBound(LagrangianOuterBound):
             "and not on the original. This spoke will report no bound until "
             "they are unfixed; remove the fixing extension from this spoke."
         )
-        return bool(newly)
 
     def lagrangian(self, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
         """Solve every subproblem, then replace the solver's (useless) bound
@@ -335,8 +360,10 @@ class IpoptOuterBound(LagrangianOuterBound):
             bool(failures),
             lambda: (
                 f"ipopt_outer_bound: no certificate for {len(failures)} "
-                f"scenario(s), for example {failures[0]}; reporting no bound "
-                "for them this iteration."
+                f"scenario(s) on rank {self.cylinder_rank}, for example "
+                f"{failures[0]}. Ebound is all-or-nothing, so this cylinder "
+                "reports no bound at all this iteration -- not merely for the "
+                "scenarios named."
             ),
         )
         self._warn_once_collectively(

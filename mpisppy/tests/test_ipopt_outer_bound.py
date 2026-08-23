@@ -471,6 +471,32 @@ class TestNewlyFixedNonants(unittest.TestCase):
     def test_nothing_fixed_is_fine(self):
         self.assertFalse(self._spoke(False, False)._nonants_newly_fixed())
 
+    def test_the_answer_is_global_so_the_branch_cannot_diverge(self):
+        """lagrangian() branches on this to skip the rest of the iteration.
+
+        A rank-local answer means the rank with a fixed nonant returns into
+        Ebound's Allreduce while its peers enter two more collectives on the
+        same communicator -- a hang with no error. This rank saw nothing; its
+        peer did; it must still say True.
+        """
+        from mpisppy import MPI
+        spoke = self._spoke(False, False)          # nothing fixed HERE
+
+        class _TwoRanks:
+            size = 2
+
+            def Get_rank(self):
+                return 0
+
+            def allreduce(self, value, op=None):
+                assert op is MPI.MIN
+                return min(value, 1)               # rank 1 saw one
+
+        spoke.cylinder_comm = _TwoRanks()
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always")
+            self.assertTrue(spoke._nonants_newly_fixed())
+
 
 class TestProxGuard(unittest.TestCase):
     """The bound is a LAGRANGIAN bound, so a proximal subproblem would not
@@ -507,18 +533,27 @@ class TestCollectiveWarning(unittest.TestCase):
     problem, leaving an empty bound column and no explanation.
     """
 
-    def _spoke(self, rank, size, speaking_rank):
+    def _spoke(self, rank, flags):
+        """A spoke on `rank` of a comm where `flags[r]` says whether rank r
+        saw the condition. The comm performs the REAL reduction over all of
+        them rather than returning a canned answer, so an inverted ternary or
+        the wrong operator fails here instead of passing."""
         from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+        from mpisppy import MPI
 
         class _Comm:
-            def __init__(self):
-                self.size = size
+            size = len(flags)
 
             def Get_rank(self):
                 return rank
 
             def allreduce(self, value, op=None):
-                return speaking_rank
+                assert op is MPI.MIN, "the helper must reduce with MIN"
+                contributions = [
+                    r if flags[r] else len(flags) for r in range(len(flags))
+                ]
+                assert value == contributions[rank], "this rank's contribution"
+                return min(contributions)
 
         spoke = IpoptOuterBound.__new__(IpoptOuterBound)
         spoke.cylinder_rank = rank
@@ -529,29 +564,49 @@ class TestCollectiveWarning(unittest.TestCase):
     def _warn(self, spoke, local_flag):
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            spoke._warn_once_collectively("k", local_flag, lambda: "saw it")
+            self._returned = spoke._warn_once_collectively(
+                "k", local_flag, lambda: "saw it")
         return [str(w.message) for w in caught]
 
     def test_the_rank_that_saw_it_speaks_even_when_it_is_not_rank_zero(self):
-        spoke = self._spoke(rank=1, size=2, speaking_rank=1)
+        spoke = self._spoke(rank=1, flags=[False, True])
         self.assertEqual(self._warn(spoke, True), ["saw it"])
 
     def test_the_other_ranks_stay_quiet(self):
-        spoke = self._spoke(rank=0, size=2, speaking_rank=1)
+        spoke = self._spoke(rank=0, flags=[False, True])
         self.assertEqual(self._warn(spoke, False), [])
 
     def test_silence_when_no_rank_saw_it(self):
-        spoke = self._spoke(rank=0, size=2, speaking_rank=2)   # == size
+        spoke = self._spoke(rank=0, flags=[False, False])
         self.assertEqual(self._warn(spoke, False), [])
         self.assertNotIn("k", spoke._warned)   # not consumed, can still fire
 
     def test_key_is_consumed_on_every_rank_so_it_fires_only_once(self):
-        spoke = self._spoke(rank=0, size=2, speaking_rank=1)
+        spoke = self._spoke(rank=0, flags=[False, True])
         self._warn(spoke, False)
         self.assertIn("k", spoke._warned)
-        spoke2 = self._spoke(rank=1, size=2, speaking_rank=1)
+        spoke2 = self._spoke(rank=1, flags=[False, True])
         self.assertEqual(self._warn(spoke2, True), ["saw it"])
         self.assertEqual(self._warn(spoke2, True), [])
+
+    def test_the_answer_is_global_not_rank_local(self):
+        """Callers branch on this. A rank-local answer sends some ranks down a
+        path that skips collectives the others enter, which hangs the run."""
+        quiet = self._spoke(rank=0, flags=[False, True])
+        self._warn(quiet, False)
+        self.assertTrue(self._returned)          # False locally, True globally
+        nobody = self._spoke(rank=0, flags=[False, False])
+        self._warn(nobody, False)
+        self.assertFalse(self._returned)
+
+    def test_the_global_answer_survives_the_warn_once(self):
+        # Second call: the key is consumed, but the reduction must still run
+        # and still report the global condition, or the branch flips on
+        # iteration two and the ranks diverge.
+        spoke = self._spoke(rank=0, flags=[False, True])
+        self._warn(spoke, False)
+        self._warn(spoke, False)
+        self.assertTrue(self._returned)
 
 
 class TestCertificateFailureStandsDown(unittest.TestCase):

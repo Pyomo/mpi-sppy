@@ -48,7 +48,22 @@ If you want a positional arg, you have to DIY:
 """
 
 import argparse
+import math
+
 import pyomo.common.config as pyofig
+
+
+def _finite_nonnegative_float(value):
+    """A float in [0, inf).  pyofig.NonNegativeFloat admits inf; this does not.
+
+    Used for options that are subtracted from a computed quantity, where inf
+    silently turns a finite result into -inf.
+    """
+    value = float(value)
+    if not (math.isfinite(value) and value >= 0.0):
+        raise ValueError(
+            f"Expected a finite non-negative float, but received {value}")
+    return value
 
 # class to inherit from ConfigDict with a name field
 class Config(pyofig.ConfigDict):
@@ -1063,15 +1078,16 @@ class Config(pyofig.ConfigDict):
         # add_solver_specs itself defaults every solver name to None).
         self.add_solver_specs("ipopt_outer_bound")
 
-        # NonNegativeFloat, not float: the cushion is SUBTRACTED, so a
-        # negative value raises the reported bound above the theorem's
-        # quantity and yields a number that is not an outer bound at all.
+        # A dedicated domain, not NonNegativeFloat: the cushion is SUBTRACTED,
+        # so a negative value raises the reported bound above the theorem's
+        # quantity, and NonNegativeFloat accepts inf, which drives the reported
+        # bound to -inf. Neither result is an outer bound.
         self.add_to_config('ipopt_outer_bound_cushion',
                            description="relative cushion subtracted from the "
                                        "certified bound: report q - eps*(1+|q|). "
                                        "Last-bit hygiene against floating point, "
                                        "not a proof-carrying margin; 0 disables",
-                           domain=pyofig.NonNegativeFloat,
+                           domain=_finite_nonnegative_float,
                            default=1e-9)
 
 

@@ -240,6 +240,22 @@ class TestCushion(unittest.TestCase):
         with self.assertRaisesRegex(CertificateError, "non-negative"):
             certified_lower_bound(m, eps_rel=float("nan"))
 
+    def test_infinite_cushion_is_rejected(self):
+        # inf passes `>= 0`, and subtracting it drives a finite qhat to -inf.
+        # Unlike NaN, -inf is a number: it survives every downstream test and
+        # is folded into Ebound's sum as though it were a bound.
+        m = _model()
+        _place(m, x=0.5, y=0.5, dual=1.0)
+        with self.assertRaisesRegex(CertificateError, "finite"):
+            certified_lower_bound(m, eps_rel=float("inf"))
+
+    def test_a_huge_cushion_never_returns_minus_inf(self):
+        # The finiteness screen must sit on the RETURNED value, after the
+        # cushion is subtracted, not on the intermediate before it.
+        m = _model()
+        _place(m, x=0.5, y=0.5, dual=1.0)
+        self.assertIsNone(certified_lower_bound(m, eps_rel=1e308))
+
     def test_zero_cushion_gives_the_theorem_quantity(self):
         m = _model()
         _place(m, x=0.5, y=0.5, dual=1.0)
@@ -359,8 +375,9 @@ class TestGuards(unittest.TestCase):
         skipped = []
         q = certified_lower_bound(m, eps_rel=0.0, missing_duals=skipped)
         self.assertEqual(skipped, ["c"])
-        # The true optimum of the running example is 2.5 (at x=2, y=1).
-        self.assertLessEqual(q, 2.5 + 1e-9)
+        # A bound is a bound: it must not exceed the running example's
+        # optimum, which the module declares as OPT (8.0, at x=1, y=0).
+        self.assertLessEqual(q, OPT + 1e-9)
         # And dropping the row really is only a loss of tightness: taking the
         # same point WITH its dual gives a bound at least as good.
         tight = certified_lower_bound(

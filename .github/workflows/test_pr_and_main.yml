@@ -1316,10 +1316,12 @@ jobs:
           SOLVER_DIR="${GITHUB_WORKSPACE}/cache/solvers"
           mkdir -p "$SOLVER_DIR"
           echo "$SOLVER_DIR" >> $GITHUB_PATH
-          # ${VAR:-}, not $VAR: an unset LD_LIBRARY_PATH leaves a leading
-          # empty entry, which the loader reads as the current directory and
-          # keeps for every later step of the job.
-          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}:$SOLVER_DIR" >> $GITHUB_ENV
+          # ${VAR:+$VAR:} is the form that actually works. Both $VAR and
+          # ${VAR:-} leave a leading empty entry when LD_LIBRARY_PATH is unset,
+          # and the loader reads that as the current directory, keeping it on
+          # the search path for every later step of the job. The :+ form emits
+          # the separator only when there is something to separate.
+          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}$SOLVER_DIR" >> $GITHUB_ENV
           URL=https://github.com/IDAES/idaes-ext
           RELEASE=$(curl --max-time 150 --retry 8 -L -s \
               -H 'Accept: application/json' ${URL}/releases/latest)
