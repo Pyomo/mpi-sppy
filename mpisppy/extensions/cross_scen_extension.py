@@ -57,7 +57,7 @@ class CrossScenarioExtension(Extension):
             self.reenable_prox = True
         elif not opt.W_disabled:
             opt._disable_W()
-            self.eenable_W = True
+            self.reenable_W = True
         elif not opt.prox_disabled:
             opt._disable_prox()
             self.reenable_prox = True

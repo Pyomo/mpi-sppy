@@ -254,11 +254,16 @@ def _copy_nonants_from_host(s):
 def _restore_nonants(Ag, s=None):
     _copy_nonants_from_host(s)
 
-def _restore_original_fixedness(Ag, scenario):
-    _copy_nonants_from_host(scenario)
+def _restore_original_fixedness(Ag, s):
+    # s, not scenario: see the note on _fix_root_nonants below. Reached on an
+    # ordinary single run through SPOpt.post_solve_bound.
+    _copy_nonants_from_host(s)
 
 def _fix_nonants(Ag, s=None):
     _copy_nonants_from_host(s)
 
-def _fix_root_nonants(Ag, scenario):
-    _copy_nonants_from_host(scenario)
+def _fix_root_nonants(Ag, s):
+    # s, not scenario: SPOpt._fix_root_nonants passes {"s": s}, and
+    # callout_agnostic calls fct(Ag=self, **kwargs), so any other parameter
+    # name is a TypeError as soon as the host calls the callout
+    _copy_nonants_from_host(s)

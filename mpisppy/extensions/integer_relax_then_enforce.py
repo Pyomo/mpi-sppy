@@ -45,16 +45,32 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
         self._integers_relaxed = False
 
     def miditer(self):
+        # Each branch below returns after unrelaxing: the conditions are
+        # independent and more than one can be true in the same pass -- a run
+        # that is past its time fraction and its iteration fraction at once --
+        # and the second undo raises, because Pyomo's first one deletes
+        # _relaxed_integer_vars.
         if not self._integers_relaxed:
             return
         # time is running out
-        if self.opt.options["time_limit"] is not None and ( time.perf_counter() - self.opt.start_time ) > (self.opt.options["time_limit"] * self.ratio):
+        #
+        # Reduced: this is the one test of the three that is rank-local, a
+        # per-process clock, and _unrelax_integers is not collective. Left per
+        # rank, one rank crossing the fraction a moment before another has
+        # some ranks solving MIPs and the rest LPs in the same iteration, with
+        # Compute_Xbar and Update_W averaging the two.
+        time_limit = self.opt.options["time_limit"]
+        out_of_time = time_limit is not None and self.opt.allreduce_or(
+            (time.perf_counter() - self.opt.start_time) > (time_limit * self.ratio))
+        if out_of_time:
             global_toc(f"{self.__class__.__name__}: enforcing integrality constraints, ran so far for more than {self.opt.options['time_limit']*self.ratio} seconds", self.opt.cylinder_rank == 0)
             self._unrelax_integers()
+            return
         # iterations are running out
         if self.opt._PHIter > self.opt.options["PHIterLimit"] * self.ratio:
             global_toc(f"{self.__class__.__name__}: enforcing integrality constraints, ran so far for {self.opt._PHIter - 1} iterations", self.opt.cylinder_rank == 0)
             self._unrelax_integers()
+            return
         # nearly converged
         if self.opt.conv < (self.opt.options["convthresh"] * 1.1):
             global_toc(f"{self.__class__.__name__}: Enforcing integrality constraints, PH is nearly converged", self.opt.cylinder_rank == 0)
