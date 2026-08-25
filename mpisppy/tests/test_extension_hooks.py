@@ -151,6 +151,54 @@ class TestWtrackerReportNames(unittest.TestCase):
         self.assertEqual(seen["prefix"], "")
 
 
+class TestFWPHSmoothing(unittest.TestCase):
+
+    def test_fwph_refuses_smoothing(self):
+        # FWPH attaches no proximal term, and smoothing rides on that term, so
+        # PH_Prep creates neither p nor beta. At smoothed == 2 Iter0's rescale
+        # then dies on the missing p; at 1 the run finishes with the smoothing
+        # silently doing nothing. Subgradient refuses the same combination.
+        from mpisppy.opt.fwph import FWPH
+        for smoothed in (1, 2):
+            with self.subTest(smoothed=smoothed):
+                options = {
+                    "solver_name": "gurobi", "PHIterLimit": 2,
+                    "defaultPHrho": 1, "convthresh": 1e-8, "verbose": False,
+                    "display_timing": False, "display_progress": False,
+                    "smoothed": smoothed, "toc": False,
+                    "FW_iter_limit": 5, "FW_weight": 0.0,
+                    "FW_conv_thresh": 1e-4, "stop_check_tol": 1e-5,
+                    "FW_LP_start_iterations": 0, "FW_verbose": False,
+                    "mip_solver_options": {}, "qp_solver_options": {},
+                    "iter0_solver_options": None, "iterk_solver_options": None,
+                }
+                fw = FWPH(options, [f"Scenario{i+1}" for i in range(3)],
+                          farmer.scenario_creator, farmer.scenario_denouement,
+                          scenario_creator_kwargs={"crops_multiplier": 1})
+                with self.assertRaisesRegex(RuntimeError, "smoothing"):
+                    fw.fwph_main()
+
+    def test_the_fwph_spoke_zeroes_smoothing(self):
+        # A caller reusing a PH hub's options dict brings smoothed along, and
+        # options_check only fills in a missing key -- so the spoke has to
+        # zero it the way fwph_hub does, or the run aborts at fwph_main.
+        from mpisppy.utils import config
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = config.Config()
+        cfg.popular_args()
+        cfg.ph_args()
+        cfg.two_sided_args()
+        cfg.fwph_args()
+        cfg.num_scens_required()
+        cfg.num_scens = 3
+        cfg.solver_name = "gurobi"
+        cfg.default_rho = 1
+        beans = (cfg, farmer.scenario_creator, farmer.scenario_denouement,
+                 [f"Scenario{i+1}" for i in range(3)])
+        spoke = vanilla.fwph_spoke(*beans)
+        self.assertEqual(spoke["opt_kwargs"]["options"]["smoothed"], 0)
+
+
 class TestAgnosticGuestCallouts(unittest.TestCase):
 
     def test_the_gurobipy_guests_take_the_parameter_the_host_passes(self):
