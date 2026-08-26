@@ -1025,7 +1025,7 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         Note:
             PH_Prep may be run only once on an object, so a PH object solves
-            one problem. Running it twice used to look like it worked and
+            one problem. Running PH_Prep twice used to look like it worked and
             quietly solve something else: attach_Ws_and_prox re-declared W and
             rho as fresh Params, discarding the duals the first run produced,
             and attach_PH_to_objective appended a *second* PH term to the same
@@ -1035,8 +1035,8 @@ class PHBase(mpisppy.spopt.SPOpt):
             W_on count from 1 to 2, with no error and no warning.
 
             Making it genuinely re-entrant is possible but is not free -- see
-            issue #848 -- and nothing in the tree wants it: every caller that
-            runs PH more than once builds a new object. So it refuses.
+            issue #848 -- and no caller wants it: every one that runs PH more
+            than once builds a new object.
         """
         if self._PH_prep_done:
             raise RuntimeError(
@@ -1067,11 +1067,8 @@ class PHBase(mpisppy.spopt.SPOpt):
         if not self._deferred_ph_attach:
             self.attach_PH_to_objective(attach_duals, attach_prox, attach_smooth)
 
-        # Last, so that a prep which died on the way here -- a rho_setter that
-        # raised, a model the prox approximation cannot take -- does not leave
-        # the object claiming a prep it never finished. Retrying then meets
-        # whatever actually went wrong instead of "already been run", which
-        # would point at the wrong fix.
+        # Last, so a prep that raised leaves the object unprepped and the
+        # retry reports the real failure, not "already been run".
         self._PH_prep_done = True
 
 
