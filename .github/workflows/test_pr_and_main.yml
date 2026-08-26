@@ -618,7 +618,7 @@ jobs:
           include-hidden-files: true
 
   ph-main:
-    name: PH ph_main and prep tests
+    name: PH ph_main tests
     runs-on: ubuntu-latest
     needs: [ruff]
     steps:
