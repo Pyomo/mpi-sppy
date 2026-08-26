@@ -54,11 +54,11 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
             return
         # time is running out
         #
-        # Reduced: this is the one test of the three that is rank-local, a
-        # per-process clock, and _unrelax_integers is not collective. Left per
-        # rank, one rank crossing the fraction a moment before another has
-        # some ranks solving MIPs and the rest LPs in the same iteration, with
-        # Compute_Xbar and Update_W averaging the two.
+        # Each rank has its own clock, so without allreduce_or the ranks stop
+        # relaxing at different iterations: some would solve MIPs while the
+        # others were still solving LPs, and Compute_Xbar would average the
+        # two. The other conditions below read _PHIter and conv, which are the
+        # same on every rank.
         time_limit = self.opt.options["time_limit"]
         out_of_time = time_limit is not None and self.opt.allreduce_or(
             (time.perf_counter() - self.opt.start_time) > (time_limit * self.ratio))

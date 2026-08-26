@@ -61,7 +61,7 @@ class TestIntegerRelaxThenEnforce(unittest.TestCase):
         irte.miditer()                    # must not raise
         self.assertFalse(irte._integers_relaxed)
 
-    def test_the_time_test_is_taken_on_every_rank(self):
+    def test_the_time_condition_is_decided_on_every_rank(self):
         # The time fraction is a per-process clock and _unrelax_integers is
         # not collective, so deciding it per rank leaves some ranks solving
         # MIPs and the rest LPs in the same iteration.
@@ -87,7 +87,28 @@ class TestIntegerRelaxThenEnforce(unittest.TestCase):
         ph.conv = 1.0
         irte.miditer()
         self.assertEqual(reduced, [True],
-                         "the time test was decided without a reduction")
+                         "the time condition was decided without a reduction")
+
+    def test_each_condition_unrelaxes_on_its_own(self):
+        # Three conditions, three returns. The time one is covered above; a
+        # run can also reach the fraction of its iteration limit, or come
+        # near convergence, with the clock nowhere near the limit.
+        from mpisppy.extensions.integer_relax_then_enforce import (
+            IntegerRelaxThenEnforce)
+        for label, phiter, conv in (("iterations", 51, 1.0),
+                                    ("convergence", 1, 1e-9)):
+            with self.subTest(condition=label):
+                ph = _make_ph(time_limit=600, PHIterLimit=100)
+                ph.PH_Prep()
+                for s in ph.local_scenarios.values():
+                    s._solver_plugin = None
+                irte = IntegerRelaxThenEnforce(ph)
+                irte.pre_iter0()
+                ph._PHIter = phiter
+                ph.conv = conv
+                irte.miditer()
+                self.assertFalse(irte._integers_relaxed,
+                                 f"the {label} condition did not unrelax")
 
     def test_no_reduction_when_there_is_no_time_limit(self):
         # time_limit is rank-identical, so an unset one is False everywhere
