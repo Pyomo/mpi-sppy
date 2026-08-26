@@ -76,6 +76,18 @@ class TestPHPrepRunsOnce(unittest.TestCase):
                              "a second PH term was spliced in")
             self.assertEqual(expressions[k].count("W_on"), 1)
 
+    def test_a_prep_that_raised_is_not_counted(self):
+        # The flag is set once the prep has been through, so a prep that died
+        # partway does not leave the object claiming one. Retrying meets the
+        # real failure rather than "already been run", which would point at
+        # the wrong fix.
+        ph = _make_ph(defaultPHrho=-1)      # attach_Ws_and_prox rejects this
+        with self.assertRaisesRegex(RuntimeError, "defaultPHrho"):
+            ph.PH_Prep()
+        self.assertFalse(ph._PH_prep_done)
+        ph.options["defaultPHrho"] = 1
+        ph.PH_Prep()                        # the corrected call goes through
+
     @unittest.skipIf(not solver_available,
                      "%s solver is not available" % (solver_name,))
     def test_a_second_ph_main_is_refused(self):

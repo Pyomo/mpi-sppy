@@ -1044,7 +1044,6 @@ class PHBase(mpisppy.spopt.SPOpt):
                 "solves one problem: W, rho and the objective terms it "
                 "carries belong to that run, and a second prep would discard "
                 "the first and double the terms. Build a new object.")
-        self._PH_prep_done = True
 
         self.attach_Ws_and_prox()
         if attach_smooth:
@@ -1067,6 +1066,13 @@ class PHBase(mpisppy.spopt.SPOpt):
         self._deferred_ph_attach = defer_attach and (self.Ag is None)
         if not self._deferred_ph_attach:
             self.attach_PH_to_objective(attach_duals, attach_prox, attach_smooth)
+
+        # Last, so that a prep which died on the way here -- a rho_setter that
+        # raised, a model the prox approximation cannot take -- does not leave
+        # the object claiming a prep it never finished. Retrying then meets
+        # whatever actually went wrong instead of "already been run", which
+        # would point at the wrong fix.
+        self._PH_prep_done = True
 
 
     def options_check(self):
