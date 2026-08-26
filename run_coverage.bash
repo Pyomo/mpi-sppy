@@ -107,6 +107,9 @@ run_phase "test_prox_solver_compat (serial)" \
 run_phase "test_ph_main (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_main.py
 
+run_phase "test_ph_prep_once (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_prep_once.py
+
 run_phase "test_ph_extensions (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_extensions.py
 
