@@ -665,11 +665,15 @@ class SPCommunicator:
         if not synchronize:
             return True
         local_val = np.array((new_id,), 'i')
-        sum_ids = np.zeros(1, 'i')
+        min_id = np.zeros(1, 'i')
+        max_id = np.zeros(1, 'i')
         self.cylinder_comm.Allreduce((local_val, MPI.INT),
-                                     (sum_ids, MPI.INT),
-                                     op=MPI.SUM)
-        return new_id * self.cylinder_comm.size == sum_ids[0]
+                                     (min_id, MPI.INT),
+                                     op=MPI.MIN)
+        self.cylinder_comm.Allreduce((local_val, MPI.INT),
+                                     (max_id, MPI.INT),
+                                     op=MPI.MAX)
+        return min_id[0] == max_id[0]
 
     def _mark_new(self, buf: RecvArray, new_id: int) -> bool:
         """Commit an accepted read: stamp ``new_id`` into the buffer's id slot
