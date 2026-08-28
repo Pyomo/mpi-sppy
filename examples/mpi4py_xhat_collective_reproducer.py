@@ -43,7 +43,8 @@ from mpi4py import MPI
 def _parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--mode", choices=("object", "typed", "invalid-mismatch"),
+        "--mode", choices=(
+            "object", "typed", "rma-only", "invalid-mismatch"),
         default="object",
     )
     parser.add_argument("--iterations", type=int, default=10_000)
@@ -58,6 +59,11 @@ def _parse_args():
     parser.add_argument(
         "--with-rma", action="store_true",
         help="Exercise Win.Allocate/Put/Get on the four-rank strata comms.",
+    )
+    parser.add_argument(
+        "--trace-iteration", type=int, default=-1,
+        help=("Zero-based iteration for which every Xhat rank prints entry/"
+              "exit around the RMA and collective phases."),
     )
     return parser.parse_args()
 
@@ -207,6 +213,8 @@ def main():
         )
     if not 0 <= args.xhat_index < args.cylinders:
         raise ValueError("xhat-index must be in [0, cylinders)")
+    if args.mode == "rma-only" and not args.with_rma:
+        raise ValueError("--mode rma-only requires --with-rma")
 
     cylinder_index = world_rank % args.cylinders
     color = 0 if cylinder_index == args.xhat_index else MPI.UNDEFINED
@@ -232,6 +240,7 @@ def main():
         )
 
     try:
+        xhat_rank = None
         if xhat_comm != MPI.COMM_NULL:
             xhat_rank = xhat_comm.Get_rank()
             if xhat_rank == 0:
@@ -244,6 +253,14 @@ def main():
 
         for iteration in range(args.iterations):
             root_value = None
+            trace = (iteration == args.trace_iteration
+                     and xhat_comm != MPI.COMM_NULL)
+            if trace:
+                print(
+                    f"TRACE iteration={iteration} world_rank={world_rank} "
+                    f"xhat_rank={xhat_rank} before-rma",
+                    flush=True,
+                )
             if args.with_rma:
                 root_value = _rma_iteration(
                     rma_window,
@@ -254,8 +271,20 @@ def main():
                     args.payload_length,
                     padded_length,
                 )
+            if trace:
+                print(
+                    f"TRACE iteration={iteration} world_rank={world_rank} "
+                    f"xhat_rank={xhat_rank} after-rma",
+                    flush=True,
+                )
 
-            if xhat_comm != MPI.COMM_NULL:
+            if xhat_comm != MPI.COMM_NULL and args.mode != "rma-only":
+                if trace:
+                    print(
+                        f"TRACE iteration={iteration} world_rank={world_rank} "
+                        f"xhat_rank={xhat_rank} before-collective",
+                        flush=True,
+                    )
                 if (args.mode == "invalid-mismatch"
                         and iteration == args.mismatch_iteration):
                     _invalid_mismatch(xhat_comm, iteration)
@@ -265,10 +294,16 @@ def main():
                 else:
                     _object_iteration(
                         xhat_comm, iteration, args.payload_length, root_value)
+                if trace:
+                    print(
+                        f"TRACE iteration={iteration} world_rank={world_rank} "
+                        f"xhat_rank={xhat_rank} after-collective",
+                        flush=True,
+                    )
 
-                if (xhat_rank == 0 and args.progress_every > 0
-                        and (iteration + 1) % args.progress_every == 0):
-                    print(f"completed {iteration + 1} iterations", flush=True)
+            if (xhat_rank == 0 and args.progress_every > 0
+                    and (iteration + 1) % args.progress_every == 0):
+                print(f"completed {iteration + 1} iterations", flush=True)
 
         if rma_window is not None:
             rma_window.Free()
