@@ -8,10 +8,12 @@
 ###############################################################################
 
 import re
+import numpy as np
 import pyomo.environ as pyo
 
 # NOTE: a caller attaches the comms (e.g. pre_iter0)
 
+from mpisppy import MPI
 import mpisppy.extensions.extension
 import mpisppy.utils.w_utils.wxbarutils as wxbarutils
 import mpisppy.utils.sputils as sputils
@@ -99,6 +101,9 @@ class XhatBase(mpisppy.extensions.extension.Extension):
         self.verbose = self.opt.options["verbose"]
 
         self.scenario_name_to_rank = opt.scenario_names_to_rank
+        self._scenario_name_to_index = {
+            name: index for index, name in enumerate(opt.all_scenario_names)
+        }
         # dict: scenario names --> LOCAL rank number (needed mainly for xhat)
 
     def _checked_bcast(self, comm, value, sname, src_rank, node_name):
@@ -110,24 +115,66 @@ class XhatBase(mpisppy.extensions.extension.Extension):
         instead of entering such a collective.
         """
         src_rank = int(src_rank)
-        reports = comm.allgather((sname, src_rank, value is not None))
-        selections = {(report[0], report[1]) for report in reports}
-        if len(selections) != 1:
+        scenario_index = self._scenario_name_to_index.get(sname, -1)
+        local_selection = np.array([scenario_index, src_rank], dtype='i')
+        min_selection = np.empty(2, dtype='i')
+        max_selection = np.empty(2, dtype='i')
+        comm.Allreduce(local_selection, min_selection, op=MPI.MIN)
+        comm.Allreduce(local_selection, max_selection, op=MPI.MAX)
+        if not np.array_equal(min_selection, max_selection):
             raise RuntimeError(
                 f"Xhat ranks disagree on the scenario/root for node "
-                f"{node_name}: {sorted(selections, key=repr)!r}"
+                f"{node_name}: scenario index range "
+                f"[{min_selection[0]}, {max_selection[0]}], root range "
+                f"[{min_selection[1]}, {max_selection[1]}]"
+            )
+        if scenario_index < 0:
+            raise RuntimeError(
+                f"Unknown Xhat scenario {sname!r} for node {node_name}"
             )
         if src_rank < 0 or src_rank >= comm.Get_size():
             raise RuntimeError(
                 f"Invalid Xhat broadcast root {src_rank} for node "
                 f"{node_name} on a communicator of size {comm.Get_size()}"
             )
-        if not reports[src_rank][2]:
+
+        is_root = comm.Get_rank() == src_rank
+        local_payload = np.array([int(is_root and value is not None)], dtype='i')
+        payload_count = np.zeros(1, dtype='i')
+        comm.Allreduce(local_payload, payload_count, op=MPI.SUM)
+        if payload_count[0] == 0:
             raise RuntimeError(
                 f"Xhat broadcast root {src_rank} has no cached values for "
                 f"scenario {sname}, node {node_name}"
             )
-        return comm.bcast(value, root=src_rank)
+        if payload_count[0] != 1:
+            raise RuntimeError(
+                f"Xhat broadcast for scenario {sname}, node {node_name} "
+                f"has {payload_count[0]} payload owners; expected exactly one"
+            )
+
+        local_length = np.array(
+            [len(value) if is_root and value is not None else 0], dtype='i')
+        payload_length = np.zeros(1, dtype='i')
+        comm.Allreduce(local_length, payload_length, op=MPI.MAX)
+        if payload_length[0] <= 0:
+            raise RuntimeError(
+                f"Xhat broadcast payload is empty for scenario {sname}, "
+                f"node {node_name}"
+            )
+
+        if is_root:
+            result = np.ascontiguousarray(value, dtype='d')
+            if result.ndim != 1 or result.size != payload_length[0]:
+                raise RuntimeError(
+                    f"Xhat broadcast payload for scenario {sname}, node "
+                    f"{node_name} must be a one-dimensional array of length "
+                    f"{payload_length[0]}; got shape {result.shape}"
+                )
+        else:
+            result = np.empty(int(payload_length[0]), dtype='d')
+        comm.Bcast([result, MPI.DOUBLE], root=src_rank)
+        return result
         
      #**********
     def _try_one(self, snamedict, solver_options=None, verbose=False,
