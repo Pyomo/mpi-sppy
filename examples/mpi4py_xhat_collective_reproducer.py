@@ -301,9 +301,17 @@ def main():
                         flush=True,
                     )
 
-            if (xhat_rank == 0 and args.progress_every > 0
+            report_progress = (
+                xhat_rank is not None
+                and (xhat_rank == 0 or args.mode == "rma-only")
+            )
+            if (report_progress and args.progress_every > 0
                     and (iteration + 1) % args.progress_every == 0):
-                print(f"completed {iteration + 1} iterations", flush=True)
+                print(
+                    f"xhat_rank={xhat_rank} completed {iteration + 1} "
+                    f"iterations",
+                    flush=True,
+                )
 
         if rma_window is not None:
             rma_window.Free()
