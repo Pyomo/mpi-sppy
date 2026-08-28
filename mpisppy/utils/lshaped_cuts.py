@@ -516,6 +516,13 @@ class StandardLPL1CutGenerator:
         repn = generate_standard_repn(obj.expr, quadratic=True)
         if repn.nonlinear_vars or repn.quadratic_vars:
             raise ValueError("standard_lp_l1 requires a linear subproblem objective")
+        if next(
+            subproblem.component_data_objects(
+                pe.SOSConstraint, active=True, descend_into=True
+            ),
+            None,
+        ) is not None:
+            raise ValueError("standard_lp_l1 does not support SOS constraints")
         for con in subproblem.component_data_objects(Constraint, active=True, descend_into=True):
             repn = generate_standard_repn(con.body, quadratic=True)
             if repn.nonlinear_vars or repn.quadratic_vars:
