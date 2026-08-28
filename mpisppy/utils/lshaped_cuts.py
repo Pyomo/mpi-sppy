@@ -304,6 +304,12 @@ class StandardLPL1CutGenerator:
         base = self.subproblems[local_ndx]
         cmap = self.complicating_vars_maps[local_ndx]
         subproblem = base.clone()
+        # The clone is made while the failed recourse solve's temporary
+        # fixing rows still exist on ``base``.  They are not original
+        # subproblem constraints and must not be relaxed into the L1 model;
+        # doing so also makes the dual of the new hard fixing row degenerate.
+        if hasattr(subproblem, "_mpisppy_lshaped_fix_cons"):
+            subproblem.del_component(subproblem._mpisppy_lshaped_fix_cons)
         if not hasattr(subproblem, "dual"):
             subproblem.dual = pe.Suffix(direction=pe.Suffix.IMPORT)
         clone_cmap = pe.ComponentMap(

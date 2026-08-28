@@ -9,10 +9,11 @@
 import unittest
 
 import pyomo.environ as pyo
+from pyomo.core.expr.visitor import identify_variables
 
 from mpisppy.opt.lshaped import LShapedMethod
 from mpisppy.utils.lshaped_cuts import StandardLPL1CutGenerator, solver_dual_sign_convention
-from mpisppy.tests.examples import farmer
+from mpisppy.tests.examples import farmer, l1_feasibility
 from mpisppy.tests.utils import get_solver
 
 
@@ -108,6 +109,57 @@ class TestStandardLPL1LShapedSolve(unittest.TestCase):
         ls.lshaped_algorithm()
 
         self.assertAlmostEqual(ls._LShaped_bound, -108390.0, delta=5.0)
+
+    @unittest.skipUnless(
+        standard_lp_l1_solver_available,
+        "%s solver is not available or is not supported by standard_lp_l1"
+        % (solver_name,),
+    )
+    def test_infeasible_recourse_generates_l1_feasibility_cuts(self):
+        names = l1_feasibility.scenario_names_creator()
+        options = {
+            "root_solver": solver_name,
+            "sp_solver": solver_name,
+            "sp_solver_options": {},
+            "valid_eta_lb": {name: 0.0 for name in names},
+            "lshaped_cut_generator": "standard_lp_l1",
+            "max_iter": 10,
+            "verbose": False,
+        }
+        ls = LShapedMethod(
+            options,
+            names,
+            l1_feasibility.scenario_creator,
+            l1_feasibility.scenario_denouement,
+        )
+
+        ls.lshaped_algorithm()
+
+        capacity = ls.root.capacity
+        cuts = list(ls.root._standard_lshaped_l1_cuts.values())
+        eta_ids = {id(eta) for eta in ls.root.eta.values()}
+        feasibility_cuts = [
+            cut for cut in cuts
+            if eta_ids.isdisjoint(id(var) for var in identify_variables(cut.body))
+        ]
+
+        # The initial master picks capacity=0.  Each scenario rejects it with
+        # an eta-free feasibility cut (capacity >= 4 and capacity >= 6).
+        self.assertEqual(len(feasibility_cuts), 2)
+        final_capacity = pyo.value(capacity)
+        capacity.set_value(0.0)
+        for cut in feasibility_cuts:
+            self.assertGreater(pyo.value(cut.body - cut.upper), 1e-7)
+
+        # Both cuts accept the converged solution, where the high-demand
+        # scenario is binding.  One subsequent optimality cut prices its
+        # emergency-supply recourse.
+        capacity.set_value(final_capacity)
+        for cut in feasibility_cuts:
+            self.assertLessEqual(pyo.value(cut.body - cut.upper), 1e-7)
+        self.assertEqual(len(cuts), 3)
+        self.assertAlmostEqual(final_capacity, 6.0, places=6)
+        self.assertAlmostEqual(ls._LShaped_bound, 6.05, places=6)
 
 
 if __name__ == "__main__":
