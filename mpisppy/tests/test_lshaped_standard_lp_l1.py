@@ -13,8 +13,9 @@ from pyomo.core.expr.visitor import identify_variables
 
 from mpisppy.opt.lshaped import LShapedMethod
 from mpisppy.utils.lshaped_cuts import StandardLPL1CutGenerator, solver_dual_sign_convention
-from mpisppy.tests.examples import farmer, l1_feasibility
+from mpisppy.tests.examples import farmer
 from mpisppy.tests.utils import get_solver
+import mpisppy.utils.sputils as sputils
 
 
 solver_available, solver_name, _, _ = get_solver()
@@ -80,6 +81,36 @@ class TestStandardLPL1CutGenerator(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unknown lshaped_cut_generator"):
             ls.lshaped_algorithm()
 
+    def test_ambiguous_recourse_status_with_zero_l1_violation_errors(self):
+        root = pyo.ConcreteModel()
+        root.x = pyo.Var(initialize=0.0)
+        root.eta = pyo.Var(initialize=0.0)
+        subproblem = pyo.ConcreteModel()
+        subproblem.x = pyo.Var()
+        subproblem.obj = pyo.Objective(expr=0.0)
+
+        class _Result:
+            class solver:
+                termination_condition = pyo.TerminationCondition.infeasibleOrUnbounded
+
+        gen = StandardLPL1CutGenerator()
+        gen.root_vars = [root.x]
+        gen.tol = 1e-6
+        gen.subproblems = [subproblem]
+        gen.complicating_vars_maps = [pyo.ComponentMap([(root.x, subproblem.x)])]
+        gen.subproblem_solvers = [object()]
+        gen.subproblem_solver_names = ["cbc"]
+        gen._solve_model = lambda *args: _Result()
+        gen._solve_l1_feasibility = lambda *args: {
+            "constant": 0.0,
+            "coefficients": [0.0],
+            "needs_cut": False,
+            "infeasible": True,
+        }
+
+        with self.assertRaisesRegex(RuntimeError, "may be unbounded"):
+            gen._solve_recourse_or_l1(0, root.eta)
+
 
 class TestStandardLPL1LShapedSolve(unittest.TestCase):
     @unittest.skipUnless(
@@ -116,7 +147,26 @@ class TestStandardLPL1LShapedSolve(unittest.TestCase):
         % (solver_name,),
     )
     def test_infeasible_recourse_generates_l1_feasibility_cuts(self):
-        names = l1_feasibility.scenario_names_creator()
+        names = ["low", "high"]
+        demand = {"low": 5.0, "high": 7.0}
+
+        def scenario_creator(scenario_name):
+            model = pyo.ConcreteModel(name=scenario_name)
+            model.capacity = pyo.Var(bounds=(0.0, 10.0))
+            model.emergency_supply = pyo.Var(bounds=(0.0, 1.0))
+            model.meet_demand = pyo.Constraint(
+                expr=(
+                    model.capacity + model.emergency_supply
+                    >= demand[scenario_name]
+                )
+            )
+            model.total_cost = pyo.Objective(
+                expr=model.capacity + 0.1 * model.emergency_supply
+            )
+            model._mpisppy_probability = 1.0 / len(names)
+            sputils.attach_root_node(model, model.capacity, [model.capacity])
+            return model
+
         options = {
             "root_solver": solver_name,
             "sp_solver": solver_name,
@@ -129,8 +179,7 @@ class TestStandardLPL1LShapedSolve(unittest.TestCase):
         ls = LShapedMethod(
             options,
             names,
-            l1_feasibility.scenario_creator,
-            l1_feasibility.scenario_denouement,
+            scenario_creator,
         )
 
         ls.lshaped_algorithm()
