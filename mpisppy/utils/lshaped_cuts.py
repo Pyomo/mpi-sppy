@@ -259,12 +259,17 @@ class StandardLPL1CutGenerator:
 
         Raises:
             RuntimeError: If the recourse solve returns an unsupported
-            termination condition.
+                termination condition, or reports ``infeasibleOrUnbounded``
+                while the L1 model finds no feasibility violation.
             NotImplementedError: If the solver dual sign convention is unknown.
         """
         subproblem = self.subproblems[local_ndx]
         solver = self.subproblem_solvers[local_ndx]
         solver_name = self.subproblem_solver_names[local_ndx]
+        if solver_name not in solver_dual_sign_convention:
+            raise NotImplementedError(
+                    f"No dual sign convention is registered for solver {solver_name}")
+
         sign = solver_dual_sign_convention[solver_name]
         fix_cons = self._add_fixing_constraints(subproblem, self.complicating_vars_maps[local_ndx])
         try:
@@ -280,7 +285,18 @@ class StandardLPL1CutGenerator:
                     "infeasible": False,
                 }
             if tc in self._infeasible_tc:
-                return self._solve_l1_feasibility(local_ndx, solver_name)
+                result = self._solve_l1_feasibility(local_ndx, solver_name)
+                if (
+                    tc == pe.TerminationCondition.infeasibleOrUnbounded
+                    and not result["needs_cut"]
+                ):
+                    raise RuntimeError(
+                        "Recourse solve returned "
+                        f"{tc}, but the L1 feasibility problem found no "
+                        "violation. The recourse problem may be unbounded; "
+                        "a valid feasibility cut cannot be generated."
+                    )
+                return result
             raise RuntimeError(f"Unexpected subproblem termination condition: {tc}")
         finally:
             self._remove_fixing_constraints(subproblem, solver, fix_cons.values())
