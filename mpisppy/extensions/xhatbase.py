@@ -100,6 +100,34 @@ class XhatBase(mpisppy.extensions.extension.Extension):
 
         self.scenario_name_to_rank = opt.scenario_names_to_rank
         # dict: scenario names --> LOCAL rank number (needed mainly for xhat)
+
+    def _checked_bcast(self, comm, value, sname, src_rank, node_name):
+        """Broadcast an xhat only after every rank agrees on its source.
+
+        A collective called with different roots has undefined MPI behavior.
+        Gather the selected scenario, root, and payload ownership first so a
+        rank-divergent xhat selection becomes a deterministic Python error
+        instead of entering such a collective.
+        """
+        src_rank = int(src_rank)
+        reports = comm.allgather((sname, src_rank, value is not None))
+        selections = {(report[0], report[1]) for report in reports}
+        if len(selections) != 1:
+            raise RuntimeError(
+                f"Xhat ranks disagree on the scenario/root for node "
+                f"{node_name}: {sorted(selections, key=repr)!r}"
+            )
+        if src_rank < 0 or src_rank >= comm.Get_size():
+            raise RuntimeError(
+                f"Invalid Xhat broadcast root {src_rank} for node "
+                f"{node_name} on a communicator of size {comm.Get_size()}"
+            )
+        if not reports[src_rank][2]:
+            raise RuntimeError(
+                f"Xhat broadcast root {src_rank} has no cached values for "
+                f"scenario {sname}, node {node_name}"
+            )
+        return comm.bcast(value, root=src_rank)
         
      #**********
     def _try_one(self, snamedict, solver_options=None, verbose=False,
@@ -143,9 +171,10 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                 xhat = self.opt.local_scenarios[sname]._mpisppy_data.nonant_cache
             else:
                 xhat = None
-            src_rank = self.scenario_name_to_rank["ROOT"][sname]
+            src_rank = self.scenario_name_to_rank["ROOT"].get(sname, -1)
             try:
-                xhats["ROOT"] = self.comms["ROOT"].bcast(xhat, root=src_rank)
+                xhats["ROOT"] = self._checked_bcast(
+                    self.comms["ROOT"], xhat, sname, src_rank, "ROOT")
             except:
                 print("rank=",self.cylinder_rank, "xhats bcast failed on src_rank={}"\
                       .format(src_rank))
@@ -175,15 +204,11 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                         xhats[ndn] = [s._mpisppy_data.nonant_cache[i+cistart[ndn]]
                                       for i in range(nlens[ndn])]
             for ndn in cistart:  # local nodes
-                if snamedict[ndn] not in self.scenario_name_to_rank[ndn]:
-                    print (f"For ndn={ndn}, snamedict[ndn] not in "
-                           "self.scenario_name_to_rank[ndn]")
-                    print(f"snamedict[ndn]={snamedict[ndn]}")
-                    print(f"self.scenario_name_to_rank[ndn]={self.scenario_name_to_rank[ndn]}")
-                    raise RuntimeError("Bad scenario selection for xhat")
-                src_rank = self.scenario_name_to_rank[ndn][snamedict[ndn]]
+                sname = snamedict[ndn]
+                src_rank = self.scenario_name_to_rank[ndn].get(sname, -1)
                 try:
-                    xhats[ndn] = self.comms[ndn].bcast(xhats[ndn], root=src_rank)
+                    xhats[ndn] = self._checked_bcast(
+                        self.comms[ndn], xhats[ndn], sname, src_rank, ndn)
                 except:
                     print("rank=",self.cylinder_rank, "xhats bcast failed on ndn={}, src_rank={}"\
                           .format(ndn,src_rank))
@@ -198,9 +223,10 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                 xhat = [self.opt.local_scenarios[sname]._mpisppy_data.nonant_cache[i] for i in range(rnlen)]
             else:
                 xhat = None
-            src_rank = self.scenario_name_to_rank["ROOT"][sname]
+            src_rank = self.scenario_name_to_rank["ROOT"].get(sname, -1)
             try:
-                xhats["ROOT"] = self.comms["ROOT"].bcast(xhat, root=src_rank)
+                xhats["ROOT"] = self._checked_bcast(
+                    self.comms["ROOT"], xhat, sname, src_rank, "ROOT")
             except:
                 print("rank=",self.cylinder_rank, "xhats bcast failed on src_rank={}"\
                       .format(src_rank))

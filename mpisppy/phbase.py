@@ -425,6 +425,26 @@ class PHBase(mpisppy.spopt.SPOpt):
         return global_diff[0] / self.n_proc
 
 
+    def _termination_decision(self, local_stop, source):
+        """Return a unanimous stop decision or raise on rank disagreement.
+
+        A rank-local break from the PH loop lets that rank begin cylinder
+        shutdown while its peers continue solving. Count votes collectively
+        at each potentially local termination point so all ranks either keep
+        going, stop, or fail together.
+        """
+        local_vote = np.array([bool(local_stop)], dtype='i')
+        stop_votes = np.zeros(1, dtype='i')
+        self.mpicomm.Allreduce(local_vote, stop_votes, op=MPI.SUM)
+        votes = int(stop_votes[0])
+        if votes not in (0, self.n_proc):
+            raise RuntimeError(
+                f"PH ranks disagree on termination from {source}: "
+                f"{votes} of {self.n_proc} ranks voted to stop"
+            )
+        return votes == self.n_proc
+
+
     def _populate_W_cache(self, cache, padding):
         """ Copy the W values for nonants *for all local scenarios*
         Args:
@@ -1326,7 +1346,8 @@ class PHBase(mpisppy.spopt.SPOpt):
         max_iterations = int(self.options["PHIterLimit"])
         if hasattr(self.spcomm, "is_converged"):
             # print a screen trace for iteration 0
-            if self.spcomm.is_converged():
+            stop = self.spcomm.is_converged()
+            if self._termination_decision(stop, "hub convergence after iteration 0"):
                 global_toc("Cylinder convergence", self.cylinder_rank == 0)
                 return
 
@@ -1361,13 +1382,15 @@ class PHBase(mpisppy.spopt.SPOpt):
             # the spokes will always have the
             # latest data, even at termination
             if have_converger:
-                if self.convobject.is_converged():
+                stop = self.convobject.is_converged()
+                if self._termination_decision(stop, "user-supplied converger"):
                     global_toc("User-supplied converger determined termination criterion reached", self.cylinder_rank == 0)
                     break
-            if self.conv is not None:
-                if self.conv < self.options["convthresh"]:
-                    global_toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.options["convthresh"]), self.cylinder_rank == 0)
-                    break
+            stop = (self.conv is not None
+                    and self.conv < self.options["convthresh"])
+            if self._termination_decision(stop, "PH convergence threshold"):
+                global_toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.options["convthresh"]), self.cylinder_rank == 0)
+                break
             if self.options["time_limit"] is not None:
                 time_to_stop = self.allreduce_or( (time.perf_counter() - self.start_time) >= self.options["time_limit"] )
                 if time_to_stop:
@@ -1426,9 +1449,11 @@ class PHBase(mpisppy.spopt.SPOpt):
             elif hasattr(self.spcomm, "sync"):
                 self.spcomm.sync()
 
-            if self.spcomm and self.spcomm.is_converged():
-                global_toc("Cylinder convergence", self.cylinder_rank == 0)
-                break
+            if self.spcomm:
+                stop = self.spcomm.is_converged()
+                if self._termination_decision(stop, "hub convergence"):
+                    global_toc("Cylinder convergence", self.cylinder_rank == 0)
+                    break
 
             if have_extensions:
                 self.extobject.enditer_after_sync()

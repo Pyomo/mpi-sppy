@@ -934,6 +934,8 @@ class TestTryOneExceptionWrapper(unittest.TestCase):
             def update_best_solution_if_improving(self, obj): return False
 
         class _StubComm:
+            def allgather(self, value): return [value]
+            def Get_size(self): return 1
             def bcast(self, data, root=0): return data
         ext.opt = _StubOpt(sp)
         ext.comms = {"ROOT": _StubComm()}
@@ -952,6 +954,63 @@ class TestTryOneExceptionWrapper(unittest.TestCase):
         self.assertIsNone(result)
         # nonants were restored despite the exception.
         self.assertEqual(ext.opt._restored, 1)
+
+
+class TestXhatBroadcastAgreement(unittest.TestCase):
+
+    class _Comm:
+        def __init__(self, reports):
+            self.reports = reports
+            self.broadcast_called = False
+
+        def allgather(self, value):
+            return self.reports
+
+        def Get_size(self):
+            return len(self.reports)
+
+        def bcast(self, value, root=0):
+            self.broadcast_called = True
+            return value
+
+    def _xhat(self):
+        import mpisppy.extensions.xhatbase as xb
+        return xb.XhatBase.__new__(xb.XhatBase)
+
+    def test_matching_selection_is_broadcast(self):
+        comm = self._Comm([
+            ("scen0", 0, True),
+            ("scen0", 0, False),
+        ])
+        value = [1.0, 2.0]
+
+        result = self._xhat()._checked_bcast(
+            comm, value, "scen0", 0, "ROOT")
+
+        self.assertIs(result, value)
+        self.assertTrue(comm.broadcast_called)
+
+    def test_mismatched_scenario_or_root_is_rejected_before_bcast(self):
+        comm = self._Comm([
+            ("scen0", 0, True),
+            ("scen1", 1, True),
+        ])
+
+        with self.assertRaisesRegex(RuntimeError, "disagree"):
+            self._xhat()._checked_bcast(
+                comm, [1.0], "scen0", 0, "ROOT")
+        self.assertFalse(comm.broadcast_called)
+
+    def test_root_without_payload_is_rejected_before_bcast(self):
+        comm = self._Comm([
+            ("scen0", 1, True),
+            ("scen0", 1, False),
+        ])
+
+        with self.assertRaisesRegex(RuntimeError, "has no cached values"):
+            self._xhat()._checked_bcast(
+                comm, [1.0], "scen0", 1, "ROOT")
+        self.assertFalse(comm.broadcast_called)
 
 
 if __name__ == "__main__":
