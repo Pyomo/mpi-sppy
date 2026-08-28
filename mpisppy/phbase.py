@@ -301,6 +301,10 @@ class PHBase(mpisppy.spopt.SPOpt):
         self.convobject = None  # PH converger
         self.attach_xbars()
 
+        # Whether PH_Prep has run. It refuses a second time: this object's W,
+        # rho and objective terms belong to one run. See PH_Prep.
+        self._PH_prep_done = False
+
     @property
     def iter0_solver_options(self):
         """Read-only fold of solver_options_layers for iteration 0.
@@ -1018,7 +1022,28 @@ class PHBase(mpisppy.spopt.SPOpt):
         Note:
             This function constructs an Extension object if one was specified
             at the time the PH object was created.
+
+        Note:
+            PH_Prep may be run only once on an object, so a PH object solves
+            one problem. Running PH_Prep twice used to look like it worked and
+            quietly solve something else: attach_Ws_and_prox re-declared W and
+            rho as fresh Params, discarding the duals the first run produced,
+            and attach_PH_to_objective appended a *second* PH term to the same
+            objective, leaving the first live and anchored to the previous
+            run's xbar. Measured on farmer, W went from
+            [8.374, 33.574, -41.948] to [0.0, 0.0, 0.0] and the objective's
+            W_on count from 1 to 2, with no error and no warning.
+
+            Making it genuinely re-entrant is possible but is not free -- see
+            issue #848 -- and no caller wants it: every one that runs PH more
+            than once builds a new object.
         """
+        if self._PH_prep_done:
+            raise RuntimeError(
+                "PH_Prep has already been run on this object. A PH object "
+                "solves one problem: W, rho and the objective terms it "
+                "carries belong to that run, and a second prep would discard "
+                "the first and double the terms. Build a new object.")
 
         self.attach_Ws_and_prox()
         if attach_smooth:
@@ -1041,6 +1066,10 @@ class PHBase(mpisppy.spopt.SPOpt):
         self._deferred_ph_attach = defer_attach and (self.Ag is None)
         if not self._deferred_ph_attach:
             self.attach_PH_to_objective(attach_duals, attach_prox, attach_smooth)
+
+        # Last, so a prep that raised leaves the object unprepped and the
+        # retry reports the real failure, not "already been run".
+        self._PH_prep_done = True
 
 
     def options_check(self):

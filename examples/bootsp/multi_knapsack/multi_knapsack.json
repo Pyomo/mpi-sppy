@@ -1,0 +1,17 @@
+{
+    "module_name": "multi_knapsack",
+    "max_count": 300,
+    "candidate_sample_size": 5,
+    "sample_size": 50,
+    "subsample_size": 10,
+    "nB": 20,
+    "alpha": 0.1,
+    "seed_offset": 100,
+    "optimal_fname": "None",
+    "xhat_fname": "None",
+    "solver_name": "cplex_direct",
+    "boot_method": "Bagging_with_replacement",
+    "trace_fname": "None",
+    "coverage_replications": 5,
+    "deterministic_data_json": "multi_knapsack_data.json"
+}

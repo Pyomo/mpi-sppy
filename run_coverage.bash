@@ -55,8 +55,11 @@ has_module() {
 
 # -oversubscribe is OpenMPI-only (MPICH rejects it). Some flexible-rank tests
 # need more ranks than the host has cores, so add the flag only under OpenMPI.
+# Ask mpi4py which library it is linked against rather than parsing the mpiexec
+# banner: OpenMPI 5 launches through PRRTE and its banner no longer reliably
+# says "Open MPI"/"OpenRTE".
 OVERSUBSCRIBE=""
-if mpiexec --version 2>&1 | grep -qiE "open[ -]?mpi|open ?rte"; then
+if python -c "import sys; from mpi4py import MPI; sys.exit(0 if 'open mpi' in MPI.Get_library_version().lower() else 1)" 2>/dev/null; then
     OVERSUBSCRIBE="-oversubscribe"
 fi
 
@@ -103,6 +106,9 @@ run_phase "test_prox_solver_compat (serial)" \
 
 run_phase "test_ph_main (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_main.py
+
+run_phase "test_ph_prep_once (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_prep_once.py
 
 run_phase "test_ph_extensions (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_extensions.py
@@ -233,6 +239,9 @@ run_phase "test_boot_sp (serial)" \
 run_phase "test_boot_sp_simulate (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_boot_sp_simulate.py
 
+run_phase "test_boot_sp_smoothed (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/test_boot_sp_smoothed.py
+
 run_phase "test_gradient_rho (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_gradient_rho.py
 
@@ -255,6 +264,9 @@ run_phase "test_boot_sp (mpiexec -np 2)" \
 
 run_phase "test_boot_sp_simulate (mpiexec -np 2)" \
     mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_boot_sp_simulate.py
+
+run_phase "test_boot_sp_smoothed (mpiexec -np 2)" \
+    mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_boot_sp_smoothed.py
 
 run_phase "test_cg_main (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_cg_main.py
