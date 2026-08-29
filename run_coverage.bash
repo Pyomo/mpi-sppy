@@ -107,6 +107,9 @@ run_phase "test_prox_solver_compat (serial)" \
 run_phase "test_ph_main (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_main.py
 
+run_phase "test_ph_prep_once (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_prep_once.py
+
 run_phase "test_ph_extensions (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_extensions.py
 
@@ -209,6 +212,7 @@ run_phase "serial unit tests (serial)" \
         mpisppy/tests/test_nice_join.py \
         mpisppy/tests/test_solver_spec.py \
         mpisppy/tests/test_extensions.py \
+        mpisppy/tests/test_extension_hooks.py \
         mpisppy/tests/test_buffer_inspect.py \
         mpisppy/tests/test_comm_lor_check.py \
         mpisppy/tests/test_ciutils.py \

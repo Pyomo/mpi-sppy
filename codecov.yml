@@ -9,4 +9,5 @@ coverage:
 
 ignore:
   - "examples/**"
+  - "mpisppy/agnostic/examples/**"
   - "mpisppy/tests/**"

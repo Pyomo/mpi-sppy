@@ -641,6 +641,7 @@ jobs:
         run: |
           cd mpisppy/tests
           coverage run $COV_ARGS test_ph_main.py
+          coverage run $COV_ARGS test_ph_prep_once.py
 
       - name: Upload coverage data
         if: always()
@@ -1374,6 +1375,7 @@ jobs:
             mpisppy/tests/test_nice_join.py \
             mpisppy/tests/test_solver_spec.py \
             mpisppy/tests/test_extensions.py \
+            mpisppy/tests/test_extension_hooks.py \
             mpisppy/tests/test_jensens.py \
             mpisppy/tests/test_vss.py \
             mpisppy/tests/test_feasible_xhat.py \

@@ -104,6 +104,15 @@ class FWPH(mpisppy.phbase.PHBase):
         return mip_solver_name, qp_solver_name
 
     def fwph_main(self, finalize=True):
+        # FWPH attaches no proximal term, and smoothing rides on that term:
+        # PH_Prep would create neither p nor beta, and Iter0's smoothed == 2
+        # rescale then fails on the p that is not there. Subgradient refuses
+        # the same combination for the same reason (subgradient.py).
+        if self.options.get("smoothed", 0) != 0:
+            raise RuntimeError(
+                "Cannot use smoothing with the FWPH algorithm: it attaches no "
+                "proximal term for the smoothing to ride on. Set "
+                "options[\"smoothed\"] to 0.")
         # defer_attach=False: FWPH snarfs the subproblem objective (with W
         # attached) between PH_Prep and Iter0 via _attach_nonant_objective and
         # _set_QP_objective, so the W terms must be spliced in here rather than
