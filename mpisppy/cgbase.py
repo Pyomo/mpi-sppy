@@ -692,9 +692,12 @@ class CGBase(mpisppy.spopt.SPOpt):
                 self.add_columns_to_mp_from_results(all_results_xfeas) 
                 # A None sum means some subproblem produced no reduced cost, so
                 # rmp_obj_val + sum(reduced costs) is not an outer bound this
-                # iteration. Leave the incumbent best bound and the convergence
-                # metric where they are rather than computing from a partial
-                # sum; the next iteration may well have every term.
+                # iteration. Leave the incumbent best bound alone rather than
+                # raising it from a partial sum; the next iteration may well
+                # have every term. The convergence metric below is still
+                # recomputed: it is the gap between this iteration's
+                # rmp_obj_val and the best bound so far, and both of those are
+                # valid whether or not a candidate arrived this time.
                 if sum_redcosts is None:
                     self.outer_bound_candidate = None
                 else:
