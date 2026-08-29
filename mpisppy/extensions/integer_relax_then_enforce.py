@@ -60,7 +60,7 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
         # two. The other conditions below read _PHIter and conv, which are the
         # same on every rank.
         time_limit = self.opt.options["time_limit"]
-        out_of_time = time_limit is not None and self.opt.allreduce_or(
+        out_of_time = time_limit not in (None, float("inf")) and self.opt.allreduce_or(
             (time.perf_counter() - self.opt.start_time) > (time_limit * self.ratio))
         if out_of_time:
             global_toc(f"{self.__class__.__name__}: enforcing integrality constraints, ran so far for more than {self.opt.options['time_limit']*self.ratio} seconds", self.opt.cylinder_rank == 0)
