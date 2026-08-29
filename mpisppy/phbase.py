@@ -551,8 +551,10 @@ class PHBase(mpisppy.spopt.SPOpt):
                 If True, displays verbose output. Default False.
 
         Returns:
-            float:
-                An outer bound on the optimal objective function value.
+            float or None:
+                An outer bound on the optimal objective function value, or
+                None if any subproblem solve produced no bound (the
+                expectation cannot be formed if a scenario is missing one).
 
         Note:
             This function overwrites current variable values. This is only
@@ -642,8 +644,10 @@ class PHBase(mpisppy.spopt.SPOpt):
                 If True, warmstart the subproblem solves. Default False.
             outer_bound_only (boolean, optional):
                 If True, populate outer_bound *only*; no solution is loaded, so
-                need_solution must be False. If the solve reports no bound, the
-                previous outer bound is kept (a valid, if vacuous, outer bound).
+                need_solution must be False. If the solve reports no bound,
+                outer_bound is cleared to None rather than left at its previous
+                value: a stale bound cannot be mixed with fresh ones in the
+                expectation that Ebound forms.
                 Keyword-only. Default False.
         """
 

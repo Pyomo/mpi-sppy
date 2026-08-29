@@ -555,21 +555,37 @@ class CGBase(mpisppy.spopt.SPOpt):
                 reduced cost, scenario cost, and variable values.
 
         Returns:
-            float: The sum of reduced costs
+            float or None: The sum of reduced costs, or None if any subproblem
+                reported no reduced cost.
+
+        build_columns_from_subproblem_solutions leaves red_cost at None when a
+        subproblem's solve produced no outer bound. Skipping such a term and
+        returning the sum of the rest would overstate the bound -- the caller
+        adds it to rmp_obj_val and treats the result as an outer bound -- so the
+        whole sum is reported unavailable instead. The columns themselves are
+        still added: they are useful regardless of whether a bound came with
+        them.
         """
         sum_redcosts=0
+        bound_available=True
         for rank_results in all_results:
             if rank_results is not None:
                 if isinstance(rank_results, list):
                     for result in rank_results:
                         sname, red_cost, scen_cost, xvec = result
                         self.add_column_for_scenario(sname, scen_cost, xvec)
-                        sum_redcosts+=red_cost
+                        if red_cost is None:
+                            bound_available=False
+                        else:
+                            sum_redcosts+=red_cost
                 else:
                     sname, red_cost, scen_cost, xvec = rank_results
                     self.add_column_for_scenario(sname, scen_cost, xvec)
-                    sum_redcosts+=red_cost
-        return sum_redcosts                
+                    if red_cost is None:
+                        bound_available=False
+                    else:
+                        sum_redcosts+=red_cost
+        return sum_redcosts if bound_available else None
 
     def _build_columns_from_xhat_list(self, xhat_list):
         """
@@ -674,22 +690,35 @@ class CGBase(mpisppy.spopt.SPOpt):
                 sum_redcosts=self.add_columns_to_mp_from_results(all_results)
                 self.add_columns_to_mp_from_results(all_results_xhat_recent) 
                 self.add_columns_to_mp_from_results(all_results_xfeas) 
-                self.outer_bound_candidate = self.rmp_obj_val + sum_redcosts
+                # A None sum means some subproblem produced no reduced cost, so
+                # rmp_obj_val + sum(reduced costs) is not an outer bound this
+                # iteration. Leave the incumbent best bound alone rather than
+                # raising it from a partial sum; the next iteration may well
+                # have every term. The convergence metric below is still
+                # recomputed: it is the gap between this iteration's
+                # rmp_obj_val and the best bound so far, and both of those are
+                # valid whether or not a candidate arrived this time.
+                if sum_redcosts is None:
+                    self.outer_bound_candidate = None
+                else:
+                    self.outer_bound_candidate = self.rmp_obj_val + sum_redcosts
                 
                 # Update bounds and convergence metric
                 if self.problem_is_lp:
                     self.best_solution_obj_val= self.rmp_obj_val
 
-                if self.best_bound_obj_val is None:
-                    self.best_bound_obj_val = self.outer_bound_candidate
-                elif self.is_minimizing:
-                    self.best_bound_obj_val = max(self.outer_bound_candidate, self.best_bound_obj_val)
-                else:
-                    self.best_bound_obj_val = min(self.outer_bound_candidate, self.best_bound_obj_val)
-                if self.is_minimizing:
-                    self.conv=(self.rmp_obj_val-self.best_bound_obj_val)/abs(self.best_bound_obj_val)
-                else:
-                    self.conv=(self.best_bound_obj_val-self.rmp_obj_val)/abs(self.best_bound_obj_val)
+                if self.outer_bound_candidate is not None:
+                    if self.best_bound_obj_val is None:
+                        self.best_bound_obj_val = self.outer_bound_candidate
+                    elif self.is_minimizing:
+                        self.best_bound_obj_val = max(self.outer_bound_candidate, self.best_bound_obj_val)
+                    else:
+                        self.best_bound_obj_val = min(self.outer_bound_candidate, self.best_bound_obj_val)
+                if self.best_bound_obj_val is not None:
+                    if self.is_minimizing:
+                        self.conv=(self.rmp_obj_val-self.best_bound_obj_val)/abs(self.best_bound_obj_val)
+                    else:
+                        self.conv=(self.best_bound_obj_val-self.rmp_obj_val)/abs(self.best_bound_obj_val)
                 
                 if dprogress:
                     print("")
