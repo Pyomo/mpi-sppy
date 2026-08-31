@@ -184,6 +184,9 @@ def _extension_class(name):
         return PreIter0Tagger
     if name == "clock_rewinder":
         return ClockRewinder
+    if name == "sep_rho":
+        from mpisppy.extensions.sep_rho import SepRho
+        return SepRho
     raise ValueError(name)
 
 
@@ -1664,6 +1667,51 @@ class TestIntegerRelaxThenEnforceResume(unittest.TestCase):
         resumed.integer_relaxer.apply_to.assert_not_called()
         self.assertFalse(resumed._integers_relaxed)
         self.assertTrue(m.x.is_integer())
+
+
+@unittest.skipIf(not solver_available,
+                 "no solver is available for the dynamic rho resume tests")
+class TestDynRhoCachesSurviveResume(unittest.TestCase):
+    """post_iter0 skips the rho recomputation on a resume, but it is also the
+    only thing that seeds primal_conv_cache and the WTracker's first W set --
+    and miditer reads both on the very next pass."""
+
+    STOP = 2
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _sep_rho_options(self, *args, **kwargs):
+        import types
+        options = _options(*args, **kwargs)
+        options["sep_rho_options"] = {"cfg": types.SimpleNamespace()}
+        return options
+
+    def test_a_resumed_run_keeps_iterating(self):
+        stopped = _make_ph(self._sep_rho_options(self.STOP,
+                                                 ckpt_dir=self.ckpt_dir),
+                           extension_name="sep_rho")
+        stopped.ph_main()
+
+        # A non-zero budget is the point: the failure was at the first
+        # miditer of the resumed leg, which a zero-iteration resume never
+        # reaches.
+        resumed = _make_ph(self._sep_rho_options(2,
+                                                 resume_from=self.ckpt_dir),
+                           extension_name="sep_rho")
+        resumed.ph_main()       # must not raise
+
+        self.assertEqual(resumed._PHIter, self.STOP + 2)
+        ext = resumed.extobject
+        self.assertTrue(ext.primal_conv_cache,
+                        msg="the convergence cache was never seeded")
+        self.assertGreaterEqual(
+            len(ext.wt.local_Ws), 2,
+            msg="the WTracker never grabbed a W set on the resumed run")
 
 
 if __name__ == "__main__":

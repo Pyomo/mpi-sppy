@@ -107,6 +107,12 @@ class SensiRho(_SensiRhoBase):
             # from an iteration-0 solve that a resume never performs.
             global_toc("SensiRho: resuming from a checkpoint; keeping the "
                        "checkpointed rho", self.ph.cylinder_rank == 0)
+            # The caches still have to be seeded. update_caches is what puts
+            # the first entry in primal_conv_cache and the first W set in the
+            # WTracker, and miditer reads both on the very next pass -- so
+            # skipping it here does not leave rho alone, it takes the run down
+            # at the first resumed iteration.
+            self.update_caches()
             return
         global_toc("Using sensitivity rho setter")
         self.update_caches()

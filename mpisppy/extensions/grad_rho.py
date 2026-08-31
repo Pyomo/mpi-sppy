@@ -353,6 +353,18 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             # behind this hook on a resume for the gradients to describe.
             global_toc("GradRho: resuming from a checkpoint; keeping the "
                        "checkpointed rho", self.opt.cylinder_rank == 0)
+            # The caches still have to be seeded. update_caches is what puts
+            # the first entry in primal_conv_cache and the first W set in the
+            # WTracker, and miditer reads both on the very next pass -- so
+            # skipping it here does not leave rho alone, it takes the run down
+            # at the first resumed iteration.
+            self.update_caches()
+            # _get_grad_exprs is called from here and nowhere else, and
+            # _eval_grad_exprs reads what it builds on every rho update. The
+            # expressions are differentiated from the models, not from an
+            # iteration-0 solve, so they are built the same way on a resumed
+            # run -- against the models the splice just installed.
+            self._get_grad_exprs()
             return
         global_toc("Using grad-rho rho setter")
         # PHBase.Iter0 runs the iter0 solve loop before this hook but does not

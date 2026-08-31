@@ -154,14 +154,28 @@ class WTracker():
         """
         cI = self.ph_iter
         self.grab_local_Ws()
-        self.local_Ws[-1] = self.local_Ws[0]
+        # local_Ws[-1] stands in for "the iteration before the first one" so
+        # that the cI-1 lookup below resolves on the first pass. It used to be
+        # spelled local_Ws[0], which is the first grab only when the run began
+        # at iteration 0: a run resumed from a checkpoint begins at the
+        # checkpointed iteration and never grabs a 0.
+        first = min(self.local_Ws)
+        if -1 not in self.local_Ws:
+            self.local_Ws[-1] = self.local_Ws[first]
+        # A resumed run has no W history from before the iteration it resumed
+        # at, so its first passes have nothing to difference against and
+        # report the zero difference an uninterrupted run reports at its own
+        # first iterations. A checkpoint does not carry a rho updater's
+        # history; doc/src/checkpointing.rst says so.
+        curr_Ws = self.local_Ws.get(cI, self.local_Ws[first])
+        prev_Ws = self.local_Ws.get(cI - 1, curr_Ws)
         global_diff = np.zeros(1)
         local_diff = np.zeros(1)
         varcount = 0
         local_diff[0] = 0
         for (sname, scenario) in self.PHB.local_scenarios.items():
             local_wdiffs = [w - w1
-                            for w, w1 in zip(self.local_Ws[cI][sname], self.local_Ws[cI-1][sname])]
+                            for w, w1 in zip(curr_Ws[sname], prev_Ws[sname])]
             for wdiff in local_wdiffs:
                 local_diff[0] += abs(wdiff)
                 varcount += 1

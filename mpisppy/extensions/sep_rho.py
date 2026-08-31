@@ -203,6 +203,12 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             # the rho_setter on a resume).
             global_toc("SepRho: resuming from a checkpoint; keeping the "
                        "checkpointed rho", self.opt.cylinder_rank == 0)
+            # The caches still have to be seeded. update_caches is what puts
+            # the first entry in primal_conv_cache and the first W set in the
+            # WTracker, and miditer reads both on the very next pass -- so
+            # skipping it here does not leave rho alone, it takes the run down
+            # at the first resumed iteration.
+            self.update_caches()
             return
         global_toc("Using sep-rho rho setter")
         self.update_caches()
