@@ -215,6 +215,7 @@ run_phase "serial unit tests (serial)" \
         mpisppy/tests/test_nice_join.py \
         mpisppy/tests/test_solver_spec.py \
         mpisppy/tests/test_extensions.py \
+        mpisppy/tests/test_extension_hooks.py \
         mpisppy/tests/test_buffer_inspect.py \
         mpisppy/tests/test_comm_lor_check.py \
         mpisppy/tests/test_ciutils.py \
