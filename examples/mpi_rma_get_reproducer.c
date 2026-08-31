@@ -9,11 +9,11 @@
  *
  * Run with the same repeated 3+1 host placement as the Python reproducer:
  *   SLURM_HOSTFILE="$hostfile" srun -u -n 24 --distribution=arbitrary \
- *       ./mpi_rma_get_reproducer 100 264
+ *       ./mpi_rma_get_reproducer 100
  *
  * Arguments are ITERATIONS and COUNT, both optional. COUNT is the number of
- * doubles transferred by MPI_Get; 264 matches the padded Python buffer for a
- * payload length of 256.
+ * doubles transferred by MPI_Get and defaults to one. The original Python
+ * reproducer transferred 264 doubles.
  */
 
 #include <errno.h>
@@ -26,7 +26,7 @@ enum {
     GROUP_SIZE = 4,
     READER_RANK = 3,
     DEFAULT_ITERATIONS = 100,
-    DEFAULT_COUNT = 264
+    DEFAULT_COUNT = 1
 };
 
 static int parse_positive_int(const char *text, const char *name, int world_rank)
@@ -128,8 +128,6 @@ int main(int argc, char **argv)
     }
 
     for (int iteration = 0; iteration < iterations; ++iteration) {
-        MPI_Barrier(group_comm);
-
         if (group_rank == READER_RANK) {
             MPI_Win_lock(MPI_LOCK_SHARED, 0, 0, window);
             MPI_Get(received, count, MPI_DOUBLE, 0, 0, count, MPI_DOUBLE, window);
