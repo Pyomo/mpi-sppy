@@ -54,7 +54,6 @@ int main(int argc, char **argv)
     int group_rank;
     int iterations = DEFAULT_ITERATIONS;
     int count = DEFAULT_COUNT;
-    MPI_Comm xhat_comm = MPI_COMM_NULL;
     MPI_Comm group_comm = MPI_COMM_NULL;
     MPI_Win window = MPI_WIN_NULL;
     double *window_base = NULL;
@@ -88,12 +87,6 @@ int main(int argc, char **argv)
     group = world_rank / GROUP_SIZE;
     group_rank = world_rank % GROUP_SIZE;
 
-    /* Keep the otherwise-unused Xhat communicator for a faithful first port. */
-    MPI_Comm_split(
-        MPI_COMM_WORLD,
-        group_rank == READER_RANK ? 0 : MPI_UNDEFINED,
-        world_rank,
-        &xhat_comm);
     MPI_Comm_split(MPI_COMM_WORLD, group, world_rank, &group_comm);
 
     MPI_Win_allocate(
@@ -158,9 +151,6 @@ int main(int argc, char **argv)
     free(received);
     MPI_Win_free(&window);
     MPI_Comm_free(&group_comm);
-    if (xhat_comm != MPI_COMM_NULL) {
-        MPI_Comm_free(&xhat_comm);
-    }
 
     MPI_Barrier(MPI_COMM_WORLD);
     if (world_rank == 0) {
