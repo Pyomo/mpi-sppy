@@ -1,18 +1,18 @@
 /*
  * Minimal C translation of mpi4py_xhat_collective_reproducer.py --mode
- * get-only.  It creates independent four-rank communicators and repeatedly
- * gets data from rank 0 of each communicator on rank 3.
+ * get-only. It creates independent communicators and repeatedly gets one
+ * double from rank 0 of each communicator on its last rank.
  *
  * Compile:
  *   mpicc -O2 -Wall -Wextra -o mpi_rma_get_reproducer \
  *       examples/mpi_rma_get_reproducer.c
  *
- * Run with the same repeated 3+1 host placement as the Python reproducer:
- *   SLURM_HOSTFILE="$hostfile" srun -u -n 24 --distribution=arbitrary \
- *       ./mpi_rma_get_reproducer 100
+ * With two nodes and block placement, the default two-rank groups contain one
+ * rank from each node:
+ *   srun -u -N 2 -n 12 --ntasks-per-node=6 ./mpi_rma_get_reproducer 100
  *
  * Arguments are ITERATIONS and GROUP_SIZE, both optional. GROUP_SIZE defaults
- * to four, with its last rank performing a one-double MPI_Get from rank zero.
+ * to two.
  */
 
 #include <errno.h>
@@ -23,7 +23,7 @@
 
 enum {
     DEFAULT_ITERATIONS = 100,
-    DEFAULT_GROUP_SIZE = 4
+    DEFAULT_GROUP_SIZE = 2
 };
 
 static int parse_positive_int(const char *text, const char *name, int world_rank)
@@ -87,8 +87,8 @@ int main(int argc, char **argv)
         MPI_Abort(MPI_COMM_WORLD, 2);
     }
 
-    group = world_rank / group_size;
-    group_rank = world_rank % group_size;
+    group = world_rank % (world_size / group_size);
+    group_rank = world_rank / (world_size / group_size);
     reader_rank = group_size - 1;
 
     MPI_Comm_split(MPI_COMM_WORLD, group, world_rank, &group_comm);
