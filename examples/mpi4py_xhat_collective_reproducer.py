@@ -26,8 +26,9 @@ Typed-collective control::
 
 RMA isolation controls use the same strata communicators. ``barrier-only``
 does not create a window; ``window-only`` creates the window but issues no
-RMA operations; and ``rma-only`` runs only the RMA operations and their
-barriers. Use ``--watchdog-seconds`` to dump stacks when an iteration stalls.
+RMA operations; ``put-only``, ``get-only``, and ``lock-only`` isolate parts of
+the passive-target epoch; and ``rma-only`` runs the complete Put/Get sequence.
+Use ``--watchdog-seconds`` to dump stacks when an iteration stalls.
 
 The ``invalid-mismatch`` mode deliberately violates MPI collective-ordering
 rules.  It is useful only for determining whether this MPI stack produces the
@@ -52,8 +53,8 @@ def _parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--mode", choices=(
-            "object", "typed", "barrier-only", "window-only", "rma-only",
-            "invalid-mismatch"),
+            "object", "typed", "barrier-only", "window-only", "put-only",
+            "get-only", "lock-only", "rma-only", "invalid-mismatch"),
         default="object",
     )
     parser.add_argument("--iterations", type=int, default=10_000)
@@ -227,7 +228,7 @@ def _make_rma_window(strata_comm, payload_length):
 
 def _rma_iteration(window, strata_comm, cylinder_index, xhat_index,
                    iteration, payload_length, padded_length,
-                   trace_rma_phases=False):
+                   operation="both", trace_rma_phases=False):
     """Publish on the hub rank and retrieve on its paired Xhat rank."""
     strata_rank = strata_comm.Get_rank()
     strata_group = MPI.COMM_WORLD.Get_rank() // strata_comm.Get_size()
@@ -241,7 +242,7 @@ def _rma_iteration(window, strata_comm, cylinder_index, xhat_index,
                 flush=True,
             )
 
-    if cylinder_index == 0:
+    if operation in ("both", "put") and cylinder_index == 0:
         publish = np.full(padded_length, np.nan, dtype=np.float64)
         publish[:payload_length] = (
             np.arange(payload_length, dtype=np.float64) + iteration)
@@ -264,23 +265,29 @@ def _rma_iteration(window, strata_comm, cylinder_index, xhat_index,
     trace("after-publish-barrier")
 
     received = None
-    if cylinder_index == xhat_index:
-        received = np.empty(padded_length, dtype=np.float64)
-        trace("before-get-lock")
+    if operation in ("both", "get", "lock") and cylinder_index == xhat_index:
+        if operation != "lock":
+            received = np.empty(padded_length, dtype=np.float64)
+        epoch_name = "get" if operation != "lock" else "remote"
+        trace(f"before-{epoch_name}-lock")
         window.Lock(0, MPI.LOCK_SHARED)
-        trace("after-get-lock")
-        trace("before-get")
-        window.Get([received, MPI.DOUBLE], 0, 0)
-        trace("after-get")
-        trace("before-get-unlock")
+        trace(f"after-{epoch_name}-lock")
+        if operation != "lock":
+            trace("before-get")
+            window.Get([received, MPI.DOUBLE], 0, 0)
+            trace("after-get")
+        trace(f"before-{epoch_name}-unlock")
         window.Unlock(0)
-        trace("after-get-unlock")
+        trace(f"after-{epoch_name}-unlock")
 
-        expected = np.arange(payload_length, dtype=np.float64) + iteration
-        if not np.array_equal(received[:payload_length], expected):
-            raise RuntimeError(f"corrupt RMA payload at iteration {iteration}")
-        if received[payload_length] != iteration + 1:
-            raise RuntimeError(f"corrupt RMA write ID at iteration {iteration}")
+        if operation == "both":
+            expected = np.arange(payload_length, dtype=np.float64) + iteration
+            if not np.array_equal(received[:payload_length], expected):
+                raise RuntimeError(
+                    f"corrupt RMA payload at iteration {iteration}")
+            if received[payload_length] != iteration + 1:
+                raise RuntimeError(
+                    f"corrupt RMA write ID at iteration {iteration}")
 
     trace("before-retrieval-barrier")
     strata_comm.Barrier()
@@ -328,10 +335,16 @@ def main():
     if args.watchdog_seconds < 0:
         raise ValueError("watchdog-seconds must be nonnegative")
 
+    isolated_rma_modes = {"put-only", "get-only", "lock-only", "rma-only"}
     perform_rma = (
-        args.mode == "rma-only"
+        args.mode in isolated_rma_modes
         or (args.with_rma and args.mode not in ("barrier-only", "window-only"))
     )
+    operation = {
+        "put-only": "put",
+        "get-only": "get",
+        "lock-only": "lock",
+    }.get(args.mode, "both")
     create_window = perform_rma or args.mode == "window-only"
     create_strata = create_window or args.mode == "barrier-only"
 
@@ -356,7 +369,8 @@ def main():
             f"MPI vendor={MPI.get_vendor()!r}; mpi4py={mpi4py.__version__}; "
             f"MPI standard={MPI.Get_version()!r}; "
             f"world={world_size}; mode={args.mode}; "
-            f"window={create_window}; rma={perform_rma}",
+            f"window={create_window}; rma={perform_rma}; "
+            f"rma_operation={operation if perform_rma else 'none'}",
             flush=True,
         )
 
@@ -395,6 +409,7 @@ def main():
                     iteration,
                     args.payload_length,
                     padded_length,
+                    operation,
                     args.trace_rma_phases,
                 )
             elif args.mode in ("barrier-only", "window-only"):
@@ -407,7 +422,9 @@ def main():
                     flush=True,
                 )
 
-            if xhat_comm != MPI.COMM_NULL and args.mode != "rma-only":
+            if (xhat_comm != MPI.COMM_NULL
+                    and args.mode not in isolated_rma_modes
+                    and args.mode not in ("barrier-only", "window-only")):
                 if trace:
                     print(
                         f"TRACE iteration={iteration} world_rank={world_rank} "
@@ -432,7 +449,7 @@ def main():
 
             report_progress = (
                 xhat_rank is not None
-                and (xhat_rank == 0 or args.mode == "rma-only")
+                and (xhat_rank == 0 or args.mode in isolated_rma_modes)
             )
             if (report_progress and args.progress_every > 0
                     and (iteration + 1) % args.progress_every == 0):
