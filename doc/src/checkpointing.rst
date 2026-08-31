@@ -272,7 +272,7 @@ package::
 unserializable by what its ``scenario_creator`` closes over -- most commonly a
 Pyomo rule written as a nested function that reads ``cfg`` directly, which pulls
 the whole configuration object into the model. See :ref:`scenario_creator` for
-the pattern and the fix. Checkpointing checks one scenario at setup rather than
+the pattern and the fix. Checkpointing checks every scenario at setup rather than
 discovering the problem at the first write, and the error
 names the offending rule.
 
@@ -281,7 +281,10 @@ at startup when either ``--checkpoint-dir`` or ``--resume-from`` is given, as
 is a hub with more than one rank, an unwritable directory, an unimplemented
 backend, scenario names that would collide once made filename-safe, and any
 configuration where the checkpointing extension would not actually be
-attached. The intent is that checkpointing either works or says so at startup,
+attached. ``--EF`` and the write-only modes (``--pickle-bundles-dir``,
+``--pickle-scenarios-dir``, ``--write-scenario-lp-mps-files-dir``) are refused
+for the same reason: none of them runs the iterative algorithm a checkpoint
+describes. The intent is that checkpointing either works or says so at startup,
 rather than running for hours and writing nothing.
 
 **Extension and converger state is not yet part of a checkpoint.** Extensions
@@ -294,7 +297,15 @@ same trajectory as an uninterrupted one. The rho-setting extensions
 (``--sep-rho``, ``--coeff-rho``, ``--sensi-rho``, ``--grad-rho``) do not
 recompute rho at the resume itself: the checkpointed rho -- including
 whatever adaptation had happened by the write -- carries over, and the
-extensions resume their per-iteration updates from there.
+extensions go on adapting it from there. Their own histories still start
+empty, so the first iteration or two after a resume have nothing to measure a
+change against and recommend no update; an uninterrupted run would have had
+several iterations of history at that point.
+
+**W and xbar input files are not read on a resumed run.** ``--init-W-fname``
+and ``--init-Xbar-fname`` initialize a study; a resumed run takes both from the
+checkpoint. Leaving the flags on the command you resubmit each morning is
+harmless -- they are skipped, with a line in the log saying so.
 
 **A custom extension that changes models at the end of an iteration must be
 attached first.** The checkpoint is written from the checkpointing extension's
