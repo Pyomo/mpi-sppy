@@ -1747,5 +1747,43 @@ class TestWXBarReaderResume(unittest.TestCase):
         set_W.assert_called_once()
 
 
+class TestCheckpointingWithoutAHub(unittest.TestCase):
+    """--EF and the three write-only modes branch off ahead of do_decomp, so
+    the hub-side guard never sees them: they accept the checkpoint flags and
+    act on neither, exiting 0."""
+
+    MODES = ("--EF", "--pickle-bundles-dir", "--pickle-scenarios-dir",
+             "--write-scenario-lp-mps-files-dir")
+
+    def _cfg(self, **overrides):
+        cfg = Config()
+        cfg.checkpoint_args()
+        for k, v in overrides.items():
+            setattr(cfg, k, v)
+        return cfg
+
+    def test_checkpoint_dir_is_refused(self):
+        from mpisppy.generic.decomp import refuse_checkpointing_without_a_hub
+        for mode in self.MODES:
+            with self.subTest(mode=mode):
+                with self.assertRaisesRegex(RuntimeError, "--checkpoint-dir"):
+                    refuse_checkpointing_without_a_hub(
+                        self._cfg(checkpoint_dir="/tmp/nope"), mode)
+
+    def test_resume_from_is_refused(self):
+        from mpisppy.generic.decomp import refuse_checkpointing_without_a_hub
+        for mode in self.MODES:
+            with self.subTest(mode=mode):
+                with self.assertRaisesRegex(RuntimeError, "--resume-from"):
+                    refuse_checkpointing_without_a_hub(
+                        self._cfg(resume_from="/tmp/nope"), mode)
+
+    def test_a_run_without_the_flags_is_left_alone(self):
+        from mpisppy.generic.decomp import refuse_checkpointing_without_a_hub
+        for mode in self.MODES:
+            with self.subTest(mode=mode):
+                refuse_checkpointing_without_a_hub(self._cfg(), mode)
+
+
 if __name__ == "__main__":
     unittest.main()

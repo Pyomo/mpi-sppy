@@ -151,6 +151,26 @@ def _write_solutions(wheel, module, cfg):
         module.custom_writer(wheel, cfg)
 
 
+def refuse_checkpointing_without_a_hub(cfg, mode):
+    """Refuse a checkpoint flag on a path that never builds a hub.
+
+    _check_checkpointing_survived below is a hub-side check, so it cannot see
+    the modes that branch off ahead of do_decomp. Those accept
+    --checkpoint-dir and --resume-from and act on neither: the directory is
+    never created, a resume starts from scratch, and both exit 0. Same failure
+    that check exists to prevent, one dispatch level up.
+    """
+    if not cfg.get("checkpoint_dir") and not cfg.get("resume_from"):
+        return
+    given = "--checkpoint-dir" if cfg.get("checkpoint_dir") else "--resume-from"
+    raise RuntimeError(
+        f"{given} was given together with {mode}, which does not run the "
+        f"iterative algorithm a checkpoint describes, so nothing would be "
+        f"written or resumed. Checkpointing currently supports the PH hub "
+        f"only. Drop {given}, or drop {mode}."
+    )
+
+
 def _check_checkpointing_survived(hub_dict, cfg):
     """Refuse to start if checkpointing was asked for but is not attached.
 
