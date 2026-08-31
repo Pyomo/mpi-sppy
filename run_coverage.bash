@@ -220,7 +220,24 @@ run_phase "serial unit tests (serial)" \
         mpisppy/tests/test_prox_approx.py \
         mpisppy/tests/test_sep_rho.py \
         mpisppy/tests/test_reduced_costs_fixer.py \
-        mpisppy/tests/test_slammer.py
+        mpisppy/tests/test_slammer.py \
+        mpisppy/tests/test_dual_certificate.py \
+        mpisppy/tests/test_ipopt_outer_bound.py
+
+run_phase "test_ipopt_outer_bound (mpiexec -np 2)" \
+    mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py -m pytest mpisppy/tests/test_ipopt_outer_bound.py -v
+
+# The CI ipopt-tests job also smoke-tests the documented command line, and
+# without the same run here local and CI coverage disagree on that path.
+# Not in a subshell: run_phase increments a global counter, which a subshell
+# would discard and the phase numbering would repeat.
+cd examples/farmer
+run_phase "generic_cylinders --ipopt-outer-bound (mpiexec -np 2)" \
+    mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py \
+        "$PROJ_DIR/mpisppy/generic_cylinders.py" \
+        --module-name farmer --num-scens 3 --solver-name ipopt \
+        --max-iterations 5 --default-rho 1.0 --ipopt-outer-bound
+cd "$PROJ_DIR"
 
 run_phase "test_conf_int_farmer (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_conf_int_farmer.py
