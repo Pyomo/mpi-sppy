@@ -1595,5 +1595,76 @@ class TestVaridToNonantIndexRestored(unittest.TestCase):
                 self.resumed.is_zero_prob(s, var)  # must not raise
 
 
+class TestIntegerRelaxThenEnforceResume(unittest.TestCase):
+    """The transformation records its undo map in a _relaxed_integer_vars
+    Suffix. Applying it twice replaces that Suffix with an empty one, so the
+    undo restores nothing while still reporting that it enforced integrality
+    -- and the run answers the relaxation."""
+
+    def _extension(self, scenarios, resumed):
+        import types
+        from mpisppy.extensions.integer_relax_then_enforce import (
+            IntegerRelaxThenEnforce)
+        opt = types.SimpleNamespace(
+            options={"integer_relax_then_enforce_options": {"ratio": 0.5}},
+            local_scenarios=scenarios,
+            cylinder_rank=0,
+            _resumed_from_checkpoint=resumed,
+        )
+        return IntegerRelaxThenEnforce(opt)
+
+    def _model(self):
+        import pyomo.environ as pyo
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var(domain=pyo.NonNegativeIntegers, bounds=(0, 10))
+        m.obj = pyo.Objective(expr=m.x)
+        m._solver_plugin = None
+        return m
+
+    def test_a_relaxed_model_is_not_relaxed_a_second_time(self):
+        m = self._model()
+        ext = self._extension({"s": m}, resumed=False)
+        ext.pre_iter0()                       # the run that wrote the checkpoint
+        undo_map = m._relaxed_integer_vars
+
+        resumed = self._extension({"s": m}, resumed=True)
+        resumed.integer_relaxer = mock.Mock()
+        resumed.pre_iter0()
+
+        resumed.integer_relaxer.apply_to.assert_not_called()
+        self.assertTrue(resumed._integers_relaxed,
+                        msg="a resumed run must know its models are relaxed")
+        self.assertIs(m._relaxed_integer_vars, undo_map,
+                      msg="the undo map was replaced, so unrelaxing would "
+                          "restore nothing")
+
+    def test_the_integrality_actually_comes_back(self):
+        m = self._model()
+        self._extension({"s": m}, resumed=False).pre_iter0()
+        self.assertFalse(m.x.is_integer())
+
+        resumed = self._extension({"s": m}, resumed=True)
+        resumed.pre_iter0()
+        resumed._unrelax_integers()
+
+        self.assertTrue(
+            m.x.is_integer(),
+            msg="the resumed run reports that it enforced integrality while "
+                "still solving the relaxation")
+
+    def test_models_that_are_not_relaxed_leave_integrality_alone(self):
+        """A checkpoint carries no extension state, so a run that had already
+        enforced integrality and one that never had this extension look the
+        same from here. Relaxing now would change the algorithm mid-study."""
+        m = self._model()
+        resumed = self._extension({"s": m}, resumed=True)
+        resumed.integer_relaxer = mock.Mock()
+        resumed.pre_iter0()
+
+        resumed.integer_relaxer.apply_to.assert_not_called()
+        self.assertFalse(resumed._integers_relaxed)
+        self.assertTrue(m.x.is_integer())
+
+
 if __name__ == "__main__":
     unittest.main()
