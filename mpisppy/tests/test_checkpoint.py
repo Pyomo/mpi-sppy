@@ -1552,5 +1552,48 @@ class TestUnknownBackend(unittest.TestCase):
         checkpointing.require_dill(checkpointing.LEAF_BACKEND)
 
 
+@unittest.skipIf(not solver_available,
+                 "no solver is available for the varid map tests")
+class TestVaridToNonantIndexRestored(unittest.TestCase):
+    """varid_to_nonant_index is keyed by id(vardata), so it cannot cross a
+    checkpoint on its own: dill brings the dict back holding the addresses of
+    the objects that were written, which say nothing about the objects that
+    came out. It looks intact and maps nothing."""
+
+    STOP = 2
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
+        stopped = _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir))
+        stopped.ph_main()
+        self.resumed = _make_ph(_options(0, resume_from=self.ckpt_dir))
+        self.resumed.ph_main()
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_the_map_addresses_the_restored_models(self):
+        for sname, s in self.resumed.local_scenarios.items():
+            varids = s._mpisppy_data.varid_to_nonant_index
+            for ndn_i, var in s._mpisppy_data.nonant_indices.items():
+                self.assertIn(
+                    id(var), varids,
+                    msg=f"{sname} nonant {ndn_i} is not in "
+                        f"varid_to_nonant_index after the resume; the map "
+                        f"still holds the writing process's ids")
+                self.assertEqual(varids[id(var)], ndn_i)
+
+    def test_the_consumer_that_crashes_does_not(self):
+        """is_zero_prob indexes the map rather than testing membership, so a
+        stale one raises. It is reached from _check_staleness after every
+        solve and from gather_var_values_to_rank0 when a run writes its
+        solution, on any run that sets variable_probability."""
+        self.resumed.variable_probability = {}     # take the early return out
+        for sname, s in self.resumed.local_scenarios.items():
+            for var in s._mpisppy_data.nonant_indices.values():
+                self.resumed.is_zero_prob(s, var)  # must not raise
+
+
 if __name__ == "__main__":
     unittest.main()

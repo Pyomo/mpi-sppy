@@ -1277,6 +1277,20 @@ class PHBase(mpisppy.spopt.SPOpt):
         if getattr(self, "local_subproblems", None) is not None:
             self.local_subproblems = self.local_scenarios
 
+        # varid_to_nonant_index maps id(vardata) -> (ndn, i). dill faithfully
+        # brings the dict back, and every key in it is dead: the integers are
+        # the addresses of the objects that were serialized, which say nothing
+        # about the objects that came out. So it survives the round trip
+        # looking perfectly intact while mapping nothing, and a consumer gets
+        # a KeyError on an id it just took from a live variable.
+        #
+        # It is the same identity-keying hazard as the initially-fixed
+        # baseline below and ADMM's varprob_dict, and the one that hides
+        # longest: the rho setter is skipped on a resume and the other
+        # consumers are optional, so the first thing to trip over it was the
+        # fixer -- several phases in.
+        self._attach_varid_to_nonant_index()
+
         # _initial_fixed_varibles is a ComponentSet of vardata belonging to the
         # models we just discarded, so every reloaded nonant would look
         # unrecognized and _can_update_best_bound would refuse to update the
