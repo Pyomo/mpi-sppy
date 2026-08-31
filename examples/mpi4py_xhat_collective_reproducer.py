@@ -65,6 +65,11 @@ def _parse_args():
         help=("Zero-based iteration for which every Xhat rank prints entry/"
               "exit around the RMA and collective phases."),
     )
+    parser.add_argument(
+        "--trace-rma-phases", action="store_true",
+        help=("Print entry/exit for every RMA call and strata barrier on all "
+              "ranks. Intended for locating an intermittent RMA hang."),
+    )
     return parser.parse_args()
 
 
@@ -165,28 +170,55 @@ def _make_rma_window(strata_comm, payload_length):
 
 
 def _rma_iteration(window, strata_comm, cylinder_index, xhat_index,
-                   iteration, payload_length, padded_length):
+                   iteration, payload_length, padded_length,
+                   trace_rma_phases=False):
     """Publish on the hub rank and retrieve on its paired Xhat rank."""
+    strata_rank = strata_comm.Get_rank()
+    strata_group = MPI.COMM_WORLD.Get_rank() // strata_comm.Get_size()
+
+    def trace(phase):
+        if trace_rma_phases:
+            print(
+                f"RMA_TRACE iteration={iteration} group={strata_group} "
+                f"world_rank={MPI.COMM_WORLD.Get_rank()} "
+                f"strata_rank={strata_rank} {phase}",
+                flush=True,
+            )
+
     if cylinder_index == 0:
         publish = np.full(padded_length, np.nan, dtype=np.float64)
         publish[:payload_length] = (
             np.arange(payload_length, dtype=np.float64) + iteration)
         publish[payload_length] = iteration + 1
+        trace("before-put-lock")
         window.Lock(0, MPI.LOCK_EXCLUSIVE)
+        trace("after-put-lock")
+        trace("before-put")
         window.Put([publish, MPI.DOUBLE], 0, 0)
+        trace("after-put")
+        trace("before-put-unlock")
         window.Unlock(0)
+        trace("after-put-unlock")
 
     # This deliberately makes the RMA test deterministic.  A later stress
     # variant can remove this barrier and use write-ID agreement to reject
     # reads that straddle publications.
+    trace("before-publish-barrier")
     strata_comm.Barrier()
+    trace("after-publish-barrier")
 
     received = None
     if cylinder_index == xhat_index:
         received = np.empty(padded_length, dtype=np.float64)
+        trace("before-get-lock")
         window.Lock(0, MPI.LOCK_SHARED)
+        trace("after-get-lock")
+        trace("before-get")
         window.Get([received, MPI.DOUBLE], 0, 0)
+        trace("after-get")
+        trace("before-get-unlock")
         window.Unlock(0)
+        trace("after-get-unlock")
 
         expected = np.arange(payload_length, dtype=np.float64) + iteration
         if not np.array_equal(received[:payload_length], expected):
@@ -194,7 +226,9 @@ def _rma_iteration(window, strata_comm, cylinder_index, xhat_index,
         if received[payload_length] != iteration + 1:
             raise RuntimeError(f"corrupt RMA write ID at iteration {iteration}")
 
+    trace("before-retrieval-barrier")
     strata_comm.Barrier()
+    trace("after-retrieval-barrier")
     return None if received is None else received[:payload_length].copy()
 
 
@@ -270,6 +304,7 @@ def main():
                     iteration,
                     args.payload_length,
                     padded_length,
+                    args.trace_rma_phases,
                 )
             if trace:
                 print(
