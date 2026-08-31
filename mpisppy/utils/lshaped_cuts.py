@@ -516,6 +516,13 @@ class StandardLPL1CutGenerator:
         repn = generate_standard_repn(obj.expr, quadratic=True)
         if repn.nonlinear_vars or repn.quadratic_vars:
             raise ValueError("standard_lp_l1 requires a linear subproblem objective")
+        if any(
+            not var.is_continuous()
+            for var in subproblem.component_data_objects(
+                Var, active=True, descend_into=True
+            )
+        ):
+            raise ValueError("standard_lp_l1 requires continuous subproblem variables")
         if next(
             subproblem.component_data_objects(
                 pe.SOSConstraint, active=True, descend_into=True
