@@ -325,7 +325,8 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
     return EF_instance
 
 def _create_EF_from_scen_dict(scen_dict, EF_name=None,
-                                nonant_for_fixed_vars=True):
+                                nonant_for_fixed_vars=True,
+                                mutable_probability=False):
     """ Create a ConcreteModel of the extensive form from a scenario
         dictionary.
 
@@ -358,6 +359,15 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
             enforced non-anticipativity for non-fixed vars, which is not always
             desirable in the context of bundling. This allows for more
             fine-grained control.
+
+            If mutable_probability is True, the scenario probabilities are
+            represented as a mutable Pyomo Param (``_mpisppy_model.prob``,
+            indexed by scenario name) instead of being folded into the
+            objective as float constants, so they can be updated after the EF
+            is built without rebuilding it (see ExtensiveForm.
+            set_scenario_probabilities). This requires the probabilities to
+            sum to 1 (as a full EF does) and is therefore NOT supported for
+            bundles, whose member probabilities sum to less than 1.
     """
     is_min, clear = _models_have_same_sense(scen_dict)
     if (not clear):
@@ -375,6 +385,42 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
 
     EF_instance._ef_scenario_names = []
     EF_instance._mpisppy_probability = 0
+    if mutable_probability:
+        # Probabilities become mutable Params so they can be updated in place
+        # (option B of the design: require a normalized full EF, no divisor).
+        # The flag exists only to enable re-weighting, and re-weighting a
+        # multistage tree is not supported, so refuse here rather than at the
+        # first set_scenario_probabilities call -- the caller can still choose
+        # a different build at this point.
+        for sname, scen in scen_dict.items():
+            if len(scen._mpisppy_node_list) > 1:
+                raise ValueError(
+                    "mutable_probability supports two-stage problems only "
+                    f"(scenario '{sname}' has a multistage node list). "
+                    "Rebuild the model with new probabilities to re-weight a "
+                    "multistage tree.")
+        try:
+            prob_init = {sname: float(scen._mpisppy_probability)
+                         for sname, scen in scen_dict.items()}
+        except (AttributeError, TypeError, ValueError) as e:
+            raise ValueError("mutable_probability requires every scenario to "
+                             "have a numeric _mpisppy_probability.") from e
+        # Require a normalized full EF, and check it here: the loop below
+        # deactivates each scenario's objective and re-parents the scenario
+        # onto this EF, so raising afterwards would leave the caller's
+        # scen_dict unusable for a corrected retry.
+        total = sum(prob_init.values())
+        if abs(total - 1.0) > 1e-9:
+            raise RuntimeError(
+                "mutable_probability requires scenario probabilities summing "
+                f"to 1; got {total}. This is a full-EF feature: a scenario "
+                "bundle, or a per-rank subset of the scenarios, sums to less "
+                "than 1 and is intentionally rejected, since the divisor it "
+                "needs cannot be a baked constant when probabilities are "
+                "mutable.")
+        EF_instance._mpisppy_model.prob = pyo.Param(
+            list(scen_dict.keys()), mutable=True, within=pyo.NonNegativeReals,
+            initialize=prob_init)
     for (sname, scenario_instance) in scen_dict.items():
         EF_instance.add_component(sname, scenario_instance)
         EF_instance._ef_scenario_names.append(sname)
@@ -382,15 +428,22 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
         scenario_objs = deact_objs(scenario_instance)
         obj_func = scenario_objs[0] # Select the first objective
         try:
-            EF_instance.EF_Obj.expr += scenario_instance._mpisppy_probability * obj_func.expr
+            if mutable_probability:
+                EF_instance.EF_Obj.expr += \
+                    EF_instance._mpisppy_model.prob[sname] * obj_func.expr
+            else:
+                EF_instance.EF_Obj.expr += scenario_instance._mpisppy_probability * obj_func.expr
             EF_instance._mpisppy_probability += scenario_instance._mpisppy_probability
         except AttributeError as e:
             raise AttributeError("Scenario " + sname + " has no specified "
                         "probability. Specify a value for the attribute "
                         " _mpisppy_probability and try again.") from e
-    # Normalization does nothing when solving the full EF, but is required for
-    # appropriate scaling of EFs used as bundles.
-    EF_instance.EF_Obj.expr /= EF_instance._mpisppy_probability
+    if not mutable_probability:
+        # Normalization does nothing when solving the full EF, but is required
+        # for appropriate scaling of EFs used as bundles. The mutable path
+        # skips it (option B) and had its sum checked above, before any
+        # scenario was touched.
+        EF_instance.EF_Obj.expr /= EF_instance._mpisppy_probability
 
     # For each node in the scenario tree, we need to collect the
     # nonanticipative vars and create the constraints for them,
@@ -540,6 +593,46 @@ def _models_have_same_sense(models):
 def is_persistent(solver):
     return isinstance(solver,
         pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver)
+
+
+def has_persistent_solve_api(solver):
+    """Return True if the solver object can hold a loaded instance:
+    it has ``set_instance`` and ``set_objective``.
+
+    This recognizes both the legacy ``PersistentSolver`` interface and the
+    APPSI / ``pyomo.contrib.solver`` interfaces (e.g. ``appsi_highs``), which
+    are not subclasses of the legacy base class and so are *not* reported by
+    :func:`is_persistent`.
+
+    It is deliberately kept separate from :func:`is_persistent`. Many PH/FWPH
+    call sites gate ``update_var``/``add_var``/``add_constraint`` on
+    ``is_persistent``; the APPSI legacy wrapper does not expose those methods,
+    so broadening ``is_persistent`` itself would break those paths. The EF
+    solve path only needs the two methods checked here.
+
+    ``load_vars`` is deliberately *not* required. On the modern
+    ``pyomo.contrib.solver`` interfaces it lives on the solution loader rather
+    than on the solver (e.g. ``GurobiSolutionLoader``), so requiring it would
+    classify ``highs`` and ``gurobi_persistent_v2`` as non-persistent even
+    though they load and re-solve an instance perfectly well.
+
+    Do not reuse this to decide how to read a solution back. That question is
+    answered by :func:`is_persistent`: ``load_vars()`` loads variable values
+    only, while ``solutions.load_from(results)`` also imports ``Suffix``
+    data such as duals, and solvers like ``gurobi_direct`` and ``appsi_highs``
+    need the latter.
+    """
+    if is_persistent(solver):
+        return True
+    try:
+        return all(hasattr(solver, name)
+                   for name in ("set_instance", "set_objective"))
+    except Exception:
+        # Pyomo's UnknownSolver.__getattr__ raises RuntimeError rather than
+        # AttributeError, so hasattr propagates instead of returning False.
+        # This function promises a bool; let the caller's own solve() call be
+        # what reports the unavailable solver.
+        return False
 
 
 def solver_quadratic_objective_capability(solver_plugin):

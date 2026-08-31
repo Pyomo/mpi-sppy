@@ -10,6 +10,7 @@ MPI is used.
    :caption: Getting Started
 
    quick_start.rst
+   console_scripts.rst
    install_mpi.rst
 
 .. toctree::
@@ -27,6 +28,7 @@ MPI is used.
    generic_cylinders.rst
    examples.rst
    ef.rst
+   mutable_probability.rst
    chance_constraints.rst
 
 .. toctree::
@@ -71,6 +73,7 @@ MPI is used.
    admmWrapper.rst
    stoch_admmWrapper.rst
    aph.rst
+   flexible_ranks.rst
    nompi4py.rst
    secretmenu.rst
    pysp.rst

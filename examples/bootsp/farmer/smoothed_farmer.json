@@ -1,0 +1,21 @@
+{
+    "module_name": "farmer",
+    "max_count": 300,
+    "candidate_sample_size": 5,
+    "sample_size": 20,
+    "subsample_size": 5,
+    "smoothed_B_I": 5,
+    "smoothed_center_sample_size": 40,
+    "nB": 10,
+    "alpha": 0.05,
+    "seed_offset": 111,
+    "optimal_fname": "None",
+    "xhat_fname": "None",
+    "solver_name": "cplex_direct",
+    "trace_fname": "None",
+    "boot_method": "Smoothed_bagging",
+    "coverage_replications": 5,
+    "crops_multiplier": 1,
+    "farmer_with_integers": "False",
+    "yield_cv": "0.1"
+}

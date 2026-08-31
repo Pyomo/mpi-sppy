@@ -7,5 +7,5 @@
 # full copyright and license information.
 ###############################################################################
 # Bootstrap and bagging confidence intervals for data-based, two-stage
-# stochastic programs (the empirical methods; smoothed methods and the
-# statdist distribution library arrive in a follow-on merge).
+# stochastic programs: the empirical methods (numpy only) and the smoothed
+# methods (which fit a distribution with the bundled statdist library).

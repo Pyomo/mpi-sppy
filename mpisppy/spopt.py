@@ -236,9 +236,18 @@ class SPOpt(SPBase):
                 If True, warmstart the subproblem solves. Default False.
             outer_bound_only (boolean, optional):
                 If True, populate outer_bound *only*; no solution is loaded, so
-                need_solution must be False. If the solve reports no bound, the
-                previous outer bound is kept (a valid, if vacuous, outer bound).
+                need_solution must be False. If the solve reports no bound,
+                outer_bound is cleared to None rather than left at its previous
+                value: a stale bound cannot be mixed with fresh ones in the
+                expectation that Ebound forms.
                 Keyword-only. Default False.
+
+        Note:
+            The subproblem's outer_bound is cleared before the solve is
+            dispatched, on the agnostic path as well as the Pyomo one, so a
+            solve that reports no bound leaves None behind rather than the
+            bound some earlier solve computed. A guest's solve callout is held
+            to the same contract: record a bound when the solve produces one.
 
         Returns:
             float:
@@ -326,6 +335,30 @@ class SPOpt(SPBase):
             # solve_keyword_args["use_signal_handling"] = False
             pass
 
+        # Whatever outer bound this subproblem holds came from an earlier
+        # solve, so it stops describing the subproblem the moment this one
+        # starts. Clearing it here makes "this solve produced no bound" the
+        # outcome a path has to overwrite, rather than one every path has to
+        # remember to write, and it is the only way to cover the agnostic
+        # branch below: a guest records a bound when its solve succeeds and
+        # returns without touching one when it fails (pyomo_guest, ampl_guest
+        # and gams_guest all do), and a guest written outside this repo cannot
+        # be fixed here at all.
+        #
+        # Keeping the previous value would be wrong even though it was a valid
+        # bound when it was computed: Ebound sums p_s * outer_bound_s across
+        # scenarios, and a Lagrangian bound is only valid as a *sum* when every
+        # scenario uses weights from one generation satisfying
+        # sum_s p_s W_s = 0. Mixing a stale bound with fresh ones gives
+        # sum_s p_s L_s(W'_s) <= OPT + (sum_s p_s W'_s)^T xbar*, whose trailing
+        # term does not vanish -- so the result is not an outer bound at all,
+        # and nothing downstream can tell. None instead lets Ebound's
+        # missing-bound check fire and the spoke decline to send.
+        #
+        # Every branch below that reaches a bound assigns one, so a solve with
+        # a bound to report does not lose it.
+        s._mpisppy_data.outer_bound = None
+
         Ag = getattr(self, "Ag", None)  # agnostic
         if Ag is not None:
             assert not disable_pyomo_signal_handling, "Not thinking about agnostic APH yet"
@@ -381,11 +414,9 @@ class SPOpt(SPBase):
                         raise
 
                 if outer_bound is None:
-                    # Leave outer_bound at its previous value rather than
-                    # publish whatever the solver left in the results object.
-                    # The stale bound is still a valid outer bound (any
-                    # Lagrangian dual value bounds the original problem),
-                    # which is what the pre-outer_bound_only path did here.
+                    # This solve produced no bound; the clear above already
+                    # recorded that, and leaving it None is what lets Ebound's
+                    # missing-bound check fire.
                     if gripe:
                         print (f"[{self._get_cylinder_name()}] No outer bound for scenario {s.name}")
                         if results is not None:
@@ -398,6 +429,8 @@ class SPOpt(SPBase):
                     s._mpisppy_data.outer_bound = outer_bound
 
             elif sputils.not_good_enough_results(results):
+                # A failed solve computed no bound, so outer_bound stays at the
+                # None set before the solve.
                 s._mpisppy_data.solution_available = False
 
                 if gripe:
@@ -489,8 +522,10 @@ class SPOpt(SPBase):
                 If True, warmstart the subproblem solves. Default False.
             outer_bound_only (boolean, optional):
                 If True, populate outer_bound *only*; no solution is loaded, so
-                need_solution must be False. If the solve reports no bound, the
-                previous outer bound is kept (a valid, if vacuous, outer bound).
+                need_solution must be False. If the solve reports no bound,
+                outer_bound is cleared to None rather than left at its previous
+                value: a stale bound cannot be mixed with fresh ones in the
+                expectation that Ebound forms.
                 Keyword-only. Default False.
         """
 

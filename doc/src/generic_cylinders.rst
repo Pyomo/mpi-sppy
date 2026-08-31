@@ -9,8 +9,7 @@ system, the extensive form solver, confidence intervals, and many
 other features without requiring you to write a driver program.
 
 .. note::
-   Installing mpi-sppy (with ``pip install mpi-sppy`` or with
-   ``pip install -e .`` from a clone) puts a console script named
+   Installing mpi-sppy puts a console script named
    ``mpi-sppy-generic-cylinders`` on your ``PATH``. It is equivalent to
    ``python -m mpisppy.generic_cylinders``, so in every example below you
    can substitute ``mpi-sppy-generic-cylinders`` for the
@@ -18,12 +17,10 @@ other features without requiring you to write a driver program.
 
        mpi-sppy-generic-cylinders --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi
 
-   The console script installs the same abort-on-exception protection
-   as mpi4py's runner, so for multi-rank parallel runs
-   ``mpiexec -np 3 mpi-sppy-generic-cylinders ...`` and the
-   ``mpiexec -np 3 python -m mpi4py -m mpisppy.generic_cylinders ...``
-   module form shown below are equally safe: if one rank raises an
-   exception, all ranks are aborted rather than leaving the job hung.
+   For multi-rank parallel runs the console script is as safe as the
+   ``python -m mpi4py`` module form shown below: both abort all ranks
+   when one of them raises an exception, rather than leaving the job
+   hung. See :ref:`console_scripts`.
 
 Your Model File (Module)
 ------------------------

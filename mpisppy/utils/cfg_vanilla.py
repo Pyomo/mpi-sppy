@@ -1093,6 +1093,12 @@ def fwph_spoke(
     shoptions = shared_options(cfg)
     options = copy.deepcopy(shoptions)
 
+    # Match fwph_hub: FWPH attaches no proximal term, so there is nothing for
+    # smoothing to ride on and fwph_main refuses it. shared_options does not
+    # carry the key today, so options_check would default it -- but a caller
+    # who hands us an options dict built for a PH hub does carry it.
+    options["smoothed"] = 0
+
     options.update(_fwph_options(cfg))
 
     # Match fwph_hub: forward linearize_* so FWPH._options_checks_fw can

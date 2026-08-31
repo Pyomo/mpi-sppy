@@ -936,20 +936,37 @@ are subtle.  If isolation is ever genuinely wanted, prefer a branch in
 the upstream repository over a separate fork -- same isolation, far less
 CI and merge friction.)
 
-**Prerequisites before the feature is recommended for production use.**
-There is no default to flip, but before the `fullcomm` path is
-documented or recommended for production use, exercise it on at least
-two MPI implementations (e.g. OpenMPI and MPICH) and more than one
-mpi4py / MPI version, since that path is where the RMA-portability risk
-lives.
+**Prerequisites before the feature is recommended for production use —
+met.**  There is no default to flip, but the `fullcomm` path was not to
+be documented or recommended for production use until it had been
+exercised on at least two MPI implementations and more than one mpi4py /
+MPI version, since that path is where the RMA-portability risk lives.
+The `test-cylinders` CI job now does exactly that on every pull request,
+as a three-cell matrix:
+
+| cell | MPI | mpi4py |
+|---|---|---|
+| `mpich` | MPICH 5.0.1 | 4.1.2 |
+| `openmpi` | OpenMPI 5.0.10 | 4.1.2 |
+| `mpich, mpi4py 3.1` | MPICH 4.3.2 | 3.1.6 |
+
+Two implementations, two MPICH versions, two mpi4py versions.  Every
+cell runs the whole unequal-rank suite — `test_spwindow_multisource`
+plus the six `test_flexible_rank_*` integration tests — at `np=6`, and
+the job prints `MPI.Get_library_version()` so the log records which
+build was exercised instead of leaving it to be inferred from whatever
+`conda install mpi4py` happened to resolve.  The matrix is
+`fail-fast: false`, so one implementation's failure cannot cancel
+another's, and the unequal-rank step runs even when the equal-rank step
+above it fails, so a pre-existing failure cannot silently skip the
+question this job exists to answer.
 
 A **scalable layout exchange** used to sit on this same "finish
 before recommending it" list; it was removed after the scaling
 analysis showed the flat `fullcomm.allgather` is fine at any realistic
 rank count (Pyomo/mpi-sppy#726, closed won't-fix; see the Option D
-layout-exchange note) — leaving the MPI-implementation matrix above as
-the remaining prerequisite for recommending the feature (not for
-landing the intervening phases on `main`).
+layout-exchange note).  With the MPI matrix now running in CI, **no
+release gates remain**.
 
 
 ### Possible future work (out of scope)
