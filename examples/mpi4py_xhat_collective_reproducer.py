@@ -24,6 +24,11 @@ Typed-collective control::
         examples/mpi4py_xhat_collective_reproducer.py \
         --mode typed --iterations 10000
 
+RMA isolation controls use the same strata communicators. ``barrier-only``
+does not create a window; ``window-only`` creates the window but issues no
+RMA operations; and ``rma-only`` runs only the RMA operations and their
+barriers. Use ``--watchdog-seconds`` to dump stacks when an iteration stalls.
+
 The ``invalid-mismatch`` mode deliberately violates MPI collective-ordering
 rules.  It is useful only for determining whether this MPI stack produces the
 same ``Negative size passed to PyBytes_FromStringAndSize``/``MemoryError``
@@ -32,7 +37,10 @@ is not evidence of an MPI bug.
 """
 
 import argparse
+import faulthandler
 import sys
+import threading
+import time
 import traceback
 
 import numpy as np
@@ -44,7 +52,8 @@ def _parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--mode", choices=(
-            "object", "typed", "rma-only", "invalid-mismatch"),
+            "object", "typed", "barrier-only", "window-only", "rma-only",
+            "invalid-mismatch"),
         default="object",
     )
     parser.add_argument("--iterations", type=int, default=10_000)
@@ -70,7 +79,54 @@ def _parse_args():
         help=("Print entry/exit for every RMA call and strata barrier on all "
               "ranks. Intended for locating an intermittent RMA hang."),
     )
+    parser.add_argument(
+        "--watchdog-seconds", type=float, default=0,
+        help=("Dump this rank's Python stack after this many seconds without "
+              "completing an iteration; zero disables the watchdog."),
+    )
     return parser.parse_args()
+
+
+class _ProgressWatchdog:
+    """Dump a rank's stack if it stops completing iterations."""
+
+    def __init__(self, timeout, world_rank):
+        self.timeout = timeout
+        self.world_rank = world_rank
+        self._condition = threading.Condition()
+        self._deadline = time.monotonic() + timeout
+        self._stopped = False
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def kick(self):
+        with self._condition:
+            self._deadline = time.monotonic() + self.timeout
+            self._condition.notify()
+
+    def stop(self):
+        with self._condition:
+            self._stopped = True
+            self._condition.notify()
+        self._thread.join()
+
+    def _run(self):
+        with self._condition:
+            while not self._stopped:
+                remaining = self._deadline - time.monotonic()
+                if remaining > 0:
+                    self._condition.wait(remaining)
+                    continue
+                break
+
+        if not self._stopped:
+            print(
+                f"WATCHDOG world_rank={self.world_rank}: no completed "
+                f"iteration for {self.timeout:g} seconds",
+                file=sys.stderr,
+                flush=True,
+            )
+            faulthandler.dump_traceback(file=sys.stderr)
 
 
 def _object_iteration(comm, iteration, payload_length, root_value=None):
@@ -232,6 +288,28 @@ def _rma_iteration(window, strata_comm, cylinder_index, xhat_index,
     return None if received is None else received[:payload_length].copy()
 
 
+def _barrier_iteration(strata_comm, iteration, trace_phases=False):
+    """Run the two strata barriers without issuing any RMA operations."""
+    world_rank = MPI.COMM_WORLD.Get_rank()
+    strata_rank = strata_comm.Get_rank()
+    strata_group = world_rank // strata_comm.Get_size()
+
+    def trace(phase):
+        if trace_phases:
+            print(
+                f"RMA_TRACE iteration={iteration} group={strata_group} "
+                f"world_rank={world_rank} strata_rank={strata_rank} {phase}",
+                flush=True,
+            )
+
+    trace("before-publish-barrier")
+    strata_comm.Barrier()
+    trace("after-publish-barrier")
+    trace("before-retrieval-barrier")
+    strata_comm.Barrier()
+    trace("after-retrieval-barrier")
+
+
 def main():
     args = _parse_args()
     world = MPI.COMM_WORLD
@@ -247,8 +325,15 @@ def main():
         )
     if not 0 <= args.xhat_index < args.cylinders:
         raise ValueError("xhat-index must be in [0, cylinders)")
-    if args.mode == "rma-only" and not args.with_rma:
-        raise ValueError("--mode rma-only requires --with-rma")
+    if args.watchdog_seconds < 0:
+        raise ValueError("watchdog-seconds must be nonnegative")
+
+    perform_rma = (
+        args.mode == "rma-only"
+        or (args.with_rma and args.mode not in ("barrier-only", "window-only"))
+    )
+    create_window = perform_rma or args.mode == "window-only"
+    create_strata = create_window or args.mode == "barrier-only"
 
     cylinder_index = world_rank % args.cylinders
     color = 0 if cylinder_index == args.xhat_index else MPI.UNDEFINED
@@ -257,11 +342,12 @@ def main():
     strata_comm = None
     rma_window = None
     padded_length = None
-    if args.with_rma:
+    if create_strata:
         strata_comm = world.Split(
             color=world_rank // args.cylinders, key=world_rank)
         if strata_comm.Get_rank() != cylinder_index:
             raise RuntimeError("unexpected strata communicator rank ordering")
+    if create_window:
         rma_window, padded_length = _make_rma_window(
             strata_comm, args.payload_length)
 
@@ -269,11 +355,16 @@ def main():
         print(
             f"MPI vendor={MPI.get_vendor()!r}; mpi4py={mpi4py.__version__}; "
             f"MPI standard={MPI.Get_version()!r}; "
-            f"world={world_size}; mode={args.mode}; with_rma={args.with_rma}",
+            f"world={world_size}; mode={args.mode}; "
+            f"window={create_window}; rma={perform_rma}",
             flush=True,
         )
 
+    watchdog = None
     try:
+        if args.watchdog_seconds:
+            watchdog = _ProgressWatchdog(args.watchdog_seconds, world_rank)
+
         xhat_rank = None
         if xhat_comm != MPI.COMM_NULL:
             xhat_rank = xhat_comm.Get_rank()
@@ -295,7 +386,7 @@ def main():
                     f"xhat_rank={xhat_rank} before-rma",
                     flush=True,
                 )
-            if args.with_rma:
+            if perform_rma:
                 root_value = _rma_iteration(
                     rma_window,
                     strata_comm,
@@ -306,6 +397,9 @@ def main():
                     padded_length,
                     args.trace_rma_phases,
                 )
+            elif args.mode in ("barrier-only", "window-only"):
+                _barrier_iteration(
+                    strata_comm, iteration, args.trace_rma_phases)
             if trace:
                 print(
                     f"TRACE iteration={iteration} world_rank={world_rank} "
@@ -347,17 +441,24 @@ def main():
                     f"iterations",
                     flush=True,
                 )
+            if watchdog is not None:
+                watchdog.kick()
 
         if rma_window is not None:
             rma_window.Free()
+        if strata_comm is not None:
             strata_comm.Free()
         if xhat_comm != MPI.COMM_NULL:
             xhat_comm.Free()
 
         world.Barrier()
+        if watchdog is not None:
+            watchdog.stop()
         if world_rank == 0:
             print("PASS", flush=True)
     except BaseException:
+        if watchdog is not None:
+            watchdog.stop()
         print(
             f"FAIL world_rank={world_rank}, cylinder_index={cylinder_index}",
             file=sys.stderr,
