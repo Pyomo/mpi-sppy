@@ -1714,5 +1714,38 @@ class TestDynRhoCachesSurviveResume(unittest.TestCase):
             msg="the WTracker never grabbed a W set on the resumed run")
 
 
+class TestWXBarReaderResume(unittest.TestCase):
+    """pre_iter0 runs after the checkpoint's models are spliced in, so reading
+    an --init-W-fname there overwrites the checkpointed duals with the values
+    the study started from -- and the documented workflow submits the same
+    command every morning, so the flag is still on it."""
+
+    def _reader(self, resumed):
+        import types
+        from mpisppy.utils.w_utils.wxbarreader import WXBarReader
+        reader = WXBarReader.__new__(WXBarReader)
+        reader.not_active = False
+        reader.w_fname = "W0.csv"
+        reader.x_fname = None
+        reader.sep_files = False
+        reader.cylinder_rank = 0
+        reader.PHB = types.SimpleNamespace(_resumed_from_checkpoint=resumed)
+        return reader
+
+    def test_a_resumed_run_does_not_read_the_files(self):
+        import mpisppy.utils.w_utils.wxbarutils as wxbarutils
+        with mock.patch.object(wxbarutils, "set_W_from_file") as set_W:
+            self._reader(resumed=True).pre_iter0()
+        set_W.assert_not_called()
+
+    def test_an_ordinary_run_still_reads_them(self):
+        import mpisppy.utils.w_utils.wxbarutils as wxbarutils
+        reader = self._reader(resumed=False)
+        reader.PHB._reenable_W = mock.Mock()
+        with mock.patch.object(wxbarutils, "set_W_from_file") as set_W:
+            reader.pre_iter0()
+        set_W.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
