@@ -47,7 +47,6 @@ static int parse_positive_int(const char *text, const char *name, int world_rank
 
 int main(int argc, char **argv)
 {
-    int provided;
     int world_rank;
     int world_size;
     int group;
@@ -61,7 +60,7 @@ int main(int argc, char **argv)
     int *window_model = NULL;
     int model_found = 0;
 
-    MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+    MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
@@ -120,14 +119,11 @@ int main(int argc, char **argv)
 
     if (world_rank == 0) {
         printf(
-            "world=%d groups=%d iterations=%d count=%d "
-            "requested_thread=%d provided_thread=%d\n",
+            "world=%d groups=%d iterations=%d count=%d\n",
             world_size,
             world_size / GROUP_SIZE,
             iterations,
-            count,
-            MPI_THREAD_MULTIPLE,
-            provided);
+            count);
         fflush(stdout);
     }
 
