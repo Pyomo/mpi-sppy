@@ -62,6 +62,22 @@ class TestStandardLPL1CutGenerator(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "linear subproblem constraints"):
             gen._validate_linear_subproblem(m)
 
+    def test_l1_clone_drops_stale_dual_suffix_values(self):
+        m = pyo.ConcreteModel()
+        m.y = pyo.Var()
+        m.obj = pyo.Objective(expr=m.y)
+        m.con = pyo.Constraint(expr=m.y >= 0)
+        m.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
+        m.dual[m.con] = 1.0
+
+        gen = StandardLPL1CutGenerator()
+        clone = gen._clone_subproblem_for_l1(m)
+
+        self.assertTrue(hasattr(m, "dual"))
+        self.assertTrue(hasattr(clone, "dual"))
+        self.assertEqual(len(m.dual), 0)
+        self.assertEqual(len(clone.dual), 0)
+
     def test_unknown_lshaped_cut_generator_option_errors(self):
         names = farmer.scenario_names_creator(3)
         options = {

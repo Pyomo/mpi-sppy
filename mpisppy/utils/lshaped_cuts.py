@@ -319,15 +319,13 @@ class StandardLPL1CutGenerator:
         """
         base = self.subproblems[local_ndx]
         cmap = self.complicating_vars_maps[local_ndx]
-        subproblem = base.clone()
+        subproblem = self._clone_subproblem_for_l1(base)
         # The clone is made while the failed recourse solve's temporary
         # fixing rows still exist on ``base``.  They are not original
         # subproblem constraints and must not be relaxed into the L1 model;
         # doing so also makes the dual of the new hard fixing row degenerate.
         if hasattr(subproblem, "_mpisppy_lshaped_fix_cons"):
             subproblem.del_component(subproblem._mpisppy_lshaped_fix_cons)
-        if not hasattr(subproblem, "dual"):
-            subproblem.dual = pe.Suffix(direction=pe.Suffix.IMPORT)
         clone_cmap = pe.ComponentMap(
             (root_var, ComponentUID(sub_var).find_component_on(subproblem))
             for root_var, sub_var in cmap.items()
@@ -353,6 +351,26 @@ class StandardLPL1CutGenerator:
             "needs_cut": zval > self.tol,
             "infeasible": True,
         }
+
+    def _clone_subproblem_for_l1(self, base):
+        """Clone a subproblem without carrying stale imported dual values.
+
+        Persistent solvers can leave solver-specific state in the ``dual``
+        suffix after prior solves.  The L1 model needs fresh duals only after
+        it is solved, so clone the algebraic model without that populated
+        suffix and attach empty import suffixes afterward.
+        """
+        dual = getattr(base, "dual", None)
+        if dual is not None:
+            base.del_component(dual)
+        try:
+            subproblem = base.clone()
+        finally:
+            if dual is not None and not hasattr(base, "dual"):
+                base.dual = pe.Suffix(direction=pe.Suffix.IMPORT)
+        if not hasattr(subproblem, "dual"):
+            subproblem.dual = pe.Suffix(direction=pe.Suffix.IMPORT)
+        return subproblem
 
     def _build_l1_model(self, subproblem):
         """Replace the active LP rows by row-violation constraints using ``z``.

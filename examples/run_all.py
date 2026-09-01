@@ -186,6 +186,12 @@ if run_first_part:
            "--num-scens 3 --max-iterations=50 "
            "--solver-name={} --rel-gap=0.0 "
            "--xhatlshaped --max-solver-threads=1".format(solver_name))
+    do_one("farmer", "../../mpisppy/generic_cylinders.py", 2,
+           "--module-name farmer --num-scens 3 --max-iterations=50 "
+           "--solver-name={} --rel-gap=0.0 "
+           "--lshaped-hub --xhatlshaped "
+           "--lshaped-cut-generator standard_lp_l1 "
+           "--max-solver-threads=1".format(solver_name))
     do_one("farmer/archive", "farmer_cylinders.py", 3,
            "--num-scens 3 --max-iterations=50 "
            "--default-rho=1 "
@@ -210,6 +216,12 @@ if run_first_part:
            "--default-rho=2 --grad-rho --grad-order-stat 0.5 "
            "--solver-name={} --lagrangian --xhatshuffle "
            "--cvar --cvar-weight 2.0 --cvar-alpha 0.8".format(solver_name))
+    do_one("relief", "../../mpisppy/generic_cylinders.py", 2,
+           "--module-name relief --max-iterations=50 "
+           "--solver-name={} --rel-gap=1E-4 "
+           "--lshaped-hub --xhatlshaped "
+           "--lshaped-cut-generator standard_lp_l1 "
+           "--max-solver-threads=1".format(solver_name))
     do_one("farmer", "../../mpisppy/generic_cylinders.py", 4,
            "--module-name farmer --num-scens 6 "
            "--rel-gap 0.001 --max-iterations=50 "
