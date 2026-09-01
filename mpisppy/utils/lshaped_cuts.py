@@ -11,7 +11,6 @@
 from pyomo.core.base.block import declare_custom_block
 from pyomo.core import Constraint, Var
 from pyomo.core.base.componentuid import ComponentUID
-from pyomo.repn.standard_repn import generate_standard_repn
 import pyomo.environ as pe
 from pyomo.solvers.plugins.solvers.persistent_solver import PersistentSolver
 import pyomo.contrib.benders.benders_cuts as bc
@@ -41,12 +40,14 @@ solver_dual_sign_convention['xpress_direct'] = -1
 solver_dual_sign_convention['xpress_persistent'] = -1
 
 
-class StandardLPL1CutGenerator:
-    """Standard LP Benders cuts with L1-normalized feasibility cuts.
+class StandardL1CutGenerator:
+    """Dual-based Benders cuts with L1-normalized feasibility cuts.
 
     This generator is intentionally opt-in and assumes that each subproblem is
-    an LP. For a fixed incumbent first-stage solution ``xbar``, it first solves
-    the ordinary scenario recourse LP. In compact notation this is
+    continuous and that the user has ensured the mathematical assumptions
+    needed for valid dual-based cuts. For a fixed incumbent first-stage
+    solution ``xbar``, it first solves the ordinary scenario recourse problem.
+    In compact linear notation this is
 
     ``Q_s(xbar) = min_y { q_s^T y : W_s y >= h_s - T_s xbar }``.
 
@@ -57,14 +58,15 @@ class StandardLPL1CutGenerator:
     ``s.t. W_s y + T_s x_s >= h_s``
     ``     x_s = xbar``.
 
-    When this LP is optimal, the dual multipliers on the temporary fixing
-    constraints define an optimality cut. After applying the dual sign
-    multiplier used by this implementation, the generated cut has the form
+    When this problem is solved to optimality, the dual multipliers on the
+    temporary fixing constraints define an optimality cut. After applying the
+    dual sign multiplier used by this implementation, the generated cut has
+    the form
 
     ``Q_s(xbar) - pi_s^T (x - xbar) <= eta_s``.
 
-    If the ordinary recourse LP is infeasible, the generator clones the
-    subproblem and solves an L1 feasibility LP. The original objective is
+    If the ordinary recourse problem is infeasible, the generator clones the
+    subproblem and solves an L1 feasibility problem. The original objective is
     deactivated, a nonnegative scalar ``z`` is minimized, and every active
     original row is relaxed so that its violation is bounded by ``z``:
 
@@ -87,7 +89,7 @@ class StandardLPL1CutGenerator:
 
     ``z_s(xbar) - rho_s^T (x - xbar) <= 0``.
 
-    This class does not add an objective-vs-eta row to the L1 feasibility LP.
+    This class does not add an objective-vs-eta row to the L1 feasibility model.
     That is the main formulation difference from Pyomo's generic feasibility
     subproblem transformation used by the default cut generator.
     """
@@ -134,8 +136,8 @@ class StandardLPL1CutGenerator:
                 on this object receives the generated cut ``ConstraintList``.
         """
         self.ls = ls
-        if not hasattr(ls.root, "_standard_lshaped_l1_cuts"):
-            ls.root.add_component("_standard_lshaped_l1_cuts", self.cuts)
+        if not hasattr(ls.root, "_standard_l1_cuts"):
+            ls.root.add_component("_standard_l1_cuts", self.cuts)
         self.root_etas = list(ls.root.eta.values())
         self._root_eta_index = {s: i for i, s in enumerate(ls.root.eta.keys())}
 
@@ -163,14 +165,14 @@ class StandardLPL1CutGenerator:
                 argument is accepted for API compatibility; eta lookup is based
                 on the scenario name.
             subproblem_solver (str or Solver): Solver name or solver object used
-                for the recourse LP.
+                for the recourse problem.
             relax_subproblem_cons (bool): Accepted for API compatibility with
                 the default cut generator. It is not used by this generator.
             subproblem_solver_options (dict, optional): Solver options applied
                 to the recourse and L1 feasibility solvers.
 
         Raises:
-            ValueError: If the scenario subproblem is not linear.
+            ValueError: If the scenario subproblem is not continuous.
             RuntimeError: If a solver object name cannot be determined.
         """
         scenario_name = subproblem_fn_kwargs["scenario_name"]
@@ -178,7 +180,7 @@ class StandardLPL1CutGenerator:
             return
 
         subproblem, complicating_vars_map = subproblem_fn(**subproblem_fn_kwargs)
-        self._validate_linear_subproblem(subproblem)
+        self._validate_continuous_subproblem(subproblem)
         if not hasattr(subproblem, "dual"):
             subproblem.dual = pe.Suffix(direction=pe.Suffix.IMPORT)
 
@@ -246,7 +248,7 @@ class StandardLPL1CutGenerator:
         return cuts_added
 
     def _solve_recourse_or_l1(self, local_ndx, root_eta):
-        """Solve ordinary recourse, falling back to the L1 feasibility LP.
+        """Solve ordinary recourse, falling back to the L1 feasibility problem.
 
         Args:
             local_ndx (int): Local subproblem index in this rank's registered
@@ -314,7 +316,7 @@ class StandardLPL1CutGenerator:
             ``needs_cut``, and ``infeasible`` entries.
 
         Raises:
-            RuntimeError: If the L1 feasibility LP does not solve to optimality.
+            RuntimeError: If the L1 feasibility problem does not solve to optimality.
             NotImplementedError: If the solver dual sign convention is unknown.
         """
         base = self.subproblems[local_ndx]
@@ -336,7 +338,7 @@ class StandardLPL1CutGenerator:
         for k, v in self.subproblem_solver_options[local_ndx].items():
             solver.options[k] = v
         if isinstance(solver, PersistentSolver):
-            set_instance_retry(subproblem, solver, "lshaped_l1")
+            set_instance_retry(subproblem, solver, "standard_l1")
         res = self._solve_model(subproblem, solver, solver_name, [])
         tc = res.solver.termination_condition
         if tc not in self._optimal_tc:
@@ -373,11 +375,11 @@ class StandardLPL1CutGenerator:
         return subproblem
 
     def _build_l1_model(self, subproblem):
-        """Replace the active LP rows by row-violation constraints using ``z``.
+        """Replace the active rows by row-violation constraints using ``z``.
 
         Args:
             subproblem (ConcreteModel): Cloned scenario model to transform in
-                place into the L1 feasibility LP.
+                place into the L1 feasibility problem.
         """
         obj = find_active_objective(subproblem)
         obj.deactivate()
@@ -520,38 +522,30 @@ class StandardLPL1CutGenerator:
                 solver.options[k] = v
         return solver, solver_name
 
-    def _validate_linear_subproblem(self, subproblem):
-        """Raise if the active objective or constraints are not linear.
+    def _validate_continuous_subproblem(self, subproblem):
+        """Raise if the subproblem has discrete variables or SOS constraints.
 
         Args:
             subproblem (ConcreteModel): Scenario model to validate.
 
         Raises:
-            ValueError: If the active objective or any active constraint body is
-            quadratic or nonlinear.
+            ValueError: If the subproblem contains non-continuous variables or
+            SOS constraints.
         """
-        obj = find_active_objective(subproblem)
-        repn = generate_standard_repn(obj.expr, quadratic=True)
-        if repn.nonlinear_vars or repn.quadratic_vars:
-            raise ValueError("standard_lp_l1 requires a linear subproblem objective")
         if any(
             not var.is_continuous()
             for var in subproblem.component_data_objects(
                 Var, active=True, descend_into=True
             )
         ):
-            raise ValueError("standard_lp_l1 requires continuous subproblem variables")
+            raise ValueError("standard_l1 requires continuous subproblem variables")
         if next(
             subproblem.component_data_objects(
                 pe.SOSConstraint, active=True, descend_into=True
             ),
             None,
         ) is not None:
-            raise ValueError("standard_lp_l1 does not support SOS constraints")
-        for con in subproblem.component_data_objects(Constraint, active=True, descend_into=True):
-            repn = generate_standard_repn(con.body, quadratic=True)
-            if repn.nonlinear_vars or repn.quadratic_vars:
-                raise ValueError("standard_lp_l1 requires linear subproblem constraints")
+            raise ValueError("standard_l1 does not support SOS constraints")
 
     def _convert_recourse_bounds_to_constraints(self, subproblem, complicating_vars_map):
         """Move recourse variable bounds into explicit rows for L1 relaxation.

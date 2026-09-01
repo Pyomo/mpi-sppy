@@ -17,7 +17,7 @@ import mpisppy.spbase as spbase
 from mpisppy import MPI
 from pyomo.core.plugins.transform.discrete_vars import RelaxIntegerVars
 from mpisppy.utils.sputils import find_active_objective
-from mpisppy.utils.lshaped_cuts import LShapedCutGenerator, StandardLPL1CutGenerator
+from mpisppy.utils.lshaped_cuts import LShapedCutGenerator, StandardL1CutGenerator
 from mpisppy.spopt import set_instance_retry
 from pyomo.core import (
     SOSConstraint, Constraint, Var
@@ -54,9 +54,9 @@ class LShapedMethod(spbase.SPBase):
               are provided, the lower bound is set to -sys.maxsize *
               scenario_prob, which may cause numerical errors.
             - lshaped_cut_generator (string) - "pyomo_feasibility" keeps the
-              existing Pyomo Benders cut generator; "standard_lp_l1" solves the
-              ordinary recourse LP for optimality cuts and an L1-normalized
-              feasibility LP if recourse is infeasible.
+              existing Pyomo Benders cut generator; "standard_l1" solves the
+              ordinary recourse problem for optimality cuts and an
+              L1-normalized feasibility problem if recourse is infeasible.
             - indx_to_stage (dict) - Dictionary mapping the index of every
               variable in the model to the stage they belong to.
         all_scenario_names (list):
@@ -549,12 +549,12 @@ class LShapedMethod(spbase.SPBase):
         cut_generator = self.options.get("lshaped_cut_generator", "pyomo_feasibility")
         if cut_generator == "pyomo_feasibility":
             m.bender = LShapedCutGenerator()
-        elif cut_generator == "standard_lp_l1":
-            m.bender = StandardLPL1CutGenerator()
+        elif cut_generator == "standard_l1":
+            m.bender = StandardL1CutGenerator()
         else:
             raise ValueError(
                 "Unknown lshaped_cut_generator option "
-                f"{cut_generator!r}; expected 'pyomo_feasibility' or 'standard_lp_l1'"
+                f"{cut_generator!r}; expected 'pyomo_feasibility' or 'standard_l1'"
             )
 
         m.bender.set_input(root_vars=self.root_vars, tol=tol, comm=self.mpicomm)

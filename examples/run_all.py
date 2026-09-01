@@ -190,7 +190,7 @@ if run_first_part:
            "--module-name farmer --num-scens 3 --max-iterations=50 "
            "--solver-name={} --rel-gap=0.0 "
            "--lshaped-hub --xhatlshaped "
-           "--lshaped-cut-generator standard_lp_l1 "
+           "--lshaped-cut-generator standard_l1 "
            "--max-solver-threads=1".format(solver_name))
     do_one("farmer/archive", "farmer_cylinders.py", 3,
            "--num-scens 3 --max-iterations=50 "
@@ -220,7 +220,7 @@ if run_first_part:
            "--module-name relief --max-iterations=50 "
            "--solver-name={} --rel-gap=1E-4 "
            "--lshaped-hub --xhatlshaped "
-           "--lshaped-cut-generator standard_lp_l1 "
+           "--lshaped-cut-generator standard_l1 "
            "--max-solver-threads=1".format(solver_name))
     do_one("farmer", "../../mpisppy/generic_cylinders.py", 4,
            "--module-name farmer --num-scens 6 "

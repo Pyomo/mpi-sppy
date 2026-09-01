@@ -244,20 +244,20 @@ class TestConfigLShapedArgs(unittest.TestCase):
         cfg.lshaped_args()
         cfg.solver_name = "gurobi"
         cfg.max_iterations = 12
-        cfg.lshaped_cut_generator = "standard_lp_l1"
+        cfg.lshaped_cut_generator = "standard_l1"
 
         opts = vanilla.lshaped_options(cfg)
-        self.assertEqual(opts["lshaped_cut_generator"], "standard_lp_l1")
+        self.assertEqual(opts["lshaped_cut_generator"], "standard_l1")
 
     def test_lshaped_cut_generator_parses_from_cli(self):
         cfg = Config()
         cfg.lshaped_args()
 
         with patch("sys.argv", ["prog", "--lshaped-cut-generator",
-                                "standard_lp_l1"]):
+                                "standard_l1"]):
             cfg.parse_command_line("prog")
 
-        self.assertEqual(cfg.lshaped_cut_generator, "standard_lp_l1")
+        self.assertEqual(cfg.lshaped_cut_generator, "standard_l1")
 
 
 class TestConfigAddSolverSpecs(unittest.TestCase):

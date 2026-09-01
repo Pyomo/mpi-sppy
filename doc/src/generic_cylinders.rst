@@ -117,7 +117,7 @@ are selected with flags:
 - ``--APH`` -- Asynchronous PH (see :ref:`sec-aph`)
 - ``--lshaped-hub`` -- L-shaped (Benders decomposition) for two-stage problems
 - ``--lshaped-cut-generator`` -- Cut generator for L-shaped; either
-  ``pyomo_feasibility`` (default) or ``standard_lp_l1``
+  ``pyomo_feasibility`` (default) or ``standard_l1``
 - ``--subgradient-hub`` -- Subgradient method
 - ``--fwph-hub`` -- Frank-Wolfe PH
 - ``--ph-primal-hub`` -- PH primal
@@ -156,7 +156,7 @@ two-stage problems:
     mpiexec -np 2 python -m mpi4py -m mpisppy.generic_cylinders \
         --module-name farmer --num-scens 3 \
         --solver-name gurobi --lshaped-hub --xhatlshaped \
-        --lshaped-cut-generator standard_lp_l1 \
+        --lshaped-cut-generator standard_l1 \
         --max-iterations 100 --rel-gap 1e-4
 
 .. note::
@@ -165,7 +165,9 @@ two-stage problems:
    first-stage variables and subproblems for each scenario.
 
 The default cut generator is ``pyomo_feasibility``. The
-``standard_lp_l1`` generator requires linear continuous subproblems.
+``standard_l1`` generator requires continuous subproblems and valid solver
+duals. It does not check convexity; for nonlinear subproblems, the user is
+responsible for providing a formulation where the generated cuts are valid.
 
 The ``--xhatlshaped`` spoke provides inner bounds (incumbent solutions) by
 evaluating candidate first-stage decisions using the L-shaped method. This
