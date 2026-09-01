@@ -1,18 +1,15 @@
 /*
  * Minimal C translation of mpi4py_xhat_collective_reproducer.py --mode
- * get-only. It creates independent communicators and repeatedly gets one
- * double from rank 0 of each communicator on its last rank.
+ * get-only. Rank 1 repeatedly gets one double from rank 0.
  *
  * Compile:
  *   mpicc -O2 -Wall -Wextra -o mpi_rma_get_reproducer \
  *       examples/mpi_rma_get_reproducer.c
  *
- * With two nodes and block placement, the default two-rank groups contain one
- * rank from each node:
- *   srun -u -N 2 -n 12 --ntasks-per-node=6 ./mpi_rma_get_reproducer 100
+ * Run one rank on each of two nodes:
+ *   srun -u -N 2 -n 2 --ntasks-per-node=1 ./mpi_rma_get_reproducer 100
  *
- * Arguments are ITERATIONS and GROUP_SIZE, both optional. GROUP_SIZE defaults
- * to two.
+ * ITERATIONS is optional and defaults to 100.
  */
 
 #include <errno.h>
@@ -21,10 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-enum {
-    DEFAULT_ITERATIONS = 100,
-    DEFAULT_GROUP_SIZE = 2
-};
+enum { DEFAULT_ITERATIONS = 100 };
 
 static int parse_positive_int(const char *text, const char *name, int world_rank)
 {
@@ -46,12 +40,7 @@ int main(int argc, char **argv)
 {
     int world_rank;
     int world_size;
-    int group;
-    int group_rank;
     int iterations = DEFAULT_ITERATIONS;
-    int group_size = DEFAULT_GROUP_SIZE;
-    int reader_rank;
-    MPI_Comm group_comm = MPI_COMM_NULL;
     MPI_Win window = MPI_WIN_NULL;
     double *window_base = NULL;
     double received;
@@ -62,42 +51,27 @@ int main(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
-    if (argc > 3) {
+    if (argc > 2) {
         if (world_rank == 0) {
-            fprintf(stderr, "usage: %s [ITERATIONS [GROUP_SIZE]]\n", argv[0]);
+            fprintf(stderr, "usage: %s [ITERATIONS]\n", argv[0]);
         }
         MPI_Abort(MPI_COMM_WORLD, 2);
     }
     if (argc >= 2) {
         iterations = parse_positive_int(argv[1], "ITERATIONS", world_rank);
     }
-    if (argc == 3) {
-        group_size = parse_positive_int(argv[2], "GROUP_SIZE", world_rank);
-    }
-    if (group_size < 2) {
+    if (world_size != 2) {
         if (world_rank == 0) {
-            fputs("GROUP_SIZE must be at least two\n", stderr);
+            fprintf(stderr, "world size must be two; got %d\n", world_size);
         }
         MPI_Abort(MPI_COMM_WORLD, 2);
     }
-    if (world_size % group_size != 0) {
-        if (world_rank == 0) {
-            fprintf(stderr, "world size must be a multiple of %d\n", group_size);
-        }
-        MPI_Abort(MPI_COMM_WORLD, 2);
-    }
-
-    group = world_rank % (world_size / group_size);
-    group_rank = world_rank / (world_size / group_size);
-    reader_rank = group_size - 1;
-
-    MPI_Comm_split(MPI_COMM_WORLD, group, world_rank, &group_comm);
 
     MPI_Win_allocate(
         (MPI_Aint)sizeof(*window_base),
         (int)sizeof(*window_base),
         MPI_INFO_NULL,
-        group_comm,
+        MPI_COMM_WORLD,
         &window_base,
         &window);
 
@@ -111,35 +85,32 @@ int main(int argc, char **argv)
 
     *window_base = (double)world_rank;
 
-    MPI_Barrier(group_comm);
+    MPI_Barrier(MPI_COMM_WORLD);
 
     if (world_rank == 0) {
         printf(
-            "world=%d groups=%d group_size=%d iterations=%d count=1\n",
+            "world=%d iterations=%d count=1\n",
             world_size,
-            world_size / group_size,
-            group_size,
             iterations);
         fflush(stdout);
     }
 
     for (int iteration = 0; iteration < iterations; ++iteration) {
-        if (group_rank == reader_rank) {
+        if (world_rank == 1) {
             MPI_Win_lock(MPI_LOCK_SHARED, 0, 0, window);
             MPI_Get(&received, 1, MPI_DOUBLE, 0, 0, 1, MPI_DOUBLE, window);
             MPI_Win_unlock(0, window);
         }
 
-        MPI_Barrier(group_comm);
+        MPI_Barrier(MPI_COMM_WORLD);
 
-        if (group_rank == reader_rank) {
-            printf("group=%d completed %d iterations\n", group, iteration + 1);
+        if (world_rank == 1) {
+            printf("completed %d iterations\n", iteration + 1);
             fflush(stdout);
         }
     }
 
     MPI_Win_free(&window);
-    MPI_Comm_free(&group_comm);
 
     MPI_Barrier(MPI_COMM_WORLD);
     if (world_rank == 0) {
