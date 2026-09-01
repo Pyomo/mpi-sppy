@@ -9,6 +9,7 @@
 """Tests for mpisppy/utils/config.py Config class."""
 
 import unittest
+from unittest.mock import patch
 
 from mpisppy.utils.config import Config
 
@@ -225,6 +226,38 @@ class TestConfigPopularArgs(unittest.TestCase):
 
     def test_verbose_default_false(self):
         self.assertFalse(self.cfg.verbose)
+
+
+class TestConfigLShapedArgs(unittest.TestCase):
+    """Tests for L-shaped CLI options."""
+
+    def test_lshaped_cut_generator_default(self):
+        cfg = Config()
+        cfg.lshaped_args()
+        self.assertEqual(cfg.lshaped_cut_generator, "pyomo_feasibility")
+
+    def test_lshaped_options_forwards_cut_generator(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+
+        cfg = Config()
+        cfg.popular_args()
+        cfg.lshaped_args()
+        cfg.solver_name = "gurobi"
+        cfg.max_iterations = 12
+        cfg.lshaped_cut_generator = "standard_l1"
+
+        opts = vanilla.lshaped_options(cfg)
+        self.assertEqual(opts["lshaped_cut_generator"], "standard_l1")
+
+    def test_lshaped_cut_generator_parses_from_cli(self):
+        cfg = Config()
+        cfg.lshaped_args()
+
+        with patch("sys.argv", ["prog", "--lshaped-cut-generator",
+                                "standard_l1"]):
+            cfg.parse_command_line("prog")
+
+        self.assertEqual(cfg.lshaped_cut_generator, "standard_l1")
 
 
 class TestConfigAddSolverSpecs(unittest.TestCase):

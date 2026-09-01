@@ -583,6 +583,17 @@ class Config(pyofig.ConfigDict):
                            description="Use LShaped Hub (default False)",
                            domain=bool,
                            default=False)        
+
+        self.add_to_config(name="lshaped_cut_generator",
+                           description="cut generator for the L-shaped method: "
+                                       "'pyomo_feasibility' uses the Pyomo "
+                                       "Benders cut generator; 'standard_l1' "
+                                       "uses dual-based recourse cuts and an "
+                                       "L1 feasibility implementation "
+                                       "(default pyomo_feasibility)",
+                           domain=pyofig.In(["pyomo_feasibility",
+                                             "standard_l1"]),
+                           default="pyomo_feasibility")
         
 
     ##### common additions to the command line #####

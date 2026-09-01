@@ -24,6 +24,7 @@ def _parse_args():
     cfg.num_scens_required() 
     cfg.ph_args()
     cfg.two_sided_args()
+    cfg.lshaped_args()
     cfg.fwph_args()
     cfg.xhatlshaped_args()
     cfg.parse_command_line("uc_lshaped")
@@ -61,6 +62,7 @@ def main():
         "sp_solver": cfg.solver_name,
         "sp_solver_options" : spo,
         "root_solver_options" : spo,
+        "lshaped_cut_generator": cfg.lshaped_cut_generator,
         #"valid_eta_lb": {n:0. for n in all_scenario_names},
         "max_iter": cfg.max_iterations,
         "verbose": False,
