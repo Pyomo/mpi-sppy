@@ -24,7 +24,7 @@ disturbing the receive buffer, and a later coherent read then succeeds."""
 import unittest
 
 import numpy as np
-from mpi4py import MPI
+from mpisppy import MPI
 
 from mpisppy.cylinders.spcommunicator import (
     SPCommunicator,
