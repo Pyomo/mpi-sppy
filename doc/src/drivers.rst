@@ -39,7 +39,7 @@ on the spoke, but all want a configuration object,
 followed by ``scenario_creator`` function, a ``scenario_denoument`` function
 (that can be ``None``), a list of scenario names as ``all_scenario_names``,
 and ``scenario_creator_kwargs``. Other arguments can be seen in the file ``mpisppy.utils.vanilla.py``
-or in the the ``*_cylinders.py`` files that use it.  Since all require
+or in the ``*_cylinders.py`` files that use it.  Since all require
 the first four, in the examples, they are often collected into a tuple called
 ``beans`` so they can be passed to the constructor for every vanilla spoke.
   

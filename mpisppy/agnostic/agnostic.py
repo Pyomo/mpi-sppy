@@ -99,7 +99,7 @@ class Agnostic():
         s = pyo.ConcreteModel(sname)
 
         ndns = [ndn for (ndn,i) in gd["nonants"].keys()]
-        iis = [i for (ndn,i) in gd["nonants"].keys()]  # is is reserved...
+        iis = [i for (ndn,i) in gd["nonants"].keys()]  # "is" is reserved...
         s.nonantVars = pyo.Var(ndns, iis)
         for idx,v  in s.nonantVars.items():
             v._value = gd["nonant_start"][idx]

@@ -242,7 +242,7 @@ def Amalgamator_parser(cfg, inparser_adder, extraargs_fct=None, use_command_line
     else:
         #Checking if cfg has all the options we need 
         if not (_bool_option(cfg, "EF_2stage") or _bool_option(cfg, "EF_mstage")):
-            raise RuntimeError("For now, completly bypassing command line only works with EF." )
+            raise RuntimeError("For now, completely bypassing command line only works with EF." )
         if 'EF_solver_name' not in cfg:
             raise RuntimeError("EF_solver_name must be specified for the amalgamator." )
         if 'num_scens' not in cfg:
