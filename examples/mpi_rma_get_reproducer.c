@@ -111,8 +111,6 @@ int main(int argc, char **argv)
     }
 
     MPI_Win_free(&window);
-
-    MPI_Barrier(MPI_COMM_WORLD);
     if (world_rank == 0) {
         puts("PASS");
     }
