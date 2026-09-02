@@ -172,10 +172,10 @@ relaxed_ph_fixer
 ^^^^^^^^^^^^^^^^
 
 This extension will fix nonanticipative variables at their bound if they are at
-their bound in the RelaxedPHSpoke for that subproblem. It will similarily unfix
+their bound in the RelaxedPHSpoke for that subproblem. It will similarly unfix
 nonanticipative variables which are not at their bounds in the RelaxedPHSpoke.
-Because different nonanticipative variables are fixed in different suproblems,
-it will also unfix nonanticipative variables if their value is *not* at the the current
+Because different nonanticipative variables are fixed in different subproblems,
+it will also unfix nonanticipative variables if their value is *not* at the current
 consensus solution xbar (because the variable was not fixed in a different subproblem
 and therefore came off its bound).
 
@@ -312,7 +312,7 @@ rho_setter
 Per variable rho values (mainly for PH) can be set using a function
 that takes a scenario (a Pyomo ``ConcreteModel``) as its only
 argument. The function returns a list of (id(vardata), rho)
-tuples. The function name can be given the the ``vanilla.ph_hub``
+tuples. The function name can be given to the ``vanilla.ph_hub``
 constructor or in the hub dictionary under ``opt_kwargs`` as the
 ``rho_setter`` entry. (The function name is ultimately passed to the
 ``phabase`` constructor.)

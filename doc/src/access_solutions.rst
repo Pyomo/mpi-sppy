@@ -43,6 +43,6 @@ use MPI (and even if you are), you might want to use a solution writer
 solution writers that is customized for your application, you should
 supply your own `scenario_tree_solution_writer` function as an
 argument to the ``write_tree_solution`` function. See ``examples.uc.uc_funcs.py`` for
-one example.  The main thing is the the custom function is passed
+one example.  The main thing is that the custom function is passed
 scenarios populated with the best upper bound solution regardless of which
 cylinder found it.

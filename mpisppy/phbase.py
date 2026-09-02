@@ -1342,7 +1342,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         This function quits() if the scenario probabilities do not sum to one,
         or if any of the scenario subproblems are infeasible. It also calls the
         `post_iter0` method of any extensions, and uses the rho setter (if
-        present) after the inital solve.
+        present) after the initial solve.
 
         Returns:
             float:
