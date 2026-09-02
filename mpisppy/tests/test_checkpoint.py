@@ -1779,6 +1779,59 @@ class TestGradRhoReadsTheUsersGradientOnAResume(unittest.TestCase):
             self.assertEqual(s._mpisppy_model.prox_on.value, 1)
 
 
+@unittest.skipIf(not solver_available,
+                 "no solver is available for the wtracker resume test")
+class TestWtrackerReportDoesNotReachPastTheStop(unittest.TestCase):
+    """--wtracker's end-of-run report reads a window of W sets. A resumed run
+    holds only the sets it grabbed itself, and the window was indexed as if
+    every iteration since 1 were there, so a resumed leg shorter than the
+    window died with a KeyError in post_everything -- after every solve had
+    been paid for. The window now starts no earlier than the first tracked
+    set, and a leg too short for it reports "not enough iterations" the way
+    a short uninterrupted run does."""
+
+    STOP = 4
+    #: Shorter than the window, so the report reaches back past the stop.
+    RESUMED = 3
+    WLEN = 3
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _ph(self, max_iters, leg, **ckpt_kwargs):
+        from mpisppy.extensions.extension import MultiExtension
+        from mpisppy.extensions.wtracker_extension import Wtracker_extension
+        options = _options(max_iters, **ckpt_kwargs)
+        options["wtracker_options"] = {
+            "wlen": self.WLEN,
+            "file_prefix": os.path.join(self._tmp.name, leg)}
+        classes = [Wtracker_extension]
+        if "checkpoint_dir" in options:
+            classes.insert(0, Checkpointer)
+        return PH(options, SCENARIO_NAMES, farmer.scenario_creator,
+                  farmer.scenario_denouement,
+                  scenario_creator_kwargs=CREATOR_KWARGS,
+                  extensions=MultiExtension,
+                  extension_kwargs={"ext_classes": classes})
+
+    def test_the_resumed_run_reports_instead_of_raising(self):
+        self.assertLess(self.RESUMED, self.WLEN + 1)
+        self._ph(self.STOP, "stopped", ckpt_dir=self.ckpt_dir).ph_main()
+        resumed = self._ph(self.RESUMED, "resumed", resume_from=self.ckpt_dir)
+        resumed.ph_main()       # raised KeyError from post_everything
+        self.assertTrue(resumed._resumed_from_checkpoint)
+        summary = os.path.join(
+            self._tmp.name,
+            f"resumed_summary_iter{self.STOP + self.RESUMED}"
+            f"_rank{resumed.global_rank}.txt")
+        with open(summary) as f:
+            self.assertIn("Not enough iterations tracked", f.read())
+
+
 class TestWXBarReaderResume(unittest.TestCase):
     """pre_iter0 runs after the checkpoint's models are spliced in, so reading
     an --init-W-fname there overwrites the checkpointed duals with the values

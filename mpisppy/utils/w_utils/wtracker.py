@@ -73,10 +73,17 @@ class WTracker():
         """
         cI = self.ph_iter
         li = cI - offsetback
-        fi = max(1, li - wlen)
+        # A run resumed from a checkpoint holds W sets only from the
+        # iteration it resumed at (plus whatever its extension carried
+        # across), so the window can start no earlier than the first set
+        # tracked. Indexing from 1 regardless raised KeyError out of the
+        # end-of-run report, after every solve had been paid for.
+        first_tracked = min((k for k in self.local_Ws if k >= 1), default=1)
+        fi = max(first_tracked, li - wlen)
         if li - fi < wlen:
-            return (f"WARNING: Not enough iterations ({cI}) for window len {wlen} and"
-                   f" offsetback {offsetback}\n")
+            return (f"WARNING: Not enough iterations tracked ({li - fi + 1}, "
+                    f"through {cI}) for window len {wlen} and"
+                    f" offsetback {offsetback}\n")
         else:
             window_stats = dict()
             wlist = dict()
@@ -109,8 +116,11 @@ class WTracker():
                       f"    {len(self.PHB.local_scenario_names)} scenarios\n")
             
         total_traces = len(self.varnames) * len(self.PHB.local_scenario_names)
-        wstats = self.compute_moving_stats(wlen)[1]
+        # Either the (wlist, window_stats) pair or a warning string; indexing
+        # the string with [1] used to write its second character as the report.
+        wstats = self.compute_moving_stats(wlen)
         if not isinstance(wstats, str):
+            wstats = wstats[1]
             Wsdf = pd.DataFrame.from_dict(wstats, orient='index',
                                           columns=["mean", "stdev"])
 
