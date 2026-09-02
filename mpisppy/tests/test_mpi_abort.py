@@ -58,39 +58,77 @@ TIMEOUT = 120
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
 
-#: Rank 1 raises; rank 0 walks into a collective that rank 1 will never
-#: reach. Without the abort this is a job that hangs forever holding a
-#: traceback nobody sees.
-_DIRECT = """
+#: Rank 1 fails; rank 0 walks into a collective rank 1 will never reach.
+#: Without the abort this is a job that hangs forever holding a traceback
+#: nobody sees. The finally and atexit lines pin the *deferred* abort: the
+#: failing rank finishes unwinding, and its buffers reach the log, before
+#: the job ends.
+_UNCAUGHT = """
+import atexit, sys
 from mpisppy import MPI
-from mpisppy.utils.mpi_abort import run_with_mpi_abort
+from mpisppy.utils.mpi_abort import abort_on_uncaught_exception
 
-def main():
-    if MPI.COMM_WORLD.Get_rank() == 1:
+rank = MPI.COMM_WORLD.Get_rank()
+abort_on_uncaught_exception()
+atexit.register(lambda: print(f"rank {rank} ATEXIT RAN", flush=True))
+
+try:
+    if rank == 1:
         raise RuntimeError("boom on rank 1")
     MPI.COMM_WORLD.Barrier()
-
-run_with_mpi_abort(main)
+finally:
+    print(f"rank {rank} FINALLY RAN", flush=True)
 """
 
-#: Same, with sys.exit in place of the raise. A scenario_creator that exits
-#: on the one rank owning a bad data file strands the others exactly as a
-#: raise does, so a nonzero exit has to abort too.
-_SYS_EXIT = """
+#: The property that protects every caller with a try/except of its own --
+#: a driver retrying with another solver, a test asserting that a call
+#: raises. A wrapper around run() fires on these; an excepthook does not.
+_CAUGHT = """
 from mpisppy import MPI
-from mpisppy.utils.mpi_abort import run_with_mpi_abort
+from mpisppy.utils.mpi_abort import abort_on_uncaught_exception
 
-def main():
-    if MPI.COMM_WORLD.Get_rank() == 1:
-        raise SystemExit("boom on rank 1")
-    MPI.COMM_WORLD.Barrier()
-
-run_with_mpi_abort(main)
+rank = MPI.COMM_WORLD.Get_rank()
+abort_on_uncaught_exception()
+try:
+    if rank == 1:
+        raise RuntimeError("caught on rank 1, and handled")
+except RuntimeError:
+    print(f"rank {rank} HANDLED ITS OWN FAILURE", flush=True)
+MPI.COMM_WORLD.Barrier()
+print(f"rank {rank} PAST THE COLLECTIVE", flush=True)
 """
 
-#: The same shape, but reached through WheelSpinner.run: the stub opt class
-#: raises on rank 1 while rank 0 blocks in a collective inside the wheel,
-#: which is where a real run loses a rank (opt construction, make_windows).
+#: Ctrl-C. A rank sitting in a collective cannot raise KeyboardInterrupt --
+#: mpi4py releases the GIL inside the C call and the signal stays pending --
+#: so letting it propagate strands exactly the ranks it was supposed to
+#: spare, and the job needs kill -9.
+_INTERRUPT = """
+from mpisppy import MPI
+from mpisppy.utils.mpi_abort import abort_on_uncaught_exception
+
+rank = MPI.COMM_WORLD.Get_rank()
+abort_on_uncaught_exception()
+if rank == 1:
+    raise KeyboardInterrupt
+MPI.COMM_WORLD.Barrier()
+print(f"rank {rank} PAST THE COLLECTIVE", flush=True)
+"""
+
+#: sys.exit never reaches an excepthook, so it keeps its own status. That is
+#: what leaves argparse alone: --help and a usage error are uniform across
+#: ranks and end the job by themselves.
+_SYSTEM_EXIT = """
+import sys
+from mpisppy import MPI
+from mpisppy.utils.mpi_abort import abort_on_uncaught_exception
+
+abort_on_uncaught_exception()
+print("about to exit", flush=True)
+sys.exit(2)
+"""
+
+#: The same failure reached through WheelSpinner.run, which is where a real
+#: run loses a rank (opt construction, make_windows).
 _THROUGH_THE_WHEEL = """
 from mpisppy import MPI
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -102,36 +140,6 @@ class StubOpt:
         MPI.COMM_WORLD.Barrier()
 
 class StubSPComm:
-    def __init__(self, *args, **kwargs):
-        pass
-
-_cylinder = {
-    "opt_class": StubOpt,
-    "opt_kwargs": {"all_scenario_names": ["Scenario1"]},
-}
-WheelSpinner(dict(hub_class=StubSPComm, **_cylinder),
-             [dict(spoke_class=StubSPComm, **_cylinder)]).run()
-"""
-
-#: One wheel per rank, each on its own single-rank comm -- the shape
-#: boot-sp's batch executor runs. Rank 1's wheel fails; rank 0's batch has
-#: nothing to do with it and must still finish, and rank 1 must be left to
-#: handle its own failure. Aborting COMM_WORLD here destroys both.
-_PER_RANK_WHEELS = """
-from mpisppy import MPI
-from mpisppy.spin_the_wheel import WheelSpinner
-
-rank = MPI.COMM_WORLD.Get_rank()
-mine = MPI.COMM_WORLD.Split(color=rank, key=0)
-
-class StubOpt:
-    def __init__(self, **kwargs):
-        if rank == 1:
-            raise RuntimeError("boom in rank 1's own wheel")
-
-class StubSPComm:
-    # Rank 0's wheel has to run all the way through, so this answers every
-    # hook the wheel calls; the two bounds are read as values, not called.
     BestInnerBound = None
     BestOuterBound = None
     def __init__(self, *args, **kwargs):
@@ -143,17 +151,8 @@ _cylinder = {
     "opt_class": StubOpt,
     "opt_kwargs": {"all_scenario_names": ["Scenario1"]},
 }
-wheel = WheelSpinner(dict(hub_class=StubSPComm, **_cylinder), [])
-try:
-    wheel.run(comm_world=mine)
-except RuntimeError:
-    print(f"RANK {rank} RECORDED ITS OWN FAILURE")
-except BaseException as e:
-    print(f"RANK {rank} UNEXPECTED {type(e).__name__}: {e}")
-else:
-    print(f"RANK {rank} FINISHED")
-MPI.COMM_WORLD.Barrier()
-print(f"RANK {rank} REACHED THE GATHER")
+WheelSpinner(dict(hub_class=StubSPComm, **_cylinder),
+             [dict(spoke_class=StubSPComm, **_cylinder)]).run()
 """
 
 
@@ -166,8 +165,8 @@ def _run(script, np=2):
         env = dict(os.environ)
         env["PYTHONPATH"] = os.pathsep.join(
             [_ROOT] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
-        # Plain python, not "python -m mpi4py": mpi4py's runner would abort
-        # on its own and the tests would pass without the code under test.
+        # Plain python, not "python -m mpi4py": mpi4py's runner would end the
+        # job on its own and the tests would pass without the code under test.
         return subprocess.run(
             ["mpiexec", *_MPIEXEC_ARGS, "-np", str(np), sys.executable, path],
             capture_output=True, text=True, timeout=TIMEOUT, check=False,
@@ -178,46 +177,67 @@ def _run(script, np=2):
 @unittest.skipIf(not have_mpi4py, "mpi4py is not available")
 class TestAbortInsteadOfHang(unittest.TestCase):
 
-    def _assert_died_reporting(self, script):
+    def _died(self, script):
         try:
             result = _run(script)
         except subprocess.TimeoutExpired:
-            self.fail(f"the job hung for {TIMEOUT}s: rank 0 is still waiting "
+            self.fail(f"the job hung for {TIMEOUT}s: a rank is still waiting "
                       "in its collective for a rank that failed")
         self.assertNotEqual(result.returncode, 0,
                             msg="the job reported success although a rank "
                                 "failed")
-        self.assertIn("boom on rank 1", result.stdout + result.stderr,
+        return result.stdout + result.stderr
+
+    def test_an_uncaught_exception_ends_the_job(self):
+        out = self._died(_UNCAUGHT)
+        self.assertIn("boom on rank 1", out,
                       msg="the job died without printing what killed it")
-        return result
 
-    def test_the_wrapper_aborts_the_job(self):
-        self._assert_died_reporting(_DIRECT)
+    def test_the_failing_rank_finishes_unwinding_first(self):
+        """The abort is deferred to interpreter exit, so cleanup runs.
 
-    def test_a_nonzero_system_exit_aborts_the_job(self):
-        self._assert_died_reporting(_SYS_EXIT)
+        An immediate Abort takes the process out mid-unwind: no finally, no
+        atexit, and whatever is still buffered is lost with it.
+        """
+        out = self._died(_UNCAUGHT)
+        self.assertIn("rank 1 FINALLY RAN", out,
+                      msg="the failing rank was killed before its finally")
+        self.assertIn("rank 1 ATEXIT RAN", out,
+                      msg="the failing rank was killed before its atexit")
 
-    def test_the_wheel_aborts_the_job(self):
-        self._assert_died_reporting(_THROUGH_THE_WHEEL)
-
-    def test_a_wheel_on_its_own_comm_leaves_the_other_ranks_alone(self):
-        """One group's failure is that group's, not the whole job's."""
+    def test_a_caught_exception_leaves_the_job_alone(self):
+        """The property that protects a caller with its own try/except."""
         try:
-            result = _run(_PER_RANK_WHEELS)
+            result = _run(_CAUGHT)
         except subprocess.TimeoutExpired:
             self.fail(f"the job hung for {TIMEOUT}s")
         out = result.stdout + result.stderr
-        self.assertIn("RANK 0 FINISHED", out,
-                      msg="rank 0's own wheel was destroyed by a failure in "
-                          "rank 1's")
-        self.assertIn("RANK 1 RECORDED ITS OWN FAILURE", out,
-                      msg="the caller's except never ran: the process was "
-                          "killed inside it")
+        self.assertIn("rank 1 HANDLED ITS OWN FAILURE", out)
         for rank in (0, 1):
-            self.assertIn(f"RANK {rank} REACHED THE GATHER", out,
-                          msg=f"rank {rank} never reached the collective "
-                              "after the failed batch")
+            self.assertIn(f"rank {rank} PAST THE COLLECTIVE", out,
+                          msg=f"rank {rank} was taken down by a failure "
+                              "another rank had already handled")
         self.assertEqual(result.returncode, 0)
+
+    def test_an_uncaught_keyboard_interrupt_ends_the_job(self):
+        out = self._died(_INTERRUPT)
+        self.assertNotIn("PAST THE COLLECTIVE", out,
+                         msg="a rank got past a collective the interrupted "
+                             "rank never reached")
+
+    def test_sys_exit_keeps_its_own_status(self):
+        """argparse and every other uniform exit are left alone."""
+        try:
+            result = _run(_SYSTEM_EXIT, np=1)
+        except subprocess.TimeoutExpired:
+            self.fail(f"the job hung for {TIMEOUT}s")
+        self.assertEqual(result.returncode, 2,
+                         msg="sys.exit(2) did not exit 2")
+        self.assertNotIn("MPI_ABORT", result.stdout + result.stderr)
+
+    def test_the_wheel_ends_the_job(self):
+        out = self._died(_THROUGH_THE_WHEEL)
+        self.assertIn("boom on rank 1", out)
 
 
 if __name__ == "__main__":

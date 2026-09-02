@@ -8,13 +8,15 @@
 ###############################################################################
 # Serial tests for the console-script wrappers in mpisppy.entry_points.
 
+import contextlib
 import io
 import sys
-import contextlib
 import unittest
+from unittest import mock
 
 import mpisppy.MPI as MPI
 import mpisppy.entry_points as entry_points
+import mpisppy.utils.mpi_abort as mpi_abort
 
 try:
     import mpi4py  # noqa: F401
@@ -46,83 +48,101 @@ class _FakeCommNoAbort:
 
 
 class TestEntryPoints(unittest.TestCase):
+    """What the console scripts install, and when it declines to.
+
+    The mechanism itself is mpi4py's: an excepthook that hands the exception
+    to ``mpi4py.run.set_abort_status``, which lets interpreter exit call
+    ``COMM_WORLD.Abort``. That deferral cannot be observed in-process, so
+    what a real job does is pinned by ``test_mpi_abort.py``, which spawns
+    one. These cover the decisions made *before* handing over: whether to
+    install at all, and doing it once.
+    """
 
     def setUp(self):
         self._saved_comm = MPI.COMM_WORLD
+        self._saved_hook = sys.excepthook
+        self._saved_installed = mpi_abort._installed
+        mpi_abort._installed = False
 
     def tearDown(self):
         MPI.COMM_WORLD = self._saved_comm
+        sys.excepthook = self._saved_hook
+        mpi_abort._installed = self._saved_installed
 
-    def _run_failing_main(self, comm, exc=ValueError):
-        """Returns whatever the wrapper wrote to stderr."""
-        MPI.COMM_WORLD = comm
-        def failing_main():
-            raise exc("boom")
-        stderr = io.StringIO()
-        with contextlib.redirect_stderr(stderr):
-            with self.assertRaises(exc):
-                entry_points._run_with_mpi_abort(failing_main)
-        return stderr.getvalue()
-
-    def test_serial_reraises_without_abort(self):
-        comm = _FakeComm(1)
-        self._run_failing_main(comm)
-        self.assertIsNone(comm.abort_code)
-
-    def test_multirank_aborts(self):
-        comm = _FakeComm(3)
-        stderr = self._run_failing_main(comm)
-        self.assertEqual(comm.abort_code, 1)
-        # the wrapper must print the traceback before aborting, or the
-        # user never learns why the job died
-        self.assertIn("ValueError: boom", stderr)
-
-    def test_keyboard_interrupt_propagates_without_aborting(self):
-        # The launcher delivers SIGINT to every rank, so an interrupt is
-        # already uniform and strands nobody. Aborting on it would only
-        # take away each rank's chance to run its finally/atexit.
-        comm = _FakeComm(3)
-        self._run_failing_main(comm, exc=KeyboardInterrupt)
-        self.assertIsNone(comm.abort_code)
-
-    def test_a_nonzero_system_exit_aborts(self):
-        # sys.exit("no scenario data") in one rank's callback is not
-        # uniform and hangs the job exactly like any other one-rank
-        # failure. mpi4py's runner reads the code the same way.
-        comm = _FakeComm(3)
-        MPI.COMM_WORLD = comm
-        with self.assertRaises(SystemExit):
-            entry_points._run_with_mpi_abort(
-                lambda: sys.exit("no scenario data"))
-        self.assertEqual(comm.abort_code, 1)
-
-    def test_system_exit_with_an_explicit_code_aborts(self):
-        comm = _FakeComm(3)
-        MPI.COMM_WORLD = comm
-        with self.assertRaises(SystemExit):
-            entry_points._run_with_mpi_abort(lambda: sys.exit(2))
-        self.assertEqual(comm.abort_code, 1)
-
-    def test_mock_comm_without_abort_reraises(self):
-        self._run_failing_main(_FakeCommNoAbort(3))
-
-    def test_a_clean_system_exit_passes_through(self):
-        # argparse --help exits 0 on every rank at once; nothing to abort.
-        comm = _FakeComm(3)
-        MPI.COMM_WORLD = comm
-        for clean in (SystemExit(), SystemExit(0), SystemExit(None)):
-            with self.subTest(code=clean.code):
-                def _main(exc=clean):
-                    raise exc
-                with self.assertRaises(SystemExit):
-                    entry_points._run_with_mpi_abort(_main)
-                self.assertIsNone(comm.abort_code)
-
-    def test_successful_main_runs_once(self):
+    def test_a_multirank_job_gets_the_hook(self):
         MPI.COMM_WORLD = _FakeComm(3)
-        calls = []
-        entry_points._run_with_mpi_abort(lambda: calls.append(1))
-        self.assertEqual(calls, [1])
+        self.assertTrue(mpi_abort.abort_on_uncaught_exception())
+        self.assertIsNot(sys.excepthook, self._saved_hook)
+
+    def test_a_serial_job_is_left_alone(self):
+        """A traceback and an exit code already say everything an abort
+        would, and say it more clearly."""
+        MPI.COMM_WORLD = _FakeComm(1)
+        self.assertFalse(mpi_abort.abort_on_uncaught_exception())
+        self.assertIs(sys.excepthook, self._saved_hook)
+
+    def test_without_mpi4py_nothing_is_installed(self):
+        MPI.COMM_WORLD = _FakeCommNoAbort(3)
+        with mock.patch.object(mpi_abort, "haveMPI", False):
+            self.assertFalse(mpi_abort.abort_on_uncaught_exception())
+        self.assertIs(sys.excepthook, self._saved_hook)
+
+    def test_a_comm_that_cannot_be_asked_is_not_fatal(self):
+        """The caller's own exception is what should be reported, not one
+        raised while deciding whether to report it."""
+        class _Unusable:
+            def Get_size(self):
+                raise RuntimeError("MPI_COMM_NULL")
+        MPI.COMM_WORLD = _Unusable()
+        self.assertFalse(mpi_abort.abort_on_uncaught_exception())
+        self.assertIs(sys.excepthook, self._saved_hook)
+
+    def test_installing_twice_does_not_stack_hooks(self):
+        MPI.COMM_WORLD = _FakeComm(3)
+        mpi_abort.abort_on_uncaught_exception()
+        once = sys.excepthook
+        mpi_abort.abort_on_uncaught_exception()
+        self.assertIs(sys.excepthook, once)
+
+    def test_the_hook_records_the_status_and_still_reports(self):
+        """Both halves matter: without the status the job hangs, without
+        the report nobody learns why it died."""
+        MPI.COMM_WORLD = _FakeComm(3)
+        reported = []
+        sys.excepthook = lambda t, e, tb: reported.append(e)
+        recorded = []
+        # Patched around the install, not just the call: the hook binds
+        # set_abort_status when it is installed. And the real one would set
+        # a status that aborts *this* process at interpreter exit.
+        with mock.patch("mpi4py.run.set_abort_status", recorded.append):
+            mpi_abort.abort_on_uncaught_exception()
+            boom = ValueError("boom")
+            sys.excepthook(ValueError, boom, None)
+        self.assertEqual(recorded, [boom])
+        self.assertEqual(reported, [boom])
+
+    def test_the_status_is_recorded_even_if_reporting_fails(self):
+        MPI.COMM_WORLD = _FakeComm(3)
+        def _broken_hook(t, e, tb):
+            raise RuntimeError("the reporter itself failed")
+        sys.excepthook = _broken_hook
+        recorded = []
+        with mock.patch("mpi4py.run.set_abort_status", recorded.append):
+            mpi_abort.abort_on_uncaught_exception()
+            with self.assertRaises(RuntimeError):
+                sys.excepthook(ValueError, ValueError("boom"), None)
+        self.assertEqual(len(recorded), 1,
+                         msg="the job would hang: no abort status was set")
+
+    def test_the_wrappers_install_it_before_importing_the_target(self):
+        """A failure during the target's import need not strike every rank
+        -- a flaky shared filesystem -- so the hook has to be in place
+        before that import runs."""
+        MPI.COMM_WORLD = _FakeComm(3)
+        seen = []
+        entry_points._run_with_mpi_abort(
+            lambda: seen.append(sys.excepthook is not self._saved_hook))
+        self.assertEqual(seen, [True])
 
     def test_console_script_targets_exist(self):
         # the callables named in pyproject.toml [project.scripts]

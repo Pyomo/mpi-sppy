@@ -11,7 +11,7 @@ from pyomo.environ import value
 from mpisppy import haveMPI, global_toc, MPI
 
 from mpisppy.utils import nice_join
-from mpisppy.utils.mpi_abort import run_with_mpi_abort
+from mpisppy.utils.mpi_abort import abort_on_uncaught_exception
 from mpisppy.utils.sputils import first_stage_nonant_writer, scenario_tree_solution_writer
 from mpisppy.utils.rank_apportionment import apportion_ranks, rank_to_cylinder
 
@@ -48,18 +48,14 @@ class WheelSpinner:
         A failure here need not strike every rank -- a solver license, a
         scenario file, one cylinder's options -- and the ranks it misses go
         on to the next collective and block there, so the job hangs instead
-        of reporting the exception that a rank is holding.  Abort the job
-        rather than leave it hanging; see ``mpisppy.utils.mpi_abort``.
-
-        The abort is on the wheel's own ``comm_world``, not on
-        ``COMM_WORLD``.  A caller running one wheel per group of ranks --
-        boot-sp's batch executor does exactly this -- is entitled to have
-        its other groups finish, and to catch this failure itself.
+        of reporting the exception that a rank is holding.  Running a wheel
+        therefore arranges for an *uncaught* exception to end the job, the
+        way ``python -m mpi4py`` does and whatever the launcher; see
+        ``mpisppy.utils.mpi_abort``.  A failure this caller catches is its
+        own business and is not touched.
         """
-        return run_with_mpi_abort(lambda: self._run(comm_world),
-                                  comm=comm_world)
+        abort_on_uncaught_exception()
 
-    def _run(self, comm_world=None):
         if self._ran:
             raise RuntimeError("WheelSpinner can only be run once")
 

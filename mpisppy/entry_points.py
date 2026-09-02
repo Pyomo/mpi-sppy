@@ -8,24 +8,27 @@
 ###############################################################################
 """Console-script wrappers that add mpi4py-style abort on uncaught exceptions.
 
-pip's console entry points bypass ``python -m mpi4py``, whose runner prints
-the traceback and calls MPI_Abort when a rank dies; without that, the
-surviving ranks block forever in a collective and the whole mpiexec job
-hangs.  These wrappers hand the entry points to
-``mpisppy.utils.mpi_abort.run_with_mpi_abort``, which gives them the same
-protection, so
-``mpiexec -np 3 mpi-sppy-generic-cylinders ...`` is as safe as the
-``python -m mpi4py -m mpisppy.generic_cylinders`` form.  Serial runs
-(and the no-mpi4py mock in mpisppy.MPI) re-raise normally so tracebacks
-and exit codes are unchanged.
+pip's console entry points bypass ``python -m mpi4py``, whose runner ends
+the job when a rank dies; without that, the surviving ranks block forever in
+a collective and the whole mpiexec job hangs.  These wrappers install
+mpi4py's own mechanism first (``mpisppy.utils.mpi_abort``), so
+``mpiexec -np 3 mpi-sppy-generic-cylinders ...`` behaves as the
+``python -m mpi4py -m mpisppy.generic_cylinders`` form does.  Serial runs,
+and the no-mpi4py mock in mpisppy.MPI, are untouched: same traceback, same
+exit code.
+
+It is installed before the target module is imported, so that a failure
+*during* that import -- which need not strike every rank, e.g. a flaky
+shared filesystem -- ends the job too.
 """
 
-from mpisppy.utils.mpi_abort import run_with_mpi_abort as _run_with_mpi_abort
+from mpisppy.utils.mpi_abort import abort_on_uncaught_exception
 
 
-# The target-module imports live inside the wrapped callables so that an
-# exception raised while importing (which need not strike every rank,
-# e.g. flaky shared filesystems) also aborts instead of hanging.
+def _run_with_mpi_abort(real_main):
+    abort_on_uncaught_exception()
+    return real_main()
+
 
 def generic_cylinders_main():
     def _main():
