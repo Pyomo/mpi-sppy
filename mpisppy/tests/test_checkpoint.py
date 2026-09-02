@@ -1819,6 +1819,7 @@ class TestWtrackerReportDoesNotReachPastTheStop(unittest.TestCase):
                   extension_kwargs={"ext_classes": classes})
 
     def test_the_resumed_run_reports_instead_of_raising(self):
+        from mpisppy.extensions.wtracker_extension import Wtracker_extension
         self.assertLess(self.RESUMED, self.WLEN + 1)
         self._ph(self.STOP, "stopped", ckpt_dir=self.ckpt_dir).ph_main()
         resumed = self._ph(self.RESUMED, "resumed", resume_from=self.ckpt_dir)
@@ -1829,7 +1830,17 @@ class TestWtrackerReportDoesNotReachPastTheStop(unittest.TestCase):
             f"resumed_summary_iter{self.STOP + self.RESUMED}"
             f"_rank{resumed.global_rank}.txt")
         with open(summary) as f:
-            self.assertIn("Not enough iterations tracked", f.read())
+            report = f.read()
+        self.assertIn(f"W Report at iteration {self.STOP + self.RESUMED}",
+                      report)
+        if Wtracker_extension.checkpoint_state is Extension.checkpoint_state:
+            # The tracker holds only the resumed leg's W sets: too few for
+            # the window, said the same way a short uninterrupted run says it.
+            self.assertIn("Not enough iterations tracked", report)
+        else:
+            # A later phase carries the window across the checkpoint, and
+            # then the resumed run writes the full report.
+            self.assertIn("Sorted by windowed stdev", report)
 
 
 class TestWXBarReaderResume(unittest.TestCase):
