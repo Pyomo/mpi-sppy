@@ -77,21 +77,46 @@ class TestEntryPoints(unittest.TestCase):
         # user never learns why the job died
         self.assertIn("ValueError: boom", stderr)
 
-    def test_keyboard_interrupt_aborts(self):
-        # KeyboardInterrupt is a BaseException, not an Exception: this
-        # pins the wrapper's except clause to the broader class, matching
-        # mpi4py's runner (Ctrl-C on one rank must not strand the others)
+    def test_keyboard_interrupt_propagates_without_aborting(self):
+        # The launcher delivers SIGINT to every rank, so an interrupt is
+        # already uniform and strands nobody. Aborting on it would only
+        # take away each rank's chance to run its finally/atexit.
         comm = _FakeComm(3)
         self._run_failing_main(comm, exc=KeyboardInterrupt)
+        self.assertIsNone(comm.abort_code)
+
+    def test_a_nonzero_system_exit_aborts(self):
+        # sys.exit("no scenario data") in one rank's callback is not
+        # uniform and hangs the job exactly like any other one-rank
+        # failure. mpi4py's runner reads the code the same way.
+        comm = _FakeComm(3)
+        MPI.COMM_WORLD = comm
+        with self.assertRaises(SystemExit):
+            entry_points._run_with_mpi_abort(
+                lambda: sys.exit("no scenario data"))
+        self.assertEqual(comm.abort_code, 1)
+
+    def test_system_exit_with_an_explicit_code_aborts(self):
+        comm = _FakeComm(3)
+        MPI.COMM_WORLD = comm
+        with self.assertRaises(SystemExit):
+            entry_points._run_with_mpi_abort(lambda: sys.exit(2))
         self.assertEqual(comm.abort_code, 1)
 
     def test_mock_comm_without_abort_reraises(self):
         self._run_failing_main(_FakeCommNoAbort(3))
 
-    def test_system_exit_passes_through(self):
+    def test_a_clean_system_exit_passes_through(self):
+        # argparse --help exits 0 on every rank at once; nothing to abort.
         comm = _FakeComm(3)
-        self._run_failing_main(comm, exc=SystemExit)
-        self.assertIsNone(comm.abort_code)
+        MPI.COMM_WORLD = comm
+        for clean in (SystemExit(), SystemExit(0), SystemExit(None)):
+            with self.subTest(code=clean.code):
+                def _main(exc=clean):
+                    raise exc
+                with self.assertRaises(SystemExit):
+                    entry_points._run_with_mpi_abort(_main)
+                self.assertIsNone(comm.abort_code)
 
     def test_successful_main_runs_once(self):
         MPI.COMM_WORLD = _FakeComm(3)

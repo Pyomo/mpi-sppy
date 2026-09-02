@@ -50,8 +50,14 @@ class WheelSpinner:
         on to the next collective and block there, so the job hangs instead
         of reporting the exception that a rank is holding.  Abort the job
         rather than leave it hanging; see ``mpisppy.utils.mpi_abort``.
+
+        The abort is on the wheel's own ``comm_world``, not on
+        ``COMM_WORLD``.  A caller running one wheel per group of ranks --
+        boot-sp's batch executor does exactly this -- is entitled to have
+        its other groups finish, and to catch this failure itself.
         """
-        return run_with_mpi_abort(lambda: self._run(comm_world))
+        return run_with_mpi_abort(lambda: self._run(comm_world),
+                                  comm=comm_world)
 
     def _run(self, comm_world=None):
         if self._ran:

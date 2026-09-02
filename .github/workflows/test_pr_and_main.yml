@@ -1196,6 +1196,20 @@ jobs:
           mpiexec -np 6 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat_multistage.py
           mpiexec -np 6 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_flexible_rank_extension_fields.py
 
+      - name: run the rank-failure abort tests
+        # These spawn their own two-rank mpiexec jobs, so they run under
+        # pytest rather than under mpiexec.  Here rather than with the unit
+        # tests because what they exercise is MPI_Abort teardown, which is
+        # exactly what differs between the implementations this matrix
+        # covers.  MPISPPY_REQUIRE_MPIEXEC turns a missing launcher into a
+        # failure, so the cell cannot go green on skips.
+        if: ${{ !cancelled() }}
+        timeout-minutes: 10
+        env:
+          MPISPPY_REQUIRE_MPIEXEC: "1"
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_mpi_abort.py -v
+
       - name: Upload coverage data
         if: always()
         uses: actions/upload-artifact@v4
@@ -1373,7 +1387,6 @@ jobs:
             mpisppy/tests/test_log.py \
             mpisppy/tests/test_scenario_tree.py \
             mpisppy/tests/test_nice_join.py \
-            mpisppy/tests/test_mpi_abort.py \
             mpisppy/tests/test_solver_spec.py \
             mpisppy/tests/test_extensions.py \
             mpisppy/tests/test_extension_hooks.py \
