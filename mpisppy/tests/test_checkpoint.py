@@ -1714,6 +1714,71 @@ class TestDynRhoCachesSurviveResume(unittest.TestCase):
             msg="the WTracker never grabbed a W set on the resumed run")
 
 
+@unittest.skipIf(not solver_available,
+                 "no solver is available for the dynamic rho resume tests")
+class TestGradRhoReadsTheUsersGradientOnAResume(unittest.TestCase):
+    """GradRho differentiates each scenario's objective when its post_iter0
+    hook runs. On a fresh run that objective is the user's, because PH
+    attaches its W and prox terms only after the hook. On a resume the
+    reloaded models already carry them, so the partials also hold
+    W_on*W and prox_on*rho*(x - xbar): the gradient of the PH subproblem
+    rather than of the user's cost, and every rho recomputed after the
+    resume was scaled from it. The extension masks the two terms while it
+    evaluates, which removes them exactly."""
+
+    STOP = 2
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _resumed_grad_rho(self):
+        from mpisppy.extensions.grad_rho import GradRho
+        stopped = _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir))
+        stopped.ph_main()
+        resumed = _make_ph(_options(0, resume_from=self.ckpt_dir))
+        resumed.ph_main()
+        self.assertTrue(resumed._resumed_from_checkpoint)
+        # The preconditions that let this test discriminate: the reloaded
+        # objectives carry the PH terms and they are switched on, and the
+        # duals are not all zero, so the W term has something to add.
+        for s in resumed.local_scenarios.values():
+            self.assertEqual(s._mpisppy_model.W_on.value, 1)
+            self.assertEqual(s._mpisppy_model.prox_on.value, 1)
+        self.assertTrue(any(w.value != 0
+                            for s in resumed.local_scenarios.values()
+                            for w in s._mpisppy_model.W.values()))
+        cfg = Config()
+        cfg.gradient_args()
+        cfg.dynamic_rho_args()
+        cfg.grad_order_stat = 0.5
+        resumed.options["grad_rho_options"] = {"cfg": cfg}
+        grad = GradRho(resumed)
+        grad._get_grad_exprs()
+        return resumed, grad
+
+    def test_the_gradient_is_of_the_users_objective(self):
+        import pyomo.environ as pyo
+        resumed, grad = self._resumed_grad_rho()
+        for s in resumed.local_scenarios.values():
+            # Farmer's objective is linear in the nonants, so the partial
+            # with respect to each DevotedAcreage is its planting cost --
+            # and it does not depend on W, rho or xbar.
+            want = {ndn_i: pyo.value(s.PlantingCostPerAcre[v.index()])
+                    for ndn_i, v in s._mpisppy_data.nonant_indices.items()}
+            self.assertEqual(grad._eval_grad_exprs(s, None), want)
+
+    def test_the_ph_flags_are_put_back(self):
+        resumed, grad = self._resumed_grad_rho()
+        for s in resumed.local_scenarios.values():
+            grad._eval_grad_exprs(s, None)
+            self.assertEqual(s._mpisppy_model.W_on.value, 1)
+            self.assertEqual(s._mpisppy_model.prox_on.value, 1)
+
+
 class TestWXBarReaderResume(unittest.TestCase):
     """pre_iter0 runs after the checkpoint's models are spliced in, so reading
     an --init-W-fname there overwrites the checkpointed duals with the values

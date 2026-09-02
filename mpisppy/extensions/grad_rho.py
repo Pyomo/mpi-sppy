@@ -211,8 +211,29 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         # If a future caller invokes _eval_grad_exprs while the bundle is
         # in a non-NA-feasible intermediate state, this branch would
         # silently return a non-consensus gradient.
-        for ndn_i, var in s._mpisppy_data.nonant_indices.items():
-            grads[ndn_i] = pyo.value(self.grad_exprs[s][ndn_i])
+        #
+        # The cached partials are of whatever objective the model carried
+        # when _get_grad_exprs ran. On a fresh run that is the user's
+        # objective, because post_iter0 runs before PH attaches its W and
+        # prox terms. On a resume the reloaded model already carries them,
+        # so each partial also holds W_on*W[ndn_i] and
+        # prox_on*rho[ndn_i]*(x - xbar[ndn_i]) -- the gradient of the
+        # PH-augmented subproblem, not of the user's cost, and rho would be
+        # scaled from it. Zeroing the two flags while evaluating removes
+        # those terms exactly: each becomes a product with zero added to
+        # the user's partial, so the value is the same on both kinds of run.
+        ph_model = s._mpisppy_model
+        flags = [getattr(ph_model, name) for name in ("W_on", "prox_on")
+                 if hasattr(ph_model, name)]
+        saved = [flag.value for flag in flags]
+        for flag in flags:
+            flag.value = 0
+        try:
+            for ndn_i, var in s._mpisppy_data.nonant_indices.items():
+                grads[ndn_i] = pyo.value(self.grad_exprs[s][ndn_i])
+        finally:
+            for flag, value in zip(flags, saved):
+                flag.value = value
 
         return grads
 
@@ -362,8 +383,10 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             # _get_grad_exprs is called from here and nowhere else, and
             # _eval_grad_exprs reads what it builds on every rho update. The
             # expressions are differentiated from the models, not from an
-            # iteration-0 solve, so they are built the same way on a resumed
-            # run -- against the models the splice just installed.
+            # iteration-0 solve, so they can be built here against the
+            # models the splice just installed. Unlike a fresh run, those
+            # models already carry the W and prox terms in their objectives;
+            # _eval_grad_exprs masks them when it evaluates.
             self._get_grad_exprs()
             return
         global_toc("Using grad-rho rho setter")
