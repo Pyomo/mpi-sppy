@@ -1833,7 +1833,9 @@ class TestWtrackerReportDoesNotReachPastTheStop(unittest.TestCase):
             report = f.read()
         self.assertIn(f"W Report at iteration {self.STOP + self.RESUMED}",
                       report)
-        if Wtracker_extension.checkpoint_state is Extension.checkpoint_state:
+        # Extension.checkpoint_state itself arrives with a later phase.
+        if (getattr(Wtracker_extension, "checkpoint_state", None)
+                is getattr(Extension, "checkpoint_state", None)):
             # The tracker holds only the resumed leg's W sets: too few for
             # the window, said the same way a short uninterrupted run says it.
             self.assertIn("Not enough iterations tracked", report)
