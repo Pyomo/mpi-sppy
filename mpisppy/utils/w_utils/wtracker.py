@@ -78,11 +78,21 @@ class WTracker():
         # across), so the window can start no earlier than the first set
         # tracked. Indexing from 1 regardless raised KeyError out of the
         # end-of-run report, after every solve had been paid for.
-        first_tracked = min((k for k in self.local_Ws if k >= 1), default=1)
+        # default=li+1 rather than 1: with nothing tracked at all, falling
+        # back to 1 puts fi at li-wlen, which passes the test below and then
+        # indexes a dict that has no such keys -- the KeyError this line is
+        # here to prevent. li+1 makes "nothing tracked" report as the
+        # shortest possible window, which is what it is.
+        first_tracked = min((k for k in self.local_Ws if k >= 1), default=li + 1)
         fi = max(first_tracked, li - wlen)
         if li - fi < wlen:
-            return (f"WARNING: Not enough iterations tracked ({li - fi + 1}, "
-                    f"through {cI}) for window len {wlen} and"
+            # The window spans fi..li *inclusive*, so a window of length wlen
+            # needs wlen+1 sets. Saying only how many were tracked reads as
+            # though that number were the threshold, and sizes the next run
+            # one iteration short.
+            return (f"WARNING: Not enough iterations tracked "
+                    f"({li - fi + 1} through {cI}; a window of length {wlen} "
+                    f"spans {wlen + 1}) for window len {wlen} and"
                     f" offsetback {offsetback}\n")
         else:
             window_stats = dict()

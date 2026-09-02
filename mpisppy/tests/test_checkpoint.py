@@ -1771,12 +1771,28 @@ class TestGradRhoReadsTheUsersGradientOnAResume(unittest.TestCase):
                     for ndn_i, v in s._mpisppy_data.nonant_indices.items()}
             self.assertEqual(grad._eval_grad_exprs(s, None), want)
 
-    def test_the_ph_flags_are_put_back(self):
+    def test_the_flags_are_off_while_the_partials_are_evaluated(self):
+        """And back on afterwards.
+
+        Asserting only that they are back on afterwards does not
+        discriminate: code that never touched them passes that too. What
+        has to be observed is their value at the moment the partials are
+        read, so the partials here are stand-ins that report it.
+        """
         resumed, grad = self._resumed_grad_rho()
         for s in resumed.local_scenarios.values():
-            grad._eval_grad_exprs(s, None)
-            self.assertEqual(s._mpisppy_model.W_on.value, 1)
-            self.assertEqual(s._mpisppy_model.prox_on.value, 1)
+            ph = s._mpisppy_model
+            grad.grad_exprs[s] = {
+                ndn_i: ph.W_on + ph.prox_on
+                for ndn_i in s._mpisppy_data.nonant_indices
+            }
+            observed = grad._eval_grad_exprs(s, None)
+            self.assertTrue(
+                observed and all(v == 0 for v in observed.values()),
+                msg=f"the PH terms were live while the user's gradient was "
+                    f"evaluated: {observed}")
+            self.assertEqual(ph.W_on.value, 1)
+            self.assertEqual(ph.prox_on.value, 1)
 
 
 @unittest.skipIf(not solver_available,
@@ -1843,6 +1859,87 @@ class TestWtrackerReportDoesNotReachPastTheStop(unittest.TestCase):
             # A later phase carries the window across the checkpoint, and
             # then the resumed run writes the full report.
             self.assertIn("Sorted by windowed stdev", report)
+
+
+@unittest.skipIf(not solver_available,
+                 "no solver is available for the wtracker resume test")
+class TestWtrackerAskedForOnlyOnTheResumedLeg(unittest.TestCase):
+    """``--wtracker`` on the command that resumes, not the one that stopped.
+
+    Then nothing carried the earlier W sets -- no phase of this stack
+    carries what was never tracked -- so the tracker holds only the sets the
+    resumed leg grabbed while ``ph_iter`` counts from where the study left
+    off. That is the gap the window has to start at rather than index past,
+    and it is the same failure whether or not the extension can checkpoint
+    its own state, which is what makes this the test that still guards the
+    window once the whole stack is merged.
+    """
+
+    STOP = 4
+    #: Shorter than the window, so a report that reached back past the stop
+    #: would look for sets from before it.
+    RESUMED = 3
+    WLEN = 3
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
+
+    def _ph(self, max_iters, leg, wtracker, **ckpt_kwargs):
+        from mpisppy.extensions.extension import MultiExtension
+        from mpisppy.extensions.wtracker_extension import Wtracker_extension
+        options = _options(max_iters, **ckpt_kwargs)
+        classes = []
+        if "checkpoint_dir" in options:
+            classes.append(Checkpointer)
+        if wtracker:
+            options["wtracker_options"] = {
+                "wlen": self.WLEN,
+                "file_prefix": os.path.join(self._tmp.name, leg)}
+            classes.append(Wtracker_extension)
+        return PH(options, SCENARIO_NAMES, farmer.scenario_creator,
+                  farmer.scenario_denouement,
+                  scenario_creator_kwargs=CREATOR_KWARGS,
+                  extensions=MultiExtension,
+                  extension_kwargs={"ext_classes": classes})
+
+    def test_the_resumed_run_reports_instead_of_raising(self):
+        self._ph(self.STOP, "stopped", wtracker=False,
+                 ckpt_dir=self.ckpt_dir).ph_main()
+        resumed = self._ph(self.RESUMED, "resumed", wtracker=True,
+                           resume_from=self.ckpt_dir)
+        resumed.ph_main()       # raised KeyError from post_everything
+        self.assertTrue(resumed._resumed_from_checkpoint)
+        summary = os.path.join(
+            self._tmp.name,
+            f"resumed_summary_iter{self.STOP + self.RESUMED}"
+            f"_rank{resumed.global_rank}.txt")
+        with open(summary) as f:
+            report = f.read()
+        self.assertIn("Not enough iterations tracked", report)
+        # The count and the threshold have to be readable against each
+        # other, or "3 tracked for window len 3" reads as enough.
+        self.assertIn(f"spans {self.WLEN + 1}", report)
+
+    def test_a_tracker_holding_nothing_reports_instead_of_raising(self):
+        """The same window, with no sets at all.
+
+        A WTracker built after the run -- the pattern in wtracker's own
+        __main__ block -- has grabbed nothing, and asked for a window it
+        indexed a dict that has no such keys.
+        """
+        from mpisppy.utils.w_utils.wtracker import WTracker
+        ph = self._ph(self.STOP, "direct", wtracker=False)
+        ph.ph_main()
+        tracker = WTracker(ph)
+        self.assertEqual(tracker.local_Ws, {})
+        result = tracker.compute_moving_stats(self.WLEN)
+        self.assertIsInstance(
+            result, str,
+            msg="a tracker holding nothing computed a window instead of "
+                "saying it had too few iterations")
+        self.assertIn("Not enough iterations tracked", result)
 
 
 class TestWXBarReaderResume(unittest.TestCase):

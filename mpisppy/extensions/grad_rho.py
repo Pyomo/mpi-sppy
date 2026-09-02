@@ -226,9 +226,12 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         flags = [getattr(ph_model, name) for name in ("W_on", "prox_on")
                  if hasattr(ph_model, name)]
         saved = [flag.value for flag in flags]
-        for flag in flags:
-            flag.value = 0
+        # The zeroing is inside the try: half-applied flags left behind by a
+        # failure part way through would leave PH solving every later
+        # subproblem with its dual term switched off, and nothing checks.
         try:
+            for flag in flags:
+                flag.value = 0
             for ndn_i, var in s._mpisppy_data.nonant_indices.items():
                 grads[ndn_i] = pyo.value(self.grad_exprs[s][ndn_i])
         finally:
