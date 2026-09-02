@@ -11,31 +11,16 @@
 pip's console entry points bypass ``python -m mpi4py``, whose runner prints
 the traceback and calls MPI_Abort when a rank dies; without that, the
 surviving ranks block forever in a collective and the whole mpiexec job
-hangs.  These wrappers give the entry points the same protection, so
+hangs.  These wrappers hand the entry points to
+``mpisppy.utils.mpi_abort.run_with_mpi_abort``, which gives them the same
+protection, so
 ``mpiexec -np 3 mpi-sppy-generic-cylinders ...`` is as safe as the
 ``python -m mpi4py -m mpisppy.generic_cylinders`` form.  Serial runs
 (and the no-mpi4py mock in mpisppy.MPI) re-raise normally so tracebacks
 and exit codes are unchanged.
 """
 
-import traceback
-
-from mpisppy import MPI
-
-
-def _run_with_mpi_abort(real_main):
-    try:
-        real_main()
-    except SystemExit:
-        # argparse exits (--help, bad flags) happen identically on every
-        # rank, so a plain exit cannot strand the others.
-        raise
-    except BaseException:
-        comm = MPI.COMM_WORLD
-        if comm.Get_size() > 1 and hasattr(comm, "Abort"):
-            traceback.print_exc()
-            comm.Abort(1)
-        raise
+from mpisppy.utils.mpi_abort import run_with_mpi_abort as _run_with_mpi_abort
 
 
 # The target-module imports live inside the wrapped callables so that an
