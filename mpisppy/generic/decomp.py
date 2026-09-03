@@ -55,6 +55,7 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs,
                               rho_setter, all_nodenames, ph_converger,
                               variable_probability=variable_probability)
     configure_extensions(hub_dict, module, cfg)
+    _check_checkpointing_survived(hub_dict, cfg)
 
     # reduced cost fixer options setup (needs hub_dict before building spokes)
     if cfg.reduced_costs:
@@ -148,3 +149,62 @@ def _write_solutions(wheel, module, cfg):
 
     if hasattr(module, "custom_writer"):
         module.custom_writer(wheel, cfg)
+
+
+def refuse_checkpointing_without_a_hub(cfg, mode):
+    """Refuse a checkpoint flag on a path that never builds a hub.
+
+    _check_checkpointing_survived below is a hub-side check, so it cannot see
+    the modes that branch off ahead of do_decomp. Those accept
+    --checkpoint-dir and --resume-from and act on neither: the directory is
+    never created, a resume starts from scratch, and both exit 0. Same failure
+    that check exists to prevent, one dispatch level up.
+    """
+    if not cfg.get("checkpoint_dir") and not cfg.get("resume_from"):
+        return
+    given = "--checkpoint-dir" if cfg.get("checkpoint_dir") else "--resume-from"
+    raise RuntimeError(
+        f"{given} was given together with {mode}, which does not run the "
+        f"iterative algorithm a checkpoint describes, so nothing would be "
+        f"written or resumed. Checkpointing currently supports the PH hub "
+        f"only. Drop {given}, or drop {mode}."
+    )
+
+
+def _check_checkpointing_survived(hub_dict, cfg):
+    """Refuse to start if checkpointing was asked for but is not attached.
+
+    add_checkpointing only wires hubs built through ph_hub, so another hub
+    type given --checkpoint-dir would proceed with exit code 0 and write
+    nothing, and the user would find out the next morning that a multi-day
+    study had no checkpoint. It also backstops any future code that rebuilds
+    the hub's extension list without composing -- configure_extensions did
+    exactly that until it was changed to go through extension_adder.
+    """
+    if not cfg.get("checkpoint_dir") and not cfg.get("resume_from"):
+        return
+
+    from mpisppy.extensions.checkpointer import Checkpointer
+    from mpisppy.extensions.extension import MultiExtension
+
+    attached = hub_dict.get("opt_kwargs", {}).get("extensions")
+    ext_classes = (hub_dict.get("opt_kwargs", {})
+                   .get("extension_kwargs") or {}).get("ext_classes") or []
+    present = (attached is Checkpointer
+               or (attached is MultiExtension and Checkpointer in ext_classes))
+
+    if cfg.get("checkpoint_dir") and not present:
+        raise RuntimeError(
+            "--checkpoint-dir was given, but the checkpointing extension is "
+            "not attached to this hub, so no checkpoint would ever be "
+            "written. Checkpointing currently supports the PH hub only. "
+            "Remove --checkpoint-dir, or run a configuration that supports "
+            "it."
+        )
+
+    if cfg.get("resume_from") and "resume_from" not in (
+            hub_dict.get("opt_kwargs", {}).get("options") or {}):
+        raise RuntimeError(
+            "--resume-from was given, but this hub does not consume it, so "
+            "the run would silently start from scratch rather than resume."
+        )

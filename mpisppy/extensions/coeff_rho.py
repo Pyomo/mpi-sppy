@@ -31,6 +31,14 @@ class CoeffRho(mpisppy.extensions.extension.Extension):
         self._rho_report_state = {}
 
     def post_iter0(self):
+        if getattr(self.ph, "_resumed_from_checkpoint", False):
+            # rho rides in the reloaded models -- including whatever
+            # adaptation had happened by the checkpoint -- so recomputing it
+            # from scratch here would clobber it (the same reason Iter0 skips
+            # the rho_setter on a resume).
+            global_toc("CoeffRho: resuming from a checkpoint; keeping the "
+                       "checkpointed rho", self.ph.cylinder_rank == 0)
+            return
         # nonants with a (near-)zero objective coefficient yield no meaningful
         # rho from this heuristic; they fall back to the positive default rho.
         # We report the fallback rather than substituting silently; see issue #560.

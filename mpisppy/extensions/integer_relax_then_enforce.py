@@ -27,6 +27,36 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
 
 
     def pre_iter0(self):
+        if getattr(self.opt, "_resumed_from_checkpoint", False):
+            # The reloaded models carry whatever this extension had already
+            # done to them, and Pyomo keeps the undo map in a
+            # _relaxed_integer_vars Suffix on each one. Relaxing a second time
+            # replaces that Suffix with an empty one, so _unrelax_integers
+            # restores nothing while still announcing that it enforced
+            # integrality, and the run answers the relaxation. The models say
+            # which state they are in: the transformation deletes the Suffix
+            # when it undoes itself.
+            self._integers_relaxed = any(
+                hasattr(s, "_relaxed_integer_vars")
+                for s in self.opt.local_scenarios.values())
+            if self._integers_relaxed:
+                global_toc(f"{self.__class__.__name__}: resuming with "
+                           "integrality still relaxed",
+                           self.opt.cylinder_rank == 0)
+            else:
+                # Either the run that wrote the checkpoint had already
+                # enforced integrality, in which case there is nothing left to
+                # do, or this extension was added to a command whose
+                # checkpoint was written without it. A checkpoint carries no
+                # extension state, so the two are indistinguishable from here,
+                # and relaxing now would change the algorithm mid-study.
+                global_toc(f"WARNING: {self.__class__.__name__}: the "
+                           "checkpointed models are not relaxed, so "
+                           "integrality stays enforced for this leg. If this "
+                           "extension was not on the run that wrote the "
+                           "checkpoint, it does nothing here.",
+                           self.opt.cylinder_rank == 0)
+            return
         global_toc(f"{self.__class__.__name__}: relaxing integrality constraints", self.opt.cylinder_rank == 0)
         for s in self.opt.local_scenarios.values():
             self.integer_relaxer.apply_to(s) 
@@ -66,8 +96,15 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
             global_toc(f"{self.__class__.__name__}: enforcing integrality constraints, ran so far for more than {self.opt.options['time_limit']*self.ratio} seconds", self.opt.cylinder_rank == 0)
             self._unrelax_integers()
             return
-        # iterations are running out
-        if self.opt._PHIter > self.opt.options["PHIterLimit"] * self.ratio:
+        # iterations are running out. Both sides are measured from where this
+        # run started, because _PHIter counts the study: on a resume it is
+        # already past any fraction of this run's iteration budget, and
+        # comparing the two directly would enforce integrality immediately.
+        start = getattr(self.opt, "_resume_iteration", 0)
+        stop = getattr(self.opt, "_stop_iteration", None)
+        if stop is None:
+            stop = start + int(self.opt.options["PHIterLimit"])
+        if (self.opt._PHIter - start) > (stop - start) * self.ratio:
             global_toc(f"{self.__class__.__name__}: enforcing integrality constraints, ran so far for {self.opt._PHIter - 1} iterations", self.opt.cylinder_rank == 0)
             self._unrelax_integers()
             return

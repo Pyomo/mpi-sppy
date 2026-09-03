@@ -53,18 +53,23 @@ def _scenario(plugin=None, solution_available=True):
     )
 
 
-def _opt(prox_quadratic, scenarios, phiter=1, solver_name="testsolver"):
+def _opt(prox_quadratic, scenarios, phiter=1, solver_name="testsolver",
+         resume_iteration=0):
     """A minimal duck-typed stand-in for a PHBase instance.
 
     Only the attributes the checks under test actually touch are provided;
     ``allreduce_or`` defaults to the single-rank identity and can be
-    overridden to simulate other ranks.
+    overridden to simulate other ranks. ``resume_iteration`` mirrors
+    ``PHBase._resume_iteration``: 0 for a run that started from scratch, so
+    the checks fire at iteration 1, and the checkpointed iteration for a
+    resumed run, whose first solve is at ``resume_iteration + 1``.
     """
     opt = types.SimpleNamespace()
     opt._prox_is_quadratic = lambda: prox_quadratic
     opt.local_scenarios = scenarios
     opt.options = {"solver_name": solver_name}
     opt._PHIter = phiter
+    opt._resume_iteration = resume_iteration
     opt.allreduce_or = lambda local: local
     return opt
 
@@ -163,6 +168,20 @@ class TestCheckProxSolveSucceeded(unittest.TestCase):
         opt.allreduce_or = lambda local: True
         PHBase._check_prox_solve_succeeded(opt)
 
+    def test_raises_on_the_first_iteration_of_a_resumed_run(self):
+        # A resumed run never sees iteration 1, and --solver-name is exempt
+        # from the resume fingerprint, so a resume is exactly when a
+        # quadratic-prox run may land on an LP-only solver.
+        opt = _opt(True, {"s1": _scenario(solution_available=False)},
+                   phiter=4, resume_iteration=3)
+        with self.assertRaisesRegex(RuntimeError, "linearize-proximal-terms"):
+            PHBase._check_prox_solve_succeeded(opt)
+
+    def test_no_raise_after_the_first_resumed_iteration(self):
+        opt = _opt(True, {"s1": _scenario(solution_available=False)},
+                   phiter=5, resume_iteration=3)
+        PHBase._check_prox_solve_succeeded(opt)
+
 
 class TestReraiseAsProxCapabilityError(unittest.TestCase):
     """The reactive check is unreachable when a solver signals 'no quadratic
@@ -189,6 +208,19 @@ class TestReraiseAsProxCapabilityError(unittest.TestCase):
     def test_no_reraise_when_prox_linearized(self):
         # linearized prox is not quadratic, so a raise is not a capability issue
         opt = _opt(False, {"s1": _scenario()}, phiter=1)
+        self.assertIsNone(
+            PHBase._reraise_as_prox_capability_error(opt, ValueError("boom"))
+        )
+
+    def test_reraises_on_the_first_iteration_of_a_resumed_run(self):
+        opt = _opt(True, {"s1": _scenario()}, phiter=4, resume_iteration=3)
+        original = ValueError("contains nonlinear terms")
+        with self.assertRaisesRegex(RuntimeError, "linearize-proximal-terms") as cm:
+            PHBase._reraise_as_prox_capability_error(opt, original)
+        self.assertIs(cm.exception.__cause__, original)
+
+    def test_no_reraise_after_the_first_resumed_iteration(self):
+        opt = _opt(True, {"s1": _scenario()}, phiter=5, resume_iteration=3)
         self.assertIsNone(
             PHBase._reraise_as_prox_capability_error(opt, ValueError("boom"))
         )

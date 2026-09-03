@@ -386,6 +386,7 @@ def ph_hub(
     add_wxbar_read_write(hub_dict, cfg)
     add_ph_tracking(hub_dict, cfg)
     add_timed_mipgap(hub_dict, cfg)
+    add_checkpointing(hub_dict, cfg)
     return hub_dict
 
 def cg_hub(
@@ -932,6 +933,50 @@ def add_wxbar_read_write(hub_dict, cfg):
              "Xbar_fname" : cfg.Xbar_fname,
              "separate_W_files" : cfg.separate_W_files
             })
+    return hub_dict
+
+def add_checkpointing(hub_dict, cfg):
+    """Attach the Checkpointer extension and forward its options.
+
+    Both --checkpoint-dir (write) and --resume-from (read) are handled here.
+    Resuming does not need the extension -- the resume branch lives in
+    PHBase.Iter0 -- but it does need resume_from in the options dict, so a
+    resume-only run (stop today, resume tomorrow with a fresh checkpoint dir)
+    still works.
+
+    See doc/designs/checkpointing_design.md.
+    """
+    from mpisppy.utils.checkpointing import _is_non_structural
+
+    if _hasit(cfg, 'checkpoint_dir'):
+        from mpisppy.extensions.checkpointer import Checkpointer
+        hub_dict = extension_adder(hub_dict, Checkpointer)
+        hub_dict["opt_kwargs"]["options"].update(
+            {"checkpoint_dir": cfg.checkpoint_dir,
+             "checkpoint_backend": cfg.checkpoint_backend,
+             "checkpoint_every_iterations": cfg.checkpoint_every_iterations,
+            })
+
+    # Outside the guard above: --stop-at-iteration-number bounds the study,
+    # and a study is one or more runs, so it is meaningful on its own. A run
+    # that sets it without asking for checkpointing gets a plain "stop at this
+    # iteration number" rather than an option that is silently dropped.
+    hub_dict["opt_kwargs"]["options"]["stop_at_iteration_number"] = \
+        cfg.get("stop_at_iteration_number", None)
+
+    if _hasit(cfg, 'resume_from'):
+        hub_dict["opt_kwargs"]["options"]["resume_from"] = cfg.resume_from
+
+    if _hasit(cfg, 'checkpoint_dir') or _hasit(cfg, 'resume_from'):
+        # Every cfg entry except the ones a resume may legitimately differ on.
+        # Checking by default is what catches the options a model's own
+        # inparser_adder registers -- those never appear in opt.options, and an
+        # allowlist silently missed them.
+        hub_dict["opt_kwargs"]["options"]["checkpoint_structural_cfg"] = {
+            k: cfg.get(k, None) for k in cfg
+            if not _is_non_structural(k)
+        }
+
     return hub_dict
 
 def add_ph_tracking(cylinder_dict, cfg, spoke=False):

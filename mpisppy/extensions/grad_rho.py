@@ -211,8 +211,32 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         # If a future caller invokes _eval_grad_exprs while the bundle is
         # in a non-NA-feasible intermediate state, this branch would
         # silently return a non-consensus gradient.
-        for ndn_i, var in s._mpisppy_data.nonant_indices.items():
-            grads[ndn_i] = pyo.value(self.grad_exprs[s][ndn_i])
+        #
+        # The cached partials are of whatever objective the model carried
+        # when _get_grad_exprs ran. On a fresh run that is the user's
+        # objective, because post_iter0 runs before PH attaches its W and
+        # prox terms. On a resume the reloaded model already carries them,
+        # so each partial also holds W_on*W[ndn_i] and
+        # prox_on*rho[ndn_i]*(x - xbar[ndn_i]) -- the gradient of the
+        # PH-augmented subproblem, not of the user's cost, and rho would be
+        # scaled from it. Zeroing the two flags while evaluating removes
+        # those terms exactly: each becomes a product with zero added to
+        # the user's partial, so the value is the same on both kinds of run.
+        ph_model = s._mpisppy_model
+        flags = [getattr(ph_model, name) for name in ("W_on", "prox_on")
+                 if hasattr(ph_model, name)]
+        saved = [flag.value for flag in flags]
+        # The zeroing is inside the try: half-applied flags left behind by a
+        # failure part way through would leave PH solving every later
+        # subproblem with its dual term switched off, and nothing checks.
+        try:
+            for flag in flags:
+                flag.value = 0
+            for ndn_i, var in s._mpisppy_data.nonant_indices.items():
+                grads[ndn_i] = pyo.value(self.grad_exprs[s][ndn_i])
+        finally:
+            for flag, value in zip(flags, saved):
+                flag.value = value
 
         return grads
 
@@ -345,6 +369,29 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         pass
 
     def post_iter0(self):
+        if getattr(self.opt, "_resumed_from_checkpoint", False):
+            # rho rides in the reloaded models -- including whatever
+            # adaptation had happened by the checkpoint -- so recomputing it
+            # from scratch here would clobber it (the same reason Iter0 skips
+            # the rho_setter on a resume). There is also no iteration-0 solve
+            # behind this hook on a resume for the gradients to describe.
+            global_toc("GradRho: resuming from a checkpoint; keeping the "
+                       "checkpointed rho", self.opt.cylinder_rank == 0)
+            # The caches still have to be seeded. update_caches is what puts
+            # the first entry in primal_conv_cache and the first W set in the
+            # WTracker, and miditer reads both on the very next pass -- so
+            # skipping it here does not leave rho alone, it takes the run down
+            # at the first resumed iteration.
+            self.update_caches()
+            # _get_grad_exprs is called from here and nowhere else, and
+            # _eval_grad_exprs reads what it builds on every rho update. The
+            # expressions are differentiated from the models, not from an
+            # iteration-0 solve, so they can be built here against the
+            # models the splice just installed. Unlike a fresh run, those
+            # models already carry the W and prox terms in their objectives;
+            # _eval_grad_exprs masks them when it evaluates.
+            self._get_grad_exprs()
+            return
         global_toc("Using grad-rho rho setter")
         # PHBase.Iter0 runs the iter0 solve loop before this hook but does not
         # compute xbar (Compute_Xbar is first called in iterk_loop, i.e. at
