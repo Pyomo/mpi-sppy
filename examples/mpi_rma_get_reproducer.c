@@ -43,6 +43,7 @@ int main(int argc, char **argv)
     int iterations = DEFAULT_ITERATIONS;
     MPI_Win window = MPI_WIN_NULL;
     double *window_base = NULL;
+    double initial;
     double received;
     int *window_model = NULL;
     int model_found = 0;
@@ -83,7 +84,10 @@ int main(int argc, char **argv)
         MPI_Abort(MPI_COMM_WORLD, 2);
     }
 
-    *window_base = (double)world_rank;
+    initial = (double)world_rank;
+    MPI_Win_lock(MPI_LOCK_EXCLUSIVE, world_rank, 0, window);
+    MPI_Put(&initial, 1, MPI_DOUBLE, world_rank, 0, 1, MPI_DOUBLE, window);
+    MPI_Win_unlock(world_rank, window);
 
     MPI_Barrier(MPI_COMM_WORLD);
 

@@ -41,8 +41,11 @@ def main():
                   flush=True)
         comm.Abort(2)
 
-    exposed = window.tomemory().cast("d")
-    exposed[0] = float(rank)
+    initial = array("d", [float(rank)])
+    window.Lock(rank, MPI.LOCK_EXCLUSIVE)
+    window.Put([initial, MPI.DOUBLE], rank, 0)
+    window.Unlock(rank)
+
     received = array("d", [0.0])
 
     comm.Barrier()
@@ -61,7 +64,6 @@ def main():
         if rank == 1:
             print(f"completed {iteration + 1} iterations", flush=True)
 
-    del exposed
     window.Free()
     if rank == 0:
         print("PASS", flush=True)
