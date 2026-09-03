@@ -1942,6 +1942,82 @@ class TestWtrackerAskedForOnlyOnTheResumedLeg(unittest.TestCase):
         self.assertIn("Not enough iterations tracked", result)
 
 
+@unittest.skipIf(not solver_available,
+                 "no solver is available for the wtracker window tests")
+class TestTheOtherWindowReadersReadTheSameWindow(unittest.TestCase):
+    """``check_cross_zero`` and ``check_w_stdev`` read the window the report
+    reads.
+
+    There are three readers of it, and the fix for a resumed run -- whose W
+    sets do not start at iteration 1 -- reached only the report. The other
+    two went on computing their window from 1, so on the very runs the
+    report now handles they raised instead: KeyError from a window that
+    starts before anything was tracked, and ValueError from unpacking the
+    sentence that says so as though it were a pair of statistics.
+    ``check_cross_zero`` also read iteration 0 on a fresh run, which is
+    never tracked, and compared the same pair of sets on every pass of its
+    loop whatever the window.
+
+    Neither method is called from mpi-sppy today. Both are public, and
+    ``doc/designs/w_oscillation_design.md`` names ``check_cross_zero`` as
+    the thing that design succeeds.
+    """
+
+    WLEN = 3
+
+    def _tracker(self, iterations):
+        """A tracker holding one W set at each of ``iterations``."""
+        from mpisppy.utils.w_utils.wtracker import WTracker
+        ph = PH(_options(1), SCENARIO_NAMES, farmer.scenario_creator,
+                farmer.scenario_denouement,
+                scenario_creator_kwargs=CREATOR_KWARGS)
+        ph.ph_main()
+        tracker = WTracker(ph)
+        for iteration in iterations:
+            # What grab_local_Ws keys the set it grabs by.
+            ph._PHIter = iteration
+            tracker.grab_local_Ws()
+        self.assertEqual(sorted(tracker.local_Ws), list(iterations))
+        return tracker
+
+    def test_a_window_shorter_than_asked_for_is_reported_not_raised(self):
+        """The shape a run resumed at iteration 4 and stopped at 7 leaves."""
+        tracker = self._tracker([5, 6, 7])
+        # One subTest each: they fail differently -- KeyError from the one
+        # that indexes the window, ValueError from the one that unpacks the
+        # sentence -- and asking them in one loop hides the second.
+        for reader in ("check_cross_zero", "check_w_stdev"):
+            with self.subTest(reader=reader):
+                answer = (tracker.check_cross_zero(self.WLEN)
+                          if reader == "check_cross_zero"
+                          else tracker.check_w_stdev(self.WLEN, 1e-3))
+                self.assertIsInstance(answer, str)
+                self.assertIn("Not enough iterations tracked", answer)
+                self.assertTrue(answer.startswith("WTRACKER"), msg=answer)
+
+    def test_the_first_window_of_a_fresh_run_does_not_read_iteration_zero(
+            self):
+        """Four sets and a window of three is the first window a fresh run
+        can report, and iteration 0 is not one of the four."""
+        tracker = self._tracker([1, 2, 3, 4])
+        answer = tracker.check_cross_zero(self.WLEN)
+        self.assertNotIn("Not enough iterations", answer)
+        self.assertTrue(answer.startswith("WTRACKER"), msg=answer)
+
+    def test_a_window_after_a_resume_is_read_where_the_sets_are(self):
+        """And a resumed run with enough sets gets its answer, from the
+        window that ends at the last iteration rather than one starting at
+        an iteration nothing tracked."""
+        tracker = self._tracker([5, 6, 7, 8, 9, 10])
+        for reader in ("check_cross_zero", "check_w_stdev"):
+            with self.subTest(reader=reader):
+                answer = (tracker.check_cross_zero(self.WLEN)
+                          if reader == "check_cross_zero"
+                          else tracker.check_w_stdev(self.WLEN, 1e-3))
+                self.assertNotIn("Not enough iterations", answer)
+                self.assertTrue(answer.startswith("WTRACKER"), msg=answer)
+
+
 class TestWXBarReaderResume(unittest.TestCase):
     """pre_iter0 runs after the checkpoint's models are spliced in, so reading
     an --init-W-fname there overwrites the checkpointed duals with the values

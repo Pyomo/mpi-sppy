@@ -60,6 +60,43 @@ class WTracker():
                        for (sname, scenario) in self.PHB.local_scenarios.items()}
         self.local_Ws[self.ph_iter] = scenario_Ws
 
+    def _window(self, wlen, offsetback=0):
+        """The iterations a window of length ``wlen`` covers.
+
+        Returns ``(fi, li, shortfall)``. The window spans ``fi`` through
+        ``li`` inclusive; ``shortfall`` is None when there is a window and
+        otherwise the sentence to report in place of statistics.
+
+        Written here because it is read from three places -- the report and
+        the two checks below -- and it used to be written out in each of
+        them. The fix for a resumed run reached one of the three, and the
+        other two went on indexing from iteration 1: a run resumed from a
+        checkpoint holds W sets only from the iteration it resumed at (plus
+        whatever its extension carried across), so the window can start no
+        earlier than the first set tracked, and starting at 1 regardless is
+        a KeyError after every solve has been paid for.
+
+        default=li+1 rather than 1: with nothing tracked at all, falling
+        back to 1 puts fi at li-wlen, which passes the test below and then
+        indexes a dict that has no such keys -- the KeyError this line is
+        here to prevent. li+1 makes "nothing tracked" report as the
+        shortest possible window, which is what it is.
+        """
+        cI = self.ph_iter
+        li = cI - offsetback
+        first_tracked = min((k for k in self.local_Ws if k >= 1), default=li + 1)
+        fi = max(first_tracked, li - wlen)
+        if li - fi >= wlen:
+            return fi, li, None
+        # The window spans fi..li *inclusive*, so a window of length wlen
+        # needs wlen+1 sets. Saying only how many were tracked reads as
+        # though that number were the threshold, and sizes the next run
+        # one iteration short.
+        return fi, li, (f"WARNING: Not enough iterations tracked "
+                        f"({li - fi + 1} through {cI}; a window of length "
+                        f"{wlen} spans {wlen + 1}) for window len {wlen} and"
+                        f" offsetback {offsetback}\n")
+
     def compute_moving_stats(self, wlen, offsetback=0):
         """ Use self.local_Ws to compute moving mean and stdev
         ASSUMES grab_local_Ws is called before this
@@ -71,29 +108,9 @@ class WTracker():
                                   OR returns a warning string
         NOTE: we sort of treat iterations as one-based
         """
-        cI = self.ph_iter
-        li = cI - offsetback
-        # A run resumed from a checkpoint holds W sets only from the
-        # iteration it resumed at (plus whatever its extension carried
-        # across), so the window can start no earlier than the first set
-        # tracked. Indexing from 1 regardless raised KeyError out of the
-        # end-of-run report, after every solve had been paid for.
-        # default=li+1 rather than 1: with nothing tracked at all, falling
-        # back to 1 puts fi at li-wlen, which passes the test below and then
-        # indexes a dict that has no such keys -- the KeyError this line is
-        # here to prevent. li+1 makes "nothing tracked" report as the
-        # shortest possible window, which is what it is.
-        first_tracked = min((k for k in self.local_Ws if k >= 1), default=li + 1)
-        fi = max(first_tracked, li - wlen)
-        if li - fi < wlen:
-            # The window spans fi..li *inclusive*, so a window of length wlen
-            # needs wlen+1 sets. Saying only how many were tracked reads as
-            # though that number were the threshold, and sizes the next run
-            # one iteration short.
-            return (f"WARNING: Not enough iterations tracked "
-                    f"({li - fi + 1} through {cI}; a window of length {wlen} "
-                    f"spans {wlen + 1}) for window len {wlen} and"
-                    f" offsetback {offsetback}\n")
+        fi, li, shortfall = self._window(wlen, offsetback)
+        if shortfall is not None:
+            return shortfall
         else:
             window_stats = dict()
             wlist = dict()
@@ -207,32 +224,35 @@ class WTracker():
     def check_cross_zero(self, wlen, offsetback=0):
         """NOTE: we assume this is called after grab_local_Ws
         """
-        cI = self.ph_iter
-        li = cI - offsetback
-        fi = max(1, li - wlen)
-        if li - fi < wlen:
-            return (f"WTRACKER WARNING: Not enough iterations ({cI}) for window len {wlen} and"
-                   f" offsetback {offsetback}\n")
+        fi, li, shortfall = self._window(wlen, offsetback)
+        if shortfall is not None:
+            return f"WTRACKER {shortfall}"
         else:
-            print(f"{np.shape(self.local_Ws)}")
+            # i and i-1, not fi and fi-1: comparing the same pair on every
+            # pass answered for one iteration whatever the window, and
+            # fi-1 is outside the window -- iteration 0 on a fresh run,
+            # which is not tracked, and the set before the resume on a
+            # resumed one, which is not there at all.
             for i in range(fi+1, li+1):
                 for sname, _ in self.PHB.local_scenarios.items():
-                    sgn_curr_iter = np.sign(np.array(self.local_Ws[fi][sname]))
-                    sgn_last_iter = np.sign(np.array(self.local_Ws[fi-1][sname]))
+                    sgn_curr_iter = np.sign(np.array(self.local_Ws[i][sname]))
+                    sgn_last_iter = np.sign(np.array(self.local_Ws[i-1][sname]))
                     if np.all(sgn_curr_iter!=sgn_last_iter):
                         return (f"WTRACKER BAD: Ws crossed zero, sensed at iter {i}")
             return (f"WTRACKER GOOD: Ws did not cross zero over the past {wlen} iters")
 
     def check_w_stdev(self, wlen, stdevthresh, offsetback=0):
-        _, window_stats = self.compute_moving_stats(wlen)
-        cI = self.ph_iter
-        li = cI - offsetback
-        fi = max(1, li - wlen)
-        if li - fi < wlen:
-            return (f"WTRACKER WARNING: Not enough iterations ({cI}) for window len {wlen} and"
-                    f" offsetback {offsetback}\n")
+        # One question, asked once, with the offsetback it was given: the
+        # statistics used to be unpacked before anything asked whether
+        # there were any, so a window too short to compute came back as a
+        # warning string and was unpacked as a pair -- ValueError, from the
+        # line meant to report that very case.
+        stats = self.compute_moving_stats(wlen, offsetback)
+        if isinstance(stats, str):
+            return f"WTRACKER {stats}"
         else:
-            for idx, varname in enumerate(self.varnames):
+            _, window_stats = stats
+            for varname in self.varnames:
                 for sname in self.PHB.local_scenario_names:
                     if np.abs(window_stats[(varname, sname)][1]) >= np.abs(stdevthresh * window_stats[(varname, sname)][0]): #stdev scaled by mean
                         return (f"WTRACKER BAD: at least one scaled stdev is bigger than {stdevthresh}")
