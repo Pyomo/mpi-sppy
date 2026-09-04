@@ -9,7 +9,7 @@
 
 # Sep 2026: windows are byte-addressed records. Each double payload retains
 # its 512-bit padding and is surrounded by transmitted canaries and local-only
-# red zones; the record also reserves metadata for a later publication protocol.
+# red zones; publication metadata guards consistent reader snapshots.
 
 from mpisppy import MPI
 
@@ -206,8 +206,9 @@ class SPWindow:
 
         A field record contains publication metadata, a left red zone, a left
         transmitted canary, the padded double payload, a right transmitted
-        canary, and a right red zone. Put/Get transfer both canaries and the
-        complete padded payload; the red zones remain local to each buffer.
+        canary, and a right red zone. Publications copy both canaries and the
+        complete padded payload into local window memory; Gets retrieve that
+        guarded region. The red zones remain local to each buffer.
 
         ``Field.WHOLE`` is retained in ``buffer_layout`` as a description of
         the complete allocation for compatibility. It is not an addressable
@@ -479,19 +480,15 @@ class SPWindow:
             target_rank=target_rank,
         )
 
-    def _put_metadata_bytes(self, contents: bytes, target_offset: int,
-                            field: Field) -> None:
+    def _store_metadata_bytes(self, contents: bytes, target_offset: int,
+                              field: Field) -> None:
         storage, body = self._make_guarded_bytes(len(contents), contents)
         self._verify_byte_buffer_red_zones(
-            storage, field, "put-metadata", "before", self.strata_rank)
-        self.window.Put(
-            (body, len(contents), MPI.BYTE),
-            self.strata_rank,
-            (target_offset, len(contents), MPI.BYTE),
-        )
-        self.window.Flush(self.strata_rank)
+            storage, field, "store-metadata", "before", self.strata_rank)
+        self.buff[target_offset:target_offset + len(contents)] = body
+        self.window.Sync()
         self._verify_byte_buffer_red_zones(
-            storage, field, "put-metadata", "after", self.strata_rank)
+            storage, field, "store-metadata", "after", self.strata_rank)
 
     def _get_publication_metadata(self, strata_rank: int, field: Field,
                                   field_layout: FieldLayout):
@@ -528,8 +525,8 @@ class SPWindow:
         (see ``overlap_map.py``).  ``dest`` must then be ``item_count`` long.
 
         Publication metadata is sampled before and after the guarded payload.
-        A read overlapping a Put is discarded and retried until both samples
-        identify the same idle generation.
+        A read overlapping publication is discarded and retried until both
+        samples identify the same idle generation.
         """
         if field == Field.WHOLE:
             raise ValueError("Field.WHOLE is not an addressable guarded record")
@@ -614,39 +611,32 @@ class SPWindow:
                 f"generation={generation}"
             )
 
-        # Mark the record busy and complete that update before modifying the
-        # guarded payload. Readers accept a snapshot only when clean metadata
-        # with one generation brackets the payload Get.
-        self._put_metadata_bytes(
+        # Mark the local record busy and publish that update before modifying
+        # the guarded payload. Readers accept a snapshot only when clean
+        # metadata with one generation brackets the payload Get.
+        self._store_metadata_bytes(
             bytes((PUBLICATION_BUSY,)),
             metadata_offset + PUBLICATION_BUSY_OFFSET,
             field,
         )
-        window.Put(
-            (transfer, field_layout.transfer_nbytes, MPI.BYTE),
-            self.strata_rank,
-            (field_layout.transfer_offset_bytes,
-             field_layout.transfer_nbytes,
-             MPI.BYTE),
-        )
-        window.Flush(self.strata_rank)
+        transfer_start = field_layout.transfer_offset_bytes
+        self.buff[
+            transfer_start:transfer_start + field_layout.transfer_nbytes
+        ] = transfer
+        window.Sync()
         self._verify_transfer_guards(
             storage, field_layout, field, "put", "after",
             target_rank=self.strata_rank,
         )
-        # Flush completes the self-target Put in the public window copy;
-        # Sync makes that update visible to the local NumPy view before its
-        # guards are inspected on MPI_WIN_SEPARATE implementations.
-        window.Sync()
         self._verify_window_guards(field, "put", "after")
 
         generation += 1
-        self._put_metadata_bytes(
+        self._store_metadata_bytes(
             struct.pack("<Q", generation),
             metadata_offset + PUBLICATION_GENERATION_OFFSET,
             field,
         )
-        self._put_metadata_bytes(
+        self._store_metadata_bytes(
             bytes((PUBLICATION_IDLE,)),
             metadata_offset + PUBLICATION_BUSY_OFFSET,
             field,

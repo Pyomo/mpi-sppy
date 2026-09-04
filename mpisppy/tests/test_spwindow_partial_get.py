@@ -196,17 +196,12 @@ class TestPartialGet(unittest.TestCase):
             np.empty(self.padded, dtype="d"), 0, Field.NONANTS_VALS)
 
         self.assertEqual(recording.calls, [
-            # Put: busy, payload, generation, idle--each made remotely
-            # complete before the next stage.
-            ("Put",),
-            ("Flush", 0),
-            ("Put",),
-            ("Flush", 0),
+            # Publication: local busy, payload, generation, and idle stores;
+            # each Sync publishes one stage before the next starts.
             ("Sync",),
-            ("Put",),
-            ("Flush", 0),
-            ("Put",),
-            ("Flush", 0),
+            ("Sync",),
+            ("Sync",),
+            ("Sync",),
             # Get: metadata, payload, metadata.
             ("Get",),
             ("Flush", 0),
