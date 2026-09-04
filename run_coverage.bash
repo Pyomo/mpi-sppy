@@ -77,6 +77,9 @@ run_phase "test_cvar (serial)" \
 run_phase "test_entry_points (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_entry_points.py -v
 
+run_phase "test_mpi_abort (spawns mpiexec)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_mpi_abort.py -v
+
 run_phase "test_outer_bound_only (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_outer_bound_only.py -v
 
