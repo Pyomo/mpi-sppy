@@ -8,8 +8,10 @@
 ###############################################################################
 import logging
 import random
+import numpy as np
 import mpisppy.log
 
+from mpisppy import MPI
 from mpisppy.extensions.xhatbase import XhatBase
 from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
 from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
@@ -24,6 +26,38 @@ logger = logging.getLogger("mpisppy.cylinders.xhatshufflelooper_bounder")
 class XhatShuffleInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
 
     converger_spoke_char = 'X'
+
+    def _check_rank_sync(self, xh_iter, new_nonants, receive_id,
+                         scenario_index):
+        """Fail before branching when XhatShuffle rank state diverges.
+
+        All ranks call this immediately after the synchronized nonant read.
+        Keeping the diagnostic to fixed-size typed collectives avoids the
+        pickle-size corruption that can result when an out-of-phase object
+        collective is matched with a different collective on peer ranks.
+        """
+        local_state = np.array(
+            [xh_iter, int(new_nonants), receive_id, scenario_index], dtype='i')
+        min_state = np.empty(4, dtype='i')
+        max_state = np.empty(4, dtype='i')
+        self.cylinder_comm.Allreduce(
+            [local_state, MPI.INT], [min_state, MPI.INT], op=MPI.MIN)
+        self.cylinder_comm.Allreduce(
+            [local_state, MPI.INT], [max_state, MPI.INT], op=MPI.MAX)
+        if np.array_equal(min_state, max_state):
+            return
+
+        labels = ("iteration", "new_nonants", "receive write ID",
+                  "scenario-cycler index")
+        differences = ", ".join(
+            f"{label}=[{lo}, {hi}]"
+            for label, lo, hi in zip(labels, min_state, max_state)
+            if lo != hi
+        )
+        raise RuntimeError(
+            f"XhatShuffle ranks are out of sync after update_nonants: "
+            f"{differences}"
+        )
 
     def xhat_extension(self):
         return XhatBase(self.opt)
@@ -111,6 +145,12 @@ class XhatShuffleInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
                 logger.debug(f'   Xhatshuffle got from opt on rank {self.global_rank}')
 
             new_nonants = self.update_nonants()
+            self._check_rank_sync(
+                xh_iter,
+                new_nonants,
+                self._nonant_len_receive_buffer.id(),
+                scenario_cycler._cycle_idx,
+            )
 
             # When there is no iter0, the serial number must be checked.
             if self._nonant_len_receive_buffer.id() == 0:

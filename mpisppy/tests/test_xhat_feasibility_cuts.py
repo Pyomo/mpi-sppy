@@ -912,6 +912,7 @@ class TestTryOneExceptionWrapper(unittest.TestCase):
         ext.n_proc = 1
         ext.verbose = False
         ext.scenario_name_to_rank = {"ROOT": {"scen0": 0}}
+        ext._scenario_name_to_index = {"scen0": 0}
 
         class _StubOpt:
             def __init__(self, sp):
@@ -934,7 +935,11 @@ class TestTryOneExceptionWrapper(unittest.TestCase):
             def update_best_solution_if_improving(self, obj): return False
 
         class _StubComm:
-            def bcast(self, data, root=0): return data
+            def Allreduce(self, sendbuf, recvbuf, op=None):
+                recvbuf[:] = sendbuf
+            def Get_rank(self): return 0
+            def Get_size(self): return 1
+            def Bcast(self, data, root=0): pass
         ext.opt = _StubOpt(sp)
         ext.comms = {"ROOT": _StubComm()}
 
@@ -952,6 +957,80 @@ class TestTryOneExceptionWrapper(unittest.TestCase):
         self.assertIsNone(result)
         # nonants were restored despite the exception.
         self.assertEqual(ext.opt._restored, 1)
+
+
+class TestXhatBroadcastAgreement(unittest.TestCase):
+
+    class _Comm:
+        def __init__(self, *, size=2, rank=0, min_selection=(0, 0),
+                     max_selection=(0, 0), payload_count=1,
+                     payload_length=2):
+            self.size = size
+            self.rank = rank
+            self.min_selection = min_selection
+            self.max_selection = max_selection
+            self.payload_count = payload_count
+            self.payload_length = payload_length
+            self.broadcast_called = False
+
+        def Allreduce(self, sendbuf, recvbuf, op=None):
+            from mpisppy import MPI
+            if sendbuf.size == 2:
+                if op == MPI.MIN:
+                    recvbuf[:] = self.min_selection
+                elif op == MPI.MAX:
+                    recvbuf[:] = self.max_selection
+                else:
+                    raise AssertionError(f"unexpected selection op {op}")
+            elif op == MPI.SUM:
+                recvbuf[0] = self.payload_count
+            elif op == MPI.MAX:
+                recvbuf[0] = self.payload_length
+            else:
+                raise AssertionError(f"unexpected scalar op {op}")
+
+        def Get_rank(self):
+            return self.rank
+
+        def Get_size(self):
+            return self.size
+
+        def Bcast(self, value, root=0):
+            self.broadcast_called = True
+
+    def _xhat(self):
+        import mpisppy.extensions.xhatbase as xb
+        xhat = xb.XhatBase.__new__(xb.XhatBase)
+        xhat._scenario_name_to_index = {"scen0": 0, "scen1": 1}
+        return xhat
+
+    def test_matching_selection_is_broadcast(self):
+        comm = self._Comm()
+        value = [1.0, 2.0]
+
+        result = self._xhat()._checked_bcast(
+            comm, value, "scen0", 0, "ROOT")
+
+        np.testing.assert_array_equal(result, value)
+        self.assertTrue(comm.broadcast_called)
+
+    def test_mismatched_scenario_or_root_is_rejected_before_bcast(self):
+        comm = self._Comm(max_selection=(1, 1))
+
+        with self.assertRaisesRegex(RuntimeError, "disagree"):
+            self._xhat()._checked_bcast(
+                comm, [1.0], "scen0", 0, "ROOT")
+        self.assertFalse(comm.broadcast_called)
+
+    def test_root_without_payload_is_rejected_before_bcast(self):
+        comm = self._Comm(
+            rank=0, min_selection=(0, 1), max_selection=(0, 1),
+            payload_count=0, payload_length=0)
+
+        with self.assertRaisesRegex(RuntimeError, "has no cached values"):
+            self._xhat()._checked_bcast(
+                comm, [1.0], "scen0", 1, "ROOT")
+        self.assertFalse(comm.broadcast_called)
 
 
 if __name__ == "__main__":

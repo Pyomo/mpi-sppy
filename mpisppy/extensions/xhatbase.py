@@ -8,10 +8,12 @@
 ###############################################################################
 
 import re
+import numpy as np
 import pyomo.environ as pyo
 
 # NOTE: a caller attaches the comms (e.g. pre_iter0)
 
+from mpisppy import MPI
 import mpisppy.extensions.extension
 import mpisppy.utils.w_utils.wxbarutils as wxbarutils
 import mpisppy.utils.sputils as sputils
@@ -99,7 +101,80 @@ class XhatBase(mpisppy.extensions.extension.Extension):
         self.verbose = self.opt.options["verbose"]
 
         self.scenario_name_to_rank = opt.scenario_names_to_rank
+        self._scenario_name_to_index = {
+            name: index for index, name in enumerate(opt.all_scenario_names)
+        }
         # dict: scenario names --> LOCAL rank number (needed mainly for xhat)
+
+    def _checked_bcast(self, comm, value, sname, src_rank, node_name):
+        """Broadcast an xhat only after every rank agrees on its source.
+
+        A collective called with different roots has undefined MPI behavior.
+        Gather the selected scenario, root, and payload ownership first so a
+        rank-divergent xhat selection becomes a deterministic Python error
+        instead of entering such a collective.
+        """
+        src_rank = int(src_rank)
+        scenario_index = self._scenario_name_to_index.get(sname, -1)
+        local_selection = np.array([scenario_index, src_rank], dtype='i')
+        min_selection = np.empty(2, dtype='i')
+        max_selection = np.empty(2, dtype='i')
+        comm.Allreduce(local_selection, min_selection, op=MPI.MIN)
+        comm.Allreduce(local_selection, max_selection, op=MPI.MAX)
+        if not np.array_equal(min_selection, max_selection):
+            raise RuntimeError(
+                f"Xhat ranks disagree on the scenario/root for node "
+                f"{node_name}: scenario index range "
+                f"[{min_selection[0]}, {max_selection[0]}], root range "
+                f"[{min_selection[1]}, {max_selection[1]}]"
+            )
+        if scenario_index < 0:
+            raise RuntimeError(
+                f"Unknown Xhat scenario {sname!r} for node {node_name}"
+            )
+        if src_rank < 0 or src_rank >= comm.Get_size():
+            raise RuntimeError(
+                f"Invalid Xhat broadcast root {src_rank} for node "
+                f"{node_name} on a communicator of size {comm.Get_size()}"
+            )
+
+        is_root = comm.Get_rank() == src_rank
+        local_payload = np.array([int(is_root and value is not None)], dtype='i')
+        payload_count = np.zeros(1, dtype='i')
+        comm.Allreduce(local_payload, payload_count, op=MPI.SUM)
+        if payload_count[0] == 0:
+            raise RuntimeError(
+                f"Xhat broadcast root {src_rank} has no cached values for "
+                f"scenario {sname}, node {node_name}"
+            )
+        if payload_count[0] != 1:
+            raise RuntimeError(
+                f"Xhat broadcast for scenario {sname}, node {node_name} "
+                f"has {payload_count[0]} payload owners; expected exactly one"
+            )
+
+        local_length = np.array(
+            [len(value) if is_root and value is not None else 0], dtype='i')
+        payload_length = np.zeros(1, dtype='i')
+        comm.Allreduce(local_length, payload_length, op=MPI.MAX)
+        if payload_length[0] <= 0:
+            raise RuntimeError(
+                f"Xhat broadcast payload is empty for scenario {sname}, "
+                f"node {node_name}"
+            )
+
+        if is_root:
+            result = np.ascontiguousarray(value, dtype='d')
+            if result.ndim != 1 or result.size != payload_length[0]:
+                raise RuntimeError(
+                    f"Xhat broadcast payload for scenario {sname}, node "
+                    f"{node_name} must be a one-dimensional array of length "
+                    f"{payload_length[0]}; got shape {result.shape}"
+                )
+        else:
+            result = np.empty(int(payload_length[0]), dtype='d')
+        comm.Bcast([result, MPI.DOUBLE], root=src_rank)
+        return result
         
      #**********
     def _try_one(self, snamedict, solver_options=None, verbose=False,
@@ -143,9 +218,10 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                 xhat = self.opt.local_scenarios[sname]._mpisppy_data.nonant_cache
             else:
                 xhat = None
-            src_rank = self.scenario_name_to_rank["ROOT"][sname]
+            src_rank = self.scenario_name_to_rank["ROOT"].get(sname, -1)
             try:
-                xhats["ROOT"] = self.comms["ROOT"].bcast(xhat, root=src_rank)
+                xhats["ROOT"] = self._checked_bcast(
+                    self.comms["ROOT"], xhat, sname, src_rank, "ROOT")
             except:
                 print("rank=",self.cylinder_rank, "xhats bcast failed on src_rank={}"\
                       .format(src_rank))
@@ -175,15 +251,11 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                         xhats[ndn] = [s._mpisppy_data.nonant_cache[i+cistart[ndn]]
                                       for i in range(nlens[ndn])]
             for ndn in cistart:  # local nodes
-                if snamedict[ndn] not in self.scenario_name_to_rank[ndn]:
-                    print (f"For ndn={ndn}, snamedict[ndn] not in "
-                           "self.scenario_name_to_rank[ndn]")
-                    print(f"snamedict[ndn]={snamedict[ndn]}")
-                    print(f"self.scenario_name_to_rank[ndn]={self.scenario_name_to_rank[ndn]}")
-                    raise RuntimeError("Bad scenario selection for xhat")
-                src_rank = self.scenario_name_to_rank[ndn][snamedict[ndn]]
+                sname = snamedict[ndn]
+                src_rank = self.scenario_name_to_rank[ndn].get(sname, -1)
                 try:
-                    xhats[ndn] = self.comms[ndn].bcast(xhats[ndn], root=src_rank)
+                    xhats[ndn] = self._checked_bcast(
+                        self.comms[ndn], xhats[ndn], sname, src_rank, ndn)
                 except:
                     print("rank=",self.cylinder_rank, "xhats bcast failed on ndn={}, src_rank={}"\
                           .format(ndn,src_rank))
@@ -198,9 +270,10 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                 xhat = [self.opt.local_scenarios[sname]._mpisppy_data.nonant_cache[i] for i in range(rnlen)]
             else:
                 xhat = None
-            src_rank = self.scenario_name_to_rank["ROOT"][sname]
+            src_rank = self.scenario_name_to_rank["ROOT"].get(sname, -1)
             try:
-                xhats["ROOT"] = self.comms["ROOT"].bcast(xhat, root=src_rank)
+                xhats["ROOT"] = self._checked_bcast(
+                    self.comms["ROOT"], xhat, sname, src_rank, "ROOT")
             except:
                 print("rank=",self.cylinder_rank, "xhats bcast failed on src_rank={}"\
                       .format(src_rank))

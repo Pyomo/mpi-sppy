@@ -20,8 +20,10 @@
 """
 
 import abc
-import time
 import logging
+import os
+import time
+import warnings
 import numpy as np
 from math import inf
 
@@ -86,6 +88,60 @@ _STRICT_COHERENCE_FIELDS = frozenset((
     Field.BEST_XHAT,
     Field.RECENT_XHATS,
 ))
+
+_UNSAFE_MVAPICH_RMA_VERSION = (2, 3, 7)
+_ALLOW_UNSAFE_MVAPICH_RMA_ENV = "MPISPPY_ALLOW_UNSAFE_MVAPICH_RMA"
+
+
+def _guard_mvapich_cross_node_rma(window_comm, fullcomm, global_rank,
+                                   flexible_ranks=False):
+    """Reject a confirmed-unsafe MVAPICH cross-node RMA configuration."""
+    get_vendor = getattr(MPI, "get_vendor", None)
+    get_processor_name = getattr(MPI, "Get_processor_name", None)
+    if get_vendor is None or get_processor_name is None:
+        return
+
+    vendor_name, vendor_version = get_vendor()
+    if (vendor_name != "MVAPICH"
+            or tuple(vendor_version) != _UNSAFE_MVAPICH_RMA_VERSION):
+        return
+
+    local_hosts = window_comm.allgather(get_processor_name())
+    local_cross_node = len(set(local_hosts)) > 1
+    any_cross_node = fullcomm.allreduce(local_cross_node, op=MPI.LOR)
+    if not any_cross_node:
+        return
+
+    allow_unsafe = fullcomm.bcast(
+        os.environ.get(_ALLOW_UNSAFE_MVAPICH_RMA_ENV) == "1"
+        if global_rank == 0 else None,
+        root=0,
+    )
+    if flexible_ranks:
+        workaround = (
+            "Unequal-rank cylinders place their window on MPI_COMM_WORLD, so "
+            "multi-node runs require a different MPI implementation (or must "
+            "run on one node)."
+        )
+    else:
+        workaround = (
+            "Use block rank placement with ranks per node divisible by the "
+            "number of cylinders so every strata communicator is node-local, "
+            "or use a different MPI implementation."
+        )
+    message = (
+        "mpi-sppy detected MVAPICH 2.3.7 and an MPI RMA window communicator "
+        "that spans nodes. A minimal two-rank reproducer confirms intermittent "
+        "cross-node MPI_Get hangs with this MPI version. "
+        f"{workaround} Set {_ALLOW_UNSAFE_MVAPICH_RMA_ENV}=1 to continue at "
+        "your own risk."
+    )
+
+    if allow_unsafe:
+        if global_rank == 0:
+            warnings.warn(message, RuntimeWarning, stacklevel=2)
+        return
+    raise RuntimeError(message)
 
 
 def reduce_source_write_ids(source_ids, strict: bool) -> int:
@@ -584,6 +640,12 @@ class SPCommunicator:
         # addressed by strata_rank. Unequal-rank: window on fullcomm,
         # addressed by global rank via overlap maps (strata_comm is None).
         window_comm = self.fullcomm if self._flex_ranks else self.strata_comm
+        _guard_mvapich_cross_node_rma(
+            window_comm,
+            self.fullcomm,
+            self.global_rank,
+            flexible_ranks=self._flex_ranks,
+        )
         self.window = SPWindow(window_spec, window_comm)
 
         self._create_field_rank_mappings()
@@ -665,11 +727,15 @@ class SPCommunicator:
         if not synchronize:
             return True
         local_val = np.array((new_id,), 'i')
-        sum_ids = np.zeros(1, 'i')
+        min_id = np.zeros(1, 'i')
+        max_id = np.zeros(1, 'i')
         self.cylinder_comm.Allreduce((local_val, MPI.INT),
-                                     (sum_ids, MPI.INT),
-                                     op=MPI.SUM)
-        return new_id * self.cylinder_comm.size == sum_ids[0]
+                                     (min_id, MPI.INT),
+                                     op=MPI.MIN)
+        self.cylinder_comm.Allreduce((local_val, MPI.INT),
+                                     (max_id, MPI.INT),
+                                     op=MPI.MAX)
+        return min_id[0] == max_id[0]
 
     def _mark_new(self, buf: RecvArray, new_id: int) -> bool:
         """Commit an accepted read: stamp ``new_id`` into the buffer's id slot

@@ -16,6 +16,7 @@ import unittest
 
 import pyomo.environ as pyo
 import mpisppy.opt.ph
+from mpisppy.phbase import PHBase
 import mpisppy.tests.examples.farmer as farmer
 from mpisppy.tests.examples.sizes.sizes import scenario_creator as sizes_creator, \
                                                scenario_denouement as sizes_denouement, \
@@ -30,6 +31,34 @@ global_rank = fullcomm.Get_rank()
 
 # Known reference values (EF optimal for farmer with 3 scenarios, crops_multiplier=1)
 FARMER_EF_OBJ = -118361.33  # approximate
+
+
+class TestTerminationAgreement(unittest.TestCase):
+
+    class _Comm:
+        def __init__(self, stop_votes):
+            self.stop_votes = stop_votes
+
+        def Allreduce(self, sendbuf, recvbuf, op=None):
+            recvbuf[0] = self.stop_votes
+
+    def _ph(self, stop_votes, size=3):
+        ph = PHBase.__new__(PHBase)
+        ph.n_proc = size
+        ph.mpicomm = self._Comm(stop_votes)
+        return ph
+
+    def test_all_ranks_continue(self):
+        self.assertFalse(
+            self._ph(stop_votes=0)._termination_decision(False, "test"))
+
+    def test_all_ranks_stop(self):
+        self.assertTrue(
+            self._ph(stop_votes=3)._termination_decision(True, "test"))
+
+    def test_mixed_votes_raise(self):
+        with self.assertRaisesRegex(RuntimeError, "1 of 3 ranks voted to stop"):
+            self._ph(stop_votes=1)._termination_decision(False, "test")
 
 
 class TestPHMainFarmer(unittest.TestCase):
