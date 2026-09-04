@@ -1,10 +1,11 @@
 /*
  * Minimal cross-node MPI_Get reproducer using one persistent lock-all epoch.
- * Rank 0 exposes one static double; rank 1 repeatedly reads it.
+ * Ranks 0-1 expose one static double each. Ranks 2-3 repeatedly read from
+ * their paired publisher, synchronizing with each other before every Get.
  *
  * Build from this directory with: make
  * Run one rank per node with:
- *   srun -u -N 2 -n 2 --ntasks-per-node=1 \
+ *   srun -u -N 4 -n 4 --ntasks-per-node=1 \
  *       ./mpi_rma_lock_all_get_reproducer 100
  */
 
@@ -38,10 +39,14 @@ int main(int argc, char **argv)
 {
     int rank;
     int size;
+    int role;
+    int pair;
     int iterations = DEFAULT_ITERATIONS;
     int model_found = 0;
     int *window_model = NULL;
     MPI_Aint window_nbytes;
+    MPI_Comm role_comm = MPI_COMM_NULL;
+    MPI_Comm strata_comm = MPI_COMM_NULL;
     MPI_Win window = MPI_WIN_NULL;
     double *window_base = NULL;
     double received = -1.0;
@@ -61,19 +66,24 @@ int main(int argc, char **argv)
     if (argc == 2) {
         iterations = parse_iterations(argv[1], rank);
     }
-    if (size != 2) {
+    if (size != 4) {
         if (rank == 0) {
-            fprintf(stderr, "world size must be two; got %d\n", size);
+            fprintf(stderr, "world size must be four; got %d\n", size);
         }
         MPI_Abort(MPI_COMM_WORLD, 2);
     }
 
-    window_nbytes = rank == 0 ? (MPI_Aint)sizeof(*window_base) : 0;
-    MPI_Win_allocate(window_nbytes, 1, MPI_INFO_NULL, MPI_COMM_WORLD,
+    role = rank / 2;
+    pair = rank % 2;
+    MPI_Comm_split(MPI_COMM_WORLD, role, pair, &role_comm);
+    MPI_Comm_split(MPI_COMM_WORLD, pair, role, &strata_comm);
+
+    window_nbytes = role == 0 ? (MPI_Aint)sizeof(*window_base) : 0;
+    MPI_Win_allocate(window_nbytes, 1, MPI_INFO_NULL, strata_comm,
                      &window_base, &window);
 
-    if (rank == 0) {
-        *window_base = 42.0;
+    if (role == 0) {
+        *window_base = 42.0 + rank;
     }
 
     MPI_Win_lock_all(0, window);
@@ -86,24 +96,26 @@ int main(int argc, char **argv)
 
     MPI_Win_get_attr(window, MPI_WIN_MODEL, &window_model, &model_found);
     if (rank == 0) {
-        printf("world=2 iterations=%d window_model=%s\n",
+        printf("world=4 publishers=2 receivers=2 iterations=%d "
+               "window_model=%s\n",
                iterations,
                model_found && *window_model == MPI_WIN_UNIFIED
                    ? "unified" : "separate-or-unknown");
         fflush(stdout);
     }
 
-    if (rank == 1) {
+    if (role == 1) {
         for (int iteration = 0; iteration < iterations; ++iteration) {
+            MPI_Barrier(role_comm);
             MPI_Get(&received, 1, MPI_DOUBLE, 0, 0, 1, MPI_DOUBLE, window);
             MPI_Win_flush(0, window);
-            if (received != 42.0) {
+            if (received != 42.0 + pair) {
                 fprintf(stderr,
-                        "rank=1 iteration=%d expected=42 actual=%.17g\n",
-                        iteration, received);
+                        "rank=%d iteration=%d expected=%.17g actual=%.17g\n",
+                        rank, iteration, 42.0 + pair, received);
                 MPI_Abort(MPI_COMM_WORLD, 1);
             }
-            printf("completed %d iterations\n", iteration + 1);
+            printf("rank=%d completed %d iterations\n", rank, iteration + 1);
             fflush(stdout);
         }
     }
@@ -111,6 +123,8 @@ int main(int argc, char **argv)
     MPI_Barrier(MPI_COMM_WORLD);
     MPI_Win_unlock_all(window);
     MPI_Win_free(&window);
+    MPI_Comm_free(&strata_comm);
+    MPI_Comm_free(&role_comm);
 
     if (rank == 0) {
         puts("PASS");
