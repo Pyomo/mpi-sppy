@@ -282,6 +282,12 @@ class SPWindow:
         # Gather layouts across ranks
         self.strata_buffer_layouts = strata_comm.allgather(self.buffer_layout)
 
+        # Keep one passive-target access epoch open for the lifetime of the
+        # window. Individual operations complete at their target with Flush;
+        # they do not repeatedly acquire and release target locks.
+        self.window.Lock_all()
+        self._epoch_open = True
+
     def free(self):
         if self.window is not None:
             guard_error = None
@@ -290,6 +296,9 @@ class SPWindow:
                     self._verify_window_guards(field, "free", "before")
             except RuntimeError as error:
                 guard_error = error
+            if self._epoch_open:
+                self.window.Unlock_all()
+                self._epoch_open = False
             self.window.Free()
             self.buff = None
             self.buffer_layout = None
@@ -465,10 +474,6 @@ class SPWindow:
             target_rank=strata_rank,
         )
         window = self.window
-        # The shared epoch may overlap other readers, but it cannot overlap
-        # the publisher's exclusive self-target epoch below. Unlock provides
-        # completion for the Get before its destination and guards are read.
-        window.Lock(strata_rank, MPI.LOCK_SHARED)
         window.Get(
             (transfer, field_layout.transfer_nbytes, MPI.BYTE),
             strata_rank,
@@ -476,7 +481,9 @@ class SPWindow:
              field_layout.transfer_nbytes,
              MPI.BYTE),
         )
-        window.Unlock(strata_rank)
+        # Flush provides local completion, so the destination and its
+        # transmitted guards are safe to inspect below.
+        window.Flush(strata_rank)
         self._verify_transfer_guards(
             storage, field_layout, field, "get", "after",
             target_rank=strata_rank,
@@ -502,11 +509,10 @@ class SPWindow:
         )
         self._verify_window_guards(field, "put", "before")
         window = self.window
-        # Publishing through a self-target Put is intentional: unlike an
-        # ordinary local store, this exclusive epoch participates in the same
-        # MPI lock arbitration as remote readers and makes the field snapshot
-        # indivisible with respect to their shared epochs.
-        window.Lock(self.strata_rank, MPI.LOCK_EXCLUSIVE)
+        # Publishing through a self-target Put is intentional: it keeps local
+        # and remote publication on the same MPI-visible path. Phase 3 will
+        # add the metadata protocol that lets readers reject an overlapping
+        # publication; Phase 2 only changes epoch management.
         window.Put(
             (transfer, field_layout.transfer_nbytes, MPI.BYTE),
             self.strata_rank,
@@ -514,7 +520,7 @@ class SPWindow:
              field_layout.transfer_nbytes,
              MPI.BYTE),
         )
-        window.Unlock(self.strata_rank)
+        window.Flush(self.strata_rank)
         self._verify_transfer_guards(
             storage, field_layout, field, "put", "after",
             target_rank=self.strata_rank,

@@ -28,14 +28,6 @@ class _RecordingWindow:
         self.wrapped = wrapped
         self.calls = []
 
-    def Lock(self, rank, lock_type):
-        self.calls.append(("Lock", rank, lock_type))
-        return self.wrapped.Lock(rank, lock_type)
-
-    def Unlock(self, rank):
-        self.calls.append(("Unlock", rank))
-        return self.wrapped.Unlock(rank)
-
     def Put(self, *args):
         self.calls.append(("Put",))
         return self.wrapped.Put(*args)
@@ -43,6 +35,18 @@ class _RecordingWindow:
     def Get(self, *args):
         self.calls.append(("Get",))
         return self.wrapped.Get(*args)
+
+    def Flush(self, rank):
+        self.calls.append(("Flush", rank))
+        return self.wrapped.Flush(rank)
+
+    def Unlock_all(self):
+        self.calls.append(("Unlock_all",))
+        return self.wrapped.Unlock_all()
+
+    def Free(self):
+        self.calls.append(("Free",))
+        return self.wrapped.Free()
 
     def __getattr__(self, name):
         return getattr(self.wrapped, name)
@@ -158,7 +162,7 @@ class TestPartialGet(unittest.TestCase):
                 0, Field.NONANTS_VALS, "left", layout.padded_len + 1),
         )
 
-    def test_put_and_get_preserve_exclusive_shared_locking(self):
+    def test_put_and_get_flush_persistent_epoch(self):
         recording = _RecordingWindow(self.win.window)
         self.win.window = recording
 
@@ -167,12 +171,21 @@ class TestPartialGet(unittest.TestCase):
             np.empty(self.padded, dtype="d"), 0, Field.NONANTS_VALS)
 
         self.assertEqual(recording.calls, [
-            ("Lock", 0, MPI.LOCK_EXCLUSIVE),
             ("Put",),
-            ("Unlock", 0),
-            ("Lock", 0, MPI.LOCK_SHARED),
+            ("Flush", 0),
             ("Get",),
-            ("Unlock", 0),
+            ("Flush", 0),
+        ])
+
+    def test_free_closes_epoch_before_freeing_window(self):
+        recording = _RecordingWindow(self.win.window)
+        self.win.window = recording
+
+        self.win.free()
+
+        self.assertEqual(recording.calls, [
+            ("Unlock_all",),
+            ("Free",),
         ])
 
 
