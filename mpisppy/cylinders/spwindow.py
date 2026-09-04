@@ -7,8 +7,9 @@
 # full copyright and license information.
 ###############################################################################
 
-# Feb 2026: the layout tuple is (offset, logical_len, padded_len) with offset += padded_len
-#   (we are padding to 512 bit boundaries to avoid collisions with solvers who do that)
+# Sep 2026: windows are byte-addressed records. Each double payload retains
+# its 512-bit padding and is surrounded by transmitted canaries and local-only
+# red zones; the record also reserves metadata for a later publication protocol.
 
 from mpisppy import MPI
 
@@ -16,6 +17,7 @@ import numpy as np
 import numpy.typing as nptyping
 
 import enum
+from typing import NamedTuple
 
 import pyomo.environ as pyo
 
@@ -115,6 +117,11 @@ class FieldLengths:
 
 
 PAD_N_DOUBLES = 8  # padding granularity in doubles (PAD_N_DOUBLES*8 bytes)
+METADATA_NBYTES = 16
+CANARY_NBYTES = 16
+RED_ZONE_NBYTES = 16
+TRANSMITTED_CANARY = bytes.fromhex("a55a" * (CANARY_NBYTES // 2))
+RED_ZONE_CANARY = bytes.fromhex("d37c" * (RED_ZONE_NBYTES // 2))
 
 
 def padded_len_n_doubles(logical_len: int) -> int:
@@ -124,14 +131,64 @@ def padded_len_n_doubles(logical_len: int) -> int:
     return ((logical_len + PAD_N_DOUBLES - 1) // PAD_N_DOUBLES) * PAD_N_DOUBLES
 
 
+class FieldLayout(NamedTuple):
+    """Location and extent of one field in a byte-addressed MPI window."""
+
+    offset_bytes: int
+    logical_len: int
+    padded_len: int
+
+    @property
+    def metadata_offset_bytes(self) -> int:
+        return self.offset_bytes - CANARY_NBYTES - RED_ZONE_NBYTES - METADATA_NBYTES
+
+    @property
+    def left_red_zone_offset_bytes(self) -> int:
+        return self.offset_bytes - CANARY_NBYTES - RED_ZONE_NBYTES
+
+    @property
+    def left_canary_offset_bytes(self) -> int:
+        return self.offset_bytes - CANARY_NBYTES
+
+    @property
+    def right_canary_offset_bytes(self) -> int:
+        return self.offset_bytes + self.padded_nbytes
+
+    @property
+    def right_red_zone_offset_bytes(self) -> int:
+        return self.right_canary_offset_bytes + CANARY_NBYTES
+
+    @property
+    def padded_nbytes(self) -> int:
+        return self.padded_len * MPI.DOUBLE.size
+
+    @property
+    def transfer_offset_bytes(self) -> int:
+        return self.left_canary_offset_bytes
+
+    @property
+    def transfer_nbytes(self) -> int:
+        return CANARY_NBYTES + self.padded_nbytes + CANARY_NBYTES
+
+    @property
+    def record_nbytes(self) -> int:
+        return (METADATA_NBYTES + RED_ZONE_NBYTES + self.transfer_nbytes
+                + RED_ZONE_NBYTES)
+
+
 class SPWindow:
 
     def __init__(self, my_fields: dict, strata_comm: MPI.Comm, field_order=None):
-        """
-        Design A (padded transfers):
-          - Layout tuple is (offset, logical_len, padded_len) and offset advances by padded_len.
-          - put/get always transfer padded_len doubles.
-          - ID slot is at (offset + logical_len - 1).
+        """Allocate guarded, byte-addressed records for the local fields.
+
+        A field record contains reserved metadata, a left red zone, a left
+        transmitted canary, the padded double payload, a right transmitted
+        canary, and a right red zone. Put/Get transfer both canaries and the
+        complete padded payload; the red zones remain local to each buffer.
+
+        ``Field.WHOLE`` is retained in ``buffer_layout`` as a description of
+        the complete allocation for compatibility. It is not an addressable
+        record and therefore cannot be passed to :meth:`put` or :meth:`get`.
         """
         self.strata_comm = strata_comm
         self.strata_rank = strata_comm.Get_rank()
@@ -142,7 +199,7 @@ class SPWindow:
         else:
             self.field_order = [f for f in field_order if f != Field.WHOLE]
 
-        offset = 0
+        record_offset_bytes = 0
         layout = {}
 
         for field in self.field_order:
@@ -158,43 +215,177 @@ class SPWindow:
                     f"{field=} has {logical_len=} but {padded_len=}; expected padded_len={expected_padded}"
                 )
 
-            layout[field] = (offset, logical_len, padded_len)
-            offset += padded_len
+            layout[field] = FieldLayout(
+                offset_bytes=(record_offset_bytes + METADATA_NBYTES
+                              + RED_ZONE_NBYTES + CANARY_NBYTES),
+                logical_len=logical_len,
+                padded_len=padded_len,
+            )
+            record_offset_bytes += layout[field].record_nbytes
 
         # WHOLE covers the entire padded window extent
         if Field.WHOLE not in layout:
             total_logical = sum(layout[f][1] for f in layout.keys() if f != Field.WHOLE)
-            layout[Field.WHOLE] = (0, total_logical, offset)
+            total_padded = record_offset_bytes // MPI.DOUBLE.size
+            layout[Field.WHOLE] = FieldLayout(0, total_logical, total_padded)
 
         self.buffer_layout = layout
-        total_buffer_length = offset
-        window_size_bytes = MPI.DOUBLE.size * total_buffer_length
+        total_buffer_length = record_offset_bytes // MPI.DOUBLE.size
+        window_size_bytes = record_offset_bytes
 
         self.buffer_length = total_buffer_length
-        self.window = MPI.Win.Allocate(window_size_bytes, MPI.DOUBLE.size, comm=strata_comm)
+        self.window = MPI.Win.Allocate(window_size_bytes, 1, comm=strata_comm)
 
-        # Bind numpy view to the window memory
-        self.buff = np.ndarray(dtype="d", shape=(total_buffer_length,), buffer=self.window.tomemory())
-        self.buff[:] = np.nan
+        # Bind a byte view to the heterogeneous window memory. Each field's
+        # payload remains a naturally-aligned array of doubles.
+        self.buff = np.ndarray(
+            dtype=np.uint8,
+            shape=(window_size_bytes,),
+            buffer=self.window.tomemory(),
+        )
+        self.buff[:] = 0
+        self._field_views = {}
 
-        # Initialize ID slots (logical end) to 0.0
-        for field, (off, logical_len, padded_len) in self.buffer_layout.items():
+        # Initialize guard regions and payloads. Metadata is reserved for the
+        # later persistent-epoch publication protocol and remains zero here.
+        for field, field_layout in self.buffer_layout.items():
             if field == Field.WHOLE:
                 continue
-            self.buff[off + logical_len - 1] = 0.0
+            self._set_guard_bytes(field_layout)
+            payload = np.ndarray(
+                dtype="d",
+                shape=(field_layout.padded_len,),
+                buffer=self.window.tomemory(),
+                offset=field_layout.offset_bytes,
+            )
+            payload[:] = np.nan
+            payload[field_layout.logical_len - 1] = 0.0
+            self._field_views[field] = payload
 
         # Gather layouts across ranks
         self.strata_buffer_layouts = strata_comm.allgather(self.buffer_layout)
 
     def free(self):
         if self.window is not None:
+            guard_error = None
+            try:
+                for field in self.field_order:
+                    self._verify_window_guards(field, "free", "before")
+            except RuntimeError as error:
+                guard_error = error
             self.window.Free()
             self.buff = None
             self.buffer_layout = None
             self.buffer_length = 0
             self.window = None
             self.strata_buffer_layouts = None
+            self._field_views = None
+            if guard_error is not None:
+                raise guard_error
         return
+
+    def _set_guard_bytes(self, field_layout: FieldLayout) -> None:
+        left_red = field_layout.left_red_zone_offset_bytes
+        left_canary = field_layout.left_canary_offset_bytes
+        right_canary = field_layout.right_canary_offset_bytes
+        right_red = field_layout.right_red_zone_offset_bytes
+        self.buff[left_red:left_red + RED_ZONE_NBYTES] = \
+            np.frombuffer(RED_ZONE_CANARY, dtype=np.uint8)
+        self.buff[left_canary:left_canary + CANARY_NBYTES] = \
+            np.frombuffer(TRANSMITTED_CANARY, dtype=np.uint8)
+        self.buff[right_canary:right_canary + CANARY_NBYTES] = \
+            np.frombuffer(TRANSMITTED_CANARY, dtype=np.uint8)
+        self.buff[right_red:right_red + RED_ZONE_NBYTES] = \
+            np.frombuffer(RED_ZONE_CANARY, dtype=np.uint8)
+
+    @staticmethod
+    def _make_guarded_transfer_buffer(field_layout: FieldLayout):
+        storage = np.empty(
+            RED_ZONE_NBYTES + field_layout.transfer_nbytes + RED_ZONE_NBYTES,
+            dtype=np.uint8,
+        )
+        storage[:RED_ZONE_NBYTES] = np.frombuffer(
+            RED_ZONE_CANARY, dtype=np.uint8)
+        storage[-RED_ZONE_NBYTES:] = np.frombuffer(
+            RED_ZONE_CANARY, dtype=np.uint8)
+        transfer = storage[RED_ZONE_NBYTES:-RED_ZONE_NBYTES]
+        transfer[:CANARY_NBYTES] = np.frombuffer(
+            TRANSMITTED_CANARY, dtype=np.uint8)
+        transfer[-CANARY_NBYTES:] = np.frombuffer(
+            TRANSMITTED_CANARY, dtype=np.uint8)
+        return storage, transfer
+
+    @classmethod
+    def _make_transfer_buffer(cls, values, field_layout: FieldLayout):
+        storage, transfer = cls._make_guarded_transfer_buffer(field_layout)
+        payload = transfer[
+            CANARY_NBYTES:CANARY_NBYTES + field_layout.padded_nbytes
+        ].view("d")
+        payload[:] = values
+        return storage, transfer
+
+    def _raise_guard_error(self, field, operation, phase, region,
+                           actual, expected, target_rank=None):
+        mismatch = np.flatnonzero(actual != expected)
+        first = int(mismatch[0])
+        target = "" if target_rank is None else f" target_rank={target_rank}"
+        raise RuntimeError(
+            f"SPWindow guard corruption: operation={operation} phase={phase} "
+            f"local_rank={self.strata_rank}{target} field={field.name} "
+            f"region={region} byte_offset={first} "
+            f"expected=0x{int(expected[first]):02x} "
+            f"actual=0x{int(actual[first]):02x}"
+        )
+
+    def _verify_pattern(self, actual, pattern, field, operation, phase,
+                        region, target_rank=None):
+        expected = np.frombuffer(pattern, dtype=np.uint8)
+        if not np.array_equal(actual, expected):
+            self._raise_guard_error(
+                field, operation, phase, region, actual, expected,
+                target_rank=target_rank,
+            )
+
+    def _verify_window_guards(self, field, operation, phase):
+        field_layout = self.buffer_layout[field]
+        regions = (
+            ("left-red-zone", field_layout.left_red_zone_offset_bytes,
+             RED_ZONE_NBYTES, RED_ZONE_CANARY),
+            ("left-transmitted-canary", field_layout.left_canary_offset_bytes,
+             CANARY_NBYTES, TRANSMITTED_CANARY),
+            ("right-transmitted-canary", field_layout.right_canary_offset_bytes,
+             CANARY_NBYTES, TRANSMITTED_CANARY),
+            ("right-red-zone", field_layout.right_red_zone_offset_bytes,
+             RED_ZONE_NBYTES, RED_ZONE_CANARY),
+        )
+        for region, offset, size, pattern in regions:
+            self._verify_pattern(
+                self.buff[offset:offset + size], pattern, field,
+                operation, phase, region,
+            )
+
+    def _verify_transfer_guards(self, storage, field_layout, field,
+                                operation, phase, target_rank=None):
+        transfer_start = RED_ZONE_NBYTES
+        right_canary = transfer_start + field_layout.transfer_nbytes \
+            - CANARY_NBYTES
+        right_red = transfer_start + field_layout.transfer_nbytes
+        regions = (
+            ("left-red-zone", storage[:RED_ZONE_NBYTES], RED_ZONE_CANARY),
+            ("left-transmitted-canary",
+             storage[transfer_start:transfer_start + CANARY_NBYTES],
+             TRANSMITTED_CANARY),
+            ("right-transmitted-canary",
+             storage[right_canary:right_canary + CANARY_NBYTES],
+             TRANSMITTED_CANARY),
+            ("right-red-zone",
+             storage[right_red:right_red + RED_ZONE_NBYTES], RED_ZONE_CANARY),
+        )
+        for region, actual, pattern in regions:
+            self._verify_pattern(
+                actual, pattern, field, operation, phase, region,
+                target_rank=target_rank,
+            )
 
     #### Functions ####
     def get(self, dest: nptyping.ArrayLike, strata_rank: int, field: Field,
@@ -208,38 +399,86 @@ class SPWindow:
         multi-source assembly across cylinders with different rank counts
         (see ``overlap_map.py``).  ``dest`` must then be ``item_count`` long.
         """
+        if field == Field.WHOLE:
+            raise ValueError("Field.WHOLE is not an addressable guarded record")
         assert (0 <= strata_rank < len(self.strata_buffer_layouts))
 
         that_layout = self.strata_buffer_layouts[strata_rank]
         assert field in that_layout
 
-        (offset, logical_len, padded_len) = that_layout[field]
+        field_layout = that_layout[field]
+        padded_len = field_layout.padded_len
 
         if item_count is None:
             count = padded_len
-            disp = offset
+            item_offset = 0
         else:
             assert item_offset >= 0 and item_count >= 0
             assert item_offset + item_count <= padded_len, \
                 f"{field=} partial get {item_offset=}+{item_count=} exceeds {padded_len=}"
             count = item_count
-            disp = offset + item_offset
         assert np.size(dest) == count
 
+        storage, transfer = self._make_guarded_transfer_buffer(field_layout)
+        self._verify_transfer_guards(
+            storage, field_layout, field, "get", "before",
+            target_rank=strata_rank,
+        )
         window = self.window
+        # The shared epoch may overlap other readers, but it cannot overlap
+        # the publisher's exclusive self-target epoch below. Unlock provides
+        # completion for the Get before its destination and guards are read.
         window.Lock(strata_rank, MPI.LOCK_SHARED)
-        window.Get((dest, count, MPI.DOUBLE), strata_rank, disp)
+        window.Get(
+            (transfer, field_layout.transfer_nbytes, MPI.BYTE),
+            strata_rank,
+            (field_layout.transfer_offset_bytes,
+             field_layout.transfer_nbytes,
+             MPI.BYTE),
+        )
         window.Unlock(strata_rank)
+        self._verify_transfer_guards(
+            storage, field_layout, field, "get", "after",
+            target_rank=strata_rank,
+        )
+        payload = transfer[
+            CANARY_NBYTES:CANARY_NBYTES + field_layout.padded_nbytes
+        ].view("d")
+        dest[:] = payload[item_offset:item_offset + count]
         return
 
     def put(self, values: nptyping.ArrayLike, field: Field):
-        (offset, logical_len, padded_len) = self.buffer_layout[field]
+        if field == Field.WHOLE:
+            raise ValueError("Field.WHOLE is not an addressable guarded record")
+        field_layout = self.buffer_layout[field]
+        padded_len = field_layout.padded_len
         assert np.size(values) == padded_len
 
+        storage, transfer = self._make_transfer_buffer(values, field_layout)
+        self._verify_transfer_guards(
+            storage, field_layout, field, "put", "before",
+            target_rank=self.strata_rank,
+        )
+        self._verify_window_guards(field, "put", "before")
         window = self.window
+        # Publishing through a self-target Put is intentional: unlike an
+        # ordinary local store, this exclusive epoch participates in the same
+        # MPI lock arbitration as remote readers and makes the field snapshot
+        # indivisible with respect to their shared epochs.
         window.Lock(self.strata_rank, MPI.LOCK_EXCLUSIVE)
-        window.Put((values, padded_len, MPI.DOUBLE), self.strata_rank, offset)
+        window.Put(
+            (transfer, field_layout.transfer_nbytes, MPI.BYTE),
+            self.strata_rank,
+            (field_layout.transfer_offset_bytes,
+             field_layout.transfer_nbytes,
+             MPI.BYTE),
+        )
         window.Unlock(self.strata_rank)
+        self._verify_transfer_guards(
+            storage, field_layout, field, "put", "after",
+            target_rank=self.strata_rank,
+        )
+        self._verify_window_guards(field, "put", "after")
         return
 
 ## End SPWindow

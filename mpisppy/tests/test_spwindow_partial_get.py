@@ -18,6 +18,31 @@ from mpisppy import MPI
 from mpisppy.cylinders.spwindow import Field, SPWindow, padded_len_n_doubles
 
 
+class _RecordingWindow:
+    def __init__(self, wrapped):
+        self.wrapped = wrapped
+        self.calls = []
+
+    def Lock(self, rank, lock_type):
+        self.calls.append(("Lock", rank, lock_type))
+        return self.wrapped.Lock(rank, lock_type)
+
+    def Unlock(self, rank):
+        self.calls.append(("Unlock", rank))
+        return self.wrapped.Unlock(rank)
+
+    def Put(self, *args):
+        self.calls.append(("Put",))
+        return self.wrapped.Put(*args)
+
+    def Get(self, *args):
+        self.calls.append(("Get",))
+        return self.wrapped.Get(*args)
+
+    def __getattr__(self, name):
+        return getattr(self.wrapped, name)
+
+
 class TestPartialGet(unittest.TestCase):
 
     def setUp(self):
@@ -76,6 +101,48 @@ class TestPartialGet(unittest.TestCase):
         dest = np.empty(5, dtype="d")  # wrong size for count=3
         with self.assertRaises(AssertionError):
             self.win.get(dest, 0, Field.NONANTS_VALS, item_offset=0, item_count=3)
+
+    def test_get_detects_corrupt_transmitted_canary(self):
+        layout = self.win.buffer_layout[Field.NONANTS_VALS]
+        offset = layout.left_canary_offset_bytes
+        self.win.buff[offset] ^= 0xff
+        try:
+            with self.assertRaisesRegex(
+                    RuntimeError, "left-transmitted-canary"):
+                self.win.get(
+                    np.empty(self.padded, dtype="d"),
+                    0,
+                    Field.NONANTS_VALS,
+                )
+        finally:
+            self.win._set_guard_bytes(layout)
+
+    def test_put_detects_corrupt_red_zone(self):
+        layout = self.win.buffer_layout[Field.NONANTS_VALS]
+        offset = layout.right_red_zone_offset_bytes
+        self.win.buff[offset] ^= 0xff
+        try:
+            with self.assertRaisesRegex(RuntimeError, "right-red-zone"):
+                self.win.put(self.data, Field.NONANTS_VALS)
+        finally:
+            self.win._set_guard_bytes(layout)
+
+    def test_put_and_get_preserve_exclusive_shared_locking(self):
+        recording = _RecordingWindow(self.win.window)
+        self.win.window = recording
+
+        self.win.put(self.data, Field.NONANTS_VALS)
+        self.win.get(
+            np.empty(self.padded, dtype="d"), 0, Field.NONANTS_VALS)
+
+        self.assertEqual(recording.calls, [
+            ("Lock", 0, MPI.LOCK_EXCLUSIVE),
+            ("Put",),
+            ("Unlock", 0),
+            ("Lock", 0, MPI.LOCK_SHARED),
+            ("Get",),
+            ("Unlock", 0),
+        ])
 
 
 if __name__ == "__main__":
