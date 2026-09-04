@@ -31,6 +31,26 @@ class Spoke(SPCommunicator):
         shutdown_buf = self.receive_buffers[self._make_key(Field.SHUTDOWN, 0)]
         self.get_receive_buffer(shutdown_buf, Field.SHUTDOWN, 0, synchronize=False)
         fired = bool(shutdown_buf[0] == 1.0)
+        if fired:
+            # A legitimate shutdown is published through put_send_buffer,
+            # which increments the trailing write ID before writing 1.0. The
+            # cached ID proves get_receive_buffer accepted that publication;
+            # the raw ID proves the value and its ID arrived together.
+            raw_write_id = shutdown_buf.array()[-1]
+            accepted_write_id = shutdown_buf.id()
+            valid_write_id = (
+                math.isfinite(raw_write_id)
+                and raw_write_id >= 1
+                and raw_write_id == math.floor(raw_write_id)
+                and accepted_write_id == int(raw_write_id)
+            )
+            if not valid_write_id:
+                raise RuntimeError(
+                    "Invalid SHUTDOWN publication: data value 1.0 requires "
+                    "a positive, accepted write ID; "
+                    f"raw_write_id={raw_write_id!r}, "
+                    f"accepted_write_id={accepted_write_id}"
+                )
         if fired and self.opt.options.get("inspect_buffers_on_shutdown"):
             self._inspect_buffers_on_shutdown(shutdown_buf)
         return self.allreduce_or(fired)

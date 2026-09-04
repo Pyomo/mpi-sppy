@@ -430,20 +430,30 @@ def _make_spoke_stub(shutdown_buf, *, inspect_on=True,
 
 
 class TestSpokeGotKillSignalWarning(unittest.TestCase):
-    """The print -> warnings.warn switch in Spoke.got_kill_signal."""
+    """Shutdown invariants and optional buffer inspection."""
 
-    def test_stomped_shutdown_emits_runtime_warning(self):
+    def test_stomped_shutdown_raises(self):
         # data=1.0 but write_id stayed at 0: the suspected stomp signature
         buf = RecvArray(1)
         buf._array[0] = 1.0
         stub = _make_spoke_stub(buf, inspect_on=True)
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always", RuntimeWarning)
-            fired = Spoke.got_kill_signal(stub)
-        self.assertTrue(fired)
-        runtime_warnings = [w for w in caught if issubclass(w.category, RuntimeWarning)]
-        self.assertEqual(len(runtime_warnings), 1, msg=[str(w.message) for w in caught])
-        self.assertIn("buffer_inspect", str(runtime_warnings[0].message))
+        with self.assertRaisesRegex(RuntimeError, "Invalid SHUTDOWN publication"):
+            Spoke.got_kill_signal(stub)
+
+    def test_unaccepted_shutdown_write_id_raises(self):
+        # A positive raw ID is insufficient if get_receive_buffer did not
+        # accept it into the RecvArray's monotone cached ID.
+        buf = RecvArray(1)
+        buf._array[0] = 1.0
+        buf._array[-1] = 1.0
+        stub = _make_spoke_stub(buf, inspect_on=False)
+        with self.assertRaisesRegex(RuntimeError, "accepted_write_id=0"):
+            Spoke.got_kill_signal(stub)
+
+    def test_initial_shutdown_state_does_not_fire(self):
+        buf = RecvArray(1)
+        stub = _make_spoke_stub(buf, inspect_on=False)
+        self.assertFalse(Spoke.got_kill_signal(stub))
 
     def test_legit_shutdown_emits_no_warning(self):
         # Properly published shutdown signal: data=1.0 with write_id>=1
@@ -457,15 +467,12 @@ class TestSpokeGotKillSignalWarning(unittest.TestCase):
             fired = Spoke.got_kill_signal(stub)
         self.assertTrue(fired)
 
-    def test_flag_off_suppresses_warning_on_stomped_buffer(self):
-        # Inspector must not run when the flag is off, even with a bad buffer.
+    def test_invariant_is_enforced_when_inspection_is_off(self):
         buf = RecvArray(1)
         buf._array[0] = 1.0
         stub = _make_spoke_stub(buf, inspect_on=False)
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", RuntimeWarning)
-            fired = Spoke.got_kill_signal(stub)
-        self.assertTrue(fired)
+        with self.assertRaisesRegex(RuntimeError, "Invalid SHUTDOWN publication"):
+            Spoke.got_kill_signal(stub)
 
     def test_sweep_inspects_every_buffer(self):
         # SHUTDOWN legit + healthy NONANTS_VALS recv + healthy NONANTS_VALS send: no warnings.
