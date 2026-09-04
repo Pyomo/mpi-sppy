@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""Two-rank reproducer for an intermittent MVAPICH passive-target RMA hang.
+"""Four-rank reproducer for an intermittent MVAPICH passive-target RMA hang.
 
-Run one rank on each of two nodes::
+Run one rank on each of four nodes::
 
-    srun -u -N 2 -n 2 --ntasks-per-node=1 \
+    srun -u -N 4 -n 4 --ntasks-per-node=1 \
         python -m mpi4py examples/mpi_rma_get_reproducer.py 100
+
+World ranks 0-1 publish and ranks 2-3 receive. Each publisher/receiver pair
+shares a strata communicator; only the receivers synchronize on their cylinder
+communicator before each Get.
 """
 
 import argparse
@@ -28,13 +32,19 @@ def main():
     rank = comm.Get_rank()
     size = comm.Get_size()
 
-    if size != 2:
+    if size != 4:
         if rank == 0:
-            print(f"world size must be two; got {size}", flush=True)
+            print(f"world size must be four; got {size}", flush=True)
         comm.Abort(2)
 
+    role = rank // 2
+    pair = rank % 2
+    cylinder_comm = comm.Split(role, pair)
+    strata_comm = comm.Split(pair, role)
+    strata_rank = strata_comm.Get_rank()
+
     window = MPI.Win.Allocate(
-        MPI.DOUBLE.Get_size(), MPI.DOUBLE.Get_size(), comm=comm)
+        MPI.DOUBLE.Get_size(), MPI.DOUBLE.Get_size(), comm=strata_comm)
     if window.Get_attr(MPI.WIN_MODEL) != MPI.WIN_UNIFIED:
         if rank == 0:
             print("this reproducer requires the unified MPI window model",
@@ -42,9 +52,9 @@ def main():
         comm.Abort(2)
 
     initial = array("d", [float(rank)])
-    window.Lock(rank, MPI.LOCK_EXCLUSIVE)
-    window.Put([initial, MPI.DOUBLE], rank, 0)
-    window.Unlock(rank)
+    window.Lock(strata_rank, MPI.LOCK_EXCLUSIVE)
+    window.Put([initial, MPI.DOUBLE], strata_rank, 0)
+    window.Unlock(strata_rank)
 
     received = array("d", [0.0])
 
@@ -54,16 +64,22 @@ def main():
         print(f"world={size} iterations={args.iterations} count=1", flush=True)
 
     for iteration in range(args.iterations):
-        if rank == 1:
+        if role == 1:
+            cylinder_comm.Barrier()
             window.Lock(0, MPI.LOCK_SHARED)
             window.Get([received, MPI.DOUBLE], 0, 0)
             window.Unlock(0)
-            print(f"completed {iteration + 1} iterations", flush=True)
+            print(
+                f"world_rank={rank} completed {iteration + 1} iterations",
+                flush=True,
+            )
 
     # Keep the target and its window alive until every Get epoch has ended.
     comm.Barrier()
 
     window.Free()
+    strata_comm.Free()
+    cylinder_comm.Free()
     if rank == 0:
         print("PASS", flush=True)
 
