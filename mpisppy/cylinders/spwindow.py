@@ -306,6 +306,9 @@ class SPWindow:
     def free(self):
         if self.window is not None:
             guard_error = None
+            # Remote completion does not update the private window copy under
+            # MPI_WIN_SEPARATE. Synchronize before inspecting it locally.
+            self.window.Sync()
             try:
                 for field in self.field_order:
                     self._verify_window_guards(field, "free", "before")
@@ -631,6 +634,10 @@ class SPWindow:
             storage, field_layout, field, "put", "after",
             target_rank=self.strata_rank,
         )
+        # Flush completes the self-target Put in the public window copy;
+        # Sync makes that update visible to the local NumPy view before its
+        # guards are inspected on MPI_WIN_SEPARATE implementations.
+        window.Sync()
         self._verify_window_guards(field, "put", "after")
 
         generation += 1

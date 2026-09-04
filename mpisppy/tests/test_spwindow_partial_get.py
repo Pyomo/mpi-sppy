@@ -43,6 +43,10 @@ class _RecordingWindow:
         self.calls.append(("Flush", rank))
         return self.wrapped.Flush(rank)
 
+    def Sync(self):
+        self.calls.append(("Sync",))
+        return self.wrapped.Sync()
+
     def Unlock_all(self):
         self.calls.append(("Unlock_all",))
         return self.wrapped.Unlock_all()
@@ -198,6 +202,7 @@ class TestPartialGet(unittest.TestCase):
             ("Flush", 0),
             ("Put",),
             ("Flush", 0),
+            ("Sync",),
             ("Put",),
             ("Flush", 0),
             ("Put",),
@@ -250,6 +255,7 @@ class TestPartialGet(unittest.TestCase):
         self.win.free()
 
         self.assertEqual(recording.calls, [
+            ("Sync",),
             ("Unlock_all",),
             ("Free",),
         ])
