@@ -980,7 +980,7 @@ class APH(ph_base.PHBase):
                         proximal term. It is not directly useful.
                         The trivial bound is computed after iter 0
         NOTE:
-            You need an xhat finder either in denoument or in an extension.
+            You need an xhat finder either in denouement or in an extension.
         """
         # Prep needs to be before iter 0 for bundling
         # (It could be split up)

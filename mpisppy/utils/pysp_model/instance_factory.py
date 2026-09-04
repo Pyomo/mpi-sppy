@@ -270,7 +270,7 @@ class ScenarioTreeInstanceFactory:
         """Class to help manage construction of scenario tree models.
 
         This class is designed to help manage the various input formats
-        that that are accepted by PySP and provide a unified interface
+        that are accepted by PySP and provide a unified interface
         for building scenario trees that are paired with a set of
         concrete Pyomo models.
 

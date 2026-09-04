@@ -32,7 +32,7 @@ class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
                    verbose=False,
                    restore_nonants=True):
         """If your rank has
-        the chosen guy, bcast, if not, recieve the bcast. In any event, fix the vars
+        the chosen guy, bcast, if not, receive the bcast. In any event, fix the vars
         at the bcast values and see if it is feasible. 
 
         Args:
