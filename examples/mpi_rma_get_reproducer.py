@@ -58,11 +58,10 @@ def main():
             window.Lock(0, MPI.LOCK_SHARED)
             window.Get([received, MPI.DOUBLE], 0, 0)
             window.Unlock(0)
-
-        comm.Barrier()
-
-        if rank == 1:
             print(f"completed {iteration + 1} iterations", flush=True)
+
+    # Keep the target and its window alive until every Get epoch has ended.
+    comm.Barrier()
 
     window.Free()
     if rank == 0:

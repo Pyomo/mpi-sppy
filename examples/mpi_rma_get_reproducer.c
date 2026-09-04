@@ -104,15 +104,13 @@ int main(int argc, char **argv)
             MPI_Win_lock(MPI_LOCK_SHARED, 0, 0, window);
             MPI_Get(&received, 1, MPI_DOUBLE, 0, 0, 1, MPI_DOUBLE, window);
             MPI_Win_unlock(0, window);
-        }
-
-        MPI_Barrier(MPI_COMM_WORLD);
-
-        if (world_rank == 1) {
             printf("completed %d iterations\n", iteration + 1);
             fflush(stdout);
         }
     }
+
+    /* Keep the target and its window alive until every Get epoch has ended. */
+    MPI_Barrier(MPI_COMM_WORLD);
 
     MPI_Win_free(&window);
     if (world_rank == 0) {
