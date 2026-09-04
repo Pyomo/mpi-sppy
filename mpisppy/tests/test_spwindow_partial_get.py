@@ -15,7 +15,12 @@ import unittest
 import numpy as np
 
 from mpisppy import MPI
-from mpisppy.cylinders.spwindow import Field, SPWindow, padded_len_n_doubles
+from mpisppy.cylinders.spwindow import (
+    Field,
+    SPWindow,
+    padded_len_n_doubles,
+    transmitted_canary,
+)
 
 
 class _RecordingWindow:
@@ -115,7 +120,7 @@ class TestPartialGet(unittest.TestCase):
                     Field.NONANTS_VALS,
                 )
         finally:
-            self.win._set_guard_bytes(layout)
+            self.win._set_guard_bytes(Field.NONANTS_VALS, layout)
 
     def test_put_detects_corrupt_red_zone(self):
         layout = self.win.buffer_layout[Field.NONANTS_VALS]
@@ -125,7 +130,33 @@ class TestPartialGet(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "right-red-zone"):
                 self.win.put(self.data, Field.NONANTS_VALS)
         finally:
-            self.win._set_guard_bytes(layout)
+            self.win._set_guard_bytes(Field.NONANTS_VALS, layout)
+
+    def test_transmitted_canaries_identify_record(self):
+        layout = self.win.buffer_layout[Field.NONANTS_VALS]
+        baseline = transmitted_canary(
+            0, Field.NONANTS_VALS, "left", layout.padded_len)
+
+        self.assertNotEqual(
+            baseline,
+            transmitted_canary(
+                1, Field.NONANTS_VALS, "left", layout.padded_len),
+        )
+        self.assertNotEqual(
+            baseline,
+            transmitted_canary(
+                0, Field.DUALS, "left", layout.padded_len),
+        )
+        self.assertNotEqual(
+            baseline,
+            transmitted_canary(
+                0, Field.NONANTS_VALS, "right", layout.padded_len),
+        )
+        self.assertNotEqual(
+            baseline,
+            transmitted_canary(
+                0, Field.NONANTS_VALS, "left", layout.padded_len + 1),
+        )
 
     def test_put_and_get_preserve_exclusive_shared_locking(self):
         recording = _RecordingWindow(self.win.window)

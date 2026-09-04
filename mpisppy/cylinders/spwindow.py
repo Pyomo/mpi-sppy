@@ -17,6 +17,7 @@ import numpy as np
 import numpy.typing as nptyping
 
 import enum
+import struct
 from typing import NamedTuple
 
 import pyomo.environ as pyo
@@ -120,8 +121,24 @@ PAD_N_DOUBLES = 8  # padding granularity in doubles (PAD_N_DOUBLES*8 bytes)
 METADATA_NBYTES = 16
 CANARY_NBYTES = 16
 RED_ZONE_NBYTES = 16
-TRANSMITTED_CANARY = bytes.fromhex("a55a" * (CANARY_NBYTES // 2))
 RED_ZONE_CANARY = bytes.fromhex("d37c" * (RED_ZONE_NBYTES // 2))
+
+
+def transmitted_canary(window_rank: int, field: Field, side: str,
+                       padded_len: int) -> bytes:
+    """Return a canary identifying one boundary of a published field.
+
+    The fixed-width representation makes a successful guard check evidence
+    that a Get reached the requested window rank, field, side, and padded
+    extent--not merely some other guarded record.
+    """
+    if side == "left":
+        magic = b"SPL1"
+    elif side == "right":
+        magic = b"SPR1"
+    else:
+        raise ValueError(f"Unknown canary side {side!r}")
+    return struct.pack("<4sIiI", magic, window_rank, int(field), padded_len)
 
 
 def padded_len_n_doubles(logical_len: int) -> int:
@@ -251,7 +268,7 @@ class SPWindow:
         for field, field_layout in self.buffer_layout.items():
             if field == Field.WHOLE:
                 continue
-            self._set_guard_bytes(field_layout)
+            self._set_guard_bytes(field, field_layout)
             payload = np.ndarray(
                 dtype="d",
                 shape=(field_layout.padded_len,),
@@ -284,7 +301,8 @@ class SPWindow:
                 raise guard_error
         return
 
-    def _set_guard_bytes(self, field_layout: FieldLayout) -> None:
+    def _set_guard_bytes(self, field: Field,
+                         field_layout: FieldLayout) -> None:
         left_red = field_layout.left_red_zone_offset_bytes
         left_canary = field_layout.left_canary_offset_bytes
         right_canary = field_layout.right_canary_offset_bytes
@@ -292,14 +310,21 @@ class SPWindow:
         self.buff[left_red:left_red + RED_ZONE_NBYTES] = \
             np.frombuffer(RED_ZONE_CANARY, dtype=np.uint8)
         self.buff[left_canary:left_canary + CANARY_NBYTES] = \
-            np.frombuffer(TRANSMITTED_CANARY, dtype=np.uint8)
+            np.frombuffer(transmitted_canary(
+                self.strata_rank, field, "left", field_layout.padded_len),
+                dtype=np.uint8,
+            )
         self.buff[right_canary:right_canary + CANARY_NBYTES] = \
-            np.frombuffer(TRANSMITTED_CANARY, dtype=np.uint8)
+            np.frombuffer(transmitted_canary(
+                self.strata_rank, field, "right", field_layout.padded_len),
+                dtype=np.uint8,
+            )
         self.buff[right_red:right_red + RED_ZONE_NBYTES] = \
             np.frombuffer(RED_ZONE_CANARY, dtype=np.uint8)
 
     @staticmethod
-    def _make_guarded_transfer_buffer(field_layout: FieldLayout):
+    def _make_guarded_transfer_buffer(field_layout: FieldLayout, field: Field,
+                                      target_rank: int):
         storage = np.empty(
             RED_ZONE_NBYTES + field_layout.transfer_nbytes + RED_ZONE_NBYTES,
             dtype=np.uint8,
@@ -310,14 +335,22 @@ class SPWindow:
             RED_ZONE_CANARY, dtype=np.uint8)
         transfer = storage[RED_ZONE_NBYTES:-RED_ZONE_NBYTES]
         transfer[:CANARY_NBYTES] = np.frombuffer(
-            TRANSMITTED_CANARY, dtype=np.uint8)
+            transmitted_canary(
+                target_rank, field, "left", field_layout.padded_len),
+            dtype=np.uint8,
+        )
         transfer[-CANARY_NBYTES:] = np.frombuffer(
-            TRANSMITTED_CANARY, dtype=np.uint8)
+            transmitted_canary(
+                target_rank, field, "right", field_layout.padded_len),
+            dtype=np.uint8,
+        )
         return storage, transfer
 
     @classmethod
-    def _make_transfer_buffer(cls, values, field_layout: FieldLayout):
-        storage, transfer = cls._make_guarded_transfer_buffer(field_layout)
+    def _make_transfer_buffer(cls, values, field_layout: FieldLayout,
+                              field: Field, target_rank: int):
+        storage, transfer = cls._make_guarded_transfer_buffer(
+            field_layout, field, target_rank)
         payload = transfer[
             CANARY_NBYTES:CANARY_NBYTES + field_layout.padded_nbytes
         ].view("d")
@@ -352,9 +385,11 @@ class SPWindow:
             ("left-red-zone", field_layout.left_red_zone_offset_bytes,
              RED_ZONE_NBYTES, RED_ZONE_CANARY),
             ("left-transmitted-canary", field_layout.left_canary_offset_bytes,
-             CANARY_NBYTES, TRANSMITTED_CANARY),
+             CANARY_NBYTES, transmitted_canary(
+                 self.strata_rank, field, "left", field_layout.padded_len)),
             ("right-transmitted-canary", field_layout.right_canary_offset_bytes,
-             CANARY_NBYTES, TRANSMITTED_CANARY),
+             CANARY_NBYTES, transmitted_canary(
+                 self.strata_rank, field, "right", field_layout.padded_len)),
             ("right-red-zone", field_layout.right_red_zone_offset_bytes,
              RED_ZONE_NBYTES, RED_ZONE_CANARY),
         )
@@ -366,6 +401,8 @@ class SPWindow:
 
     def _verify_transfer_guards(self, storage, field_layout, field,
                                 operation, phase, target_rank=None):
+        if target_rank is None:
+            raise ValueError("target_rank is required for transmitted canaries")
         transfer_start = RED_ZONE_NBYTES
         right_canary = transfer_start + field_layout.transfer_nbytes \
             - CANARY_NBYTES
@@ -374,10 +411,12 @@ class SPWindow:
             ("left-red-zone", storage[:RED_ZONE_NBYTES], RED_ZONE_CANARY),
             ("left-transmitted-canary",
              storage[transfer_start:transfer_start + CANARY_NBYTES],
-             TRANSMITTED_CANARY),
+             transmitted_canary(
+                 target_rank, field, "left", field_layout.padded_len)),
             ("right-transmitted-canary",
              storage[right_canary:right_canary + CANARY_NBYTES],
-             TRANSMITTED_CANARY),
+             transmitted_canary(
+                 target_rank, field, "right", field_layout.padded_len)),
             ("right-red-zone",
              storage[right_red:right_red + RED_ZONE_NBYTES], RED_ZONE_CANARY),
         )
@@ -419,7 +458,8 @@ class SPWindow:
             count = item_count
         assert np.size(dest) == count
 
-        storage, transfer = self._make_guarded_transfer_buffer(field_layout)
+        storage, transfer = self._make_guarded_transfer_buffer(
+            field_layout, field, strata_rank)
         self._verify_transfer_guards(
             storage, field_layout, field, "get", "before",
             target_rank=strata_rank,
@@ -454,7 +494,8 @@ class SPWindow:
         padded_len = field_layout.padded_len
         assert np.size(values) == padded_len
 
-        storage, transfer = self._make_transfer_buffer(values, field_layout)
+        storage, transfer = self._make_transfer_buffer(
+            values, field_layout, field, self.strata_rank)
         self._verify_transfer_guards(
             storage, field_layout, field, "put", "before",
             target_rank=self.strata_rank,
