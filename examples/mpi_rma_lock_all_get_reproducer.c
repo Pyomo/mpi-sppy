@@ -35,6 +35,12 @@ static int parse_iterations(const char *text, int rank)
     return (int)value;
 }
 
+static void trace(int rank, int iteration, const char *stage)
+{
+    printf("TRACE rank=%d iteration=%d %s\n", rank, iteration, stage);
+    fflush(stdout);
+}
+
 int main(int argc, char **argv)
 {
     int rank;
@@ -106,17 +112,21 @@ int main(int argc, char **argv)
 
     if (role == 1) {
         for (int iteration = 0; iteration < iterations; ++iteration) {
+            trace(rank, iteration, "before-barrier");
             MPI_Barrier(role_comm);
+            trace(rank, iteration, "after-barrier");
+            trace(rank, iteration, "before-get");
             MPI_Get(&received, 1, MPI_DOUBLE, 0, 0, 1, MPI_DOUBLE, window);
+            trace(rank, iteration, "after-get");
+            trace(rank, iteration, "before-flush");
             MPI_Win_flush(0, window);
+            trace(rank, iteration, "after-flush");
             if (received != 42.0 + pair) {
                 fprintf(stderr,
                         "rank=%d iteration=%d expected=%.17g actual=%.17g\n",
                         rank, iteration, 42.0 + pair, received);
                 MPI_Abort(MPI_COMM_WORLD, 1);
             }
-            printf("rank=%d completed %d iterations\n", rank, iteration + 1);
-            fflush(stdout);
         }
     }
 
