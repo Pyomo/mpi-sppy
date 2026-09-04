@@ -122,6 +122,12 @@ METADATA_NBYTES = 16
 CANARY_NBYTES = 16
 RED_ZONE_NBYTES = 16
 RED_ZONE_CANARY = bytes.fromhex("d37c" * (RED_ZONE_NBYTES // 2))
+PUBLICATION_BUSY_OFFSET = 0
+PUBLICATION_GENERATION_OFFSET = 8
+PUBLICATION_IDLE = 0
+PUBLICATION_BUSY = 1
+PUBLICATION_MAX_GENERATION = (1 << 64) - 1
+_PUBLICATION_METADATA = struct.Struct("<B7xQ")
 
 
 def transmitted_canary(window_rank: int, field: Field, side: str,
@@ -198,7 +204,7 @@ class SPWindow:
     def __init__(self, my_fields: dict, strata_comm: MPI.Comm, field_order=None):
         """Allocate guarded, byte-addressed records for the local fields.
 
-        A field record contains reserved metadata, a left red zone, a left
+        A field record contains publication metadata, a left red zone, a left
         transmitted canary, the padded double payload, a right transmitted
         canary, and a right red zone. Put/Get transfer both canaries and the
         complete padded payload; the red zones remain local to each buffer.
@@ -263,11 +269,16 @@ class SPWindow:
         self.buff[:] = 0
         self._field_views = {}
 
-        # Initialize guard regions and payloads. Metadata is reserved for the
-        # later persistent-epoch publication protocol and remains zero here.
+        # Initialize guard regions, publication metadata, and payloads.
+        self._publication_generations = {}
         for field, field_layout in self.buffer_layout.items():
             if field == Field.WHOLE:
                 continue
+            metadata = _PUBLICATION_METADATA.pack(PUBLICATION_IDLE, 0)
+            metadata_start = field_layout.metadata_offset_bytes
+            self.buff[metadata_start:metadata_start + METADATA_NBYTES] = \
+                np.frombuffer(metadata, dtype=np.uint8)
+            self._publication_generations[field] = 0
             self._set_guard_bytes(field, field_layout)
             payload = np.ndarray(
                 dtype="d",
@@ -279,14 +290,18 @@ class SPWindow:
             payload[field_layout.logical_len - 1] = 0.0
             self._field_views[field] = payload
 
-        # Gather layouts across ranks
-        self.strata_buffer_layouts = strata_comm.allgather(self.buffer_layout)
-
         # Keep one passive-target access epoch open for the lifetime of the
         # window. Individual operations complete at their target with Flush;
         # they do not repeatedly acquire and release target locks.
         self.window.Lock_all()
         self._epoch_open = True
+        # Publish the direct initialization above on separate-memory-model
+        # implementations. This is normally a no-op for unified windows.
+        self.window.Sync()
+
+        # Besides exchanging layouts, this ensures every target has completed
+        # initialization and Sync before any constructor returns to its caller.
+        self.strata_buffer_layouts = strata_comm.allgather(self.buffer_layout)
 
     def free(self):
         if self.window is not None:
@@ -306,6 +321,7 @@ class SPWindow:
             self.window = None
             self.strata_buffer_layouts = None
             self._field_views = None
+            self._publication_generations = None
             if guard_error is not None:
                 raise guard_error
         return
@@ -435,6 +451,67 @@ class SPWindow:
                 target_rank=target_rank,
             )
 
+    @staticmethod
+    def _make_guarded_bytes(nbytes: int, contents=None):
+        storage = np.empty(RED_ZONE_NBYTES + nbytes + RED_ZONE_NBYTES,
+                           dtype=np.uint8)
+        expected = np.frombuffer(RED_ZONE_CANARY, dtype=np.uint8)
+        storage[:RED_ZONE_NBYTES] = expected
+        storage[-RED_ZONE_NBYTES:] = expected
+        body = storage[RED_ZONE_NBYTES:-RED_ZONE_NBYTES]
+        if contents is not None:
+            body[:] = np.frombuffer(contents, dtype=np.uint8)
+        return storage, body
+
+    def _verify_byte_buffer_red_zones(self, storage, field, operation, phase,
+                                      target_rank):
+        self._verify_pattern(
+            storage[:RED_ZONE_NBYTES], RED_ZONE_CANARY, field,
+            operation, phase, "metadata-left-red-zone",
+            target_rank=target_rank,
+        )
+        self._verify_pattern(
+            storage[-RED_ZONE_NBYTES:], RED_ZONE_CANARY, field,
+            operation, phase, "metadata-right-red-zone",
+            target_rank=target_rank,
+        )
+
+    def _put_metadata_bytes(self, contents: bytes, target_offset: int,
+                            field: Field) -> None:
+        storage, body = self._make_guarded_bytes(len(contents), contents)
+        self._verify_byte_buffer_red_zones(
+            storage, field, "put-metadata", "before", self.strata_rank)
+        self.window.Put(
+            (body, len(contents), MPI.BYTE),
+            self.strata_rank,
+            (target_offset, len(contents), MPI.BYTE),
+        )
+        self.window.Flush(self.strata_rank)
+        self._verify_byte_buffer_red_zones(
+            storage, field, "put-metadata", "after", self.strata_rank)
+
+    def _get_publication_metadata(self, strata_rank: int, field: Field,
+                                  field_layout: FieldLayout):
+        storage, body = self._make_guarded_bytes(METADATA_NBYTES)
+        self._verify_byte_buffer_red_zones(
+            storage, field, "get-metadata", "before", strata_rank)
+        self.window.Get(
+            (body, METADATA_NBYTES, MPI.BYTE),
+            strata_rank,
+            (field_layout.metadata_offset_bytes, METADATA_NBYTES, MPI.BYTE),
+        )
+        self.window.Flush(strata_rank)
+        self._verify_byte_buffer_red_zones(
+            storage, field, "get-metadata", "after", strata_rank)
+        busy, generation = _PUBLICATION_METADATA.unpack(bytes(body))
+        if busy not in (PUBLICATION_IDLE, PUBLICATION_BUSY):
+            raise RuntimeError(
+                "SPWindow publication metadata corruption: "
+                f"local_rank={self.strata_rank} target_rank={strata_rank} "
+                f"field={field.name} busy={busy}"
+            )
+        return busy, generation
+
     #### Functions ####
     def get(self, dest: nptyping.ArrayLike, strata_rank: int, field: Field,
             item_offset: int = 0, item_count: int = None):
@@ -446,6 +523,10 @@ class SPWindow:
         ``item_offset`` doubles into the field -- a partial read used for
         multi-source assembly across cylinders with different rank counts
         (see ``overlap_map.py``).  ``dest`` must then be ``item_count`` long.
+
+        Publication metadata is sampled before and after the guarded payload.
+        A read overlapping a Put is discarded and retried until both samples
+        identify the same idle generation.
         """
         if field == Field.WHOLE:
             raise ValueError("Field.WHOLE is not an addressable guarded record")
@@ -467,23 +548,35 @@ class SPWindow:
             count = item_count
         assert np.size(dest) == count
 
+        window = self.window
         storage, transfer = self._make_guarded_transfer_buffer(
             field_layout, field, strata_rank)
-        self._verify_transfer_guards(
-            storage, field_layout, field, "get", "before",
-            target_rank=strata_rank,
-        )
-        window = self.window
-        window.Get(
-            (transfer, field_layout.transfer_nbytes, MPI.BYTE),
-            strata_rank,
-            (field_layout.transfer_offset_bytes,
-             field_layout.transfer_nbytes,
-             MPI.BYTE),
-        )
-        # Flush provides local completion, so the destination and its
-        # transmitted guards are safe to inspect below.
-        window.Flush(strata_rank)
+        while True:
+            metadata_before = self._get_publication_metadata(
+                strata_rank, field, field_layout)
+            if metadata_before[0] == PUBLICATION_BUSY:
+                continue
+
+            self._verify_transfer_guards(
+                storage, field_layout, field, "get", "before",
+                target_rank=strata_rank,
+            )
+            window.Get(
+                (transfer, field_layout.transfer_nbytes, MPI.BYTE),
+                strata_rank,
+                (field_layout.transfer_offset_bytes,
+                 field_layout.transfer_nbytes,
+                 MPI.BYTE),
+            )
+            # Flush provides local completion, so the destination can be
+            # inspected once the second metadata snapshot accepts it.
+            window.Flush(strata_rank)
+            metadata_after = self._get_publication_metadata(
+                strata_rank, field, field_layout)
+            if metadata_before == metadata_after \
+                    and metadata_after[0] == PUBLICATION_IDLE:
+                break
+
         self._verify_transfer_guards(
             storage, field_layout, field, "get", "after",
             target_rank=strata_rank,
@@ -509,10 +602,23 @@ class SPWindow:
         )
         self._verify_window_guards(field, "put", "before")
         window = self.window
-        # Publishing through a self-target Put is intentional: it keeps local
-        # and remote publication on the same MPI-visible path. Phase 3 will
-        # add the metadata protocol that lets readers reject an overlapping
-        # publication; Phase 2 only changes epoch management.
+        metadata_offset = field_layout.metadata_offset_bytes
+        generation = self._publication_generations[field]
+        if generation >= PUBLICATION_MAX_GENERATION:
+            raise OverflowError(
+                "SPWindow publication generation exhausted: "
+                f"local_rank={self.strata_rank} field={field.name} "
+                f"generation={generation}"
+            )
+
+        # Mark the record busy and complete that update before modifying the
+        # guarded payload. Readers accept a snapshot only when clean metadata
+        # with one generation brackets the payload Get.
+        self._put_metadata_bytes(
+            bytes((PUBLICATION_BUSY,)),
+            metadata_offset + PUBLICATION_BUSY_OFFSET,
+            field,
+        )
         window.Put(
             (transfer, field_layout.transfer_nbytes, MPI.BYTE),
             self.strata_rank,
@@ -526,6 +632,19 @@ class SPWindow:
             target_rank=self.strata_rank,
         )
         self._verify_window_guards(field, "put", "after")
+
+        generation += 1
+        self._put_metadata_bytes(
+            struct.pack("<Q", generation),
+            metadata_offset + PUBLICATION_GENERATION_OFFSET,
+            field,
+        )
+        self._put_metadata_bytes(
+            bytes((PUBLICATION_IDLE,)),
+            metadata_offset + PUBLICATION_BUSY_OFFSET,
+            field,
+        )
+        self._publication_generations[field] = generation
         return
 
 ## End SPWindow
