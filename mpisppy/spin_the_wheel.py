@@ -47,12 +47,18 @@ class WheelSpinner:
 
         A failure here need not strike every rank -- a solver license, a
         scenario file, one cylinder's options -- and the ranks it misses go
-        on to the next collective and block there, so the job hangs instead
-        of reporting the exception that a rank is holding.  Running a wheel
-        therefore arranges for an *uncaught* exception to end the job, the
-        way ``python -m mpi4py`` does and whatever the launcher; see
-        ``mpisppy.utils.mpi_abort``.  A failure this caller catches is its
-        own business and is not touched.
+        on to the next collective and block there.  Importing mpi-sppy has
+        already arranged for an *uncaught* exception to end the job instead;
+        see ``mpisppy.utils.mpi_abort``.  A failure this caller catches is
+        its own business and is not touched.
+
+        The call below is not redundant with that install.  A driver that
+        sets its own ``sys.excepthook`` after importing mpi-sppy -- a crash
+        reporter, a traceback formatter -- displaces ours, and one that
+        chains to ``sys.__excepthook__`` rather than to the hook it replaced
+        drops the abort entirely.  Re-asserting it here puts it back in
+        front of whatever is now installed, which is why the module holds
+        the hook object rather than a bool.
         """
         abort_on_uncaught_exception()
 

@@ -61,26 +61,25 @@ other command:
        --num-scens 3 --solver-name gurobi --max-iterations 10 \
        --default-rho 1 --lagrangian --xhatshuffle
 
-The console scripts abort the whole job when a rank dies, exactly as
+A rank that dies takes the whole job with it, exactly as
 ``python -m mpi4py`` does: if one rank raises an uncaught exception, the
 traceback is printed and ``MPI_Abort`` is called, rather than leaving the
 surviving ranks blocked forever in a collective and the ``mpiexec`` job
-hung. That is why
+hung. Importing mpi-sppy is what arranges this, so it holds from that
+import onwards -- a per-rank failure in an earlier import of your own,
+before mpi-sppy is loaded, can still hang the job. All three of these are
+equally safe:
 
 .. code-block:: bash
 
    mpiexec -np 3 mpi-sppy-generic-cylinders ...
-
-and the longer module form
-
-.. code-block:: bash
-
    mpiexec -np 3 python -m mpi4py -m mpisppy.generic_cylinders ...
+   mpiexec -np 3 python my_own_driver.py
 
-are equally safe. A plain ``mpiexec -np 3 python -m mpisppy.generic_cylinders ...``
-(no ``mpi4py`` runner) is the form to avoid, since a dying rank can hang
-the job. Serial runs of the console scripts re-raise normally, so
-tracebacks and exit codes are unchanged.
+Only an exception you do not catch yourself ends the job; one you handle is
+your own business. Serial runs re-raise normally, so tracebacks and exit
+codes are unchanged. The exception is ``APH``, which runs its iterations on
+a worker thread: a failure there can still hang the job.
 
 Troubleshooting
 ---------------

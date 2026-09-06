@@ -42,33 +42,66 @@ down, and OpenMPI does -- so a caller that runs one wheel per group of ranks
 and wants a failed group not to take the others with it needs process-level
 isolation, one mpiexec job per group.
 
-Keep this module free of heavy imports.  Its callers install the hook before
-importing anything else, precisely so that a failure *during* those imports
-aborts too.
+``mpisppy/__init__.py`` calls this at import, so a driver is covered from
+its first ``import mpisppy`` rather than from the moment it reaches a
+``WheelSpinner``.  That matters because the failures that strike one rank
+and not the others are mostly the early ones -- reading a scenario file off
+a flaky mount, checking out a per-rank solver license, importing a model
+module -- and they happen before any wheel is built.  Keep the module free
+of heavy imports for the same reason: it runs on every import of mpi-sppy.
+
+The hook is never uninstalled, since one that uninstalled itself would
+leave open the window it was covering.
+
+Installing at import means importing mpi-sppy claims the process's
+``sys.excepthook``, whether or not a wheel is ever spun.  An application
+that embeds mpi-sppy for part of its work therefore has *its* uncaught
+exceptions end the job too.  That is the intended trade -- a hang with no
+traceback is the worse outcome, and an exception the application catches is
+never seen here -- but it is a process-wide effect of an import and is
+worth knowing.
+
+What this does not cover is an exception on a worker thread.  Those go to
+``threading.excepthook``, and recording an abort status from there would
+not help: the status is acted on at interpreter exit, and a main thread
+waiting on that worker never reaches it.  ``APH`` is that shape -- it runs
+its iterations on a thread while the main thread blocks in the listener's
+``join`` (``mpisppy/utils/listener_util``), and nothing there notices a
+worker that died -- so an uncaught exception inside an APH iteration hangs
+the job, as it did before this module existed.  Ending that one needs the
+synchronizer to see the dead worker and set ``quitting``, which is a change
+to APH rather than to an excepthook.
 """
 
 import sys
 
+# mpisppy/__init__.py imports this module, so these two names have to be
+# bound there before it does. They are: it imports mpisppy.MPI first.
 from mpisppy import MPI, haveMPI
 
-#: Installed at most once per process, and never removed: an excepthook that
-#: uninstalled itself would leave the window it was covering.
-_installed = False
+#: The hook this module installed, or None. Held as the object rather than a
+#: bool so that a later call can tell "ours is still in place" from "someone
+#: has replaced sys.excepthook since", and reinstall in the second case.
+_installed_excepthook = None
 
 
 def abort_on_uncaught_exception():
     """Make an uncaught exception abort the job, as ``python -m mpi4py`` does.
 
-    Idempotent, and a no-op where there is nothing to abort: without mpi4py
-    (the mock comm in ``mpisppy.MPI``), and on a single-rank job, where a
-    traceback and an exit code already say everything an abort would and
-    say it more clearly.
+    Called at import by ``mpisppy/__init__.py``; public because a driver
+    that replaces ``sys.excepthook`` of its own accord can call it again to
+    put the abort back in front of the new hook.
+
+    A no-op where there is nothing to abort: without mpi4py (the mock comm
+    in ``mpisppy.MPI``), and on a single-rank job, where a traceback and an
+    exit code already say everything an abort would and say it more clearly.
 
     Returns True if the hook is in place afterwards, for callers that want
     to say so.
     """
-    global _installed
-    if _installed:
+    global _installed_excepthook
+    if _installed_excepthook is not None \
+            and sys.excepthook is _installed_excepthook:
         return True
     if not haveMPI:
         return False
@@ -92,5 +125,5 @@ def abort_on_uncaught_exception():
             previous(exc_type, exc, traceback)
 
     sys.excepthook = _abort_then_report
-    _installed = True
+    _installed_excepthook = _abort_then_report
     return True

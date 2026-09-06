@@ -36,10 +36,10 @@ tracker = "https://github.com/Pyomo/mpi-sppy/issues"
 # Console entry points: pip creates a launcher on the user's PATH for each,
 # so pip-installed users can run these drivers without knowing where the
 # files landed in site-packages.  Each target is an importable module:callable.
-# The mpisppy.entry_points wrappers replicate the mpi4py runner's
-# abort-on-exception behavior, so multi-rank runs of these scripts
-# (e.g. mpiexec -np 3 mpi-sppy-generic-cylinders ...) cannot hang on an
-# uncaught exception; the python -m mpi4py module form remains equivalent
+# Importing mpi-sppy installs the mpi4py runner's abort-on-exception
+# behavior (see mpisppy/utils/mpi_abort.py), so multi-rank runs of these
+# scripts (e.g. mpiexec -np 3 mpi-sppy-generic-cylinders ...) cannot hang on
+# an uncaught exception; the python -m mpi4py module form remains equivalent
 # for running from a checkout.
 [project.scripts]
 mpi-sppy-generic-cylinders = "mpisppy.entry_points:generic_cylinders_main"

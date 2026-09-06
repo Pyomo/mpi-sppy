@@ -14,13 +14,16 @@ could not tell the fix from its absence. Each asserts the job ends, which
 means the wrong answer here is a timeout rather than a failed assertion --
 hence the short timeout and the message that says so.
 
-``mpisppy/tests/test_entry_points.py`` covers the wrapper's branches (serial,
-a clean exit, a comm with no Abort, Ctrl-C) in-process with a fake comm; what
-only a real job can show is that the survivor does not sit in its collective.
+None of the scripts below install the hook: importing mpi-sppy is what does
+that, so leaving the call out is how these pin it. ``test_entry_points.py``
+covers the install decisions (serial, no mpi4py, an unusable comm, a hook
+someone replaced) in-process with a fake comm; what only a real job can show
+is that the survivor does not sit in its collective.
 """
 
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -52,6 +55,10 @@ except ImportError:
 #: short enough that a hang is reported rather than waited out.
 TIMEOUT = 120
 
+#: How long to wait for the killed process group to release the pipes. Only
+#: reached when the job has already hung, so it just bounds the report.
+_REAP_TIMEOUT = 30
+
 #: The checkout under test. The children are plain ``python`` on a script in
 #: a temp directory, so without this they would import whatever mpi-sppy is
 #: installed -- which on a developer machine need not be this one.
@@ -64,12 +71,10 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
 #: failing rank finishes unwinding, and its buffers reach the log, before
 #: the job ends.
 _UNCAUGHT = """
-import atexit, sys
+import atexit
 from mpisppy import MPI
-from mpisppy.utils.mpi_abort import abort_on_uncaught_exception
 
 rank = MPI.COMM_WORLD.Get_rank()
-abort_on_uncaught_exception()
 atexit.register(lambda: print(f"rank {rank} ATEXIT RAN", flush=True))
 
 try:
@@ -82,13 +87,11 @@ finally:
 
 #: The property that protects every caller with a try/except of its own --
 #: a driver retrying with another solver, a test asserting that a call
-#: raises. A wrapper around run() fires on these; an excepthook does not.
+#: raises. A wrapper around the driver would fire on these; a hook does not.
 _CAUGHT = """
 from mpisppy import MPI
-from mpisppy.utils.mpi_abort import abort_on_uncaught_exception
 
 rank = MPI.COMM_WORLD.Get_rank()
-abort_on_uncaught_exception()
 try:
     if rank == 1:
         raise RuntimeError("caught on rank 1, and handled")
@@ -104,10 +107,8 @@ print(f"rank {rank} PAST THE COLLECTIVE", flush=True)
 #: spare, and the job needs kill -9.
 _INTERRUPT = """
 from mpisppy import MPI
-from mpisppy.utils.mpi_abort import abort_on_uncaught_exception
 
 rank = MPI.COMM_WORLD.Get_rank()
-abort_on_uncaught_exception()
 if rank == 1:
     raise KeyboardInterrupt
 MPI.COMM_WORLD.Barrier()
@@ -116,13 +117,13 @@ print(f"rank {rank} PAST THE COLLECTIVE", flush=True)
 
 #: sys.exit never reaches an excepthook, so it keeps its own status. That is
 #: what leaves argparse alone: --help and a usage error are uniform across
-#: ranks and end the job by themselves.
+#: ranks and end the job by themselves. Every rank exits, so this runs at the
+#: default two: at one rank no hook is installed and the test would pass
+#: whatever an installed hook did to SystemExit.
 _SYSTEM_EXIT = """
 import sys
-from mpisppy import MPI
-from mpisppy.utils.mpi_abort import abort_on_uncaught_exception
+import mpisppy  # the import is what installs the hook
 
-abort_on_uncaught_exception()
 print("about to exit", flush=True)
 sys.exit(2)
 """
@@ -156,8 +157,54 @@ WheelSpinner(dict(hub_class=StubSPComm, **_cylinder),
 """
 
 
+#: A driver that installs its own excepthook after importing mpi-sppy and
+#: chains to sys.__excepthook__ rather than to the hook it displaced -- a
+#: crash reporter is usually written exactly this way. The import-time
+#: install is gone by the time the wheel runs, so only run()'s re-assert
+#: keeps rank 0 from waiting in its collective forever.
+_HOSTILE_HOOK = """
+import sys
+from mpisppy import MPI
+from mpisppy.spin_the_wheel import WheelSpinner
+
+def crash_reporter(exc_type, exc, tb):
+    print("REPORTER RAN", flush=True)
+    sys.__excepthook__(exc_type, exc, tb)
+
+sys.excepthook = crash_reporter
+
+class StubOpt:
+    def __init__(self, **kwargs):
+        if MPI.COMM_WORLD.Get_rank() == 1:
+            raise RuntimeError("boom on rank 1")
+        MPI.COMM_WORLD.Barrier()
+
+class StubSPComm:
+    BestInnerBound = None
+    BestOuterBound = None
+    def __init__(self, *args, **kwargs):
+        pass
+    def __getattr__(self, name):
+        return lambda *a, **k: None
+
+_cylinder = {
+    "opt_class": StubOpt,
+    "opt_kwargs": {"all_scenario_names": ["Scenario1"]},
+}
+WheelSpinner(dict(hub_class=StubSPComm, **_cylinder),
+             [dict(spoke_class=StubSPComm, **_cylinder)]).run()
+"""
+
+
 def _run(script, np=2):
-    """Run `script` as an `np`-rank plain-python job. Returns the result."""
+    """Run `script` as an `np`-rank plain-python job. Returns the result.
+
+    Not subprocess.run: on the timeout path it kills only mpiexec and then
+    reads the pipes with no deadline of its own, so an orphaned rank still
+    holding the write end blocks the report forever. Since a timeout is the
+    failure these tests exist to report, the reporting path is the one that
+    must not hang -- hence a process group of our own, killed whole.
+    """
     with tempfile.TemporaryDirectory() as tmpdir:
         path = os.path.join(tmpdir, "leg.py")
         with open(path, "w") as f:
@@ -167,10 +214,25 @@ def _run(script, np=2):
             [_ROOT] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
         # Plain python, not "python -m mpi4py": mpi4py's runner would end the
         # job on its own and the tests would pass without the code under test.
-        return subprocess.run(
-            ["mpiexec", *_MPIEXEC_ARGS, "-np", str(np), sys.executable, path],
-            capture_output=True, text=True, timeout=TIMEOUT, check=False,
-            env=env)
+        argv = ["mpiexec", *_MPIEXEC_ARGS, "-np", str(np), sys.executable, path]
+        proc = subprocess.Popen(argv, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, text=True, env=env,
+                                start_new_session=True)
+        try:
+            out, err = proc.communicate(timeout=TIMEOUT)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                # It finished as the deadline lapsed. The TimeoutExpired is
+                # still what the caller has to see, so do not raise over it.
+                pass
+            try:
+                proc.communicate(timeout=_REAP_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                pass  # the caller is about to fail the test regardless
+            raise
+        return subprocess.CompletedProcess(argv, proc.returncode, out, err)
 
 
 @unittest.skipIf(not mpiexec_available, "mpiexec is not available")
@@ -228,7 +290,7 @@ class TestAbortInsteadOfHang(unittest.TestCase):
     def test_sys_exit_keeps_its_own_status(self):
         """argparse and every other uniform exit are left alone."""
         try:
-            result = _run(_SYSTEM_EXIT, np=1)
+            result = _run(_SYSTEM_EXIT)
         except subprocess.TimeoutExpired:
             self.fail(f"the job hung for {TIMEOUT}s")
         self.assertEqual(result.returncode, 2,
@@ -238,6 +300,19 @@ class TestAbortInsteadOfHang(unittest.TestCase):
     def test_the_wheel_ends_the_job(self):
         out = self._died(_THROUGH_THE_WHEEL)
         self.assertIn("boom on rank 1", out)
+
+    def test_a_driver_that_took_the_excepthook_still_ends_the_job(self):
+        """Why run() re-asserts the hook the import already installed.
+
+        A driver that replaces sys.excepthook and chains to
+        sys.__excepthook__ instead of to the hook it displaced drops the
+        abort. Without the call in run() this hangs to the timeout.
+        """
+        out = self._died(_HOSTILE_HOOK)
+        self.assertIn("boom on rank 1", out)
+        self.assertIn("REPORTER RAN", out,
+                      msg="the driver's own excepthook was bypassed rather "
+                          "than wrapped")
 
 
 if __name__ == "__main__":
