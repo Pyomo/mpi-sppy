@@ -86,10 +86,17 @@ worker thread, and a failure there can still hang the job.
 
 If your ranks are doing independent work -- a sweep where each rank runs
 its own case, or an ``--EF`` run -- you may not want one rank's failure to
-end the others. Set ``MPISPPY_NO_ABORT_HOOK=1`` and a rank that raises
-takes only itself down. Do not set it for a run with cylinders, where the
-ranks are in collectives together and the job will hang instead. It says
-so when it takes effect.
+end the others:
+
+.. code-block:: bash
+
+   MPISPPY_NO_ABORT_HOOK=1 mpiexec -np 40 python sweep.py
+
+A rank that raises then takes only itself down. It must be set before the
+process starts, because mpi-sppy installs the hook when it is imported;
+setting it from inside a running driver is too late. Do not set it for a
+run with cylinders, where the ranks are in collectives together and the job
+will hang instead. It says so on rank 0 when it takes effect.
 
 Troubleshooting
 ---------------

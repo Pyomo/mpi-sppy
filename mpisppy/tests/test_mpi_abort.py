@@ -323,8 +323,11 @@ class TestAbortInsteadOfHang(unittest.TestCase):
         """MPISPPY_NO_ABORT_HOOK is for ranks doing independent work, where
         one rank's failure should not end the others. It is loud because
         the cost of setting it by mistake is a hang."""
-        result = _run(_OPT_OUT_SAYS_SO,
-                      env_extra={"MPISPPY_NO_ABORT_HOOK": "1"})
+        try:
+            result = _run(_OPT_OUT_SAYS_SO,
+                          env_extra={"MPISPPY_NO_ABORT_HOOK": "1"})
+        except subprocess.TimeoutExpired:
+            self.fail(f"the job hung for {TIMEOUT}s")
         out = result.stdout + result.stderr
         self.assertEqual(result.returncode, 0, msg=out)
         self.assertIn("installed: False", out,

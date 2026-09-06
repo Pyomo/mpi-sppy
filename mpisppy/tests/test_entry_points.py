@@ -41,8 +41,8 @@ class _FakeComm:
 
 
 class _HostileComm:
-    """Any access is a bug: with no mpi4py, or with the opt-out set, the
-    installer must decide before it reaches for a communicator."""
+    """Any access is a bug: where the installer declines on grounds it can
+    check without a communicator, it must not reach for one."""
     def __getattr__(self, name):
         raise AssertionError(f"the installer consulted the comm ({name})")
 
@@ -56,8 +56,15 @@ class _RestoresHookState(unittest.TestCase):
         self._saved_installed = mpi_abort._installed_excepthook
         self._saved_announced = mpi_abort._announced_opt_out
         mpi_abort._installed_excepthook = None
+        mpi_abort._announced_opt_out = False
+        # The docs tell people to export this for sweep-shaped jobs, so a
+        # developer or runner that has it set must not see these fail.
+        self._env = mock.patch.dict(os.environ)
+        self._env.start()
+        os.environ.pop(mpi_abort.OPT_OUT_ENVVAR, None)
 
     def tearDown(self):
+        self._env.stop()
         MPI.COMM_WORLD = self._saved_comm
         sys.excepthook = self._saved_hook
         mpi_abort._installed_excepthook = self._saved_installed
@@ -76,25 +83,34 @@ class TestWithoutMpi4pyNothingIsInstalled(_RestoresHookState):
             self.assertFalse(mpi_abort.abort_on_uncaught_exception())
         self.assertIs(sys.excepthook, self._saved_hook)
 
-    def test_the_opt_out_declines_before_anything_else(self):
+    def test_the_opt_out_declines_and_announces(self):
         """A job whose ranks are independent turns the abort off, and gets
-        no hook however many ranks it has."""
-        MPI.COMM_WORLD = _HostileComm()
-        with mock.patch.dict(os.environ, {mpi_abort.OPT_OUT_ENVVAR: "1"}):
+        no hook however many ranks it has. The announcement is the point:
+        the cost of setting this by mistake is a hang."""
+        MPI.COMM_WORLD = _FakeComm(3)
+        said = []
+        with mock.patch.dict(os.environ, {mpi_abort.OPT_OUT_ENVVAR: "1"}), \
+                mock.patch("mpisppy.global_toc", said.append):
+            self.assertFalse(mpi_abort.abort_on_uncaught_exception())
             self.assertFalse(mpi_abort.abort_on_uncaught_exception())
         self.assertIs(sys.excepthook, self._saved_hook)
+        self.assertEqual(len(said), 1, msg="said nothing, or said it twice")
+        self.assertIn(mpi_abort.OPT_OUT_ENVVAR, said[0])
 
     def test_the_opt_out_is_off_when_unset_or_zero(self):
         """The convention MPISPPY_REQUIRE_MPIEXEC already uses: "" and "0"
         mean off, so exporting it empty does not silently disarm the job."""
-        MPI.COMM_WORLD = _FakeComm(3)
         for value in ("", "0"):
+            MPI.COMM_WORLD = _HostileComm()
+            said = []
             with mock.patch.dict(os.environ,
-                                 {mpi_abort.OPT_OUT_ENVVAR: value}):
-                with mock.patch.object(mpi_abort, "haveMPI", False):
-                    mpi_abort.abort_on_uncaught_exception()
-                # it got past the opt-out and declined for the other reason
-                self.assertFalse(mpi_abort._announced_opt_out)
+                                 {mpi_abort.OPT_OUT_ENVVAR: value}), \
+                    mock.patch("mpisppy.global_toc", said.append), \
+                    mock.patch.object(mpi_abort, "haveMPI", False):
+                # got past the opt-out and declined for the other reason,
+                # without reaching for a communicator on the way
+                self.assertFalse(mpi_abort.abort_on_uncaught_exception())
+            self.assertEqual(said, [], msg=f"{value!r} disarmed the job")
 
 
 @unittest.skipUnless(have_mpi4py, "the abort hook is mpi4py's mechanism")
