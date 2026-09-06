@@ -65,10 +65,7 @@ A rank that dies takes the whole job with it, exactly as
 ``python -m mpi4py`` does: if one rank raises an uncaught exception, the
 traceback is printed and ``MPI_Abort`` is called, rather than leaving the
 surviving ranks blocked forever in a collective and the ``mpiexec`` job
-hung. Importing mpi-sppy is what arranges this, so it holds from that
-import onwards -- a per-rank failure in an earlier import of your own,
-before mpi-sppy is loaded, can still hang the job. All three of these are
-equally safe:
+hung. Importing mpi-sppy is what arranges this, so all of these are covered:
 
 .. code-block:: bash
 
@@ -76,10 +73,23 @@ equally safe:
    mpiexec -np 3 python -m mpi4py -m mpisppy.generic_cylinders ...
    mpiexec -np 3 python my_own_driver.py
 
+The protection begins at the ``import mpisppy``, so a per-rank failure in
+an earlier import of your own is not covered by the first and third forms.
+The ``python -m mpi4py`` runner starts before your script does and so
+covers that too; if your driver imports something of its own off a shared
+filesystem before it reaches mpi-sppy, prefer it.
+
 Only an exception you do not catch yourself ends the job; one you handle is
 your own business. Serial runs re-raise normally, so tracebacks and exit
-codes are unchanged. The exception is ``APH``, which runs its iterations on
-a worker thread: a failure there can still hang the job.
+codes are unchanged. ``APH`` is the exception: it runs its iterations on a
+worker thread, and a failure there can still hang the job.
+
+If your ranks are doing independent work -- a sweep where each rank runs
+its own case, or an ``--EF`` run -- you may not want one rank's failure to
+end the others. Set ``MPISPPY_NO_ABORT_HOOK=1`` and a rank that raises
+takes only itself down. Do not set it for a run with cylinders, where the
+ranks are in collectives together and the job will hang instead. It says
+so when it takes effect.
 
 Troubleshooting
 ---------------

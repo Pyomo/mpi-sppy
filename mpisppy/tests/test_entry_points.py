@@ -11,6 +11,7 @@
 
 import contextlib
 import io
+import os
 import sys
 import unittest
 from unittest import mock
@@ -39,8 +40,65 @@ class _FakeComm:
         self.abort_code = errorcode
 
 
+class _HostileComm:
+    """Any access is a bug: with no mpi4py, or with the opt-out set, the
+    installer must decide before it reaches for a communicator."""
+    def __getattr__(self, name):
+        raise AssertionError(f"the installer consulted the comm ({name})")
+
+
+class _RestoresHookState(unittest.TestCase):
+    """Both suites below install hooks and move COMM_WORLD aside."""
+
+    def setUp(self):
+        self._saved_comm = MPI.COMM_WORLD
+        self._saved_hook = sys.excepthook
+        self._saved_installed = mpi_abort._installed_excepthook
+        self._saved_announced = mpi_abort._announced_opt_out
+        mpi_abort._installed_excepthook = None
+
+    def tearDown(self):
+        MPI.COMM_WORLD = self._saved_comm
+        sys.excepthook = self._saved_hook
+        mpi_abort._installed_excepthook = self._saved_installed
+        mpi_abort._announced_opt_out = self._saved_announced
+
+
+class TestWithoutMpi4pyNothingIsInstalled(_RestoresHookState):
+    """What must hold in an install with no mpi4py, and so cannot be gated
+    on having it. Importing mpi-sppy calls the installer unconditionally, so
+    a regression that made it reach for mpi4py or for a communicator would
+    break every import of the library in that configuration."""
+
+    def test_nothing_is_installed_and_the_comm_is_not_consulted(self):
+        MPI.COMM_WORLD = _HostileComm()
+        with mock.patch.object(mpi_abort, "haveMPI", False):
+            self.assertFalse(mpi_abort.abort_on_uncaught_exception())
+        self.assertIs(sys.excepthook, self._saved_hook)
+
+    def test_the_opt_out_declines_before_anything_else(self):
+        """A job whose ranks are independent turns the abort off, and gets
+        no hook however many ranks it has."""
+        MPI.COMM_WORLD = _HostileComm()
+        with mock.patch.dict(os.environ, {mpi_abort.OPT_OUT_ENVVAR: "1"}):
+            self.assertFalse(mpi_abort.abort_on_uncaught_exception())
+        self.assertIs(sys.excepthook, self._saved_hook)
+
+    def test_the_opt_out_is_off_when_unset_or_zero(self):
+        """The convention MPISPPY_REQUIRE_MPIEXEC already uses: "" and "0"
+        mean off, so exporting it empty does not silently disarm the job."""
+        MPI.COMM_WORLD = _FakeComm(3)
+        for value in ("", "0"):
+            with mock.patch.dict(os.environ,
+                                 {mpi_abort.OPT_OUT_ENVVAR: value}):
+                with mock.patch.object(mpi_abort, "haveMPI", False):
+                    mpi_abort.abort_on_uncaught_exception()
+                # it got past the opt-out and declined for the other reason
+                self.assertFalse(mpi_abort._announced_opt_out)
+
+
 @unittest.skipUnless(have_mpi4py, "the abort hook is mpi4py's mechanism")
-class TestAbortHookInstallation(unittest.TestCase):
+class TestAbortHookInstallation(_RestoresHookState):
     """What importing mpi-sppy installs, and when it declines to.
 
     The mechanism itself is mpi4py's: an excepthook that hands the exception
@@ -50,17 +108,6 @@ class TestAbortHookInstallation(unittest.TestCase):
     one. These cover the decisions made *before* handing over: whether to
     install at all, and whether the hook is still the one we installed.
     """
-
-    def setUp(self):
-        self._saved_comm = MPI.COMM_WORLD
-        self._saved_hook = sys.excepthook
-        self._saved_installed = mpi_abort._installed_excepthook
-        mpi_abort._installed_excepthook = None
-
-    def tearDown(self):
-        MPI.COMM_WORLD = self._saved_comm
-        sys.excepthook = self._saved_hook
-        mpi_abort._installed_excepthook = self._saved_installed
 
     def test_a_multirank_job_gets_the_hook(self):
         MPI.COMM_WORLD = _FakeComm(3)
@@ -72,12 +119,6 @@ class TestAbortHookInstallation(unittest.TestCase):
         would, and say it more clearly."""
         MPI.COMM_WORLD = _FakeComm(1)
         self.assertFalse(mpi_abort.abort_on_uncaught_exception())
-        self.assertIs(sys.excepthook, self._saved_hook)
-
-    def test_without_mpi4py_nothing_is_installed(self):
-        MPI.COMM_WORLD = _FakeComm(3)
-        with mock.patch.object(mpi_abort, "haveMPI", False):
-            self.assertFalse(mpi_abort.abort_on_uncaught_exception())
         self.assertIs(sys.excepthook, self._saved_hook)
 
     def test_a_comm_that_cannot_be_asked_is_not_fatal(self):
@@ -137,13 +178,22 @@ class TestAbortHookInstallation(unittest.TestCase):
         MPI.COMM_WORLD = _FakeComm(3)
         mpi_abort.abort_on_uncaught_exception()
         ours = sys.excepthook
+        recorded, reported = [], []
 
         def usurper(t, e, tb):
-            pass
+            reported.append(e)
         sys.excepthook = usurper
-        self.assertTrue(mpi_abort.abort_on_uncaught_exception())
-        self.assertIsNot(sys.excepthook, usurper)
-        self.assertIsNot(sys.excepthook, ours)
+        with mock.patch("mpi4py.run.set_abort_status", recorded.append):
+            self.assertTrue(mpi_abort.abort_on_uncaught_exception())
+            self.assertIsNot(sys.excepthook, usurper)
+            self.assertIsNot(sys.excepthook, ours)
+            boom = ValueError("boom")
+            sys.excepthook(ValueError, boom, None)
+        # both halves, or the re-install is worse than none: the job would
+        # hang without the status, and lose the driver's report without it
+        # chaining to the hook it displaced.
+        self.assertEqual(recorded, [boom])
+        self.assertEqual(reported, [boom])
 
 
 class TestConsoleScripts(unittest.TestCase):

@@ -196,7 +196,17 @@ WheelSpinner(dict(hub_class=StubSPComm, **_cylinder),
 """
 
 
-def _run(script, np=2):
+#: Turning the abort off is announced. A job that hangs later should not
+#: leave anyone hunting for why the guard did not fire.
+_OPT_OUT_SAYS_SO = """
+import mpisppy
+from mpisppy.utils.mpi_abort import abort_on_uncaught_exception
+
+print("installed:", abort_on_uncaught_exception(), flush=True)
+"""
+
+
+def _run(script, np=2, env_extra=None):
     """Run `script` as an `np`-rank plain-python job. Returns the result.
 
     Not subprocess.run: on the timeout path it kills only mpiexec and then
@@ -212,6 +222,7 @@ def _run(script, np=2):
         env = dict(os.environ)
         env["PYTHONPATH"] = os.pathsep.join(
             [_ROOT] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
+        env.update(env_extra or {})
         # Plain python, not "python -m mpi4py": mpi4py's runner would end the
         # job on its own and the tests would pass without the code under test.
         argv = ["mpiexec", *_MPIEXEC_ARGS, "-np", str(np), sys.executable, path]
@@ -223,9 +234,10 @@ def _run(script, np=2):
         except subprocess.TimeoutExpired:
             try:
                 os.killpg(proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                # It finished as the deadline lapsed. The TimeoutExpired is
-                # still what the caller has to see, so do not raise over it.
+            except OSError:
+                # It finished as the deadline lapsed, or the group is not
+                # ours to signal. The TimeoutExpired is still what the
+                # caller has to see, so nothing may be raised over it.
                 pass
             try:
                 proc.communicate(timeout=_REAP_TIMEOUT)
@@ -293,9 +305,32 @@ class TestAbortInsteadOfHang(unittest.TestCase):
             result = _run(_SYSTEM_EXIT)
         except subprocess.TimeoutExpired:
             self.fail(f"the job hung for {TIMEOUT}s")
+        out = result.stdout + result.stderr
+        self.assertIn("about to exit", out,
+                      msg="the job did not get as far as the exit")
         self.assertEqual(result.returncode, 2,
                          msg="sys.exit(2) did not exit 2")
-        self.assertNotIn("MPI_ABORT", result.stdout + result.stderr)
+        # Lowered because the implementations disagree on the spelling:
+        # OpenMPI prints "MPI_ABORT was invoked", MPICH "application called
+        # MPI_Abort(MPI_COMM_WORLD, 2)". Matching only one of them would let
+        # the abort matrix's MPICH cells pass an intercepted SystemExit --
+        # the returncode cannot tell them apart, since an abort on a status
+        # of 2 also exits 2.
+        self.assertNotIn("mpi_abort", out.lower(),
+                         msg="SystemExit was turned into an abort")
+
+    def test_the_opt_out_declines_and_says_so(self):
+        """MPISPPY_NO_ABORT_HOOK is for ranks doing independent work, where
+        one rank's failure should not end the others. It is loud because
+        the cost of setting it by mistake is a hang."""
+        result = _run(_OPT_OUT_SAYS_SO,
+                      env_extra={"MPISPPY_NO_ABORT_HOOK": "1"})
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, msg=out)
+        self.assertIn("installed: False", out,
+                      msg="the hook was installed despite the opt-out")
+        self.assertIn("MPISPPY_NO_ABORT_HOOK is set", out,
+                      msg="the abort was turned off without saying so")
 
     def test_the_wheel_ends_the_job(self):
         out = self._died(_THROUGH_THE_WHEEL)

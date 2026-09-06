@@ -51,7 +51,13 @@ module -- and they happen before any wheel is built.  Keep the module free
 of heavy imports for the same reason: it runs on every import of mpi-sppy.
 
 The hook is never uninstalled, since one that uninstalled itself would
-leave open the window it was covering.
+leave open the window it was covering.  Setting ``MPISPPY_NO_ABORT_HOOK``
+declines to install it in the first place, for a job whose ranks are doing
+independent work: `mpiexec -np 40 python sweep.py` where each rank runs its
+own case has nothing to hang, so a rank that raises should take only itself
+down and leave the other 39 to finish and write their results.  An `--EF`
+run is that shape too.  Turning it off is announced, because a job that
+hangs later should not leave anyone guessing why.
 
 Installing at import means importing mpi-sppy claims the process's
 ``sys.excepthook``, whether or not a wheel is ever spun.  An application
@@ -73,16 +79,43 @@ synchronizer to see the dead worker and set ``quitting``, which is a change
 to APH rather than to an excepthook.
 """
 
+import os
 import sys
 
-# mpisppy/__init__.py imports this module, so these two names have to be
-# bound there before it does. They are: it imports mpisppy.MPI first.
-from mpisppy import MPI, haveMPI
+# Imported from the mpisppy package rather than through it: mpisppy/__init__
+# imports this module while it is still initializing, so reaching back for
+# names it has bound would make this sensitive to the order of the lines
+# there. Going straight to the submodule has no such dependency.
+import mpisppy.MPI as MPI
+from mpisppy.MPI import haveMPI
 
 #: The hook this module installed, or None. Held as the object rather than a
 #: bool so that a later call can tell "ours is still in place" from "someone
 #: has replaced sys.excepthook since", and reinstall in the second case.
 _installed_excepthook = None
+
+#: Set to anything but "" or "0" to decline the hook. Read at every call, so
+#: a driver can set it before importing mpi-sppy or before spinning a wheel.
+OPT_OUT_ENVVAR = "MPISPPY_NO_ABORT_HOOK"
+
+#: Said once, not once per call site.
+_announced_opt_out = False
+
+
+def _announce_opt_out():
+    """Say that the abort is off, once, so a later hang is not a mystery."""
+    global _announced_opt_out
+    if _announced_opt_out:
+        return
+    _announced_opt_out = True
+    try:
+        from mpisppy import global_toc
+        if MPI.COMM_WORLD.Get_size() > 1:
+            global_toc(f"{OPT_OUT_ENVVAR} is set: a rank that raises an "
+                       "uncaught exception will not end the job, and the "
+                       "other ranks can hang in a collective")
+    except Exception:
+        pass  # saying so is a courtesy; failing to say so must not raise
 
 
 def abort_on_uncaught_exception():
@@ -95,6 +128,7 @@ def abort_on_uncaught_exception():
     A no-op where there is nothing to abort: without mpi4py (the mock comm
     in ``mpisppy.MPI``), and on a single-rank job, where a traceback and an
     exit code already say everything an abort would and say it more clearly.
+    Also a no-op, with a message, when ``MPISPPY_NO_ABORT_HOOK`` is set.
 
     Returns True if the hook is in place afterwards, for callers that want
     to say so.
@@ -103,6 +137,9 @@ def abort_on_uncaught_exception():
     if _installed_excepthook is not None \
             and sys.excepthook is _installed_excepthook:
         return True
+    if os.environ.get(OPT_OUT_ENVVAR, "") not in ("", "0"):
+        _announce_opt_out()
+        return False
     if not haveMPI:
         return False
     try:
