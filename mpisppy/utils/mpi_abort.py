@@ -34,7 +34,8 @@ property worth having rather than an accident:
 * ``SystemExit`` never reaches an excepthook at all, so ``sys.exit`` and
   argparse pass through with their own status, and ``KeyboardInterrupt``
   does reach it, so Ctrl-C ends the job rather than stranding the ranks
-  that were inside a collective when it arrived.
+  that were inside a collective when it arrived -- except where a live
+  non-daemon thread blocks the exit, which is the APH case below.
 
 The abort is always on ``COMM_WORLD``.  MPI offers no way to end part of a
 job -- ``MPI_Abort`` on a sub-communicator is permitted to take everything
@@ -56,9 +57,12 @@ declines to install it in the first place -- it has to be set before the
 process starts, since that install happens at import -- for a job whose
 ranks are doing independent work.  ``mpiexec -np 40 python sweep.py`` with
 a case per rank has nothing to hang, so a rank that raises should take only
-itself down and leave the other 39 to finish and write their results; an
-``--EF`` run is that shape too.  Turning it off is announced, because a job
-that hangs later should not leave anyone guessing why.
+itself down and leave the other 39 to finish and write their results.  That
+means genuinely independent: anything that builds an mpi-sppy object across
+ranks is collective, ``--EF`` included, since ``SPBase.__init__`` gathers
+and allreduces as soon as there is more than one rank.  Turning it off is
+announced, because a job that hangs later should not leave anyone guessing
+why.
 
 Installing at import means importing mpi-sppy claims the process's
 ``sys.excepthook``, whether or not a wheel is ever spun.  An application
@@ -71,10 +75,13 @@ worth knowing.
 Two things defeat the deferral itself.  A live non-daemon thread is one:
 CPython joins those before it runs ``atexit``, so an uncaught exception on
 the main thread while such a thread is still going blocks the interpreter
-short of the abort.  mpi-sppy makes non-daemon threads in
-``mpisppy/utils/listener_util``, so APH can be in that position.  This is
-the one way the deferred abort is weaker than the immediate
-``comm.Abort(1)`` it replaced.
+short of the abort.  ``Synchronizer.run`` in ``mpisppy/utils/listener_util``
+starts two such threads and joins only one of them, so APH is in that
+position for its whole run -- Ctrl-C during an APH job raises out of that
+join with both threads alive, and the interpreter blocks before the abort
+status is ever acted on.  This is the one way the deferred abort is weaker
+than the immediate ``comm.Abort(1)`` it replaced, and making those threads
+daemons is what would close it.
 
 The other is an exception on a worker thread.  Those go to
 ``threading.excepthook``, and recording an abort status from there would
@@ -103,12 +110,16 @@ from mpisppy.MPI import haveMPI
 #: has replaced sys.excepthook since", and reinstall in the second case.
 _installed_excepthook = None
 
-#: Set to anything but "" or "0" to decline the hook. Consulted where the
+#: Set to decline the hook. Values that read as off are treated as off, so
+#: MPISPPY_NO_ABORT_HOOK=false does not disarm a job. Consulted where the
 #: hook would be installed, which is the import of mpi-sppy, so it has to be
 #: in the environment before the process starts: MPISPPY_NO_ABORT_HOOK=1
 #: mpiexec ... Setting it from inside a running driver is too late, and
 #: nothing is uninstalled -- see the note above on why.
 OPT_OUT_ENVVAR = "MPISPPY_NO_ABORT_HOOK"
+
+#: Anything else, including "1", "yes" and "please", turns the hook off.
+_OFF_VALUES = ("", "0", "false", "no", "off")
 
 #: Said once, not once per call site.
 _announced_opt_out = False
@@ -153,7 +164,7 @@ def abort_on_uncaught_exception():
     if _installed_excepthook is not None \
             and sys.excepthook is _installed_excepthook:
         return True
-    if os.environ.get(OPT_OUT_ENVVAR, "") not in ("", "0"):
+    if os.environ.get(OPT_OUT_ENVVAR, "").strip().lower() not in _OFF_VALUES:
         _announce_opt_out()
         return False
     if not haveMPI:

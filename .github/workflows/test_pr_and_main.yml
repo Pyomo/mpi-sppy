@@ -1201,10 +1201,15 @@ jobs:
         # pytest rather than under mpiexec.  Here rather than with the unit
         # tests because what they exercise is MPI_Abort teardown, which is
         # exactly what differs between the implementations this matrix
-        # covers.  MPISPPY_REQUIRE_MPIEXEC turns a missing launcher into a
-        # failure, so the cell cannot go green on skips.
+        # covers.  MPISPPY_REQUIRE_MPIEXEC turns a missing launcher or a
+        # missing mpi4py into a failure, so the cell cannot go green on
+        # skips.  The cap is above the worst case -- six jobs that can each
+        # wait out TIMEOUT plus the reap -- so that a reintroduced hang
+        # reports "the job hung for 120s: a rank is still waiting in its
+        # collective", rather than being cut short by a generic step
+        # timeout that says nothing about why.
         if: ${{ !cancelled() }}
-        timeout-minutes: 10
+        timeout-minutes: 25
         env:
           MPISPPY_REQUIRE_MPIEXEC: "1"
         run: |

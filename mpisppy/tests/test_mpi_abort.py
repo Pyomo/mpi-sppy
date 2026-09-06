@@ -31,14 +31,11 @@ import unittest
 
 mpiexec_available = shutil.which("mpiexec") is not None
 
-#: Set where mpiexec is known to exist. Without it a launcher-less
-#: environment reports skips and the job goes green with nothing having
-#: asserted the guard, which is the one outcome these tests must not have.
-if (os.environ.get("MPISPPY_REQUIRE_MPIEXEC", "") not in ("", "0")
-        and not mpiexec_available):
-    raise RuntimeError(
-        "MPISPPY_REQUIRE_MPIEXEC is set but mpiexec is not on the PATH, so "
-        "the rank-failure abort tests cannot run.")
+#: Set where mpiexec and mpi4py are known to exist. Without this a
+#: launcher-less environment reports skips and the job goes green with
+#: nothing having asserted the guard, which is the one outcome these tests
+#: must not have.
+_require = os.environ.get("MPISPPY_REQUIRE_MPIEXEC", "") not in ("", "0")
 
 #: Extra arguments for the mpiexec jobs these tests spawn -- the workflow
 #: computes "-oversubscribe" for OpenMPI, where a runner has fewer usable
@@ -50,6 +47,17 @@ try:
     have_mpi4py = True
 except ImportError:
     have_mpi4py = False
+
+#: Both halves, or the cell goes green on skips with nothing asserted --
+#: the class below skips on either, so checking only the launcher would
+#: leave a broken mpi4py looking like a pass.
+if _require and not (mpiexec_available and have_mpi4py):
+    missing = ", ".join(
+        name for name, ok in (("mpiexec", mpiexec_available),
+                              ("mpi4py", have_mpi4py)) if not ok)
+    raise RuntimeError(
+        f"MPISPPY_REQUIRE_MPIEXEC is set but {missing} is not available, so "
+        "the rank-failure abort tests cannot run.")
 
 #: Long enough for interpreter start-up and MPI_Init on a loaded CI runner,
 #: short enough that a hang is reported rather than waited out.
@@ -222,6 +230,10 @@ def _run(script, np=2, env_extra=None):
         env = dict(os.environ)
         env["PYTHONPATH"] = os.pathsep.join(
             [_ROOT] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
+        # The docs tell sweep users to export this; inheriting it here
+        # would disarm the very guard these jobs exist to exercise, and
+        # every _died test would wait out its timeout before failing.
+        env.pop("MPISPPY_NO_ABORT_HOOK", None)
         env.update(env_extra or {})
         # Plain python, not "python -m mpi4py": mpi4py's runner would end the
         # job on its own and the tests would pass without the code under test.

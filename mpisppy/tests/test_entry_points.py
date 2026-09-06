@@ -97,10 +97,10 @@ class TestWithoutMpi4pyNothingIsInstalled(_RestoresHookState):
         self.assertEqual(len(said), 1, msg="said nothing, or said it twice")
         self.assertIn(mpi_abort.OPT_OUT_ENVVAR, said[0])
 
-    def test_the_opt_out_is_off_when_unset_or_zero(self):
-        """The convention MPISPPY_REQUIRE_MPIEXEC already uses: "" and "0"
-        mean off, so exporting it empty does not silently disarm the job."""
-        for value in ("", "0"):
+    def test_a_value_that_reads_as_off_is_off(self):
+        """Exporting the variable empty, or set to something that plainly
+        means no, must not disarm the job."""
+        for value in ("", "0", "false", "FALSE", "no", "off", "  0  "):
             MPI.COMM_WORLD = _HostileComm()
             said = []
             with mock.patch.dict(os.environ,
