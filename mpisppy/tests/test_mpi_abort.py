@@ -27,6 +27,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 mpiexec_available = shutil.which("mpiexec") is not None
@@ -63,9 +64,13 @@ if _require and not (mpiexec_available and have_mpi4py):
 #: short enough that a hang is reported rather than waited out.
 TIMEOUT = 120
 
-#: How long to wait for the killed process group to release the pipes. Only
-#: reached when the job has already hung, so it just bounds the report.
+#: How long to wait for the killed job to release the pipes. Only reached
+#: when the job has already hung, so it just bounds the report.
 _REAP_TIMEOUT = 30
+
+#: How long the launcher gets to take its own ranks down after SIGTERM
+#: before the kills in ``_reap`` stop asking.
+_TERM_TIMEOUT = 10
 
 #: The checkout under test. The children are plain ``python`` on a script in
 #: a temp directory, so without this they would import whatever mpi-sppy is
@@ -214,6 +219,114 @@ print("installed:", abort_on_uncaught_exception(), flush=True)
 """
 
 
+#: A job that hangs whatever the code under test does, for the test that
+#: the harness takes the ranks down and not just the launcher. Rank 0 waits
+#: in a collective rank 1 never reaches, because *that* is the rank that
+#: survives: one merely asleep notices its launcher die and goes with it,
+#: while one inside a collective busy-waits and stays. It is also the shape
+#: of every job the tests above leave behind when they report a hang.
+_HANGS = """
+import os
+import time
+from mpisppy import MPI
+
+rank = MPI.COMM_WORLD.Get_rank()
+here = os.path.dirname(os.path.abspath(__file__))
+# Announced on disk rather than on stdout: the pipes cannot be read until
+# the job is over, and the test has to know both ranks are up before it
+# kills them or it would be asserting on a job that never started.
+open(os.path.join(here, "ready.%d" % rank), "w").close()
+if rank == 1:
+    time.sleep(9999)
+MPI.COMM_WORLD.Barrier()
+"""
+
+
+def _launch(path, np, env_extra=None):
+    """Start the `np`-rank job for the script at `path`. Returns argv, proc.
+
+    The session is our own so that `_reap` can take the whole job down and
+    not just the process it started.
+    """
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(
+        [_ROOT] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
+    # The docs tell sweep users to export this; inheriting it here would
+    # disarm the very guard these jobs exist to exercise, and every _died
+    # test would wait out its timeout before failing.
+    env.pop("MPISPPY_NO_ABORT_HOOK", None)
+    env.update(env_extra or {})
+    # Plain python, not "python -m mpi4py": mpi4py's runner would end the
+    # job on its own and the tests would pass without the code under test.
+    argv = ["mpiexec", *_MPIEXEC_ARGS, "-np", str(np), sys.executable, path]
+    proc = subprocess.Popen(argv, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True, env=env,
+                            start_new_session=True)
+    return argv, proc
+
+
+def _session_members(sid):
+    """The pids still in session `sid`, the session leader included.
+
+    Empty where pgrep is missing, which costs the confirmation rather than
+    the kill: the signals in `_reap` do the work, and this only reports
+    whether they landed.
+    """
+    try:
+        found = subprocess.run(["pgrep", "-s", str(sid)], capture_output=True,
+                               text=True, timeout=_REAP_TIMEOUT)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return [int(pid) for pid in found.stdout.split()]
+
+
+def _reap(proc):
+    """End the whole job behind `proc`, ranks included. Returns survivors.
+
+    ``start_new_session=True`` makes mpiexec a session leader, but prterun
+    gives each rank a process group of its own -- the ranks share only the
+    session -- so killing the launcher's group reaches the launcher and
+    stops there. What is left is orphaned to init, and a rank abandoned in
+    a collective busy-waits, so each survivor holds a core at 100% with no
+    output and no log until someone goes looking.
+
+    SIGTERM to the launcher first: a launcher that is still healthy takes
+    its own ranks down, and that is the only route that also reaches ranks
+    on another node. The group kill is the backstop for a launcher that is
+    itself wedged, and the sweep by session covers the ranks no signal to
+    the launcher's group can name.
+
+    `proc` itself is not a survivor: it is still to be waited on by the
+    caller, which is what reads the pipes.
+    """
+    try:
+        proc.terminate()
+    except OSError:
+        pass
+    try:
+        proc.wait(timeout=_TERM_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except OSError:
+        # It finished as the deadline lapsed, or the group is not ours to
+        # signal. The sweep below is what says whether anything is left.
+        pass
+    deadline = time.monotonic() + _REAP_TIMEOUT
+    while True:
+        survivors = [pid for pid in _session_members(proc.pid)
+                     if pid != proc.pid]
+        if not survivors or time.monotonic() >= deadline:
+            return survivors
+        for pid in survivors:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
+        time.sleep(0.1)
+
+
 def _run(script, np=2, env_extra=None):
     """Run `script` as an `np`-rank plain-python job. Returns the result.
 
@@ -221,36 +334,29 @@ def _run(script, np=2, env_extra=None):
     reads the pipes with no deadline of its own, so an orphaned rank still
     holding the write end blocks the report forever. Since a timeout is the
     failure these tests exist to report, the reporting path is the one that
-    must not hang -- hence a process group of our own, killed whole.
+    must not hang -- hence a session of our own, torn down whole by `_reap`
+    before the pipes are read. That teardown is on every way out and not
+    just the timeout, since a Ctrl-C orphans exactly the same job.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         path = os.path.join(tmpdir, "leg.py")
         with open(path, "w") as f:
             f.write(script)
-        env = dict(os.environ)
-        env["PYTHONPATH"] = os.pathsep.join(
-            [_ROOT] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
-        # The docs tell sweep users to export this; inheriting it here
-        # would disarm the very guard these jobs exist to exercise, and
-        # every _died test would wait out its timeout before failing.
-        env.pop("MPISPPY_NO_ABORT_HOOK", None)
-        env.update(env_extra or {})
-        # Plain python, not "python -m mpi4py": mpi4py's runner would end the
-        # job on its own and the tests would pass without the code under test.
-        argv = ["mpiexec", *_MPIEXEC_ARGS, "-np", str(np), sys.executable, path]
-        proc = subprocess.Popen(argv, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, text=True, env=env,
-                                start_new_session=True)
+        argv, proc = _launch(path, np, env_extra)
         try:
             out, err = proc.communicate(timeout=TIMEOUT)
-        except subprocess.TimeoutExpired:
-            try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except OSError:
-                # It finished as the deadline lapsed, or the group is not
-                # ours to signal. The TimeoutExpired is still what the
-                # caller has to see, so nothing may be raised over it.
-                pass
+        except BaseException:
+            # A timeout is the way in that these tests are written around,
+            # but Ctrl-C and anything else that takes the run down arrive
+            # here too and leave the same job behind, which is where the
+            # survivors found spinning days later have come from.
+            leaked = _reap(proc)
+            if leaked:
+                # Nothing may be raised over the exception the caller has
+                # to see, so a leak is reported rather than raised.
+                print(f"WARNING: {len(leaked)} process(es) from the abandoned "
+                      f"job outlived the kill and are still running: {leaked}",
+                      file=sys.stderr, flush=True)
             try:
                 proc.communicate(timeout=_REAP_TIMEOUT)
             except subprocess.TimeoutExpired:
@@ -363,6 +469,52 @@ class TestAbortInsteadOfHang(unittest.TestCase):
         self.assertIn("REPORTER RAN", out,
                       msg="the driver's own excepthook was bypassed rather "
                           "than wrapped")
+
+
+@unittest.skipIf(not mpiexec_available, "mpiexec is not available")
+@unittest.skipIf(not have_mpi4py, "mpi4py is not available")
+@unittest.skipIf(shutil.which("pgrep") is None, "pgrep is not available")
+class TestTheTimedOutJobIsGone(unittest.TestCase):
+    """Nothing from a timed-out job outlives the test that reported it.
+
+    Every test above reports a hang by timing out, so the kill on that path
+    runs exactly when these tests are earning their keep. A rank it misses
+    is orphaned in a collective and spins on a core for as long as the
+    machine is up, saying nothing -- which is why this asserts on the pids
+    rather than trusting the signal.
+    """
+
+    def test_the_kill_takes_the_ranks_and_not_just_the_launcher(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "hang.py")
+            with open(path, "w") as f:
+                f.write(_HANGS)
+            _, proc = _launch(path, 2)
+            try:
+                # Killing before both ranks are past MPI_Init would pass
+                # without either having been at risk, and rank 0 has to be
+                # in its collective for this to be the job the timeout path
+                # actually leaves behind.
+                markers = [os.path.join(tmpdir, f"ready.{r}") for r in (0, 1)]
+                deadline = time.monotonic() + TIMEOUT
+                while (not all(os.path.exists(m) for m in markers)
+                       and time.monotonic() < deadline):
+                    time.sleep(0.1)
+                self.assertTrue(
+                    all(os.path.exists(m) for m in markers),
+                    msg=f"the job did not reach two running ranks in "
+                        f"{TIMEOUT}s, so the kill below had nothing to miss")
+                time.sleep(1)  # rank 0 is a few instructions from Barrier
+                leaked = _reap(proc)
+            finally:
+                try:
+                    proc.communicate(timeout=_REAP_TIMEOUT)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+            self.assertEqual(
+                leaked, [],
+                msg="the kill reached mpiexec and stopped there: these pids "
+                    "are ranks left running, each one holding a core")
 
 
 if __name__ == "__main__":
