@@ -6,10 +6,9 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-""" Conventional wisdom seems to be that we should use Put calls locally (i.e.
-    a process should Put() into its own buffer), and Get calls for
-    communication (i.e. call Get on a remote target, rather than your local
-    buffer). The following implementation uses this paradigm.
+""" Cylinder communication uses synchronized local stores to publish into a
+    process's own window and short Get epochs to read remote windows.  Each Get
+    epoch is closed before the cylinder's write-id agreement collective.
 
     The communication in this paradigm is a star graph, with the hub at the
     center and the spokes on the outside. Each spoke is concerned only
@@ -653,12 +652,17 @@ class SPCommunicator:
         reader: the equal-rank path and both unequal-rank helpers).
 
         Consumers that run collectives on freshly-received data (Eobjective
-        Allreduce, ROOT bcast, ...) must enter them in lockstep, so every reader
-        rank has to agree on whether a read is "new". A synchronous writer
+        Allreduce, ROOT bcast, ...) must accept updates in lockstep, so every
+        reader rank has to agree on whether a read is "new". A synchronous writer
         stamps all of its ranks at one write_id, so when ids agree every rank
-        computes the same answer; a transient mixed-id read (the writer Put
+        computes the same answer; a transient mixed-id read (the writer publish
         between two readers' Gets) fails here and is rejected, to be retried,
         rather than accepted out of lockstep.
+
+        Fetches deliberately have no leading cylinder barrier.  This collective
+        is the synchronization point: each rank first completes and closes its
+        RMA epoch, then all ranks agree on the fetched generation before any of
+        them accepts it.
 
         Returns True if not synchronizing, or if all ranks read the same id.
         """
@@ -718,9 +722,6 @@ class SPCommunicator:
             if (field, origin) in self.overlap_maps:
                 return self._flex_get_multi_source(buf, field, origin, synchronize)
             return self._flex_get_single_source(buf, field, origin, synchronize)
-
-        if synchronize:
-            self.cylinder_comm.Barrier()
 
         last_id = buf.id()
 
@@ -876,8 +877,6 @@ class SPCommunicator:
         the base rank is sufficient and keeps the cross-cylinder write_id
         agreement check (every local rank reads the same remote rank)."""
         window_rank = self._cylinder_bases[peer_cylinder]
-        if synchronize:
-            self.cylinder_comm.Barrier()
         last_id = buf.id()
         self.window.get(buf.window_array(), window_rank, field)
         new_id = int(buf.array()[-1])
@@ -917,14 +916,12 @@ class SPCommunicator:
         multistage) and each obj_val stays paired with its own nonants -- no
         post-assembly fix-up, at any number of stages.
         """
-        if synchronize:
-            self.cylinder_comm.Barrier()
         last_id = buf.id()
 
         # Read each source's whole field once -- data and trailing write_id
         # from a single atomic snapshot, exactly as the equal-rank reader does.
         # Reading the data segment and the id in separate Gets would race the
-        # writer: the hub could Put a source between the two reads, yielding
+        # writer: the hub could publish a source between the two reads, yielding
         # pre-write NaN data paired with a fresh id, which the gate below would
         # then accept. One whole-field Get per source closes that window. We
         # also defer writing into buf until the read is accepted, so a rejected

@@ -183,6 +183,13 @@ class SPWindow:
                 continue
             self.buff[off + logical_len - 1] = 0.0
 
+        # Publish the direct initialization before peers inspect this window.
+        # The self epoch is valid for a zero-byte window as well, which occurs
+        # on ranks that publish no fields.
+        self.window.Lock(self.strata_rank, MPI.LOCK_EXCLUSIVE)
+        self.window.Sync()
+        self.window.Unlock(self.strata_rank)
+
         # Gather layouts across ranks
         self.strata_buffer_layouts = strata_comm.allgather(self.buffer_layout)
 
@@ -227,9 +234,12 @@ class SPWindow:
         assert np.size(dest) == count
 
         window = self.window
-        window.Lock(strata_rank, MPI.LOCK_SHARED)
+        # Keep the passive-target epoch local to this fetch.  In particular,
+        # no epoch may span the caller's write-id agreement collective.
+        window.Lock_all()
         window.Get((dest, count, MPI.DOUBLE), strata_rank, disp)
-        window.Unlock(strata_rank)
+        window.Flush(strata_rank)
+        window.Unlock_all()
         return
 
     def put(self, values: nptyping.ArrayLike, field: Field):
@@ -238,7 +248,8 @@ class SPWindow:
 
         window = self.window
         window.Lock(self.strata_rank, MPI.LOCK_EXCLUSIVE)
-        window.Put((values, padded_len, MPI.DOUBLE), self.strata_rank, offset)
+        self.buff[offset:offset + padded_len] = values
+        window.Sync()
         window.Unlock(self.strata_rank)
         return
 

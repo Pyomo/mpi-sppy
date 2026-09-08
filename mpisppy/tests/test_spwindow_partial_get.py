@@ -78,5 +78,81 @@ class TestPartialGet(unittest.TestCase):
             self.win.get(dest, 0, Field.NONANTS_VALS, item_offset=0, item_count=3)
 
 
+class _RecordingWindow:
+    def __init__(self):
+        self.calls = []
+
+    def Lock(self, rank, lock_type):
+        self.calls.append(("Lock", rank, lock_type))
+
+    def Sync(self):
+        self.calls.append(("Sync",))
+
+    def Unlock(self, rank):
+        self.calls.append(("Unlock", rank))
+
+    def Lock_all(self):
+        self.calls.append(("Lock_all",))
+
+    def Get(self, origin, rank, disp):
+        self.calls.append(("Get", rank, disp, origin[1], origin[2]))
+
+    def Flush(self, rank):
+        self.calls.append(("Flush", rank))
+
+    def Unlock_all(self):
+        self.calls.append(("Unlock_all",))
+
+    def Put(self, *args):
+        self.calls.append(("Put",))
+
+
+class TestRMAProtocol(unittest.TestCase):
+    def setUp(self):
+        self.logical = 3
+        self.padded = padded_len_n_doubles(self.logical)
+        self.layout = {
+            Field.NONANTS_VALS: (0, self.logical, self.padded),
+            Field.WHOLE: (0, self.logical, self.padded),
+        }
+        self.win = SPWindow.__new__(SPWindow)
+        self.win.strata_rank = 2
+        self.win.buffer_layout = self.layout
+        self.win.strata_buffer_layouts = [self.layout] * 4
+        self.win.buff = np.full(self.padded, np.nan, dtype="d")
+        self.win.window = _RecordingWindow()
+
+    def test_put_uses_local_store_in_exclusive_self_epoch(self):
+        values = np.arange(self.padded, dtype="d")
+
+        self.win.put(values, Field.NONANTS_VALS)
+
+        np.testing.assert_array_equal(self.win.buff, values)
+        self.assertEqual(
+            self.win.window.calls,
+            [
+                ("Lock", 2, MPI.LOCK_EXCLUSIVE),
+                ("Sync",),
+                ("Unlock", 2),
+            ],
+        )
+        self.assertNotIn(("Put",), self.win.window.calls)
+
+    def test_get_completes_short_lock_all_epoch(self):
+        dest = np.empty(self.padded, dtype="d")
+
+        self.win.get(dest, 3, Field.NONANTS_VALS)
+
+        self.assertEqual(
+            self.win.window.calls,
+            [
+                ("Lock_all",),
+                ("Get", 3, 0, self.padded, MPI.DOUBLE),
+                ("Flush", 3),
+                ("Unlock_all",),
+            ],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
