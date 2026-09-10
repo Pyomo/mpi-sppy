@@ -8,8 +8,10 @@
 ###############################################################################
 import logging
 import random
+import numpy as np
 import mpisppy.log
 
+from mpisppy import MPI
 from mpisppy.extensions.xhatbase import XhatBase
 from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
 from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
@@ -24,6 +26,42 @@ logger = logging.getLogger("mpisppy.cylinders.xhatshufflelooper_bounder")
 class XhatShuffleInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
 
     converger_spoke_char = 'X'
+
+    def _check_scenario_sync(self, snamedict):
+        """Fail before ``_try_one`` if ranks selected different scenarios.
+
+        ``_try_one`` uses broadcasts whose roots are determined by
+        ``snamedict``.  Different selections across cylinder ranks therefore
+        make the following collective invalid.  Use fixed-size typed
+        collectives here so the disagreement is detected before any object
+        broadcast is entered.
+        """
+        scenario_indices = {
+            sname: idx for idx, sname in enumerate(self.opt.all_scenario_names)
+        }
+        node_names = sorted(snamedict)
+        local = np.asarray(
+            [scenario_indices.get(snamedict[node], -1) for node in node_names],
+            dtype=np.int64,
+        )
+        minimum = np.empty_like(local)
+        maximum = np.empty_like(local)
+        self.cylinder_comm.Allreduce(
+            [local, MPI.INT64_T], [minimum, MPI.INT64_T], op=MPI.MIN)
+        self.cylinder_comm.Allreduce(
+            [local, MPI.INT64_T], [maximum, MPI.INT64_T], op=MPI.MAX)
+        if np.array_equal(minimum, maximum):
+            return
+
+        differences = ", ".join(
+            f"{node}=scenario indices [{lo}, {hi}]"
+            for node, lo, hi in zip(node_names, minimum, maximum)
+            if lo != hi
+        )
+        raise RuntimeError(
+            "XhatShuffle ranks selected different scenarios before _try_one: "
+            + differences
+        )
 
     def xhat_extension(self):
         return XhatBase(self.opt)
@@ -40,6 +78,7 @@ class XhatShuffleInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
     def try_scenario_dict(self, xhat_scenario_dict):
         """ wrapper for _try_one"""
         snamedict = xhat_scenario_dict
+        self._check_scenario_sync(snamedict)
 
         stage2_ef_solver_name = self.opt.options.get("stage2_ef_solver_name", None)
         branching_factors = self.opt.options.get("branching_factors", None)  # for stage2ef
