@@ -934,7 +934,8 @@ class TestTryOneExceptionWrapper(unittest.TestCase):
             def update_best_solution_if_improving(self, obj): return False
 
         class _StubComm:
-            def bcast(self, data, root=0): return data
+            def Get_rank(self): return 0
+            def Bcast(self, data, root=0): pass
         ext.opt = _StubOpt(sp)
         ext.comms = {"ROOT": _StubComm()}
 

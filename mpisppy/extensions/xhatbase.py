@@ -8,6 +8,7 @@
 ###############################################################################
 
 import re
+import numpy as np
 import pyomo.environ as pyo
 
 # NOTE: a caller attaches the comms (e.g. pre_iter0)
@@ -101,15 +102,49 @@ class XhatBase(mpisppy.extensions.extension.Extension):
         self.scenario_name_to_rank = opt.scenario_names_to_rank
         # dict: scenario names --> LOCAL rank number (needed mainly for xhat)
 
-    def _validate_xhat_broadcast(self, xhat, sname, node, src_rank):
-        """Report a missing xhat at the boundary where it becomes invalid."""
-        if xhat is None:
+    def _bcast_xhat(self, comm, xhat, length, sname, node, src_rank):
+        """Broadcast an xhat with a fixed-size typed MPI collective.
+
+        The former object ``bcast`` pickled the NumPy array and communicated
+        its serialized length and payload separately.  Xhats have a known,
+        fixed length, so that protocol is unnecessary and provides a larger
+        failure surface than a single typed ``Bcast``.
+        """
+        if comm.Get_rank() == src_rank:
+            if xhat is None:
+                raise RuntimeError(
+                    f"Xhat broadcast source has an empty cache for "
+                    f"scenario={sname}, node={node}, source communicator "
+                    f"rank={src_rank}"
+                )
+            result = np.asarray(xhat, dtype=np.float64)
+            if result.ndim != 1 or result.size != length:
+                raise RuntimeError(
+                    f"Xhat broadcast source has cache shape {result.shape} for "
+                    f"scenario={sname}, node={node}; expected ({length},)"
+                )
+            if not result.flags.c_contiguous:
+                result = np.ascontiguousarray(result)
+        else:
+            result = np.empty(length, dtype=np.float64)
+
+        try:
+            comm.Bcast(result, root=src_rank)
+        except Exception:
+            print(
+                f"rank={self.cylinder_rank} typed xhat Bcast failed for "
+                f"scenario={sname}, node={node}, src_rank={src_rank}",
+                flush=True,
+            )
+            raise
+
+        if result is None:
             raise RuntimeError(
                 f"Xhat broadcast returned an empty cache for scenario={sname}, "
                 f"node={node}, source cylinder rank={src_rank}, "
                 f"receiver cylinder rank={self.cylinder_rank}"
             )
-        return xhat
+        return result
         
      #**********
     def _try_one(self, snamedict, solver_options=None, verbose=False,
@@ -154,21 +189,11 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             else:
                 xhat = None
             src_rank = self.scenario_name_to_rank["ROOT"][sname]
-            if self.cylinder_rank == src_rank and xhat is None:
-                raise RuntimeError(
-                    f"Xhat broadcast source has an empty cache for "
-                    f"scenario={sname}, node=ROOT, source cylinder "
-                    f"rank={src_rank}"
-                )
-            try:
-                xhats["ROOT"] = self.comms["ROOT"].bcast(xhat, root=src_rank)
-            except:
-                print("rank=",self.cylinder_rank, "xhats bcast failed on src_rank={}"\
-                      .format(src_rank))
-                print("root comm size={}".format(self.comms["ROOT"].size))
-                raise
-            self._validate_xhat_broadcast(
-                xhats["ROOT"], sname, "ROOT", src_rank)
+            root_len = next(iter(
+                self.opt.local_scenarios.values()
+            ))._mpisppy_data.nlens["ROOT"]
+            xhats["ROOT"] = self._bcast_xhat(
+                self.comms["ROOT"], xhat, root_len, sname, "ROOT", src_rank)
         elif stage2_ef_solver_name is None:  # regular multi-stage
             # assemble parts and put it in xhats
             # send to ranks in the comm or receive ANY_SOURCE
@@ -200,20 +225,9 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                     print(f"self.scenario_name_to_rank[ndn]={self.scenario_name_to_rank[ndn]}")
                     raise RuntimeError("Bad scenario selection for xhat")
                 src_rank = self.scenario_name_to_rank[ndn][snamedict[ndn]]
-                if self.comms[ndn].rank == src_rank and xhats[ndn] is None:
-                    raise RuntimeError(
-                        f"Xhat broadcast source has an empty cache for "
-                        f"scenario={snamedict[ndn]}, node={ndn}, source "
-                        f"communicator rank={src_rank}"
-                    )
-                try:
-                    xhats[ndn] = self.comms[ndn].bcast(xhats[ndn], root=src_rank)
-                except:
-                    print("rank=",self.cylinder_rank, "xhats bcast failed on ndn={}, src_rank={}"\
-                          .format(ndn,src_rank))
-                    raise
-                self._validate_xhat_broadcast(
-                    xhats[ndn], snamedict[ndn], ndn, src_rank)
+                xhats[ndn] = self._bcast_xhat(
+                    self.comms[ndn], xhats[ndn], nlens[ndn],
+                    snamedict[ndn], ndn, src_rank)
         else:  # we are multi-stage with stage2ef
             # Form an ef for all local scenarios and then fix the first stage
             # vars based on the chosen scenario
@@ -225,21 +239,11 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             else:
                 xhat = None
             src_rank = self.scenario_name_to_rank["ROOT"][sname]
-            if self.cylinder_rank == src_rank and xhat is None:
-                raise RuntimeError(
-                    f"Xhat broadcast source has an empty cache for "
-                    f"scenario={sname}, node=ROOT, source cylinder "
-                    f"rank={src_rank}"
-                )
-            try:
-                xhats["ROOT"] = self.comms["ROOT"].bcast(xhat, root=src_rank)
-            except:
-                print("rank=",self.cylinder_rank, "xhats bcast failed on src_rank={}"\
-                      .format(src_rank))
-                print("root comm size={}".format(self.comms["ROOT"].size))
-                raise
-            self._validate_xhat_broadcast(
-                xhats["ROOT"], sname, "ROOT", src_rank)
+            root_len = next(iter(
+                self.opt.local_scenarios.values()
+            ))._mpisppy_data.nlens["ROOT"]
+            xhats["ROOT"] = self._bcast_xhat(
+                self.comms["ROOT"], xhat, root_len, sname, "ROOT", src_rank)
             # now form the EF for the appropriate number of second-stage scenario tree nodes
             # The count of second-stage tree nodes is branching_factors[0] (children of ROOT);
             # branching_factors[1] is the per-second-stage-node branching, not the count.
