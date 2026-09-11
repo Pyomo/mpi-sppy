@@ -11,6 +11,7 @@
 from pyomo.core.base.block import declare_custom_block
 from pyomo.core import Constraint, Var
 from pyomo.core.base.componentuid import ComponentUID
+from pyomo.core.base.PyomoModel import ModelSolutions
 import pyomo.environ as pe
 from pyomo.solvers.plugins.solvers.persistent_solver import PersistentSolver
 import pyomo.contrib.benders.benders_cuts as bc
@@ -370,6 +371,8 @@ class StandardL1CutGenerator:
         finally:
             if dual is not None and not hasattr(base, "dual"):
                 base.dual = pe.Suffix(direction=pe.Suffix.IMPORT)
+        if getattr(subproblem, "solutions", None) is None:
+            subproblem.solutions = ModelSolutions(subproblem)
         if not hasattr(subproblem, "dual"):
             subproblem.dual = pe.Suffix(direction=pe.Suffix.IMPORT)
         return subproblem
