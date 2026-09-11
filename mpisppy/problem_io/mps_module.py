@@ -159,7 +159,7 @@ def scenario_names_creator(num_scens, start=None):
 
 #=========
 def inparser_adder(cfg):
-    # verify that that the mps_files_directory is there, or add it
+    # verify that the mps_files_directory is there, or add it
     if "mps_files_directory" not in cfg:
         cfg.add_to_config("mps_files_directory",
                           "Directory with mps, json pairs for scenarios",
@@ -283,4 +283,3 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
     pass
-

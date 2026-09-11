@@ -561,7 +561,7 @@ class SPBase:
 
         tol = self.E1_tolerance
         checked_nodes = list()
-        # check sum node conditional probabilites are close to 1
+        # check sum node conditional probabilities are close to 1
         for k,s in self.local_scenarios.items():
             nlens = s._mpisppy_data.nlens
             for node in s._mpisppy_node_list:

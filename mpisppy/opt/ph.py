@@ -55,7 +55,7 @@ class PH(mpisppy.phbase.PHBase):
                     nonanticipativity constraints (immediately after iter 0).
 
         NOTE:
-            You need an xhat finder either in denoument or in an extension.
+            You need an xhat finder either in denouement or in an extension.
         """
         verbose = self.options['verbose']
         smoothed = self.options['smoothed']

@@ -47,7 +47,7 @@ class CG(mpisppy.cgbase.CGBase):
                     `None`.
 
         NOTE:
-            You need an xhat finder either in denoument or in an extension.
+            You need an xhat finder either in denouement or in an extension.
         """
         verbose = self.options['verbose']
         self.CG_Prep()

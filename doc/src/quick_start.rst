@@ -399,8 +399,8 @@ Running the Farmer Example
        --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01
 
 ``mpi-sppy-generic-cylinders`` is a console script created by the
-install; it is equivalent to ``python -m mpisppy.generic_cylinders``,
-and it aborts every rank if one of them dies. See
+install; it is equivalent to ``python -m mpisppy.generic_cylinders``.
+A rank that dies ends the job rather than hanging the others; see
 :ref:`console_scripts`.
 
 For more detail, see :ref:`generic_cylinders` and :ref:`Examples`.

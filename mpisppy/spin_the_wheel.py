@@ -11,6 +11,7 @@ from pyomo.environ import value
 from mpisppy import haveMPI, global_toc, MPI
 
 from mpisppy.utils import nice_join
+from mpisppy.utils.mpi_abort import abort_on_uncaught_exception
 from mpisppy.utils.sputils import first_stage_nonant_writer, scenario_tree_solution_writer
 from mpisppy.utils.rank_apportionment import apportion_ranks, rank_to_cylinder
 
@@ -43,7 +44,24 @@ class WheelSpinner:
         """ top level for the hub and spoke system
         Args:
             comm_world (MPI comm): the world for this hub-spoke system
+
+        A failure here need not strike every rank -- a solver license, a
+        scenario file, one cylinder's options -- and the ranks it misses go
+        on to the next collective and block there.  Importing mpi-sppy has
+        already arranged for an *uncaught* exception to end the job instead;
+        see ``mpisppy.utils.mpi_abort``.  A failure this caller catches is
+        its own business and is not touched.
+
+        The call below is not redundant with that install.  A driver that
+        sets its own ``sys.excepthook`` after importing mpi-sppy -- a crash
+        reporter, a traceback formatter -- displaces ours, and one that
+        chains to ``sys.__excepthook__`` rather than to the hook it replaced
+        drops the abort entirely.  Re-asserting it here puts it back in
+        front of whatever is now installed, which is why the module holds
+        the hook object rather than a bool.
         """
+        abort_on_uncaught_exception()
+
         if self._ran:
             raise RuntimeError("WheelSpinner can only be run once")
 

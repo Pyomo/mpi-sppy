@@ -17,10 +17,9 @@ other features without requiring you to write a driver program.
 
        mpi-sppy-generic-cylinders --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi
 
-   For multi-rank parallel runs the console script is as safe as the
-   ``python -m mpi4py`` module form shown below: both abort all ranks
-   when one of them raises an exception, rather than leaving the job
-   hung. See :ref:`console_scripts`.
+   For multi-rank parallel runs a rank that raises an uncaught
+   exception ends the job rather than leaving it hung, whichever form
+   you use. See :ref:`console_scripts`.
 
 Your Model File (Module)
 ------------------------

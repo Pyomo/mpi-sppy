@@ -61,26 +61,43 @@ other command:
        --num-scens 3 --solver-name gurobi --max-iterations 10 \
        --default-rho 1 --lagrangian --xhatshuffle
 
-The console scripts abort the whole job when a rank dies, exactly as
+A rank that dies takes the whole job with it, exactly as
 ``python -m mpi4py`` does: if one rank raises an uncaught exception, the
 traceback is printed and ``MPI_Abort`` is called, rather than leaving the
 surviving ranks blocked forever in a collective and the ``mpiexec`` job
-hung. That is why
+hung. Importing mpi-sppy is what arranges this, so all of these are covered:
 
 .. code-block:: bash
 
    mpiexec -np 3 mpi-sppy-generic-cylinders ...
+   mpiexec -np 3 python -m mpi4py -m mpisppy.generic_cylinders ...
+   mpiexec -np 3 python my_own_driver.py
 
-and the longer module form
+The protection begins at the ``import mpisppy``, so a per-rank failure in
+an earlier import of your own is not covered by the first and third forms.
+The ``python -m mpi4py`` runner starts before your script does and so
+covers that too; if your driver imports something of its own off a shared
+filesystem before it reaches mpi-sppy, prefer it.
+
+Only an exception you do not catch yourself ends the job; one you handle is
+your own business. Serial runs re-raise normally, so tracebacks and exit
+codes are unchanged. ``APH`` is the exception: it runs its iterations on a
+worker thread, and a failure there can still hang the job.
+
+If your ranks are doing genuinely independent work -- a sweep where each
+rank runs its own case and never builds an mpi-sppy object across ranks --
+you may not want one rank's failure to end the others:
 
 .. code-block:: bash
 
-   mpiexec -np 3 python -m mpi4py -m mpisppy.generic_cylinders ...
+   MPISPPY_NO_ABORT_HOOK=1 mpiexec -np 40 python sweep.py
 
-are equally safe. A plain ``mpiexec -np 3 python -m mpisppy.generic_cylinders ...``
-(no ``mpi4py`` runner) is the form to avoid, since a dying rank can hang
-the job. Serial runs of the console scripts re-raise normally, so
-tracebacks and exit codes are unchanged.
+A rank that raises then takes only itself down. It must be set before the
+process starts, because mpi-sppy installs the hook when it is imported;
+setting it from inside a running driver is too late. Do not set it for a
+run with cylinders, or for a multi-rank ``--EF`` run: those ranks are in
+collectives together and the job will hang instead. It says so on rank 0
+when it takes effect.
 
 Troubleshooting
 ---------------

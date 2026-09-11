@@ -59,7 +59,7 @@ def min_cost_distr_problem(local_dict, cfg, stoch_scenario_name, sense=pyo.minim
     Args:
         local_dict (dict): dictionary representing a region including the inter region arcs \n
         cfg (): config argument used here for the random parameters \n
-        stoch_scenario_name(str): name of the stochastic scenario. In each region, the model is scenario dependant \n
+        stoch_scenario_name(str): name of the stochastic scenario. In each region, the model is scenario dependent \n
         sense (=pyo.minimize): we aim to minimize the cost, this should always be minimize \n
         max_revenue (float, opt): higher than all the possible revenues, this value allows to add a penalty slack making sure that the optimal value of the new model is obtained with a 0 slack
 
