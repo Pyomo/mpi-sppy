@@ -97,6 +97,38 @@ class TestStandardL1CutGenerator(unittest.TestCase):
         self.assertEqual(len(m.dual), 0)
         self.assertEqual(len(clone.dual), 0)
 
+    def test_l1_feasibility_problem_is_cached_without_fixing_rows(self):
+        root = pyo.ConcreteModel()
+        root.x = pyo.Var(initialize=0.0)
+
+        subproblem = pyo.ConcreteModel()
+        subproblem.x = pyo.Var()
+        subproblem.y = pyo.Var()
+        subproblem.obj = pyo.Objective(expr=subproblem.y)
+        subproblem.con = pyo.Constraint(expr=subproblem.y >= subproblem.x + 1.0)
+        subproblem._mpisppy_lshaped_fix_cons = pyo.ConstraintList()
+        subproblem._mpisppy_lshaped_fix_cons.add(subproblem.x == 0.0)
+
+        gen = StandardL1CutGenerator()
+        gen.root_vars = [root.x]
+        gen.subproblems = [subproblem]
+        gen.complicating_vars_maps = [
+            pyo.ComponentMap([(root.x, subproblem.x)])
+        ]
+        gen.subproblem_solver_options = [{}]
+        gen.l1_subproblems = [None]
+        gen.l1_complicating_vars_maps = [None]
+        gen.l1_solvers = [None]
+
+        l1_model, clone_cmap, solver = gen._get_l1_feasibility_problem(0, "glpk")
+        again_model, again_cmap, again_solver = gen._get_l1_feasibility_problem(0, "glpk")
+
+        self.assertIs(l1_model, again_model)
+        self.assertIs(clone_cmap, again_cmap)
+        self.assertIs(solver, again_solver)
+        self.assertFalse(hasattr(l1_model, "_mpisppy_lshaped_fix_cons"))
+        self.assertEqual(len(l1_model._mpisppy_l1_cons), 1)
+
     def test_unknown_lshaped_cut_generator_option_errors(self):
         names = farmer.scenario_names_creator(3)
         options = {

@@ -115,6 +115,9 @@ class StandardL1CutGenerator:
         self.subproblem_solver_names = []
         self.subproblem_solver_options = []
         self.subproblem_indices = []
+        self.l1_subproblems = []
+        self.l1_complicating_vars_maps = []
+        self.l1_solvers = []
 
     def set_input(self, root_vars, tol=1e-6, comm=None):
         """Store root variables, cut tolerance, and MPI communicator.
@@ -199,6 +202,9 @@ class StandardL1CutGenerator:
         self.subproblem_solver_names.append(solver_name)
         self.subproblem_solver_options.append(dict(subproblem_solver_options or {}))
         self.subproblem_indices.append(self._root_eta_index[scenario_name])
+        self.l1_subproblems.append(None)
+        self.l1_complicating_vars_maps.append(None)
+        self.l1_solvers.append(None)
 
     def generate_cut(self):
         """Solve local subproblems, reduce coefficients, and add violated cuts.
@@ -305,7 +311,7 @@ class StandardL1CutGenerator:
             self._remove_fixing_constraints(subproblem, solver, fix_cons.values())
 
     def _solve_l1_feasibility(self, local_ndx, solver_name):
-        """Build and solve the cloned L1 feasibility model for one scenario.
+        """Solve the cached L1 feasibility model for one scenario.
 
         Args:
             local_ndx (int): Local subproblem index in this rank's registered
@@ -320,6 +326,37 @@ class StandardL1CutGenerator:
             RuntimeError: If the L1 feasibility problem does not solve to optimality.
             NotImplementedError: If the solver dual sign convention is unknown.
         """
+        subproblem, clone_cmap, solver = self._get_l1_feasibility_problem(
+            local_ndx, solver_name
+        )
+        fix_cons = self._add_fixing_constraints(subproblem, clone_cmap)
+        try:
+            res = self._solve_model(subproblem, solver, solver_name, fix_cons.values())
+            tc = res.solver.termination_condition
+            if tc not in self._optimal_tc:
+                raise RuntimeError(f"L1 feasibility subproblem did not solve to optimality: {tc}")
+            zval = pe.value(subproblem._mpisppy_l1_z)
+            coeffs = self._fixing_dual_coefficients(
+                subproblem, fix_cons, solver_dual_sign_convention[solver_name]
+            )
+            return {
+                "constant": zval,
+                "coefficients": coeffs,
+                "needs_cut": zval > self.tol,
+                "infeasible": True,
+            }
+        finally:
+            self._remove_fixing_constraints(subproblem, solver, fix_cons.values())
+
+    def _get_l1_feasibility_problem(self, local_ndx, solver_name):
+        """Return the cached L1 model, clone map, and solver for a subproblem."""
+        if self.l1_subproblems[local_ndx] is not None:
+            return (
+                self.l1_subproblems[local_ndx],
+                self.l1_complicating_vars_maps[local_ndx],
+                self.l1_solvers[local_ndx],
+            )
+
         base = self.subproblems[local_ndx]
         cmap = self.complicating_vars_maps[local_ndx]
         subproblem = self._clone_subproblem_for_l1(base)
@@ -334,26 +371,16 @@ class StandardL1CutGenerator:
             for root_var, sub_var in cmap.items()
         )
         self._build_l1_model(subproblem)
-        fix_cons = self._add_fixing_constraints(subproblem, clone_cmap)
         solver = pe.SolverFactory(solver_name)
         for k, v in self.subproblem_solver_options[local_ndx].items():
             solver.options[k] = v
         if isinstance(solver, PersistentSolver):
             set_instance_retry(subproblem, solver, "standard_l1")
-        res = self._solve_model(subproblem, solver, solver_name, [])
-        tc = res.solver.termination_condition
-        if tc not in self._optimal_tc:
-            raise RuntimeError(f"L1 feasibility subproblem did not solve to optimality: {tc}")
-        zval = pe.value(subproblem._mpisppy_l1_z)
-        coeffs = self._fixing_dual_coefficients(
-            subproblem, fix_cons, solver_dual_sign_convention[solver_name]
-        )
-        return {
-            "constant": zval,
-            "coefficients": coeffs,
-            "needs_cut": zval > self.tol,
-            "infeasible": True,
-        }
+
+        self.l1_subproblems[local_ndx] = subproblem
+        self.l1_complicating_vars_maps[local_ndx] = clone_cmap
+        self.l1_solvers[local_ndx] = solver
+        return subproblem, clone_cmap, solver
 
     def _clone_subproblem_for_l1(self, base):
         """Clone a subproblem without carrying stale imported dual values.
