@@ -44,11 +44,11 @@ solver_dual_sign_convention['xpress_persistent'] = -1
 class StandardL1CutGenerator:
     """Dual-based Benders cuts with L1-normalized feasibility cuts.
 
-    This generator is intentionally opt-in and assumes that each subproblem is
-    continuous and that the user has ensured the mathematical assumptions
-    needed for valid dual-based cuts. For a fixed incumbent first-stage
-    solution ``xbar``, it first solves the ordinary scenario recourse problem.
-    In compact linear notation this is
+    This is the default cut generator for the L-shaped method. It assumes that
+    each subproblem is continuous and that the user has ensured the
+    mathematical assumptions needed for valid dual-based cuts. For a fixed
+    incumbent first-stage solution ``xbar``, it first solves the ordinary
+    scenario recourse problem. In compact linear notation this is
 
     ``Q_s(xbar) = min_y { q_s^T y : W_s y >= h_s - T_s xbar }``.
 
@@ -92,7 +92,7 @@ class StandardL1CutGenerator:
 
     This class does not add an objective-vs-eta row to the L1 feasibility model.
     That is the main formulation difference from Pyomo's generic feasibility
-    subproblem transformation used by the default cut generator.
+    subproblem transformation used by the ``pyomo_feasibility`` cut generator.
     """
 
     _optimal_tc = {pe.TerminationCondition.optimal}
