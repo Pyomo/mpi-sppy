@@ -546,7 +546,7 @@ class LShapedMethod(spbase.SPBase):
         _init_vars(self.root_vars)
 
         # sets up the BendersCutGenerator object
-        cut_generator = self.options.get("lshaped_cut_generator", "pyomo_feasibility")
+        cut_generator = self.options.get("lshaped_cut_generator", "standard_l1")
         if cut_generator == "pyomo_feasibility":
             m.bender = LShapedCutGenerator()
         elif cut_generator == "standard_l1":

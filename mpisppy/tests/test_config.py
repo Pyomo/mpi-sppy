@@ -234,7 +234,7 @@ class TestConfigLShapedArgs(unittest.TestCase):
     def test_lshaped_cut_generator_default(self):
         cfg = Config()
         cfg.lshaped_args()
-        self.assertEqual(cfg.lshaped_cut_generator, "pyomo_feasibility")
+        self.assertEqual(cfg.lshaped_cut_generator, "standard_l1")
 
     def test_lshaped_options_forwards_cut_generator(self):
         import mpisppy.utils.cfg_vanilla as vanilla
@@ -245,6 +245,17 @@ class TestConfigLShapedArgs(unittest.TestCase):
         cfg.solver_name = "gurobi"
         cfg.max_iterations = 12
         cfg.lshaped_cut_generator = "standard_l1"
+
+        opts = vanilla.lshaped_options(cfg)
+        self.assertEqual(opts["lshaped_cut_generator"], "standard_l1")
+
+    def test_lshaped_options_default_cut_generator(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+
+        cfg = Config()
+        cfg.popular_args()
+        cfg.solver_name = "gurobi"
+        cfg.max_iterations = 12
 
         opts = vanilla.lshaped_options(cfg)
         self.assertEqual(opts["lshaped_cut_generator"], "standard_l1")

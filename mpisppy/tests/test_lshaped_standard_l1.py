@@ -221,7 +221,6 @@ class TestStandardL1LShapedSolve(unittest.TestCase):
             "sp_solver": solver_name,
             "sp_solver_options": {},
             "valid_eta_lb": {name: -1e6 for name in names},
-            "lshaped_cut_generator": "standard_l1",
             "max_iter": 20,
             "verbose": False,
         }

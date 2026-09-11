@@ -590,10 +590,10 @@ class Config(pyofig.ConfigDict):
                                        "Benders cut generator; 'standard_l1' "
                                        "uses dual-based recourse cuts and an "
                                        "L1 feasibility implementation "
-                                       "(default pyomo_feasibility)",
+                                       "(default standard_l1)",
                            domain=pyofig.In(["pyomo_feasibility",
                                              "standard_l1"]),
-                           default="pyomo_feasibility")
+                           default="standard_l1")
         
 
     ##### common additions to the command line #####

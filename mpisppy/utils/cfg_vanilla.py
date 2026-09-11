@@ -331,7 +331,7 @@ def lshaped_options(cfg):
         "sp_solver": cfg.solver_name,
         "sp_solver_options" : odict,
         "lshaped_cut_generator": cfg.get("lshaped_cut_generator",
-                                         ifmissing="pyomo_feasibility"),
+                                         ifmissing="standard_l1"),
         "max_iter": cfg.max_iterations,
         "verbose": False,
         "root_scenarios":None
