@@ -112,7 +112,7 @@ jobs:
 
       - name: Test standard LP L1 L-shaped cuts
         run: |
-          coverage run $COV_ARGS -m pytest mpisppy/tests/test_lshaped_standard_lp_l1.py -v
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_lshaped_standard_l1.py -v
 
       - name: Test CVaR
         run: |
