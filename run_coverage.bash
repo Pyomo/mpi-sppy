@@ -225,7 +225,9 @@ run_phase "serial unit tests (serial)" \
         mpisppy/tests/test_reduced_costs_fixer.py \
         mpisppy/tests/test_slammer.py \
         mpisppy/tests/test_dual_certificate.py \
-        mpisppy/tests/test_ipopt_outer_bound.py
+        mpisppy/tests/test_ipopt_outer_bound.py \
+        mpisppy/tests/test_mvapich_rma_guard.py \
+        mpisppy/tests/test_window_distribution.py
 
 run_phase "test_ipopt_outer_bound (mpiexec -np 2)" \
     mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py -m pytest mpisppy/tests/test_ipopt_outer_bound.py -v
