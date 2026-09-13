@@ -766,6 +766,50 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=0.5)
 
+    def checkpoint_args(self):
+        # Checkpoint/resume (see doc/designs/checkpointing_design.md). The
+        # Checkpointer extension is attached iff checkpoint_dir is set, so a
+        # run that does not ask for checkpointing pays nothing.
+        self.add_to_config("checkpoint_dir",
+                           description="directory for checkpoint files; its "
+                           "presence enables checkpointing (default None)",
+                           domain=str,
+                           default=None)
+
+        self.add_to_config("checkpoint_backend",
+                           description="how scenario-model state is saved and "
+                           "restored; 'dill-reload' is the only implemented "
+                           "backend (default dill-reload)",
+                           domain=str,
+                           default="dill-reload")
+
+        self.add_to_config("checkpoint_every_iterations",
+                           description="write a checkpoint every K completed "
+                           "iterations instead of every one, trading up to "
+                           "K-1 iterations of lost work for a smaller share "
+                           "of the run spent serializing models; the last "
+                           "iteration of an exhausted iteration limit is "
+                           "always written (default 1)",
+                           domain=int,
+                           default=1)
+
+        self.add_to_config("stop_at_iteration_number",
+                           description="absolute iteration number at which to "
+                           "stop, counted across every run linked by "
+                           "checkpoints; --max-iterations bounds one run, this "
+                           "bounds the whole study, and a run ends at "
+                           "whichever comes first (default None)",
+                           domain=int,
+                           default=None)
+
+        self.add_to_config("resume_from",
+                           description="resume from the checkpoint in this "
+                           "directory; requires the same rank count and "
+                           "scenario-to-rank distribution as the run that "
+                           "wrote it (default None)",
+                           domain=str,
+                           default=None)
+
     def slamming_args(self):
         # Phase-1 preference-driven slamming (see doc/designs/slamming_design.md).
         # The Slammer extension is activated iff slamming_directives_file is set;

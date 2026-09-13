@@ -1,0 +1,272 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
+"""Write checkpoints so a run can be stopped and resumed later.
+
+Attached only when ``--checkpoint-dir`` is given, so a run that does not ask
+for checkpointing pays nothing at all -- the extension is never constructed and
+none of its hooks exist. This extension decides *when* to write;
+``mpisppy/utils/checkpointing.py`` owns the on-disk format, and the resume
+branch lives in ``PHBase.Iter0`` (restoring has to happen mid-startup, before
+solvers are created).
+
+**A checkpoint is only ever written at an iteration boundary.** That is the
+whole design, and it is worth being explicit about why, because the obvious
+alternative -- snapshot whatever state exists when the run ends -- does not
+work and cannot be patched into working.
+
+``iterk_loop`` runs Compute_Xbar, then Update_W, then ``miditer``, then *may
+break* (the user converger, the convergence threshold, ``--time-limit``), and
+only then solves. A run that ends through one of those breaks leaves the models
+describing half an iteration: dual weights advanced to iteration k, and
+nonanticipative values still those of k-1's solve. ``--time-limit`` -- the
+planned-stop recipe this feature exists for -- exits that way every time.
+
+Reconstructing a coherent iterate from that state means undoing everything the
+first half of the iteration did, and that set is open-ended: ``miditer`` gives
+every extension a chance to change rho, fix variables, relax domains, or add
+cuts. Any list of things to rewind is a list of the extensions someone has
+thought about so far.
+
+Writing at ``enditer`` sidesteps all of it. ``enditer`` fires after the solve,
+so a checkpoint written there always describes a *completed* iteration, no
+matter which extensions are loaded or what they touched. The invariant is one
+sentence and it holds by construction.
+
+The cost is a model serialization per checkpoint rather than one per run. That
+is the deliberate trade: correctness that needs no knowledge of any extension.
+Retention is a single generation, so each write replaces the last, and the disk
+footprint does not grow with the iteration count. Each write is bracketed by
+``global_toc`` so the cost is visible in the log rather than guessed at.
+
+``--checkpoint-every-iterations K`` buys that cost back on models whose solves
+are cheap enough for serialization to dominate: writes happen at every K-th
+completed iteration instead of every one, so an unplanned stop loses up to
+K-1 iterations. It moves *which* boundaries are checkpoint points; it does not
+move the write off an iteration boundary, so the coherence argument above is
+untouched. The last iteration of an exhausted iteration limit is always
+written, because raising ``--max-iterations`` and resuming is a supported
+workflow and that iterate is known-good and already in memory.
+
+A checkpoint therefore describes a *completed PH iteration*. A run that ends
+before finishing iteration 1 publishes nothing: no iteration completed, so
+there is no iterate to resume from. Iteration 0 is deliberately not a
+checkpoint point -- ``Iter0`` splices the W and proximal terms into the
+objective after the last extension hook available to us, so a checkpoint taken
+during it would capture a model whose objective is not yet the one PH iterates
+on.
+
+**Extension order matters, and this one is attached first.**
+``MultiExtension`` dispatches ``enditer`` in the order extensions were
+attached, and ``add_checkpointing`` runs at the end of ``ph_hub`` -- before
+``configure_extensions`` appends anything else -- so the Checkpointer's
+``enditer`` fires before the others'. Any extension whose ``enditer`` *changes
+a scenario model* (rho, nonant fixedness, domains, cuts) therefore makes that
+change after the checkpoint for that iteration has been written: the change is
+absent from the checkpoint, and a resume from it never re-applies the change,
+because ``enditer`` for that iteration has already run.
+
+No shipped extension is affected -- every ``enditer`` in the tree is a no-op or
+read-only (the xhat evaluators do their work in ``post_everything``, which is
+also why an xhat evaluation cannot contaminate a checkpoint). The exposure is a
+user extension supplied with ``--user-defined-extensions``, which is appended
+after the Checkpointer: if its ``enditer`` mutates models, attach it *before*
+the Checkpointer so its changes land in the checkpoint. The durable fix is to
+stop depending on dispatch order at all, by writing from a dedicated hook in
+``iterk_loop``; that is scheduled with the cylinders work, which needs the same
+hook for the xhatter loop (design section 9, item 8, and section 11 phase 4).
+
+See ``doc/designs/checkpointing_design.md``.
+"""
+
+import os
+
+from mpisppy import global_toc
+from mpisppy.extensions.extension import Extension
+import mpisppy.utils.checkpointing as ckpt
+
+
+class Checkpointer(Extension):
+    """Write a resumable checkpoint at each completed PH iteration."""
+
+    def __init__(self, opt):
+        super().__init__(opt)
+        options = opt.options
+        self.ckpt_dir = options.get("checkpoint_dir", None)
+        self.backend = options.get("checkpoint_backend",
+                                   ckpt.DILL_RELOAD_BACKEND)
+        every = options.get("checkpoint_every_iterations", 1)
+        self.every = 1 if every is None else int(every)
+        if self.every < 1:
+            raise RuntimeError(
+                f"--checkpoint-every-iterations must be at least 1, got "
+                f"{self.every}. It counts completed iterations between "
+                f"writes; 1 writes at every iteration."
+            )
+
+        if self.ckpt_dir is None:
+            raise RuntimeError(
+                "Checkpointer was attached without a checkpoint directory. "
+                "It should only be attached when --checkpoint-dir is set."
+            )
+        # Everything below fails at setup rather than after a multi-hour run
+        # reaches its first write and discovers it cannot finish one.
+        if self.backend != ckpt.DILL_RELOAD_BACKEND:
+            raise RuntimeError(
+                f"--checkpoint-backend '{self.backend}' is not implemented. "
+                f"The only supported backend is "
+                f"'{ckpt.DILL_RELOAD_BACKEND}'."
+            )
+        ckpt.require_dill(self.backend)
+
+        # The invariant this design rests on -- enditer fires after the solve,
+        # so W and the nonants agree -- is a property of the *synchronous*
+        # iterk_loop. APH inherits this wiring because aph_hub is built by
+        # calling ph_hub, but its loop dispatches a fraction of the scenarios
+        # per pass, keeps its own hardcoded iteration range that no resume
+        # offset touches, and runs on a worker thread under the listener. A
+        # checkpoint written there would not describe a completed iteration
+        # and a resumed run would renumber from 1, overwriting the checkpoint
+        # it resumed from.
+        from mpisppy.opt.ph import PH
+        if not isinstance(opt, PH):
+            raise RuntimeError(
+                f"Checkpointing currently supports the synchronous PH hub "
+                f"only, but this hub is {type(opt).__name__}. Remove "
+                f"--checkpoint-dir, or run PH."
+            )
+
+        # Multi-rank writing is not implemented: every rank would compute the
+        # same staging and generation directory and race to create, replace and
+        # delete it, so ranks destroy each other's files. Refuse rather than
+        # abort the job at its very end with a half-published generation.
+        n_proc = getattr(opt, "n_proc", 1)
+        if n_proc > 1:
+            raise RuntimeError(
+                f"Checkpointing currently supports a single rank per hub, but "
+                f"this hub has {n_proc}. Multi-rank checkpointing is planned; "
+                f"until then, either drop --checkpoint-dir or give the hub a "
+                f"single rank."
+            )
+
+        # Two scenario names that sanitize to the same file name would
+        # silently overwrite each other's model files; refuse now rather than
+        # at the first write.
+        ckpt.check_filename_collisions(opt.local_scenarios)
+
+        # Create and probe the directory now. Discovering only at write time
+        # that the path is unwritable would mean the run never checkpoints.
+        try:
+            os.makedirs(self.ckpt_dir, exist_ok=True)
+            probe = os.path.join(self.ckpt_dir, ".mpisppy_write_probe")
+            with open(probe, "w"):
+                pass
+            os.remove(probe)
+        except OSError as exc:
+            raise RuntimeError(
+                f"Cannot write to the checkpoint directory "
+                f"'{self.ckpt_dir}' ({type(exc).__name__}: {exc})."
+            ) from exc
+
+    def pre_iter0(self):
+        # Prove now that this run's models can actually be checkpointed. A run
+        # that only found out at its first write would lose exactly the state
+        # checkpointing exists to preserve.
+        ckpt.probe_model_is_dillable(self.opt)
+
+    def _is_final_iteration(self):
+        """True when the loop bound says this completed iteration is the last.
+
+        ``iterk_loop`` works out the absolute number of its last iteration
+        from the two bounds -- ``--max-iterations`` over this run and
+        ``--stop-at-iteration-number`` over the study -- and leaves it in
+        ``_stop_iteration``, so at the end of that iteration there is no next
+        pass. Reading the answer rather than ``PHIterLimit`` is what makes the
+        rule hold on a resumed run, where the limit counts this run's
+        iterations and ``_PHIter`` counts the study's.
+
+        Only the iteration bounds are knowable here: convergence, the user
+        converger and ``--time-limit`` are all decided in the *next*
+        iteration's top half, and the cylinder-convergence test fires after
+        this hook.
+        """
+        stop = getattr(self.opt, "_stop_iteration", None)
+        if stop is None:
+            # Called from outside iterk_loop, which is where that attribute is
+            # set. Fall back to what the loop would have computed from the
+            # per-run limit alone.
+            limit = self.opt.options.get("PHIterLimit", None)
+            if limit is None:
+                return False
+            stop = int(getattr(self.opt, "_resume_iteration", 0)) + int(limit)
+        return int(getattr(self.opt, "_PHIter", 0)) >= int(stop)
+
+    def _should_write(self):
+        """Whether this completed iteration is a checkpoint point.
+
+        Every K-th iteration by absolute number, so the cadence is unchanged
+        by a resume (which picks the global counter up where it left off).
+        The final iteration of an exhausted iteration limit is always written:
+        raising ``--max-iterations`` and resuming is an explicitly supported
+        workflow, and dropping the last K-1 iterations of a run that ended by
+        finishing its budget would lose work that is known to be coherent and
+        is sitting in memory.
+        """
+        iteration = int(getattr(self.opt, "_PHIter", 0))
+        return iteration % self.every == 0 or self._is_final_iteration()
+
+    def enditer(self):
+        """Write the checkpoint if this iteration is a checkpoint point.
+
+        See the module docstring for why the write lives here.
+
+        A mid-run write failure -- disk full, an NFS hiccup -- is warned
+        about, not raised: the previously published generation is untouched
+        and remains resumable, while the optimization progress that a raise
+        would destroy lives only in memory. The next checkpoint point tries
+        again. Conditions detectable at setup (unwritable directory,
+        undillable model, unknown backend) still fail loudly in ``__init__``
+        and ``pre_iter0``.
+
+        Every exception is caught, not just the ``RuntimeError`` that
+        ``write_checkpoint`` raises for a failed model dump: only the model
+        dump is wrapped, so the leaf write, the publishing renames and the
+        manifest write all surface a bare ``OSError``, and ENOSPC between the
+        last model file and the leaf would otherwise take the run down by the
+        exact route this is here to prevent. Continuing is safe at every one
+        of those points -- each is either pre-commit (the manifest still
+        names the previous generation, which is intact) or the atomic
+        manifest flip itself.
+        """
+        if not self._should_write():
+            return
+        try:
+            self._write()
+        except Exception as exc:
+            global_toc(
+                f"WARNING: checkpoint write failed at iteration "
+                f"{int(getattr(self.opt, '_PHIter', 0))} "
+                f"({type(exc).__name__}); the run continues, the previously "
+                f"published checkpoint (if any) is intact, and the next "
+                f"checkpoint point will try again.\n{exc}",
+                self.opt.cylinder_rank == 0)
+
+    def _write(self):
+        """Write one generation, bracketed by toc so the cost is legible.
+
+        The pair of timestamps *is* the measured write duration, which is what
+        a user needs in order to judge the per-iteration overhead on their own
+        models -- mpi-sppy deliberately does not estimate it for them.
+        """
+        rank0 = self.opt.cylinder_rank == 0
+        generation = int(getattr(self.opt, "_PHIter", 0))
+        global_toc(f"Writing checkpoint at iteration {generation} "
+                   f"to {self.ckpt_dir}", rank0)
+        ckpt.write_checkpoint(self.opt, self.ckpt_dir, generation,
+                              backend=self.backend)
+        global_toc(f"Checkpoint written at iteration {generation}", rank0)

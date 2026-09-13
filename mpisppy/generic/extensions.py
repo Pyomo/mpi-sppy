@@ -12,7 +12,7 @@ import os
 
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.sputils as sputils
-from mpisppy.extensions.extension import MultiExtension, Extension
+from mpisppy.extensions.extension import Extension
 
 
 def configure_extensions(hub_dict, module, cfg):
@@ -114,9 +114,11 @@ def configure_extensions(hub_dict, module, cfg):
 
     # reduced_costs_rho was deprecated and removed; Config.checker() rejects it.
 
-    if len(ext_classes) != 0:
-        hub_dict['opt_kwargs']['extensions'] = MultiExtension
-        hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
+    # Compose with whatever is already attached (the Checkpointer, say) rather
+    # than rebuilding the extension list from scratch, which silently dropped
+    # every earlier extension.
+    for ext_class in ext_classes:
+        vanilla.extension_adder(hub_dict, ext_class)
     if cfg.primal_dual_converger:
         hub_dict['opt_kwargs']['options']\
             ['primal_dual_converger_options'] = {
