@@ -126,6 +126,7 @@ def add_decomp_args(cfg):
     cfg.ph_xfeas_spoke_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
+    cfg.ipopt_outer_bound_args()
     cfg.subgradient_bounder_args()
     cfg.xhatshuffle_args()
     cfg.xhatxbar_args()
