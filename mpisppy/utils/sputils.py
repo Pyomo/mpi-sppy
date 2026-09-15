@@ -646,9 +646,9 @@ def set_solver_log_file(solver, solver_name, log_path, solve_keyword_args):
     The legacy ``solve(logfile=...)`` keyword is not implemented by the
     ``pyomo.contrib.solver`` interfaces (e.g. ``highs``) or the APPSI
     interfaces (e.g. ``appsi_highs``); both raise ``NotImplementedError``.
-    APPSI solvers that declare a ``logfile`` config option get it set.
-    ``pyomo.contrib.solver`` solvers can only write a log through ``tee``,
-    which needs a file open for the duration of the solve, so for them
+    Solvers of either kind that declare a ``logfile`` config option get it
+    set. Other ``pyomo.contrib.solver`` solvers can only write a log through
+    ``tee``, which needs a file open for the duration of the solve, so for them
     this returns ``log_path`` for the caller to pass to
     :func:`solver_log_stream` around the solve.
 
@@ -684,6 +684,12 @@ def set_solver_log_file(solver, solver_name, log_path, solve_keyword_args):
         # for GurobiDirect / GurobiPersistent when keepfiles is True.
         solver.options["LogFile"] = log_path
     elif isinstance(solver, SolverBase):
+        if "logfile" in solver.config:
+            # e.g. gams_v2, which reduces tee to a bool and prints to stdout.
+            # Through Pyomo 6.10.1 gams_v2 does not pass logfile on to GAMS,
+            # so no log is written until Pyomo/pyomo#4042 is released.
+            solver.config.logfile = log_path
+            return None
         return log_path
     elif isinstance(solver, AppsiSolver):
         if "logfile" not in solver.config:

@@ -1123,6 +1123,15 @@ class Test_solver_log_dir(unittest.TestCase):
                 self.assertEqual(got == log_path, wants_stream)
                 self.assertEqual("logfile" in kwargs, wants_keyword)
 
+        # a pyomo.contrib.solver interface with its own logfile option: it
+        # reduces tee to a bool, so a stream in tee would stay empty
+        gams = pyo.SolverFactory("gams_v2")
+        kwargs = {}
+        self.assertIsNone(sputils.set_solver_log_file(
+            gams, "gams_v2", log_path, kwargs))
+        self.assertEqual(str(gams.config.logfile), log_path)
+        self.assertEqual(kwargs, {})
+
         gurobi = pyo.SolverFactory("gurobi_persistent")
         kwargs = {}
         self.assertIsNone(sputils.set_solver_log_file(
