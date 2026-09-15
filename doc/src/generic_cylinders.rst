@@ -484,6 +484,11 @@ solve will be written. This directory will be created for the user and
 must *not* exist in advance. File names disambiguate scenario and rank,
 so concurrent solves do not clobber one another.
 
+This works with the legacy Pyomo solver interfaces and with the
+``pyomo.contrib.solver`` interfaces (e.g. ``highs``). Among the APPSI
+interfaces, only those with a log file option (e.g. ``appsi_highs``,
+``appsi_gurobi``) support it; the others raise an error.
+
 If the per-solve log volume is too high, add
 ``--hub-only-solver-logs`` to write logs only for hub-side solves
 (spoke-side subproblem solves are skipped). ``--hub-only-solver-logs``
