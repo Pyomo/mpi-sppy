@@ -68,3 +68,67 @@ jobs:
         run: |
           cd mpisppy/tests
           mpiexec -n 2 python -m mpi4py test_with_cylinders.py
+
+  windows-straight-tests:
+    name: Windows straight_tests.py
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mpi4py/setup-mpi@v1
+        with:
+          mpi: msmpi
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+      - name: Install dependencies
+        run: |
+          pip install mpi4py cplex xpress
+
+      - name: setup the program
+        run: |
+          pip install -e ".[test]"
+
+      - name: mpi tests
+        run: |
+          cd mpisppy/tests
+          python straight_tests.py
+
+  windows-runall:
+    name: Windows run_all.py ${{ matrix.solver }} (${{ matrix.part }})
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - solver: xpress_persistent
+            part: first
+          - solver: xpress_persistent
+            part: second
+          - solver: xpress_direct
+            part: first
+          - solver: xpress_direct
+            part: second
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mpi4py/setup-mpi@v1
+        with:
+          mpi: msmpi
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+      - name: Install dependencies
+        run: |
+          pip install mpi4py pandas cplex xpress
+
+      - name: setup the program
+        run: |
+          pip install -e ".[test]"
+
+      - name: Test run_all nouc (${{ matrix.part }} part)
+        run: |
+          cd examples
+          python run_all.py ${{ matrix.solver }} "" nouc --${{ matrix.part }}-part-only
