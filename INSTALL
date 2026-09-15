@@ -1,0 +1,59 @@
+Installing mpi-sppy
+===================
+
+Full instructions, including platform-specific MPI setup, are in the
+Quick Start chapter of the documentation:
+https://mpi-sppy.readthedocs.io/en/latest/quick_start.html
+
+Requirements
+------------
+* Python 3.9 or newer
+* Pyomo >= 6.4 and numpy (installed automatically)
+* A Pyomo-compatible solver. Open-source choices include HiGHS
+  (pip install highspy), Cbc, Ipopt, and SCIP; commercial choices are
+  CPLEX, Gurobi, and Xpress. No solver is installed automatically.
+* For parallel decomposition: an MPI implementation (OpenMPI or MPICH)
+  and mpi4py. The extensive form runs without MPI.
+* Optional: scipy, pandas, matplotlib, dill, and mip (python-mip, which
+  provides MPS/LP/SMPS input via Cbc). Install them all with the
+  [extras] option below.
+
+Install
+-------
+    git clone https://github.com/Pyomo/mpi-sppy.git
+    cd mpi-sppy
+    pip install -e ".[mpi,extras]"
+
+If mpi4py is already installed (for example from conda), use
+pip install -e ".[extras]" instead. A release is also on PyPI
+(pip install mpi-sppy), but it lags the GitHub repository.
+
+Verify the installation
+-----------------------
+1. Check that MPI works:
+
+       mpiexec -n 2 mpi-sppy-one-sided-test
+
+   No error output means MPI is usable.
+
+2. Run the tests. The test suite looks for CPLEX, Gurobi, or Xpress;
+   without one of them most tests are skipped. The free community
+   editions from pip are enough, and are what continuous integration
+   uses:
+
+       pip install -e ".[test]"
+       pip install cplex
+       python -m pytest mpisppy/tests/test_ef_ph.py
+       mpiexec -np 2 python -m mpi4py mpisppy/tests/test_with_cylinders.py
+
+   Each command reports passes and failures.
+
+About the tests
+---------------
+The tests are unittest/pytest modules in mpisppy/tests, generally one
+module per feature (e.g., test_ef_ph.py covers the extensive form and
+progressive hedging; test_with_cylinders.py covers the hub-and-spoke
+runs under MPI). The full list, and how each is run, is in
+.github/workflows/test_pr_and_main.yml; run_coverage.bash runs them all.
+To add a test, add a module to mpisppy/tests and register it in both of
+those files.
