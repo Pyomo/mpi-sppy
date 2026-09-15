@@ -1,0 +1,70 @@
+name: Windows CI
+
+on:
+  push:
+    branches:
+      - main
+      - windows_tests
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash -el {0}
+
+jobs:
+  windows:
+    name: Windows (serial and MS-MPI)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mpi4py/setup-mpi@v1
+        with:
+          mpi: msmpi
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+      - name: Install dependencies
+        run: |
+          # pip's mpi4py wheel for Windows is built against MS-MPI
+          pip install mpi4py cplex xpress highspy
+
+      - name: setup the program
+        run: |
+          pip install -e ".[test]"
+
+      - name: Record the MPI build and solver under test
+        run: |
+          python -c "import mpi4py; from mpi4py import MPI; print('mpi4py', mpi4py.__version__); print(MPI.Get_library_version())"
+          # the tests skip when no solver is found; fail here instead
+          python -c "from mpisppy.tests.utils import get_solver; s = get_solver(); print(s); assert s[0], 'no solver found'"
+
+      - name: Test EF/PH
+        timeout-minutes: 15
+        run: |
+          python -m pytest mpisppy/tests/test_ef_ph.py -v
+
+      - name: Test config
+        if: ${{ !cancelled() }}
+        run: |
+          python -m pytest mpisppy/tests/test_config.py -v
+
+      - name: Test sputils
+        if: ${{ !cancelled() }}
+        run: |
+          python -m pytest mpisppy/tests/test_sputils.py -v
+
+      - name: Test with cylinders (mpiexec -n 2)
+        # Runs even when a serial step failed: this is the step that tells
+        # us whether the RMA windows in spwindow.py work under MS-MPI.
+        if: ${{ !cancelled() }}
+        timeout-minutes: 15
+        run: |
+          cd mpisppy/tests
+          mpiexec -n 2 python -m mpi4py test_with_cylinders.py
