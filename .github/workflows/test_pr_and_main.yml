@@ -54,7 +54,7 @@ jobs:
           python-version: 3.11
       - name: Install dependencies
         run: |
-          pip install cplex xpress highspy
+          pip install cplex xpress
 
       - name: setup the program
         run: |
@@ -109,6 +109,10 @@ jobs:
       - name: Test maximization
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_maximization.py -v
+
+      - name: Test solver log dir
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_solver_log_dir.py -v
 
       - name: Test CVaR
         run: |
