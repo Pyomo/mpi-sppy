@@ -71,6 +71,9 @@ run_phase "test_ef_ph (serial)" \
 run_phase "test_maximization (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_maximization.py -v
 
+run_phase "test_solver_log_dir (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_solver_log_dir.py -v
+
 run_phase "test_cvar (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_cvar.py -v
 

@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools git
-          pip install cplex xpress
+          pip install cplex xpress highspy
 
       - name: set up pyomo
         run: |
@@ -43,6 +43,10 @@ jobs:
       - name: Test EF/PH
         run: |
           python mpisppy/tests/test_ef_ph.py
+
+      - name: Test solver log dir
+        run: |
+          python mpisppy/tests/test_solver_log_dir.py
 
       - name: Test afew
         run: |
