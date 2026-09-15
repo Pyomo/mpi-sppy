@@ -298,10 +298,16 @@ class SPOpt(SPBase):
                 self._subproblem_solve_index[k] = 0
             dir_name = self.options["solver_log_dir"]
             file_name = f"{self._subproblem_file_stem(k)}_{self._subproblem_solve_index[k]}.log"
-            log_stream_path = sputils.set_solver_log_file(
-                s._solver_plugin, self.options.get("solver_name"),
-                os.path.join(dir_name, file_name),
-                solve_keyword_args)
+            log_path = os.path.join(dir_name, file_name)
+            if getattr(self, "Ag", None) is not None:
+                # The guest does the solve, not s._solver_plugin, so the
+                # host plugin's log mechanism does not apply; hand the guest
+                # the path.
+                solve_keyword_args["logfile"] = log_path
+            else:
+                log_stream_path = sputils.set_solver_log_file(
+                    s._solver_plugin, self.options.get("solver_name"),
+                    log_path, solve_keyword_args)
             self._subproblem_solve_index[k] += 1
 
         if (solver_options):

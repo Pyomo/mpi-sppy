@@ -1150,6 +1150,37 @@ class Test_solver_log_dir(unittest.TestCase):
             sputils.set_solver_log_file(
                 appsi_ipopt, "appsi_ipopt", log_path, kwargs)
 
+    def test_agnostic_solve_hands_the_guest_the_log_path(self):
+        # With a guest doing the solve, the host plugin's log mechanism is
+        # irrelevant: an APPSI host solver with no log file option must not
+        # make the run fail, and the guest gets the path as before.
+        try:
+            host_solver = pyo.SolverFactory("appsi_ipopt")
+        except Exception as e:
+            self.skipTest(f"APPSI solvers cannot be constructed: {e}")
+
+        class RecordingGuest:
+            def callout_agnostic(self, kws):
+                self.kws = kws
+
+        log_dir = self._log_dir("agnostic")
+        options = _get_ph_base_options()
+        options["solver_name"] = "appsi_ipopt"
+        options["solver_log_dir"] = log_dir
+        ph = mpisppy.opt.ph.PH(
+            options,
+            self.snames,
+            self.farmer.scenario_creator,
+            scenario_creator_kwargs=self.sck,
+        )
+        ph.Ag = RecordingGuest()
+        k, s = next(iter(ph.local_scenarios.items()))
+        s._solver_plugin = host_solver
+        ph.solve_one(None, k, s)
+        self.assertEqual(
+            ph.Ag.kws["solve_keyword_args"]["logfile"],
+            os.path.join(log_dir, f"{ph._subproblem_file_stem(k)}_0.log"))
+
     def test_contrib_solver_ef_writes_log(self):
         from mpisppy.opt.ef import ExtensiveForm
         solvers = _available_contrib_solvers()

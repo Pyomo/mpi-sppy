@@ -669,7 +669,11 @@ def set_solver_log_file(solver, solver_name, log_path, solve_keyword_args):
     try:
         from pyomo.contrib.solver.common.base import SolverBase
     except ImportError:
-        SolverBase = ()
+        try:
+            # Pyomo 6.7.1 through 6.9.1
+            from pyomo.contrib.solver.base import SolverBase
+        except ImportError:
+            SolverBase = ()
     try:
         from pyomo.contrib.appsi.base import Solver as AppsiSolver
     except ImportError:
