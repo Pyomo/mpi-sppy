@@ -140,6 +140,9 @@ jobs:
           # did not find the runner's VS 18; use the environment set up above
           DISTUTILS_USE_SDK: "1"
           MSSdk: "1"
+        # not bash: its login shell puts Git's /usr/bin/link.exe ahead of
+        # MSVC's link.exe on PATH
+        shell: pwsh
         run: |
           # we don't need it all; just APPSI's extensions (netdes --presolve)
           pyomo build-extensions || python -c "from pyomo.contrib.appsi.cmodel import cmodel_available; exit(0) if bool(cmodel_available) else exit(1)"
