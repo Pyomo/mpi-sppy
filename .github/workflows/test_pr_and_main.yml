@@ -54,7 +54,7 @@ jobs:
           python-version: 3.11
       - name: Install dependencies
         run: |
-          pip install cplex xpress
+          pip install cplex xpress highspy
 
       - name: setup the program
         run: |
@@ -90,7 +90,7 @@ jobs:
 
           # pyomo + pybind11 explicit: the build-extensions step below runs
           # before the editable install; solvers are in no extra (licensing)
-          pip install pyomo pybind11 cplex gurobipy xpress
+          pip install pyomo pybind11 cplex gurobipy xpress highspy
 
       - name: Build pyomo extensions
         run: |

@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools git
-          pip install cplex xpress
+          pip install cplex xpress highspy
 
       - name: set up pyomo
         run: |

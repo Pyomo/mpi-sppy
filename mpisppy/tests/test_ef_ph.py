@@ -1063,21 +1063,14 @@ class Test_mutable_probability(unittest.TestCase):
             ef._compute_unconditional_node_probabilities(force=True)
 
 
-def _available_contrib_solvers():
-    # pyomo.contrib.solver interfaces reject the legacy logfile keyword
-    # (issue #861), so solver_log_dir has to reach them through tee.
-    found = []
-    for cand in ("highs", "gurobi_persistent_v2"):
-        try:
-            if pyo.SolverFactory(cand).available(exception_flag=False):
-                found.append(cand)
-        except Exception:
-            continue
-    return found
-
-
 class Test_solver_log_dir(unittest.TestCase):
-    """ solver_log_dir with each kind of Pyomo solver interface (issue #861). """
+    """ solver_log_dir with each kind of Pyomo solver interface (issue #861).
+
+    The solves use highs, a pyomo.contrib.solver interface: those reject the
+    legacy logfile keyword, so solver_log_dir has to reach them through tee.
+    CI installs highspy for every job that runs this file; these tests fail
+    rather than skip without it.
+    """
 
     def setUp(self):
         import tempfile
@@ -1137,11 +1130,8 @@ class Test_solver_log_dir(unittest.TestCase):
         self.assertEqual(gurobi.options["LogFile"], log_path)
         self.assertEqual(kwargs, {})
 
-        try:
-            appsi_highs = pyo.SolverFactory("appsi_highs")
-            appsi_ipopt = pyo.SolverFactory("appsi_ipopt")
-        except Exception as e:
-            self.skipTest(f"APPSI solvers cannot be constructed: {e}")
+        appsi_highs = pyo.SolverFactory("appsi_highs")
+        appsi_ipopt = pyo.SolverFactory("appsi_ipopt")
         self.assertIsNone(sputils.set_solver_log_file(
             appsi_highs, "appsi_highs", log_path, kwargs))
         self.assertEqual(appsi_highs.config.logfile, log_path)
@@ -1154,10 +1144,7 @@ class Test_solver_log_dir(unittest.TestCase):
         # With a guest doing the solve, the host plugin's log mechanism is
         # irrelevant: an APPSI host solver with no log file option must not
         # make the run fail, and the guest gets the path as before.
-        try:
-            host_solver = pyo.SolverFactory("appsi_ipopt")
-        except Exception as e:
-            self.skipTest(f"APPSI solvers cannot be constructed: {e}")
+        host_solver = pyo.SolverFactory("appsi_ipopt")
 
         class RecordingGuest:
             def callout_agnostic(self, kws):
@@ -1183,48 +1170,38 @@ class Test_solver_log_dir(unittest.TestCase):
 
     def test_contrib_solver_ef_writes_log(self):
         from mpisppy.opt.ef import ExtensiveForm
-        solvers = _available_contrib_solvers()
-        if not solvers:
-            self.skipTest("no pyomo.contrib.solver solver is available")
-        for name in solvers:
-            with self.subTest(solver=name):
-                log_dir = self._log_dir(f"ef_{name}")
-                ef = ExtensiveForm(
-                    options={"solver": name, "solver_log_dir": log_dir},
-                    all_scenario_names=self.snames,
-                    scenario_creator=self.farmer.scenario_creator,
-                    scenario_creator_kwargs=self.sck)
-                results = ef.solve_extensive_form()
-                pyo.assert_optimal_termination(results)
-                log_file = os.path.join(log_dir, "EF_solver_log.log")
-                self.assertGreater(os.path.getsize(log_file), 0)
+        log_dir = self._log_dir("ef")
+        ef = ExtensiveForm(
+            options={"solver": "highs", "solver_log_dir": log_dir},
+            all_scenario_names=self.snames,
+            scenario_creator=self.farmer.scenario_creator,
+            scenario_creator_kwargs=self.sck)
+        results = ef.solve_extensive_form()
+        pyo.assert_optimal_termination(results)
+        log_file = os.path.join(log_dir, "EF_solver_log.log")
+        self.assertGreater(os.path.getsize(log_file), 0)
 
     def test_contrib_solver_ph_writes_log(self):
-        solvers = _available_contrib_solvers()
-        if not solvers:
-            self.skipTest("no pyomo.contrib.solver solver is available")
-        for name in solvers:
-            with self.subTest(solver=name):
-                log_dir = self._log_dir(f"ph_{name}")
-                options = _get_ph_base_options()
-                options["solver_name"] = name
-                options["PHIterLimit"] = 1
-                options["iter0_solver_options"] = {}
-                options["iterk_solver_options"] = {}
-                options["solver_log_dir"] = log_dir
-                ph = mpisppy.opt.ph.PH(
-                    options,
-                    self.snames,
-                    self.farmer.scenario_creator,
-                    scenario_creator_kwargs=self.sck,
-                )
-                ph.ph_main()
-                logs = sorted(os.listdir(log_dir))
-                # iter0 and iter1 for each scenario
-                self.assertEqual(len(logs), 2 * len(self.snames), logs)
-                for log in logs:
-                    self.assertGreater(
-                        os.path.getsize(os.path.join(log_dir, log)), 0, log)
+        log_dir = self._log_dir("ph")
+        options = _get_ph_base_options()
+        options["solver_name"] = "highs"
+        options["PHIterLimit"] = 1
+        options["iter0_solver_options"] = {}
+        options["iterk_solver_options"] = {}
+        options["solver_log_dir"] = log_dir
+        ph = mpisppy.opt.ph.PH(
+            options,
+            self.snames,
+            self.farmer.scenario_creator,
+            scenario_creator_kwargs=self.sck,
+        )
+        ph.ph_main()
+        logs = sorted(os.listdir(log_dir))
+        # iter0 and iter1 for each scenario
+        self.assertEqual(len(logs), 2 * len(self.snames), logs)
+        for log in logs:
+            self.assertGreater(
+                os.path.getsize(os.path.join(log_dir, log)), 0, log)
 
 
 if __name__ == '__main__':
