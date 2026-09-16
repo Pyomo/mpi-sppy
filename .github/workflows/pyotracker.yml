@@ -6,6 +6,8 @@ on:
   schedule:
     # min hr dayofmonth month dayofweek
     - cron: "14 3 * * *"
+  # so a change to this file can be tried without waiting for the cron
+  workflow_dispatch:
 
 defaults:
     run:
@@ -16,8 +18,12 @@ jobs:
 
     runs-on: ubuntu-latest
     strategy:
+      # the two versions are the comparison this workflow exists to make, so
+      # a failure in one must not cancel the other
+      fail-fast: false
       matrix:
-        pyomo-version: [6.9.5, main]
+        # the current pyomo release, and pyomo main
+        pyomo-version: [6.10.1, main]
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v3
@@ -27,7 +33,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools git
-          pip install cplex xpress
+          pip install cplex xpress highspy
 
       - name: set up pyomo
         run: |
@@ -43,6 +49,10 @@ jobs:
       - name: Test EF/PH
         run: |
           python mpisppy/tests/test_ef_ph.py
+
+      - name: Test solver log dir
+        run: |
+          python mpisppy/tests/test_solver_log_dir.py
 
       - name: Test afew
         run: |

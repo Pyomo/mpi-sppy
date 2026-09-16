@@ -23,7 +23,6 @@ from mpisppy import MPI
 import pyomo.environ as pyo
 from pyomo.opt import SolverFactory
 from pyomo.common.collections import ComponentSet
-from pyomo.solvers.plugins.solvers.gurobi_direct import GurobiDirect
 
 from mpisppy.spbase import SPBase
 import mpisppy.utils.sputils as sputils
@@ -293,17 +292,22 @@ class SPOpt(SPBase):
         # parameters to the wrong iteration and breaks log-driven
         # debugging of per-iteration options.
         solve_keyword_args = dict()
+        log_stream_path = None
         if self.options.get("solver_log_dir", None):
             if k not in self._subproblem_solve_index:
                 self._subproblem_solve_index[k] = 0
             dir_name = self.options["solver_log_dir"]
             file_name = f"{self._subproblem_file_stem(k)}_{self._subproblem_solve_index[k]}.log"
-            # Workaround for Pyomo/pyomo#3589: Setting 'keepfiles' to True is required
-            # for proper functionality when using the GurobiDirect / GurobiPersistent solver.
-            if isinstance(s._solver_plugin, GurobiDirect):
-                s._solver_plugin.options["LogFile"] = os.path.join(dir_name, file_name)
+            log_path = os.path.join(dir_name, file_name)
+            if getattr(self, "Ag", None) is not None:
+                # The guest does the solve, not s._solver_plugin, so the
+                # host plugin's log mechanism does not apply; hand the guest
+                # the path.
+                solve_keyword_args["logfile"] = log_path
             else:
-                solve_keyword_args["logfile"] = os.path.join(dir_name, file_name)
+                log_stream_path = sputils.set_solver_log_file(
+                    s._solver_plugin, self.options.get("solver_name"),
+                    log_path, solve_keyword_args)
             self._subproblem_solve_index[k] += 1
 
         if (solver_options):
@@ -367,9 +371,11 @@ class SPOpt(SPBase):
         else:
             #  didcallout = False  (returned true by the callout, but not used)
             try:
-                results = s._solver_plugin.solve(s,
-                                                 **solve_keyword_args,
-                                                 load_solutions=False)
+                with sputils.solver_log_stream(log_stream_path,
+                                               solve_keyword_args):
+                    results = s._solver_plugin.solve(s,
+                                                     **solve_keyword_args,
+                                                     load_solutions=False)
                 solver_exception = None
             except Exception as e:
                 results = None
@@ -442,9 +448,11 @@ class SPOpt(SPBase):
                     else:
                         print("no results object, so solving agin with tee=True")
                         solve_keyword_args["tee"] = True
-                        results = s._solver_plugin.solve(s,
-                                                 **solve_keyword_args,
-                                                 load_solutions=False)
+                        with sputils.solver_log_stream(log_stream_path,
+                                                       solve_keyword_args):
+                            results = s._solver_plugin.solve(s,
+                                                     **solve_keyword_args,
+                                                     load_solutions=False)
 
                 if solver_exception is not None:
                     raise solver_exception

@@ -90,7 +90,7 @@ jobs:
 
           # pyomo + pybind11 explicit: the build-extensions step below runs
           # before the editable install; solvers are in no extra (licensing)
-          pip install pyomo pybind11 cplex gurobipy xpress
+          pip install pyomo pybind11 cplex gurobipy xpress highspy
 
       - name: Build pyomo extensions
         run: |
@@ -109,6 +109,10 @@ jobs:
       - name: Test maximization
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_maximization.py -v
+
+      - name: Test solver log dir
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_solver_log_dir.py -v
 
       - name: Test CVaR
         run: |
@@ -199,6 +203,14 @@ jobs:
       - name: Test termination callback
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/utils/callbacks/termination/tests/test_termination.py -v
+
+      - name: Test window distribution
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_window_distribution.py -v
+
+      - name: Test RMA guard
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_mvapich_rma_guard.py -v
 
       - name: Test docs
         run: |
@@ -1199,6 +1211,25 @@ jobs:
           mpiexec -np 6 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_flexible_rank_xfeas.py
           mpiexec -np 6 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat_multistage.py
           mpiexec -np 6 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_flexible_rank_extension_fields.py
+
+      - name: run the rank-failure abort tests
+        # These spawn their own two-rank mpiexec jobs, so they run under
+        # pytest rather than under mpiexec.  Here rather than with the unit
+        # tests because what they exercise is MPI_Abort teardown, which is
+        # exactly what differs between the implementations this matrix
+        # covers.  MPISPPY_REQUIRE_MPIEXEC turns a missing launcher or a
+        # missing mpi4py into a failure, so the cell cannot go green on
+        # skips.  The cap is above the worst case -- six jobs that can each
+        # wait out TIMEOUT plus the reap -- so that a reintroduced hang
+        # reports "the job hung for 120s: a rank is still waiting in its
+        # collective", rather than being cut short by a generic step
+        # timeout that says nothing about why.
+        if: ${{ !cancelled() }}
+        timeout-minutes: 25
+        env:
+          MPISPPY_REQUIRE_MPIEXEC: "1"
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_mpi_abort.py -v
 
       - name: Upload coverage data
         if: always()

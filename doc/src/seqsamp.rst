@@ -23,10 +23,10 @@ a ``--module-name`` argument pointing to your model module.
    Installing mpi-sppy puts the console script
    ``mpi-sppy-mrp-generic`` on your ``PATH``; it is equivalent to
    ``python -m mpisppy.mrp_generic`` and can be used in place of that
-   prefix in the examples below. It aborts all ranks when one of them
-   raises an exception, just as the ``python -m mpi4py`` module form
-   does, so either is safe for the ``--xhat-method cylinders``
-   (multi-rank) case. See :ref:`console_scripts`.
+   prefix in the examples below. A rank that raises an uncaught
+   exception ends the job rather than hanging the others, so either
+   form is safe for the ``--xhat-method cylinders`` (multi-rank) case.
+   See :ref:`console_scripts`.
 
 Your model module must provide the same functions required by
 ``generic_cylinders``: ``scenario_creator``, ``scenario_names_creator``,

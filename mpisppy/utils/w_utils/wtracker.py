@@ -69,12 +69,11 @@ class WTracker():
 
         Written here because it is read from three places -- the report and
         the two checks below -- and it used to be written out in each of
-        them. The fix for a resumed run reached one of the three, and the
-        other two went on indexing from iteration 1: a run resumed from a
-        checkpoint holds W sets only from the iteration it resumed at (plus
-        whatever its extension carried across), so the window can start no
-        earlier than the first set tracked, and starting at 1 regardless is
-        a KeyError after every solve has been paid for.
+        them, with the copies out of step.
+
+        The window can start no earlier than the first iteration actually
+        tracked. Starting at 1 regardless indexes a dict that has no such
+        key, which is a KeyError after every solve has been paid for.
 
         default=li+1 rather than 1: with nothing tracked at all, falling
         back to 1 puts fi at li-wlen, which passes the test below and then
@@ -231,8 +230,7 @@ class WTracker():
             # i and i-1, not fi and fi-1: comparing the same pair on every
             # pass answered for one iteration whatever the window, and
             # fi-1 is outside the window -- iteration 0 on a fresh run,
-            # which is not tracked, and the set before the resume on a
-            # resumed one, which is not there at all.
+            # which is never tracked.
             for i in range(fi+1, li+1):
                 for sname, _ in self.PHB.local_scenarios.items():
                     sgn_curr_iter = np.sign(np.array(self.local_Ws[i][sname]))
