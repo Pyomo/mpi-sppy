@@ -195,7 +195,11 @@ class WTracker():
         # spelled local_Ws[0], which is the first grab only when the run began
         # at iteration 0: a run resumed from a checkpoint begins at the
         # checkpointed iteration and never grabs a 0.
-        first = min(self.local_Ws)
+        # Skip the -1 this method inserts just below. A plain min() would
+        # return that sentinel from the second call on, so `first` would stop
+        # meaning the earliest iteration actually tracked -- which is what the
+        # fallback below reads it as.
+        first = min(k for k in self.local_Ws if k >= 0)
         if -1 not in self.local_Ws:
             self.local_Ws[-1] = self.local_Ws[first]
         # A resumed run has no W history from before the iteration it resumed
