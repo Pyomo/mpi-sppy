@@ -17,10 +17,9 @@ other features without requiring you to write a driver program.
 
        mpi-sppy-generic-cylinders --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi
 
-   For multi-rank parallel runs the console script is as safe as the
-   ``python -m mpi4py`` module form shown below: both abort all ranks
-   when one of them raises an exception, rather than leaving the job
-   hung. See :ref:`console_scripts`.
+   For multi-rank parallel runs a rank that raises an uncaught
+   exception ends the job rather than leaving it hung, whichever form
+   you use. See :ref:`console_scripts`.
 
 Your Model File (Module)
 ------------------------
@@ -484,6 +483,18 @@ This specifies a directory where solver log files for *every* subproblem
 solve will be written. This directory will be created for the user and
 must *not* exist in advance. File names disambiguate scenario and rank,
 so concurrent solves do not clobber one another.
+
+This works with the legacy Pyomo solver interfaces and with the
+``pyomo.contrib.solver`` interfaces (e.g. ``highs``). Among the APPSI
+interfaces, only those with a log file option (e.g. ``appsi_highs``,
+``appsi_gurobi``) support it; the others raise an error.
+
+.. note::
+
+   With ``gams_v2``, no log files are written through Pyomo 6.10.1, because
+   that interface does not pass its log file option on to GAMS. This is
+   fixed by Pyomo/pyomo#4042; until a Pyomo release includes it, use the
+   ``gams`` solver interface if you need GAMS logs.
 
 If the per-solve log volume is too high, add
 ``--hub-only-solver-logs`` to write logs only for hub-side solves

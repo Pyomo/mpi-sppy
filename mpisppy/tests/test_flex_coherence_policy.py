@@ -24,6 +24,7 @@ disturbing the receive buffer, and a later coherent read then succeeds."""
 import unittest
 
 import numpy as np
+from mpisppy import MPI
 
 from mpisppy.cylinders.spcommunicator import (
     SPCommunicator,
@@ -175,7 +176,45 @@ class _StubCylinderComm:
     def Allreduce(self, sendbuf, recvbuf, op=None):
         local = int(sendbuf[0][0])
         peer = local if self.peer_id is None else self.peer_id
-        recvbuf[0][0] = local + peer
+        if op == MPI.MIN:
+            recvbuf[0][0] = min(local, peer)
+        elif op == MPI.MAX:
+            recvbuf[0][0] = max(local, peer)
+        else:
+            raise AssertionError(f"unexpected reduction operation: {op}")
+
+
+class _StubThreeRankCylinderComm:
+    """Exercise disagreement that the former sum/average test missed."""
+
+    size = 3
+
+    def Allreduce(self, sendbuf, recvbuf, op=None):
+        values = (1, int(sendbuf[0][0]), 3)
+        if op == MPI.MIN:
+            recvbuf[0][0] = min(values)
+        elif op == MPI.MAX:
+            recvbuf[0][0] = max(values)
+        else:
+            raise AssertionError(f"unexpected reduction operation: {op}")
+
+
+class TestWriteIdsAgree(unittest.TestCase):
+
+    def test_rejects_mixed_ids_when_local_id_equals_average(self):
+        sp = SPCommunicator.__new__(SPCommunicator)
+        sp.cylinder_comm = _StubThreeRankCylinderComm()
+
+        # The former sum check accepted local id 2 because
+        # 2 * 3 == 1 + 2 + 3, even though the ranks disagreed.
+        self.assertFalse(sp._write_ids_agree(2, synchronize=True))
+
+    def test_accepts_matching_ids(self):
+        sp = SPCommunicator.__new__(SPCommunicator)
+        sp.cylinder_comm = _StubCylinderComm()
+        sp.cylinder_comm.peer_id = 7
+
+        self.assertTrue(sp._write_ids_agree(7, synchronize=True))
 
 
 def _make_reader():
