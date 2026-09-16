@@ -90,7 +90,7 @@ jobs:
 
           # pyomo + pybind11 explicit: the build-extensions step below runs
           # before the editable install; solvers are in no extra (licensing)
-          pip install pyomo pybind11 cplex gurobipy xpress
+          pip install pyomo pybind11 cplex gurobipy xpress highspy
 
       - name: Build pyomo extensions
         run: |
@@ -109,6 +109,10 @@ jobs:
       - name: Test maximization
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_maximization.py -v
+
+      - name: Test solver log dir
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_solver_log_dir.py -v
 
       - name: Test CVaR
         run: |
