@@ -23,7 +23,7 @@ license = { file = "LICENSE.md" }
 requires-python = ">=3.9"
 dependencies = [
     "numpy",
-    "pyomo>=6.4",
+    "pyomo>=6.8.2",
 ]
 
 [project.urls]

@@ -14,7 +14,6 @@ import numbers
 import mpisppy.utils.sputils as sputils
 import pathlib
 import os
-from pyomo.solvers.plugins.solvers.gurobi_direct import GurobiDirect
 
 logger = logging.getLogger("mpisppy.ef")
 
@@ -163,26 +162,22 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             self._instance_loaded = True
 
 
-        solve_keyword_args = dict()            
-        if self.options.get("solver_log_dir", None):            
-            # solver-log logic copied from spopt.py
-            dir_name = self.options["solver_log_dir"]
-            file_name = "EF_solver_log.log"
-            # Workaround for Pyomo/pyomo#3589: Setting 'keepfiles' to True is required
-            # for proper functionality when using the GurobiDirect / GurobiPersistent solver.
-            if isinstance(self.solver, GurobiDirect):
-                if solver_options is None:
-                    solver_options = dict()
-                solver_options["LogFile"] = os.path.join(dir_name, file_name)
-            else:
-                solve_keyword_args["logfile"] = os.path.join(dir_name, file_name)
-            
+        solve_keyword_args = {"tee": tee}
+        log_stream_path = None
+        if self.options.get("solver_log_dir", None):
+            log_stream_path = sputils.set_solver_log_file(
+                self.solver, self.options["solver"],
+                os.path.join(self.options["solver_log_dir"], "EF_solver_log.log"),
+                solve_keyword_args)
+
         # Pass solver-specifiec (e.g. Gurobi, CPLEX) options
         if solver_options is not None:
             for (opt, value) in solver_options.items():
                 self.solver.options[opt] = value
-                
-        results = self.solver.solve(self.ef, tee=tee, load_solutions=False, **solve_keyword_args)
+
+        with sputils.solver_log_stream(log_stream_path, solve_keyword_args):
+            results = self.solver.solve(self.ef, load_solutions=False,
+                                        **solve_keyword_args)
         if sputils.not_good_enough_results(results):
             # this should catch infeasible and unbounded cases
             return results

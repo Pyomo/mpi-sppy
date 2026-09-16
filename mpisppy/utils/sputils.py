@@ -10,6 +10,7 @@
 # Note to developers: things called spcomm are way more than just a comm; SPCommunicator
 
 import pyomo.environ as pyo
+import contextlib
 import sys
 import os
 import re
@@ -633,6 +634,111 @@ def has_persistent_solve_api(solver):
         # This function promises a bool; let the caller's own solve() call be
         # what reports the unavailable solver.
         return False
+
+
+def set_solver_log_file(solver, solver_name, log_path, solve_keyword_args):
+    """Point the log of ``solver``'s next solve at ``log_path``.
+
+    Call this before writing the solver's other options: for persistent
+    Gurobi the ``Set parameter`` lines go to whatever ``LogFile`` is
+    active when each option is set.
+
+    The legacy ``solve(logfile=...)`` keyword is not implemented by the
+    ``pyomo.contrib.solver`` interfaces (e.g. ``highs``) or the APPSI
+    interfaces (e.g. ``appsi_highs``); both raise ``NotImplementedError``.
+    Solvers of either kind that declare a ``logfile`` config option get it
+    set. Other ``pyomo.contrib.solver`` solvers can only write a log through
+    ``tee``, which needs a file open for the duration of the solve, so for them
+    this returns ``log_path`` for the caller to pass to
+    :func:`solver_log_stream` around the solve.
+
+    Args:
+        solver: the Pyomo solver plugin.
+        solver_name (str): the name ``solver`` was made from, for messages.
+        log_path (str): the log file to write.
+        solve_keyword_args (dict): keyword arguments for ``solver.solve``;
+            updated in place.
+
+    Returns:
+        str or None: ``log_path`` if the caller must wrap the solve in
+        :func:`solver_log_stream`, otherwise None.
+    """
+    # Imported here: these modules are not in every Pyomo release mpi-sppy
+    # supports.
+    from pyomo.solvers.plugins.solvers.gurobi_direct import GurobiDirect
+    try:
+        from pyomo.contrib.solver.common.base import SolverBase
+    except ImportError:
+        try:
+            # Pyomo 6.7.1 through 6.9.1
+            from pyomo.contrib.solver.base import SolverBase
+        except ImportError:
+            SolverBase = ()
+    try:
+        from pyomo.contrib.appsi.base import Solver as AppsiSolver
+    except ImportError:
+        AppsiSolver = ()
+
+    if isinstance(solver, GurobiDirect):
+        # Workaround for Pyomo/pyomo#3589: the logfile keyword only works
+        # for GurobiDirect / GurobiPersistent when keepfiles is True.
+        solver.options["LogFile"] = log_path
+    elif isinstance(solver, SolverBase):
+        if "logfile" in solver.config:
+            # e.g. gams_v2, which reduces tee to a bool and prints to stdout.
+            # Through Pyomo 6.10.1 gams_v2 does not pass logfile on to GAMS,
+            # so no log is written until Pyomo/pyomo#4042 is released.
+            solver.config.logfile = log_path
+            return None
+        return log_path
+    elif isinstance(solver, AppsiSolver):
+        if "logfile" not in solver.config:
+            raise ValueError(
+                f"solver {solver_name} has no log file option, so "
+                "solver-log-dir cannot be used with it")
+        solver.config.logfile = log_path
+    else:
+        solve_keyword_args["logfile"] = log_path
+    return None
+
+
+@contextlib.contextmanager
+def solver_log_stream(log_path, solve_keyword_args):
+    """Add an open ``log_path`` to the ``tee`` of a ``pyomo.contrib.solver``
+    solve made inside this context; see :func:`set_solver_log_file`.
+
+    Does nothing when ``log_path`` is None. The file is opened for append,
+    so a second solve of the same subproblem under the same name (e.g. a
+    retry after a failure) adds to the log rather than replacing it. The
+    caller's ``tee`` value is restored on exit.
+
+    Args:
+        log_path (str or None): the log file, or None.
+        solve_keyword_args (dict): keyword arguments for ``solver.solve``;
+            its ``tee`` entry is replaced inside the context.
+    """
+    if log_path is None:
+        yield
+        return
+    had_tee = "tee" in solve_keyword_args
+    tee = solve_keyword_args.get("tee", False)
+    with open(log_path, "a") as log_file:
+        if tee is True:
+            streams = [log_file, sys.stdout]
+        elif isinstance(tee, (list, tuple)):
+            streams = [log_file, *tee]
+        elif tee:
+            streams = [log_file, tee]
+        else:
+            streams = [log_file]
+        solve_keyword_args["tee"] = streams
+        try:
+            yield
+        finally:
+            if had_tee:
+                solve_keyword_args["tee"] = tee
+            else:
+                del solve_keyword_args["tee"]
 
 
 def solver_quadratic_objective_capability(solver_plugin):
