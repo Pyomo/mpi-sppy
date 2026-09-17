@@ -55,7 +55,6 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs,
                               rho_setter, all_nodenames, ph_converger,
                               variable_probability=variable_probability)
     configure_extensions(hub_dict, module, cfg)
-    _check_checkpointing_survived(hub_dict, cfg)
 
     # reduced cost fixer options setup (needs hub_dict before building spokes)
     if cfg.reduced_costs:
@@ -76,6 +75,10 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs,
     # if the user dares, let them mess with the hubdict prior to solve
     if hasattr(module, 'hub_and_spoke_dict_callback'):
         module.hub_and_spoke_dict_callback(hub_dict, list_of_spoke_dict, cfg)
+
+    # After the callback, which may rewrite the hub's extension list, so the
+    # guard judges the dictionary the wheel is actually built from.
+    _check_checkpointing_survived(hub_dict, cfg)
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
@@ -177,9 +180,10 @@ def _check_checkpointing_survived(hub_dict, cfg):
     add_checkpointing only wires hubs built through ph_hub, so another hub
     type given --checkpoint-dir would proceed with exit code 0 and write
     nothing, and the user would find out the next morning that a multi-day
-    study had no checkpoint. It also backstops any future code that rebuilds
-    the hub's extension list without composing -- configure_extensions did
-    exactly that until it was changed to go through extension_adder.
+    study had no checkpoint. It also backstops anything that rebuilds the
+    hub's extension list without composing -- configure_extensions did exactly
+    that until it was changed to go through extension_adder, and a model's
+    hub_and_spoke_dict_callback is free to.
     """
     if not cfg.get("checkpoint_dir") and not cfg.get("resume_from"):
         return

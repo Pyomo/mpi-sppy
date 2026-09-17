@@ -1258,6 +1258,14 @@ class PHBase(mpisppy.spopt.SPOpt):
                 f"--resume-from, or run PH."
             )
 
+        # Also the read-side counterpart of the Checkpointer's backend
+        # refusal, for a resume that runs without one attached: without it,
+        # `--resume-from ckpt --checkpoint-backend leaf` would go ahead on the
+        # manifest's backend and ignore the one it was asked for.
+        checkpointing.require_implemented_backend(
+            self.options.get("checkpoint_backend",
+                             checkpointing.DILL_RELOAD_BACKEND))
+
         leaf, models = checkpointing.load_checkpoint(self, ckpt_dir)
 
         for sname, model in models.items():

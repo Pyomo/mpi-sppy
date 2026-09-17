@@ -126,9 +126,12 @@ specific to checkpointing: the existing `--pickle-scenarios-dir` path would fail
 the same way on such a model. Two consequences for this design:
 
 - The dill-reload backend cannot promise to checkpoint an *arbitrary* model; it
-  requires a dill-serializable one. The implementation therefore **probes one
+  requires a dill-serializable one. The implementation therefore **probes every
   local scenario at setup** and fails immediately with an actionable message
-  rather than discovering the problem at the first write, hours in.
+  rather than discovering the problem at the first write, hours in. Every
+  scenario, not just one: a `scenario_creator` can close over something
+  unserializable for a single scenario, and a one-scenario probe would wave
+  that run through.
 - The workaround lives in the model (hoist the value out of the closure before
   defining the rule), so the user-facing docs must say so.
 
@@ -601,9 +604,10 @@ record.
   version-robust checkpoints, for small/cheap-creator runs or frequent kill-safety
   writes) — is designed but **not currently planned** (§11 Phase 6); until that
   phase lands, `dill-reload` is the only valid value.
-- **`--resume-from <dir>`** (or `--resume`, auto-selecting the latest *complete*
-  checkpoint from the manifest) — reconstruct the wheel and restore. Resume
-  requires identical geometry (§5.7); a mismatch is refused with a clear error.
+- **`--resume-from <dir>`** — resume from the complete checkpoint that the
+  directory's manifest names: reconstruct the wheel and restore. There is no
+  bare `--resume` that finds a directory on its own. Resume requires identical
+  geometry (§5.7); a mismatch is refused with a clear error.
 
 Each checkpoint is published atomically (§9, item 7; §10), so a kill *during* a
 write leaves the previous complete checkpoint intact and referenced — never a
@@ -1006,7 +1010,7 @@ as a branch stacked on the 1a PR.
   `aph_hub`), more than one rank, an unimplemented backend, an unwritable
   directory, and any run where the extension would not actually be attached.
   CLI flags `--checkpoint-dir`,
-  `--checkpoint-backend`, `--resume-from`/`--resume`, with a clear error when
+  `--checkpoint-backend`, `--resume-from`, with a clear error when
   `dill` is not installed (it is an optional `extras` dependency). Tests (the
   §11.1 A/B harness, serial): **farmer** bit-identical A vs B; no iter-0
   subproblem solve occurs on resume; geometry/cfg mismatch refused.

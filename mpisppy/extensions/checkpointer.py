@@ -135,12 +135,7 @@ class Checkpointer(Extension):
             )
         # Everything below fails at setup rather than after a multi-hour run
         # reaches its first write and discovers it cannot finish one.
-        if self.backend != ckpt.DILL_RELOAD_BACKEND:
-            raise RuntimeError(
-                f"--checkpoint-backend '{self.backend}' is not implemented. "
-                f"The only supported backend is "
-                f"'{ckpt.DILL_RELOAD_BACKEND}'."
-            )
+        ckpt.require_implemented_backend(self.backend)
 
         # One class, two jobs. On the hub it writes the PH iterate, models and
         # all. On an xhat spoke it writes only that spoke's best incumbent, by

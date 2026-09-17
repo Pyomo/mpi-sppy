@@ -919,6 +919,30 @@ class TestSetupRefusals(unittest.TestCase):
             Checkpointer(self._stub(backend="leaf"))
         self.assertIn("not implemented", str(ctx.exception))
 
+    def test_unimplemented_backend_is_refused_on_a_resume_only_run(self):
+        """The read-side counterpart of the refusal above.
+
+        A resume need not have a Checkpointer attached, so that refusal cannot
+        be relied on, and add_checkpointing used to forward the backend only
+        alongside --checkpoint-dir. `--resume-from ckpt --checkpoint-backend
+        leaf` then went ahead on the manifest's backend with no error. Built
+        through add_checkpointing so the forwarding is under test too, and
+        indifferent to which of the two refusals fires first.
+        """
+        import mpisppy.utils.cfg_vanilla as vanilla
+
+        cfg = Config()
+        cfg.checkpoint_args()
+        cfg.resume_from = tempfile.mkdtemp()
+        cfg.checkpoint_backend = checkpointing.LEAF_BACKEND
+        hub_dict = {"opt_kwargs": {"options": {}}}
+        vanilla.add_checkpointing(hub_dict, cfg)
+
+        with self.assertRaises(RuntimeError) as ctx:
+            opt = _make_ph(_options(1, **hub_dict["opt_kwargs"]["options"]))
+            opt._restore_from_checkpoint_if_resuming()
+        self.assertIn("not implemented", str(ctx.exception))
+
     def test_multirank_is_refused_at_setup(self):
         with self.assertRaises(RuntimeError) as ctx:
             Checkpointer(self._stub(n_proc=2))
@@ -1051,6 +1075,46 @@ class TestCheckpointingSurvivedGuard(unittest.TestCase):
     def test_silent_when_checkpointing_was_not_requested(self):
         from mpisppy.generic.decomp import _check_checkpointing_survived
         _check_checkpointing_survived(self._hub_dict(), self._cfg())
+
+    def test_judges_the_hub_dict_the_user_callback_hands_back(self):
+        """hub_and_spoke_dict_callback runs late and may rewrite anything.
+
+        A model's callback that rebuilds the hub's extension list drops the
+        Checkpointer. Checked before the callback, the guard passes on a
+        dictionary the wheel is never built from, and the run writes nothing.
+        """
+        from mpisppy.generic.decomp import do_decomp
+        from mpisppy.generic.parsing import add_decomp_args
+
+        cfg = Config()
+        cfg.proper_bundle_config()
+        cfg.pickle_scenarios_config()
+        cfg.EF_base()
+        add_decomp_args(cfg)
+        cfg.quick_assign("solution_base_name", str, None)
+        cfg.quick_assign("write_scenario_lp_mps_files_dir", str, None)
+        cfg.quick_assign("module_name", str, None)
+        cfg.quick_assign("num_scens", int, len(SCENARIO_NAMES))
+        cfg.solver_name = solver_name or "unused"
+        cfg.default_rho = 1.0
+        cfg.checkpoint_dir = tempfile.mkdtemp()
+
+        def drop_extensions(hub_dict, list_of_spoke_dict, cfg):
+            hub_dict["opt_kwargs"]["extensions"] = None
+            hub_dict["opt_kwargs"]["extension_kwargs"] = None
+
+        class FarmerWithCallback:
+            hub_and_spoke_dict_callback = staticmethod(drop_extensions)
+
+            def __getattr__(self, name):
+                return getattr(farmer, name)
+
+        with mock.patch("mpisppy.generic.decomp.WheelSpinner") as wheel:
+            with self.assertRaises(RuntimeError) as ctx:
+                do_decomp(FarmerWithCallback(), cfg, farmer.scenario_creator,
+                          CREATOR_KWARGS, farmer.scenario_denouement)
+        self.assertIn("not attached", str(ctx.exception))
+        wheel.assert_not_called()
 
 
 class TestStructuralFingerprint(unittest.TestCase):
