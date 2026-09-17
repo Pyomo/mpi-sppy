@@ -7,6 +7,8 @@
 # full copyright and license information.
 ###############################################################################
 
+from collections import Counter
+
 from pyomo.environ import value
 from mpisppy import haveMPI, global_toc, MPI
 
@@ -14,6 +16,64 @@ from mpisppy.utils import nice_join
 from mpisppy.utils.mpi_abort import abort_on_uncaught_exception
 from mpisppy.utils.sputils import first_stage_nonant_writer, scenario_tree_solution_writer
 from mpisppy.utils.rank_apportionment import apportion_ranks, rank_to_cylinder
+
+
+def _format_equal_window_distribution(records, n_cylinders):
+    """Summarize one record per rank into distinct strata-window groups."""
+    groups = {}
+    for group_id, nodes in records:
+        nodes = tuple(nodes)
+        previous = groups.setdefault(group_id, nodes)
+        if previous != nodes:
+            raise RuntimeError(
+                f"Inconsistent node placement reported for RMA window group "
+                f"{group_id}: {previous} versus {nodes}"
+            )
+
+    spans = Counter(len(nodes) for nodes in groups.values())
+    total = len(groups)
+    node_local = spans.get(1, 0)
+    histogram = ", ".join(
+        f"{node_count} node{'s' if node_count != 1 else ''}: {count}"
+        for node_count, count in sorted(spans.items())
+    )
+    return (
+        f"RMA payload window placement: {total} strata windows "
+        f"({n_cylinders} ranks each, one matching rank from every "
+        f"equal-sized cylinder); {node_local} node-local and "
+        f"{total - node_local} cross-node; node spans [{histogram}]."
+    )
+
+
+def _format_flexible_window_distribution(hosts, rank_counts):
+    node_count = len(set(hosts))
+    return (
+        f"RMA payload window placement: flexible cylinders use one "
+        f"full-world window with {len(hosts)} ranks spanning {node_count} "
+        f"node{'s' if node_count != 1 else ''}; per-cylinder rank counts "
+        f"{rank_counts}."
+    )
+
+
+def _report_window_distribution(fullcomm, strata_comm, cylinder_comm,
+                                n_cylinders, rank_counts=None):
+    """Collect and print the physical-node span of the payload windows."""
+    hostname = MPI.Get_processor_name()
+    global_rank = fullcomm.Get_rank()
+
+    if strata_comm is None:
+        hosts = fullcomm.gather(hostname, root=0)
+        if global_rank == 0:
+            message = _format_flexible_window_distribution(hosts, rank_counts)
+    else:
+        group_nodes = tuple(sorted(set(strata_comm.allgather(hostname))))
+        record = (cylinder_comm.Get_rank(), group_nodes)
+        records = fullcomm.gather(record, root=0)
+        if global_rank == 0:
+            message = _format_equal_window_distribution(records, n_cylinders)
+
+    if global_rank == 0:
+        global_toc(message, True)
 
 class WheelSpinner:
 
@@ -141,6 +201,7 @@ class WheelSpinner:
         # The cylinder index plays strata_rank's role (it selects the
         # spcomm dict and marks the hub as 0).
         rank_ratios = [d.get("rank_ratio", 1.0) for d in communicator_list]
+        rank_counts = None
         if any(r != 1.0 for r in rank_ratios):
             rank_counts = apportion_ranks(rank_ratios, fullcomm.Get_size())
             global_toc(
@@ -156,6 +217,14 @@ class WheelSpinner:
             strata_comm, cylinder_comm = _make_comms(n_spcomms, fullcomm=fullcomm)
             strata_rank = strata_comm.Get_rank()
             cylinder_rank = cylinder_comm.Get_rank()
+
+        _report_window_distribution(
+            fullcomm,
+            strata_comm,
+            cylinder_comm,
+            n_spcomms,
+            rank_counts=rank_counts,
+        )
 
         spcomm_dict = communicator_list[strata_rank]
 
