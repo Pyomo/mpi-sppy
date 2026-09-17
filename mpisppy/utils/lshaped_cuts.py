@@ -453,7 +453,7 @@ class StandardL1CutGenerator:
                 continue
             sub_var = complicating_vars_map[root_var]
             sub_var.set_value(root_var.value, skip_validation=True)
-            con = subproblem._mpisppy_lshaped_fix_cons.add(sub_var - root_var.value == 0)
+            con = subproblem._mpisppy_lshaped_fix_cons.add((root_var.value, sub_var, root_var.value))
             fix_cons[root_var] = con
         return fix_cons
 
