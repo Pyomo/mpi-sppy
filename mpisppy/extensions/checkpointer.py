@@ -116,12 +116,7 @@ class Checkpointer(Extension):
             )
         # Everything below fails at setup rather than after a multi-hour run
         # reaches its first write and discovers it cannot finish one.
-        if self.backend != ckpt.DILL_RELOAD_BACKEND:
-            raise RuntimeError(
-                f"--checkpoint-backend '{self.backend}' is not implemented. "
-                f"The only supported backend is "
-                f"'{ckpt.DILL_RELOAD_BACKEND}'."
-            )
+        ckpt.require_implemented_backend(self.backend)
         ckpt.require_dill(self.backend)
 
         # The invariant this design rests on -- enditer fires after the solve,

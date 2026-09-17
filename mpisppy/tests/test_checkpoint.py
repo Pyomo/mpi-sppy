@@ -902,6 +902,29 @@ class TestSetupRefusals(unittest.TestCase):
             Checkpointer(self._stub(backend="leaf"))
         self.assertIn("not implemented", str(ctx.exception))
 
+    def test_unimplemented_backend_is_refused_on_a_resume_only_run(self):
+        """The read-side counterpart of the refusal above.
+
+        A resume-only run never constructs a Checkpointer, so that refusal
+        cannot fire, and add_checkpointing used to forward the backend only
+        alongside --checkpoint-dir. `--resume-from ckpt --checkpoint-backend
+        leaf` then went ahead on the manifest's backend with no error. Built
+        through add_checkpointing so the forwarding is under test too.
+        """
+        import mpisppy.utils.cfg_vanilla as vanilla
+
+        cfg = Config()
+        cfg.checkpoint_args()
+        cfg.resume_from = tempfile.mkdtemp()
+        cfg.checkpoint_backend = checkpointing.LEAF_BACKEND
+        hub_dict = {"opt_kwargs": {"options": {}}}
+        vanilla.add_checkpointing(hub_dict, cfg)
+
+        opt = _make_ph(_options(1, **hub_dict["opt_kwargs"]["options"]))
+        with self.assertRaises(RuntimeError) as ctx:
+            opt._restore_from_checkpoint_if_resuming()
+        self.assertIn("not implemented", str(ctx.exception))
+
     def test_multirank_is_refused_at_setup(self):
         with self.assertRaises(RuntimeError) as ctx:
             Checkpointer(self._stub(n_proc=2))

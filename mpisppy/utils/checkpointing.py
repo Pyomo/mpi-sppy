@@ -238,6 +238,20 @@ def _fsync_dir(path):
         os.close(fd)
 
 
+def require_implemented_backend(backend):
+    """Refuse a backend that is only designed, or not known at all.
+
+    Shared by the write side (Checkpointer) and the read side (the resume
+    branch in PHBase), because a resume-only run never constructs a
+    Checkpointer.
+    """
+    if backend != DILL_RELOAD_BACKEND:
+        raise RuntimeError(
+            f"--checkpoint-backend '{backend}' is not implemented. "
+            f"The only supported backend is '{DILL_RELOAD_BACKEND}'."
+        )
+
+
 def require_dill(backend):
     if backend == DILL_RELOAD_BACKEND and not dill_available:
         raise RuntimeError(

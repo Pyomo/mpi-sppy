@@ -953,7 +953,6 @@ def add_checkpointing(hub_dict, cfg):
         hub_dict = extension_adder(hub_dict, Checkpointer)
         hub_dict["opt_kwargs"]["options"].update(
             {"checkpoint_dir": cfg.checkpoint_dir,
-             "checkpoint_backend": cfg.checkpoint_backend,
              "checkpoint_every_iterations": cfg.checkpoint_every_iterations,
             })
 
@@ -968,6 +967,10 @@ def add_checkpointing(hub_dict, cfg):
         hub_dict["opt_kwargs"]["options"]["resume_from"] = cfg.resume_from
 
     if _hasit(cfg, 'checkpoint_dir') or _hasit(cfg, 'resume_from'):
+        # Both sides refuse an unimplemented backend, so both need it.
+        hub_dict["opt_kwargs"]["options"]["checkpoint_backend"] = \
+            cfg.checkpoint_backend
+
         # Every cfg entry except the ones a resume may legitimately differ on.
         # Checking by default is what catches the options a model's own
         # inparser_adder registers -- those never appear in opt.options, and an
