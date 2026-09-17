@@ -20,8 +20,10 @@
 """
 
 import abc
-import time
 import logging
+import os
+import time
+import warnings
 import numpy as np
 from math import inf
 
@@ -86,6 +88,78 @@ _STRICT_COHERENCE_FIELDS = frozenset((
     Field.BEST_XHAT,
     Field.RECENT_XHATS,
 ))
+
+_UNSAFE_MVAPICH_RMA_VERSION = (2, 3, 7)
+_ALLOW_UNSAFE_MVAPICH_RMA_ENV = "MPISPPY_ALLOW_UNSAFE_MVAPICH_RMA"
+_MVAPICH_VENDOR_NAMES = frozenset(("MVAPICH", "MVAPICH2"))
+
+
+def _guard_mvapich_cross_node_rma(window_comm, fullcomm, global_rank,
+                                   flexible_ranks=False):
+    """Reject MVAPICH <= 2.3.7 cross-node RMA unless explicitly overridden."""
+    get_vendor = getattr(MPI, "get_vendor", None)
+    get_processor_name = getattr(MPI, "Get_processor_name", None)
+    if get_vendor is None or get_processor_name is None:
+        return
+
+    vendor_name, vendor_version = get_vendor()
+    vendor_version = tuple(vendor_version)
+    if (vendor_name not in _MVAPICH_VENDOR_NAMES
+            or vendor_version > _UNSAFE_MVAPICH_RMA_VERSION):
+        return
+
+    local_hosts = window_comm.allgather(get_processor_name())
+    local_cross_node = len(set(local_hosts)) > 1
+    any_cross_node = fullcomm.allreduce(local_cross_node, op=MPI.LOR)
+    if not any_cross_node:
+        return
+
+    if flexible_ranks:
+        workaround = (
+            "Unequal-rank cylinders place their window on MPI_COMM_WORLD, so "
+            "multi-node runs require a different MPI implementation (or must "
+            "run on one node)."
+        )
+    else:
+        workaround = (
+            "Use block rank placement with ranks per node divisible by the "
+            "number of cylinders so every strata communicator is node-local, "
+            "or use a different MPI implementation."
+        )
+
+    allow_unsafe = fullcomm.bcast(
+        os.environ.get(_ALLOW_UNSAFE_MVAPICH_RMA_ENV) == "1"
+        if global_rank == 0 else None,
+        root=0,
+    )
+    version_text = ".".join(map(str, vendor_version))
+    if vendor_version < _UNSAFE_MVAPICH_RMA_VERSION:
+        evidence = (
+            "Intermittent cross-node RMA failures have been observed with "
+            "MVAPICH 2.3.7 on one HPC system; it is not known whether the "
+            "behavior is specific to that environment. This earlier release "
+            "has not been tested and is being guarded as a precaution. "
+        )
+    else:
+        evidence = (
+            "On one HPC system, this configuration has produced intermittent "
+            "cross-node MPI_Get hangs, heap corruption, and segmentation "
+            "faults; it is not known whether the behavior is specific to that "
+            "environment. "
+        )
+    message = (
+        f"mpi-sppy detected MVAPICH {version_text} and an MPI RMA window "
+        f"communicator that spans nodes. {evidence}"
+        "As a precaution, mpi-sppy will not use this configuration by default. "
+        f"{workaround} Set {_ALLOW_UNSAFE_MVAPICH_RMA_ENV}=1 to continue at "
+        "your own risk."
+    )
+
+    if allow_unsafe:
+        if global_rank == 0:
+            warnings.warn(message, RuntimeWarning, stacklevel=2)
+        return
+    raise RuntimeError(message)
 
 
 def reduce_source_write_ids(source_ids, strict: bool) -> int:
@@ -584,6 +658,12 @@ class SPCommunicator:
         # addressed by strata_rank. Unequal-rank: window on fullcomm,
         # addressed by global rank via overlap maps (strata_comm is None).
         window_comm = self.fullcomm if self._flex_ranks else self.strata_comm
+        _guard_mvapich_cross_node_rma(
+            window_comm,
+            self.fullcomm,
+            self.global_rank,
+            flexible_ranks=self._flex_ranks,
+        )
         self.window = SPWindow(window_spec, window_comm)
 
         self._create_field_rank_mappings()
