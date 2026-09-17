@@ -242,8 +242,8 @@ def require_implemented_backend(backend):
     """Refuse a backend that is only designed, or not known at all.
 
     Shared by the write side (Checkpointer) and the read side (the resume
-    branch in PHBase), because a resume-only run never constructs a
-    Checkpointer.
+    branch in PHBase), because a resume need not have a Checkpointer
+    attached.
     """
     if backend != DILL_RELOAD_BACKEND:
         raise RuntimeError(
