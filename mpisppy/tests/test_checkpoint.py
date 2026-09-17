@@ -1035,6 +1035,46 @@ class TestCheckpointingSurvivedGuard(unittest.TestCase):
         from mpisppy.generic.decomp import _check_checkpointing_survived
         _check_checkpointing_survived(self._hub_dict(), self._cfg())
 
+    def test_judges_the_hub_dict_the_user_callback_hands_back(self):
+        """hub_and_spoke_dict_callback runs late and may rewrite anything.
+
+        A model's callback that rebuilds the hub's extension list drops the
+        Checkpointer. Checked before the callback, the guard passes on a
+        dictionary the wheel is never built from, and the run writes nothing.
+        """
+        from mpisppy.generic.decomp import do_decomp
+        from mpisppy.generic.parsing import add_decomp_args
+
+        cfg = Config()
+        cfg.proper_bundle_config()
+        cfg.pickle_scenarios_config()
+        cfg.EF_base()
+        add_decomp_args(cfg)
+        cfg.quick_assign("solution_base_name", str, None)
+        cfg.quick_assign("write_scenario_lp_mps_files_dir", str, None)
+        cfg.quick_assign("module_name", str, None)
+        cfg.quick_assign("num_scens", int, len(SCENARIO_NAMES))
+        cfg.solver_name = solver_name or "unused"
+        cfg.default_rho = 1.0
+        cfg.checkpoint_dir = tempfile.mkdtemp()
+
+        def drop_extensions(hub_dict, list_of_spoke_dict, cfg):
+            hub_dict["opt_kwargs"]["extensions"] = None
+            hub_dict["opt_kwargs"]["extension_kwargs"] = None
+
+        class FarmerWithCallback:
+            hub_and_spoke_dict_callback = staticmethod(drop_extensions)
+
+            def __getattr__(self, name):
+                return getattr(farmer, name)
+
+        with mock.patch("mpisppy.generic.decomp.WheelSpinner") as wheel:
+            with self.assertRaises(RuntimeError) as ctx:
+                do_decomp(FarmerWithCallback(), cfg, farmer.scenario_creator,
+                          CREATOR_KWARGS, farmer.scenario_denouement)
+        self.assertIn("not attached", str(ctx.exception))
+        wheel.assert_not_called()
+
 
 class TestStructuralFingerprint(unittest.TestCase):
     """Which option changes block a resume, and which do not."""
