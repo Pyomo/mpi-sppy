@@ -12,7 +12,11 @@ import pyomo.environ as pyo
 from pyomo.core.expr.visitor import identify_variables
 
 from mpisppy.opt.lshaped import LShapedMethod
-from mpisppy.utils.lshaped_cuts import StandardL1CutGenerator, solver_dual_sign_convention
+from mpisppy.utils.lshaped_cuts import (
+    StandardL1CutGenerator,
+    _StandardL1SubproblemData,
+    solver_dual_sign_convention,
+)
 from mpisppy.tests.examples import farmer
 from mpisppy.tests.utils import get_solver
 import mpisppy.utils.sputils as sputils
@@ -111,14 +115,16 @@ class TestStandardL1CutGenerator(unittest.TestCase):
 
         gen = StandardL1CutGenerator()
         gen.root_vars = [root.x]
-        gen.subproblems = [subproblem]
-        gen.complicating_vars_maps = [
-            pyo.ComponentMap([(root.x, subproblem.x)])
+        gen.subproblem_data = [
+            _StandardL1SubproblemData(
+                subproblem=subproblem,
+                complicating_vars_map=pyo.ComponentMap([(root.x, subproblem.x)]),
+                solver=None,
+                solver_name="glpk",
+                solver_options={},
+                global_index=0,
+            )
         ]
-        gen.subproblem_solver_options = [{}]
-        gen.l1_subproblems = [None]
-        gen.l1_complicating_vars_maps = [None]
-        gen.l1_solvers = [None]
 
         l1_model, clone_cmap, solver = gen._get_l1_feasibility_problem(0, "glpk")
         again_model, again_cmap, again_solver = gen._get_l1_feasibility_problem(0, "glpk")
@@ -183,10 +189,16 @@ class TestStandardL1CutGenerator(unittest.TestCase):
         gen = StandardL1CutGenerator()
         gen.root_vars = [root.x]
         gen.tol = 1e-6
-        gen.subproblems = [subproblem]
-        gen.complicating_vars_maps = [pyo.ComponentMap([(root.x, subproblem.x)])]
-        gen.subproblem_solvers = [object()]
-        gen.subproblem_solver_names = ["cbc"]
+        gen.subproblem_data = [
+            _StandardL1SubproblemData(
+                subproblem=subproblem,
+                complicating_vars_map=pyo.ComponentMap([(root.x, subproblem.x)]),
+                solver=object(),
+                solver_name="cbc",
+                solver_options={},
+                global_index=0,
+            )
+        ]
         gen._solve_model = lambda *args: _Result()
         gen._solve_l1_feasibility = lambda *args: {
             "constant": 0.0,
@@ -213,12 +225,16 @@ class TestStandardL1CutGenerator(unittest.TestCase):
         gen = StandardL1CutGenerator()
         gen.root_vars = [root.x]
         gen.tol = 1e-6
-        gen.subproblems = [subproblem]
-        gen.complicating_vars_maps = [
-            pyo.ComponentMap([(root.x, subproblem.x)])
+        gen.subproblem_data = [
+            _StandardL1SubproblemData(
+                subproblem=subproblem,
+                complicating_vars_map=pyo.ComponentMap([(root.x, subproblem.x)]),
+                solver=pyo.SolverFactory("ipopt"),
+                solver_name="ipopt",
+                solver_options={},
+                global_index=0,
+            )
         ]
-        gen.subproblem_solvers = [pyo.SolverFactory("ipopt")]
-        gen.subproblem_solver_names = ["ipopt"]
 
         result = gen._solve_recourse_or_l1(0, root.eta)
 

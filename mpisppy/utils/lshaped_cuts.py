@@ -8,6 +8,8 @@
 ###############################################################################
 """Cut generators used by the mpi-sppy L-shaped method."""
 
+from dataclasses import dataclass
+
 from pyomo.core.base.block import declare_custom_block
 from pyomo.core import Constraint, Var
 from pyomo.core.base.componentuid import ComponentUID
@@ -24,6 +26,19 @@ import logging
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _StandardL1SubproblemData:
+    subproblem: object
+    complicating_vars_map: object
+    solver: object
+    solver_name: str
+    solver_options: dict
+    global_index: int
+    l1_subproblem: object = None
+    l1_complicating_vars_map: object = None
+    l1_solver: object = None
 
 
 solver_dual_sign_convention = dict()
@@ -109,15 +124,7 @@ class StandardL1CutGenerator:
         self.comm = None
         self.ls = None
         self.cuts = pe.ConstraintList()
-        self.subproblems = []
-        self.complicating_vars_maps = []
-        self.subproblem_solvers = []
-        self.subproblem_solver_names = []
-        self.subproblem_solver_options = []
-        self.subproblem_indices = []
-        self.l1_subproblems = []
-        self.l1_complicating_vars_maps = []
-        self.l1_solvers = []
+        self.subproblem_data = []
 
     def set_input(self, root_vars, tol=1e-6, comm=None):
         """Store root variables, cut tolerance, and MPI communicator.
@@ -196,15 +203,16 @@ class StandardL1CutGenerator:
         if isinstance(solver, PersistentSolver):
             set_instance_retry(subproblem, solver, scenario_name)
 
-        self.subproblems.append(subproblem)
-        self.complicating_vars_maps.append(complicating_vars_map)
-        self.subproblem_solvers.append(solver)
-        self.subproblem_solver_names.append(solver_name)
-        self.subproblem_solver_options.append(dict(subproblem_solver_options or {}))
-        self.subproblem_indices.append(self._root_eta_index[scenario_name])
-        self.l1_subproblems.append(None)
-        self.l1_complicating_vars_maps.append(None)
-        self.l1_solvers.append(None)
+        self.subproblem_data.append(
+            _StandardL1SubproblemData(
+                subproblem=subproblem,
+                complicating_vars_map=complicating_vars_map,
+                solver=solver,
+                solver_name=solver_name,
+                solver_options=dict(subproblem_solver_options or {}),
+                global_index=self._root_eta_index[scenario_name],
+            )
+        )
 
     def generate_cut(self):
         """Solve local subproblems, reduce coefficients, and add violated cuts.
@@ -219,8 +227,8 @@ class StandardL1CutGenerator:
         needs_cut = np.zeros(nsubs, dtype="d")
         infeasible = np.zeros(nsubs, dtype="d")
 
-        for local_ndx, subproblem in enumerate(self.subproblems):
-            global_ndx = self.subproblem_indices[local_ndx]
+        for local_ndx, subproblem_data in enumerate(self.subproblem_data):
+            global_ndx = subproblem_data.global_index
             root_eta = self.root_etas[global_ndx]
             result = self._solve_recourse_or_l1(local_ndx, root_eta)
             constants[global_ndx] = result["constant"]
@@ -272,15 +280,18 @@ class StandardL1CutGenerator:
                 while the L1 model finds no feasibility violation.
             NotImplementedError: If the solver dual sign convention is unknown.
         """
-        subproblem = self.subproblems[local_ndx]
-        solver = self.subproblem_solvers[local_ndx]
-        solver_name = self.subproblem_solver_names[local_ndx]
+        subproblem_data = self.subproblem_data[local_ndx]
+        subproblem = subproblem_data.subproblem
+        solver = subproblem_data.solver
+        solver_name = subproblem_data.solver_name
         if solver_name not in solver_dual_sign_convention:
             raise NotImplementedError(
                     f"No dual sign convention is registered for solver {solver_name}")
 
         sign = solver_dual_sign_convention[solver_name]
-        fix_cons = self._add_fixing_constraints(subproblem, self.complicating_vars_maps[local_ndx])
+        fix_cons = self._add_fixing_constraints(
+            subproblem, subproblem_data.complicating_vars_map
+        )
         try:
             res = self._solve_model(subproblem, solver, solver_name, fix_cons.values())
             tc = res.solver.termination_condition
@@ -350,15 +361,16 @@ class StandardL1CutGenerator:
 
     def _get_l1_feasibility_problem(self, local_ndx, solver_name):
         """Return the cached L1 model, clone map, and solver for a subproblem."""
-        if self.l1_subproblems[local_ndx] is not None:
+        subproblem_data = self.subproblem_data[local_ndx]
+        if subproblem_data.l1_subproblem is not None:
             return (
-                self.l1_subproblems[local_ndx],
-                self.l1_complicating_vars_maps[local_ndx],
-                self.l1_solvers[local_ndx],
+                subproblem_data.l1_subproblem,
+                subproblem_data.l1_complicating_vars_map,
+                subproblem_data.l1_solver,
             )
 
-        base = self.subproblems[local_ndx]
-        cmap = self.complicating_vars_maps[local_ndx]
+        base = subproblem_data.subproblem
+        cmap = subproblem_data.complicating_vars_map
         subproblem = self._clone_subproblem_for_l1(base)
         # The clone is made while the failed recourse solve's temporary
         # fixing rows still exist on ``base``.  They are not original
@@ -372,14 +384,14 @@ class StandardL1CutGenerator:
         )
         self._build_l1_model(subproblem)
         solver = pe.SolverFactory(solver_name)
-        for k, v in self.subproblem_solver_options[local_ndx].items():
+        for k, v in subproblem_data.solver_options.items():
             solver.options[k] = v
         if isinstance(solver, PersistentSolver):
             set_instance_retry(subproblem, solver, "standard_l1")
 
-        self.l1_subproblems[local_ndx] = subproblem
-        self.l1_complicating_vars_maps[local_ndx] = clone_cmap
-        self.l1_solvers[local_ndx] = solver
+        subproblem_data.l1_subproblem = subproblem
+        subproblem_data.l1_complicating_vars_map = clone_cmap
+        subproblem_data.l1_solver = solver
         return subproblem, clone_cmap, solver
 
     def _clone_subproblem_for_l1(self, base):
