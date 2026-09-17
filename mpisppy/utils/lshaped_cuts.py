@@ -598,6 +598,7 @@ class StandardL1CutGenerator:
             if ub is not None:
                 cons.add(var <= ub)
             if lb is not None or ub is not None:
+                var.domain = pe.Reals
                 var.setlb(None)
                 var.setub(None)
 

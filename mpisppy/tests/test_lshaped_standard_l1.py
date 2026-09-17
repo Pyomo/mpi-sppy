@@ -129,6 +129,26 @@ class TestStandardL1CutGenerator(unittest.TestCase):
         self.assertFalse(hasattr(l1_model, "_mpisppy_lshaped_fix_cons"))
         self.assertEqual(len(l1_model._mpisppy_l1_cons), 1)
 
+    def test_l1_transform_relaxes_domain_implied_recourse_bounds(self):
+        m = pyo.ConcreteModel()
+        m.y = pyo.Var(domain=pyo.NonNegativeReals)
+        m.u = pyo.Var(domain=pyo.UnitInterval)
+        m.obj = pyo.Objective(expr=m.y + m.u)
+        m._mpisppy_lshaped_bound_cons = pyo.ConstraintList()
+
+        gen = StandardL1CutGenerator()
+        gen._convert_recourse_bounds_to_constraints(m, pyo.ComponentMap())
+
+        self.assertEqual(len(m._mpisppy_lshaped_bound_cons), 3)
+        self.assertEqual(m.y.bounds, (None, None))
+        self.assertEqual(m.u.bounds, (None, None))
+
+        gen._build_l1_model(m)
+
+        self.assertEqual(len(m._mpisppy_l1_cons), 3)
+        for con in m._mpisppy_lshaped_bound_cons.values():
+            self.assertFalse(con.active)
+
     def test_unknown_lshaped_cut_generator_option_errors(self):
         names = farmer.scenario_names_creator(3)
         options = {
