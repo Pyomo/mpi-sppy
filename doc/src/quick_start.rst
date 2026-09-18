@@ -365,9 +365,12 @@ and the remaining commands are run from there.
 
    If you see no error messages, your MPI installation should be
    suitable. On native Windows with MS-MPI this test fails with an
-   ``AssertionError`` even when mpi-sppy runs correctly, so skip it
-   there and rely on the PH run below. Then confirm the full
-   hub-and-spoke flow with a short PH run on farmer:
+   ``AssertionError``, and the failure is real: under MS-MPI, data
+   one cylinder posts reaches the others only when that cylinder
+   makes an MPI call, so cylinders can wait on each other while one
+   is in a long solve. mpi-sppy still gives correct results, but such
+   runs can be slower than on Linux (see issue #869). Then confirm the
+   full hub-and-spoke flow with a short PH run on farmer:
 
    .. code-block:: text
 

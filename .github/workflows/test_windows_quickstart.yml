@@ -1,9 +1,8 @@
 # Runs the farmer commands from doc/src/quick_start.rst on native Windows,
 # installed the way that page says to (MS-MPI runtime, conda-forge mpi4py,
-# PowerShell).  mpi-sppy-one-sided-test is left out: it fails under MS-MPI
-# although mpi-sppy runs, and the page says to skip it there.  Kept small
-# so it can run on every PR; the full Windows suite is in test_windows.yml
-# and runs weekly.
+# PowerShell).  mpi-sppy-one-sided-test is left out: it cannot pass under
+# MS-MPI (issue #869).  Kept small so it can run on every PR; the full
+# Windows suite is in test_windows.yml and runs weekly.
 name: Windows quickstart
 
 on:
