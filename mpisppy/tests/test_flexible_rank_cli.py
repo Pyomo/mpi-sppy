@@ -28,6 +28,7 @@ def _full_cfg():
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.gapper_args("lagrangian")
+    cfg.ipopt_outer_bound_args()
     cfg.ph_dual_args()
     cfg.relaxed_ph_args()
     cfg.ph_xfeas_spoke_args()
@@ -57,6 +58,7 @@ class TestFlexibleRankCLI(unittest.TestCase):
         self.assertEqual(cfg.ph_dual_rank_ratio, 1.0)
         self.assertEqual(cfg.relaxed_ph_rank_ratio, 1.0)
         self.assertEqual(cfg.subgradient_rank_ratio, 1.0)
+        self.assertEqual(cfg.ipopt_outer_bound_rank_ratio, 1.0)
 
     def test_build_spoke_list_injects_rank_ratio(self):
         cfg = _full_cfg()
@@ -77,6 +79,8 @@ class TestFlexibleRankCLI(unittest.TestCase):
         cfg.relaxed_ph_rank_ratio = 5.0
         cfg.subgradient = True
         cfg.subgradient_rank_ratio = 0.125
+        cfg.ipopt_outer_bound = True
+        cfg.ipopt_outer_bound_rank_ratio = 6.0
 
         scenario_creator = farmer.scenario_creator
         scenario_denouement = farmer.scenario_denouement
@@ -92,7 +96,7 @@ class TestFlexibleRankCLI(unittest.TestCase):
         # exactly the enabled spokes, each carrying its requested ratio
         ratios = sorted(d["rank_ratio"] for d in spokes)
         self.assertEqual(ratios, sorted([0.5, 0.25, 2.0, 4.0,
-                                         8.0, 3.0, 5.0, 0.125]))
+                                         8.0, 3.0, 5.0, 0.125, 6.0]))
         # and every spoke dict got an explicit rank_ratio
         self.assertTrue(all("rank_ratio" in d for d in spokes))
 
