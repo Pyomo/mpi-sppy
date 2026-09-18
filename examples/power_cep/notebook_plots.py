@@ -29,9 +29,6 @@ TECH_COLORS = {
     "load_shedding": "#D62728",
 }
 
-GAS_BLOCK_MW = 50.0
-
-
 def _autopct_mw(values):
     total = sum(values) if values else 0.0
 
@@ -40,14 +37,6 @@ def _autopct_mw(values):
         return f"{mw:.0f} MW"
 
     return _fmt
-
-
-def _builds_in_mw(builds: dict[str, float]) -> dict[str, float]:
-    return {
-        "gas": float(builds.get("gas", 0.0)) * GAS_BLOCK_MW,
-        "wind": float(builds.get("wind", 0.0)),
-        "solar": float(builds.get("solar", 0.0)),
-    }
 
 
 def plot_existing_system_pie(ax, existing_df: pd.DataFrame):
@@ -84,10 +73,10 @@ def plot_demand_by_scenario(
     ax.legend()
 
 
-def plot_build_pies(ax_left, ax_right, ev_builds: dict[str, float], rp_builds: dict[str, float]):
+def plot_build_pies(ax_left, ax_right, ev_builds_mw: dict[str, float], rp_builds_mw: dict[str, float]):
     labels = ["gas", "wind", "solar"]
-    ev_vals = [_builds_in_mw(ev_builds).get(k, 0.0) for k in labels]
-    rp_vals = [_builds_in_mw(rp_builds).get(k, 0.0) for k in labels]
+    ev_vals = [float(ev_builds_mw.get(k, 0.0)) for k in labels]
+    rp_vals = [float(rp_builds_mw.get(k, 0.0)) for k in labels]
     colors = [TECH_COLORS[k] for k in labels]
 
     ax_left.pie(ev_vals, labels=labels, colors=colors, autopct=_autopct_mw(ev_vals), startangle=90)
