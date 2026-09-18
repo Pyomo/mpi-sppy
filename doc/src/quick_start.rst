@@ -130,8 +130,12 @@ Install from GitHub on Windows
 Two installation paths are supported on Windows. Most users will have a
 substantially easier time with WSL2, because the Python+MPI ecosystem is
 developed and tested on Linux first. Native Windows with MS-MPI does work
-but breaks more often and requires more manual setup. Detailed instructions
-for both follow.
+but breaks more often and requires more manual setup. Runs with several
+cylinders can also be slow on native Windows: under MS-MPI a cylinder
+waits for data from another cylinder until that one finishes its current
+solve, so with long solves the hub can run at the pace of its slowest
+spoke (see issue #869). The extensive form (``--EF``) does not use MPI
+and is unaffected. Detailed instructions for both follow.
 
 Optional: notes for Visual Studio Code users
 """"""""""""""""""""""""""""""""""""""""""""
