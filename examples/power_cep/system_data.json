@@ -1,0 +1,96 @@
+{
+  "representative_hours": [
+    "winter_night",
+    "winter_day",
+    "spring_day",
+    "summer_afternoon_peak",
+    "summer_evening_peak",
+    "fall_shoulder_day"
+  ],
+  "hour_weights": {
+    "winter_night": 1460,
+    "winter_day": 1460,
+    "spring_day": 1460,
+    "summer_afternoon_peak": 730,
+    "summer_evening_peak": 730,
+    "fall_shoulder_day": 2920
+  },
+  "existing_generators": {
+    "gas_existing_1": {
+      "technology": "gas",
+      "capacity_mw": 120,
+      "variable_cost_per_mwh": 58,
+      "availability_profile": {
+        "winter_night": 0.97,
+        "winter_day": 0.96,
+        "spring_day": 0.95,
+        "summer_afternoon_peak": 0.94,
+        "summer_evening_peak": 0.95,
+        "fall_shoulder_day": 0.96
+      }
+    },
+    "gas_existing_2": {
+      "technology": "gas",
+      "capacity_mw": 90,
+      "variable_cost_per_mwh": 66,
+      "availability_profile": {
+        "winter_night": 0.98,
+        "winter_day": 0.97,
+        "spring_day": 0.96,
+        "summer_afternoon_peak": 0.95,
+        "summer_evening_peak": 0.96,
+        "fall_shoulder_day": 0.97
+      }
+    },
+    "wind_existing_1": {
+      "technology": "wind",
+      "capacity_mw": 100,
+      "variable_cost_per_mwh": 4,
+      "availability_profile": {
+        "winter_night": 0.55,
+        "winter_day": 0.40,
+        "spring_day": 0.48,
+        "summer_afternoon_peak": 0.30,
+        "summer_evening_peak": 0.62,
+        "fall_shoulder_day": 0.45
+      }
+    },
+    "solar_existing_1": {
+      "technology": "solar",
+      "capacity_mw": 85,
+      "variable_cost_per_mwh": 2,
+      "availability_profile": {
+        "winter_night": 0.00,
+        "winter_day": 0.22,
+        "spring_day": 0.45,
+        "summer_afternoon_peak": 0.92,
+        "summer_evening_peak": 0.18,
+        "fall_shoulder_day": 0.38
+      }
+    }
+  },
+  "candidate_technologies": {
+    "gas": {
+      "build_type": "integer_blocks",
+      "block_mw": 50,
+      "annualized_cost_per_block": 3400000,
+      "variable_cost_per_mwh": 72,
+      "max_build_blocks": 12
+    },
+    "wind": {
+      "build_type": "continuous_mw",
+      "annualized_cost_per_mw": 145000,
+      "variable_cost_per_mwh": 0,
+      "max_build_mw": 500
+    },
+    "solar": {
+      "build_type": "continuous_mw",
+      "annualized_cost_per_mw": 220000,
+      "variable_cost_per_mwh": 0,
+      "max_build_mw": 450
+    }
+  },
+  "system_parameters": {
+    "load_shedding_cost_per_mwh": 1200
+  }
+}
