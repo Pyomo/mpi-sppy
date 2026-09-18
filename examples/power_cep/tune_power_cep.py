@@ -41,8 +41,9 @@ for p in (MODULE_DIR, REPO_ROOT):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
-import power_cep as pc
-import scenario_generator as scen_gen
+# Local example modules must be imported after their directories are added to sys.path.
+import power_cep as pc  # noqa: E402
+import scenario_generator as scen_gen  # noqa: E402
 
 
 def build_model_from_data(scenario_name: str, system_data: dict, scenario_data: dict) -> pyo.ConcreteModel:

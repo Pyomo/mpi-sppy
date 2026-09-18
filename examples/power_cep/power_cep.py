@@ -21,7 +21,8 @@ MODULE_DIR = Path(__file__).resolve().parent
 if str(MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(MODULE_DIR))
 
-import scenario_generator as scen_gen
+# Local example modules must be imported after MODULE_DIR is added to sys.path.
+import scenario_generator as scen_gen  # noqa: E402
 
 DEFAULT_DATA_FILE = Path(__file__).with_name("system_data.json")
 

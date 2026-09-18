@@ -19,10 +19,11 @@ MODULE_DIR = Path(__file__).resolve().parent
 if str(MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(MODULE_DIR))
 
-import notebook_solution_io as solio
-import power_cep as pc
-import scenario_generator as scen_gen
-import tune_power_cep as tune
+# Local example modules must be imported after MODULE_DIR is added to sys.path.
+import notebook_solution_io as solio  # noqa: E402
+import power_cep as pc  # noqa: E402
+import scenario_generator as scen_gen  # noqa: E402
+import tune_power_cep as tune  # noqa: E402
 
 
 def solve_ev(system_data: dict, num_scens: int, seed: int = 0, solver_name: str = "highs"):
