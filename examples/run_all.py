@@ -404,21 +404,21 @@ if run_second_part:
            "--solver-name={}".format(solver_name))
 
     do_one("hydro", "hydro_cylinders.py", 3,
-           "--branching-factors \'3 3\' --max-iterations=100 "
+           "--branching-factors \"3 3\" --max-iterations=100 "
            "--default-rho=1 --xhatshuffle --lagrangian "
            "--solver-name={} --stage2-ef-solver-name={}".format(solver_name, solver_name))
 
     # Same hydro run via the generic driver (replaces the archived PySP
     # custom driver; hydro_cylinders.py above is kept for its rst references).
     do_one("hydro", "../../mpisppy/generic_cylinders.py", 3,
-           "--module-name hydro --branching-factors \'3 3\' "
+           "--module-name hydro --branching-factors \"3 3\" "
            "--max-iterations=100 --default-rho=1 "
            "--xhatshuffle --lagrangian "
            "--stage2-ef-solver-name={} --solver-name={}".format(solver_name, solver_name))
 
     # the next might hang with 6 ranks
     do_one("aircond", "aircond_cylinders.py", 3,
-           "--branching-factors \'4 3 2\' --max-iterations=100 "
+           "--branching-factors \"4 3 2\" --max-iterations=100 "
            "--default-rho=1 --lagrangian --xhatshuffle "
            "--solver-name={}".format(solver_name))
 
@@ -428,11 +428,11 @@ if run_second_part:
     # still exercise the lagrangian + xhat-inner-bound combo.
     do_one("aircond", "../../mpisppy/generic_cylinders.py", 3,
            "--module-name ../../mpisppy/tests/examples/aircond "
-           "--branching-factors \'4 3 2\' --max-iterations=100 "
+           "--branching-factors \"4 3 2\" --max-iterations=100 "
            "--default-rho=1 --lagrangian --xhatxbar "
            "--solver-name={}".format(solver_name))
     do_one("aircond", "aircond_ama.py", 3,
-           "--branching-factors \'3 3\' --max-iterations=100 "
+           "--branching-factors \"3 3\" --max-iterations=100 "
            "--default-rho=1 --lagrangian --xhatshuffle "
            "--solver-name={}".format(solver_name))
 
@@ -442,7 +442,7 @@ if run_second_part:
     # doesn't register it, so use --xhatxbar for the inner bound.
     do_one("aircondMulti", "../../mpisppy/generic_cylinders.py", 3,
            "--module-name ../../mpisppy/tests/examples/aircondMulti "
-           "--branching-factors \'3 3\' --max-iterations=5 "
+           "--branching-factors \"3 3\" --max-iterations=5 "
            "--default-rho=1 --lagrangian --xhatxbar "
            "--solver-name={}".format(solver_name))
 

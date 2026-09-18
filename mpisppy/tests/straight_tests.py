@@ -11,6 +11,7 @@
 
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 
@@ -66,8 +67,13 @@ def _doone(cmdstr: str) -> bool:
         "exit ${rc}\n"
     )
 
+    # Look bash up on PATH: on Windows a bare "bash" is found in System32
+    # first, and that one is the WSL launcher, not Git Bash.
+    bash = shutil.which("bash")
+    if bash is None:
+        raise RuntimeError("straight_tests.py needs bash on PATH")
     with open(log, "w", encoding="utf-8") as f:
-        p = subprocess.run(["bash", "-lc", script], stdout=f, stderr=subprocess.STDOUT)
+        p = subprocess.run([bash, "-lc", script], stdout=f, stderr=subprocess.STDOUT)
 
     if p.returncode != 0:
         # include tail of log for convenience
