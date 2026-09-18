@@ -41,7 +41,8 @@ jobs:
           python-version: "3.12"
 
       # Each command below is its own step: pwsh does not stop a script
-      # when a native command in the middle of it fails.
+      # when a native command in the middle of it fails.  The farmer steps
+      # run even when an earlier one failed, so one run reports them all.
       - name: Install mpi4py from conda-forge
         working-directory: .
         run: conda install -y -c conda-forge mpi4py
@@ -58,16 +59,20 @@ jobs:
         run: mpi-sppy-generic-cylinders --module-name farmer --help
 
       - name: Verify step 2 (EF)
+        if: ${{ !cancelled() }}
         run: mpi-sppy-generic-cylinders --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi
 
       - name: Verify step 3 (one-sided MPI test)
+        if: ${{ !cancelled() }}
         timeout-minutes: 5
         run: mpiexec -n 2 mpi-sppy-one-sided-test
 
       - name: Verify step 3 (PH)
+        if: ${{ !cancelled() }}
         timeout-minutes: 5
         run: mpiexec -n 3 mpi-sppy-generic-cylinders --module-name farmer --num-scens 3 --solver-name gurobi --max-iterations 5 --default-rho 1 --lagrangian --xhatshuffle
 
       - name: Running the Farmer Example (PH with spokes)
+        if: ${{ !cancelled() }}
         timeout-minutes: 5
         run: mpiexec -np 3 mpi-sppy-generic-cylinders --module-name farmer --num-scens 3 --solver-name gurobi_persistent --max-iterations 10 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01
