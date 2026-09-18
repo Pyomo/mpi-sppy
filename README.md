@@ -6,6 +6,37 @@ Optimization under uncertainty for [Pyomo](https://pyomo.org) and other models.
 [Documentation is available at readthedocs](https://mpi-sppy.readthedocs.io/en/latest/) and
 there is a [paper](https://link.springer.com/article/10.1007/s12532-023-00247-3).
 
+mpi-sppy decomposes scenario-based stochastic programs and solves the
+pieces in parallel. It provides progressive hedging (synchronous and
+asynchronous), Frank-Wolfe progressive hedging, L-shaped decomposition,
+and subgradient methods, with bounding and heuristic procedures running
+alongside. Scenario models can come from Pyomo, from AMPL or GAMS, or as
+MPS, LP, or SMPS files. See `INSTALL` for installation and `AUTHORS` for
+the authors.
+
+Project web page, support, and bug reports
+------------------------------------------
+
+- Project web page: https://github.com/Pyomo/mpi-sppy
+- Bug reports, feature requests, and questions: open an issue at
+  https://github.com/Pyomo/mpi-sppy/issues
+- Project maintainer: David L. Woodruff, DLWoodruff@UCDavis.edu
+- Code of conduct: https://www.coin-or.org/code-of-conduct/
+
+Dependencies
+------------
+
+- Required (installed by pip): [Pyomo](https://pyomo.org) and numpy.
+- A Pyomo-compatible solver, which is not installed automatically.
+  Open-source choices include HiGHS, Cbc, Ipopt, and SCIP; commercial
+  choices are CPLEX, Gurobi, and Xpress.
+- For parallel runs: an MPI implementation (e.g., OpenMPI or MPICH) and
+  mpi4py (the `[mpi]` extra).
+- Optional (the `[extras]` extra): scipy, pandas, matplotlib, dill, and
+  python-mip (`mip`, which reads MPS, LP, and SMPS files using Cbc).
+- The proprietary bridges for AMPL and GAMS models need amplpy or gams,
+  which are not installed by any extra.
+
 Status for internal tests
 -------------------------
 
