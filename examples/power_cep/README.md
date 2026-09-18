@@ -34,10 +34,17 @@ annualized investment costs.
 From `examples/power_cep/`:
 
 ```bash
-python -m mpisppy.generic_cylinders --module-name power_cep --EF --EF-solver-name highs
+python -m mpisppy.generic_cylinders --module-name power_cep --num-scens 3 --EF --EF-solver-name highs
 ```
 
-For a parallel PH run, use the `ph.sh` script.
+For a parallel PH run with bound-producing spokes:
+
+```bash
+mpiexec -n 6 python -m mpi4py -m mpisppy.generic_cylinders \
+    --module-name power_cep --num-scens 3 --solver-name highs \
+    --default-rho 2.0 --lagrangian --xhatshuffle \
+    --linearize-proximal-terms --max-iterations 50
+```
 
 ## Tuning and pedagogy
 
@@ -54,7 +61,7 @@ battery sizing teaching example:
 Example:
 
 ```bash
-python examples/power_cep/tune_power_cep.py --num-scens 3 --solver-name highs
+python tune_power_cep.py --num-scens 3 --solver-name highs
 ```
 
 ## Files
@@ -74,4 +81,3 @@ They don't represent realistic values and should **NOT** be used as such.
 While some review of the validity of the analyses and conclusions presented here was performed,
 it is possible that uncaught errors persist.
 Use with caution!
-
