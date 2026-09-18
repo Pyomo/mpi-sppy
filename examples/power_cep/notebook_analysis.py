@@ -9,9 +9,9 @@
 
 from __future__ import annotations
 
+import sys
 from collections import defaultdict
 from pathlib import Path
-import sys
 
 import pyomo.environ as pyo
 
@@ -19,9 +19,9 @@ MODULE_DIR = Path(__file__).resolve().parent
 if str(MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(MODULE_DIR))
 
+import notebook_solution_io as solio
 import power_cep as pc
 import scenario_generator as scen_gen
-import notebook_solution_io as solio
 import tune_power_cep as tune
 
 

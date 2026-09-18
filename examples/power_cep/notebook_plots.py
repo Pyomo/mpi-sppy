@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
     import matplotlib.pyplot as plt  # noqa: F401
-    import pandas as pd  # noqa: F401
+    import pandas as pd
 
 
 def _normalize_rows(table):

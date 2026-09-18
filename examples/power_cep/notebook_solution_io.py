@@ -14,7 +14,6 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-
 _INDEXED_NAME_RE = re.compile(r"^(?P<base>[A-Za-z_][A-Za-z0-9_]*)\[(?P<args>.*)\]$")
 
 

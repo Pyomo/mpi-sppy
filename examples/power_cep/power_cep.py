@@ -10,19 +10,18 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pyomo.environ as pyo
 
-import mpisppy.utils.sputils as sputils
+from mpisppy.utils import sputils
 
 MODULE_DIR = Path(__file__).resolve().parent
 if str(MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(MODULE_DIR))
 
 import scenario_generator as scen_gen
-
 
 DEFAULT_DATA_FILE = Path(__file__).with_name("system_data.json")
 

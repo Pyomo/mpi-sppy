@@ -28,10 +28,11 @@ from __future__ import annotations
 import argparse
 import copy
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pyomo.environ as pyo
+
 from mpisppy.opt.ef import ExtensiveForm
 
 MODULE_DIR = Path(__file__).resolve().parent
