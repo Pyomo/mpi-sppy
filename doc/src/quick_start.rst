@@ -364,8 +364,10 @@ and the remaining commands are run from there.
       mpiexec -n 2 mpi-sppy-one-sided-test
 
    If you see no error messages, your MPI installation should be
-   suitable. Then confirm the full hub-and-spoke flow with a short PH
-   run on farmer:
+   suitable. On native Windows with MS-MPI this test fails with an
+   ``AssertionError`` even when mpi-sppy runs correctly, so skip it
+   there and rely on the PH run below. Then confirm the full
+   hub-and-spoke flow with a short PH run on farmer:
 
    .. code-block:: text
 
