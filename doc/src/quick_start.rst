@@ -404,7 +404,9 @@ prints the equivalent explicit command line, and runs it:
 
 Any option you set explicitly always wins, so this is a good starting point you
 can refine. (For a small, fast-solving model like farmer, OOTB will sensibly
-choose the extensive form; it decomposes for larger or harder problems.) See
+choose the extensive form; it decomposes for larger or harder problems.) The
+feature is experimental and its choices may change between releases, so for
+work you need to reproduce, keep the explicit command line it prints. See
 :ref:`out_of_the_box` for the full description -- effort tiers,
 ``--inspect-only``, policy files, and the validation and calibration tools.
 

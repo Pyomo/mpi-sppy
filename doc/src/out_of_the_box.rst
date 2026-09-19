@@ -3,6 +3,14 @@
 Out-of-the-box auto-configuration
 =================================
 
+.. warning::
+   **This feature is experimental.** The choices it makes, the numbers in the
+   shipped policy file, and the flags described on this page may all change,
+   and a configuration it picks today may differ from what it picks after the
+   next release. Treat it as a starting point to learn from -- read the
+   equivalent command line it prints and keep the explicit options -- rather
+   than as something to depend on in a reproducible study or a script.
+
 The ``--out-of-the-box`` option lets a relatively new user obtain a *sensible*
 mpi-sppy run with almost no knowledge of the library's internals. You supply a
 model module (and its scenario data); mpi-sppy introspects the environment and
