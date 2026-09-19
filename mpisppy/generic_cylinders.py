@@ -15,7 +15,8 @@ import sys
 from mpisppy import MPI, global_toc
 
 # Re-export public API for backwards compatibility
-from mpisppy.generic.decomp import do_decomp  # noqa: F401
+from mpisppy.generic.decomp import (do_decomp,  # noqa: F401
+                                   refuse_checkpointing_without_a_hub)
 from mpisppy.generic.mmw import do_mmw  # noqa: F401
 
 from mpisppy.generic.parsing import model_fname, load_module, parse_args, proper_bundles, name_lists
@@ -159,6 +160,18 @@ def main():
         def scenario_denouement(rank, sname, s):
             if "Bundle" not in sname:
                 _original_denouement(rank, sname, s)
+
+    # Each branch below returns without ever building a hub, so the hub-side
+    # check in do_decomp does not see them.
+    for _mode, _selected in (
+            ("--pickle-bundles-dir", cfg.pickle_bundles_dir is not None),
+            ("--pickle-scenarios-dir", cfg.pickle_scenarios_dir is not None),
+            ("--write-scenario-lp-mps-files-dir",
+             cfg.write_scenario_lp_mps_files_dir is not None),
+            ("--EF", bool(cfg.EF))):
+        if _selected:
+            refuse_checkpointing_without_a_hub(cfg, _mode)
+            break
 
     if cfg.pickle_bundles_dir is not None:
         global_comm = MPI.COMM_WORLD
