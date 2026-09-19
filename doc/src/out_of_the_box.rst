@@ -26,6 +26,23 @@ was chosen and how to do better.
    always wins** -- OOTB never overrides it. So you can start from
    ``--out-of-the-box`` and override individual choices as you learn.
 
+Known limitations
+-----------------
+
+* **Multistage decomposition does not run.** When OOTB decomposes a multistage
+  problem it may choose proper bundles, and the shipped policy always adds
+  ``--grad-rho``; that combination -- multistage, proper bundles, and
+  ``--grad-rho`` together -- fails during the first iteration. The failure is
+  in the gradient-based rho setter, not in OOTB, and it reproduces without
+  ``--out-of-the-box``. Until it is fixed, give multistage runs an explicit
+  rho setting (for example ``--default-rho``) instead of relying on OOTB, or
+  run them unbundled.
+* The effort model that sizes bundles and decides extensive form vs.
+  decomposition is fitted on small examples. It has no memory or model-size
+  cap, so for a very large model it can keep the extensive form when
+  decomposing would be wiser. Use ``--inspect-only`` to see the choice before
+  committing to a long run.
+
 Basic usage
 -----------
 
