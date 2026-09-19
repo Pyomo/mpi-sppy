@@ -48,7 +48,10 @@ class Wtracker_extension(mpisppy.extensions.extension.Extension):
     def post_everything(self):
         reportlen = self.options.get("reportlen")
         stdevthresh = self.options.get("stdevthresh")
-        file_prefix = self.options.get("file_prefix")
+        # "" rather than None when the option is unset, matching
+        # report_by_moving_stats's own default: unset, the three reports were
+        # named after a stringified None ("None_summary_iter5_rank0.txt").
+        file_prefix = self.options.get("file_prefix") or ""
         self.wtracker.report_by_moving_stats(self.wlen,
                                              reportlen=reportlen,
                                              stdevthresh=stdevthresh,

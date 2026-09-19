@@ -134,8 +134,37 @@ def do_one_mmw(dirname, modname, runefstring, npyfile, mmwargstring):
     os.chdir("..")
     os.chdir("..")  # moved to CI directory
 
+def do_one_boot(dirname, module, boot_method, size_args, np=2):
+    # A small bootstrap confidence-interval run. schultz/schultz_data need only
+    # numpy; farmer/cvar/multi_knapsack pull in statdist (and so scipy), and a
+    # Smoothed_* method fits a distribution with it.
+    # xhat is computed by the model's xhat_generator (no npy file needed).
+    argstring = (f"{module} {size_args} --alpha 0.1 --seed-offset 100 "
+                 f"--solver-name {solver_name} --boot-method {boot_method}")
+    return do_one(f"bootsp/{dirname}",
+                  "-m mpisppy.confidence_intervals.bootsp.user_boot",
+                  np, argstring)
+
 # -------- First part: farmer family, usar, netdes --------
 if run_first_part:
+    # schultz: data generated on the fly from the scenario number
+    do_one_boot("schultz", "unique_schultz", "Classical_quantile",
+                "--max-count 50 --candidate-sample-size 1 --sample-size 30 "
+                "--subsample-size 10 --nB 20", np=2)
+    # schultz_data: same model, data read from a committed csv dataset
+    do_one_boot("schultz_data", "schultz_data", "Bagging_with_replacement",
+                "--max-count 200 --candidate-sample-size 5 --sample-size 100 "
+                "--subsample-size 20 --nB 20", np=2)
+    # farmer: an empirical run on a statdist-dependent example (crop yields are
+    # perturbed by a statdist univariate distribution)
+    do_one_boot("farmer", "farmer", "Bagging_with_replacement",
+                "--max-count 200 --candidate-sample-size 5 --sample-size 30 "
+                "--subsample-size 10 --nB 8 --crops-multiplier 1 --yield-cv 0.1", np=2)
+    # cvar: a smoothed run (statdist fits a kernel density to the sampled data)
+    do_one_boot("cvar", "cvar", "Smoothed_bagging",
+                "--max-count 200 --candidate-sample-size 5 --sample-size 20 "
+                "--subsample-size 5 --nB 8 --smoothed-B-I 3 "
+                "--smoothed-center-sample-size 20", np=2)
     do_one("farmer/CI", "farmer_ef.py", 1,
            "1 3 {}".format(solver_name))
     # for farmer_cylinders, the first arg is num_scens and is required
@@ -193,6 +222,29 @@ if run_first_part:
            "--ph-primal-hub --ph-dual --ph-dual-rescale-rho-factor=0.1 --ph-dual-rho-multiplier 0.2 "
            "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
 
+    # VSS report (--vss). Two runs, because do_vss has two call sites in
+    # generic_cylinders that supply RP differently: the --EF path (RP from
+    # the EF objective, with the solver's dual bound deciding whether it is
+    # labelled exact) and the decomposition path (RP from the wheel's
+    # incumbent, bracketed by the outer bound). farmer defines
+    # average_scenario_creator, which --vss requires.
+    do_one("farmer", "../../mpisppy/generic_cylinders.py", 1,
+           "--module-name farmer --num-scens 6 --EF "
+           "--EF-solver-name={} --vss".format(solver_name))
+    do_one("farmer", "../../mpisppy/generic_cylinders.py", 3,
+           "--module-name farmer --num-scens 6 "
+           "--rel-gap 0.001 --max-iterations=50 --default-rho=1 "
+           "--solver-name={} --lagrangian --xhatshuffle --vss".format(solver_name))
+
+    # dcap (SIPLIB) read from SMPS files via the generic driver. Passing
+    # --smps-dir selects mpisppy.problem_io.smps_module automatically, so no
+    # model module is needed. dcap233_200 is the full 200-scenario instance.
+    do_one("dcap", "../../mpisppy/generic_cylinders.py", 3,
+           "--smps-dir dcap233_200 --solver-name={} "
+           "--max-iterations=5 --default-rho=1 "
+           "--lagrangian --xhatshuffle --rel-gap=1e-4 "
+           "--intra-hub-conv-thresh=-0.1".format(solver_name))
+
     do_one("farmer/from_pysp", "concrete_ampl.py", 1, solver_name)
     do_one("farmer/from_pysp", "abstract.py", 1, solver_name)
 
@@ -227,6 +279,18 @@ if run_first_part:
            f"--num-scens=3 --solver-name={solver_name} "
            f"--max-iterations=3 --default-rho=1 --lagrangian --xhatshuffle "
            f"--output-dir=solutions_ws {usar_problem_args}")
+    # usar has a binary first-stage (is_active_depot), so it exercises
+    # --xhat-feasibility-cuts-count end-to-end: buffer registration on
+    # the xhatter spoke, the hub extension's binary-only startup check,
+    # and the sync loop. The xhatter may or may not actually hit an
+    # infeasibility on this small instance — the cut-emission path is
+    # unit-tested separately in test_xhat_feasibility_cuts.py — but this
+    # smoke entry guards the full-run plumbing from regressions.
+    do_one("usar", "wheel_spinner.py", 3,
+           f"--num-scens=3 --solver-name={solver_name} "
+           f"--max-iterations=3 --default-rho=1 --lagrangian --xhatshuffle "
+           f"--xhat-feasibility-cuts-count=3 "
+           f"--output-dir=solutions_ws_feas {usar_problem_args}")
 
     # netdes
     # NOTE: Pyomo OBBT does not support persistent solvers as of Aug 2025
@@ -315,22 +379,8 @@ if run_second_part:
     do_one("sizes", "../../mpisppy/generic_cylinders.py", 1,
            "--module-name sizes --num-scens=3 --EF "
            "--EF-solver-name={}".format(solver_name))
-    do_one("sslp",
-           "sslp_cylinders.py",
-           4,
-           "--instance-name=sslp_15_45_10 "
-           "--integer-relax-then-enforce "
-           "--integer-relax-then-enforce-ratio=0.8 "
-           "--lagrangian "
-           "--max-iterations=20 --default-rho=1e-6 "
-           "--reduced-costs --rc-fixer --xhatshuffle "
-           "--linearize-proximal-terms "
-           "--rel-gap=0.0 --surrogate-nonant "
-           "--use-primal-dual-rho-updater --primal-dual-rho-update-threshold=10 "
-           "--solver-name={}".format(solver_name))
-
-    # Same sslp run via the generic driver (sslp.py exposes the same
-    # --instance-name, --sslp-data-path, --surrogate-nonant options).
+    # sslp via the generic driver (sslp.py exposes --instance-name,
+    # --sslp-data-path, and --surrogate-nonant through its inparser_adder).
     do_one("sslp", "../../mpisppy/generic_cylinders.py", 4,
            "--module-name sslp --instance-name=sslp_15_45_10 "
            "--sslp-data-path=./data "
@@ -343,22 +393,32 @@ if run_second_part:
            "--rel-gap=0.0 --surrogate-nonant "
            "--use-primal-dual-rho-updater --primal-dual-rho-update-threshold=10 "
            "--solver-name={}".format(solver_name))
+
+    do_one("sslp", "../../mpisppy/generic_cylinders.py", 4,
+           "--module-name sslp --instance-name=sslp_15_45_10 "
+           "--sslp-data-path=./data "
+           "--fwph-objgap-hub --rel-gap=0.0 "
+           "--max-iterations=10 --default-rho=10 "
+           "--xhatshuffle --xhatshuffle-rank-ratio=0.01 "
+           "--sep-rho --surrogate-nonant "
+           "--solver-name={}".format(solver_name))
+
     do_one("hydro", "hydro_cylinders.py", 3,
-           "--branching-factors \'3 3\' --max-iterations=100 "
+           "--branching-factors \"3 3\" --max-iterations=100 "
            "--default-rho=1 --xhatshuffle --lagrangian "
            "--solver-name={} --stage2-ef-solver-name={}".format(solver_name, solver_name))
 
     # Same hydro run via the generic driver (replaces the archived PySP
     # custom driver; hydro_cylinders.py above is kept for its rst references).
     do_one("hydro", "../../mpisppy/generic_cylinders.py", 3,
-           "--module-name hydro --branching-factors \'3 3\' "
+           "--module-name hydro --branching-factors \"3 3\" "
            "--max-iterations=100 --default-rho=1 "
            "--xhatshuffle --lagrangian "
            "--stage2-ef-solver-name={} --solver-name={}".format(solver_name, solver_name))
 
     # the next might hang with 6 ranks
     do_one("aircond", "aircond_cylinders.py", 3,
-           "--branching-factors \'4 3 2\' --max-iterations=100 "
+           "--branching-factors \"4 3 2\" --max-iterations=100 "
            "--default-rho=1 --lagrangian --xhatshuffle "
            "--solver-name={}".format(solver_name))
 
@@ -368,11 +428,11 @@ if run_second_part:
     # still exercise the lagrangian + xhat-inner-bound combo.
     do_one("aircond", "../../mpisppy/generic_cylinders.py", 3,
            "--module-name ../../mpisppy/tests/examples/aircond "
-           "--branching-factors \'4 3 2\' --max-iterations=100 "
+           "--branching-factors \"4 3 2\" --max-iterations=100 "
            "--default-rho=1 --lagrangian --xhatxbar "
            "--solver-name={}".format(solver_name))
     do_one("aircond", "aircond_ama.py", 3,
-           "--branching-factors \'3 3\' --max-iterations=100 "
+           "--branching-factors \"3 3\" --max-iterations=100 "
            "--default-rho=1 --lagrangian --xhatshuffle "
            "--solver-name={}".format(solver_name))
 
@@ -382,7 +442,7 @@ if run_second_part:
     # doesn't register it, so use --xhatxbar for the inner bound.
     do_one("aircondMulti", "../../mpisppy/generic_cylinders.py", 3,
            "--module-name ../../mpisppy/tests/examples/aircondMulti "
-           "--branching-factors \'3 3\' --max-iterations=5 "
+           "--branching-factors \"3 3\" --max-iterations=5 "
            "--default-rho=1 --lagrangian --xhatxbar "
            "--solver-name={}".format(solver_name))
 

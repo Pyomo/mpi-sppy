@@ -63,9 +63,15 @@ def do_mmw(module_fname, cfg, wheel=None):
                 "do_mmw: mmw_xhat_input_file_name must be set when no wheel is provided"
             )
         # Write the wheel's best xhat to a temporary file readable by all ranks.
+        # Rank 0 owns a secure temp directory; write_first_stage_solution writes
+        # the .npy inside it only when a feasible first-stage solution exists, so
+        # the file's absence after the barrier means "no feasible solution".
+        # (A pre-created temp file, e.g. from mkstemp, would defeat that test.)
         if global_rank == 0:
-            tmp_path = tempfile.mktemp(suffix=".npy")
+            tmp_dir = tempfile.mkdtemp()
+            tmp_path = os.path.join(tmp_dir, "xhat.npy")
         else:
+            tmp_dir = None
             tmp_path = None
         tmp_path = global_comm.bcast(tmp_path, root=0)
 
@@ -77,11 +83,17 @@ def do_mmw(module_fname, cfg, wheel=None):
 
         if not os.path.exists(tmp_path):
             global_toc("MMW CI skipped: no feasible solution found by the main algorithm.")
+            if global_rank == 0:
+                try:
+                    os.rmdir(tmp_dir)
+                except OSError:
+                    pass
             return
         xhat = ciutils.read_xhat(tmp_path)
         if global_rank == 0:
             try:
                 os.remove(tmp_path)
+                os.rmdir(tmp_dir)
             except OSError:
                 pass
 

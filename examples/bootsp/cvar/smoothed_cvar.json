@@ -1,0 +1,18 @@
+{
+    "module_name": "cvar",
+    "max_count": 3000,
+    "candidate_sample_size": 10,
+    "sample_size": 20,
+    "subsample_size": 3,
+    "smoothed_B_I": 5,
+    "smoothed_center_sample_size": 40,
+    "nB": 5,
+    "alpha": 0.05,
+    "seed_offset": 11,
+    "optimal_fname": "None",
+    "xhat_fname": "None",
+    "solver_name": "cplex_direct",
+    "trace_fname": "None",
+    "boot_method": "Smoothed_bagging",
+    "coverage_replications": 5
+}

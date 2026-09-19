@@ -34,7 +34,7 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
                     verbose=False,
                     restore_nonants=True):
         """Loop over some number of the global scenarios; if your rank has
-        the chosen guy, bcast, if not, recieve the bcast. In any event, fix the vars
+        the chosen guy, bcast, if not, receive the bcast. In any event, fix the vars
         at the bcast values and see if it is feasible. If so, stop and 
         leave the nonants fixed.
 
@@ -71,8 +71,9 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
                 if seed is None:
                     snumlists[ndn] = [i % nsize for i in range(llim)]
                 else:
-                    print ("need a random permutation in snumlist xxxx quitting")
-                    quit()
+                    raise RuntimeError("XhatLooper does not support a seed: "
+                                       "a random permutation in snumlist "
+                                       "is not implemented")
         
         self.opt._save_nonants() # to cache for use in fixing
         # for the moment (dec 2019) treat two-stage as special

@@ -49,7 +49,7 @@ class Test_confint_farmer(unittest.TestCase):
         self.arefmodelname ="mpisppy.tests.examples.farmer"  # amalgamator compatible
 
 
-    def _get_base_options(self):
+    def _get_base_options(self, maximize=False):
         cfg = config.Config()
         cfg.quick_assign("EF_solver_name", str, solver_name)
         cfg.quick_assign("use_integer", bool, False)
@@ -58,6 +58,7 @@ class Test_confint_farmer(unittest.TestCase):
         cfg.quick_assign("EF_2stage", bool, True)
         cfg.quick_assign("num_batches", int, 2)
         cfg.quick_assign("batch_size", int, 10)
+        cfg.quick_assign("farmer_maximize", bool, maximize)
         scenario_creator_kwargs = farmer.kw_creator(cfg)
         cfg.quick_assign('kwargs', dict,scenario_creator_kwargs)
         return cfg
@@ -131,6 +132,37 @@ class Test_confint_farmer(unittest.TestCase):
                                 stopping_criterion="BM",
                                 solving_type="EF_2stage",
         )
+
+    def test_seqsampling_maximize_raises(self):
+        # Sequential sampling supports minimization only. The sense is read from
+        # the first gap estimator's fully built model (no extra probe build), so
+        # construction succeeds; the guard then raises once the real sense is
+        # known -- before any stopping decision or sample size is computed from a
+        # wrong-signed gap. Reaching the guard through a real run() requires a
+        # full gap estimation, which is too big for community solvers (see the
+        # skipped test_seqsampling_running), so exercise the guard directly.
+        optionsBM = config.Config()
+        confidence_config.confidence_config(optionsBM)
+        confidence_config.sequential_config(optionsBM)
+        optionsBM.quick_assign('BM_h', float, 0.2)
+        optionsBM.quick_assign('BM_hprime', float, 0.015,)
+        optionsBM.quick_assign('BM_eps', float, 0.5,)
+        optionsBM.quick_assign('BM_eps_prime', float, 0.4,)
+        optionsBM.quick_assign("BM_p", float, 0.2)
+        optionsBM.quick_assign("BM_q", float, 1.2)
+        optionsBM.quick_assign("solver_name", str, solver_name)
+        optionsBM.quick_assign("solving_type", str, "EF_2stage")
+        seq_pb = seqsampling.SeqSampling("mpisppy.tests.examples.farmer",
+                                         seqsampling.xhat_generator_farmer,
+                                         optionsBM,
+                                         stochastic_sampling=False,
+                                         stopping_criterion="BM",
+                                         solving_type="EF_2stage",
+        )
+        # minimization passes through; maximization must raise loudly
+        seq_pb._min_only_guard(True)
+        with self.assertRaisesRegex(RuntimeError, "minimization only"):
+            seq_pb._min_only_guard(False)
 
 
     def test_pyomo_opt_sense(self):
@@ -218,11 +250,30 @@ class Test_confint_farmer(unittest.TestCase):
                                            cfg['num_batches'],
                                            batch_size = cfg["batch_size"],
                                            start = cfg['num_scens'])
-        r = MMW.run() 
+        r = MMW.run()
         s = round_pos_sig(r['std'],2)
         bound = round_pos_sig(r['gap_inner_bound'],2)
         self.assertEqual((s,bound), (1.5,96.0))
-   
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_MMW_running_maximize(self):
+        # The optimality-gap magnitude is sense-independent, so the maximize
+        # bound matches the minimize case above. Before the sense fix the
+        # reported bound came out negative (Gbar < 0 for maximization).
+        cfg = self._get_base_options(maximize=True)
+        xhat = ciutils.read_xhat(self.xhat_path)
+        MMW = MMWci.MMWConfidenceIntervals(self.refmodelname,
+                                           cfg,
+                                           xhat,
+                                           cfg['num_batches'],
+                                           batch_size = cfg["batch_size"],
+                                           start = cfg['num_scens'])
+        r = MMW.run()
+        s = round_pos_sig(r['std'],2)
+        bound = round_pos_sig(r['gap_inner_bound'],2)
+        self.assertEqual((s,bound), (1.5,96.0))
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_gap_estimators(self):
@@ -237,7 +288,110 @@ class Test_confint_farmer(unittest.TestCase):
         s = estim['s']
         G,s = round_pos_sig(G,3),round_pos_sig(s,3)
         self.assertEqual((G,s), (456.0,944.0))
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_gap_estimators_maximize(self):
+        # farmer negates its objective for maximization, so the gap is the
+        # negation of the minimize gap; the standard deviation is unchanged.
+        # Before the sense fix the gap was mis-signed/clipped.
+        scenario_names = farmer.scenario_names_creator(50,start=1000)
+        estim = ciutils.gap_estimators(self.xhat,
+                                       self.refmodelname,
+                                       cfg=self._get_base_options(maximize=True),
+                                       solver_name=solver_name,
+                                       scenario_names=scenario_names,
+                                       )
+        G = estim['G']
+        s = estim['s']
+        G,s = round_pos_sig(G,3),round_pos_sig(s,3)
+        self.assertEqual((G,s), (-456.0,944.0))
         
+    def test_seqsampling_scenario_disjoint_draws(self):
+        """Two-stage SeqSampling must draw disjoint scenario-name ranges
+        across iterations.
+
+        Before the fix, the inner-loop xhat step asked for ``int(mult*nk)``
+        names but advanced ``self.ScenCount`` by ``mk``; with ``ArRP > 1``
+        and an odd ``lower_bound_k`` these differ, so the next iteration's
+        scen indices could overlap the current draw.  This test patches
+        the xhat_generator and gap_estimators so no solver is needed, plus
+        ``sample_size`` so ``lower_bound_k`` lands on values that exercise
+        the ArRP-rounding path, records every ``scenario_names_creator``
+        call, and asserts pairwise disjoint intervals.
+        """
+        optionsBM = config.Config()
+        confidence_config.confidence_config(optionsBM)
+        confidence_config.sequential_config(optionsBM)
+        confidence_config.BM_config(optionsBM)
+        optionsBM.quick_assign('BM_hprime', float, 0.015)
+        optionsBM.quick_assign('BM_eps_prime', float, 0.4)
+        optionsBM.quick_assign("solver_name", str, "bogus")
+        optionsBM.quick_assign("solving_type", str, "EF_2stage")
+        # Force the ArRP>1 path that used to misalign draws vs. ScenCount
+        optionsBM["ArRP"] = 2
+
+        def _dummy_xhat_gen(scenario_names, **kwargs):
+            return {"ROOT": np.array([0.0, 0.0, 0.0])}
+
+        sampler = seqsampling.SeqSampling(
+            "mpisppy.tests.examples.farmer",
+            _dummy_xhat_gen,
+            optionsBM,
+            stochastic_sampling=False,
+            stopping_criterion="BM",
+            solving_type="EF_2stage",
+        )
+
+        # Pin lower_bound_k to odd values so nk (= ArRP*ceil(L/ArRP)) > mk;
+        # that's the regime where the old code overlapped draws.
+        lb_values = iter([3, 5, 7, 9, 11])
+        def _fake_sample_size(k, G, s, nk_m1):
+            return next(lb_values)
+        sampler.sample_size = _fake_sample_size
+
+        # Record every draw as a half-open [start, start+count) interval.
+        calls = []
+        orig_creator = sampler.refmodel.scenario_names_creator
+        def _recording_creator(num_scens, start=None):
+            s = 0 if start is None else start
+            calls.append((s, int(num_scens)))
+            return orig_creator(num_scens, start=start)
+        sampler.refmodel.scenario_names_creator = _recording_creator
+
+        # Gap values: keep loop going a few iterations, then terminate.
+        gvals = iter([(50.0, 10.0), (40.0, 10.0), (30.0, 10.0), (0.0, 10.0)])
+        def _fake_gap_estimators(xhat, refmodelname, **kwargs):
+            G, s = next(gvals)
+            # farmer is a minimization; run()'s min-only guard reads this key
+            return {"G": G, "s": s, "seed": 0, "is_minimizing": True}
+
+        try:
+            orig_gap = ciutils.gap_estimators
+            ciutils.gap_estimators = _fake_gap_estimators
+            sampler.run(maxit=5)
+        finally:
+            ciutils.gap_estimators = orig_gap
+            sampler.refmodel.scenario_names_creator = orig_creator
+
+        # Invariant: since every call uses start=self.ScenCount and the
+        # advance should match the number of names drawn, the final
+        # ScenCount must equal the total names drawn.  The pre-fix bug
+        # caused ScenCount to advance by mk while only int(mult*nk)
+        # names were drawn, producing a mismatch (and gaps in the
+        # per-iteration xhat samples).
+        total_drawn = sum(c for _, c in calls)
+        self.assertEqual(sampler.ScenCount, total_drawn,
+            f"ScenCount ({sampler.ScenCount}) != total names drawn "
+            f"({total_drawn}); draws were {calls}")
+
+        # And no two recorded intervals should overlap.
+        for i, (si, ci) in enumerate(calls):
+            for sj, cj in calls[:i]:
+                self.assertFalse(si < sj + cj and sj < si + ci,
+                    f"Overlapping scenario draws across iterations: {calls}")
+
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     @unittest.skipIf(True, "too big for community solvers")

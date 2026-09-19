@@ -10,6 +10,7 @@ MPI is used.
    :caption: Getting Started
 
    quick_start.rst
+   console_scripts.rst
    install_mpi.rst
 
 .. toctree::
@@ -28,6 +29,7 @@ MPI is used.
    out_of_the_box.rst
    examples.rst
    ef.rst
+   mutable_probability.rst
    chance_constraints.rst
 
 .. toctree::
@@ -38,6 +40,7 @@ MPI is used.
    hubs.rst
    spokes.rst
    extensions.rst
+   w_oscillation.rst
    rho_setting.rst
 
 .. toctree::
@@ -50,6 +53,7 @@ MPI is used.
    zhat.rst
    risk_management.rst
    seqsamp.rst
+   boot_sp.rst
 
 .. toctree::
    :maxdepth: 2
@@ -58,8 +62,10 @@ MPI is used.
    properbundles.rst
    pickling.rst
    jensens.rst
+   vss.rst
    feasible_xhat.rst
    xhat_from_file.rst
+   xhat_feasibility_cuts.rst
    iis.rst
    smps.rst
    agnostic.rst
@@ -67,6 +73,7 @@ MPI is used.
    admmWrapper.rst
    stoch_admmWrapper.rst
    aph.rst
+   flexible_ranks.rst
    nompi4py.rst
    secretmenu.rst
    pysp.rst

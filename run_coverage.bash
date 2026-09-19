@@ -55,8 +55,11 @@ has_module() {
 
 # -oversubscribe is OpenMPI-only (MPICH rejects it). Some flexible-rank tests
 # need more ranks than the host has cores, so add the flag only under OpenMPI.
+# Ask mpi4py which library it is linked against rather than parsing the mpiexec
+# banner: OpenMPI 5 launches through PRRTE and its banner no longer reliably
+# says "Open MPI"/"OpenRTE".
 OVERSUBSCRIBE=""
-if mpiexec --version 2>&1 | grep -qiE "open[ -]?mpi|open ?rte"; then
+if python -c "import sys; from mpi4py import MPI; sys.exit(0 if 'open mpi' in MPI.Get_library_version().lower() else 1)" 2>/dev/null; then
     OVERSUBSCRIBE="-oversubscribe"
 fi
 
@@ -65,11 +68,29 @@ fi
 run_phase "test_ef_ph (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_ef_ph.py -v
 
+run_phase "test_maximization (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_maximization.py -v
+
+run_phase "test_solver_log_dir (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_solver_log_dir.py -v
+
 run_phase "test_cvar (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_cvar.py -v
 
+run_phase "test_entry_points (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_entry_points.py -v
+
+run_phase "test_mpi_abort (spawns mpiexec)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_mpi_abort.py -v
+
+run_phase "test_outer_bound_only (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_outer_bound_only.py -v
+
 run_phase "test_chance_constraint (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_chance_constraint.py -v
+
+run_phase "test_cross_scenario_buffer_sizing (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_cross_scenario_buffer_sizing.py -v
 
 run_phase "test_component_map_usage (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_component_map_usage.py -v
@@ -86,8 +107,14 @@ run_phase "test_nonant_validation (serial)" \
 run_phase "test_rho_enforcement (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_rho_enforcement.py -v
 
+run_phase "test_prox_solver_compat (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_prox_solver_compat.py -v
+
 run_phase "test_ph_main (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_main.py
+
+run_phase "test_ph_prep_once (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_prep_once.py
 
 run_phase "test_ph_extensions (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_extensions.py
@@ -122,6 +149,9 @@ run_phase "test_smps (serial)" \
 run_phase "test_generic_cylinders (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_generic_cylinders.py -v
 
+run_phase "test_w_oscillation (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_w_oscillation.py -v
+
 run_phase "test_out_of_the_box (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_out_of_the_box.py -v
 
@@ -133,6 +163,9 @@ run_phase "test_ootb_calibrate (serial)" \
 
 run_phase "test_jensens (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_jensens.py -v
+
+run_phase "test_vss (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_vss.py -v
 
 run_phase "test_feasible_xhat (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_feasible_xhat.py -v
@@ -173,6 +206,9 @@ run_phase "test_flex_xhat_assembly (serial)" \
 run_phase "test_xhat_from_file (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_xhat_from_file.py -v
 
+run_phase "test_xhat_feasibility_cuts (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_xhat_feasibility_cuts.py -v
+
 run_phase "test_incumbent_writing (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_incumbent_writing.py -v
 
@@ -191,19 +227,38 @@ run_phase "serial unit tests (serial)" \
         mpisppy/tests/test_nice_join.py \
         mpisppy/tests/test_solver_spec.py \
         mpisppy/tests/test_extensions.py \
+        mpisppy/tests/test_extension_hooks.py \
         mpisppy/tests/test_buffer_inspect.py \
         mpisppy/tests/test_comm_lor_check.py \
         mpisppy/tests/test_ciutils.py \
+        mpisppy/tests/test_lshaped_cuts.py \
         mpisppy/tests/test_prox_approx.py \
         mpisppy/tests/test_sep_rho.py \
         mpisppy/tests/test_reduced_costs_fixer.py \
-        mpisppy/tests/test_slammer.py
+        mpisppy/tests/test_slammer.py \
+        mpisppy/tests/test_mvapich_rma_guard.py \
+        mpisppy/tests/test_window_distribution.py
 
 run_phase "test_conf_int_farmer (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_conf_int_farmer.py
 
 run_phase "test_conf_int_aircond (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_conf_int_aircond.py
+
+run_phase "test_mrp_generic (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_mrp_generic.py -v
+
+run_phase "farmer_mrp_generic.bash (spawns mpiexec)" \
+    bash -c "cd '$PROJ_DIR/examples/farmer/CI' && bash farmer_mrp_generic.bash '$SOLVER'"
+
+run_phase "test_boot_sp (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/test_boot_sp.py
+
+run_phase "test_boot_sp_simulate (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/test_boot_sp_simulate.py
+
+run_phase "test_boot_sp_smoothed (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/test_boot_sp_smoothed.py
 
 run_phase "test_gradient_rho (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_gradient_rho.py
@@ -221,6 +276,15 @@ run_phase "pysp_model pytest (serial)" \
 
 run_phase "test_with_cylinders (mpiexec -np 2)" \
     mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_with_cylinders.py
+
+run_phase "test_boot_sp (mpiexec -np 2)" \
+    mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_boot_sp.py
+
+run_phase "test_boot_sp_simulate (mpiexec -np 2)" \
+    mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_boot_sp_simulate.py
+
+run_phase "test_boot_sp_smoothed (mpiexec -np 2)" \
+    mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_boot_sp_smoothed.py
 
 run_phase "test_cg_main (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_cg_main.py

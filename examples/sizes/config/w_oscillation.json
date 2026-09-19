@@ -1,0 +1,22 @@
+{
+    "output_csv": "w_oscillations.csv",
+    "per_scenario_csv": null,
+    "warmup_iters": 5,
+    "check_every": 1,
+    "report_mode": "on_detect",
+    "min_frac_to_report": 0.5,
+    "methods": {
+        "zero_crossings": {
+            "tol": 1e-6,
+            "window": 20,
+            "thresh_w_crossings": 2,
+            "thresh_diff_crossings": 3,
+            "thresh_diffs_ratio": 0.2
+        },
+        "w_hash_recurrence": {
+            "window": 20,
+            "quantum": 1e-6,
+            "min_period": 2
+        }
+    }
+}

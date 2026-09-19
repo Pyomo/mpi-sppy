@@ -17,6 +17,15 @@ defaults:
     shell: bash -l {0}
 
 env:
+  # Some GitHub-hosted runners expose an Azure MANA RDMA verbs device
+  # (mana_0).  conda-forge builds MPICH and OpenMPI against UCX, and UCX
+  # probes that device during MPI_Init, fails to create a UD queue pair
+  # ("Operation not supported"), and aborts the whole run before any test
+  # starts.  Which runner a job lands on is luck, so this shows up as a
+  # cell that passes one day and dies at MPI_Init the next.  Every rank
+  # here is on one node, so restrict UCX to the transports that node
+  # actually uses; nothing in mpi-sppy's tests wants a network fabric.
+  UCX_TLS: "self,sm,tcp"
   COV_ARGS: "--parallel-mode --rcfile=${{ github.workspace }}/.coveragerc --data-file=${{ github.workspace }}/.coverage --source=${{ github.workspace }}/mpisppy"
   EX_COV_ARGS: "--parallel-mode --rcfile=${{ github.workspace }}/.coveragerc --data-file=${{ github.workspace }}/.coverage --source=${{ github.workspace }}/mpisppy,${{ github.workspace }}/examples"
 
@@ -26,7 +35,50 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: chartboost/ruff-action@v1
+      # Pin the ruff version: an unpinned linter means an upstream release
+      # can turn every PR red overnight (ruff 0.16.0 did exactly that by
+      # expanding the default rule set).  Bump deliberately.
+      - uses: astral-sh/ruff-action@v3
+        with:
+          version: "0.15.21"
+
+  power_cep_notebook:
+    name: Power CEP notebook
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    timeout-minutes: 10
+    env:
+      COVERAGE_FILE: ${{ github.workspace }}/.coverage
+      COVERAGE_PROCESS_START: ${{ github.workspace }}/examples/power_cep/.coveragerc
+      OMPI_MCA_rmaps_base_oversubscribe: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+      - name: Install dependencies
+        run: |
+          conda install mpi4py setuptools
+          pip install -e . highspy scipy matplotlib pandas nbconvert ipykernel coverage
+          python -c "import pathlib, site; pathlib.Path(site.getsitepackages()[0], 'coverage_startup.pth').write_text('import coverage; coverage.process_startup()\\n')"
+      - name: Execute notebook
+        working-directory: examples/power_cep
+        run: |
+          jupyter nbconvert \
+            --execute power_cep_tutorial.ipynb \
+            --to notebook \
+            --output power_cep_tutorial.executed.ipynb \
+            --output-dir /tmp \
+            --ExecutePreprocessor.timeout=300
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-power-cep-notebook
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: warn
+          include-hidden-files: true
 
   nompi4py:
     name: no mpi4py
@@ -40,12 +92,11 @@ jobs:
           python-version: 3.11
       - name: Install dependencies
         run: |
-          pip install sphinx sphinx_rtd_theme cplex
-          pip install xpress pandas dill coverage
+          pip install cplex xpress
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: PH EF tests
         run: |
@@ -74,8 +125,10 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo sphinx sphinx_rtd_theme sphinx-copybutton dill gridx-egret cplex pybind11
-          pip install xpress coverage
+
+          # pyomo + pybind11 explicit: the build-extensions step below runs
+          # before the editable install; solvers are in no extra (licensing)
+          pip install pyomo pybind11 cplex gurobipy xpress highspy
 
       - name: Build pyomo extensions
         run: |
@@ -84,19 +137,40 @@ jobs:
 
       - name: setup the program
         run: |
-          pip install -e .
+          # [doc] too: this job runs "make doctest" below
+          pip install -e ".[test,doc]"
 
       - name: Test EF/PH
         run: |
           coverage run $COV_ARGS mpisppy/tests/test_ef_ph.py
 
+      - name: Test maximization
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_maximization.py -v
+
+      - name: Test solver log dir
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_solver_log_dir.py -v
+
       - name: Test CVaR
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_cvar.py -v
 
+      - name: Test entry points
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_entry_points.py -v
+
+      - name: Test outer_bound_only
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_outer_bound_only.py -v
+
       - name: Test chance_constraint
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_chance_constraint.py -v
+
+      - name: Test cross-scenario buffer sizing
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_cross_scenario_buffer_sizing.py -v
 
       - name: Test afew
         run: |
@@ -120,9 +194,17 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_rho_enforcement.py -v
 
+      - name: Test prox/solver quadratic compatibility checks
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_prox_solver_compat.py -v
+
       - name: Test generic_cylinders usage
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_generic_cylinders.py -v
+
+      - name: Test W-oscillation detection
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_w_oscillation.py -v
 
       - name: Test out-of-the-box interpreter wiring
         run: |
@@ -140,13 +222,41 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_xhat_from_file.py -v
 
+      - name: Test xhat feasibility cuts
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_xhat_feasibility_cuts.py -v
+
       - name: Test feasible_xhat
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_feasible_xhat.py -v
 
+      - name: Test jensens
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_jensens.py -v
+
+      - name: Test vss
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_vss.py -v
+
       - name: Test prox_approx end-to-end
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_prox_approx_e2e.py -v
+
+      - name: Test timed mipgap
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_timed_mipgap.py -v
+
+      - name: Test termination callback
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/utils/callbacks/termination/tests/test_termination.py -v
+
+      - name: Test window distribution
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_window_distribution.py -v
+
+      - name: Test RMA guard
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_mvapich_rma_guard.py -v
 
       - name: Test docs
         run: |
@@ -176,10 +286,9 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
-          pip install xpress coverage
-          # usar runs in first-part and imports matplotlib + scipy at module load
-          pip install matplotlib scipy
+          # pyomo + pybind11 explicit: the build-extensions step below runs
+          # before the editable install; solvers are in no extra (licensing)
+          pip install pyomo pybind11 cplex xpress
 
       - name: Build pyomo extensions
         run: |
@@ -188,7 +297,7 @@ jobs:
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: Test run_all nouc (first part)
         run: |
@@ -220,8 +329,9 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
-          pip install xpress coverage
+          # pyomo + pybind11 explicit: the build-extensions step below runs
+          # before the editable install; solvers are in no extra (licensing)
+          pip install pyomo pybind11 cplex xpress
 
       - name: Build pyomo extensions
         run: |
@@ -230,7 +340,7 @@ jobs:
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: Test run_all nouc (second part)
         run: |
@@ -260,10 +370,9 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
-          pip install xpress coverage
-          # usar runs in first-part and imports matplotlib + scipy at module load
-          pip install matplotlib scipy
+          # pyomo + pybind11 explicit: the build-extensions step below runs
+          # before the editable install; solvers are in no extra (licensing)
+          pip install pyomo pybind11 cplex xpress
 
       - name: Build pyomo extensions
         run: |
@@ -272,7 +381,7 @@ jobs:
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: Test run_all nouc (first part)
         run: |
@@ -303,8 +412,9 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
-          pip install xpress coverage
+          # pyomo + pybind11 explicit: the build-extensions step below runs
+          # before the editable install; solvers are in no extra (licensing)
+          pip install pyomo pybind11 cplex xpress
 
       - name: Build pyomo extensions
         run: |
@@ -313,7 +423,7 @@ jobs:
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: Test run_all nouc (second part)
         run: |
@@ -345,12 +455,13 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo dill pybind11 highspy coverage
-          pip install git+https://github.com/grid-parity-exchange/egret.git
+          # gridx-egret comes from the [test] extra; the git egret install
+          # lives only in the weekly UC workflow (test_uc_weekly.yml)
+          pip install pybind11 highspy
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: Run run_uc_pr.py
         run: |
@@ -400,7 +511,7 @@ jobs:
           pyomo build-extensions
           cd ../
           pip install git+https://github.com/parapint/parapint.git
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: Test with pytest (serial)
         shell: bash -l {0}
@@ -434,11 +545,11 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo xpress cplex dill matplotlib scipy coverage
+          pip install cplex xpress
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: mpi tests
         run: |
@@ -468,11 +579,11 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo gurobipy dill matplotlib scipy coverage pytest
+          pip install gurobipy
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: Probe gurobi_persistent availability
         run: |
@@ -510,12 +621,11 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo xpress cplex
-          pip install numpy packaging coverage
+          pip install cplex xpress
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: run tests
         timeout-minutes: 10
@@ -548,11 +658,11 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo xpress cplex coverage
+          pip install cplex xpress
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: run tests
         timeout-minutes: 10
@@ -582,17 +692,18 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo xpress cplex coverage
+          pip install cplex xpress
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: run tests
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
           coverage run $COV_ARGS test_ph_main.py
+          coverage run $COV_ARGS test_ph_prep_once.py
 
       - name: Upload coverage data
         if: always()
@@ -616,11 +727,11 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo xpress cplex coverage pytest
+          pip install cplex xpress
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: run tests
         timeout-minutes: 10
@@ -654,11 +765,11 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy" setuptools
-          pip install pyomo pandas xpress cplex scipy sympy dill PyYAML Pympler networkx pandas packaging coverage
+          pip install cplex xpress
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: run pickled bundles tests
         timeout-minutes: 10
@@ -690,11 +801,11 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy" setuptools
-          pip install pyomo pandas xpress cplex scipy sympy dill PyYAML Pympler networkx packaging coverage pytest
+          pip install cplex xpress
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: run pre-pickle pipeline tests
         timeout-minutes: 10
@@ -729,11 +840,11 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo xpress cplex mip coverage
+          pip install cplex xpress
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: run MPS tests
         timeout-minutes: 2
@@ -767,11 +878,11 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo xpress cplex mip pytest coverage
+          pip install cplex xpress
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: run SMPS tests
         timeout-minutes: 2
@@ -805,11 +916,55 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy" setuptools
-          pip install pyomo pandas xpress cplex scipy sympy dill packaging coverage
+          pip install cplex xpress
+
+      # the bootstrap epi-spline distributions fit with a nonlinear solver, so
+      # without ipopt those tests skip; this is how Pyomo's own CI gets ipopt
+      - name: Install the Ipopt system libraries
+        run: |
+          # the ipopt binary links against these; Pyomo's CI installs the same
+          sudo apt-get update -q
+          sudo apt-get install -y libopenblas-dev gfortran liblapack-dev
+
+      - name: Identify the Ipopt release
+        id: ipopt-release
+        run: |
+          URL=https://github.com/IDAES/idaes-ext
+          VER=$(curl -sL -H 'Accept: application/json' $URL/releases/latest \
+                | sed -e 's/.*"tag_name":"\([^"]*\)".*/\1/')
+          if test -z "$VER"; then echo "FAILED identifying the ipopt release"; exit 1; fi
+          echo "ver=$VER" >> $GITHUB_OUTPUT
+
+      # Downloading the solvers tarball is the slow part of this job, and it is
+      # the same bytes every run. Keyed on the release tag, so a new IDAES
+      # release fetches once and every run after that restores from the cache.
+      - name: Cache Ipopt
+        id: cache-ipopt
+        uses: actions/cache@v4
+        with:
+          path: ~/ipopt
+          key: ipopt-${{ runner.os }}-${{ steps.ipopt-release.outputs.ver }}
+
+      - name: Install Ipopt
+        run: |
+          IPOPT_DIR=$HOME/ipopt
+          if test "${{ steps.cache-ipopt.outputs.cache-hit }}" != "true"; then
+            echo "cache miss; downloading ${{ steps.ipopt-release.outputs.ver }}"
+            mkdir -p "$IPOPT_DIR"
+            URL=https://github.com/IDAES/idaes-ext
+            curl -fL $URL/releases/download/${{ steps.ipopt-release.outputs.ver }}/idaes-solvers-ubuntu2204-x86_64.tar.gz \
+              | tar -xz -C "$IPOPT_DIR"
+          else
+            echo "cache hit; skipping the download"
+          fi
+          # set on every run: the cache restores the files, not the environment
+          echo "$IPOPT_DIR" >> $GITHUB_PATH
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$IPOPT_DIR" >> $GITHUB_ENV
+          "$IPOPT_DIR"/ipopt -v
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: run farmer tests
         timeout-minutes: 10
@@ -822,6 +977,34 @@ jobs:
         run: |
           cd mpisppy/tests
           coverage run $COV_ARGS test_conf_int_aircond.py
+
+      - name: run mrp tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          coverage run $COV_ARGS test_mrp_generic.py
+
+      - name: run farmer_mrp_generic.bash
+        timeout-minutes: 10
+        run: |
+          cd examples/farmer/CI
+          bash farmer_mrp_generic.bash
+
+      - name: run bootstrap CI tests (serial)
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          coverage run $COV_ARGS test_boot_sp.py
+          coverage run $COV_ARGS test_boot_sp_simulate.py
+          coverage run $COV_ARGS test_boot_sp_smoothed.py
+
+      - name: run bootstrap CI tests (mpiexec -np 2)
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          mpiexec -np 2 coverage run $COV_ARGS -m mpi4py test_boot_sp.py
+          mpiexec -np 2 coverage run $COV_ARGS -m mpi4py test_boot_sp_simulate.py
+          mpiexec -np 2 coverage run $COV_ARGS -m mpi4py test_boot_sp_smoothed.py
 
       - name: Upload coverage data
         if: always()
@@ -846,7 +1029,9 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11 mip coverage
+          # pyomo + pybind11 explicit: the build-extensions step below runs
+          # before the editable install; solvers are in no extra (licensing)
+          pip install pyomo pybind11 cplex
 
       - name: Build pyomo extensions
         run: |
@@ -855,7 +1040,7 @@ jobs:
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: Test test_generic nouc
         run: |
@@ -892,11 +1077,11 @@ jobs:
         run: |
           conda install -y conda-forge::libstdcxx-ng
           conda install -y -c conda-forge openmpi mpi4py "numpy" setuptools cmake pip
-          conda run -n test_env --no-capture-output pip install pyomo pandas xpress cplex scipy sympy dill packaging coverage
+          conda run -n test_env --no-capture-output pip install cplex xpress
 
       - name: setup the program
         run: |
-          conda run -n test_env --no-capture-output pip install -e .
+          conda run -n test_env --no-capture-output pip install -e ".[test]"
 
       - name: run gradient/rho tests
         timeout-minutes: 10
@@ -926,11 +1111,11 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy" setuptools
-          pip install pyomo addheader pyyaml pytest
+          pip install pyyaml
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: run headers test
         timeout-minutes: 10
@@ -951,11 +1136,11 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools pytest pyyaml networkx
-          pip install pyomo xpress cplex coverage
+          pip install cplex xpress
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: run pysp model tests
         timeout-minutes: 10
@@ -979,50 +1164,150 @@ jobs:
           include-hidden-files: true
 
   test-cylinders:
-    name: tests on some cylinders
+    name: tests on some cylinders (${{ matrix.label }})
     runs-on: ubuntu-latest
     needs: [ruff]
+    strategy:
+      # One cell failing must not cancel the others: the point of the matrix
+      # is to learn *which* MPI builds the RMA path works on, so every cell
+      # has to report.
+      fail-fast: false
+      matrix:
+        # The flexible (unequal) rank path is the only place mpi-sppy uses
+        # passive-target MPI RMA (Lock/Get/Put), the least portable corner of
+        # the spec, and it is where a portability regression would first show.
+        # It is therefore exercised on both major open-source implementations
+        # and on more than one mpi4py version.  A bare `conda install mpi4py`
+        # resolves to MPICH, which is what this job used to test alone.
+        include:
+          - label: mpich
+            mpi: mpich
+            mpi4py: "mpi4py"
+            artifact: mpich
+          - label: openmpi
+            mpi: openmpi
+            mpi4py: "mpi4py"
+            artifact: openmpi
+          - label: mpich, mpi4py 3.1
+            mpi: mpich
+            mpi4py: "mpi4py=3.1"
+            artifact: mpich-mpi4py31
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
+          # conda-forge, exclusively: it is the channel that actually
+          # maintains per-implementation MPI variants.  Asking for `openmpi`
+          # there also pulls the openmpi-flavored mpi4py (via the `mpi`
+          # metapackage), so each cell really does exercise the MPI it names;
+          # on the defaults channel the mpi4py build is not variant-selected
+          # and an "openmpi" cell could silently keep linking MPICH.
+          channels: conda-forge
+          conda-remove-defaults: "true"
       - name: Install dependencies
         run: |
-          conda install mpi4py "numpy" setuptools
-          pip install pyomo pandas xpress cplex scipy packaging coverage
+          conda install ${{ matrix.mpi }} "${{ matrix.mpi4py }}" "numpy" setuptools
+          pip install cplex xpress
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
+
+      - name: Record the MPI build under test
+        run: |
+          # The log is the evidence for "exercised on two MPI implementations
+          # and more than one mpi4py/MPI version".
+          mpiexec --version || true
+          python -c "import mpi4py; from mpi4py import MPI; print('mpi4py', mpi4py.__version__); print(MPI.Get_library_version())"
+          # -oversubscribe is OpenMPI-only (MPICH rejects it) and the np=6 runs
+          # below ask for more ranks than the runner has cores.  Ask mpi4py
+          # which library it is linked against rather than parsing the mpiexec
+          # banner: OpenMPI 5 launches through PRRTE and its banner no longer
+          # reliably says "Open MPI"/"OpenRTE".  Detected rather than taken
+          # from the matrix label, so this stays correct if conda ever resolves
+          # something other than the label claims.
+          if python -c "import sys; from mpi4py import MPI; sys.exit(0 if 'open mpi' in MPI.Get_library_version().lower() else 1)"; then
+            echo "OVERSUBSCRIBE=-oversubscribe" >> $GITHUB_ENV
+          else
+            echo "OVERSUBSCRIBE=" >> $GITHUB_ENV
+          fi
 
       - name: run tests
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          mpiexec -np 2 coverage run $COV_ARGS -m mpi4py test_with_cylinders.py
+          mpiexec -np 2 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_with_cylinders.py
 
       - name: run flexible (unequal) rank tests
+        # Runs even when the equal-rank step above failed.  This step is the
+        # whole reason the matrix exists, and a failure in the pre-existing
+        # equal-rank tests would otherwise skip it and leave the question the
+        # matrix is asking -- does the RMA path work on this MPI build? --
+        # unanswered.  Both still fail the job.
+        if: ${{ !cancelled() }}
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_spwindow_multisource.py
-          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_cylinders.py
-          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_duals.py
-          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat.py
-          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xfeas.py
-          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat_multistage.py
-          mpiexec -np 6 coverage run $COV_ARGS -m mpi4py test_flexible_rank_extension_fields.py
+          mpiexec -np 6 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_spwindow_multisource.py
+          mpiexec -np 6 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_flexible_rank_cylinders.py
+          mpiexec -np 6 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_flexible_rank_duals.py
+          mpiexec -np 6 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat.py
+          mpiexec -np 6 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_flexible_rank_xfeas.py
+          mpiexec -np 6 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_flexible_rank_xhat_multistage.py
+          mpiexec -np 6 $OVERSUBSCRIBE coverage run $COV_ARGS -m mpi4py test_flexible_rank_extension_fields.py
+
+      - name: run the rank-failure abort tests
+        # These spawn their own two-rank mpiexec jobs, so they run under
+        # pytest rather than under mpiexec.  Here rather than with the unit
+        # tests because what they exercise is MPI_Abort teardown, which is
+        # exactly what differs between the implementations this matrix
+        # covers.  MPISPPY_REQUIRE_MPIEXEC turns a missing launcher or a
+        # missing mpi4py into a failure, so the cell cannot go green on
+        # skips.  The cap is above the worst case -- six jobs that can each
+        # wait out TIMEOUT plus the reap -- so that a reintroduced hang
+        # reports "the job hung for 120s: a rank is still waiting in its
+        # collective", rather than being cut short by a generic step
+        # timeout that says nothing about why.
+        if: ${{ !cancelled() }}
+        timeout-minutes: 25
+        env:
+          MPISPPY_REQUIRE_MPIEXEC: "1"
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_mpi_abort.py -v
 
       - name: Upload coverage data
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-cylinders
+          name: coverage-cylinders-${{ matrix.artifact }}
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
           include-hidden-files: true
+
+  test-cylinders-gate:
+    # Branch protection requires a check named "tests on some cylinders",
+    # which is what the job above was called before it became a matrix.  A
+    # matrix reports one context per cell -- "tests on some cylinders
+    # (mpich)" and friends -- so the required name is never reported and
+    # every PR sits waiting on a status that will never arrive.  Reporting
+    # it from a gate keeps that name stable no matter how the matrix is
+    # edited later, and avoids naming individual cells in a setting that
+    # would then block PRs branched before the matrix existed.
+    name: tests on some cylinders
+    runs-on: ubuntu-latest
+    needs: [test-cylinders]
+    # A skipped matrix (ruff red) still has to report, or the required check
+    # hangs; the run is already failing in that case.
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Report the matrix result
+        run: |
+          # `needs.<job>.result` collapses the whole matrix into one verdict:
+          # "success" only when every cell succeeded.
+          echo "cylinder cells: ${{ needs.test-cylinders.result }}"
+          test "${{ needs.test-cylinders.result }}" = "success"
 
   test-cg:
     name: column generation tests
@@ -1037,11 +1322,11 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo xpress cplex coverage
+          pip install cplex xpress
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: run CG serial tests
         timeout-minutes: 10
@@ -1101,19 +1386,17 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo xpress cplex coverage
-          pip install numpy packaging
+          pip install cplex xpress
           python -m pip install amplpy --upgrade
           python -m amplpy.modules install highs cbc gurobi
           conda install -c conda-forge openssl
           echo "LD_LIBRARY_PATH=${CONDA_PREFIX}/lib:${LD_LIBRARY_PATH:-}" >> $GITHUB_ENV
           python -m pip install gamspy
-          python -m pip install mip
           # license?
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: run agnostic tests
         timeout-minutes: 10
@@ -1158,11 +1441,10 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo pytest coverage
 
       - name: setup the program
         run: |
-          pip install -e .
+          pip install -e ".[test]"
 
       - name: run unit tests
         run: |
@@ -1174,7 +1456,9 @@ jobs:
             mpisppy/tests/test_nice_join.py \
             mpisppy/tests/test_solver_spec.py \
             mpisppy/tests/test_extensions.py \
+            mpisppy/tests/test_extension_hooks.py \
             mpisppy/tests/test_jensens.py \
+            mpisppy/tests/test_vss.py \
             mpisppy/tests/test_feasible_xhat.py \
             mpisppy/tests/test_proper_bundler.py \
             mpisppy/tests/test_incumbent_writing.py \
@@ -1193,6 +1477,7 @@ jobs:
             mpisppy/tests/test_flexible_rank_cli.py \
             mpisppy/tests/test_flex_xhat_assembly.py \
             mpisppy/tests/test_ciutils.py \
+            mpisppy/tests/test_lshaped_cuts.py \
             mpisppy/tests/test_prox_approx.py \
             mpisppy/tests/test_sep_rho.py \
             mpisppy/tests/test_reduced_costs_fixer.py \
@@ -1211,6 +1496,7 @@ jobs:
     name: Coverage Report
     runs-on: ubuntu-latest
     needs:
+      - power_cep_notebook
       - nompi4py
       - regression
       - runall_persistent_part1

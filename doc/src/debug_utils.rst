@@ -89,7 +89,7 @@ printed when the report is not ok:
 
 .. code-block:: bash
 
-   mpiexec -np N python my_driver.py --inspect-buffers-on-shutdown
+   mpiexec -np N python -m mpi4py my_driver.py --inspect-buffers-on-shutdown
 
 When the flag is unset (the default), the inspector is never called
 and the shutdown-poll cost is unchanged.

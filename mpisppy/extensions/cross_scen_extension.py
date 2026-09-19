@@ -57,7 +57,7 @@ class CrossScenarioExtension(Extension):
             self.reenable_prox = True
         elif not opt.W_disabled:
             opt._disable_W()
-            self.eenable_W = True
+            self.reenable_W = True
         elif not opt.prox_disabled:
             opt._disable_prox()
             self.reenable_prox = True
@@ -102,8 +102,15 @@ class CrossScenarioExtension(Extension):
                 need_solution=False,
         )
 
-        local_obs = np.fromiter((s._mpisppy_data.outer_bound for s in opt.local_scenarios.values()),
-                                dtype="d", count=len(opt.local_scenarios))
+        # A subproblem that produced no outer bound holds None; for the max/min
+        # aggregation it should be the weakest possible bound (so it is ignored),
+        # which is the vacuous bound: -inf when minimizing, +inf when maximizing.
+        vacuous_ob = -np.inf if opt.is_minimizing else np.inf
+        local_obs = np.fromiter(
+            (vacuous_ob if s._mpisppy_data.outer_bound is None
+             else s._mpisppy_data.outer_bound
+             for s in opt.local_scenarios.values()),
+            dtype="d", count=len(opt.local_scenarios))
 
         local_ob = np.empty(1)
         if opt.is_minimizing:
@@ -238,9 +245,12 @@ class CrossScenarioExtension(Extension):
             )
             self.send_nonants = True
         ## End if-else
+        # CROSS_SCENARIO_COST is local-sized: one eta value per global scenario,
+        # for each local scenario (see send_to_cross_cuts). It is nscen * nscen
+        # only when every cylinder has exactly one rank (local_scen_count==nscen).
         self.all_etas = spcomm.register_send_field(
             Field.CROSS_SCENARIO_COST,
-            nscen * nscen,
+            nscen * local_scen_count,
         )
         return
 

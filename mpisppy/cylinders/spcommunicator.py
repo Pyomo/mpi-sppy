@@ -20,8 +20,10 @@
 """
 
 import abc
-import time
 import logging
+import os
+import time
+import warnings
 import numpy as np
 from math import inf
 
@@ -87,6 +89,78 @@ _STRICT_COHERENCE_FIELDS = frozenset((
     Field.RECENT_XHATS,
 ))
 
+_UNSAFE_MVAPICH_RMA_VERSION = (2, 3, 7)
+_ALLOW_UNSAFE_MVAPICH_RMA_ENV = "MPISPPY_ALLOW_UNSAFE_MVAPICH_RMA"
+_MVAPICH_VENDOR_NAMES = frozenset(("MVAPICH", "MVAPICH2"))
+
+
+def _guard_mvapich_cross_node_rma(window_comm, fullcomm, global_rank,
+                                   flexible_ranks=False):
+    """Reject MVAPICH <= 2.3.7 cross-node RMA unless explicitly overridden."""
+    get_vendor = getattr(MPI, "get_vendor", None)
+    get_processor_name = getattr(MPI, "Get_processor_name", None)
+    if get_vendor is None or get_processor_name is None:
+        return
+
+    vendor_name, vendor_version = get_vendor()
+    vendor_version = tuple(vendor_version)
+    if (vendor_name not in _MVAPICH_VENDOR_NAMES
+            or vendor_version > _UNSAFE_MVAPICH_RMA_VERSION):
+        return
+
+    local_hosts = window_comm.allgather(get_processor_name())
+    local_cross_node = len(set(local_hosts)) > 1
+    any_cross_node = fullcomm.allreduce(local_cross_node, op=MPI.LOR)
+    if not any_cross_node:
+        return
+
+    if flexible_ranks:
+        workaround = (
+            "Unequal-rank cylinders place their window on MPI_COMM_WORLD, so "
+            "multi-node runs require a different MPI implementation (or must "
+            "run on one node)."
+        )
+    else:
+        workaround = (
+            "Use block rank placement with ranks per node divisible by the "
+            "number of cylinders so every strata communicator is node-local, "
+            "or use a different MPI implementation."
+        )
+
+    allow_unsafe = fullcomm.bcast(
+        os.environ.get(_ALLOW_UNSAFE_MVAPICH_RMA_ENV) == "1"
+        if global_rank == 0 else None,
+        root=0,
+    )
+    version_text = ".".join(map(str, vendor_version))
+    if vendor_version < _UNSAFE_MVAPICH_RMA_VERSION:
+        evidence = (
+            "Intermittent cross-node RMA failures have been observed with "
+            "MVAPICH 2.3.7 on one HPC system; it is not known whether the "
+            "behavior is specific to that environment. This earlier release "
+            "has not been tested and is being guarded as a precaution. "
+        )
+    else:
+        evidence = (
+            "On one HPC system, this configuration has produced intermittent "
+            "cross-node MPI_Get hangs, heap corruption, and segmentation "
+            "faults; it is not known whether the behavior is specific to that "
+            "environment. "
+        )
+    message = (
+        f"mpi-sppy detected MVAPICH {version_text} and an MPI RMA window "
+        f"communicator that spans nodes. {evidence}"
+        "As a precaution, mpi-sppy will not use this configuration by default. "
+        f"{workaround} Set {_ALLOW_UNSAFE_MVAPICH_RMA_ENV}=1 to continue at "
+        "your own risk."
+    )
+
+    if allow_unsafe:
+        if global_rank == 0:
+            warnings.warn(message, RuntimeWarning, stacklevel=2)
+        return
+    raise RuntimeError(message)
+
 
 def reduce_source_write_ids(source_ids, strict: bool) -> int:
     """Reduce the per-source write_ids of a multi-source read to the single id
@@ -110,6 +184,28 @@ def reduce_source_write_ids(source_ids, strict: bool) -> int:
     if strict:
         return source_ids[0] if len(set(source_ids)) == 1 else -1
     return min(source_ids)
+
+
+def coherence_miss_rate(counters) -> float:
+    """Fraction of the multi-source reads in ``counters`` that a straddled
+    publish cost something (see SPCommunicator._count_coherence_read).
+
+    All three non-clean outcomes count, not just the locally-detected one: a
+    read this rank rejected because its own sources disagreed
+    (``rejected_incoherent``), one rejected because a *peer* reader rank
+    straddled and broke cross-reader agreement (``rejected_cross_reader``), and
+    one accepted with a blended assembly (``accepted_mixed``). Counting only
+    the first would divide by the number of reader ranks: one straddle on an
+    R-rank reader records 1 ``rejected_incoherent`` and R-1
+    ``rejected_cross_reader``.
+    """
+    if counters["total"] == 0:
+        return 0.0
+    misses = (counters["rejected_incoherent"]
+              + counters["rejected_cross_reader"]
+              + counters["accepted_mixed"])
+    return misses / counters["total"]
+
 
 def communicator_array(data_length: int):
     """
@@ -347,6 +443,25 @@ class SPCommunicator:
         self.overlap_maps = {}            # -> list[OverlapSegment] (global ranks)
         self._overlap_source_ranks = {}   # -> sorted distinct source global ranks
 
+        # Per-field read-outcome counters for the unequal-rank multi-source
+        # reader (see _count_coherence_read); always accumulated (two integer
+        # increments per multi-source read), reported at finalization by
+        # report_coherence_diagnostics. Empty on the equal-rank path and for
+        # single-source reads, which cannot straddle a publish.
+        self.coherence_counters = {}
+        # opt-in periodic per-field line for live debugging: print local
+        # counters every N multi-source reads (0 = off). Read from the
+        # underlying SPBase options, not this object's `options`: the bound
+        # spoke constructors take no `communicators` argument, so the cylinder
+        # list WheelSpinner passes positionally lands in their `options`
+        # parameter and `SPCommunicator.options` is always empty on a spoke.
+        # opt.options is set from opt_kwargs for every cylinder, and is where
+        # the sibling cylinder-wide debug switches (`trace_prefix`,
+        # `inspect_buffers_on_shutdown`) already live.
+        self._coherence_report_period = int(
+            self.opt.options.get("coherence_diagnostics_period", 0)
+        )
+
         # setup FieldLengths which calculates
         # the length of each buffer type based
         # on the problem data
@@ -543,6 +658,12 @@ class SPCommunicator:
         # addressed by strata_rank. Unequal-rank: window on fullcomm,
         # addressed by global rank via overlap maps (strata_comm is None).
         window_comm = self.fullcomm if self._flex_ranks else self.strata_comm
+        _guard_mvapich_cross_node_rma(
+            window_comm,
+            self.fullcomm,
+            self.global_rank,
+            flexible_ranks=self._flex_ranks,
+        )
         self.window = SPWindow(window_spec, window_comm)
 
         self._create_field_rank_mappings()
@@ -624,11 +745,15 @@ class SPCommunicator:
         if not synchronize:
             return True
         local_val = np.array((new_id,), 'i')
-        sum_ids = np.zeros(1, 'i')
+        min_id = np.zeros(1, 'i')
+        max_id = np.zeros(1, 'i')
         self.cylinder_comm.Allreduce((local_val, MPI.INT),
-                                     (sum_ids, MPI.INT),
-                                     op=MPI.SUM)
-        return new_id * self.cylinder_comm.size == sum_ids[0]
+                                     (min_id, MPI.INT),
+                                     op=MPI.MIN)
+        self.cylinder_comm.Allreduce((local_val, MPI.INT),
+                                     (max_id, MPI.INT),
+                                     op=MPI.MAX)
+        return min_id[0] == max_id[0]
 
     def _mark_new(self, buf: RecvArray, new_id: int) -> bool:
         """Commit an accepted read: stamp ``new_id`` into the buffer's id slot
@@ -893,15 +1018,33 @@ class SPCommunicator:
             source_snapshots[r] = snapshot
             source_ids.append(int(snapshot[logical_len - 1]))
 
-        new_id = reduce_source_write_ids(
-            source_ids, strict=field in _STRICT_COHERENCE_FIELDS
-        )
+        strict = field in _STRICT_COHERENCE_FIELDS
+        new_id = reduce_source_write_ids(source_ids, strict=strict)
+
+        # Read-outcome diagnostic: count genuinely multi-source reads (>= 2
+        # sources; a single source cannot straddle a publish). The outcome
+        # buckets let a user tell a coherence problem (reads rejected or
+        # blended) from a slow upstream sender (nothing new to read) when a
+        # consumer appears to report infrequently.
+        counters = None
+        if len(source_ids) >= 2:
+            counters = self._count_coherence_read(field)
+            mixed = len(set(source_ids)) > 1
 
         if not self._write_ids_agree(new_id, synchronize):
+            if counters is not None:
+                # this rank's own sources disagreeing is the fundamental
+                # coherence miss (the read straddled a publish) whatever the
+                # field's policy; otherwise its sources agreed and it was the
+                # collective cross-reader check that rejected the read
+                counters["rejected_incoherent" if mixed
+                         else "rejected_cross_reader"] += 1
             buf._is_new = False
             return False
 
         if new_id > last_id:
+            if counters is not None:
+                counters["accepted_mixed" if mixed else "new_accepted"] += 1
             # assemble the accepted data into buf, then commit via the shared
             # _mark_new (which stamps the id slot the assembly does not touch)
             data_view = buf.value_array()
@@ -910,8 +1053,91 @@ class SPCommunicator:
                 data_view[seg.local_offset : seg.local_offset + seg.count] = \
                     snapshot[seg.remote_offset : seg.remote_offset + seg.count]
             return self._mark_new(buf, new_id)
+        if counters is not None:
+            # strict + mixed lands here when every reader rank computed the
+            # sentinel -1, so cross-reader agreement held but the id cannot
+            # advance -- still a coherence rejection, not a slow sender. A
+            # *relaxed* mixed read that gets here is the slow-sender case
+            # proper: the floor did not move because one source is behind.
+            counters["rejected_incoherent" if strict and mixed
+                     else "not_new"] += 1
         buf._is_new = False
         return False
+
+    def _count_coherence_read(self, field: Field) -> dict:
+        """Count one multi-source read of ``field`` and return its outcome
+        counters (created on first use) for the caller to bucket:
+
+          * ``new_accepted`` -- sources agreed on an advanced write_id; used.
+          * ``not_new`` -- the write_id did not advance, so there was nothing
+            to take (the sender has not published since the last accepted
+            read). A relaxed field whose sources disagree but whose floor has
+            not moved lands here too: some source has not published yet, which
+            is the same diagnosis.
+          * ``rejected_incoherent`` -- this rank's sources disagreed and the
+            read was rejected, so it will be retried (the fundamental coherence
+            miss: the read straddled a publish).
+          * ``rejected_cross_reader`` -- this rank's sources agreed, but the
+            collective cross-reader write_id check rejected the read (some
+            other rank of this cylinder saw a different id -- typically because
+            *it* straddled the publish, and records the miss itself).
+          * ``accepted_mixed`` -- a relaxed field's sources disagreed and the
+            blended assembly was used anyway.
+
+        The buckets partition ``total``. The coherence miss rate is
+        ``coherence_miss_rate(counters)`` -- every read that a straddled
+        publish cost something, whether it was rejected here, rejected because
+        a peer reader straddled, or accepted blended. If ``not_new`` dominates
+        instead, the upstream sender is just slow.
+        """
+        counters = self.coherence_counters.setdefault(field, {
+            "total": 0,
+            "new_accepted": 0,
+            "not_new": 0,
+            "rejected_incoherent": 0,
+            "rejected_cross_reader": 0,
+            "accepted_mixed": 0,
+        })
+        counters["total"] += 1
+        if self._coherence_report_period > 0 and self.cylinder_rank == 0 \
+                and counters["total"] % self._coherence_report_period == 0:
+            # live-debugging line: this rank's counts only (the current
+            # read's outcome bucket is not yet incremented)
+            print(f"coherence diagnostic [{self.__class__.__name__}] "
+                  f"{field.name}: "
+                  + ", ".join(f"{k}={v}" for k, v in counters.items()),
+                  flush=True)
+        return counters
+
+    def report_coherence_diagnostics(self):
+        """Print a per-field summary of the multi-source read outcomes
+        accumulated in ``coherence_counters`` (see _count_coherence_read for
+        the buckets and their diagnosis). Collective on ``cylinder_comm``:
+        every rank of the cylinder must call it (different ranks can have
+        different multi-source fields, or none, so the counters are gathered
+        rather than reduced); rank 0 prints. Inert -- no output, one gather --
+        at equal ranks or when no multi-source reads happened.
+        """
+        if not self._flex_ranks:
+            return
+        all_counters = self.cylinder_comm.gather(self.coherence_counters, root=0)
+        if self.cylinder_rank != 0:
+            return
+        totals = {}
+        for rank_counters in all_counters:
+            for field, counters in rank_counters.items():
+                aggregate = totals.setdefault(field, dict.fromkeys(counters, 0))
+                for outcome, count in counters.items():
+                    aggregate[outcome] += count
+        for field in sorted(totals):
+            counters = totals[field]
+            if counters["total"] == 0:
+                continue
+            print(f"coherence diagnostic [{self.__class__.__name__}] "
+                  f"{field.name}: "
+                  + ", ".join(f"{k}={v}" for k, v in counters.items())
+                  + f", miss rate={coherence_miss_rate(counters):.2%}",
+                  flush=True)
 
     def receive_nonant_bounds(self):
         """ receive the bounds on the nonanticipative variables based on

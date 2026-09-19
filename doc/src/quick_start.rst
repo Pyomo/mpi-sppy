@@ -68,6 +68,10 @@ Install from GitHub on Linux
 
       pip install -e ".[mpi]"
 
+   If you plan to run the tests or contribute, ``pip install -e ".[mpi,dev]"``
+   also installs every optional feature package plus the test, documentation,
+   and linting tools (see :ref:`Install mpi4py` for the full list of extras).
+
 4. Install a solver of your choice (e.g. ``pip install gurobipy``; commercial
    solvers also need a license).
 
@@ -126,8 +130,12 @@ Install from GitHub on Windows
 Two installation paths are supported on Windows. Most users will have a
 substantially easier time with WSL2, because the Python+MPI ecosystem is
 developed and tested on Linux first. Native Windows with MS-MPI does work
-but breaks more often and requires more manual setup. Detailed instructions
-for both follow.
+but breaks more often and requires more manual setup. Runs with several
+cylinders can also be slow on native Windows: under MS-MPI a cylinder
+waits for data from another cylinder until that one finishes its current
+solve, so with long solves the hub can run at the pace of its slowest
+spoke (see issue #869). The extensive form (``--EF``) does not use MPI
+and is unaffected. Detailed instructions for both follow.
 
 Optional: notes for Visual Studio Code users
 """"""""""""""""""""""""""""""""""""""""""""
@@ -261,13 +269,14 @@ Windows.
    environment rather than a ``venv``.
 
    * **conda-forge (simplest).** Installs a prebuilt ``mpi4py``, so you do
-     not need the MS-MPI SDK or a C++ compiler:
+     not need the MS-MPI SDK or a C++ compiler. Name ``msmpi`` in the
+     install; without it conda may pick Intel MPI instead of MS-MPI:
 
      .. code-block:: powershell
 
         conda create -n mpisppy-env python=3.12
         conda activate mpisppy-env
-        conda install -c conda-forge mpi4py
+        conda install -c conda-forge mpi4py msmpi
 
    * **venv + pip.** Use this only if you have the Microsoft C++ Build
      Tools and the MS-MPI SDK installed, since pip builds ``mpi4py`` from
@@ -296,7 +305,7 @@ Windows.
 
    .. code-block:: powershell
 
-      mpiexec -n 3 python -m mpi4py mpisppy\generic_cylinders.py ...
+      mpiexec -n 3 mpi-sppy-generic-cylinders ...
 
 
 Install from PyPI (not recommended)
@@ -321,23 +330,25 @@ Verify Installation
 The following three checks confirm that mpi-sppy, your solver, and (if
 you installed it) MPI are all working. The commands below are
 shell-neutral: they work in bash, zsh, the WSL2 Ubuntu shell, and
-Windows PowerShell. On native Windows, if ``python`` is not on PATH but
-the Python launcher is, substitute ``py`` for ``python``. Start from the
-top of the cloned ``mpi-sppy`` repository; step 1 changes into
-``examples/farmer`` and the remaining commands are run from there.
+Windows PowerShell. They use the ``mpi-sppy-generic-cylinders`` and
+``mpi-sppy-one-sided-test`` console scripts, which the install put on
+your ``PATH`` (see :ref:`console_scripts`). Start from the top of the
+cloned ``mpi-sppy`` repository; step 1 changes into ``examples/farmer``
+and the remaining commands are run from there.
 
-1. **mpi-sppy is importable and the CLI works.** This confirms the
-   editable install succeeded and Python can import the package.
+1. **The command-line driver works.** This confirms the install
+   succeeded and put the console scripts on your ``PATH``.
 
    .. code-block:: text
 
       cd examples/farmer
-      python -m mpisppy.generic_cylinders --module-name farmer --help
+      mpi-sppy-generic-cylinders --module-name farmer --help
 
    You should see a long help message listing all available
-   command-line options. If you see ``ModuleNotFoundError: No module
-   named 'mpisppy'``, the install did not take effect in this
-   environment (most often a virtual-environment issue).
+   command-line options. If the shell reports that the command is not
+   found, the install did not take effect in this environment (most
+   often a virtual-environment issue); see :ref:`console_scripts` for
+   what to check.
 
 2. **Your solver works.** Solve the farmer extensive form directly
    with three scenarios. Substitute the solver you installed
@@ -345,26 +356,30 @@ top of the cloned ``mpi-sppy`` repository; step 1 changes into
 
    .. code-block:: text
 
-      python -m mpisppy.generic_cylinders --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi
+      mpi-sppy-generic-cylinders --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi
 
    You should see the solver print progress and the script print an
    optimal objective value. This check does *not* use MPI.
 
-3. **MPI works** (only if you installed MPI and ``mpi4py``). Still in
-   ``examples/farmer``, run the bundled one-sided MPI test (its path is
-   given relative to ``examples/farmer``):
+3. **MPI works** (only if you installed MPI and ``mpi4py``). Run the
+   bundled one-sided MPI test:
 
    .. code-block:: text
 
-      mpiexec -n 2 python -m mpi4py ../../mpi_one_sided_test.py
+      mpiexec -n 2 mpi-sppy-one-sided-test
 
    If you see no error messages, your MPI installation should be
-   suitable. Then confirm the full hub-and-spoke flow with a short PH
-   run on farmer:
+   suitable. On native Windows with MS-MPI this test fails with an
+   ``AssertionError``, and the failure is real: under MS-MPI, data
+   one cylinder posts reaches the others only when that cylinder
+   makes an MPI call, so cylinders can wait on each other while one
+   is in a long solve. mpi-sppy still gives correct results, but such
+   runs can be slower than on Linux (see issue #869). Then confirm the
+   full hub-and-spoke flow with a short PH run on farmer:
 
    .. code-block:: text
 
-      mpiexec -n 3 python -m mpi4py -m mpisppy.generic_cylinders --module-name farmer --num-scens 3 --solver-name gurobi --max-iterations 5 --default-rho 1 --lagrangian --xhatshuffle
+      mpiexec -n 3 mpi-sppy-generic-cylinders --module-name farmer --num-scens 3 --solver-name gurobi --max-iterations 5 --default-rho 1 --lagrangian --xhatshuffle
 
    You should see iteration output and the run should terminate
    normally.
@@ -399,17 +414,22 @@ The explicit forms below show what such a run is equivalent to.
 
 .. code-block:: bash
 
-   python -m mpisppy.generic_cylinders --module-name farmer \
+   mpi-sppy-generic-cylinders --module-name farmer \
        --num-scens 3 --EF --EF-solver-name gurobi
 
 **Run PH with spokes** (requires MPI):
 
 .. code-block:: bash
 
-   mpiexec -np 3 python -m mpi4py mpisppy/generic_cylinders.py \
+   mpiexec -np 3 mpi-sppy-generic-cylinders \
        --module-name farmer --num-scens 3 \
        --solver-name gurobi_persistent --max-iterations 10 \
        --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01
+
+``mpi-sppy-generic-cylinders`` is a console script created by the
+install; it is equivalent to ``python -m mpisppy.generic_cylinders``.
+A rank that dies ends the job rather than hanging the others; see
+:ref:`console_scripts`.
 
 For more detail, see :ref:`generic_cylinders` and :ref:`Examples`.
 
@@ -426,10 +446,11 @@ following functions:
 - ``inparser_adder`` -- adds problem-specific command-line arguments (see :ref:`helper_functions`)
 - ``scenario_denouement`` -- called at termination (can be ``None``; see :ref:`helper_functions`)
 
-Once you have these functions, you can use ``generic_cylinders.py``
-(see :ref:`generic_cylinders`) to solve your problem using the EF or
-the hub-and-spoke system. See the ``farmer`` directory in ``examples``
-for a complete working example (``farmer.py`` and ``farmer_generic.bash``).
+Once you have these functions, you can use
+``mpi-sppy-generic-cylinders`` (see :ref:`generic_cylinders`) to solve
+your problem using the EF or the hub-and-spoke system. See the
+``farmer`` directory in ``examples`` for a complete working example
+(``farmer.py`` and ``farmer_generic.bash``).
 
 For models written in an algebraic modeling language other than Pyomo
 (e.g., AMPL or GAMS), see :doc:`agnostic`. For models supplied as

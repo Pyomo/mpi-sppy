@@ -176,18 +176,29 @@ class Test_correcting_numeric(unittest.TestCase):
         self.assertEqual(G, -50.0)
 
     def test_maximize_clips_small_positive_to_zero(self):
-        cfg = {"pyo_opt_sense": pyo.maximize}
+        # sense passed explicitly (the path gap_estimators uses)
         G = ciutils.correcting_numeric(
-            1e-9, cfg=cfg, relative_error=True, threshold=1e-4, objfct=100.0
+            1e-9, cfg={}, relative_error=True, threshold=1e-4, objfct=100.0,
+            sense=pyo.maximize,
         )
         self.assertEqual(G, 0.0)
 
     def test_maximize_keeps_large_wrong_sign_gap(self):
-        cfg = {"pyo_opt_sense": pyo.maximize}
         G = ciutils.correcting_numeric(
-            50.0, cfg=cfg, relative_error=False, threshold=1e-2, objfct=100.0
+            50.0, cfg={}, relative_error=False, threshold=1e-2, objfct=100.0,
+            sense=pyo.maximize,
         )
         self.assertEqual(G, 50.0)
+
+    def test_maximize_sense_from_cfg_key(self):
+        # When sense is not passed, fall back to the cfg entry written by
+        # pyomo_opt_sense(); the key is "pyomo_opt_sense". (A small positive
+        # gap is numerical noise for a maximize problem and clips to 0.)
+        cfg = {"pyomo_opt_sense": pyo.maximize}
+        G = ciutils.correcting_numeric(
+            1e-9, cfg=cfg, relative_error=True, threshold=1e-4, objfct=100.0
+        )
+        self.assertEqual(G, 0.0)
 
     def test_missing_objfct_raises(self):
         with self.assertRaises(RuntimeError):

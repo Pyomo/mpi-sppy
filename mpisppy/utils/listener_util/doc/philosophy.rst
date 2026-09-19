@@ -16,7 +16,7 @@ The listener should mostly sleep. When it wakes up it grabs the lock
 and goes through a series of reductions with small amounts of work in
 between.  The reductions may take place over multiple comms.
 
-Of course, there could be only only one reduction per listener wakeup,
+Of course, there could be only one reduction per listener wakeup,
 there could be only one comm, and the listener does not have to do any
 work. This is the case for PH on a two-stage problem (for multi-stage
 problems PH uses multiple comms.

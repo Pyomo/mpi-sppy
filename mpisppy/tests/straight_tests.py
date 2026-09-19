@@ -11,6 +11,7 @@
 
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 
@@ -66,8 +67,13 @@ def _doone(cmdstr: str) -> bool:
         "exit ${rc}\n"
     )
 
+    # Look bash up on PATH: on Windows a bare "bash" is found in System32
+    # first, and that one is the WSL launcher, not Git Bash.
+    bash = shutil.which("bash")
+    if bash is None:
+        raise RuntimeError("straight_tests.py needs bash on PATH")
     with open(log, "w", encoding="utf-8") as f:
-        p = subprocess.run(["bash", "-lc", script], stdout=f, stderr=subprocess.STDOUT)
+        p = subprocess.run([bash, "-lc", script], stdout=f, stderr=subprocess.STDOUT)
 
     if p.returncode != 0:
         # include tail of log for convenience
@@ -154,6 +160,17 @@ _doone(cmdstr)
 
 
 #####################################################
+# mrp_generic: cylinder xhat generator (farmer, PH + lagrangian)
+mrp_cyl_path = os.path.abspath(os.path.join(_tests_dir, "test_mrp_cylinders.py"))
+
+cmdstr = (
+    f"mpiexec -np 3 {pyexe} {python_args} -m mpi4py {shlex.quote(mrp_cyl_path)}"
+)
+
+_doone(cmdstr)
+
+
+#####################################################
 # generic_cylinders with both Jensen's flags (farmer)
 # Exercises the outer-bound and xhat Jensen's paths inside the
 # lagrangian and xhatshuffle spokes' main() bodies.
@@ -167,6 +184,28 @@ cmdstr = (
     f"--max-iterations 2 "
     f"--lagrangian --xhatshuffle "
     f"--lagrangian-try-jensens-first --xhatshuffle-try-jensens-first"
+)
+
+_doone(cmdstr)
+
+
+#####################################################
+# L-shaped with a multi-rank hub (regression test for issue #551).
+# farmer_lshapedhub.py builds the middle scenario into the root problem
+# (root_scenarios), so with one scenario per rank this exercises the
+# subproblem index bookkeeping in mpisppy.utils.lshaped_cuts.set_ls.
+lshaped_path = os.path.abspath(
+    os.path.join(_tests_dir, "..", "..", "examples", "farmer", "farmer_lshapedhub.py")
+)
+
+cmdstr = (
+    f"mpiexec -np 3 {pyexe} {python_args} -m mpi4py {shlex.quote(lshaped_path)} "
+    f"--num-scens 3 "
+    f"--bundles-per-rank=0 "
+    f"--max-iterations=50 "
+    f"--solver-name={shlex.quote(solver_name)} "
+    f"--max-solver-threads 1 "
+    f"--rel-gap=0.0"
 )
 
 _doone(cmdstr)

@@ -8,6 +8,19 @@ run mpi-sppy. It provides command-line access to the hub-and-spoke
 system, the extensive form solver, confidence intervals, and many
 other features without requiring you to write a driver program.
 
+.. note::
+   Installing mpi-sppy puts a console script named
+   ``mpi-sppy-generic-cylinders`` on your ``PATH``. It is equivalent to
+   ``python -m mpisppy.generic_cylinders``, so in every example below you
+   can substitute ``mpi-sppy-generic-cylinders`` for the
+   ``python -m mpisppy.generic_cylinders`` prefix, e.g.::
+
+       mpi-sppy-generic-cylinders --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi
+
+   For multi-rank parallel runs a rank that raises an uncaught
+   exception ends the job rather than leaving it hung, whichever form
+   you use. See :ref:`console_scripts`.
+
 .. tip::
    If you are new to mpi-sppy, add ``--out-of-the-box`` and let the driver
    pick a sensible configuration automatically, then read the equivalent
@@ -143,7 +156,7 @@ two-stage problems:
 
 .. code-block:: bash
 
-    mpiexec -np 2 python -m mpisppy.generic_cylinders \
+    mpiexec -np 2 python -m mpi4py -m mpisppy.generic_cylinders \
         --module-name farmer --num-scens 3 \
         --solver-name gurobi --lshaped-hub --xhatlshaped \
         --max-iterations 100 --rel-gap 1e-4
@@ -219,10 +232,20 @@ Some extensions can be activated directly from the command line:
 
 - ``--fixer`` -- Fix variables that have converged
 - ``--mipgaps-json <file>`` -- MIP gap schedule from a JSON file
+- ``--starting-mipgap <float>`` (required; ``--mipgap-ratio`` defaults to
+  ``0.1``) -- auto MIP gap mode for cylinders
+- ``--timed-mipgap <curve>`` -- Time-dependent MIP gap termination
+  curve as ``gap:time`` pairs
 - ``--user-defined-extensions <module>`` -- Load a custom extension module
 - ``--wtracker`` -- Track W (Lagrange-multiplier) values per iteration
   and write a convergence report at the end of the run
   (see :ref:`wtracker_extension`)
+- ``--detect-W-oscillations <file>`` -- Detect oscillation/cycling in the
+  W vector and report it to a CSV (see :ref:`w_oscillation`)
+- ``--interrupt-W-oscillations <file>`` -- Act on detected W oscillation
+  (slamming) to break the cycle; runs the detection engine to drive the
+  action, but CSV reporting stays opt-in (via ``--detect-W-oscillations``
+  or a ``detect`` block) (see :ref:`w_oscillation`)
 
 See :ref:`Extensions` for details on available extensions.
 
@@ -349,6 +372,28 @@ flag adds ``mipgap`` and leaves the global ``presolve`` and
 ``threads`` in place. The hub and the other spokes see the
 global dict ``{presolve=2, threads=4}`` unchanged.
 
+Each spoke also takes ``--<spoke>-solver-name``, so a spoke can run
+on a different solver from the hub. This covers the xhat inner-bound
+spokes (``--xhatshuffle-solver-name``, ``--xhatxbar-solver-name``,
+``--xhatlshaped-solver-name``) as well as the outer-bound ones:
+
+.. code-block:: bash
+
+    --solver-name gurobi --xhatshuffle --xhatshuffle-solver-name xpress
+
+Here the PH hub solves on Gurobi and the xhatshuffle spoke's
+incumbent-finding solves go to Xpress. ``--<spoke>-solver-name``
+falls back to ``--solver-name`` when it is not given, and the name
+and options flags are independent — supply only
+``--<spoke>-solver-options`` to keep the inherited solver but change
+its options.
+
+.. note::
+   FWPH is the exception to the ``--<spoke>-solver-name`` pattern:
+   it solves two kinds of subproblem and so takes
+   ``--fwph-mip-solver-name`` and ``--fwph-qp-solver-name``
+   instead. See :ref:`Hubs`.
+
 .. warning::
 
    Behavior change in 2026: per-spoke solver-options flags
@@ -373,7 +418,9 @@ any ``mipgap`` set elsewhere.
 
 For iteration-aware mipgap, use ``--iter0-mipgap`` and
 ``--iterk-mipgap`` (plus their per-spoke variants), or
-``--mipgaps-json <path>`` for a mipgap-only schedule.
+``--mipgaps-json <path>`` for a mipgap-only schedule. For
+auto-tuning mipgap during decomposition, use ``--starting-mipgap``;
+``--mipgap-ratio`` defaults to ``0.1``.
 ``--max-solver-threads`` sets a system-level thread cap that wins
 over any inline ``threads`` value; use it on shared HPC nodes.
 
@@ -442,6 +489,18 @@ This specifies a directory where solver log files for *every* subproblem
 solve will be written. This directory will be created for the user and
 must *not* exist in advance. File names disambiguate scenario and rank,
 so concurrent solves do not clobber one another.
+
+This works with the legacy Pyomo solver interfaces and with the
+``pyomo.contrib.solver`` interfaces (e.g. ``highs``). Among the APPSI
+interfaces, only those with a log file option (e.g. ``appsi_highs``,
+``appsi_gurobi``) support it; the others raise an error.
+
+.. note::
+
+   With ``gams_v2``, no log files are written through Pyomo 6.10.1, because
+   that interface does not pass its log file option on to GAMS. This is
+   fixed by Pyomo/pyomo#4042; until a Pyomo release includes it, use the
+   ``gams`` solver interface if you need GAMS logs.
 
 If the per-solve log volume is too high, add
 ``--hub-only-solver-logs`` to write logs only for hub-side solves

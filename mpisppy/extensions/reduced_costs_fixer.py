@@ -30,7 +30,7 @@ class ReducedCostsFixer(Extension):
         self.zero_rc_tol = rc_options['zero_rc_tol']
         self._rc_fixer_require_improving_lagrangian = rc_options.get('rc_fixer_require_improving_lagrangian', True)
         # Percentage of variables which are at the bound we will target
-        # to fix. We never fix varibles with reduced costs less than
+        # to fix. We never fix variables with reduced costs less than
         # the `zero_rc_tol` in absolute value
         self._fix_fraction_target_pre_iter0 = rc_options.get('fix_fraction_target_pre_iter0', 0)
         if self._fix_fraction_target_pre_iter0 < 0 or self._fix_fraction_target_pre_iter0 > 1:

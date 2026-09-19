@@ -6,6 +6,37 @@ Optimization under uncertainty for [Pyomo](https://pyomo.org) and other models.
 [Documentation is available at readthedocs](https://mpi-sppy.readthedocs.io/en/latest/) and
 there is a [paper](https://link.springer.com/article/10.1007/s12532-023-00247-3).
 
+mpi-sppy decomposes scenario-based stochastic programs and solves the
+pieces in parallel. It provides progressive hedging (synchronous and
+asynchronous), Frank-Wolfe progressive hedging, L-shaped decomposition,
+and subgradient methods, with bounding and heuristic procedures running
+alongside. Scenario models can come from Pyomo, from AMPL or GAMS, or as
+MPS, LP, or SMPS files. See `INSTALL` for installation and `AUTHORS` for
+the authors.
+
+Project web page, support, and bug reports
+------------------------------------------
+
+- Project web page: https://github.com/Pyomo/mpi-sppy
+- Bug reports, feature requests, and questions: open an issue at
+  https://github.com/Pyomo/mpi-sppy/issues
+- Project maintainer: David L. Woodruff, DLWoodruff@UCDavis.edu
+- Code of conduct: https://www.coin-or.org/code-of-conduct/
+
+Dependencies
+------------
+
+- Required (installed by pip): [Pyomo](https://pyomo.org) and numpy.
+- A Pyomo-compatible solver, which is not installed automatically.
+  Open-source choices include HiGHS, Cbc, Ipopt, and SCIP; commercial
+  choices are CPLEX, Gurobi, and Xpress.
+- For parallel runs: an MPI implementation (e.g., OpenMPI or MPICH) and
+  mpi4py (the `[mpi]` extra).
+- Optional (the `[extras]` extra): scipy, pandas, matplotlib, dill, and
+  python-mip (`mip`, which reads MPS, LP, and SMPS files using Cbc).
+- The proprietary bridges for AMPL and GAMS models need amplpy or gams,
+  which are not installed by any extra.
+
 Status for internal tests
 -------------------------
 
@@ -33,26 +64,50 @@ Here are two methods that seem to work well for installation, at least when cons
    ```shell
    pip install -e .[mpi]
    ```
-   Run the line aborve after cloning and moving to the repo root directory.
+   Run the line above after cloning and moving to the repo root directory.
+   If you plan to run the tests or contribute, use `pip install -e ".[mpi,dev]"`
+   instead to also get every optional feature package plus the test,
+   documentation, and linting tools (the docs describe all of the extras).
 
-To test your installation, cd to the directory where you installed mpi-sppy
-(it is called ``mpi-sppy``) and then give this command.
+To test your installation, give this command (once mpi-sppy is installed
+it works from any directory):
 
 ```
-mpirun -n 2 python -m mpi4py mpi_one_sided_test.py
+mpirun -n 2 mpi-sppy-one-sided-test
 ```
 
 If you don't see any error messages, you might have an MPI
-installation that will work well. Note that even if there is
+installation that will work. Note that even if there is
 an error message, mpi-sppy may still execute and return correct
 results. Per the comment below, the run-times may just be 
-unnecessarily inflated.
+unnecessarily inflated. If you're on an HPC, run this across two
+nodes, with one rank on each node.
 
 Installing mpi-sppy
 -------------------
 
 It is possible to pip install mpi-sppy; however, most users are better off
 getting the software from Github because it is under active development.
+
+Command-line programs
+---------------------
+
+Installing mpi-sppy — whether with `pip install mpi-sppy` or with
+`pip install -e .` from a clone (the recommended way to work from source) —
+puts a few console scripts on your `PATH`, so you can run the main drivers
+without locating the files in your environment:
+
+- `mpi-sppy-generic-cylinders` — the general-purpose driver, equivalent to
+  `python -m mpisppy.generic_cylinders` (see the `generic_cylinders` docs).
+- `mpi-sppy-mrp-generic` — the sequential-sampling (MRP) driver, equivalent
+  to `python -m mpisppy.mrp_generic`.
+- `mpi-sppy-one-sided-test` — the MPI one-sided diagnostic shown above.
+
+For multi-rank parallel runs, the `python -m mpi4py` module form is still
+recommended (e.g. `mpiexec -np 3 python -m mpi4py -m
+mpisppy.generic_cylinders ...`) so that mpi4py installs its
+abort-on-exception handler; a bare `mpiexec -np 3 mpi-sppy-generic-cylinders
+...` runs, but a failure on one rank may leave the others hanging.
 
 Citing mpi-sppy
 ---------------

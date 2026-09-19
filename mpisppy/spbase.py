@@ -129,9 +129,26 @@ class SPBase:
         self._set_sense()
         self._use_variable_probability_setter()
         self._set_solution_cache()
+        self._set_initial_bounds()   # None until the first solve writes a bound
+        self._set_cvar_eta_bounds()
 
         ## SPCommunicator object
         self._spcomm = None
+
+
+    def _set_cvar_eta_bounds(self):
+        """Bound the CVaR Value-at-Risk variable eta, if the CVaR transform
+        (mpisppy.utils.cvar) was applied to the scenarios.  eta is otherwise
+        free; now that every local scenario and the ROOT comm (which spans all
+        scenarios) exist, give it a valid global bound.  No-op for non-CVaR runs.
+        """
+        if not self.local_scenarios:
+            return
+        first = next(iter(self.local_scenarios.values()))
+        if not hasattr(first, "_mpisppy_cvar_eta"):
+            return
+        from mpisppy.utils.cvar import set_cvar_eta_bounds
+        set_cvar_eta_bounds(self.local_scenarios, self.comms["ROOT"])
 
 
     def _set_sense(self, comm=None):
@@ -411,15 +428,38 @@ class SPBase:
                         raise RuntimeError(f"For the node {nodename}, the scenario {sname} has the rank {rank} from scenario_names_to_rank and {comm.Get_rank()} from its comm.")
 
 
-    def _compute_unconditional_node_probabilities(self):
+    def _compute_unconditional_node_probabilities(self, force=False):
         """ calculates unconditional node probabilities and prob_coeff
-            and prob0_mask is set to a scalar 1 (used by variable_probability)"""
+            and prob0_mask is set to a scalar 1 (used by variable_probability)
+
+            Args:
+                force (bool): if True, rebuild prob_coeff/prob0_mask even when
+                    they already exist. Used by
+                    ExtensiveForm.set_scenario_probabilities to pick up updated
+                    _mpisppy_probability values; the default (False) keeps the
+                    compute-once behavior relied on at setup.
+
+            Raises:
+                RuntimeError: if force is True and variable probability is in
+                    use. The rebuild writes a scalar prob_coeff and
+                    prob0_mask=1.0 per node, which would silently throw away
+                    the per-variable arrays and zeroed mask entries that
+                    _use_variable_probability_setter installs.
+        """
+        if force and any(getattr(s._mpisppy_data, 'has_variable_probability',
+                                 False)
+                         for s in self.local_scenarios.values()):
+            raise RuntimeError(
+                "_compute_unconditional_node_probabilities(force=True) would "
+                "discard variable-probability data. Re-apply "
+                "_use_variable_probability_setter after the rebuild, or "
+                "rebuild the object, if this combination is needed.")
         for k,s in self.local_scenarios.items():
             root = s._mpisppy_node_list[0]
             root.uncond_prob = 1.0
             for parent,child in zip(s._mpisppy_node_list[:-1],s._mpisppy_node_list[1:]):
                 child.uncond_prob = parent.uncond_prob * child.cond_prob
-            if not hasattr(s._mpisppy_data, 'prob_coeff'):
+            if force or not hasattr(s._mpisppy_data, 'prob_coeff'):
                 s._mpisppy_data.prob_coeff = dict()
                 s._mpisppy_data.prob0_mask = dict()
                 for node in s._mpisppy_node_list:
@@ -521,7 +561,7 @@ class SPBase:
 
         tol = self.E1_tolerance
         checked_nodes = list()
-        # check sum node conditional probabilites are close to 1
+        # check sum node conditional probabilities are close to 1
         for k,s in self.local_scenarios.items():
             nlens = s._mpisppy_data.nlens
             for node in s._mpisppy_node_list:
@@ -574,6 +614,24 @@ class SPBase:
         for k,s in self.local_scenarios.items():
             s._mpisppy_data.best_solution_cache = None
             s._mpisppy_data.latest_nonant_solution_cache = np.full(len(s._mpisppy_data.nonant_indices), np.nan)
+
+    def _set_initial_bounds(self):
+        """Give every subproblem the "not computed yet" bounds it holds before
+        its first solve.
+
+        Only solve_one ever writes these, so until it does there is nothing to
+        read: Ebound would die with "'ScalarBlock' object has no attribute
+        'outer_bound'" whenever a first solve reports no bound (a subproblem
+        that times out with no bound to show for it, say). None says exactly
+        that -- the bound has not been computed -- rather than dressing the
+        absence up as a number. Ebound propagates the None (the expected bound
+        is unavailable if any scenario is missing its bound) and the bound
+        spokes decline to send it, so a missing bound is never mistaken for a
+        real one at the hub.
+        """
+        for k,s in self.local_scenarios.items():
+            s._mpisppy_data.outer_bound = None
+            s._mpisppy_data.inner_bound = None
 
     def update_best_solution_if_improving(self, obj_val):
         """ Call if the variable values have a nonanticipative solution

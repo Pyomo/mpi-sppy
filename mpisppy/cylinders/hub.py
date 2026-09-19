@@ -8,6 +8,7 @@
 ###############################################################################
 
 import abc
+import math
 import logging
 import mpisppy.log
 
@@ -86,6 +87,22 @@ class Hub(SPCommunicator):
             return '  ' + self.latest_ib_char
         return self.latest_ob_char+' '+self.latest_ib_char
 
+    @staticmethod
+    def _format_trace_value(value, width, decimals):
+        """Format a trace value in fixed notation unless it under/overflows it."""
+        fixed = f"{value:{width}.{decimals}f}"
+        if not math.isfinite(value):
+            return fixed
+
+        if len(fixed) > width:
+            return f"{value:{width}.{decimals}e}"
+
+        fixed_core = fixed.strip().lstrip("-")
+        if value != 0 and fixed_core == f"0.{('0' * decimals)}":
+            return f"{value:{width}.{decimals}e}"
+
+        return fixed
+
     def screen_trace(self):
         current_iteration = self.current_iteration()
         abs_gap, rel_gap = self.compute_gaps()
@@ -96,7 +113,11 @@ class Hub(SPCommunicator):
             row = f'{"Iter.":>5s}  {"   "}  {"Best Bound":>14s}  {"Best Incumbent":>14s}  {"Rel. Gap":>12s}  {"Abs. Gap":>14s}'
             global_toc(row, True)
             self.print_init = False
-        row = f"{current_iteration:5d}  {update_source}  {best_bound:14.4f}  {best_solution:14.4f}  {rel_gap*100:12.3f}%  {abs_gap:14.4f}"
+        best_bound_s = self._format_trace_value(best_bound, 14, 4)
+        best_solution_s = self._format_trace_value(best_solution, 14, 4)
+        rel_gap_s = self._format_trace_value(rel_gap * 100, 12, 3)
+        abs_gap_s = self._format_trace_value(abs_gap, 14, 4)
+        row = f"{current_iteration:5d}  {update_source}  {best_bound_s}  {best_solution_s}  {rel_gap_s}%  {abs_gap_s}"
         global_toc(row, True)
         self.clear_latest_chars()
 

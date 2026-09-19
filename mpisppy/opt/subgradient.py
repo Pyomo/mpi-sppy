@@ -102,8 +102,11 @@ class Subgradient(mpisppy.opt.ph.PH):
         )
 
         # set self.best_bound_obj_val if we don't have any additional fixed variables
-        if self._can_update_best_bound():
-            self.best_bound_obj_val = self.Ebound(verbose)
+        # (Ebound is None if a subproblem produced no outer bound; keep the prior
+        # best bound in that case rather than overwriting it with nothing)
+        bound = self.Ebound(verbose)
+        if bound is not None and self._can_update_best_bound():
+            self.best_bound_obj_val = bound
 
     def _can_update_best_bound(self):
         # TODO: is our class hierarchy wrong?

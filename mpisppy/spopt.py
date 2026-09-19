@@ -23,7 +23,6 @@ from mpisppy import MPI
 import pyomo.environ as pyo
 from pyomo.opt import SolverFactory
 from pyomo.common.collections import ComponentSet
-from pyomo.solvers.plugins.solvers.gurobi_direct import GurobiDirect
 
 from mpisppy.spbase import SPBase
 import mpisppy.utils.sputils as sputils
@@ -203,6 +202,8 @@ class SPOpt(SPBase):
                   update_objective=True,
                   need_solution=True,
                   warmstart=sputils.WarmstartStatus.FALSE,
+                  *,
+                  outer_bound_only=False,
                   ):
         """ Solve one subproblem.
 
@@ -232,6 +233,20 @@ class SPOpt(SPBase):
                 Default True
             warmstart (bool, optional):
                 If True, warmstart the subproblem solves. Default False.
+            outer_bound_only (boolean, optional):
+                If True, populate outer_bound *only*; no solution is loaded, so
+                need_solution must be False. If the solve reports no bound,
+                outer_bound is cleared to None rather than left at its previous
+                value: a stale bound cannot be mixed with fresh ones in the
+                expectation that Ebound forms.
+                Keyword-only. Default False.
+
+        Note:
+            The subproblem's outer_bound is cleared before the solve is
+            dispatched, on the agnostic path as well as the Pyomo one, so a
+            solve that reports no bound leaves None behind rather than the
+            bound some earlier solve computed. A guest's solve callout is held
+            to the same contract: record a bound when the solve produces one.
 
         Returns:
             float:
@@ -242,7 +257,15 @@ class SPOpt(SPBase):
         def _vb(msg):
             if verbose and self.cylinder_rank == 0:
                 print ("(rank0) " + msg)
-
+        # Not an assert: python -O strips those, and this guard earns its keep
+        # exactly there. It is what catches a caller that slid an argument into
+        # outer_bound_only, whose silent form is bound-only solves in code that
+        # needs the solution.
+        if need_solution and outer_bound_only:
+            raise ValueError(
+                f"solve_one for scenario {s.name} got outer_bound_only=True "
+                "with need_solution=True; if you only need the outer bound, "
+                "you don't need the solution, so pass need_solution=False")
         # if using a persistent solver plugin,
         # re-compile the objective due to changed weights and x-bars
         # high variance in set objective time (Feb 2023)?
@@ -269,17 +292,22 @@ class SPOpt(SPBase):
         # parameters to the wrong iteration and breaks log-driven
         # debugging of per-iteration options.
         solve_keyword_args = dict()
+        log_stream_path = None
         if self.options.get("solver_log_dir", None):
             if k not in self._subproblem_solve_index:
                 self._subproblem_solve_index[k] = 0
             dir_name = self.options["solver_log_dir"]
             file_name = f"{self._subproblem_file_stem(k)}_{self._subproblem_solve_index[k]}.log"
-            # Workaround for Pyomo/pyomo#3589: Setting 'keepfiles' to True is required
-            # for proper functionality when using the GurobiDirect / GurobiPersistent solver.
-            if isinstance(s._solver_plugin, GurobiDirect):
-                s._solver_plugin.options["LogFile"] = os.path.join(dir_name, file_name)
+            log_path = os.path.join(dir_name, file_name)
+            if getattr(self, "Ag", None) is not None:
+                # The guest does the solve, not s._solver_plugin, so the
+                # host plugin's log mechanism does not apply; hand the guest
+                # the path.
+                solve_keyword_args["logfile"] = log_path
             else:
-                solve_keyword_args["logfile"] = os.path.join(dir_name, file_name)
+                log_stream_path = sputils.set_solver_log_file(
+                    s._solver_plugin, self.options.get("solver_name"),
+                    log_path, solve_keyword_args)
             self._subproblem_solve_index[k] += 1
 
         if (solver_options):
@@ -311,6 +339,30 @@ class SPOpt(SPBase):
             # solve_keyword_args["use_signal_handling"] = False
             pass
 
+        # Whatever outer bound this subproblem holds came from an earlier
+        # solve, so it stops describing the subproblem the moment this one
+        # starts. Clearing it here makes "this solve produced no bound" the
+        # outcome a path has to overwrite, rather than one every path has to
+        # remember to write, and it is the only way to cover the agnostic
+        # branch below: a guest records a bound when its solve succeeds and
+        # returns without touching one when it fails (pyomo_guest, ampl_guest
+        # and gams_guest all do), and a guest written outside this repo cannot
+        # be fixed here at all.
+        #
+        # Keeping the previous value would be wrong even though it was a valid
+        # bound when it was computed: Ebound sums p_s * outer_bound_s across
+        # scenarios, and a Lagrangian bound is only valid as a *sum* when every
+        # scenario uses weights from one generation satisfying
+        # sum_s p_s W_s = 0. Mixing a stale bound with fresh ones gives
+        # sum_s p_s L_s(W'_s) <= OPT + (sum_s p_s W'_s)^T xbar*, whose trailing
+        # term does not vanish -- so the result is not an outer bound at all,
+        # and nothing downstream can tell. None instead lets Ebound's
+        # missing-bound check fire and the spoke decline to send.
+        #
+        # Every branch below that reaches a bound assigns one, so a solve with
+        # a bound to report does not lose it.
+        s._mpisppy_data.outer_bound = None
+
         Ag = getattr(self, "Ag", None)  # agnostic
         if Ag is not None:
             assert not disable_pyomo_signal_handling, "Not thinking about agnostic APH yet"
@@ -319,15 +371,72 @@ class SPOpt(SPBase):
         else:
             #  didcallout = False  (returned true by the callout, but not used)
             try:
-                results = s._solver_plugin.solve(s,
-                                                 **solve_keyword_args,
-                                                 load_solutions=False)
+                with sputils.solver_log_stream(log_stream_path,
+                                               solve_keyword_args):
+                    results = s._solver_plugin.solve(s,
+                                                     **solve_keyword_args,
+                                                     load_solutions=False)
                 solver_exception = None
             except Exception as e:
                 results = None
                 solver_exception = e
 
-            if sputils.not_good_enough_results(results):
+            # Record how this solve ended, so a caller that sees
+            # solution_available == False can tell a genuine infeasibility
+            # from a solve that merely did not finish (time limit, solver
+            # error). Stored as a string rather than the enum so it costs
+            # nothing to carry around and survives pickling.
+            try:
+                s._mpisppy_data.termination_condition = (
+                    None if results is None
+                    else str(results.solver.termination_condition))
+            except (AttributeError, KeyError, IndexError):
+                s._mpisppy_data.termination_condition = None
+
+            if outer_bound_only:
+                # No solution is loaded, so the Vars still hold whatever they
+                # held before this solve; say so, or the staleness check and a
+                # PRIOR_SOLUTION warmstart would read them as a solution.
+                s._mpisppy_data.solution_available = False
+
+                # Note the gate is no_outer_bound_results and not
+                # not_good_enough_results: a subproblem stopped by a time
+                # limit or a gap can have no solution and still report the
+                # bound we are here for.
+                outer_bound = None
+                if not sputils.no_outer_bound_results(results):
+                    try:
+                        if self.is_minimizing:
+                            outer_bound = results.Problem[0].Lower_bound
+                        else:
+                            outer_bound = results.Problem[0].Upper_bound
+                    except Exception:
+                        # Not a solve we already know to be bound-less, so
+                        # this is a surprise and not a routine outcome.
+                        print (f"[{self._get_cylinder_name()}] Outer bound not found for scenario {s.name}")
+                        print ("status=", results.solver.status)
+                        print ("TerminationCondition=",
+                               results.solver.termination_condition)
+                        raise
+
+                if outer_bound is None:
+                    # This solve produced no bound; the clear above already
+                    # recorded that, and leaving it None is what lets Ebound's
+                    # missing-bound check fire.
+                    if gripe:
+                        print (f"[{self._get_cylinder_name()}] No outer bound for scenario {s.name}")
+                        if results is not None:
+                            print ("status=", results.solver.status)
+                            print ("TerminationCondition=",
+                                   results.solver.termination_condition)
+                    if solver_exception is not None:
+                        raise solver_exception
+                else:
+                    s._mpisppy_data.outer_bound = outer_bound
+
+            elif sputils.not_good_enough_results(results):
+                # A failed solve computed no bound, so outer_bound stays at the
+                # None set before the solve.
                 s._mpisppy_data.solution_available = False
 
                 if gripe:
@@ -339,9 +448,11 @@ class SPOpt(SPBase):
                     else:
                         print("no results object, so solving agin with tee=True")
                         solve_keyword_args["tee"] = True
-                        results = s._solver_plugin.solve(s,
-                                                 **solve_keyword_args,
-                                                 load_solutions=False)
+                        with sputils.solver_log_stream(log_stream_path,
+                                                       solve_keyword_args):
+                            results = s._solver_plugin.solve(s,
+                                                     **solve_keyword_args,
+                                                     load_solutions=False)
 
                 if solver_exception is not None:
                     raise solver_exception
@@ -388,6 +499,8 @@ class SPOpt(SPBase):
                    verbose=False,
                    need_solution=True,
                    warmstart=sputils.WarmstartStatus.FALSE,
+                   *,
+                   outer_bound_only=False,
                    ):
         """ Loop over `local_scenarios` and solve them in a manner
         dictated by the arguments.
@@ -415,6 +528,13 @@ class SPOpt(SPBase):
                 Default True
             warmstart (bool, optional):
                 If True, warmstart the subproblem solves. Default False.
+            outer_bound_only (boolean, optional):
+                If True, populate outer_bound *only*; no solution is loaded, so
+                need_solution must be False. If the solve reports no bound,
+                outer_bound is cleared to None rather than left at its previous
+                value: a stale bound cannot be mixed with fresh ones in the
+                expectation that Ebound forms.
+                Keyword-only. Default False.
         """
 
         """ Developer notes:
@@ -452,6 +572,7 @@ class SPOpt(SPBase):
                     gripe=gripe,
                     disable_pyomo_signal_handling=disable_pyomo_signal_handling,
                     need_solution=need_solution,
+                    outer_bound_only=outer_bound_only,
                     warmstart=warmstart,
                 )
             )
@@ -523,9 +644,26 @@ class SPOpt(SPBase):
                 sum reduction
 
         Returns:
-            float:
-                The expected objective outer bound.
+            float or None:
+                The expected objective outer bound, or None if any scenario is
+                missing its outer bound (see below).
         """
+        # A subproblem whose latest solve produced no outer bound holds None
+        # ("not computed"), not a number. The expectation over scenarios cannot
+        # be formed if any scenario is missing its bound, so report None -- which
+        # callers treat as "no bound to offer" -- rather than folding a
+        # placeholder into the sum. The check is collective: a missing bound on
+        # any rank spoils the global expectation, and every rank must agree to
+        # return None (or not) so the Allreduce below stays matched.
+        local_missing = np.array(
+            [any(s._mpisppy_data.outer_bound is None
+                 for s in self.local_scenarios.values())],
+            dtype='d')
+        global_missing = np.zeros(1)
+        self.mpicomm.Allreduce(local_missing, global_missing, op=MPI.MAX)
+        if global_missing[0]:
+            return (None, None) if extra_sum_terms is not None else None
+
         local_Ebounds = []
         for k,s in self.local_scenarios.items():
             logger.debug("  in loop Ebound k={}, rank={}".format(k, self.cylinder_rank))

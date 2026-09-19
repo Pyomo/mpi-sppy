@@ -222,11 +222,18 @@ class Slammer(Extension):
         added before rounding integer variables (matches the slam spokes).
     ``verbose`` (bool, default False)
         report each slam on rank 0.
+
+    ``options`` may be passed directly to the constructor by a *consumer* that
+    drives the action layer itself (e.g. a stall/cycle detector calling
+    :meth:`slam_nonant`); when given it is used in place of
+    ``spobj.options["slammer_options"]``, so such a consumer can run its own
+    Slammer without disturbing a separately-configured one.
     """
 
-    def __init__(self, spobj):
+    def __init__(self, spobj, options=None):
         super().__init__(spobj)
-        opts = spobj.options.get("slammer_options", {})
+        opts = options if options is not None \
+            else spobj.options.get("slammer_options", {})
         # Kept for error messages; None when directives are passed in directly.
         self._directives_file = opts.get("directives_file")
         if "directives" in opts:
@@ -314,12 +321,21 @@ class Slammer(Extension):
             return
         self._slam_one()
 
-    def _slam_one(self):
-        """Select the highest-priority eligible nonant and slam it.
+    def _slam_one(self, candidates=None):
+        """Select the highest-priority eligible nonant and slam it; return 1 if
+        one was slammed, else 0.
+
+        When ``candidates`` is given (a set/collection of ``(ndn, i)`` keys),
+        only those nonants are considered -- the entry point a stall/cycle
+        detector uses to slam one of *its* flagged nonants while still
+        honoring the directives file's priority ranking.  Ineligible or
+        no-applicable-direction candidates are skipped, so this effectively
+        walks the priority order until it finds one it can slam.
 
         Selection uses only globally-consistent inputs (file-supplied priority
         and name; the fixed mask, which is coherent because slamming/fixing is
-        applied to all scenarios on all ranks), so every rank picks the same
+        applied to all scenarios on all ranks; and, for the detector-driven
+        path, a rank-identical ``candidates`` set), so every rank picks the same
         nonant with no communication.  This holds when the nonant catalog is
         rank-coherent (two-stage, or single-rank multistage); node-split
         multistage would need a cross-rank reduction to agree on the selection,
@@ -328,18 +344,14 @@ class Slammer(Extension):
         rep = self.opt.local_scenarios[self.opt.local_scenario_names[0]]
         surrogates = rep._mpisppy_data.all_surrogate_nonants
 
-        best = None        # (ndn_i, direction, value)
+        best_ndn_i = None
         best_key = None    # (priority, name) for max-priority, name-tiebreak
         for ndn_i, d in self._directive_of.items():
-            if ndn_i in self._slammed:
+            if candidates is not None and ndn_i not in candidates:
                 continue
-            xvar = rep._mpisppy_data.nonant_indices[ndn_i]
-            if xvar.fixed:
+            if not self._slam_eligible(rep, ndn_i, surrogates):
                 continue
-            if xvar in surrogates:
-                continue
-            choice = self._first_applicable_direction(rep, ndn_i, d.directions)
-            if choice is None:
+            if self._first_applicable_direction(rep, ndn_i, d.directions) is None:
                 continue  # no applicable direction -> not eligible this event
             name = self._name_of[ndn_i]
             # Largest priority wins; ties broken by name (ascending) so the
@@ -347,13 +359,62 @@ class Slammer(Extension):
             key = (d.priority, name)
             if best_key is None or key[0] > best_key[0] \
                or (key[0] == best_key[0] and key[1] < best_key[1]):
-                best = (ndn_i, choice[0], choice[1])
+                best_ndn_i = ndn_i
                 best_key = key
 
-        if best is None:
-            return  # nothing eligible this event
+        if best_ndn_i is None:
+            return 0  # nothing eligible this event
+        return 1 if self.slam_nonant(best_ndn_i) else 0
 
-        ndn_i, direction, value = best
+    def _slam_eligible(self, rep, ndn_i, surrogates):
+        """Whether ``ndn_i`` may be slammed: it is in the directive map (checked
+        by the caller / :meth:`slam_nonant`), not already slammed, not
+        modeler-/fixer-fixed, and not a surrogate nonant (§7.1 of the design).
+        Every input is rank-coherent, so the verdict is identical on every rank.
+        """
+        if ndn_i in self._slammed:
+            return False
+        xvar = rep._mpisppy_data.nonant_indices[ndn_i]
+        if xvar.fixed:
+            return False
+        if xvar in surrogates:
+            return False
+        return True
+
+    def slam_nonant(self, ndn_i):
+        """Action layer: slam the specific nonant ``ndn_i`` per its directive.
+
+        This is the reusable action entry the slamming design (§7) anticipated
+        for an external stall/cycle detector: rather than the built-in
+        iteration trigger choosing *which* nonant, a caller that has already
+        decided ``ndn_i`` is stuck invokes this directly.  The nonant is slammed
+        in the first applicable direction of its directive (so a detector need
+        only supply the directives file and the cycling nonant).
+
+        Returns ``True`` if the nonant was slammed, ``False`` if it is not in
+        the directive map, is not eligible (already fixed/slammed/surrogate), or
+        no direction applies this event.
+
+        **Collective safety:** a ``min``/``max`` direction triggers a per-node
+        ``Allreduce`` (:meth:`_node_extremum`); a caller iterating several
+        nonants must therefore call this for the *same* nonants in the *same
+        order on every rank*.  That holds when the caller's target set comes
+        from a rank-identical reduction (as the W-oscillation interrupter's
+        does) and the nonant catalog is rank-coherent (two-stage / single-rank
+        multistage), matching :meth:`_slam_one`'s own assumption.
+        """
+        d = self._directive_of.get(ndn_i)
+        if d is None:
+            return False
+        rep = self.opt.local_scenarios[self.opt.local_scenario_names[0]]
+        surrogates = rep._mpisppy_data.all_surrogate_nonants
+        if not self._slam_eligible(rep, ndn_i, surrogates):
+            return False
+        choice = self._first_applicable_direction(rep, ndn_i, d.directions)
+        if choice is None:
+            return False
+
+        direction, value = choice
         if direction in ("min", "max"):
             value = self._node_extremum(ndn_i, direction)
             xvar = rep._mpisppy_data.nonant_indices[ndn_i]
@@ -362,7 +423,8 @@ class Slammer(Extension):
 
         self._fix_everywhere(ndn_i, value)
         self._slammed[ndn_i] = value
-        self._report(self._name_of[ndn_i], value, direction, best_key[0])
+        self._report(self._name_of[ndn_i], value, direction, d.priority)
+        return True
 
     def _first_applicable_direction(self, scenario, ndn_i, directions):
         """Return ``(direction, value)`` for the first applicable direction, or

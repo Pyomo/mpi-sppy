@@ -10,6 +10,7 @@
 # Note to developers: things called spcomm are way more than just a comm; SPCommunicator
 
 import pyomo.environ as pyo
+import contextlib
 import sys
 import os
 import re
@@ -77,6 +78,35 @@ def not_good_enough_results(results):
     return (results is None) or (len(results.solution) == 0) or \
         (results.solution(0).status == SolutionStatus.infeasible) or \
         (results.solution(0).status == SolutionStatus.unknown) or \
+        (results.solver.termination_condition == TerminationCondition.infeasible) or \
+        (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
+        (results.solver.termination_condition == TerminationCondition.error) or \
+        (results.solver.termination_condition == TerminationCondition.unbounded)
+
+
+def no_outer_bound_results(results):
+    """True when `results` cannot carry a usable outer bound.
+
+    The bound-only analog of not_good_enough_results, for callers that want a
+    bound and never a solution. Screen as little as possible here: anything
+    disqualified is a bound thrown away, and a bound from a solve that went
+    badly is the whole point of asking for a bound only.
+
+    So this says nothing about whether a solution is present, and nothing
+    about a solve merely going badly. A subproblem stopped by a time limit
+    with no incumbent still reports the bound the caller is after, and
+    solvers describe that outcome in unflattering terms: xpress calls it
+    status=aborted, TerminationCondition=error (mip_no_sol_found in
+    xpress_direct.py) and then hands over xprob_attrs.bestbound anyway.
+
+    Only two outcomes really have no bound to report, and both are dangerous
+    rather than merely useless, because solvers do not agree on how to say
+    "none": for an unbounded LP gurobi leaves lower_bound None while cplex
+    fills in the last iterate's objective, a plausible finite number that is
+    not a bound at all. Hence infeasible and unbounded are screened on the
+    termination condition, never on the value.
+    """
+    return (results is None) or \
         (results.solver.termination_condition == TerminationCondition.infeasible) or \
         (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
         (results.solver.termination_condition == TerminationCondition.unbounded)
@@ -296,7 +326,8 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
     return EF_instance
 
 def _create_EF_from_scen_dict(scen_dict, EF_name=None,
-                                nonant_for_fixed_vars=True):
+                                nonant_for_fixed_vars=True,
+                                mutable_probability=False):
     """ Create a ConcreteModel of the extensive form from a scenario
         dictionary.
 
@@ -329,6 +360,15 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
             enforced non-anticipativity for non-fixed vars, which is not always
             desirable in the context of bundling. This allows for more
             fine-grained control.
+
+            If mutable_probability is True, the scenario probabilities are
+            represented as a mutable Pyomo Param (``_mpisppy_model.prob``,
+            indexed by scenario name) instead of being folded into the
+            objective as float constants, so they can be updated after the EF
+            is built without rebuilding it (see ExtensiveForm.
+            set_scenario_probabilities). This requires the probabilities to
+            sum to 1 (as a full EF does) and is therefore NOT supported for
+            bundles, whose member probabilities sum to less than 1.
     """
     is_min, clear = _models_have_same_sense(scen_dict)
     if (not clear):
@@ -346,6 +386,42 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
 
     EF_instance._ef_scenario_names = []
     EF_instance._mpisppy_probability = 0
+    if mutable_probability:
+        # Probabilities become mutable Params so they can be updated in place
+        # (option B of the design: require a normalized full EF, no divisor).
+        # The flag exists only to enable re-weighting, and re-weighting a
+        # multistage tree is not supported, so refuse here rather than at the
+        # first set_scenario_probabilities call -- the caller can still choose
+        # a different build at this point.
+        for sname, scen in scen_dict.items():
+            if len(scen._mpisppy_node_list) > 1:
+                raise ValueError(
+                    "mutable_probability supports two-stage problems only "
+                    f"(scenario '{sname}' has a multistage node list). "
+                    "Rebuild the model with new probabilities to re-weight a "
+                    "multistage tree.")
+        try:
+            prob_init = {sname: float(scen._mpisppy_probability)
+                         for sname, scen in scen_dict.items()}
+        except (AttributeError, TypeError, ValueError) as e:
+            raise ValueError("mutable_probability requires every scenario to "
+                             "have a numeric _mpisppy_probability.") from e
+        # Require a normalized full EF, and check it here: the loop below
+        # deactivates each scenario's objective and re-parents the scenario
+        # onto this EF, so raising afterwards would leave the caller's
+        # scen_dict unusable for a corrected retry.
+        total = sum(prob_init.values())
+        if abs(total - 1.0) > 1e-9:
+            raise RuntimeError(
+                "mutable_probability requires scenario probabilities summing "
+                f"to 1; got {total}. This is a full-EF feature: a scenario "
+                "bundle, or a per-rank subset of the scenarios, sums to less "
+                "than 1 and is intentionally rejected, since the divisor it "
+                "needs cannot be a baked constant when probabilities are "
+                "mutable.")
+        EF_instance._mpisppy_model.prob = pyo.Param(
+            list(scen_dict.keys()), mutable=True, within=pyo.NonNegativeReals,
+            initialize=prob_init)
     for (sname, scenario_instance) in scen_dict.items():
         EF_instance.add_component(sname, scenario_instance)
         EF_instance._ef_scenario_names.append(sname)
@@ -353,15 +429,22 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
         scenario_objs = deact_objs(scenario_instance)
         obj_func = scenario_objs[0] # Select the first objective
         try:
-            EF_instance.EF_Obj.expr += scenario_instance._mpisppy_probability * obj_func.expr
+            if mutable_probability:
+                EF_instance.EF_Obj.expr += \
+                    EF_instance._mpisppy_model.prob[sname] * obj_func.expr
+            else:
+                EF_instance.EF_Obj.expr += scenario_instance._mpisppy_probability * obj_func.expr
             EF_instance._mpisppy_probability += scenario_instance._mpisppy_probability
         except AttributeError as e:
             raise AttributeError("Scenario " + sname + " has no specified "
                         "probability. Specify a value for the attribute "
                         " _mpisppy_probability and try again.") from e
-    # Normalization does nothing when solving the full EF, but is required for
-    # appropriate scaling of EFs used as bundles.
-    EF_instance.EF_Obj.expr /= EF_instance._mpisppy_probability
+    if not mutable_probability:
+        # Normalization does nothing when solving the full EF, but is required
+        # for appropriate scaling of EFs used as bundles. The mutable path
+        # skips it (option B) and had its sum checked above, before any
+        # scenario was touched.
+        EF_instance.EF_Obj.expr /= EF_instance._mpisppy_probability
 
     # For each node in the scenario tree, we need to collect the
     # nonanticipative vars and create the constraints for them,
@@ -511,7 +594,180 @@ def _models_have_same_sense(models):
 def is_persistent(solver):
     return isinstance(solver,
         pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver)
-    
+
+
+def has_persistent_solve_api(solver):
+    """Return True if the solver object can hold a loaded instance:
+    it has ``set_instance`` and ``set_objective``.
+
+    This recognizes both the legacy ``PersistentSolver`` interface and the
+    APPSI / ``pyomo.contrib.solver`` interfaces (e.g. ``appsi_highs``), which
+    are not subclasses of the legacy base class and so are *not* reported by
+    :func:`is_persistent`.
+
+    It is deliberately kept separate from :func:`is_persistent`. Many PH/FWPH
+    call sites gate ``update_var``/``add_var``/``add_constraint`` on
+    ``is_persistent``; the APPSI legacy wrapper does not expose those methods,
+    so broadening ``is_persistent`` itself would break those paths. The EF
+    solve path only needs the two methods checked here.
+
+    ``load_vars`` is deliberately *not* required. On the modern
+    ``pyomo.contrib.solver`` interfaces it lives on the solution loader rather
+    than on the solver (e.g. ``GurobiSolutionLoader``), so requiring it would
+    classify ``highs`` and ``gurobi_persistent_v2`` as non-persistent even
+    though they load and re-solve an instance perfectly well.
+
+    Do not reuse this to decide how to read a solution back. That question is
+    answered by :func:`is_persistent`: ``load_vars()`` loads variable values
+    only, while ``solutions.load_from(results)`` also imports ``Suffix``
+    data such as duals, and solvers like ``gurobi_direct`` and ``appsi_highs``
+    need the latter.
+    """
+    if is_persistent(solver):
+        return True
+    try:
+        return all(hasattr(solver, name)
+                   for name in ("set_instance", "set_objective"))
+    except Exception:
+        # Pyomo's UnknownSolver.__getattr__ raises RuntimeError rather than
+        # AttributeError, so hasattr propagates instead of returning False.
+        # This function promises a bool; let the caller's own solve() call be
+        # what reports the unavailable solver.
+        return False
+
+
+def set_solver_log_file(solver, solver_name, log_path, solve_keyword_args):
+    """Point the log of ``solver``'s next solve at ``log_path``.
+
+    Call this before writing the solver's other options: for persistent
+    Gurobi the ``Set parameter`` lines go to whatever ``LogFile`` is
+    active when each option is set.
+
+    The legacy ``solve(logfile=...)`` keyword is not implemented by the
+    ``pyomo.contrib.solver`` interfaces (e.g. ``highs``) or the APPSI
+    interfaces (e.g. ``appsi_highs``); both raise ``NotImplementedError``.
+    Solvers of either kind that declare a ``logfile`` config option get it
+    set. Other ``pyomo.contrib.solver`` solvers can only write a log through
+    ``tee``, which needs a file open for the duration of the solve, so for them
+    this returns ``log_path`` for the caller to pass to
+    :func:`solver_log_stream` around the solve.
+
+    Args:
+        solver: the Pyomo solver plugin.
+        solver_name (str): the name ``solver`` was made from, for messages.
+        log_path (str): the log file to write.
+        solve_keyword_args (dict): keyword arguments for ``solver.solve``;
+            updated in place.
+
+    Returns:
+        str or None: ``log_path`` if the caller must wrap the solve in
+        :func:`solver_log_stream`, otherwise None.
+    """
+    # Imported here: these modules are not in every Pyomo release mpi-sppy
+    # supports.
+    from pyomo.solvers.plugins.solvers.gurobi_direct import GurobiDirect
+    try:
+        from pyomo.contrib.solver.common.base import SolverBase
+    except ImportError:
+        try:
+            # Pyomo 6.7.1 through 6.9.1
+            from pyomo.contrib.solver.base import SolverBase
+        except ImportError:
+            SolverBase = ()
+    try:
+        from pyomo.contrib.appsi.base import Solver as AppsiSolver
+    except ImportError:
+        AppsiSolver = ()
+
+    if isinstance(solver, GurobiDirect):
+        # Workaround for Pyomo/pyomo#3589: the logfile keyword only works
+        # for GurobiDirect / GurobiPersistent when keepfiles is True.
+        solver.options["LogFile"] = log_path
+    elif isinstance(solver, SolverBase):
+        if "logfile" in solver.config:
+            # e.g. gams_v2, which reduces tee to a bool and prints to stdout.
+            # Through Pyomo 6.10.1 gams_v2 does not pass logfile on to GAMS,
+            # so no log is written until Pyomo/pyomo#4042 is released.
+            solver.config.logfile = log_path
+            return None
+        return log_path
+    elif isinstance(solver, AppsiSolver):
+        if "logfile" not in solver.config:
+            raise ValueError(
+                f"solver {solver_name} has no log file option, so "
+                "solver-log-dir cannot be used with it")
+        solver.config.logfile = log_path
+    else:
+        solve_keyword_args["logfile"] = log_path
+    return None
+
+
+@contextlib.contextmanager
+def solver_log_stream(log_path, solve_keyword_args):
+    """Add an open ``log_path`` to the ``tee`` of a ``pyomo.contrib.solver``
+    solve made inside this context; see :func:`set_solver_log_file`.
+
+    Does nothing when ``log_path`` is None. The file is opened for append,
+    so a second solve of the same subproblem under the same name (e.g. a
+    retry after a failure) adds to the log rather than replacing it. The
+    caller's ``tee`` value is restored on exit.
+
+    Args:
+        log_path (str or None): the log file, or None.
+        solve_keyword_args (dict): keyword arguments for ``solver.solve``;
+            its ``tee`` entry is replaced inside the context.
+    """
+    if log_path is None:
+        yield
+        return
+    had_tee = "tee" in solve_keyword_args
+    tee = solve_keyword_args.get("tee", False)
+    with open(log_path, "a") as log_file:
+        if tee is True:
+            streams = [log_file, sys.stdout]
+        elif isinstance(tee, (list, tuple)):
+            streams = [log_file, *tee]
+        elif tee:
+            streams = [log_file, tee]
+        else:
+            streams = [log_file]
+        solve_keyword_args["tee"] = streams
+        try:
+            yield
+        finally:
+            if had_tee:
+                solve_keyword_args["tee"] = tee
+            else:
+                del solve_keyword_args["tee"]
+
+
+def solver_quadratic_objective_capability(solver_plugin):
+    """Tri-state probe of whether a solver can handle a quadratic objective.
+
+    Returns ``True`` or ``False`` as reported by the legacy ``has_capability``
+    API, or ``None`` when the capability cannot be determined. The APPSI and
+    newer ``pyomo.contrib.solver`` interfaces (e.g. ``appsi_highs``, ``highs``)
+    do not expose ``has_capability``, so they return ``None`` and the caller
+    must fall back to detecting a failed solve. ``None`` therefore means
+    "unknown", never "unsupported".
+
+    Args:
+        solver_plugin: an instantiated Pyomo solver object (e.g. the object
+            attached as ``scenario._solver_plugin``).
+
+    Returns:
+        bool or None
+    """
+    has_capability = getattr(solver_plugin, "has_capability", None)
+    if has_capability is None:
+        return None
+    try:
+        return bool(has_capability("quadratic_objective"))
+    except Exception:
+        # Be conservative: any trouble querying capability means "unknown",
+        # so we never wrongly block a solve based on a capability probe.
+        return None
+
 def ef_scenarios(ef):
     """ An iterator to give the scenario sub-models in an ef
     Args:
@@ -887,13 +1143,8 @@ def option_dict_to_string(odict):
     """
     if odict is None:
         return None
-    ostr = ""
-    for i, v in odict.items():
-        if v is None:
-            ostr += "{i} "
-        else:
-            ostr += f"{i}={v} "
-    return ostr
+    return "".join(f"{k} " if v is None else f"{k}={v} "
+                   for k, v in odict.items())
 
 
 # Solver-options layered representation. See
@@ -979,38 +1230,127 @@ def fold_solver_options_layers(layers, k):
     return folded
 
 
-# Solver-name-aware translation for the two canonical option keys
+# Solver-name-aware translation for the canonical option keys
 # mpi-sppy stores internally. Keys not in this table are passed
 # through unchanged by translate_solver_options.
 #
-# Entries map (canonical_key, solver_name) → solver-native key when
+# Entries map (canonical_key, solver_name) → solver-native key(s) when
 # the solver names the option differently. Solver names not listed
 # under a canonical key use the canonical name itself (no rename).
-# Persistent variants (e.g. gurobi_persistent) are normalized to the
-# base name before lookup.
+# Solver names are matched by substring, so a mapping for "gurobi"
+# applies to gurobi, gurobi_persistent, appsi_gurobi, etc. A mapping
+# value may be:
+#   - a string (single target key)
+#   - a tuple/list of strings (same value fanout to several keys)
+#   - a dict mapping target key -> value spec, where the value spec is
+#     either the string "same" (use the canonical value) or a literal
+#     replacement value.
+#   - None, meaning the canonical option cannot be mapped for that solver.
 _SOLVER_OPTION_TRANSLATIONS = {
     "mipgap": {
+        # CPLEX uses Pyomo's underscore form of the native parameter name.
+        "cplex": "mip_tolerances_mipgap",
+        "glpk": "mipgap",
         # HiGHS uses its native option name.
         "highs": "mip_rel_gap",
-        "appsi_highs": "mip_rel_gap",
+        # CBC uses ratioGap for the relative MIP gap.
+        "cbc": "ratioGap",
+        # SCIP uses a limits/gap control.
+        "scip": "limits/gap",
+        # MOSEK uses a dparam for the relative MIP gap.
+        "mosek": "mio_tol_rel_gap",
+        # FICO Xpress expresses the same concept with a trio of controls.
+        "xpress": {
+            "miprelstop": "same",
+            "miprelcutoff": 0.0,
+            "mipaddcutoff": 0.0,
+        },
+    },
+    "absgap": {
+        # CPLEX uses Pyomo's underscore form of the native parameter name.
+        "cplex": "mip_tolerances_absmipgap",
+        # Gurobi uses its native parameter name.
+        "gurobi": "MIPGapAbs",
+        # HiGHS uses its native option name.
+        "highs": "mip_abs_gap",
+        # CBC uses gapAbs for the absolute MIP gap.
+        "cbc": "gapAbs",
+        # SCIP uses a limits/absgap control.
+        "scip": "limits/absgap",
+        # MOSEK uses a dparam for the absolute MIP gap.
+        "mosek": "mio_tol_abs_gap",
+        # FICO Xpress uses the absolute-gap counterparts.
+        "xpress": {
+            "mipabscutoff": "same",
+            "miprelcutoff": 0.0,
+            "mipaddcutoff": 0.0,
+        },
+        # GLPK does not support absolute gap control.
+        "glpk": None,
     },
     "threads": {
         # Gurobi parameter is conventionally capitalized.
         "gurobi": "Threads",
-        "appsi_gurobi": "Threads",
+        # SCIP uses both LP and parallel thread controls.
+        "scip": ("lp/threads", "parallel/maxnthreads"),
+        # MOSEK uses a different name for solver threads.
+        "mosek": "num_threads",
+        # These solvers already use the canonical mpi-sppy spelling.
+        "cplex": "threads",
+        "cbc": "threads",
+        # GLPK does not support threads.
+        "glpk": None,
+    },
+    "time_limit": {
+        # seconds; HiGHS's native name is time_limit, so it passes through.
+        # Gurobi parameter is conventionally capitalized.
+        "gurobi": "TimeLimit",
+        # CPLEX accepts the timelimit parameter alias (shell and persistent).
+        "cplex": "timelimit",
+        # FICO Xpress MAXTIME: a positive value is a soft stop for MIPs
+        # (the solver keeps going until a first feasible solution exists);
+        # a hard stop would need a negative value, which a same-value
+        # rename cannot express.
+        "xpress": "maxtime",
+        # CBC names its time limit "seconds".
+        "cbc": "seconds",
+        # SCIP uses a limits/time control.
+        "scip": "limits/time",
+        # MOSEK uses a dparam for the overall solver time limit.
+        "mosek": "optimizer_max_time",
+        # GLPK's tmlim is in seconds for the glpsol interface.
+        "glpk": "tmlim",
     },
 }
+
+
+def _solver_name_matches(solver_name, token):
+    return bool(solver_name) and token in solver_name
+
+
+def _target_option_names(target):
+    if isinstance(target, str):
+        return (target,)
+    if isinstance(target, (tuple, list)):
+        return tuple(target)
+    if isinstance(target, dict):
+        return target
+    if target is None:
+        return None
+    raise TypeError(
+        "solver-option translation targets must be a string, tuple/list of strings, dict, or None")
 
 
 def translate_solver_options(opts, solver_name):
     """Return a copy of *opts* with canonical option keys renamed to
     the solver's native key, where they differ.
 
-    Currently translates only ``mipgap`` and ``threads``; all other
-    keys pass through unchanged. If the user already supplied the
-    solver-native key alongside the canonical key, the
-    solver-native key wins and the canonical key is dropped (so the
-    solver does not receive both forms).
+    Currently translates only ``mipgap``, ``absgap``, ``threads`` and
+    ``time_limit``; all other
+    keys pass through unchanged. A translation may fan out to multiple
+    solver-native keys. If the user already supplied one of the
+    solver-native keys alongside the canonical key, that explicit value
+    wins and the canonical value is only used for the missing targets.
 
     Args:
         opts (dict | None): solver options. ``None`` returns ``None``;
@@ -1029,23 +1369,37 @@ def translate_solver_options(opts, solver_name):
     out = dict(opts)
     if not solver_name:
         return out
-    # gurobi_persistent → gurobi; appsi_highs stays as appsi_highs;
-    # cplex_persistent → cplex; xpress_persistent → xpress.
-    base_name = solver_name
-    if base_name.endswith("_persistent"):
-        base_name = base_name[:-len("_persistent")]
     for canonical, mapping in _SOLVER_OPTION_TRANSLATIONS.items():
         if canonical not in out:
             continue
-        target = mapping.get(solver_name) or mapping.get(base_name)
-        if target is None or target == canonical:
+        target = None
+        matched = False
+        for key, value in mapping.items():
+            if _solver_name_matches(solver_name, key):
+                target = value
+                matched = True
+                break
+        if not matched or target == canonical:
             continue
-        if target in out:
-            # User explicitly supplied the solver-native key; respect
-            # it and drop the canonical to avoid sending duplicates.
-            del out[canonical]
+        value = out.pop(canonical)
+        target_names = _target_option_names(target)
+        if target_names is None:
+            raise ValueError(
+                f"Cannot translate option {canonical!r} for solver {solver_name!r}")
+        if isinstance(target_names, dict):
+            for target_name, target_value in target_names.items():
+                if target_name in out:
+                    # User explicitly supplied the solver-native key; respect
+                    # it and leave that value in place.
+                    continue
+                out[target_name] = value if target_value == "same" else target_value
         else:
-            out[target] = out.pop(canonical)
+            for target_name in target_names:
+                if target_name in out:
+                    # User explicitly supplied the solver-native key; respect
+                    # it and leave that value in place.
+                    continue
+                out[target_name] = value
     return out
 
 
@@ -1598,7 +1952,7 @@ def nonant_cost_coeffs(s):
         if id(var) in s._mpisppy_data.varid_to_nonant_index:
             raise RuntimeError(
                 "A call to nonant_cost_coefficient found nonlinear variables in the objective function. "
-                f"Variable {var} has nonlinear interactions in the objective funtion. "
+                f"Variable {var} has nonlinear interactions in the objective function. "
                 "Consider using gradient-based rho."
             )
 
@@ -1680,4 +2034,3 @@ if __name__ == "__main__":
         print(ndn, v)
     print(f"slices: {slices}")
     check4losses(numscens, branching_factors, sntr, slices, ranks_per_scenario)
-

@@ -16,7 +16,7 @@ spokes), which is briefly described in :ref:`Drivers`.  Most hubs have
 an internal convergence metric, but the threshold option
 (``--intra-hub-conv-thresh`` on the command line, ``intra_hub_conv_thresh``
 in a ``Config`` object) is often set to a negative number so internal
-convergence is ignored in favor of the threshhold on the gap between
+convergence is ignored in favor of the threshold on the gap between
 upper and lower bounds as computed by the spokes (``rel_gap`` and
 ``abs_gap`` in ``Config`` object).  Most hubs can be terminated
 based on an iteration limit (``max_iterations`` in a ``Config`` object),
@@ -132,4 +132,3 @@ Unfortunately, the word "converger" is also used to describe spokes that return 
 for the purpose of measuring overall convergence (as opposed to convergence within the hub
 algorithm.)  This word is used fairly deep in the code to distinguish spokes
 that return bounds.
-

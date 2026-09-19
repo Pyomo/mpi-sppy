@@ -211,6 +211,96 @@ class TestPHMainFarmer(unittest.TestCase):
         conv, obj, tbound = ph.ph_main()
         self.assertIsNotNone(obj)
 
+    def _has_ph_objective_terms(self, s):
+        """Return (has_W, has_prox) for a scenario's PH objective terms."""
+        m = s._mpisppy_model
+        return hasattr(m, "WExpr"), hasattr(m, "ProxExpr")
+
+    def _objective_has_quadratic(self, s):
+        """True if the active objective has any quadratic/nonlinear part."""
+        from pyomo.repn import generate_standard_repn
+        import mpisppy.utils.sputils as sputils
+        obj = sputils.find_active_objective(s)
+        repn = generate_standard_repn(obj.expr, compute_values=False,
+                                      quadratic=True)
+        return bool(repn.quadratic_vars) or (repn.nonlinear_expr is not None)
+
+    @unittest.skipIf(not solver_available,
+                     "%s solver is not available" % (solver_name,))
+    def test_iter0_uses_user_objective(self):
+        """W/prox terms are absent during iteration 0 and attached afterward.
+
+        Regression test for issue #772: iteration 0 should solve exactly the
+        objective the user passed in -- no PH machinery (W, prox, xsqvar) in
+        the expression tree -- with the terms spliced in only at the end of
+        Iter0.
+        """
+        ph = mpisppy.opt.ph.PH(
+            self._copy_options(),
+            self.scenario_names,
+            farmer.scenario_creator,
+            farmer.scenario_denouement,
+            scenario_creator_kwargs=self.creator_kwargs,
+        )
+        ph.PH_Prep(attach_prox=True)
+        s0 = ph.local_scenarios[self.scenario_names[0]]
+
+        # Before Iter0: pure user objective, no PH terms, not quadratic.
+        has_W, has_prox = self._has_ph_objective_terms(s0)
+        self.assertFalse(has_W, "W term should be absent before Iter0")
+        self.assertFalse(has_prox, "prox term should be absent before Iter0")
+        self.assertFalse(self._objective_has_quadratic(s0),
+                         "iteration-0 objective should be the user's "
+                         "(non-quadratic for farmer) objective")
+
+        ph.Iter0()
+
+        # After Iter0: PH terms attached and re-enabled.
+        has_W, has_prox = self._has_ph_objective_terms(s0)
+        self.assertTrue(has_W, "W term should be attached after Iter0")
+        self.assertTrue(has_prox, "prox term should be attached after Iter0")
+        self.assertFalse(ph.prox_disabled,
+                         "prox should be re-enabled after Iter0")
+        self.assertFalse(ph.W_disabled,
+                         "W should be re-enabled after Iter0")
+
+    @unittest.skipIf(not persistent_available,
+                     "%s solver is not available" % (persistent_solver_name,))
+    def test_iter0_defers_with_prox_approx_persistent(self):
+        """Deferred attach works with prox linearization on a persistent solver.
+
+        With ``linearize_proximal_terms`` the prox term introduces the new
+        ``xsqvar`` variable and cut constraints inside attach_PH_to_objective.
+        Because the persistent solver was built on the user's objective during
+        Iter0, the deferred attach must re-push the instance. Confirms xsqvar
+        is absent before Iter0, present after, and the run completes.
+        """
+        options = self._copy_options()
+        options["solver_name"] = persistent_solver_name
+        options["PHIterLimit"] = 20
+        options["linearize_proximal_terms"] = True
+        options["proximal_linearization_tolerance"] = 1e-1
+        ph = mpisppy.opt.ph.PH(
+            options,
+            self.scenario_names,
+            farmer.scenario_creator,
+            farmer.scenario_denouement,
+            scenario_creator_kwargs=self.creator_kwargs,
+        )
+        ph.PH_Prep(attach_prox=True)
+        s0 = ph.local_scenarios[self.scenario_names[0]]
+        self.assertFalse(hasattr(s0._mpisppy_model, "xsqvar"),
+                         "xsqvar should not exist before Iter0")
+
+        ph.Iter0()
+        self.assertTrue(hasattr(s0._mpisppy_model, "xsqvar"),
+                        "xsqvar should be created by the deferred attach")
+
+        # Remaining iterations exercise the re-pushed persistent instance.
+        ph.iterk_loop()
+        obj = ph.post_loops(ph.extensions)
+        self.assertAlmostEqual(obj, FARMER_EF_OBJ, delta=500)
+
 
 class TestPHMainSizes(unittest.TestCase):
     """Test PH.ph_main() with the sizes (MIP) model, including fixer."""

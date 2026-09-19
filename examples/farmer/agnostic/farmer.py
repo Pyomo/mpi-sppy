@@ -257,6 +257,11 @@ def inparser_adder(cfg):
                       domain=bool,
                       default=False)
 
+    cfg.add_to_config("farmer_maximize",
+                      description="maximize profit instead of minimizing cost (default False)",
+                      domain=bool,
+                      default=False)
+
 
 #=========
 def kw_creator(cfg):
@@ -264,6 +269,8 @@ def kw_creator(cfg):
     kwargs = {"use_integer": cfg.get('farmer_with_integers', False),
               "crops_multiplier": cfg.get('crops_multiplier', 1),
               "num_scens" : cfg.get('num_scens', None),
+              "sense": pyo.maximize if cfg.get('farmer_maximize', False)
+                       else pyo.minimize,
               }
     return kwargs
 

@@ -29,8 +29,10 @@ from pyomo.core.expr.numeric_expr import LinearExpression
 class LShapedMethod(spbase.SPBase):
     """ Base class for the L-shaped method for two-stage stochastic programs.
 
-    Warning:
-        This class explicitly assumes minimization.
+    Note:
+        Maximization is supported. The objective is negated internally so the
+        root (master) and subproblems are always solved as minimizations, and
+        the reported bound is negated back to the model's natural sense.
 
     Args:
         options (dict):

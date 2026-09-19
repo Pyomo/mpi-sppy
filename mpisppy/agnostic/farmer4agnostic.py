@@ -281,7 +281,7 @@ def scenario_names_creator(num_scens, start=None):
         return [f"scen{i}" for i in range(start,start+num_scens)]
     else:
         # The hack should have changed the value of num_scens to be a fib!
-        # We will assume that start and and num_scens refers to bundle counts.
+        # We will assume that start and num_scens refer to bundle counts.
         # Bundle numbers are zero based and scenario numbers as well.
         return [f"bundle_{i*bunsize}_{(i+1)*bunsize-1}" for i in range(start,start+num_scens)]
 

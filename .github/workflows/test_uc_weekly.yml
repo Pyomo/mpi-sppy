@@ -29,12 +29,14 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo dill pybind11 highspy
+          pip install pybind11 highspy
           pip install git+https://github.com/grid-parity-exchange/egret.git
 
       - name: setup the program
         run: |
-          pip install -e .
+          # the git egret installed above already satisfies the [test]
+          # extra's gridx-egret requirement, so pip does not replace it
+          pip install -e ".[test]"
 
       - name: Run run_uc.py
         run: |

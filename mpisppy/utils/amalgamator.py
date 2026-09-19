@@ -242,7 +242,7 @@ def Amalgamator_parser(cfg, inparser_adder, extraargs_fct=None, use_command_line
     else:
         #Checking if cfg has all the options we need 
         if not (_bool_option(cfg, "EF_2stage") or _bool_option(cfg, "EF_mstage")):
-            raise RuntimeError("For now, completly bypassing command line only works with EF." )
+            raise RuntimeError("For now, completely bypassing command line only works with EF." )
         if 'EF_solver_name' not in cfg:
             raise RuntimeError("EF_solver_name must be specified for the amalgamator." )
         if 'num_scens' not in cfg:
@@ -328,12 +328,14 @@ class Amalgamator():
             
             self.is_minimizing = objs[0].is_minimizing
             #TBD : Write a function doing this
+            # The solver's Lower and Upper bounds bracket the optimal value, so
+            # which one is the outer (relaxation) bound depends on the sense.
             if self.is_minimizing:
                 self.best_outer_bound = results.Problem[0]['Lower bound']
                 self.best_inner_bound = results.Problem[0]['Upper bound']
             else:
-                self.best_inner_bound = results.Problem[0]['Upper bound']
-                self.best_outer_bound = results.Problem[0]['Lower bound']
+                self.best_outer_bound = results.Problem[0]['Upper bound']
+                self.best_inner_bound = results.Problem[0]['Lower bound']
             self.ef = ef
             
             if 'write_solution' in self.cfg:

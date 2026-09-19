@@ -275,6 +275,17 @@ def min_cost_distr_problem(local_dict, stoch_scenario_name, cfg, demand=None, se
     # Helps to define pseudo randomly the percentage of loss at production
     scennum = _scenario_number(stoch_scenario_name, demand=demand)
 
+    # Read every cfg value the Pyomo rules below need into plain locals, so
+    # that the rules close over ints/floats rather than over cfg itself. Pyomo
+    # keeps a reference to a rule function on the model, so a rule that closes
+    # over cfg drags the whole Config into the model's serialization graph --
+    # and a Pyomo ConfigDict cannot be serialized with dill, which makes the
+    # scenario model unusable with --pickle-scenarios-dir and with
+    # checkpointing. See issue #829.
+    initial_seed = cfg.initial_seed
+    spm = cfg.spm
+    cv = cfg.cv
+
     # Assert sense == pyo.minimize, "sense should be equal to pyo.minimize"
     # First, make the special In, Out arc lists for each node
     arcsout = {n: list() for n in local_dict["nodes"]}
@@ -348,10 +359,10 @@ def min_cost_distr_problem(local_dict, stoch_scenario_name, cfg, demand=None, se
             numbers = re.findall(r'\d+', n)
             # Concatenate the numbers together
             node_num = int(''.join(numbers))
-            np.random.seed(scennum+node_num+cfg.initial_seed)
+            np.random.seed(scennum+node_num+initial_seed)
             return sum(m.flow[a] for a in arcsout[n])\
             - sum(m.flow[a] for a in arcsin[n])\
-            == (local_dict["supply"][n] - m.y[n]) * min(1,max(0,1-np.random.normal(cfg.spm,cfg.cv)/100)) # We add the loss
+            == (local_dict["supply"][n] - m.y[n]) * min(1,max(0,1-np.random.normal(spm,cv)/100)) # We add the loss
         elif n in local_dict["buyer nodes"] and demand is not None: # for a 3-stage scenario the export changes the flow balance
             return sum(m.flow[a] for a in arcsout[n])\
             - sum(m.flow[a] for a in arcsin[n])\

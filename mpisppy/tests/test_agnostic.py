@@ -49,13 +49,14 @@ solver_available, solver_name, persistent_available, persistent_solver_name = (
 # (and, if you have gurobi installed the ampl test will fail)
 
 
-def _farmer_cfg():
+def _farmer_cfg(maximize=False):
     cfg = config.Config()
     cfg.popular_args()
     cfg.ph_args()
     cfg.default_rho = 1
     cfg.max_solver_threads = 1
     farmer_pyomo_agnostic.inparser_adder(cfg)
+    cfg.farmer_maximize = maximize
     return cfg
 
 
@@ -131,6 +132,30 @@ class Test_Agnostic_pyomo(unittest.TestCase):
         conv, obj, tbound = ph.ph_main()
         assert math.isclose(-115405.5555, tbound, rel_tol=1e-4, abs_tol=1e-6)
         assert math.isclose(-110433.4007, obj, rel_tol=1e-4, abs_tol=1e-6)
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_agnostic_pyomo_PH_maximize(self):
+        # farmer negates its objective for maximization; the Pyomo guest must
+        # report the sense so PH augments with the correct sign. The bound and
+        # objective are then the negation of the minimize case above.
+        cfg = _farmer_cfg(maximize=True)
+        Ag = agnostic.Agnostic(farmer_pyomo_agnostic, cfg)
+        s1 = Ag.scenario_creator("scen1")  # average case
+        phoptions = _get_ph_base_options()
+        phoptions["Ag"] = Ag  # this is critical
+        scennames = farmer_pyomo_agnostic.scenario_names_creator(num_scens=3)
+        ph = mpisppy.opt.ph.PH(
+            phoptions,
+            scennames,
+            Ag.scenario_creator,
+            farmer_pyomo_agnostic.scenario_denouement,
+            scenario_creator_kwargs=None,   # agnostic.py takes care of this
+            extensions=None
+        )
+        conv, obj, tbound = ph.ph_main()
+        assert math.isclose(115405.5555, tbound, rel_tol=1e-4, abs_tol=1e-6)
+        assert math.isclose(110433.4007, obj, rel_tol=1e-4, abs_tol=1e-6)
 
 
 @unittest.skipIf(not have_AMPL, "skipping AMPL")
@@ -219,6 +244,12 @@ class Test_Agnostic_gurobipy(unittest.TestCase):
         Ag = agnostic.Agnostic(farmer_gurobipy_agnostic, cfg)
         s0 = Ag.scenario_creator("scen0")
         s2 = Ag.scenario_creator("scen2")
+
+    def test_agnostic_gurobipy_maximize_raises(self):
+        # The gurobipy guest is minimize-only; a maximize model must fail loudly.
+        import gurobipy as gp
+        with self.assertRaises(RuntimeError):
+            farmer_gurobipy_agnostic.scenario_creator("scen0", sense=gp.GRB.MAXIMIZE)
 
     def test_agnostic_gurobipy_PH_constructor(self):
         cfg = _farmer_cfg()

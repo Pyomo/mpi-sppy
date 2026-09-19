@@ -57,7 +57,7 @@ def scenario_creator(
         "nonant_start": {("ROOT",i): v._value for i,v in enumerate(s.DevotedAcreage.values())},
         "nonant_names": {("ROOT",i): v.name for i, v in enumerate(s.DevotedAcreage.values())},
         "probability": "uniform",
-        "sense": pyo.minimize,
+        "sense": sense,
         "BFs": None
         }
     return gd

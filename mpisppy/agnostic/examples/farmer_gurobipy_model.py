@@ -140,7 +140,7 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     nonant_sqs = {}
     # Need to create a new var for x^2, and then add a constraint to the var with x val, so that we can set coeff value later on
     for i, nonant in gd["nonants"].items():
-        # Create a constaint that sets x * x = xsq 
+        # Create a constraint that sets x * x = xsq
         nonant_sq = gs.addVar(vtype=GRB.CONTINUOUS, obj=nonant.Obj**2, name=f"{nonant.VarName}sq")
         gs.addConstr(nonant * nonant == nonant_sq, f'{nonant.VarName}sqconstr')
         # Put the x^2 in the objective function
@@ -254,11 +254,15 @@ def _copy_nonants_from_host(s):
 def _restore_nonants(Ag, s=None):
     _copy_nonants_from_host(s)
 
-def _restore_original_fixedness(Ag, scenario):
-    _copy_nonants_from_host(scenario)
+def _restore_original_fixedness(Ag, s):
+    # The host calls this through callout_agnostic, which does
+    # fct(Ag=self, **{"s": s}), so the second parameter must be named s.
+    # SPOpt.post_solve_bound reaches it on an ordinary run.
+    _copy_nonants_from_host(s)
 
 def _fix_nonants(Ag, s=None):
     _copy_nonants_from_host(s)
 
-def _fix_root_nonants(Ag, scenario):
-    _copy_nonants_from_host(scenario)
+def _fix_root_nonants(Ag, s):
+    # named s for the same reason as _restore_original_fixedness above
+    _copy_nonants_from_host(s)
