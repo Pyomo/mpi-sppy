@@ -269,13 +269,14 @@ Windows.
    environment rather than a ``venv``.
 
    * **conda-forge (simplest).** Installs a prebuilt ``mpi4py``, so you do
-     not need the MS-MPI SDK or a C++ compiler:
+     not need the MS-MPI SDK or a C++ compiler. Name ``msmpi`` in the
+     install; without it conda may pick Intel MPI instead of MS-MPI:
 
      .. code-block:: powershell
 
         conda create -n mpisppy-env python=3.12
         conda activate mpisppy-env
-        conda install -c conda-forge mpi4py
+        conda install -c conda-forge mpi4py msmpi
 
    * **venv + pip.** Use this only if you have the Microsoft C++ Build
      Tools and the MS-MPI SDK installed, since pip builds ``mpi4py`` from
