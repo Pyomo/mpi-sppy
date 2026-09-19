@@ -43,6 +43,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import shlex
 import sys
 from dataclasses import dataclass, field
 
@@ -159,12 +160,22 @@ HUB_FLAGS = frozenset({
 DECOMPOSITION_FLAGS = SPOKE_FLAGS | HUB_FLAGS
 
 
-# Options that read the incumbent (Field.BEST_XHAT). With no inner-bound spoke
-# in the roster nothing publishes one and the run dies in do_decomp with
-# KeyError: <Field.BEST_XHAT>, so OOTB must not add these to such a roster.
+# Options that read the incumbent (Field.BEST_XHAT). With nothing in the
+# roster publishing one the run dies in do_decomp with
+# KeyError: <Field.BEST_XHAT>, so OOTB must neither add these to such a roster
+# nor build such a roster under one the user set.
 # Verified per flag: --sensi-rho and --sep-rho do NOT need one.
 NEEDS_INNER_BOUND = frozenset({
     "--grad-rho", "--dynamic-rho-primal-crit", "--dynamic-rho-dual-crit",
+})
+
+# Spokes that publish Field.BEST_XHAT: the xhat family, whose base class
+# InnerBoundSpoke lists it in send_fields. --ph-xfeas-spoke is an inner-ish
+# spoke but sends Field.XFEAS, not BEST_XHAT, so it does NOT satisfy
+# NEEDS_INNER_BOUND -- which is why this is its own set and not
+# `bound == "inner"`.
+BEST_XHAT_SPOKES = frozenset({
+    "--xhatshuffle", "--xhatxbar", "--xhatlshaped",
 })
 
 
@@ -253,7 +264,7 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     elif requested:
         # Asked for, but genuinely does not fit. Say so rather than silently
         # running something else.
-        d.run_ef, d.ef_reason = True, "min_ranks"
+        d.run_ef, d.ef_reason = True, "request_too_big"
         forced = ", ".join(sorted(requested))
         choose("--EF", None,
                f"user requested decomposition ({forced}) needs "
@@ -319,26 +330,84 @@ def recommend(facts: Facts, policy: dict) -> Decision:
             break
         chosen.append(r)
 
-    # Every cylinder needs at least one rank -- apportion_ranks raises
-    # otherwise -- so the roster cannot be wider than num_ranks - 1 spokes.
-    # The core roster above is taken unconditionally, so below the policy's
-    # rank floor (reachable now that an explicit request is honored there) it
-    # could ask for more cylinders than there are ranks. A spoke the user
-    # asked for is kept ahead of one OOTB chose for itself.
+    # Every cylinder needs at least one rank -- apportion_ranks and _make_comms
+    # both refuse otherwise -- so the roster cannot be wider than
+    # num_ranks - 1 spokes. The core roster above is taken unconditionally, so
+    # below the policy's rank floor (reachable now that an explicit request is
+    # honored there) it could ask for more cylinders than there are ranks.
+    #
+    # A spoke the user set becomes a cylinder whether or not it is on the
+    # policy ladder -- build_spoke_list appends on cfg.<spoke>, whoever set it
+    # -- so an off-ladder request spends rank budget that `chosen` never sees.
+    # Counting only `chosen` left e.g. `-np 2 --xhatxbar` asking for 3
+    # cylinders and aborting in _make_comms.
     user_spokes = facts.user_flags & SPOKE_FLAGS
+    ladder_flags = {r["flag"] for r in all_rungs}
+    off_ladder = user_spokes - ladder_flags
+    # A ladder spoke the user asked for is a cylinder even when the widening
+    # loop above did not reach it (e.g. --xhatxbar is priority 4), so put it in
+    # `chosen` to be counted. Counting only what OOTB picked left `-np 2
+    # --xhatxbar` asking for 3 cylinders.
+    for r in all_rungs:
+        if r["flag"] in user_spokes and r not in chosen:
+            chosen.append(r)
     max_spokes = max(0, facts.num_ranks - 1)
-    if len(chosen) > max_spokes:
+    budget = max_spokes - len(off_ladder)          # left for ladder rungs
+    if len(chosen) > budget:
+        # A spoke the user asked for outranks one OOTB chose for itself. The
+        # EF gate above guarantees num_ranks >= 1 + len(user_spokes), so the
+        # budget always covers the user's own ladder spokes.
         chosen.sort(key=lambda r: (r["flag"] not in user_spokes, r["priority"]))
-        dropped = [r["flag"] for r in chosen[max_spokes:]]
-        chosen = sorted(chosen[:max_spokes], key=lambda r: r["priority"])
+        keep = max(0, budget)
+        dropped = [r["flag"] for r in chosen[keep:]]
+        chosen = chosen[:keep]
         d.notes.append(
-            f"spoke roster trimmed to {len(chosen)} for {facts.num_ranks} "
-            f"ranks (one rank minimum per cylinder); dropped "
-            + ", ".join(dropped))
+            f"spoke roster trimmed to {len(chosen) + len(off_ladder)} for "
+            f"{facts.num_ranks} ranks (one rank minimum per cylinder); "
+            f"dropped " + ", ".join(dropped))
 
+    # An incumbent-reading option the USER set needs a spoke that publishes
+    # BEST_XHAT. OOTB's own such options are skipped in step 6, but the user's
+    # cannot be taken back, and trimming away the xhat spoke under one left
+    # the run to die in do_decomp with KeyError: <Field.BEST_XHAT>.
+    if (facts.user_flags & NEEDS_INNER_BOUND) and not (
+            (user_spokes | {r["flag"] for r in chosen}) & BEST_XHAT_SPOKES):
+        want = next((r for r in all_rungs
+                     if r["flag"] in BEST_XHAT_SPOKES), None)
+        victims = [r for r in chosen if r["flag"] not in user_spokes]
+        needed = ", ".join(sorted(facts.user_flags & NEEDS_INNER_BOUND))
+        if want is None:
+            pass                                    # no xhat rung in the policy
+        elif len(chosen) < budget:
+            chosen.append(want)
+            d.notes.append(f"{want['flag']} added: {needed} reads the "
+                           f"incumbent and needs a spoke to publish one")
+        elif victims:
+            loser = max(victims, key=lambda r: r["priority"])
+            chosen.remove(loser)
+            chosen.append(want)
+            d.notes.append(f"{want['flag']} replaces {loser['flag']}: "
+                           f"{needed} reads the incumbent and needs a spoke "
+                           f"to publish one")
+        else:
+            # No room for one. Decomposing would crash in do_decomp, so treat
+            # it like any other request that does not fit and run the EF.
+            d.run_ef, d.ef_reason = True, "request_too_big"
+            choose("--EF", None,
+                   f"{needed} reads the incumbent and needs a spoke to "
+                   f"publish one, but {facts.num_ranks} rank(s) cannot host "
+                   f"the hub, the spokes you asked for, and one more; "
+                   f"running the EF instead")
+            if d.chosen_solver is not None:
+                choose("--EF-solver-name", d.chosen_solver,
+                       f"EF solver ({d.chosen_solver})")
+            d.num_cylinders = 1
+            return d
+
+    chosen = sorted(chosen, key=lambda r: r["priority"])
     for r in chosen:
         choose(r["flag"], None, f"spoke ({r['bound']}, priority {r['priority']})")
-    d.num_cylinders = 1 + len(chosen)
+    d.num_cylinders = 1 + len(chosen) + len(off_ladder)
 
     # --- step 4: rank allocation -- UNBALANCED by per-cylinder ratio --------
     # Split ranks across cylinders by ratio (flex-ranks), not uniformly; xhat
@@ -415,7 +484,11 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     # Per-concern override: OOTB backs off a whole concern (e.g. its rho setter)
     # if the user set ANY equivalent flag, not just the identical one -- mpi-sppy
     # allows only one rho setter, so stacking would be a hard error.
-    have_inner = any(r["bound"] == "inner" for r in chosen)
+    # A user-requested xhat spoke publishes BEST_XHAT too, so OOTB need
+    # not drop its own incumbent-reading options in that case.
+    have_inner = bool(
+        ((facts.user_flags & SPOKE_FLAGS) | {r["flag"] for r in chosen})
+        & BEST_XHAT_SPOKES)
 
     def _skip_for_no_inner(flag):
         """True if `flag` reads the incumbent but no spoke will publish one."""
@@ -583,6 +656,20 @@ def _rank_layout(total: int, ratios: list, chosen: list) -> tuple:
 # ---------------------------------------------------------------------------
 
 
+def _sg_request_too_big(d, facts, policy, outcome):
+    """The user asked for more cylinders than they have ranks.
+
+    Distinct from the rank-floor case: quoting min_ranks_for_decomposition
+    here produced "only 3 ranks were available; with >= 3 ranks OOTB would
+    decompose", which contradicts itself.
+    """
+    if d.run_ef and d.ef_reason == "request_too_big":
+        return (f"Ran the monolithic EF because the decomposition you asked "
+                f"for needs more cylinders than the {facts.num_ranks} MPI "
+                f"rank(s) available; each cylinder needs at least one rank.")
+    return None
+
+
 def _sg_ran_ef_few_ranks(d, facts, policy, outcome):
     if d.run_ef and d.ef_reason == "min_ranks":
         need = policy["ef_fallback"]["min_ranks_for_decomposition"]
@@ -668,6 +755,7 @@ def _sg_from_outcome(d, facts, policy, outcome):
 
 # generators in priority order (lower first)
 SUGGESTION_GENERATORS = [
+    _sg_request_too_big,
     _sg_ran_ef_few_ranks,
     _sg_no_class_solver,
     _sg_no_persistent_solver,
@@ -837,6 +925,9 @@ def _cfg_key_to_flag(key: str) -> str:
 # command_line() already emits.
 _NOT_ECHOED = frozenset(EFFORT_FLAGS) | {
     "inspect_only", "module_name", "num_scens", "branching_factors",
+    # command_line() always emits --module-name, and model_fname() refuses
+    # that together with either of these, so echoing them made the line fail.
+    "mps_files_directory", "smps_dir",
 }
 
 
@@ -861,9 +952,11 @@ def _user_args(cfg) -> list:
                 out.append((_cfg_key_to_flag(key), None))
         elif isinstance(v, (list, tuple)):
             out.append((_cfg_key_to_flag(key),
-                        " ".join(str(x) for x in v)))
+                        shlex.quote(" ".join(str(x) for x in v))))
         elif v is not None:
-            out.append((_cfg_key_to_flag(key), str(v)))
+            # quote: --solver-options takes a space-delimited string, so an
+            # unquoted value made the echoed line unparseable by argparse.
+            out.append((_cfg_key_to_flag(key), shlex.quote(str(v))))
     return sorted(out)
 
 

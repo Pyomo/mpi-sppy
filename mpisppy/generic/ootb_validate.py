@@ -326,6 +326,18 @@ def validate_static(policy: dict) -> list:
     add("out_of_the_box.DECOMPOSITION_FLAGS are all real CLI options", not bad,
         f"unknown: {bad}")
 
+    # Same for the incumbent sets: a typo in either would silently never
+    # match, and the option would go back into an xhat-free roster.
+    bad = sorted(f for f in ootb.NEEDS_INNER_BOUND if f not in flags)
+    add("out_of_the_box.NEEDS_INNER_BOUND are all real CLI options", not bad,
+        f"unknown: {bad}")
+    bad = sorted(f for f in ootb.BEST_XHAT_SPOKES if f not in flags)
+    add("out_of_the_box.BEST_XHAT_SPOKES are all real CLI options", not bad,
+        f"unknown: {bad}")
+    bad = sorted(ootb.BEST_XHAT_SPOKES - ootb.SPOKE_FLAGS)
+    add("out_of_the_box.BEST_XHAT_SPOKES are spokes", not bad,
+        f"not spokes: {bad}")
+
     return checks
 
 

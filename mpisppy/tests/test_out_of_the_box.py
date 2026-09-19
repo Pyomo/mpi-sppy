@@ -18,6 +18,7 @@ locally; see test_ootb_validate / test_ootb_calibrate.)
 """
 
 import os
+import shlex
 import sys
 import unittest
 
@@ -548,6 +549,190 @@ class TestPersistentSolverSuggestion(unittest.TestCase):
     def test_suggests_a_real_persistent_interface(self):
         self.assertIn("gurobi_persistent", self._msg("gurobi"))
         self.assertIsNone(self._msg("gurobi_persistent"))
+
+
+class TestRosterFitsTheRanks(unittest.TestCase):
+    """Count the spokes the RUN builds, not OOTB's own tally.
+
+    d.num_cylinders was itself wrong, so asserting on it hid a regression:
+    build_spoke_list appends on cfg.<spoke> whoever set it, so a user spoke
+    OOTB did not pick is still a cylinder.
+    """
+
+    def setUp(self):
+        self.policy = ootb.load_policy()
+
+    @staticmethod
+    def _built(flags, num_ranks):
+        module = _farmer_module()
+        facts = ootb.Facts("farmer", num_ranks, {"gurobi"}, 60, effort="base",
+                           vars_int=0, vars_cont=5, nonants_int=0,
+                           model_degree="linear", user_flags=set(flags))
+        d = ootb.recommend(facts, ootb.load_policy())
+        cfg = config.Config()
+        parsing.add_driver_args(cfg, module)
+        cfg.num_scens = 60
+        cfg.module_name = "farmer"
+        for f in flags:
+            key = f[2:].replace("-", "_")
+            if key in cfg:
+                cfg[key] = True
+        ootb.apply_decision(d, cfg)
+        built = sum(1 for s in ootb.SPOKE_FLAGS
+                    if cfg.get(s[2:].replace("-", "_"), ifmissing=False))
+        return d, 1 + built
+
+    def test_every_roster_fits_and_the_count_is_honest(self):
+        combos = [set(), {"--lagrangian"}, {"--xhatxbar"}, {"--fwph"},
+                  {"--ph-dual"}, {"--relaxed-ph"}, {"--subgradient"},
+                  {"--reduced-costs"}, {"--xhatshuffle"},
+                  {"--lagrangian", "--fwph"},
+                  {"--lagrangian", "--fwph", "--xhatxbar"}]
+        for n in range(1, 7):
+            for flags in combos:
+                d, cylinders = self._built(flags, n)
+                if d.run_ef:
+                    continue
+                with self.subTest(ranks=n, flags=sorted(flags)):
+                    self.assertLessEqual(cylinders, n)
+                    self.assertEqual(cylinders, d.num_cylinders)
+
+    def test_user_incumbent_option_keeps_a_best_xhat_spoke(self):
+        """--grad-rho reads BEST_XHAT; the roster must publish one or not
+        decompose. Trimming the xhat spoke under it killed the run."""
+        for n in (2, 3, 4, 6):
+            # both cases carry a real rho setter: --dynamic-rho-primal-crit
+            # WITHOUT one is rejected by parse_args' own checker, so it can
+            # never reach OOTB and is not a configuration worth asserting on.
+            for flags in ({"--lagrangian", "--grad-rho"},
+                          {"--fwph", "--grad-rho"}):
+                d, _ = self._built(flags, n)
+                if d.run_ef:
+                    continue
+                emitted = {a.flag for a in d.args} | set(flags)
+                with self.subTest(ranks=n, flags=sorted(flags)):
+                    self.assertTrue(emitted & ootb.BEST_XHAT_SPOKES)
+
+    def test_user_xhat_spoke_keeps_ootb_rho_setter(self):
+        """A user's own xhat spoke publishes BEST_XHAT, so OOTB need not drop
+        --grad-rho.
+
+        --xhatlshaped is the discriminating choice: it is NOT on the policy
+        ladder, so it never lands in `chosen`. A ladder spoke like --xhatxbar
+        does, and then the roster carries a BEST_XHAT spoke either way, so the
+        test would pass without consulting the user's flags at all.
+        """
+        d, _ = self._built({"--xhatlshaped"}, 2)
+        self.assertFalse(d.run_ef)
+        self.assertIn("--grad-rho", {a.flag for a in d.args})
+
+
+class TestEchoedValuesAreRunnable(unittest.TestCase):
+    def test_values_with_spaces_are_quoted(self):
+        """--solver-options is a space-delimited string; unquoted, the echoed
+        line made argparse reject the trailing words."""
+        cfg, _ = _farmer_cfg(solver_options="mipgap=0.001 threads=2")
+        value = dict(ootb._user_args(cfg))["--solver-options"]
+        facts = ootb.Facts("farmer", 1, set(), 6,
+                           user_args=ootb._user_args(cfg))
+        line = ootb.Decision().command_line(facts)
+        self.assertEqual(shlex.split(f"x {value}")[1],
+                         "mipgap=0.001 threads=2")
+        # the whole line survives shell splitting as one token per value
+        self.assertIn("mipgap=0.001 threads=2", shlex.split(line))
+
+    def test_implicit_module_inputs_are_not_echoed(self):
+        """command_line() always emits --module-name, and model_fname()
+        refuses that together with either of these."""
+        for key in ("mps_files_directory", "smps_dir"):
+            # these are declared by the problem_io module's inparser_adder,
+            # not by add_driver_args, so add them the way that module does
+            cfg, _ = _farmer_cfg()
+            cfg.add_to_config(key, description=key, domain=str, default=None)
+            cfg[key] = "/tmp/x"
+            self.assertNotIn(ootb._cfg_key_to_flag(key),
+                             dict(ootb._user_args(cfg)))
+
+    def test_abbreviation_through_real_parse_args(self):
+        """The premise of the cfg-over-argv fix: argparse accepts prefixes."""
+        module = _farmer_module()
+        argv = sys.argv
+        try:
+            sys.argv = ["prog", "--module-name", "farmer", "--num-scens", "3",
+                        "--solver-nam", "cbc"]
+            cfg = parsing.parse_args(module)
+        finally:
+            sys.argv = argv
+        self.assertEqual(cfg.solver_name, "cbc")
+        self.assertIn("--solver-name", ootb._user_flags(cfg))
+
+
+class TestApplyDecisionValidates(unittest.TestCase):
+    def test_checker_runs_on_what_ootb_built(self):
+        """parse_args checked the config before OOTB existed."""
+        cfg, _ = _farmer_cfg()
+        d = ootb.Decision()
+        d.args = [ootb.ChosenArg("--dynamic-rho-primal-crit", None, "x")]
+        with self.assertRaises(ValueError):    # no automated rho setter
+            ootb.apply_decision(d, cfg)
+
+    def test_coeff_rho_supersedes_dynamic_rho_in_the_policy(self):
+        """So OOTB defers instead of building a pair checker rejects."""
+        policy = ootb.load_policy()
+        sup = policy["option_categories"]["dynamic_rho"]["superseded_by"]
+        for f in ("--coeff-rho", "--reduced-costs-rho"):
+            self.assertIn(f, sup)
+
+
+class TestUserRankRatioIsModeled(unittest.TestCase):
+    def test_user_ratio_changes_the_split(self):
+        """12 ranks, not 6: at 6 the policy and user ratios both give
+        [2, 3, 1] and the test would prove nothing."""
+        policy = ootb.load_policy()
+        facts = ootb.Facts(
+            "m", 12, {"gurobi"}, 60, effort="base", vars_int=0, vars_cont=5,
+            nonants_int=0, model_degree="linear",
+            user_flags={"--lagrangian", "--lagrangian-rank-ratio"},
+            user_args=[("--lagrangian-rank-ratio", "3.0")])
+        d = ootb.recommend(facts, policy)
+        self.assertFalse(d.run_ef)
+        base = ootb.recommend(
+            ootb.Facts("m", 12, {"gurobi"}, 60, effort="base", vars_int=0,
+                       vars_cont=5, nonants_int=0, model_degree="linear",
+                       user_flags={"--lagrangian"}),
+            policy)
+        # the user's 3.0 widens --lagrangian and moves the bundle floor
+        self.assertGreater(d.rank_split["--lagrangian"],
+                           base.rank_split["--lagrangian"])
+        self.assertNotEqual(d.intra_ranks, base.intra_ranks)
+
+
+class TestProbeIsQuiet(unittest.TestCase):
+    def test_missing_solvers_do_not_log(self):
+        """Pyomo logs a WARNING plus a traceback per missing ASL solver."""
+        import logging
+        records = []
+
+        class _Catch(logging.Handler):
+            def emit(self, record):
+                records.append(record)
+
+        handler = _Catch()
+        for name in ("pyomo.opt", "pyomo.solvers", "pyomo.common"):
+            logging.getLogger(name).addHandler(handler)
+        try:
+            ootb._detect_available_solvers(["bonmin", "couenne", "not_a_solver"])
+        finally:
+            for name in ("pyomo.opt", "pyomo.solvers", "pyomo.common"):
+                logging.getLogger(name).removeHandler(handler)
+        self.assertEqual([], [r.getMessage() for r in records])
+
+    def test_levels_are_restored(self):
+        import logging
+        lg = logging.getLogger("pyomo.opt")
+        before = lg.level
+        ootb._detect_available_solvers(["bonmin"])
+        self.assertEqual(before, lg.level)
 
 
 if __name__ == "__main__":
