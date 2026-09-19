@@ -182,18 +182,27 @@ def check_filename_collisions(scenario_names):
     Two distinct names that sanitize to the same fragment (``scen 1`` and
     ``scen_1``, say) would write to the same model file -- the second
     silently overwriting the first -- and a resume would then restore one
-    scenario's model for both, with no error anywhere.
+    scenario's model for both, with no error anywhere. The comparison ignores
+    case, because on a case-insensitive filesystem (the macOS and Windows
+    defaults) ``Scenario1`` and ``scenario1`` are the same file too.
     """
     seen = {}
     for sname in scenario_names:
-        key = sanitize_for_filename(sname)
+        fragment = sanitize_for_filename(sname)
+        key = fragment.casefold()
         other = seen.get(key)
         if other is not None:
+            if sanitize_for_filename(other) == fragment:
+                why = ("once unsafe characters are replaced, so their "
+                       "checkpoints would overwrite each other")
+            else:
+                why = ("apart from case, so their checkpoints would "
+                       "overwrite each other on a filesystem that ignores "
+                       "case")
             raise RuntimeError(
                 f"Scenario names '{other}' and '{sname}' both map to "
-                f"'{key}' in checkpoint file names once unsafe characters "
-                f"are replaced, so their checkpoints would overwrite each "
-                f"other. Rename the scenarios so the names stay distinct."
+                f"'{fragment}' in checkpoint file names {why}. Rename the "
+                f"scenarios so the names stay distinct."
             )
         seen[key] = sname
 

@@ -75,14 +75,19 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
         ''' Do a bunch of checking if files exist '''
         w_fname, x_fname, sep_files = self.cfg.init_W_fname, self.cfg.init_Xbar_fname, self.cfg.init_separate_W_files
 
-        if w_fname is not None:
+        # A resumed run never reads these files (see pre_iter0), and a
+        # --resume-from run either resumes or stops at startup, so requiring
+        # them to still exist would only break the documented workflow of
+        # resubmitting the original command after they were cleaned up.
+        resuming = bool(ph.options.get("resume_from", None))
+        if w_fname is not None and not resuming:
             if (not os.path.exists(w_fname)):
                 if (sep_files):
                     raise RuntimeError(f'Cannot find path {w_fname}')
                 else:
                     raise RuntimeError(f'Cannot find file {w_fname}')
 
-        if x_fname is not None:
+        if x_fname is not None and not resuming:
             if (not os.path.exists(x_fname)):
                 raise RuntimeError(f'Cannot find file {x_fname}')
 

@@ -120,8 +120,10 @@ cause is upstream: Pyomo's `UninitializedMixin` sets `self.__class__` while
 class when the consistency check runs. Each failed attempt resolves one entry,
 so a real model can need many attempts; it is intra-process only, so a fresh
 run fails deterministically on the first.
-`examples/stoch_distr/stoch_distr.py` has exactly this shape, so its scenario
-models cannot be dilled at all, wrapper or no wrapper (issue #828). This is not
+`examples/stoch_distr/stoch_distr.py` had exactly this shape, so its scenario
+models could not be dilled at all, wrapper or no wrapper (issue #828); #830
+removed the closures from both copies, and a structural guard in
+`test_stoch_admmWrapper.py` keeps the pattern from returning. This is not
 specific to checkpointing: the existing `--pickle-scenarios-dir` path would fail
 the same way on such a model. Two consequences for this design:
 
@@ -686,14 +688,13 @@ be honored or checkpointing will not work for ADMM:
    the ADMM resume test must assert both survive. (A leaf-rebuild ADMM resume
    would have to re-apply the mask and re-fix the dummies explicitly — one
    more reason that backend is deferred, §11 Phase 6.)
-4. **The dill round-trip is unvalidated for a wrapper-mutated model, and the
-   intended vehicle cannot currently test it.** `stoch_distr` scenario models
-   do not dill *at all* — not because of the wrapper, but because the model
-   defines a Pyomo rule closing over `cfg` (§2.2, issue #828). A bare
-   `scenario_creator` result fails identically, so the wrapper is exonerated
-   and simultaneously untested. Validating this item needs either a fix to
-   `stoch_distr` or a different stoch-ADMM model, and that is now a
-   prerequisite of Phase 2 rather than a step within it. The rest of this item
+4. **The dill round-trip is unvalidated for a wrapper-mutated model.** When
+   this was written the intended vehicle could not test it: `stoch_distr`
+   scenario models did not dill *at all* — not because of the wrapper, but
+   because the model defined a Pyomo rule closing over `cfg` (§2.2, issue
+   #828). A bare `scenario_creator` result failed identically, so the wrapper
+   was exonerated and simultaneously untested. #830 fixed `stoch_distr`, so
+   it is the vehicle again (§11 Phase 2). The rest of this item
    describes what still has to be proven once a vehicle exists. The MIP
    PoC (§6) dilled a plain `sizes` model. A stoch-ADMM scenario is stranger:
    inline dummy `pyo.Var()`s added post-construction with bracket-mangled

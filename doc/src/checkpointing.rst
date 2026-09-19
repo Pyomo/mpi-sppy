@@ -113,7 +113,9 @@ how long it took::
 A write that fails mid-run -- the disk filling up, a network filesystem
 hiccup -- does not stop the optimization. The failure is reported loudly in
 the log, the previously published checkpoint stays intact and resumable, and
-the next iteration boundary tries again. Conditions detectable at setup (an
+the next checkpoint point tries again: the next multiple of
+``--checkpoint-every-iterations``, or the last iteration of the budget,
+whichever comes first. Conditions detectable at setup (an
 unwritable directory, a model that cannot be serialized) still stop the run
 at startup, before any solving is done.
 
@@ -178,15 +180,21 @@ registers. That is deliberate: checking by default is what stops a farmer
 checkpoint from being resumed with ``--farmer-with-integers`` and quietly
 answering the linear program.
 
-There are two practical consequences, and they come from different places.
+There are three practical consequences, and they come from different places.
 
-**Editing your model module invalidates the checkpoints you already have.**
-Registering one more option in ``inparser_adder`` changes the configuration
-being compared, so the next resume stops at startup with
+**Adding an option to your model module invalidates the checkpoints you
+already have.** Registering one more option in ``inparser_adder`` changes the
+configuration being compared, so the next resume stops at startup with
 ``CheckpointMismatch`` naming the directory. That is the check doing its job
 rather than a defect -- it cannot tell a harmless new option from one that
-changes the problem -- but it does mean a study wants to reach its end before
-the module is edited under it.
+changes the problem.
+
+**Editing the model's code is not detected, and a resume ignores the edit.**
+The check compares configuration, not source code. Change an equation or the
+data ``scenario_creator`` builds without changing any option, and the resume
+goes ahead -- on the models saved in the checkpoint, which replace the ones
+the edited code just built. Keep the model code unchanged until a study
+reaches its end.
 
 **A checkpoint is only as portable as the pickles inside it.** Under
 ``dill-reload`` it holds serialized Pyomo models, so upgrading mpi-sppy, Pyomo
