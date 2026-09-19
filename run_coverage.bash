@@ -161,6 +161,9 @@ run_phase "test_ootb_validate (serial)" \
 run_phase "test_ootb_calibrate (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_ootb_calibrate.py -v
 
+run_phase "test_ootb_policy_packaged (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_ootb_policy_packaged.py -v
+
 run_phase "test_jensens (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_jensens.py -v
 

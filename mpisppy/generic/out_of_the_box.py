@@ -311,19 +311,23 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     elif facts.num_scens >= bs["min_scens_to_consider_bundling"]:
         b_min = max(d.intra_ranks,
                     bs["min_bundles_per_intra_rank"] * d.intra_ranks)
+        mult = _spb_multiple_of(facts)
         spb = _pick_spb_by_effort(
             facts.num_scens, b_min, facts, policy["effort_scaling"],
-            bs["base_max_hardness_vs_single_scenario"])
+            bs["base_max_hardness_vs_single_scenario"], multiple_of=mult)
+        whole_nodes = (f", multiple of {mult} (whole second-stage nodes)"
+                       if mult > 1 else "")
         if spb is not None:
             nb = facts.num_scens // spb
             choose("--scenarios-per-bundle", str(spb),
                    f"{facts.num_scens} scenarios -> {nb} bundles of {spb} "
                    f"(effort <= {bs['base_max_hardness_vs_single_scenario']}x a "
-                   f"single scenario, >= {b_min} bundles)")
+                   f"single scenario, >= {b_min} bundles{whole_nodes})")
         else:
             d.notes.append(
                 f"bundling: no divisor of {facts.num_scens} qualifies "
-                f"(>= {b_min} bundles within budget); running unbundled"
+                f"(>= {b_min} bundles within budget{whole_nodes}); "
+                f"running unbundled"
             )
 
     # --- step 6: extra options by concern; any superseded_by flag defers ----
@@ -400,17 +404,42 @@ def _effort(spb: int, facts: Facts, scaling: dict) -> float:
             + scaling["int_nonant_coeff"] * (facts.nonants_int or 0))
 
 
+def _spb_multiple_of(facts: Facts) -> int:
+    """The granularity a multistage bundle size must respect.
+
+    ``ProperBundler.set_bunBFs`` requires ``scenarios_per_bundle`` to be a
+    multiple of ``prod(branching_factors[1:])`` -- a bundle has to consume whole
+    second-stage nodes -- and raises otherwise. Two-stage runs have no such
+    constraint, so this returns 1 there."""
+    bf = facts.branching_factors
+    if not facts.multistage or not bf or len(bf) < 2:
+        return 1
+    beyond2size = 1
+    for b in bf[1:]:
+        beyond2size *= int(b)
+    return beyond2size
+
+
 def _pick_spb_by_effort(num_scens: int, min_bundles: int, facts: Facts,
-                        scaling: dict, max_hardness: float) -> int | None:
+                        scaling: dict, max_hardness: float,
+                        multiple_of: int = 1) -> int | None:
     """base/plus sizer: the LARGEST scenarios_per_bundle that divides num_scens,
     leaves >= min_bundles bundles, and keeps a bundle's modeled effort within
     `max_hardness` x a single scenario (the relative, unit-free budget). The plus
     tier feeds the same function a time-calibrated effective hardness. Returns
-    None when nothing past the degenerate spb==1 qualifies."""
+    None when nothing past the degenerate spb==1 qualifies.
+
+    `multiple_of` is the multistage granularity from `_spb_multiple_of`: a size
+    that is not a multiple of it would abort the run in `set_bunBFs`, so such
+    sizes are not candidates. (Dividing num_scens then also makes the leading
+    bundle branching factor come out whole, since prod(BFs[1:]) divides
+    num_scens.)"""
     e1 = _effort(1, facts, scaling)
     best = None
     for spb in range(2, num_scens + 1):           # spb==1 is "no bundling"
         if num_scens % spb or num_scens // spb < min_bundles:
+            continue
+        if spb % multiple_of:
             continue
         if e1 > 0 and _effort(spb, facts, scaling) / e1 > max_hardness:
             continue

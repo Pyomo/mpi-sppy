@@ -218,6 +218,10 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_ootb_calibrate.py -v
 
+      - name: Test out-of-the-box policy packaging
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_ootb_policy_packaged.py -v
+
       - name: Test xhat from file
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_xhat_from_file.py -v

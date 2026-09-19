@@ -92,3 +92,10 @@ py-modules = ["mpi_one_sided_test"]
 
 [tool.setuptools.packages.find]
 include = ["mpisppy", "mpisppy.*"]
+
+# The out-of-the-box policies are data, not code, so nothing above installs
+# them and a pip-installed --out-of-the-box died in load_policy with
+# FileNotFoundError.  A checkout cannot catch this (the files are simply
+# there); test_ootb_policy_packaged.py checks the built wheel instead.
+[tool.setuptools.package-data]
+"mpisppy.generic" = ["ootb_policies/*.json"]

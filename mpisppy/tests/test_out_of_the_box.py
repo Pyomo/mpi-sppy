@@ -318,5 +318,60 @@ class TestSolverRoutingByClass(unittest.TestCase):
         self.assertEqual(d.chosen_solver, "cbc")       # OOTB defers to the user
 
 
+class TestMultistageBundleSizing(unittest.TestCase):
+    """A multistage bundle must consume whole second-stage nodes.
+
+    ProperBundler.set_bunBFs raises "Bundles must consume the same number of
+    entire second stage nodes" unless scenarios_per_bundle is a multiple of
+    prod(branching_factors[1:]), so a size that only divides num_scens aborts
+    the run at startup.
+    """
+
+    def setUp(self):
+        self.policy = ootb.load_policy()
+
+    @staticmethod
+    def _facts(bf, num_scens, **kw):
+        return ootb.Facts("m", 6, {"gurobi"}, num_scens, effort="base",
+                          vars_int=0, vars_cont=2, nonants_int=0,
+                          model_degree="linear", multistage=bf is not None,
+                          branching_factors=bf, **kw)
+
+    def test_multiple_of_beyond2size(self):
+        self.assertEqual(ootb._spb_multiple_of(self._facts([4, 3, 3, 2], 72)), 18)
+        # two-stage is unconstrained
+        self.assertEqual(ootb._spb_multiple_of(self._facts(None, 72)), 1)
+
+    def test_sizer_only_offers_whole_node_multiples(self):
+        facts = self._facts([4, 3, 3, 2], 72)
+        scaling = self.policy["effort_scaling"]
+        # a hardness budget generous enough that the effort test excludes nothing
+        spb = ootb._pick_spb_by_effort(72, 1, facts, scaling, 1e9,
+                                       multiple_of=18)
+        self.assertIsNotNone(spb)
+        self.assertEqual(spb % 18, 0)
+        self.assertEqual(72 % spb, 0)
+
+    def test_chosen_size_survives_set_bunBFs(self):
+        """The end-to-end property: whatever OOTB picks, the run can use it."""
+        from mpisppy.utils.proper_bundler import ProperBundler
+        bf = [4, 3, 3, 2]
+        facts = self._facts(bf, 72)
+        scaling = self.policy["effort_scaling"]
+        for max_hardness in (1e9, 100.0, 10.0):
+            spb = ootb._pick_spb_by_effort(
+                72, 1, facts, scaling, max_hardness,
+                multiple_of=ootb._spb_multiple_of(facts))
+            if spb is None:
+                continue                       # unbundled is always safe
+            cfg = config.Config()
+            cfg.add_branching_factors()
+            cfg.proper_bundle_config()
+            cfg.branching_factors = bf
+            cfg.scenarios_per_bundle = spb
+            # raises RuntimeError if spb is not a whole number of stage-2 nodes
+            ProperBundler.set_bunBFs(ProperBundler.__new__(ProperBundler), cfg)
+
+
 if __name__ == "__main__":
     unittest.main()
