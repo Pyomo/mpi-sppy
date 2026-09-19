@@ -46,7 +46,11 @@ jobs:
       # run even when an earlier one failed, so one run reports them all.
       - name: Install mpi4py from conda-forge
         working-directory: .
-        run: conda install -y -c conda-forge mpi4py
+        run: conda install -y -c conda-forge mpi4py msmpi
+
+      - name: Check that mpi4py uses MS-MPI
+        working-directory: .
+        run: python -c "from mpi4py import MPI; v = MPI.Get_library_version(); print(v); assert 'Microsoft MPI' in v"
 
       - name: Install mpi-sppy
         working-directory: .
