@@ -93,7 +93,10 @@ where a solve takes minutes, dominant for many cheap scenarios.
 
 Writing every iteration **subsumes** `--checkpoint-every-seconds` and the
 anticipatory `--checkpoint-before-seconds`: a checkpoint from the last
-completed iteration always exists, so neither has a gap left to fill.
+completed iteration always exists, so neither has a gap left to fill. That holds
+only at K = 1 (below). With K > 1 the latest checkpoint can be up to K−1
+iterations old, and a stop before the first multiple of K leaves none, so
+`--checkpoint-before-seconds` has a gap to fill again and remains a follow-up.
 
 The trigger still worth building was `--checkpoint-every-iterations K`, and its
 meaning had **inverted**. It was designed as insurance — write *more* often. It

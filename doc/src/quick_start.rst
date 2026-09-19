@@ -130,8 +130,12 @@ Install from GitHub on Windows
 Two installation paths are supported on Windows. Most users will have a
 substantially easier time with WSL2, because the Python+MPI ecosystem is
 developed and tested on Linux first. Native Windows with MS-MPI does work
-but breaks more often and requires more manual setup. Detailed instructions
-for both follow.
+but breaks more often and requires more manual setup. Runs with several
+cylinders can also be slow on native Windows: under MS-MPI a cylinder
+waits for data from another cylinder until that one finishes its current
+solve, so with long solves the hub can run at the pace of its slowest
+spoke (see issue #869). The extensive form (``--EF``) does not use MPI
+and is unaffected. Detailed instructions for both follow.
 
 Optional: notes for Visual Studio Code users
 """"""""""""""""""""""""""""""""""""""""""""
@@ -265,13 +269,14 @@ Windows.
    environment rather than a ``venv``.
 
    * **conda-forge (simplest).** Installs a prebuilt ``mpi4py``, so you do
-     not need the MS-MPI SDK or a C++ compiler:
+     not need the MS-MPI SDK or a C++ compiler. Name ``msmpi`` in the
+     install; without it conda may pick Intel MPI instead of MS-MPI:
 
      .. code-block:: powershell
 
         conda create -n mpisppy-env python=3.12
         conda activate mpisppy-env
-        conda install -c conda-forge mpi4py
+        conda install -c conda-forge mpi4py msmpi
 
    * **venv + pip.** Use this only if you have the Microsoft C++ Build
      Tools and the MS-MPI SDK installed, since pip builds ``mpi4py`` from
@@ -364,8 +369,13 @@ and the remaining commands are run from there.
       mpiexec -n 2 mpi-sppy-one-sided-test
 
    If you see no error messages, your MPI installation should be
-   suitable. Then confirm the full hub-and-spoke flow with a short PH
-   run on farmer:
+   suitable. On native Windows with MS-MPI this test fails with an
+   ``AssertionError``, and the failure is real: under MS-MPI, data
+   one cylinder posts reaches the others only when that cylinder
+   makes an MPI call, so cylinders can wait on each other while one
+   is in a long solve. mpi-sppy still gives correct results, but such
+   runs can be slower than on Linux (see issue #869). Then confirm the
+   full hub-and-spoke flow with a short PH run on farmer:
 
    .. code-block:: text
 
