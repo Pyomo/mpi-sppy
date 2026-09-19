@@ -42,6 +42,44 @@ jobs:
         with:
           version: "0.15.21"
 
+  power_cep_notebook:
+    name: Power CEP notebook
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    timeout-minutes: 10
+    env:
+      COVERAGE_FILE: ${{ github.workspace }}/.coverage
+      COVERAGE_PROCESS_START: ${{ github.workspace }}/examples/power_cep/.coveragerc
+      OMPI_MCA_rmaps_base_oversubscribe: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+      - name: Install dependencies
+        run: |
+          conda install mpi4py setuptools
+          pip install -e . highspy scipy matplotlib pandas nbconvert ipykernel coverage
+          python -c "import pathlib, site; pathlib.Path(site.getsitepackages()[0], 'coverage_startup.pth').write_text('import coverage; coverage.process_startup()\\n')"
+      - name: Execute notebook
+        working-directory: examples/power_cep
+        run: |
+          jupyter nbconvert \
+            --execute power_cep_tutorial.ipynb \
+            --to notebook \
+            --output power_cep_tutorial.executed.ipynb \
+            --output-dir /tmp \
+            --ExecutePreprocessor.timeout=300
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-power-cep-notebook
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: warn
+          include-hidden-files: true
+
   nompi4py:
     name: no mpi4py
     runs-on: ubuntu-latest
@@ -1451,6 +1489,7 @@ jobs:
     name: Coverage Report
     runs-on: ubuntu-latest
     needs:
+      - power_cep_notebook
       - nompi4py
       - regression
       - runall_persistent_part1

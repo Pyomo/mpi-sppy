@@ -1,0 +1,78 @@
+# Runs the farmer commands from doc/src/quick_start.rst on native Windows,
+# installed the way that page says to (MS-MPI runtime, conda-forge mpi4py,
+# PowerShell).  mpi-sppy-one-sided-test is left out: it cannot pass under
+# MS-MPI (issue #869).  Kept small so it can run on every PR; the full
+# Windows suite is in test_windows.yml and runs weekly.
+name: Windows quickstart
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: pwsh
+    working-directory: examples/farmer
+
+permissions:
+  contents: read
+
+jobs:
+  windows-quickstart:
+    name: Windows quickstart farmer
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mpi4py/setup-mpi@v1
+        with:
+          mpi: msmpi
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: mpisppy-env
+          python-version: "3.12"
+
+      # Each command below is its own step: pwsh does not stop a script
+      # when a native command in the middle of it fails.  The farmer steps
+      # run even when an earlier one failed, so one run reports them all.
+      - name: Install mpi4py from conda-forge
+        working-directory: .
+        run: conda install -y -c conda-forge mpi4py msmpi
+
+      - name: Check that mpi4py uses MS-MPI
+        working-directory: .
+        run: python -c "from mpi4py import MPI; v = MPI.Get_library_version(); print(v); assert 'Microsoft MPI' in v"
+
+      - name: Install mpi-sppy
+        working-directory: .
+        run: pip install -e ".[mpi]"
+
+      - name: Install gurobi
+        working-directory: .
+        run: pip install gurobipy
+
+      - name: Verify step 1 (the command-line driver works)
+        run: mpi-sppy-generic-cylinders --module-name farmer --help
+
+      - name: Verify step 2 (EF)
+        if: ${{ !cancelled() }}
+        run: mpi-sppy-generic-cylinders --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi
+
+      - name: Verify step 3 (PH)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: mpiexec -n 3 mpi-sppy-generic-cylinders --module-name farmer --num-scens 3 --solver-name gurobi --max-iterations 5 --default-rho 1 --lagrangian --xhatshuffle
+
+      - name: Running the Farmer Example (PH with spokes)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: mpiexec -np 3 mpi-sppy-generic-cylinders --module-name farmer --num-scens 3 --solver-name gurobi_persistent --max-iterations 10 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01
