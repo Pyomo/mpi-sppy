@@ -82,7 +82,7 @@ class Facts:
     # the minus tier (nothing is instantiated, so the class cannot be determined).
     model_degree: str | None = None
     multistage: bool = False
-    branching_factors: list | None = None  # for the equivalent command line
+    branching_factors: list | None = None  # equivalent command line + bundle sizing
     user_solver_name: str | None = None    # name the user gave (if any)
     num_cores: int | None = None     # best effort; may be None
     memory_gb: float | None = None   # best effort; may be None
@@ -416,7 +416,13 @@ def _spb_multiple_of(facts: Facts) -> int:
         return 1
     beyond2size = 1
     for b in bf[1:]:
-        beyond2size *= int(b)
+        b = int(b)
+        if b <= 0:
+            # Degenerate branching factors (a run with those cannot build a
+            # scenario tree anyway); 1 keeps the sizer's `spb % multiple_of`
+            # from dividing by zero and leaves the size unconstrained.
+            return 1
+        beyond2size *= b
     return beyond2size
 
 
@@ -431,9 +437,9 @@ def _pick_spb_by_effort(num_scens: int, min_bundles: int, facts: Facts,
 
     `multiple_of` is the multistage granularity from `_spb_multiple_of`: a size
     that is not a multiple of it would abort the run in `set_bunBFs`, so such
-    sizes are not candidates. (Dividing num_scens then also makes the leading
-    bundle branching factor come out whole, since prod(BFs[1:]) divides
-    num_scens.)"""
+    sizes are not candidates. That test is also what makes the leading bundle
+    branching factor (`spb // multiple_of`) come out whole; dividing num_scens
+    additionally makes the bundle count whole."""
     e1 = _effort(1, facts, scaling)
     best = None
     for spb in range(2, num_scens + 1):           # spb==1 is "no bundling"

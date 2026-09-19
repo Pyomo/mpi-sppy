@@ -284,8 +284,14 @@ unportable in raw variable counts (the same count is trivial for one model,
 intractable for another). The design makes bundle size a **derived** quantity:
 pick the **largest** `scenarios_per_bundle` (`spb`) that (a) divides
 `num_scens`, (b) leaves at least `B_min = max(intra_ranks,
-min_bundles_per_intra_rank · intra_ranks)` bundles, and (c) keeps a bundle's
-**modeled solve effort** within a budget.
+min_bundles_per_intra_rank · intra_ranks)` bundles, (c) keeps a bundle's
+**modeled solve effort** within a budget, and (d) for a multistage run, is a
+multiple of `prod(branching_factors[1:])`.
+
+Clause (d) is the library's rule, not a preference: `ProperBundler.set_bunBFs`
+raises "Bundles must consume the same number of entire second stage nodes"
+unless a bundle holds whole second-stage nodes, so a size that only satisfies
+(a)-(c) aborts the run at startup.
 
 **Shared effort shape (`effort_scaling`).** One policy block models how solve
 effort grows with sub-problem size, from the probe profile (`vars_cont`,

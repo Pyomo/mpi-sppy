@@ -141,9 +141,14 @@ class TestPolicyIsPackaged(unittest.TestCase):
             )
             # the module really came from the unpacked wheel, not the checkout
             marker = "OOTB_POLICY_KEYS="
-            line = next(ln for ln in proc.stdout.splitlines()
-                        if ln.startswith(marker))
-            keys = json.loads(line[len(marker):])
+            lines = [ln for ln in proc.stdout.splitlines()
+                     if ln.startswith(marker)]
+            self.assertEqual(
+                len(lines), 1,
+                f"expected one {marker} line, got {len(lines)}; stdout was:\n"
+                f"{proc.stdout[-3000:]}",
+            )
+            keys = json.loads(lines[0][len(marker):])
             for expected in ("bundle_sizing", "effort_scaling"):
                 self.assertIn(expected, keys)
 

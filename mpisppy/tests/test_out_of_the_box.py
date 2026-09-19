@@ -343,14 +343,60 @@ class TestMultistageBundleSizing(unittest.TestCase):
         self.assertEqual(ootb._spb_multiple_of(self._facts(None, 72)), 1)
 
     def test_sizer_only_offers_whole_node_multiples(self):
+        """A budget under which the ONLY affordable sizes are illegal ones.
+
+        With a generous budget the sizer returns 72, which is a multiple of 18
+        anyway -- that assertion passes with the constraint deleted and proves
+        nothing. At 10x, the legal sizes (18, 36, 72) are all too expensive, so
+        the unconstrained sizer would return an illegal 9 and the constrained
+        one must decline.
+        """
         facts = self._facts([4, 3, 3, 2], 72)
         scaling = self.policy["effort_scaling"]
-        # a hardness budget generous enough that the effort test excludes nothing
-        spb = ootb._pick_spb_by_effort(72, 1, facts, scaling, 1e9,
-                                       multiple_of=18)
-        self.assertIsNotNone(spb)
-        self.assertEqual(spb % 18, 0)
-        self.assertEqual(72 % spb, 0)
+        self.assertIsNone(
+            ootb._pick_spb_by_effort(72, 1, facts, scaling, 10.0,
+                                     multiple_of=18))
+        # unconstrained, the same call picks a size set_bunBFs would reject
+        illegal = ootb._pick_spb_by_effort(72, 1, facts, scaling, 10.0,
+                                           multiple_of=1)
+        self.assertIsNotNone(illegal)
+        self.assertNotEqual(illegal % 18, 0)
+
+    def test_degenerate_branching_factor_does_not_divide_by_zero(self):
+        facts = self._facts([10, 0], 120)
+        self.assertEqual(ootb._spb_multiple_of(facts), 1)
+        # recommend() must not raise either (num_scens beats the bad bf)
+        ootb.recommend(facts, self.policy)
+
+    def test_recommend_never_emits_an_illegal_bundle_size(self):
+        """Guards the shipped behavior, not just the helper.
+
+        The sizing tests below call _pick_spb_by_effort directly and pass
+        multiple_of themselves, so they stay green even if recommend() stops
+        passing it -- deleting `multiple_of=mult` at the call site left the
+        whole suite passing. This exercises recommend() with the shipped
+        policy: wired it emits no bundle size here, unwired it emits 2, which
+        set_bunBFs rejects (2 % 18 != 0).
+        """
+        from mpisppy.utils.proper_bundler import ProperBundler
+        bf = [4, 3, 3, 2]
+        facts = ootb.Facts(
+            "m", 6, {"gurobi"}, 72, effort="base", vars_int=200, vars_cont=500,
+            nonants_int=50, nonants_total=100, model_degree="linear",
+            multistage=True, branching_factors=bf,
+            user_flags={"--lagrangian"},        # force decomposition
+        )
+        d = ootb.recommend(facts, self.policy)
+        self.assertFalse(d.run_ef)
+        emitted = [a.value for a in d.args
+                   if a.flag == "--scenarios-per-bundle"]
+        for spb in emitted:                     # whatever it chose must be usable
+            cfg = config.Config()
+            cfg.add_branching_factors()
+            cfg.proper_bundle_config()
+            cfg.branching_factors = bf
+            cfg.scenarios_per_bundle = int(spb)
+            ProperBundler.set_bunBFs(ProperBundler.__new__(ProperBundler), cfg)
 
     def test_chosen_size_survives_set_bunBFs(self):
         """The end-to-end property: whatever OOTB picks, the run can use it."""
