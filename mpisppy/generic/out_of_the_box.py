@@ -88,6 +88,10 @@ class Facts:
     memory_gb: float | None = None   # best effort; may be None
     under_slurm: bool = False
     user_flags: set[str] = field(default_factory=set)  # CLI flags the user set
+    # (flag, value-or-None) for each flag the user set, minus the OOTB flags
+    # themselves and the anchors command_line() already emits. Echoed in the
+    # equivalent command line so it reproduces the run.
+    user_args: list = field(default_factory=list)
 
 
 @dataclass
@@ -113,10 +117,12 @@ class Decision:
     def command_line(self, facts: "Facts") -> str:
         """The explicit command the OOTB choices are equivalent to (req. 4).
 
-        Anchored with the module and scenario specification so it is runnable
-        without --out-of-the-box; the OOTB-added flags follow. (Options the user
-        set explicitly are not repeated here -- they were already on the user's
-        command line and OOTB left them untouched.)
+        Anchored with the module and scenario specification, then the flags the
+        user set, then the ones OOTB added, so the line RUNS and reproduces the
+        run without --out-of-the-box. The user's flags have to be echoed: they
+        were part of the configuration, and leaving them out produced a line
+        that silently dropped the solver and any requested spoke, which is what
+        the docs tell people to paste.
         """
         parts = [
             f"mpiexec -np {facts.num_ranks} python -m mpi4py -m "
@@ -128,6 +134,8 @@ class Decision:
                          + " ".join(str(b) for b in facts.branching_factors))
         else:
             parts.append(f"--num-scens {facts.num_scens}")
+        for flag, value in facts.user_args:
+            parts.append(flag if value is None else f"{flag} {value}")
         for a in self.args:
             parts.append(a.flag if a.value is None else f"{a.flag} {a.value}")
         return " ".join(parts)
@@ -138,15 +146,33 @@ class Decision:
 # must NOT substitute the EF, even for a small problem (requirement 0). This is
 # the generic_cylinders vocabulary -- a fact, not a focus preference -- so it
 # lives in code, and the validator checks it against the actual CLI flags.
-DECOMPOSITION_FLAGS = frozenset({
-    # wired spokes
+SPOKE_FLAGS = frozenset({
     "--lagrangian", "--fwph", "--ph-dual", "--ph-xfeas-spoke", "--relaxed-ph",
     "--subgradient", "--reduced-costs", "--xhatshuffle", "--xhatxbar",
     "--xhatlshaped",
-    # non-default hubs
+})
+# A hub flag selects WHICH hub runs; it does not add a cylinder.
+HUB_FLAGS = frozenset({
     "--APH", "--subgradient-hub", "--fwph-hub", "--ph-primal-hub",
     "--lshaped-hub", "--cg-hub", "--dualcg-hub",
 })
+DECOMPOSITION_FLAGS = SPOKE_FLAGS | HUB_FLAGS
+
+
+# Options that read the incumbent (Field.BEST_XHAT). With no inner-bound spoke
+# in the roster nothing publishes one and the run dies in do_decomp with
+# KeyError: <Field.BEST_XHAT>, so OOTB must not add these to such a roster.
+# Verified per flag: --sensi-rho and --sep-rho do NOT need one.
+NEEDS_INNER_BOUND = frozenset({
+    "--grad-rho", "--dynamic-rho-primal-crit", "--dynamic-rho-dual-crit",
+})
+
+
+def _requested_cylinders(user_flags) -> int:
+    """How many cylinders the user's own flags ask for: the hub plus each
+    requested spoke. Used to decide whether an explicit decomposition request
+    actually fits in the ranks available."""
+    return 1 + len(user_flags & SPOKE_FLAGS)
 
 
 # ---------------------------------------------------------------------------
@@ -208,20 +234,36 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     # size profile): the count rule.
     ef = policy["ef_fallback"]
     have_profile = facts.vars_cont is not None or facts.vars_int is not None
+    requested = facts.user_flags & DECOMPOSITION_FLAGS
+    # Ranks the user's OWN request needs. The policy's rank floor is about when
+    # OOTB would CHOOSE to decompose; it must not veto a decomposition the user
+    # asked for and that mpi-sppy can actually run (hub + one spoke on 2 ranks
+    # is a real configuration), so the request is tested against this instead.
+    need_for_request = _requested_cylinders(facts.user_flags)
     if "--EF" in facts.user_flags:
         d.run_ef, d.ef_reason = True, "user"
         d.notes.append("--EF: user requested")
+    elif requested and facts.num_ranks >= need_for_request:
+        # User explicitly asked for a decomposition and it fits, so we never
+        # substitute the EF -- even for a small problem (requirement 0).
+        forced = ", ".join(sorted(requested))
+        d.notes.append(f"EF gate skipped: user requested decomposition ({forced}) "
+                       f"and {facts.num_ranks} ranks cover the "
+                       f"{need_for_request} cylinder(s) it needs")
+    elif requested:
+        # Asked for, but genuinely does not fit. Say so rather than silently
+        # running something else.
+        d.run_ef, d.ef_reason = True, "min_ranks"
+        forced = ", ".join(sorted(requested))
+        choose("--EF", None,
+               f"user requested decomposition ({forced}) needs "
+               f"{need_for_request} ranks but only {facts.num_ranks} are "
+               f"available; running the EF instead")
     elif facts.num_ranks < ef["min_ranks_for_decomposition"]:
         d.run_ef, d.ef_reason = True, "min_ranks"
         choose("--EF", None,
                f"only {facts.num_ranks} ranks; decomposition needs "
                f">= {ef['min_ranks_for_decomposition']}")
-    elif facts.user_flags & DECOMPOSITION_FLAGS:
-        # User explicitly asked for a decomposition and has enough ranks, so we
-        # never substitute the EF -- even for a small problem (requirement 0).
-        forced = ", ".join(sorted(facts.user_flags & DECOMPOSITION_FLAGS))
-        d.notes.append(f"EF gate skipped: user requested decomposition ({forced}) "
-                       f"with >= {ef['min_ranks_for_decomposition']} ranks")
     elif have_profile:
         # base/plus: EF when the whole monolith is within the absolute EF budget.
         whole = _effort(facts.num_scens, facts, policy["effort_scaling"])
@@ -276,6 +318,24 @@ def recommend(facts: Facts, policy: dict) -> Decision:
         if cyl_if_added > max_cyl or facts.num_ranks // cyl_if_added < min_rpc:
             break
         chosen.append(r)
+
+    # Every cylinder needs at least one rank -- apportion_ranks raises
+    # otherwise -- so the roster cannot be wider than num_ranks - 1 spokes.
+    # The core roster above is taken unconditionally, so below the policy's
+    # rank floor (reachable now that an explicit request is honored there) it
+    # could ask for more cylinders than there are ranks. A spoke the user
+    # asked for is kept ahead of one OOTB chose for itself.
+    user_spokes = facts.user_flags & SPOKE_FLAGS
+    max_spokes = max(0, facts.num_ranks - 1)
+    if len(chosen) > max_spokes:
+        chosen.sort(key=lambda r: (r["flag"] not in user_spokes, r["priority"]))
+        dropped = [r["flag"] for r in chosen[max_spokes:]]
+        chosen = sorted(chosen[:max_spokes], key=lambda r: r["priority"])
+        d.notes.append(
+            f"spoke roster trimmed to {len(chosen)} for {facts.num_ranks} "
+            f"ranks (one rank minimum per cylinder); dropped "
+            + ", ".join(dropped))
+
     for r in chosen:
         choose(r["flag"], None, f"spoke ({r['bound']}, priority {r['priority']})")
     d.num_cylinders = 1 + len(chosen)
@@ -291,14 +351,35 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     default_ratio = ra["default_rank_ratio"]
     # ratios in cylinder order: hub first (always the default), then spokes.
     ratios = [default_ratio]
+    # A ratio the user set is the ratio the RUN will use, so model that one --
+    # otherwise intra_ranks (and the bundle floor it drives) is computed from a
+    # split that never happens.
+    user_ratio = dict(facts.user_args)
     for r in chosen:
+        ratio_flag = f"{r['flag']}-rank-ratio"
         spoke_ratio = ra["rank_ratios"].get(r["flag"], default_ratio)
+        if ratio_flag in facts.user_flags:
+            try:
+                spoke_ratio = float(user_ratio[ratio_flag])
+            except (KeyError, TypeError, ValueError):
+                pass                       # unparseable: keep the policy value
         ratios.append(spoke_ratio)
         if spoke_ratio != default_ratio:
-            choose(f"{r['flag']}-rank-ratio", _fmt_ratio(spoke_ratio),
+            choose(ratio_flag, _fmt_ratio(spoke_ratio),
                    f"flex-ranks: cheaper cylinder gets a {spoke_ratio} share "
                    f"(crude cold-start)")
-    d.intra_ranks, d.rank_split = _rank_layout(facts.num_ranks, ratios, chosen)
+    d.intra_ranks, d.rank_split, divisible = _rank_layout(
+        facts.num_ranks, ratios, chosen)
+    if not divisible:
+        # The equal-rank path in WheelSpinner refuses a rank count that is not
+        # a multiple of the cylinder count, so say it here instead of letting
+        # the run abort in _make_comms.
+        d.notes.append(
+            f"WARNING: {facts.num_ranks} ranks is not a multiple of "
+            f"{d.num_cylinders} cylinders; mpi-sppy requires a multiple when "
+            f"every cylinder has the same rank ratio. Use "
+            f"{d.num_cylinders * (facts.num_ranks // d.num_cylinders)} ranks "
+            f"(or a multiple of {d.num_cylinders}).")
     d.notes.append("rank split (flex-ranks, crude cold-start): "
                    + ", ".join(f"{k}={v}" for k, v in d.rank_split.items()))
 
@@ -334,18 +415,29 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     # Per-concern override: OOTB backs off a whole concern (e.g. its rho setter)
     # if the user set ANY equivalent flag, not just the identical one -- mpi-sppy
     # allows only one rho setter, so stacking would be a hard error.
+    have_inner = any(r["bound"] == "inner" for r in chosen)
+
+    def _skip_for_no_inner(flag):
+        """True if `flag` reads the incumbent but no spoke will publish one."""
+        if have_inner or flag not in NEEDS_INNER_BOUND:
+            return False
+        d.notes.append(
+            f"{flag}: skipped -- it reads the incumbent, and this roster has "
+            f"no inner-bound spoke to publish one")
+        return True
+
     for name, cat in policy.get("option_categories", {}).items():
         if name.startswith("_"):
             continue
         if any(f in facts.user_flags for f in cat.get("superseded_by", [cat["flag"]])):
             d.notes.append(f"{name}: superseded by a user option; OOTB defers")
-        else:
+        elif not _skip_for_no_inner(cat["flag"]):
             choose(cat["flag"], cat.get("value"), f"policy option ({name})")
     # catch-all: per-flag override (superseded_by defaults to the flag itself)
     for opt in policy.get("additional_options", {}).get("options", []):
         if any(f in facts.user_flags for f in opt.get("superseded_by", [opt["flag"]])):
             d.notes.append(f"{opt['flag']}: superseded by a user option; OOTB defers")
-        else:
+        elif not _skip_for_no_inner(opt["flag"]):
             choose(opt["flag"], opt.get("value"), "policy additional option")
 
     return d
@@ -457,21 +549,27 @@ def _pick_spb_by_effort(num_scens: int, min_bundles: int, facts: Facts,
 def _rank_layout(total: int, ratios: list, chosen: list) -> tuple:
     """Return (intra_ranks, rank_split) for the chosen cylinders.
 
-    `ratios` is hub-first, matching `[hub] + chosen`. When every ratio equals
-    the first (uniform), WheelSpinner uses the equal-rank split
-    (total // n_cyl per cylinder); otherwise it apportions by ratio
-    (largest-remainder, floor of one) -- we mirror that so the bundling
-    `#bundles >= intra_ranks` floor matches what actually runs. intra_ranks is
-    the widest cylinder's rank count (it governs the bundle floor)."""
+    `ratios` is hub-first, matching `[hub] + chosen`. We mirror what
+    WheelSpinner actually branches on (`spin_the_wheel.py`): it apportions by
+    ratio when ANY ratio differs from 1.0, and otherwise takes the equal split.
+    Testing "all ratios equal" instead would model an equal split for a policy
+    whose ratios are uniform but not 1.0, while the run apportioned.
+
+    The equal-split path is the one `_make_comms` guards with "Need a multiple
+    of N processes", so that case is reported here rather than surfacing as a
+    startup abort. intra_ranks is the widest cylinder's rank count (it governs
+    the bundle floor)."""
     names = ["(hub)"] + [r["flag"] for r in chosen]
-    if all(x == ratios[0] for x in ratios):
-        per = max(1, total // len(ratios))
-        split = {nm: per for nm in names}
-    else:
+    if any(r != 1.0 for r in ratios):
         from mpisppy.utils.rank_apportionment import apportion_ranks
         counts = apportion_ranks(ratios, total)
         split = dict(zip(names, counts))
-    return max(split.values()), split
+        divisible = True
+    else:
+        per = max(1, total // len(ratios))
+        split = {nm: per for nm in names}
+        divisible = total % len(ratios) == 0
+    return max(split.values()), split, divisible
 
 
 # ---------------------------------------------------------------------------
@@ -510,12 +608,26 @@ def _sg_no_class_solver(d, facts, policy, outcome):
 
 
 def _sg_no_persistent_solver(d, facts, policy, outcome):
+    """Suggest the persistent interface only when one actually exists.
+
+    Testing just `not s.endswith("_persistent")` told cbc/glpk/ipopt/highs
+    users to switch to e.g. "cbc_persistent", which is not a Pyomo solver --
+    a dead end. A persistent interface exists when the policy's master
+    preference order names one, which is what the run could actually use.
+    """
     s = d.chosen_solver
-    if not d.run_ef and s is not None and not s.endswith("_persistent"):
-        return (f"Chosen solver '{s}' has no persistent interface available; "
-                f"'{s}_persistent' would warm-start subproblems and is usually "
-                f"much faster for PH.")
-    return None
+    if d.run_ef or s is None or s.endswith("_persistent"):
+        return None
+    persistent = f"{s}_persistent"
+    if persistent not in policy["solver"]["preference_order"]:
+        return None
+    if persistent in facts.available_solvers:
+        return (f"Chosen solver '{s}' is installed in its persistent form too; "
+                f"naming '{persistent}' instead would warm-start subproblems "
+                f"and is usually much faster for PH.")
+    return (f"Chosen solver '{s}' has no persistent interface available; "
+            f"installing '{persistent}' would warm-start subproblems and is "
+            f"usually much faster for PH.")
 
 
 def _sg_linearized_prox(d, facts, policy, outcome):
@@ -659,19 +771,48 @@ def _inspect_ranks(cfg) -> int:
     comes from the real, possibly small, session.)"""
     io = cfg.get("inspect_only", None)
     if io not in (None, "", "detected"):
-        return int(io)
+        try:
+            n = int(io)
+        except (TypeError, ValueError):
+            raise RuntimeError(
+                f"--inspect-only takes an MPI rank count (e.g. --inspect-only "
+                f"512) or no value at all; got {io!r}.") from None
+        if n < 1:
+            raise RuntimeError(
+                f"--inspect-only rank count must be at least 1; got {n}.")
+        return n
     return _detect_num_ranks()
 
 
 def _detect_available_solvers(candidates) -> set:
+    """Which of the policy's candidate solvers are installed.
+
+    Asking for a solver that is not installed is normal here, but Pyomo logs a
+    WARNING and a full traceback for each missing ASL solver (bonmin, couenne,
+    ...) before raising. The `except` below swallows the exception, not the
+    logging, so the first command a new user runs printed two tracebacks ahead
+    of its own output and looked like a crash. Silence those loggers for the
+    duration of the probe only.
+    """
+    import logging
     import pyomo.environ as pyo
+
+    quieted = [logging.getLogger(n)
+               for n in ("pyomo.opt", "pyomo.solvers", "pyomo.common")]
+    previous = [lg.level for lg in quieted]
     found = set()
-    for name in candidates:
-        try:
-            if pyo.SolverFactory(name).available(exception_flag=False):
-                found.add(name)
-        except Exception:
-            pass
+    try:
+        for lg in quieted:
+            lg.setLevel(logging.CRITICAL)
+        for name in candidates:
+            try:
+                if pyo.SolverFactory(name).available(exception_flag=False):
+                    found.add(name)
+            except Exception:
+                pass
+    finally:
+        for lg, lvl in zip(quieted, previous):
+            lg.setLevel(lvl)
     return found
 
 
@@ -686,16 +827,71 @@ def _detect_num_scens(module, cfg) -> int:
     return len(module.scenario_names_creator(None))
 
 
-def _user_flags() -> set:
-    """The set of long CLI flags the user actually typed (--flag, stripped of
-    any =value). This is how requirement 0 is honored: recommend() defers to any
-    flag in here. Parsing argv (rather than the post-parse cfg) is what lets us
-    tell a user-set value apart from a default -- argparse fills defaults for
-    everything, so the cfg alone cannot say what the user chose."""
+def _cfg_key_to_flag(key: str) -> str:
+    """cfg key -> the CLI flag that sets it ("solver_name" -> "--solver-name")."""
+    return "--" + key.replace("_", "-")
+
+
+# Set by the user but NOT echoed in the equivalent command line: the OOTB flags
+# themselves (the line is what to run instead of them) and the anchors
+# command_line() already emits.
+_NOT_ECHOED = frozenset(EFFORT_FLAGS) | {
+    "inspect_only", "module_name", "num_scens", "branching_factors",
+}
+
+
+def _user_args(cfg) -> list:
+    """(flag, value) pairs for what the user set, formatted for a command line.
+
+    A bool that is True becomes a bare flag; a list (e.g. branching factors)
+    is space-joined. A False bool is dropped -- it is the default, and there
+    is no --no-<flag> spelling to emit.
+    """
+    out = []
+    for val in cfg.user_values():
+        try:
+            key = val.name()
+        except Exception:
+            continue
+        if key in _NOT_ECHOED:
+            continue
+        v = cfg.get(key)
+        if isinstance(v, bool):
+            if v:
+                out.append((_cfg_key_to_flag(key), None))
+        elif isinstance(v, (list, tuple)):
+            out.append((_cfg_key_to_flag(key),
+                        " ".join(str(x) for x in v)))
+        elif v is not None:
+            out.append((_cfg_key_to_flag(key), str(v)))
+    return sorted(out)
+
+
+def _user_flags(cfg=None) -> set:
+    """The set of long CLI flags the user actually set.
+
+    This is how requirement 0 is honored: recommend() defers to any flag in
+    here. It comes from Pyomo's own record of which ConfigValues were assigned
+    (``cfg.user_values()``) rather than from scanning ``sys.argv``, because
+    argparse accepts unambiguous abbreviations: ``--solver-nam cbc`` sets
+    solver_name, but an argv scan yields the token "--solver-nam", which
+    matches no flag OOTB knows, so OOTB would decide the user had not chosen a
+    solver and overwrite it. user_values() reports ``solver_name`` either way,
+    and also covers ``--flag=value`` and values that did not come from the
+    command line at all.
+
+    `cfg` is optional only so the argv fallback keeps working for callers that
+    have no Config (hand-built Facts in tests); prefer passing it.
+    """
+    if cfg is None:
+        return {tok.split("=", 1)[0]
+                for tok in sys.argv[1:] if tok.startswith("--")}
     flags = set()
-    for tok in sys.argv[1:]:
-        if tok.startswith("--"):
-            flags.add(tok.split("=", 1)[0])
+    for val in cfg.user_values():
+        try:
+            flags.add(_cfg_key_to_flag(val.name()))
+        except Exception:
+            continue
     return flags
 
 
@@ -786,7 +982,8 @@ def gather_facts(module, cfg, effort: str, policy: dict) -> Facts:
         user_solver_name=cfg.get("solver_name") or cfg.get("EF_solver_name"),
         num_cores=os.cpu_count(),
         under_slurm=("SLURM_JOB_ID" in os.environ),
-        user_flags=_user_flags(),
+        user_flags=_user_flags(cfg),
+        user_args=_user_args(cfg),
     )
     if effort in ("base", "plus"):
         # one probe scenario (discarded) feeds the size-aware decisions; the
@@ -821,6 +1018,14 @@ def apply_decision(decision: Decision, cfg) -> None:
     if decision.run_ef and cfg.get("EF_solver_name") is None \
             and cfg.get("solver_name") is not None:
         cfg["EF_solver_name"] = cfg["solver_name"]
+
+    # parse_args() ran cfg.checker() BEFORE OOTB existed, so every combination
+    # added above is unvalidated. Config.checker rejects pairs OOTB can build
+    # -- e.g. a user's --coeff-rho with OOTB's --dynamic-rho-primal-crit, which
+    # checker counts as "dynamic rho without an automated rho setter" -- and
+    # those were slipping through to a silently inert flag or a later failure.
+    # Re-check the configuration OOTB actually produced.
+    cfg.checker()
 
 
 @dataclass

@@ -419,5 +419,136 @@ class TestMultistageBundleSizing(unittest.TestCase):
             ProperBundler.set_bunBFs(ProperBundler.__new__(ProperBundler), cfg)
 
 
+class TestUserOptionsWin(unittest.TestCase):
+    """What the user set, and how the equivalent command line reports it."""
+
+    def setUp(self):
+        self.policy = ootb.load_policy()
+        self._argv = sys.argv
+
+    def tearDown(self):
+        sys.argv = self._argv
+
+    def test_abbreviated_flag_counts_as_user_set(self):
+        """argparse accepts unambiguous prefixes; an argv scan does not.
+
+        --solver-nam sets solver_name, but scanning argv yields the token
+        "--solver-nam", which matches no flag OOTB knows, so OOTB decided the
+        user had chosen no solver and overwrote it.
+        """
+        cfg, _ = _farmer_cfg(solver_name="cbc")
+        sys.argv = ["prog", "--module-name", "farmer", "--solver-nam", "cbc"]
+        self.assertIn("--solver-name", ootb._user_flags(cfg))
+        # the argv fallback is what got this wrong
+        self.assertNotIn("--solver-name", ootb._user_flags(None))
+
+    def test_command_line_echoes_user_flags(self):
+        """The printed line has to RUN; the docs tell people to paste it."""
+        cfg, _ = _farmer_cfg(solver_name="cbc", lagrangian=True)
+        args = ootb._user_args(cfg)
+        flags = dict(args)
+        self.assertEqual(flags.get("--solver-name"), "cbc")
+        self.assertIn("--lagrangian", flags)
+        # OOTB's own flags and the anchors are not echoed twice
+        for absent in ("--out-of-the-box", "--module-name", "--num-scens"):
+            self.assertNotIn(absent, flags)
+        facts = ootb.Facts("farmer", 3, {"cbc"}, 6, user_args=args)
+        line = ootb.Decision().command_line(facts)
+        self.assertIn("--solver-name cbc", line)
+        self.assertIn("--lagrangian", line)
+
+    def test_inspect_only_rank_count_is_validated(self):
+        for bad in ("foo", "0", "-4"):
+            cfg, _ = _farmer_cfg(inspect_only=bad)
+            with self.assertRaises(RuntimeError):
+                ootb._inspect_ranks(cfg)
+
+
+class TestRankFloorAndRoster(unittest.TestCase):
+    """An explicit decomposition request vs. the policy's rank floor."""
+
+    def setUp(self):
+        self.policy = ootb.load_policy()
+
+    @staticmethod
+    def _facts(num_ranks, user_flags):
+        return ootb.Facts("m", num_ranks, {"gurobi"}, 6, effort="base",
+                          vars_int=0, vars_cont=5, nonants_int=0,
+                          model_degree="linear", user_flags=set(user_flags))
+
+    def test_explicit_request_beats_the_rank_floor(self):
+        """hub + one spoke on 2 ranks is a configuration mpi-sppy runs."""
+        d = ootb.recommend(self._facts(2, {"--lagrangian"}), self.policy)
+        self.assertFalse(d.run_ef)
+        self.assertEqual(d.num_cylinders, 2)
+
+    def test_request_that_does_not_fit_says_so(self):
+        d = ootb.recommend(self._facts(1, {"--lagrangian"}), self.policy)
+        self.assertTrue(d.run_ef)
+        self.assertTrue(any("only 1 are available" in n for n in d.notes))
+
+    def test_roster_never_exceeds_available_ranks(self):
+        """Every cylinder needs a rank; apportion_ranks raises otherwise."""
+        for n in (2, 3, 4):
+            d = ootb.recommend(self._facts(n, {"--lagrangian"}), self.policy)
+            if not d.run_ef:
+                self.assertLessEqual(d.num_cylinders, n)
+
+    def test_incumbent_options_dropped_without_an_inner_spoke(self):
+        """--grad-rho and dynamic rho read BEST_XHAT; with no inner-bound
+        spoke to publish one the run dies in do_decomp."""
+        d = ootb.recommend(self._facts(2, {"--lagrangian"}), self.policy)
+        emitted = {a.flag for a in d.args}
+        self.assertFalse(emitted & ootb.NEEDS_INNER_BOUND)
+
+
+class TestRankLayoutMirrorsTheRun(unittest.TestCase):
+    """_rank_layout must model what WheelSpinner actually does."""
+
+    def test_branches_on_any_ratio_not_all_equal(self):
+        """spin_the_wheel branches on any(r != 1.0). Uniform-but-not-1.0
+        ratios apportion at run time, so modeling an equal split is wrong."""
+        # 7 ranks is the discriminating case: apportionment spends the
+        # remainder ([3, 2, 2]) while the equal split drops it ([2, 2, 2]),
+        # so intra_ranks -- and the bundle floor it drives -- differ. At 6
+        # ranks both paths give [2, 2, 2] and the test proves nothing.
+        from mpisppy.utils.rank_apportionment import apportion_ranks
+        ratios = [2.0, 2.0, 2.0]
+        chosen = [{"flag": "--a"}, {"flag": "--b"}]
+        intra, split, _ = ootb._rank_layout(7, ratios, chosen)
+        self.assertEqual(sorted(split.values()),
+                         sorted(apportion_ranks(ratios, 7)))
+        self.assertEqual(intra, 3)          # the equal split would say 2
+        self.assertEqual(sum(split.values()), 7)
+
+    def test_reports_indivisible_equal_split(self):
+        """_make_comms raises "Need a multiple of N processes"."""
+        _, _, divisible = ootb._rank_layout(5, [1.0, 1.0, 1.0],
+                                            [{"flag": "--a"}, {"flag": "--b"}])
+        self.assertFalse(divisible)
+        _, _, divisible = ootb._rank_layout(6, [1.0, 1.0, 1.0],
+                                            [{"flag": "--a"}, {"flag": "--b"}])
+        self.assertTrue(divisible)
+
+
+class TestPersistentSolverSuggestion(unittest.TestCase):
+    def setUp(self):
+        self.policy = ootb.load_policy()
+
+    def _msg(self, solver, available=()):
+        d = ootb.Decision(run_ef=False, chosen_solver=solver)
+        facts = ootb.Facts("m", 6, set(available), 6)
+        return ootb._sg_no_persistent_solver(d, facts, self.policy, None)
+
+    def test_no_dead_end_advice(self):
+        """cbc_persistent/glpk_persistent are not Pyomo solvers."""
+        for solver in ("cbc", "glpk", "ipopt", "highs", "appsi_highs"):
+            self.assertIsNone(self._msg(solver), f"bad advice for {solver}")
+
+    def test_suggests_a_real_persistent_interface(self):
+        self.assertIn("gurobi_persistent", self._msg("gurobi"))
+        self.assertIsNone(self._msg("gurobi_persistent"))
+
+
 if __name__ == "__main__":
     unittest.main()

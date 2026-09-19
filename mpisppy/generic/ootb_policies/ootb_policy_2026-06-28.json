@@ -222,9 +222,11 @@
       "value": null,
       "superseded_by": [
         "--dynamic-rho-primal-crit",
-        "--dynamic-rho-dual-crit"
+        "--dynamic-rho-dual-crit",
+        "--coeff-rho",
+        "--reduced-costs-rho"
       ],
-      "_note": "Boolean flag (no argument needed); its paired threshold dynamic_rho_primal_thresh defaults to 0.1. Requires an active rho setter (config errors otherwise), which OOTB's default --grad-rho provides."
+      "_note": "Boolean flag (no argument needed); its paired threshold dynamic_rho_primal_thresh defaults to 0.1. Requires an AUTOMATED rho setter, which Config.checker counts as only --grad-rho, --sensi-rho or --sep-rho; OOTB's default --grad-rho provides one. --coeff-rho and --reduced-costs-rho are in superseded_by because they make the rho_setter category defer WITHOUT satisfying that check: OOTB would then add dynamic rho with no automated setter, which checker rejects outright."
     },
     "_cold_start_guess": [
       "base_rho",
