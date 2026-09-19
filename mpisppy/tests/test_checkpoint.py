@@ -1308,6 +1308,14 @@ class TestFilenameSanitizing(unittest.TestCase):
             checkpointing.check_filename_collisions(["scen 1", "scen_1"])
         self.assertIn("scen_1", str(ctx.exception))
 
+    def test_names_differing_only_in_case_are_refused(self):
+        """On a case-insensitive filesystem (the macOS and Windows defaults)
+        'Scenario1' and 'scenario1' are one file, so the second write would
+        replace the first."""
+        with self.assertRaises(RuntimeError) as ctx:
+            checkpointing.check_filename_collisions(["Scenario1", "scenario1"])
+        self.assertIn("case", str(ctx.exception))
+
     def test_distinct_names_pass(self):
         checkpointing.check_filename_collisions(SCENARIO_NAMES)
 
@@ -2096,6 +2104,31 @@ class TestWXBarReaderResume(unittest.TestCase):
         with mock.patch.object(wxbarutils, "set_W_from_file") as set_W:
             reader.pre_iter0()
         set_W.assert_called_once()
+
+    def _ph_stub(self, resume_from):
+        import types
+        cfg = Config()
+        from mpisppy.utils.w_utils.wxbarreader import add_options_to_config
+        add_options_to_config(cfg)
+        cfg.W_and_xbar_reader = True
+        cfg.init_W_fname = os.path.join(tempfile.gettempdir(),
+                                        "mpisppy_no_such_W0.csv")
+        cfg.init_Xbar_fname = os.path.join(tempfile.gettempdir(),
+                                           "mpisppy_no_such_xbar0.csv")
+        return types.SimpleNamespace(
+            options={"cfg": cfg, "resume_from": resume_from})
+
+    def test_a_resume_does_not_require_the_files_to_exist(self):
+        """Resubmitting the original command after the init files were
+        cleaned up must not fail in the constructor, before the skip in
+        pre_iter0 is ever reached."""
+        from mpisppy.utils.w_utils.wxbarreader import WXBarReader
+        WXBarReader(self._ph_stub(resume_from="./ckpt"))
+
+    def test_a_fresh_run_still_requires_them(self):
+        from mpisppy.utils.w_utils.wxbarreader import WXBarReader
+        with self.assertRaisesRegex(RuntimeError, "Cannot find"):
+            WXBarReader(self._ph_stub(resume_from=None))
 
 
 class TestCheckpointingWithoutAHub(unittest.TestCase):
