@@ -541,6 +541,80 @@ class TestResumeABFarmer(unittest.TestCase):
         generations = sorted(os.listdir(os.path.join(self.ckpt_dir, "hub")))
         self.assertEqual(generations, [f"gen_{self.STOP + 1:04d}"])
 
+    def _assert_failed_write_leaves_only_the_committed_generation(
+            self, fail_in):
+        """A write that fails at `fail_in` must leave nothing behind.
+
+        On a full disk an orphaned generation is what makes the retry fail
+        too, so it has to be reclaimed on the failure path, not by the sweep
+        after a successful write.
+        """
+        opt = _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir))
+        opt.ph_main()
+        hub = os.path.join(self.ckpt_dir, "hub")
+        enospc = OSError(errno.ENOSPC, "No space left on device")
+        with mock.patch.object(checkpointing, fail_in, side_effect=enospc):
+            with self.assertRaises(OSError):
+                checkpointing.write_checkpoint(opt, self.ckpt_dir,
+                                               self.STOP + 1)
+        self.assertEqual(sorted(os.listdir(hub)), [f"gen_{self.STOP:04d}"])
+        leaf, _ = checkpointing.load_checkpoint(opt, self.ckpt_dir)
+        self.assertEqual(leaf["generation"], self.STOP)
+
+        checkpointing.write_checkpoint(opt, self.ckpt_dir, self.STOP + 2)
+        self.assertEqual(sorted(os.listdir(hub)),
+                         [f"gen_{self.STOP + 2:04d}"])
+
+    def test_failure_after_the_models_leaves_no_staged_generation(self):
+        # _fsync_dir first runs right after the leaf write, while the new
+        # generation is still staged.
+        self._assert_failed_write_leaves_only_the_committed_generation(
+            "_fsync_dir")
+
+    def test_failure_before_the_manifest_flip_leaves_no_published_orphan(self):
+        # By _publish_manifest the new generation has been renamed into
+        # place, but nothing names it.
+        self._assert_failed_write_leaves_only_the_committed_generation(
+            "_publish_manifest")
+
+    def test_orphans_from_an_earlier_failure_are_reclaimed_before_staging(self):
+        """The pre-write sweep, alone: leftovers must not block the retry."""
+        opt = _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir))
+        opt.ph_main()
+        hub = os.path.join(self.ckpt_dir, "hub")
+        os.makedirs(os.path.join(hub, f"gen_{self.STOP + 1:04d}.tmp"))
+        os.makedirs(os.path.join(hub, f"gen_{self.STOP + 1:04d}"))
+        seen = []
+        real = checkpointing._stage_and_publish
+
+        def spy(*args, **kwargs):
+            seen.append(sorted(os.listdir(hub)))
+            return real(*args, **kwargs)
+
+        with mock.patch.object(checkpointing, "_stage_and_publish", spy):
+            checkpointing.write_checkpoint(opt, self.ckpt_dir, self.STOP + 2)
+        self.assertEqual(seen, [[f"gen_{self.STOP:04d}"]])
+
+    def test_failure_keeps_the_retired_copy_the_manifest_depends_on(self):
+        """After a kill between the publishing renames, the manifest's
+        generation exists only as `.retiring`; cleaning up a later failed
+        write must not delete it."""
+        opt = _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir))
+        opt.ph_main()
+        hub = os.path.join(self.ckpt_dir, "hub")
+        live = os.path.join(hub, f"gen_{self.STOP:04d}")
+        os.rename(live, f"{live}.retiring")
+        enospc = OSError(errno.ENOSPC, "No space left on device")
+        with mock.patch.object(checkpointing, "_fsync_dir",
+                               side_effect=enospc):
+            with self.assertRaises(OSError):
+                checkpointing.write_checkpoint(opt, self.ckpt_dir,
+                                               self.STOP + 1)
+        self.assertEqual(sorted(os.listdir(hub)),
+                         [f"gen_{self.STOP:04d}.retiring"])
+        leaf, _ = checkpointing.load_checkpoint(opt, self.ckpt_dir)
+        self.assertEqual(leaf["generation"], self.STOP)
+
 
 @unittest.skipIf(not solver_available,
                  "no solver is available to run the iteration bounds")

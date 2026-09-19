@@ -485,7 +485,12 @@ replaces that with the in-core resume branch (§5.1), which is itself unproven.
   uninterrupted run. That is expected, not a bug.
 - **Bounds and incumbent:** valid and best-so-far, not bit-reproducible (async,
   timing-dependent). Resume never reports a *worse* best-so-far than the
-  checkpoint.
+  checkpoint. This covers what the hub tracks (`best_bound_obj_val`,
+  `best_solution_obj_val`), not the serial xhat extensions (`XhatLooper`,
+  `XhatXbar`, `XhatClosest`, `XhatSpecific`): they evaluate the final iterate
+  in `post_everything`, after the last write, and cache the result on the
+  extension. Moving the write after them would undo §9 item 4, so a resumed
+  run evaluates its own final iterate instead, and the value can be worse.
 - **Leaf-rebuild on a deterministic LP/QP solver:** the primal trajectory (W,
   nonants, rho, xbar) *can* be bit-identical — this is what the PoC showed — but it
   is a bonus, not the target guarantee.
@@ -560,13 +565,16 @@ Consequences, all deliberate:
   which closes §9 item 4 without separate machinery.
 
 **Triggers.** The periodic and anticipated triggers below were designed against
-the terminal-checkpoint model. Writing at completed iterations subsumes most of
-what they were for — a checkpoint from a recent completed iteration always
-exists, so `--checkpoint-every-seconds` and the anticipatory
-`--checkpoint-before-seconds` have no gap left to fill, and neither is
-implemented. What remained genuinely useful was the opposite of insurance: a
-way to write **less** often, to buy back the per-iteration cost on models with
-many cheap scenarios.
+the terminal-checkpoint model. Writing at every completed iteration (K = 1)
+subsumes what they were for — a checkpoint from the last completed iteration
+always exists, so `--checkpoint-every-seconds` and the anticipatory
+`--checkpoint-before-seconds` have no gap left to fill. With K > 1 they do: the
+latest checkpoint can be up to K−1 iterations old, and a stop before the first
+multiple of K leaves none at all. Neither is implemented in this phase;
+`--checkpoint-before-seconds` is the one worth building, as that follow-up.
+What remained genuinely useful was the opposite of insurance: a way to write
+**less** often, to buy back the per-iteration cost on models with many cheap
+scenarios.
 
 `--checkpoint-every-iterations K` **is implemented** and is that control; its
 meaning inverted along the way — it is a cost control, not a safety net. Writes

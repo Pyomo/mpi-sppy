@@ -351,8 +351,38 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
     require_dill(backend)
     check_filename_collisions(opt.local_scenarios)
 
-    rank = int(opt.cylinder_rank)
     hub_dir = os.path.join(ckpt_dir, HUB_SUBDIR)
+    # A failed write can leave a staged or published-but-uncommitted
+    # generation behind. Reclaim it before staging another: on a full disk the
+    # orphan is what makes the retry fail, so the sweep after a successful
+    # write would never be reached.
+    _sweep_uncommitted_generations(ckpt_dir, hub_dir)
+    try:
+        final_dir = _stage_and_publish(opt, ckpt_dir, hub_dir, generation,
+                                       backend)
+    except Exception:
+        # The manifest still names the previous generation (or nothing), so
+        # everything else is garbage; give the disk back now rather than at
+        # the next checkpoint point.
+        _sweep_uncommitted_generations(ckpt_dir, hub_dir)
+        raise
+
+    # Sweep everything the manifest does not name, rather than only the
+    # generation the previous manifest did. A kill between any two publishing
+    # steps can leave a directory behind, and deleting just the known
+    # predecessor would let those accumulate for the life of the run.
+    _sweep_stale_generations(hub_dir, keep=int(generation))
+
+    return final_dir
+
+
+def _stage_and_publish(opt, ckpt_dir, hub_dir, generation, backend):
+    """Write this rank's files for one generation and flip the manifest to it.
+
+    Returns the published generation directory. Sweeping what this leaves
+    behind is the caller's job.
+    """
+    rank = int(opt.cylinder_rank)
     final_dir = os.path.join(hub_dir, _generation_dirname(generation))
     staging_dir = f"{final_dir}.tmp"
 
@@ -435,24 +465,44 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
         "structural_fingerprint": structural_fingerprint(opt.options),
     })
 
-    # Sweep everything the manifest does not name, rather than only the
-    # generation the previous manifest did. A kill between any two steps above
-    # can leave a directory behind, and deleting just the known predecessor
-    # would let those accumulate for the life of the run.
-    _sweep_stale_generations(hub_dir, keep=int(generation))
-
     return final_dir
 
 
+def _sweep_uncommitted_generations(ckpt_dir, hub_dir):
+    """Delete every generation directory the current manifest does not name.
+
+    With no manifest nothing is committed, so every generation directory
+    goes. A manifest that cannot be read deletes nothing: it may still name
+    the only good checkpoint.
+    """
+    try:
+        manifest = _read_manifest(ckpt_dir, missing_ok=True)
+        keep = None if manifest is None else int(manifest["generation"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return
+    _sweep_stale_generations(hub_dir, keep)
+
+
 def _sweep_stale_generations(hub_dir, keep):
-    """Delete every generation directory except the one the manifest names."""
-    keep_name = _generation_dirname(keep)
+    """Delete every generation directory except the one the manifest names.
+
+    ``keep=None`` means the manifest names none. When the named generation's
+    directory is absent, its ``.retiring`` copy is kept: that is the state a
+    kill between the two publishing renames leaves, and ``load_checkpoint``
+    reads the retired copy.
+    """
+    keep_names = set()
+    if keep is not None:
+        keep_name = _generation_dirname(keep)
+        keep_names.add(keep_name)
+        if not os.path.isdir(os.path.join(hub_dir, keep_name)):
+            keep_names.add(f"{keep_name}.retiring")
     try:
         entries = os.listdir(hub_dir)
     except OSError:
         return
     for name in entries:
-        if name == keep_name or not name.startswith("gen_"):
+        if name in keep_names or not name.startswith("gen_"):
             continue
         path = os.path.join(hub_dir, name)
         if os.path.isdir(path):
