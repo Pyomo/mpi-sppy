@@ -42,6 +42,44 @@ jobs:
         with:
           version: "0.15.21"
 
+  power_cep_notebook:
+    name: Power CEP notebook
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    timeout-minutes: 10
+    env:
+      COVERAGE_FILE: ${{ github.workspace }}/.coverage
+      COVERAGE_PROCESS_START: ${{ github.workspace }}/examples/power_cep/.coveragerc
+      OMPI_MCA_rmaps_base_oversubscribe: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+      - name: Install dependencies
+        run: |
+          conda install mpi4py setuptools
+          pip install -e . highspy scipy matplotlib pandas nbconvert ipykernel coverage
+          python -c "import pathlib, site; pathlib.Path(site.getsitepackages()[0], 'coverage_startup.pth').write_text('import coverage; coverage.process_startup()\\n')"
+      - name: Execute notebook
+        working-directory: examples/power_cep
+        run: |
+          jupyter nbconvert \
+            --execute power_cep_tutorial.ipynb \
+            --to notebook \
+            --output power_cep_tutorial.executed.ipynb \
+            --output-dir /tmp \
+            --ExecutePreprocessor.timeout=300
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-power-cep-notebook
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: warn
+          include-hidden-files: true
+
   nompi4py:
     name: no mpi4py
     runs-on: ubuntu-latest
@@ -90,7 +128,7 @@ jobs:
 
           # pyomo + pybind11 explicit: the build-extensions step below runs
           # before the editable install; solvers are in no extra (licensing)
-          pip install pyomo pybind11 cplex gurobipy xpress
+          pip install pyomo pybind11 cplex gurobipy xpress highspy
 
       - name: Build pyomo extensions
         run: |
@@ -109,6 +147,10 @@ jobs:
       - name: Test maximization
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_maximization.py -v
+
+      - name: Test solver log dir
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_solver_log_dir.py -v
 
       - name: Test CVaR
         run: |
@@ -163,6 +205,22 @@ jobs:
       - name: Test W-oscillation detection
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_w_oscillation.py -v
+
+      - name: Test out-of-the-box interpreter wiring
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_out_of_the_box.py -v
+
+      - name: Test out-of-the-box policy validator (layers 1 + 2)
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_ootb_validate.py -v
+
+      - name: Test out-of-the-box effort calibrator (pure fit)
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_ootb_calibrate.py -v
+
+      - name: Test out-of-the-box policy packaging
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_ootb_policy_packaged.py -v
 
       - name: Test xhat from file
         run: |
@@ -1578,6 +1636,7 @@ jobs:
     name: Coverage Report
     runs-on: ubuntu-latest
     needs:
+      - power_cep_notebook
       - nompi4py
       - regression
       - runall_persistent_part1

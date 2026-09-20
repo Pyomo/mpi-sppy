@@ -31,17 +31,30 @@ def _bundle_consensus_groups(scenario):
     behavior is to perturb the consensus direction — every per-sub-scenario
     nonant Var at that bundle position together. See issue #673.
 
-    Returns ``{(ndn, k): [list of per-sub-scenario Var objects]}``. For a
-    proper bundle the mapping is read directly from ``scenario.consensus_groups``,
-    which ``sputils.create_EF`` builds and stashes at construction time. For
-    an unbundled scenario the mapping is synthesized as singleton groups from
-    ``_mpisppy_data.nonant_indices`` so callers can use one uniform loop
-    shape regardless of bundling.
+    Returns ``{(ndn, k): [list of per-sub-scenario Var objects]}``, keyed by
+    the positions in ``scenario._mpisppy_data.nonant_indices`` so callers can
+    use one uniform loop shape regardless of bundling. For a proper bundle
+    the groups come from ``scenario.consensus_groups``, which
+    ``sputils.create_EF`` builds and stashes at construction time. For an
+    unbundled scenario the mapping is synthesized as singleton groups.
+
+    ``create_EF`` keys ``consensus_groups`` by every node it wrote NA
+    constraints for. When the sub-scenarios are themselves multistage --
+    a proper bundle of a multistage problem -- that includes the nodes
+    interior to the bundle (``ROOT_0``, ``ROOT_0_1``, ...). Those are not
+    nonants of the bundle: ``proper_bundler`` attaches only the ROOT
+    positions, so the bundle enters the rest of mpi-sppy as a two-stage
+    problem and its interior nodes are ordinary constrained Vars. Keys the
+    caller cannot look up in ``nonant_indices`` are dropped here, which is
+    also what makes the two branches below agree on their key set. See
+    issue #873.
     """
+    nonant_indices = scenario._mpisppy_data.nonant_indices
     if hasattr(scenario, "_ef_scenario_names"):
-        return scenario.consensus_groups
-    return {ndn_i: [v]
-            for ndn_i, v in scenario._mpisppy_data.nonant_indices.items()}
+        return {ndn_i: group
+                for ndn_i, group in scenario.consensus_groups.items()
+                if ndn_i in nonant_indices}
+    return {ndn_i: [v] for ndn_i, v in nonant_indices.items()}
 
 
 def nonant_sensitivies(s):

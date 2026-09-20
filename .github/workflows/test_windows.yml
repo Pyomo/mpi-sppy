@@ -1,0 +1,184 @@
+name: Windows weekly
+
+on:
+  schedule:
+    # 07:00 UTC every Monday, an hour after the UC weekly
+    - cron: "0 7 * * 1"
+  workflow_dispatch: {}
+
+defaults:
+  run:
+    shell: bash -el {0}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  windows:
+    name: Windows (serial and MS-MPI)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mpi4py/setup-mpi@v1
+        with:
+          mpi: msmpi
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+      - name: Install dependencies
+        run: |
+          # pip's mpi4py wheel for Windows is built against MS-MPI
+          pip install mpi4py cplex xpress highspy
+
+      - name: setup the program
+        run: |
+          pip install -e ".[test]"
+
+      - name: Record the MPI build and solver under test
+        run: |
+          python -c "import mpi4py; from mpi4py import MPI; print('mpi4py', mpi4py.__version__); print(MPI.Get_library_version())"
+          # the tests skip when no solver is found; fail here instead
+          python -c "from mpisppy.tests.utils import get_solver; s = get_solver(); print(s); assert s[0], 'no solver found'"
+
+      - name: Test EF/PH
+        timeout-minutes: 15
+        run: |
+          python -m pytest mpisppy/tests/test_ef_ph.py -v
+
+      - name: Test config
+        if: ${{ !cancelled() }}
+        run: |
+          python -m pytest mpisppy/tests/test_config.py -v
+
+      - name: Test sputils
+        if: ${{ !cancelled() }}
+        run: |
+          python -m pytest mpisppy/tests/test_sputils.py -v
+
+      - name: Test with cylinders (mpiexec -n 2)
+        # Runs even when a serial step failed: this is the step that tells
+        # us whether the RMA windows in spwindow.py work under MS-MPI.
+        if: ${{ !cancelled() }}
+        timeout-minutes: 15
+        run: |
+          cd mpisppy/tests
+          mpiexec -n 2 python -m mpi4py test_with_cylinders.py
+
+  windows-straight-tests:
+    name: Windows straight_tests.py
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mpi4py/setup-mpi@v1
+        with:
+          mpi: msmpi
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+      - name: Install dependencies
+        run: |
+          pip install mpi4py cplex xpress
+
+      - name: setup the program
+        run: |
+          pip install -e ".[test]"
+
+      - name: mpi tests
+        run: |
+          cd mpisppy/tests
+          python straight_tests.py
+
+  windows-runall:
+    name: Windows run_all.py ${{ matrix.solver }} (${{ matrix.part }})
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - solver: xpress_persistent
+            part: first
+          - solver: xpress_persistent
+            part: second
+          - solver: xpress_direct
+            part: first
+          - solver: xpress_direct
+            part: second
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mpi4py/setup-mpi@v1
+        with:
+          mpi: msmpi
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+      - name: Install dependencies
+        run: |
+          # pyomo + pybind11 explicit: the build-extensions step below runs
+          # before the editable install
+          pip install mpi4py pandas pyomo pybind11 cplex xpress
+
+      # APPSI's extensions are only needed by the first part (netdes --presolve)
+      - name: Set up the MSVC environment
+        if: ${{ matrix.part == 'first' }}
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build pyomo extensions
+        if: ${{ matrix.part == 'first' }}
+        env:
+          # APPSI builds through setuptools, whose own Visual Studio search
+          # did not find the runner's VS 18; use the environment set up above
+          DISTUTILS_USE_SDK: "1"
+          MSSdk: "1"
+        # not bash: its login shell puts Git's /usr/bin/link.exe ahead of
+        # MSVC's link.exe on PATH
+        shell: pwsh
+        run: |
+          # we don't need it all; just APPSI's extensions (netdes --presolve)
+          pyomo build-extensions || python -c "from pyomo.contrib.appsi.cmodel import cmodel_available; exit(0) if bool(cmodel_available) else exit(1)"
+
+      - name: setup the program
+        run: |
+          pip install -e ".[test]"
+
+      - name: Test run_all nouc (${{ matrix.part }} part)
+        run: |
+          cd examples
+          python run_all.py ${{ matrix.solver }} "" nouc --${{ matrix.part }}-part-only
+
+  report-failure:
+    name: File/update failure issue
+    runs-on: ubuntu-latest
+    needs: [windows, windows-straight-tests, windows-runall]
+    # not on the temporary push trigger, so development runs file no issues
+    if: ${{ failure() && github.event_name != 'push' }}
+    steps:
+      - name: File/update failure issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # Ensure the dedupe label exists (harmless if it already does).
+          gh label create weekly-windows-failure \
+            --color "d73a4a" \
+            --description "Weekly Windows tests failing" 2>/dev/null || true
+
+          URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          EXISTING=$(gh issue list --label weekly-windows-failure --state open \
+                       --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" \
+              --body "Weekly Windows tests failed again: $URL"
+          else
+            gh issue create \
+              --title "Weekly Windows tests failing" \
+              --label weekly-windows-failure \
+              --body "The weekly Windows workflow failed. Latest run: $URL
+
+          This issue will be updated with a comment each additional week the job fails. Close it once the underlying problem is fixed; a new issue will be opened on the next failure."
+          fi

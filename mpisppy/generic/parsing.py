@@ -157,6 +157,21 @@ def add_decomp_args(cfg):
 def parse_args(m):
     """Parse CLI args given the model module m. Returns a Config object."""
     cfg = config.Config()
+    add_driver_args(cfg, m)
+    cfg.parse_command_line(f"mpi-sppy for {cfg.module_name}")
+
+    cfg.checker()  # looks for inconsistencies
+    return cfg
+
+
+def add_driver_args(cfg, m=None):
+    """Declare every generic_cylinders option on cfg, WITHOUT parsing.
+
+    Split out of parse_args so the same authoritative set of options can be
+    obtained without a command line -- the OOTB validator uses it (with m=None)
+    to learn which CLI flags are real. When m is given, its inparser_adder runs
+    too (the model-specific options).
+    """
     cfg.proper_bundle_config()
     cfg.pickle_scenarios_config()
     cfg.pre_pickle_args()
@@ -166,7 +181,8 @@ def parse_args(m):
                       domain=str,
                       default=None,
                       argparse=True)
-    assert hasattr(m, "inparser_adder"), "The model file must have an inparser_adder function"
+    assert m is None or hasattr(m, "inparser_adder"), \
+        "The model file must have an inparser_adder function"
     cfg.add_to_config(name="solution_base_name",
                       description="The string used for a directory of ouput along with a csv and an npv file (default None, which means no soltion output)",
                       domain=str,
@@ -176,7 +192,8 @@ def parse_args(m):
                       domain=str,
                       default=None)
 
-    m.inparser_adder(cfg)
+    if m is not None:
+        m.inparser_adder(cfg)
     # many models, e.g., farmer, need num_scens_required
     #  in which case, it should go in the inparser_adder function
     # cfg.num_scens_required()
@@ -191,14 +208,10 @@ def parse_args(m):
 
     cfg.mmw_args()
     cfg.vss_args()
+    cfg.ootb_args()
 
     from mpisppy.generic.admm import admm_args
     admm_args(cfg)
-
-    cfg.parse_command_line(f"mpi-sppy for {cfg.module_name}")
-
-    cfg.checker()  # looks for inconsistencies
-    return cfg
 
 
 def name_lists(module, cfg, bundle_wrapper=None):
@@ -215,10 +228,14 @@ def name_lists(module, cfg, bundle_wrapper=None):
 
     # Note: high level code like this assumes there are branching factors for
     # multi-stage problems. For other trees, you will need lower-level code
-    if cfg.get("branching_factors") is not None:
+    # `if cfg.get(...)` and not `is not None`: --branching-factors "" parses
+    # to an empty list, and np.prod([]) is 1.0 -- a FLOAT, which then fails as
+    # a range bound inside the model ("'numpy.float64' object cannot be
+    # interpreted as an integer"). An empty list means "not multistage".
+    if cfg.get("branching_factors"):
         all_nodenames = sputils.create_nodenames_from_branching_factors(
                                     cfg.branching_factors)
-        num_scens = np.prod(cfg.branching_factors)
+        num_scens = int(np.prod(cfg.branching_factors))
         if cfg.xhatshuffle and cfg.get("stage2_ef_solver_name") is None:
             import warnings
             warnings.warn(
