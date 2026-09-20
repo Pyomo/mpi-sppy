@@ -414,27 +414,64 @@ class IpoptOuterBound(LagrangianOuterBound):
         verbose = self.opt.options['verbose']
         teeme = self.opt.options.get('tee-rank0-solves', False)
 
-        self.opt.solve_loop(
-            solver_options=self.opt._effective_solver_options(self.opt._PHIter),
-            dtiming=False,
-            gripe=True,
-            tee=teeme,
-            verbose=verbose,
-            # False so a solution that fails to LOAD is reported rather than
-            # raised. spopt hands that case back as solution_available=False,
-            # which the loop below already treats as "no bound for this
-            # scenario" and now names as a cause -- an optional source of a
-            # bound should not take the hub and every other cylinder with it.
-            #
-            # Worth being exact about the reach of this, because the name
-            # oversells it: it governs ONLY the load step. A solve that fails
-            # outright still re-raises its solver_exception from the
-            # not_good_enough_results branch, which need_solution does not
-            # gate. Narrowing that too would take a catch around solve_loop
-            # here, which is a bigger change than this flag.
-            need_solution=False,
-            warmstart=warmstart,
-        )
+        # A failed solve on a BOUNDING spoke means one thing: no bound. It must
+        # not end the run, which is why need_solution is False and why the call
+        # is wrapped.
+        #
+        # need_solution=False governs ONLY the load step: spopt hands a
+        # failed load back as solution_available=False, which the loop below
+        # treats as "no bound for this scenario" and names as a cause. It does
+        # NOT cover a solver that THROWS -- spopt's not_good_enough_results
+        # branch gripes and then re-raises solver_exception, which would take
+        # the hub and every other cylinder with it. That raise is right for the
+        # hub, which has nothing to do without a solve, so the stand-down
+        # belongs here rather than in the shared code.
+        #
+        # Catching also removes a divergence: the raising rank would skip the
+        # Ebound collective below while its peers waited in it -- the same
+        # rank-local-raise-before-a-collective shape _raise_collectively exists
+        # for. gripe=True has already printed the scenario, the solver status
+        # and the termination condition by the time we get here, so this adds
+        # the once-per-run summary rather than repeating per scenario.
+        try:
+            self.opt.solve_loop(
+                solver_options=self.opt._effective_solver_options(
+                    self.opt._PHIter),
+                dtiming=False,
+                gripe=True,
+                tee=teeme,
+                verbose=verbose,
+                need_solution=False,
+                warmstart=warmstart,
+            )
+            solve_raised = None
+        except Exception as e:                       # noqa: BLE001
+            # Nothing a subproblem solve raises is worth the run; see the
+            # module docstring on why this is deliberately not enumerated.
+            solve_raised = e
+            for s in self.opt.local_scenarios.values():
+                s._mpisppy_data.outer_bound = None
+
+        # Branch on the helper's GLOBAL answer, never on solve_raised itself:
+        # the rank-local flag would send only the raising rank down the early
+        # return, past the _warn_once_collectively calls in the loop below,
+        # and its peers would wait in one of them forever. Ebound is
+        # all-or-nothing, so one rank without a bound means no bound anyway --
+        # every rank standing down together is both safe and correct.
+        if self._warn_once_collectively(
+            "solve_raised",
+            solve_raised is not None,
+            lambda: (
+                f"ipopt_outer_bound: a subproblem solve raised "
+                f"{type(solve_raised).__name__} on rank {self.cylinder_rank} "
+                f"({solve_raised}). This spoke reports NO bound for that "
+                "iteration and keeps running; the solver's own status was "
+                "printed above. This message is printed once."
+            ),
+        ):
+            for s in self.opt.local_scenarios.values():
+                s._mpisppy_data.outer_bound = None
+            return self.opt.Ebound(verbose)
 
         if self._nonants_newly_fixed():
             for s in self.opt.local_scenarios.values():

@@ -907,6 +907,32 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
         spoke._nonants_newly_fixed = lambda: False
         return spoke
 
+    def test_a_throwing_solve_stands_down_instead_of_ending_the_run(self):
+        # spopt's not_good_enough_results branch gripes and then re-raises
+        # solver_exception. That is right for the hub, which has nothing to do
+        # without a solve, but a BOUNDING spoke losing a solve means one thing:
+        # no bound. It must not take the hub and every other cylinder with it.
+        spoke = self._spoke_over(self._scenario_with_uninitialized_var())
+
+        boom = RuntimeError("solver died")
+
+        def _raising_solve_loop(**kwargs):
+            raise boom
+
+        spoke.opt.solve_loop = _raising_solve_loop
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = spoke.lagrangian()               # must not raise
+        self.assertEqual(result, "EBOUND")
+        for s in spoke.opt.local_scenarios.values():
+            self.assertIsNone(s._mpisppy_data.outer_bound)
+        said = [str(w.message) for w in caught
+                if "subproblem solve raised" in str(w.message)]
+        self.assertEqual(len(said), 1, f"warnings were: {caught}")
+        self.assertIn("RuntimeError", said[0])
+        self.assertIn("solver died", said[0])
+        self.assertIn("NO bound", said[0])
+
     def _scenario_with_uninitialized_var(self):
         # No initialize=, so evaluating phi raises ValueError rather than
         # CertificateError. bound_relax_factor putting an iterate a hair

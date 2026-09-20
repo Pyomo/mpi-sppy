@@ -111,6 +111,15 @@ constraints. A variable still unbounded afterwards produces a warning at setup,
 and the spoke reports nothing on iterations where that variable's gradient
 component is nonzero -- it stays quiet rather than sending a wrong number.
 
+**Failed solves.** This spoke is an optional source of a bound, so losing a
+solve means one thing: no bound for that iteration. Nothing about a subproblem
+solve ends the run -- not a solution that fails to load, and not a solver that
+raises outright. The solver's own status and termination condition are printed
+for the scenario that failed, and a once-per-run warning names the rank and the
+exception. Because ``Ebound`` is all-or-nothing, one failure empties the ``N``
+column for that iteration; the run continues and the next iteration tries
+again.
+
 **Solver options.** Unlike every other spoke, this one does **not** inherit the
 global ``--solver-options``. Ipopt hard-fails on an unrecognized keyword rather
 than ignoring it, so a perfectly ordinary run (a MIP solver and its options for
