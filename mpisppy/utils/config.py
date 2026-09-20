@@ -1831,18 +1831,17 @@ class Config(pyofig.ConfigDict):
         )
         self.add_to_config(
             "out_of_the_box_plus",
-            description="Like --out-of-the-box but instantiates all scenarios "
-            "and does a brief timed solve for more information (NOT a tuning "
-            "tool). Optional policy-file path; bare flag uses the default "
-            "policy.",
+            description="Reserved: planned to instantiate all scenarios and do "
+            "a brief timed solve for more information (NOT a tuning tool). "
+            "Today it behaves exactly like --out-of-the-box. Optional "
+            "policy-file path; bare flag uses the default policy.",
             domain=str,
             default=None,
             argparse_args={"nargs": "?", "const": ""},
         )
         self.add_to_config(
             "inspect_only",
-            description="Do the inspection (and, with --out-of-the-box-plus, "
-            "the brief calibration solve), print the configuration, the "
+            description="Do the inspection, print the configuration, the "
             "equivalent command line, and config-time suggestions, then STOP "
             "before the production run. Optional value is an assumed MPI rank "
             "count for HPC planning (e.g. --inspect-only 512); bare flag uses "

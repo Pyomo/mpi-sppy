@@ -210,7 +210,7 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_out_of_the_box.py -v
 
-      - name: Test out-of-the-box policy validator (layers 1 + 2-synthetic)
+      - name: Test out-of-the-box policy validator (layers 1 + 2)
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_ootb_validate.py -v
 

@@ -47,7 +47,8 @@ problems, ``--branching-factors`` for multistage):
     python -m mpisppy.generic_cylinders --module-name farmer --num-scens 3 \
         --out-of-the-box
 
-    # 3+ ranks available; OOTB decomposes when the problem is big/hard enough
+    # 3+ ranks, but farmer is a small LP, so OOTB still solves the EF; it
+    # decomposes only when the problem is big or hard enough to pay for it
     mpiexec -np 3 python -m mpi4py -m mpisppy.generic_cylinders \
         --module-name farmer --num-scens 6 --out-of-the-box
 
@@ -77,8 +78,13 @@ What OOTB decides
 
 In order, OOTB chooses:
 
-#. **Solver.** The first installed solver in a preference order (persistent
-   commercial, then commercial, then a free QP-capable solver, then LP/MIP-only).
+#. **Solver.** The first installed solver in a preference order, chosen for the
+   model's problem class. The base tier classifies the probe scenario as LP,
+   MIP, QP, MIQP, NLP or MINLP and picks from that class's order -- so an NLP
+   model can be sent to ipopt and an integer model never is. (The minus tier
+   instantiates nothing, so it has no class and falls back to the one master
+   order: persistent commercial, then commercial, then a free QP-capable
+   solver, then LP/MIP-only.)
    An LP/MIP-only solver (cbc, glpk) automatically adds
    ``--linearize-proximal-terms`` because it cannot take the quadratic PH prox.
    If you pass ``--solver-name`` it is used as-is (and carried over to
@@ -102,8 +108,10 @@ In order, OOTB chooses:
    depends on relative subproblem solve cost.)
 #. **Proper bundling.** When there are many scenarios, OOTB forms proper bundles,
    choosing the largest ``--scenarios-per-bundle`` that divides the scenario
-   count, leaves at least as many bundles as ranks, and keeps a bundle's modeled
-   solve effort within budget.
+   count, leaves at least as many bundles as the *widest cylinder* has ranks
+   (not as many as the whole run has ranks -- each cylinder works through its
+   own bundles), and keeps a bundle's modeled solve effort within budget. For
+   a multistage problem a bundle must also cover whole second-stage nodes.
 #. **A few extra defaults**, each backed off if you addressed the same concern:
    ``--default-rho 1`` and the ``--grad-rho`` rho setter, ``--rel-gap 0.01``,
    ``--max-iterations 100``, and ``--dynamic-rho-primal-crit``.
@@ -116,7 +124,8 @@ OOTB prints the choices and the equivalent command line up front, and a
 went). For example, a serial farmer run reports::
 
     [out-of-the-box] tier 'base', policy 2026-06-28
-      - solver: gurobi_persistent (first available in preference order)
+      - model class: LP (continuous + linear)
+      - solver: gurobi_persistent (first available preferred for a LP model)
       - --EF: only 1 ranks; decomposition needs >= 3
       - --EF-solver-name gurobi_persistent: EF solver (gurobi_persistent)
     [out-of-the-box] equivalent command line:
@@ -224,10 +233,11 @@ its recommendations make sense -- and, on demand, actually run:
     # static schema + decision checks on the default policy
     python -m mpisppy.generic.ootb_validate
 
-    # also exercise the real example models (needs a solver to instantiate)
+    # also exercise the real example models (builds scenarios; no solve)
     python -m mpisppy.generic.ootb_validate --examples
 
     # also actually run the recommended configs and flag problem cases
+    # (this one does need a solver, and is never a CI gate)
     python -m mpisppy.generic.ootb_validate --run --json report.json
 
 The validator has three layers: static schema checks (every referenced flag is
