@@ -286,3 +286,11 @@ tune convergence parameters to optimality and does not search a parameter space.
 For full control, write an explicit hub/spoke command line (the rest of
 :ref:`generic_cylinders` documents every option) -- and remember that OOTB emits
 exactly such a command line for you to start from.
+
+See Also
+--------
+
+- :ref:`generic_cylinders` — every option OOTB can set, written out by hand.
+- ``doc/designs/out_of_the_box_design.md`` — the design document: why the
+  policy is a dated data file rather than code, how the effort tiers and the
+  EF gate were chosen, and what is deliberately left undone.

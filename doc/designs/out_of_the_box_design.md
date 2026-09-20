@@ -1,18 +1,22 @@
 # Out-of-the-box auto-configuration — design
 
-**Status:** PR1 is written and under review as Pyomo/mpi-sppy#779, from branch
-`outOfTheBox` on the DLWoodruff fork. The major design questions are resolved —
-decision-logic mechanism (§5), policy file + path selection (§5.1), effort tiers
-(§5.2), bundle sizing & the EF gate (§5.3), `--inspect-only` (§5.4), rank
-allocation (§5.5) — and PR1 implements all of them, together with the validator
-(§8) and the effort calibrator (§9), whose fit produced the shipped policy's
-effort numbers. Next: the **plus** tier (§5.2), which is declared and accepted
-today but behaves exactly like base.
+**Status:** PR1 shipped, as Pyomo/mpi-sppy#779. The major design questions are
+resolved — decision-logic mechanism (§5), policy file + path selection (§5.1),
+effort tiers (§5.2), bundle sizing & the EF gate (§5.3), `--inspect-only`
+(§5.4), rank allocation (§5.5) — and PR1 implements all of them, together with
+the validator (§8) and the effort calibrator (§9), whose fit produced the
+shipped policy's effort numbers.
+
+**No further phase is scheduled.** The **plus** tier (§5.2) is declared and
+accepted on the command line but behaves exactly like base; §7 lists it as PR2
+and that is a *design* for a phase nobody is working on, not work in progress.
+Treat the phases after PR1 as a record of what was considered, and expect to
+revisit the reasoning rather than resume it.
 
 Read the sections below as the design that was built, not as a plan; where one
 disagrees with the code, the code is what to trust.
 **Author:** dlw (captured with Claude Code assistance)
-**Last updated:** 2026-09-19
+**Last updated:** 2026-09-20
 
 ---
 
@@ -254,7 +258,7 @@ to the tier.
 |---|---|---|---|---|
 | minus | `--out-of-the-box-minus` | nothing | scenario count, ranks, solvers, stage structure | EF gate by **count**; solver by availability; **cannot bundle**. Integrality/size unknown, so no problem class and no bundle sizing — but prox linearization is **decided** here too, since it keys on the chosen solver, not on the model |
 | base (default) | `--out-of-the-box` | **one** probe scenario | size profile: `vars_int`, `vars_cont`, `nonants_total`, `nonants_int`, `model_degree` | EF gate **size-aware**; integrality + degree **decide** the problem class (LP/MIP/QP/MIQP/NLP/MINLP) and hence the solver (nonlinear → ipopt); linearize-prox for LP/MIP-only solvers; effort-budgeted bundle sizing (§5.3) |
-| plus (later) | `--out-of-the-box-plus` | **all** + brief solve | per-subproblem solve time, LP-relax / integrality gap | iteration/time-limit defaults, bundle sizing to amortize solve cost, "hard MIP" signals |
+| plus (not built) | `--out-of-the-box-plus` | **all** + brief solve | per-subproblem solve time, LP-relax / integrality gap | iteration/time-limit defaults, bundle sizing to amortize solve cost, "hard MIP" signals |
 
 **`plus` is still OOTB, not a tuning tool.** It makes the *same* one-shot
 decisions as base — only with a richer fact base (measured single-scenario solve
@@ -462,7 +466,8 @@ cylinder works through its own bundles.
 
 ## 7. Phased rollout
 
-Per project convention, ship as review-sized phases, each green on its own. The
+Per project convention, ship as review-sized phases, each green on its own.
+**Only PR1 was built; nothing below it is scheduled** (see Status). The
 interpreter lives at `mpisppy/generic/out_of_the_box.py`: the pure
 `recommend(facts, policy) → Decision` logic, plus the environment/model probing
 (`gather_facts`) and `apply_decision`, which were stubbed while this section was
@@ -481,7 +486,7 @@ written and are now implemented.
   no-instantiation escape hatch in one **large but cohesive** PR: interpreter +
   validator + calibrator together make the shipped policy both *runnable* and
   *assessable*.
-- **PR2 (later) — `--out-of-the-box-plus`.** Full instantiation + a brief timed
+- **PR2 (not scheduled) — `--out-of-the-box-plus`.** Full instantiation + a brief timed
   solve, a probe-time budget, and handling for "doesn't solve quickly"; feeds
   iteration/time-limit defaults and solve-cost-aware bundling.
 
