@@ -43,6 +43,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -156,7 +157,25 @@ def valid_flags() -> set:
 
 
 def _is_number(x) -> bool:
-    return isinstance(x, (int, float)) and not isinstance(x, bool)
+    """A real number that is representable as a finite float.
+
+    Policy values come from json, which accepts the bare tokens Infinity and
+    NaN as well as an arbitrarily long integer literal. None of those is a
+    usable policy number, and inf is the dangerous one: every caller pairs this
+    with a magnitude test, and `_is_number(inf) and inf > 0` was true, so a
+    policy carrying "ef_effort_budget": Infinity validated clean. The EF gate
+    then tests `whole_effort <= budget`, which is always true, and OOTB would
+    silently run the extensive form on every problem however large.
+
+    float() is converted under try rather than asking math.isfinite, which
+    RAISES OverflowError on an int too large to convert.
+    """
+    if not isinstance(x, (int, float)) or isinstance(x, bool):
+        return False
+    try:
+        return math.isfinite(float(x))
+    except (OverflowError, ValueError):
+        return False
 
 
 # ---------------------------------------------------------------------------

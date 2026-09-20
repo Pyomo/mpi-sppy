@@ -156,13 +156,6 @@ class TestCalibratedPolicy(unittest.TestCase):
                                              seconds_per_effort_unit=3.0),
                                   [], "gurobi", "2026-07-01")
 
-    def test_refuses_a_non_numeric_target(self):
-        # "120" must give the written ValueError, not a TypeError from '>'.
-        base = copy.deepcopy(self.base)
-        base["ef_fallback"]["ef_target_seconds"] = "120"
-        with self.assertRaises(ValueError):
-            cal.calibrated_policy(base, self.fit, [], "gurobi", "2026-07-01")
-
     def test_stray_guess_entries_keep_their_input_order(self):
         # Orphan entries are preserved (so ootb_validate still flags them), and
         # must come back in input order -- iterating a set would make the

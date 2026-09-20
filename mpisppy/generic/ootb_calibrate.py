@@ -75,21 +75,14 @@ def _round_sig(x: float, n: int = 6) -> float:
 
 
 def _finite_positive(x) -> bool:
-    """True iff x is a real number that converts to a finite, positive float.
+    """True iff x is a usable positive policy number.
 
-    Not `math.isfinite(x)`: that RAISES OverflowError on an int too large to
-    convert to a float (json accepts an arbitrarily long integer literal), which
-    is the bare-traceback failure these checks exist to translate. json also
-    accepts the bare tokens Infinity and NaN, so the float path has to be
-    checked too. The conversion is guarded rather than asked.
+    val._is_number already means "representable as a finite float" -- it
+    rejects the bare Infinity / NaN tokens json accepts, and an integer literal
+    too long to convert -- so this only adds the sign. Keeping one definition
+    means the producer here and the validator agree on what a number is.
     """
-    if not val._is_number(x):
-        return False
-    try:
-        f = float(x)
-    except (OverflowError, ValueError):
-        return False
-    return math.isfinite(f) and f > 0
+    return val._is_number(x) and x > 0
 
 
 def _design_columns(point: dict, exponent: float):
@@ -265,8 +258,9 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
     # scale. ootb_validate has no check on this field, so a bad one reaches us.
     raw_spe = fit["seconds_per_effort_unit"]
     if not _finite_positive(raw_spe):
-        raise ValueError("seconds_per_effort_unit must be a positive finite "
-                         f"number, got {raw_spe!r}")
+        raise ValueError("seconds_per_effort_unit must be positive and "
+                         "representable as a finite float, got "
+                         f"{raw_spe!r}")
     spe = _round_sig(raw_spe)
     es["seconds_per_effort_unit"] = spe
     es["_calibration"] = {
@@ -296,8 +290,8 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
         # would reach the division and be misdiagnosed as a bad scale, and an
         # over-long integer literal would raise OverflowError in the division.
         raise ValueError(
-            "ef_fallback.ef_target_seconds must be a positive finite number to "
-            f"derive ef_effort_budget from it; got {target!r}")
+            "ef_fallback.ef_target_seconds must be positive and representable "
+            f"as a finite float to derive ef_effort_budget from it; got {target!r}")
     quotient = target / spe
     if not math.isfinite(quotient):
         # A denormal scale survives _round_sig, and target/1e-310 overflows to
@@ -376,8 +370,9 @@ def run_calibration(base_policy_path, solver_name=None, spb_grid=DEFAULT_SPB_GRI
     target = base.get("ef_fallback", {}).get("ef_target_seconds")
     if not _finite_positive(target):
         raise ValueError(
-            "base policy needs a positive finite ef_fallback.ef_target_seconds "
-            f"to calibrate against; got {target!r}")
+            "base policy needs an ef_fallback.ef_target_seconds that is "
+            "positive and representable as a finite float; got "
+            f"{target!r}")
     solver = _pick_solver(base, solver_name)
     print(f"[calibrate] solver: {solver}")
     points = collect_points(base, solver, spb_grid, reps)

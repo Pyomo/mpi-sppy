@@ -103,6 +103,21 @@ class TestValidatorCatchesBadPolicies(unittest.TestCase):
         self.policy["bundle_sizing"]["_cold_start_guess"].append("not_a_key")
         self.assertTrue(self._fails(val.validate_static(self.policy)))
 
+    def test_infinite_budget_is_rejected(self):
+        # json accepts the bare token Infinity, and inf > 0 is true, so this
+        # used to validate clean -- while the EF gate tests `whole <= budget`,
+        # which is always true against inf, so OOTB would silently run the
+        # extensive form on every problem however large.
+        self.policy["ef_fallback"]["ef_effort_budget"] = float("inf")
+        self.assertTrue(self._fails(val.validate_static(self.policy)))
+
+    def test_nan_and_over_large_numbers_are_rejected(self):
+        for bad in (float("nan"), 10 ** 400):
+            with self.subTest(value=bad):
+                policy = copy.deepcopy(self.policy)
+                policy["ef_fallback"]["ef_effort_budget"] = bad
+                self.assertTrue(self._fails(val.validate_static(policy)))
+
     def test_rank_ratio_key_without_a_declared_ratio_option(self):
         # regression: --xhatlshaped is a real spoke flag, so the "keys are real
         # spoke flags" check passes, but recommend() sets the derived
