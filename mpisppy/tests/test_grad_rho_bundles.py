@@ -22,7 +22,9 @@ import pyomo.environ as pyo
 
 import mpisppy.MPI as MPI
 import mpisppy.utils.sputils as sputils
+from mpisppy import scenario_tree
 from mpisppy.extensions.grad_rho import GradRho
+from mpisppy.utils.nonant_sensitivities import _bundle_consensus_groups
 
 
 def _build_linear_scen(name, c_coefs, prob):
@@ -597,6 +599,114 @@ class TestBundleAndUnbundledDivergeUnderSignCancellation(unittest.TestCase):
             msg=f"sign-cancellation case expected to shrink bundle rho "
                 f"well below unbundled mean; got ratio {ratio:.3f}",
         )
+
+
+class TestMultistageBundleInteriorNodes(unittest.TestCase):
+    """A proper bundle of *multistage* scenarios. See issue #873.
+
+    create_EF writes NA constraints at every node the sub-scenarios share,
+    so for multistage sub-scenarios ``consensus_groups`` is keyed by the
+    bundle's interior nodes (ROOT_0, ...) as well as ROOT. proper_bundler
+    attaches only the ROOT positions, so those interior keys are absent
+    from the bundle's ``nonant_indices``. GradRho used to index its
+    gradient dict with every consensus-group key and raised
+    ``KeyError: ('ROOT_0', 0)`` in the first iteration.
+    """
+
+    scen_names = ["scen0", "scen1"]
+    # first-stage (ROOT) cost coefficients, per sub-scenario
+    c = [[1.0, 2.0], [4.0, 6.0]]
+    # second-stage (ROOT_0) cost coefficients, per sub-scenario
+    d = [[10.0, 20.0], [30.0, 40.0]]
+    probs = [0.5, 0.5]
+
+    def _build_multistage_scen(self, name, c_coefs, d_coefs, prob):
+        """Three-stage scenario: x at ROOT, y at ROOT_0. Bundling two of
+        these gives the shape proper_bundler builds from a multistage model
+        with branching factors, where the whole second-stage node lands
+        inside one bundle."""
+        m = pyo.ConcreteModel(name=name)
+        m.x = pyo.Var(range(len(c_coefs)), bounds=(0, None), initialize=0.0)
+        m.y = pyo.Var(range(len(d_coefs)), bounds=(0, None), initialize=0.0)
+        m.obj = pyo.Objective(
+            expr=sum(c_coefs[i] * m.x[i] for i in range(len(c_coefs)))
+               + sum(d_coefs[i] * m.y[i] for i in range(len(d_coefs)))
+        )
+        sputils.attach_root_node(m, 0, [m.x[i] for i in range(len(c_coefs))])
+        m._mpisppy_node_list.append(
+            scenario_tree.ScenarioNode(
+                "ROOT_0", 1.0, 2, 0,
+                [m.y[i] for i in range(len(d_coefs))], m,
+                parent_name="ROOT",
+            )
+        )
+        m._mpisppy_probability = prob
+        return m
+
+    def _build_bundled(self):
+        c_by_name = dict(zip(self.scen_names, self.c))
+        d_by_name = dict(zip(self.scen_names, self.d))
+        prob_by_name = dict(zip(self.scen_names, self.probs))
+
+        def _scen_creator(sname, **kwargs):
+            return self._build_multistage_scen(
+                sname, c_by_name[sname], d_by_name[sname], prob_by_name[sname]
+            )
+
+        return _build_bundle(_scen_creator, self.scen_names)
+
+    def test_interior_node_positions_are_tied_but_not_bundle_nonants(self):
+        # Guards the premise of the other two tests: if create_EF stopped
+        # tying the interior node, they would pass for the wrong reason.
+        bundle = self._build_bundled()
+        self.assertEqual(
+            [node.name for node in bundle._mpisppy_node_list], ["ROOT"],
+            msg="proper bundles enter mpi-sppy as two-stage problems",
+        )
+        raw_nodes = {ndn for (ndn, _) in bundle.consensus_groups}
+        self.assertIn(
+            "ROOT_0", raw_nodes,
+            msg="create_EF no longer ties the bundle-interior node, so this "
+                "no longer reproduces the shape of issue #873",
+        )
+
+    def test_consensus_groups_are_restricted_to_bundle_nonants(self):
+        bundle = self._build_bundled()
+        groups = _bundle_consensus_groups(bundle)
+        self.assertEqual(
+            set(groups), set(bundle._mpisppy_data.nonant_indices),
+            msg="consensus group keys must be exactly the positions callers "
+                "can look up in nonant_indices",
+        )
+        # The ROOT groups still hold one Var per sub-scenario -- restricting
+        # the keys must not also collapse the groups back to the ref Var.
+        for ndn_i, group in groups.items():
+            self.assertEqual(
+                len(group), len(self.scen_names),
+                msg=f"consensus group at {ndn_i} lost sub-scenario Vars",
+            )
+
+    def test_grad_exprs_on_multistage_bundle(self):
+        # The regression itself: this raised KeyError: ('ROOT_0', 0).
+        bundle = self._build_bundled()
+        g = _make_grad_rho({"bundle": bundle})
+        g._get_grad_exprs()
+
+        # Same algebra as the two-stage bundle case: create_EF normalizes
+        # the objective, so the gradient at (ROOT, k) is the conditional-
+        # probability-weighted sum of the sub-scenarios' coefficients. The
+        # second-stage coefficients must not leak into it.
+        bundle_prob = bundle._mpisppy_probability
+        for k in range(len(self.c[0])):
+            expected = sum(
+                (self.probs[s] / bundle_prob) * self.c[s][k]
+                for s in range(len(self.c))
+            )
+            got = pyo.value(g.grad_exprs[bundle][("ROOT", k)])
+            self.assertAlmostEqual(
+                got, expected, places=10,
+                msg=f"multistage bundle k={k}: {got=} != {expected=}",
+            )
 
 
 if __name__ == "__main__":
