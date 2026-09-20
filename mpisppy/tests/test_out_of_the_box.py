@@ -160,6 +160,38 @@ class TestCommandLineAndFlags(unittest.TestCase):
         self.assertIn("--branching-factors '3 2'", cl)
         self.assertNotIn("--num-scens", cl)
 
+    def test_empty_branching_factors_is_not_an_anchor(self):
+        # --branching-factors "" parses to [], which is not None; a bare
+        # --branching-factors token makes the printed line fail with
+        # "expected one argument".
+        cfg, module = _farmer_cfg()
+        cfg.branching_factors = []
+        facts = ootb.gather_facts(module, cfg, "minus", ootb.load_policy())
+        cl = ootb.Decision().command_line(facts)
+        self.assertNotIn("--branching-factors", cl)
+
+    def test_kw_creator_failure_is_reported_not_swallowed(self):
+        # The generic "define --num-scens" advice is wrong for a model that
+        # declares no such flag; the real cause is the model's own missing
+        # option, and it is the only message that says which.
+        class _Mod:
+            @staticmethod
+            def kw_creator(cfg):
+                raise AttributeError("'NoneType' object has no attribute 'split'")
+
+            @staticmethod
+            def scenario_names_creator(n, start=None):
+                return [f"s{i}" for i in range(start or 0, (start or 0) + n)]
+
+        cfg, _ = _farmer_cfg()
+        cfg.num_scens = None
+        with self.assertRaises(RuntimeError) as cm:
+            ootb._detect_num_scens(_Mod, cfg)
+        msg = str(cm.exception)
+        self.assertIn("AttributeError", msg)
+        self.assertIn("split", msg)
+        self.assertNotIn("--num-scens", msg)
+
     def test_ef_command_line_is_serial(self):
         # An EF is one monolithic solve; echoing mpiexec would tell the reader
         # to do the thing ExtensiveForm itself warns about ("Creating an
@@ -641,6 +673,18 @@ class TestOffLadderSpokesAreInTheRankModel(unittest.TestCase):
         # ladder spoke that also has the default.
         hub = d.rank_split["(hub)"]
         self.assertGreaterEqual(d.rank_split[off], hub if default == 1.0 else 1)
+
+    def test_user_set_ratio_is_recorded(self):
+        # "Every decision records why" covers the ones OOTB declines to make.
+        facts = ootb.Facts("farmer", 6, {"gurobi"}, 1000, effort="base",
+                           vars_int=50, vars_cont=50, nonants_total=20,
+                           nonants_int=10, model_degree="linear",
+                           user_flags={"--xhatshuffle-rank-ratio"},
+                           user_args=[("--xhatshuffle-rank-ratio", "0.5")])
+        d = ootb.recommend(facts, ootb.load_policy())
+        self.assertTrue(any("--xhatshuffle-rank-ratio" in n and "defers" in n
+                            for n in d.notes),
+                        msg="the user's rank ratio left no trace")
 
     def test_non_positive_user_ratio_is_reported_not_a_traceback(self):
         # apportion_ranks refuses a non-positive ratio and recommend() is not

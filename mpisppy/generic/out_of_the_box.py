@@ -534,6 +534,11 @@ def recommend(facts: Facts, policy: dict) -> Decision:
                         if on_ladder else default_ratio)
         if f"{flag}-rank-ratio" in facts.user_flags:
             spoke_ratio = _ratio_for(flag, policy_ratio)
+            # choose() used to log this deferral; it is no longer on that path,
+            # and "every decision records why" has to hold for the ones OOTB
+            # declines to make too.
+            d.notes.append(f"{flag}-rank-ratio: kept user's value "
+                           f"({_fmt_ratio(spoke_ratio)}); OOTB defers")
         elif on_ladder and policy_ratio != 1.0:
             choose(f"{flag}-rank-ratio", _fmt_ratio(policy_ratio),
                    f"flex-ranks: cheaper cylinder gets a {policy_ratio} share "
@@ -1037,12 +1042,18 @@ def _detect_num_scens(module, cfg) -> int:
     # kw_creator anyway, so ask for the kwargs before giving up. If it raises,
     # say so through the error below rather than here: the model may simply
     # need more than OOTB has set up yet.
+    kw_error = None
     try:
         module.kw_creator(cfg)
         if cfg.get("num_scens") is not None:
             return int(cfg.num_scens)
-    except Exception:                       # noqa: BLE001 - reported below
-        pass
+    except Exception as e:                  # noqa: BLE001 - reported below
+        # Keep it: this is usually the only message that says what is actually
+        # missing. netdes without --instance-name raises AttributeError here,
+        # and the generic advice below ("many models define --num-scens") is
+        # wrong for netdes twice over -- it declares no such flag, and its
+        # kw_creator rejects one.
+        kw_error = e
     # scenario_names_creator(None) is a convention, not a guarantee: netdes's
     # does `range(start, start + num_scens)` and raises TypeError on None. A
     # bare traceback from inside the model is a poor way to say "OOTB cannot
@@ -1050,12 +1061,20 @@ def _detect_num_scens(module, cfg) -> int:
     try:
         return len(module.scenario_names_creator(None))
     except Exception as e:                  # noqa: BLE001
+        name = cfg.get("module_name", "this model")
+        if kw_error is not None:
+            raise RuntimeError(
+                f"out-of-the-box cannot tell how many scenarios {name} has: "
+                f"asking it for its arguments raised "
+                f"{type(kw_error).__name__}: {kw_error}. That usually means "
+                "one of the model's own options is missing."
+            ) from kw_error
         raise RuntimeError(
-            f"out-of-the-box cannot tell how many scenarios "
-            f"{cfg.get('module_name', 'this model')} has. Give it a count the "
-            "model understands (many models define --num-scens; multistage "
-            "ones take --branching-factors), or have the module's "
-            "scenario_names_creator(None) return the full list of names."
+            f"out-of-the-box cannot tell how many scenarios {name} has. Give "
+            "it a count the model understands (many models define "
+            "--num-scens; multistage ones take --branching-factors), or have "
+            "the module's scenario_names_creator(None) return the full list "
+            "of names."
         ) from e
 
 
@@ -1233,13 +1252,24 @@ def gather_facts(module, cfg, effort: str, policy: dict) -> Facts:
     # USER named a count. Printing a derived --num-scens for such a model gives
     # a command line its own parser rejects, since --num-scens is declared by
     # the model and netdes declares no such flag.
-    if bf is not None:
+    if bf:
         scen_anchor = _fmt_arg("--branching-factors",
                                " ".join(str(b) for b in bf))
     elif cfg.get("num_scens") is not None:
         scen_anchor = f"--num-scens {int(cfg.num_scens)}"
     else:
+        # An empty --branching-factors "" parses to [], which is not None: a
+        # bare --branching-factors token would then make the printed line fail
+        # with "expected one argument".
         scen_anchor = None
+    # Same reason, and the general form of it: keyword arguments evaluate in
+    # source order, so _detect_num_scens below runs kw_creator -- and a model
+    # that assigns cfg options there (netdes assigns num_scens) would have them
+    # read back as USER choices. That would make choose() defer to a value
+    # nobody set, suppress OOTB's own pick, and echo it in the command line.
+    # Everything derived from cfg is captured here, before that can happen.
+    user_flags = _user_flags(cfg)
+    user_args = _user_args(cfg)
     facts = Facts(
         module_name=cfg.get("module_name", "<module>") or "<module>",
         num_ranks=_inspect_ranks(cfg),
@@ -1251,8 +1281,8 @@ def gather_facts(module, cfg, effort: str, policy: dict) -> Facts:
         user_solver_name=cfg.get("solver_name") or cfg.get("EF_solver_name"),
         num_cores=os.cpu_count(),
         under_slurm=("SLURM_JOB_ID" in os.environ),
-        user_flags=_user_flags(cfg),
-        user_args=_user_args(cfg),
+        user_flags=user_flags,
+        user_args=user_args,
         scen_anchor=scen_anchor,
     )
     if effort in ("base", "plus"):
