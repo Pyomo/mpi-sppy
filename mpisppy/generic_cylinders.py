@@ -219,7 +219,8 @@ def main():
             do_mmw(fname, cfg, wheel=wheel)
 
     # Out-of-the-box: the prioritized "Suggestions" list is printed AFTER the
-    # run so it can also reflect how the run went (req. 4).
+    # run (req. 4). The generators reason from the facts and the decision, not
+    # from how the run went -- capturing an outcome is designed but not built.
     if ootb_state is not None:  # pragma: no cover (CLI entrypoint)
         ootb.report_suggestions(ootb_state)
 

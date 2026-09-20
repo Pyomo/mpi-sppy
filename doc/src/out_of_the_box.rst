@@ -225,8 +225,11 @@ select one by passing its path. The run logs which policy and ``policy_version``
 it used.
 
 The policy holds the solver preference order, the EF budget, the spoke ladder and
-rank ratios, the bundle-effort model, and the extra-option defaults. Its numbers
-are produced by the calibration tool (below), not hand-guessed.
+rank ratios, the bundle-effort model, and the extra-option defaults. The
+``effort_scaling`` coefficients are produced by the calibration tool (below);
+the thresholds and budget magnitudes around them -- the EF target, the bundling
+thresholds, the rank ratios -- are authored, and each is flagged in its block's
+``_cold_start_guess`` list.
 
 .. _ootb_validator:
 

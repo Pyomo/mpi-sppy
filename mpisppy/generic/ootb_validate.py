@@ -201,6 +201,22 @@ def validate_static(policy: dict) -> list:
     if missing:
         return checks  # the rest assume the structure exists
 
+    # ... and the right SHAPE, not just presence. Everything below does
+    # block.get(...), so a policy with e.g. "solver": [] crashed the validator
+    # with AttributeError instead of reporting a failed check -- reporting is
+    # the whole job. spoke_ladder.rungs is a list; the rest are mappings.
+    blocks = [k for k in required
+              if k not in ("schema_version", "policy_version")]
+    mistyped = [k for k in blocks if not isinstance(policy[k], dict)]
+    add("top-level blocks are objects", not mistyped,
+        f"not objects: {mistyped}" if mistyped else "all objects")
+    if mistyped:
+        return checks
+    if not isinstance(policy["spoke_ladder"].get("rungs"), list):
+        add("spoke_ladder.rungs is a list", False,
+            f"got {type(policy['spoke_ladder'].get('rungs')).__name__}")
+        return checks
+
     # ef_fallback numbers
     ef = policy["ef_fallback"]
     add("ef_fallback.min_ranks_for_decomposition is a positive int",
@@ -217,7 +233,8 @@ def validate_static(policy: dict) -> list:
     add("solver.preference_order is a non-empty list of strings",
         isinstance(pref, list) and len(pref) > 0
         and all(isinstance(s, str) for s in pref))
-    for key in ("commercial", "qp_capable", "lp_mip_only_force_linearize_prox"):
+    for key in ("commercial", "qp_capable", "lp_mip_only_force_linearize_prox",
+                "no_miqp_force_linearize_prox"):
         val = sp.get(key, [])
         add(f"solver.{key} is a subset of preference_order",
             isinstance(val, list) and set(val) <= set(pref or []),
@@ -244,9 +261,12 @@ def validate_static(policy: dict) -> list:
     add("spoke_ladder.rungs flags are real CLI options",
         all(f in flags for f in rung_flags),
         f"unknown: {[f for f in rung_flags if f not in flags]}")
-    add("spoke_ladder.rungs flags are decomposition (spoke) flags",
-        all(f in ootb.DECOMPOSITION_FLAGS for f in rung_flags),
-        f"not spokes: {[f for f in rung_flags if f not in ootb.DECOMPOSITION_FLAGS]}")
+    # SPOKE_FLAGS, not DECOMPOSITION_FLAGS: the latter includes hub flags, so a
+    # policy listing --APH as a rung passed while recommend() counted it as a
+    # cylinder that build_spoke_list never creates.
+    add("spoke_ladder.rungs flags are spoke flags",
+        all(f in ootb.SPOKE_FLAGS for f in rung_flags),
+        f"not spokes: {[f for f in rung_flags if f not in ootb.SPOKE_FLAGS]}")
     add("spoke_ladder.rungs have unique priorities",
         len({r.get("priority") for r in rungs}) == len(rungs))
     add("spoke_ladder.rungs bounds are outer/inner",

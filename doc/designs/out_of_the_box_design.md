@@ -55,9 +55,12 @@ explanation of what was chosen and how to do better.
 5. **Transparency** (requirement 4): print (a) the **equivalent explicit
    command line** the choices imply, so the user can reproduce / learn from /
    tweak it, and (b) a short, prioritized list of **suggestions** (labelled
-   "Suggestions"), **written after the run executes** so it can also reflect
-   how the run went (e.g., a persistent solver, more ranks). The run proceeds
-   regardless.
+   "Suggestions"), **written after the run executes** (e.g., a persistent
+   solver, more ranks). The run proceeds regardless. NOTE: as built, the
+   generators reason from the facts and the decision only -- nothing captures
+   how the run actually went, and the one generator that read such an outcome
+   was removed rather than left inert. Wiring a real outcome (convergence,
+   iterations, gap) through is designed but not scheduled.
 6. **Proper bundling is central** (requirement 5): auto-forming proper bundles
    from scenario count vs. available ranks is a first-class part of the
    decision, not an afterthought.

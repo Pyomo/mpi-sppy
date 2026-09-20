@@ -84,7 +84,11 @@ class Facts:
     model_degree: str | None = None
     multistage: bool = False
     branching_factors: list | None = None  # equivalent command line + bundle sizing
-    user_solver_name: str | None = None    # name the user gave (if any)
+    user_solver_name: str | None = None    # --solver-name, if the user set it
+    # --EF-solver-name, if the user set it. Kept apart from user_solver_name:
+    # one governs the decomposition and the other the EF, and conflating them
+    # let an EF-only override choose the PH solver.
+    user_ef_solver_name: str | None = None
     num_cores: int | None = None     # best effort; may be None
     memory_gb: float | None = None   # best effort; may be None
     under_slurm: bool = False
@@ -186,8 +190,8 @@ SPOKE_BUILD_ORDER = (
 
 # A hub flag selects WHICH hub runs; it does not add a cylinder.
 HUB_FLAGS = frozenset({
-    "--APH", "--subgradient-hub", "--fwph-hub", "--ph-primal-hub",
-    "--lshaped-hub", "--cg-hub", "--dualcg-hub",
+    "--APH", "--subgradient-hub", "--fwph-hub", "--fwph-objgap-hub",
+    "--ph-primal-hub", "--lshaped-hub", "--cg-hub", "--dualcg-hub",
 })
 DECOMPOSITION_FLAGS = SPOKE_FLAGS | HUB_FLAGS
 
@@ -247,10 +251,20 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     d.problem_class = _problem_class(facts)
     if d.problem_class is not None:
         d.notes.append(f"model class: {d.problem_class} ({_class_english(facts)})")
-    if facts.user_flags & {"--solver-name", "--EF-solver-name"} and facts.user_solver_name:
+    # --solver-name governs the decomposition, --EF-solver-name the EF. They
+    # are separate options, so an EF-only override must not decide the PH
+    # solver -- it used to, via `solver_name or EF_solver_name`. It is still
+    # honored when the EF is certain (below the rank floor there is no
+    # decomposition to pick a solver for), and on the size-gated EF path
+    # apply_decision carries it through as before.
+    if "--solver-name" in facts.user_flags and facts.user_solver_name:
         d.chosen_solver = facts.user_solver_name
         d.notes.append(f"solver: kept user's value ({facts.user_solver_name}); "
                        f"OOTB defers")
+    elif facts.user_ef_solver_name and _will_run_ef_for_sure(facts, policy):
+        d.chosen_solver = facts.user_ef_solver_name
+        d.notes.append(f"solver: kept user's --EF-solver-name "
+                       f"({facts.user_ef_solver_name}); OOTB defers")
     else:
         by_class = sp.get("preference_order_by_class", {})
         if d.problem_class is not None and d.problem_class in by_class:
@@ -338,6 +352,15 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     if d.chosen_solver in sp["lp_mip_only_force_linearize_prox"]:
         choose("--linearize-proximal-terms", None,
                f"{d.chosen_solver} is LP/MIP-only; the PH prox must be linearized")
+    elif (d.chosen_solver in sp.get("no_miqp_force_linearize_prox", ())
+            and (facts.vars_int or 0) > 0):
+        # The prox makes every MIP subproblem an MIQP, and these solvers do
+        # continuous QP but not MIQP (phbase.py: "HiGHS, which cannot solve an
+        # MIQP"). Linearizing keeps them usable for an integer model; without
+        # it the run dies on the first proximal solve.
+        choose("--linearize-proximal-terms", None,
+               f"{d.chosen_solver} cannot solve an MIQP and this model has "
+               "integers; the PH prox must be linearized")
 
     # --- step 3: spoke roster -- small core, widened by ranks --------------
     # Take the minimal core (>=1 outer + >=1 inner). Add further ladder rungs
@@ -666,6 +689,12 @@ _PROBLEM_CLASS = {
 }
 
 
+def _will_run_ef_for_sure(facts, policy) -> bool:
+    """True when the EF is settled before any size reasoning: below the rank
+    floor there is no cylinder configuration to choose a solver for."""
+    return facts.num_ranks < policy["ef_fallback"]["min_ranks_for_decomposition"]
+
+
 def _problem_class(facts: Facts) -> str | None:
     """The model's problem class (LP/MIP/QP/MIQP/NLP/MINLP), or None when the
     model was not instantiated (minus tier) so integrality/degree are unknown.
@@ -845,12 +874,19 @@ def _sg_no_persistent_solver(d, facts, policy, outcome):
 
 
 def _sg_linearized_prox(d, facts, policy, outcome):
-    if not d.run_ef and \
-            d.chosen_solver in policy["solver"]["lp_mip_only_force_linearize_prox"]:
-        return (f"'{d.chosen_solver}' is LP/MIP-only, so the PH prox is being "
-                f"linearized; a QP-capable solver (gurobi/cplex/xpress, or ipopt "
-                f"for continuous models) avoids the approximation.")
-    return None
+    sp = policy["solver"]
+    if d.run_ef:
+        return None
+    if d.chosen_solver in sp["lp_mip_only_force_linearize_prox"]:
+        why = "is LP/MIP-only"
+    elif (d.chosen_solver in sp.get("no_miqp_force_linearize_prox", ())
+            and (facts.vars_int or 0) > 0):
+        why = "cannot solve an MIQP, which is what the PH prox makes of a MIP"
+    else:
+        return None
+    return (f"'{d.chosen_solver}' {why}, so the PH prox is being linearized; a "
+            "QP-capable solver (gurobi/cplex/xpress, or ipopt for continuous "
+            "models) avoids the approximation.")
 
 
 # EF reasons where decomposing WAS available and OOTB (or the user) chose the
@@ -894,16 +930,6 @@ def _sg_minus_no_bundling(d, facts, policy, outcome):
     return None
 
 
-def _sg_from_outcome(d, facts, policy, outcome):
-    # Outcome-based (post-run) computed suggestion; inert until the run captures
-    # an outcome (None in the minus/base tiers for now).
-    if outcome and outcome.get("converged") is False:
-        return (f"PH stopped at {outcome.get('iterations')} iterations with a "
-                f"{outcome.get('rel_gap', 0):.0%} gap; consider raising "
-                f"--max-iterations or adding a tighter bound spoke.")
-    return None
-
-
 # generators in priority order (lower first)
 SUGGESTION_GENERATORS = [
     _sg_request_too_big,
@@ -914,16 +940,20 @@ SUGGESTION_GENERATORS = [
     _sg_linearized_prox,
     _sg_more_ranks,
     _sg_minus_no_bundling,
-    _sg_from_outcome,
 ]
 
 
 def make_suggestions(d: Decision, facts: Facts, policy: dict,
                      outcome: dict | None = None) -> list[str]:
-    """Build the post-run "Suggestions" list (req. 4) by running the computed
-    generators in priority order, skipping any named in suggestions.disabled.
-    Called AFTER the run so generators may use `outcome` (convergence, gap,
-    iters, time)."""
+    """Build the "Suggestions" list (req. 4) by running the computed generators
+    in priority order, skipping any named in suggestions.disabled.
+
+    Printed after the run, but every generator reasons from the FACTS and the
+    DECISION, not from how the run went: no caller supplies `outcome`. A
+    generator that read it could never fire, so the one that did was removed
+    rather than left as dead code claiming a capability. The parameter stays
+    so adding real outcome capture later is not a signature change -- see the
+    design document, which describes it and does not schedule it."""
     disabled = set(policy.get("suggestions", {}).get("disabled", []))
     out = []
     for gen in SUGGESTION_GENERATORS:
@@ -1313,7 +1343,12 @@ def gather_facts(module, cfg, effort: str, policy: dict) -> Facts:
         effort=effort,
         multistage=bool(bf),
         branching_factors=list(bf) if bf else None,
-        user_solver_name=cfg.get("solver_name") or cfg.get("EF_solver_name"),
+        # NOT `solver_name or EF_solver_name`: they are different options.
+        # Taking the EF one here let `--EF-solver-name cplex` alone decide the
+        # PH solver when OOTB went on to decompose. The EF path carries
+        # EF_solver_name over separately, after the EF is chosen.
+        user_solver_name=cfg.get("solver_name"),
+        user_ef_solver_name=cfg.get("EF_solver_name"),
         num_cores=os.cpu_count(),
         under_slurm=("SLURM_JOB_ID" in os.environ),
         user_flags=user_flags,
@@ -1397,7 +1432,7 @@ def configure(module, cfg) -> OOTBState:
 
 def report_suggestions(state: OOTBState, outcome: dict | None = None) -> None:
     """Print the prioritized "Suggestions" list (req. 4), AFTER the run so it can
-    reflect how the run went (via `outcome`). Rank 0 only."""
+    be read alongside the run. Rank 0 only."""
     if not _rank0():
         return
     state.decision.suggestions = make_suggestions(

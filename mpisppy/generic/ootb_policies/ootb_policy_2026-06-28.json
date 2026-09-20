@@ -36,11 +36,11 @@
       "couenne"
     ],
     "preference_order_by_class": {
-      "_comment": "Per-problem-class preferred solver lists (design sec. 6). Keyed by class: LP, MIP, QP, MIQP, NLP, MINLP. Each list is tried top-to-bottom; the first installed solver wins. Every entry must also appear in preference_order. Note: on the DECOMPOSITION path PH adds a quadratic proximal term, so an LP/MIP model's subproblem is really a QP/MIQP; when the chosen solver is LP/MIP-only (lp_mip_only_force_linearize_prox) OOTB linearizes that prox instead of requiring a QP-capable solver, which is why cbc/glpk remain acceptable for LP/MIP.",
+      "_comment": "Per-problem-class preferred solver lists (design sec. 6). Keyed by class: LP, MIP, QP, MIQP, NLP, MINLP. Each list is tried top-to-bottom; the first installed solver wins. Every entry must also appear in preference_order. Note: on the DECOMPOSITION path PH adds a quadratic proximal term, so an LP/MIP model's subproblem is really a QP/MIQP; when the chosen solver is LP/MIP-only (lp_mip_only_force_linearize_prox) OOTB linearizes that prox instead of requiring a QP-capable solver, which is why cbc/glpk remain acceptable for LP/MIP. MIQP drops highs/appsi_highs: they do continuous QP but NOT mixed-integer QP (phbase.py says so outright). They are listed in no_miqp_force_linearize_prox instead, so an INTEGER model on the decomposition path -- where the prox makes every MIP subproblem an MIQP -- gets the prox linearized rather than a failed first solve.",
       "LP": ["gurobi_persistent", "cplex_persistent", "xpress_persistent", "gurobi", "cplex", "xpress", "appsi_highs", "highs", "cbc", "glpk"],
       "MIP": ["gurobi_persistent", "cplex_persistent", "xpress_persistent", "gurobi", "cplex", "xpress", "appsi_highs", "highs", "cbc", "glpk"],
       "QP": ["gurobi_persistent", "cplex_persistent", "xpress_persistent", "gurobi", "cplex", "xpress", "appsi_highs", "highs", "ipopt"],
-      "MIQP": ["gurobi_persistent", "cplex_persistent", "xpress_persistent", "gurobi", "cplex", "xpress", "appsi_highs", "highs"],
+      "MIQP": ["gurobi_persistent", "cplex_persistent", "xpress_persistent", "gurobi", "cplex", "xpress"],
       "NLP": ["ipopt"],
       "MINLP": ["baron", "scip", "bonmin", "couenne"]
     },
@@ -66,6 +66,10 @@
     "lp_mip_only_force_linearize_prox": [
       "glpk",
       "cbc"
+    ],
+    "no_miqp_force_linearize_prox": [
+      "appsi_highs",
+      "highs"
     ],
     "caveats": {
       "_comment": "Human-readable notes about individual solvers. The base/plus probe now DOES introspect integrality and nonlinearity to route solver selection (see preference_order_by_class), so these caveats mostly explain the routing; the remaining ones are surfaced via suggestions.",

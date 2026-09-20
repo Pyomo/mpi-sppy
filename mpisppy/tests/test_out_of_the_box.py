@@ -346,11 +346,18 @@ class TestSuggestionGenerators(unittest.TestCase):
         d = ootb.Decision(run_ef=False, chosen_solver="gurobi", num_cylinders=3)
         self.assertTrue(any("minus" in m for m in self._msgs(d, facts)))
 
-    def test_outcome_based(self):
+    def test_no_generator_depends_on_an_outcome(self):
+        # No caller supplies `outcome` -- both report_suggestions call sites
+        # pass none -- so a generator reading it could never fire. The one
+        # that did was removed rather than left as dead code claiming a
+        # capability; this keeps a new one from being added inert.
         facts = ootb.Facts("m", 6, set(), 10, effort="base")
         d = ootb.Decision(run_ef=False, chosen_solver="gurobi", num_cylinders=3)
         outcome = {"converged": False, "iterations": 100, "rel_gap": 0.2}
-        self.assertTrue(any("iterations" in m for m in self._msgs(d, facts, outcome)))
+        self.assertEqual(self._msgs(d, facts, outcome),
+                         self._msgs(d, facts, None),
+                         msg="a suggestion generator reads `outcome`, which "
+                             "nothing ever supplies")
 
     def test_disabled_generator_skipped(self):
         facts = ootb.Facts("m", 1, set(), 3, effort="base")
@@ -637,6 +644,64 @@ class TestRankFloorAndRoster(unittest.TestCase):
 
 def _ladder_flags():
     return {r["flag"] for r in ootb.load_policy()["spoke_ladder"]["rungs"]}
+
+
+class TestCopilotReviewFindings(unittest.TestCase):
+    """Cases from the Copilot review of PR #779."""
+
+    @staticmethod
+    def _facts(**kw):
+        base = dict(vars_int=0, vars_cont=50, nonants_total=20, nonants_int=0,
+                    model_degree="linear", effort="base")
+        base.update(kw)
+        ranks = base.pop("ranks", 6)
+        solvers = base.pop("solvers", {"gurobi"})
+        return ootb.Facts("farmer", ranks, solvers, 1000, **base)
+
+    def test_highs_is_not_offered_for_an_miqp(self):
+        # phbase.py: "HiGHS, which cannot solve an MIQP".
+        miqp = ootb.load_policy()["solver"]["preference_order_by_class"]["MIQP"]
+        self.assertNotIn("highs", miqp)
+        self.assertNotIn("appsi_highs", miqp)
+
+    def test_highs_on_an_integer_model_linearizes_the_prox(self):
+        # On the decomposition path the prox makes every MIP subproblem an
+        # MIQP, so highs would fail on the first proximal solve.
+        d = ootb.recommend(self._facts(solvers={"highs"}, vars_int=50,
+                                       nonants_int=10),
+                           ootb.load_policy())
+        self.assertFalse(d.run_ef)
+        self.assertEqual(d.chosen_solver, "highs")
+        self.assertIn("--linearize-proximal-terms", [a.flag for a in d.args])
+
+    def test_ef_solver_override_does_not_drive_the_decomposition(self):
+        # --EF-solver-name governs the EF; --solver-name the decomposition.
+        # --lagrangian forces the decomposition so the branch under test runs
+        facts = self._facts(ranks=6, solvers={"gurobi", "cplex"},
+                            user_flags={"--EF-solver-name", "--lagrangian"},
+                            user_ef_solver_name="cplex")
+        d = ootb.recommend(facts, ootb.load_policy())
+        self.assertFalse(d.run_ef)
+        self.assertNotEqual(d.chosen_solver, "cplex",
+                            msg="an EF-only override chose the PH solver")
+        self.assertIn("--solver-name", [a.flag for a in d.args])
+
+    def test_ef_solver_override_is_honored_when_the_ef_is_certain(self):
+        facts = self._facts(ranks=1, solvers={"gurobi", "cplex"},
+                            user_flags={"--EF-solver-name"},
+                            user_ef_solver_name="cplex")
+        d = ootb.recommend(facts, ootb.load_policy())
+        self.assertTrue(d.run_ef)
+        self.assertEqual(d.chosen_solver, "cplex")
+
+    def test_fwph_objgap_hub_is_a_decomposition_request(self):
+        self.assertIn("--fwph-objgap-hub", ootb.HUB_FLAGS)
+        self.assertIn("--fwph-objgap-hub", ootb.DECOMPOSITION_FLAGS)
+        d = ootb.recommend(self._facts(ranks=6,
+                                       user_flags={"--fwph-objgap-hub"}),
+                           ootb.load_policy())
+        self.assertFalse(d.run_ef, msg="OOTB substituted the EF for a hub the "
+                                       "user asked for")
 
 
 class TestSpokeBuildOrderIsShared(unittest.TestCase):
