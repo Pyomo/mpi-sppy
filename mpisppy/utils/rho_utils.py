@@ -7,6 +7,8 @@
 # full copyright and license information.
 ###############################################################################
 
+import math
+
 from pyomo.common.dependencies import pandas as pd
 
 from mpisppy import global_toc
@@ -30,12 +32,22 @@ def resolve_rho(val, default_rho):
             not a usable rho.
 
     Returns:
-        (rho_value, used_default): if ``val > RHO_ZERO_TOL`` it is returned
-        unchanged (small positive values are respected); otherwise (near-zero
-        or negative -- the heuristic is uninformative) ``default_rho`` is
-        returned and ``used_default`` is True.
+        (rho_value, used_default): if ``val`` is finite and above
+        ``RHO_ZERO_TOL`` it is returned unchanged (small positive values are
+        respected); otherwise (near-zero, negative, or non-finite -- the
+        heuristic is uninformative) ``default_rho`` is returned and
+        ``used_default`` is True.
+
+    ``inf`` reaches here when a heuristic divides by a denominator that came
+    out zero -- GradRho does, when every scenario agrees on a nonant whose
+    consensus value is also zero, so there is no spread and no scale to
+    divide the gradient by. That is the same "uninformative heuristic" case
+    as a zero gradient, not a usable rho, so it falls back and is reported
+    rather than being passed on to become a nan W (issue #873). ``nan``
+    compares False against the tolerance and so already fell back; it is
+    covered explicitly here so the reason no longer depends on that.
     """
-    if val > RHO_ZERO_TOL:
+    if math.isfinite(val) and val > RHO_ZERO_TOL:
         return val, False
     return default_rho, True
 

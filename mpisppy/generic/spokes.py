@@ -11,6 +11,7 @@
 import copy
 
 import mpisppy.utils.cfg_vanilla as vanilla
+from mpisppy.generic import out_of_the_box as ootb
 
 
 def build_spoke_list(cfg, beans, scenario_creator_kwargs,
@@ -168,26 +169,36 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
                                               rho_setter=None,
                                               average_scenario_creator=average_scenario_creator)
 
-    list_of_spoke_dict = list()
+    made = {}
     if cfg.fwph:
-        list_of_spoke_dict.append(fw_spoke)
+        made["--fwph"] = fw_spoke
     if cfg.lagrangian:
-        list_of_spoke_dict.append(lagrangian_spoke)
+        made["--lagrangian"] = lagrangian_spoke
     if cfg.ph_dual:
-        list_of_spoke_dict.append(ph_dual_spoke)
+        made["--ph-dual"] = ph_dual_spoke
     if cfg.relaxed_ph:
-        list_of_spoke_dict.append(relaxed_ph_spoke)
+        made["--relaxed-ph"] = relaxed_ph_spoke
     if cfg.subgradient:
-        list_of_spoke_dict.append(subgradient_spoke)
+        made["--subgradient"] = subgradient_spoke
     if cfg.xhatshuffle:
-        list_of_spoke_dict.append(xhatshuffle_spoke)
+        made["--xhatshuffle"] = xhatshuffle_spoke
     if cfg.xhatxbar:
-        list_of_spoke_dict.append(xhatxbar_spoke)
+        made["--xhatxbar"] = xhatxbar_spoke
     if cfg.reduced_costs:
-        list_of_spoke_dict.append(reduced_costs_spoke)
+        made["--reduced-costs"] = reduced_costs_spoke
     if cfg.xhatlshaped:
-        list_of_spoke_dict.append(xhatlshaped_spoke)
+        made["--xhatlshaped"] = xhatlshaped_spoke
     if cfg.ph_xfeas_spoke:
-        list_of_spoke_dict.append(ph_xfeas_spoke)
+        made["--ph-xfeas-spoke"] = ph_xfeas_spoke
 
-    return list_of_spoke_dict
+    # Assembled from the shared tuple rather than a second hand-written
+    # sequence: WheelSpinner sees the spokes in this order, apportion_ranks
+    # breaks rank ties by position, and out_of_the_box models the split in the
+    # same order so its "rank split" note names the right cylinders.
+    missing = [f for f in made if f not in ootb.SPOKE_BUILD_ORDER]
+    if missing:
+        raise RuntimeError(
+            f"spoke(s) {missing} are built here but absent from "
+            "out_of_the_box.SPOKE_BUILD_ORDER; add them there so the launch "
+            "order stays declared in one place")
+    return [made[f] for f in ootb.SPOKE_BUILD_ORDER if f in made]

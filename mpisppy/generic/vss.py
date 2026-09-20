@@ -61,7 +61,7 @@ def vss_prep(module, cfg):
             "bound; see doc/src/jensens.rst). It builds the mean-value "
             "scenario whose first-stage solution VSS evaluates."
         )
-    if cfg.get("branching_factors") is not None:
+    if cfg.get("branching_factors"):     # empty list is not multistage
         raise RuntimeError(
             "--vss is two-stage only in this version; it cannot be used with "
             "multistage runs (--branching-factors)."

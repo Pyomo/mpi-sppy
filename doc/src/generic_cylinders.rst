@@ -21,6 +21,12 @@ other features without requiring you to write a driver program.
    exception ends the job rather than leaving it hung, whichever form
    you use. See :ref:`console_scripts`.
 
+.. tip::
+   If you are new to mpi-sppy, add ``--out-of-the-box`` and let the driver
+   pick a sensible configuration automatically, then read the equivalent
+   command line it prints to learn the explicit options. See
+   :ref:`out_of_the_box`.
+
 Your Model File (Module)
 ------------------------
 
