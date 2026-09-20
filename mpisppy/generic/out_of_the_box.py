@@ -93,6 +93,11 @@ class Facts:
     # themselves and the anchors command_line() already emits. Echoed in the
     # equivalent command line so it reproduces the run.
     user_args: list = field(default_factory=list)
+    # The scenario anchor to echo, exactly as the user gave it, or None when
+    # the model takes no scenario-count flag (its own options carry the
+    # count). Captured before anything can add num_scens to cfg as a side
+    # effect -- see gather_facts.
+    scen_anchor: str | None = None
 
 
 @dataclass
@@ -130,15 +135,17 @@ class Decision:
             f"mpisppy.generic_cylinders",
             f"--module-name {facts.module_name}",
         ]
-        if facts.multistage and facts.branching_factors:
-            parts.append("--branching-factors "
-                         + " ".join(str(b) for b in facts.branching_factors))
-        else:
-            parts.append(f"--num-scens {facts.num_scens}")
+        # Anchor with the scenario flag the USER gave, not a derived number.
+        # --num-scens is declared by the model, not the driver, so a model that
+        # does not define it (netdes, which reads the count off --instance-name)
+        # rejects the line we print. Those models need no anchor: the options
+        # they DO take are echoed below.
+        if facts.scen_anchor:
+            parts.append(facts.scen_anchor)
         for flag, value in facts.user_args:
-            parts.append(flag if value is None else f"{flag} {value}")
+            parts.append(_fmt_arg(flag, value))
         for a in self.args:
-            parts.append(a.flag if a.value is None else f"{a.flag} {a.value}")
+            parts.append(_fmt_arg(a.flag, a.value))
         return " ".join(parts)
 
 
@@ -338,7 +345,20 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     ladder_flags = {r["flag"] for r in all_rungs}
     off_ladder = user_spokes - ladder_flags
     chosen = []
+    # A user spoke already supplies its bound, so the core does not need to add
+    # another of that kind. Counting only the ladder left `-np 6 --fwph
+    # --xhatxbar` (an outer and an inner the user asked for) with OOTB piling
+    # --lagrangian and --xhatshuffle on top: 5 cylinders, 4 of them at 1 rank
+    # against min_ranks_per_cylinder 2. Only ladder rungs can be credited --
+    # the policy records a `bound` for those; an off-ladder spoke has none, so
+    # the core is still filled from the ladder alongside it.
+    for r in all_rungs:
+        if r["flag"] in user_spokes and need.get(r["bound"], 0) > 0:
+            chosen.append(r)
+            need[r["bound"]] -= 1
     for r in all_rungs:                           # minimal core
+        if r in chosen:
+            continue
         if need.get(r["bound"], 0) > 0:
             chosen.append(r)
             need[r["bound"]] -= 1
@@ -443,8 +463,10 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     # refinement).
     ra = policy["rank_allocation"]
     default_ratio = ra["default_rank_ratio"]
-    # ratios in cylinder order: hub first (always the default), then spokes.
-    ratios = [default_ratio]
+    # ratios in cylinder order: hub first, then spokes. The hub has no
+    # --*-rank-ratio flag at all, so whatever the policy's default says, the
+    # run always gives the hub mpi-sppy's own default of 1.0.
+    ratios = [1.0]
     # A ratio the user set is the ratio the RUN will use, so model that one --
     # otherwise intra_ranks (and the bundle floor it drives) is computed from a
     # split that never happens.
@@ -487,23 +509,31 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     spoke_names = []
     for flag in ordered:
         on_ladder = flag in ladder_by_flag
-        # The RUN never reads the policy file -- it sees only the flags OOTB
-        # emits -- so a policy ratio we do not emit has no effect and must not
-        # be modelled. OOTB emits a ratio only for a ladder rung: an
-        # off-ladder spoke's derived -rank-ratio option may not be declared at
-        # all (--xhatlshaped has none). So off-ladder spokes model
-        # default_rank_ratio, which is what they will actually get. A ratio
-        # the USER set is different -- that one is on the command line, so
-        # _ratio_for honors it for both kinds.
+        # Model the ratio the RUN will use, which is exactly one of three
+        # things. The run never reads the policy file -- it sees only flags.
+        #   1. the user's, if they set --<spoke>-rank-ratio themselves;
+        #   2. the policy's, if OOTB emits it -- only for a ladder rung, since
+        #      an off-ladder spoke's derived option may not be declared at all
+        #      (--xhatlshaped has none);
+        #   3. otherwise mpi-sppy's own default of 1.0.
+        # Case 3 is why the emission test is against 1.0 and not against
+        # default_rank_ratio: a policy default of, say, 2.0 was never emitted
+        # (every ratio equalled it), so the run saw 1.0 everywhere and took
+        # WheelSpinner's equal-split path while OOTB had modelled an
+        # apportioned one -- and the "not a multiple" warning never fired.
         policy_ratio = (ra["rank_ratios"].get(flag, default_ratio)
                         if on_ladder else default_ratio)
-        spoke_ratio = _ratio_for(flag, policy_ratio)
+        if f"{flag}-rank-ratio" in facts.user_flags:
+            spoke_ratio = _ratio_for(flag, policy_ratio)
+        elif on_ladder and policy_ratio != 1.0:
+            choose(f"{flag}-rank-ratio", _fmt_ratio(policy_ratio),
+                   f"flex-ranks: cheaper cylinder gets a {policy_ratio} share "
+                   f"(crude cold-start)")
+            spoke_ratio = policy_ratio
+        else:
+            spoke_ratio = 1.0
         ratios.append(spoke_ratio)
         spoke_names.append(flag)
-        if on_ladder and spoke_ratio != default_ratio:
-            choose(f"{flag}-rank-ratio", _fmt_ratio(spoke_ratio),
-                   f"flex-ranks: cheaper cylinder gets a {spoke_ratio} share "
-                   f"(crude cold-start)")
     d.intra_ranks, d.rank_split, divisible = _rank_layout(
         facts.num_ranks, ratios, spoke_names)
     if not divisible:
@@ -975,13 +1005,57 @@ def _detect_available_solvers(candidates) -> set:
 
 def _detect_num_scens(module, cfg) -> int:
     """Mirror mpisppy/generic/parsing.py::name_lists: cfg.num_scens, else the
-    product of the branching factors, else the module's full scenario list."""
+    product of the branching factors, else ask the module."""
     if cfg.get("num_scens") is not None:
         return int(cfg.num_scens)
     bf = cfg.get("branching_factors")
     if bf is not None:
         return int(math.prod(bf))
-    return len(module.scenario_names_creator(None))
+    # A model may take no scenario-count flag at all and work the number out
+    # from its own options -- netdes reads it off --instance-name and sets
+    # cfg.num_scens as a documented side effect of kw_creator. The driver calls
+    # kw_creator anyway, so ask for the kwargs before giving up. If it raises,
+    # say so through the error below rather than here: the model may simply
+    # need more than OOTB has set up yet.
+    try:
+        module.kw_creator(cfg)
+        if cfg.get("num_scens") is not None:
+            return int(cfg.num_scens)
+    except Exception:                       # noqa: BLE001 - reported below
+        pass
+    # scenario_names_creator(None) is a convention, not a guarantee: netdes's
+    # does `range(start, start + num_scens)` and raises TypeError on None. A
+    # bare traceback from inside the model is a poor way to say "OOTB cannot
+    # tell how big your problem is".
+    try:
+        return len(module.scenario_names_creator(None))
+    except Exception as e:                  # noqa: BLE001
+        raise RuntimeError(
+            f"out-of-the-box cannot tell how many scenarios "
+            f"{cfg.get('module_name', 'this model')} has. Give it a count the "
+            "model understands (many models define --num-scens; multistage "
+            "ones take --branching-factors), or have the module's "
+            "scenario_names_creator(None) return the full list of names."
+        ) from e
+
+
+def _fmt_arg(flag: str, value) -> str:
+    """One command-line token pair, quoted so the printed line actually RUNS.
+
+    A ListOf option is a SINGLE argparse token: `--branching-factors 10 3 2`
+    comes back as "unrecognized arguments: 3 2". Values with spaces -- list
+    options, solver option strings -- have to be quoted.
+    """
+    if value is None:
+        return flag
+    text = str(value)
+    if text == "":
+        return flag
+    # _user_args already quotes what it echoes, so only quote what is not
+    # quoted yet -- doing it twice gives a literal "'a b'" the parser keeps.
+    if any(ch.isspace() for ch in text) and text[0] not in "'\"":
+        text = shlex.quote(text)
+    return f"{flag} {text}"
 
 
 def _cfg_key_to_flag(key: str) -> str:
@@ -1133,6 +1207,19 @@ def gather_facts(module, cfg, effort: str, policy: dict) -> Facts:
     also instantiate `probe_scenarios` scenario(s) for the size profile."""
     solvers = _detect_available_solvers(policy["solver"]["preference_order"])
     bf = cfg.get("branching_factors")
+    # Capture the scenario anchor BEFORE _detect_num_scens, which may call
+    # kw_creator -- and a model that works its own count out (netdes) adds
+    # num_scens to cfg there, after which cfg can no longer say whether the
+    # USER named a count. Printing a derived --num-scens for such a model gives
+    # a command line its own parser rejects, since --num-scens is declared by
+    # the model and netdes declares no such flag.
+    if bf is not None:
+        scen_anchor = _fmt_arg("--branching-factors",
+                               " ".join(str(b) for b in bf))
+    elif cfg.get("num_scens") is not None:
+        scen_anchor = f"--num-scens {int(cfg.num_scens)}"
+    else:
+        scen_anchor = None
     facts = Facts(
         module_name=cfg.get("module_name", "<module>") or "<module>",
         num_ranks=_inspect_ranks(cfg),
@@ -1146,6 +1233,7 @@ def gather_facts(module, cfg, effort: str, policy: dict) -> Facts:
         under_slurm=("SLURM_JOB_ID" in os.environ),
         user_flags=_user_flags(cfg),
         user_args=_user_args(cfg),
+        scen_anchor=scen_anchor,
     )
     if effort in ("base", "plus"):
         # one probe scenario (discarded) feeds the size-aware decisions; the

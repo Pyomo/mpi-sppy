@@ -41,8 +41,9 @@ Add ``--out-of-the-box`` to an otherwise minimal ``generic_cylinders`` command
 line. How you say which scenarios to use is the *model's* business, not OOTB's:
 the examples below use ``--num-scens`` because farmer defines it, aircond uses
 ``--branching-factors``, and netdes takes an instance name instead. Give the
-model whatever it asks for; if that is nothing, OOTB reads the scenario list
-from the module.
+model whatever it asks for. If it asks for nothing -- netdes works its count
+out from the instance name -- OOTB gets the count from the model too, and says
+so plainly if it cannot.
 
 .. code-block:: bash
 

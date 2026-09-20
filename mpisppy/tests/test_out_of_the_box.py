@@ -140,7 +140,7 @@ class TestApplyDecision(unittest.TestCase):
 
 class TestCommandLineAndFlags(unittest.TestCase):
     def test_command_line_two_stage(self):
-        facts = ootb.Facts("farmer", 3, set(), 6)
+        facts = ootb.Facts("farmer", 3, set(), 6, scen_anchor="--num-scens 6")
         d = ootb.Decision()
         d.args = [ootb.ChosenArg("--lagrangian", None, "x"),
                   ootb.ChosenArg("--solver-name", "gurobi", "x")]
@@ -151,11 +151,31 @@ class TestCommandLineAndFlags(unittest.TestCase):
         self.assertIn("-np 3", cl)
 
     def test_command_line_multistage(self):
+        # gather_facts quotes the list value; a ListOf option is ONE argparse
+        # token, so an unquoted "3 2" gives "unrecognized arguments: 2".
         facts = ootb.Facts("aircond", 3, set(), 6, multistage=True,
-                           branching_factors=[3, 2])
+                           branching_factors=[3, 2],
+                           scen_anchor="--branching-factors '3 2'")
         cl = ootb.Decision().command_line(facts)
-        self.assertIn("--branching-factors 3 2", cl)
+        self.assertIn("--branching-factors '3 2'", cl)
         self.assertNotIn("--num-scens", cl)
+
+    def test_command_line_has_no_anchor_when_the_model_takes_none(self):
+        # netdes declares no --num-scens; printing a derived one gave a line
+        # its own parser rejects.
+        facts = ootb.Facts("netdes", 1, set(), 20)
+        cl = ootb.Decision().command_line(facts)
+        self.assertNotIn("--num-scens", cl)
+        self.assertNotIn("--branching-factors", cl)
+
+    def test_gather_facts_quotes_the_branching_factor_anchor(self):
+        import shlex
+        cfg, module = _farmer_cfg()
+        cfg.branching_factors = [3, 2]   # already declared by the driver
+        facts = ootb.gather_facts(module, cfg, "minus", ootb.load_policy())
+        self.assertIsNotNone(facts.scen_anchor)
+        toks = shlex.split(facts.scen_anchor)
+        self.assertEqual(toks, ["--branching-factors", "3 2"])
 
     def test_requested_and_effort_and_policy(self):
         cfg, _ = _farmer_cfg(out_of_the_box="")
@@ -615,6 +635,11 @@ class TestOffLadderSpokesAreInTheRankModel(unittest.TestCase):
         # put a split in the note (and an intra_ranks in the bundle floor) that
         # never happens.
         policy = copy.deepcopy(ootb.load_policy())
+        # the premise: --ph-dual is NOT a ladder rung, so OOTB never emits a
+        # ratio for it. If a later policy promotes it, say so here rather than
+        # failing below with a message about unemitted ratios.
+        self.assertNotIn("--ph-dual",
+                         {r["flag"] for r in policy["spoke_ladder"]["rungs"]})
         policy["rank_allocation"]["rank_ratios"]["--ph-dual"] = 0.2
         facts = ootb.Facts("farmer", 12, {"gurobi"}, 1000, effort="base",
                            vars_int=50, vars_cont=50, nonants_total=20,
@@ -626,10 +651,11 @@ class TestOffLadderSpokesAreInTheRankModel(unittest.TestCase):
         self.assertGreater(d.rank_split["--ph-dual"], 1)
         self.assertEqual(d.intra_ranks, max(d.rank_split.values()))
 
-    def test_widening_gate_counts_user_set_ladder_spokes(self):
-        # A user-set ladder rung beyond the widening loop's reach is
-        # force-added afterwards, so it spends rank budget the gate has to see
-        # -- same as an off-ladder spoke.
+    def test_widening_gate_counts_every_user_spoke(self):
+        # A user-set LADDER rung beyond the widening loop's reach is
+        # force-added afterwards, and an off-ladder spoke never enters
+        # `chosen` at all; both spend rank budget the gate has to see.
+        # --reduced-costs and --subgradient are rungs, --ph-dual is not.
         policy = ootb.load_policy()
         min_rpc = policy["rank_allocation"]["min_ranks_per_cylinder"]
         for flag in ("--reduced-costs", "--subgradient", "--ph-dual"):
