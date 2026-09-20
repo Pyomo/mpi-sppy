@@ -253,18 +253,15 @@ def recommend(facts: Facts, policy: dict) -> Decision:
         d.notes.append(f"model class: {d.problem_class} ({_class_english(facts)})")
     # --solver-name governs the decomposition, --EF-solver-name the EF. They
     # are separate options, so an EF-only override must not decide the PH
-    # solver -- it used to, via `solver_name or EF_solver_name`. It is still
-    # honored when the EF is certain (below the rank floor there is no
-    # decomposition to pick a solver for), and on the size-gated EF path
-    # apply_decision carries it through as before.
+    # solver -- it used to, via `solver_name or EF_solver_name`. The EF name is
+    # adopted by _adopt_ef_solver below, at each point where run_ef is already
+    # decided. Predicting the gate here does not work: it skips the EF for an
+    # explicit decomposition request BEFORE it consults the rank floor, so a
+    # floor test alone said "EF for sure" for a run that decomposed.
     if "--solver-name" in facts.user_flags and facts.user_solver_name:
         d.chosen_solver = facts.user_solver_name
         d.notes.append(f"solver: kept user's value ({facts.user_solver_name}); "
                        f"OOTB defers")
-    elif facts.user_ef_solver_name and _will_run_ef_for_sure(facts, policy):
-        d.chosen_solver = facts.user_ef_solver_name
-        d.notes.append(f"solver: kept user's --EF-solver-name "
-                       f"({facts.user_ef_solver_name}); OOTB defers")
     else:
         by_class = sp.get("preference_order_by_class", {})
         if d.problem_class is not None and d.problem_class in by_class:
@@ -338,6 +335,7 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     if d.run_ef:
         # EF bypasses the hub/spoke system entirely; skip spokes + bundling.
         # The EF path reads cfg.EF_solver_name (its own key).
+        _adopt_ef_solver(d, facts)
         if d.chosen_solver is not None:
             choose("--EF-solver-name", d.chosen_solver,
                    f"EF solver ({d.chosen_solver})")
@@ -352,15 +350,28 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     if d.chosen_solver in sp["lp_mip_only_force_linearize_prox"]:
         choose("--linearize-proximal-terms", None,
                f"{d.chosen_solver} is LP/MIP-only; the PH prox must be linearized")
-    elif (d.chosen_solver in sp.get("no_miqp_force_linearize_prox", ())
-            and (facts.vars_int or 0) > 0):
-        # The prox makes every MIP subproblem an MIQP, and these solvers do
-        # continuous QP but not MIQP (phbase.py: "HiGHS, which cannot solve an
-        # MIQP"). Linearizing keeps them usable for an integer model; without
-        # it the run dies on the first proximal solve.
-        choose("--linearize-proximal-terms", None,
-               f"{d.chosen_solver} cannot solve an MIQP and this model has "
-               "integers; the PH prox must be linearized")
+    elif d.chosen_solver in sp.get("no_miqp_force_linearize_prox", ()):
+        # These do continuous QP but not mixed-integer QP (phbase.py: "HiGHS,
+        # which cannot solve an MIQP"). Key on the problem CLASS, not on
+        # vars_int: linearizing helps only when the quadratic part is the PROX.
+        if d.problem_class in _MIQP_CLASSES:
+            # The model's OWN objective is quadratic with integers, so
+            # linearizing the prox changes nothing -- the solve still fails.
+            d.notes.append(
+                f"WARNING: {d.chosen_solver} cannot solve an MIQP and this "
+                f"model is {d.problem_class}; linearizing the PH prox would "
+                "not help. Use a solver that handles mixed-integer quadratics "
+                "(gurobi/cplex/xpress).")
+        elif d.problem_class in ("MIP", None):
+            # MIP: the prox is what makes the subproblem an MIQP, so
+            # linearizing keeps the solver usable. None: the minus tier took
+            # no size profile, so integrality is UNKNOWN -- linearize rather
+            # than let an integer model die at PH iteration 1.
+            why = ("this model has integers" if d.problem_class == "MIP"
+                   else "integrality is unknown at this tier")
+            choose("--linearize-proximal-terms", None,
+                   f"{d.chosen_solver} cannot solve an MIQP and {why}; the PH "
+                   "prox must be linearized")
 
     # --- step 3: spoke roster -- small core, widened by ranks --------------
     # Take the minimal core (>=1 outer + >=1 inner). Add further ladder rungs
@@ -479,6 +490,7 @@ def recommend(facts: Facts, policy: dict) -> Decision:
                    f"publish one, but {facts.num_ranks} rank(s) cannot host "
                    f"the hub, the spokes you asked for, and one more; "
                    f"running the EF instead")
+            _adopt_ef_solver(d, facts)
             if d.chosen_solver is not None:
                 choose("--EF-solver-name", d.chosen_solver,
                        f"EF solver ({d.chosen_solver})")
@@ -689,10 +701,16 @@ _PROBLEM_CLASS = {
 }
 
 
-def _will_run_ef_for_sure(facts, policy) -> bool:
-    """True when the EF is settled before any size reasoning: below the rank
-    floor there is no cylinder configuration to choose a solver for."""
-    return facts.num_ranks < policy["ef_fallback"]["min_ranks_for_decomposition"]
+def _adopt_ef_solver(d, facts) -> None:
+    """On the EF path, the solver that runs is --EF-solver-name when the user
+    set one. Called only where run_ef is already decided, so nothing has to
+    predict the gate. Keeps d.chosen_solver equal to what actually runs, which
+    the notes and the suggestion generators report."""
+    if ("--EF-solver-name" in facts.user_flags and facts.user_ef_solver_name
+            and facts.user_ef_solver_name != d.chosen_solver):
+        d.chosen_solver = facts.user_ef_solver_name
+        d.notes.append(f"solver: the EF uses your --EF-solver-name "
+                       f"({facts.user_ef_solver_name}); OOTB defers")
 
 
 def _problem_class(facts: Facts) -> str | None:
@@ -880,13 +898,20 @@ def _sg_linearized_prox(d, facts, policy, outcome):
     if d.chosen_solver in sp["lp_mip_only_force_linearize_prox"]:
         why = "is LP/MIP-only"
     elif (d.chosen_solver in sp.get("no_miqp_force_linearize_prox", ())
-            and (facts.vars_int or 0) > 0):
+            and d.problem_class in ("MIP", None)):
+        # Not for a genuine MIQP: there the prox is not the problem, and
+        # recommend() warns instead of linearizing.
         why = "cannot solve an MIQP, which is what the PH prox makes of a MIP"
     else:
         return None
     return (f"'{d.chosen_solver}' {why}, so the PH prox is being linearized; a "
             "QP-capable solver (gurobi/cplex/xpress, or ipopt for continuous "
             "models) avoids the approximation.")
+
+
+# Classes whose own objective is a mixed-integer quadratic (or worse), where
+# linearizing the PH prox cannot rescue a solver that has no MIQP support.
+_MIQP_CLASSES = frozenset({"MIQP", "MINLP"})
 
 
 # EF reasons where decomposing WAS available and OOTB (or the user) chose the

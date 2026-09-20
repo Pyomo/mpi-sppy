@@ -212,9 +212,30 @@ def validate_static(policy: dict) -> list:
         f"not objects: {mistyped}" if mistyped else "all objects")
     if mistyped:
         return checks
-    if not isinstance(policy["spoke_ladder"].get("rungs"), list):
+    rungs_val = policy["spoke_ladder"].get("rungs")
+    if not isinstance(rungs_val, list):
         add("spoke_ladder.rungs is a list", False,
-            f"got {type(policy['spoke_ladder'].get('rungs')).__name__}")
+            f"got {type(rungs_val).__name__}")
+        return checks
+    # ... and its ELEMENTS, plus every sub-block below that gets .get/.items
+    # called on it. Guarding only the outer container still left
+    # `"rungs": ["--lagrangian"]` crashing with AttributeError, which is the
+    # failure this guard exists to replace with a reported check.
+    bad_rungs = [r for r in rungs_val if not isinstance(r, dict)]
+    add("spoke_ladder.rungs entries are objects", not bad_rungs,
+        f"not objects: {bad_rungs}" if bad_rungs else "all objects")
+    subblocks = {
+        "spoke_ladder.core_roster_min": policy["spoke_ladder"].get("core_roster_min"),
+        "solver.preference_order_by_class":
+            policy["solver"].get("preference_order_by_class"),
+        "solver.caveats": policy["solver"].get("caveats"),
+        "rank_allocation.rank_ratios": policy["rank_allocation"].get("rank_ratios"),
+    }
+    bad_sub = [k for k, v in subblocks.items()
+               if v is not None and not isinstance(v, dict)]
+    add("sub-blocks are objects", not bad_sub,
+        f"not objects: {bad_sub}" if bad_sub else "all objects")
+    if bad_rungs or bad_sub:
         return checks
 
     # ef_fallback numbers
@@ -289,6 +310,15 @@ def validate_static(policy: dict) -> list:
 
     # rank allocation
     ra = policy["rank_allocation"]
+    no_miqp = set(sp.get("no_miqp_force_linearize_prox", ()))
+    miqp_list = set(sp.get("preference_order_by_class", {}).get("MIQP", ()))
+    both = sorted(no_miqp & miqp_list)
+    # The whole point of the no_miqp list is that these cannot solve an MIQP.
+    # Offering one FOR an MIQP and then "fixing" it by linearizing a prox that
+    # was never the problem is the combination the shipped policy removed.
+    add("no_miqp_force_linearize_prox solvers are absent from the MIQP list",
+        not both, f"in both: {both}" if both else "none in both")
+
     add("rank_allocation.min_ranks_per_cylinder is a positive int",
         isinstance(ra.get("min_ranks_per_cylinder"), int)
         and ra["min_ranks_per_cylinder"] >= 1)
@@ -371,6 +401,16 @@ def validate_static(policy: dict) -> list:
         bad = [g for g in guesses if g not in block]
         add(f"{block_name}._cold_start_guess entries name real keys", not bad,
             f"stray: {bad}")
+
+    # HUB_FLAGS must match Config.checker's own hub roster. The subset check
+    # below passes whether or not a hub is MISSING from HUB_FLAGS, and that
+    # asymmetry is exactly how --fwph-objgap-hub went unrecognised: OOTB then
+    # substitutes the EF for a hub the user asked for.
+    real_hubs = {"--" + h.replace("_", "-") for h in config.Config.HUBS}
+    add("HUB_FLAGS matches the driver's hub roster",
+        real_hubs == set(ootb.HUB_FLAGS),
+        f"missing: {sorted(real_hubs - set(ootb.HUB_FLAGS))}; "
+        f"extra: {sorted(set(ootb.HUB_FLAGS) - real_hubs)}")
 
     # DECOMPOSITION_FLAGS line up with the real vocabulary
     bad = sorted(f for f in ootb.DECOMPOSITION_FLAGS if f not in flags)

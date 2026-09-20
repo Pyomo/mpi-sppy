@@ -694,6 +694,42 @@ class TestCopilotReviewFindings(unittest.TestCase):
         self.assertTrue(d.run_ef)
         self.assertEqual(d.chosen_solver, "cplex")
 
+    def test_ef_override_never_drives_a_decomposition_below_the_floor(self):
+        # The EF gate skips the EF for an explicit decomposition request
+        # BEFORE it consults the rank floor, so a floor test alone said "EF
+        # for sure" for a run that decomposes -- reinstating the original bug.
+        facts = self._facts(ranks=2, solvers={"gurobi", "cplex"},
+                            user_flags={"--EF-solver-name", "--lagrangian"},
+                            user_ef_solver_name="cplex")
+        d = ootb.recommend(facts, ootb.load_policy())
+        self.assertFalse(d.run_ef)
+        self.assertNotEqual(d.chosen_solver, "cplex")
+        self.assertNotIn(("--solver-name", "cplex"),
+                         [(a.flag, a.value) for a in d.args])
+
+    def test_miqp_model_warns_instead_of_linearizing(self):
+        # The model's OWN objective is quadratic with integers, so linearizing
+        # the prox changes nothing and the solve still fails.
+        facts = self._facts(ranks=6, solvers={"highs"}, vars_int=50,
+                            nonants_int=10, model_degree="quadratic",
+                            user_flags={"--solver-name", "--lagrangian"},
+                            user_solver_name="highs")
+        d = ootb.recommend(facts, ootb.load_policy())
+        self.assertEqual(d.problem_class, "MIQP")
+        self.assertNotIn("--linearize-proximal-terms", [a.flag for a in d.args])
+        self.assertTrue(any(n.startswith("WARNING") and "MIQP" in n
+                            for n in d.notes))
+
+    def test_minus_tier_linearizes_for_a_no_miqp_solver(self):
+        # Integrality is unknown with no size profile; linearizing is safe,
+        # and not doing it kills an integer model at PH iteration 1.
+        facts = ootb.Facts("m", 6, {"highs"}, 1000, effort="minus",
+                           user_flags={"--solver-name", "--lagrangian"},
+                           user_solver_name="highs")
+        d = ootb.recommend(facts, ootb.load_policy())
+        self.assertIsNone(d.problem_class)
+        self.assertIn("--linearize-proximal-terms", [a.flag for a in d.args])
+
     def test_fwph_objgap_hub_is_a_decomposition_request(self):
         self.assertIn("--fwph-objgap-hub", ootb.HUB_FLAGS)
         self.assertIn("--fwph-objgap-hub", ootb.DECOMPOSITION_FLAGS)

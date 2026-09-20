@@ -103,6 +103,33 @@ class TestValidatorCatchesBadPolicies(unittest.TestCase):
         self.policy["bundle_sizing"]["_cold_start_guess"].append("not_a_key")
         self.assertTrue(self._fails(val.validate_static(self.policy)))
 
+    def test_malformed_sub_blocks_are_reported_not_crashes(self):
+        # Guarding only the outer containers still crashed on the elements.
+        for name, mutate in (
+            ("rungs entries",
+             lambda p: p["spoke_ladder"].__setitem__("rungs", ["--lagrangian"])),
+            ("core_roster_min",
+             lambda p: p["spoke_ladder"].__setitem__("core_roster_min", [])),
+            ("preference_order_by_class",
+             lambda p: p["solver"].__setitem__("preference_order_by_class",
+                                               ["LP"])),
+        ):
+            with self.subTest(block=name):
+                policy = copy.deepcopy(self.policy)
+                mutate(policy)
+                self.assertTrue(self._fails(val.validate_static(policy)))
+
+    def test_no_miqp_solver_may_not_be_offered_for_an_miqp(self):
+        self.policy["solver"]["preference_order_by_class"]["MIQP"] = ["highs"]
+        self.assertTrue(self._fails(val.validate_static(self.policy)))
+
+    def test_hub_flags_match_the_driver_roster(self):
+        # The subset check passes whether or not a hub is MISSING, which is how
+        # --fwph-objgap-hub went unrecognised. This checks both directions.
+        from mpisppy.utils import config as _config
+        real = {"--" + h.replace("_", "-") for h in _config.Config.HUBS}
+        self.assertEqual(real, set(ootb.HUB_FLAGS))
+
     def test_infinite_budget_is_rejected(self):
         # json accepts the bare token Infinity, and inf > 0 is true, so this
         # used to validate clean -- while the EF gate tests `whole <= budget`,

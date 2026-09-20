@@ -52,6 +52,14 @@ import pyomo.common.config as pyofig
 
 # class to inherit from ConfigDict with a name field
 class Config(pyofig.ConfigDict):
+
+    # The hub options, in one place. checker() enforces "only one hub", and
+    # out_of_the_box.HUB_FLAGS has to agree with this list or OOTB will not
+    # recognise a hub the user asked for and may substitute the EF; the OOTB
+    # validator checks the two against each other.
+    HUBS = ["APH", "subgradient_hub", "fwph_hub", "ph_primal_hub",
+            "lshaped_hub", "cg_hub", "dualcg_hub", "fwph_objgap_hub"]
+
     # remember that the parent uses slots
 
     #===============
@@ -161,8 +169,7 @@ class Config(pyofig.ConfigDict):
             )
 
         # remember that True is 1 and False is 0
-        HUBS = ["APH", "subgradient_hub", "fwph_hub", "ph_primal_hub", "lshaped_hub", "cg_hub", "dualcg_hub", "fwph_objgap_hub"]
-        if sum(self.get(hub_name,0) for hub_name in HUBS) > 1:
+        if sum(self.get(hub_name, 0) for hub_name in Config.HUBS) > 1:
             _bad_options("Only one hub can be active.")
 
         # remember that True is 1 and False is 0
