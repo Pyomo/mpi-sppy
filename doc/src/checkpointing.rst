@@ -21,8 +21,14 @@ not attached at all, and a run that does not ask for it pays nothing.
 .. note::
    The current implementation covers a **serial PH hub**. Multi-rank runs,
    bundles, and cylinder (hub-and-spoke) runs are planned but not yet
-   supported. See ``doc/designs/checkpointing_design.md`` for the full design
-   and the phased rollout.
+   supported. A multi-rank hub is refused at startup, but a hub-and-spoke run
+   is not: it writes a checkpoint covering the hub alone. The incumbent is
+   held by the spoke that found it, so resuming one starts with no incumbent
+   at all -- and having none, it accepts the first solution it is offered as
+   its best, which can be worse than the one the checkpoint was written with.
+   Do not resume a hub-and-spoke run until cylinder support lands. See
+   ``doc/designs/checkpointing_design.md`` for the full design and the phased
+   rollout.
 
 Writing a checkpoint
 --------------------
@@ -219,8 +225,10 @@ uninterrupted run: multi-threaded MIP solves are not deterministic and admit
 multiple optima, so the resumed iterates may differ. That is expected, not a
 bug.
 
-Bounds and the incumbent are carried forward as valid best-so-far values. A
-resumed run never reports a worse best-so-far than its checkpoint.
+The hub's bounds and incumbent are carried forward as valid best-so-far
+values, so a resumed hub never reports a worse best-so-far than its
+checkpoint. What a spoke held is not covered, for the reason given in the
+note at the top of this page.
 
 The xhat extensions that run inside the hub (``XhatLooper``, ``XhatXbar``,
 ``XhatClosest`` and ``XhatSpecific``) are not covered by that promise. They
