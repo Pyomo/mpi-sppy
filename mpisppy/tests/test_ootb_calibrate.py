@@ -14,6 +14,7 @@ locally, not in CI. See doc/designs/out_of_the_box_design.md sec. 9.
 """
 
 import copy
+import json
 import unittest
 
 from mpisppy.generic import ootb_calibrate as cal
@@ -102,14 +103,39 @@ class TestCalibratedPolicy(unittest.TestCase):
         self.assertIn("0.5", ef["_calibration_note"])
         self.assertIn("0.5", pol["provenance"])
 
-    def test_provenance_omits_the_budget_when_none_was_derived(self):
-        # No ef_target_seconds -> the budget is never recomputed, so provenance
-        # must not claim it was derived from one.
+    def test_refuses_a_policy_with_no_ef_target_seconds(self):
+        # Without a target there is nothing to convert, and ootb_validate
+        # already rejects such a policy (ef_target_seconds must be > 0). Emitting
+        # a file whose _comment and _cold_start_guess describe a conversion that
+        # never happened would be worse than refusing.
         base = copy.deepcopy(self.base)
         base["ef_fallback"].pop("ef_target_seconds", None)
-        pol = cal.calibrated_policy(base, self.fit, [], "gurobi", "2026-07-01")
-        self.assertNotIn("ef_effort_budget", pol["provenance"])
-        self.assertNotIn("_calibration_note", pol["ef_fallback"])
+        with self.assertRaises(ValueError):
+            cal.calibrated_policy(base, self.fit, [], "gurobi", "2026-07-01")
+
+    def test_refuses_a_non_positive_scale(self):
+        with self.assertRaises(ValueError):
+            cal.calibrated_policy(copy.deepcopy(self.base),
+                                  dict(self.fit, seconds_per_effort_unit=0.0),
+                                  [], "gurobi", "2026-07-01")
+
+    def test_prose_uses_the_rounded_scale_the_file_records(self):
+        # The stored field is rounded to 8 places; dividing by (or quoting) the
+        # unrounded value would make the file disagree with its own note and
+        # stop it being a fixed point of calibrated_policy.
+        rescaled = dict(self.fit, seconds_per_effort_unit=1 / 3)
+        pol = cal.calibrated_policy(copy.deepcopy(self.base), rescaled,
+                                    [], "gurobi", "2026-07-01")
+        stored = pol["effort_scaling"]["seconds_per_effort_unit"]
+        self.assertEqual(stored, round(1 / 3, 8))
+        self.assertIn(str(stored), pol["ef_fallback"]["_calibration_note"])
+        self.assertIn(str(stored), pol["provenance"])
+        self.assertNotIn(str(1 / 3), pol["ef_fallback"]["_calibration_note"])
+        # and the emitted file must itself be a fixed point
+        again = cal.calibrated_policy(copy.deepcopy(pol), dict(rescaled),
+                                      [], "gurobi", "2026-07-01")
+        self.assertEqual(pol["ef_fallback"]["_calibration_note"],
+                         again["ef_fallback"]["_calibration_note"])
 
     def test_shipped_policy_is_reproducible_by_the_calibrator(self):
         # The shipped file must be a fixed point of calibrated_policy for the
@@ -122,11 +148,11 @@ class TestCalibratedPolicy(unittest.TestCase):
         fit.update(r2=calib["r2"], n_points=calib["n_points"])
         rebuilt = cal.calibrated_policy(copy.deepcopy(shipped), fit,
                                         [], calib["solver"], calib["date"])
-        self.assertEqual(shipped["provenance"], rebuilt["provenance"])
-        for key in ("_calibration_note", "_comment", "_cold_start_guess",
-                    "ef_effort_budget"):
-            self.assertEqual(shipped["ef_fallback"][key],
-                             rebuilt["ef_fallback"][key], msg=f"{key} drifted")
+        # Compare the WHOLE policy, not a hand-picked key list: the claim is
+        # that nothing the calibrator writes can drift from the shipped file,
+        # and a hand-picked list would miss the effort_scaling prose.
+        self.assertEqual(json.dumps(shipped, sort_keys=True, indent=1),
+                         json.dumps(rebuilt, sort_keys=True, indent=1))
 
     def test_calibrated_policy_passes_static_validation(self):
         # end-to-end: a fitted policy must still be well-formed.

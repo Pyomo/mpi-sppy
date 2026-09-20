@@ -189,11 +189,14 @@ needed. A user selects a focus simply by passing that file's path. The run
 *structure* is authored. The `effort_scaling` *coefficients* are produced by the
 calibration tool (§9) on the example set — reproducible, not hand-guesses. The
 rest of the numbers — thresholds and budget magnitudes — are still authored, and
-each block flags its hand-guessed keys in `_cold_start_guess`. Two authored
-values are deliberately not flagged: `min_ranks_for_decomposition` (3) is
-requirement 3, not a guess, and the spoke ladder's *priority ordering* is a
-guess that the key cannot name, since it lists keys rather than orderings (the
-block's own comment says so). Schema keys:
+each block flags its hand-guessed keys in `_cold_start_guess`. A few authored
+values are deliberately not flagged, so checking the lists against the file
+turns up more than the guesses: `min_ranks_for_decomposition` (3) is
+requirement 3, `spoke_ladder.core_roster_min` follows from it, and
+`bundle_sizing.never_fewer_bundles_than_ranks` is a rule rather than a number.
+The spoke ladder's *priority ordering* is a genuine guess that the key cannot
+name, since it lists keys rather than orderings (the block's own comment says
+so). Schema keys:
 
 | Key | Purpose |
 |---|---|
@@ -366,8 +369,10 @@ file carries a `_calibration` block — gurobi, 14 timed EF solves, R^2 0.9995).
 seconds units, so `seconds_per_effort_unit` is 1 by construction rather than
 estimated, and the budget is simply the authored `ef_target_seconds` restated in
 effort units. What calibration bought here is that the units mean something; the
-magnitude (120) is still a hand-chosen target. The `bundle_sizing` numbers and the
-remaining `ef_fallback` counts are plain `_cold_start_guess`es; **foci** *may*
+magnitude (120) is still a hand-chosen target, and it is listed in
+`ef_fallback._cold_start_guess` alongside the `ef_target_seconds` it comes from.
+The `bundle_sizing` numbers and the other `ef_fallback` counts are plain
+`_cold_start_guess`es too; **foci** *may*
 ship different shapes (say a `mip-heavy` file with a steeper `int_exponent`;
 only the one dated file exists today), and the dated-file migration path (§5)
 refines the

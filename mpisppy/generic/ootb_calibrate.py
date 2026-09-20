@@ -233,7 +233,13 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
     es["int_weight"] = fit["int_weight"]
     es["int_exponent"] = fit["int_exponent"]
     es["int_nonant_coeff"] = fit["int_nonant_coeff"]
-    es["seconds_per_effort_unit"] = round(fit["seconds_per_effort_unit"], 8)
+    # Round ONCE and use that value everywhere -- for the stored field, the
+    # budget division and the two prose strings. Dividing by the unrounded
+    # value while recording the rounded one makes the file disagree with its
+    # own note, and stops the emitted policy being a fixed point of this
+    # function (see test_shipped_policy_is_reproducible_by_the_calibrator).
+    spe = round(fit["seconds_per_effort_unit"], 8)
+    es["seconds_per_effort_unit"] = spe
     es["_calibration"] = {
         "solver": solver_name, "r2": fit["r2"], "n_points": fit["n_points"],
         "date": today, "note": "Fitted by mpisppy.generic.ootb_calibrate on the "
@@ -249,39 +255,47 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
     # Derive the EF budget in effort units from the seconds target so the budget
     # is consistent with the fitted scale (effort <= seconds / sec_per_effort).
     ef = pol["ef_fallback"]
-    spe = fit["seconds_per_effort_unit"]
-    budget_clause = ""     # provenance says nothing if nothing was derived
-    if spe > 0 and ef.get("ef_target_seconds"):
-        ef["ef_effort_budget"] = int(round(ef["ef_target_seconds"] / spe))
-        # State the scale that was actually used. The coefficients are normally
-        # kept in seconds (scale 1), but fit_effort_model documents the field as
-        # a knob "to let a focus rescale", so asserting 1 here would be wrong
-        # for such a focus -- and wrong next to a budget computed from spe.
-        ef["_calibration_note"] = (
-            "ef_effort_budget = ef_target_seconds / seconds_per_effort_unit "
-            f"= {ef['ef_target_seconds']} / {spe} (scale fitted {today}). "
-            "Calibration makes the UNITS meaningful; the magnitude comes from "
-            "the authored ef_target_seconds, not from measurement.")
-        # ef_effort_budget STAYS listed as a cold-start guess. It is
-        # ef_target_seconds -- itself a guess -- divided by a scale that is 1
-        # by construction, so the derivation adds no evidence. Listing the
-        # source but not the number derived from it would read as though the
-        # derivation measured something. Rebuilt in block-key order.
-        guesses = set(ef.get("_cold_start_guess", [])) | {"ef_effort_budget"}
-        ef["_cold_start_guess"] = [k for k in ef if k in guesses]
-        ef["_comment"] = ef.get("_comment", "").replace(
-            "All cold-start guesses.",
-            "ef_effort_budget is ef_target_seconds in effort units (see "
-            "_calibration_note); ef_target_seconds and ef_if_num_scens_at_most "
-            "remain authored guesses.")
-        budget_clause = (" ef_effort_budget is the authored ef_target_seconds "
-                         f"converted at seconds_per_effort_unit={spe}; its "
-                         "magnitude is authored, not measured.")
-    else:
-        # Nothing was derived, so drop any note carried in from the policy we
-        # were handed: left in place it would describe this new dated file's
-        # budget as freshly converted when it was not touched at all.
-        ef.pop("_calibration_note", None)
+    # A policy with no positive ef_target_seconds (or a non-positive scale) is
+    # one ootb_validate already rejects -- it requires ef_target_seconds > 0 --
+    # so there is no sound file to emit here. Refuse rather than write one
+    # whose _comment, _cold_start_guess and stale ef_effort_budget describe a
+    # conversion that never happened.
+    if spe <= 0:
+        raise ValueError(f"seconds_per_effort_unit must be positive, got {spe}")
+    if not ef.get("ef_target_seconds", 0) > 0:
+        raise ValueError(
+            "ef_fallback.ef_target_seconds must be a positive number to derive "
+            f"ef_effort_budget from it; got {ef.get('ef_target_seconds')!r}")
+    ef["ef_effort_budget"] = int(round(ef["ef_target_seconds"] / spe))
+    # State the scale that was actually used. The coefficients are normally
+    # kept in seconds (scale 1), but fit_effort_model documents the field as
+    # a knob "to let a focus rescale", so asserting 1 here would be wrong
+    # for such a focus -- and wrong next to a budget computed from spe.
+    ef["_calibration_note"] = (
+        "ef_effort_budget = ef_target_seconds / seconds_per_effort_unit "
+        f"= {ef['ef_target_seconds']} / {spe} (scale fitted {today}). "
+        "Calibration makes the UNITS meaningful; the magnitude comes from "
+        "the authored ef_target_seconds, not from measurement.")
+    # ef_effort_budget STAYS listed as a cold-start guess. It is
+    # ef_target_seconds -- itself a guess -- divided by a scale that is 1
+    # by construction, so the derivation adds no evidence. Listing the
+    # source but not the number derived from it would read as though the
+    # derivation measured something. Rebuilt in block-key order.
+    guesses = set(ef.get("_cold_start_guess", [])) | {"ef_effort_budget"}
+    # Keep entries that name no key in this block. Dropping them would
+    # silently repair an authoring error that ootb_validate has a dedicated
+    # check for, so a renamed key would lose its "still a guess" label and
+    # the validator would then report clean.
+    ef["_cold_start_guess"] = ([k for k in ef if k in guesses]
+                               + [g for g in guesses if g not in ef])
+    ef["_comment"] = ef.get("_comment", "").replace(
+        "All cold-start guesses.",
+        "ef_effort_budget is ef_target_seconds in effort units (see "
+        "_calibration_note); ef_target_seconds and ef_if_num_scens_at_most "
+        "remain authored guesses.")
+    budget_clause = (" ef_effort_budget is the authored ef_target_seconds "
+                     f"converted at seconds_per_effort_unit={spe}; its "
+                     "magnitude is authored, not measured.")
 
     pol["policy_version"] = today
     pol["provenance"] = (f"CALIBRATED {today} by mpisppy.generic.ootb_calibrate "
