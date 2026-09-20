@@ -102,7 +102,7 @@ def do_mmw(module_fname, cfg, wheel=None):
         cfg.quick_assign("EF_solver_name", str, cfg.solver_name)
 
     # Tell MMW whether this is a 2-stage or multi-stage problem.
-    if cfg.get("branching_factors") is not None:
+    if cfg.get("branching_factors"):     # empty list is not multistage
         cfg.quick_assign("EF_mstage", bool, True)
     else:
         cfg.quick_assign("EF_2stage", bool, True)

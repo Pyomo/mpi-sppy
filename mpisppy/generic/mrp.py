@@ -186,7 +186,8 @@ def do_mrp(module_fname, module, cfg):
     importable_name = os.path.basename(module_fname)
 
     # Determine two-stage vs multi-stage
-    is_multistage = cfg.get("branching_factors") is not None
+    # empty list (--branching-factors "") is not multistage
+    is_multistage = bool(cfg.get("branching_factors"))
 
     # Set the solving_type for SeqSampling
     if is_multistage:
