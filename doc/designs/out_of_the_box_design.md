@@ -1,15 +1,18 @@
 # Out-of-the-box auto-configuration — design
 
-**Status:** Design phase. Branch `outOfTheBox` (off Pyomo/mpi-sppy `main`), on
-the DLWoodruff fork. Proceeding deliberately ("slowly"): requirements confirmed
-and the major design questions resolved — decision-logic mechanism (§5), policy
-file + path selection (§5.1), effort tiers (§5.2), bundle sizing & the EF gate
-(§5.3), `--inspect-only` (§5.4), rank allocation (§5.5), and the PR1 tooling —
-validator (§8) and effort calibrator (§9). The first dated policy file is
-committed, as is an interpreter *sketch* (§7) whose decision logic is complete
-with the environment wiring stubbed. Next: turn the sketch into PR1 code.
+**Status:** PR1 is written and under review as Pyomo/mpi-sppy#779, from branch
+`outOfTheBox` on the DLWoodruff fork. The major design questions are resolved —
+decision-logic mechanism (§5), policy file + path selection (§5.1), effort tiers
+(§5.2), bundle sizing & the EF gate (§5.3), `--inspect-only` (§5.4), rank
+allocation (§5.5) — and PR1 implements all of them, together with the validator
+(§8) and the effort calibrator (§9), whose fit produced the shipped policy's
+effort numbers. Next: the **plus** tier (§5.2), which is declared and accepted
+today but behaves exactly like base.
+
+Read the sections below as the design that was built, not as a plan; where one
+disagrees with the code, the code is what to trust.
 **Author:** dlw (captured with Claude Code assistance)
-**Last updated:** 2026-06-28
+**Last updated:** 2026-09-19
 
 ---
 
@@ -184,9 +187,9 @@ needed. A user selects a focus simply by passing that file's path. The run
 
 **v1 schema** (see the file for the authoritative, self-documenting copy). The
 *structure* is authored; the *numbers* are produced by the calibration tool (§9)
-on the example set — reproducible, not hand-guesses. (The current design-phase
-file still carries hand-guesses flagged `_cold_start_guess`; PR1 replaces them
-with calibration output.) Schema keys:
+on the example set — reproducible, not hand-guesses. (The shipped file's
+`effort_scaling` block is calibration output; what remains hand-authored is
+still flagged `_cold_start_guess`.) Schema keys:
 
 | Key | Purpose |
 |---|---|
@@ -196,16 +199,22 @@ with calibration output.) Schema keys:
 | `spoke_ladder` | ordered `rungs` of WIRED spoke flags (outer/inner), `core_roster_min` (≥1 outer + ≥1 inner = the 3-rank floor), `max_cylinders` |
 | `rank_allocation` | small-core roster widened by ranks (add a rung only while each cylinder keeps ≥ `min_ranks_per_cylinder`, ≤ `max_cylinders`); ranks split **unbalanced** across cylinders by `rank_ratios` (xhatter 0.2) — crude cold-start (§5.5) |
 | `effort_scaling` | shape of solve effort vs. size (continuous ~linear, integers superlinear via `int_exponent`); shared by bundle sizing (§5.3) |
-| `bundle_sizing` | how big bundles are (base/plus only — **minus cannot bundle**): largest `spb` within an effort budget (base = relative M; plus = measured seconds); `--scenarios-per-bundle` divides `num_scens`; `#bundles ≥ #ranks` |
-| `option_categories` | per-concern default options (`rho_setter` `--grad-rho`, `termination` `--rel-gap 0.01`, `max_iterations` `--max-iterations 100`, `dynamic_rho` `--dynamic-rho-primal-crit`), each skipped if the user set any flag in its `superseded_by` list; skipped on the EF path |
+| `bundle_sizing` | how big bundles are (base/plus only — **minus cannot bundle**): largest `spb` within an effort budget (base = relative M; plus = measured seconds); `--scenarios-per-bundle` divides `num_scens`; `#bundles ≥ #intra_ranks` (§5.3) |
+| `option_categories` | per-concern default options (`base_rho` `--default-rho 1`, `rho_setter` `--grad-rho`, `termination` `--rel-gap 0.01`, `max_iterations` `--max-iterations 100`, `dynamic_rho` `--dynamic-rho-primal-crit`), each skipped if the user set any flag in its `superseded_by` list; skipped on the EF path |
 | `additional_options` | catch-all for other extra flags (each with an optional `superseded_by`, default = its own flag) |
 | `suggestions` | toggles/tunes the **computed** suggestion generators (`disabled` suppresses specific ones); the prose lives in code, emitted after the run |
 
 **Additional options, with per-concern override.** Beyond the structural
 choices, the policy applies extra options grouped by **concern** in
-`option_categories` — `rho_setter` (`--grad-rho`), `termination`
-(`--rel-gap 0.01`), `max_iterations` (`--max-iterations 100`), `dynamic_rho`
-(`--dynamic-rho-primal-crit`). Each carries a **`superseded_by`** list of user
+`option_categories` — `base_rho` (`--default-rho 1`), `rho_setter`
+(`--grad-rho`), `termination` (`--rel-gap 0.01`), `max_iterations`
+(`--max-iterations 100`), `dynamic_rho` (`--dynamic-rho-primal-crit`).
+`base_rho` is load-bearing rather than cosmetic: `--grad-rho` *refines* rho but
+does not supply a base, and (unlike sep/coeff/sensi rho) mpi-sppy does not
+auto-default one, so a decomposition with `--grad-rho` and no `--default-rho`
+is a hard error.
+
+Each category carries a **`superseded_by`** list of user
 flags that obviate OOTB's default for that concern, so OOTB backs off when the
 user addresses the concern with *any* equivalent flag — not just the identical
 one. This matters concretely: mpi-sppy allows **only one rho setter active**, so
@@ -236,7 +245,7 @@ to the tier.
 
 | Tier | Flag | Instantiates | New facts | What it can decide (vs. advise) |
 |---|---|---|---|---|
-| minus | `--out-of-the-box-minus` | nothing | scenario count, ranks, solvers, stage structure | EF gate by **count**; solver by availability; **cannot bundle**. Integrality/size unknown → only **advises** on prox linearization |
+| minus | `--out-of-the-box-minus` | nothing | scenario count, ranks, solvers, stage structure | EF gate by **count**; solver by availability; **cannot bundle**. Integrality/size unknown, so no problem class and no bundle sizing — but prox linearization is **decided** here too, since it keys on the chosen solver, not on the model |
 | base (default) | `--out-of-the-box` | **one** probe scenario | size profile: `vars_int`, `vars_cont`, `nonants_total`, `nonants_int`, `model_degree` | EF gate **size-aware**; integrality + degree **decide** the problem class (LP/MIP/QP/MIQP/NLP/MINLP) and hence the solver (nonlinear → ipopt); linearize-prox for LP/MIP-only solvers; effort-budgeted bundle sizing (§5.3) |
 | plus (later) | `--out-of-the-box-plus` | **all** + brief solve | per-subproblem solve time, LP-relax / integrality gap | iteration/time-limit defaults, bundle sizing to amortize solve cost, "hard MIP" signals |
 
@@ -347,12 +356,15 @@ first: below it the decomposition can't fit, so the EF is used regardless. (This
 flag vocabulary is a *fact* about `generic_cylinders`, not a focus preference, so
 it lives in code, not the policy; the validator checks it against the real CLI.)
 
-**Status.** All `effort_scaling` / `bundle_sizing` numbers are
-`_cold_start_guess`es; **foci** ship different shapes (a `mip-heavy` file with a
+**Status.** The `effort_scaling` coefficients and `ef_effort_budget` are
+**calibrated** (the shipped file carries a `_calibration` block — gurobi,
+14 timed EF solves, R^2 0.9995); the `bundle_sizing` numbers and the remaining
+`ef_fallback` counts are still `_cold_start_guess`es; **foci** ship different
+shapes (a `mip-heavy` file with a
 steeper `int_exponent`), and the dated-file migration path (§5) refines the
-coefficients from benchmark data. The interpreter sketch implements the base
+coefficients from benchmark data. The interpreter implements the base
 relative sizer (`_effort`, `_pick_spb_by_effort`); minus does not bundle; the
-`plus` measure-and-scale hook is stubbed.
+`plus` measure-and-scale hook is not implemented.
 
 ## 5.4 `--inspect-only` (dry run; shares OOTB's instantiation) — RESOLVED 2026-06-28
 
@@ -408,8 +420,9 @@ chosen cylinders and floored at 1 rank each (e.g. 6 ranks → hub 3, lagrangian 
 xhatshuffle 1). **This is a crude cold-start:** the right split is a much more
 complicated calculation that depends on the *nature of the subproblems*
 (relative solve cost), and is a natural place for the `plus` tier's measurements
-to inform. The widest cylinder's rank count governs the bundling
-`#bundles ≥ #ranks` floor.
+to inform. The widest cylinder's rank count (`intra_ranks`) governs the bundling
+`#bundles ≥ #intra_ranks` floor — not the run's total rank count, since each
+cylinder works through its own bundles.
 
 ---
 
@@ -419,8 +432,9 @@ to inform. The widest cylinder's rank count governs the bundling
   base (one probe, default), plus (all + brief solve, later).
 - **Bundle sizing — RESOLVED** as an effort-budgeted rule (§5.3): policy
   `effort_scaling` shape + `bundle_sizing` budgets; interpreter `_effort` /
-  `_pick_spb_by_effort` (base, relative M); minus does not bundle; stubbed
-  `plus` measure-and-scale. Numbers are `_cold_start_guess`es.
+  `_pick_spb_by_effort` (base, relative M); minus does not bundle; `plus`
+  measure-and-scale not implemented. The `bundle_sizing` numbers are
+  `_cold_start_guess`es; the `effort_scaling` shape they use is calibrated.
 - **EF gate — RESOLVED** (§5.3): reuses the bundle `effort()` model on the whole
   problem against an absolute **EF budget** — base `ef_effort_budget`, plus
   `ef_target_seconds`, minus the count rule `ef_if_num_scens_at_most`.
@@ -433,10 +447,11 @@ to inform. The widest cylinder's rank count governs the bundling
 
 ## 7. Phased rollout
 
-Per project convention, ship as review-sized phases, each green on its own. A
-sketch of the interpreter already exists at `mpisppy/generic/out_of_the_box.py`
-— the pure `recommend(facts, policy) → Decision` logic is complete and
-smoke-tested; environment/model probing and apply-to-`Config` are stubbed.
+Per project convention, ship as review-sized phases, each green on its own. The
+interpreter lives at `mpisppy/generic/out_of_the_box.py`: the pure
+`recommend(facts, policy) → Decision` logic, plus the environment/model probing
+(`gather_facts`) and `apply_decision`, which were stubbed while this section was
+written and are now implemented.
 
 - **PR1 — interpreter pipeline + `--out-of-the-box-minus` + `--out-of-the-box`
   (base).** These share everything except one probe instantiation, so they land
@@ -490,7 +505,7 @@ solvers, problem sizes), and assert:
 - **User-forced decomposition wins:** simulated user `--ph --lagrangian
   --xhatshuffle` with ≥ rank floor ⇒ never EF (§5.3).
 - **Bundling validity:** when bundling, `scenarios_per_bundle` divides
-  `num_scens` and `#bundles ≥ #ranks`.
+  `num_scens` and `#bundles ≥ #intra_ranks`.
 - **No conflicting options:** `superseded_by` simulation ⇒ OOTB never stacks a
   second rho setter (which would be a hard error).
 
@@ -543,13 +558,13 @@ into `run_coverage.bash` **and** `test_pr_and_main.yml` in the same commit. Laye
 3 is the same module invoked with `--run` (nightly / local). The report is
 written human-readable and machine-readable (JSON).
 
-**Status:** design nailed down; **scheduled for PR1**. The check *catalog* will
-keep growing, but the tool, the three-layer structure, the CI gate, and the
-report all ship in PR1.
+**Status:** shipped in PR1 as `mpisppy/generic/ootb_validate.py`. The check
+*catalog* will keep growing, but the tool, the three-layer structure, the CI
+gate, and the report are all in place.
 
 ---
 
-## 9. Effort-calibration tool (future; data-tuning side)
+## 9. Effort-calibration tool (data-tuning side)
 
 The `effort_scaling` coefficients and the effort budgets are abstract by
 construction (arbitrary "effort units"); left as hand-guesses they are
