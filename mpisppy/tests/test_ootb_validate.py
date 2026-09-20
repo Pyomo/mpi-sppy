@@ -8,10 +8,11 @@
 ###############################################################################
 """CI gate for the out-of-the-box (OOTB) policy-file validator.
 
-Runs only the solver-free, fast layers -- layer 1 (static schema) and the
-synthetic-facts subset of layer 2 (pure recommend() decisions on hand-built
-Facts) -- on the shipped policy file(s). Example instantiation, anything needing
-a solver, and all of layer 3 run nightly / on demand / locally, NOT here. See
+Runs the solver-free, fast layers on the shipped policy file(s): layer 1
+(static schema) and both subsets of layer 2 -- the synthetic-facts decisions on
+hand-built Facts, and the real-example decisions, which probe-instantiate the
+models without solving them. Anything that needs a solver, and all of layer 3,
+run nightly / on demand / locally, NOT here. See
 doc/designs/out_of_the_box_design.md sec. 8.
 """
 
@@ -100,6 +101,15 @@ class TestValidatorCatchesBadPolicies(unittest.TestCase):
         # regression: a _cold_start_guess entry that is prose, not a real key.
         # (bundle_sizing stays hand-authored even after effort calibration.)
         self.policy["bundle_sizing"]["_cold_start_guess"].append("not_a_key")
+        self.assertTrue(self._fails(val.validate_static(self.policy)))
+
+    def test_rank_ratio_key_without_a_declared_ratio_option(self):
+        # regression: --xhatlshaped is a real spoke flag, so the "keys are real
+        # spoke flags" check passes, but recommend() sets the derived
+        # --xhatlshaped-rank-ratio and apply_decision writes it onto the
+        # Config, which has no such option. It was inert only because
+        # --xhatlshaped is not on the spoke ladder.
+        self.policy["rank_allocation"]["rank_ratios"]["--xhatlshaped"] = 0.2
         self.assertTrue(self._fails(val.validate_static(self.policy)))
 
     def test_rho_setter_must_list_all_setters(self):

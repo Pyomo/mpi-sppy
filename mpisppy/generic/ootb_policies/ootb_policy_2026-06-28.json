@@ -140,8 +140,7 @@
     "default_rank_ratio": 1.0,
     "rank_ratios": {
       "--xhatshuffle": 0.2,
-      "--xhatxbar": 0.2,
-      "--xhatlshaped": 0.2
+      "--xhatxbar": 0.2
     },
     "_cold_start_guess": [
       "min_ranks_per_cylinder",

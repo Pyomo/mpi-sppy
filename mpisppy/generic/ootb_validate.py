@@ -31,8 +31,10 @@ Three layers, fast to slow:
      recommended configs on the small examples and FLAG (a) an EF that misses a
      1% gap in ten minutes and (b) cylinders that max out on iterations.
 
-The CI gate (mpisppy/tests/test_ootb_validate.py) runs only layers 1 +
-2-synthetic on the shipped policy file(s) -- solver-free, fast.
+The CI gate (mpisppy/tests/test_ootb_validate.py) runs layers 1 and 2 on the
+shipped policy file(s) -- both the synthetic-facts subset and the real-example
+subset, which probe-instantiates the models without solving. All of it is
+solver-free and fast. Layer 3 is never a CI gate.
 """
 
 from __future__ import annotations
@@ -255,6 +257,15 @@ def validate_static(policy: dict) -> list:
     rr = ra.get("rank_ratios", {})
     add("rank_allocation.rank_ratios keys are real spoke flags",
         all(f in flags for f in rr), f"unknown: {[f for f in rr if f not in flags]}")
+    # recommend() does not set the spoke flag itself, it sets the derived
+    # "<flag>-rank-ratio" option, and apply_decision writes that straight onto
+    # the Config. A key whose derived option was never declared therefore
+    # raises a KeyError the moment that spoke joins the ladder. The key check
+    # above cannot catch it: --xhatlshaped is a real spoke flag, but
+    # --xhatlshaped-rank-ratio was never declared.
+    missing_ratio = [f for f in rr if f"{f}-rank-ratio" not in flags]
+    add("rank_allocation.rank_ratios keys have a declared -rank-ratio option",
+        not missing_ratio, f"no such option: {[f + '-rank-ratio' for f in missing_ratio]}")
     add("rank_allocation.rank_ratios values are positive numbers",
         all(_is_number(v) and v > 0 for v in rr.values()))
 
@@ -591,9 +602,15 @@ def validate_runs(policy_path: str, *, ef_time_limit=EF_TIME_LIMIT_SEC,
     """Run two configurations per example and flag the two failure modes."""
     records = []
     pol_arg = ["--out-of-the-box", policy_path] if policy_path else ["--out-of-the-box"]
+    # The EF leg runs at the minus tier (one rank reaches the EF on rank count
+    # alone, with nothing to instantiate), but it still has to be the policy
+    # under test: a bare --out-of-the-box-minus reads the shipped default, so
+    # validating a candidate file would report the default's EF results.
+    minus_arg = (["--out-of-the-box-minus", policy_path] if policy_path
+                 else ["--out-of-the-box-minus"])
     for spec in example_models():
         # (a) EF: few ranks -> OOTB picks the EF. Flag if it misses the gap/time.
-        res = _run_one(spec, "EF", 1, ["--out-of-the-box-minus"] + (
+        res = _run_one(spec, "EF", 1, minus_arg + (
             ["--EF-mipgap", str(ef_gap)] if spec["kind"] == "2-stage MIP" else []),
             timeout=ef_time_limit)
         if isinstance(res, RunRecord):           # timed out
@@ -721,7 +738,7 @@ def main(argv=None):
                    help="policy file path (default: the shipped default policy)")
     p.add_argument("--examples", action="store_true",
                    help="also run decision checks on probe-instantiated real "
-                        "example models (needs a solver to instantiate; not CI)")
+                        "example models (builds scenarios; no solve, no solver)")
     p.add_argument("--run", action="store_true",
                    help="also actually RUN the recommended configs (layer 3; "
                         "slow, needs a solver and mpiexec; never a CI gate)")
