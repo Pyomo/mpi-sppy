@@ -74,6 +74,24 @@ def _round_sig(x: float, n: int = 6) -> float:
     return round(x, -int(math.floor(math.log10(abs(x)))) + (n - 1))
 
 
+def _finite_positive(x) -> bool:
+    """True iff x is a real number that converts to a finite, positive float.
+
+    Not `math.isfinite(x)`: that RAISES OverflowError on an int too large to
+    convert to a float (json accepts an arbitrarily long integer literal), which
+    is the bare-traceback failure these checks exist to translate. json also
+    accepts the bare tokens Infinity and NaN, so the float path has to be
+    checked too. The conversion is guarded rather than asked.
+    """
+    if not val._is_number(x):
+        return False
+    try:
+        f = float(x)
+    except (OverflowError, ValueError):
+        return False
+    return math.isfinite(f) and f > 0
+
+
 def _design_columns(point: dict, exponent: float):
     """The three effort features for one measured point, matching ootb._effort:
     continuous content (~spb), integer content (^exponent), integer nonants
@@ -246,7 +264,7 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
     # maps nan and inf to 0.0, which would report a degenerate fit as a zero
     # scale. ootb_validate has no check on this field, so a bad one reaches us.
     raw_spe = fit["seconds_per_effort_unit"]
-    if not (val._is_number(raw_spe) and math.isfinite(raw_spe) and raw_spe > 0):
+    if not _finite_positive(raw_spe):
         raise ValueError("seconds_per_effort_unit must be a positive finite "
                          f"number, got {raw_spe!r}")
     spe = _round_sig(raw_spe)
@@ -272,12 +290,14 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
     # whose _comment, _cold_start_guess and stale ef_effort_budget describe a
     # conversion that never happened.
     target = ef.get("ef_target_seconds")
-    if not (val._is_number(target) and target > 0):
-        # _is_number first: a hand-authored "120" would otherwise raise
-        # TypeError from the comparison instead of this message.
+    if not _finite_positive(target):
+        # The same guard as the scale, for the same reasons: a hand-authored
+        # "120" would raise TypeError from the comparison, a bare Infinity
+        # would reach the division and be misdiagnosed as a bad scale, and an
+        # over-long integer literal would raise OverflowError in the division.
         raise ValueError(
-            "ef_fallback.ef_target_seconds must be a positive number to derive "
-            f"ef_effort_budget from it; got {target!r}")
+            "ef_fallback.ef_target_seconds must be a positive finite number to "
+            f"derive ef_effort_budget from it; got {target!r}")
     quotient = target / spe
     if not math.isfinite(quotient):
         # A denormal scale survives _round_sig, and target/1e-310 overflows to
@@ -354,10 +374,10 @@ def run_calibration(base_policy_path, solver_name=None, spb_grid=DEFAULT_SPB_GRI
     # base without a positive ef_target_seconds, and that is knowable now --
     # discovering it after minutes of timed solves would throw the run away.
     target = base.get("ef_fallback", {}).get("ef_target_seconds")
-    if not (val._is_number(target) and target > 0):
+    if not _finite_positive(target):
         raise ValueError(
-            "base policy needs a positive ef_fallback.ef_target_seconds to "
-            f"calibrate against; got {target!r}")
+            "base policy needs a positive finite ef_fallback.ef_target_seconds "
+            f"to calibrate against; got {target!r}")
     solver = _pick_solver(base, solver_name)
     print(f"[calibrate] solver: {solver}")
     points = collect_points(base, solver, spb_grid, reps)

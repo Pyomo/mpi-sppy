@@ -113,12 +113,6 @@ class TestCalibratedPolicy(unittest.TestCase):
         with self.assertRaises(ValueError):
             cal.calibrated_policy(base, self.fit, [], "gurobi", "2026-07-01")
 
-    def test_refuses_a_non_positive_scale(self):
-        with self.assertRaises(ValueError):
-            cal.calibrated_policy(copy.deepcopy(self.base),
-                                  dict(self.fit, seconds_per_effort_unit=0.0),
-                                  [], "gurobi", "2026-07-01")
-
     def test_prose_uses_the_rounded_scale_the_file_records(self):
         # The stored field is rounded to significant figures (_round_sig);
         # dividing by (or quoting) the unrounded value would make the file
@@ -192,6 +186,19 @@ class TestCalibratedPolicy(unittest.TestCase):
                         copy.deepcopy(self.base),
                         dict(self.fit, seconds_per_effort_unit=bad),
                         [], "gurobi", "2026-07-01")
+
+    def test_refuses_a_non_finite_or_over_large_target(self):
+        # Symmetric with the scale. json accepts the bare token Infinity and an
+        # arbitrarily long integer literal; inf > 0 is true, and a huge int
+        # raises OverflowError inside the division (and inside math.isfinite,
+        # which is why the guard converts under try rather than asking).
+        for bad in (float("inf"), float("nan"), 10 ** 400, "120", 0, -5):
+            with self.subTest(target=bad):
+                base = copy.deepcopy(self.base)
+                base["ef_fallback"]["ef_target_seconds"] = bad
+                with self.assertRaises(ValueError):
+                    cal.calibrated_policy(base, self.fit, [], "gurobi",
+                                          "2026-07-01")
 
     def test_refuses_a_scale_that_overflows_the_budget(self):
         # A denormal scale survives significant-figure rounding, and
