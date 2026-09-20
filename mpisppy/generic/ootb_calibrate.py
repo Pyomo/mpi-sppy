@@ -252,22 +252,29 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
     spe = fit["seconds_per_effort_unit"]
     if spe > 0 and ef.get("ef_target_seconds"):
         ef["ef_effort_budget"] = int(round(ef["ef_target_seconds"] / spe))
-        ef["_calibration_note"] = ("ef_effort_budget derived from "
-                                   "ef_target_seconds / seconds_per_effort_unit "
-                                   f"(calibrated {today}).")
+        ef["_calibration_note"] = (
+            "ef_effort_budget = ef_target_seconds / seconds_per_effort_unit "
+            f"(scale fitted {today}). The coefficients are fitted in seconds, "
+            "so the scale is 1 and this budget is the authored "
+            "ef_target_seconds in effort units -- calibration makes the UNITS "
+            "meaningful, it does not choose the magnitude.")
         guesses = ef.get("_cold_start_guess", [])
         ef["_cold_start_guess"] = [g for g in guesses if g != "ef_effort_budget"]
         ef["_comment"] = ef.get("_comment", "").replace(
             "All cold-start guesses.",
-            "ef_effort_budget is calibrated (see _calibration_note); "
-            "ef_target_seconds and ef_if_num_scens_at_most remain authored guesses.")
+            "ef_effort_budget is ef_target_seconds in effort units (see "
+            "_calibration_note); ef_target_seconds and ef_if_num_scens_at_most "
+            "remain authored guesses.")
 
     pol["policy_version"] = today
     pol["provenance"] = (f"CALIBRATED {today} by mpisppy.generic.ootb_calibrate "
                          f"(solver {solver_name}, R^2={fit['r2']}, "
                          f"{fit['n_points']} timed EF solves on the example set). "
-                         "effort_scaling and ef_effort_budget are data-tuned; "
-                         "remaining numbers are still authored. Per reference "
+                         "effort_scaling is data-tuned. ef_effort_budget is "
+                         "the authored ef_target_seconds restated in effort "
+                         "units (the fit is in seconds, so the scale is 1); "
+                         "its magnitude, and the remaining numbers, are still "
+                         "authored. Per reference "
                          "machine/solver and approximate (MIP times are noisy).")
     return pol
 

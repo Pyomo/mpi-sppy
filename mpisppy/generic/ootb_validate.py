@@ -602,6 +602,15 @@ def validate_runs(policy_path: str, *, ef_time_limit=EF_TIME_LIMIT_SEC,
                   ef_gap=EF_GAP_TARGET) -> list:  # pragma: no cover
     """Run two configurations per example and flag the two failure modes."""
     records = []
+    # Each child below runs with cwd set to the example's directory, so a
+    # relative policy path would resolve against that directory rather than the
+    # caller's: layers 1-2 would pass and every run here would die on a missing
+    # file, reported as "run did not complete cleanly". Resolve it here, in the
+    # function whose children need it, so an importing caller
+    # (run_validation("candidate.json", run=True)) is covered too, not just the
+    # command line.
+    if policy_path:
+        policy_path = os.path.abspath(policy_path)
     pol_arg = ["--out-of-the-box", policy_path] if policy_path else ["--out-of-the-box"]
     # The EF leg runs at the minus tier (one rank reaches the EF on rank count
     # alone, with nothing to instantiate), but it still has to be the policy
@@ -746,14 +755,6 @@ def main(argv=None):
     p.add_argument("--json", metavar="PATH", default=None,
                    help="write the machine-readable report to PATH")
     args = p.parse_args(argv)
-
-    # Layer 3 launches each child with cwd set to the example's directory, so a
-    # relative policy path would resolve against that directory instead of the
-    # one the user typed it in: layers 1-2 would pass and every layer-3 run
-    # would die on a missing file, reported as "run did not complete cleanly".
-    # Resolve once, here, while the user's cwd is still current.
-    if args.policy:
-        args.policy = os.path.abspath(args.policy)
 
     report = run_validation(args.policy, examples=args.examples, run=args.run)
     print(format_report(report))

@@ -358,12 +358,15 @@ it lives in code, not the policy; the validator checks it against the real CLI.)
 
 **Status.** The `effort_scaling` coefficients are **calibrated** (the shipped
 file carries a `_calibration` block — gurobi, 14 timed EF solves, R^2 0.9995).
-`ef_effort_budget` is *derived*, not fitted: it converts the authored
-`ef_target_seconds` through the calibrated `seconds_per_effort_unit`, so its
-magnitude is still the hand-chosen target. The `bundle_sizing` numbers and the
-remaining `ef_fallback` counts are plain `_cold_start_guess`es; **foci** ship
-different shapes (a `mip-heavy` file with a steeper `int_exponent`), and the
-dated-file migration path (§5) refines the
+`ef_effort_budget` is *not* fitted. The coefficients are deliberately kept in
+seconds units, so `seconds_per_effort_unit` is 1 by construction rather than
+estimated, and the budget is simply the authored `ef_target_seconds` restated in
+effort units. What calibration bought here is that the units mean something; the
+magnitude (120) is still a hand-chosen target. The `bundle_sizing` numbers and the
+remaining `ef_fallback` counts are plain `_cold_start_guess`es; **foci** *may*
+ship different shapes (say a `mip-heavy` file with a steeper `int_exponent`;
+only the one dated file exists today), and the dated-file migration path (§5)
+refines the
 coefficients from benchmark data. The interpreter implements the base
 relative sizer (`_effort`, `_pick_spb_by_effort`); minus does not bundle; the
 `plus` measure-and-scale hook is not implemented.
@@ -542,10 +545,13 @@ policy file and `policy_version` validated.
 
 **Only a small part can gate CI.** CI runners typically have **no commercial
 solver** and tight time budgets, so the per-PR gate is limited to the cheap,
-solver-free checks: layer 1 (static schema) plus the **synthetic-facts** subset
-of layer 2 (pure `recommend()` decisions on hand-built `Facts`, no instantiation,
-no solver). Everything else — example instantiation, anything needing a solver,
-and all of layer 3 — runs **nightly / on demand / locally**, not as a gate.
+**solver-free** checks. In the end that is more than this section first
+assumed: layer 1 (static schema) and the **synthetic-facts** subset of layer 2
+(pure `recommend()` decisions on hand-built `Facts`) for every shipped policy,
+plus the **real-example** subset of layer 2 for the default policy — probing
+farmer, sizes and aircond needs no solver, because it instantiates scenarios
+without solving them. Anything that needs a solver, and all of layer 3, runs
+**nightly / on demand / locally**, not as a gate.
 
 **Concrete shape (built in PR1).** A runnable module
 `mpisppy/generic/ootb_validate.py` — `python -m mpisppy.generic.ootb_validate
@@ -554,9 +560,9 @@ continuous), a small **MIP** example (e.g. `sizes`/`sslp`), and **aircond**
 (multistage). Decision checks sweep a handful of synthetic
 `(ranks, solvers, num_scens, size/integrality)` tuples chosen to hit each branch
 (EF-small, EF-few-ranks, decompose-large, forced-decomp, bundling on/off, LP-only
-solver, no-persistent). The CI gate is a **pytest** that runs only layers 1 +
-2-synthetic on the shipped policy file(s) — and, per project convention, is wired
-into `run_coverage.bash` **and** `test_pr_and_main.yml` in the same commit. Layer
+solver, no-persistent). The CI gate is a **pytest** that runs the solver-free layers
+(above) — and, per project convention, is wired into `run_coverage.bash` **and**
+`test_pr_and_main.yml` in the same commit. Layer
 3 is the same module invoked with `--run` (nightly / local). The report is
 written human-readable and machine-readable (JSON).
 
