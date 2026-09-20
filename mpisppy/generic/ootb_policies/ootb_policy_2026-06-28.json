@@ -2,7 +2,7 @@
   "_description": "Out-of-the-box (OOTB) auto-configuration policy. This is DATA, not code: a thin Python interpreter reads it and a set of facts about the environment (MPI ranks, installed solvers, optional cores/memory) and the model (scenario count, stage structure) to assemble a defensible mpi-sppy run. User-supplied options always win; OOTB only fills gaps. See doc/designs/out_of_the_box_design.md.",
   "schema_version": 1,
   "policy_version": "2026-06-28",
-  "provenance": "CALIBRATED 2026-06-28 by mpisppy.generic.ootb_calibrate (solver gurobi, R^2=0.9995, 14 timed EF solves on the example set). effort_scaling is data-tuned. ef_effort_budget is the authored ef_target_seconds restated in effort units (the fit is in seconds, so the scale is 1); its magnitude, and the remaining numbers, are still authored. Per reference machine/solver and approximate (MIP times are noisy).",
+  "provenance": "CALIBRATED 2026-06-28 by mpisppy.generic.ootb_calibrate (solver gurobi, R^2=0.9995, 14 timed EF solves on the example set). effort_scaling is data-tuned. ef_effort_budget is the authored ef_target_seconds converted at seconds_per_effort_unit=1.0; its magnitude is authored, not measured. Remaining numbers are still authored. Per reference machine/solver and approximate (MIP times are noisy).",
   "ef_fallback": {
     "_comment": "When to solve the monolithic EF instead of decomposing. Always EF when ranks < min_ranks_for_decomposition (requirement 3). Otherwise EF when the WHOLE problem is small enough, measured with the SAME effort model as bundle sizing (effort_scaling) applied to all scenarios as one model, i.e. effort(num_scens). Unlike bundle sizing's RELATIVE budget, the EF budget is ABSOLUTE (the monolith has no single-scenario reference). base: effort(num_scens) <= ef_effort_budget (same effort units as bundle effort). plus: measured_single_scenario_seconds * effort(num_scens)/effort(1) <= ef_target_seconds. minus (no size profile): fall back to the count rule num_scens <= ef_if_num_scens_at_most. ef_effort_budget is ef_target_seconds in effort units (see _calibration_note); ef_target_seconds and ef_if_num_scens_at_most remain authored guesses.",
     "min_ranks_for_decomposition": 3,
@@ -11,9 +11,10 @@
     "ef_target_seconds": 120,
     "_cold_start_guess": [
       "ef_if_num_scens_at_most",
+      "ef_effort_budget",
       "ef_target_seconds"
     ],
-    "_calibration_note": "ef_effort_budget = ef_target_seconds / seconds_per_effort_unit (scale fitted 2026-06-28). The coefficients are fitted in seconds, so the scale is 1 and this budget is the authored ef_target_seconds in effort units -- calibration makes the UNITS meaningful, it does not choose the magnitude."
+    "_calibration_note": "ef_effort_budget = ef_target_seconds / seconds_per_effort_unit = 120 / 1.0 (scale fitted 2026-06-28). Calibration makes the UNITS meaningful; the magnitude comes from the authored ef_target_seconds, not from measurement."
   },
   "solver": {
     "_comment": "The base/plus probe classifies the model into one of six problem classes (LP, MIP, QP, MIQP, NLP, MINLP) from its integrality (vars_int) and the max polynomial degree of its objective/constraints (linear / quadratic / more-than-quadratic). OOTB then picks the first AVAILABLE solver from that class's list in preference_order_by_class -- e.g. a more-than-quadratic (NLP) model routes to ipopt, an integer model never routes to ipopt. Availability is SolverFactory(name).available(exception_flag=False). Persistence is requested by NAMING the *_persistent interface (no separate flag), so persistent commercial comes first within each class. preference_order is the MASTER superset (the detection candidate set, and the fallback when the class is unknown -- the minus tier does not instantiate, so it cannot classify). Every per-class list is a subset of it (the validator enforces this). Continuous QP/NLP lists drop the LP/MIP-only solvers (cbc/glpk); integer lists drop ipopt (continuous only); MINLP lists dedicated global solvers, which are rarely installed (OOTB then warns).",

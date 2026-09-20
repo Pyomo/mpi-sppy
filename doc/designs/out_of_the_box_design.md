@@ -186,10 +186,14 @@ needed. A user selects a focus simply by passing that file's path. The run
 **logs which policy file (and `policy_version`) it used**, for reproducibility.
 
 **v1 schema** (see the file for the authoritative, self-documenting copy). The
-*structure* is authored; the *numbers* are produced by the calibration tool (§9)
-on the example set — reproducible, not hand-guesses. (The shipped file's
-`effort_scaling` block is calibration output; what remains hand-authored is
-still flagged `_cold_start_guess`.) Schema keys:
+*structure* is authored. The `effort_scaling` *coefficients* are produced by the
+calibration tool (§9) on the example set — reproducible, not hand-guesses. The
+rest of the numbers — thresholds and budget magnitudes — are still authored, and
+each block flags its hand-guessed keys in `_cold_start_guess`. Two authored
+values are deliberately not flagged: `min_ranks_for_decomposition` (3) is
+requirement 3, not a guess, and the spoke ladder's *priority ordering* is a
+guess that the key cannot name, since it lists keys rather than orderings (the
+block's own comment says so). Schema keys:
 
 | Key | Purpose |
 |---|---|
@@ -597,10 +601,15 @@ calibrated scale is per reference machine/solver and approximate. The **plus**
 tier effectively *re-calibrates per session* via its measured single-scenario
 time (`t₁`); **base** relies on this offline calibration.
 
-**Status: PR1.** Reviewers can't assess a policy whose effort coefficients and
-budgets are *wild guesses*, so the calibration tool ships in PR1 and **the v1
-policy's numbers are its output** — an initial calibration on the **example set**
-(the same timed solves the validator's run-tier performs, so they share
-infrastructure), reproducible by re-running it. Preliminary but principled, and
-far better than hand-guesses; a broader benchmark corpus (more models / machines)
-is the future refinement that later dated files fold in.
+**Status: PR1.** Reviewers can't assess effort coefficients that are *wild
+guesses*, so the calibration tool ships in PR1 and **the v1 policy's
+`effort_scaling` coefficients are its output** — an initial calibration on the
+**example set** (the same timed solves the validator's run-tier performs, so
+they share infrastructure), reproducible by re-running it. What it does *not*
+do is choose thresholds: `bundle_sizing`, `ef_if_num_scens_at_most` and
+`ef_target_seconds` remain authored, and so does the magnitude of
+`ef_effort_budget`, which is `ef_target_seconds` converted into effort units.
+What calibration bought for those is that the units are interpretable — a
+budget of 120 now means roughly 120 seconds on the reference machine instead of
+an opaque number. Preliminary but principled; a broader benchmark corpus (more
+models / machines) is the future refinement that later dated files fold in.

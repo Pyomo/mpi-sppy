@@ -13,6 +13,7 @@ The measurement (timed example solves) needs a solver and is run on demand /
 locally, not in CI. See doc/designs/out_of_the_box_design.md sec. 9.
 """
 
+import copy
 import unittest
 
 from mpisppy.generic import ootb_calibrate as cal
@@ -79,6 +80,53 @@ class TestCalibratedPolicy(unittest.TestCase):
         pol = cal.calibrated_policy(self.base, self.fit, [], "gurobi", "2026-07-01")
         self.assertEqual(pol["ef_fallback"]["ef_effort_budget"],
                          pol["ef_fallback"]["ef_target_seconds"])
+
+    def test_ef_budget_stays_a_cold_start_guess(self):
+        # Calibration fixes the UNITS of ef_effort_budget, not its magnitude:
+        # it is ef_target_seconds (itself a guess) over a scale that is 1 by
+        # construction. Listing the source but not the derived number would
+        # read as though the derivation measured something.
+        pol = cal.calibrated_policy(self.base, self.fit, [], "gurobi", "2026-07-01")
+        guesses = pol["ef_fallback"]["_cold_start_guess"]
+        self.assertIn("ef_effort_budget", guesses)
+        self.assertIn("ef_target_seconds", guesses)
+
+    def test_calibration_note_states_the_scale_actually_used(self):
+        # The note must not hardcode "the scale is 1": fit_effort_model keeps
+        # the field so a focus can rescale, and the budget is computed from it.
+        rescaled = dict(self.fit, seconds_per_effort_unit=0.5)
+        pol = cal.calibrated_policy(self.base, rescaled, [], "gurobi", "2026-07-01")
+        ef = pol["ef_fallback"]
+        self.assertEqual(ef["ef_effort_budget"],
+                         round(ef["ef_target_seconds"] / 0.5))
+        self.assertIn("0.5", ef["_calibration_note"])
+        self.assertIn("0.5", pol["provenance"])
+
+    def test_provenance_omits_the_budget_when_none_was_derived(self):
+        # No ef_target_seconds -> the budget is never recomputed, so provenance
+        # must not claim it was derived from one.
+        base = copy.deepcopy(self.base)
+        base["ef_fallback"].pop("ef_target_seconds", None)
+        pol = cal.calibrated_policy(base, self.fit, [], "gurobi", "2026-07-01")
+        self.assertNotIn("ef_effort_budget", pol["provenance"])
+        self.assertNotIn("_calibration_note", pol["ef_fallback"])
+
+    def test_shipped_policy_is_reproducible_by_the_calibrator(self):
+        # The shipped file must be a fixed point of calibrated_policy for the
+        # fit it records, so the prose in the artifact a user reads cannot
+        # drift away from the code that writes it.
+        shipped = ootb.load_policy()
+        es, calib = shipped["effort_scaling"], shipped["effort_scaling"]["_calibration"]
+        fit = {k: es[k] for k in ("cont_coeff", "int_weight", "int_exponent",
+                                  "int_nonant_coeff", "seconds_per_effort_unit")}
+        fit.update(r2=calib["r2"], n_points=calib["n_points"])
+        rebuilt = cal.calibrated_policy(copy.deepcopy(shipped), fit,
+                                        [], calib["solver"], calib["date"])
+        self.assertEqual(shipped["provenance"], rebuilt["provenance"])
+        for key in ("_calibration_note", "_comment", "_cold_start_guess",
+                    "ef_effort_budget"):
+            self.assertEqual(shipped["ef_fallback"][key],
+                             rebuilt["ef_fallback"][key], msg=f"{key} drifted")
 
     def test_calibrated_policy_passes_static_validation(self):
         # end-to-end: a fitted policy must still be well-formed.
