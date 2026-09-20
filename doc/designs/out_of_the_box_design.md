@@ -366,9 +366,10 @@ it lives in code, not the policy; the validator checks it against the real CLI.)
 **Status.** The `effort_scaling` coefficients are **calibrated** (the shipped
 file carries a `_calibration` block — gurobi, 14 timed EF solves, R^2 0.9995).
 `ef_effort_budget` is *not* fitted. The coefficients are deliberately kept in
-seconds units, so `seconds_per_effort_unit` is 1 by construction rather than
-estimated, and the budget is simply the authored `ef_target_seconds` restated in
-effort units. What calibration bought here is that the units mean something; the
+seconds units, so an effort unit already IS about a second and the budget is
+simply the authored `ef_target_seconds`. (The schema carried a
+`seconds_per_effort_unit` conversion for a while; it was always 1 by
+construction of the fit and nothing read it, so it was removed.) What calibration bought here is that the units mean something; the
 magnitude (120) is still a hand-chosen target, and it is listed in
 `ef_fallback._cold_start_guess` alongside the `ef_target_seconds` it comes from.
 The `bundle_sizing` numbers and the other `ef_fallback` counts are plain

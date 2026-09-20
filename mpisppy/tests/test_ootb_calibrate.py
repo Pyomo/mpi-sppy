@@ -46,7 +46,6 @@ class TestFit(unittest.TestCase):
         self.assertEqual(fit["int_exponent"], 2.0)
         self.assertAlmostEqual(fit["int_nonant_coeff"], 0.2, places=5)
         self.assertGreater(fit["r2"], 0.999)
-        self.assertEqual(fit["seconds_per_effort_unit"], 1.0)
 
     def test_requires_minimum_points(self):
         with self.assertRaises(ValueError):
@@ -71,13 +70,12 @@ class TestCalibratedPolicy(unittest.TestCase):
         es = pol["effort_scaling"]
         self.assertAlmostEqual(es["cont_coeff"], 0.01, places=5)
         self.assertEqual(es["int_exponent"], 2.0)
-        self.assertIn("seconds_per_effort_unit", es)
         self.assertNotIn("_cold_start_guess", es)   # numbers are now data-tuned
         self.assertEqual(pol["policy_version"], "2026-07-01")
 
     def test_ef_budget_is_seconds_like(self):
-        # budget = target seconds / seconds_per_effort_unit (~1), so it reads as
-        # seconds rather than an opaque huge number.
+        # the coefficients are fitted in seconds, so the budget IS the target
+        # and reads as seconds rather than an opaque huge number.
         pol = cal.calibrated_policy(self.base, self.fit, [], "gurobi", "2026-07-01")
         self.assertEqual(pol["ef_fallback"]["ef_effort_budget"],
                          pol["ef_fallback"]["ef_target_seconds"])
@@ -92,17 +90,6 @@ class TestCalibratedPolicy(unittest.TestCase):
         self.assertIn("ef_effort_budget", guesses)
         self.assertIn("ef_target_seconds", guesses)
 
-    def test_calibration_note_states_the_scale_actually_used(self):
-        # The note must not hardcode "the scale is 1": fit_effort_model keeps
-        # the field so a focus can rescale, and the budget is computed from it.
-        rescaled = dict(self.fit, seconds_per_effort_unit=0.5)
-        pol = cal.calibrated_policy(self.base, rescaled, [], "gurobi", "2026-07-01")
-        ef = pol["ef_fallback"]
-        self.assertEqual(ef["ef_effort_budget"],
-                         round(ef["ef_target_seconds"] / 0.5))
-        self.assertIn("0.5", ef["_calibration_note"])
-        self.assertIn("0.5", pol["provenance"])
-
     def test_refuses_a_policy_with_no_ef_target_seconds(self):
         # Without a target there is nothing to convert, and ootb_validate
         # already rejects such a policy (ef_target_seconds must be > 0). Emitting
@@ -113,48 +100,13 @@ class TestCalibratedPolicy(unittest.TestCase):
         with self.assertRaises(ValueError):
             cal.calibrated_policy(base, self.fit, [], "gurobi", "2026-07-01")
 
-    def test_prose_uses_the_rounded_scale_the_file_records(self):
-        # The stored field is rounded to significant figures (_round_sig);
-        # dividing by (or quoting) the unrounded value would make the file
-        # disagree with its own note and stop it being a fixed point of
-        # calibrated_policy.
-        rescaled = dict(self.fit, seconds_per_effort_unit=1 / 3)
-        pol = cal.calibrated_policy(copy.deepcopy(self.base), rescaled,
-                                    [], "gurobi", "2026-07-01")
-        stored = pol["effort_scaling"]["seconds_per_effort_unit"]
-        self.assertEqual(stored, cal._round_sig(1 / 3))
-        self.assertIn(str(stored), pol["ef_fallback"]["_calibration_note"])
-        self.assertIn(str(stored), pol["provenance"])
-        self.assertNotIn(str(1 / 3), pol["ef_fallback"]["_calibration_note"])
-        # and the emitted file must itself be a fixed point
-        again = cal.calibrated_policy(copy.deepcopy(pol), dict(rescaled),
-                                      [], "gurobi", "2026-07-01")
-        self.assertEqual(pol["ef_fallback"]["_calibration_note"],
-                         again["ef_fallback"]["_calibration_note"])
-
-    def test_tiny_scale_survives_rounding(self):
-        # Significant figures, not decimal places: a focus keeping effort in raw
-        # units has a legitimately tiny scale, and round(x, 8) would zero it --
-        # which the positivity guard would then reject for a positive input.
-        tiny = 1.57e-09
-        base = copy.deepcopy(self.base)
-        base["ef_fallback"]["ef_target_seconds"] = 1
-        pol = cal.calibrated_policy(base, dict(self.fit,
-                                               seconds_per_effort_unit=tiny),
-                                    [], "gurobi", "2026-07-01")
-        self.assertEqual(pol["effort_scaling"]["seconds_per_effort_unit"], tiny)
-        self.assertGreater(pol["ef_fallback"]["ef_effort_budget"], 0)
-
     def test_refuses_a_budget_that_rounds_to_zero(self):
-        # A scale large relative to the target rounds the budget to 0, and the
-        # EF gate tests `whole <= budget`, so EF-when-small would be silently
-        # off while the note claimed a clean conversion.
+        # A target below 0.5 rounds to 0, and the EF gate tests
+        # `whole <= budget`, so EF-when-small would be silently off.
         base = copy.deepcopy(self.base)
-        base["ef_fallback"]["ef_target_seconds"] = 1
+        base["ef_fallback"]["ef_target_seconds"] = 0.4
         with self.assertRaises(ValueError):
-            cal.calibrated_policy(base, dict(self.fit,
-                                             seconds_per_effort_unit=3.0),
-                                  [], "gurobi", "2026-07-01")
+            cal.calibrated_policy(base, self.fit, [], "gurobi", "2026-07-01")
 
     def test_stray_guess_entries_keep_their_input_order(self):
         # Orphan entries are preserved (so ootb_validate still flags them), and
@@ -167,18 +119,6 @@ class TestCalibratedPolicy(unittest.TestCase):
         pol = cal.calibrated_policy(base, self.fit, [], "gurobi", "2026-07-01")
         got = pol["ef_fallback"]["_cold_start_guess"]
         self.assertEqual([g for g in got if g in strays], strays)
-
-    def test_refuses_a_non_numeric_or_non_finite_scale(self):
-        # _round_sig is not type-safe and maps nan/inf to 0.0, so the scale has
-        # to be validated BEFORE rounding or the user gets a TypeError, or a
-        # message blaming a zero scale for a degenerate fit.
-        for bad in ("1.0", float("nan"), float("inf"), 0.0, -1.0):
-            with self.subTest(scale=bad):
-                with self.assertRaises(ValueError):
-                    cal.calibrated_policy(
-                        copy.deepcopy(self.base),
-                        dict(self.fit, seconds_per_effort_unit=bad),
-                        [], "gurobi", "2026-07-01")
 
     def test_refuses_a_non_finite_or_over_large_target(self):
         # Symmetric with the scale. json accepts the bare token Infinity and an
@@ -193,15 +133,15 @@ class TestCalibratedPolicy(unittest.TestCase):
                     cal.calibrated_policy(base, self.fit, [], "gurobi",
                                           "2026-07-01")
 
-    def test_refuses_a_scale_that_overflows_the_budget(self):
-        # A denormal scale survives significant-figure rounding, and
-        # target / 1e-310 is inf, which int(round(...)) turns into a bare
-        # OverflowError rather than the written message.
-        with self.assertRaises(ValueError):
-            cal.calibrated_policy(copy.deepcopy(self.base),
-                                  dict(self.fit,
-                                       seconds_per_effort_unit=1e-310),
-                                  [], "gurobi", "2026-07-01")
+    def test_seconds_per_effort_unit_is_gone(self):
+        # Retired: nothing read it, it was 1 by construction of the fit (the
+        # coefficients are fitted in seconds), and carrying it invited prose
+        # that claimed a conversion the file never performed.
+        self.assertNotIn("seconds_per_effort_unit", self.fit)
+        pol = cal.calibrated_policy(copy.deepcopy(self.base), self.fit,
+                                    [], "gurobi", "2026-07-01")
+        self.assertNotIn("seconds_per_effort_unit", pol["effort_scaling"])
+        self.assertNotIn("seconds_per_effort_unit", json.dumps(pol))
 
     def test_shipped_policy_is_reproducible_by_the_calibrator(self):
         # The shipped file must be a fixed point of calibrated_policy for the
@@ -210,7 +150,7 @@ class TestCalibratedPolicy(unittest.TestCase):
         shipped = ootb.load_policy()
         es, calib = shipped["effort_scaling"], shipped["effort_scaling"]["_calibration"]
         fit = {k: es[k] for k in ("cont_coeff", "int_weight", "int_exponent",
-                                  "int_nonant_coeff", "seconds_per_effort_unit")}
+                                  "int_nonant_coeff")}
         fit.update(r2=calib["r2"], n_points=calib["n_points"])
         rebuilt = cal.calibrated_policy(copy.deepcopy(shipped), fit,
                                         [], calib["solver"], calib["date"])

@@ -20,8 +20,8 @@ migration path -- design doc sec. 9). It:
      differing continuous / integer / nonant content.
   2. CALIBRATES effort to ~seconds: the fitted coefficients are kept in seconds
      units, so modeled effort approximates predicted solve time and the absolute
-     budgets read as roughly seconds (ef_effort_budget is set from the policy's
-     ef_target_seconds) instead of opaque large numbers.
+     budgets read as roughly seconds -- ef_effort_budget is simply the policy's
+     authored ef_target_seconds -- instead of opaque large numbers.
   3. WRITES a new dated policy file with the fitted numbers in place of the
      cold-start guesses.
 
@@ -106,10 +106,10 @@ def fit_effort_model(points: list, exponents=EXPONENT_GRID) -> dict:
     exponent with the best R^2. The fitted coefficients are kept in SECONDS units
     (we do NOT divide the scale back out), so modeled effort approximates the
     predicted solve time directly -- the absolute budgets (ef_effort_budget) then
-    read as roughly seconds (e.g. ~120) instead of opaque large numbers.
-    seconds_per_effort_unit is therefore ~1; it stays in the schema to document
-    the units and to let a focus rescale. Returns the effort_scaling fields plus
-    r2 / n_points.
+    read as roughly seconds (e.g. ~120) instead of opaque large numbers. The
+    schema carried a `seconds_per_effort_unit` conversion for a while; it was
+    always 1 by construction of this fit and nothing read it, so it is gone.
+    Returns the effort_scaling fields plus r2 / n_points.
     """
     import numpy as np
     from scipy.optimize import nnls
@@ -134,7 +134,6 @@ def fit_effort_model(points: list, exponents=EXPONENT_GRID) -> dict:
         "int_weight": _round_sig(b),
         "int_exponent": best["p"],
         "int_nonant_coeff": _round_sig(c),
-        "seconds_per_effort_unit": 1.0,   # effort is calibrated to ~seconds
         "r2": round(best["r2"], 4),
         "n_points": len(points),
     }
@@ -244,30 +243,13 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
     es["int_weight"] = fit["int_weight"]
     es["int_exponent"] = fit["int_exponent"]
     es["int_nonant_coeff"] = fit["int_nonant_coeff"]
-    # Round ONCE and use that value everywhere -- for the stored field, the
-    # budget division and the two prose strings. Dividing by the unrounded
-    # value while recording the rounded one makes the file disagree with its
-    # own note, and stops the emitted policy being a fixed point of this
-    # function (see test_shipped_policy_is_reproducible_by_the_calibrator).
-    # Significant figures, not decimal places: a focus that keeps effort in raw
-    # units has a legitimately tiny scale, and round(1.57e-09, 8) is 0.0, which
-    # the positivity check below would then reject (see _round_sig).
-    # Validate BEFORE rounding: _round_sig is not type-safe (it would raise
-    # TypeError on a hand-authored "1.0" instead of the message below), and it
-    # maps nan and inf to 0.0, which would report a degenerate fit as a zero
-    # scale. ootb_validate has no check on this field, so a bad one reaches us.
-    raw_spe = fit["seconds_per_effort_unit"]
-    if not _finite_positive(raw_spe):
-        raise ValueError("seconds_per_effort_unit must be positive and "
-                         "representable as a finite float, got "
-                         f"{raw_spe!r}")
-    spe = _round_sig(raw_spe)
-    es["seconds_per_effort_unit"] = spe
+    es.pop("seconds_per_effort_unit", None)   # retired; see _calibration.note
     es["_calibration"] = {
         "solver": solver_name, "r2": fit["r2"], "n_points": fit["n_points"],
         "date": today, "note": "Fitted by mpisppy.generic.ootb_calibrate on the "
-        "example set; per reference machine/solver and approximate. "
-        "seconds_per_effort_unit: modeled effort * this ~= seconds."}
+        "example set; per reference machine/solver and approximate. The "
+        "coefficients are fitted in SECONDS, so modeled effort is already "
+        "approximately a solve time and the absolute budgets read as seconds."}
     es.pop("_cold_start_guess", None)        # these numbers are now data-tuned
     # Reconcile the prose: the coefficients are no longer cold-start guesses.
     es["_comment"] = es.get("_comment", "").replace(
@@ -285,41 +267,28 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
     # conversion that never happened.
     target = ef.get("ef_target_seconds")
     if not _finite_positive(target):
-        # The same guard as the scale, for the same reasons: a hand-authored
-        # "120" would raise TypeError from the comparison, a bare Infinity
-        # would reach the division and be misdiagnosed as a bad scale, and an
-        # over-long integer literal would raise OverflowError in the division.
+        # _finite_positive, not `target > 0`: a hand-authored "120" would raise
+        # TypeError from the comparison, json accepts the bare token Infinity
+        # (and inf > 0 is true), and an over-long integer literal raises
+        # OverflowError when converted. Each would escape as a bare traceback.
         raise ValueError(
             "ef_fallback.ef_target_seconds must be positive and representable "
-            f"as a finite float to derive ef_effort_budget from it; got {target!r}")
-    quotient = target / spe
-    if not math.isfinite(quotient):
-        # A denormal scale survives _round_sig, and target/1e-310 overflows to
-        # inf, so int(round(...)) below would raise a bare OverflowError past
-        # the written message.
-        raise ValueError(
-            f"ef_target_seconds {target} at seconds_per_effort_unit {spe} "
-            "overflows; the scale is too small to express this budget")
-    budget = int(round(quotient))
+            f"as a finite float to set ef_effort_budget from it; got {target!r}")
+    budget = int(round(target))
     if budget <= 0:
-        # Rounds to zero when the scale is large relative to the target. The
-        # EF gate tests `whole_effort <= ef_effort_budget`, so a zero budget
-        # silently disables EF-when-small while _calibration_note claims a
-        # clean conversion. Check the result, not just the inputs.
+        # A target below 0.5 rounds to zero, and the EF gate tests
+        # `whole_effort <= ef_effort_budget`, so a zero budget would silently
+        # disable EF-when-small. Check the result, not just the input.
         raise ValueError(
-            f"ef_target_seconds {target} at seconds_per_effort_unit {spe} "
-            f"gives a non-positive ef_effort_budget ({budget}); raise the "
-            "target or rescale")
+            f"ef_target_seconds {target} rounds to a non-positive "
+            f"ef_effort_budget ({budget}); raise the target")
     ef["ef_effort_budget"] = budget
-    # State the scale that was actually used. The coefficients are normally
-    # kept in seconds (scale 1), but fit_effort_model documents the field as
-    # a knob "to let a focus rescale", so asserting 1 here would be wrong
-    # for such a focus -- and wrong next to a budget computed from spe.
     ef["_calibration_note"] = (
-        "ef_effort_budget = ef_target_seconds / seconds_per_effort_unit "
-        f"= {ef['ef_target_seconds']} / {spe} (scale fitted {today}). "
-        "Calibration makes the UNITS meaningful; the magnitude comes from "
-        "the authored ef_target_seconds, not from measurement.")
+        f"ef_effort_budget = ef_target_seconds rounded ({today}). The "
+        "coefficients are fitted in seconds, so an effort unit IS about a "
+        "second and no conversion is needed. Calibration makes the UNITS "
+        "meaningful; the magnitude comes from the authored ef_target_seconds, "
+        "not from measurement.")
     # ef_effort_budget STAYS listed as a cold-start guess. It is
     # ef_target_seconds -- itself a guess -- divided by a scale that is 1
     # by construction, so the derivation adds no evidence. Listing the
@@ -341,9 +310,9 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
         "ef_effort_budget is ef_target_seconds in effort units (see "
         "_calibration_note); ef_target_seconds and ef_if_num_scens_at_most "
         "remain authored guesses.")
-    budget_clause = (" ef_effort_budget is the authored ef_target_seconds "
-                     f"converted at seconds_per_effort_unit={spe}; its "
-                     "magnitude is authored, not measured.")
+    budget_clause = (" ef_effort_budget is the authored ef_target_seconds in "
+                     "effort units (the fit is in seconds, so they are the "
+                     "same number); its magnitude is authored, not measured.")
 
     pol["policy_version"] = today
     pol["provenance"] = (f"CALIBRATED {today} by mpisppy.generic.ootb_calibrate "
@@ -408,7 +377,7 @@ def main(argv=None):  # pragma: no cover
 
     print("\n[calibrate] fit:")
     for k in ("cont_coeff", "int_weight", "int_exponent", "int_nonant_coeff",
-              "seconds_per_effort_unit", "r2", "n_points"):
+              "r2", "n_points"):
         print(f"    {k}: {fit[k]}")
     print(f"    ef_effort_budget -> {pol['ef_fallback']['ef_effort_budget']} "
           f"(from {pol['ef_fallback'].get('ef_target_seconds')}s target)")
