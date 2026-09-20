@@ -17,6 +17,7 @@ mpiexec. (The solver-dependent run/measurement tiers are exercised on demand /
 locally; see test_ootb_validate / test_ootb_calibrate.)
 """
 
+import copy
 import os
 import shlex
 import sys
@@ -523,13 +524,20 @@ class TestSpokeBuildOrderIsShared(unittest.TestCase):
                          len(set(ootb.SPOKE_BUILD_ORDER)))
 
     def test_build_spoke_list_assembles_from_the_tuple(self):
-        # the guard in spokes.py must name a spoke it builds but the tuple omits
+        # Both directions, from the source rather than from one run: the
+        # runtime guard in spokes.py only sees the spokes that run enabled, so
+        # a spoke added there but omitted from the tuple would stay invisible
+        # until someone switched it on.
         import inspect
+        import re
         from mpisppy.generic import spokes
         src = inspect.getsource(spokes.build_spoke_list)
         self.assertIn("SPOKE_BUILD_ORDER", src)
-        for flag in ootb.SPOKE_BUILD_ORDER:
-            self.assertIn(f'"{flag}"', src, msg=f"{flag} not built in spokes.py")
+        built = set(re.findall(r'made\["(--[a-z-]+)"\]', src))
+        self.assertTrue(built, "could not find the spokes build_spoke_list makes")
+        self.assertEqual(built, set(ootb.SPOKE_BUILD_ORDER),
+                         msg="build_spoke_list and SPOKE_BUILD_ORDER disagree "
+                             "about which spokes exist")
 
     def test_modelled_split_follows_build_order(self):
         for flags, ranks in ((["--ph-dual"], 16), (["--relaxed-ph"], 12),
@@ -599,6 +607,41 @@ class TestOffLadderSpokesAreInTheRankModel(unittest.TestCase):
         self.assertTrue(any("--ph-dual-rank-ratio" in n and "WARNING" in n
                             for n in d.notes),
                         msg="no warning for a non-positive rank ratio")
+
+    def test_unemitted_policy_ratio_is_not_modelled(self):
+        # The RUN sees only the flags OOTB emits, never the policy file, and
+        # OOTB emits a -rank-ratio only for a ladder rung. So a policy ratio on
+        # an off-ladder spoke has no effect on the run, and modelling it would
+        # put a split in the note (and an intra_ranks in the bundle floor) that
+        # never happens.
+        policy = copy.deepcopy(ootb.load_policy())
+        policy["rank_allocation"]["rank_ratios"]["--ph-dual"] = 0.2
+        facts = ootb.Facts("farmer", 12, {"gurobi"}, 1000, effort="base",
+                           vars_int=50, vars_cont=50, nonants_total=20,
+                           nonants_int=10, model_degree="linear",
+                           user_flags={"--ph-dual"})
+        d = ootb.recommend(facts, policy)
+        self.assertNotIn("--ph-dual-rank-ratio", [a.flag for a in d.args])
+        # a 0.2 share of 12 ranks would be 1; the default share is more
+        self.assertGreater(d.rank_split["--ph-dual"], 1)
+        self.assertEqual(d.intra_ranks, max(d.rank_split.values()))
+
+    def test_widening_gate_counts_user_set_ladder_spokes(self):
+        # A user-set ladder rung beyond the widening loop's reach is
+        # force-added afterwards, so it spends rank budget the gate has to see
+        # -- same as an off-ladder spoke.
+        policy = ootb.load_policy()
+        min_rpc = policy["rank_allocation"]["min_ranks_per_cylinder"]
+        for flag in ("--reduced-costs", "--subgradient", "--ph-dual"):
+            with self.subTest(flag=flag):
+                facts = ootb.Facts("farmer", 12, {"gurobi"}, 1000,
+                                   effort="base", vars_int=50, vars_cont=50,
+                                   nonants_total=20, nonants_int=10,
+                                   model_degree="linear", user_flags={flag})
+                d = ootb.recommend(facts, policy)
+                self.assertGreaterEqual(12 // d.num_cylinders, min_rpc,
+                                        msg=f"{d.num_cylinders} cylinders for "
+                                            f"12 ranks starves the roster")
 
     def test_split_is_deterministic(self):
         # off_ladder is a set; iterating it directly would make the split

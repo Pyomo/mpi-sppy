@@ -260,11 +260,11 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
     # seconds, so an effort unit already IS about a second and the budget is the
     # target itself -- no conversion.
     ef = pol["ef_fallback"]
-    # A policy with no positive ef_target_seconds (or a non-positive scale) is
-    # one ootb_validate already rejects -- it requires ef_target_seconds > 0 --
-    # so there is no sound file to emit here. Refuse rather than write one
-    # whose _comment, _cold_start_guess and stale ef_effort_budget describe a
-    # conversion that never happened.
+    # A policy with no positive ef_target_seconds is one ootb_validate already
+    # rejects -- it requires ef_target_seconds > 0 -- so there is no sound file
+    # to emit here. Refuse rather than write one whose _comment,
+    # _cold_start_guess and stale ef_effort_budget describe a budget this run
+    # never set.
     target = ef.get("ef_target_seconds")
     if not _finite_positive(target):
         # _finite_positive, not `target > 0`: a hand-authored "120" would raise

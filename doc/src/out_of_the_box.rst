@@ -38,8 +38,11 @@ Basic usage
 -----------
 
 Add ``--out-of-the-box`` to an otherwise minimal ``generic_cylinders`` command
-line (your model still needs its scenario count -- ``--num-scens`` for two-stage
-problems, ``--branching-factors`` for multistage):
+line. How you say which scenarios to use is the *model's* business, not OOTB's:
+the examples below use ``--num-scens`` because farmer defines it, aircond uses
+``--branching-factors``, and netdes takes an instance name instead. Give the
+model whatever it asks for; if that is nothing, OOTB reads the scenario list
+from the module.
 
 .. code-block:: bash
 

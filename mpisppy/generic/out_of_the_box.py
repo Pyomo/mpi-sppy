@@ -345,8 +345,15 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     for r in all_rungs:                           # widen-aware additions
         if r in chosen:
             continue
-        # hub + chosen + this rung + the off-ladder spokes the run will launch
-        cyl_if_added = 2 + len(chosen) + len(off_ladder)
+        # hub + chosen + this rung + every OTHER spoke the user set that is
+        # not in `chosen` yet. Two kinds get there: an off-ladder spoke, which
+        # never enters `chosen`, and a user-set ladder rung this loop does not
+        # reach, which is force-added just below. Both are cylinders the run
+        # will launch, so counting only `chosen` let the gate add a rung on
+        # the strength of ranks already spoken for.
+        pending = (off_ladder | (user_spokes & ladder_flags)) - {
+            c["flag"] for c in chosen} - {r["flag"]}
+        cyl_if_added = 2 + len(chosen) + len(pending)
         if cyl_if_added > max_cyl or facts.num_ranks // cyl_if_added < min_rpc:
             break
         chosen.append(r)
@@ -479,18 +486,21 @@ def recommend(facts: Facts, policy: dict) -> Decision:
 
     spoke_names = []
     for flag in ordered:
-        # A policy may give a ratio to any real spoke flag, on its ladder or
-        # not (ootb_validate only requires the derived -rank-ratio option to
-        # exist), so consult rank_ratios for both; DLW's default_rank_ratio
-        # applies when the policy names no ratio.
-        spoke_ratio = _ratio_for(flag,
-                                 ra["rank_ratios"].get(flag, default_ratio))
+        on_ladder = flag in ladder_by_flag
+        # The RUN never reads the policy file -- it sees only the flags OOTB
+        # emits -- so a policy ratio we do not emit has no effect and must not
+        # be modelled. OOTB emits a ratio only for a ladder rung: an
+        # off-ladder spoke's derived -rank-ratio option may not be declared at
+        # all (--xhatlshaped has none). So off-ladder spokes model
+        # default_rank_ratio, which is what they will actually get. A ratio
+        # the USER set is different -- that one is on the command line, so
+        # _ratio_for honors it for both kinds.
+        policy_ratio = (ra["rank_ratios"].get(flag, default_ratio)
+                        if on_ladder else default_ratio)
+        spoke_ratio = _ratio_for(flag, policy_ratio)
         ratios.append(spoke_ratio)
         spoke_names.append(flag)
-        if flag in ladder_by_flag and spoke_ratio != default_ratio:
-            # Only for a ladder rung: an off-ladder spoke's derived
-            # -rank-ratio option may not be declared at all (--xhatlshaped
-            # has none), and a user-set one is already on the command line.
+        if on_ladder and spoke_ratio != default_ratio:
             choose(f"{flag}-rank-ratio", _fmt_ratio(spoke_ratio),
                    f"flex-ranks: cheaper cylinder gets a {spoke_ratio} share "
                    f"(crude cold-start)")
