@@ -238,7 +238,10 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
     # value while recording the rounded one makes the file disagree with its
     # own note, and stops the emitted policy being a fixed point of this
     # function (see test_shipped_policy_is_reproducible_by_the_calibrator).
-    spe = round(fit["seconds_per_effort_unit"], 8)
+    # Significant figures, not decimal places: a focus that keeps effort in raw
+    # units has a legitimately tiny scale, and round(1.57e-09, 8) is 0.0, which
+    # the positivity check below would then reject (see _round_sig).
+    spe = _round_sig(fit["seconds_per_effort_unit"])
     es["seconds_per_effort_unit"] = spe
     es["_calibration"] = {
         "solver": solver_name, "r2": fit["r2"], "n_points": fit["n_points"],
@@ -260,13 +263,27 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
     # so there is no sound file to emit here. Refuse rather than write one
     # whose _comment, _cold_start_guess and stale ef_effort_budget describe a
     # conversion that never happened.
-    if spe <= 0:
-        raise ValueError(f"seconds_per_effort_unit must be positive, got {spe}")
-    if not ef.get("ef_target_seconds", 0) > 0:
+    target = ef.get("ef_target_seconds")
+    if not (val._is_number(spe) and spe > 0):
+        raise ValueError("seconds_per_effort_unit must be a positive number, "
+                         f"got {spe!r}")
+    if not (val._is_number(target) and target > 0):
+        # _is_number first: a hand-authored "120" would otherwise raise
+        # TypeError from the comparison instead of this message.
         raise ValueError(
             "ef_fallback.ef_target_seconds must be a positive number to derive "
-            f"ef_effort_budget from it; got {ef.get('ef_target_seconds')!r}")
-    ef["ef_effort_budget"] = int(round(ef["ef_target_seconds"] / spe))
+            f"ef_effort_budget from it; got {target!r}")
+    budget = int(round(target / spe))
+    if budget <= 0:
+        # Rounds to zero when the scale is large relative to the target. The
+        # EF gate tests `whole_effort <= ef_effort_budget`, so a zero budget
+        # silently disables EF-when-small while _calibration_note claims a
+        # clean conversion. Check the result, not just the inputs.
+        raise ValueError(
+            f"ef_target_seconds {target} at seconds_per_effort_unit {spe} "
+            f"gives a non-positive ef_effort_budget ({budget}); raise the "
+            "target or rescale")
+    ef["ef_effort_budget"] = budget
     # State the scale that was actually used. The coefficients are normally
     # kept in seconds (scale 1), but fit_effort_model documents the field as
     # a knob "to let a focus rescale", so asserting 1 here would be wrong
@@ -286,8 +303,12 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
     # silently repair an authoring error that ootb_validate has a dedicated
     # check for, so a renamed key would lose its "still a guess" label and
     # the validator would then report clean.
-    ef["_cold_start_guess"] = ([k for k in ef if k in guesses]
-                               + [g for g in guesses if g not in ef])
+    ef["_cold_start_guess"] = (
+        [k for k in ef if k in guesses]
+        # input order, not set order: iterating the set makes the emitted file
+        # depend on PYTHONHASHSEED, so two runs on the same input would differ
+        # and the whole-policy fixed-point test would go flaky.
+        + [g for g in ef.get("_cold_start_guess", []) if g not in ef])
     ef["_comment"] = ef.get("_comment", "").replace(
         "All cold-start guesses.",
         "ef_effort_budget is ef_target_seconds in effort units (see "
@@ -316,6 +337,14 @@ def run_calibration(base_policy_path, solver_name=None, spb_grid=DEFAULT_SPB_GRI
                     reps=DEFAULT_REPS, today=None):  # pragma: no cover
     """Measure, fit, and return (calibrated_policy_dict, fit, points)."""
     base = ootb.load_policy(base_policy_path or None)
+    # Fail before the measurement, not after it. calibrated_policy refuses a
+    # base without a positive ef_target_seconds, and that is knowable now --
+    # discovering it after minutes of timed solves would throw the run away.
+    target = base.get("ef_fallback", {}).get("ef_target_seconds")
+    if not (val._is_number(target) and target > 0):
+        raise ValueError(
+            "base policy needs a positive ef_fallback.ef_target_seconds to "
+            f"calibrate against; got {target!r}")
     solver = _pick_solver(base, solver_name)
     print(f"[calibrate] solver: {solver}")
     points = collect_points(base, solver, spb_grid, reps)

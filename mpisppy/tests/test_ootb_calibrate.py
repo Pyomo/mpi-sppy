@@ -127,7 +127,7 @@ class TestCalibratedPolicy(unittest.TestCase):
         pol = cal.calibrated_policy(copy.deepcopy(self.base), rescaled,
                                     [], "gurobi", "2026-07-01")
         stored = pol["effort_scaling"]["seconds_per_effort_unit"]
-        self.assertEqual(stored, round(1 / 3, 8))
+        self.assertEqual(stored, cal._round_sig(1 / 3))
         self.assertIn(str(stored), pol["ef_fallback"]["_calibration_note"])
         self.assertIn(str(stored), pol["provenance"])
         self.assertNotIn(str(1 / 3), pol["ef_fallback"]["_calibration_note"])
@@ -136,6 +136,49 @@ class TestCalibratedPolicy(unittest.TestCase):
                                       [], "gurobi", "2026-07-01")
         self.assertEqual(pol["ef_fallback"]["_calibration_note"],
                          again["ef_fallback"]["_calibration_note"])
+
+    def test_tiny_scale_survives_rounding(self):
+        # Significant figures, not decimal places: a focus keeping effort in raw
+        # units has a legitimately tiny scale, and round(x, 8) would zero it --
+        # which the positivity guard would then reject for a positive input.
+        tiny = 1.57e-09
+        base = copy.deepcopy(self.base)
+        base["ef_fallback"]["ef_target_seconds"] = 1
+        pol = cal.calibrated_policy(base, dict(self.fit,
+                                               seconds_per_effort_unit=tiny),
+                                    [], "gurobi", "2026-07-01")
+        self.assertEqual(pol["effort_scaling"]["seconds_per_effort_unit"], tiny)
+        self.assertGreater(pol["ef_fallback"]["ef_effort_budget"], 0)
+
+    def test_refuses_a_budget_that_rounds_to_zero(self):
+        # A scale large relative to the target rounds the budget to 0, and the
+        # EF gate tests `whole <= budget`, so EF-when-small would be silently
+        # off while the note claimed a clean conversion.
+        base = copy.deepcopy(self.base)
+        base["ef_fallback"]["ef_target_seconds"] = 1
+        with self.assertRaises(ValueError):
+            cal.calibrated_policy(base, dict(self.fit,
+                                             seconds_per_effort_unit=3.0),
+                                  [], "gurobi", "2026-07-01")
+
+    def test_refuses_a_non_numeric_target(self):
+        # "120" must give the written ValueError, not a TypeError from '>'.
+        base = copy.deepcopy(self.base)
+        base["ef_fallback"]["ef_target_seconds"] = "120"
+        with self.assertRaises(ValueError):
+            cal.calibrated_policy(base, self.fit, [], "gurobi", "2026-07-01")
+
+    def test_stray_guess_entries_keep_their_input_order(self):
+        # Orphan entries are preserved (so ootb_validate still flags them), and
+        # must come back in input order -- iterating a set would make the
+        # emitted file depend on PYTHONHASHSEED.
+        base = copy.deepcopy(self.base)
+        strays = ["zz_renamed", "aa_renamed", "mm_renamed"]
+        base["ef_fallback"]["_cold_start_guess"] = (
+            list(base["ef_fallback"]["_cold_start_guess"]) + strays)
+        pol = cal.calibrated_policy(base, self.fit, [], "gurobi", "2026-07-01")
+        got = pol["ef_fallback"]["_cold_start_guess"]
+        self.assertEqual([g for g in got if g in strays], strays)
 
     def test_shipped_policy_is_reproducible_by_the_calibrator(self):
         # The shipped file must be a fixed point of calibrated_policy for the
