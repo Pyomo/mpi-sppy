@@ -160,6 +160,22 @@ class TestCommandLineAndFlags(unittest.TestCase):
         self.assertIn("--branching-factors '3 2'", cl)
         self.assertNotIn("--num-scens", cl)
 
+    def test_empty_branching_factors_is_not_a_scenario_count(self):
+        # math.prod([]) is 1, so an empty list used to report a one-scenario
+        # problem and quietly take the EF instead of saying it cannot tell.
+        cfg, module = _farmer_cfg()
+        cfg.branching_factors = []
+        cfg.num_scens = None
+        with self.assertRaises(RuntimeError):
+            ootb._detect_num_scens(module, cfg)
+
+    def test_empty_branching_factors_is_not_multistage(self):
+        cfg, module = _farmer_cfg()
+        cfg.branching_factors = []
+        facts = ootb.gather_facts(module, cfg, "minus", ootb.load_policy())
+        self.assertFalse(facts.multistage)
+        self.assertIsNone(facts.branching_factors)
+
     def test_empty_branching_factors_is_not_an_anchor(self):
         # --branching-factors "" parses to [], which is not None; a bare
         # --branching-factors token makes the printed line fail with
@@ -207,17 +223,33 @@ class TestCommandLineAndFlags(unittest.TestCase):
         cl2 = ootb.Decision(run_ef=False).command_line(facts)
         self.assertIn("mpiexec -np 6", cl2)
 
+    def _ef_msgs(self, facts, ef_reason):
+        d = ootb.Decision(run_ef=True, ef_reason=ef_reason)
+        return ootb.make_suggestions(d, facts, ootb.load_policy())
+
     def test_ef_under_mpiexec_is_called_out(self):
         facts = ootb.Facts("farmer", 6, set(), 6)
-        msgs = ootb.make_suggestions(ootb.Decision(run_ef=True), facts,
-                                     ootb.load_policy())
-        self.assertTrue(any("idled" in m for m in msgs),
+        self.assertTrue(any("idled" in m for m in self._ef_msgs(facts,
+                                                                "small_effort")),
                         msg="no suggestion about wasting ranks on an EF")
-        # and not when the EF is the only sensible choice
+
+    def test_ef_suggestion_only_when_decomposing_was_available(self):
+        facts = ootb.Facts("farmer", 6, set(), 6)
+        # the EF is the only sensible choice at one rank
         solo = ootb.Facts("farmer", 1, set(), 6)
-        msgs = ootb.make_suggestions(ootb.Decision(run_ef=True), solo,
-                                     ootb.load_policy())
-        self.assertFalse(any("idled" in m for m in msgs))
+        self.assertFalse(any("idled" in m
+                             for m in self._ef_msgs(solo, "small_effort")))
+        # the policy REFUSED to decompose at this rank count, so telling the
+        # reader to decompose would contradict the suggestion beside it
+        for reason in ("min_ranks", "request_too_big"):
+            with self.subTest(reason=reason):
+                self.assertFalse(any("idled" in m
+                                     for m in self._ef_msgs(facts, reason)))
+        # --inspect-only N plans for N ranks that were never allocated, and
+        # nothing ran, so "the other N-1 idled" describes no event
+        planned = ootb.Facts("farmer", 512, set(), 6, ranks_assumed=True)
+        self.assertFalse(any("idled" in m
+                             for m in self._ef_msgs(planned, "small_effort")))
 
     def test_command_line_has_no_anchor_when_the_model_takes_none(self):
         # netdes declares no --num-scens; printing a derived one gave a line
@@ -685,6 +717,20 @@ class TestOffLadderSpokesAreInTheRankModel(unittest.TestCase):
         self.assertTrue(any("--xhatshuffle-rank-ratio" in n and "defers" in n
                             for n in d.notes),
                         msg="the user's rank ratio left no trace")
+
+    def test_rejected_user_ratio_is_not_called_a_deferral(self):
+        # The warning says OOTB is modelling the policy value; a "kept user's
+        # value" note beside it would contradict that in the same trace.
+        facts = ootb.Facts("farmer", 6, {"gurobi"}, 1000, effort="base",
+                           vars_int=50, vars_cont=50, nonants_total=20,
+                           nonants_int=10, model_degree="linear",
+                           user_flags={"--ph-dual", "--ph-dual-rank-ratio"},
+                           user_args=[("--ph-dual-rank-ratio", "0")])
+        d = ootb.recommend(facts, ootb.load_policy())
+        self.assertTrue(any("WARNING" in n and "--ph-dual-rank-ratio" in n
+                            for n in d.notes))
+        self.assertFalse(any("kept user's value" in n
+                             and "--ph-dual-rank-ratio" in n for n in d.notes))
 
     def test_non_positive_user_ratio_is_reported_not_a_traceback(self):
         # apportion_ranks refuses a non-positive ratio and recommend() is not

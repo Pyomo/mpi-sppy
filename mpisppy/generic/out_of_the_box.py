@@ -98,6 +98,9 @@ class Facts:
     # count). Captured before anything can add num_scens to cfg as a side
     # effect -- see gather_facts.
     scen_anchor: str | None = None
+    # True when num_ranks came from --inspect-only N rather than from a real
+    # allocation: nothing ran, and those ranks were never held.
+    ranks_assumed: bool = False
 
 
 @dataclass
@@ -482,18 +485,19 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     user_ratio = dict(facts.user_args)
 
     def _ratio_for(flag, policy_ratio):
-        """The ratio the RUN will use: the user's if they set one, else the
-        policy's. Modelling the policy value when the user overrode it would
-        compute intra_ranks (and the bundle floor it drives) from a split that
-        never happens."""
+        """(ratio, honored) -- the ratio the RUN will use, and whether that is
+        the user's own value. Modelling the policy value when the user overrode
+        it would compute intra_ranks (and the bundle floor it drives) from a
+        split that never happens; claiming a deferral when we did NOT take the
+        user's value would contradict the warning issued right beside it."""
         ratio_flag = f"{flag}-rank-ratio"
         if ratio_flag in facts.user_flags:
             try:
                 got = float(user_ratio[ratio_flag])
             except (KeyError, TypeError, ValueError):
-                return policy_ratio        # unparseable: keep the policy value
+                return policy_ratio, False  # unparseable: keep the policy value
             if got > 0 and math.isfinite(got):
-                return got
+                return got, True
             # apportion_ranks refuses a non-positive ratio, and recommend() is
             # not wrapped, so passing one through killed the run with a bare
             # traceback. Say so and model the policy value instead; the run
@@ -502,7 +506,7 @@ def recommend(facts: Facts, policy: dict) -> Decision:
                 f"WARNING: {ratio_flag} {user_ratio[ratio_flag]!r} is not a "
                 "positive number; mpi-sppy requires a positive rank ratio. "
                 "Modeling the policy value instead.")
-        return policy_ratio
+        return policy_ratio, False
 
     # Model the cylinders in the order the RUN launches them (see
     # SPOKE_BUILD_ORDER); policy priority is the order rungs are CHOSEN, not
@@ -533,12 +537,14 @@ def recommend(facts: Facts, policy: dict) -> Decision:
         policy_ratio = (ra["rank_ratios"].get(flag, default_ratio)
                         if on_ladder else default_ratio)
         if f"{flag}-rank-ratio" in facts.user_flags:
-            spoke_ratio = _ratio_for(flag, policy_ratio)
-            # choose() used to log this deferral; it is no longer on that path,
-            # and "every decision records why" has to hold for the ones OOTB
-            # declines to make too.
-            d.notes.append(f"{flag}-rank-ratio: kept user's value "
-                           f"({_fmt_ratio(spoke_ratio)}); OOTB defers")
+            spoke_ratio, honored = _ratio_for(flag, policy_ratio)
+            if honored:
+                # choose() used to log this deferral; it is no longer on that
+                # path, and "every decision records why" has to hold for the
+                # ones OOTB declines to make too. Only when we really took the
+                # user's value -- the rejection path warns for itself.
+                d.notes.append(f"{flag}-rank-ratio: kept user's value "
+                               f"({_fmt_ratio(spoke_ratio)}); OOTB defers")
         elif on_ladder and policy_ratio != 1.0:
             choose(f"{flag}-rank-ratio", _fmt_ratio(policy_ratio),
                    f"flex-ranks: cheaper cylinder gets a {policy_ratio} share "
@@ -839,8 +845,16 @@ def _sg_linearized_prox(d, facts, policy, outcome):
     return None
 
 
+# EF reasons where decomposing WAS available and OOTB (or the user) chose the
+# monolith anyway. "min_ranks" and "request_too_big" are not here: the policy
+# refused to decompose at that rank count, so telling the reader to decompose
+# would contradict _sg_ran_ef_few_ranks in the same list.
+_EF_COULD_HAVE_DECOMPOSED = frozenset({"small_effort", "few_scens", "user"})
+
+
 def _sg_ef_under_mpiexec(d, facts, policy, outcome):
-    if d.run_ef and facts.num_ranks > 1:
+    if (d.run_ef and facts.num_ranks > 1 and not facts.ranks_assumed
+            and d.ef_reason in _EF_COULD_HAVE_DECOMPOSED):
         return (f"Solved the extensive form on one rank while {facts.num_ranks} "
                 f"were allocated: the other {facts.num_ranks - 1} built the same "
                 "model and then idled. Run an EF serially (python -m "
@@ -1034,8 +1048,11 @@ def _detect_num_scens(module, cfg) -> int:
     if cfg.get("num_scens") is not None:
         return int(cfg.num_scens)
     bf = cfg.get("branching_factors")
-    if bf is not None:
+    if bf:
         return int(math.prod(bf))
+    # `if bf:` and not `is not None`: --branching-factors "" parses to [], and
+    # math.prod([]) is 1, so an empty list used to report a one-scenario
+    # problem and quietly take the EF instead of raising below.
     # A model may take no scenario-count flag at all and work the number out
     # from its own options -- netdes reads it off --instance-name and sets
     # cfg.num_scens as a documented side effect of kw_creator. The driver calls
@@ -1270,20 +1287,23 @@ def gather_facts(module, cfg, effort: str, policy: dict) -> Facts:
     # Everything derived from cfg is captured here, before that can happen.
     user_flags = _user_flags(cfg)
     user_args = _user_args(cfg)
+    io = cfg.get("inspect_only", None)
+    ranks_assumed = io not in (None, "", "detected")
     facts = Facts(
         module_name=cfg.get("module_name", "<module>") or "<module>",
         num_ranks=_inspect_ranks(cfg),
         available_solvers=solvers,
         num_scens=_detect_num_scens(module, cfg),
         effort=effort,
-        multistage=bf is not None,
-        branching_factors=list(bf) if bf is not None else None,
+        multistage=bool(bf),
+        branching_factors=list(bf) if bf else None,
         user_solver_name=cfg.get("solver_name") or cfg.get("EF_solver_name"),
         num_cores=os.cpu_count(),
         under_slurm=("SLURM_JOB_ID" in os.environ),
         user_flags=user_flags,
         user_args=user_args,
         scen_anchor=scen_anchor,
+        ranks_assumed=ranks_assumed,
     )
     if effort in ("base", "plus"):
         # one probe scenario (discarded) feeds the size-aware decisions; the
