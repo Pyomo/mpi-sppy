@@ -1199,6 +1199,49 @@ class TestStructuralFingerprint(unittest.TestCase):
                               display_progress=True, verbose=True,
                               solver_name="some_other_solver"))
 
+    def test_setup_flags_do_not_block_a_resume(self):
+        """How a run was configured is not what problem it is.
+
+        out-of-the-box prints an equivalent command line and invites the user
+        to reuse it; with these folded in, resuming from exactly that line
+        raised CheckpointMismatch. ph_xfeas_spoke is the one spoke flag that
+        was missing from the "which cylinders run" entry above it, and the
+        per-cylinder gapper knobs are named by gapper_args as
+        <name>_mipgaps_json / <name>_mipgap_ratio, which the suffix rule for
+        solver settings did not match.
+        """
+        for key, value in (
+                ("out_of_the_box", ""),
+                ("out_of_the_box_minus", ""),
+                ("out_of_the_box_plus", ""),
+                ("inspect_only", True),
+                ("ph_xfeas_spoke", True),
+                ("lagrangian_mipgaps_json", "/tmp/gaps.json"),
+                ("lagrangian_mipgap_ratio", 0.5),
+                ("lagrangian_starting_mipgap", 0.1),
+        ):
+            with self.subTest(key=key):
+                self.assertTrue(
+                    checkpointing._is_non_structural(key),
+                    f"{key} would be folded into the fingerprint, so a resume "
+                    f"differing only in {key} is refused")
+                self.assertNotIn(key, self._folded_cfg(**{key: value}))
+
+    def _folded_cfg(self, **overrides):
+        """What cfg_vanilla actually hands the fingerprint."""
+        import mpisppy.utils.cfg_vanilla as vanilla
+        from mpisppy.utils.config import Config
+
+        cfg = Config()
+        cfg.popular_args()
+        cfg.checkpoint_args()
+        cfg.checkpoint_dir = "/tmp/whatever"
+        for key, value in overrides.items():
+            cfg.quick_assign(key, type(value), value)
+        hub_dict = {"opt_kwargs": {"options": {}}}
+        vanilla.add_checkpointing(hub_dict, cfg)
+        return hub_dict["opt_kwargs"]["options"]["checkpoint_structural_cfg"]
+
     def test_structural_cfg_extras_are_covered(self):
         """Settings PH never reads, but which reshape the model, still count."""
         with_cvar = self._fingerprint(

@@ -118,6 +118,12 @@ NON_STRUCTURAL_CFG_KEYS = frozenset({
     # cylinder support will need this to be allowed.
     "lagrangian", "xhatshuffle", "xhatxbar", "xhatlshaped", "fwph",
     "subgradient", "ph_primal_hub", "ph_dual", "relaxed_ph", "reduced_costs",
+    "ph_xfeas_spoke",
+    # How the run was set up, not what problem it is. out-of-the-box prints an
+    # equivalent command line and invites the user to reuse it, so leaving
+    # these structural refuses a resume of exactly the line it printed.
+    "out_of_the_box", "out_of_the_box_minus", "out_of_the_box_plus",
+    "inspect_only",
 })
 
 
@@ -133,7 +139,8 @@ def _is_non_structural(key):
         return True
     return key.endswith((
         "_solver_name", "_solver_options", "_solver_options_file",
-        "_mipgap", "_rank_ratio", "_solver_log_dir",
+        "_mipgap", "_mipgaps_json", "_mipgap_ratio",
+        "_rank_ratio", "_solver_log_dir",
     ))
 
 
