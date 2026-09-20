@@ -160,6 +160,33 @@ class TestCommandLineAndFlags(unittest.TestCase):
         self.assertIn("--branching-factors '3 2'", cl)
         self.assertNotIn("--num-scens", cl)
 
+    def test_ef_command_line_is_serial(self):
+        # An EF is one monolithic solve; echoing mpiexec would tell the reader
+        # to do the thing ExtensiveForm itself warns about ("Creating an
+        # ExtensiveForm object in parallel. Why?").
+        facts = ootb.Facts("farmer", 6, set(), 6, scen_anchor="--num-scens 6")
+        d = ootb.Decision(run_ef=True)
+        cl = d.command_line(facts)
+        self.assertTrue(cl.startswith("python -m mpisppy.generic_cylinders"),
+                        msg=cl)
+        self.assertNotIn("mpiexec", cl)
+        self.assertNotIn("mpi4py", cl)
+        # a decomposition still gets the parallel launcher
+        cl2 = ootb.Decision(run_ef=False).command_line(facts)
+        self.assertIn("mpiexec -np 6", cl2)
+
+    def test_ef_under_mpiexec_is_called_out(self):
+        facts = ootb.Facts("farmer", 6, set(), 6)
+        msgs = ootb.make_suggestions(ootb.Decision(run_ef=True), facts,
+                                     ootb.load_policy())
+        self.assertTrue(any("idled" in m for m in msgs),
+                        msg="no suggestion about wasting ranks on an EF")
+        # and not when the EF is the only sensible choice
+        solo = ootb.Facts("farmer", 1, set(), 6)
+        msgs = ootb.make_suggestions(ootb.Decision(run_ef=True), solo,
+                                     ootb.load_policy())
+        self.assertFalse(any("idled" in m for m in msgs))
+
     def test_command_line_has_no_anchor_when_the_model_takes_none(self):
         # netdes declares no --num-scens; printing a derived one gave a line
         # its own parser rejects.

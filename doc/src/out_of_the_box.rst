@@ -133,7 +133,7 @@ went). For example, a serial farmer run reports::
       - --EF: only 1 ranks; decomposition needs >= 3
       - --EF-solver-name gurobi_persistent: EF solver (gurobi_persistent)
     [out-of-the-box] equivalent command line:
-      mpiexec -np 1 python -m mpi4py -m mpisppy.generic_cylinders \
+      python -m mpisppy.generic_cylinders \
           --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi_persistent
     ...
     [out-of-the-box] Suggestions:
@@ -142,7 +142,11 @@ went). For example, a serial farmer run reports::
 
 The equivalent command line is anchored with the module and scenario
 specification and lists every flag OOTB added, so you can paste it (dropping
-``--out-of-the-box``) to reproduce or modify the run.
+``--out-of-the-box``) to reproduce or modify the run. When OOTB chose the
+extensive form the line is **serial** -- an EF is one monolithic solve, so
+running it under ``mpiexec`` just has the other ranks build the same model and
+idle. If you launch an EF under ``mpiexec`` anyway, both mpi-sppy and the
+Suggestions list say so.
 
 Effort tiers (how deeply OOTB inspects the model)
 -------------------------------------------------

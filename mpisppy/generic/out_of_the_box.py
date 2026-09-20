@@ -130,11 +130,20 @@ class Decision:
         that silently dropped the solver and any requested spoke, which is what
         the docs tell people to paste.
         """
-        parts = [
-            f"mpiexec -np {facts.num_ranks} python -m mpi4py -m "
-            f"mpisppy.generic_cylinders",
-            f"--module-name {facts.module_name}",
-        ]
+        # An EF run is one monolithic solve on one rank: the other ranks build
+        # the same model and then sit idle, and ExtensiveForm itself warns
+        # ("Creating an ExtensiveForm object in parallel. Why?"). So the line
+        # to reproduce an EF decision is a plain serial one -- echoing mpiexec
+        # would be telling the reader to do the thing OOTB is warning about.
+        if self.run_ef:
+            parts = ["python -m mpisppy.generic_cylinders",
+                     f"--module-name {facts.module_name}"]
+        else:
+            parts = [
+                f"mpiexec -np {facts.num_ranks} python -m mpi4py -m "
+                f"mpisppy.generic_cylinders",
+                f"--module-name {facts.module_name}",
+            ]
         # Anchor with the scenario flag the USER gave, not a derived number.
         # --num-scens is declared by the model, not the driver, so a model that
         # does not define it (netdes, which reads the count off --instance-name)
@@ -825,6 +834,16 @@ def _sg_linearized_prox(d, facts, policy, outcome):
     return None
 
 
+def _sg_ef_under_mpiexec(d, facts, policy, outcome):
+    if d.run_ef and facts.num_ranks > 1:
+        return (f"Solved the extensive form on one rank while {facts.num_ranks} "
+                f"were allocated: the other {facts.num_ranks - 1} built the same "
+                "model and then idled. Run an EF serially (python -m "
+                "mpisppy.generic_cylinders ..., no mpiexec), or give the ranks "
+                "something to do by decomposing.")
+    return None
+
+
 def _sg_more_ranks(d, facts, policy, outcome):
     cap = policy["spoke_ladder"]["max_cylinders"]
     if not d.run_ef and d.num_cylinders < cap:
@@ -856,6 +875,7 @@ def _sg_from_outcome(d, facts, policy, outcome):
 SUGGESTION_GENERATORS = [
     _sg_request_too_big,
     _sg_ran_ef_few_ranks,
+    _sg_ef_under_mpiexec,
     _sg_no_class_solver,
     _sg_no_persistent_solver,
     _sg_linearized_prox,
