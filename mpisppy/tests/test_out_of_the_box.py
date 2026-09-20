@@ -764,6 +764,40 @@ class TestCopilotReviewFindings(unittest.TestCase):
                 self.assertIn("--linearize-proximal-terms",
                               [a.flag for a in d.args])
 
+    def test_unsolvable_class_warning_names_the_right_solvers(self):
+        # gurobi/cplex/xpress cannot solve a general NLP/MINLP either, so a
+        # hard-coded list was wrong advice; the policy already knows.
+        policy = ootb.load_policy()
+        for deg, cls in (("nonlinear", "NLP"), ("quadratic", "QP")):
+            with self.subTest(cls=cls):
+                facts = self._facts(ranks=6, solvers={"cbc"},
+                                    model_degree=deg,
+                                    user_flags={"--solver-name", "--lagrangian"},
+                                    user_solver_name="cbc")
+                d = ootb.recommend(facts, policy)
+                self.assertEqual(d.problem_class, cls)
+                warn = [n for n in d.notes if n.startswith("WARNING")]
+                self.assertTrue(warn)
+                preferred = policy["solver"]["preference_order_by_class"][cls]
+                self.assertIn(preferred[0], warn[0],
+                              msg=f"warning for {cls} does not name {preferred[0]}")
+                self.assertNotIn("quadratic objective", warn[0])
+
+    def test_late_ef_fallback_drops_every_decomposition_note(self):
+        # Matching only the notes choose() wrote left the prox warning, the
+        # roster-trim line and the solver deferral on an EF trace.
+        facts = self._facts(ranks=3, solvers={"cbc"}, vars_int=50,
+                            nonants_int=10, model_degree="quadratic",
+                            user_flags={"--solver-name", "--lagrangian",
+                                        "--fwph", "--grad-rho"},
+                            user_solver_name="cbc")
+        d = ootb.recommend(facts, ootb.load_policy())
+        self.assertTrue(d.run_ef)
+        for n in d.notes:
+            self.assertNotIn("PH prox", n)
+            self.assertNotIn("spoke roster trimmed", n)
+            self.assertFalse(n.startswith("--solver-name"))
+
     def test_late_ef_fallback_drops_decomposition_choices(self):
         # The incumbent-spoke gate can pick the EF after the decomposition
         # path already chose a solver, a prox linearization and spokes. An EF

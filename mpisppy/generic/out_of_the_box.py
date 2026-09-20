@@ -361,13 +361,20 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     if lp_mip_only or no_miqp:
         unreachable = (_QUADRATIC_CLASSES if lp_mip_only else _MIQP_CLASSES)
         if d.problem_class in unreachable:
-            cannot = ("cannot take a quadratic objective" if lp_mip_only
-                      else "cannot solve an MIQP")
+            # Name the solvers the POLICY prefers for this class rather than a
+            # hard-coded list: gurobi/cplex/xpress cannot solve a general NLP
+            # or MINLP either, and the policy already says NLP -> ipopt and
+            # MINLP -> baron/scip/bonmin/couenne.
+            preferred = sp.get("preference_order_by_class", {}).get(
+                d.problem_class, ())
+            advice = (f" Solvers this policy prefers for {d.problem_class}: "
+                      + ", ".join(preferred) + "."
+                      if preferred else "")
             d.notes.append(
-                f"WARNING: {d.chosen_solver} {cannot} and this model is "
-                f"{d.problem_class}; linearizing the PH prox would not help, "
-                "because the model's own objective is the quadratic one. Use a "
-                "solver that handles it (gurobi/cplex/xpress).")
+                f"WARNING: {d.chosen_solver} cannot solve a "
+                f"{d.problem_class} model. Linearizing the PH prox would not "
+                "help, because the objective OOTB cannot hand it is the "
+                f"model's own, not the prox.{advice}")
         elif lp_mip_only:
             choose("--linearize-proximal-terms", None,
                    f"{d.chosen_solver} is LP/MIP-only; the PH prox must be "
@@ -726,21 +733,39 @@ _DECOMPOSITION_ONLY_ARGS = frozenset({"--solver-name",
                                       "--linearize-proximal-terms"})
 
 
+# Notes that only make sense on the decomposition path. choose() writes
+# "<flag> value: reason" / "<flag>: reason"; the rest are d.notes.append text,
+# matched by a distinctive opening. Matching only choose()'s form left the
+# prox warning, the roster-trim line and the solver deferral on an EF trace.
+_DECOMPOSITION_ONLY_NOTE_MARKERS = (
+    "spoke roster trimmed",
+    "rank split",
+    "bundling:",
+)
+
+
 def _drop_decomposition_choices(d) -> None:
     """Remove decisions that only apply to a decomposition, with their notes.
 
     Called when a gate picks the EF after the decomposition path had already
-    recorded choices. The notes are matched by the flag they open with, which
-    is how choose() writes them."""
-    dropped = {a.flag for a in d.args if a.flag in _DECOMPOSITION_ONLY_ARGS}
-    dropped |= {a.flag for a in d.args if a.flag.endswith("-rank-ratio")}
-    dropped |= {a.flag for a in d.args if a.flag in SPOKE_FLAGS}
-    if not dropped:
-        return
+    recorded choices, so the trace and the equivalent command line describe
+    the run that happens."""
+    dropped = {a.flag for a in d.args
+               if a.flag in _DECOMPOSITION_ONLY_ARGS
+               or a.flag.endswith("-rank-ratio")
+               or a.flag in SPOKE_FLAGS}
     d.args = [a for a in d.args if a.flag not in dropped]
-    d.notes = [n for n in d.notes
-               if not any(n.startswith(f"{f} ") or n.startswith(f"{f}:")
-                          for f in dropped)]
+
+    def _is_decomposition_note(n: str) -> bool:
+        if any(n.startswith(f"{f} ") or n.startswith(f"{f}:")
+               for f in dropped | _DECOMPOSITION_ONLY_ARGS):
+            return True
+        if any(m in n for m in _DECOMPOSITION_ONLY_NOTE_MARKERS):
+            return True
+        # the prox warning and its linearize note: an EF has no PH prox
+        return "PH prox" in n
+
+    d.notes = [n for n in d.notes if not _is_decomposition_note(n)]
 
 
 def _adopt_ef_solver(d, facts) -> None:

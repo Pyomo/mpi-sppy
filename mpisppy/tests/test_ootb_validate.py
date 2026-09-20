@@ -127,6 +127,29 @@ class TestValidatorCatchesBadPolicies(unittest.TestCase):
                 policy["solver"]["preference_order_by_class"][cls] = ["highs"]
                 self.assertTrue(self._fails(val.validate_static(policy)))
 
+    def test_lp_mip_only_solver_may_not_be_offered_for_a_quadratic_class(self):
+        # recommend() refuses to linearize for these, so pairing them offers a
+        # configuration that cannot run. The MIQP side was checked; this was not.
+        for cls in sorted(ootb._QUADRATIC_CLASSES):
+            with self.subTest(cls=cls):
+                policy = copy.deepcopy(self.policy)
+                policy["solver"]["preference_order_by_class"][cls] = ["cbc"]
+                self.assertTrue(self._fails(val.validate_static(policy)))
+
+    def test_null_list_valued_solver_keys_are_reported(self):
+        # The detail f-string is built eagerly, so an isinstance test in the
+        # condition cannot protect it: null crashed with TypeError.
+        for path in (("no_miqp_force_linearize_prox",),
+                     ("lp_mip_only_force_linearize_prox",),
+                     ("preference_order_by_class", "LP")):
+            with self.subTest(key=".".join(path)):
+                policy = copy.deepcopy(self.policy)
+                block = policy["solver"]
+                for k in path[:-1]:
+                    block = block[k]
+                block[path[-1]] = None
+                self.assertTrue(self._fails(val.validate_static(policy)))
+
     def test_explicit_null_sub_block_is_reported_not_a_crash(self):
         # dict.get does NOT substitute its default for a key present with
         # value null, so an explicit null still reached the dereference.

@@ -260,10 +260,16 @@ def validate_static(policy: dict) -> list:
         and all(isinstance(s, str) for s in pref))
     for key in ("commercial", "qp_capable", "lp_mip_only_force_linearize_prox",
                 "no_miqp_force_linearize_prox"):
-        val = sp.get(key, [])
+        v = sp.get(key, [])
+        if not isinstance(v, list):
+            # The detail below is built EAGERLY, so the isinstance test in the
+            # condition cannot protect it: a null here crashed the validator
+            # with TypeError instead of reporting. Same for the class lists.
+            add(f"solver.{key} is a list", False, f"got {type(v).__name__}")
+            continue
         add(f"solver.{key} is a subset of preference_order",
-            isinstance(val, list) and set(val) <= set(pref or []),
-            f"stray: {sorted(set(val) - set(pref or []))}")
+            set(v) <= set(pref or []),
+            f"stray: {sorted(set(v) - set(pref or []))}")
     # per-class preferred solver lists: all six classes present, each a non-empty
     # subset of the master preference_order (so detection always probes them).
     by_class = {k: v for k, v in sp.get("preference_order_by_class", {}).items()
@@ -272,10 +278,13 @@ def validate_static(policy: dict) -> list:
         set(by_class) == {"LP", "MIP", "QP", "MIQP", "NLP", "MINLP"},
         f"have {sorted(by_class)}")
     for cls, lst in by_class.items():
+        if not isinstance(lst, list):
+            add(f"solver.preference_order_by_class.{cls} is a list", False,
+                f"got {type(lst).__name__}")
+            continue
         add(f"solver.preference_order_by_class.{cls} is a non-empty subset of "
             f"preference_order",
-            isinstance(lst, list) and len(lst) > 0
-            and all(isinstance(s, str) for s in lst)
+            len(lst) > 0 and all(isinstance(s, str) for s in lst)
             and set(lst) <= set(pref or []),
             f"stray: {sorted(set(lst) - set(pref or []))}")
 
@@ -317,13 +326,28 @@ def validate_static(policy: dict) -> list:
     # Every class recommend() refuses to linearize for, not just MIQP: it keys
     # on ootb._MIQP_CLASSES, so a policy adding one of these to the MINLP list
     # would validate clean and then produce the configuration this forbids.
-    no_miqp = set(sp.get("no_miqp_force_linearize_prox", ()))
-    by_class = sp.get("preference_order_by_class", {})
-    both = sorted({(cls, s_) for cls in ootb._MIQP_CLASSES
-                   for s_ in no_miqp & set(by_class.get(cls, ()))})
+    # A solver must not be offered FOR a class it cannot solve. recommend()
+    # refuses to linearize for these combinations and warns instead, so a
+    # policy that pairs them is offering a configuration that cannot run.
+    cls_lists = sp.get("preference_order_by_class", {})
+
+    def _offered_where_unsolvable(key, classes):
+        listed = set(sp.get(key, ()) or ())
+        return sorted({(c, x) for c in classes
+                       for x in listed & set(cls_lists.get(c, ()) or ())})
+
+    both = _offered_where_unsolvable("no_miqp_force_linearize_prox",
+                                     ootb._MIQP_CLASSES)
     add("no_miqp_force_linearize_prox solvers are absent from the "
         "mixed-integer quadratic class lists",
         not both, f"in both: {both}" if both else "none in both")
+    # The LP/MIP-only side was generalized in the code but not here: a policy
+    # with preference_order_by_class["QP"] = ["cbc"] validated clean.
+    both_q = _offered_where_unsolvable("lp_mip_only_force_linearize_prox",
+                                       ootb._QUADRATIC_CLASSES)
+    add("lp_mip_only_force_linearize_prox solvers are absent from the "
+        "quadratic class lists",
+        not both_q, f"in both: {both_q}" if both_q else "none in both")
 
     add("rank_allocation.min_ranks_per_cylinder is a positive int",
         isinstance(ra.get("min_ranks_per_cylinder"), int)

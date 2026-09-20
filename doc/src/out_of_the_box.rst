@@ -90,13 +90,15 @@ In order, OOTB chooses:
    order: persistent commercial, then commercial, then a free QP-capable
    solver, then LP/MIP-only.)
    A solver that cannot take the quadratic PH prox automatically gets
-   ``--linearize-proximal-terms``: cbc and glpk always, and HiGHS when the
-   model has integers (it does continuous QP but not mixed-integer QP). At the
-   minus tier, where nothing is instantiated, integrality is unknown and HiGHS
-   gets the linearization anyway -- an approximation on a continuous model, but
-   it avoids a failed solve on an integer one. If the *model's own* objective
-   is the quadratic one, linearizing the prox cannot help, so OOTB warns
-   instead of pretending to fix it.
+   ``--linearize-proximal-terms`` -- but only when the prox is the *only*
+   quadratic part: cbc and glpk on an LP or MIP model, HiGHS on a MIP (it does
+   continuous QP but not mixed-integer QP). If the model's *own* objective is
+   the one the solver cannot take, linearizing the prox cannot help, so OOTB
+   warns and names the solvers the policy prefers for that class instead of
+   pretending to fix it. At the minus tier, where nothing is instantiated,
+   integrality is unknown and HiGHS gets the linearization anyway -- an
+   approximation on a continuous model, but it avoids a failed solve on an
+   integer one.
    If you pass ``--solver-name`` it is used as-is. ``--EF-solver-name`` is a
    separate option: it governs the EF and is not used as the decomposition
    solver.
