@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import math
 import sys
 import time
 
@@ -68,7 +69,6 @@ def _round_sig(x: float, n: int = 6) -> float:
     """Round to n significant figures. Decimal-place rounding would destroy the
     legitimately tiny coefficients that multiply huge (int*spb)^exponent terms
     (e.g. int_weight ~ 1e-9 when the exponent is 3 and there are ~150 integers)."""
-    import math
     if x == 0 or not math.isfinite(x):
         return 0.0
     return round(x, -int(math.floor(math.log10(abs(x)))) + (n - 1))
@@ -241,7 +241,15 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
     # Significant figures, not decimal places: a focus that keeps effort in raw
     # units has a legitimately tiny scale, and round(1.57e-09, 8) is 0.0, which
     # the positivity check below would then reject (see _round_sig).
-    spe = _round_sig(fit["seconds_per_effort_unit"])
+    # Validate BEFORE rounding: _round_sig is not type-safe (it would raise
+    # TypeError on a hand-authored "1.0" instead of the message below), and it
+    # maps nan and inf to 0.0, which would report a degenerate fit as a zero
+    # scale. ootb_validate has no check on this field, so a bad one reaches us.
+    raw_spe = fit["seconds_per_effort_unit"]
+    if not (val._is_number(raw_spe) and math.isfinite(raw_spe) and raw_spe > 0):
+        raise ValueError("seconds_per_effort_unit must be a positive finite "
+                         f"number, got {raw_spe!r}")
+    spe = _round_sig(raw_spe)
     es["seconds_per_effort_unit"] = spe
     es["_calibration"] = {
         "solver": solver_name, "r2": fit["r2"], "n_points": fit["n_points"],
@@ -264,16 +272,21 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
     # whose _comment, _cold_start_guess and stale ef_effort_budget describe a
     # conversion that never happened.
     target = ef.get("ef_target_seconds")
-    if not (val._is_number(spe) and spe > 0):
-        raise ValueError("seconds_per_effort_unit must be a positive number, "
-                         f"got {spe!r}")
     if not (val._is_number(target) and target > 0):
         # _is_number first: a hand-authored "120" would otherwise raise
         # TypeError from the comparison instead of this message.
         raise ValueError(
             "ef_fallback.ef_target_seconds must be a positive number to derive "
             f"ef_effort_budget from it; got {target!r}")
-    budget = int(round(target / spe))
+    quotient = target / spe
+    if not math.isfinite(quotient):
+        # A denormal scale survives _round_sig, and target/1e-310 overflows to
+        # inf, so int(round(...)) below would raise a bare OverflowError past
+        # the written message.
+        raise ValueError(
+            f"ef_target_seconds {target} at seconds_per_effort_unit {spe} "
+            "overflows; the scale is too small to express this budget")
+    budget = int(round(quotient))
     if budget <= 0:
         # Rounds to zero when the scale is large relative to the target. The
         # EF gate tests `whole_effort <= ef_effort_budget`, so a zero budget

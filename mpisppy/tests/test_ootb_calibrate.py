@@ -120,9 +120,10 @@ class TestCalibratedPolicy(unittest.TestCase):
                                   [], "gurobi", "2026-07-01")
 
     def test_prose_uses_the_rounded_scale_the_file_records(self):
-        # The stored field is rounded to 8 places; dividing by (or quoting) the
-        # unrounded value would make the file disagree with its own note and
-        # stop it being a fixed point of calibrated_policy.
+        # The stored field is rounded to significant figures (_round_sig);
+        # dividing by (or quoting) the unrounded value would make the file
+        # disagree with its own note and stop it being a fixed point of
+        # calibrated_policy.
         rescaled = dict(self.fit, seconds_per_effort_unit=1 / 3)
         pol = cal.calibrated_policy(copy.deepcopy(self.base), rescaled,
                                     [], "gurobi", "2026-07-01")
@@ -179,6 +180,28 @@ class TestCalibratedPolicy(unittest.TestCase):
         pol = cal.calibrated_policy(base, self.fit, [], "gurobi", "2026-07-01")
         got = pol["ef_fallback"]["_cold_start_guess"]
         self.assertEqual([g for g in got if g in strays], strays)
+
+    def test_refuses_a_non_numeric_or_non_finite_scale(self):
+        # _round_sig is not type-safe and maps nan/inf to 0.0, so the scale has
+        # to be validated BEFORE rounding or the user gets a TypeError, or a
+        # message blaming a zero scale for a degenerate fit.
+        for bad in ("1.0", float("nan"), float("inf"), 0.0, -1.0):
+            with self.subTest(scale=bad):
+                with self.assertRaises(ValueError):
+                    cal.calibrated_policy(
+                        copy.deepcopy(self.base),
+                        dict(self.fit, seconds_per_effort_unit=bad),
+                        [], "gurobi", "2026-07-01")
+
+    def test_refuses_a_scale_that_overflows_the_budget(self):
+        # A denormal scale survives significant-figure rounding, and
+        # target / 1e-310 is inf, which int(round(...)) turns into a bare
+        # OverflowError rather than the written message.
+        with self.assertRaises(ValueError):
+            cal.calibrated_policy(copy.deepcopy(self.base),
+                                  dict(self.fit,
+                                       seconds_per_effort_unit=1e-310),
+                                  [], "gurobi", "2026-07-01")
 
     def test_shipped_policy_is_reproducible_by_the_calibrator(self):
         # The shipped file must be a fixed point of calibrated_policy for the
