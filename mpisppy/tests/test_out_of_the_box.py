@@ -507,6 +507,44 @@ def _ladder_flags():
     return {r["flag"] for r in ootb.load_policy()["spoke_ladder"]["rungs"]}
 
 
+class TestSpokeBuildOrderIsShared(unittest.TestCase):
+    """OOTB must model the rank split in the order the run launches spokes.
+
+    apportion_ranks breaks largest-remainder ties by position, so a different
+    order gives each cylinder the right total under the wrong NAME -- the
+    "rank split" note would tell the user a cylinder got ranks that went
+    somewhere else. spokes.py assembles from the same tuple so the order is
+    declared once.
+    """
+
+    def test_order_covers_every_spoke_flag(self):
+        self.assertEqual(set(ootb.SPOKE_BUILD_ORDER), set(ootb.SPOKE_FLAGS))
+        self.assertEqual(len(ootb.SPOKE_BUILD_ORDER),
+                         len(set(ootb.SPOKE_BUILD_ORDER)))
+
+    def test_build_spoke_list_assembles_from_the_tuple(self):
+        # the guard in spokes.py must name a spoke it builds but the tuple omits
+        import inspect
+        from mpisppy.generic import spokes
+        src = inspect.getsource(spokes.build_spoke_list)
+        self.assertIn("SPOKE_BUILD_ORDER", src)
+        for flag in ootb.SPOKE_BUILD_ORDER:
+            self.assertIn(f'"{flag}"', src, msg=f"{flag} not built in spokes.py")
+
+    def test_modelled_split_follows_build_order(self):
+        for flags, ranks in ((["--ph-dual"], 16), (["--relaxed-ph"], 12),
+                             (["--ph-dual", "--xhatlshaped"], 16), ([], 16)):
+            with self.subTest(flags=flags, ranks=ranks):
+                facts = ootb.Facts("farmer", ranks, {"gurobi"}, 1000,
+                                   effort="base", vars_int=50, vars_cont=50,
+                                   nonants_total=20, nonants_int=10,
+                                   model_degree="linear", user_flags=set(flags))
+                d = ootb.recommend(facts, ootb.load_policy())
+                got = [n for n in d.rank_split if n != "(hub)"]
+                self.assertEqual(
+                    got, [f for f in ootb.SPOKE_BUILD_ORDER if f in got])
+
+
 class TestOffLadderSpokesAreInTheRankModel(unittest.TestCase):
     """A spoke the user set is a cylinder even when the policy ladder does not
     list it, so it has to be in the rank split. It was not: every rank was
@@ -548,6 +586,19 @@ class TestOffLadderSpokesAreInTheRankModel(unittest.TestCase):
         # ladder spoke that also has the default.
         hub = d.rank_split["(hub)"]
         self.assertGreaterEqual(d.rank_split[off], hub if default == 1.0 else 1)
+
+    def test_non_positive_user_ratio_is_reported_not_a_traceback(self):
+        # apportion_ranks refuses a non-positive ratio and recommend() is not
+        # wrapped, so passing one through killed the run with a bare traceback.
+        facts = ootb.Facts("farmer", 6, {"gurobi"}, 1000, effort="base",
+                           vars_int=50, vars_cont=50, nonants_total=20,
+                           nonants_int=10, model_degree="linear",
+                           user_flags={"--ph-dual", "--ph-dual-rank-ratio"},
+                           user_args=[("--ph-dual-rank-ratio", "0")])
+        d = ootb.recommend(facts, ootb.load_policy())      # must not raise
+        self.assertTrue(any("--ph-dual-rank-ratio" in n and "WARNING" in n
+                            for n in d.notes),
+                        msg="no warning for a non-positive rank ratio")
 
     def test_split_is_deterministic(self):
         # off_ladder is a set; iterating it directly would make the split

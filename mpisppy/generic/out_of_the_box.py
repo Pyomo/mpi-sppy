@@ -152,6 +152,18 @@ SPOKE_FLAGS = frozenset({
     "--subgradient", "--reduced-costs", "--xhatshuffle", "--xhatxbar",
     "--xhatlshaped",
 })
+# The order build_spoke_list appends spokes in, which is the order
+# WheelSpinner sees them. apportion_ranks breaks largest-remainder ties by
+# position, so modelling the split in a DIFFERENT order gives each cylinder the
+# right total but the wrong NAME -- the "rank split" note would then tell the
+# user that a cylinder got ranks that actually went to another. spokes.py
+# assembles from this tuple so there is one declaration of the order.
+SPOKE_BUILD_ORDER = (
+    "--fwph", "--lagrangian", "--ph-dual", "--relaxed-ph", "--subgradient",
+    "--xhatshuffle", "--xhatxbar", "--reduced-costs", "--xhatlshaped",
+    "--ph-xfeas-spoke",
+)
+
 # A hub flag selects WHICH hub runs; it does not add a cylinder.
 HUB_FLAGS = frozenset({
     "--APH", "--subgradient-hub", "--fwph-hub", "--ph-primal-hub",
@@ -317,6 +329,14 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     min_rpc = policy["rank_allocation"]["min_ranks_per_cylinder"]
     all_rungs = sorted(ladder["rungs"], key=lambda r: r["priority"])
     need = dict(ladder["core_roster_min"])       # e.g. {"outer": 1, "inner": 1}
+    # A spoke the user set is a cylinder whether or not it is on the ladder
+    # (see off_ladder below), so it is spending rank budget before the
+    # widening loop starts. Counting only `chosen` let the gate add a rung on
+    # the strength of ranks an off-ladder spoke had already taken, leaving
+    # cylinders below min_ranks_per_cylinder.
+    user_spokes = facts.user_flags & SPOKE_FLAGS
+    ladder_flags = {r["flag"] for r in all_rungs}
+    off_ladder = user_spokes - ladder_flags
     chosen = []
     for r in all_rungs:                           # minimal core
         if need.get(r["bound"], 0) > 0:
@@ -325,7 +345,8 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     for r in all_rungs:                           # widen-aware additions
         if r in chosen:
             continue
-        cyl_if_added = 2 + len(chosen)            # hub + chosen + this rung
+        # hub + chosen + this rung + the off-ladder spokes the run will launch
+        cyl_if_added = 2 + len(chosen) + len(off_ladder)
         if cyl_if_added > max_cyl or facts.num_ranks // cyl_if_added < min_rpc:
             break
         chosen.append(r)
@@ -341,9 +362,6 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     # -- so an off-ladder request spends rank budget that `chosen` never sees.
     # Counting only `chosen` left e.g. `-np 2 --xhatxbar` asking for 3
     # cylinders and aborting in _make_comms.
-    user_spokes = facts.user_flags & SPOKE_FLAGS
-    ladder_flags = {r["flag"] for r in all_rungs}
-    off_ladder = user_spokes - ladder_flags
     # A ladder spoke the user asked for is a cylinder even when the widening
     # loop above did not reach it (e.g. --xhatxbar is priority 4), so put it in
     # `chosen` to be counted. Counting only what OOTB picked left `-np 2
@@ -433,34 +451,49 @@ def recommend(facts: Facts, policy: dict) -> Decision:
         ratio_flag = f"{flag}-rank-ratio"
         if ratio_flag in facts.user_flags:
             try:
-                return float(user_ratio[ratio_flag])
+                got = float(user_ratio[ratio_flag])
             except (KeyError, TypeError, ValueError):
-                pass                       # unparseable: keep the policy value
+                return policy_ratio        # unparseable: keep the policy value
+            if got > 0 and math.isfinite(got):
+                return got
+            # apportion_ranks refuses a non-positive ratio, and recommend() is
+            # not wrapped, so passing one through killed the run with a bare
+            # traceback. Say so and model the policy value instead; the run
+            # will still fail on the user's own flag, but having been told.
+            d.notes.append(
+                f"WARNING: {ratio_flag} {user_ratio[ratio_flag]!r} is not a "
+                "positive number; mpi-sppy requires a positive rank ratio. "
+                "Modeling the policy value instead.")
         return policy_ratio
 
+    # Model the cylinders in the order the RUN launches them (see
+    # SPOKE_BUILD_ORDER); policy priority is the order rungs are CHOSEN, not
+    # the order they are built, and apportion_ranks breaks ties by position.
+    ladder_by_flag = {r["flag"]: r for r in chosen}
+    ordered = [f for f in SPOKE_BUILD_ORDER
+               if f in ladder_by_flag or f in off_ladder]
+    # anything the vocabulary gained without this tuple being updated still
+    # gets modelled, just at the end, rather than vanishing from the split
+    ordered += sorted((set(ladder_by_flag) | off_ladder)
+                      - set(SPOKE_BUILD_ORDER))
+
     spoke_names = []
-    for r in chosen:
-        spoke_ratio = _ratio_for(r["flag"],
-                                 ra["rank_ratios"].get(r["flag"], default_ratio))
+    for flag in ordered:
+        # A policy may give a ratio to any real spoke flag, on its ladder or
+        # not (ootb_validate only requires the derived -rank-ratio option to
+        # exist), so consult rank_ratios for both; DLW's default_rank_ratio
+        # applies when the policy names no ratio.
+        spoke_ratio = _ratio_for(flag,
+                                 ra["rank_ratios"].get(flag, default_ratio))
         ratios.append(spoke_ratio)
-        spoke_names.append(r["flag"])
-        if spoke_ratio != default_ratio:
-            choose(f"{r['flag']}-rank-ratio", _fmt_ratio(spoke_ratio),
+        spoke_names.append(flag)
+        if flag in ladder_by_flag and spoke_ratio != default_ratio:
+            # Only for a ladder rung: an off-ladder spoke's derived
+            # -rank-ratio option may not be declared at all (--xhatlshaped
+            # has none), and a user-set one is already on the command line.
+            choose(f"{flag}-rank-ratio", _fmt_ratio(spoke_ratio),
                    f"flex-ranks: cheaper cylinder gets a {spoke_ratio} share "
                    f"(crude cold-start)")
-    # An off-ladder spoke the user set is a cylinder too -- build_spoke_list
-    # appends on cfg.<spoke> whoever set it -- so it belongs in the rank model.
-    # Leaving it out apportioned every rank across the ladder cylinders while
-    # the run launched more, dropped the user's own spoke from the printed
-    # split, and left intra_ranks (hence the bundle floor) describing a split
-    # that never happens. The policy lists no ratio for a spoke that is not on
-    # its ladder, so these take default_rank_ratio: a full share. No
-    # --<flag>-rank-ratio is emitted for them -- it is the default, and for an
-    # off-ladder spoke that option may not even be declared. sorted() because
-    # off_ladder is a set and the rank split must not vary run to run.
-    for flag in sorted(off_ladder):
-        ratios.append(_ratio_for(flag, default_ratio))
-        spoke_names.append(flag)
     d.intra_ranks, d.rank_split, divisible = _rank_layout(
         facts.num_ranks, ratios, spoke_names)
     if not divisible:

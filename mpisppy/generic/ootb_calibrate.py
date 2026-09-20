@@ -95,8 +95,7 @@ def _design_columns(point: dict, exponent: float):
 
 
 def fit_effort_model(points: list, exponents=EXPONENT_GRID) -> dict:
-    """Fit the effort_scaling coefficients + an effort->seconds scale to timed
-    solves.
+    """Fit the effort_scaling coefficients to timed solves.
 
     points: list of dicts with PER-SCENARIO `vars_cont`, `vars_int`,
     `nonants_int`, the bundle size `spb`, and the measured `seconds`.
@@ -233,8 +232,8 @@ def collect_points(policy: dict, solver_name: str, spb_grid, reps,
 
 def calibrated_policy(base_policy: dict, fit: dict, points: list,
                       solver_name: str, today: str) -> dict:
-    """Return a copy of base_policy with the fitted effort_scaling, the
-    effort->seconds scale, and a seconds-derived ef_effort_budget."""
+    """Return a copy of base_policy with the fitted effort_scaling and an
+    ef_effort_budget set from the policy's authored ef_target_seconds."""
     import copy
     pol = copy.deepcopy(base_policy)
 
@@ -257,8 +256,9 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
         "Coefficients are calibrated by ootb_calibrate (see _calibration); foci "
         "may ship different shapes; more benchmark data refines further.")
 
-    # Derive the EF budget in effort units from the seconds target so the budget
-    # is consistent with the fitted scale (effort <= seconds / sec_per_effort).
+    # Set the EF budget from the seconds target. The coefficients are fitted in
+    # seconds, so an effort unit already IS about a second and the budget is the
+    # target itself -- no conversion.
     ef = pol["ef_fallback"]
     # A policy with no positive ef_target_seconds (or a non-positive scale) is
     # one ootb_validate already rejects -- it requires ef_target_seconds > 0 --
@@ -276,7 +276,8 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
             f"as a finite float to set ef_effort_budget from it; got {target!r}")
     budget = int(round(target))
     if budget <= 0:
-        # A target below 0.5 rounds to zero, and the EF gate tests
+        # A target of 0.5 or below rounds to zero (round() is half-to-even, so
+        # 0.5 itself goes to 0), and the EF gate tests
         # `whole_effort <= ef_effort_budget`, so a zero budget would silently
         # disable EF-when-small. Check the result, not just the input.
         raise ValueError(
@@ -289,11 +290,10 @@ def calibrated_policy(base_policy: dict, fit: dict, points: list,
         "second and no conversion is needed. Calibration makes the UNITS "
         "meaningful; the magnitude comes from the authored ef_target_seconds, "
         "not from measurement.")
-    # ef_effort_budget STAYS listed as a cold-start guess. It is
-    # ef_target_seconds -- itself a guess -- divided by a scale that is 1
-    # by construction, so the derivation adds no evidence. Listing the
-    # source but not the number derived from it would read as though the
-    # derivation measured something. Rebuilt in block-key order.
+    # ef_effort_budget STAYS listed as a cold-start guess: it IS
+    # ef_target_seconds, itself a guess, so nothing about it was measured.
+    # Listing the source but not the number taken from it would read as though
+    # the calibration had chosen the magnitude. Rebuilt in block-key order.
     guesses = set(ef.get("_cold_start_guess", [])) | {"ef_effort_budget"}
     # Keep entries that name no key in this block. Dropping them would
     # silently repair an authoring error that ootb_validate has a dedicated
