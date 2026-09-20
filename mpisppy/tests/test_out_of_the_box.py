@@ -503,6 +503,62 @@ class TestRankFloorAndRoster(unittest.TestCase):
         self.assertFalse(emitted & ootb.NEEDS_INNER_BOUND)
 
 
+def _ladder_flags():
+    return {r["flag"] for r in ootb.load_policy()["spoke_ladder"]["rungs"]}
+
+
+class TestOffLadderSpokesAreInTheRankModel(unittest.TestCase):
+    """A spoke the user set is a cylinder even when the policy ladder does not
+    list it, so it has to be in the rank split. It was not: every rank was
+    apportioned across the ladder cylinders while the run launched more, the
+    printed split omitted the user's own spoke, and intra_ranks -- hence the
+    bundle floor -- described a split that never happens."""
+
+    @staticmethod
+    def _decide(flags, num_ranks):
+        facts = ootb.Facts("farmer", num_ranks, {"gurobi"}, 1000, effort="base",
+                           vars_int=50, vars_cont=50, nonants_total=20,
+                           nonants_int=10, model_degree="linear",
+                           user_flags=set(flags))
+        return ootb.recommend(facts, ootb.load_policy())
+
+    def test_split_covers_every_cylinder(self):
+        off = sorted(ootb.SPOKE_FLAGS - _ladder_flags())
+        self.assertTrue(off, "no off-ladder spoke to test with")
+        for flags, ranks in ((off[:1], 6), (off[:2], 8), (off, 8)):
+            with self.subTest(flags=flags, ranks=ranks):
+                d = self._decide(flags, ranks)
+                # the property: one entry per cylinder the run will launch,
+                # every requested spoke named, and no rank unaccounted for
+                self.assertEqual(len(d.rank_split), d.num_cylinders)
+                for f in flags:
+                    self.assertIn(f, d.rank_split)
+                self.assertEqual(sum(d.rank_split.values()), ranks)
+                self.assertEqual(d.intra_ranks, max(d.rank_split.values()))
+
+    def test_off_ladder_spoke_gets_the_default_ratio(self):
+        off = sorted(ootb.SPOKE_FLAGS - _ladder_flags())[0]
+        policy = ootb.load_policy()
+        default = policy["rank_allocation"]["default_rank_ratio"]
+        d = self._decide([off], 8)
+        # no --<flag>-rank-ratio is emitted: it is the default, and for an
+        # off-ladder spoke that option may not even be declared.
+        self.assertNotIn(f"{off}-rank-ratio", [a.flag for a in d.args])
+        # a full share: at the default ratio it is not starved relative to a
+        # ladder spoke that also has the default.
+        hub = d.rank_split["(hub)"]
+        self.assertGreaterEqual(d.rank_split[off], hub if default == 1.0 else 1)
+
+    def test_split_is_deterministic(self):
+        # off_ladder is a set; iterating it directly would make the split
+        # depend on PYTHONHASHSEED.
+        flags = sorted(ootb.SPOKE_FLAGS - _ladder_flags())
+        first = list(self._decide(flags, 8).rank_split.items())
+        for _ in range(5):
+            self.assertEqual(list(self._decide(flags, 8).rank_split.items()),
+                             first)
+
+
 class TestRankLayoutMirrorsTheRun(unittest.TestCase):
     """_rank_layout must model what WheelSpinner actually does."""
 
@@ -515,8 +571,7 @@ class TestRankLayoutMirrorsTheRun(unittest.TestCase):
         # ranks both paths give [2, 2, 2] and the test proves nothing.
         from mpisppy.utils.rank_apportionment import apportion_ranks
         ratios = [2.0, 2.0, 2.0]
-        chosen = [{"flag": "--a"}, {"flag": "--b"}]
-        intra, split, _ = ootb._rank_layout(7, ratios, chosen)
+        intra, split, _ = ootb._rank_layout(7, ratios, ["--a", "--b"])
         self.assertEqual(sorted(split.values()),
                          sorted(apportion_ranks(ratios, 7)))
         self.assertEqual(intra, 3)          # the equal split would say 2
@@ -525,10 +580,10 @@ class TestRankLayoutMirrorsTheRun(unittest.TestCase):
     def test_reports_indivisible_equal_split(self):
         """_make_comms raises "Need a multiple of N processes"."""
         _, _, divisible = ootb._rank_layout(5, [1.0, 1.0, 1.0],
-                                            [{"flag": "--a"}, {"flag": "--b"}])
+                                            ["--a", "--b"])
         self.assertFalse(divisible)
         _, _, divisible = ootb._rank_layout(6, [1.0, 1.0, 1.0],
-                                            [{"flag": "--a"}, {"flag": "--b"}])
+                                            ["--a", "--b"])
         self.assertTrue(divisible)
 
 

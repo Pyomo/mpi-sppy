@@ -424,21 +424,45 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     # otherwise intra_ranks (and the bundle floor it drives) is computed from a
     # split that never happens.
     user_ratio = dict(facts.user_args)
-    for r in chosen:
-        ratio_flag = f"{r['flag']}-rank-ratio"
-        spoke_ratio = ra["rank_ratios"].get(r["flag"], default_ratio)
+
+    def _ratio_for(flag, policy_ratio):
+        """The ratio the RUN will use: the user's if they set one, else the
+        policy's. Modelling the policy value when the user overrode it would
+        compute intra_ranks (and the bundle floor it drives) from a split that
+        never happens."""
+        ratio_flag = f"{flag}-rank-ratio"
         if ratio_flag in facts.user_flags:
             try:
-                spoke_ratio = float(user_ratio[ratio_flag])
+                return float(user_ratio[ratio_flag])
             except (KeyError, TypeError, ValueError):
                 pass                       # unparseable: keep the policy value
+        return policy_ratio
+
+    spoke_names = []
+    for r in chosen:
+        spoke_ratio = _ratio_for(r["flag"],
+                                 ra["rank_ratios"].get(r["flag"], default_ratio))
         ratios.append(spoke_ratio)
+        spoke_names.append(r["flag"])
         if spoke_ratio != default_ratio:
-            choose(ratio_flag, _fmt_ratio(spoke_ratio),
+            choose(f"{r['flag']}-rank-ratio", _fmt_ratio(spoke_ratio),
                    f"flex-ranks: cheaper cylinder gets a {spoke_ratio} share "
                    f"(crude cold-start)")
+    # An off-ladder spoke the user set is a cylinder too -- build_spoke_list
+    # appends on cfg.<spoke> whoever set it -- so it belongs in the rank model.
+    # Leaving it out apportioned every rank across the ladder cylinders while
+    # the run launched more, dropped the user's own spoke from the printed
+    # split, and left intra_ranks (hence the bundle floor) describing a split
+    # that never happens. The policy lists no ratio for a spoke that is not on
+    # its ladder, so these take default_rank_ratio: a full share. No
+    # --<flag>-rank-ratio is emitted for them -- it is the default, and for an
+    # off-ladder spoke that option may not even be declared. sorted() because
+    # off_ladder is a set and the rank split must not vary run to run.
+    for flag in sorted(off_ladder):
+        ratios.append(_ratio_for(flag, default_ratio))
+        spoke_names.append(flag)
     d.intra_ranks, d.rank_split, divisible = _rank_layout(
-        facts.num_ranks, ratios, chosen)
+        facts.num_ranks, ratios, spoke_names)
     if not divisible:
         # The equal-rank path in WheelSpinner refuses a rank count that is not
         # a multiple of the cylinder count, so say it here instead of letting
@@ -619,10 +643,12 @@ def _pick_spb_by_effort(num_scens: int, min_bundles: int, facts: Facts,
     return best
 
 
-def _rank_layout(total: int, ratios: list, chosen: list) -> tuple:
-    """Return (intra_ranks, rank_split) for the chosen cylinders.
+def _rank_layout(total: int, ratios: list, spoke_names: list) -> tuple:
+    """Return (intra_ranks, rank_split) for the cylinders the run will launch.
 
-    `ratios` is hub-first, matching `[hub] + chosen`. We mirror what
+    `spoke_names` is every spoke that becomes a cylinder -- the rungs OOTB
+    chose AND any off-ladder spoke the user set -- and `ratios` is hub-first,
+    matching `[hub] + spoke_names`. We mirror what
     WheelSpinner actually branches on (`spin_the_wheel.py`): it apportions by
     ratio when ANY ratio differs from 1.0, and otherwise takes the equal split.
     Testing "all ratios equal" instead would model an equal split for a policy
@@ -632,7 +658,7 @@ def _rank_layout(total: int, ratios: list, chosen: list) -> tuple:
     of N processes", so that case is reported here rather than surfacing as a
     startup abort. intra_ranks is the widest cylinder's rank count (it governs
     the bundle floor)."""
-    names = ["(hub)"] + [r["flag"] for r in chosen]
+    names = ["(hub)"] + list(spoke_names)
     if any(r != 1.0 for r in ratios):
         from mpisppy.utils.rank_apportionment import apportion_ranks
         counts = apportion_ranks(ratios, total)
