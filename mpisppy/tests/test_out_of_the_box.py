@@ -730,6 +730,56 @@ class TestCopilotReviewFindings(unittest.TestCase):
         self.assertIsNone(d.problem_class)
         self.assertIn("--linearize-proximal-terms", [a.flag for a in d.args])
 
+    def test_lp_mip_only_solver_warns_on_a_quadratic_model(self):
+        # cbc cannot take a quadratic objective AT ALL, so linearizing the
+        # prox cannot rescue a model whose own objective is quadratic --
+        # continuous QP included, which is why this is wider than the highs
+        # case. Reporting a fix for a run that still dies is the bug.
+        for deg, vi, cls in (("quadratic", 50, "MIQP"), ("quadratic", 0, "QP")):
+            with self.subTest(cls=cls):
+                facts = self._facts(ranks=6, solvers={"cbc"}, vars_int=vi,
+                                    nonants_int=10 if vi else 0,
+                                    model_degree=deg,
+                                    user_flags={"--solver-name", "--lagrangian"},
+                                    user_solver_name="cbc")
+                d = ootb.recommend(facts, ootb.load_policy())
+                self.assertEqual(d.problem_class, cls)
+                self.assertNotIn("--linearize-proximal-terms",
+                                 [a.flag for a in d.args])
+                self.assertTrue(any(n.startswith("WARNING") for n in d.notes))
+                self.assertFalse(
+                    any("avoids the approximation" in m for m in
+                        ootb.make_suggestions(d, facts, ootb.load_policy())),
+                    msg="suggested a fix for a model the solver cannot solve")
+
+    def test_lp_mip_only_solver_still_linearizes_for_lp_and_mip(self):
+        for deg, vi, cls in (("linear", 0, "LP"), ("linear", 50, "MIP")):
+            with self.subTest(cls=cls):
+                facts = self._facts(ranks=6, solvers={"cbc"}, vars_int=vi,
+                                    nonants_int=10 if vi else 0,
+                                    model_degree=deg,
+                                    user_flags={"--solver-name", "--lagrangian"},
+                                    user_solver_name="cbc")
+                d = ootb.recommend(facts, ootb.load_policy())
+                self.assertIn("--linearize-proximal-terms",
+                              [a.flag for a in d.args])
+
+    def test_late_ef_fallback_drops_decomposition_choices(self):
+        # The incumbent-spoke gate can pick the EF after the decomposition
+        # path already chose a solver, a prox linearization and spokes. An EF
+        # run has no PH prox and reads EF_solver_name, so the trace and the
+        # equivalent command line must not advertise a decomposition.
+        facts = self._facts(ranks=3, solvers={"gurobi"},
+                            user_flags={"--grad-rho", "--lagrangian", "--fwph"})
+        d = ootb.recommend(facts, ootb.load_policy())
+        self.assertTrue(d.run_ef)
+        flags = [a.flag for a in d.args]
+        self.assertNotIn("--solver-name", flags)
+        self.assertNotIn("--linearize-proximal-terms", flags)
+        self.assertIn("--EF-solver-name", flags)
+        cl = d.command_line(facts)
+        self.assertNotIn("--solver-name", cl)
+
     def test_fwph_objgap_hub_is_a_decomposition_request(self):
         self.assertIn("--fwph-objgap-hub", ootb.HUB_FLAGS)
         self.assertIn("--fwph-objgap-hub", ootb.DECOMPOSITION_FLAGS)

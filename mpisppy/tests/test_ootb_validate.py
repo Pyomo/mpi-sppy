@@ -120,8 +120,24 @@ class TestValidatorCatchesBadPolicies(unittest.TestCase):
                 self.assertTrue(self._fails(val.validate_static(policy)))
 
     def test_no_miqp_solver_may_not_be_offered_for_an_miqp(self):
-        self.policy["solver"]["preference_order_by_class"]["MIQP"] = ["highs"]
-        self.assertTrue(self._fails(val.validate_static(self.policy)))
+        # every class recommend() refuses to linearize for, not just MIQP
+        for cls in sorted(ootb._MIQP_CLASSES):
+            with self.subTest(cls=cls):
+                policy = copy.deepcopy(self.policy)
+                policy["solver"]["preference_order_by_class"][cls] = ["highs"]
+                self.assertTrue(self._fails(val.validate_static(policy)))
+
+    def test_explicit_null_sub_block_is_reported_not_a_crash(self):
+        # dict.get does NOT substitute its default for a key present with
+        # value null, so an explicit null still reached the dereference.
+        for blk, key in (("solver", "preference_order_by_class"),
+                         ("solver", "caveats"),
+                         ("spoke_ladder", "core_roster_min"),
+                         ("rank_allocation", "rank_ratios")):
+            with self.subTest(block=f"{blk}.{key}"):
+                policy = copy.deepcopy(self.policy)
+                policy[blk][key] = None
+                self.assertTrue(self._fails(val.validate_static(policy)))
 
     def test_hub_flags_match_the_driver_roster(self):
         # The subset check passes whether or not a hub is MISSING, which is how

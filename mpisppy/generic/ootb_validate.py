@@ -225,14 +225,18 @@ def validate_static(policy: dict) -> list:
     add("spoke_ladder.rungs entries are objects", not bad_rungs,
         f"not objects: {bad_rungs}" if bad_rungs else "all objects")
     subblocks = {
-        "spoke_ladder.core_roster_min": policy["spoke_ladder"].get("core_roster_min"),
-        "solver.preference_order_by_class":
-            policy["solver"].get("preference_order_by_class"),
-        "solver.caveats": policy["solver"].get("caveats"),
-        "rank_allocation.rank_ratios": policy["rank_allocation"].get("rank_ratios"),
+        f"{blk}.{key}": (key in policy[blk], policy[blk].get(key))
+        for blk, key in (("spoke_ladder", "core_roster_min"),
+                         ("solver", "preference_order_by_class"),
+                         ("solver", "caveats"),
+                         ("rank_allocation", "rank_ratios"))
     }
-    bad_sub = [k for k, v in subblocks.items()
-               if v is not None and not isinstance(v, dict)]
+    # `k in block`, not `v is not None`: downstream reads use
+    # block.get(key, {}), and dict.get does NOT substitute the default when
+    # the key is PRESENT with value null. An absent key is safe; an explicit
+    # null still crashed, which is the failure this guard replaces.
+    bad_sub = [k for k, (present, v) in subblocks.items()
+               if present and not isinstance(v, dict)]
     add("sub-blocks are objects", not bad_sub,
         f"not objects: {bad_sub}" if bad_sub else "all objects")
     if bad_rungs or bad_sub:
@@ -310,13 +314,15 @@ def validate_static(policy: dict) -> list:
 
     # rank allocation
     ra = policy["rank_allocation"]
+    # Every class recommend() refuses to linearize for, not just MIQP: it keys
+    # on ootb._MIQP_CLASSES, so a policy adding one of these to the MINLP list
+    # would validate clean and then produce the configuration this forbids.
     no_miqp = set(sp.get("no_miqp_force_linearize_prox", ()))
-    miqp_list = set(sp.get("preference_order_by_class", {}).get("MIQP", ()))
-    both = sorted(no_miqp & miqp_list)
-    # The whole point of the no_miqp list is that these cannot solve an MIQP.
-    # Offering one FOR an MIQP and then "fixing" it by linearizing a prox that
-    # was never the problem is the combination the shipped policy removed.
-    add("no_miqp_force_linearize_prox solvers are absent from the MIQP list",
+    by_class = sp.get("preference_order_by_class", {})
+    both = sorted({(cls, s_) for cls in ootb._MIQP_CLASSES
+                   for s_ in no_miqp & set(by_class.get(cls, ()))})
+    add("no_miqp_force_linearize_prox solvers are absent from the "
+        "mixed-integer quadratic class lists",
         not both, f"in both: {both}" if both else "none in both")
 
     add("rank_allocation.min_ranks_per_cylinder is a positive int",

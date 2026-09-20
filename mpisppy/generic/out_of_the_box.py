@@ -347,31 +347,44 @@ def recommend(facts: Facts, policy: dict) -> Decision:
     if d.chosen_solver is not None:
         choose("--solver-name", d.chosen_solver,
                f"decomposition solver ({d.chosen_solver})")
-    if d.chosen_solver in sp["lp_mip_only_force_linearize_prox"]:
-        choose("--linearize-proximal-terms", None,
-               f"{d.chosen_solver} is LP/MIP-only; the PH prox must be linearized")
-    elif d.chosen_solver in sp.get("no_miqp_force_linearize_prox", ()):
-        # These do continuous QP but not mixed-integer QP (phbase.py: "HiGHS,
-        # which cannot solve an MIQP"). Key on the problem CLASS, not on
-        # vars_int: linearizing helps only when the quadratic part is the PROX.
-        if d.problem_class in _MIQP_CLASSES:
-            # The model's OWN objective is quadratic with integers, so
-            # linearizing the prox changes nothing -- the solve still fails.
+    # Linearizing the PH prox helps only when the quadratic part IS the prox.
+    # Both lists name solvers that cannot take a quadratic objective on some
+    # class of model, so both get the same class test: if the MODEL's own
+    # objective is already a mixed-integer quadratic, linearizing changes
+    # nothing and the solve still fails -- say so instead of reporting a fix.
+    #   lp_mip_only (cbc, glpk): no quadratic objective at all, so any
+    #     quadratic class is out of reach, continuous QP included.
+    #   no_miqp (highs): continuous QP is fine, mixed-integer QP is not
+    #     (phbase.py: "HiGHS, which cannot solve an MIQP").
+    lp_mip_only = d.chosen_solver in sp["lp_mip_only_force_linearize_prox"]
+    no_miqp = d.chosen_solver in sp.get("no_miqp_force_linearize_prox", ())
+    if lp_mip_only or no_miqp:
+        unreachable = (_QUADRATIC_CLASSES if lp_mip_only else _MIQP_CLASSES)
+        if d.problem_class in unreachable:
+            cannot = ("cannot take a quadratic objective" if lp_mip_only
+                      else "cannot solve an MIQP")
             d.notes.append(
-                f"WARNING: {d.chosen_solver} cannot solve an MIQP and this "
-                f"model is {d.problem_class}; linearizing the PH prox would "
-                "not help. Use a solver that handles mixed-integer quadratics "
-                "(gurobi/cplex/xpress).")
-        elif d.problem_class in ("MIP", None):
-            # MIP: the prox is what makes the subproblem an MIQP, so
-            # linearizing keeps the solver usable. None: the minus tier took
-            # no size profile, so integrality is UNKNOWN -- linearize rather
-            # than let an integer model die at PH iteration 1.
-            why = ("this model has integers" if d.problem_class == "MIP"
-                   else "integrality is unknown at this tier")
+                f"WARNING: {d.chosen_solver} {cannot} and this model is "
+                f"{d.problem_class}; linearizing the PH prox would not help, "
+                "because the model's own objective is the quadratic one. Use a "
+                "solver that handles it (gurobi/cplex/xpress).")
+        elif lp_mip_only:
             choose("--linearize-proximal-terms", None,
-                   f"{d.chosen_solver} cannot solve an MIQP and {why}; the PH "
-                   "prox must be linearized")
+                   f"{d.chosen_solver} is LP/MIP-only; the PH prox must be "
+                   "linearized")
+        elif d.problem_class == "MIP":
+            choose("--linearize-proximal-terms", None,
+                   f"{d.chosen_solver} cannot solve an MIQP and this model has "
+                   "integers; the PH prox must be linearized")
+        elif d.problem_class is None:
+            # The minus tier took no size profile, so integrality is UNKNOWN.
+            # Linearizing costs an approximation on a continuous model but
+            # avoids a dead run on an integer one; say which trade was made.
+            choose("--linearize-proximal-terms", None,
+                   f"{d.chosen_solver} cannot solve an MIQP and integrality is "
+                   "unknown at this tier; linearizing the PH prox is an "
+                   "approximation on a continuous model but avoids a failed "
+                   "solve on an integer one")
 
     # --- step 3: spoke roster -- small core, widened by ranks --------------
     # Take the minimal core (>=1 outer + >=1 inner). Add further ladder rungs
@@ -490,6 +503,12 @@ def recommend(facts: Facts, policy: dict) -> Decision:
                    f"publish one, but {facts.num_ranks} rank(s) cannot host "
                    f"the hub, the spokes you asked for, and one more; "
                    f"running the EF instead")
+            # This bail-out happens AFTER the decomposition decisions above,
+            # so drop them: an EF run has no PH prox to linearize and reads
+            # EF_solver_name, not solver_name. Leaving them made the trace and
+            # the equivalent command line advertise a decomposition that is
+            # not happening.
+            _drop_decomposition_choices(d)
             _adopt_ef_solver(d, facts)
             if d.chosen_solver is not None:
                 choose("--EF-solver-name", d.chosen_solver,
@@ -701,6 +720,29 @@ _PROBLEM_CLASS = {
 }
 
 
+# Flags that only mean something on the decomposition path, so they have to go
+# if a late gate sends the run to the EF after they were already chosen.
+_DECOMPOSITION_ONLY_ARGS = frozenset({"--solver-name",
+                                      "--linearize-proximal-terms"})
+
+
+def _drop_decomposition_choices(d) -> None:
+    """Remove decisions that only apply to a decomposition, with their notes.
+
+    Called when a gate picks the EF after the decomposition path had already
+    recorded choices. The notes are matched by the flag they open with, which
+    is how choose() writes them."""
+    dropped = {a.flag for a in d.args if a.flag in _DECOMPOSITION_ONLY_ARGS}
+    dropped |= {a.flag for a in d.args if a.flag.endswith("-rank-ratio")}
+    dropped |= {a.flag for a in d.args if a.flag in SPOKE_FLAGS}
+    if not dropped:
+        return
+    d.args = [a for a in d.args if a.flag not in dropped]
+    d.notes = [n for n in d.notes
+               if not any(n.startswith(f"{f} ") or n.startswith(f"{f}:")
+                          for f in dropped)]
+
+
 def _adopt_ef_solver(d, facts) -> None:
     """On the EF path, the solver that runs is --EF-solver-name when the user
     set one. Called only where run_ef is already decided, so nothing has to
@@ -895,12 +937,14 @@ def _sg_linearized_prox(d, facts, policy, outcome):
     sp = policy["solver"]
     if d.run_ef:
         return None
-    if d.chosen_solver in sp["lp_mip_only_force_linearize_prox"]:
+    # Only where recommend() actually linearized -- for a class the solver
+    # cannot reach it warns instead, and calling that "an approximation" would
+    # be telling the reader the run is fine when it is not.
+    if (d.chosen_solver in sp["lp_mip_only_force_linearize_prox"]
+            and d.problem_class not in _QUADRATIC_CLASSES):
         why = "is LP/MIP-only"
     elif (d.chosen_solver in sp.get("no_miqp_force_linearize_prox", ())
             and d.problem_class in ("MIP", None)):
-        # Not for a genuine MIQP: there the prox is not the problem, and
-        # recommend() warns instead of linearizing.
         why = "cannot solve an MIQP, which is what the PH prox makes of a MIP"
     else:
         return None
@@ -912,6 +956,10 @@ def _sg_linearized_prox(d, facts, policy, outcome):
 # Classes whose own objective is a mixed-integer quadratic (or worse), where
 # linearizing the PH prox cannot rescue a solver that has no MIQP support.
 _MIQP_CLASSES = frozenset({"MIQP", "MINLP"})
+
+# Classes an LP/MIP-only solver cannot reach at all: it has no quadratic
+# objective, so continuous QP is out too, not just the mixed-integer kind.
+_QUADRATIC_CLASSES = frozenset({"QP", "MIQP", "NLP", "MINLP"})
 
 
 # EF reasons where decomposing WAS available and OOTB (or the user) chose the
