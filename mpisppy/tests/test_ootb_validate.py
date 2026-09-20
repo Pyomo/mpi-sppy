@@ -8,12 +8,12 @@
 ###############################################################################
 """CI gate for the out-of-the-box (OOTB) policy-file validator.
 
-Runs the solver-free, fast layers on the shipped policy file(s): layer 1
-(static schema) and both subsets of layer 2 -- the synthetic-facts decisions on
-hand-built Facts, and the real-example decisions, which probe-instantiate the
-models without solving them. Anything that needs a solver, and all of layer 3,
-run nightly / on demand / locally, NOT here. See
-doc/designs/out_of_the_box_design.md sec. 8.
+Runs the solver-free, fast layers. Layer 1 (static schema) and the
+synthetic-facts subset of layer 2 run for every shipped policy file; the
+real-example subset of layer 2 -- which probe-instantiates farmer, sizes and
+aircond without solving them -- runs for the default policy. Anything that
+needs a solver, and all of layer 3, run nightly / on demand / locally, NOT
+here. See doc/designs/out_of_the_box_design.md sec. 8.
 """
 
 import copy
@@ -134,16 +134,24 @@ class TestValidatorCatchesBadPolicies(unittest.TestCase):
 
 class TestExamplesLayer(unittest.TestCase):
     """The decision-on-real-models layer builds scenarios (no solve), so it runs
-    here; the farmer checks must pass."""
+    here, and every example's checks must pass."""
 
-    def test_validate_decisions_examples_farmer_passes(self):
+    def test_validate_decisions_examples_pass(self):
+        # Assert on all of them, not just farmer: the layer covers farmer,
+        # sizes and aircond at 1/3/8 ranks, and asserting a subset meant a
+        # regression in the sizes or aircond probe (a bad size profile, an
+        # invalid bundle size, two rho setters) produced ok=False checks that
+        # nothing read, leaving CI green.
         checks = val.validate_decisions_examples(ootb.load_policy())
         self.assertTrue(checks)
-        farmer = [c for c in checks if "farmer" in c.name]
-        self.assertTrue(farmer)
-        self.assertTrue(all(c.ok for c in farmer),
-                        msg="\n".join(f"{c.name}: {c.detail}"
-                                      for c in farmer if not c.ok))
+        # guard the coverage itself, so narrowing the layer is not silent
+        for model in ("farmer", "sizes", "aircond"):
+            self.assertTrue(any(model in c.name for c in checks),
+                            msg=f"no {model} checks in the examples layer")
+        bad = [c for c in checks if not c.ok]
+        self.assertEqual(
+            [], bad,
+            msg="\n".join(f"{c.name}: {c.detail}" for c in bad))
 
 
 class TestHelpers(unittest.TestCase):

@@ -31,10 +31,11 @@ Three layers, fast to slow:
      recommended configs on the small examples and FLAG (a) an EF that misses a
      1% gap in ten minutes and (b) cylinders that max out on iterations.
 
-The CI gate (mpisppy/tests/test_ootb_validate.py) runs layers 1 and 2 on the
-shipped policy file(s) -- both the synthetic-facts subset and the real-example
-subset, which probe-instantiates the models without solving. All of it is
-solver-free and fast. Layer 3 is never a CI gate.
+The CI gate (mpisppy/tests/test_ootb_validate.py) runs layer 1 and the
+synthetic-facts subset of layer 2 for every shipped policy file, and the
+real-example subset -- which probe-instantiates the models without solving --
+for the default policy. All of it is solver-free and fast. Layer 3 is never a
+CI gate.
 """
 
 from __future__ import annotations
@@ -745,6 +746,14 @@ def main(argv=None):
     p.add_argument("--json", metavar="PATH", default=None,
                    help="write the machine-readable report to PATH")
     args = p.parse_args(argv)
+
+    # Layer 3 launches each child with cwd set to the example's directory, so a
+    # relative policy path would resolve against that directory instead of the
+    # one the user typed it in: layers 1-2 would pass and every layer-3 run
+    # would die on a missing file, reported as "run did not complete cleanly".
+    # Resolve once, here, while the user's cwd is still current.
+    if args.policy:
+        args.policy = os.path.abspath(args.policy)
 
     report = run_validation(args.policy, examples=args.examples, run=args.run)
     print(format_report(report))

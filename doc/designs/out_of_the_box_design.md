@@ -356,12 +356,14 @@ first: below it the decomposition can't fit, so the EF is used regardless. (This
 flag vocabulary is a *fact* about `generic_cylinders`, not a focus preference, so
 it lives in code, not the policy; the validator checks it against the real CLI.)
 
-**Status.** The `effort_scaling` coefficients and `ef_effort_budget` are
-**calibrated** (the shipped file carries a `_calibration` block — gurobi,
-14 timed EF solves, R^2 0.9995); the `bundle_sizing` numbers and the remaining
-`ef_fallback` counts are still `_cold_start_guess`es; **foci** ship different
-shapes (a `mip-heavy` file with a
-steeper `int_exponent`), and the dated-file migration path (§5) refines the
+**Status.** The `effort_scaling` coefficients are **calibrated** (the shipped
+file carries a `_calibration` block — gurobi, 14 timed EF solves, R^2 0.9995).
+`ef_effort_budget` is *derived*, not fitted: it converts the authored
+`ef_target_seconds` through the calibrated `seconds_per_effort_unit`, so its
+magnitude is still the hand-chosen target. The `bundle_sizing` numbers and the
+remaining `ef_fallback` counts are plain `_cold_start_guess`es; **foci** ship
+different shapes (a `mip-heavy` file with a steeper `int_exponent`), and the
+dated-file migration path (§5) refines the
 coefficients from benchmark data. The interpreter implements the base
 relative sizer (`_effort`, `_pick_spb_by_effort`); minus does not bundle; the
 `plus` measure-and-scale hook is not implemented.
