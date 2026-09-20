@@ -143,6 +143,20 @@ class Test_resolve_rho(unittest.TestCase):
         self.assertTrue(resolve_rho(RHO_ZERO_TOL, self.DEFAULT)[1])
         self.assertFalse(resolve_rho(RHO_ZERO_TOL * 10, self.DEFAULT)[1])
 
+    def test_infinite_falls_back_to_default(self):
+        # inf arrives from a heuristic dividing by a zero denominator (GradRho
+        # on a proper bundle whose nonants are all at consensus at zero). It is
+        # greater than the tolerance, so before issue #873 it was kept, and PH
+        # then multiplied it by a zero xdiff to make W nan.
+        val, used_default = resolve_rho(float("inf"), self.DEFAULT)
+        self.assertEqual(val, self.DEFAULT)
+        self.assertTrue(used_default)
+
+    def test_nan_falls_back_to_default(self):
+        val, used_default = resolve_rho(float("nan"), self.DEFAULT)
+        self.assertEqual(val, self.DEFAULT)
+        self.assertTrue(used_default)
+
 
 class Test_report_zero_rho_fallback(unittest.TestCase):
     """The aggregated, report-only-on-change fallback reporter (no log spam)."""
