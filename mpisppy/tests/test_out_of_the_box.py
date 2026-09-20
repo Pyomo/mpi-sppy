@@ -160,6 +160,18 @@ class TestCommandLineAndFlags(unittest.TestCase):
         self.assertIn("--branching-factors '3 2'", cl)
         self.assertNotIn("--num-scens", cl)
 
+    def test_empty_branching_factors_on_the_driver_path(self):
+        # The guard has to hold where OOTB hands off too: np.prod([]) is 1.0,
+        # a FLOAT, which fails as a range bound inside the model. OOTB plans
+        # for --num-scens, so the run must agree.
+        from mpisppy.generic import parsing as _parsing
+        cfg, module = _farmer_cfg()
+        cfg.num_scens = 100
+        cfg.branching_factors = []
+        names, nodenames = _parsing.name_lists(module, cfg)
+        self.assertEqual(len(names), 100)
+        self.assertIsNone(nodenames)
+
     def test_empty_branching_factors_is_not_a_scenario_count(self):
         # math.prod([]) is 1, so an empty list used to report a one-scenario
         # problem and quietly take the EF instead of saying it cannot tell.
@@ -245,11 +257,19 @@ class TestCommandLineAndFlags(unittest.TestCase):
             with self.subTest(reason=reason):
                 self.assertFalse(any("idled" in m
                                      for m in self._ef_msgs(facts, reason)))
-        # --inspect-only N plans for N ranks that were never allocated, and
-        # nothing ran, so "the other N-1 idled" describes no event
-        planned = ootb.Facts("farmer", 512, set(), 6, ranks_assumed=True)
+        # --inspect-only reports and exits, so nothing was solved and nothing
+        # idled -- in EITHER form, with a planned rank count or without
+        planned = ootb.Facts("farmer", 512, set(), 6, inspect_only=True)
         self.assertFalse(any("idled" in m
                              for m in self._ef_msgs(planned, "small_effort")))
+        bare = ootb.Facts("farmer", 6, set(), 6, inspect_only=True)
+        self.assertFalse(any("idled" in m
+                             for m in self._ef_msgs(bare, "small_effort")))
+        # an explicit --EF below the rank floor: OOTB would not have
+        # decomposed there either, so do not tell the reader to
+        below_floor = ootb.Facts("farmer", 2, set(), 6)
+        self.assertFalse(any("idled" in m
+                             for m in self._ef_msgs(below_floor, "user")))
 
     def test_command_line_has_no_anchor_when_the_model_takes_none(self):
         # netdes declares no --num-scens; printing a derived one gave a line
@@ -717,6 +737,19 @@ class TestOffLadderSpokesAreInTheRankModel(unittest.TestCase):
         self.assertTrue(any("--xhatshuffle-rank-ratio" in n and "defers" in n
                             for n in d.notes),
                         msg="the user's rank ratio left no trace")
+
+    def test_unreadable_user_ratio_leaves_a_trace(self):
+        # user_flags names the ratio but user_args has no value for it: OOTB
+        # models the policy value, and must say so rather than fall silent.
+        facts = ootb.Facts("farmer", 6, {"gurobi"}, 1000, effort="base",
+                           vars_int=50, vars_cont=50, nonants_total=20,
+                           nonants_int=10, model_degree="linear",
+                           user_flags={"--xhatshuffle-rank-ratio"},
+                           user_args=[])
+        d = ootb.recommend(facts, ootb.load_policy())
+        self.assertTrue(any("--xhatshuffle-rank-ratio" in n and "WARNING" in n
+                            for n in d.notes),
+                        msg="an unreadable ratio left no trace")
 
     def test_rejected_user_ratio_is_not_called_a_deferral(self):
         # The warning says OOTB is modelling the policy value; a "kept user's

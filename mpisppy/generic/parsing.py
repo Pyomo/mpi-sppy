@@ -227,10 +227,14 @@ def name_lists(module, cfg, bundle_wrapper=None):
 
     # Note: high level code like this assumes there are branching factors for
     # multi-stage problems. For other trees, you will need lower-level code
-    if cfg.get("branching_factors") is not None:
+    # `if cfg.get(...)` and not `is not None`: --branching-factors "" parses
+    # to an empty list, and np.prod([]) is 1.0 -- a FLOAT, which then fails as
+    # a range bound inside the model ("'numpy.float64' object cannot be
+    # interpreted as an integer"). An empty list means "not multistage".
+    if cfg.get("branching_factors"):
         all_nodenames = sputils.create_nodenames_from_branching_factors(
                                     cfg.branching_factors)
-        num_scens = np.prod(cfg.branching_factors)
+        num_scens = int(np.prod(cfg.branching_factors))
         if cfg.xhatshuffle and cfg.get("stage2_ef_solver_name") is None:
             import warnings
             warnings.warn(

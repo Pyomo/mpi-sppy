@@ -98,9 +98,10 @@ class Facts:
     # count). Captured before anything can add num_scens to cfg as a side
     # effect -- see gather_facts.
     scen_anchor: str | None = None
-    # True when num_ranks came from --inspect-only N rather than from a real
-    # allocation: nothing ran, and those ranks were never held.
-    ranks_assumed: bool = False
+    # True under --inspect-only in any form: the run stops before solving, so
+    # a past-tense suggestion ("the other N-1 idled") describes no event. With
+    # --inspect-only N the rank count is a plan too, not an allocation.
+    inspect_only: bool = False
 
 
 @dataclass
@@ -495,7 +496,14 @@ def recommend(facts: Facts, policy: dict) -> Decision:
             try:
                 got = float(user_ratio[ratio_flag])
             except (KeyError, TypeError, ValueError):
-                return policy_ratio, False  # unparseable: keep the policy value
+                # Keep the policy value -- and SAY so. The `if honored:` note
+                # below is skipped on this path, so without this the trace
+                # showed nothing at all while OOTB modelled a ratio the run
+                # will not use.
+                d.notes.append(
+                    f"WARNING: could not read {ratio_flag}; modeling the "
+                    "policy value instead.")
+                return policy_ratio, False
             if got > 0 and math.isfinite(got):
                 return got, True
             # apportion_ranks refuses a non-positive ratio, and recommend() is
@@ -853,7 +861,13 @@ _EF_COULD_HAVE_DECOMPOSED = frozenset({"small_effort", "few_scens", "user"})
 
 
 def _sg_ef_under_mpiexec(d, facts, policy, outcome):
-    if (d.run_ef and facts.num_ranks > 1 and not facts.ranks_assumed
+    # The rank floor has to be tested too, not just the reason: an explicit
+    # --EF is matched before the floor is ever consulted, so ef_reason "user"
+    # can carry a rank count at which OOTB would never have decomposed --
+    # and then this would tell the reader to do what the policy refuses.
+    floor = policy["ef_fallback"]["min_ranks_for_decomposition"]
+    if (d.run_ef and facts.num_ranks > 1 and not facts.inspect_only
+            and facts.num_ranks >= floor
             and d.ef_reason in _EF_COULD_HAVE_DECOMPOSED):
         return (f"Solved the extensive form on one rank while {facts.num_ranks} "
                 f"were allocated: the other {facts.num_ranks - 1} built the same "
@@ -1287,8 +1301,10 @@ def gather_facts(module, cfg, effort: str, policy: dict) -> Facts:
     # Everything derived from cfg is captured here, before that can happen.
     user_flags = _user_flags(cfg)
     user_args = _user_args(cfg)
-    io = cfg.get("inspect_only", None)
-    ranks_assumed = io not in (None, "", "detected")
+    # Any --inspect-only means the driver reports and exits (generic_cylinders
+    # calls report_suggestions then sys.exit(0)), so nothing is solved --
+    # whether or not the flag carried a rank count.
+    inspect_only = cfg.get("inspect_only", None) is not None
     facts = Facts(
         module_name=cfg.get("module_name", "<module>") or "<module>",
         num_ranks=_inspect_ranks(cfg),
@@ -1303,7 +1319,7 @@ def gather_facts(module, cfg, effort: str, policy: dict) -> Facts:
         user_flags=user_flags,
         user_args=user_args,
         scen_anchor=scen_anchor,
-        ranks_assumed=ranks_assumed,
+        inspect_only=inspect_only,
     )
     if effort in ("base", "plus"):
         # one probe scenario (discarded) feeds the size-aware decisions; the
