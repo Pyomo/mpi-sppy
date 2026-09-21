@@ -198,11 +198,28 @@ class Checkpointer(Extension):
         # at the first write.
         ckpt.check_filename_collisions(opt.local_scenarios)
 
-        # Create and probe the directory now. Discovering only at write time
-        # that the path is unwritable would mean the run never checkpoints.
+        self._probe_directory(opt)
+
+    def _probe_directory(self, opt):
+        """Create the checkpoint directory and prove this rank can write in it.
+
+        Discovering only at write time that the path is unwritable would mean
+        the run never checkpoints.
+
+        The probe file is named for the *global* rank. Every cylinder given a
+        Checkpointer probes the one directory, and each of them numbers its
+        own ranks from zero, so a shared or cylinder-rank name has one copy
+        per cylinder: whichever probes second removes the file the first is
+        still using, and that one dies reporting a directory that is
+        perfectly writable. Global ranks are unique across the job, which is
+        the scope this needs.
+        """
         try:
             os.makedirs(self.ckpt_dir, exist_ok=True)
-            probe = os.path.join(self.ckpt_dir, ".mpisppy_write_probe")
+            probe = os.path.join(
+                self.ckpt_dir,
+                f".mpisppy_write_probe_"
+                f"{int(getattr(opt, 'global_rank', opt.cylinder_rank)):04d}")
             with open(probe, "w"):
                 pass
             os.remove(probe)

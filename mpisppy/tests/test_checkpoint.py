@@ -25,6 +25,7 @@ model swap -- without it a resumed run silently stops updating its best bound.
 
 import errno
 import json
+import math
 import os
 import pickle
 import shutil
@@ -1954,7 +1955,12 @@ class _SpokeStub:
         #: cylinder of its class as far as the Checkpointer can tell.
         if communicators is not None:
             self.communicators = communicators
-        self.best_inner_bound = best_inner_bound
+        #: The real spoke starts this at the infinity that loses every
+        #: comparison and never holds None, so a stub that said None would
+        #: not be standing in for anything reachable.
+        self.best_inner_bound = (math.inf if best_inner_bound is None
+                                 else best_inner_bound)
+        self.is_minimizing = True
         self.sent_bounds = []
         self.sent_xhats = 0
 

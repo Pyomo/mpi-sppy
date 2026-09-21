@@ -440,3 +440,44 @@ class TestEverySpokeGivenTheCheckpointerDrivesIt(unittest.TestCase):
                 spoke.opt = types.SimpleNamespace(extensions=None)
                 spoke.restore_checkpointed_incumbent()   # must not raise
                 spoke.maybe_checkpoint()
+
+
+class TestEveryWriterProbesItsOwnFile(unittest.TestCase):
+    """Several cylinders share one --checkpoint-dir and all of them probe it.
+
+    The hub and every xhat spoke carrying a Checkpointer create and delete a
+    probe file in the same directory during setup. A name they share makes
+    whichever removes it second fail on a directory that is perfectly
+    writable, and the run dies at startup rather than checkpointing. It is a
+    race, so it needs two writers to show at all: one xhat spoke never fails,
+    two fail most of the time.
+    """
+
+    def _probe_names(self, global_ranks):
+        """The probe file each of these ranks leaves behind, in order."""
+        from mpisppy.extensions.checkpointer import Checkpointer
+        seen = []
+        with tempfile.TemporaryDirectory() as ckpt_dir:
+            for gr in global_ranks:
+                ext = Checkpointer.__new__(Checkpointer)
+                ext.ckpt_dir = ckpt_dir
+                opt = types.SimpleNamespace(global_rank=gr, cylinder_rank=0)
+                # Run only the probe, with os.remove stubbed so the file it
+                # would clean up stays visible to the assertion.
+                with mock.patch("mpisppy.extensions.checkpointer.os.remove"):
+                    Checkpointer._probe_directory(ext, opt)
+                seen = sorted(os.listdir(ckpt_dir))
+        return seen
+
+    def test_two_cylinders_do_not_share_a_probe_file(self):
+        """Cylinder rank is 0 for both; only the global rank separates them."""
+        names = self._probe_names([0, 3])
+        self.assertEqual(
+            len(names), 2,
+            msg=f"two cylinders wrote {len(names)} probe file(s) {names}; "
+                f"sharing one means whichever removes it second fails on a "
+                f"writable directory")
+
+    def test_the_probe_name_carries_the_global_rank(self):
+        names = self._probe_names([7])
+        self.assertEqual(names, [".mpisppy_write_probe_0007"])
