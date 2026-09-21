@@ -25,6 +25,7 @@ def _parse_args():
     cfg.num_scens_required()
     cfg.popular_args()
     cfg.two_sided_args()
+    cfg.lshaped_args()
     cfg.fwph_args()
     cfg.xhatlshaped_args()
     cfg.add_to_config("crops_mult",
@@ -68,6 +69,7 @@ def main():
         "root_solver": cfg.solver_name,
         "sp_solver": cfg.solver_name,
         "sp_solver_options" : spo,
+        "lshaped_cut_generator": cfg.lshaped_cut_generator,
         #"valid_eta_lb": {i: -432000 for i in all_scenario_names},
         "max_iter": cfg.max_iterations,
         "verbose": False,

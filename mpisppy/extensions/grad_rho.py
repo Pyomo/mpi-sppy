@@ -341,15 +341,21 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         else:
             raise RuntimeError("Coding error.")
 
-        # a near-zero or negative computed rho (e.g. from a ~zero objective
-        # gradient, or sign cancellation when grad_order_stat > 0.5) is not a
-        # usable rho; those nonants fall back to the positive default rho. We
-        # report the fallback rather than substituting silently; see issue #560.
+        # A computed rho that is near-zero or negative (e.g. from a ~zero
+        # objective gradient, or sign cancellation when grad_order_stat > 0.5)
+        # is not a usable rho, and neither is an infinite one: the denominator
+        # is zero whenever every scenario already agrees on a nonant whose
+        # consensus value is also zero, which a proper bundle makes likely at
+        # iteration 0 because only the root nonants survive bundling (issue
+        # #873). Those nonants fall back to the positive default rho. We report
+        # the fallback rather than substituting silently; see issue #560.
         default_rho = opt.options.get("defaultPHrho")
         assign_rho_with_fallback(opt, default_rho, "GradRho",
                                  self._rho_report_state,
                                  lambda s, ndn_i: self.multiplier * rhos[ndn_i],
-                                 reason="a near-zero or negative computed rho")
+                                 reason="a computed rho that was near-zero, "
+                                        "negative, or undefined for want of a "
+                                        "nonzero denominator")
 
     def compute_and_update_rho(self):
         self._compute_and_update_rho()

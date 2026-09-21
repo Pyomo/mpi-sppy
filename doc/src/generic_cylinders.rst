@@ -21,6 +21,12 @@ other features without requiring you to write a driver program.
    exception ends the job rather than leaving it hung, whichever form
    you use. See :ref:`console_scripts`.
 
+.. tip::
+   If you are new to mpi-sppy, add ``--out-of-the-box`` and let the driver
+   pick a sensible configuration automatically, then read the equivalent
+   command line it prints to learn the explicit options. See
+   :ref:`out_of_the_box`.
+
 Your Model File (Module)
 ------------------------
 
@@ -115,6 +121,8 @@ are selected with flags:
 - (default) PH -- no flag needed
 - ``--APH`` -- Asynchronous PH (see :ref:`sec-aph`)
 - ``--lshaped-hub`` -- L-shaped (Benders decomposition) for two-stage problems
+- ``--lshaped-cut-generator`` -- Cut generator for L-shaped; either
+  ``standard_l1`` (default) or ``pyomo_feasibility``
 - ``--subgradient-hub`` -- Subgradient method
 - ``--fwph-hub`` -- Frank-Wolfe PH
 - ``--ph-primal-hub`` -- PH primal
@@ -159,6 +167,12 @@ two-stage problems:
    L-shaped is currently implemented for two-stage stochastic programs only.
    The hub algorithm decomposes by stage, solving a master problem with
    first-stage variables and subproblems for each scenario.
+
+The default cut generator is ``standard_l1``. It requires continuous
+subproblems and valid solver duals. It does not check convexity; for nonlinear
+subproblems, the user is responsible for providing a formulation where the
+generated cuts are valid. Use ``--lshaped-cut-generator pyomo_feasibility`` to
+select the Pyomo Benders cut generator.
 
 The ``--xhatlshaped`` spoke provides inner bounds (incumbent solutions) by
 evaluating candidate first-stage decisions using the L-shaped method. This

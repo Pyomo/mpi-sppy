@@ -52,6 +52,14 @@ import pyomo.common.config as pyofig
 
 # class to inherit from ConfigDict with a name field
 class Config(pyofig.ConfigDict):
+
+    # The hub options, in one place. checker() enforces "only one hub", and
+    # out_of_the_box.HUB_FLAGS has to agree with this list or OOTB will not
+    # recognise a hub the user asked for and may substitute the EF; the OOTB
+    # validator checks the two against each other.
+    HUBS = ["APH", "subgradient_hub", "fwph_hub", "ph_primal_hub",
+            "lshaped_hub", "cg_hub", "dualcg_hub", "fwph_objgap_hub"]
+
     # remember that the parent uses slots
 
     #===============
@@ -161,8 +169,7 @@ class Config(pyofig.ConfigDict):
             )
 
         # remember that True is 1 and False is 0
-        HUBS = ["APH", "subgradient_hub", "fwph_hub", "ph_primal_hub", "lshaped_hub", "cg_hub", "dualcg_hub", "fwph_objgap_hub"]
-        if sum(self.get(hub_name,0) for hub_name in HUBS) > 1:
+        if sum(self.get(hub_name, 0) for hub_name in Config.HUBS) > 1:
             _bad_options("Only one hub can be active.")
 
         # remember that True is 1 and False is 0
@@ -583,6 +590,17 @@ class Config(pyofig.ConfigDict):
                            description="Use LShaped Hub (default False)",
                            domain=bool,
                            default=False)        
+
+        self.add_to_config(name="lshaped_cut_generator",
+                           description="cut generator for the L-shaped method: "
+                                       "'pyomo_feasibility' uses the Pyomo "
+                                       "Benders cut generator; 'standard_l1' "
+                                       "uses dual-based recourse cuts and an "
+                                       "L1 feasibility implementation "
+                                       "(default standard_l1)",
+                           domain=pyofig.In(["pyomo_feasibility",
+                                             "standard_l1"]),
+                           default="standard_l1")
         
 
     ##### common additions to the command line #####
@@ -1836,6 +1854,63 @@ class Config(pyofig.ConfigDict):
             description="First scenario number used by MMW (default None)",
             domain=int,
             default=None,
+        )
+
+    def ootb_args(self):
+        """Out-of-the-box (OOTB) auto-configuration flags.
+
+        Three mutually-exclusive effort tiers plus the (OOTB-independent)
+        ``--inspect-only`` dry run. See doc/designs/out_of_the_box_design.md
+        and mpisppy/generic/out_of_the_box.py.
+
+        Each tier flag takes an OPTIONAL value: the path to a policy file.
+        Declared ``domain=str, default=None`` with ``nargs='?', const=''`` so
+        there are three states -- absent (None, OOTB off), bare flag ('', use
+        the shipped default policy), and ``--out-of-the-box PATH`` (that policy
+        file). A bool domain cannot be used because pyomo forces ``store_true``
+        (which takes no value); ``str`` + ``nargs='?'`` is the supported
+        optional-value form. Detection keys on ``is not None`` (not truthiness)
+        because the bare-flag value is the empty string.
+        """
+        self.add_to_config(
+            "out_of_the_box",
+            description="Auto-configure a defensible run from the environment "
+            "and model (base tier: one probe scenario). Optional value is a "
+            "policy-file path; bare flag uses the shipped default policy. "
+            "User-supplied options always win.",
+            domain=str,
+            default=None,
+            argparse_args={"nargs": "?", "const": ""},
+        )
+        self.add_to_config(
+            "out_of_the_box_minus",
+            description="Like --out-of-the-box but instantiates nothing "
+            "(structural decisions only; cannot bundle). Optional policy-file "
+            "path; bare flag uses the default policy.",
+            domain=str,
+            default=None,
+            argparse_args={"nargs": "?", "const": ""},
+        )
+        self.add_to_config(
+            "out_of_the_box_plus",
+            description="Reserved: planned to instantiate all scenarios and do "
+            "a brief timed solve for more information (NOT a tuning tool). "
+            "Today it behaves exactly like --out-of-the-box. Optional "
+            "policy-file path; bare flag uses the default policy.",
+            domain=str,
+            default=None,
+            argparse_args={"nargs": "?", "const": ""},
+        )
+        self.add_to_config(
+            "inspect_only",
+            description="Do the inspection, print the configuration, the "
+            "equivalent command line, and config-time suggestions, then STOP "
+            "before the production run. Optional value is an assumed MPI rank "
+            "count for HPC planning (e.g. --inspect-only 512); bare flag uses "
+            "the actually-detected rank count.",
+            domain=str,
+            default=None,
+            argparse_args={"nargs": "?", "const": "detected"},
         )
 
     def vss_args(self):

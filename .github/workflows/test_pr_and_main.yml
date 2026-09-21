@@ -152,6 +152,10 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_maximization.py -v
 
+      - name: Test standard LP L1 L-shaped cuts
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_lshaped_standard_l1.py -v
+          
       - name: Test solver log dir
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_solver_log_dir.py -v
@@ -209,6 +213,22 @@ jobs:
       - name: Test W-oscillation detection
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_w_oscillation.py -v
+
+      - name: Test out-of-the-box interpreter wiring
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_out_of_the_box.py -v
+
+      - name: Test out-of-the-box policy validator (layers 1 + 2)
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_ootb_validate.py -v
+
+      - name: Test out-of-the-box effort calibrator (pure fit)
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_ootb_calibrate.py -v
+
+      - name: Test out-of-the-box policy packaging
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_ootb_policy_packaged.py -v
 
       - name: Test xhat from file
         run: |
