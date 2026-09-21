@@ -188,14 +188,33 @@ class _ResumeABMixin:
                 "checkpoint; the spoke's best xhat was lost")
 
     def test_bounds_stay_valid_after_a_resume(self):
-        """Best-so-far, not reproduced: bound timing is spoke-dependent."""
-        _, _, resumed = self._run_ab()
+        """Best-so-far, not reproduced: bound timing is spoke-dependent.
+
+        Read what each assertion can and cannot see. Without an outer-bound
+        spoke feeding it, the hub's own ``best_bound_obj_val`` is set once
+        from the trivial bound and never moves, so the two sandwich
+        assertions compare one constant against another across thousands of
+        units and only a non-number can redden them. They are here because
+        crossed bounds are worth catching cheaply, not because they guard the
+        restore. The claim that the restore is what carries the hub's bound
+        across is the third one, and it needs the stopped leg to mean
+        anything.
+        """
+        _, stopped, resumed = self._run_ab()
         self.assertLessEqual(
             resumed["BestOuterBound"], resumed["BestInnerBound"],
             msg="the resumed run's outer bound crossed its incumbent")
         self.assertLessEqual(
             resumed["best_bound_obj_val"], resumed["BestInnerBound"],
             msg="the hub's restored best bound crossed the incumbent")
+        self.assertEqual(
+            resumed["best_bound_obj_val"], stopped["best_bound_obj_val"],
+            msg="the resumed hub did not carry the checkpointed best bound "
+                "across; it recomputed or discarded it")
+        self.assertGreaterEqual(
+            resumed["BestOuterBound"], stopped["BestOuterBound"],
+            msg="the resumed run ended with a weaker outer bound than the "
+                "leg it resumed from, having run more iterations")
 
 
 @unittest.skipIf(not solver_available, "no solver is available")
@@ -395,16 +414,47 @@ class TestEverySpokeGivenTheCheckpointerDrivesIt(unittest.TestCase):
                 "and make its loop drive the hooks")
 
     def test_each_one_asks_for_its_checkpointed_incumbent(self):
+        """Look at the method that runs, not at the module around it.
+
+        The four XhatInnerBoundBase spokes reach the extension through
+        ``xhat_prep``, which is defined in cylinders/xhatbase.py -- so a test
+        that reads each spoke's own module sees the word ``xhat_prep()``
+        where the spoke *calls* it and passes without ever looking at the
+        body that does the work. Resolving the attribute walks the MRO to
+        wherever it is really defined.
+        """
         import inspect
-        for name, cls, mod in self._classes():
+        for name, cls, _ in self._classes():
             with self.subTest(spoke=name):
-                source = inspect.getsource(mod)
+                entry_name = ("xhat_prep" if hasattr(cls, "xhat_prep")
+                              else "restore_checkpointed_incumbent")
                 self.assertTrue(
-                    "restore_checkpointed_incumbent()" in source
-                    or "xhat_prep()" in source,
-                    msg=f"{name} never gives its extensions their pre-loop "
-                        f"hook, so a Checkpointer attached to it can never "
-                        f"restore")
+                    hasattr(cls, entry_name),
+                    msg=f"{name} has neither pre-loop entry point")
+                # Every definition of it along the MRO, most derived first.
+                chain = [inspect.getsource(c.__dict__[entry_name])
+                         for c in cls.__mro__ if entry_name in c.__dict__]
+                reached = False
+                for depth, source in enumerate(chain):
+                    if "extobject.pre_iter0" in source:
+                        reached = True
+                        break
+                    # An override that does not give the hook itself has to
+                    # hand on to the one that does, or the chain stops here.
+                    self.assertIn(
+                        "super()", source,
+                        msg=f"{name}.{entry_name} (override {depth}) neither "
+                            f"gives its extensions their hook nor calls "
+                            f"super(), so a Checkpointer attached to it can "
+                            f"never restore")
+                self.assertTrue(
+                    reached,
+                    msg=f"no definition of {name}.{entry_name} along its "
+                        f"MRO calls extobject.pre_iter0(), so the extensions "
+                        f"never get their pre-loop hook. Note the marker is "
+                        f"the extension call specifically: xhat_prep also "
+                        f"calls pre_iter0() on the xhatter, which says "
+                        f"nothing about extensions.")
 
     def test_each_one_offers_a_checkpoint_point(self):
         import inspect
