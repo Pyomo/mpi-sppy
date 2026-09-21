@@ -726,12 +726,26 @@ def spoke_incumbent_state(opt, cylinder, ordinal, best_inner_bound=None,
         # packs it next to the values; a resumed spoke that published its
         # restored incumbent without it would send whatever the fresh models
         # happen to hold, which is None.
+        # The objective of the cached solution, snapshotted with it in
+        # _cache_best_solution -- not the live inner_bound, which the next
+        # solve overwrites while the values beside it stay put.
+        objective = _as_float_or_none(
+            getattr(s._mpisppy_data, "best_solution_inner_bound", None))
+        if objective is None:
+            # Refuse the whole file rather than write a solution with no
+            # objective. send_best_xhat packs this number into a float64
+            # buffer, where None is stored as NaN without anything raising,
+            # and FWPH reads that slot as the recourse cost of a QP column.
+            # A solver is entitled to accept a solution and report no bound
+            # for it, so this is reachable without anything being wrong;
+            # what must not happen is passing the gap on silently.
+            raise ValueError(
+                f"scenario '{sname}' has a cached best solution but no "
+                f"objective recorded with it, so this incumbent cannot be "
+                f"checkpointed: the objective travels with the values and "
+                f"a missing one becomes NaN downstream")
         solutions[sname] = {
-            # The objective of the cached solution, snapshotted with it in
-            # _cache_best_solution -- not the live inner_bound, which the
-            # next solve overwrites while the values beside it stay put.
-            "inner_bound": _as_float_or_none(
-                getattr(s._mpisppy_data, "best_solution_inner_bound", None)),
+            "inner_bound": objective,
             "values": {var.name: value for var, value in cache.items()},
         }
     return {
@@ -861,6 +875,16 @@ def restore_spoke_incumbent(opt, state):
                 f"The checkpointed incumbent for scenario '{sname}' names "
                 f"{len(missing)} variable(s) this model does not have "
                 f"(e.g. {sorted(missing)[:3]}), so it cannot be restored."
+            )
+        if entry["inner_bound"] is None:
+            # Written before the write path refused this, or hand-edited.
+            # Adopting it would put NaN into the BEST_XHAT buffer, so the
+            # incumbent is unusable however it got here.
+            raise CheckpointMismatch(
+                f"the checkpointed incumbent for scenario '{sname}' has no "
+                f"objective recorded with it, so it cannot be restored: the "
+                f"objective is published beside the values and a missing one "
+                f"becomes NaN downstream."
             )
         s._mpisppy_data.best_solution_cache = cache
         # Both, and to the same number. The first is the one that goes back

@@ -2061,6 +2061,38 @@ class TestSpokeIncumbentFile(unittest.TestCase):
             opt, self.ckpt_dir, self.CYLINDER, 2, best_inner_bound=bound)
         return opt, path
 
+    def test_a_solution_with_no_objective_is_not_written(self):
+        """A solver may accept a solution and report no bound for it.
+
+        The objective travels in the same float64 buffer as the values, and
+        assigning None into one stores NaN without raising, so the gap would
+        leave here as a number and arrive at FWPH as the recourse cost of a
+        QP column. Refuse the file instead; the caller turns this into the
+        warning it already prints when a spoke cannot write.
+        """
+        opt = _xhat_eval(ckpt_dir=self.ckpt_dir)
+        _set_and_cache_solution(opt, 1.0)
+        for s in opt.local_scenarios.values():
+            s._mpisppy_data.best_solution_inner_bound = None
+        with self.assertRaises(ValueError) as ctx:
+            checkpointing.write_spoke_incumbent(
+                opt, self.ckpt_dir, self.CYLINDER, 2, best_inner_bound=-42.0)
+        self.assertIn("no objective", str(ctx.exception))
+        self.assertFalse(
+            os.path.isdir(os.path.join(self.ckpt_dir, "spokes")),
+            msg="a file that cannot describe a usable incumbent was written")
+
+    def test_a_solution_with_no_objective_is_not_restored(self):
+        """Files written before the write refused this still exist."""
+        opt, _ = self._write_one()
+        state = checkpointing.load_spoke_incumbent(
+            opt, self.ckpt_dir, self.CYLINDER, 2)
+        for entry in state["solutions"].values():
+            entry["inner_bound"] = None
+        with self.assertRaises(checkpointing.CheckpointMismatch) as ctx:
+            checkpointing.restore_spoke_incumbent(opt, state)
+        self.assertIn("no objective", str(ctx.exception))
+
     def test_written_where_the_design_says(self):
         _, path = self._write_one()
         self.assertEqual(
