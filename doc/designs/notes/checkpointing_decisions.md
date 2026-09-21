@@ -4,7 +4,9 @@ Companion to `../checkpointing_design.md`. That document says what the design
 *is*; this one records what it is **not**, and why, so that ideas which look
 obviously better in isolation are not re-attempted from scratch.
 
-Each entry below was reached by measurement, and the measurement is given.
+Most entries below were reached by measurement, and where there is one it
+is given; the last two are reasoning from the design rather than from a
+run.
 
 ## Snapshot at termination, from `post_everything`
 

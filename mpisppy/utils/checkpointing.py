@@ -314,8 +314,11 @@ def probe_model_is_dillable(opt):
     possibly many hours in -- that its models cannot be dilled would lose
     exactly the state checkpointing exists to preserve, so this trades the
     serializations up front for a failure that arrives immediately and says
-    what to do about it. The probe runs at iteration 0, when the models are at
-    their smallest (no accumulated prox-approximation cuts).
+    what to do about it. The probe runs at iteration 0. On a fresh run that is
+    when the models are at their smallest, with no accumulated
+    prox-approximation cuts; on a resume it runs after the checkpointed models
+    have been spliced in, so it dills whatever they had accumulated by the
+    stop and costs correspondingly more.
 
     Every scenario, not just the first: what makes a model undillable is
     usually something its ``scenario_creator`` closed over, and a creator that

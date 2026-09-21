@@ -20,8 +20,9 @@ not attached at all, and a run that does not ask for it pays nothing.
 
 .. note::
    The current implementation covers a **PH hub with one rank per cylinder**,
-   run on its own or with spokes. Giving any cylinder more than one rank is
-   refused at startup, and bundles and stoch-ADMM are not yet validated. See
+   run on its own or with spokes, with plain scenarios or stoch-ADMM. A run
+   that writes checkpoints is refused at startup if any cylinder has more
+   than one rank. Proper bundles are not yet covered by a resume test. See
    ``doc/designs/checkpointing_design.md`` for the full design and the phased
    rollout.
 
@@ -221,7 +222,11 @@ multiple optima, so the resumed iterates may differ. That is expected, not a
 bug.
 
 Bounds and the incumbent are carried forward as valid best-so-far values. A
-resumed run never reports a worse best-so-far than its checkpoint.
+resumed run never reports a worse best-so-far than its checkpoint, provided
+the spoke that held the incumbent is still in the run. Each spoke keeps its
+own file, so dropping one leaves its incumbent behind: resuming
+``--xhatshuffle`` as ``--xhatxbar`` starts without the answer the first one
+found, and says so.
 
 The xhat extensions that run inside the hub (``XhatLooper``, ``XhatXbar``,
 ``XhatClosest`` and ``XhatSpecific``) are not covered by that promise. They
