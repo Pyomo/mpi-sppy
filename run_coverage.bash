@@ -155,6 +155,18 @@ run_phase "test_generic_cylinders (serial)" \
 run_phase "test_w_oscillation (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_w_oscillation.py -v
 
+run_phase "test_out_of_the_box (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_out_of_the_box.py -v
+
+run_phase "test_ootb_validate (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_ootb_validate.py -v
+
+run_phase "test_ootb_calibrate (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_ootb_calibrate.py -v
+
+run_phase "test_ootb_policy_packaged (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_ootb_policy_packaged.py -v
+
 run_phase "test_jensens (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_jensens.py -v
 
