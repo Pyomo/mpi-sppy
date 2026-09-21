@@ -447,7 +447,22 @@ class Checkpointer(Extension):
         if self._publish_restored_bound is not None:
             bound, self._publish_restored_bound = \
                 self._publish_restored_bound, None
+            # The publish is deferred to here, the bottom of the first loop
+            # pass, so that pass may already have found something better and
+            # published it. Sending the restored number unconditionally walks
+            # the spoke's own bound backwards, and pairs it with a
+            # send_best_xhat() that carries the newer values -- a bound that
+            # is not the objective of the solution beside it. Publish the
+            # better of the two, by the spoke's own sense of better, so that
+            # a hub which has not heard an incumbent still gets the restored
+            # one and a spoke which has already improved does not step back.
             if bound is not None:
+                current = spoke.best_inner_bound
+                if (bound < current if spoke.is_minimizing
+                        else bound > current):
+                    spoke.best_inner_bound = bound
+                else:
+                    bound = current
                 spoke.send_bound(bound)
                 spoke.send_best_xhat()
 

@@ -30,6 +30,7 @@ Three properties, and they are different claims:
 """
 
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -296,6 +297,57 @@ class TestRestoredIncumbentIsRepublished(unittest.TestCase):
         ext = self._restore(ckpt_dir=None, resume_from="/tmp/ck1")
         self.assertEqual(ext.restored_incumbent_obj, -108382.22)
         self.assertIsNone(ext._last_written_obj)
+
+    def _publish(self, restored, already_held):
+        """Run the deferred publish with the spoke already holding a bound.
+
+        The publish waits for the first checkpoint point, which is the bottom
+        of the first loop pass, so the spoke may have solved and published
+        something of its own by the time it runs.
+        """
+        sent = []
+        ext = self._checkpointer(ckpt_dir=None, resume_from="/tmp/ck1")
+        ext._publish_restored_bound = restored
+        ext.opt.spcomm = types.SimpleNamespace(
+            best_inner_bound=already_held,
+            is_minimizing=True,
+            send_bound=lambda v: sent.append(v),
+            send_best_xhat=lambda: None,
+        )
+        ext._spoke_checkpoint()
+        return ext, sent
+
+    def test_the_restored_bound_reaches_a_hub_that_has_heard_nothing(self):
+        ext, sent = self._publish(restored=-108382.22, already_held=math.inf)
+        self.assertEqual(
+            sent, [-108382.22],
+            msg="a hub that has not heard an incumbent must still be told the "
+                "restored one, or it reports an infinite inner bound")
+        self.assertEqual(ext.opt.spcomm.best_inner_bound, -108382.22)
+
+    def test_a_spoke_that_already_improved_does_not_step_back(self):
+        """The defect this guards: the restored number was sent regardless.
+
+        send_best_xhat() beside it publishes the *current* cache, so sending
+        the restored objective pairs a bound with values it is not the
+        objective of -- and FWPH reads that pair as a QP column.
+        """
+        better = -108500.00
+        ext, sent = self._publish(restored=-108382.22, already_held=better)
+        self.assertEqual(
+            sent, [better],
+            msg="the spoke published a bound it already knew was worse than "
+                "the one it holds")
+        self.assertEqual(ext.opt.spcomm.best_inner_bound, better)
+
+    def test_the_stash_is_consumed_either_way(self):
+        for held in (math.inf, -108500.00):
+            with self.subTest(already_held=held):
+                ext, _ = self._publish(restored=-108382.22, already_held=held)
+                self.assertIsNone(
+                    ext._publish_restored_bound,
+                    msg="the restored bound must publish once, not at every "
+                        "checkpoint point for the rest of the run")
 
 
 class TestEverySpokeGivenTheCheckpointerDrivesIt(unittest.TestCase):
