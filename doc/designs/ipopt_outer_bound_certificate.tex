@@ -453,14 +453,14 @@ anything.  The computation evaluates $\varphi_s$ at $\vhat$, evaluates
 $\nabla \varphi_s(\vhat)$, compares each component with zero, selects an
 endpoint of the corresponding interval, multiplies and adds.  Each is a forward
 evaluation, and $\kappa$ has no route in.  Correspondingly, the inequality the
-construction rests on,
+construction rests on, the tangent-plane inequality \eqref{eq:tangent},
 \[
   \varphi_s(v) \;\ge\; \varphi_s(\vhat)
                      + \nabla \varphi_s(\vhat)^{\top} (v - \vhat)
-  \qquad \text{for all } v,
+  \qquad \text{for every } v \in B,
 \]
-is a pointwise consequence of convexity.  It holds exactly, at every $\vhat$,
-with no error constant and no dependence on the conditioning of anything.
+is a pointwise consequence of convexity on $U$.  It holds exactly, at every
+$\vhat \in U$ at which $\varphi_s$ is differentiable, with no error constant and no dependence on the conditioning of anything.
 Conditioning governs how loose the plane is away from $\vhat$; it cannot change
 which side of $\varphi_s$ the plane lies on.  What it does change is the size of
 $\nabla \varphi_s(\vhat)$ and the quality of the multipliers, and both push
