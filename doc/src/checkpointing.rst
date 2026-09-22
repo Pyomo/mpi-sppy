@@ -21,8 +21,8 @@ not attached at all, and a run that does not ask for it pays nothing.
 .. note::
    The current implementation covers a **PH hub with one rank per cylinder**,
    run on its own or with spokes, with plain scenarios or stoch-ADMM. A run
-   that writes checkpoints is refused at startup if any cylinder has more
-   than one rank. Proper bundles are not yet covered by a resume test. See
+   that writes checkpoints is refused at startup if any cylinder that
+   checkpoints has more than one rank. Proper bundles are not yet covered by a resume test. See
    ``doc/designs/checkpointing_design.md`` for the full design and the phased
    rollout.
 
@@ -223,7 +223,9 @@ bug.
 
 Bounds and the incumbent are carried forward as valid best-so-far values. A
 resumed run never reports a worse best-so-far than its checkpoint, provided
-the spoke that held the incumbent is still in the run. Each spoke keeps its
+the spoke that held the incumbent is still in the run. A bound that reaches
+the hub after the last checkpoint is written is not in it, so the stopped
+run's final line can show a better bound than the resumed run starts from. Each spoke keeps its
 own file, so dropping one leaves its incumbent behind: resuming
 ``--xhatshuffle`` as ``--xhatxbar`` starts without the answer the first one
 found, and says so.
@@ -254,8 +256,9 @@ cylinders run is on the list above that a resume may change. Resuming without
 ``--lagrangian`` therefore still finds the xhat spoke's incumbent, and two
 spokes of one class still read their own. The one change that cannot be
 absorbed is dropping one of two spokes *of the same class*: the survivor then
-looks like the one that was removed, and the resume says so rather than
-adopting an incumbent that belonged to a different cylinder.
+looks like the one that was removed, and the resume warns that the incumbent
+it adopts may have belonged to the other one. That incumbent is still a
+feasible solution for the same model.
 
 On a deterministic LP or QP solve the primal trajectory can come back
 bit-identical, but that is a bonus rather than the guarantee.
@@ -324,7 +327,7 @@ names the offending rule.
 
 **The synchronous PH hub only.** ``--APH`` and the other hub types are refused
 at startup when either ``--checkpoint-dir`` or ``--resume-from`` is given, as
-is any cylinder with more than one rank, an unwritable directory, an unimplemented
+is any cylinder that checkpoints with more than one rank, an unwritable directory, an unimplemented
 backend, scenario names that would collide once made filename-safe, and any
 configuration where the checkpointing extension would not actually be
 attached. ``--EF`` and the write-only modes (``--pickle-bundles-dir``,

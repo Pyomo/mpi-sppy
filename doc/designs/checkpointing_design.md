@@ -355,8 +355,10 @@ anyway), relevant only if an LP/QP run wants bit-identity.
 None of this lives on a hub scenario model, so it is restored as leaf data under
 **both** backends:
 
-- `spcomm.BestInnerBound`, `spcomm.BestOuterBound`; `opt.best_bound_obj_val`,
-  `opt.best_solution_obj_val`. Products of **async** spoke interaction — their
+- `spcomm.BestOuterBound` (the hub leaf's `best_outer_bound`, which is where a
+  spoke's bound such as a Lagrangian one ends up), `opt.best_bound_obj_val`,
+  `opt.best_solution_obj_val`; `spcomm.BestInnerBound` comes back through the
+  xhat spoke's republish rather than from the hub leaf. Products of **async** spoke interaction — their
   timing is not reproducible, so they are carried forward as best-so-far. They
   stay valid: a restored looser bound is improved again, and a restored
   incumbent objective is assigned outright rather than filtered — the file is
@@ -492,8 +494,8 @@ replaces that with the in-core resume branch (§5.1), which is itself unproven.
   uninterrupted run. That is expected, not a bug.
 - **Bounds and incumbent:** valid and best-so-far, not bit-reproducible (async,
   timing-dependent). Resume never reports a *worse* best-so-far than the
-  checkpoint. This covers what the hub tracks (`best_bound_obj_val`,
-  `best_solution_obj_val`), not the serial xhat extensions (`XhatLooper`,
+  checkpoint. This covers what the hub tracks (`BestOuterBound`,
+  `best_bound_obj_val`, `best_solution_obj_val`), not the serial xhat extensions (`XhatLooper`,
   `XhatXbar`, `XhatClosest`, `XhatSpecific`): they evaluate the final iterate
   in `post_everything`, after the last write, and cache the result on the
   extension. Moving the write after them would undo §9 item 4, so a resumed
@@ -834,7 +836,7 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
    the cylinder-convergence break, so a run ending that way would write nothing.
 
    The xhatter `main()` loops have no `enditer` to borrow, so they call the same
-   hook (via `XhatInnerBoundBase.maybe_checkpoint`) once per pass, at the bottom
+   hook (via `InnerBoundNonantSpoke.maybe_checkpoint`) once per pass, at the bottom
    — plus once on xhatshuffle's mid-pass kill-signal `return`, the one exit that
    skips it. That is what makes **one `Checkpointer` serve hub and xhatter
    uniformly** (restore already has a home: `pre_iter0`/`post_iter0` fire once
@@ -909,7 +911,7 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
       hub_rank_<RRRR>.pkl             # non-model leaf state: iter counter, bounds, extension-object state
       hub_rank_<RRRR>_scen_<S>.dill   # dilled scenario model(s) for this rank (dill-reload backend)
   spokes/
-    spoke_<name>_rank_<RRRR>.pkl      # each spoke's latest incumbent (best xhat, by name) + bound,
+    spoke_<cylinder>_ordinal_<II>_rank_<RRRR>.pkl  # each spoke's latest incumbent (best xhat, by name) + bound,
                                       #   overwritten asynchronously on improvement (§9, item 6)
 ```
 
@@ -1060,7 +1062,7 @@ as a branch stacked on the 1a PR.
 - **Phase 4 — Cylinders / spokes.**
   - *The write hook — implemented.* `Extension.maybe_checkpoint`, called
     directly by `iterk_loop` (after every `enditer`) and once per pass by each
-    xhatter's `main()` loop through `XhatInnerBoundBase.maybe_checkpoint`. The
+    xhatter's `main()` loop through `InnerBoundNonantSpoke.maybe_checkpoint`. The
     hub write moved onto it, which is what removes the dispatch-order
     dependency phase 1a had to document: `MultiExtension` dispatched `enditer`
     in attach order with the `Checkpointer` first (`add_checkpointing` runs at
@@ -1073,7 +1075,7 @@ as a branch stacked on the 1a PR.
     `do_decomp` path.
   - *The spoke incumbent — implemented.* One `Checkpointer` now attaches to
     an xhat spoke's `Xhat_Eval` as well as to the PH hub. On a spoke it writes
-    `spokes/spoke_<cylinder>_strata_<II>_rank_<RRRR>.pkl` — the best solution
+    `spokes/spoke_<cylinder>_ordinal_<II>_rank_<RRRR>.pkl` — the best solution
     by variable name, per-scenario inner bounds, and the two incumbent
     objectives — whenever the incumbent improves, latest-wins, with no
     hub↔spoke coordination (§9, item 6). It restores in `pre_iter0` (which
