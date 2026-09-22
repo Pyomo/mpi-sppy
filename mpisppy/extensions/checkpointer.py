@@ -170,6 +170,10 @@ class Checkpointer(Extension):
         #: The incumbent objective the last write recorded, so an unchanged
         #: incumbent is not rewritten on every pass of a loop that spins.
         self._last_written_obj = None
+        #: The incumbent objective whose write last failed. Without it a
+        #: failure retries on every pass of that same loop, rebuilding and
+        #: pickling the whole incumbent and printing a warning each time.
+        self._last_failed_obj = None
 
         if not self.spoke_mode and self.write_enabled:
             ckpt.require_dill(self.backend)
@@ -492,7 +496,8 @@ class Checkpointer(Extension):
             return
 
         obj = getattr(self.opt, "best_solution_obj_val", None)
-        if obj is None or obj == self._last_written_obj:
+        if obj is None or obj in (self._last_written_obj,
+                                  self._last_failed_obj):
             return
         try:
             cylinder, ordinal = self._spoke_identity()
@@ -501,6 +506,7 @@ class Checkpointer(Extension):
                 best_inner_bound=getattr(spoke, "best_inner_bound", None),
                 class_count=self._class_ordinal_and_count()[1])
         except Exception as exc:
+            self._last_failed_obj = obj
             global_toc(
                 f"WARNING: this spoke could not write its incumbent "
                 f"({type(exc).__name__}); the run continues and the next "

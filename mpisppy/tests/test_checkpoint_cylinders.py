@@ -211,10 +211,25 @@ class _ResumeABMixin:
             resumed["best_bound_obj_val"], stopped["best_bound_obj_val"],
             msg="the resumed hub did not carry the checkpointed best bound "
                 "across; it recomputed or discarded it")
+        # Against the checkpoint, not against the stopped leg's last word:
+        # a spoke's bound can reach the hub after the final checkpoint is
+        # written, and nothing carries that one.
+        checkpointed = self._checkpointed_outer_bound()
+        self.assertIsNotNone(checkpointed,
+                             msg="the checkpoint recorded no outer bound")
         self.assertGreaterEqual(
-            resumed["BestOuterBound"], stopped["BestOuterBound"],
-            msg="the resumed run ended with a weaker outer bound than the "
-                "leg it resumed from, having run more iterations")
+            resumed["BestOuterBound"], checkpointed,
+            msg="the resumed run ended with a weaker outer bound than its "
+                "checkpoint holds")
+
+    def _checkpointed_outer_bound(self):
+        import pickle
+        with open(os.path.join(self.ckpt_dir, "manifest.json")) as f:
+            generation = json.load(f)["generation"]
+        leaf = os.path.join(self.ckpt_dir, "hub", f"gen_{generation:04d}",
+                            "hub_rank_0000.pkl")
+        with open(leaf, "rb") as f:
+            return pickle.load(f)["best_outer_bound"]
 
 
 @unittest.skipIf(not solver_available, "no solver is available")
@@ -223,6 +238,11 @@ class TestFarmerCylindersResumeAB(_ResumeABMixin, unittest.TestCase):
     """PH hub + lagrangian + xhatshuffle on the deterministic-LP baseline."""
 
     MODULE = _FARMER
+    #: Late enough that the Lagrangian bounds the resumed spoke re-finds in
+    #: its first iterations are weaker than the checkpointed one, so a resume
+    #: that drops the hub's outer bound fails the bound test.
+    N = 8
+    STOP = 6
     MODEL_ARGS = ("--num-scens", "3", "--default-rho", "1")
     SPOKE_ARGS = ("--lagrangian", "--xhatshuffle")
     INCUMBENT_SPOKE = "XhatShuffleInnerBound"
@@ -246,10 +266,6 @@ class TestStochAdmmCylindersResumeAB(_ResumeABMixin, unittest.TestCase):
                   "--num-admm-subproblems", "2", "--default-rho", "10")
     SPOKE_ARGS = ("--lagrangian", "--xhatxbar")
     INCUMBENT_SPOKE = "XhatXbarInnerBound"
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class TestRestoredIncumbentIsRepublished(unittest.TestCase):
@@ -277,6 +293,7 @@ class TestRestoredIncumbentIsRepublished(unittest.TestCase):
         ext.write_enabled = ckpt_dir is not None
         ext.spoke_mode = True
         ext._last_written_obj = None
+        ext._last_failed_obj = None
         ext._publish_restored_bound = None
         ext.restored_incumbent_obj = None
         ext._spoke_identity = lambda: ("XhatShuffleInnerBound", 2)
@@ -367,6 +384,47 @@ class TestRestoredIncumbentIsRepublished(unittest.TestCase):
                     ext._publish_restored_bound,
                     msg="the restored bound must publish once, not at every "
                         "checkpoint point for the rest of the run")
+
+
+class TestAFailedSpokeWriteIsNotRetriedEveryPass(unittest.TestCase):
+    """The hook runs on every pass of a loop that spins while it waits on the
+    hub, so a write that fails must not be tried again until there is a new
+    incumbent to write."""
+
+    def _checkpointer(self):
+        from mpisppy.extensions.checkpointer import Checkpointer
+        ext = Checkpointer.__new__(Checkpointer)
+        ext.opt = types.SimpleNamespace(
+            options={}, best_solution_obj_val=-108382.22, cylinder_rank=0,
+            spcomm=types.SimpleNamespace(best_inner_bound=-108382.22))
+        ext.ckpt_dir = "/tmp/ck"
+        ext.write_enabled = True
+        ext.spoke_mode = True
+        ext._last_written_obj = None
+        ext._last_failed_obj = None
+        ext._publish_restored_bound = None
+        ext._spoke_identity = lambda: ("XhatShuffleInnerBound", 0)
+        ext._class_ordinal_and_count = lambda: (0, 1)
+        return ext
+
+    def test_a_failure_waits_for_the_next_improvement(self):
+        from mpisppy.extensions import checkpointer as mod
+        ext = self._checkpointer()
+        writer = mock.Mock(side_effect=OSError("disk full"))
+        with mock.patch.object(mod.ckpt, "write_spoke_incumbent", writer), \
+             mock.patch.object(mod, "global_toc") as toc:
+            for _ in range(50):
+                ext._spoke_checkpoint()
+            self.assertEqual(writer.call_count, 1,
+                             msg="an unchanged incumbent was written again "
+                                 "after its write failed")
+            self.assertEqual(toc.call_count, 1)
+
+            ext.opt.best_solution_obj_val = -108500.0
+            ext._spoke_checkpoint()
+            self.assertEqual(writer.call_count, 2,
+                             msg="a new incumbent was not tried after an "
+                                 "earlier write failed")
 
 
 class TestEverySpokeGivenTheCheckpointerDrivesIt(unittest.TestCase):
@@ -531,3 +589,7 @@ class TestEveryWriterProbesItsOwnFile(unittest.TestCase):
     def test_the_probe_name_carries_the_global_rank(self):
         names = self._probe_names([7])
         self.assertEqual(names, [".mpisppy_write_probe_0007"])
+
+
+if __name__ == "__main__":
+    unittest.main()
