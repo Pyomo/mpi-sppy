@@ -5,7 +5,8 @@ Status: draft for review. Branch `ipopt-outer-bound` (off Pyomo/mpi-sppy `main`)
 The mathematics is set out separately, with proofs, in
 [`ipopt_outer_bound_certificate.tex`](ipopt_outer_bound_certificate.pdf) —
 weak duality, the box underestimator, exactness at a KKT point, the canonical-form
-sign condition, and the aggregation hypothesis. This document covers the design
+sign condition, and the aggregation hypothesis, with an appendix on why the reduced
+costs are not a shortcut. This document covers the design
 decisions and the implementation; that one covers why the bound is valid.
 
 ## 1. Goal
@@ -396,7 +397,14 @@ out of `φ` — which is what complementarity requires.
 
 Bound multipliers `z_L`/`z_U` are **not needed** — the box is kept explicit in the
 certificate rather than dualized, so `ipopt_zL_out`/`ipopt_zU_out` need not be
-imported at all.
+imported at all. That is a choice, not merely a saving: adding a reduced-cost term
+`z_Lᵀ(lo − v) + z_Uᵀ(v − hi)` to `φ_s` while keeping the box leaves the bound valid
+but never tighter, coordinate by coordinate, and equal only at `z = 0` or at an exact
+KKT point (the proposition *Dualizing the bounds is dominated* in the note's
+appendix). It also makes §6.1's no-bound case more frequent: for a variable bounded
+on one side only, the coefficient becomes the dual residual `∂_i φ − z_L,i`, whose
+sign is arbitrary, so the infinite endpoint gets selected roughly half the time
+where the gradient form stays finite.
 
 ### 5.1 The robustness property that makes this safe
 
