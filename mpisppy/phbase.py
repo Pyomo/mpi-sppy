@@ -1684,6 +1684,19 @@ class PHBase(mpisppy.spopt.SPOpt):
 
             if have_extensions:
                 self.extobject.enditer()
+                # The checkpoint write has its own hook, fired here rather
+                # than from some extension's enditer, so a checkpoint holds
+                # the whole end-of-iteration state no matter what order
+                # extensions were attached in -- including any model change
+                # an extension made in the enditer just above, which a
+                # resume would otherwise drop for good.
+                #
+                # This is the last point in the iteration where the state is
+                # still coherent and reachable: enditer_after_sync is not a
+                # substitute, because it is skipped on the cylinder
+                # convergence break below, so a run that ends that way would
+                # write nothing.
+                self.extobject.maybe_checkpoint()
 
             if hasattr(self.spcomm, "sync_nonants"):
                 self.spcomm.sync_nonants()

@@ -7,6 +7,10 @@ on:
   pull_request:
     branches:
       - main
+      # The checkpointing work is a stack of branches, each building on the
+      # one below. A PR between two of them shows a single phase's diff,
+      # which a PR into main cannot -- but only if CI runs on it.
+      - 'checkpoint-*'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -249,6 +253,13 @@ jobs:
       - name: Test checkpoint/resume
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_checkpoint.py -v
+
+      # This one spawns its own mpiexec jobs -- one per A/B leg, in a fresh
+      # process, which is what the design's acceptance gate asks for and what
+      # a stopped study really does -- so it runs under plain pytest.
+      - name: Test checkpoint/resume on cylinders
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_checkpoint_cylinders.py -v
 
       - name: Test prox_approx end-to-end
         run: |

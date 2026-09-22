@@ -41,13 +41,18 @@ import mpisppy.utils.pickle_bundle as pickle_bundle
 dill, dill_available = attempt_import("dill")
 
 # Bump when the on-disk layout changes in a way older readers cannot handle.
-FORMAT_VERSION = 1
+#: Bumped when the on-disk shape changes. Version 2 replaced the spoke
+#: incumbent file's per-scenario ``inner_bound`` -- read live at write time,
+#: so it could describe a later solve than the values beside it -- with the
+#: objective cached when the incumbent itself was.
+FORMAT_VERSION = 2
 
 DILL_RELOAD_BACKEND = "dill-reload"
 LEAF_BACKEND = "leaf"
 
 MANIFEST_NAME = "manifest.json"
 HUB_SUBDIR = "hub"
+SPOKES_SUBDIR = "spokes"
 
 # Option keys that must match for a checkpoint to be resumable. Deliberately a
 # named subset rather than the whole configuration: these are the entries that
@@ -114,12 +119,16 @@ NON_STRUCTURAL_CFG_KEYS = frozenset({
     "rc_debug", "rc_verbose", "tee_EF", "hub_only_solver_logs",
     "inspect_buffers_on_shutdown", "fwph_save_file",
     "write_scenario_lp_mps_files_dir", "config_file",
-    # Which cylinders run. The hub's primal trajectory does not depend on the
-    # spokes, so a checkpoint stays valid across a different spoke set -- and
-    # cylinder support will need this to be allowed.
+    # Which cylinders run. A different spoke set can change where the hub
+    # goes (with --ph-primal-hub the dual spokes feed it W), but it leaves
+    # nothing in the hub's models, so the checkpoint still describes the same
+    # problem. reduced_costs and cross_scenario_cuts are not here: each also
+    # gives the hub an extension that changes the hub's own models (fixing
+    # variables, adding cuts), and a resume without it would keep them.
     "lagrangian", "xhatshuffle", "xhatxbar", "xhatlshaped", "fwph",
-    "subgradient", "ph_primal_hub", "ph_dual", "relaxed_ph", "reduced_costs",
-    "ph_xfeas_spoke",
+    "subgradient", "ph_primal_hub", "ph_dual", "relaxed_ph",
+    "ph_xfeas_spoke", "lagranger", "xhatlooper", "xhatspecific",
+    "slammax", "slammin",
     # How the run was set up, not what problem it is. out-of-the-box prints an
     # equivalent command line and invites the user to reuse it, so leaving
     # these structural refuses a resume of exactly the line it printed.
@@ -222,6 +231,28 @@ def _model_filename(rank, sname):
     return f"hub_rank_{rank:04d}_scen_{sanitize_for_filename(sname)}.dill"
 
 
+def _spoke_filename(cylinder, ordinal, rank):
+    """One file per spoke per rank.
+
+    The cylinder class name alone is not unique -- a wheel may carry two
+    spokes of the same class configured differently -- so a second number
+    disambiguates them. That number is the spoke's *ordinal among cylinders
+    of its own class*, not its strata rank.
+
+    The strata rank is the cylinder's index in the whole wheel, and which
+    cylinders run is on the list a resume may change (see
+    NON_STRUCTURAL_CFG_KEYS: lagrangian, xhatshuffle, fwph and the rest).
+    Dropping one renumbers every cylinder after it, so a spoke naming its
+    file by strata rank looks for a file that is not there while its own sits
+    beside it under the old number -- and, with two spokes of one class,
+    lands on the *other* one's file under its own new number and restores an
+    incumbent that is not its. The ordinal does not move when an unrelated
+    cylinder is added or removed.
+    """
+    return (f"spoke_{sanitize_for_filename(cylinder)}"
+            f"_ordinal_{int(ordinal):02d}_rank_{int(rank):04d}.pkl")
+
+
 def _atomic_write_bytes(path, write_callback):
     """Write via a temp file in the same directory, then rename into place."""
     tmp = f"{path}.tmp"
@@ -288,8 +319,11 @@ def probe_model_is_dillable(opt):
     possibly many hours in -- that its models cannot be dilled would lose
     exactly the state checkpointing exists to preserve, so this trades the
     serializations up front for a failure that arrives immediately and says
-    what to do about it. The probe runs at iteration 0, when the models are at
-    their smallest (no accumulated prox-approximation cuts).
+    what to do about it. The probe runs at iteration 0. On a fresh run that is
+    when the models are at their smallest, with no accumulated
+    prox-approximation cuts; on a resume it runs after the checkpointed models
+    have been spliced in, so it dills whatever they had accumulated by the
+    stop and costs correspondingly more.
 
     Every scenario, not just the first: what makes a model undillable is
     usually something its ``scenario_creator`` closed over, and a creator that
@@ -671,3 +705,218 @@ def load_checkpoint(opt, ckpt_dir):
             models[sname] = dill.load(f)
 
     return leaf, models
+
+
+###############################################################################
+# The spoke side: an xhat spoke's best incumbent.
+#
+# The hub checkpoint carries the PH iterate; the best *solution* the run has
+# found does not live there. It lives on the xhat spoke, in
+# ``s._mpisppy_data.best_solution_cache``, and ``InnerBoundSpoke.finalize()``
+# loads it back at the end of the run -- so without the file written here, a
+# resumed run restores its iterate perfectly and still reports whatever it
+# happens to find after the restart, having thrown away the answer it had.
+#
+# Two things make this unlike the hub's checkpoint:
+#
+# * **It is by name.** The cache is a ComponentMap keyed by variable
+#   *objects*. A resumed spoke builds fresh models, so those keys address
+#   nothing; names survive the rebuild. Same discipline as
+#   ``initially_fixed_nonant_names``.
+# * **It holds no models.** A spoke's models are rebuilt by the
+#   ``scenario_creator`` at startup and accumulate nothing worth keeping, so
+#   only values are stored. That is why this can be written on every
+#   improvement while the hub write is paced by ``--checkpoint-every-iterations``.
+#
+# It is also deliberately not aligned with the hub's generations: one file per
+# spoke per rank, overwritten in place whenever the incumbent improves. See
+# section 9 item 6 of doc/designs/checkpointing_design.md for why no
+# hub-to-spoke coordination is wanted here.
+###############################################################################
+
+
+def spoke_incumbent_state(opt, cylinder, ordinal, best_inner_bound=None,
+                          class_count=None):
+    """The dict written by ``write_spoke_incumbent``, or None if there is
+    nothing to write yet. ``_cache_best_solution`` caches every scenario at
+    once, so one scenario without a cache means none has one."""
+    solutions = {}
+    for sname, s in opt.local_scenarios.items():
+        cache = s._mpisppy_data.best_solution_cache
+        if cache is None:
+            return None
+        # The per-scenario inner bound rides along because send_best_xhat
+        # packs it next to the values; a resumed spoke that published its
+        # restored incumbent without it would send whatever the fresh models
+        # happen to hold, which is None.
+        # The objective of the cached solution, snapshotted with it in
+        # _cache_best_solution -- not the live inner_bound, which the next
+        # solve overwrites while the values beside it stay put.
+        objective = _as_float_or_none(
+            getattr(s._mpisppy_data, "best_solution_inner_bound", None))
+        if objective is None or not math.isfinite(objective):
+            # Refuse the whole file rather than write a solution with no
+            # objective. send_best_xhat packs this number into a float64
+            # buffer, where None is stored as NaN without anything raising,
+            # and FWPH reads that slot as the recourse cost of a QP column.
+            # A solver is entitled to accept a solution and report no bound
+            # for it (ipopt reports an infinite one), so this is reachable
+            # without anything being wrong; what must not happen is passing
+            # the gap on silently.
+            raise ValueError(
+                f"scenario '{sname}' has a cached best solution but no "
+                f"finite objective recorded with it ({objective}), so this "
+                f"incumbent cannot be checkpointed: the objective travels "
+                f"with the values and is read downstream as a real number")
+        solutions[sname] = {
+            "inner_bound": objective,
+            "values": {var.name: value for var, value in cache.items()},
+        }
+    return {
+        "format_version": FORMAT_VERSION,
+        "kind": "spoke-incumbent",
+        "cylinder": str(cylinder),
+        "ordinal": int(ordinal),
+        # How many cylinders of this class the writing wheel carried. The
+        # ordinal only means the same thing while that is unchanged: drop one
+        # of two same-class spokes and the survivor's ordinal becomes the
+        # removed one's. Recorded so the resume can say so when it adopts an
+        # incumbent that may have belonged to a different cylinder.
+        "class_count": None if class_count is None else int(class_count),
+        "rank": int(opt.cylinder_rank),
+        "geometry": geometry(opt),
+        "structural_fingerprint": structural_fingerprint(opt.options),
+        # Two numbers rather than one because they are kept in two places:
+        # the spoke's own best_inner_bound gates what it sends to the hub,
+        # while the opt object's best_solution_obj_val gates what the
+        # solution cache accepts. Restoring one and inferring the other would
+        # bake in an equality nothing enforces.
+        "best_inner_bound": _as_float_or_none(best_inner_bound),
+        "best_solution_obj_val": _as_float_or_none(
+            getattr(opt, "best_solution_obj_val", None)),
+        "solutions": solutions,
+    }
+
+
+def write_spoke_incumbent(opt, ckpt_dir, cylinder, ordinal,
+                          best_inner_bound=None, class_count=None):
+    """Write this spoke's best incumbent, latest-wins. Returns the path, or
+    None when there is no incumbent to write.
+
+    The write is the same temp-then-rename used for the hub's files, so a
+    kill mid-write leaves the previous incumbent intact rather than a
+    truncated file. There are no generations to publish and nothing else to
+    be consistent with, so the rename *is* the commit point -- no manifest is
+    involved.
+    """
+    state = spoke_incumbent_state(opt, cylinder, ordinal,
+                                  best_inner_bound=best_inner_bound,
+                                  class_count=class_count)
+    if state is None:
+        return None
+    spokes_dir = os.path.join(ckpt_dir, SPOKES_SUBDIR)
+    os.makedirs(spokes_dir, exist_ok=True)
+    path = os.path.join(
+        spokes_dir,
+        _spoke_filename(cylinder, ordinal, opt.cylinder_rank),
+    )
+    _atomic_write_bytes(path, lambda f: pickle.dump(state, f))
+    _fsync_dir(spokes_dir)
+    return path
+
+
+def load_spoke_incumbent(opt, ckpt_dir, cylinder, ordinal):
+    """Read this spoke's incumbent file, or None if it is not there.
+
+    A missing file is not an error: the run being resumed may have stopped
+    before this spoke found anything, and a checkpoint directory is allowed
+    to carry no incumbent at all. A file that *is* there but does not match
+    this run is an error, for the same reason the hub refuses one -- values
+    from a different model are wrong answers, not stale ones.
+    """
+    path = os.path.join(
+        ckpt_dir, SPOKES_SUBDIR,
+        _spoke_filename(cylinder, ordinal, opt.cylinder_rank),
+    )
+    if not os.path.exists(path):
+        return None
+    with open(path, "rb") as f:
+        state = pickle.load(f)
+
+    if state.get("format_version") != FORMAT_VERSION:
+        raise CheckpointMismatch(
+            f"The incumbent file '{path}' has format version "
+            f"{state.get('format_version')}, but this mpi-sppy writes "
+            f"version {FORMAT_VERSION}."
+        )
+    if state.get("structural_fingerprint") != structural_fingerprint(opt.options):
+        raise CheckpointMismatch(
+            f"The incumbent file '{path}' was written by a run configured "
+            f"differently from this one, so its variable values do not "
+            f"describe this model."
+        )
+    have = sorted(opt.local_scenarios.keys())
+    want = state["geometry"]["scenario_names"]
+    if have != want:
+        raise CheckpointMismatch(
+            f"Rank {opt.cylinder_rank} of this spoke owns scenarios {have}, "
+            f"but '{path}' was written with {want} on that rank."
+        )
+    return state
+
+
+def restore_spoke_incumbent(opt, state):
+    """Rebuild ``best_solution_cache`` on this spoke's models from a loaded
+    state, by variable name. Returns the incumbent objective value.
+
+    Every variable in the file must still exist on the model: a name that no
+    longer resolves means the file describes a different model, and a
+    partially restored incumbent is a solution that was never feasible for
+    anything. The structural fingerprint should have caught that already, so
+    reaching the error here means a model changed without its configuration
+    changing.
+    """
+    import pyomo.environ as pyo
+
+    for sname, s in opt.local_scenarios.items():
+        entry = state["solutions"][sname]
+        by_name = entry["values"]
+        cache = pyo.ComponentMap()
+        found = 0
+        for var in s.component_data_objects(pyo.Var):
+            if var.name not in by_name:
+                continue
+            cache[var] = by_name[var.name]
+            found += 1
+        if found != len(by_name):
+            missing = set(by_name) - {
+                var.name for var in s.component_data_objects(pyo.Var)
+            }
+            raise CheckpointMismatch(
+                f"The checkpointed incumbent for scenario '{sname}' names "
+                f"{len(missing)} variable(s) this model does not have "
+                f"(e.g. {sorted(missing)[:3]}), so it cannot be restored."
+            )
+        if entry["inner_bound"] is None or \
+                not math.isfinite(entry["inner_bound"]):
+            # Written before the write path refused this, or hand-edited.
+            # Adopting it would put NaN or inf into the BEST_XHAT buffer, so
+            # the incumbent is unusable however it got here.
+            raise CheckpointMismatch(
+                f"the checkpointed incumbent for scenario '{sname}' has no "
+                f"finite objective recorded with it "
+                f"({entry['inner_bound']}), so it cannot be restored: the "
+                f"objective is published beside the values and is read "
+                f"downstream as a real number."
+            )
+        s._mpisppy_data.best_solution_cache = cache
+        # Both, and to the same number. The first is the one that goes back
+        # out: send_best_xhat publishes the objective snapshotted with the
+        # values. The second leaves this scenario reading as it did when the
+        # incumbent was found, which is what it means before this spoke has
+        # solved anything of its own.
+        s._mpisppy_data.best_solution_inner_bound = entry["inner_bound"]
+        s._mpisppy_data.inner_bound = entry["inner_bound"]
+
+    opt.best_solution_obj_val = state["best_solution_obj_val"]
+    return state["best_solution_obj_val"]

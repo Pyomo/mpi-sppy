@@ -59,4 +59,7 @@ class XhatLooperInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
                 # send a bound to the opt companion
                 # XhatBase._try_one updates the solution cache on the opt object for us
                 self.update_if_improving(upperbound, update_best_solution_cache=False)
+
+            self.maybe_checkpoint()
+
             xh_iter += 1

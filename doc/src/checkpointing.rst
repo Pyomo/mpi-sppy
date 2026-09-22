@@ -19,14 +19,10 @@ Checkpointing is entirely opt-in. With no ``--checkpoint-dir`` the machinery is
 not attached at all, and a run that does not ask for it pays nothing.
 
 .. note::
-   The current implementation covers a **serial PH hub**. Multi-rank runs,
-   bundles, and cylinder (hub-and-spoke) runs are planned but not yet
-   supported. A multi-rank hub is refused at startup, but a hub-and-spoke run
-   is not: it writes a checkpoint covering the hub alone. The incumbent is
-   held by the spoke that found it, so resuming one starts with no incumbent
-   at all -- and having none, it accepts the first solution it is offered as
-   its best, which can be worse than the one the checkpoint was written with.
-   Do not resume a hub-and-spoke run until cylinder support lands. See
+   The current implementation covers a **PH hub with one rank per cylinder**,
+   run on its own or with spokes, with plain scenarios or stoch-ADMM. A run
+   that writes checkpoints is refused at startup if any cylinder that
+   checkpoints has more than one rank. Proper bundles are not yet covered by a resume test. See
    ``doc/designs/checkpointing_design.md`` for the full design and the phased
    rollout.
 
@@ -177,8 +173,10 @@ may legitimately change:
   a mipgap on day two continues the same problem rather than redefining it;
 * **display, tracking and output destinations**, and the checkpoint options
   themselves;
-* **which cylinders run.** The hub's primal trajectory does not depend on the
-  spokes.
+* **which cylinders run**, except ``--reduced-costs`` and
+  ``--cross-scenario-cuts``, which also change the hub's own models. With
+  ``--ph-primal-hub`` a different set of dual spokes changes where the hub
+  goes, but not what problem it is solving.
 
 Everything else must match -- including options your own model module
 registers. That is deliberate: checking by default is what stops a farmer
@@ -225,16 +223,44 @@ uninterrupted run: multi-threaded MIP solves are not deterministic and admit
 multiple optima, so the resumed iterates may differ. That is expected, not a
 bug.
 
-The hub's bounds and incumbent are carried forward as valid best-so-far
-values, so a resumed hub never reports a worse best-so-far than its
-checkpoint. What a spoke held is not covered, for the reason given in the
-note at the top of this page.
+Bounds and the incumbent are carried forward as valid best-so-far values. A
+resumed run never reports a worse best-so-far than its checkpoint, provided
+the spoke that held the incumbent is still in the run. A bound that reaches
+the hub after the last checkpoint is written is not in it, so the stopped
+run's final line can show a better bound than the resumed run starts from. Each spoke keeps its
+own file, so dropping one leaves its incumbent behind: resuming
+``--xhatshuffle`` as ``--xhatxbar`` starts without the answer the first one
+found, and says so.
 
 The xhat extensions that run inside the hub (``XhatLooper``, ``XhatXbar``,
 ``XhatClosest`` and ``XhatSpecific``) are not covered by that promise. They
 evaluate the run's final iterate once, after the last checkpoint has been
 written, and keep the result to themselves. A resumed run evaluates its own
 final iterate, which can come out worse than the one before the stop.
+
+In a cylinders run the best solution does not live on the hub: the spoke that
+found it holds it. So each spoke that looks for one -- the xhat spokes, the
+L-shaped xhatter and the two slammers -- keeps its own small file under
+``spokes/`` in the checkpoint directory, holding the best solution it has
+found, written by variable name whenever that solution improves. A resumed
+spoke reads it back and reports it to the hub, which is why a resumed
+cylinders run starts from the answer it already had rather than from nothing.
+
+Those files are deliberately not synchronised with the hub's: a spoke writes
+when it improves, the hub writes at iteration boundaries, and neither waits
+for the other. A spoke whose file is missing -- because the earlier run
+stopped before it found anything, or because that spoke was not in the earlier
+run at all -- simply starts without an incumbent and says so in the log.
+
+Each file is named for the spoke's class and for which spoke of that class it
+is, rather than for the cylinder's position in the wheel, because which
+cylinders run is on the list above that a resume may change. Resuming without
+``--lagrangian`` therefore still finds the xhat spoke's incumbent, and two
+spokes of one class still read their own. The one change that cannot be
+absorbed is dropping one of two spokes *of the same class*: the survivor then
+looks like the one that was removed, and the resume warns that the incumbent
+it adopts may have belonged to the other one. That incumbent is still a
+feasible solution for the same model.
 
 On a deterministic LP or QP solve the primal trajectory can come back
 bit-identical, but that is a bonus rather than the guarantee.
@@ -303,7 +329,7 @@ names the offending rule.
 
 **The synchronous PH hub only.** ``--APH`` and the other hub types are refused
 at startup when either ``--checkpoint-dir`` or ``--resume-from`` is given, as
-is a hub with more than one rank, an unwritable directory, an unimplemented
+is any cylinder that checkpoints with more than one rank, an unwritable directory, an unimplemented
 backend, scenario names that would collide once made filename-safe, and any
 configuration where the checkpointing extension would not actually be
 attached. ``--EF`` and the write-only modes (``--pickle-bundles-dir``,
@@ -332,14 +358,8 @@ and ``--init-Xbar-fname`` initialize a study; a resumed run takes both from the
 checkpoint. Leaving the flags on the command you resubmit each morning is
 harmless -- they are skipped, with a line in the log saying so.
 
-**A custom extension that changes models at the end of an iteration must be
-attached first.** The checkpoint is written from the checkpointing extension's
-end-of-iteration hook, and extensions run that hook in the order they were
-attached, with the checkpointing one attached before anything you add. So if
-your own extension uses that hook to change rho, fix a variable, relax a
-domain or add a cut, it acts *after* the checkpoint for that iteration has
-been written -- the change is missing from the checkpoint and is not redone
-when you resume. Attach such an extension ahead of the checkpointing one. No
-extension shipped with mpi-sppy is affected; this applies only to extensions
-supplied with ``--user-defined-extensions``. A future release will write from
-a dedicated point in the iteration loop so that ordering stops mattering.
+**The order you attach extensions in does not affect what is checkpointed.**
+The write happens at a dedicated point in the iteration loop, after every
+extension's end-of-iteration hook has run. So if your own extension uses that
+hook to change rho, fix a variable, relax a domain or add a cut, the change is
+part of that iteration's checkpoint and is there when you resume.

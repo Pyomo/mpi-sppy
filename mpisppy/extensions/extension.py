@@ -148,6 +148,22 @@ class Extension:
         '''
         pass
 
+    def maybe_checkpoint(self):
+        ''' Method called at each point where the algorithm's state is
+            coherent enough to be checkpointed: after the solve and after
+            every enditer() on the hub, and once per pass through an
+            xhatter spoke's main loop.
+
+            Unlike the hooks above, this one is called by the algorithm
+            drivers directly rather than being one hook among many, so what
+            a checkpoint contains does not depend on the order extensions
+            were attached in. It exists because the hub and the xhatter
+            spokes have differently shaped loops but need the same
+            checkpoint writer; see mpisppy/extensions/checkpointer.py and
+            doc/designs/checkpointing_design.md.
+        '''
+        pass
+
     def post_everything(self):
         ''' Method called after the termination of the algorithm.
             This method is called after the scenario_denouement, if a
@@ -231,6 +247,10 @@ class MultiExtension(Extension):
     def enditer_after_sync(self):
         for lobject in self.extdict.values():
             lobject.enditer_after_sync()
+
+    def maybe_checkpoint(self):
+        for lobject in self.extdict.values():
+            lobject.maybe_checkpoint()
 
     def post_everything(self):
         for lobject in self.extdict.values():

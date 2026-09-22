@@ -937,24 +937,36 @@ def add_wxbar_read_write(hub_dict, cfg):
             })
     return hub_dict
 
-def add_checkpointing(hub_dict, cfg):
+def add_checkpointing(cylinder_dict, cfg):
     """Attach the Checkpointer extension and forward its options.
 
+    Used for the PH hub and for the xhat spokes, which checkpoint the best
+    solution they have found (the hub checkpoint does not carry it -- see
+    section 9 item 6 of the design). The extension knows which of the two it
+    is attached to; everything here is the same either way.
+
     Both --checkpoint-dir (write) and --resume-from (read) are handled here.
-    Resuming does not need the extension -- the resume branch lives in
-    PHBase.Iter0 -- but it does need resume_from in the options dict, so a
-    resume-only run (stop today, resume tomorrow with a fresh checkpoint dir)
-    still works.
+    On the hub, resuming does not need the extension -- that resume branch
+    lives in PHBase.Iter0 -- but it does need resume_from in the options
+    dict, so a resume-only run (stop today, resume tomorrow with a fresh
+    checkpoint dir) still works. On a spoke the extension does the restore
+    itself, and needs resume_from for the same reason.
 
     See doc/designs/checkpointing_design.md.
     """
     from mpisppy.utils.checkpointing import _is_non_structural
 
-    if _hasit(cfg, 'checkpoint_dir'):
+    # Attached for a resume too, not just a write: a spoke's restore is the
+    # extension's own pre_iter0, so a --resume-from run with no
+    # --checkpoint-dir would otherwise start every spoke without the
+    # incumbent sitting on disk. The extension switches writing off when
+    # there is no directory to write to.
+    if _hasit(cfg, 'checkpoint_dir') or _hasit(cfg, 'resume_from'):
         from mpisppy.extensions.checkpointer import Checkpointer
-        hub_dict = extension_adder(hub_dict, Checkpointer)
-        hub_dict["opt_kwargs"]["options"].update(
-            {"checkpoint_dir": cfg.checkpoint_dir,
+        cylinder_dict = extension_adder(cylinder_dict, Checkpointer)
+        cylinder_dict["opt_kwargs"]["options"].update(
+            {"checkpoint_dir": cfg.get("checkpoint_dir", None),
+             "checkpoint_backend": cfg.checkpoint_backend,
              "checkpoint_every_iterations": cfg.checkpoint_every_iterations,
             })
 
@@ -962,27 +974,23 @@ def add_checkpointing(hub_dict, cfg):
     # and a study is one or more runs, so it is meaningful on its own. A run
     # that sets it without asking for checkpointing gets a plain "stop at this
     # iteration number" rather than an option that is silently dropped.
-    hub_dict["opt_kwargs"]["options"]["stop_at_iteration_number"] = \
+    cylinder_dict["opt_kwargs"]["options"]["stop_at_iteration_number"] = \
         cfg.get("stop_at_iteration_number", None)
 
     if _hasit(cfg, 'resume_from'):
-        hub_dict["opt_kwargs"]["options"]["resume_from"] = cfg.resume_from
+        cylinder_dict["opt_kwargs"]["options"]["resume_from"] = cfg.resume_from
 
     if _hasit(cfg, 'checkpoint_dir') or _hasit(cfg, 'resume_from'):
-        # Both sides refuse an unimplemented backend, so both need it.
-        hub_dict["opt_kwargs"]["options"]["checkpoint_backend"] = \
-            cfg.checkpoint_backend
-
         # Every cfg entry except the ones a resume may legitimately differ on.
         # Checking by default is what catches the options a model's own
         # inparser_adder registers -- those never appear in opt.options, and an
         # allowlist silently missed them.
-        hub_dict["opt_kwargs"]["options"]["checkpoint_structural_cfg"] = {
+        cylinder_dict["opt_kwargs"]["options"]["checkpoint_structural_cfg"] = {
             k: cfg.get(k, None) for k in cfg
             if not _is_non_structural(k)
         }
 
-    return hub_dict
+    return cylinder_dict
 
 def add_ph_tracking(cylinder_dict, cfg, spoke=False):
     """ Manage the phtracker extension and bridge gap between config and ph options dict
@@ -1192,6 +1200,9 @@ def _Xhat_Eval_spoke_foundation(
         extension_kwargs=extension_kwargs,
         )
     spoke_dict["opt_class"] = Xhat_Eval
+    # Every xhat spoke checkpoints its own best solution; the hub's checkpoint
+    # does not carry one (design section 5.4).
+    add_checkpointing(spoke_dict, cfg)
     return spoke_dict
 
 

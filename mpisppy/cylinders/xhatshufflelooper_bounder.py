@@ -149,7 +149,10 @@ class XhatShuffleInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
                         scenario_cycler.best = next_scendict["ROOT"]
 
                 if self.got_kill_signal():
-                    # time to go; don't solve next
+                    # time to go; don't solve next -- but the try just above
+                    # may have improved the incumbent, and this is the only
+                    # exit that skips the bottom of the loop.
+                    self.maybe_checkpoint()
                     return
 
             next_scendict = scenario_cycler.get_next()
@@ -161,6 +164,8 @@ class XhatShuffleInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
                     scenario_cycler.best = next_scendict["ROOT"]
 
             #_vb(f"    scenario_cycler._scenarios_this_epoch {scenario_cycler._scenarios_this_epoch}")
+
+            self.maybe_checkpoint()
 
             xh_iter += 1
 
