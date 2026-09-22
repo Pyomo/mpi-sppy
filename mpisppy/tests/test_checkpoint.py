@@ -1276,6 +1276,13 @@ class TestStructuralFingerprint(unittest.TestCase):
                 ("lagrangian_mipgaps_json", "/tmp/gaps.json"),
                 ("lagrangian_mipgap_ratio", 0.5),
                 ("lagrangian_starting_mipgap", 0.1),
+                # Spokes a custom driver can add or drop between legs; the
+                # spoke files are named so that this is absorbed.
+                ("lagranger", True),
+                ("xhatlooper", True),
+                ("xhatspecific", True),
+                ("slammax", True),
+                ("slammin", True),
         ):
             with self.subTest(key=key):
                 self.assertTrue(
@@ -1283,6 +1290,12 @@ class TestStructuralFingerprint(unittest.TestCase):
                     f"{key} would be folded into the fingerprint, so a resume "
                     f"differing only in {key} is refused")
                 self.assertNotIn(key, self._folded_cfg(**{key: value}))
+
+    def test_cross_scenario_cuts_stays_structural(self):
+        """Unlike the other spoke flags, it also adds cuts to the hub's
+        models, so the hub's trajectory depends on it."""
+        self.assertFalse(
+            checkpointing._is_non_structural("cross_scenario_cuts"))
 
     def _folded_cfg(self, **overrides):
         """What cfg_vanilla actually hands the fingerprint."""
@@ -2100,6 +2113,10 @@ class TestSpokeIncumbentFile(unittest.TestCase):
             opt, self.ckpt_dir, self.CYLINDER, 2, best_inner_bound=bound)
         return opt, path
 
+    #: What a solver can report for a solution it accepted: no bound at all,
+    #: or (ipopt) an infinite one. NaN is what None becomes in a buffer.
+    NOT_AN_OBJECTIVE = (None, math.inf, -math.inf, math.nan)
+
     def test_a_solution_with_no_objective_is_not_written(self):
         """A solver may accept a solution and report no bound for it.
 
@@ -2109,28 +2126,35 @@ class TestSpokeIncumbentFile(unittest.TestCase):
         QP column. Refuse the file instead; the caller turns this into the
         warning it already prints when a spoke cannot write.
         """
-        opt = _xhat_eval(ckpt_dir=self.ckpt_dir)
-        _set_and_cache_solution(opt, 1.0)
-        for s in opt.local_scenarios.values():
-            s._mpisppy_data.best_solution_inner_bound = None
-        with self.assertRaises(ValueError) as ctx:
-            checkpointing.write_spoke_incumbent(
-                opt, self.ckpt_dir, self.CYLINDER, 2, best_inner_bound=-42.0)
-        self.assertIn("no objective", str(ctx.exception))
-        self.assertFalse(
-            os.path.isdir(os.path.join(self.ckpt_dir, "spokes")),
-            msg="a file that cannot describe a usable incumbent was written")
+        for bad in self.NOT_AN_OBJECTIVE:
+            with self.subTest(objective=bad):
+                opt = _xhat_eval(ckpt_dir=self.ckpt_dir)
+                _set_and_cache_solution(opt, 1.0)
+                for s in opt.local_scenarios.values():
+                    s._mpisppy_data.best_solution_inner_bound = bad
+                with self.assertRaises(ValueError) as ctx:
+                    checkpointing.write_spoke_incumbent(
+                        opt, self.ckpt_dir, self.CYLINDER, 2,
+                        best_inner_bound=-42.0)
+                self.assertIn("no finite objective", str(ctx.exception))
+                self.assertFalse(
+                    os.path.isdir(os.path.join(self.ckpt_dir, "spokes")),
+                    msg="a file that cannot describe a usable incumbent was "
+                        "written")
 
     def test_a_solution_with_no_objective_is_not_restored(self):
         """Files written before the write refused this still exist."""
         opt, _ = self._write_one()
-        state = checkpointing.load_spoke_incumbent(
-            opt, self.ckpt_dir, self.CYLINDER, 2)
-        for entry in state["solutions"].values():
-            entry["inner_bound"] = None
-        with self.assertRaises(checkpointing.CheckpointMismatch) as ctx:
-            checkpointing.restore_spoke_incumbent(opt, state)
-        self.assertIn("no objective", str(ctx.exception))
+        for bad in self.NOT_AN_OBJECTIVE:
+            with self.subTest(objective=bad):
+                state = checkpointing.load_spoke_incumbent(
+                    opt, self.ckpt_dir, self.CYLINDER, 2)
+                for entry in state["solutions"].values():
+                    entry["inner_bound"] = bad
+                with self.assertRaises(
+                        checkpointing.CheckpointMismatch) as ctx:
+                    checkpointing.restore_spoke_incumbent(opt, state)
+                self.assertIn("no finite objective", str(ctx.exception))
 
     def test_written_where_the_design_says(self):
         _, path = self._write_one()
