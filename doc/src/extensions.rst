@@ -317,6 +317,10 @@ constructor or in the hub dictionary under ``opt_kwargs`` as the
 ``rho_setter`` entry. (The function name is ultimately passed to the
 ``phabase`` constructor.)
 
+The function is called once per scenario, and must return the same rho for
+a variable in every scenario through that variable's tree node (see
+:ref:`rho_setting`).
+
 There is an example of the function in the sizes example (``_rho_setter``).
 
 SepRho
