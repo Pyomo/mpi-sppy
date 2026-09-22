@@ -738,7 +738,8 @@ def load_checkpoint(opt, ckpt_dir):
 def spoke_incumbent_state(opt, cylinder, ordinal, best_inner_bound=None,
                           class_count=None):
     """The dict written by ``write_spoke_incumbent``, or None if there is
-    nothing to write yet (no scenario has an incumbent cached)."""
+    nothing to write yet. ``_cache_best_solution`` caches every scenario at
+    once, so one scenario without a cache means none has one."""
     solutions = {}
     for sname, s in opt.local_scenarios.items():
         cache = s._mpisppy_data.best_solution_cache
@@ -885,10 +886,7 @@ def restore_spoke_incumbent(opt, state):
         for var in s.component_data_objects(pyo.Var):
             if var.name not in by_name:
                 continue
-            # ComponentMap keys on id(); write the same (var, value) pair
-            # shape _cache_best_solution builds so send_best_xhat and
-            # load_best_solution both read it unchanged.
-            cache._dict[id(var)] = (var, by_name[var.name])
+            cache[var] = by_name[var.name]
             found += 1
         if found != len(by_name):
             missing = set(by_name) - {

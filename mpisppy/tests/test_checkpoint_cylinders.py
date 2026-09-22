@@ -426,6 +426,21 @@ class TestAFailedSpokeWriteIsNotRetriedEveryPass(unittest.TestCase):
                              msg="a new incumbent was not tried after an "
                                  "earlier write failed")
 
+    def test_a_nan_incumbent_is_not_retried_either(self):
+        """NaN != NaN, but ``in`` checks identity first, and a NaN incumbent
+        stays the same object: update_best_solution_if_improving never
+        replaces it, since every comparison with it is False."""
+        from mpisppy.extensions import checkpointer as mod
+        ext = self._checkpointer()
+        ext.opt.best_solution_obj_val = float("nan")
+        writer = mock.Mock(side_effect=ValueError("no finite objective"))
+        with mock.patch.object(mod.ckpt, "write_spoke_incumbent", writer), \
+             mock.patch.object(mod, "global_toc") as toc:
+            for _ in range(50):
+                ext._spoke_checkpoint()
+        self.assertEqual(writer.call_count, 1)
+        self.assertEqual(toc.call_count, 1)
+
 
 class TestEverySpokeGivenTheCheckpointerDrivesIt(unittest.TestCase):
     """cfg_vanilla attaches the Checkpointer in one place, and the spokes that
@@ -461,12 +476,17 @@ class TestEverySpokeGivenTheCheckpointerDrivesIt(unittest.TestCase):
     def test_the_foundation_still_builds_exactly_these(self):
         """If a spoke is added to _Xhat_Eval_spoke_foundation it gets a
         Checkpointer, so it has to appear above and drive the hooks."""
+        import ast
         import inspect
         from mpisppy.utils import cfg_vanilla
-        source = inspect.getsource(cfg_vanilla)
-        builders = source.count("_Xhat_Eval_spoke_foundation(")
+        tree = ast.parse(inspect.getsource(cfg_vanilla))
+        builders = sum(
+            1 for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "_Xhat_Eval_spoke_foundation")
         self.assertEqual(
-            builders - 1, len(self.SPOKES),      # -1 for the definition
+            builders, len(self.SPOKES),
             msg="the number of spokes built through the foundation that "
                 "attaches the Checkpointer changed; add it to SPOKES here "
                 "and make its loop drive the hooks")
