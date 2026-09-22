@@ -958,6 +958,71 @@ The limitation carries over unchanged.  A variable whose reduced cost has the
 sign that selects a missing bound contributes $-\infty$, so finite bounds are
 needed exactly where Section~\ref{sec:practical} says they are.
 
+\section{A candidate defect in Pyomo's legacy Gurobi interface}
+\label{sec:pyomoissue}
+
+Remark~\ref{rem:pyomo} is worth separating from the rest of
+Appendix~\ref{sec:gurobi}, because unlike everything else in this note it is a
+claim about someone else's code that we have not reported upstream.  This
+appendix states it in the form an issue would take, and records what has and
+has not been established.  It is written to be deleted once the question is
+settled one way or the other.
+
+\paragraph{The observation.}
+In \texttt{pyomo/solvers/plugins/solvers/gurobi\_direct.py}, the results object
+is populated from the solved model.  When the model has no binary and no
+integer variables, both \texttt{problem.upper\_bound} and
+\texttt{problem.lower\_bound} are assigned \texttt{ObjVal}.  \texttt{ObjBound}
+is read only in the two mixed-integer branches that follow.  Gurobi does
+populate \texttt{ObjBound} for a continuous model --- Remark~\ref{rem:gurobi}
+reads it from one --- so a number the solver computed, and the only one of the
+two that is a bound on the optimal value, is discarded at the interface.
+
+\paragraph{Why it matters.}
+For a minimisation the surviving number lies above the optimum rather than
+below it, so a consumer treating \texttt{lower\_bound} as a dual bound is
+handed an inner bound.  The discrepancy is at the level of the solver's
+tolerances, $4.1\mathrm{e}{-10}$ against $1.5\mathrm{e}{-10}$ in
+Remark~\ref{rem:pyomo}, and it will pass unnoticed in most uses.  It does not
+pass unnoticed in this one: \texttt{SPOpt.solve\_one} takes each subproblem's
+\texttt{outer\_bound} from exactly this field, and \texttt{SPOpt.Ebound} sums
+those into the quantity Proposition~\ref{prop:agg} certifies.  A bound
+assembled from values that are individually on the wrong side of their own
+subproblem optimum is not the quantity that proposition is about.
+
+\paragraph{What the convention appears to be.}
+The same shape appears in the sibling interfaces, so this is a convention
+rather than an oversight in one file.  The legacy CPLEX interface assigns the
+objective value to both bounds under the same ``no binary or integer
+variables'' test, and the legacy Xpress interface assigns \texttt{lpobjval} to
+both on its continuous path.  The convention is defensible on its own terms:
+for a continuous convex problem solved to optimality the primal and dual values
+coincide \emph{in exact arithmetic}, so reporting one number twice records
+that.  The objection is that it is exactly the identification this note spends
+Section~\ref{sec:setting} declining to make, and that for Gurobi, unlike
+possibly for the other two, a distinct and more conservative number was
+available and was dropped.
+
+\paragraph{The suggested change.}
+In the continuous branch, read \texttt{ObjBound} into \texttt{lower\_bound} for
+a minimisation and into \texttt{upper\_bound} for a maximisation, keeping
+\texttt{ObjVal} on the other side, and fall back to \texttt{ObjVal} when the
+attribute is unavailable.  That makes the continuous branch agree with the
+mixed-integer branches directly below it, and with the newer interfaces under
+\texttt{pyomo/contrib/solver/solvers/}, which assign \texttt{ObjBound}
+unconditionally.  The change is conservative in the sense that it can only
+move a reported lower bound down.
+
+\paragraph{What has not been established.}
+Three things.  The measurements were made against a development checkout
+(\texttt{6.9.4-27-ge173cb54b}), not a release, although the block in question
+is of long standing --- it was already in this form when it was last
+restructured in 2021.  Whether CPLEX and Xpress expose an analogous
+continuous-model bound attribute, and so whether the same change applies to
+them, was not checked.  And no claim is made that any released mpi-sppy result
+is wrong: the effect is bounded by the solver's tolerances, which is a
+different statement from the effect being zero.
+
 \begin{thebibliography}{9}
 
 \bibitem{frankwolfe1956}
