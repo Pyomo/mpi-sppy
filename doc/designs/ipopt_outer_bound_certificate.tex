@@ -1014,14 +1014,37 @@ unconditionally.  The change is conservative in the sense that it can only
 move a reported lower bound down.
 
 \paragraph{What has not been established.}
-Three things.  The measurements were made against a development checkout
-(\texttt{6.9.4-27-ge173cb54b}), not a release, although the block in question
-is of long standing --- it was already in this form when it was last
-restructured in 2021.  Whether CPLEX and Xpress expose an analogous
-continuous-model bound attribute, and so whether the same change applies to
-them, was not checked.  And no claim is made that any released mpi-sppy result
-is wrong: the effect is bounded by the solver's tolerances, which is a
-different statement from the effect being zero.
+Two things.  Whether CPLEX and Xpress expose an analogous continuous-model
+bound attribute, and so whether the same change applies to them, was not
+checked.  And no claim is made that any released mpi-sppy result is wrong: the
+effect is bounded by the solver's tolerances, which is a different statement
+from the effect being zero.
+
+\begin{remark}[Reproduced on a release]\label{rem:release}
+Remark~\ref{rem:pyomo} was measured against a development checkout, so the
+same LP was run again under Pyomo 6.9.4 installed from PyPI into a clean
+environment, with \texttt{gurobipy} 13.0.3, \texttt{Method} $=2$ and
+\texttt{Crossover} $=0$.
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+interface & reported bound & which attribute \\
+\midrule
+\texttt{gurobi\_direct} (legacy)     & $13.000000000409$ & \texttt{ObjVal} \\
+\texttt{gurobi\_persistent} (legacy) & $13.000000000409$ & \texttt{ObjVal} \\
+\texttt{contrib} \texttt{gurobi\_direct}     & $12.999999999850$ & \texttt{ObjBound} \\
+\texttt{contrib} \texttt{gurobi\_persistent} & $12.999999999850$ & \texttt{ObjBound} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The behaviour is therefore not an artefact of a development branch.  The
+released file carries the same continuous-model branch, and the two newer
+interfaces report the dual bound on the same model, from which the attribute
+is plainly available.  The block is also of long standing: it was already in
+this form when it was last restructured in 2021.
+\end{remark}
 
 \begin{thebibliography}{9}
 
