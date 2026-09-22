@@ -158,8 +158,18 @@ examples/**/*_full_solution/
 examples/**/*_pickles/
 examples/**/*_cyl_nonants.npy
 
-# LaTeX build products under doc/slides (the .tex and the built .pdf are
-# committed; everything else pdflatex/biber leaves behind is not)
+# LaTeX build products under doc/slides and doc/designs (the .tex and the
+# built .pdf are committed; everything else pdflatex/biber leaves behind is not)
+doc/designs/**/*.aux
+doc/designs/**/*.bbl
+doc/designs/**/*.bcf
+doc/designs/**/*.blg
+doc/designs/**/*.fdb_latexmk
+doc/designs/**/*.fls
+doc/designs/**/*.out
+doc/designs/**/*.run.xml
+doc/designs/**/*.synctex.gz
+doc/designs/**/*.toc
 doc/slides/**/*.aux
 doc/slides/**/*.bbl
 doc/slides/**/*.bcf

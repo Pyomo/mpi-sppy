@@ -34,6 +34,150 @@ hedging algorithm for stochastic mixed-integer programs` by Gade et al
 [gade2016]_. It takes W values from the hub and uses them to compute a bound.
 
 
+.. _ipopt-outer-bound-spoke:
+
+ipopt_outer_bound
+^^^^^^^^^^^^^^^^^
+
+An outer bound for problems whose scenario subproblems are **convex NLPs solved
+with Ipopt**, enabled with ``--ipopt-outer-bound``.
+
+The Lagrangian spoke gets its bound from the solver's dual bound. Ipopt is not a
+branch-and-bound solver and reports none, so on a convex NLP that spoke produces
+nothing usable. This one computes the bound itself, from the subproblem's own
+duals.
+
+This spoke does not simply report the solved objective value. That value is
+measured *at a point*, hence an inner bound for a minimization -- the wrong
+direction. The spoke instead computes a Lagrangian weak-duality bound, corrected
+by a tangent-plane underestimator minimized in closed form over the variable box.
+The result is valid for *any* multipliers, so no assumption that Ipopt converged
+is needed: a truncated or sloppy solve gives a loose bound rather than a wrong
+bound. At an exact KKT point the correction vanishes and the bound equals the
+subproblem optimum.
+
+Cost is one solve per scenario per iteration, the same as the Lagrangian spoke.
+
+.. warning::
+   **Convexity is assumed and mostly cannot be checked.** If the objective is
+   non-convex, or an inequality is non-convex *in canonical form*, the bound is
+   simply wrong rather than merely loose.
+
+   Canonical form matters, and it is easy to get backwards. Every inequality is
+   rewritten as ``g(v) <= 0``, which negates the body of a ``>=`` row:
+
+   ==========================  ====================  ==========================
+   as written                  canonical ``g``       requirement on the body
+   ==========================  ====================  ==========================
+   ``body <= upper``           ``body - upper``      convex
+   ``body >= lower``           ``lower - body``      **concave**
+   ``lo <= body <= up``        both of the above     affine
+   ``body == rhs``             ``body - rhs``        affine
+   ==========================  ====================  ==========================
+
+   So the theorem applies to ``x**2 <= 4`` but not to ``x**2 >= 1``, even though
+   both are written with a convex body -- and the feasible set of the latter is
+   not convex at all. Getting this wrong yields an outer bound that can exceed
+   the true optimum.
+
+   What *is* checked, as a hard error at setup: discrete variables, nonlinear
+   equality constraints, nonlinear two-sided (ranged) constraints, a
+   maximization objective, a solver that is not Ipopt, a ``dual`` Suffix
+   the scenario creator already attached in a direction that does not import
+   (the certificate needs the solver's duals back, so ``Suffix.IMPORT`` or
+   ``Suffix.IMPORT_EXPORT`` is required), and an expression Pyomo's
+   ``differentiate`` has no rule for. The affine cases are decidable, so
+   they are enforced; convexity of a one-sided nonlinear body is not, so
+   convexity remains a user assertion.
+
+   That last one is worth expanding, because it refuses models that are
+   perfectly convex. The certificate differentiates the objective and the
+   constraint bodies, so an expression ``differentiate`` cannot handle means
+   no bound is available for that scenario on any iteration -- and because
+   ``Ebound`` is all-or-nothing, one such scenario leaves the whole ``N``
+   column empty for the run. Today the gap is ``cosh``, ``sinh``, ``tanh``,
+   ``ceil``, ``floor`` and ``Expr_if``; the error names the one it found.
+   Convexity is not the issue and asserting it does not help -- ``cosh`` is
+   convex and unsupported alike -- so the expression has to be rewritten in
+   terms ``differentiate`` knows, or this spoke left off the run.
+
+Two things determine whether the bound is any good:
+
+**Variable bounds.** The certificate minimizes over the box of variable bounds,
+so its looseness is roughly ``sum_i |d_i phi| * (width of the box in the
+descending direction)``. Tight bounds give a tight bound; enormous ones give a
+valid but useless number. ``fbbt`` runs first to recover bounds implied by the
+constraints. A variable still unbounded afterwards produces a warning at setup,
+and the spoke reports nothing on iterations where that variable's gradient
+component is nonzero -- it stays quiet rather than sending a wrong number.
+
+**Failed solves.** This spoke is an optional source of a bound, so losing a
+solve means one thing: no bound for that iteration. Nothing about a subproblem
+solve ends the run -- not a solution that fails to load, and not a solver that
+raises outright. The solver's own status and termination condition are printed
+for the scenario that failed, and a once-per-run warning names the rank and the
+exception. Because ``Ebound`` is all-or-nothing, one failure empties the ``N``
+column for that iteration; the run continues and the next iteration tries
+again.
+
+**Solver options.** Unlike every other spoke, this one does **not** inherit the
+global ``--solver-options``. Ipopt hard-fails on an unrecognized keyword rather
+than ignoring it, so a perfectly ordinary run (a MIP solver and its options for
+the hub, this spoke attached alongside) would otherwise kill the spoke on its
+first solve. Pass Ipopt settings through ``--ipopt-outer-bound-solver-options``.
+
+The hub and the other spokes keep whatever ``--solver-name`` selects; only this
+spoke is pinned to Ipopt. The flag ``--ipopt-outer-bound-solver-name`` itself
+defaults to ``None``, like every other per-spoke solver flag; the pin to
+``ipopt`` is applied afterwards by the spoke factory when the flag was left
+unset, so leaving it alone and passing ``ipopt`` explicitly come to the same
+thing. Note that this routing lets Ipopt coexist with a MIP solver on a
+*convex* model -- it does not let it certify a non-convex one. If the model has
+integer variables this spoke is inapplicable no matter what anything else runs.
+
+**An inexact or ill-conditioned solve is safe.** The certificate assumes nothing
+about the accuracy of the solve. The model is convex by assumption, so it has no
+non-global local minima, and Ipopt returning a sub-optimal answer can only mean
+it stopped short of converging -- an inexact point with inexact multipliers, and
+the bound holds for any point and any ``lam >= 0``. The point need not even lie
+in the box: the minimization runs over the box while the point only has to be
+somewhere the objective is convex and differentiable, which is what makes the
+certificate cover the slightly-out-of-bounds iterate ``bound_relax_factor``
+can produce. Ill-conditioning does not enter either:
+the certificate evaluates the objective and one gradient, and inverts nothing, so
+there is no linear solve for a condition number to amplify. What both cost is
+tightness. The looseness term grows as the point moves away from optimal, so a
+badly conditioned subproblem reports a weak bound, and the hub keeps the best
+outer bound it has seen and ignores it.
+
+``--ipopt-outer-bound-cushion`` (default ``1e-9``) subtracts a small relative
+amount, ``q - eps*(1+|q|)``, from the reported bound. This is last-bit hygiene
+against floating point, not a proof-carrying margin; pass ``0`` to disable it.
+
+The one case worth raising it for is a badly *scaled* model. The bound is summed
+as ``f + lam^T g + mu^T h``, so its rounding error tracks the size of those terms,
+while the cushion tracks the size of the answer. Multipliers of order ``1e8``
+against an objective of order one put the error floor near ``1e-8`` while the
+default cushion is ``1e-9``. Rescaling the offending constraint rows is the better
+fix; raising the cushion is the cheap one. A solve that diverges outright produces
+no number at all -- a non-finite result is rejected and the spoke stays quiet.
+
+Maximization is not supported and raises at setup.
+
+.. note::
+   Ipopt builds obtained from the IDAES ``idaes-ext`` distribution (the usual way
+   to get one with good linear solvers, and what mpi-sppy's CI installs) link the
+   Harwell Subroutine Library and **default to the** ``ma27`` **linear solver**
+   rather than to MUMPS. That is worth knowing because results can differ
+   slightly between them, and because HSL asks that its use be acknowledged:
+
+      HSL, a collection of Fortran codes for large-scale scientific computation.
+      See https://www.hsl.rl.ac.uk/
+
+   Pass ``--ipopt-outer-bound-solver-options "linear_solver=mumps"`` to choose
+   otherwise.
+
+
 Subgradient
 ^^^^^^^^^^^
 

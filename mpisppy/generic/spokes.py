@@ -59,6 +59,15 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
             vanilla.add_gapper(lagrangian_spoke, cfg, "lagrangian")
         lagrangian_spoke["rank_ratio"] = cfg.lagrangian_rank_ratio
 
+    # Certified outer bound for convex NLP subproblems solved with Ipopt
+    if cfg.ipopt_outer_bound:
+        ipopt_outer_bound_spoke = vanilla.ipopt_outer_bound_spoke(*beans,
+                                                scenario_creator_kwargs=scenario_creator_kwargs,
+                                                rho_setter=rho_setter,
+                                                all_nodenames=all_nodenames,
+                                                )
+        ipopt_outer_bound_spoke["rank_ratio"] = cfg.ipopt_outer_bound_rank_ratio
+
     # dual ph spoke
     if cfg.ph_dual:
         ph_dual_spoke = vanilla.ph_dual_spoke(*beans,
@@ -174,6 +183,8 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
         made["--fwph"] = fw_spoke
     if cfg.lagrangian:
         made["--lagrangian"] = lagrangian_spoke
+    if cfg.ipopt_outer_bound:
+        made["--ipopt-outer-bound"] = ipopt_outer_bound_spoke
     if cfg.ph_dual:
         made["--ph-dual"] = ph_dual_spoke
     if cfg.relaxed_ph:

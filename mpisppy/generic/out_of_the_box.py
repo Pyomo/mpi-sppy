@@ -174,7 +174,7 @@ class Decision:
 SPOKE_FLAGS = frozenset({
     "--lagrangian", "--fwph", "--ph-dual", "--ph-xfeas-spoke", "--relaxed-ph",
     "--subgradient", "--reduced-costs", "--xhatshuffle", "--xhatxbar",
-    "--xhatlshaped",
+    "--xhatlshaped", "--ipopt-outer-bound",
 })
 # The order build_spoke_list appends spokes in, which is the order
 # WheelSpinner sees them. apportion_ranks breaks largest-remainder ties by
@@ -183,9 +183,11 @@ SPOKE_FLAGS = frozenset({
 # user that a cylinder got ranks that actually went to another. spokes.py
 # assembles from this tuple so there is one declaration of the order.
 SPOKE_BUILD_ORDER = (
-    "--fwph", "--lagrangian", "--ph-dual", "--relaxed-ph", "--subgradient",
-    "--xhatshuffle", "--xhatxbar", "--reduced-costs", "--xhatlshaped",
-    "--ph-xfeas-spoke",
+    # --ipopt-outer-bound sits where build_spoke_list appended it before the
+    # order moved here: right after --lagrangian.
+    "--fwph", "--lagrangian", "--ipopt-outer-bound", "--ph-dual",
+    "--relaxed-ph", "--subgradient", "--xhatshuffle", "--xhatxbar",
+    "--reduced-costs", "--xhatlshaped", "--ph-xfeas-spoke",
 )
 
 # A hub flag selects WHICH hub runs; it does not add a cylinder.
