@@ -119,12 +119,14 @@ NON_STRUCTURAL_CFG_KEYS = frozenset({
     "rc_debug", "rc_verbose", "tee_EF", "hub_only_solver_logs",
     "inspect_buffers_on_shutdown", "fwph_save_file",
     "write_scenario_lp_mps_files_dir", "config_file",
-    # Which cylinders run. The hub's primal trajectory does not depend on the
-    # spokes, so a checkpoint stays valid across a different spoke set.
-    # cross_scenario_cuts is not here: turning it on also gives the hub an
-    # extension that adds cuts to the hub's own models.
+    # Which cylinders run. A different spoke set can change where the hub
+    # goes (with --ph-primal-hub the dual spokes feed it W), but it leaves
+    # nothing in the hub's models, so the checkpoint still describes the same
+    # problem. reduced_costs and cross_scenario_cuts are not here: each also
+    # gives the hub an extension that changes the hub's own models (fixing
+    # variables, adding cuts), and a resume without it would keep them.
     "lagrangian", "xhatshuffle", "xhatxbar", "xhatlshaped", "fwph",
-    "subgradient", "ph_primal_hub", "ph_dual", "relaxed_ph", "reduced_costs",
+    "subgradient", "ph_primal_hub", "ph_dual", "relaxed_ph",
     "ph_xfeas_spoke", "lagranger", "xhatlooper", "xhatspecific",
     "slammax", "slammin",
     # How the run was set up, not what problem it is. out-of-the-box prints an

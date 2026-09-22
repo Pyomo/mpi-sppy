@@ -173,8 +173,10 @@ may legitimately change:
   a mipgap on day two continues the same problem rather than redefining it;
 * **display, tracking and output destinations**, and the checkpoint options
   themselves;
-* **which cylinders run.** The hub's primal trajectory does not depend on the
-  spokes.
+* **which cylinders run**, except ``--reduced-costs`` and
+  ``--cross-scenario-cuts``, which also change the hub's own models. With
+  ``--ph-primal-hub`` a different set of dual spokes changes where the hub
+  goes, but not what problem it is solving.
 
 Everything else must match -- including options your own model module
 registers. That is deliberate: checking by default is what stops a farmer

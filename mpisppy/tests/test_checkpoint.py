@@ -1291,11 +1291,14 @@ class TestStructuralFingerprint(unittest.TestCase):
                     f"differing only in {key} is refused")
                 self.assertNotIn(key, self._folded_cfg(**{key: value}))
 
-    def test_cross_scenario_cuts_stays_structural(self):
-        """Unlike the other spoke flags, it also adds cuts to the hub's
-        models, so the hub's trajectory depends on it."""
-        self.assertFalse(
-            checkpointing._is_non_structural("cross_scenario_cuts"))
+    def test_spoke_flags_that_change_the_hub_models_stay_structural(self):
+        """Unlike the other spoke flags, each of these also attaches a hub
+        extension that changes the hub's own models -- reduced_costs fixes
+        variables, cross_scenario_cuts adds cuts -- and a resume without it
+        would keep what it did."""
+        for key in ("reduced_costs", "cross_scenario_cuts"):
+            with self.subTest(key=key):
+                self.assertFalse(checkpointing._is_non_structural(key))
 
     def _folded_cfg(self, **overrides):
         """What cfg_vanilla actually hands the fingerprint."""
