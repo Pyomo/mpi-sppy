@@ -819,6 +819,145 @@ multipliers held in mutable parameters --- either of which leaves every
 hypothesis of Theorem~\ref{thm:main} intact.  Cheapening the gradient is safe;
 approximating it is not.
 
+\section{Does a barrier solve in Gurobi give a bound?}\label{sec:gurobi}
+
+Section~\ref{sec:setting} rules out reading a bound off Ipopt's returned value,
+and the natural follow-up is whether a solver that runs its own primal--dual
+interior point method --- Gurobi, say, on the convex relaxation --- is in a
+different position.  It is in a better one, but not a different one.  The
+number it reports is correct to within its tolerances, and is not certified.
+
+\subsection{Why it is not strictly a bound}
+
+Gurobi's barrier carries a dual iterate alongside the primal one, and
+terminates on the relative primal--dual gap, \texttt{BarConvTol}, together with
+primal and dual residual tests, \texttt{FeasibilityTol} and
+\texttt{OptimalityTol}.  Weak duality, Lemma~\ref{lem:weak} again, makes the
+dual objective a lower bound only when the dual iterate is exactly feasible,
+and it is feasible only to within those tolerances and in floating point.  The
+residual that Section~\ref{sec:reducedcost} calls $r$ in \eqref{eq:resid} is
+small here rather than absent, so the same objection applies, scaled down.
+
+Crossover, on by default for linear programs, does not close this.  It returns
+a basic solution, but ``optimal'' still means dual feasible to within
+\texttt{OptimalityTol} in floating point.  For quadratically constrained models
+there is no crossover at all, so what is available is the barrier's own
+tolerance-level answer.  Nor is the mixed-integer case different in kind:
+\texttt{ObjBound} is assembled from node relaxations solved to the same
+tolerances, and the arithmetic is not directed-rounding safe.
+
+\subsection{Why it is nevertheless better than Ipopt's returned value}
+
+Two differences matter.  First, a barrier solve that terminates reports a
+\emph{gap}, not merely a value: the dual iterate is maintained throughout, and
+the stopping test is applied to the primal--dual gap directly.  Ipopt reports
+the objective at the point it stopped at, with termination tested on a scaled
+KKT residual, which is how the Hilbert QP of Remark~\ref{rem:measured} comes
+back labelled \texttt{optimal} while being wrong in the third significant
+digit.  Second, the tolerances are tighter and are applied unscaled.  On a
+reasonable model the reported bound is wrong, if at all, at the level of those
+tolerances rather than at the level of the objective.
+
+\begin{remark}[Measured, on Gurobi 13.0.2]\label{rem:gurobi}
+Defaults as reported by the library: \texttt{BarConvTol} $=10^{-8}$,
+\texttt{FeasibilityTol} $=$ \texttt{OptimalityTol} $=10^{-6}$,
+\texttt{BarQCPConvTol} $=10^{-6}$, \texttt{Crossover} automatic.  Three
+measurements on one machine, each on a problem whose optimum is known
+analytically.
+
+\begin{center}
+\begin{tabular}{llll}
+\toprule
+model & exact optimum & reported value & \texttt{ObjBound} \\
+\midrule
+LP, barrier $+$ crossover & $13$        & $13.0$              & $13.0$ \\
+LP, barrier, no crossover & $13$        & $13.000000000409$   & $12.999999999850$ \\
+SOCP (no crossover available) & $\sqrt2$ & $1.414213571461$    & $1.414213548883$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+In both barrier rows the reported value lies \emph{above} the optimum and
+\texttt{ObjBound} lies below it, by around $4\mathrm{e}{-10}$ and
+$2\mathrm{e}{-8}$ respectively --- the tolerance level, not the objective
+level, and the opposite of the picture in Remark~\ref{rem:measured}.  The
+quadratically constrained model exposed no basis, confirming that no crossover
+was performed.  Three instances establish nothing in general; they are quoted
+to place the magnitude.
+\end{remark}
+
+\subsection{Whether the bound survives the modelling layer}
+
+A bound the solver computed is of no use if the interface discards it, and for
+continuous models two of Pyomo's three Gurobi interfaces do exactly that.
+
+\begin{remark}[Measured, on Pyomo 6.9.5.dev0]\label{rem:pyomo}
+The LP of Remark~\ref{rem:gurobi} was solved through each interface with
+\texttt{Method} $=2$ and \texttt{Crossover} $=0$, and
+\texttt{results.problem.lower\_bound} read off.
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+interface & \texttt{lower\_bound} & which attribute \\
+\midrule
+\texttt{gurobi} (LP file)           & $12.999999999850$ & \texttt{ObjBound} \\
+\texttt{gurobi\_direct} (legacy)    & $13.000000000409$ & \texttt{ObjVal} \\
+\texttt{gurobi\_persistent} (legacy)& $13.000000000409$ & \texttt{ObjVal} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The mechanism is in \texttt{pyomo/solvers/plugins/solvers/gurobi\_direct.py}:
+when a model has no binary or integer variables, the interface assigns
+\texttt{ObjVal} to \emph{both} \texttt{upper\_bound} and
+\texttt{lower\_bound}, and reads \texttt{ObjBound} only in the
+mixed-integer branches.  So for a continuous model the dual bound Gurobi
+computed is present on the model object and discarded before it reaches the
+results object, and the number carried forward as a lower bound sits
+\emph{above} the optimum --- $4.1\mathrm{e}{-10}$ above, where the discarded
+\texttt{ObjBound} sits $1.5\mathrm{e}{-10}$ below.  That is
+Section~\ref{sec:setting}'s objection again, at tolerance magnitude.  The
+mixed-integer path is unaffected, and the newer interfaces under
+\texttt{pyomo/contrib/solver/solvers/} assign \texttt{ObjBound}
+unconditionally, falling back to $\mp\infty$ when the attribute is missing,
+which is the safe direction.
+\end{remark}
+
+This is not a hypothetical route into mpi-sppy.  \texttt{SPOpt.solve\_one}
+takes each subproblem's \texttt{outer\_bound} from
+\texttt{results.Problem[0].Lower\_bound} for a minimisation, and
+\texttt{SPOpt.Ebound} --- the same sum as Proposition~\ref{prop:agg} --- adds
+those up.  A Lagrangian spoke whose scenario subproblems are continuous and
+which is driven through the legacy persistent interface therefore aggregates
+primal objective values labelled as dual bounds.  The error is at the level of
+Remark~\ref{rem:pyomo} rather than of Remark~\ref{rem:measured}, and it is
+bounded by the solver's tolerances rather than by nothing at all, which is why
+it has gone unnoticed; it is nonetheless the wrong quantity.  The spoke
+documented in this note is not affected, because it never reads a bound off
+the solver.
+
+\subsection{Making it rigorous}
+
+Theorem~\ref{thm:main} does not care which solver produced its inputs.  It asks
+for convexity, a box, a point $\vhat$ and multipliers $\lambda \ge 0$, $\mu$,
+and Gurobi supplies the last two for a continuous model as readily as Ipopt
+does.  Specialising to a linear program recovers the bound already written down
+in Section~\ref{sec:reducedcost},
+\[
+  b^{\top} y \;+\; \sum_j \; \min_{x_j \in [l_j, u_j]} \,
+      \bigl( c - A^{\top} y \bigr)_j \, x_j ,
+\]
+valid for \emph{any} $y$, which is the safe bound of Neumaier and Shcherbina
+\cite{neumaier2004}.  Their treatment adds directed rounding, so that the
+floating-point evaluation is itself rigorous --- the gap
+Remark~\ref{rem:rounding} leaves open here, and the reason their construction
+is used to certify results in exact mixed-integer programming.
+
+The limitation carries over unchanged.  A variable whose reduced cost has the
+sign that selects a missing bound contributes $-\infty$, so finite bounds are
+needed exactly where Section~\ref{sec:practical} says they are.
+
 \begin{thebibliography}{9}
 
 \bibitem{frankwolfe1956}
@@ -838,6 +977,11 @@ Woodruff, D.L.:
 \newblock Obtaining lower bounds from the progressive hedging algorithm for
 stochastic mixed-integer programs.
 \newblock \emph{Mathematical Programming} \textbf{157}(1), 47--67 (2016).
+
+\bibitem{neumaier2004}
+Neumaier, A. and Shcherbina, O.:
+\newblock Safe bounds in linear and mixed-integer linear programming.
+\newblock \emph{Mathematical Programming} \textbf{99}(2), 283--296 (2004).
 
 \bibitem{boland2018}
 Boland, N., Christiansen, J., Dandurand, B., Eberhard, A., Linderoth, J.,
