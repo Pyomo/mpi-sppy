@@ -7,6 +7,27 @@ The penalty parameter rho (:math:`\rho`) is central to Progressive Hedging (PH)
 and related decomposition methods. mpi-sppy provides several ways to set and
 dynamically update rho values. This page consolidates all rho-related options.
 
+Requirement
+-----------
+
+PH requires the same rho for a given nonanticipative variable in every
+scenario that passes through that variable's tree node. mpi-sppy does not
+check this (except within a proper bundle), and a run that breaks it is
+ill-defined: PH's dual weights no longer sum to zero over the scenarios, which
+is what makes a Lagrangian bound computed from them a bound. See issue #887.
+
+- ``--default-rho``, ``--grad-rho`` and ``--sensi-rho`` always meet it.
+- The norm and primal-dual rho updaters scale every scenario's rho by the
+  same factor, so they keep it if it held before. The ``--dynamic-rho-*``
+  options only decide when ``--sep-rho``, ``--sensi-rho`` or ``--grad-rho``
+  recompute rho, so the method doing the recomputing is what matters.
+- ``--sep-rho`` and ``--coeff-rho`` meet it only if the variable's objective
+  coefficient is the same in every scenario through its node, because each
+  scenario's rho comes from that scenario's own coefficient.
+- A ``_rho_setter`` meets it only if it returns the same value for the
+  variable in every scenario through the node; it is called once per
+  scenario. The same goes for per-scenario rho files (see :doc:`agnostic`).
+
 Default Rho
 -----------
 
@@ -30,12 +51,15 @@ Rho Setter Function
 
 The model module can define a ``_rho_setter`` function that returns
 per-variable rho values. This function is passed to the hub constructor
-and is called during setup. See :ref:`helper_functions` for details.
+and is called during setup, once per scenario, so it must meet the
+`Requirement`_ above. See :ref:`helper_functions` for details.
 
 Separation-based Rho (``--sep-rho``)
 -------------------------------------
 
-Uses the separation between scenario solutions to set rho. Enabled with:
+Uses the separation between scenario solutions to set rho. Each scenario's
+rho is computed from its own objective coefficient; see `Requirement`_.
+Enabled with:
 
 .. code-block:: bash
 
@@ -44,7 +68,8 @@ Uses the separation between scenario solutions to set rho. Enabled with:
 Coefficient-based Rho (``--coeff-rho``)
 ----------------------------------------
 
-Sets rho based on objective function coefficients. Enabled with:
+Sets rho based on objective function coefficients, each scenario from its
+own; see `Requirement`_. Enabled with:
 
 .. code-block:: bash
 
@@ -64,17 +89,6 @@ Sets rho based on sensitivity analysis. Enabled with:
    ``--coeff-rho``), ``--sensi-rho`` will use them as starting points.
    For this reason, ``--sensi-rho`` should typically appear after
    ``--sep-rho`` or ``--coeff-rho`` in the workflow.
-
-Reduced-costs-based Rho (``--reduced-costs-rho``)
---------------------------------------------------
-
-Sets rho based on reduced costs from LP relaxations. Enabled with:
-
-.. code-block:: bash
-
-   --reduced-costs-rho
-
-Like ``--sensi-rho``, this will use existing rho values if available.
 
 Gradient-based Rho (``--grad-rho``)
 ------------------------------------

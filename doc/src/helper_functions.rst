@@ -62,7 +62,7 @@ Optional Functions
 
 These functions are optional and enable additional features:
 
-- ``_rho_setter``: Returns per-variable rho values for PH. See :ref:`rho_setting`.
+- ``_rho_setter``: Returns per-variable rho values for PH. It is called once per scenario and must return the same value for a variable in every scenario through that variable's tree node. See :ref:`rho_setting`.
 - ``id_fix_list_fct``: Identifies variables to fix (used with the ``--fixer`` extension).
 - ``hub_and_spoke_dict_callback``: Allows direct manipulation of hub/spoke dicts before solving. See :ref:`generic_cylinders`.
 - ``custom_writer``: Custom solution output functions. See :ref:`generic_cylinders`.
