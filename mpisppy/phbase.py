@@ -1452,6 +1452,14 @@ class PHBase(mpisppy.spopt.SPOpt):
             restored_bound = self._checkpoint_leaf_state["best_bound_obj_val"]
             if restored_bound is not None:
                 self.best_bound_obj_val = restored_bound
+            # The best outer bound may have come from a spoke (for example a
+            # Lagrangian bound), which best_bound_obj_val never sees. Put it
+            # back where the hub keeps it, or the resumed run reports whatever
+            # the restarted spokes find next, which can be worse.
+            restored_outer = self._checkpoint_leaf_state["best_outer_bound"]
+            if restored_outer is not None and self.spcomm is not None:
+                self.spcomm.BestOuterBound = \
+                    self.spcomm.OuterBoundUpdate(restored_outer)
             # Without this the incumbent objective reads as None, which
             # update_best_solution_if_improving treats as "accept anything" --
             # so the first xhat after a resume, however bad, would replace the
