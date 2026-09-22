@@ -700,6 +700,85 @@ safeguard is loose exactly where the gradient form is loose but correct.  The
 gradient form is at least as tight everywhere, and it needs no estimate of
 $\|r\|_{\infty}$.
 
+\subsection{Dualizing the bounds instead}
+
+A tidier way to use the reported bound multipliers without forfeiting validity
+is to put them into the Lagrangian itself, adding a reduced-cost term to
+\eqref{eq:phi} and keeping the infimum over $B$.  The bound this produces is
+valid, and the question becomes one of tightness only.  It never gains.
+
+\begin{proposition}[Dualizing the bounds is dominated]\label{prop:dualbox}
+Let $z_L, z_U \in \R^{n}_{+}$, with $z_{L,i} = 0$ when $l_i = -\infty$ and
+$z_{U,i} = 0$ when $u_i = +\infty$, and define
+\[
+  \tilde\varphi_s(v) \;=\; \varphi_s(v)
+     \;+\; \sum_{i :\, l_i > -\infty} z_{L,i}\,(l_i - v_i)
+     \;+\; \sum_{i :\, u_i < +\infty} z_{U,i}\,(v_i - u_i).
+\]
+Let $\tilde q_s(\vhat)$ be \eqref{eq:qhat} with $\tilde\varphi_s$ in place of
+$\varphi_s$.  Under the hypotheses of Theorem~\ref{thm:main},
+\begin{enumerate}
+  \item[(i)] $\tilde q_s(\vhat) \le L_s(\W_s)$;
+  \item[(ii)] $\tilde q_s(\vhat) \le \qhat_s(\vhat)$, coordinate by coordinate;
+  \item[(iii)] equality holds in (ii) when $z_L = z_U = 0$, and also at a KKT point
+        of \eqref{eq:sub} taken with its own bound multipliers, where both
+        sides equal $L_s(\W_s)$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+The added terms are affine, so $\tilde\varphi_s$ is convex and differentiable
+wherever $\varphi_s$ is, with
+$\nabla \tilde\varphi_s(\vhat) = \nabla \varphi_s(\vhat) - z_L + z_U$.  On $B$
+each added term is $\le 0$, so $\tilde\varphi_s \le \varphi_s$ there.
+Theorem~\ref{thm:main} applied to $\tilde\varphi_s$ then gives
+$\tilde q_s(\vhat) \le \inf_{B} \tilde\varphi_s \le \inf_{B} \varphi_s
+= q_s(\lambda,\mu) \le L_s(\W_s)$, which is (i).
+
+For (ii), an affine term coincides with its own tangent plane, so for every $t$
+\[
+  \tilde\varphi_s(\vhat) + \nabla \tilde\varphi_s(\vhat)^{\top}(t - \vhat)
+  \;=\;
+  \varphi_s(\vhat) + \nabla \varphi_s(\vhat)^{\top}(t - \vhat)
+  \;+\; \sum_{i} \bigl[\, z_{L,i}(l_i - t_i) + z_{U,i}(t_i - u_i) \,\bigr],
+\]
+the sum running over the finite bounds.  Every bracket is $\le 0$ for
+$t \in B$.  Both sides are separable across coordinates, so minimizing
+coordinate $i$ over $[l_i, u_i]$ gives, in the extended reals, a term of
+$\tilde q_s$ no larger than the corresponding term of $\qhat_s$.
+
+For (iii), the case $z = 0$ is immediate.  At a KKT point with its bound
+multipliers, \eqref{eq:stat} gives $\nabla \tilde\varphi_s(\vhat) = 0$, so the
+correction in $\tilde q_s$ vanishes, and complementarity gives
+$z_{L,i}(l_i - \vhat_i) = z_{U,i}(\vhat_i - u_i) = 0$, so
+$\tilde\varphi_s(\vhat) = \varphi_s(\vhat)$.  Proposition~\ref{prop:kkt} then
+gives $\tilde q_s(\vhat) = \qhat_s(\vhat) = L_s(\W_s)$.
+\end{proof}
+
+The general principle is the familiar one that dualizing a constraint which is
+also kept in the inner minimization can only lower the dual function, so for
+fixed $(\lambda,\mu)$ the best choice of bound multipliers is $z = 0$, which is
+\eqref{eq:phi} as it stands.  The gradient of $\tilde\varphi_s$ at $\vhat$ is
+the residual $r$ of \eqref{eq:resid}, so $\tilde q_s$ is the substitution of
+the previous subsections made rigorous: it is valid with no estimate of
+$\|r\|_{\infty}$ and no finite-diameter requirement on $B$.
+Proposition~\ref{prop:dualbox} shows that the rigour costs tightness and
+returns nothing.
+
+The loss is not merely formal.  At a barrier iterate satisfying the perturbed
+complementarity of Proposition~\ref{prop:collapse}, each finite bound
+contributes $-\tau$ to $\tilde\varphi_s(\vhat)$ before the correction is
+applied.  When the sign of $r_i$ selects the far endpoint, the bracket in the
+proof costs up to $z_i\,(u_i - l_i)$ on top of that.  Worse, the
+unbounded-variable guard fires more often.  Take $l_i$ finite and
+$u_i = +\infty$.  Near convergence
+$\partial_i \varphi_s(\vhat) \approx z_{L,i} > 0$, so \eqref{eq:closed} selects
+the finite endpoint and the term of $\qhat_s$ is finite.  The coefficient in
+$\tilde q_s$ is instead $r_i = \partial_i \varphi_s(\vhat) - z_{L,i}$, a small
+residual of either sign, and whenever $r_i < 0$ the term is $-\infty$.  For
+variables bounded on one side only, $\tilde q_s$ therefore reports ``no bound''
+roughly as often as not, in situations where $\qhat_s$ is finite.
+
 \subsection{Where a saving would actually come from}
 
 The cost the proposal targets is real, and it is not negligible: rebuilding
