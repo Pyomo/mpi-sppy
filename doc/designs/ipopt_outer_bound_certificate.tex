@@ -163,8 +163,8 @@ not by itself certify anything.
 \section{The box underestimator}
 
 \begin{theorem}[Certified bound]\label{thm:main}
-Suppose $\varphi_s$ is convex on an open set containing $B$ and differentiable
-at $\vhat$.  Define
+Let $U$ be an open convex set containing both $B$ and $\vhat$, and suppose
+$\varphi_s$ is convex on $U$ and differentiable at $\vhat$.  Define
 \begin{equation}\label{eq:qhat}
   \qhat_s(\vhat) \;=\; \varphi_s(\vhat)
     \;+\; \sum_{i=1}^{n} \; \inf_{t \in [l_i,u_i]}
@@ -188,24 +188,48 @@ invalid; Section~\ref{sec:practical} says what the implementation does with it.
 \end{theorem}
 
 \begin{proof}
-Convexity and differentiability at $\vhat$ give the gradient inequality
+Write $c_i = \partial_i \varphi_s(\vhat)$ and let $m_i$ denote the $i$-th
+infimum in \eqref{eq:qhat}, so that
+$\qhat_s(\vhat) = \varphi_s(\vhat) + \sum_i m_i$.  There are three steps: a
+tangent-plane inequality on $B$, a coordinatewise lower bound on its linear
+term, and the evaluation of each $m_i$.
+
+\emph{Step 1: the tangent plane lies below $\varphi_s$ on $B$.}  Fix
+$v \in B$.  Both $v$ and $\vhat$ lie in the convex set $U$, so for
+$\theta \in (0,1]$ convexity gives
+$\varphi_s\bigl(\vhat + \theta(v - \vhat)\bigr)
+  \le (1-\theta)\,\varphi_s(\vhat) + \theta\,\varphi_s(v)$, which rearranges to
 \[
-  \varphi_s(v) \;\ge\; \varphi_s(\vhat)
-      + \nabla \varphi_s(\vhat)^{\top} (v - \vhat)
-  \qquad \text{for all } v .
+  \varphi_s(v) - \varphi_s(\vhat) \;\ge\;
+  \frac{\varphi_s\bigl(\vhat + \theta(v - \vhat)\bigr) - \varphi_s(\vhat)}{\theta}.
 \]
-Minimising both sides over $v \in B$ preserves the inequality, and the right-hand
-side is separable across coordinates because $B$ is a box, which yields
-\eqref{eq:qhat}.  Each one-dimensional problem minimises a linear function over
-an interval.  When the endpoint the sign of $\partial_i \varphi_s(\vhat)$ selects
-is finite the infimum is attained there; when it is infinite the infimum is
-$-\infty$.  Either way \eqref{eq:closed} holds, read in the extended reals, and
-the final inequality is Lemma~\ref{lem:weak}.
+Differentiability at $\vhat$ makes the right-hand side converge to
+$\nabla \varphi_s(\vhat)^{\top}(v - \vhat)$ as $\theta \downarrow 0$, so
+\begin{equation}\label{eq:tangent}
+  \varphi_s(v) \;\ge\; \varphi_s(\vhat) + \sum_{i=1}^{n} c_i\,(v_i - \vhat_i)
+  \qquad \text{for every } v \in B .
+\end{equation}
+
+\emph{Step 2: bound the linear term coordinate by coordinate.}  Because $B$ is a
+box, $v \in B$ means $v_i \in [l_i, u_i]$ for each $i$, so
+$c_i (v_i - \vhat_i) \ge m_i$ by the definition of an infimum.  No $m_i$ is
+$+\infty$, so $\sum_i m_i$ is well defined in the extended reals, and summing
+over $i$ in \eqref{eq:tangent} gives $\varphi_s(v) \ge \qhat_s(\vhat)$ for
+every $v \in B$.  Taking the infimum over $v \in B$ yields
+$q_s(\lambda,\mu) \ge \qhat_s(\vhat)$, and Lemma~\ref{lem:weak} supplies
+$q_s(\lambda,\mu) \le L_s(\W_s)$.
+
+\emph{Step 3: the closed form.}  The function $t \mapsto c_i (t - \vhat_i)$ is
+affine.  If $c_i > 0$ it is increasing, so its infimum over $[l_i, u_i]$ is its
+value $c_i(l_i - \vhat_i)$ at $t = l_i$ when $l_i$ is finite, and $-\infty$ when
+$l_i = -\infty$.  If $c_i < 0$ it is decreasing, and the same holds with $u_i$
+in place of $l_i$.  If $c_i = 0$ it is identically zero.  This is
+\eqref{eq:closed}, including the cases in which a term is $-\infty$.
 \end{proof}
 
 \begin{corollary}\label{cor:anypoint}
-$\qhat_s(\vhat) \le L_s(\W_s)$ for \emph{any} $\vhat$ at which $\varphi_s$ is
-differentiable, \emph{any} $\lambda \ge 0$ and \emph{any} $\mu$.  In particular
+$\qhat_s(\vhat) \le L_s(\W_s)$ for \emph{any} $\vhat \in U$ at which
+$\varphi_s$ is differentiable, \emph{any} $\lambda \ge 0$ and \emph{any} $\mu$.  In particular
 $\vhat$ need not be optimal, and need not even be feasible for \eqref{eq:sub}.
 \end{corollary}
 
