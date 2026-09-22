@@ -427,16 +427,16 @@ class TestAFailedSpokeWriteIsNotRetriedEveryPass(unittest.TestCase):
                                  "earlier write failed")
 
     def test_a_nan_incumbent_is_not_retried_either(self):
-        """NaN != NaN, but ``in`` checks identity first, and a NaN incumbent
-        stays the same object: update_best_solution_if_improving never
-        replaces it, since every comparison with it is False."""
+        """NaN != NaN, so an equality test alone makes an unchanged NaN
+        incumbent look new on every pass. A fresh NaN object each pass, so
+        that nothing here rests on identity."""
         from mpisppy.extensions import checkpointer as mod
         ext = self._checkpointer()
-        ext.opt.best_solution_obj_val = float("nan")
         writer = mock.Mock(side_effect=ValueError("no finite objective"))
         with mock.patch.object(mod.ckpt, "write_spoke_incumbent", writer), \
              mock.patch.object(mod, "global_toc") as toc:
             for _ in range(50):
+                ext.opt.best_solution_obj_val = float("nan")
                 ext._spoke_checkpoint()
         self.assertEqual(writer.call_count, 1)
         self.assertEqual(toc.call_count, 1)
