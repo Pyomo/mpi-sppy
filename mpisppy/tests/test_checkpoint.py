@@ -40,7 +40,9 @@ import mpisppy.utils.checkpointing as checkpointing
 import mpisppy.tests.examples.farmer as farmer
 from mpisppy.extensions.checkpointer import Checkpointer
 from mpisppy.extensions.extension import Extension
+from mpisppy.cylinders.hub import PHHub
 from mpisppy.opt.ph import PH
+from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.tests.utils import get_solver
 from mpisppy.utils.config import Config
 
@@ -509,6 +511,43 @@ class TestResumeABFarmer(unittest.TestCase):
         self.assertFalse(
             resumed.update_best_solution_if_improving(-100000.0),
             msg="a worse incumbent was accepted after a resume")
+
+    def _spin_hub(self, options):
+        """A PH hub with no spokes, so the run has a hub to keep bounds on."""
+        extensions = Checkpointer if "checkpoint_dir" in options else None
+        hub_dict = {
+            "hub_class": PHHub,
+            "hub_kwargs": {"options": {"rel_gap": -1, "abs_gap": -1,
+                                       "max_stalled_iters": None}},
+            "opt_class": PH,
+            "opt_kwargs": {
+                "options": options,
+                "all_scenario_names": SCENARIO_NAMES,
+                "scenario_creator": farmer.scenario_creator,
+                "scenario_creator_kwargs": CREATOR_KWARGS,
+                "scenario_denouement": farmer.scenario_denouement,
+                "extensions": extensions,
+            },
+        }
+        wheel = WheelSpinner(hub_dict, [])
+        wheel.spin()
+        return wheel.spcomm
+
+    def test_outer_bound_from_a_spoke_is_restored(self):
+        """A spoke's bound reaches only spcomm.BestOuterBound, not
+        opt.best_bound_obj_val, so the checkpoint has to take it from there."""
+        hub = self._spin_hub(_options(self.STOP, ckpt_dir=self.ckpt_dir))
+        # Better than the trivial bound, which is all PH computes by itself
+        # on farmer; this stands in for what a Lagrangian spoke would send.
+        spoke_bound = -110000.0
+        self.assertLess(hub.opt.trivial_bound, spoke_bound)
+        hub.BestOuterBound = spoke_bound
+        checkpointing.write_checkpoint(hub.opt, self.ckpt_dir, self.STOP)
+
+        resumed = self._spin_hub(_options(self.REMAINING,
+                                          resume_from=self.ckpt_dir))
+        self.assertTrue(resumed.opt._resumed_from_checkpoint)
+        self.assertEqual(resumed.BestOuterBound, spoke_bound)
 
     def test_writes_one_generation_and_a_manifest(self):
         """Retention is exactly one published generation."""

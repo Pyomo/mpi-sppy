@@ -27,6 +27,7 @@ alongside as a small pickle of plain data.
 """
 
 import json
+import math
 import os
 import pickle
 import re
@@ -467,6 +468,7 @@ def _stage_and_publish(opt, ckpt_dir, hub_dir, generation, backend):
             getattr(opt, "best_bound_obj_val", None)),
         "best_solution_obj_val": _as_float_or_none(
             getattr(opt, "best_solution_obj_val", None)),
+        "best_outer_bound": _hub_best_outer_bound(opt),
     }
     _atomic_write_bytes(
         os.path.join(staging_dir, _leaf_filename(rank)),
@@ -584,6 +586,19 @@ def _write_models(opt, staging_dir, rank, backend):
 
 def _as_float_or_none(value):
     return None if value is None else float(value)
+
+
+def _hub_best_outer_bound(opt):
+    """The hub's best outer bound from any source, or None if it has none.
+
+    ``opt.best_bound_obj_val`` holds only the bounds the hub computed itself;
+    a bound sent by a spoke, such as a Lagrangian bound, lives on
+    ``opt.spcomm.BestOuterBound`` and nowhere else.
+    """
+    bound = getattr(getattr(opt, "spcomm", None), "BestOuterBound", None)
+    if bound is None or not math.isfinite(bound):
+        return None
+    return float(bound)
 
 
 def _publish_manifest(ckpt_dir, manifest):
