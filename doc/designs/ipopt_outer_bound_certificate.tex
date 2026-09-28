@@ -664,9 +664,11 @@ Let $\vhat$ satisfy the perturbed complementarity conditions of the barrier
 subproblem with parameter $\tau > 0$, that is
 $z_{L,i}(\vhat_i - l_i) = \tau$ for every finite $l_i$ and
 $z_{U,i}(u_i - \vhat_i) = \tau$ for every finite $u_i$, with $z_{L,i} = 0$ when
-$l_i = -\infty$ and $z_{U,i} = 0$ when $u_i = +\infty$.  Substitute
-$d_i = z_{L,i} - z_{U,i}$ for $\partial_i \varphi_s(\vhat)$ in
-\eqref{eq:closed}.  Then every term of the resulting sum lies in
+$l_i = -\infty$ and $z_{U,i} = 0$ when $u_i = +\infty$.  Write
+$d_i = z_{L,i} - z_{U,i}$, and let $\qhat_s^{\mathrm{rc}}(\vhat)$ denote the
+right side of \eqref{eq:qhat} with $d_i$ in place of
+$\partial_i \varphi_s(\vhat)$.  Unlike $\qhat_s(\vhat)$, it is not a bound.
+Then every term of its sum, evaluated by \eqref{eq:closed}, lies in
 $(-\tau, 0\,]$, so the substituted correction lies in $(-n\tau, 0\,]$ and
 \[
   \qhat_s^{\mathrm{rc}}(\vhat) \;\ge\; \varphi_s(\vhat) - n\tau .
@@ -711,7 +713,7 @@ and Pyomo's reduced cost $-0.494$.  Run to convergence, all three agreed to
 within $10^{-8}$.
 \end{remark}
 
-Two consequences make the proposal worse than merely unsound.
+Two consequences make reporting $\qhat_s^{\mathrm{rc}}$ worse than merely unsound.
 
 First, the quantity returned is governed by the solver's barrier parameter and
 not by the inexactness of the solve.  As $\tau \to 0$ it converges to
@@ -746,12 +748,22 @@ finite diameter, which Section~\ref{sec:practical} shows is not guaranteed, and
 $\varepsilon_d$ must be the \emph{unscaled} dual infeasibility, since the
 reported convergence measure is scaled by default.
 
-Even so the variant is dominated in both regimes.  Near a KKT point the honest
-correction is already zero by Proposition~\ref{prop:kkt}, so there is no
-tightness to be gained and the safeguard can only subtract.  Away from one, the
-safeguard is loose exactly where the gradient form is loose but correct.  The
-gradient form is at least as tight everywhere, and it needs no estimate of
-$\|r\|_{\infty}$.
+Even so, the variant is dominated.  Since
+$\nabla \varphi_s(\vhat) = d + r$ by \eqref{eq:resid} and the infimum in
+\eqref{eq:qhat} separates by coordinate,
+\[
+  \begin{aligned}
+  \sum_{i=1}^{n} \inf_{t \in [l_i,u_i]} \partial_i \varphi_s(\vhat)\,(t - \vhat_i)
+  &\;\ge\; \sum_{i=1}^{n} \inf_{t \in [l_i,u_i]} d_i\,(t - \vhat_i)
+     \;+\; \sum_{i=1}^{n} \inf_{t \in [l_i,u_i]} r_i\,(t - \vhat_i) \\
+  &\;\ge\; \sum_{i=1}^{n} \inf_{t \in [l_i,u_i]} d_i\,(t - \vhat_i)
+     \;-\; \|r\|_{\infty} \,\|\mathrm{diam}(B)\|_1 .
+  \end{aligned}
+\]
+So whenever the variant is valid,
+$\qhat_s(\vhat) \ge \qhat_s^{\mathrm{rc}}(\vhat) - \varepsilon_d
+\|\mathrm{diam}(B)\|_1$: the gradient form is at least as tight, and it needs no
+estimate of $\|r\|_{\infty}$.
 
 \subsection{Dualizing the bounds instead}
 
@@ -834,7 +846,8 @@ roughly as often as not, in situations where $\qhat_s$ is finite.
 
 \subsection{Where a saving would actually come from}
 
-The cost the proposal targets is real, and it is not negligible: rebuilding
+The gradient evaluation that $\qhat_s^{\mathrm{rc}}$ would skip is a real cost, and
+not a negligible one: rebuilding
 $\varphi_s$ and walking it takes about $3$ seconds at $10^{5}$ constraint rows,
 growing linearly at roughly $30\,\mu$s per row, so a million-row scenario would
 spend on the order of $30$ seconds per iteration inside the certificate.  (A
