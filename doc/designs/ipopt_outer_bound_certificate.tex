@@ -596,13 +596,20 @@ the \texttt{None} propagated across both.  All paths are relative to
 
 \section{Why the reduced costs are not a shortcut}\label{sec:reducedcost}
 
-Ipopt reports bound multipliers, and a natural proposal is to read the distance
-below the returned objective value off them directly, saving the gradient
+Ipopt does not report reduced costs.  It reports the two vectors of bound
+multipliers $z_L \ge 0$ and $z_U \ge 0$ separately, and in this appendix the
+reduced cost is defined to be $z_L - z_U$, the combination that
+\eqref{eq:stat} equates with the gradient at a KKT point.  (How Pyomo combines
+them is different; see Remark~\ref{rem:pyomorc}.)  A natural proposal is to
+read the distance below the returned objective value off the multipliers
+directly, saving the gradient
 evaluation that Theorem~\ref{thm:main} calls for.  This appendix records why the
 implementation does not do that.  The short version is that the reduced costs
-are not an alternative route to the bound --- they are the same quantity the
-certificate already uses --- and that substituting the reported values for the
-gradient forfeits validity in a way that is systematic rather than occasional.
+would enter the certificate in the place of the gradient, and equal it only at a
+KKT point; away from one, using the reported multipliers
+$z_L - z_U$ in place of the gradient $\nabla \varphi_s(\vhat)$ evaluated at the
+returned point loses validity in a way that is systematic rather than
+occasional.
 
 \subsection{The reduced cost is the gradient}
 
@@ -681,6 +688,28 @@ $z_{U,i} = 0$ and $d_i = \tau/\sigma > 0$, so \eqref{eq:closed} selects
 $t = l_i$ and the term is exactly $-\tau$; the case $l_i = -\infty$ is
 symmetric.  Summing over $i$ gives the claim.
 \end{proof}
+
+\begin{remark}[What Pyomo reports as the reduced cost]\label{rem:pyomorc}
+Through the \texttt{.sol} file Ipopt returns $z_L$ as the suffix
+\texttt{ipopt\_zL\_out} and $-z_U$ as the suffix \texttt{ipopt\_zU\_out}.
+Pyomo's \texttt{get\_reduced\_costs} for Ipopt does not add them.  For
+each variable it returns whichever of the two has the larger absolute value, so
+it reports $z_{L,i}$ or $-z_{U,i}$, never $z_{L,i} - z_{U,i}$.  At a KKT point
+with strict complementarity at most one of the two is nonzero and the rules
+agree; at a truncated barrier iterate both are positive and they differ.  Under
+the hypotheses of Proposition~\ref{prop:collapse}, $\sigma < \theta$ gives
+$z_{L,i} > z_{U,i}$, so Pyomo reports $d_i = \tau/\sigma$ and the term is
+exactly $-\tau$.  Every term then lies in $[-\tau, 0\,]$, and the conclusion
+$\qhat_s^{\mathrm{rc}}(\vhat) \ge \varphi_s(\vhat) - n\tau$ holds unchanged.
+
+This was checked under Pyomo 6.10.1 installed from PyPI, with Ipopt 3.13.2 and
+the \texttt{contrib} \texttt{ipopt} interface, on
+$\min \sum_i (x_i - c_i)^2$ over $[0,1]^4$ with $c = (-0.5, 0.2, 0.9, 1.7)$.
+The suffix \texttt{ipopt\_zU\_out} came back nonpositive.  Stopped after two
+iterations, the second variable had gradient $-0.042$, $z_L - z_U = -0.012$,
+and Pyomo's reduced cost $-0.494$.  Run to convergence, all three agreed to
+within $10^{-8}$.
+\end{remark}
 
 Two consequences make the proposal worse than merely unsound.
 
