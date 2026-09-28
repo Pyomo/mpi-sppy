@@ -33,6 +33,7 @@
 
 import mpisppy.utils.w_utils.wxbarutils
 import os # For checking if files exist
+from mpisppy import global_toc
 import mpisppy.extensions.extension
 import mpisppy.MPI as MPI
 
@@ -74,14 +75,19 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
         ''' Do a bunch of checking if files exist '''
         w_fname, x_fname, sep_files = self.cfg.init_W_fname, self.cfg.init_Xbar_fname, self.cfg.init_separate_W_files
 
-        if w_fname is not None:
+        # A resumed run never reads these files (see pre_iter0), and a
+        # --resume-from run either resumes or stops at startup, so requiring
+        # them to still exist would only break the documented workflow of
+        # resubmitting the original command after they were cleaned up.
+        resuming = bool(ph.options.get("resume_from", None))
+        if w_fname is not None and not resuming:
             if (not os.path.exists(w_fname)):
                 if (sep_files):
                     raise RuntimeError(f'Cannot find path {w_fname}')
                 else:
                     raise RuntimeError(f'Cannot find file {w_fname}')
 
-        if x_fname is not None:
+        if x_fname is not None and not resuming:
             if (not os.path.exists(x_fname)):
                 raise RuntimeError(f'Cannot find file {x_fname}')
 
@@ -98,6 +104,20 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
     def pre_iter0(self):
         if self.not_active:
             return  # nothing to do.
+        names = [f for f in (self.w_fname, self.x_fname) if f]
+        if names and getattr(self.PHB, "_resumed_from_checkpoint", False):
+            # pre_iter0 runs after the checkpoint's models are spliced in, so
+            # reading these files here overwrites the checkpointed duals with
+            # the values the study started from. The documented workflow is to
+            # submit the same command every morning, so the flags are still on
+            # it. A resumed run takes W and xbar from the checkpoint by
+            # definition -- the same reason Iter0 skips the rho setter.
+            global_toc("WARNING: WXBarReader: this run resumed from a "
+                       f"checkpoint, so {', '.join(names)} "
+                       f"{'was' if len(names) == 1 else 'were'} not read. W "
+                       "and xbar come from the checkpoint.",
+                       self.cylinder_rank == 0)
+            return
         if self.w_fname:
             mpisppy.utils.w_utils.wxbarutils.set_W_from_file(
                     self.w_fname, self.PHB, self.cylinder_rank,

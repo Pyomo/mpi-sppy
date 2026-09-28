@@ -99,6 +99,21 @@ class SensiRho(_SensiRhoBase):
         return nonant_sensis
 
     def post_iter0(self):
+        if getattr(self.ph, "_resumed_from_checkpoint", False):
+            # rho rides in the reloaded models -- including whatever
+            # adaptation had happened by the checkpoint -- so recomputing it
+            # from scratch here would clobber it (the same reason Iter0 skips
+            # the rho_setter on a resume). The sensitivities are also computed
+            # from an iteration-0 solve that a resume never performs.
+            global_toc("SensiRho: resuming from a checkpoint; keeping the "
+                       "checkpointed rho", self.ph.cylinder_rank == 0)
+            # The caches still have to be seeded. update_caches is what puts
+            # the first entry in primal_conv_cache and the first W set in the
+            # WTracker, and miditer reads both on the very next pass -- so
+            # skipping it here does not leave rho alone, it takes the run down
+            # at the first resumed iteration.
+            self.update_caches()
+            return
         global_toc("Using sensitivity rho setter")
         self.update_caches()
         self.compute_and_update_rho()
