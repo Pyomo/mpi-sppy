@@ -670,8 +670,8 @@ Ipopt's iterates satisfy the central-path equations only approximately, so
 Proposition~\ref{prop:collapse} describes the idealized case.
 
 \begin{proposition}[The substituted correction collapses]\label{prop:collapse}
-Let $\vhat$ satisfy the perturbed complementarity conditions of the barrier
-subproblem with parameter $\tau > 0$, that is
+Let $\vhat$ satisfy the central-path conditions with barrier parameter
+$\tau > 0$, that is
 $z_{L,i}(\vhat_i - l_i) = \tau$ for every finite $l_i$ and
 $z_{U,i}(u_i - \vhat_i) = \tau$ for every finite $u_i$, with $z_{L,i} = 0$ when
 $l_i = -\infty$ and $z_{U,i} = 0$ when $u_i = +\infty$.  Write
@@ -844,8 +844,8 @@ $\|r\|_{\infty}$ and no finite-diameter requirement on $B$.
 Proposition~\ref{prop:dualbox} shows that the rigour costs tightness and
 returns nothing.
 
-The loss is not merely formal.  At a barrier iterate satisfying the perturbed
-complementarity of Proposition~\ref{prop:collapse}, each finite bound
+The loss is not merely formal.  At a barrier iterate satisfying the central-path
+conditions of Proposition~\ref{prop:collapse}, each finite bound
 contributes $-\tau$ to $\tilde\varphi_s(\vhat)$ before the correction is
 applied.  When the sign of $r_i$ selects the far endpoint, the bracket in the
 proof costs up to $z_i\,(u_i - l_i)$ on top of that.  Worse, the
