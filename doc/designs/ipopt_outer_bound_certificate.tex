@@ -655,9 +655,19 @@ perturbation that can raise $\qhat_s$.
 
 \subsection{The failure is systematic, not occasional}
 
-The substitution does not merely risk an invalid bound now and then.  It drives
-the correction term to zero by construction, at every iterate, however
-unconverged.
+The substitution does not merely risk an invalid bound now and then.  An
+interior-point method such as Ipopt does not choose the bound multipliers from
+the slope of $\varphi_s$; it ties each one to the distance from its bound.  On
+the central path that the method follows,
+$z_{L,i}(\vhat_i - l_i) = \tau$ and $z_{U,i}(u_i - \vhat_i) = \tau$, where
+$\tau > 0$ is the barrier parameter, which the method drives toward zero.
+(Ipopt calls it \texttt{mu}; it is renamed here to avoid a clash with the
+multiplier $\mu$.)  The multipliers therefore record where $\vhat$ sits in the
+box, not how far it is from optimal.  Proposition~\ref{prop:collapse} shows
+that, put in place of the gradient, they shrink each term of the correction in
+\eqref{eq:qhat} to at most $\tau$ in size, whatever the true gradient is.
+Ipopt's iterates satisfy the central-path equations only approximately, so
+Proposition~\ref{prop:collapse} describes the idealized case.
 
 \begin{proposition}[The substituted correction collapses]\label{prop:collapse}
 Let $\vhat$ satisfy the perturbed complementarity conditions of the barrier
@@ -669,10 +679,12 @@ $d_i = z_{L,i} - z_{U,i}$, and let $\qhat_s^{\mathrm{rc}}(\vhat)$ denote the
 right side of \eqref{eq:qhat} with $d_i$ in place of
 $\partial_i \varphi_s(\vhat)$.  Unlike $\qhat_s(\vhat)$, it is not a bound.
 Then every term of its sum, evaluated by \eqref{eq:closed}, lies in
-$(-\tau, 0\,]$, so the substituted correction lies in $(-n\tau, 0\,]$ and
+$(-\tau, 0\,]$, so
 \[
-  \qhat_s^{\mathrm{rc}}(\vhat) \;\ge\; \varphi_s(\vhat) - n\tau .
+  \varphi_s(\vhat) - n\tau \;<\; \qhat_s^{\mathrm{rc}}(\vhat) \;\le\; \varphi_s(\vhat) :
 \]
+however far $\vhat$ is from a KKT point, $\qhat_s^{\mathrm{rc}}(\vhat)$ lies
+within $n\tau$ of the Lagrangian \eqref{eq:phi} at $\vhat$.
 \end{proposition}
 
 \begin{proof}
@@ -701,8 +713,9 @@ with strict complementarity at most one of the two is nonzero and the rules
 agree; at a truncated barrier iterate both are positive and they differ.  Under
 the hypotheses of Proposition~\ref{prop:collapse}, $\sigma < \theta$ gives
 $z_{L,i} > z_{U,i}$, so Pyomo reports $d_i = \tau/\sigma$ and the term is
-exactly $-\tau$.  Every term then lies in $[-\tau, 0\,]$, and the conclusion
-$\qhat_s^{\mathrm{rc}}(\vhat) \ge \varphi_s(\vhat) - n\tau$ holds unchanged.
+exactly $-\tau$.  Every term then lies in $[-\tau, 0\,]$, so the conclusion of
+Proposition~\ref{prop:collapse} holds with the strict inequality relaxed to
+$\qhat_s^{\mathrm{rc}}(\vhat) \ge \varphi_s(\vhat) - n\tau$.
 
 This was checked under Pyomo 6.10.1 installed from PyPI, with Ipopt 3.13.2 and
 the \texttt{contrib} \texttt{ipopt} interface, on
