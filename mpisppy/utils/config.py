@@ -786,8 +786,9 @@ class Config(pyofig.ConfigDict):
 
     def checkpoint_args(self):
         # Checkpoint/resume (see doc/designs/checkpointing_design.md). The
-        # Checkpointer extension is attached iff checkpoint_dir is set, so a
-        # run that does not ask for checkpointing pays nothing.
+        # Checkpointer extension is attached iff checkpoint_dir or
+        # resume_from is set, so a run that does not ask for checkpointing
+        # pays nothing.
         self.add_to_config("checkpoint_dir",
                            description="directory for checkpoint files; its "
                            "presence enables checkpointing (default None)",
