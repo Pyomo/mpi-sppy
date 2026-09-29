@@ -15,8 +15,9 @@ counts: ``--max-iterations`` bounds the run being started, and
 ``--stop-at-iteration-number`` bounds the study. A run ends at whichever of
 them arrives first.
 
-Checkpointing is entirely opt-in. With no ``--checkpoint-dir`` the machinery is
-not attached at all, and a run that does not ask for it pays nothing.
+Checkpointing is entirely opt-in. With neither ``--checkpoint-dir`` nor
+``--resume-from`` the machinery is not attached at all, and a run that does not
+ask for it pays nothing.
 
 .. note::
    The current implementation covers a **PH hub with one rank per cylinder**,
