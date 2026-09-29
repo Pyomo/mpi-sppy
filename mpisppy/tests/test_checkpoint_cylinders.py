@@ -181,6 +181,25 @@ class _ResumeABMixin:
             msg="the spoke restored something other than the incumbent its "
                 "own checkpoint held")
 
+        # The objective can match while the values do not, so compare the
+        # solution too: every variable of the file the stopped leg wrote,
+        # against the cache the resumed spoke built on models its
+        # scenario_creator made fresh in another process. The resumed leg
+        # only reads the directory, so the file is still the stopped leg's.
+        files = [f for f in written
+                 if f.startswith(f"spoke_{self.INCUMBENT_SPOKE}")]
+        self.assertEqual(len(files), 1, msg=f"expected one incumbent file: "
+                                            f"{written}")
+        with open(os.path.join(spokes_dir, files[0]), "rb") as f:
+            on_disk = {sname: entry["values"] for sname, entry
+                       in pickle.load(f)["solutions"].items()}
+        self.assertTrue(all(on_disk.values()),
+                        msg="the incumbent file holds no variable values")
+        self.assertEqual(
+            restored[0]["restored_values"], on_disk,
+            msg="the resumed spoke's incumbent is not the solution its "
+                "checkpoint file holds")
+
         # Minimization: a smaller inner bound is a better incumbent, and the
         # resumed run must not report a worse one than the leg it resumed.
         self.assertLessEqual(
@@ -224,7 +243,6 @@ class _ResumeABMixin:
                 "checkpoint holds")
 
     def _checkpointed_outer_bound(self):
-        import pickle
         with open(os.path.join(self.ckpt_dir, "manifest.json")) as f:
             generation = json.load(f)["generation"]
         leaf = os.path.join(self.ckpt_dir, "hub", f"gen_{generation:04d}",
