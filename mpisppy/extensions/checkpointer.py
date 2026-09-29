@@ -226,7 +226,7 @@ class Checkpointer(Extension):
             raise RuntimeError(
                 f"Checkpointing supports the synchronous PH hub and the xhat "
                 f"spokes, but this cylinder is {type(opt).__name__}. Remove "
-                f"--checkpoint-dir, or run PH."
+                f"--checkpoint-dir and --resume-from, or run PH."
             )
 
         #: Set once a restored incumbent still needs publishing to the hub.

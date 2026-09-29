@@ -21,8 +21,9 @@ not always the iteration at which the previous run stopped. How far back that is
 set by ``--checkpoint-every-iterations``; read `Choosing K`_ before relying on
 this for anything expensive.
 
-Checkpointing is entirely opt-in. With no ``--checkpoint-dir`` the machinery is
-not attached at all, and a run that does not ask for it pays nothing.
+Checkpointing is entirely opt-in. With neither ``--checkpoint-dir`` nor
+``--resume-from`` the machinery is not attached at all, and a run that does not
+ask for it pays nothing.
 
 .. note::
    The current implementation covers a **synchronous PH hub**, run on its own
