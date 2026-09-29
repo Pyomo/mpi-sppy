@@ -33,6 +33,13 @@ import json
 import sys
 
 from mpisppy import generic_cylinders
+import mpisppy.utils.checkpointing as ckpt
+
+#: The incumbent a resumed spoke holds right after restoring it, by scenario
+#: and variable name. Recorded at the restore because the spoke may improve
+#: on it later in the leg, and by then its cache no longer shows what was
+#: read from disk.
+_restored_values = {}
 
 
 def _num(value):
@@ -183,7 +190,21 @@ def _spoke_marker(wheel):
     return {
         "cylinder": type(wheel.spcomm).__name__,
         "restored_incumbent_obj": ext.restored_incumbent_obj,
+        "restored_values": _restored_values or None,
     }
+
+
+def _recording_restore(real_restore):
+    """Wrap restore_spoke_incumbent so the cache it builds is recorded."""
+    def restore(opt, state):
+        obj = real_restore(opt, state)
+        for sname, s in opt.local_scenarios.items():
+            _restored_values[sname] = {
+                var.name: value
+                for var, value in s._mpisppy_data.best_solution_cache.items()
+            }
+        return obj
+    return restore
 
 
 def main():
@@ -200,6 +221,8 @@ def main():
         return wheel
 
     generic_cylinders.do_decomp = capturing_do_decomp
+    ckpt.restore_spoke_incumbent = _recording_restore(
+        ckpt.restore_spoke_incumbent)
 
     sys.argv = [sys.argv[0]] + sys.argv[3:]
     generic_cylinders.main()
