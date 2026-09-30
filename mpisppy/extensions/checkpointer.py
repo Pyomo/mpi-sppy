@@ -260,9 +260,9 @@ class Checkpointer(Extension):
         whether a Checkpointer is attached, and generic_cylinders refuses a
         --checkpoint-dir run whose hub did not get one. It runs before any
         spoke can write: the hub builds this extension while constructing its
-        opt object, every spoke's rank 0 waits in make_windows for the hub's
-        rank 0, which reaches it only afterwards, and a spoke's other ranks
-        read and write only in step with their rank 0.
+        opt object, before make_windows; each spoke rank waits in make_windows
+        for the hub rank of the same number; and every hub rank is held in
+        this setup's agreement until hub rank 0 has finished deleting.
         """
         if self._same_directory(self.opt.options.get("resume_from", None)):
             return
