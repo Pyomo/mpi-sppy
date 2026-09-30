@@ -225,12 +225,12 @@ the next checkpoint point tries again: the next multiple of
 if it has not happened yet, or the last iteration of the budget, whichever
 comes first, if the run gets that far. A run that stops on convergence, on
 the gap between the cylinders' bounds, on ``--max-stalled-iters`` or at
-``--time-limit`` writes nothing more. A failed
-``--checkpoint-before-seconds`` write is not retried: that trigger fires
-once. A write that fails at the last iteration of the budget is not retried
-either; a resume starts from the checkpoint before it. Conditions detectable
-at setup (an unwritable directory, a model that cannot be serialized) still
-stop the run at startup, before any solving is done.
+``--time-limit`` writes nothing more. A failed ``--checkpoint-before-seconds``
+write is not retried: that trigger fires once. A write that fails at the last
+iteration of the budget is not retried either; a resume starts from the
+checkpoint before it. Conditions detectable at setup (an unwritable directory,
+a model that cannot be serialized) still stop the run at startup, before any
+solving is done.
 
 Resuming
 --------
@@ -509,9 +509,10 @@ Cylinders that span several ranks
 Each rank holds a different slice of the scenarios, so one checkpoint is the
 whole set of per-rank files, and it is committed only once every rank has
 written its own. If any rank cannot write, none of them publishes: the previous
-checkpoint stays on disk as the resumable one and the run carries on to try
-again at the next checkpoint point. There is no state in which some ranks have
-advanced their checkpoint and others have not.
+checkpoint stays on disk as the resumable one and the run carries on; the
+next checkpoint point tries again if the run gets that far, as `Writing a
+checkpoint`_ describes. There is no state in which some ranks have advanced
+their checkpoint and others have not.
 
 You get two log lines from such a failure: one from the rank that failed,
 carrying the actual cause, and one from rank 0 naming that rank.
