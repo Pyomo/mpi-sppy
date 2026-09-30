@@ -747,8 +747,10 @@ class Checkpointer(Extension):
         A mid-run write failure -- disk full, an NFS hiccup -- is warned
         about, not raised: the previously published generation is untouched
         and remains resumable, while the optimization progress that a raise
-        would destroy lives only in memory. The next checkpoint point tries
-        again. Conditions detectable at setup (unwritable directory,
+        would destroy lives only in memory. The next multiple of K, or the
+        last iteration of the iteration limit, tries again; the
+        ``--checkpoint-before-seconds`` write fires once and is not retried.
+        Conditions detectable at setup (unwritable directory,
         undillable model, unknown backend) still fail loudly in ``__init__``
         and ``pre_iter0``.
 
@@ -788,12 +790,16 @@ class Checkpointer(Extension):
             # silences the diagnosis and leaves a bare "some rank failed".
             rank = int(self.opt.cylinder_rank)
             mine = getattr(exc, "mpisppy_failed_locally", True)
+            deadline = ("" if self.before_seconds is None else
+                        " (--checkpoint-before-seconds writes once and does "
+                        "not retry)")
             global_toc(
                 f"WARNING: checkpoint write failed at iteration "
                 f"{int(getattr(self.opt, '_PHIter', 0))} on rank {rank} "
                 f"({type(exc).__name__}); the run continues, the previously "
                 f"published checkpoint (if any) is intact, and the next "
-                f"checkpoint point will try again.\n{exc}",
+                f"multiple of K, or the last iteration of the iteration "
+                f"limit, will try again{deadline}.\n{exc}",
                 rank == 0 or mine)
 
     def _write(self):
