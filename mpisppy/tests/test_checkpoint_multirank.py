@@ -1527,6 +1527,25 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
         "_extension_objects",
     })
 
+    #: Functions, by qualified name, that catch every failure of the work
+    #: they do and carry on, and that talk to no other rank. A rank whose
+    #: step fails there continues exactly as one whose step succeeded, so it
+    #: cannot leave the others waiting, and the closure below does not
+    #: follow into them. The claim is checked, not trusted:
+    #: test_catch_and_continue_members_do reads each one's source.
+    CATCH_AND_CONTINUE = frozenset({
+        "Checkpointer._spoke_checkpoint",
+    })
+
+    #: Method names that are collectives on an MPI communicator, for the
+    #: check that a CATCH_AND_CONTINUE member reaches none.
+    COLLECTIVE_METHODS = frozenset({
+        "Barrier", "barrier", "bcast", "Bcast", "allreduce", "Allreduce",
+        "reduce", "Reduce", "allgather", "Allgather", "Allgatherv", "gather",
+        "Gather", "Gatherv", "scatter", "Scatter", "alltoall", "Alltoall",
+        "allreduce_or",
+    })
+
     #: Modules whose callables do this rank's own work: they touch the file
     #: system or turn bytes into objects, and either can fail on one rank
     #: alone. Named as modules rather than as functions so that the next
@@ -1657,6 +1676,9 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
                 if cls._called_name(node) in cls.AGREE_THEMSELVES:
                     continue
                 target = cls._resolve(node.func, namespace, owner)
+                if getattr(target, "__qualname__", None) \
+                        in cls.CATCH_AND_CONTINUE:
+                    continue
                 module = getattr(target, "__module__", None) or ""
                 if (target is not None and module.startswith("mpisppy")
                         and not inspect.isclass(target)):
@@ -1719,6 +1741,83 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
                             f"CANNOT_FAIL_ON_ONE_RANK; otherwise the rank it "
                             f"fails on leaves the rest of the cylinder "
                             f"waiting in the next collective.")
+
+    @staticmethod
+    def _catch_all_bodies(tree):
+        """The ids of the nodes inside the body of a ``try`` that has an
+        ``except Exception`` (or bare ``except``) handler which does not
+        re-raise."""
+        inside = set()
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Try):
+                continue
+            catches_all = any(
+                (handler.type is None
+                 or (isinstance(handler.type, ast.Name)
+                     and handler.type.id in ("Exception", "BaseException")))
+                and not any(isinstance(n, ast.Raise)
+                            for n in ast.walk(handler))
+                for handler in node.handlers)
+            if catches_all:
+                for stmt in node.body:
+                    inside.update(id(n) for n in ast.walk(stmt))
+        return inside
+
+    def test_catch_and_continue_members_do(self):
+        """Each CATCH_AND_CONTINUE member raises nothing, does every step
+        the checks above would flag inside a catch-all ``try``, and reaches
+        no collective, directly or through anything it calls."""
+        members = {}
+        for owner in self._owner_classes():
+            for attr in vars(owner).values():
+                qualname = getattr(attr, "__qualname__", None)
+                if qualname in self.CATCH_AND_CONTINUE:
+                    members[qualname] = attr
+        self.assertEqual(sorted(members), sorted(self.CATCH_AND_CONTINUE),
+                         msg="CATCH_AND_CONTINUE names a function that no "
+                             "longer exists")
+        for qualname, func in members.items():
+            tree = ast.parse(textwrap.dedent(inspect.getsource(func)))
+            ns = self._namespace(func, tree)
+            owner = func.__globals__.get(qualname.split(".")[0])
+            caught = self._catch_all_bodies(tree)
+            with self.subTest(function=qualname, check="raises"):
+                self.assertFalse(
+                    [n for n in ast.walk(tree) if isinstance(n, ast.Raise)],
+                    msg=f"{qualname} raises, so a failure on one rank does "
+                        f"not continue like a success on the others")
+            flagged = [(n, called) for n, called
+                       in self._checkpointing_calls(func, tree, ns)]
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                called = self._called_name(node)
+                target = self._resolve(node.func, ns, owner)
+                if (getattr(target, "__module__", None)
+                        in self.LOCAL_WORK_MODULES
+                        or called in self.LOCAL_WORK_METHODS):
+                    flagged.append((node, called))
+            for node, called in flagged:
+                with self.subTest(function=qualname, step=called):
+                    self.assertIn(
+                        id(node), caught,
+                        msg=f"{qualname} calls {called} outside a try whose "
+                            f"handler catches every exception, so it can "
+                            f"fail on one rank alone")
+            for reached, _, sub_tree, _, _ in self._closure(func):
+                for node in ast.walk(sub_tree):
+                    if not isinstance(node, ast.Call):
+                        continue
+                    called = self._called_name(node)
+                    with self.subTest(function=qualname, reached=reached,
+                                      call=called):
+                        self.assertFalse(
+                            called in self.COLLECTIVE_METHODS
+                            or called in self.AGREE_THEMSELVES,
+                            msg=f"{qualname} reaches the collective "
+                                f"{called} (in {reached}); a rank whose "
+                                f"step failed would skip it or reach it "
+                                f"at a different point")
 
     def test_no_path_does_a_rank_s_own_file_handling_inline(self):
         for name, entry in self.PATHS:

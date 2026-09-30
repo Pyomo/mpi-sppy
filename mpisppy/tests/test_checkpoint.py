@@ -2424,12 +2424,12 @@ class TestXhatterLoopsOfferCheckpointPoints(unittest.TestCase):
         self.assertEqual(recorder.calls, 3)
 
     def test_xhatshuffle_kill_between_tries_still_offers_a_point(self):
-        """The one exit that skips the bottom of the loop.
+        """An exit from the middle of a pass skips the bottom of the loop.
 
         xhatshuffle re-checks the kill signal between its two tries and
         returns from the middle of the pass. The try just above it may have
-        improved the incumbent, so that improvement would never be offered a
-        write.
+        improved the incumbent, and the pass offers it a write before
+        returning.
         """
         from mpisppy.cylinders.xhatshufflelooper_bounder import (
             XhatShuffleInnerBound)
@@ -2946,6 +2946,79 @@ class TestCheckpointerSpokeMode(unittest.TestCase):
 
         ext.maybe_checkpoint()                    # not resent every pass
         self.assertEqual(spoke.sent_bounds, [13.0])
+
+    def test_a_resume_into_a_new_directory_writes_the_incumbent_at_once(self):
+        """A short resume whose hub finishes while this spoke is still in its
+        prep never reaches a loop pass, so a write left for the bottom of
+        one leaves the new directory with a hub checkpoint and no incumbent,
+        and the next resume starts without one."""
+        old = os.path.join(self._tmp.name, "old")
+        writer = _xhat_eval(ckpt_dir=old)
+        _set_and_cache_solution(writer, 19.0)
+        checkpointing.write_spoke_incumbent(
+            writer, old, "_SpokeStub", 0, best_inner_bound=19.0)
+
+        opt = _xhat_eval(ckpt_dir=self.ckpt_dir, resume_from=old)
+        ext, _ = self._attach(opt)
+        ext.pre_iter0()                           # no loop pass follows
+        state = checkpointing.load_spoke_incumbent(
+            opt, self.ckpt_dir, "_SpokeStub", 0)
+        self.assertIsNotNone(state, "the new directory has no incumbent")
+        self.assertEqual(state["best_inner_bound"], 19.0)
+
+    def test_the_write_after_a_restore_carries_what_was_read(self):
+        """The spoke is handed the loop state after pre_iter0 and the
+        extension state at the end of its prep, so the write straight after
+        a restore has to carry the read state itself; asking the spoke would
+        put a fresh cursor and fresh extension state in the new directory."""
+        old = os.path.join(self._tmp.name, "old")
+        read_loop = {"xh_iter": 7, "cursor": {"at": 3}}
+        read_ext = {"extensions": {"SomeExtension": {"k": 1}}}
+        writer = _xhat_eval(ckpt_dir=old)
+        _set_and_cache_solution(writer, 29.0)
+        checkpointing.write_spoke_incumbent(
+            writer, old, "_SpokeStub", 0, best_inner_bound=29.0,
+            loop_state=read_loop, extension_state=read_ext)
+
+        opt = _xhat_eval(ckpt_dir=self.ckpt_dir, resume_from=old)
+        ext, _ = self._attach(opt, _SpokeStub(loop_state={"fresh": True}))
+        ext.pre_iter0()
+        state = checkpointing.load_spoke_incumbent(
+            opt, self.ckpt_dir, "_SpokeStub", 0)
+        self.assertIsNotNone(state, "the new directory has no incumbent")
+        self.assertEqual(state["loop_state"], read_loop)
+        self.assertEqual(state["extension_state"], read_ext)
+
+    def test_a_resume_in_place_does_not_rewrite_what_it_read(self):
+        writer = _xhat_eval(ckpt_dir=self.ckpt_dir)
+        _set_and_cache_solution(writer, 23.0)
+        checkpointing.write_spoke_incumbent(
+            writer, self.ckpt_dir, "_SpokeStub", 0, best_inner_bound=23.0)
+
+        opt = _xhat_eval(ckpt_dir=self.ckpt_dir, resume_from=self.ckpt_dir)
+        ext, _ = self._attach(opt)
+        with mock.patch.object(checkpointing, "write_spoke_incumbent") as write:
+            ext.pre_iter0()
+        write.assert_not_called()
+
+
+class TestAnInnerBoundSpokeCheckpointsAtFinalize(unittest.TestCase):
+    """A spoke loop can exit at its top check without reaching a bottom,
+    where the checkpoint point is, so an incumbent found before the loop
+    would never be written. finalize offers one last checkpoint point."""
+
+    def test_finalize_offers_a_checkpoint_point_first(self):
+        from mpisppy.cylinders.spoke import InnerBoundNonantSpoke
+        calls = []
+        # Built without __init__, which wants communicators; finalize reads
+        # only these two. The checkpoint comes before load_best_solution,
+        # which InnerBoundSpoke.finalize runs through super().
+        spoke = InnerBoundNonantSpoke.__new__(InnerBoundNonantSpoke)
+        spoke.maybe_checkpoint = lambda: calls.append("checkpoint")
+        spoke.opt = types.SimpleNamespace(
+            load_best_solution=lambda: calls.append("load") and False)
+        self.assertIsNone(spoke.finalize())
+        self.assertEqual(calls, ["checkpoint", "load"])
 
 
 class TestAnEarlierStudysSpokeFilesAreCleared(unittest.TestCase):

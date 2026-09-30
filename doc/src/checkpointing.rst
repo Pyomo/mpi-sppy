@@ -418,7 +418,9 @@ Bounds and the incumbent are carried forward as valid best-so-far values. A
 resumed run never reports a worse best-so-far than its checkpoint, provided
 the spoke that held the incumbent is still in the run and its file holds that
 incumbent: a spoke writes an improvement at the end of the loop pass that
-reported it, and a failed write is warned about and not retried. An outer
+reported it, or when the spoke finishes if its loop never got that far; it
+writes a restored incumbent to this run's directory as soon as it restores
+it; and a failed write is warned about and not retried. An outer
 bound that reaches the hub after the last checkpoint is written is not in it,
 so the stopped run's final line can show a better outer bound than the resumed
 run starts from. An incumbent a spoke wrote after that checkpoint is restored,

@@ -171,8 +171,8 @@ class XhatShuffleInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
 
                 if self.got_kill_signal():
                     # time to go; don't solve next -- but the try just above
-                    # may have improved the incumbent, and this is the only
-                    # exit that skips the bottom of the loop.
+                    # may have improved the incumbent, and this exit skips
+                    # the bottom of the loop.
                     self.maybe_checkpoint()
                     return
 

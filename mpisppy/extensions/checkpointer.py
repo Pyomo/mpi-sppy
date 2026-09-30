@@ -97,8 +97,8 @@ starts at the next iteration, so the ``enditer`` that made the change never
 runs again.
 
 The same hook is what the xhatter spokes call once per pass through their main
-loops, which have no ``enditer`` to borrow: one Checkpointer serves the hub
-and the spokes.
+loops, which have no ``enditer`` to borrow, and once more when they finalize:
+one Checkpointer serves the hub and the spokes.
 
 **Multi-rank cylinders.** A hub spread over several ranks holds its scenarios
 in slices, so one checkpoint generation spans all of them and is published only
@@ -626,6 +626,18 @@ class Checkpointer(Extension):
             self.opt.spcomm.send_best_xhat()
         global_toc(f"Restored the checkpointed incumbent for {cylinder} "
                    f"(objective {obj})", rank0)
+        # Write it to this run's directory now, not at the bottom of the
+        # first loop pass: a short resume whose hub finishes before this
+        # spoke starts its loop -- the spoke's prep can solve for a while --
+        # never reaches that pass, and leaves a directory whose hub
+        # checkpoint has no incumbent beside it. Resuming in place skips the
+        # write, because _last_written_obj was seeded above. The loop state
+        # and extension state are the ones just read, not the spoke's: it
+        # has neither yet, and asking it would write a fresh cursor and fresh
+        # extension state over the restored ones.
+        self._spoke_checkpoint(
+            restored=(self.restored_loop_state,
+                      self.restored_extension_state))
 
     def _same_directory(self, other):
         """True when ``other`` names the directory this run writes to.
@@ -846,12 +858,16 @@ class Checkpointer(Extension):
                               backend=self.backend)
         global_toc(f"Checkpoint written at iteration {generation}", rank0)
 
-    def _spoke_checkpoint(self):
+    def _spoke_checkpoint(self, restored=None):
         """Write if anything worth keeping moved.
 
-        Called once per pass of a loop that spins while it waits on the hub,
-        so the common case has to be cheap: comparing a float and a small dict
-        and returning.
+        ``restored`` is (loop state, extension state) as a resume just read
+        them, for the write straight after a restore, before the spoke holds
+        either; otherwise both are asked of the spoke and its extensions.
+
+        Called once per pass of a loop that spins while it waits on the hub
+        (and also right after a restore and at finalize), so the common case
+        has to be cheap: comparing a float and a small dict and returning.
 
         Two things can move. The incumbent improves rarely. The **loop cursor**
         moves whenever the spoke tries another scenario, which is more often --
@@ -880,7 +896,11 @@ class Checkpointer(Extension):
             # cursor rides along with it rather than on its own. Or the last
             # write of this incumbent failed; wait for a new one.
             return
-        loop_state = spoke.checkpoint_loop_state()
+        if restored is None:
+            loop_state = spoke.checkpoint_loop_state()
+            extension_state = ckpt.GATHER_EXTENSION_STATE
+        else:
+            loop_state, extension_state = restored
         # Compared on the progress projection rather than the whole state.
         # xhatshuffle's loop state carries xh_iter, which counts passes of a
         # loop that spins while it waits on the hub, so it differs on every
@@ -899,7 +919,8 @@ class Checkpointer(Extension):
                 self.opt, self.ckpt_dir, cylinder, ordinal,
                 best_inner_bound=getattr(spoke, "best_inner_bound", None),
                 loop_state=loop_state,
-                class_count=self._class_ordinal_and_count()[1])
+                class_count=self._class_ordinal_and_count()[1],
+                extension_state=extension_state)
         except Exception as exc:
             self._last_failed_obj = obj
             # Printed by the rank that failed, whichever it is: each rank

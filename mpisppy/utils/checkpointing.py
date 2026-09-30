@@ -1373,8 +1373,18 @@ def load_checkpoint(opt, ckpt_dir):
 ###############################################################################
 
 
+#: Passed as ``extension_state`` to mean "gather it from the extensions now",
+#: which is what every write but one wants. The one is the write straight
+#: after a restore, which has to carry what it read: the spoke hands the read
+#: state to its extensions only at the end of its prep, so gathering then
+#: would write fresh state over the restored one. None cannot mean "gather",
+#: because None is also what a file with no extension state holds.
+GATHER_EXTENSION_STATE = object()
+
+
 def spoke_incumbent_state(opt, cylinder, ordinal, best_inner_bound=None,
-                          loop_state=None, class_count=None):
+                          loop_state=None, class_count=None,
+                          extension_state=GATHER_EXTENSION_STATE):
     """The dict written by ``write_spoke_incumbent``, or None if there is
     nothing to write yet. ``_cache_best_solution`` caches every scenario at
     once, so one scenario without a cache means none has one."""
@@ -1439,13 +1449,16 @@ def spoke_incumbent_state(opt, cylinder, ordinal, best_inner_bound=None,
         "loop_state": loop_state,
         # Same contract as the hub's, for extensions attached to the spoke's
         # Xhat_Eval rather than to the PH hub.
-        "extension_state": gather_extension_state(opt),
+        "extension_state": (gather_extension_state(opt)
+                            if extension_state is GATHER_EXTENSION_STATE
+                            else extension_state),
     }
 
 
 def write_spoke_incumbent(opt, ckpt_dir, cylinder, ordinal,
                           best_inner_bound=None, loop_state=None,
-                          class_count=None):
+                          class_count=None,
+                          extension_state=GATHER_EXTENSION_STATE):
     """Write this spoke's best incumbent, latest-wins. Returns the path, or
     None when there is no incumbent to write.
 
@@ -1458,7 +1471,8 @@ def write_spoke_incumbent(opt, ckpt_dir, cylinder, ordinal,
     state = spoke_incumbent_state(opt, cylinder, ordinal,
                                   best_inner_bound=best_inner_bound,
                                   loop_state=loop_state,
-                                  class_count=class_count)
+                                  class_count=class_count,
+                                  extension_state=extension_state)
     if state is None:
         return None
     spokes_dir = os.path.join(ckpt_dir, SPOKES_SUBDIR)
