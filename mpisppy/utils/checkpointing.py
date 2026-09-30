@@ -865,6 +865,49 @@ def load_spoke_incumbent(opt, ckpt_dir, cylinder, ordinal):
     return state
 
 
+def spoke_inner_bounds_to_restore(communicators, ckpt_dir):
+    """``[(strata rank, inner bound)]`` for each spoke in this run that has
+    an incumbent file in ``ckpt_dir`` -- the bounds the spokes are about to
+    restore and publish.
+
+    Read by the resumed hub, which first hears from its spokes only after
+    its first resumed solve. It reads the spokes' own files, not a number of
+    its own, because only a bound a spoke holds a solution for may be
+    credited to it: the credited spoke writes the solution at the end of the
+    run, and the hub's last word can be newer than the spoke's file (a spoke
+    publishes an improvement before it writes it, and a failed write is not
+    retried).
+
+    Only rank 0's file is read. A file that cannot be read is skipped rather
+    than refused here; the spoke that owns it raises on it.
+    """
+    names = [d["spcomm_class"].__name__ for d in communicators]
+    found = []
+    for strata_rank, name in enumerate(names):
+        if strata_rank == 0:
+            continue
+        ordinal = names[:strata_rank].count(name)
+        path = os.path.join(ckpt_dir, SPOKES_SUBDIR,
+                            _spoke_filename(name, ordinal, 0))
+        if not os.path.exists(path):
+            continue
+        # Anything that goes wrong with one file skips that file. Raising
+        # here would stop hub rank 0 alone, and the other hub ranks would
+        # wait for it forever.
+        try:
+            with open(path, "rb") as f:
+                state = pickle.load(f)
+            if (state.get("format_version") != FORMAT_VERSION
+                    or state.get("kind") != "spoke-incumbent"):
+                continue
+            bound = float(state["best_inner_bound"])
+        except Exception:
+            continue
+        if math.isfinite(bound):
+            found.append((strata_rank, bound))
+    return found
+
+
 def restore_spoke_incumbent(opt, state):
     """Rebuild ``best_solution_cache`` on this spoke's models from a loaded
     state, by variable name. Returns the incumbent objective value.
