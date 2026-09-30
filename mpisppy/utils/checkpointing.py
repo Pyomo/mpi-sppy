@@ -1323,6 +1323,19 @@ def load_spoke_incumbent(opt, ckpt_dir, cylinder, ordinal):
     return state
 
 
+def _ranks_agree(held):
+    """True when every rank of a spoke holds an incumbent file and they all
+    carry the same ``(objective, inner bound)``. ``held`` has one entry per
+    rank, None for a rank with no file.
+
+    The one rule for adopting a spoke's incumbent, shared by the spoke's
+    ranks (``agree_on_spoke_incumbent``) and by the resumed hub
+    (``spoke_inner_bounds_to_restore``), which must credit a spoke only with
+    an incumbent the spoke will keep.
+    """
+    return None not in held and len(set(held)) == 1
+
+
 def agree_on_spoke_incumbent(opt, state):
     """Keep a loaded spoke incumbent only if every rank loaded the same one.
 
@@ -1351,7 +1364,7 @@ def agree_on_spoke_incumbent(opt, state):
     everyone = comm.allgather(mine)
     if all(v is None for v in everyone):
         return None, None
-    if None not in everyone and len(set(everyone)) == 1:
+    if _ranks_agree(everyone):
         return state, None
     missing = [rank for rank, v in enumerate(everyone) if v is None]
     held = {v for v in everyone if v is not None}
@@ -1359,6 +1372,64 @@ def agree_on_spoke_incumbent(opt, state):
     if missing:
         reason = f"rank(s) {missing} have no file; {reason}"
     return None, reason
+
+
+def spoke_inner_bounds_to_restore(communicators, ckpt_dir):
+    """``[(strata rank, inner bound)]`` for each spoke in this run that has
+    an incumbent file in ``ckpt_dir`` -- the bounds the spokes are about to
+    restore and publish.
+
+    Read by the resumed hub, which first hears from its spokes only after
+    its first resumed solve. It reads the spokes' own files, not a number of
+    its own, because only a bound a spoke holds a solution for may be
+    credited to it: the credited spoke writes the solution at the end of the
+    run, and the hub's last word can be newer than the spoke's file (a spoke
+    publishes an improvement before it writes it, and a failed write is not
+    retried).
+
+    A spoke with several ranks keeps its incumbent only if every rank's file
+    is there and they agree (``agree_on_spoke_incumbent``), so the same rule
+    decides here. How many ranks wrote is read from rank 0's file. A file
+    that cannot be read is skipped rather than refused here; the spoke that
+    owns it raises on it.
+    """
+    names = [d["spcomm_class"].__name__ for d in communicators]
+    found = []
+    for strata_rank, name in enumerate(names):
+        if strata_rank == 0:
+            continue
+        ordinal = names[:strata_rank].count(name)
+
+        def read(rank):
+            path = os.path.join(ckpt_dir, SPOKES_SUBDIR,
+                                _spoke_filename(name, ordinal, rank))
+            if not os.path.exists(path):
+                return None
+            with open(path, "rb") as f:
+                return pickle.load(f)
+
+        # Anything that goes wrong with one spoke's files skips that spoke.
+        # Raising here would stop hub rank 0 alone, and the other hub ranks
+        # would wait for it forever.
+        try:
+            first = read(0)
+            if first is None:
+                continue
+            states = [first] + [read(rank) for rank in
+                                range(1, int(first["geometry"]["n_proc"]))]
+            held = [None if s is None
+                    or s.get("format_version") != FORMAT_VERSION
+                    or s.get("kind") != "spoke-incumbent"
+                    else (s["best_solution_obj_val"], s["best_inner_bound"])
+                    for s in states]
+            if not _ranks_agree(held):
+                continue
+            bound = float(first["best_inner_bound"])
+        except Exception:
+            continue
+        if math.isfinite(bound):
+            found.append((strata_rank, bound))
+    return found
 
 
 def restore_spoke_incumbent(opt, state):

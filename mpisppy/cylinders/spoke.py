@@ -277,9 +277,8 @@ class InnerBoundSpoke(_BoundSpoke):
         with the values, and not the live ``inner_bound``, which every solve
         overwrites. The two are the same number on the ordinary path, where
         this is called straight after the solve that improved the incumbent
-        -- and they are not when a resumed spoke republishes the incumbent it
-        restored, which happens at the bottom of a loop pass, after that
-        pass's own evaluation has moved the live one.
+        -- and they are not once any later solve has moved the live one
+        while the incumbent stayed put.
         """
         best_xhat_buf = self.send_buffers[Field.BEST_XHAT]
         ci = 0

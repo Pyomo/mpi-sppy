@@ -621,6 +621,27 @@ class TestTornSpokeIncumbentIsDropped(unittest.TestCase):
                 msg=f"spoke rank {m['cylinder_rank']} restored an incumbent "
                     f"the other rank does not hold")
 
+    def test_the_hub_credits_nothing_the_spoke_dropped(self):
+        """The resumed hub takes its inner bound from the spokes' files, so
+        it must drop what the spoke's ranks drop. Crediting rank 0's file
+        made the run report that incumbent and write the worse solution the
+        spoke went on to find."""
+        for snap in _hub_ranks(self.out_path):
+            self.assertEqual(
+                snap["first_BestInnerBound"], float("inf"),
+                msg=f"hub rank {snap['cylinder_rank']} restored an incumbent "
+                    f"the spoke's ranks did not agree on")
+        spoke = {m["strata_rank"]: m for m in _spoke_ranks(self.out_path)
+                 if m["cylinder_rank"] == 0}
+        for snap in _hub_ranks(self.out_path):
+            credited = spoke.get(snap["last_ib_idx"])
+            self.assertIsNotNone(credited, msg="no xhat spoke is credited")
+            self.assertAlmostEqual(
+                credited["best_solution_obj_val"], snap["BestInnerBound"],
+                delta=1e-6 * abs(snap["BestInnerBound"]),
+                msg="the hub reports an incumbent the spoke it credits "
+                    "does not hold")
+
     def test_the_hub_still_hears_the_spoke(self):
         """The failure this guards left the hub's inner bound at inf."""
         for snap in _hub_ranks(self.out_path):
