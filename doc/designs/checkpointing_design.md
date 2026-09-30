@@ -595,7 +595,10 @@ Consequences, all deliberate:
   hiccup — is different: the previously published generation is untouched and
   remains resumable, while the optimization progress a raise would destroy
   lives only in memory. So `Checkpointer.maybe_checkpoint` catches the write error,
-  reports it loudly, and retries at the next iteration boundary.
+  reports it loudly, and retries at the next multiple of K, at the
+  `--checkpoint-before-seconds` write if that has not happened yet, or at the
+  last iteration of the budget; a failed deadline write, and a failure at the
+  last iteration, are not retried.
 - The **incidental benefit**: because every write now precedes any
   `post_everything`, an xhat evaluation can no longer contaminate a checkpoint,
   which closes §9 item 4 without separate machinery.
@@ -648,7 +651,8 @@ load-bearing:
   and the hub write is a collective bracketed by barriers, so a rank that
   believed its own clock alone would hang the cylinder for the rest of the job.
   It is asked at every completed iteration, before the iteration-count tests,
-  so every rank reaches the collective every time; a checkpoint point that
+  so until it fires every rank reaches the collective at every completed
+  iteration (after it fires, every rank skips it alike); a checkpoint point that
   lands near the deadline is then the deadline write rather than being
   followed by another at the next iteration. `TestDeadlineOnOneRankDoesNotHangTheOthers`
   (`test_checkpoint_multirank.py`, driver `multirank_deadline_driver.py`) skews
@@ -986,8 +990,8 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
      with the same collective pattern, then latching so it fires at most once
      (§8). It needs the most-recent iteration duration (item 9); everything
      else it shares with the periodic path. It is asked at every completed
-     iteration, before the iteration-count tests, so every rank reaches the
-     collective every time.
+     iteration, before the iteration-count tests, so until it fires every
+     rank reaches the collective at every completed iteration.
    - *at each completed iteration* — after the subproblem solve, the only point
      in the loop where the dual weights and the nonants describe the same
      iteration (§8). There is no terminal trigger and no

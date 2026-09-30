@@ -221,9 +221,11 @@ A write that fails mid-run -- the disk filling up, a network filesystem
 hiccup -- does not stop the optimization. The failure is reported loudly,
 the previously published checkpoint stays intact and resumable, and
 the next checkpoint point tries again: the next multiple of
-``--checkpoint-every-iterations``, or the last iteration of the budget,
-whichever comes first. A failed ``--checkpoint-before-seconds`` write is not
-retried: that trigger fires once. Conditions detectable at setup (an
+``--checkpoint-every-iterations``, the ``--checkpoint-before-seconds`` write
+if it has not happened yet, or the last iteration of the budget, whichever
+comes first. A failed ``--checkpoint-before-seconds`` write is not retried:
+that trigger fires once. A write that fails at the last iteration of the
+budget is not retried either; a resume starts from the checkpoint before it. Conditions detectable at setup (an
 unwritable directory, a model that cannot be serialized) still stop the run
 at startup, before any solving is done.
 

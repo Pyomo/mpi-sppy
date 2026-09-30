@@ -1924,6 +1924,29 @@ class TestCheckpointBeforeSecondsDecision(unittest.TestCase):
         # ... and having not fired, it is not latched either.
         self.assertTrue(ext._should_write())
 
+    def test_the_failed_write_warning_names_what_retries(self):
+        """A user deciding whether to stop a job needs to know whether a
+        write is still coming, so the warning says which one, and says so
+        when none is."""
+        last = self._checkpointer(100.0, phiter=100, limit=100)
+        self.assertIn("no later write will try again", last._what_retries())
+
+        pending = self._checkpointer(100.0, phiter=5)
+        self.assertIn("--checkpoint-before-seconds write if it has not "
+                      "happened yet", pending._what_retries())
+        self.assertNotIn("already fired", pending._what_retries())
+
+        fired = self._checkpointer(100.0, phiter=5)
+        fired._before_seconds_fired = True
+        self.assertIn("already fired and does not retry",
+                      fired._what_retries())
+        self.assertNotIn("if it has not happened yet", fired._what_retries())
+
+        unset = self._checkpointer(None, phiter=5)
+        self.assertIn("will try again", unset._what_retries())
+        self.assertNotIn("--checkpoint-before-seconds",
+                         unset._what_retries())
+
     def test_a_nonpositive_deadline_is_refused_at_setup(self):
         for bad in (0.0, -5.0):
             with self.subTest(bad=bad):

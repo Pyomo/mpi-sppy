@@ -70,9 +70,10 @@ workflow and that iterate is known-good and already in memory.
 
 ``--checkpoint-before-seconds S`` covers the stop K does not: a run that ends
 against a wall clock rather than at an iteration limit, at an iteration that
-is not a multiple of K. It writes once, at the end of the first iteration
-after which one more as long as the last would pass S seconds; if that
-iteration is a multiple of K, the write it gets anyway is the one. See
+is not a multiple of K. It writes once, at the end of the first completed
+iteration after which one more iteration, as long as the last, would take the
+run past S seconds; if that iteration is a multiple of K, the write it gets
+anyway is the one. See
 ``_deadline_is_near``.
 
 A checkpoint therefore describes a *completed PH iteration*. A run that ends
@@ -747,9 +748,11 @@ class Checkpointer(Extension):
         A mid-run write failure -- disk full, an NFS hiccup -- is warned
         about, not raised: the previously published generation is untouched
         and remains resumable, while the optimization progress that a raise
-        would destroy lives only in memory. The next multiple of K, or the
-        last iteration of the iteration limit, tries again; the
-        ``--checkpoint-before-seconds`` write fires once and is not retried.
+        would destroy lives only in memory. The next multiple of K, the
+        ``--checkpoint-before-seconds`` write if it has not happened yet, or
+        the last iteration of the iteration limit tries again, whichever
+        comes first. The deadline write fires once and is not retried, and a
+        failure at the last iteration of the limit has nothing after it.
         Conditions detectable at setup (unwritable directory,
         undillable model, unknown backend) still fail loudly in ``__init__``
         and ``pre_iter0``.
@@ -790,17 +793,35 @@ class Checkpointer(Extension):
             # silences the diagnosis and leaves a bare "some rank failed".
             rank = int(self.opt.cylinder_rank)
             mine = getattr(exc, "mpisppy_failed_locally", True)
-            deadline = ("" if self.before_seconds is None else
-                        " (--checkpoint-before-seconds writes once and does "
-                        "not retry)")
             global_toc(
                 f"WARNING: checkpoint write failed at iteration "
                 f"{int(getattr(self.opt, '_PHIter', 0))} on rank {rank} "
-                f"({type(exc).__name__}); the run continues, the previously "
-                f"published checkpoint (if any) is intact, and the next "
-                f"multiple of K, or the last iteration of the iteration "
-                f"limit, will try again{deadline}.\n{exc}",
+                f"({type(exc).__name__}); the previously published "
+                f"checkpoint (if any) is intact, and "
+                f"{self._what_retries()}.\n{exc}",
                 rank == 0 or mine)
+
+    def _what_retries(self):
+        """The end of the failed-write warning: which write, if any, tries
+        again. Named rather than left as "the next checkpoint point",
+        because a user deciding whether to stop the job needs to know
+        whether one is coming before the scheduler's kill."""
+        if self._is_final_iteration():
+            return ("this was the last iteration of the iteration limit, so "
+                    "no later write will try again; a resume starts from "
+                    "the previously published checkpoint")
+        pending = (self.before_seconds is not None
+                   and not self._before_seconds_fired)
+        retry = ("the run continues; the next multiple of "
+                 "--checkpoint-every-iterations"
+                 + (", the --checkpoint-before-seconds write if it has not "
+                    "happened yet," if pending else "")
+                 + " or the last iteration of the iteration limit, whichever "
+                 "comes first, will try again")
+        if self.before_seconds is not None and not pending:
+            retry += (" (--checkpoint-before-seconds has already fired and "
+                      "does not retry)")
+        return retry
 
     def _write(self):
         """Write one generation, bracketed by toc so the cost is legible.
