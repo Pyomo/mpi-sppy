@@ -115,6 +115,7 @@ See ``doc/designs/checkpointing_design.md``.
 """
 
 import os
+import shutil
 
 from mpisppy import global_toc
 from mpisppy.extensions.extension import Extension
@@ -188,8 +189,6 @@ class Checkpointer(Extension):
                 f"--checkpoint-dir and --resume-from, or run PH."
             )
 
-        #: Set once a restored incumbent still needs publishing to the hub.
-        self._publish_restored_bound = None
         #: The incumbent objective this spoke restored from disk, or None if
         #: it started without one. Read by tests, which otherwise cannot tell
         #: a restored incumbent from one the spoke happened to re-find.
@@ -234,6 +233,40 @@ class Checkpointer(Extension):
         ckpt.check_filename_collisions(opt.local_scenarios)
 
         ckpt.probe_directory_is_writable(opt, self.ckpt_dir)
+
+        # Not a refusal, but deleting can fail on one rank like the checks
+        # above, so it is agreed with them.
+        if not self.spoke_mode and opt.cylinder_rank == 0:
+            self._clear_other_studies_spoke_files()
+
+    def _clear_other_studies_spoke_files(self):
+        """Delete ``spokes/`` unless this run is resuming from this directory.
+
+        A spoke overwrites only its own file, and only once it finds an
+        incumbent, so a run started in a directory an earlier study used
+        leaves that study's spoke files beside its own. A later resume of
+        this run then restores them into whichever spoke has the same name:
+        silently when the configuration matches, and with a refusal that
+        kills the spoke when it does not. When this run resumes from the
+        directory it writes to, those files are this study's and are kept.
+
+        The hub does this, once: every cylinder shares the cfg that decides
+        whether a Checkpointer is attached, and generic_cylinders refuses a
+        --checkpoint-dir run whose hub did not get one. It runs before any
+        spoke can write: the hub builds this extension while constructing its
+        opt object, every spoke's rank 0 waits in make_windows for the hub's
+        rank 0, which reaches it only afterwards, and a spoke's other ranks
+        read and write only in step with their rank 0.
+        """
+        if self._same_directory(self.opt.options.get("resume_from", None)):
+            return
+        spokes_dir = os.path.join(self.ckpt_dir, ckpt.SPOKES_SUBDIR)
+        if not os.path.isdir(spokes_dir):
+            return
+        global_toc(f"Removing spoke incumbent files left in {spokes_dir} by "
+                   f"an earlier run; this run is not resuming from that "
+                   f"directory", True)
+        shutil.rmtree(spokes_dir)
 
     def pre_iter0(self):
         if self.spoke_mode:
@@ -361,12 +394,18 @@ class Checkpointer(Extension):
             self._last_written_obj = obj
         # The hub learns bounds only from what a spoke sends, so a restored
         # incumbent that is never published leaves the hub reporting an
-        # infinite inner bound -- and its gap and convergence tests reading
-        # from it -- until this spoke happens to improve on the answer it
-        # already has. Publishing needs the send buffers, which exist by the
-        # time the loop runs but not necessarily here, so it is deferred to
-        # the first checkpoint point.
-        self._publish_restored_bound = state["best_inner_bound"]
+        # infinite inner bound -- and its gap and convergence tests, and
+        # Gapper's automatic mipgap, reading from it -- until this spoke
+        # happens to improve on the answer it already has. Publish it now,
+        # before this spoke has solved anything: WheelSpinner.run creates the
+        # send buffers before spcomm.main(), which is where this runs from.
+        # The bound and the values beside it are the restored pair, so the
+        # BEST_XHAT buffer never carries an objective that belongs to other
+        # values.
+        bound = state["best_inner_bound"]
+        if bound is not None:
+            self.opt.spcomm.send_bound(bound)
+            self.opt.spcomm.send_best_xhat()
         global_toc(f"Restored the checkpointed incumbent for {cylinder} "
                    f"(objective {obj})", rank0)
 
@@ -495,7 +534,7 @@ class Checkpointer(Extension):
         global_toc(f"Checkpoint written at iteration {generation}", rank0)
 
     def _spoke_checkpoint(self):
-        """Publish a restored bound, then write the incumbent if it improved.
+        """Write the incumbent if it improved.
 
         Called once per pass of a loop that spins while it waits on the hub,
         so the common case has to be cheap: comparing two floats and
@@ -508,34 +547,12 @@ class Checkpointer(Extension):
         killing a running spoke over.
         """
         spoke = self.opt.spcomm
-        if self._publish_restored_bound is not None:
-            bound, self._publish_restored_bound = \
-                self._publish_restored_bound, None
-            # The publish is deferred to here, the bottom of the first loop
-            # pass, so that pass may already have found something better and
-            # published it. Sending the restored number unconditionally walks
-            # the spoke's own bound backwards, and pairs it with a
-            # send_best_xhat() that carries the newer values -- a bound that
-            # is not the objective of the solution beside it. Publish the
-            # better of the two, by the spoke's own sense of better, so that
-            # a hub which has not heard an incumbent still gets the restored
-            # one and a spoke which has already improved does not step back.
-            if bound is not None:
-                current = spoke.best_inner_bound
-                if (bound < current if spoke.is_minimizing
-                        else bound > current):
-                    spoke.best_inner_bound = bound
-                else:
-                    bound = current
-                spoke.send_bound(bound)
-                spoke.send_best_xhat()
-
         if not self.write_enabled:
-            # --resume-from with no --checkpoint-dir. Publishing the restored
-            # bound above is this spoke's whole job; there is nowhere to
-            # write. Without this the write below is attempted with
-            # ckpt_dir=None on every improvement, and only the warning path
-            # keeps that from ending the run.
+            # --resume-from with no --checkpoint-dir. The restore already
+            # published the incumbent, which is this spoke's whole job; there
+            # is nowhere to write. Without this the write below is attempted
+            # with ckpt_dir=None on every improvement, and only the warning
+            # path keeps that from ending the run.
             return
 
         obj = getattr(self.opt, "best_solution_obj_val", None)

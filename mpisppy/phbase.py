@@ -1505,6 +1505,30 @@ class PHBase(mpisppy.spopt.SPOpt):
             if restored_outer is not None and self.spcomm is not None:
                 self.spcomm.BestOuterBound = \
                     self.spcomm.OuterBoundUpdate(restored_outer)
+            # Likewise the inner bound, which an xhat spoke sent. The hub
+            # first reads its spokes' bounds after the first resumed
+            # iteration's solve, so without this that iteration runs against
+            # an infinite inner bound -- gap tests that cannot fire, and a
+            # Gapper mipgap set as if nothing had been found -- where the
+            # uninterrupted run had the incumbent. Each bound is credited to
+            # the spoke whose file it came from: that spoke restores the
+            # solution and republishes the same value, which does not beat
+            # it, and the credited cylinder writes the solution at the end.
+            if self.spcomm is not None and \
+                    getattr(self.spcomm, "communicators", None):
+                spoke_bounds = None
+                if self.cylinder_rank == 0:
+                    spoke_bounds = checkpointing.spoke_inner_bounds_to_restore(
+                        self.spcomm.communicators, self.options["resume_from"])
+                # A spoke resuming in place may replace its file while the
+                # hub's ranks read it, and hub ranks that disagreed on the
+                # inner bound could disagree on when to stop.
+                spoke_bounds = self.mpicomm.bcast(spoke_bounds, root=0)
+                comm = self.spcomm
+                for strata_rank, bound in spoke_bounds:
+                    comm.BestInnerBound = comm.InnerBoundUpdate(
+                        bound, comm.communicators[strata_rank]["spcomm_class"],
+                        strata_rank)
             # Without this the incumbent objective reads as None, which
             # update_best_solution_if_improving treats as "accept anything" --
             # so the first xhat after a resume, however bad, would replace the
