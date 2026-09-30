@@ -2859,9 +2859,9 @@ class TestSpokeIncumbentFile(unittest.TestCase):
                 resumed, self.ckpt_dir, self.CYLINDER, 2)
 
     def test_a_file_missing_an_agreed_key_is_refused_at_load(self):
-        """agree_on_spoke_incumbent reads these two before its collective,
-        so a file without one has to be refused by the load, which runs
-        inside an agreement, not by a KeyError on one rank."""
+        """The agreed restore relies on these two, so a file without one has
+        to be refused by the load, which runs inside an agreement, rather
+        than have None stand in for what the file recorded."""
         for key in ("best_solution_obj_val", "best_inner_bound"):
             with self.subTest(key=key):
                 _, path = self._write_one()
@@ -2875,6 +2875,38 @@ class TestSpokeIncumbentFile(unittest.TestCase):
                         as ctx:
                     checkpointing.load_spoke_incumbent(
                         resumed, self.ckpt_dir, self.CYLINDER, 2)
+                self.assertIn(key, str(ctx.exception))
+
+    def test_a_dual_file_missing_a_key_read_outside_the_agreement_is_refused(
+            self):
+        """The dual restore reads generation and Wbar outside any agreement,
+        just before a collective, so the load -- which runs inside one --
+        has to refuse a file without them."""
+        opt = _make_ph(_options(1))
+        cylinder, ordinal = "PHDualSpoke", 0
+        spokes_dir = os.path.join(self.ckpt_dir, checkpointing.SPOKES_SUBDIR)
+        os.makedirs(spokes_dir)
+        path = os.path.join(spokes_dir, checkpointing._spoke_filename(
+            cylinder, ordinal, opt.cylinder_rank))
+        for key in ("generation", "Wbar"):
+            with self.subTest(key=key):
+                state = {
+                    "format_version": checkpointing.FORMAT_VERSION,
+                    "kind": "dual-spoke-ph-state",
+                    "structural_fingerprint":
+                        checkpointing.structural_fingerprint(opt.options),
+                    "geometry": {
+                        "scenario_names": sorted(opt.local_scenarios)},
+                    "generation": 3,
+                    "Wbar": {},
+                }
+                del state[key]
+                with open(path, "wb") as f:
+                    pickle.dump(state, f)
+                with self.assertRaises(checkpointing.CheckpointMismatch) \
+                        as ctx:
+                    checkpointing.load_dual_spoke_state(
+                        opt, self.ckpt_dir, cylinder, ordinal)
                 self.assertIn(key, str(ctx.exception))
 
     def test_a_variable_the_model_no_longer_has_is_refused(self):

@@ -1510,10 +1510,9 @@ def load_spoke_incumbent(opt, ckpt_dir, cylinder, ordinal):
             f"{state.get('format_version')}, but this mpi-sppy writes "
             f"version {FORMAT_VERSION}."
         )
-    # Checked here, inside the agreement the load runs in, because
-    # agree_on_spoke_incumbent reads both before its collective: a file
-    # without one would raise KeyError on that rank alone and leave the
-    # others waiting in the gather.
+    # Checked here, inside the agreement the load runs in, because the
+    # agreed restore relies on both: without one, agree_spoke_restore would
+    # compare or broadcast None as though the file had recorded it.
     missing = [key for key in ("best_solution_obj_val", "best_inner_bound")
                if key not in state]
     if missing:
@@ -1769,6 +1768,17 @@ def load_dual_spoke_state(opt, ckpt_dir, cylinder, ordinal):
             f"The cylinder state file '{path}' was written by a run "
             f"configured differently from this one, so its dual weights do "
             f"not belong to this model."
+        )
+    # Checked here, inside the agreement the load runs in, because the
+    # restore reads both outside one: require_restored_duals_match_their_file
+    # is collective, and a file without one would raise KeyError on that
+    # rank alone and leave the others waiting in it.
+    missing = [key for key in ("generation", "Wbar") if key not in state]
+    if missing:
+        raise CheckpointMismatch(
+            f"The cylinder state file '{path}' has no "
+            f"{' or '.join(missing)}, so it was not written by this mpi-sppy "
+            f"or has been damaged."
         )
     have = sorted(opt.local_scenarios.keys())
     want = state["geometry"]["scenario_names"]
