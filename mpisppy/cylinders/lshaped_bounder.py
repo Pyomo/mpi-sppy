@@ -22,6 +22,11 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
         if not isinstance(self.opt, Xhat_Eval):
             raise RuntimeError("XhatLShapedInnerBound must be used with Xhat_Eval.")
 
+        # cfg_vanilla builds this spoke through _Xhat_Eval_spoke_foundation,
+        # which attaches the Checkpointer. Without this call the extension is
+        # constructed and then never asked for anything.
+        self.restore_checkpointed_incumbent()
+
         teeme = False
         if "tee-rank0-solves" in self.opt.options:
             teeme = self.opt.options['tee-rank0-solves']
@@ -70,3 +75,5 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
                     continue
 
                 self.update_if_improving(obj)
+
+            self.maybe_checkpoint()

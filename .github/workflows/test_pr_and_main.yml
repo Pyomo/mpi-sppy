@@ -250,6 +250,13 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_checkpoint.py -v
 
+      # This one spawns its own mpiexec jobs -- one per A/B leg, in a fresh
+      # process, which is what the design's acceptance gate asks for and what
+      # a stopped study really does -- so it runs under plain pytest.
+      - name: Test checkpoint/resume on cylinders
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_checkpoint_cylinders.py -v
+
       - name: Test prox_approx end-to-end
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_prox_approx_e2e.py -v

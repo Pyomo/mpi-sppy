@@ -83,6 +83,8 @@ class XhatXbarInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
 
                 self.update_if_improving(innerbound)
 
+            self.maybe_checkpoint()
+
             ib_iter += 1
 
         dtm.debug(f'IB xbar thread ran {ib_iter} iterations\n')
