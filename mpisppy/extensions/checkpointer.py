@@ -70,8 +70,9 @@ workflow and that iterate is known-good and already in memory.
 
 ``--checkpoint-before-seconds S`` covers the stop K does not: a run that ends
 against a wall clock rather than at an iteration limit, at an iteration that
-is not a multiple of K. It adds one extra checkpoint point, at the end of the
-last iteration that is expected to finish before S seconds have elapsed. See
+is not a multiple of K. It writes once, at the end of the first iteration
+after which one more as long as the last would pass S seconds; if that
+iteration is a multiple of K, the write it gets anyway is the one. See
 ``_deadline_is_near``.
 
 A checkpoint therefore describes a *completed PH iteration*. A run that ends

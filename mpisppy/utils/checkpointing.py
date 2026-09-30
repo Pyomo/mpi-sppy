@@ -349,13 +349,13 @@ def _fsync_dir(path):
 #   error message. Anything added to those paths belongs inside it;
 #   ``test_checkpoint_multirank.py`` checks that nothing sits beside it.
 #
-# The write *trigger* needs no such agreement. It is a pure function of the
-# absolute iteration number and the iteration limit (see
+# The iteration-count triggers need no such agreement. They are a pure function
+# of the absolute iteration number and the iteration limit (see
 # ``Checkpointer._should_write``), both of which are identical on every rank of
 # a synchronous PH cylinder, so the ranks arrive at the barrier together
-# without being asked. Any trigger that is not a pure function of the iteration
-# count -- an elapsed-time trigger, say -- would reintroduce rank skew and
-# deadlock here, and would have to be put through ``allreduce_or`` first.
+# without being asked. A trigger that is not a pure function of the iteration
+# count would reintroduce rank skew and deadlock here, so the elapsed-time one,
+# ``--checkpoint-before-seconds``, is put through ``allreduce_or`` first.
 ###############################################################################
 
 #: Sentinel meaning "no rank failed" in the failure agreement below. Larger

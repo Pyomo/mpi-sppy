@@ -922,14 +922,14 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
      by `TestOneRankFailingDoesNotHangTheOthers`, which sabotages one rank's
      write under `mpiexec` and checks the job returns rather than hanging.
 
-   The write *trigger* needs no agreement, and that is load-bearing rather than
-   lucky: `--checkpoint-every-iterations` makes it a pure function of the
-   absolute iteration number and the iteration limit, both identical on every
-   rank of a synchronous PH cylinder, so the ranks arrive at the barrier
-   together without being asked. Any trigger that is not a pure function of the
-   iteration count — the elapsed-time triggers this design declined to
-   implement, for instance — reintroduces rank skew and must go through
-   `allreduce_or` before the barrier or it deadlocks the write.
+   The iteration-count triggers need no agreement, and that is load-bearing
+   rather than lucky: `--checkpoint-every-iterations` makes them a pure
+   function of the absolute iteration number and the iteration limit, both
+   identical on every rank of a synchronous PH cylinder, so the ranks arrive at
+   the barrier together without being asked. A trigger that is not a pure
+   function of the iteration count reintroduces rank skew and must go through
+   `allreduce_or` before the barrier or it deadlocks the write; the elapsed-time
+   trigger, `--checkpoint-before-seconds`, does exactly that.
 
    The setup-time dillability probe (§9, item 8's companion in
    `probe_model_is_dillable`) is collective for the same reason: an undillable
@@ -985,9 +985,9 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
      at the hook, testing `allreduce_or(elapsed + last_iteration_seconds ≥ S)`
      with the same collective pattern, then latching so it fires at most once
      (§8). It needs the most-recent iteration duration (item 9); everything
-     else it shares with the periodic path. The iteration-count tests run
-     ahead of it so that the ranks agree on whether the collective is reached
-     at all.
+     else it shares with the periodic path. It is asked at every completed
+     iteration, before the iteration-count tests, so every rank reaches the
+     collective every time.
    - *at each completed iteration* — after the subproblem solve, the only point
      in the loop where the dual weights and the nonants describe the same
      iteration (§8). There is no terminal trigger and no
