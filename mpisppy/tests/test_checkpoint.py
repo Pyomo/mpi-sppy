@@ -1138,7 +1138,12 @@ class TestSetupRefusals(unittest.TestCase):
         real ranks, which `test_checkpoint_multirank.py` supplies under
         mpiexec. This is what keeps the refusal from creeping back in.
         """
-        ckpt = Checkpointer(self._stub(n_proc=2))
+        opt = self._stub(n_proc=2)
+        # A two-rank cylinder agrees on its setup steps, so it needs a comm
+        # that can; the single-rank fallback mpi-sppy uses without mpi4py
+        # has no allgather.
+        opt.mpicomm = _TwoRankComm()
+        ckpt = Checkpointer(opt)
         self.assertTrue(ckpt.write_enabled)
 
     def test_unwritable_directory_is_refused_at_setup(self):
@@ -2596,6 +2601,26 @@ def _solution_by_name(opt):
     }
 
 
+class _TwoRankComm:
+    """A cylinder comm for two ranks that agree on everything: each
+    collective answers as though the other rank sent what this one did."""
+
+    def Get_size(self):
+        return 2
+
+    def Get_rank(self):
+        return 0
+
+    def allgather(self, value):
+        return [value, value]
+
+    def bcast(self, value, root=0):
+        return value
+
+    def Barrier(self):
+        pass
+
+
 class TestSpokeIncumbentFile(unittest.TestCase):
     """The spoke's own checkpoint: the best xhat, by variable name.
 
@@ -2832,6 +2857,25 @@ class TestSpokeIncumbentFile(unittest.TestCase):
         with self.assertRaises(checkpointing.CheckpointMismatch):
             checkpointing.load_spoke_incumbent(
                 resumed, self.ckpt_dir, self.CYLINDER, 2)
+
+    def test_a_file_missing_an_agreed_key_is_refused_at_load(self):
+        """agree_on_spoke_incumbent reads these two before its collective,
+        so a file without one has to be refused by the load, which runs
+        inside an agreement, not by a KeyError on one rank."""
+        for key in ("best_solution_obj_val", "best_inner_bound"):
+            with self.subTest(key=key):
+                _, path = self._write_one()
+                with open(path, "rb") as f:
+                    state = pickle.load(f)
+                del state[key]
+                with open(path, "wb") as f:
+                    pickle.dump(state, f)
+                resumed = _xhat_eval(resume_from=self.ckpt_dir)
+                with self.assertRaises(checkpointing.CheckpointMismatch) \
+                        as ctx:
+                    checkpointing.load_spoke_incumbent(
+                        resumed, self.ckpt_dir, self.CYLINDER, 2)
+                self.assertIn(key, str(ctx.exception))
 
     def test_a_variable_the_model_no_longer_has_is_refused(self):
         """A partially restored incumbent is a solution that was never
