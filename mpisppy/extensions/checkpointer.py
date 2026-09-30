@@ -261,8 +261,10 @@ class Checkpointer(Extension):
         --checkpoint-dir run whose hub did not get one. It runs before any
         spoke can write: the hub builds this extension while constructing its
         opt object, before make_windows; each spoke rank waits in make_windows
-        for the hub rank of the same number; and every hub rank is held in
-        this setup's agreement until hub rank 0 has finished deleting.
+        for every hub rank on its window's communicator (the hub rank of the
+        same number when every cylinder has the same number of ranks, every
+        hub rank otherwise); and every hub rank is held in this setup's
+        agreement until hub rank 0 has finished deleting.
         """
         if self._same_directory(self.opt.options.get("resume_from", None)):
             return
