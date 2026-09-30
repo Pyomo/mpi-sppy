@@ -751,8 +751,10 @@ class Checkpointer(Extension):
         would destroy lives only in memory. The next multiple of K, the
         ``--checkpoint-before-seconds`` write if it has not happened yet, or
         the last iteration of the iteration limit tries again, whichever
-        comes first. The deadline write fires once and is not retried, and a
-        failure at the last iteration of the limit has nothing after it.
+        comes first, if the run gets that far: a stop on convergence, the
+        cylinders' gap or ``--time-limit`` writes nothing more. The deadline
+        write fires once and is not retried, and a failure at the last
+        iteration of the limit has nothing after it.
         Conditions detectable at setup (unwritable directory,
         undillable model, unknown backend) still fail loudly in ``__init__``
         and ``pre_iter0``.
@@ -812,12 +814,17 @@ class Checkpointer(Extension):
                     "the previously published checkpoint")
         pending = (self.before_seconds is not None
                    and not self._before_seconds_fired)
+        # "if the run gets that far": _is_final_iteration knows only the
+        # iteration bounds, and a run that stops on convergence, the
+        # cylinders' gap or --time-limit ends with no further write.
         retry = ("the run continues; the next multiple of "
                  "--checkpoint-every-iterations"
-                 + (", the --checkpoint-before-seconds write if it has not "
-                    "happened yet," if pending else "")
+                 + (", the --checkpoint-before-seconds write,"
+                    if pending else "")
                  + " or the last iteration of the iteration limit, whichever "
-                 "comes first, will try again")
+                 "comes first, will try again if the run gets that far (a "
+                 "stop on convergence, the cylinders' gap or --time-limit "
+                 "writes nothing more)")
         if self.before_seconds is not None and not pending:
             retry += (" (--checkpoint-before-seconds has already fired and "
                       "does not retry)")

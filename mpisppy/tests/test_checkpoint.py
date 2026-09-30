@@ -1932,20 +1932,64 @@ class TestCheckpointBeforeSecondsDecision(unittest.TestCase):
         self.assertIn("no later write will try again", last._what_retries())
 
         pending = self._checkpointer(100.0, phiter=5)
-        self.assertIn("--checkpoint-before-seconds write if it has not "
-                      "happened yet", pending._what_retries())
+        self.assertIn("the --checkpoint-before-seconds write,",
+                      pending._what_retries())
         self.assertNotIn("already fired", pending._what_retries())
 
         fired = self._checkpointer(100.0, phiter=5)
         fired._before_seconds_fired = True
         self.assertIn("already fired and does not retry",
                       fired._what_retries())
-        self.assertNotIn("if it has not happened yet", fired._what_retries())
+        self.assertNotIn("the --checkpoint-before-seconds write,",
+                         fired._what_retries())
 
         unset = self._checkpointer(None, phiter=5)
         self.assertIn("will try again", unset._what_retries())
         self.assertNotIn("--checkpoint-before-seconds",
                          unset._what_retries())
+
+        # A stop on convergence, the gap or --time-limit is not knowable at
+        # the hook, so no mid-run promise is unconditional.
+        for ext in (pending, fired, unset):
+            self.assertIn("if the run gets that far", ext._what_retries())
+
+    def _failed_write_warning(self, ext):
+        """Drive a failing write through maybe_checkpoint, the path a user
+        sees, and return the warning it printed."""
+        enospc = OSError(errno.ENOSPC, "No space left on device")
+        with mock.patch.object(checkpointing, "write_checkpoint",
+                               side_effect=enospc), \
+             mock.patch("mpisppy.extensions.checkpointer.global_toc") as toc:
+            ext.maybe_checkpoint()
+        warnings = [c.args[0] for c in toc.call_args_list
+                    if c.args[0].startswith("WARNING: checkpoint write failed")]
+        self.assertEqual(len(warnings), 1, toc.call_args_list)
+        return warnings[0]
+
+    def test_the_printed_warning_names_what_retries(self):
+        """The warning the user reads is the one maybe_checkpoint prints, so
+        each case is checked there, not only in the helper."""
+        # A K write fails while the deadline write is still to come.
+        pending = self._checkpointer(100.0, every=5, phiter=5)
+        self._clock(pending, elapsed=1.0, last_iteration=1.0)
+        warning = self._failed_write_warning(pending)
+        self.assertIn("the --checkpoint-before-seconds write,", warning)
+        self.assertIn("if the run gets that far", warning)
+
+        # The failed write is itself the deadline write: the trigger set the
+        # latch on the way in, so the warning must not offer it as a retry.
+        deadline = self._checkpointer(100.0, every=100, phiter=5)
+        self._clock(deadline, elapsed=80.0, last_iteration=30.0)
+        warning = self._failed_write_warning(deadline)
+        self.assertTrue(deadline._before_seconds_fired)
+        self.assertIn("already fired and does not retry", warning)
+        self.assertNotIn("the --checkpoint-before-seconds write,", warning)
+
+        # The last iteration of the limit has nothing after it.
+        last = self._checkpointer(100.0, every=100, phiter=100, limit=100)
+        self._clock(last, elapsed=1.0, last_iteration=1.0)
+        warning = self._failed_write_warning(last)
+        self.assertIn("no later write will try again", warning)
 
     def test_a_nonpositive_deadline_is_refused_at_setup(self):
         for bad in (0.0, -5.0):
