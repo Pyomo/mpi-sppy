@@ -486,8 +486,8 @@ class Checkpointer(Extension):
             global_toc(
                 f"WARNING: rank {self.opt.cylinder_rank} of this cylinder "
                 f"could not write its dual weights ({type(exc).__name__}); "
-                f"the run continues and the next iteration, if there is "
-                f"one, will try again.\n{exc}",
+                f"the run continues and the end of the next iteration "
+                f"will try again if the run gets that far.\n{exc}",
                 True)
 
     def _spoke_identity(self):
