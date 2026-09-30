@@ -1054,7 +1054,7 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
     # Publishing is rank 0's alone and comes after the last collective, so a
     # failure in it cannot desynchronize anyone: rank 0 raises and warns, the
     # other ranks return, the manifest still names the previous generation and
-    # the next checkpoint point retries.
+    # the next checkpoint point retries if the run gets that far.
     if is_publisher:
         try:
             _publish_generation(opt, ckpt_dir, hub_dir, final_dir,

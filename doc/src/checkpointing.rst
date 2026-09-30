@@ -223,13 +223,14 @@ the previously published checkpoint stays intact and resumable, and
 the next checkpoint point tries again: the next multiple of
 ``--checkpoint-every-iterations``, the ``--checkpoint-before-seconds`` write
 if it has not happened yet, or the last iteration of the budget, whichever
-comes first, if the run gets that far: a run that stops on convergence, on
-the gap between the cylinders' bounds or at ``--time-limit`` writes nothing
-more. A failed ``--checkpoint-before-seconds`` write is not retried: that
-trigger fires once. A write that fails at the last iteration of the budget is
-not retried either; a resume starts from the checkpoint before it.
-Conditions detectable at setup (an unwritable directory, a model that cannot
-be serialized) still stop the run at startup, before any solving is done.
+comes first, if the run gets that far. A run that stops on convergence, on
+the gap between the cylinders' bounds, on ``--max-stalled-iters`` or at
+``--time-limit`` writes nothing more. A failed
+``--checkpoint-before-seconds`` write is not retried: that trigger fires
+once. A write that fails at the last iteration of the budget is not retried
+either; a resume starts from the checkpoint before it. Conditions detectable
+at setup (an unwritable directory, a model that cannot be serialized) still
+stop the run at startup, before any solving is done.
 
 Resuming
 --------

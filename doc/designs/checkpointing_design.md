@@ -598,8 +598,9 @@ Consequences, all deliberate:
   reports it loudly, and retries at the next multiple of K, at the
   `--checkpoint-before-seconds` write if that has not happened yet, or at the
   last iteration of the budget, if the run gets that far (a stop on
-  convergence, the cylinders' gap or `--time-limit` writes nothing more); a
-  failed deadline write, and a failure at the last iteration, are not retried.
+  convergence, the cylinders' gap, `--max-stalled-iters` or `--time-limit`
+  writes nothing more); a failed deadline write, and a failure at the last
+  iteration, are not retried.
 - The **incidental benefit**: because every write now precedes any
   `post_everything`, an xhat evaluation can no longer contaminate a checkpoint,
   which closes §9 item 4 without separate machinery.
