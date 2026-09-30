@@ -1434,7 +1434,7 @@ as a branch stacked on the 1a PR.
     for its inner bound, so its gap reflects the answer the run already had
     from the first resumed iteration on (§5.4). A hub that is not resuming from its own
     `--checkpoint-dir` removes `spokes/` at setup, so a later resume cannot
-    restore an earlier study's incumbent. `--resume-from` without `--checkpoint-dir`
+    restore an earlier study's incumbent or dual weights. `--resume-from` without `--checkpoint-dir`
     attaches the extension with writing switched off, since on a spoke the
     restore *is* the extension's job.
   - *The A/B tests — implemented.* `test_checkpoint_cylinders.py` runs each

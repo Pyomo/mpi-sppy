@@ -3010,13 +3010,15 @@ class TestSpokeInnerBoundsToRestore(unittest.TestCase):
                         objective=-99.0)
         self.assertEqual(self._found(self.Hub, self.XhatShuffle), [])
 
-    def test_ranks_agreeing_on_the_objective_alone_are_not_credited(self):
-        """The spoke's ranks compare the inner bound too
-        (agree_on_spoke_incumbent), so the hub must as well."""
+    def test_ranks_agreeing_on_the_objective_are_credited_rank_0s_bound(self):
+        """The spoke's ranks compare only the objective (agree_spoke_restore)
+        and then all take rank 0's inner bound, which is what they publish,
+        so the hub credits exactly that."""
         self._incumbent("XhatShuffle", 0, -100.0, rank=0, n_proc=2)
         self._incumbent("XhatShuffle", 0, -90.0, rank=1, n_proc=2,
                         objective=-100.0)
-        self.assertEqual(self._found(self.Hub, self.XhatShuffle), [])
+        self.assertEqual(self._found(self.Hub, self.XhatShuffle),
+                         [(1, -100.0)])
 
     def test_a_pickle_that_is_not_a_dict_is_skipped(self):
         self._file("XhatShuffle", 0, ["not", "a", "dict"])

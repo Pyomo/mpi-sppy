@@ -335,16 +335,6 @@ class TestFarmerCylindersResumeAB(_ResumeABMixin, unittest.TestCase):
                     return pickle.load(f)["loop_state"]
         raise AssertionError(f"no {self.INCUMBENT_SPOKE} file in {spokes_dir}")
 
-    def test_spokes_without_a_cursor_carry_none(self):
-        """lagrangian has no loop position worth resuming; it says so."""
-        _, stopped, _ = self._run_ab()
-        by_cylinder = {s["cylinder"]: s for s in stopped["spokes"]}
-        self.assertIn("XhatShuffleInnerBound", by_cylinder)
-        for name, marker in by_cylinder.items():
-            if name != "XhatShuffleInnerBound":
-                self.assertIsNone(marker["final_loop_state"])
-
-
     def test_a_bound_the_spoke_never_wrote_is_not_restored(self):
         """The hub's last word can be newer than a spoke's file: a spoke
         publishes an improvement before it writes it, and a failed write is
@@ -391,6 +381,20 @@ class TestStochAdmmCylindersResumeAB(_ResumeABMixin, unittest.TestCase):
                   "--num-admm-subproblems", "2", "--default-rho", "10")
     SPOKE_ARGS = ("--lagrangian", "--xhatxbar")
     INCUMBENT_SPOKE = "XhatXbarInnerBound"
+
+    def test_a_spoke_without_a_cursor_carries_none(self):
+        """xhatxbar re-evaluates from scratch whenever new nonants arrive, so
+        it has no loop position worth resuming, and neither it nor its
+        checkpoint file claims one."""
+        _, stopped, _ = self._run_ab()
+        (marker,) = [s for s in stopped["spokes"]
+                     if s["cylinder"] == self.INCUMBENT_SPOKE]
+        self.assertIsNone(marker["final_loop_state"])
+        spokes_dir = os.path.join(self.ckpt_dir, "spokes")
+        (fname,) = [f for f in os.listdir(spokes_dir)
+                    if f.startswith(f"spoke_{self.INCUMBENT_SPOKE}")]
+        with open(os.path.join(spokes_dir, fname), "rb") as f:
+            self.assertIsNone(pickle.load(f)["loop_state"])
 
 
 @unittest.skipIf(not solver_available, "no solver is available")

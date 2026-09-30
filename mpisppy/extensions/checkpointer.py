@@ -299,8 +299,9 @@ class Checkpointer(Extension):
     def _clear_other_studies_spoke_files(self):
         """Delete ``spokes/`` unless this run is resuming from this directory.
 
-        A spoke overwrites only its own file, and only once it finds an
-        incumbent, so a run started in a directory an earlier study used
+        A spoke overwrites only its own file, and only once it has an
+        incumbent or dual weights to write, so a run started in a directory
+        an earlier study used
         leaves that study's spoke files beside its own. A later resume of
         this run then restores them into whichever spoke has the same name:
         silently when the configuration matches, and with a refusal that
@@ -320,7 +321,7 @@ class Checkpointer(Extension):
         spokes_dir = os.path.join(self.ckpt_dir, ckpt.SPOKES_SUBDIR)
         if not os.path.isdir(spokes_dir):
             return
-        global_toc(f"Removing spoke incumbent files left in {spokes_dir} by "
+        global_toc(f"Removing spoke files left in {spokes_dir} by "
                    f"an earlier run; this run is not resuming from that "
                    f"directory", True)
         shutil.rmtree(spokes_dir)

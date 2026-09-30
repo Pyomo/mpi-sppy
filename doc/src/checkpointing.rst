@@ -70,8 +70,10 @@ The options
 There are six, and they are the whole interface:
 
 ``--checkpoint-dir DIR``
-   Where checkpoints are written. Giving it is what turns checkpointing on;
-   without it none of this machinery is attached.
+   Where checkpoints are written. Giving it is what turns writing on. Without
+   it or ``--resume-from`` none of this machinery is attached; with
+   ``--resume-from`` alone it is attached with writing switched off, so the
+   run reads a checkpoint and writes none.
 
 ``--checkpoint-every-iterations K``
    Write at every K-th completed iteration instead of every one. The default is
@@ -81,10 +83,10 @@ There are six, and they are the whole interface:
    the safest cadence and the most expensive one.
 
 ``--checkpoint-before-seconds S``
-   Write once, at the last iteration boundary expected to arrive within S
-   seconds of the start of the run. For a run that will be stopped by a clock
-   rather than by its iteration limit -- see `Guarding against a scheduler
-   timeout`_.
+   Write once, at the first iteration boundary where one more iteration as
+   long as the last would carry the run past S seconds from its start. For a
+   run that will be stopped by a clock rather than by its iteration limit --
+   see `Guarding against a scheduler timeout`_.
 
 ``--stop-at-iteration-number T``
    End the study at iteration ``T``, counted across every run linked by
@@ -192,7 +194,10 @@ starts when S has all but arrived. Read a write's cost off the ``toc`` lines in
 your own log (`What it costs`_) and leave room for it, along with anything else
 that must happen before the scheduler's axe falls. Setting S equal to
 ``--time-limit``, as above, is the usual choice when ``--time-limit`` is in use: the write then lands at the
-last iteration boundary before the time limit stops the run.
+first iteration boundary where one more iteration as long as the last would
+cross the time limit. Because it writes only once, iterations the run still
+completes after it -- when later ones turn out faster -- are covered only by
+the every-K writes.
 
 Writing only at iteration boundaries is deliberate. PH computes xbar, updates
 the dual weights, gives extensions their mid-iteration hook, and only then
@@ -490,7 +495,7 @@ the next successful write reclaims anything the interrupted one left behind.
 Use one checkpoint directory per run. Two runs sharing one share a manifest and
 will overwrite each other. A run that is not resuming from its own
 ``--checkpoint-dir`` removes the ``spokes/`` files an earlier run left there,
-so a later resume cannot pick up another study's incumbent.
+so a later resume cannot pick up another study's incumbent or dual weights.
 
 Cylinders that span several ranks
 ---------------------------------
