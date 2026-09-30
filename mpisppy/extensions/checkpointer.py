@@ -89,8 +89,8 @@ starts at the next iteration, so the ``enditer`` that made the change never
 runs again.
 
 The same hook is what the xhatter spokes call once per pass through their main
-loops, which have no ``enditer`` to borrow: one Checkpointer serves the hub
-and the spokes.
+loops, which have no ``enditer`` to borrow, and once more when they finalize:
+one Checkpointer serves the hub and the spokes.
 
 **Multi-rank cylinders.** A hub spread over several ranks holds its scenarios
 in slices, so one checkpoint generation spans all of them and is published only
@@ -410,6 +410,13 @@ class Checkpointer(Extension):
             self.opt.spcomm.send_best_xhat()
         global_toc(f"Restored the checkpointed incumbent for {cylinder} "
                    f"(objective {obj})", rank0)
+        # Write it to this run's directory now, not at the bottom of the
+        # first loop pass: a short resume whose hub finishes before this
+        # spoke starts its loop -- the spoke's prep can solve for a while --
+        # never reaches that pass, and leaves a directory whose hub
+        # checkpoint has no incumbent beside it. Resuming in place skips the
+        # write, because _last_written_obj was seeded above.
+        self._spoke_checkpoint()
 
     def _same_directory(self, other):
         """True when ``other`` names the directory this run writes to.
@@ -538,10 +545,11 @@ class Checkpointer(Extension):
     def _spoke_checkpoint(self):
         """Write the incumbent if it improved.
 
-        Called once per pass of a loop that spins while it waits on the hub,
-        so the common case has to be cheap: comparing two floats and
-        returning. A write happens only when the incumbent objective differs
-        from the one already on disk.
+        Called once per pass of a loop that spins while it waits on the hub
+        (and also right after a restore and at finalize), so the common case
+        has to be cheap: comparing two floats and returning. A write
+        happens only when the incumbent objective differs from the one
+        already on disk.
 
         Failures warn rather than raise, for the hub's reason and one more:
         this file is an optimization. Losing it costs a resumed run the

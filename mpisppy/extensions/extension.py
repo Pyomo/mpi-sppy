@@ -152,7 +152,8 @@ class Extension:
         ''' Method called at each point where the algorithm's state is
             coherent enough to be checkpointed: after the solve and after
             every enditer() on the hub, and once per pass through an
-            xhatter spoke's main loop.
+            xhatter spoke's main loop plus once more when the spoke
+            finalizes.
 
             Unlike the hooks above, this one is called by the algorithm
             drivers directly rather than being one hook among many, so what
