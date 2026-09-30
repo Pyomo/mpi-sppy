@@ -89,8 +89,8 @@ starts at the next iteration, so the ``enditer`` that made the change never
 runs again.
 
 The same hook is what the xhatter spokes call once per pass through their main
-loops, which have no ``enditer`` to borrow: one Checkpointer serves the hub
-and the spokes.
+loops, which have no ``enditer`` to borrow, and once more when they finalize:
+one Checkpointer serves the hub and the spokes.
 
 See ``doc/designs/checkpointing_design.md``.
 """
@@ -505,10 +505,11 @@ class Checkpointer(Extension):
     def _spoke_checkpoint(self):
         """Write the incumbent if it improved.
 
-        Called once per pass of a loop that spins while it waits on the hub,
-        so the common case has to be cheap: comparing two floats and
-        returning. A write happens only when the incumbent objective differs
-        from the one already on disk.
+        Called once per pass of a loop that spins while it waits on the hub
+        (and also right after a restore and at finalize), so the common case
+        has to be cheap: comparing two floats and returning. A write
+        happens only when the incumbent objective differs from the one
+        already on disk.
 
         Failures warn rather than raise, for the hub's reason and one more:
         this file is an optimization. Losing it costs a resumed run the

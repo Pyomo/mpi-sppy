@@ -430,7 +430,8 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke, InnerBoundSpoke):
 
         Call it at the *bottom* of a pass: what a spoke checkpoints is the
         best xhat it has found, so the pass that finds one has to finish
-        before the write is worth making.
+        before the write is worth making. ``finalize`` calls it once more,
+        for a loop that exits at its top check before reaching a bottom.
 
         See section 9, items 6 and 8 of
         doc/designs/checkpointing_design.md.

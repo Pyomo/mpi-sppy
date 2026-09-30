@@ -849,13 +849,14 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
    the cylinder-convergence break, so a run ending that way would write nothing.
 
    The xhatter `main()` loops have no `enditer` to borrow, so they call the same
-   hook (via `InnerBoundNonantSpoke.maybe_checkpoint`) once per pass, at the bottom
-   — plus once on xhatshuffle's mid-pass kill-signal `return`, which skips it,
-   and once more in `InnerBoundNonantSpoke.finalize`, which covers a loop that
-   exits at its top check before any pass. That is what makes **one
-   `Checkpointer` serve hub and xhatter uniformly** (restore already has a home: `pre_iter0`/`post_iter0` fire once
-   in `xhat_prep` in `xhatbase.py`). Both hooks live on `InnerBoundNonantSpoke`
-   rather than on `XhatInnerBoundBase`, because `cfg_vanilla` attaches the
+   hook (via `InnerBoundNonantSpoke.maybe_checkpoint`) once per pass, at the
+   bottom — plus once on xhatshuffle's mid-pass kill-signal `return`, which
+   skips it, and once more in `InnerBoundNonantSpoke.finalize`, which covers a
+   loop that exits at its top check before any pass. That is what makes **one
+   `Checkpointer` serve hub and xhatter uniformly** (restore already has a
+   home: `pre_iter0`/`post_iter0` fire once in `xhat_prep` in `xhatbase.py`).
+   Both hooks live on `InnerBoundNonantSpoke` rather than on
+   `XhatInnerBoundBase`, because `cfg_vanilla` attaches the
    Checkpointer through `_Xhat_Eval_spoke_foundation`, which builds the
    L-shaped xhatter and the two slammers as well as the four xhat spokes;
    those three derive from the former and not the latter, and were handed an
@@ -1076,7 +1077,8 @@ as a branch stacked on the 1a PR.
 - **Phase 4 — Cylinders / spokes.**
   - *The write hook — implemented.* `Extension.maybe_checkpoint`, called
     directly by `iterk_loop` (after every `enditer`) and once per pass by each
-    xhatter's `main()` loop through `InnerBoundNonantSpoke.maybe_checkpoint`. The
+    xhatter's `main()` loop through `InnerBoundNonantSpoke.maybe_checkpoint`,
+    plus once more from `InnerBoundNonantSpoke.finalize`. The
     hub write moved onto it, which is what removes the dispatch-order
     dependency phase 1a had to document: `MultiExtension` dispatched `enditer`
     in attach order with the `Checkpointer` first (`add_checkpointing` runs at
