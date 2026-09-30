@@ -77,7 +77,7 @@ class _ResumeABMixin:
     def tearDown(self):
         self._tmp.cleanup()
 
-    def _leg(self, name, *extra_args):
+    def _leg(self, name, *extra_args, spoke_writes_may_fail=False):
         """Run one mpiexec job and return the hub's snapshot."""
         out_path = os.path.join(self._tmp.name, f"{name}.json")
         cmd = [
@@ -108,9 +108,10 @@ class _ResumeABMixin:
         # write does not fail a leg -- it just prints. A resume-only leg
         # attempting a write it has nowhere to put got all the way through
         # the harness this way once.
-        self.assertNotIn(
-            "could not write its incumbent", result.stdout,
-            msg=f"leg {name!r} failed to write a spoke incumbent")
+        if not spoke_writes_may_fail:
+            self.assertNotIn(
+                "could not write its incumbent", result.stdout,
+                msg=f"leg {name!r} failed to write a spoke incumbent")
         self.assertNotIn(
             "WARNING: checkpoint write failed", result.stdout,
             msg=f"leg {name!r} failed to write a hub checkpoint")
@@ -133,6 +134,25 @@ class _ResumeABMixin:
         resumed = self._leg("B2", "--max-iterations", str(self.N - self.STOP),
                             "--resume-from", self.ckpt_dir)
         return reference, stopped, resumed
+
+    def _assert_the_credited_spoke_holds_the_bound(self, snapshot):
+        """The cylinder credited with the hub's inner bound writes the
+        solution, so it has to hold one with that objective; otherwise the
+        run reports one number and writes a solution worth another."""
+        credited = [s for s in snapshot["spokes"]
+                    if s["strata_rank"] == snapshot["last_ib_idx"]]
+        self.assertEqual(
+            len(credited), 1,
+            msg=f"the inner bound is credited to cylinder "
+                f"{snapshot['last_ib_idx']}, which is not an xhat spoke: "
+                f"{snapshot['spokes']}")
+        self.assertIsNotNone(credited[0]["best_solution_obj_val"],
+                             msg="the credited spoke holds no solution")
+        self.assertAlmostEqual(
+            credited[0]["best_solution_obj_val"], snapshot["BestInnerBound"],
+            delta=1e-6 * abs(snapshot["BestInnerBound"]),
+            msg="the hub reports an incumbent objective that the spoke it "
+                "credits does not hold")
 
     def test_cylinders_resume_matches_an_uninterrupted_run(self):
         reference, stopped, resumed = self._run_ab()
@@ -206,6 +226,16 @@ class _ResumeABMixin:
             resumed["BestInnerBound"], stopped["BestInnerBound"],
             msg="the resumed run reports a worse incumbent than its "
                 "checkpoint; the spoke's best xhat was lost")
+
+        # The hub hears from its spokes only after its first resumed solve,
+        # so that solve sees the restored incumbent only if the hub restored
+        # it itself.
+        self.assertEqual(
+            resumed["first_BestInnerBound"],
+            restored[0]["restored_incumbent_obj"],
+            msg="the resumed hub's first iteration ran without the incumbent "
+                "the spoke restored")
+        self._assert_the_credited_spoke_holds_the_bound(resumed)
 
     def test_bounds_stay_valid_after_a_resume(self):
         """Best-so-far, not reproduced: bound timing is spoke-dependent.
@@ -315,6 +345,34 @@ class TestFarmerCylindersResumeAB(_ResumeABMixin, unittest.TestCase):
                 self.assertIsNone(marker["final_loop_state"])
 
 
+    def test_a_bound_the_spoke_never_wrote_is_not_restored(self):
+        """The hub's last word can be newer than a spoke's file: a spoke
+        publishes an improvement before it writes it, and a failed write is
+        not retried. Here every spoke write fails, so the hub heard an
+        incumbent that no file holds, and the resumed spoke re-finds a worse
+        one within the iterations it gets. A hub that restored its own number
+        would credit that spoke with it, and the spoke would then write its
+        worse solution under the better objective."""
+        # A regular file where the spokes' directory goes makes every spoke
+        # write fail while the hub's own checkpoint is written normally.
+        os.makedirs(self.ckpt_dir)
+        with open(os.path.join(self.ckpt_dir, "spokes"), "w"):
+            pass
+        stopped = self._leg("B1", "--max-iterations", str(self.STOP),
+                            "--checkpoint-dir", self.ckpt_dir,
+                            spoke_writes_may_fail=True)
+        self.assertLess(stopped["BestInnerBound"], math.inf,
+                        msg="the stopped leg found no incumbent to lose")
+        resumed = self._leg("B2", "--max-iterations", "1",
+                            "--resume-from", self.ckpt_dir)
+        # No spoke file holds an incumbent, so the resumed hub starts with
+        # none -- whatever the resumed spoke later re-finds.
+        self.assertEqual(
+            resumed["first_BestInnerBound"], math.inf,
+            msg="the resumed hub restored an incumbent no spoke file holds")
+        self._assert_the_credited_spoke_holds_the_bound(resumed)
+
+
 @unittest.skipIf(not solver_available, "no solver is available")
 @unittest.skipIf(not mpiexec_available, "mpiexec is not available")
 class TestStochAdmmCylindersResumeAB(_ResumeABMixin, unittest.TestCase):
@@ -409,6 +467,8 @@ class TestRestoredIncumbentIsRepublished(unittest.TestCase):
                 # Spelled out because a SimpleNamespace inherits nothing, and
                 # the restore path reads this on branches that carry a cursor.
                 loop_state_progress=lambda state: state,
+                send_bound=lambda v: None,
+                send_best_xhat=lambda: None,
             ),
             cylinder_rank=0,
         )
@@ -417,7 +477,6 @@ class TestRestoredIncumbentIsRepublished(unittest.TestCase):
         ext.spoke_mode = True
         ext._last_written_obj = None
         ext._last_failed_obj = None
-        ext._publish_restored_bound = None
         ext.restored_incumbent_obj = None
         ext._spoke_identity = lambda: ("XhatShuffleInnerBound", 2)
         return ext
@@ -457,57 +516,6 @@ class TestRestoredIncumbentIsRepublished(unittest.TestCase):
         self.assertEqual(ext.restored_incumbent_obj, -108382.22)
         self.assertIsNone(ext._last_written_obj)
 
-    def _publish(self, restored, already_held):
-        """Run the deferred publish with the spoke already holding a bound.
-
-        The publish waits for the first checkpoint point, which is the bottom
-        of the first loop pass, so the spoke may have solved and published
-        something of its own by the time it runs.
-        """
-        sent = []
-        ext = self._checkpointer(ckpt_dir=None, resume_from="/tmp/ck1")
-        ext._publish_restored_bound = restored
-        ext.opt.spcomm = types.SimpleNamespace(
-            best_inner_bound=already_held,
-            is_minimizing=True,
-            send_bound=lambda v: sent.append(v),
-            send_best_xhat=lambda: None,
-        )
-        ext._spoke_checkpoint()
-        return ext, sent
-
-    def test_the_restored_bound_reaches_a_hub_that_has_heard_nothing(self):
-        ext, sent = self._publish(restored=-108382.22, already_held=math.inf)
-        self.assertEqual(
-            sent, [-108382.22],
-            msg="a hub that has not heard an incumbent must still be told the "
-                "restored one, or it reports an infinite inner bound")
-        self.assertEqual(ext.opt.spcomm.best_inner_bound, -108382.22)
-
-    def test_a_spoke_that_already_improved_does_not_step_back(self):
-        """The defect this guards: the restored number was sent regardless.
-
-        send_best_xhat() beside it publishes the *current* cache, so sending
-        the restored objective pairs a bound with values it is not the
-        objective of -- and FWPH reads that pair as a QP column.
-        """
-        better = -108500.00
-        ext, sent = self._publish(restored=-108382.22, already_held=better)
-        self.assertEqual(
-            sent, [better],
-            msg="the spoke published a bound it already knew was worse than "
-                "the one it holds")
-        self.assertEqual(ext.opt.spcomm.best_inner_bound, better)
-
-    def test_the_stash_is_consumed_either_way(self):
-        for held in (math.inf, -108500.00):
-            with self.subTest(already_held=held):
-                ext, _ = self._publish(restored=-108382.22, already_held=held)
-                self.assertIsNone(
-                    ext._publish_restored_bound,
-                    msg="the restored bound must publish once, not at every "
-                        "checkpoint point for the rest of the run")
-
 
 class TestAFailedSpokeWriteIsNotRetriedEveryPass(unittest.TestCase):
     """The hook runs on every pass of a loop that spins while it waits on the
@@ -530,7 +538,6 @@ class TestAFailedSpokeWriteIsNotRetriedEveryPass(unittest.TestCase):
         ext._last_written_obj = None
         ext._last_written_loop_progress = None
         ext._last_failed_obj = None
-        ext._publish_restored_bound = None
         ext._spoke_identity = lambda: ("XhatShuffleInnerBound", 0)
         ext._class_ordinal_and_count = lambda: (0, 1)
         return ext

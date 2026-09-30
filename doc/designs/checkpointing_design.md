@@ -362,15 +362,24 @@ None of this lives on a hub scenario model, so it is restored as leaf data under
 
 - `spcomm.BestOuterBound` (the hub leaf's `best_outer_bound`, which is where a
   spoke's bound such as a Lagrangian one ends up), `opt.best_bound_obj_val`,
-  `opt.best_solution_obj_val`; `spcomm.BestInnerBound` comes back through the
-  xhat spoke's republish rather than from the hub leaf. Products of **async** spoke interaction — their
+  `opt.best_solution_obj_val`; `spcomm.BestInnerBound` is rebuilt from the
+  xhat spokes' own incumbent files rather than from the hub leaf. Products of **async** spoke interaction — their
   timing is not reproducible, so they are carried forward as best-so-far. They
   stay valid: a restored looser bound is improved again, and a restored
   incumbent objective is assigned outright rather than filtered — the file is
-  this spoke's own last word, so there is nothing yet to improve on. What is
-  filtered is the *republish*: the deferred send at the first checkpoint point
-  publishes whichever of the restored bound and the spoke's current one is
-  better. In cylinders the hub's
+  this spoke's own last word, so there is nothing yet to improve on. The
+  resumed hub reads the inner bound from those files itself, because it first
+  reads its spokes' bounds after the first resumed iteration's solve, so that
+  iteration would otherwise run against an infinite inner bound (no gap test
+  can fire, and Gapper sets its mipgap as if nothing had been found). It
+  credits each bound to the spoke whose file it came from, at that spoke's
+  position in the resumed run: the credited cylinder writes the solution at
+  the end. It does not use a number of its own, because the hub's last word
+  can be newer than the spoke's file -- a spoke publishes an improvement
+  before it writes it, and a failed write is not retried -- and crediting a
+  spoke with a bound it holds no solution for makes the run report one
+  objective and write a solution worth another.
+  In cylinders the hub's
   `best_solution_obj_val` is often `None` — the inner bound arrives as a scalar via
   `receive_innerbounds` (`spcommunicator.py`) into `spcomm.BestInnerBound`.
 - **The best xhat SOLUTION values live on the xhat spoke**, in
@@ -869,9 +878,8 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
    best-so-far, not bit-reproducible, so a globally-consistent "snapshot at
    iteration `k`" across cylinders is unnecessary. On resume the hub restores its
    primal state while each spoke reloads its latest incumbent/bound. The reload
-   is an assignment, not a filtered update; it is the republish to the hub that
-   sends the better of the restored bound and whatever the spoke has since
-   found. This
+   is an assignment, not a filtered update, and the spoke publishes it to the
+   hub at once, before its first solve. This
    also avoids a hub-triggered snapshot barrier and its stall/deadlock risk.
 7. **Atomic writes with a single published generation.** Each rank writes only its
    local state (dilled models + leaf non-model data) to rank-tagged temp files and
@@ -959,6 +967,10 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
    a different best-so-far on each rank makes the ranks reach different
    verdicts on the same candidate, after which the hub rejects everything the
    spoke sends or the spoke hangs in its own broadcast.
+   The resumed hub, which takes its inner bound from the same files (§5.4),
+   decides by the same rule (`_one_write_verdict`, shared with
+   `agree_one_write`) and takes rank 0's bound as the spoke does, so it never
+   credits a spoke with an incumbent the spoke's ranks dropped.
 8. **A `Checkpointer` extension** that writes on its active triggers; restore
    itself is the in-core resume branch (item 2), with extension
    `restore_state` hooks (item 3) fired from it before `iterk_loop`:
@@ -1417,9 +1429,12 @@ as a branch stacked on the 1a PR.
     by variable name, per-scenario inner bounds, and the two incumbent
     objectives — whenever the incumbent improves, latest-wins, with no
     hub↔spoke coordination (§9, item 6). It restores in `pre_iter0` (which
-    `xhat_prep` calls once) and publishes the restored bound to the hub at the
-    first checkpoint point, so the hub's inner bound and gap reflect the
-    answer the run already had. `--resume-from` without `--checkpoint-dir`
+    `xhat_prep` calls once) and publishes the restored bound to the hub there,
+    before the spoke's first solve, and the resumed hub reads the same files
+    for its inner bound, so its gap reflects the answer the run already had
+    from the first resumed iteration on (§5.4). A hub that is not resuming from its own
+    `--checkpoint-dir` removes `spokes/` at setup, so a later resume cannot
+    restore an earlier study's incumbent. `--resume-from` without `--checkpoint-dir`
     attaches the extension with writing switched off, since on a spoke the
     restore *is* the extension's job.
   - *The A/B tests — implemented.* `test_checkpoint_cylinders.py` runs each

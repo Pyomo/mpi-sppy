@@ -2627,12 +2627,11 @@ class TestSpokeIncumbentFile(unittest.TestCase):
     def test_the_restored_objective_is_the_one_the_spoke_republishes(self):
         """And it stays that one once the resumed spoke starts working.
 
-        The republish is deferred to the spoke's first checkpoint point,
-        which is the *bottom* of a loop pass -- so an xhat evaluation has
-        already run by then and overwritten the live ``inner_bound``. Asking
-        only what the restore put on the models cannot see that: this asks
-        what ``send_best_xhat`` actually puts in the buffer, after such an
-        evaluation, which is what reaches FWPH.
+        Every xhat evaluation overwrites the live ``inner_bound``, and the
+        restored incumbent stays in the cache until the spoke improves on
+        it. Asking only what the restore put on the models cannot see that:
+        this asks what ``send_best_xhat`` actually puts in the buffer, after
+        such an evaluation, which is what reaches FWPH.
         """
         opt = _xhat_eval(ckpt_dir=self.ckpt_dir)
         _set_and_cache_solution(opt, 10.0)
@@ -2655,9 +2654,9 @@ class TestSpokeIncumbentFile(unittest.TestCase):
             self.assertEqual(s._mpisppy_data.best_solution_inner_bound,
                              incumbent[sname])
 
-        # The pass that carries the republish evaluates an xhat of its own
-        # first, and a worse one leaves the incumbent alone -- and the live
-        # attribute on every scenario changed.
+        # The resumed spoke evaluates an xhat of its own, and a worse one
+        # leaves the incumbent alone -- and the live attribute on every
+        # scenario changed.
         for offset, s in enumerate(fresh.local_scenarios.values()):
             s._mpisppy_data.inner_bound = 5555.0 + offset
 
@@ -2850,7 +2849,10 @@ class TestCheckpointerSpokeMode(unittest.TestCase):
     def test_restored_bound_is_published_to_the_hub_once(self):
         """The hub learns bounds only from what a spoke sends, so a restored
         incumbent that is never published leaves the hub reporting an
-        infinite inner bound and gapping against it."""
+        infinite inner bound and gapping against it. The restore runs before
+        the spoke's first solve, and that is when the hub must hear it: a
+        publish left for later lets the hub run an iteration against an
+        infinite inner bound."""
         writer = _xhat_eval(ckpt_dir=self.ckpt_dir)
         _set_and_cache_solution(writer, 13.0)
         checkpointing.write_spoke_incumbent(
@@ -2859,14 +2861,167 @@ class TestCheckpointerSpokeMode(unittest.TestCase):
         opt = _xhat_eval(resume_from=self.ckpt_dir)
         ext, spoke = self._attach(opt)
         ext.pre_iter0()
-        self.assertEqual(spoke.sent_bounds, [])   # buffers may not exist yet
-
-        ext.maybe_checkpoint()
         self.assertEqual(spoke.sent_bounds, [13.0])
         self.assertEqual(spoke.sent_xhats, 1)
 
         ext.maybe_checkpoint()                    # not resent every pass
         self.assertEqual(spoke.sent_bounds, [13.0])
+
+
+class TestAnEarlierStudysSpokeFilesAreCleared(unittest.TestCase):
+    """A spoke overwrites only its own file, so a run started in a directory
+    an earlier study used would otherwise leave that study's spoke files
+    there, and a later resume would restore one into a spoke of the same name
+    -- or die on it when the configuration differs."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
+        self.stale = os.path.join(self.ckpt_dir, "spokes",
+                                  "spoke_XhatShuffleInnerBound_ordinal_00_"
+                                  "rank_0000.pkl")
+        os.makedirs(os.path.dirname(self.stale))
+        with open(self.stale, "wb"):
+            pass
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_a_fresh_run_clears_them(self):
+        _make_ph(_options(1, ckpt_dir=self.ckpt_dir))
+        self.assertFalse(os.path.exists(self.stale))
+
+    def test_resuming_from_another_directory_clears_them(self):
+        other = os.path.join(self._tmp.name, "other")
+        _make_ph(_options(1, ckpt_dir=self.ckpt_dir, resume_from=other))
+        self.assertFalse(os.path.exists(self.stale))
+
+    def test_resuming_in_place_keeps_them(self):
+        """They are this study's, and the spokes are about to read them."""
+        _make_ph(_options(1, ckpt_dir=self.ckpt_dir,
+                          resume_from=self.ckpt_dir))
+        self.assertTrue(os.path.exists(self.stale))
+
+    def test_a_spoke_does_not_clear_them(self):
+        """Only the hub clears: it is the one cylinder whose setup is
+        certain to come before every spoke's first write."""
+        opt = _xhat_eval(ckpt_dir=self.ckpt_dir)
+        spoke = _SpokeStub()
+        opt.spcomm = spoke
+        Checkpointer(opt)
+        self.assertTrue(os.path.exists(self.stale))
+
+
+class TestSpokeInnerBoundsToRestore(unittest.TestCase):
+    """What the resumed hub credits, read from the spokes' own files: only a
+    bound a spoke holds a solution for may be credited to it, because the
+    credited cylinder writes the solution."""
+
+    class Hub:
+        pass
+
+    class Lagrangian:
+        pass
+
+    class XhatShuffle:
+        pass
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.ckpt_dir = self._tmp.name
+        os.makedirs(os.path.join(self.ckpt_dir, "spokes"))
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _file(self, cylinder, ordinal, state, rank=0):
+        path = os.path.join(
+            self.ckpt_dir, "spokes",
+            checkpointing._spoke_filename(cylinder, ordinal, rank))
+        with open(path, "wb") as f:
+            pickle.dump(state, f)
+
+    def _incumbent(self, cylinder, ordinal, bound, rank=0, n_proc=1,
+                   objective=None):
+        self._file(cylinder, ordinal, {
+            "format_version": checkpointing.FORMAT_VERSION,
+            "kind": "spoke-incumbent", "best_inner_bound": bound,
+            "best_solution_obj_val": bound if objective is None else objective,
+            "geometry": {"n_proc": n_proc, "rank": rank}}, rank=rank)
+
+    def _found(self, *classes):
+        return checkpointing.spoke_inner_bounds_to_restore(
+            [{"spcomm_class": cls} for cls in classes], self.ckpt_dir)
+
+    def test_each_spoke_gets_its_own_file(self):
+        self._incumbent("XhatShuffle", 0, -100.0)
+        self._incumbent("XhatShuffle", 1, -90.0)
+        self.assertEqual(
+            self._found(self.Hub, self.XhatShuffle, self.Lagrangian,
+                        self.XhatShuffle),
+            [(1, -100.0), (3, -90.0)])
+
+    def test_found_after_an_unrelated_cylinder_is_dropped(self):
+        self._incumbent("XhatShuffle", 0, -100.0)
+        self.assertEqual(self._found(self.Hub, self.XhatShuffle),
+                         [(1, -100.0)])
+
+    def test_nothing_for_a_spoke_this_run_does_not_have(self):
+        self._incumbent("XhatXbar", 0, -100.0)
+        self.assertEqual(self._found(self.Hub, self.XhatShuffle), [])
+
+    def test_a_file_that_is_not_an_incumbent_is_skipped(self):
+        for name, state in (
+                ("XhatShuffle", {"format_version": -1,
+                                 "kind": "spoke-incumbent",
+                                 "best_inner_bound": -100.0}),
+                ("Lagrangian", {"format_version":
+                                checkpointing.FORMAT_VERSION,
+                                "kind": "something-else",
+                                "best_inner_bound": -100.0})):
+            self._file(name, 0, state)
+        self.assertEqual(
+            self._found(self.Hub, self.XhatShuffle, self.Lagrangian), [])
+
+    def test_a_file_without_a_usable_bound_is_skipped(self):
+        for bound in (None, math.inf, "not a number"):
+            with self.subTest(bound=bound):
+                self._incumbent("XhatShuffle", 0, bound)
+                self.assertEqual(self._found(self.Hub, self.XhatShuffle), [])
+
+    def test_a_spoke_whose_ranks_agree_is_credited(self):
+        for rank in (0, 1):
+            self._incumbent("XhatShuffle", 0, -100.0, rank=rank, n_proc=2)
+        self.assertEqual(self._found(self.Hub, self.XhatShuffle),
+                         [(1, -100.0)])
+
+    def test_a_spoke_with_a_rank_missing_is_not_credited(self):
+        """The spoke's ranks drop an incumbent one of them has no file for,
+        so the hub must not credit it: the spoke would write a solution that
+        is not the one whose objective the hub reports."""
+        self._incumbent("XhatShuffle", 0, -100.0, rank=0, n_proc=2)
+        self.assertEqual(self._found(self.Hub, self.XhatShuffle), [])
+
+    def test_a_spoke_whose_ranks_disagree_is_not_credited(self):
+        self._incumbent("XhatShuffle", 0, -100.0, rank=0, n_proc=2)
+        self._incumbent("XhatShuffle", 0, -90.0, rank=1, n_proc=2)
+        self.assertEqual(self._found(self.Hub, self.XhatShuffle), [])
+        self._incumbent("XhatShuffle", 0, -100.0, rank=1, n_proc=2,
+                        objective=-99.0)
+        self.assertEqual(self._found(self.Hub, self.XhatShuffle), [])
+
+    def test_a_pickle_that_is_not_a_dict_is_skipped(self):
+        self._file("XhatShuffle", 0, ["not", "a", "dict"])
+        self.assertEqual(self._found(self.Hub, self.XhatShuffle), [])
+
+    def test_an_unreadable_file_is_skipped(self):
+        """Raising would stop hub rank 0 alone, with the other hub ranks
+        waiting on it."""
+        path = os.path.join(self.ckpt_dir, "spokes",
+                            checkpointing._spoke_filename("XhatShuffle", 0, 0))
+        with open(path, "wb") as f:
+            f.write(b"not a pickle")
+        self.assertEqual(self._found(self.Hub, self.XhatShuffle), [])
 
 
 class TestUnknownBackend(unittest.TestCase):

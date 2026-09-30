@@ -33,6 +33,7 @@ import json
 import sys
 
 from mpisppy import generic_cylinders
+from mpisppy.cylinders.hub import PHHub
 import mpisppy.utils.checkpointing as ckpt
 
 #: The incumbent a resumed spoke holds right after restoring it, by scenario
@@ -40,6 +41,10 @@ import mpisppy.utils.checkpointing as ckpt
 #: on it later in the leg, and by then its cache no longer shows what was
 #: read from disk.
 _restored_values = {}
+#: The hub's inner bound at its first convergence check: on a resume, the
+#: bound its first resumed iteration runs against, before it has heard
+#: anything from a spoke.
+_first_inner_bound = {}
 
 
 def _num(value):
@@ -149,6 +154,10 @@ def _hub_snapshot(wheel):
             getattr(opt, "best_solution_obj_val", None)),
         "BestInnerBound": _num(wheel.BestInnerBound),
         "BestOuterBound": _num(wheel.BestOuterBound),
+        # The cylinder credited with that inner bound, which is the one that
+        # writes the solution.
+        "last_ib_idx": wheel.spcomm.last_ib_idx,
+        "first_BestInnerBound": _num(_first_inner_bound.get("value")),
         "state": state,
         # Which Objective each scenario's Eobjective actually reads. A resume
         # rebuilds saved_objectives from the reloaded models, and on a model
@@ -191,6 +200,12 @@ def _spoke_marker(wheel):
     spoke = wheel.spcomm
     return {
         "cylinder": type(spoke).__name__,
+        "strata_rank": spoke.strata_rank,
+        # What this spoke holds at the end: the objective of the solution
+        # it would write if the hub credits it with the inner bound. None on
+        # a dual cylinder, which holds no solution.
+        "best_solution_obj_val": getattr(spoke.opt, "best_solution_obj_val",
+                                         None),
         "restored_incumbent_obj": ext.restored_incumbent_obj,
         # The iteration a dual cylinder's restored W was written at, or None
         # on a cylinder that has no such state or did not restore any.
@@ -222,6 +237,14 @@ def _recording_restore(real_restore):
     return restore
 
 
+def _recording_is_converged(real_is_converged):
+    """Wrap the hub's convergence check so its first inner bound is kept."""
+    def is_converged(self, *args, **kwargs):
+        _first_inner_bound.setdefault("value", self.BestInnerBound)
+        return real_is_converged(self, *args, **kwargs)
+    return is_converged
+
+
 def main():
     if sys.argv[1] != "--out":
         raise RuntimeError("usage: cylinders_ab_driver.py --out PATH [generic_cylinders args]")
@@ -238,6 +261,7 @@ def main():
     generic_cylinders.do_decomp = capturing_do_decomp
     ckpt.restore_spoke_incumbent = _recording_restore(
         ckpt.restore_spoke_incumbent)
+    PHHub.is_converged = _recording_is_converged(PHHub.is_converged)
 
     sys.argv = [sys.argv[0]] + sys.argv[3:]
     generic_cylinders.main()

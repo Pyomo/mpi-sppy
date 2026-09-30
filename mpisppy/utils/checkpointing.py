@@ -428,16 +428,36 @@ def agree_one_write(opt, state, key):
         return ("agreed" if state is not None else "none"), None
     size = comm.Get_size()
     have = comm.allreduce(1 if state is not None else 0, op=MPI.SUM)
-    if have == 0:
-        return "none", None
     if have < size:
-        return "partial", (have, size)
+        return _one_write_verdict(have, size, None)
     # Every rank reads these out of the same collective -- an Eobjective
     # reduction for the objective, the shared iteration counter for the
     # generation -- so ranks from one write hold the identical value and an
     # exact comparison is the right one. Gathered rather than reduced so a
     # warning can name what disagrees, which is what a user needs to see.
     values = comm.allgather(state.get(key))
+    return _one_write_verdict(have, size, values)
+
+
+#: The field that identifies an xhat spoke's write: the objective of the
+#: cached solution.
+XHAT_WRITE_KEY = "best_solution_obj_val"
+
+
+def _one_write_verdict(have, size, values):
+    """``agree_one_write``'s verdict from what it gathered: ``have`` of
+    ``size`` ranks hold a file, and ``values`` are their ``key`` values
+    (read only when every rank has a file).
+
+    Separate from the collective so the resumed hub, which reads a spoke's
+    files for its inner bound (``spoke_inner_bounds_to_restore``), decides by
+    the same rule as the spoke's ranks and never credits an incumbent they
+    drop.
+    """
+    if have == 0:
+        return "none", None
+    if have < size:
+        return "partial", (have, size)
     if len(set(values)) != 1:
         return "differ", values
     return "agreed", values[0]
@@ -539,7 +559,7 @@ def agree_spoke_restore(opt, state):
 
     Collective; see :func:`agree_one_write`.
     """
-    verdict, detail = agree_one_write(opt, state, "best_solution_obj_val")
+    verdict, detail = agree_one_write(opt, state, XHAT_WRITE_KEY)
     if verdict == "none":
         return None, None
     if verdict == "partial":
@@ -1490,6 +1510,68 @@ def load_spoke_incumbent(opt, ckpt_dir, cylinder, ordinal):
             f"but '{path}' was written with {want} on that rank."
         )
     return state
+
+
+def spoke_inner_bounds_to_restore(communicators, ckpt_dir):
+    """``[(strata rank, inner bound)]`` for each spoke in this run that has
+    an incumbent file in ``ckpt_dir`` -- the bounds the spokes are about to
+    restore and publish.
+
+    Read by the resumed hub, which first hears from its spokes only after
+    its first resumed solve. It reads the spokes' own files, not a number of
+    its own, because only a bound a spoke holds a solution for may be
+    credited to it: the credited spoke writes the solution at the end of the
+    run, and the hub's last word can be newer than the spoke's file (a spoke
+    publishes an improvement before it writes it, and a failed write is not
+    retried).
+
+    A spoke with several ranks keeps its incumbent only if every rank's file
+    is there and all are from one write (``agree_spoke_restore``), and then
+    takes rank 0's inner bound on every rank, so the same rule decides here.
+    How many ranks wrote is read from rank 0's file. A file that cannot be
+    read is skipped rather than refused here; the spoke that owns it raises
+    on it.
+    """
+    names = [d["spcomm_class"].__name__ for d in communicators]
+    found = []
+    for strata_rank, name in enumerate(names):
+        if strata_rank == 0:
+            continue
+        ordinal = names[:strata_rank].count(name)
+
+        def read(rank):
+            path = os.path.join(ckpt_dir, SPOKES_SUBDIR,
+                                _spoke_filename(name, ordinal, rank))
+            if not os.path.exists(path):
+                return None
+            with open(path, "rb") as f:
+                return pickle.load(f)
+
+        # Anything that goes wrong with one spoke's files skips that spoke.
+        # Raising here would stop hub rank 0 alone, and the other hub ranks
+        # would wait for it forever.
+        try:
+            first = read(0)
+            if first is None:
+                continue
+            states = [first] + [read(rank) for rank in
+                                range(1, int(first["geometry"]["n_proc"]))]
+            states = [s if s is not None
+                      and s.get("format_version") == FORMAT_VERSION
+                      and s.get("kind") == "spoke-incumbent" else None
+                      for s in states]
+            present = [s for s in states if s is not None]
+            verdict, _ = _one_write_verdict(
+                len(present), len(states),
+                [s[XHAT_WRITE_KEY] for s in present])
+            if verdict != "agreed":
+                continue
+            bound = float(first["best_inner_bound"])
+        except Exception:
+            continue
+        if math.isfinite(bound):
+            found.append((strata_rank, bound))
+    return found
 
 
 def restore_spoke_incumbent(opt, state):

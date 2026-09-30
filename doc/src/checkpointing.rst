@@ -323,17 +323,6 @@ Both are clean. Farmer is a deterministic LP, so here "very close" is in fact
 tolerance instead, since a resumed run can land on a different optimal solution
 (see `What resume guarantees`_).
 
-.. note::
-   In the resumed run the *Best Incumbent* column reads ``inf`` for an
-   iteration or two before the restored value reappears. The spoke restores
-   its incumbent in ``pre_iter0`` but cannot send it from there -- the send
-   buffers do not exist yet -- so it publishes on the next pass of its own
-   loop, which is also where it offers to write. That pass costs no solve and
-   is not gated by ``--checkpoint-every-iterations`` or by having a
-   ``--checkpoint-dir`` at all, so the lag is the hub's display catching up
-   and nothing more. The column settles back to the restored value, and the
-   final answer is unaffected.
-
 To exercise the multi-rank path as well, give each cylinder more than one rank
 -- ``-np 6`` with three cylinders gives each of them two::
 
@@ -416,10 +405,13 @@ bug.
 
 Bounds and the incumbent are carried forward as valid best-so-far values. A
 resumed run never reports a worse best-so-far than its checkpoint, provided
-the spoke that held the incumbent is still in the run. A bound that reaches
-the hub after the last checkpoint is written is not in it, so the stopped
-run's final line can show a better bound than the resumed run starts from. Each spoke keeps its
-own file, so dropping one leaves its incumbent behind: resuming
+the spoke that held the incumbent is still in the run and its file holds that
+incumbent: a spoke writes an improvement at the end of the loop pass that
+reported it, and a failed write is warned about and not retried. An outer
+bound that reaches the hub after the last checkpoint is written is not in it,
+so the stopped run's final line can show a better outer bound than the resumed
+run starts from. An incumbent a spoke wrote after that checkpoint is restored,
+since the resumed hub takes its incumbent from the spokes' files. Each spoke keeps its own file, so dropping one leaves its incumbent behind: resuming
 ``--xhatshuffle`` as ``--xhatxbar`` starts without the answer the first one
 found, and says so.
 
@@ -496,7 +488,9 @@ complete, resumable checkpoint referenced -- never a half-written one -- and
 the next successful write reclaims anything the interrupted one left behind.
 
 Use one checkpoint directory per run. Two runs sharing one share a manifest and
-will overwrite each other.
+will overwrite each other. A run that is not resuming from its own
+``--checkpoint-dir`` removes the ``spokes/`` files an earlier run left there,
+so a later resume cannot pick up another study's incumbent.
 
 Cylinders that span several ranks
 ---------------------------------
