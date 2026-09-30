@@ -1932,12 +1932,12 @@ class TestXhatterLoopsOfferCheckpointPoints(unittest.TestCase):
         self.assertEqual(recorder.calls, 3)
 
     def test_xhatshuffle_kill_between_tries_still_offers_a_point(self):
-        """The one exit that skips the bottom of the loop.
+        """An exit from the middle of a pass skips the bottom of the loop.
 
         xhatshuffle re-checks the kill signal between its two tries and
         returns from the middle of the pass. The try just above it may have
-        improved the incumbent, so that improvement would never be offered a
-        write.
+        improved the incumbent, and the pass offers it a write before
+        returning.
         """
         from mpisppy.cylinders.xhatshufflelooper_bounder import (
             XhatShuffleInnerBound)

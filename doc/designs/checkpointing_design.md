@@ -850,9 +850,10 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
 
    The xhatter `main()` loops have no `enditer` to borrow, so they call the same
    hook (via `InnerBoundNonantSpoke.maybe_checkpoint`) once per pass, at the bottom
-   — plus once on xhatshuffle's mid-pass kill-signal `return`, the one exit that
-   skips it. That is what makes **one `Checkpointer` serve hub and xhatter
-   uniformly** (restore already has a home: `pre_iter0`/`post_iter0` fire once
+   — plus once on xhatshuffle's mid-pass kill-signal `return`, which skips it,
+   and once more in `InnerBoundNonantSpoke.finalize`, which covers a loop that
+   exits at its top check before any pass. That is what makes **one
+   `Checkpointer` serve hub and xhatter uniformly** (restore already has a home: `pre_iter0`/`post_iter0` fire once
    in `xhat_prep` in `xhatbase.py`). Both hooks live on `InnerBoundNonantSpoke`
    rather than on `XhatInnerBoundBase`, because `cfg_vanilla` attaches the
    Checkpointer through `_Xhat_Eval_spoke_foundation`, which builds the
