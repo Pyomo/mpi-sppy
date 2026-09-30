@@ -857,6 +857,33 @@ class TestResumeRefusesMismatch(unittest.TestCase):
             _make_ph(options, scenario_names=["scen0", "scen1"]).ph_main()
         self.assertIn("scenario", str(ctx.exception).lower())
 
+    def test_a_leaf_missing_a_key_the_resume_reads_is_refused_at_load(self):
+        """Iter0 reads the bounds outside any agreement, just before a
+        collective, so the load -- which runs inside one -- has to refuse a
+        leaf without them rather than leave one rank to raise KeyError."""
+        manifest = checkpointing._read_manifest(self.ckpt_dir)
+        leaf_path = os.path.join(
+            self.ckpt_dir, checkpointing.HUB_SUBDIR,
+            checkpointing._generation_dirname(manifest["generation"]),
+            checkpointing._leaf_filename(0))
+        with open(leaf_path, "rb") as f:
+            original = f.read()
+        try:
+            for key in checkpointing.LEAF_KEYS_READ_ON_RESUME:
+                with self.subTest(key=key):
+                    leaf = pickle.loads(original)
+                    del leaf[key]
+                    with open(leaf_path, "wb") as f:
+                        pickle.dump(leaf, f)
+                    resumed = _make_ph(_options(4, resume_from=self.ckpt_dir))
+                    with self.assertRaises(
+                            checkpointing.CheckpointMismatch) as ctx:
+                        checkpointing.load_checkpoint(resumed, self.ckpt_dir)
+                    self.assertIn(key, str(ctx.exception))
+        finally:
+            with open(leaf_path, "wb") as f:
+                f.write(original)
+
     def test_missing_manifest_is_refused_clearly(self):
         options = _options(4, resume_from=os.path.join(self._tmp.name, "nope"))
         with self.assertRaises(checkpointing.CheckpointMismatch) as ctx:
