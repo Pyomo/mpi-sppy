@@ -1537,6 +1537,18 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
         "Checkpointer._spoke_checkpoint",
     })
 
+    #: Hooks a CATCH_AND_CONTINUE member calls through an object the source
+    #: reader cannot resolve -- ``spoke.checkpoint_loop_state()`` on
+    #: whatever spoke this is, ``ext.checkpoint_state()`` on each attached
+    #: extension -- keyed by the base class whose subclasses implement them.
+    #: Every implementation is checked as if the member called it directly.
+    HOOKS_REACHED_THROUGH_OBJECTS = {
+        ("mpisppy.cylinders.spoke", "InnerBoundNonantSpoke"): (
+            "checkpoint_loop_state", "loop_state_progress"),
+        ("mpisppy.extensions.extension", "Extension"): (
+            "checkpoint_state",),
+    }
+
     #: Method names that are collectives on an MPI communicator, for the
     #: check that a CATCH_AND_CONTINUE member reaches none.
     COLLECTIVE_METHODS = frozenset({
@@ -1763,6 +1775,37 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
                     inside.update(id(n) for n in ast.walk(stmt))
         return inside
 
+    @classmethod
+    def _hook_implementations(cls):
+        """Every implementation of HOOKS_REACHED_THROUGH_OBJECTS, found by
+        importing the packages the subclasses live in and walking them."""
+        import pkgutil
+        for package in ("mpisppy.cylinders", "mpisppy.extensions"):
+            pkg = importlib.import_module(package)
+            for info in pkgutil.iter_modules(pkg.__path__):
+                try:
+                    importlib.import_module(f"{package}.{info.name}")
+                except ImportError:
+                    # An optional dependency is missing, so nothing in that
+                    # module can be attached to a run here either.
+                    continue
+        found = []
+        for (module, base_name), hooks in \
+                cls.HOOKS_REACHED_THROUGH_OBJECTS.items():
+            base = getattr(importlib.import_module(module), base_name)
+            pending, seen = [base], set()
+            while pending:
+                klass = pending.pop()
+                if klass in seen:
+                    continue
+                seen.add(klass)
+                pending.extend(klass.__subclasses__())
+                for hook in hooks:
+                    impl = vars(klass).get(hook)
+                    if impl is not None and impl not in found:
+                        found.append(impl)
+        return found
+
     def test_catch_and_continue_members_do(self):
         """Each CATCH_AND_CONTINUE member raises nothing, does every step
         the checks above would flag inside a catch-all ``try``, and reaches
@@ -1804,7 +1847,9 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
                         msg=f"{qualname} calls {called} outside a try whose "
                             f"handler catches every exception, so it can "
                             f"fail on one rank alone")
-            for reached, _, sub_tree, _, _ in self._closure(func):
+            roots = [func] + self._hook_implementations()
+            reached_all = [r for root in roots for r in self._closure(root)]
+            for reached, _, sub_tree, _, _ in reached_all:
                 for node in ast.walk(sub_tree):
                     if not isinstance(node, ast.Call):
                         continue

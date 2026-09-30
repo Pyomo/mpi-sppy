@@ -419,14 +419,15 @@ resumed run never reports a worse best-so-far than its checkpoint, provided
 the spoke that held the incumbent is still in the run and its file holds that
 incumbent: a spoke writes an improvement at the end of the loop pass that
 reported it, or when the spoke finishes if its loop never got that far; it
-writes a restored incumbent to this run's directory as soon as it restores
-it; and a failed write is warned about and not retried. An outer
-bound that reaches the hub after the last checkpoint is written is not in it,
-so the stopped run's final line can show a better outer bound than the resumed
-run starts from. An incumbent a spoke wrote after that checkpoint is restored,
-since the resumed hub takes its incumbent from the spokes' files. Each spoke keeps its own file, so dropping one leaves its incumbent behind: resuming
-``--xhatshuffle`` as ``--xhatxbar`` starts without the answer the first one
-found, and says so.
+writes a restored incumbent, with the xhatshuffle cursor read beside it, to
+this run's directory as soon as it restores it; and a failed write is warned
+about and not retried. An outer bound that reaches the hub after the last
+checkpoint is written is not in it, so the stopped run's final line can show a
+better outer bound than the resumed run starts from. An incumbent a spoke
+wrote after that checkpoint is restored, since the resumed hub takes its
+incumbent from the spokes' files. Each spoke keeps its own file, so dropping
+one leaves its incumbent behind: resuming ``--xhatshuffle`` as ``--xhatxbar``
+starts without the answer the first one found, and says so.
 
 The xhat extensions that run inside the hub (``XhatLooper``, ``XhatXbar``,
 ``XhatClosest`` and ``XhatSpecific``) are not covered by that promise. They

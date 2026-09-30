@@ -389,8 +389,8 @@ None of this lives on a hub scenario model, so it is restored as leaf data under
   them back. So **"keep the best xhat" requires checkpointing the spoke
   incumbent**, not just hub bounds. The spoke checkpoints its own cache **on its
   own schedule**, independent of the hub checkpoint (§9, item 6): at the bottom
-  of each loop pass in which `best_solution_obj_val` changed, right after a
-  restore, and once more in `finalize`. Its writer is
+  of each loop pass in which `best_solution_obj_val` changed or the loop cursor
+  moved, right after a restore, and once more in `finalize`. Its writer is
   `Checkpointer._spoke_checkpoint` calling `write_spoke_incumbent`, which share
   no code with `_maybe_write_incumbent_on_improvement`. Serialize the `ComponentMap` **by variable name** (`{var.name: value}`)
   and rebuild by name lookup on the reconstructed model.
@@ -880,14 +880,15 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
 5. **Geometry / cfg fingerprint** (§5.7) with a clear refusal on mismatch.
 6. **Async per-spoke incumbent checkpoints — no hub↔spoke coordination.** Each
    spoke serializes its *own* best incumbent (the best xhat solution values, §5.4)
-   and bound — at the bottom of each loop pass in which its incumbent changed,
-   right after a restore, and once more in `finalize` — to its own rank-tagged
-   file with the same atomic write (item 7). The write after a restore and the
-   one in `finalize` are there because a spoke loop can exit at its top check
-   without reaching a bottom: a short resume whose hub finishes during the
-   spoke's prep would otherwise leave a directory whose hub checkpoint has no
-   incumbent beside it. Spokes are **not** synchronized to the hub's
-   checkpoint iteration: the determinism contract (§7) makes bounds/incumbent
+   and bound — at the bottom of each loop pass in which its incumbent changed or
+   its cursor moved, right after a restore, and once more in `finalize` — to
+   its own rank-tagged file with the same atomic write (item 7). The write
+   after a restore and the one in `finalize` are there because a spoke loop
+   can exit at its top check without reaching a bottom: a short resume whose
+   hub finishes during the spoke's prep would otherwise leave a directory
+   whose hub checkpoint has no incumbent beside it. Spokes are **not**
+   synchronized to the hub's checkpoint iteration: the determinism contract
+   (§7) makes bounds/incumbent
    best-so-far, not bit-reproducible, so a globally-consistent "snapshot at
    iteration `k`" across cylinders is unnecessary. On resume the hub restores its
    primal state while each spoke reloads its latest incumbent/bound. The reload
@@ -1492,7 +1493,11 @@ as a branch stacked on the 1a PR.
   subproblem solve*, so a small pickle and a rename per move is negligible
   against what caused it, while a pass that solves nothing still writes nothing.
   That last case is the one that has to stay cheap, since the loop spins while
-  it waits on the hub.
+  it waits on the hub. The write right after a restore carries the cursor and
+  extension state it just read rather than asking the spoke for them: the
+  spoke is handed the cursor only once its loop exists, after `pre_iter0`, and
+  the extension state at the end of `xhat_prep`, so asking would write fresh
+  ones over the restored ones.
 
   **Only xhatshuffle has a cursor.** `xhatlooper`, `xhatxbar` and
   `xhatspecific` re-evaluate from scratch whenever new nonants arrive, so their
