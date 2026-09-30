@@ -382,10 +382,11 @@ None of this lives on a hub scenario model, so it is restored as leaf data under
   `spoke.best_inner_bound`; `InnerBoundSpoke.finalize()` (`spoke.py`) loads
   them back. So **"keep the best xhat" requires checkpointing the spoke
   incumbent**, not just hub bounds. The spoke checkpoints its own cache **on its
-  own schedule** — on each improvement, on the same trigger as
-  `_maybe_write_incumbent_on_improvement` but through its own writer
-  (`Checkpointer._spoke_checkpoint` calling `write_spoke_incumbent`, which share
-  no code with it), independent of the hub checkpoint (§9, item 6). Serialize the `ComponentMap` **by variable name** (`{var.name: value}`)
+  own schedule**, independent of the hub checkpoint (§9, item 6): at the bottom
+  of each loop pass in which `best_solution_obj_val` changed, right after a
+  restore, and once more in `finalize`. Its writer is
+  `Checkpointer._spoke_checkpoint` calling `write_spoke_incumbent`, which share
+  no code with `_maybe_write_incumbent_on_improvement`. Serialize the `ComponentMap` **by variable name** (`{var.name: value}`)
   and rebuild by name lookup on the reconstructed model.
 - **The initially-fixed-nonant baseline** (`opt._initial_fixed_varibles`), which
   gates whether the outer bound may be updated at all. It lives on the opt object
@@ -794,9 +795,13 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
 5. **Geometry / cfg fingerprint** (§5.7) with a clear refusal on mismatch.
 6. **Async per-spoke incumbent checkpoints — no hub↔spoke coordination.** Each
    spoke serializes its *own* best incumbent (the best xhat solution values, §5.4)
-   and bound whenever its incumbent improves — on the same trigger as
-   `_maybe_write_incumbent_on_improvement`, through a writer of its own — to its
-   own rank-tagged file with the same atomic write (item 7). Spokes are **not** synchronized to the hub's
+   and bound — at the bottom of each loop pass in which its incumbent changed,
+   right after a restore, and once more in `finalize` — to its own rank-tagged
+   file with the same atomic write (item 7). The write after a restore and the
+   one in `finalize` are there because a spoke loop can exit at its top check
+   without reaching a bottom: a short resume whose hub finishes during the
+   spoke's prep would otherwise leave a directory whose hub checkpoint has no
+   incumbent beside it. Spokes are **not** synchronized to the hub's
    checkpoint iteration: the determinism contract (§7) makes bounds/incumbent
    best-so-far, not bit-reproducible, so a globally-consistent "snapshot at
    iteration `k`" across cylinders is unnecessary. On resume the hub restores its

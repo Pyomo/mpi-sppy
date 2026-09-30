@@ -383,6 +383,13 @@ class Checkpointer(Extension):
             self.opt.spcomm.send_best_xhat()
         global_toc(f"Restored the checkpointed incumbent for {cylinder} "
                    f"(objective {obj})", rank0)
+        # Write it to this run's directory now, not at the bottom of the
+        # first loop pass: a short resume whose hub finishes before this
+        # spoke starts its loop -- the spoke's prep can solve for a while --
+        # never reaches that pass, and leaves a directory whose hub
+        # checkpoint has no incumbent beside it. Resuming in place skips the
+        # write, because _last_written_obj was seeded above.
+        self._spoke_checkpoint()
 
     def _same_directory(self, other):
         """True when ``other`` names the directory this run writes to.
