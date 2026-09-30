@@ -901,6 +901,14 @@ def _read_manifest(ckpt_dir, missing_ok=False):
         return json.load(f)
 
 
+#: The hub leaf keys a resume reads by name. The load refuses a leaf missing
+#: any of them, so the refusal is agreed across the hub's ranks.
+LEAF_KEYS_READ_ON_RESUME = (
+    "generation", "initially_fixed_nonants", "trivial_bound",
+    "best_bound_obj_val", "best_outer_bound", "best_solution_obj_val",
+)
+
+
 def load_checkpoint(opt, ckpt_dir):
     """Load this rank's checkpoint, refusing a mismatch with a clear error.
 
@@ -959,6 +967,18 @@ def load_checkpoint(opt, ckpt_dir):
         )
     with open(leaf_path, "rb") as f:
         leaf = pickle.load(f)
+
+    # Checked here, inside the agreement the load runs in, because Iter0
+    # reads the bounds outside one, before the hub's next collective: a leaf
+    # without one would raise KeyError on that rank alone and leave the
+    # others waiting in it.
+    missing = [key for key in LEAF_KEYS_READ_ON_RESUME if key not in leaf]
+    if missing:
+        raise CheckpointMismatch(
+            f"The checkpoint state '{leaf_path}' has no "
+            f"{', '.join(missing)}, so it was not written by this mpi-sppy "
+            f"or has been damaged."
+        )
 
     have = sorted(opt.local_scenarios.keys())
     want = leaf["geometry"]["scenario_names"]
