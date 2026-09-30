@@ -1537,17 +1537,15 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
         "Checkpointer._spoke_checkpoint",
     })
 
-    #: Hooks a CATCH_AND_CONTINUE member calls through an object the source
-    #: reader cannot resolve -- ``spoke.checkpoint_loop_state()`` on
-    #: whatever spoke this is, ``ext.checkpoint_state()`` on each attached
-    #: extension -- keyed by the base class whose subclasses implement them.
-    #: Every implementation is checked as if the member called it directly.
-    HOOKS_REACHED_THROUGH_OBJECTS = {
-        ("mpisppy.cylinders.spoke", "InnerBoundNonantSpoke"): (
-            "checkpoint_loop_state", "loop_state_progress"),
-        ("mpisppy.extensions.extension", "Extension"): (
-            "checkpoint_state",),
-    }
+    #: Packages imported before the collective check below, so that an
+    #: attribute call the source reader cannot resolve -- a spoke's
+    #: ``checkpoint_loop_state()``, an extension's ``checkpoint_state()``,
+    #: xhatshuffle's ``cycler.checkpoint_state()`` -- can be followed into
+    #: every mpisppy function or method of that name. Naming the classes one
+    #: at a time missed the next object down each time it was tried.
+    NAME_FALLBACK_PACKAGES = (
+        "mpisppy.cylinders", "mpisppy.extensions", "mpisppy.convergers",
+    )
 
     #: Method names that are collectives on an MPI communicator, for the
     #: check that a CATCH_AND_CONTINUE member reaches none.
@@ -1776,34 +1774,73 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
         return inside
 
     @classmethod
-    def _hook_implementations(cls):
-        """Every implementation of HOOKS_REACHED_THROUGH_OBJECTS, found by
-        importing the packages the subclasses live in and walking them."""
+    def _functions_by_name(cls):
+        """Every function and method defined in a loaded mpisppy module, by
+        name, after importing NAME_FALLBACK_PACKAGES."""
         import pkgutil
-        for package in ("mpisppy.cylinders", "mpisppy.extensions"):
+        for package in cls.NAME_FALLBACK_PACKAGES:
             pkg = importlib.import_module(package)
-            for info in pkgutil.iter_modules(pkg.__path__):
+            for info in pkgutil.walk_packages(pkg.__path__, f"{package}."):
                 try:
-                    importlib.import_module(f"{package}.{info.name}")
+                    importlib.import_module(info.name)
                 except ImportError:
                     # An optional dependency is missing, so nothing in that
                     # module can be attached to a run here either.
                     continue
-        found = []
-        for (module, base_name), hooks in \
-                cls.HOOKS_REACHED_THROUGH_OBJECTS.items():
-            base = getattr(importlib.import_module(module), base_name)
-            pending, seen = [base], set()
-            while pending:
-                klass = pending.pop()
-                if klass in seen:
+        index = {}
+        for name, module in list(sys.modules.items()):
+            if not name.startswith("mpisppy") or module is None:
+                continue
+            for obj in list(vars(module).values()):
+                if inspect.isclass(obj) and obj.__module__ == name:
+                    for attr, value in vars(obj).items():
+                        value = getattr(value, "__func__", value)
+                        if inspect.isfunction(value):
+                            index.setdefault(attr, set()).add(value)
+                elif inspect.isfunction(obj) and obj.__module__ == name:
+                    index.setdefault(obj.__name__, set()).add(obj)
+        return index
+
+    @classmethod
+    def _closure_by_name(cls, func):
+        """``func`` and everything it can reach, as [(qualname, tree)].
+
+        Conservative where _closure is exact: a call it can resolve is
+        followed to what it names, and an attribute call it cannot is
+        followed into every mpisppy function or method of that name.
+        Agreements are followed too, since the question here is whether a
+        collective is reached at all.
+        """
+        index = cls._functions_by_name()
+        found, seen = [], set()
+
+        def walk(f):
+            key = f"{f.__module__}.{f.__qualname__}"
+            if key in seen:
+                return
+            seen.add(key)
+            try:
+                tree = ast.parse(textwrap.dedent(inspect.getsource(f)))
+            except (OSError, TypeError):
+                return
+            found.append((f.__qualname__, tree))
+            owner = f.__globals__.get(f.__qualname__.split(".")[0])
+            namespace = cls._namespace(f, tree)
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
                     continue
-                seen.add(klass)
-                pending.extend(klass.__subclasses__())
-                for hook in hooks:
-                    impl = vars(klass).get(hook)
-                    if impl is not None and impl not in found:
-                        found.append(impl)
+                target = cls._resolve(node.func, namespace, owner)
+                target = getattr(target, "__func__", target)
+                if target is not None:
+                    module = getattr(target, "__module__", None) or ""
+                    if module.startswith("mpisppy") \
+                            and inspect.isfunction(target):
+                        walk(target)
+                elif isinstance(node.func, ast.Attribute):
+                    for candidate in index.get(node.func.attr, ()):
+                        walk(candidate)
+
+        walk(func)
         return found
 
     def test_catch_and_continue_members_do(self):
@@ -1847,9 +1884,7 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
                         msg=f"{qualname} calls {called} outside a try whose "
                             f"handler catches every exception, so it can "
                             f"fail on one rank alone")
-            roots = [func] + self._hook_implementations()
-            reached_all = [r for root in roots for r in self._closure(root)]
-            for reached, _, sub_tree, _, _ in reached_all:
+            for reached, sub_tree in self._closure_by_name(func):
                 for node in ast.walk(sub_tree):
                     if not isinstance(node, ast.Call):
                         continue
