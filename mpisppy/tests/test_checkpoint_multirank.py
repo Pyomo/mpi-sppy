@@ -1108,10 +1108,15 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
     #: attribute call the source reader cannot resolve -- a spoke's
     #: ``checkpoint_loop_state()``, an extension's ``checkpoint_state()``,
     #: xhatshuffle's ``cycler.checkpoint_state()`` -- can be followed into
-    #: every mpisppy function or method of that name. Naming the classes one
-    #: at a time missed the next object down each time it was tried.
+    #: every function or method of that name in these packages and in any
+    #: mpisppy module already loaded. Naming the classes one at a time missed
+    #: the next object down each time it was tried. These are the packages
+    #: that define spokes, extensions and convergers; mpisppy.utils.w_utils
+    #: is listed because its extensions are imported only lazily. The rest
+    #: of mpisppy.utils is not walked: a demo in it raises at import.
     NAME_FALLBACK_PACKAGES = (
         "mpisppy.cylinders", "mpisppy.extensions", "mpisppy.convergers",
+        "mpisppy.utils.w_utils",
     )
 
     #: Method names that are collectives on an MPI communicator, for the
