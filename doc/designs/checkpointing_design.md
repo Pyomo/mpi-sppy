@@ -76,7 +76,8 @@ as a future option but **not currently planned** (§4, §11 Phase 6).
   previous checkpoint is preserved by atomic publication (§9), not by catching the
   signal and checkpointing in response. Where a known walltime is the hazard,
   `--checkpoint-before-seconds` (§8) is the answer instead of a signal handler:
-  it writes at the last iteration boundary preceding a user-supplied deadline.
+  it writes once, at the first iteration boundary where one more iteration as
+  long as the last would cross a user-supplied deadline.
 
 ---
 
@@ -638,8 +639,7 @@ against elapsed time in exactly one place, at the top of an iteration
 (`phbase.py`), never during a solve, so it overshoots by up to a full iteration
 and forces no write.
 
-So at each completed iteration that is not already a checkpoint point,
-`Checkpointer._deadline_is_near` asks whether *another* iteration would carry
+So at each completed iteration `Checkpointer._deadline_is_near` asks whether *another* iteration would carry
 the run past S seconds of elapsed wall clock — `elapsed +
 _last_iteration_seconds >= S` — and writes if it would. Three properties are
 load-bearing:
@@ -647,8 +647,10 @@ load-bearing:
 - **The test goes through `allreduce_or`.** Elapsed wall clock is rank-local,
   and the hub write is a collective bracketed by barriers, so a rank that
   believed its own clock alone would hang the cylinder for the rest of the job.
-  The iteration-count tests are evaluated *first*, so the ranks either all
-  reach the collective or all skip it. `TestDeadlineOnOneRankDoesNotHangTheOthers`
+  It is asked at every completed iteration, before the iteration-count tests,
+  so every rank reaches the collective every time; a checkpoint point that
+  lands near the deadline is then the deadline write rather than being
+  followed by another at the next iteration. `TestDeadlineOnOneRankDoesNotHangTheOthers`
   (`test_checkpoint_multirank.py`, driver `multirank_deadline_driver.py`) skews
   the clock on one rank of two and asserts the job returns; without the
   `allreduce_or` it hangs.

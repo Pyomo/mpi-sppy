@@ -109,9 +109,9 @@ the ranks reach the write together without being asked.
 The deadline trigger is not: elapsed wall clock is rank-local, and a rank that
 decided to write alone would hang the cylinder at the write barrier for the
 rest of the job. So it is put through ``allreduce_or`` before it is believed,
-and the cheap iteration-count tests are evaluated *first* so that the ranks
-either all skip that collective or all reach it. Any trigger added later has
-to do the same.
+and that collective is reached at every completed iteration, on every rank,
+before the iteration-count tests -- so nothing that could differ between ranks
+decides whether it is reached. Any trigger added later has to do the same.
 
 The *spoke* incumbent write needs none of that. Each rank writes only its own
 file, and the incumbent objective that gates the write comes from an
@@ -293,7 +293,10 @@ class Checkpointer(Extension):
 
         # Not a refusal, but deleting can fail on one rank like the checks
         # above, so it is agreed with them.
-        if not self.spoke_mode and opt.cylinder_rank == 0:
+        # The hub only: a dual cylinder is not a spoke_mode one either, and
+        # two cylinders deleting the one directory at once race each other.
+        if (not self.spoke_mode and not self.dual_spoke_mode
+                and opt.cylinder_rank == 0):
             self._clear_other_studies_spoke_files()
 
     def _clear_other_studies_spoke_files(self):
@@ -674,16 +677,18 @@ class Checkpointer(Extension):
         finishing its budget would lose work that is known to be coherent and
         is sitting in memory.
 
-        Failing all that, the deadline trigger gets a look. The order matters
-        for more than speed: everything above is a pure function of the
-        iteration number, so every rank of a multi-rank cylinder answers it
-        the same way, and the ranks either all skip the collective below or
-        all reach it.
+        The deadline trigger is asked first, at every completed iteration,
+        so that a write at a multiple of K that lands near the deadline is
+        the deadline write: asked only off the K boundaries, it wrote again
+        at the next iteration, just when the user had said time was short.
+        Asking it every time also keeps its collective on every rank of a
+        multi-rank cylinder at every iteration, since nothing before it can
+        differ between ranks.
         """
+        near = self._deadline_is_near()
         iteration = int(getattr(self.opt, "_PHIter", 0))
-        if iteration % self.every == 0 or self._is_final_iteration():
-            return True
-        return self._deadline_is_near()
+        return (near or iteration % self.every == 0
+                or self._is_final_iteration())
 
     def _deadline_is_near(self):
         """``--checkpoint-before-seconds S``: is there time for another one?

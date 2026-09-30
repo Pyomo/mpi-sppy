@@ -1890,15 +1890,28 @@ class TestCheckpointBeforeSecondsDecision(unittest.TestCase):
         ext.opt._PHIter = 4
         self.assertTrue(ext._should_write())
 
-    def test_a_cadence_iteration_does_not_consult_the_clock(self):
-        """Rank safety, not speed: the collective below must be reached by
-        every rank or by none, so everything decided before it has to be a
-        pure function of the iteration number."""
-        ext = self._checkpointer(100.0, every=2, phiter=4)
-        self._clock(ext, elapsed=1.0, last_iteration=1.0)
-        with mock.patch.object(ext.opt, "allreduce_or") as never:
-            self.assertTrue(ext._should_write())
-        never.assert_not_called()
+    def test_a_cadence_write_near_the_deadline_is_the_deadline_write(self):
+        """A multiple of K that lands near the deadline writes anyway, and
+        that write is the one the deadline asked for: writing again at the
+        next iteration spends a serialization just when time is short."""
+        ext = self._checkpointer(100.0, every=10, phiter=30)
+        self._clock(ext, elapsed=95.0, last_iteration=10.0)
+        self.assertTrue(ext._should_write())
+        ext.opt._PHIter = 31
+        self.assertFalse(ext._should_write())
+
+    def test_every_iteration_reaches_the_collective(self):
+        """Rank safety: the all-reduce must be reached by every rank or by
+        none. It is asked at every completed iteration, so nothing that
+        could differ between ranks decides whether it is reached."""
+        for phiter in (3, 4):
+            with self.subTest(phiter=phiter):
+                ext = self._checkpointer(100.0, every=2, phiter=phiter)
+                self._clock(ext, elapsed=1.0, last_iteration=1.0)
+                with mock.patch.object(ext.opt, "allreduce_or",
+                                       return_value=False) as reduce:
+                    ext._should_write()
+                reduce.assert_called_once()
 
     def test_the_ranks_decide_together(self):
         """A rank that wrote on its own local clock would hang the cylinder at
@@ -2900,6 +2913,14 @@ class TestAnEarlierStudysSpokeFilesAreCleared(unittest.TestCase):
         """They are this study's, and the spokes are about to read them."""
         _make_ph(_options(1, ckpt_dir=self.ckpt_dir,
                           resume_from=self.ckpt_dir))
+        self.assertTrue(os.path.exists(self.stale))
+
+    def test_a_dual_cylinder_does_not_clear_them(self):
+        """relaxed_ph and ph_dual run PH without being the hub. A second
+        cylinder deleting the same directory at the same moment as the hub
+        races it, and the loser's rmtree raises on a file already gone."""
+        _make_ph(_options(1, ckpt_dir=self.ckpt_dir,
+                          checkpoint_role="dual_spoke"))
         self.assertTrue(os.path.exists(self.stale))
 
     def test_a_spoke_does_not_clear_them(self):

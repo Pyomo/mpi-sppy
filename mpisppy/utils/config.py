@@ -823,8 +823,9 @@ class Config(pyofig.ConfigDict):
 
         self.add_to_config("checkpoint_before_seconds",
                            description="also write a checkpoint at the end of "
-                           "the last iteration expected to finish within S "
-                           "seconds of the start of the run, for a run that "
+                           "the first iteration after which one more as long "
+                           "as the last would pass S seconds from the start "
+                           "of the run, for a run that "
                            "will be stopped by a wall clock rather than by an "
                            "iteration limit; the estimate is the duration of "
                            "the most recent iteration, nothing is added for "
