@@ -1307,6 +1307,17 @@ def load_spoke_incumbent(opt, ckpt_dir, cylinder, ordinal):
             f"{state.get('format_version')}, but this mpi-sppy writes "
             f"version {FORMAT_VERSION}."
         )
+    # Checked here, inside the agreement the load runs in, because
+    # agree_on_spoke_incumbent reads both before its collective: a file
+    # without one would raise KeyError on that rank alone and leave the
+    # others waiting in the gather.
+    missing = [key for key in ("best_solution_obj_val", "best_inner_bound")
+               if key not in state]
+    if missing:
+        raise CheckpointMismatch(
+            f"The incumbent file '{path}' has no {' or '.join(missing)}, so "
+            f"it was not written by this mpi-sppy or has been damaged."
+        )
     if state.get("structural_fingerprint") != structural_fingerprint(opt.options):
         raise CheckpointMismatch(
             f"The incumbent file '{path}' was written by a run configured "
