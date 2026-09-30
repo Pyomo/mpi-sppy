@@ -385,10 +385,11 @@ None of this lives on a hub scenario model, so it is restored as leaf data under
   `spoke.best_inner_bound`; `InnerBoundSpoke.finalize()` (`spoke.py`) loads
   them back. So **"keep the best xhat" requires checkpointing the spoke
   incumbent**, not just hub bounds. The spoke checkpoints its own cache **on its
-  own schedule** — on each improvement, on the same trigger as
-  `_maybe_write_incumbent_on_improvement` but through its own writer
-  (`Checkpointer._spoke_checkpoint` calling `write_spoke_incumbent`, which share
-  no code with it), independent of the hub checkpoint (§9, item 6). Serialize the `ComponentMap` **by variable name** (`{var.name: value}`)
+  own schedule**, independent of the hub checkpoint (§9, item 6): at the bottom
+  of each loop pass in which `best_solution_obj_val` changed, right after a
+  restore, and once more in `finalize`. Its writer is
+  `Checkpointer._spoke_checkpoint` calling `write_spoke_incumbent`, which share
+  no code with `_maybe_write_incumbent_on_improvement`. Serialize the `ComponentMap` **by variable name** (`{var.name: value}`)
   and rebuild by name lookup on the reconstructed model.
 - **The initially-fixed-nonant baseline** (`opt._initial_fixed_varibles`), which
   gates whether the outer bound may be updated at all. It lives on the opt object
@@ -831,9 +832,13 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
 5. **Geometry / cfg fingerprint** (§5.7) with a clear refusal on mismatch.
 6. **Async per-spoke incumbent checkpoints — no hub↔spoke coordination.** Each
    spoke serializes its *own* best incumbent (the best xhat solution values, §5.4)
-   and bound whenever its incumbent improves — on the same trigger as
-   `_maybe_write_incumbent_on_improvement`, through a writer of its own — to its
-   own rank-tagged file with the same atomic write (item 7). Spokes are **not** synchronized to the hub's
+   and bound — at the bottom of each loop pass in which its incumbent changed,
+   right after a restore, and once more in `finalize` — to its own rank-tagged
+   file with the same atomic write (item 7). The write after a restore and the
+   one in `finalize` are there because a spoke loop can exit at its top check
+   without reaching a bottom: a short resume whose hub finishes during the
+   spoke's prep would otherwise leave a directory whose hub checkpoint has no
+   incumbent beside it. Spokes are **not** synchronized to the hub's
    checkpoint iteration: the determinism contract (§7) makes bounds/incumbent
    best-so-far, not bit-reproducible, so a globally-consistent "snapshot at
    iteration `k`" across cylinders is unnecessary. On resume the hub restores its
@@ -940,12 +945,14 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
    the cylinder-convergence break, so a run ending that way would write nothing.
 
    The xhatter `main()` loops have no `enditer` to borrow, so they call the same
-   hook (via `InnerBoundNonantSpoke.maybe_checkpoint`) once per pass, at the bottom
-   — plus once on xhatshuffle's mid-pass kill-signal `return`, the one exit that
-   skips it. That is what makes **one `Checkpointer` serve hub and xhatter
-   uniformly** (restore already has a home: `pre_iter0`/`post_iter0` fire once
-   in `xhat_prep` in `xhatbase.py`). Both hooks live on `InnerBoundNonantSpoke`
-   rather than on `XhatInnerBoundBase`, because `cfg_vanilla` attaches the
+   hook (via `InnerBoundNonantSpoke.maybe_checkpoint`) once per pass, at the
+   bottom — plus once on xhatshuffle's mid-pass kill-signal `return`, which
+   skips it, and once more in `InnerBoundNonantSpoke.finalize`, which covers a
+   loop that exits at its top check before any pass. That is what makes **one
+   `Checkpointer` serve hub and xhatter uniformly** (restore already has a
+   home: `pre_iter0`/`post_iter0` fire once in `xhat_prep` in `xhatbase.py`).
+   Both hooks live on `InnerBoundNonantSpoke` rather than on
+   `XhatInnerBoundBase`, because `cfg_vanilla` attaches the
    Checkpointer through `_Xhat_Eval_spoke_foundation`, which builds the
    L-shaped xhatter and the two slammers as well as the four xhat spokes;
    those three derive from the former and not the latter, and were handed an
@@ -1277,7 +1284,8 @@ as a branch stacked on the 1a PR.
 - **Phase 4 — Cylinders / spokes.**
   - *The write hook — implemented.* `Extension.maybe_checkpoint`, called
     directly by `iterk_loop` (after every `enditer`) and once per pass by each
-    xhatter's `main()` loop through `InnerBoundNonantSpoke.maybe_checkpoint`. The
+    xhatter's `main()` loop through `InnerBoundNonantSpoke.maybe_checkpoint`,
+    plus once more from `InnerBoundNonantSpoke.finalize`. The
     hub write moved onto it, which is what removes the dispatch-order
     dependency phase 1a had to document: `MultiExtension` dispatched `enditer`
     in attach order with the `Checkpointer` first (`add_checkpointing` runs at

@@ -430,13 +430,24 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke, InnerBoundSpoke):
 
         Call it at the *bottom* of a pass: what a spoke checkpoints is the
         best xhat it has found, so the pass that finds one has to finish
-        before the write is worth making.
+        before the write is worth making. ``finalize`` calls it once more,
+        for a loop that exits at its top check before reaching a bottom.
 
         See section 9, items 6 and 8 of
         doc/designs/checkpointing_design.md.
         """
         if self.opt.extensions is not None:
             self.opt.extobject.maybe_checkpoint()
+
+    def finalize(self):
+        # One last checkpoint point after the loop. A loop can exit at its
+        # top check without ever reaching a bottom -- the hub may finish
+        # while this spoke is still in its prep -- and an incumbent found
+        # before the loop (a Jensen or feasible xhat, an xhat from a file)
+        # would otherwise never be written. Before load_best_solution, which
+        # is about the model's values, not the incumbent this writes.
+        self.maybe_checkpoint()
+        return super().finalize()
 
 
 class OuterBoundNonantSpoke(_BoundNonantSpoke):
