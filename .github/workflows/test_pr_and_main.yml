@@ -7,10 +7,6 @@ on:
   pull_request:
     branches:
       - main
-      # The checkpointing work is a stack of branches, each building on the
-      # one below. A PR between two of them shows a single phase's diff,
-      # which a PR into main cannot -- but only if CI runs on it.
-      - 'checkpoint-*'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
