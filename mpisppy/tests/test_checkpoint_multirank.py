@@ -1104,6 +1104,16 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
         "Checkpointer._spoke_checkpoint",
     })
 
+    #: Packages imported before the collective check below, so that an
+    #: attribute call the source reader cannot resolve -- a spoke's
+    #: ``checkpoint_loop_state()``, an extension's ``checkpoint_state()``,
+    #: xhatshuffle's ``cycler.checkpoint_state()`` -- can be followed into
+    #: every mpisppy function or method of that name. Naming the classes one
+    #: at a time missed the next object down each time it was tried.
+    NAME_FALLBACK_PACKAGES = (
+        "mpisppy.cylinders", "mpisppy.extensions", "mpisppy.convergers",
+    )
+
     #: Method names that are collectives on an MPI communicator, for the
     #: check that a CATCH_AND_CONTINUE member reaches none.
     COLLECTIVE_METHODS = frozenset({
@@ -1331,6 +1341,76 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
                     inside.update(id(n) for n in ast.walk(stmt))
         return inside
 
+    @classmethod
+    def _functions_by_name(cls):
+        """Every function and method defined in a loaded mpisppy module, by
+        name, after importing NAME_FALLBACK_PACKAGES."""
+        import pkgutil
+        for package in cls.NAME_FALLBACK_PACKAGES:
+            pkg = importlib.import_module(package)
+            for info in pkgutil.walk_packages(pkg.__path__, f"{package}."):
+                try:
+                    importlib.import_module(info.name)
+                except ImportError:
+                    # An optional dependency is missing, so nothing in that
+                    # module can be attached to a run here either.
+                    continue
+        index = {}
+        for name, module in list(sys.modules.items()):
+            if not name.startswith("mpisppy") or module is None:
+                continue
+            for obj in list(vars(module).values()):
+                if inspect.isclass(obj) and obj.__module__ == name:
+                    for attr, value in vars(obj).items():
+                        value = getattr(value, "__func__", value)
+                        if inspect.isfunction(value):
+                            index.setdefault(attr, set()).add(value)
+                elif inspect.isfunction(obj) and obj.__module__ == name:
+                    index.setdefault(obj.__name__, set()).add(obj)
+        return index
+
+    @classmethod
+    def _closure_by_name(cls, func):
+        """``func`` and everything it can reach, as [(qualname, tree)].
+
+        Conservative where _closure is exact: a call it can resolve is
+        followed to what it names, and an attribute call it cannot is
+        followed into every mpisppy function or method of that name.
+        Agreements are followed too, since the question here is whether a
+        collective is reached at all.
+        """
+        index = cls._functions_by_name()
+        found, seen = [], set()
+
+        def walk(f):
+            key = f"{f.__module__}.{f.__qualname__}"
+            if key in seen:
+                return
+            seen.add(key)
+            try:
+                tree = ast.parse(textwrap.dedent(inspect.getsource(f)))
+            except (OSError, TypeError):
+                return
+            found.append((f.__qualname__, tree))
+            owner = f.__globals__.get(f.__qualname__.split(".")[0])
+            namespace = cls._namespace(f, tree)
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                target = cls._resolve(node.func, namespace, owner)
+                target = getattr(target, "__func__", target)
+                if target is not None:
+                    module = getattr(target, "__module__", None) or ""
+                    if module.startswith("mpisppy") \
+                            and inspect.isfunction(target):
+                        walk(target)
+                elif isinstance(node.func, ast.Attribute):
+                    for candidate in index.get(node.func.attr, ()):
+                        walk(candidate)
+
+        walk(func)
+        return found
+
     def test_catch_and_continue_members_do(self):
         """Each CATCH_AND_CONTINUE member raises nothing, does every step
         the checks above would flag inside a catch-all ``try``, and reaches
@@ -1372,7 +1452,7 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
                         msg=f"{qualname} calls {called} outside a try whose "
                             f"handler catches every exception, so it can "
                             f"fail on one rank alone")
-            for reached, _, sub_tree, _, _ in self._closure(func):
+            for reached, sub_tree in self._closure_by_name(func):
                 for node in ast.walk(sub_tree):
                     if not isinstance(node, ast.Call):
                         continue
