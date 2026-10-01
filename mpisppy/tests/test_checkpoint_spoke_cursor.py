@@ -345,8 +345,10 @@ class TestRestoredDualsMustMatchTheirFile(unittest.TestCase):
         return Wbar_by_node(opt)
 
     def _check(self, opt, recorded, generation=7):
+        from mpisppy.phbase import Wbar_by_node, W_magnitude_by_node
         checkpointing.require_restored_duals_match_their_file(
-            opt, self.CYLINDER, generation, recorded)
+            opt, self.CYLINDER, generation, recorded,
+            Wbar_by_node(opt), W_magnitude_by_node(opt))
 
     def test_the_weights_the_file_recorded_are_accepted(self):
         opt = self._prepped_ph()

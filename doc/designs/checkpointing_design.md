@@ -1389,7 +1389,11 @@ as a branch stacked on the 1a PR.
   (`phbase.W_magnitude_by_node`), relative so that a large-cost model is not
   refused for its own rounding; in practice the two sums are of the same
   numbers and agree exactly. Measured on farmer: adding 1.0 to one scenario's
-  weights is refused by name.
+  weights is refused by name. The sums are allreduces and come out the same
+  on every rank, but each rank compares them with the E[W] in its own file,
+  so the comparison is agreed across the cylinder like the load: one damaged
+  file refuses on every rank rather than on one, which would leave the
+  others waiting in `Compute_Xbar`.
 
   An earlier version refused weights whose E[W] was not zero, which is the
   dual feasibility a Lagrangian bound relies on. PH keeps it only when rho is

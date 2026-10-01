@@ -410,9 +410,19 @@ class Checkpointer(Extension):
         # What every check up to here asks is whether the file describes this
         # model. This asks whether the weights now on the models reproduce
         # the E[W] the file recorded: they become another cylinder's
-        # Lagrangian bound, which the hub keeps as best-so-far.
-        ckpt.require_restored_duals_match_their_file(
-            self.opt, cylinder, state["generation"], state["Wbar"])
+        # Lagrangian bound, which the hub keeps as best-so-far. The sums are
+        # allreduces, so every rank computes them before the agreement; the
+        # comparison is with this rank's own file, so it is agreed.
+        from mpisppy.phbase import Wbar_by_node, W_magnitude_by_node
+        bars = Wbar_by_node(self.opt)
+        sizes = W_magnitude_by_node(self.opt)
+        ckpt.run_agreed(
+            self.opt,
+            lambda: ckpt.require_restored_duals_match_their_file(
+                self.opt, cylinder, state["generation"], state["Wbar"],
+                bars, sizes),
+            "confirm that their restored dual weights reproduce the E[W] "
+            "their files recorded, so none of them resumes from those weights")
         self.restored_dual_generation = state["generation"]
         # Only W crosses the checkpoint for a dual cylinder. Its own
         # extensions -- --grad-rho on --ph-dual, say -- are rebuilt fresh,

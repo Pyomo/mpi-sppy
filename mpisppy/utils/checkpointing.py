@@ -1789,10 +1789,8 @@ def load_dual_spoke_state(opt, ckpt_dir, cylinder, ordinal):
             f"configured differently from this one, so its dual weights do "
             f"not belong to this model."
         )
-    # Checked here, inside the agreement the load runs in, because the
-    # restore reads both outside one: require_restored_duals_match_their_file
-    # is collective, and a file without one would raise KeyError on that
-    # rank alone and leave the others waiting in it.
+    # Checked here, at the load, so that a file without one is refused by
+    # name rather than as a bare KeyError from the restore that reads it.
     missing = [key for key in ("generation", "Wbar") if key not in state]
     if missing:
         raise CheckpointMismatch(
@@ -1847,7 +1845,7 @@ RESTORED_WBAR_RTOL = 1e-6
 
 
 def require_restored_duals_match_their_file(opt, cylinder, generation,
-                                            recorded):
+                                            recorded, bars, sizes):
     """Refuse restored dual weights that do not reproduce the file's E[W].
 
     The rest of this cylinder's restore checks that the file describes this
@@ -1868,15 +1866,15 @@ def require_restored_duals_match_their_file(opt, cylinder, generation,
     continues was doing. What a resume must not do is publish weights other
     than the ones it was checkpointed with.
 
-    Collective: the sum spans the scenarios of a tree node and so the ranks
-    of the cylinder. Every rank computes the same sums and so makes the same
-    refusal.
+    ``bars`` and ``sizes`` are ``phbase.Wbar_by_node`` and
+    ``phbase.W_magnitude_by_node`` of the restored models. They are passed in
+    because each sum spans the scenarios of a tree node and so the ranks of
+    the cylinder: the caller computes them on every rank first. That makes
+    them the same on every rank, but ``recorded`` is not -- each rank read it
+    from its own file -- so a damaged file makes this refuse on that rank
+    alone. Per rank, then, and a step the caller has to agree on: see
+    :func:`run_agreed`.
     """
-    # Here rather than at module scope: phbase imports this module.
-    from mpisppy.phbase import Wbar_by_node, W_magnitude_by_node
-
-    bars = Wbar_by_node(opt)
-    sizes = W_magnitude_by_node(opt)
     if recorded is None or set(recorded) != set(bars):
         raise CheckpointMismatch(
             f"The dual weights file {cylinder} wrote at its iteration "

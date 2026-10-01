@@ -607,6 +607,8 @@ class TestAFailedSpokeWriteIsNotRetriedEveryPass(unittest.TestCase):
                                    return_value=(found, None)), \
                  mock.patch.object(mod.ckpt,
                                    "require_restored_duals_match_their_file"), \
+                 mock.patch("mpisppy.phbase.Wbar_by_node"), \
+                 mock.patch("mpisppy.phbase.W_magnitude_by_node"), \
                  mock.patch.object(mod, "global_toc") as toc:
                 ext.post_iter0()
             return " ".join(str(c.args[0]) for c in toc.call_args_list)

@@ -1473,7 +1473,8 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
         "PHBase._restore_extension_state_if_resuming":
             ("restore_extension_state",),
         "Checkpointer.post_iter0": ("load_dual_spoke_state",
-                                    "restore_dual_spoke_state"),
+                                    "restore_dual_spoke_state",
+                                    "require_restored_duals_match_their_file"),
         "Checkpointer._report_unclaimed_spoke_files":
             ("unclaimed_spoke_files",),
         "XhatInnerBoundBase._restore_extension_state_if_resuming":
@@ -1512,7 +1513,6 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
         "probe_model_is_dillable",
         "agree_spoke_restore",
         "agree_dual_spoke_restore",
-        "require_restored_duals_match_their_file",
     })
 
     #: And calls that need no agreement because there is nothing in them for
