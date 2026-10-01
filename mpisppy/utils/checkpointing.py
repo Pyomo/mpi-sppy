@@ -1871,7 +1871,7 @@ def require_restored_duals_match_their_file(opt, cylinder, generation,
     because each sum spans the scenarios of a tree node and so the ranks of
     the cylinder: the caller computes them on every rank first. That makes
     them the same on every rank, but ``recorded`` is not -- each rank read it
-    from its own file -- so a damaged file makes this refuse on that rank
+    from its own file -- so a damaged file can make this refuse on that rank
     alone. Per rank, then, and a step the caller has to agree on: see
     :func:`run_agreed`.
     """
