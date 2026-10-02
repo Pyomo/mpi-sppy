@@ -613,6 +613,7 @@ class SPBase:
         # set up best solution cache
         for k,s in self.local_scenarios.items():
             s._mpisppy_data.best_solution_cache = None
+            s._mpisppy_data.best_solution_inner_bound = None
             s._mpisppy_data.latest_nonant_solution_cache = np.full(len(s._mpisppy_data.nonant_indices), np.nan)
 
     def _set_initial_bounds(self):
@@ -662,6 +663,15 @@ class SPBase:
                 s.component_data_objects(pyo.Var)
             )
             s._mpisppy_data.best_solution_cache = scenario_cache
+            # This scenario's own objective for the solution just cached.
+            # ``inner_bound`` moves on every solve while the cache moves only
+            # on an improvement, so after the next solve the live attribute
+            # no longer describes what is in the cache. Anything that has to
+            # report the two together -- a checkpoint of this incumbent, and
+            # the resumed run that republishes it -- needs the pair taken at
+            # the same moment, which is here.
+            s._mpisppy_data.best_solution_inner_bound = \
+                s._mpisppy_data.inner_bound
 
     def _cache_latest_solution_nonants(self):
         for k,s in self.local_scenarios.items():

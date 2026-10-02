@@ -66,6 +66,8 @@ class XhatSpecificInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
 
                 self.update_if_improving(innerbound)
 
+            self.maybe_checkpoint()
+
             ib_iter += 1
 
         dtm.debug(f'IB specific thread ran {ib_iter} iterations\n')

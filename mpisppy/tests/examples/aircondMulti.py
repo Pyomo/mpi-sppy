@@ -26,15 +26,17 @@ aircondstream = np.random.RandomState()  # pylint: disable=no-member
 # across any realistic tree size.
 PRODUCT_SEED_OFFSET = 100_000
 
-# Per-bundle demand seed separation.
-# When mpi-sppy builds bundles it passes sub-tree BFs (e.g. [1,2,2,2]) to
-# scenario_creator.  All bundles then share the same internal BF structure,
-# so node_idx values are identical across bundles.  bundle_idx
-# (= global scennum // sub-tree-size) is added to the seed to give each
-# bundle a unique demand realisation.
+# Bundling.  When mpi-sppy builds proper bundles it passes sub-tree BFs
+# (e.g. [1,2,2,2] for a [20,2,2,2] tree) to scenario_creator as
+# branching_factors.  Demands are nevertheless seeded from each scenario's
+# node in the FULL tree, which kw_creator records as full_branching_factors,
+# so a bundled instance has exactly the demands of the unbundled one.
+#
+# Fallback, for a caller that supplies sub-tree BFs without
+# full_branching_factors: bundle_idx (= global scennum // sub-tree-size) is
+# added to the seed so that bundles at least differ from each other.
 # Must satisfy: max_bundle_idx * BUNDLE_SEED_OFFSET + max_node_idx
 #                 < PRODUCT_SEED_OFFSET = 100_000
-# Safe for up to ~999 bundles with sub-tree node counts up to ~99.
 BUNDLE_SEED_OFFSET = 100
 
 # Do not edit these defaults!
@@ -80,31 +82,43 @@ def _demands_creator(product_index, sname, sample_branching_factors,
     num_products = kwargs.get("num_products", parms["num_products"][1])
 
     scennum = sputils.extract_num(sname)
-    prod    = np.prod(sample_branching_factors)
-    s       = int(scennum % prod)
 
-    # bundle_idx distinguishes scenarios that belong to different bundles but
-    # share the same position within the sub-tree BFs.  When scenario_creator
-    # is called with the full BFs (no bundling), all scennum < prod, so
-    # bundle_idx == 0 and the behaviour is identical to before.
-    bundle_idx = int(scennum // prod)
+    def _path(bfs):
+        # Branch taken at each stage, for scenario scennum of a tree with BFs bfs.
+        prod = int(np.prod(bfs))
+        s    = int(scennum % prod)
+        path = []
+        for bf in bfs:
+            assert prod % bf == 0
+            prod = prod // bf
+            path.append(s // prod)
+            s = s % prod
+        return path
+
+    # nodenames follow the BFs the caller passed (a bundle's sub-tree when
+    # bundling), since they define the tree the model is attached to.
+    nodenames = [root_name] + [str(i) for i in _path(sample_branching_factors)]
+
+    # The seeds follow the full tree when it is known, so bundling does not
+    # change the instance.  Without it, see BUNDLE_SEED_OFFSET.
+    full_bfs = kwargs.get("full_branching_factors")
+    if full_bfs is not None:
+        assert len(full_bfs) == len(sample_branching_factors)
+        seed_bfs   = list(full_bfs)
+        bundle_idx = 0
+    else:
+        seed_bfs   = list(sample_branching_factors)
+        bundle_idx = int(scennum // np.prod(sample_branching_factors))
+    stagelist = _path(seed_bfs)
 
     d         = kwargs.get("starting_d", parms["starting_d"][1]) / num_products
     demands   = [d]
-    nodenames = [root_name]
 
-    for bf in sample_branching_factors:
-        assert prod % bf == 0
-        prod = prod // bf
-        nodenames.append(str(s // prod))
-        s = s % prod
-
-    stagelist = [int(x) for x in nodenames[1:]]
     for t in range(1, len(nodenames)):
         seed = (start_seed
                 + product_index * PRODUCT_SEED_OFFSET
                 + bundle_idx * BUNDLE_SEED_OFFSET
-                + sputils.node_idx(stagelist[:t], sample_branching_factors))
+                + sputils.node_idx(stagelist[:t], seed_bfs))
         aircondstream.seed(seed)
         d = min(max_d, max(min_d, d + aircondstream.normal(mu_dev, sigma_dev)))
         demands.append(d)
@@ -479,6 +493,10 @@ def kw_creator(cfg, optionsin=None):
         kwargs[option_name] = default if retval is None else retval
 
     _kwarg("branching_factors")
+    # proper_bundler replaces branching_factors with a bundle's sub-tree BFs;
+    # this copy survives that, so the demands can follow the full tree.
+    if kwargs.get("branching_factors") is not None:
+        kwargs["full_branching_factors"] = list(kwargs["branching_factors"])
     for idx, tpl in parms.items():
         _kwarg(idx, tpl[1])
 

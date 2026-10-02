@@ -55,6 +55,10 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
         self.opt._update_E1()
         self.opt._lazy_create_solvers()
 
+        # As for the L-shaped xhatter: cfg_vanilla attaches the Checkpointer
+        # to this spoke through _Xhat_Eval_spoke_foundation.
+        self.restore_checkpointed_incumbent()
+
     def extract_local_candidate_soln(self):
         num_scen = len(self.opt.local_scenarios)
         num_vars = len(self.localnonants) // num_scen
@@ -108,6 +112,8 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
                 obj = self.opt.calculate_incumbent(fix_nonants=False)
 
                 self.update_if_improving(obj)
+
+            self.maybe_checkpoint()
 
             slam_iter += 1
 

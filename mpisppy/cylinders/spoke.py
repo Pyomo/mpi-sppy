@@ -264,6 +264,22 @@ class InnerBoundSpoke(_BoundSpoke):
         self._incumbent_write_counter = counter + 1
 
     def send_best_xhat(self):
+        """Publish the incumbent xhat and, per scenario, its own objective.
+
+        The trailing value has to be the objective *of the xhat in this
+        buffer*: FWPH reads the pair back as one column of its QP, taking
+        the values as the column and the objective as that column's recourse
+        cost (``FWPH_Cylinder._add_QP_columns_from_buf`` ->
+        ``FWPH._add_QP_column``), so an objective belonging to some other
+        xhat is a wrong coefficient with nothing to reveal it.
+
+        So it is ``best_solution_inner_bound``, the objective snapshotted
+        with the values, and not the live ``inner_bound``, which every solve
+        overwrites. The two are the same number on the ordinary path, where
+        this is called straight after the solve that improved the incumbent
+        -- and they are not once any later solve has moved the live one
+        while the incumbent stayed put.
+        """
         best_xhat_buf = self.send_buffers[Field.BEST_XHAT]
         ci = 0
         for s in self.opt.local_scenarios.values():
@@ -271,7 +287,7 @@ class InnerBoundSpoke(_BoundSpoke):
             for ndn_varid in s._mpisppy_data.varid_to_nonant_index:
                 best_xhat_buf[ci] = solution_cache[ndn_varid][1]
                 ci += 1
-            best_xhat_buf[ci] = s._mpisppy_data.inner_bound
+            best_xhat_buf[ci] = s._mpisppy_data.best_solution_inner_bound
             ci += 1
         # print(f"{self.cylinder_rank=} sending {best_xhat_buf.value_array()=}")
         self.put_send_buffer(best_xhat_buf, Field.BEST_XHAT)
@@ -386,6 +402,52 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke, InnerBoundSpoke):
     receive_fields = (*InnerBoundSpoke.receive_fields, Field.NONANTS_VALS)
 
     converger_spoke_char = 'I'
+
+    def restore_checkpointed_incumbent(self):
+        """Give the extensions their pre-loop hook, once, before the main loop.
+
+        This is where the Checkpointer restores an incumbent written by an
+        earlier run. Every inner-bound spoke needs it, not just the ones
+        derived from XhatInnerBoundBase: cfg_vanilla attaches the
+        Checkpointer through _Xhat_Eval_spoke_foundation, which also builds
+        the L-shaped xhatter and the two slammers.
+
+        Call it from the spoke's prep, before its loop starts.
+        """
+        if self.opt.extensions is not None:
+            self.opt.extobject.pre_iter0()
+
+    def maybe_checkpoint(self):
+        """Offer the extensions a checkpoint point, once per loop pass.
+
+        A spoke's main loop is not a sequence of PH iterations and has no
+        ``enditer`` to hang a write off, so it calls this instead: it is the
+        spoke's half of the hook the hub fires at the end of every iteration,
+        and it is what lets one Checkpointer serve both. The extension
+        decides whether the pass is worth a write -- for a spoke that means
+        "has my incumbent improved since the last one" -- so a loop spinning
+        while it waits on the hub costs nothing but the call.
+
+        Call it at the *bottom* of a pass: what a spoke checkpoints is the
+        best xhat it has found, so the pass that finds one has to finish
+        before the write is worth making. ``finalize`` calls it once more,
+        for a loop that exits at its top check before reaching a bottom.
+
+        See section 9, items 6 and 8 of
+        doc/designs/checkpointing_design.md.
+        """
+        if self.opt.extensions is not None:
+            self.opt.extobject.maybe_checkpoint()
+
+    def finalize(self):
+        # One last checkpoint point after the loop. A loop can exit at its
+        # top check without ever reaching a bottom -- the hub may finish
+        # while this spoke is still in its prep -- and an incumbent found
+        # before the loop (a Jensen or feasible xhat, an xhat from a file)
+        # would otherwise never be written. Before load_best_solution, which
+        # is about the model's values, not the incumbent this writes.
+        self.maybe_checkpoint()
+        return super().finalize()
 
 
 class OuterBoundNonantSpoke(_BoundNonantSpoke):
