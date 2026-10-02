@@ -252,12 +252,12 @@ run_phase "serial unit tests (serial)" \
         mpisppy/tests/test_reduced_costs_fixer.py \
         mpisppy/tests/test_slammer.py \
         mpisppy/tests/test_dual_certificate.py \
-        mpisppy/tests/test_ipopt_outer_bound.py \
+        mpisppy/tests/test_certified_outer_bound.py \
         mpisppy/tests/test_mvapich_rma_guard.py \
         mpisppy/tests/test_window_distribution.py
 
-run_phase "test_ipopt_outer_bound (mpiexec -np 2)" \
-    mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py -m pytest mpisppy/tests/test_ipopt_outer_bound.py -v
+run_phase "test_certified_outer_bound (mpiexec -np 2)" \
+    mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py -m pytest mpisppy/tests/test_certified_outer_bound.py -v
 
 # The CI ipopt-tests job also smoke-tests the documented command line, and
 # without the same run here local and CI coverage disagree on that path.
@@ -271,12 +271,12 @@ run_phase "test_ipopt_outer_bound (mpiexec -np 2)" \
 # unaffected because COV_ARGS carries --data-file, so the mismatch is silent.
 # The example-based phases below pass it for the same reason; see EX_COV.
 cd examples/farmer
-run_phase "generic_cylinders --ipopt-outer-bound (mpiexec -np 2)" \
+run_phase "generic_cylinders --certified-outer-bound (mpiexec -np 2)" \
     mpiexec -np 2 coverage run --data-file="$PROJ_DIR/.coverage" \
         --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py \
         "$PROJ_DIR/mpisppy/generic_cylinders.py" \
         --module-name farmer --num-scens 3 --solver-name ipopt \
-        --max-iterations 5 --default-rho 1.0 --ipopt-outer-bound
+        --max-iterations 5 --default-rho 1.0 --certified-outer-bound
 cd "$PROJ_DIR"
 
 run_phase "test_conf_int_farmer (spawns mpiexec)" \

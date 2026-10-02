@@ -141,8 +141,9 @@ Spokes provide bounds and heuristic solutions. Enable them with flags:
 - ``--ph-dual`` -- PH dual bound
 - ``--relaxed-ph`` -- Relaxed PH bound
 - ``--reduced-costs`` -- Reduced costs bound
-- ``--ipopt-outer-bound`` -- Certified bound for convex NLP subproblems, solved
-  with Ipopt (see :ref:`ipopt-outer-bound-spoke`)
+- ``--certified-outer-bound`` -- Certified bound for convex continuous
+  subproblems, by default solved with Ipopt (see
+  :ref:`certified-outer-bound-spoke`)
 
 **Inner bound (upper bound for minimization) spokes:**
 
@@ -369,11 +370,11 @@ takes a per-spoke variant — ``--lagrangian-solver-options``,
 and so on — that overlays on top of the global flag for that
 spoke's solves.
 
-One spoke is deliberately different. ``--ipopt-outer-bound`` does **not**
+One spoke is deliberately different. ``--certified-outer-bound`` does **not**
 inherit the global ``--solver-options`` at all: its per-spoke options
-*replace* rather than overlay, because Ipopt hard-fails on an unrecognized
-keyword instead of ignoring it, so a MIP solver's options reaching it would
-kill the spoke on its first solve. See :ref:`ipopt-outer-bound-spoke`.
+*replace* rather than overlay, because Ipopt, its default solver, hard-fails
+on an unrecognized keyword instead of ignoring it, so a MIP solver's options
+reaching it would kill the spoke on its first solve. See :ref:`certified-outer-bound-spoke`.
 
 Example:
 
@@ -439,9 +440,10 @@ auto-tuning mipgap during decomposition, use ``--starting-mipgap``;
 ``--mipgap-ratio`` defaults to ``0.1``.
 ``--max-solver-threads`` sets a system-level thread cap that wins
 over any inline ``threads`` value; use it on shared HPC nodes. The one
-exception is the ``--ipopt-outer-bound`` spoke, which strips it: Ipopt has no
-``threads`` option and would hard-fail on it. On that spoke an explicit
-``--ipopt-outer-bound-solver-options "threads=4"`` is dropped as well.
+exception is the ``--certified-outer-bound`` spoke, which does not take it:
+Ipopt has no ``threads`` option and would hard-fail on it. On that spoke an
+explicit ``--certified-outer-bound-solver-options "threads=4"`` is passed to
+its solver unchanged.
 
 For solver logging, see ``--solver-log-dir`` below — do not try
 to enable solver logs through ``--solver-options``.
@@ -497,9 +499,9 @@ Precedence at the same iteration / predicate, lowest to highest:
 4. ``--iter0-mipgap`` / ``--iterk-mipgap`` / ``--max-solver-threads``
    (CLI sugar).
 
-This ordering describes every spoke but ``--ipopt-outer-bound``, which takes
-none of the global layers; only ``--ipopt-outer-bound-solver-options`` reaches
-it, and ``threads`` is stripped even from that.
+This ordering describes every spoke but ``--certified-outer-bound``, which takes
+none of the global layers and not the ``--max-solver-threads`` cap; only
+``--certified-outer-bound-solver-options`` reaches it.
 
 More specific predicates always win for any iteration that matches
 both: at ``k = 7``, an ``starting_at_iter: {"5": …}`` entry overrides

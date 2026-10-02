@@ -6,10 +6,10 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-# Tests for the ipopt_outer_bound spoke.
+# Tests for the certified_outer_bound spoke.
 #
-#     python -m pytest mpisppy/tests/test_ipopt_outer_bound.py
-#     mpiexec -np 2 python -m mpi4py -m pytest mpisppy/tests/test_ipopt_outer_bound.py
+#     python -m pytest mpisppy/tests/test_certified_outer_bound.py
+#     mpiexec -np 2 python -m mpi4py -m pytest mpisppy/tests/test_certified_outer_bound.py
 #
 # The wiring tests need neither a solver nor MPI: option routing is the part
 # most likely to break silently, and it is checkable by inspecting the spoke
@@ -102,7 +102,7 @@ def _cfg(num_scens=3, hub_solver="ipopt"):
     cfg.two_sided_args()
     cfg.ph_args()
     cfg.lagrangian_args()
-    cfg.ipopt_outer_bound_args()
+    cfg.certified_outer_bound_args()
     cfg.num_scens = num_scens
     cfg.max_iterations = 5
     cfg.default_rho = 1.0
@@ -120,7 +120,7 @@ def _beans(cfg):
 
 def _spoke_options(cfg, **kw):
     beans, kwargs = _beans(cfg)
-    spoke = vanilla.ipopt_outer_bound_spoke(*beans,
+    spoke = vanilla.certified_outer_bound_spoke(*beans,
                                             scenario_creator_kwargs=kwargs, **kw)
     return spoke["opt_kwargs"]["options"]
 
@@ -133,9 +133,9 @@ class TestConfigSurface(unittest.TestCase):
         # outer bound. domain=float allowed it; NonNegativeFloat does not.
         cfg = _cfg()
         with self.assertRaisesRegex(ValueError, "non-negative"):
-            cfg.ipopt_outer_bound_cushion = -0.05
-        cfg.ipopt_outer_bound_cushion = 0.0      # zero still disables it
-        self.assertEqual(cfg.ipopt_outer_bound_cushion, 0.0)
+            cfg.certified_outer_bound_cushion = -0.05
+        cfg.certified_outer_bound_cushion = 0.0      # zero still disables it
+        self.assertEqual(cfg.certified_outer_bound_cushion, 0.0)
 
     def test_warmstart_does_not_reach_the_spoke(self):
         # shared_options copies --warmstart-subproblems in and solve_one turns
@@ -170,39 +170,38 @@ class TestConfigSurface(unittest.TestCase):
 
     def test_flags_exist_with_expected_defaults(self):
         cfg = _cfg()
-        self.assertFalse(cfg.ipopt_outer_bound)
-        self.assertEqual(cfg.ipopt_outer_bound_rank_ratio, 1.0)
-        self.assertEqual(cfg.ipopt_outer_bound_cushion, 1e-9)
-        # Scoped to Ipopt, but the name is still overridable.
-        self.assertIn("ipopt_outer_bound_solver_name", cfg)
+        self.assertFalse(cfg.certified_outer_bound)
+        self.assertEqual(cfg.certified_outer_bound_rank_ratio, 1.0)
+        self.assertEqual(cfg.certified_outer_bound_cushion, 1e-9)
+        # Defaults to ipopt in the factory, and any solver can be named.
+        self.assertIn("certified_outer_bound_solver_name", cfg)
 
     def test_no_mipgap_flags(self):
-        # Ipopt is not a branch-and-bound solver; offering mipgap flags would
+        # The spoke refuses discrete variables; offering mipgap flags would
         # imply otherwise.
         cfg = _cfg()
-        self.assertNotIn("ipopt_outer_bound_starting_mipgap", cfg)
-        self.assertNotIn("ipopt_outer_bound_iter0_mipgap", cfg)
+        self.assertNotIn("certified_outer_bound_starting_mipgap", cfg)
+        self.assertNotIn("certified_outer_bound_iter0_mipgap", cfg)
 
 
 class TestFactoryWiring(unittest.TestCase):
 
     def test_solver_defaults_to_ipopt(self):
-        # Even when the hub runs something else entirely, the spoke must land
-        # on ipopt rather than inheriting -- its own setup guard would reject
-        # anything else.
+        # Even when the hub runs something else entirely, the spoke lands on
+        # ipopt rather than inheriting the hub's solver.
         options = _spoke_options(_cfg(hub_solver="gurobi"))
         self.assertEqual(options["solver_name"], "ipopt")
 
     def test_explicit_solver_name_is_honored(self):
         cfg = _cfg()
-        cfg.ipopt_outer_bound_solver_name = "ipopt_v2"
-        self.assertEqual(_spoke_options(cfg)["solver_name"], "ipopt_v2")
+        cfg.certified_outer_bound_solver_name = "gurobi"
+        self.assertEqual(_spoke_options(cfg)["solver_name"], "gurobi")
 
     def test_cushion_is_threaded_through(self):
         cfg = _cfg()
-        cfg.ipopt_outer_bound_cushion = 1e-7
+        cfg.certified_outer_bound_cushion = 1e-7
         self.assertEqual(
-            _spoke_options(cfg)["ipopt_outer_bound_cushion"], 1e-7)
+            _spoke_options(cfg)["certified_outer_bound_cushion"], 1e-7)
 
     def test_global_solver_options_do_not_leak(self):  # noqa: D401
         # The point of this test: Ipopt hard-fails on an unrecognized keyword
@@ -227,10 +226,9 @@ class TestFactoryWiring(unittest.TestCase):
                       lag["opt_kwargs"]["options"]["iter0_solver_options"])
 
     def test_max_solver_threads_does_not_leak(self):
-        # --max-solver-threads is re-applied by apply_solver_specs *after* the
-        # factory clears the global layers, so clearing alone is not enough.
-        # Ipopt has no `threads` option and translate_solver_options has no
-        # mapping for it, so it would reach the solver verbatim and hard-fail
+        # The cap is a global layer like --solver-options, and the spoke takes
+        # none. Ipopt has no `threads` option and translate_solver_options has
+        # no mapping for it, so it would reach the solver verbatim and hard-fail
         # the spoke's first solve -- taking the whole run with it.
         cfg = _cfg()
         cfg.max_solver_threads = 2
@@ -240,21 +238,27 @@ class TestFactoryWiring(unittest.TestCase):
         for layer in options["solver_options_layers"]:
             self.assertNotIn("threads", layer["options"])
 
-    def test_max_solver_threads_stripped_but_spoke_options_kept(self):
-        # Stripping the cap must not take the spoke's own options with it.
+    def test_the_spokes_own_thread_count_is_kept(self):
+        # A spoke solver that takes a thread count, Gurobi say, gets the one
+        # the user gave the spoke, and the global cap does not override it.
         cfg = _cfg()
         cfg.max_solver_threads = 2
-        cfg.ipopt_outer_bound_solver_options = "max_iter=42"
+        cfg.certified_outer_bound_solver_options = "threads=4 max_iter=42"
         options = _spoke_options(cfg)
-        self.assertNotIn("threads", options["iterk_solver_options"])
-        self.assertEqual(options["iterk_solver_options"].get("max_iter"), 42)
+        for key in ("iter0_solver_options", "iterk_solver_options"):
+            self.assertEqual(options[key].get("threads"), 4)
+            self.assertEqual(options[key].get("max_iter"), 42)
+        threads = [layer["options"]["threads"]
+                   for layer in options["solver_options_layers"]
+                   if "threads" in layer["options"]]
+        self.assertEqual(threads, [4])
 
     def test_per_spoke_solver_options_do_apply(self):
         # Not inheriting the global layer must not mean ignoring the spoke's
-        # own options, which is how Ipopt settings are meant to arrive.
+        # own options, which is how its solver's settings are meant to arrive.
         cfg = _cfg()
         cfg.solver_options = "mipgap=0.01"
-        cfg.ipopt_outer_bound_solver_options = "max_iter=42"
+        cfg.certified_outer_bound_solver_options = "max_iter=42"
         options = _spoke_options(cfg)
         self.assertEqual(options["iterk_solver_options"].get("max_iter"), 42)
         self.assertNotIn("mipgap", options["iterk_solver_options"])
@@ -299,7 +303,7 @@ class TestSetupGuards(unittest.TestCase):
     """
 
     def _guard_with_solver(self, solver_name, scenarios=None):
-        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+        from mpisppy.cylinders.certified_outer_bound import CertifiedOuterBound
 
         # A real scenario by default. With local_scenarios = {} both
         # per-scenario loops in _check_setup_guards have empty bodies, so the
@@ -311,39 +315,22 @@ class TestSetupGuards(unittest.TestCase):
             options = {"solver_name": solver_name}
             local_scenarios = scenarios
 
-        spoke = IpoptOuterBound.__new__(IpoptOuterBound)
+        spoke = CertifiedOuterBound.__new__(CertifiedOuterBound)
         spoke.opt = _Stub()
         spoke.cylinder_rank = 0
         spoke.cylinder_comm = _SerialComm()
         spoke._warned = set()
         return spoke
 
-    def test_non_ipopt_solver_is_rejected(self):
-        spoke = self._guard_with_solver("gurobi")
-        with self.assertRaisesRegex(CertificateError, "scoped to Ipopt"):
-            spoke._check_setup_guards()
-
-    def test_the_measured_ipopt_is_accepted(self):
-        self._guard_with_solver("ipopt")._check_setup_guards()
-        # and the name is normalized before the test
-        self._guard_with_solver("  IPOPT ")._check_setup_guards()
-
-    def test_unmeasured_ipopt_variants_are_rejected(self):
-        # These all contain "ipopt", which an earlier substring test accepted.
-        # ipopt_v2 and appsi_ipopt run a linear presolve that eliminates rows
-        # and then cannot load their duals; cyipopt's sign convention has never
-        # been measured against this certificate. Each one fails at solve time
-        # with an error naming something other than the solver choice, so the
-        # guard has to catch them here.
-        for name in ("ipopt_v2", "appsi_ipopt", "cyipopt"):
+    def test_any_solver_passes_the_setup_guards(self):
+        # There is no list of allowed solvers. A solver whose dual signs differ
+        # from Ipopt's gets wrong multipliers, which weak duality turns into a
+        # looser bound, never an invalid one; and one that cannot load duals
+        # fails its solve, which the spoke already stands down from.
+        for name in ("ipopt", "gurobi", "ipopt_v2", "appsi_ipopt", "cyipopt",
+                     "knitroampl", None):
             with self.subTest(name=name):
-                with self.assertRaisesRegex(CertificateError, "scoped to Ipopt"):
-                    self._guard_with_solver(name)._check_setup_guards()
-
-    def test_missing_solver_name_is_rejected(self):
-        spoke = self._guard_with_solver(None)
-        with self.assertRaisesRegex(CertificateError, "scoped to Ipopt"):
-            spoke._check_setup_guards()
+                self._guard_with_solver(name)._check_setup_guards()
 
     def test_fbbt_infeasibility_does_not_take_down_the_run(self):
         """An infeasible scenario is the model's problem, not this spoke's.
@@ -375,51 +362,51 @@ class TestInheritsTheLagrangianDriver(unittest.TestCase):
     was inert. Assert the wiring, since none of that failed loudly."""
 
     def test_it_is_a_lagrangian_outer_bound(self):
-        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+        from mpisppy.cylinders.certified_outer_bound import CertifiedOuterBound
         from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
         from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
-        self.assertTrue(issubclass(IpoptOuterBound, LagrangianOuterBound))
-        self.assertTrue(issubclass(IpoptOuterBound, _PreLoopXhatMixin))
+        self.assertTrue(issubclass(CertifiedOuterBound, LagrangianOuterBound))
+        self.assertTrue(issubclass(CertifiedOuterBound, _PreLoopXhatMixin))
 
     def test_the_driver_is_not_reimplemented(self):
-        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+        from mpisppy.cylinders.certified_outer_bound import CertifiedOuterBound
         from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
         for name in ("main", "do_while_waiting_for_new_Ws",
                      "_set_weights_and_solve"):
             with self.subTest(name=name):
-                self.assertNotIn(name, IpoptOuterBound.__dict__)
-                self.assertIs(getattr(IpoptOuterBound, name),
+                self.assertNotIn(name, CertifiedOuterBound.__dict__)
+                self.assertIs(getattr(CertifiedOuterBound, name),
                               getattr(LagrangianOuterBound, name))
 
     def test_only_the_bound_computation_is_overridden(self):
-        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
-        self.assertIn("lagrangian", IpoptOuterBound.__dict__)
-        self.assertIn("lagrangian_prep", IpoptOuterBound.__dict__)
+        from mpisppy.cylinders.certified_outer_bound import CertifiedOuterBound
+        self.assertIn("lagrangian", CertifiedOuterBound.__dict__)
+        self.assertIn("lagrangian_prep", CertifiedOuterBound.__dict__)
 
     def test_jensens_is_declined(self):
         # The inherited main() would offer a Jensen's bound taken from
         # results.problem.lower_bound -- the solver dual bound Ipopt does not
         # produce, and the reason this spoke exists.
-        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
-        spoke = IpoptOuterBound.__new__(IpoptOuterBound)
+        from mpisppy.cylinders.certified_outer_bound import CertifiedOuterBound
+        spoke = CertifiedOuterBound.__new__(CertifiedOuterBound)
         spoke.opt = type("_O", (), {"options": {"jensens": {}}})()
         self.assertFalse(spoke._jensens_enabled())
 
     def test_the_certificate_needs_the_solution_loaded(self):
-        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+        from mpisppy.cylinders.certified_outer_bound import CertifiedOuterBound
         from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
         # The base spoke skips loading the solution; the certificate reads the
         # point AND the duals off the solved model, so it cannot.
         self.assertTrue(LagrangianOuterBound.outer_bound_only)
-        self.assertFalse(IpoptOuterBound.outer_bound_only)
+        self.assertFalse(CertifiedOuterBound.outer_bound_only)
 
 
 class TestDualSuffixGuard(unittest.TestCase):
     """The certificate reads the solver's duals, so the Suffix has to import."""
 
     def _spoke_over(self, scenario):
-        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
-        spoke = IpoptOuterBound.__new__(IpoptOuterBound)
+        from mpisppy.cylinders.certified_outer_bound import CertifiedOuterBound
+        spoke = CertifiedOuterBound.__new__(CertifiedOuterBound)
         spoke.opt = type("_O", (), {"local_scenarios": {"Scen0": scenario}})()
         # The reject path is collective -- see _raise_collectively -- so even a
         # one-rank stub needs a comm.
@@ -489,13 +476,13 @@ class TestNewlyFixedNonants(unittest.TestCase):
     bounds the restricted problem and not the original."""
 
     def _spoke(self, fixed_now, fixed_at_setup):
-        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+        from mpisppy.cylinders.certified_outer_bound import CertifiedOuterBound
         m = _certifiable_scenario()
         m.x.fixed = fixed_now
         data = type("_D", (), {})()
         data.nonant_indices = {("ROOT", 0): m.x}
         m._mpisppy_data = data
-        spoke = IpoptOuterBound.__new__(IpoptOuterBound)
+        spoke = CertifiedOuterBound.__new__(CertifiedOuterBound)
         spoke.opt = type("_O", (), {"local_scenarios": {"Scen0": m}})()
         spoke.cylinder_rank = 0
         spoke.cylinder_comm = _SerialComm()
@@ -549,13 +536,13 @@ class TestProxGuard(unittest.TestCase):
     always creates at 0, so it could never fire."""
 
     def _spoke(self, attach_prox):
-        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+        from mpisppy.cylinders.certified_outer_bound import CertifiedOuterBound
 
         class _Opt:
             options = {"solver_name": "ipopt"}
             local_scenarios = {}
 
-        spoke = IpoptOuterBound.__new__(IpoptOuterBound)
+        spoke = CertifiedOuterBound.__new__(CertifiedOuterBound)
         spoke.opt = _Opt()
         spoke.opt._attach_prox = attach_prox
         spoke.cylinder_rank = 0
@@ -580,13 +567,13 @@ class TestFbbtExceptionsStandDown(unittest.TestCase):
     """
 
     def _spoke_over(self, scenario):
-        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+        from mpisppy.cylinders.certified_outer_bound import CertifiedOuterBound
 
         class _Stub:
             options = {"solver_name": "ipopt"}
             local_scenarios = {"Scen0": scenario}
 
-        spoke = IpoptOuterBound.__new__(IpoptOuterBound)
+        spoke = CertifiedOuterBound.__new__(CertifiedOuterBound)
         spoke.opt = _Stub()
         spoke.opt._attach_prox = False
         spoke.cylinder_rank = 0
@@ -718,7 +705,7 @@ class TestCollectiveRaise(unittest.TestCase):
 
     def _spoke(self, rank, peer_saw_it):
         from mpisppy import MPI
-        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+        from mpisppy.cylinders.certified_outer_bound import CertifiedOuterBound
 
         class _TwoRanks:
             size = 2
@@ -734,7 +721,7 @@ class TestCollectiveRaise(unittest.TestCase):
                 # rank 1 is the one with the bad scenario in these tests
                 return value if root == rank else "scenario Scen1: a discrete variable"
 
-        spoke = IpoptOuterBound.__new__(IpoptOuterBound)
+        spoke = CertifiedOuterBound.__new__(CertifiedOuterBound)
         spoke.cylinder_rank = rank
         spoke.cylinder_comm = _TwoRanks()
         return spoke
@@ -769,8 +756,8 @@ class TestCollectiveRaiseOnRealRanks(unittest.TestCase):
     """
 
     def _spoke(self):
-        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
-        spoke = IpoptOuterBound.__new__(IpoptOuterBound)
+        from mpisppy.cylinders.certified_outer_bound import CertifiedOuterBound
+        spoke = CertifiedOuterBound.__new__(CertifiedOuterBound)
         spoke.cylinder_comm = comm
         spoke.cylinder_rank = comm.Get_rank()
         return spoke
@@ -805,7 +792,7 @@ class TestCollectiveWarning(unittest.TestCase):
         saw the condition. The comm performs the REAL reduction over all of
         them rather than returning a canned answer, so an inverted ternary or
         the wrong operator fails here instead of passing."""
-        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+        from mpisppy.cylinders.certified_outer_bound import CertifiedOuterBound
         from mpisppy import MPI
 
         class _Comm:
@@ -822,7 +809,7 @@ class TestCollectiveWarning(unittest.TestCase):
                 assert value == contributions[rank], "this rank's contribution"
                 return min(contributions)
 
-        spoke = IpoptOuterBound.__new__(IpoptOuterBound)
+        spoke = CertifiedOuterBound.__new__(CertifiedOuterBound)
         spoke.cylinder_rank = rank
         spoke.cylinder_comm = _Comm()
         spoke._warned = set()
@@ -881,11 +868,11 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
     CertificateError, and none of them is worth aborting the run."""
 
     def _spoke_over(self, scenario):
-        from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
+        from mpisppy.cylinders.certified_outer_bound import CertifiedOuterBound
 
         class _Opt:
             options = {"verbose": False, "tee-rank0-solves": False,
-                       "ipopt_outer_bound_cushion": 1e-9}
+                       "certified_outer_bound_cushion": 1e-9}
             local_scenarios = {"Scen0": scenario}
             _PHIter = 1
 
@@ -898,7 +885,7 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
             def Ebound(self, verbose):
                 return "EBOUND"
 
-        spoke = IpoptOuterBound.__new__(IpoptOuterBound)
+        spoke = CertifiedOuterBound.__new__(CertifiedOuterBound)
         spoke.opt = _Opt()
         spoke.cylinder_rank = 0
         spoke.cylinder_comm = _SerialComm()
@@ -1334,7 +1321,7 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
         scenario = self._scenario_with_a_bound_and_a_missing_dual()
         spoke = self._spoke_over(scenario)
         with mock.patch(
-            "mpisppy.cylinders.ipopt_outer_bound.certified_lower_bound",
+            "mpisppy.cylinders.certified_outer_bound.certified_lower_bound",
             return_value=None,          # returns None, records no reason
         ):
             with warnings.catch_warnings(record=True) as caught:
@@ -1391,7 +1378,7 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
             return None
 
         with mock.patch(
-            "mpisppy.cylinders.ipopt_outer_bound.certified_lower_bound",
+            "mpisppy.cylinders.certified_outer_bound.certified_lower_bound",
             side_effect=_records_an_unknown_tag,
         ):
             with warnings.catch_warnings(record=True) as caught:
@@ -1430,7 +1417,7 @@ class TestAgainstEFOptimum(unittest.TestCase):
             cfg.linearize_proximal_terms = True
         beans, kwargs = _beans(cfg)
         hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=kwargs)
-        spoke = vanilla.ipopt_outer_bound_spoke(
+        spoke = vanilla.certified_outer_bound_spoke(
             *beans, scenario_creator_kwargs=kwargs)
         wheel = WheelSpinner(hub_dict, [spoke])
         wheel.spin()
@@ -1504,7 +1491,7 @@ class TestAgreesWithLagrangian(unittest.TestCase):
     def test_certificate_reproduces_the_lagrangian_bound(self):
         lag = self._bound_from(vanilla.lagrangian_spoke,
                                lagrangian_solver_name=dual_bound_solver_name)
-        cert = self._bound_from(vanilla.ipopt_outer_bound_spoke)
+        cert = self._bound_from(vanilla.certified_outer_bound_spoke)
 
         if lag.global_rank != 1:
             return
@@ -1520,7 +1507,7 @@ class TestAgreesWithLagrangian(unittest.TestCase):
                 f"{dual_bound_solver_name} reported no dual bound for the "
                 "Lagrangian spoke, so there is nothing to compare against")
         self.assertFalse(math.isnan(cert_bound),
-                         "ipopt_outer_bound sent no bound at all")
+                         "certified_outer_bound sent no bound at all")
 
         # Two independent computations of the same number.
         self.assertAlmostEqual(cert_bound, lag_bound, delta=self.TOL)
@@ -1533,6 +1520,30 @@ class TestAgreesWithLagrangian(unittest.TestCase):
         # Both remain valid outer bounds.
         self.assertLessEqual(cert_bound, FARMER_EF_OPT + 1e-6)
         self.assertLessEqual(lag_bound, FARMER_EF_OPT + 1e-6)
+
+    def test_the_spoke_is_not_tied_to_ipopt(self):
+        # The same comparison with the spoke itself on the dual-bound solver
+        # (glpk in the ipopt-tests job), whose duals arrive under Ipopt's sign
+        # convention. A convention that differed would still give a valid
+        # bound, but a loose one, and the agreement below would fail.
+        lag = self._bound_from(vanilla.lagrangian_spoke,
+                               lagrangian_solver_name=dual_bound_solver_name)
+        cert = self._bound_from(
+            vanilla.certified_outer_bound_spoke,
+            certified_outer_bound_solver_name=dual_bound_solver_name)
+
+        if lag.global_rank != 1:
+            return
+        lag_bound, cert_bound = lag.spcomm.bound, cert.spcomm.bound
+        if math.isnan(lag_bound):
+            self.skipTest(
+                f"{dual_bound_solver_name} reported no dual bound for the "
+                "Lagrangian spoke, so there is nothing to compare against")
+        self.assertFalse(math.isnan(cert_bound),
+                         f"certified_outer_bound on {dual_bound_solver_name} "
+                         "sent no bound at all")
+        self.assertAlmostEqual(cert_bound, lag_bound, delta=self.TOL)
+        self.assertLessEqual(cert_bound, FARMER_EF_OPT + 1e-6)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
-% Mathematical companion to doc/designs/ipopt_outer_bound_design.md
-% Build:  pdflatex ipopt_outer_bound_certificate.tex
+% Mathematical companion to doc/designs/certified_outer_bound_design.md
+% Build:  pdflatex certified_outer_bound_certificate.tex
 \documentclass[11pt]{article}
 
 \usepackage[margin=1.1in]{geometry}
@@ -22,15 +22,15 @@
 \newcommand{\OPT}{\mathrm{OPT}}
 
 \title{A certified outer bound for convex NLP scenario subproblems}
-\author{mpi-sppy \\ \small companion to \texttt{doc/designs/ipopt\_outer\_bound\_design.md}}
+\author{mpi-sppy \\ \small companion to \texttt{doc/designs/certified\_outer\_bound\_design.md}}
 \date{2 October 2026}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-The usual device for getting outer bounds in mpi-sppy is to read the dual bound off the subproblem solver, which fails for Ipopt, which reports no dual bound.  This note
-derives the bound that the \texttt{ipopt\_outer\_bound} spoke computes instead.
+The usual device for getting outer bounds in mpi-sppy is to read the dual bound off the subproblem solver, which fails for a local NLP solver such as Ipopt, which reports none.  This note
+derives the bound that the \texttt{certified\_outer\_bound} spoke computes instead.
 The construction is Lagrangian weak duality combined with a tangent-plane
 underestimator minimised in closed form over the variable box.  \emph{None of the
 mathematics is new}: Theorem~\ref{thm:main} is the Frank--Wolfe duality gap on a
@@ -554,7 +554,7 @@ obtain Lagrangian dual bounds is itself established \cite{boland2018}, and
 mpi-sppy already ships an FWPH cylinder on that basis.
 
 What is specific here is therefore an assembly rather than a result: the
-multipliers are the ones Ipopt already returns, the linearisation point is the
+multipliers are the ones the solver already returns, the linearisation point is the
 iterate it already stopped at, and the box is the model's own variable bounds ---
 so a valid outer bound is obtained from the solve the spoke was going to perform
 anyway, with no second optimisation and no assumption that the first one
@@ -586,11 +586,11 @@ Remark~\ref{rem:mixed} safeguard   & a \texttt{None} bound, propagated collectiv
 \noindent
 Everything above the rule is in \texttt{utils/dual\_certificate.py},
 whose \texttt{eps\_rel} argument is exposed on the command line as
-\texttt{--ipopt-outer-bound-cushion}.  Below it, the weak-form tightening is in
+\texttt{--certified-outer-bound-cushion}.  Below it, the weak-form tightening is in
 \texttt{cylinders/spcommunicator.py} and the sum is in \texttt{spopt.py}, with
 the \texttt{None} propagated across both.  All paths are relative to
 \texttt{mpisppy/}, and the spoke driving the whole is
-\texttt{cylinders/ipopt\_outer\_bound.py}.
+\texttt{cylinders/certified\_outer\_bound.py}.
 
 \appendix
 

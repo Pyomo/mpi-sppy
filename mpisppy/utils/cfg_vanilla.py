@@ -241,7 +241,7 @@ def shared_options(cfg, is_hub=False):
 
     return shoptions
 
-def apply_solver_specs(name, spoke, cfg):
+def apply_solver_specs(name, spoke, cfg, thread_cap=True):
     options = spoke["opt_kwargs"]["options"]
     # Per-spoke option specs (--{name}-solver-options,
     # --{name}-iter0-mipgap, etc.) overlay on top of the global
@@ -302,7 +302,8 @@ def apply_solver_specs(name, spoke, cfg):
     # Re-apply max_solver_threads so the global thread cap wins
     # even when --{name}-solver-options explicitly sets a different
     # threads value (system-level cap beats user preference).
-    if _hasit(cfg, "max_solver_threads"):
+    # thread_cap=False is for a spoke that takes none of the global layers.
+    if thread_cap and _hasit(cfg, "max_solver_threads"):
         options["iter0_solver_options"]["threads"] = cfg.max_solver_threads
         options["iterk_solver_options"]["threads"] = cfg.max_solver_threads
         options["solver_options_layers"].append(
@@ -1239,7 +1240,7 @@ def lagrangian_spoke(
     return lagrangian_spoke
 
 
-def ipopt_outer_bound_spoke(
+def certified_outer_bound_spoke(
     cfg,
     scenario_creator,
     scenario_denouement,
@@ -1250,9 +1251,9 @@ def ipopt_outer_bound_spoke(
     ph_extensions=None,
     extension_kwargs=None,
 ):
-    from mpisppy.cylinders.ipopt_outer_bound import IpoptOuterBound
-    ipopt_ob_spoke = _PHBase_spoke_foundation(
-        IpoptOuterBound,
+    from mpisppy.cylinders.certified_outer_bound import CertifiedOuterBound
+    certified_ob_spoke = _PHBase_spoke_foundation(
+        CertifiedOuterBound,
         cfg,
         scenario_creator,
         scenario_denouement,
@@ -1265,15 +1266,17 @@ def ipopt_outer_bound_spoke(
     )
 
     # This spoke does NOT inherit the global --solver-options layer, unlike
-    # every other spoke. Ipopt hard-fails on an unrecognized keyword rather
+    # every other spoke. The hub and this spoke usually run different solvers,
+    # and Ipopt (the default here) hard-fails on an unrecognized keyword rather
     # than ignoring it, so an ordinary run -- a MIP solver and its options for
     # the hub, this spoke attached alongside -- would kill the spoke on its
     # first solve with an error naming Ipopt rather than the option routing.
-    # Ipopt-specific settings come in through --ipopt-outer-bound-solver-options.
-    # Filtering the global dict against a list of Ipopt-known keywords was
-    # considered and rejected: the list would have to track Ipopt releases, and
-    # silently dropping an option the user set is worse than never applying it.
-    options = ipopt_ob_spoke["opt_kwargs"]["options"]
+    # This spoke's solver settings come in through
+    # --certified-outer-bound-solver-options. Filtering the global dict against
+    # a list of keywords each solver knows was considered and rejected: the
+    # lists would have to track solver releases, and silently dropping an
+    # option the user set is worse than never applying it.
+    options = certified_ob_spoke["opt_kwargs"]["options"]
     options["iter0_solver_options"] = dict()
     options["iterk_solver_options"] = dict()
     options["solver_options_layers"] = []
@@ -1298,34 +1301,26 @@ def ipopt_outer_bound_spoke(
     options["presolve"] = False
     options.pop("presolve_options", None)
 
-    apply_solver_specs("ipopt_outer_bound", ipopt_ob_spoke, cfg)
-
-    # apply_solver_specs ends by re-applying --max-solver-threads as a
-    # system-level cap, *after* the reset above, so clearing the layers first is
-    # not enough. Ipopt has no `threads` option and translate_solver_options has
-    # no mapping for it, so it would reach the solver verbatim and hard-fail the
-    # spoke's first solve -- exactly the leak this factory is trying to prevent,
-    # reintroduced by a later step. Strip it here, where it is unambiguously
-    # wrong: the cap is meaningful for the MIP solvers it was written for.
-    for _key in ("iter0_solver_options", "iterk_solver_options"):
-        options[_key].pop("threads", None)
-    _stripped = []
-    for _layer in options["solver_options_layers"]:
-        _layer["options"].pop("threads", None)
-        if _layer["options"]:
-            _stripped.append(_layer)
-    options["solver_options_layers"] = _stripped
+    # Nor the --max-solver-threads cap, for the same reason: Ipopt has no
+    # `threads` option and translate_solver_options has no mapping for it, so
+    # it would reach the solver verbatim and hard-fail the spoke's first solve.
+    # A spoke solver that does take a thread count gets one through
+    # --certified-outer-bound-solver-options.
+    apply_solver_specs("certified_outer_bound", certified_ob_spoke, cfg,
+                       thread_cap=False)
 
     # apply_solver_specs only sets solver_name when the per-spoke flag was
     # given; without this the spoke would silently inherit the global solver,
-    # which the setup guard then rejects. The spoke is Ipopt-scoped, so ipopt
-    # is the sensible default rather than something the user must repeat.
-    if not cfg.get("ipopt_outer_bound_solver_name"):
+    # which is usually a MIP solver chosen for the hub. Ipopt is the default
+    # because a local NLP solver reports no bound of its own, which is the case
+    # this spoke was written for; --certified-outer-bound-solver-name names any
+    # other.
+    if not cfg.get("certified_outer_bound_solver_name"):
         options["solver_name"] = "ipopt"
-    options["ipopt_outer_bound_cushion"] = cfg.ipopt_outer_bound_cushion
-    add_ph_tracking(ipopt_ob_spoke, cfg, spoke=True)
+    options["certified_outer_bound_cushion"] = cfg.certified_outer_bound_cushion
+    add_ph_tracking(certified_ob_spoke, cfg, spoke=True)
 
-    return ipopt_ob_spoke
+    return certified_ob_spoke
 
 
 def reduced_costs_spoke(

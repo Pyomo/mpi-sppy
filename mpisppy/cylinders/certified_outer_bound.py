@@ -6,16 +6,18 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-# An outer-bound spoke for convex NLP subproblems solved with Ipopt.
+# An outer-bound spoke for convex continuous subproblems.
 #
 # The ordinary Lagrangian spoke reads its bound off the solver's dual bound.
-# Ipopt is not a branch-and-bound solver and reports none, so that spoke warns
-# and produces nothing usable. This one computes the bound itself, from the
-# subproblem's own duals, using mpisppy.utils.dual_certificate -- see that
-# module for the argument. The short version: the value at the returned point
-# is an *inner* bound, and what makes an outer bound available without any
-# convergence assumption is Lagrangian weak duality plus a tangent-plane
-# underestimator minimized in closed form over the variable box.
+# A local NLP solver such as Ipopt reports none, so that spoke warns and
+# produces nothing usable; and on a continuous model some interfaces report the
+# objective value at the returned point as the bound, which is not a bound at
+# all. This one computes the bound itself, from the subproblem's own duals,
+# using mpisppy.utils.dual_certificate -- see that module for the argument.
+# The short version: the value at the returned point is an *inner* bound, and
+# what makes an outer bound available without any convergence assumption is
+# Lagrangian weak duality plus a tangent-plane underestimator minimized in
+# closed form over the variable box.
 #
 # Convexity of the scenario subproblems is the user's assertion. The parts of it
 # that can be checked mechanically are checked at setup and are hard errors; see
@@ -39,16 +41,7 @@ from mpisppy.utils.dual_certificate import (
 )
 
 
-# Solver names whose dual sign conventions have actually been measured against
-# this certificate. A substring test was tried first and was too permissive: it
-# admitted ipopt_v2 and appsi_ipopt, whose writer runs a linear presolve that
-# eliminates rows and then cannot load their duals, and cyipopt, whose
-# convention has never been checked. Each of those fails at solve time with an
-# error that names something other than the solver choice that caused it.
-_MEASURED_IPOPT_SOLVERS = frozenset({"ipopt"})
-
-
-class IpoptOuterBound(LagrangianOuterBound):
+class CertifiedOuterBound(LagrangianOuterBound):
     """The Lagrangian outer-bound spoke with the bound computed, not read.
 
     Subclasses rather than forks: everything about driving the cylinder --
@@ -147,25 +140,16 @@ class IpoptOuterBound(LagrangianOuterBound):
         # not the objective contains a prox term, so it would also have fired
         # on models that have none.
         # Every hard error below goes through _raise_collectively, including
-        # the two whose conditions are the same on every rank -- self.opt.options
-        # comes from the spoke dict and _attach_prox is set identically by
-        # PH_Prep. Routing them the same way costs two allreduces once, at
-        # setup, and leaves the class one rule instead of a per-guard judgement
-        # about whether this particular condition happens to be rank-uniform.
+        # this first one, whose condition is the same on every rank --
+        # _attach_prox is set identically by PH_Prep. Routing it the same way
+        # costs one allreduce once, at setup, and leaves the class one rule
+        # instead of a per-guard judgement about whether this particular
+        # condition happens to be rank-uniform.
         self._raise_collectively(
-            "ipopt_outer_bound requires the proximal term to be off; "
+            "certified_outer_bound requires the proximal term to be off; "
             "the bound it computes is a Lagrangian bound and a proximal "
             "subproblem is not the Lagrangian relaxation"
             if getattr(self.opt, "_attach_prox", False) else None
-        )
-
-        solver_name = (self.opt.options.get("solver_name") or "").strip().lower()
-        self._raise_collectively(
-            f"ipopt_outer_bound is scoped to Ipopt, but its solver is "
-            f"{solver_name!r}. The dual sign conventions it relies on have "
-            f"been measured only for {sorted(_MEASURED_IPOPT_SOLVERS)}. "
-            "Set --ipopt-outer-bound-solver-name."
-            if solver_name not in _MEASURED_IPOPT_SOLVERS else None
         )
 
         # Certifiability is genuinely rank-local -- a discrete variable or a
@@ -232,7 +216,7 @@ class IpoptOuterBound(LagrangianOuterBound):
             "fbbt_infeasible",
             bool(infeasible),
             lambda: (
-                f"ipopt_outer_bound: bounds tightening found {len(infeasible)} "
+                f"certified_outer_bound: bounds tightening found {len(infeasible)} "
                 f"scenario(s) infeasible on rank {self.cylinder_rank}, for "
                 f"example {infeasible[0]}. An infeasible scenario never yields "
                 "a certificate and Ebound is all-or-nothing, so this spoke "
@@ -245,7 +229,7 @@ class IpoptOuterBound(LagrangianOuterBound):
             "fbbt_failed",
             bool(fbbt_failed),
             lambda: (
-                f"ipopt_outer_bound: bounds tightening could not analyze "
+                f"certified_outer_bound: bounds tightening could not analyze "
                 f"{len(fbbt_failed)} scenario(s) on rank "
                 f"{self.cylinder_rank}, for example {fbbt_failed[0]}. Their "
                 "variable boxes are used as the model states them, untightened, "
@@ -258,7 +242,7 @@ class IpoptOuterBound(LagrangianOuterBound):
         def _unbounded_message():
             sname, names = next(iter(still_unbounded.items()))
             return (
-                f"ipopt_outer_bound: {len(still_unbounded)} scenario(s) have "
+                f"certified_outer_bound: {len(still_unbounded)} scenario(s) have "
                 "variables with no finite bound after fbbt, for example "
                 f"{sname}: {', '.join(names[:5])}"
                 f"{' ...' if len(names) > 5 else ''}. This is a heads-up, not "
@@ -380,7 +364,7 @@ class IpoptOuterBound(LagrangianOuterBound):
             "fixed_nonants",
             bool(newly),
             lambda:
-            "ipopt_outer_bound: nonanticipative variables were fixed after "
+            "certified_outer_bound: nonanticipative variables were fixed after "
             f"setup ({', '.join(newly[:5])}"
             f"{' ...' if len(newly) > 5 else ''}). Fixing restricts the "
             "subproblem, so its minimum is a bound on the restricted problem "
@@ -393,8 +377,9 @@ class IpoptOuterBound(LagrangianOuterBound):
         with the certificate. Returns the expected outer bound, or None.
 
         This is the whole of the difference from the base spoke, which reads
-        results.Problem[0].Lower_bound instead -- the number Ipopt does not
-        provide."""
+        results.Problem[0].Lower_bound instead -- a number Ipopt does not
+        provide, and one other solvers fill with the objective value on a
+        continuous model."""
         # This shrinks the box the certificate minimizes over, so it needs an
         # argument. Note the tempting one -- "a smaller box removes points, and
         # fewer points can only raise an infimum" -- is an argument that the
@@ -462,7 +447,7 @@ class IpoptOuterBound(LagrangianOuterBound):
             "solve_raised",
             solve_raised is not None,
             lambda: (
-                f"ipopt_outer_bound: a subproblem solve raised "
+                f"certified_outer_bound: a subproblem solve raised "
                 f"{type(solve_raised).__name__} on rank {self.cylinder_rank} "
                 f"({solve_raised}). This spoke reports NO bound for that "
                 "iteration and keeps running; the solver's own status was "
@@ -518,6 +503,10 @@ class IpoptOuterBound(LagrangianOuterBound):
             # missing_duals warn-once key, hiding a real tightness loss later.
             scenario_no_dual = []
             scenario_reason = []
+            # Ipopt's convention, whatever the solver: it is the only one
+            # measured. A solver whose signs differ gets multipliers that are
+            # wrong, which weak duality turns into a looser bound, never an
+            # invalid one.
             try:
                 s._mpisppy_data.outer_bound = certified_lower_bound(
                     s, sign_convention="ipopt", eps_rel=self._cushion,
@@ -610,7 +599,7 @@ class IpoptOuterBound(LagrangianOuterBound):
                 # too; the defaults are what keep that from depending on when
                 # the callback runs.
                 lambda cls=cls, here=here: (
-                    f"ipopt_outer_bound: no certificate ({cls}) for "
+                    f"certified_outer_bound: no certificate ({cls}) for "
                     f"{len(here)} scenario(s) on rank {self.cylinder_rank}, "
                     f"for example {here[0]}. Ebound is all-or-nothing, so this "
                     "cylinder reports NO bound at all on such an iteration, "
@@ -667,7 +656,7 @@ class IpoptOuterBound(LagrangianOuterBound):
                 f"no_bound_returned:{tag}",
                 bool(here),
                 lambda tag=tag, here=here, what=what, advice=advice: (
-                    f"ipopt_outer_bound: no bound for {len(here)} scenario(s) "
+                    f"certified_outer_bound: no bound for {len(here)} scenario(s) "
                     f"on rank {self.cylinder_rank} -- {what}. For example "
                     f"{here[0]}. Ebound is all-or-nothing, so this cylinder "
                     "reports NO bound on such an iteration, not merely for "
@@ -678,7 +667,7 @@ class IpoptOuterBound(LagrangianOuterBound):
             "missing_duals",
             bool(no_dual),
             lambda: (
-                f"ipopt_outer_bound: {len(no_dual)} constraint(s) had no dual "
+                f"certified_outer_bound: {len(no_dual)} constraint(s) had no dual "
                 f"imported, for example {no_dual[0]}. They are taken with "
                 "multiplier zero, which weak duality admits, so the bound is "
                 "looser than it could be but still valid."
@@ -688,15 +677,15 @@ class IpoptOuterBound(LagrangianOuterBound):
 
     @property
     def _cushion(self):
-        return self.opt.options.get("ipopt_outer_bound_cushion", 1e-9)
+        return self.opt.options.get("certified_outer_bound_cushion", 1e-9)
 
     def _jensens_enabled(self):
         """Never, for this spoke.
 
         The inherited main() offers a Jensen's bound before the loop, and
         _jensens_solve takes it from results.problem.lower_bound -- the
-        solver's own dual bound. That is precisely the number Ipopt does not
-        produce, and the reason this spoke exists. Taking it would send a
-        meaningless bound, so the step is declined rather than inherited.
+        solver's own dual bound. That number is missing or not a bound for
+        the solvers this spoke is for. Taking it would send a meaningless
+        bound, so the step is declined rather than inherited.
         """
         return False

@@ -34,25 +34,26 @@ hedging algorithm for stochastic mixed-integer programs` by Gade et al
 [gade2016]_. It takes W values from the hub and uses them to compute a bound.
 
 
-.. _ipopt-outer-bound-spoke:
+.. _certified-outer-bound-spoke:
 
-ipopt_outer_bound
-^^^^^^^^^^^^^^^^^
+certified_outer_bound
+^^^^^^^^^^^^^^^^^^^^^
 
-An outer bound for problems whose scenario subproblems are **convex NLPs solved
-with Ipopt**, enabled with ``--ipopt-outer-bound``.
+An outer bound for problems whose scenario subproblems are **convex and
+continuous**, enabled with ``--certified-outer-bound``.
 
-The Lagrangian spoke gets its bound from the solver's dual bound. Ipopt is not a
-branch-and-bound solver and reports none, so on a convex NLP that spoke produces
-nothing usable. This one computes the bound itself, from the subproblem's own
-duals.
+The Lagrangian spoke gets its bound from the solver's dual bound. A local NLP
+solver such as Ipopt reports none, so on a convex NLP that spoke produces
+nothing usable. Some solver interfaces instead report the objective value at the
+returned point as the bound on a continuous model, which is close to a bound but
+not one. This spoke computes the bound itself, from the subproblem's own duals.
 
 This spoke does not simply report the solved objective value. That value is
 measured *at a point*, hence an inner bound for a minimization -- the wrong
 direction. The spoke instead computes a Lagrangian weak-duality bound, corrected
 by a tangent-plane underestimator minimized in closed form over the variable box.
-The result is valid for *any* multipliers, so no assumption that Ipopt converged
-is needed: a truncated or sloppy solve gives a loose bound rather than a wrong
+The result is valid for *any* multipliers, so no assumption that the solver
+converged is needed: a truncated or sloppy solve gives a loose bound rather than a wrong
 bound. At an exact KKT point the correction vanishes and the bound equals the
 subproblem optimum.
 
@@ -82,7 +83,7 @@ Cost is one solve per scenario per iteration, the same as the Lagrangian spoke.
 
    What *is* checked, as a hard error at setup: discrete variables, nonlinear
    equality constraints, nonlinear two-sided (ranged) constraints, a
-   maximization objective, a solver that is not Ipopt, a ``dual`` Suffix
+   maximization objective, a ``dual`` Suffix
    the scenario creator already attached in a direction that does not import
    (the certificate needs the solver's duals back, so ``Suffix.IMPORT`` or
    ``Suffix.IMPORT_EXPORT`` is required), and an expression Pyomo's
@@ -120,24 +121,30 @@ exception. Because ``Ebound`` is all-or-nothing, one failure empties the ``N``
 column for that iteration; the run continues and the next iteration tries
 again.
 
-**Solver options.** Unlike every other spoke, this one does **not** inherit the
-global ``--solver-options``. Ipopt hard-fails on an unrecognized keyword rather
-than ignoring it, so a perfectly ordinary run (a MIP solver and its options for
-the hub, this spoke attached alongside) would otherwise kill the spoke on its
-first solve. Pass Ipopt settings through ``--ipopt-outer-bound-solver-options``.
+**Which solver.** The spoke uses Ipopt unless
+``--certified-outer-bound-solver-name`` names another; it does not inherit
+``--solver-name``, so the hub and the other spokes can run a MIP solver while
+this spoke runs an NLP solver. Any solver that returns constraint duals into a
+Pyomo ``dual`` Suffix can be used, for example Knitro or, on a convex QP or
+QCP, Gurobi. The duals are read with Ipopt's sign convention, which is the only
+one that has been checked against known multipliers; Gurobi agrees with it on the
+farmer example. A solver whose signs differ still gives a valid bound, because
+any multipliers do, but a loose one. A solver that returns no duals gives the
+looser bound that zero multipliers give, and the spoke warns. None of this lets
+the spoke certify a non-convex model, and if the model has integer variables
+the spoke is inapplicable whatever solver runs it.
 
-The hub and the other spokes keep whatever ``--solver-name`` selects; only this
-spoke is pinned to Ipopt. The flag ``--ipopt-outer-bound-solver-name`` itself
-defaults to ``None``, like every other per-spoke solver flag; the pin to
-``ipopt`` is applied afterwards by the spoke factory when the flag was left
-unset, so leaving it alone and passing ``ipopt`` explicitly come to the same
-thing. Note that this routing lets Ipopt coexist with a MIP solver on a
-*convex* model -- it does not let it certify a non-convex one. If the model has
-integer variables this spoke is inapplicable no matter what anything else runs.
+**Solver options.** Unlike every other spoke, this one does **not** inherit the
+global ``--solver-options`` or the ``--max-solver-threads`` cap. Ipopt
+hard-fails on an unrecognized keyword rather than ignoring it, so a perfectly
+ordinary run (a MIP solver and its options for the hub, this spoke attached
+alongside) would otherwise kill the spoke on its first solve. Pass this spoke's
+solver settings, including a thread count if its solver takes one, through
+``--certified-outer-bound-solver-options``.
 
 **An inexact or ill-conditioned solve is safe.** The certificate assumes nothing
 about the accuracy of the solve. The model is convex by assumption, so it has no
-non-global local minima, and Ipopt returning a sub-optimal answer can only mean
+non-global local minima, and a solver returning a sub-optimal answer can only mean
 it stopped short of converging -- an inexact point with inexact multipliers, and
 the bound holds for any point and any ``lam >= 0``. The point need not even lie
 in the box: the minimization runs over the box while the point only has to be
@@ -150,7 +157,7 @@ tightness. The looseness term grows as the point moves away from optimal, so a
 badly conditioned subproblem reports a weak bound, and the hub keeps the best
 outer bound it has seen and ignores it.
 
-``--ipopt-outer-bound-cushion`` (default ``1e-9``) subtracts a small relative
+``--certified-outer-bound-cushion`` (default ``1e-9``) subtracts a small relative
 amount, ``q - eps*(1+|q|)``, from the reported bound. This is last-bit hygiene
 against floating point, not a proof-carrying margin; pass ``0`` to disable it.
 
@@ -174,7 +181,7 @@ Maximization is not supported and raises at setup.
       HSL, a collection of Fortran codes for large-scale scientific computation.
       See https://www.hsl.rl.ac.uk/
 
-   Pass ``--ipopt-outer-bound-solver-options "linear_solver=mumps"`` to choose
+   Pass ``--certified-outer-bound-solver-options "linear_solver=mumps"`` to choose
    otherwise.
 
 

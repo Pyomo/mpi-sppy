@@ -1,9 +1,9 @@
-# `ipopt_outer_bound` — a certified outer-bound cylinder for convex NLP subproblems
+# `certified_outer_bound` — a certified outer-bound cylinder for convex continuous subproblems
 
 Status: draft for review. Branch `ipopt-outer-bound` (off Pyomo/mpi-sppy `main`).
 
 The mathematics is set out separately, with proofs, in
-[`ipopt_outer_bound_certificate.tex`](ipopt_outer_bound_certificate.pdf) —
+[`certified_outer_bound_certificate.tex`](certified_outer_bound_certificate.pdf) —
 weak duality, the box underestimator, exactness at a KKT point, the canonical-form
 sign condition, and the aggregation hypothesis, with an appendix on why the reduced
 costs are not a shortcut. This document covers the design
@@ -42,9 +42,10 @@ inequality it rests on holds exactly at every point. Ill-conditioning costs tigh
 The two places where numerics do bear on validity, both of them about scaling rather
 than conditioning, are in §5.2.
 
-Scope is **Ipopt only**, by decision. The mechanism generalizes to any NLP solver
-returning duals, but nothing here is written to be solver-neutral, and the dual sign
-conventions in §5 are measured from Ipopt.
+The cylinder was first scoped to Ipopt and named for it. It now takes any solver that
+returns duals, with Ipopt as the default: the certificate is valid for any multipliers,
+so a solver whose sign convention differs from Ipopt's (§5, the only one measured) gives
+a looser bound, not a wrong one. See §7.
 
 ## 2. Why this cannot just read a number off the solver
 
@@ -432,7 +433,7 @@ nothing that matters in a PH outer bound.
     q̂ − ε_rel·(1 + |q̂|),      ε_rel = 1e-9 by default
 ```
 
-settable through `--ipopt-outer-bound-cushion` (0 disables it). Note honestly what this
+settable through `--certified-outer-bound-cushion` (0 disables it). Note honestly what this
 does and does not buy: 1e-9 is an order of magnitude *smaller* than the 1.5e−06 margin
 measured above, so it is last-bit hygiene, not a proof-carrying margin. The margin
 itself is not a soundness problem — the theorem in §3.3 needs no tolerance argument —
@@ -461,7 +462,7 @@ one-directional, a gradient error is not. It is not amplified by anything — se
 but it is not self-protecting either.
 
 **Practical consequence: on a model known to be badly scaled, raise
-`--ipopt-outer-bound-cushion`.** This is the one respect in which numerics bear on
+`--certified-outer-bound-cushion`.** This is the one respect in which numerics bear on
 validity rather than on tightness, and it is the reason the flag exists as a knob
 instead of a constant.
 
@@ -544,8 +545,6 @@ Checkable at setup, hard error (following the repo's fail-loudly convention):
   `attach_prox=False`; assert it.
 - **Maximization.** Minimize-only, with a hard error. The concave mirror that would add
   max support is deferred and may not happen; see §10.
-- **Solver is not Ipopt.** Scope decision; the sign conventions in §5 are measured from
-  Ipopt only.
 - **A `dual` Suffix that does not import.** A scenario creator may already have attached
   one — supplying dual warm starts is a common reason — and silently reusing an
   `EXPORT` or `LOCAL` suffix would import nothing, leaving the certificate with no
@@ -659,9 +658,10 @@ from spopt's `not_good_enough_results` branch.
 
 Not checkable, documented as the user's assertion: convexity of `f_s` and `g_s`.
 
-## 7. Solver scoping: Ipopt for this cylinder, anything for everyone else
+## 7. Solver scoping: this cylinder's solver is its own
 
-This cylinder pins **its own** solver to Ipopt. The hub and every other spoke keep
+This cylinder chooses **its own** solver, Ipopt unless
+`--certified-outer-bound-solver-name` names another. The hub and every other spoke keep
 whatever `--solver-name` selects — gurobi, cplex, xpress, glpk — and nothing here
 constrains them. Each cylinder builds its own copy of the scenario models and solves
 them with its own solver; the only coupling between cylinders is the numeric exchange
@@ -676,9 +676,15 @@ if _hasit(cfg, name+"_solver_name"):
     options["solver_name"] = cfg.get(name+"_solver_name")
 ```
 
-So the factory declares `ipopt_outer_bound_solver_name` with default `"ipopt"` and
-calls `apply_solver_specs("ipopt_outer_bound", ...)` like every other spoke factory.
-The guard in §6 rejects a value that does not name Ipopt.
+So the factory calls `apply_solver_specs("certified_outer_bound", ...)` like every
+other spoke factory, and sets `"ipopt"` when the flag was left unset.
+
+An earlier version also had a §6 guard that rejected every solver but Ipopt, since only
+Ipopt's sign convention is measured. It was dropped. A wrong convention costs tightness,
+not validity (§5), and the solvers it was written to catch (`ipopt_v2` and
+`appsi_ipopt`, which cannot load their duals after their presolve) fail the solve, which
+the cylinder already stands down from. With the cylinder run on Gurobi, the farmer
+bound agrees with the Lagrangian spoke's.
 
 ### 7.1 Global solver options must not leak into this cylinder
 
@@ -698,10 +704,13 @@ for the hub, this cylinder attached alongside — would kill the cylinder on its
 solve, with an error naming Ipopt rather than the option routing.
 
 Decision: this cylinder does **not** inherit the global solver-options layer. It starts
-from an empty base, and Ipopt-specific settings arrive through
-`--ipopt-outer-bound-solver-options`. Filtering the global dict against a list of
+from an empty base, and its solver's settings arrive through
+`--certified-outer-bound-solver-options`. Filtering the global dict against a list of
 Ipopt-known keywords was considered and rejected: the list would have to track Ipopt
 releases, and silently dropping an option the user set is worse than never applying it.
+The `--max-solver-threads` cap is not applied either (`apply_solver_specs(...,
+thread_cap=False)`): Ipopt has no `threads` option, and a solver that does take one gets
+it through the cylinder's own options.
 
 ### 7.2 Convexity is a property of the model, not of the routing
 
@@ -709,8 +718,9 @@ Worth stating because the flexibility above invites the wrong inference: the §6
 guards apply to the shared scenario model, not to this cylinder's private copy of it.
 If the model has integer variables this cylinder is inapplicable no matter what solver
 anything else runs — and "another cylinder needs a MIP solver" is usually the signal
-that it does. The routing lets Ipopt coexist with a MIP solver on a *convex* model (a
-hub pushing an LP through gurobi, say); it does not let it certify a non-convex one.
+that it does. The routing lets an NLP solver coexist with a MIP solver on a *convex*
+model (a hub pushing an LP through gurobi, say); it does not let it certify a
+non-convex one.
 
 ## 8. Combining across the cylinder's ranks
 
@@ -750,12 +760,12 @@ noted in §12.
 |---|---|
 | `mpisppy/utils/dual_certificate.py` | **Landed (Phase 1).** Pure function of a solved Pyomo model + its `dual` suffix → certified lower bound. No MPI, no cylinder, no PH. Named neutrally because only the §5 sign table is Ipopt-specific; the convention is a `sign_convention="ipopt"` argument rather than a hard-coded assumption. API: `check_model_is_certifiable`, `unbounded_variables`, `certified_lower_bound`, `CertificateError`. |
 | `mpisppy/tests/test_dual_certificate.py` | **Landed (Phase 1).** Wired into `run_coverage.bash` and the `unit-tests` CI job. |
-| `mpisppy/cylinders/ipopt_outer_bound.py` | **Landed.** `IpoptOuterBound(_LagrangianMixin, OuterBoundWSpoke)`; `outer_bound_only = False` (duals and primals are both needed); per-scenario certificate → `_mpisppy_data.outer_bound` → `Ebound()`. |
-| `mpisppy/utils/config.py` | **Landed.** `ipopt_outer_bound_args()`. |
-| `mpisppy/utils/cfg_vanilla.py` | **Landed.** `ipopt_outer_bound_spoke()` factory, alongside `lagrangian_spoke()`. |
+| `mpisppy/cylinders/certified_outer_bound.py` | **Landed.** `CertifiedOuterBound(_LagrangianMixin, OuterBoundWSpoke)`; `outer_bound_only = False` (duals and primals are both needed); per-scenario certificate → `_mpisppy_data.outer_bound` → `Ebound()`. |
+| `mpisppy/utils/config.py` | **Landed.** `certified_outer_bound_args()`. |
+| `mpisppy/utils/cfg_vanilla.py` | **Landed.** `certified_outer_bound_spoke()` factory, alongside `lagrangian_spoke()`. |
 | `mpisppy/generic/spokes.py` | **Landed.** Spoke registry. Note this is *not* `generic_cylinders.py`, where an earlier draft of this table put it — the driver delegates spoke construction to `generic/spokes.py`, and the arg registration to `generic/parsing.py`. |
-| `mpisppy/generic/parsing.py` | **Landed.** Registers `ipopt_outer_bound_args()`. |
-| `mpisppy/tests/test_ipopt_outer_bound.py` | **Landed.** Wiring tests (no solver, no MPI) plus an end-to-end run against the EF optimum. |
+| `mpisppy/generic/parsing.py` | **Landed.** Registers `certified_outer_bound_args()`. |
+| `mpisppy/tests/test_certified_outer_bound.py` | **Landed.** Wiring tests (no solver, no MPI) plus an end-to-end run against the EF optimum. |
 | `doc/src/spokes.rst` | **Landed.** User-facing page. |
 
 Prep attaches a `dual` Suffix (IMPORT) to each scenario. The objective expression after
@@ -764,8 +774,8 @@ of it.
 
 The certificate engine is deliberately a standalone utility rather than a method on the
 spoke: it is the part with the interesting math, and it is fully testable serially.
-The *cylinder* keeps the Ipopt name, because the scope decision in §1 is real — only
-Ipopt's conventions are measured and only Ipopt is accepted by the §6 guard.
+The cylinder was first called `ipopt_outer_bound`. It was renamed when the solver
+guard was dropped (§7), since nothing in it is tied to Ipopt beyond the default.
 
 ## 10. Phased rollout
 
@@ -774,7 +784,7 @@ Each phase is its own review-sized PR and is green on its own.
 - **Phase 1 — certificate engine. DONE, in this design branch.**
   `utils/dual_certificate.py` plus the §6 model guards plus
   `tests/test_dual_certificate.py`. No cylinder, no MPI, no config surface.
-- **Phase 2 — the cylinder. DONE.** `IpoptOuterBound`, config surface, `cfg_vanilla`
+- **Phase 2 — the cylinder. DONE.** `CertifiedOuterBound`, config surface, `cfg_vanilla`
   factory, driver wiring.
 - **Phase 3 — parallel + docs. DONE.** Two-rank test exercising the `Ebound`
   reduction; `doc/src/spokes.rst`; a driver command-line smoke run.
@@ -870,8 +880,7 @@ optimum 8 at `(1, 0)` and multiplier 4, all analytic.
   raises. Plus the negative cases that matter as much: a *fixed* discrete variable is
   allowed (it is a constant, so it carries no convexity claim) and a *nonlinear
   inequality* is allowed (convex inequalities are the entire point; only equalities must
-  be affine). The prox and non-Ipopt-solver guards are cylinder-level and land in
-  Phase 2.
+  be affine). The prox guard is cylinder-level and lands in Phase 2.
 - **Unbounded variable**: asserts the §6.1 path — `None` rather than `-inf`, and only
   when the unbounded direction actually carries a nonzero gradient component. Includes
   the half-open case, where whether the bound survives depends on which way the gradient
@@ -922,14 +931,14 @@ the patch.
 Every question this design opened is now settled; item 4 turned out to be a bug in
 shipped code rather than a design choice.
 
-1. **Cushion default — on.** `ε_rel = 1e-9`, `--ipopt-outer-bound-cushion` to change,
+1. **Cushion default — on.** `ε_rel = 1e-9`, `--certified-outer-bound-cushion` to change,
    0 to disable. See §5.2 for what it is and is not worth.
 2. **Unbounded variables — warn, then report no bound.** `fbbt` first; anything still
    unbounded produces a rank-0 setup warning naming the variables and a `None` bound,
    not an exception. See §6.1.
-3. **Naming — neutral engine, Ipopt cylinder.** `utils/dual_certificate.py` takes the
-   sign convention as an argument; `cylinders/ipopt_outer_bound.py` is the Ipopt-scoped
-   consumer. See §9.
+3. **Naming — neutral engine, neutral cylinder.** `utils/dual_certificate.py` takes
+   the sign convention as an argument; `cylinders/certified_outer_bound.py` is its
+   consumer, with Ipopt as the default solver. See §7 and §9.
 4. **Pre-existing stale-bound exposure — confirmed, and fixed separately.** The
    question was whether the existing stale-`outer_bound` fallback admits the §8
    mixed-`W` case in practice. It does. `solve_one` left a subproblem's previous
