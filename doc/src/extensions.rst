@@ -264,6 +264,14 @@ in the iteration or time limit, is used for relaxed progressive hedging iteratio
 The extension will also re-enforce the integrality restrictions if the convergence
 threshold is within 10\%  of the convergence tolerance.
 
+The iteration fraction is of ``--stop-at-iteration-number`` when that is set,
+counted from the start of the study, and otherwise of this run's own
+``--max-iterations``. The time fraction is always of this run's
+``--time-limit``. So a study stopped and resumed with checkpointing (see
+:ref:`checkpointing`) enforces at the same iteration as an uninterrupted run
+only if every run of it is given ``--stop-at-iteration-number``; without it,
+each resumed run applies the ratio to its own budget.
+
 This extension can be especially effective if (1) solving the relaxation
 is much easier than solving the problem with integrality constraints or (2) the
 relaxation is reasonably "tight".

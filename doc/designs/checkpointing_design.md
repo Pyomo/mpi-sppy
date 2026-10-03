@@ -1300,7 +1300,15 @@ as a branch stacked on the 1a PR.
 
   `integer_relax_then_enforce` declares itself stateless: whether the integers
   are relaxed is a model transformation, so it rides in the dill, and its
-  `pre_iter0` reads the state back from the reloaded models.
+  `pre_iter0` reads the state back from the reloaded models. When it enforces
+  is a fraction of a budget. With `--stop-at-iteration-number` the iteration
+  fraction is of the study (iterations `0 .. stop_at`), so a resumed run
+  enforces where an uninterrupted one would with nothing carried; without it,
+  the only budget is the run's own `--max-iterations`. The time fraction is
+  always of the run's own `--time-limit`, which is a per-job wall clock.
+  Carrying the first run's budget instead was rejected: it retraces a killed
+  run resubmitted for its remaining iterations, but for a study planned as
+  several shorter runs it would enforce at a fraction of the first run.
 
   Two defects turned up that were not divergences but outright breakage, and
   each is worth recording because neither was visible from the design:
@@ -1334,7 +1342,9 @@ as a branch stacked on the 1a PR.
   `integer_relax_then_enforce` (on `sizes`, stopped once in each integrality
   state, with a probe extension recording what the subproblems looked like
   *during* the resumed leg's iterations — the end of the run cannot tell a
-  re-relaxed leg from a clean one; this one pins the stateless declaration)
+  re-relaxed leg from a clean one; one more class stops and resumes under
+  `--stop-at-iteration-number` and checks it enforces at the uninterrupted
+  run's iteration)
   and `primal_dual_converger` (stopping at the uninterrupted run's iteration,
   with no warning). The farmer cases assert bit-identity. `sizes` is a MIP and
   can resume onto an alternate optimum, so there the fixer case compares what
