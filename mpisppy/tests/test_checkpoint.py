@@ -44,7 +44,7 @@ from mpisppy.extensions.extension import Extension
 from mpisppy.cylinders.hub import PHHub
 from mpisppy.opt.ph import PH
 from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.tests.utils import get_solver
+from mpisppy.tests.utils import REPO_ROOT, get_solver, subprocess_env
 from mpisppy.utils.config import Config
 
 solver_available, solver_name, persistent_available, persistent_solver_name = \
@@ -432,6 +432,7 @@ class TestResumeABFarmer(unittest.TestCase):
              "import json, mpisppy.tests.test_checkpoint as t; "
              f"t._resume_and_dump(*json.loads({call_args!r}))"],
             capture_output=True, text=True, timeout=900, check=False,
+            env=subprocess_env(),
         )
         self.assertEqual(
             result.returncode, 0,
@@ -3853,6 +3854,107 @@ class TestDroppingOneOfTwoSameClassSpokesIsReported(unittest.TestCase):
         self.assertFalse(
             any("belonged to a different" in m for m in tocs),
             msg=f"reported an identity change that did not happen: {tocs}")
+
+
+class TestTheStudyBoundStaysOffDualCylinders(unittest.TestCase):
+    """--stop-at-iteration-number counts hub iterations.
+
+    A dual cylinder (--ph-dual, --relaxed-ph) counts its own iterations from 1
+    on every run and is meant to run until the hub is done. Handed the study
+    bound, it would stop after that many of its own iterations -- on a
+    resumed run, long before the hub finishes -- and the hub would get no new
+    duals from then on. Built through the real cfg_vanilla builders, so this
+    also pins that both dual builders say they are dual cylinders. No solver.
+    """
+
+    BOUND = 7
+
+    def _cylinders(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+
+        cfg = Config()
+        cfg.popular_args()
+        cfg.ph_args()
+        cfg.two_sided_args()
+        cfg.relaxed_ph_args()
+        cfg.ph_dual_args()
+        cfg.checkpoint_args()
+        farmer.inparser_adder(cfg)
+        cfg.num_scens = 3
+        cfg.default_rho = 1.0
+        cfg.solver_name = "unused"
+        cfg.max_iterations = 10
+        cfg.stop_at_iteration_number = self.BOUND
+        beans = (cfg, farmer.scenario_creator, farmer.scenario_denouement,
+                 farmer.scenario_names_creator(3))
+        kwargs = {"scenario_creator_kwargs": farmer.kw_creator(cfg)}
+        return (vanilla.ph_hub(*beans, **kwargs),
+                vanilla.ph_dual_spoke(*beans, **kwargs),
+                vanilla.relaxed_ph_spoke(*beans, **kwargs))
+
+    def test_the_dual_cylinders_do_not_get_it(self):
+        _, ph_dual, relaxed_ph = self._cylinders()
+        for name, cylinder in (("ph_dual", ph_dual),
+                               ("relaxed_ph", relaxed_ph)):
+            self.assertNotIn(
+                "stop_at_iteration_number",
+                cylinder["opt_kwargs"]["options"],
+                msg=f"the {name} cylinder was given the study bound, so it "
+                    f"would stop after that many of its own iterations")
+
+    def test_the_hub_does(self):
+        hub, _, _ = self._cylinders()
+        self.assertEqual(
+            hub["opt_kwargs"]["options"]["stop_at_iteration_number"],
+            self.BOUND)
+
+
+class TestChildProcessesImportTheCheckoutUnderTest(unittest.TestCase):
+    """The mpiexec legs and fresh-process resumes must run this checkout.
+
+    With an editable install, a child Python process imports ``mpisppy``
+    from wherever it was installed from. Run from a second worktree, the
+    tests would then compare that other checkout's code against itself and
+    pass or fail on the wrong code.
+    """
+
+    def test_a_child_imports_this_checkout(self):
+        # Importing mpisppy prints a banner, so the path is marked.
+        result = subprocess.run(
+            [sys.executable, "-c",
+             "import mpisppy; print('MPISPPY_FILE=' + mpisppy.__file__)"],
+            capture_output=True, text=True, timeout=120, check=True,
+            env=subprocess_env(),
+            cwd=tempfile.gettempdir(),
+        )
+        marked = [line for line in result.stdout.splitlines()
+                  if line.startswith("MPISPPY_FILE=")]
+        self.assertEqual(len(marked), 1, msg=result.stdout)
+        child = os.path.realpath(marked[0][len("MPISPPY_FILE="):])
+        self.assertTrue(
+            child.startswith(os.path.realpath(REPO_ROOT) + os.sep),
+            msg=f"the child imported {child}, not the checkout at {REPO_ROOT}")
+
+    def test_every_launch_in_the_checkpoint_tests_passes_the_environment(self):
+        import ast
+        import glob
+        tests_dir = os.path.dirname(os.path.abspath(__file__))
+        missing = []
+        for path in sorted(glob.glob(os.path.join(tests_dir,
+                                                  "test_checkpoint*.py"))):
+            with open(path) as f:
+                tree = ast.parse(f.read())
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)
+                        and isinstance(node.func.value, ast.Name)
+                        and node.func.value.id == "subprocess"
+                        and not any(k.arg == "env" for k in node.keywords)):
+                    missing.append(f"{os.path.basename(path)}:{node.lineno}")
+        self.assertEqual(missing, [],
+                         msg="these subprocess calls do not pass "
+                             "env=subprocess_env(), so their children may "
+                             "import a different checkout's mpisppy")
 
 
 if __name__ == "__main__":

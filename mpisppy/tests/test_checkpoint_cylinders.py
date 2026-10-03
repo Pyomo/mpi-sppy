@@ -41,7 +41,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from mpisppy.tests.utils import get_solver
+from mpisppy.tests.utils import get_solver, subprocess_env
 
 solver_available, solver_name, persistent_available, persistent_solver_name = \
     get_solver()
@@ -96,7 +96,8 @@ class _ResumeABMixin:
             *extra_args,
         ]
         result = subprocess.run(cmd, capture_output=True, text=True,
-                                timeout=1800, check=False)
+                                timeout=1800, check=False,
+                                env=subprocess_env())
         self.assertEqual(
             result.returncode, 0,
             msg=f"leg {name!r} failed:\n{result.stdout[-4000:]}\n"
@@ -417,7 +418,8 @@ class TestADroppedSpokeFileIsReported(unittest.TestCase):
                "-m", "mpisppy.generic_cylinders", "--solver-name",
                solver_name, *self.COMMON, *args]
         result = subprocess.run(cmd, capture_output=True, text=True,
-                                timeout=1800, check=False)
+                                timeout=1800, check=False,
+                                env=subprocess_env())
         self.assertEqual(result.returncode, 0,
                          msg=result.stdout[-4000:] + result.stderr[-4000:])
         return result.stdout

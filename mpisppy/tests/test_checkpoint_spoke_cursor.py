@@ -36,6 +36,7 @@ rank restoring the same iteration -- is in ``test_checkpoint_multirank.py``.
 
 import os
 import tempfile
+import types
 import unittest
 
 import mpisppy.utils.checkpointing as checkpointing
@@ -158,6 +159,42 @@ class TestScenarioCyclerState(unittest.TestCase):
         other = _cycler(self.NAMES + ["scen5"])
         other.restore_state(cycler.checkpoint_state())
         self.assertEqual(other.get_next()["ROOT"], "scen0")
+
+    def test_a_cursor_missing_a_key_is_refused_and_changes_nothing(self):
+        """A same-version file whose cursor lacks a key is discarded whole.
+
+        Hand-edited, or written before a change to checkpoint_state() that
+        did not raise the format version. It goes the way of a changed
+        scenario order, with a warning, rather than raising a KeyError out of
+        the spoke's main() and taking the incumbent down with it.
+        """
+        saved = _cycler_after(self.NAMES, 3)
+        for key in saved:
+            with self.subTest(missing=key):
+                damaged = {k: v for k, v in saved.items() if k != key}
+                cycler = _cycler(self.NAMES)
+                before = cycler.checkpoint_state()
+                warnings = cycler.restore_state(damaged)
+                self.assertEqual(len(warnings), 1)
+                if key != "order_fingerprint":
+                    self.assertIn(key, warnings[0])
+                self.assertEqual(cycler.checkpoint_state(), before,
+                                 msg="a refused cursor was half applied")
+                self.assertEqual(cycler.get_next()["ROOT"], "scen0")
+
+    def test_loop_state_missing_a_key_is_refused_with_a_warning(self):
+        from mpisppy.cylinders.xhatshufflelooper_bounder import (
+            XhatShuffleInnerBound)
+        saved = {"xh_iter": 4, "cursor": _cycler_after(self.NAMES, 3)}
+        for key in saved:
+            with self.subTest(missing=key):
+                spoke = types.SimpleNamespace(
+                    scenario_cycler=_cycler(self.NAMES), xh_iter=1)
+                warnings = XhatShuffleInnerBound.restore_loop_state(
+                    spoke, {k: v for k, v in saved.items() if k != key})
+                self.assertEqual(len(warnings), 1)
+                self.assertIn(key, warnings[0])
+                self.assertEqual(spoke.xh_iter, 1)
 
     def test_the_fingerprint_is_order_sensitive(self):
         """The same names shuffled differently must not compare equal."""

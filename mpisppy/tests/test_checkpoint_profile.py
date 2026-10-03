@@ -84,7 +84,8 @@ from unittest import mock
 
 import pyomo.environ as pyo
 
-from mpisppy.tests.utils import get_solver, solver_takes_model_size
+from mpisppy.tests.utils import (get_solver, solver_takes_model_size,
+                                 subprocess_env)
 
 solver_available, solver_name, persistent_available, persistent_solver_name = \
     get_solver()
@@ -180,7 +181,7 @@ def _run_leg(tmpdir, name, module, model_args, extra_args):
         *extra_args,
     ]
     result = subprocess.run(cmd, capture_output=True, text=True,
-                            timeout=3600, check=False)
+                            timeout=3600, check=False, env=subprocess_env())
     if result.returncode != 0:
         raise AssertionError(
             f"leg {name!r} failed:\n{result.stdout[-4000:]}\n"

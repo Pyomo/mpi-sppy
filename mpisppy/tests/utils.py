@@ -8,10 +8,33 @@
 ###############################################################################
 
 
+import os
+
 import pyomo.environ as pyo
 from math import log10, floor
 
 from mpisppy.utils import sputils
+
+#: The directory holding the ``mpisppy`` package these tests belong to.
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))
+
+
+def subprocess_env():
+    """Environment for a Python process a test starts, such as an mpiexec leg.
+
+    A child started as ``python -m mpi4py <script>`` imports ``mpisppy`` from
+    wherever the interpreter finds it, which with an editable install is the
+    checkout it was installed from -- not necessarily the one under test, so
+    a test run in a second worktree would exercise the first one's code.
+    Putting this checkout first on ``PYTHONPATH`` makes the child import the
+    same ``mpisppy`` as the test.
+    """
+    env = os.environ.copy()
+    existing = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (REPO_ROOT if not existing
+                         else REPO_ROOT + os.pathsep + existing)
+    return env
 
 
 def limit_solver_threads(solver, solver_name, threads=1):

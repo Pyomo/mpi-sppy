@@ -56,9 +56,10 @@ import unittest
 import mpisppy.tests.multirank_agreement_driver as agreement_driver
 import mpisppy.utils.checkpointing as checkpointing
 from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
+from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
 from mpisppy.extensions.checkpointer import Checkpointer
 from mpisppy.phbase import PHBase
-from mpisppy.tests.utils import get_solver
+from mpisppy.tests.utils import get_solver, subprocess_env
 
 solver_available, solver_name, persistent_available, persistent_solver_name = \
     get_solver()
@@ -98,7 +99,7 @@ def _run_leg(tmpdir, name, np, module, model_args, spoke_args, extra_args,
         *extra_args,
     ]
     result = subprocess.run(cmd, capture_output=True, text=True,
-                            timeout=3600, check=False)
+                            timeout=3600, check=False, env=subprocess_env())
     if check and result.returncode != 0:
         raise AssertionError(
             f"leg {name!r} failed:\n{result.stdout[-4000:]}\n"
@@ -828,7 +829,8 @@ class TestOneRankFailingDoesNotHangTheOthers(unittest.TestCase):
         # second when it finishes at all: what this is really measuring is
         # whether the job returns.
         self.result = subprocess.run(cmd, capture_output=True, text=True,
-                                     timeout=600, check=False)
+                                     timeout=600, check=False,
+                                     env=subprocess_env())
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -936,7 +938,8 @@ class TestDeadlineOnOneRankDoesNotHangTheOthers(unittest.TestCase):
         # second when it finishes at all: what this is really measuring is
         # whether the job returns.
         self.result = subprocess.run(cmd, capture_output=True, text=True,
-                                     timeout=600, check=False)
+                                     timeout=600, check=False,
+                                     env=subprocess_env())
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -998,7 +1001,7 @@ class TestDeadlineOnOneRankDoesNotHangTheOthers(unittest.TestCase):
             "--checkpoint-before-seconds", str(self.DEADLINE),
         ]
         subprocess.run(cmd, capture_output=True, text=True, timeout=600,
-                       check=True)
+                       check=True, env=subprocess_env())
         self.assertEqual(_published_generation(self.ckpt_dir)["generation"],
                          self.SKEW_AT)
 
@@ -1420,7 +1423,8 @@ class TestNoRankLocalRaiseOnTheCheckpointPaths(unittest.TestCase):
         ]
         try:
             return subprocess.run(cmd, capture_output=True, text=True,
-                                  timeout=self.TIMEOUT, check=False)
+                                  timeout=self.TIMEOUT, check=False,
+                                  env=subprocess_env())
         except subprocess.TimeoutExpired:
             self.fail(
                 f"the job never came back after {step} failed on one rank: "
@@ -1496,7 +1500,24 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
         ("Checkpointer.post_iter0", Checkpointer.post_iter0),
         ("XhatInnerBoundBase._restore_extension_state_if_resuming",
          XhatInnerBoundBase._restore_extension_state_if_resuming),
+        ("XhatShuffleInnerBound._restore_loop_state_if_resuming",
+         XhatShuffleInnerBound._restore_loop_state_if_resuming),
     )
+
+    #: What a resume read and holds for a spoke until its loop asks: the
+    #: Checkpointer's attributes and the accessor that hands them over. A
+    #: function that reads any of these is on a restore path, so it belongs in
+    #: PATHS; test_every_reader_of_the_restored_state_is_a_path checks that.
+    RESTORED_STATE_NAMES = frozenset({
+        "restored_loop_state", "restored_extension_state",
+        "_checkpointed_loop_state",
+    })
+
+    #: Readers that only return what they read to their caller. They are not
+    #: paths themselves; their callers are, by the rule above.
+    RESTORED_STATE_ACCESSORS = frozenset({
+        "XhatInnerBoundBase._checkpointed_loop_state",
+    })
 
     #: Every agreement reached from those paths, by the function it is
     #: written in and in the order it appears there, named by the step
@@ -1776,6 +1797,50 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
         return out
 
     # ---- the properties ------------------------------------------------
+
+    def test_every_reader_of_the_restored_state_is_a_path(self):
+        """A restore step reached only from a spoke's main() is invisible to
+        the closure walk unless its function is listed in PATHS, which is how
+        the xhatshuffle cursor restore was once missed. So find every reader
+        rather than trusting the list."""
+        import ast
+        import importlib
+        import pkgutil
+        modules = ["mpisppy.phbase"]
+        for package_name in self.NAME_FALLBACK_PACKAGES:
+            package = importlib.import_module(package_name)
+            modules += [m.name for m in pkgutil.walk_packages(
+                package.__path__, f"{package_name}.")]
+        readers = set()
+        for module_name in modules:
+            try:
+                module = importlib.import_module(module_name)
+                tree = ast.parse(inspect.getsource(module))
+            except Exception:
+                continue    # an optional dependency, or no source
+            for cls in (n for n in ast.walk(tree)
+                        if isinstance(n, ast.ClassDef)):
+                for func in cls.body:
+                    if not isinstance(func, (ast.FunctionDef,
+                                             ast.AsyncFunctionDef)):
+                        continue
+                    for node in ast.walk(func):
+                        name = (node.attr if isinstance(node, ast.Attribute)
+                                and isinstance(node.ctx, ast.Load)
+                                else node.value
+                                if isinstance(node, ast.Constant)
+                                else None)
+                        if name in self.RESTORED_STATE_NAMES:
+                            readers.add(f"{cls.name}.{func.name}")
+                            break
+        self.assertIn("XhatShuffleInnerBound._restore_loop_state_if_resuming",
+                      readers, msg="the scan found nothing, so it proves "
+                                   "nothing")
+        paths = {name for name, _ in self.PATHS}
+        self.assertEqual(
+            readers - paths - self.RESTORED_STATE_ACCESSORS, set(),
+            msg="these functions read what a resume restored but are not in "
+                "PATHS, so nothing checks that their steps are agreed")
 
     def test_no_checkpointing_step_is_called_outside_an_agreement(self):
         for name, entry in self.PATHS:

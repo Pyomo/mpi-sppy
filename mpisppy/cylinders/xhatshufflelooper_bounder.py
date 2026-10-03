@@ -227,6 +227,12 @@ class XhatShuffleInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
         a reason to throw away the incumbent in the same file and refuse the
         resume.
         """
+        missing = [key for key in ("cursor", "xh_iter")
+                   if not isinstance(state, dict) or key not in state]
+        if missing:
+            return [f"the checkpointed xhatshuffle loop state has no "
+                    f"{', '.join(missing)}, so this spoke explores from the "
+                    f"start again."]
         warnings = self.scenario_cycler.restore_state(state["cursor"])
         if not warnings:
             # The file records the pass that completed, so the resumed loop
@@ -343,10 +349,20 @@ class ScenarioCycler:
         the same file carries the incumbent, which is the part worth keeping,
         and exploring from the start again is a cost rather than an error.
         """
+        if not isinstance(state, dict):
+            return ["the checkpointed xhatshuffle cursor is not readable, so "
+                    "this spoke explores from the start again."]
         if state.get("order_fingerprint") != self._order_fingerprint():
             return ["the checkpointed xhatshuffle cursor was taken against a "
                     "different scenario order, so its position means nothing "
                     "here; this spoke explores from the start again."]
+        # Checked before anything is changed, so a cursor missing a key is
+        # discarded whole rather than half applied.
+        missing = sorted(set(self.checkpoint_state()) - set(state))
+        if missing:
+            return [f"the checkpointed xhatshuffle cursor has no "
+                    f"{', '.join(missing)}, so this spoke explores from the "
+                    f"start again."]
 
         # `best` first: the epoch rebuild below reads it to decide where the
         # epoch starts. The position is overwritten afterwards either way, but
