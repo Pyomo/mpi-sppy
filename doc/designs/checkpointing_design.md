@@ -675,7 +675,8 @@ several assumptions made elsewhere in this design. Each of the following must
 be honored or checkpointing will not work for ADMM.
 
 **All six are implemented and validated as of Phase 2**, by
-`TestStochAdmmMultiRank` in `test_checkpoint_multirank.py` (items 1–5) and
+`TestStochAdmmMultiRank` in `test_checkpoint_multirank.py` (items 1–4),
+`TestBundledStochAdmmMultiRank` in the same file (item 5) and
 `TestStochAdmmCylindersResumeAB` in `test_checkpoint_cylinders.py` (item 6).
 Item 2 needed code: `release_scenario_models` on `AdmmWrapper`,
 `Stoch_AdmmWrapper` and `AdmmBundler`, called from the resume branch. The rest
