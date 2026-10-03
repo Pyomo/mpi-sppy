@@ -885,10 +885,11 @@ class TestIntegerRelaxThenEnforceOnTheStudysSchedule(_IntegerRelaxMixin,
 
     Every leg is given the study bound, so the ratio is a fraction of the
     study rather than of the leg. At 0.5 over a 4-iteration study the
-    uninterrupted run enforces at iteration 3. A leg that counted its own
-    budget would not: resumed after iteration 2 with 2 iterations left, half
-    of its budget is 1, so it would solve iteration 3 relaxed and enforce
-    at 4.
+    uninterrupted run enforces at iteration 3. Legs that counted their own
+    budgets would not, at either end of the stop: the stopped leg, 2
+    iterations long, would enforce at iteration 2, one early; and a resumed
+    leg with 2 iterations left would solve iteration 3 relaxed and enforce at
+    4, one late.
     """
 
     RATIO = 0.5
@@ -906,7 +907,8 @@ class TestIntegerRelaxThenEnforceOnTheStudysSchedule(_IntegerRelaxMixin,
                          msg="the uninterrupted run did not enforce at "
                              "iteration 3, so this test proves nothing")
         self.assertEqual(_relaxed_models(stopped), relaxed,
-                         msg="the stop did not land while still relaxed")
+                         msg="the stopped leg enforced before the study's "
+                             "fraction, as one counting its own budget would")
         self.assertEqual(
             _extension(resumed, _RelaxationProbe).per_iteration,
             want[self.STOP:],

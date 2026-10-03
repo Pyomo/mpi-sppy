@@ -270,7 +270,11 @@ counted from the start of the study, and otherwise of this run's own
 ``--time-limit``. So a study stopped and resumed with checkpointing (see
 :ref:`checkpointing`) enforces at the same iteration as an uninterrupted run
 only if every run of it is given ``--stop-at-iteration-number``; without it,
-each resumed run applies the ratio to its own budget.
+each resumed run applies the ratio to its own budget. A run that ends before
+the study reaches its fraction ends with integrality still relaxed, unless
+the time or convergence condition enforced it first; the run that continues
+the study enforces it. APH does not honour ``--stop-at-iteration-number``, so
+under APH the fraction is always of ``--max-iterations``.
 
 This extension can be especially effective if (1) solving the relaxation
 is much easier than solving the problem with integrality constraints or (2) the

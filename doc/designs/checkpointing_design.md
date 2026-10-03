@@ -1304,7 +1304,8 @@ as a branch stacked on the 1a PR.
   is a fraction of a budget. With `--stop-at-iteration-number` the iteration
   fraction is of the study (iterations `0 .. stop_at`), so a resumed run
   enforces where an uninterrupted one would with nothing carried; without it,
-  the only budget is the run's own `--max-iterations`. The time fraction is
+  or where the loop does not honour that bound (APH, which never sets
+  `_stop_iteration`), the only budget is the run's own `--max-iterations`. The time fraction is
   always of the run's own `--time-limit`, which is a per-job wall clock.
   Carrying the first run's budget instead was rejected: it retraces a killed
   run resubmitted for its remaining iterations, but for a study planned as

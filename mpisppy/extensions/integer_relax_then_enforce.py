@@ -108,12 +108,16 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
         # iterations are running out. With --stop-at-iteration-number the
         # study's length is known, so the fraction is of the whole study:
         # every run of it, and a run that never stopped, enforces at the same
-        # iteration. Without it the only budget is this run's own, so both
-        # sides are measured from where this run started -- _PHIter counts
-        # the study, and on a resume it is already past any fraction of this
-        # run's budget, so comparing the two directly would enforce at once.
+        # iteration. Only where the loop honours that bound, though, which is
+        # where it sets _stop_iteration; APH's loop ignores the option and
+        # runs to PHIterLimit. Otherwise the only budget is this run's own,
+        # so both sides are measured from where this run started -- _PHIter
+        # counts the study, and on a resume it is already past any fraction
+        # of this run's budget, so comparing the two directly would enforce
+        # at once.
         stop_at = self.opt.options.get("stop_at_iteration_number", None)
-        if stop_at is not None:
+        if (stop_at is not None
+                and getattr(self.opt, "_stop_iteration", None) is not None):
             start, stop = 0, int(stop_at)
         else:
             start = getattr(self.opt, "_resume_iteration", 0)
