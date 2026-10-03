@@ -25,6 +25,19 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
     checkpoint_stateless = True
 
     def __init__(self, opt):
+        # FWPH manages integrality on these same models itself: its LP warm
+        # start relaxes and then restores them, deleting the
+        # _relaxed_integer_vars Suffix this extension's undo depends on, and
+        # its main loop solves them as MIPs to generate columns. Combined,
+        # the run crashes either in the warm start or at the first FWPH
+        # solve after this extension enforces.
+        from mpisppy.opt.fwph import FWPH
+        if isinstance(opt, FWPH):
+            raise RuntimeError(
+                "integer_relax_then_enforce cannot be used with an FWPH hub: "
+                "FWPH relaxes and restores integrality on the same models "
+                "itself, and solves them as MIPs to generate columns. Remove "
+                "--integer-relax-then-enforce, or use a PH hub.")
         super().__init__(opt)
         self.integer_relaxer = pyo.TransformationFactory('core.relax_integer_vars')
         options = opt.options.get("integer_relax_then_enforce_options", {})

@@ -280,6 +280,9 @@ This extension can be especially effective if (1) solving the relaxation
 is much easier than solving the problem with integrality constraints or (2) the
 relaxation is reasonably "tight".
 
+It cannot be used with an FWPH hub, which manages integrality on the same
+models itself, and refuses one at startup.
+
 .. _slammer:
 
 slammer
