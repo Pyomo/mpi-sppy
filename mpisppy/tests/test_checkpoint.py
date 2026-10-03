@@ -3939,7 +3939,8 @@ class TestChildProcessesImportTheCheckoutUnderTest(unittest.TestCase):
     #: are not checked for the environment they are given, since some take it
     #: positionally and some not at all; the checkpoint tests must use
     #: subprocess instead. Matched as name prefixes.
-    OS_LAUNCHERS = ("system", "popen", "exec", "spawn", "posix_spawn", "fork")
+    OS_LAUNCHERS = ("system", "popen", "exec", "spawn", "posix_spawn", "fork",
+                    "startfile")
     #: Launchers that take env=, by module, which must be given
     #: env=subprocess_env().
     ASYNCIO_LAUNCHERS = {"create_subprocess_exec", "create_subprocess_shell"}
@@ -3963,13 +3964,27 @@ class TestChildProcessesImportTheCheckoutUnderTest(unittest.TestCase):
         environment again, so the value must be the call
         ``subprocess_env()`` itself, written as a keyword.
 
+        Bindings are collected from the whole file regardless of scope, and
+        a name bound more than one way (``import subprocess`` at the top and
+        ``from asyncio import subprocess`` inside a function, say) is
+        checked as every one of them, so neither hides the other.
+
         Not followed, so a launch written these ways is not checked:
         ``from x import *``; a module or launcher held in a variable or
         passed along (``f = os.system``, ``functools.partial``, getattr);
-        launchers outside os, subprocess and asyncio, such as ``pty.spawn``,
-        ``multiprocessing`` or mpi4py's ``Comm.Spawn``. And a correct launch
-        whose env is built first and passed as a variable, or through
-        ``**kwargs``, is reported, as is a local name that shadows ``os``.
+        a module reached as an attribute of another (``subprocess.os.system``,
+        ``asyncio.subprocess.subprocess.Popen``); an event loop's
+        ``subprocess_exec``/``subprocess_shell``, however the loop was
+        obtained; launchers outside os, subprocess and asyncio, such as
+        ``pty.spawn``, ``multiprocessing`` or mpi4py's ``Comm.Spawn``.
+
+        Reported although correct: a launch whose env is built first and
+        passed as a variable, or through ``**kwargs``; a local name that
+        shadows ``os`` or ``subprocess``; and, since every binding of a name
+        is checked, a name imported from two of these modules in different
+        places -- ``from subprocess import run`` in one function and
+        ``from asyncio import run`` in another makes ``run(main())`` read as
+        a subprocess launch.
         """
         import ast
         import glob
@@ -3983,7 +3998,8 @@ class TestChildProcessesImportTheCheckoutUnderTest(unittest.TestCase):
         for path in paths:
             with open(path) as f:
                 tree = ast.parse(f.read())
-            bound = {}      # a name in this file -> the dotted path it means
+            # A name in this file -> every dotted path it is bound to.
+            bound = {}
             for node in ast.walk(tree):
                 if isinstance(node, ast.Import):
                     for alias in node.names:
@@ -3991,28 +4007,31 @@ class TestChildProcessesImportTheCheckoutUnderTest(unittest.TestCase):
                         if top not in watched:
                             continue
                         if alias.asname is None:
-                            bound[top] = top
+                            bound.setdefault(top, set()).add(top)
                         else:
-                            bound[alias.asname] = alias.name
+                            bound.setdefault(alias.asname, set()).add(
+                                alias.name)
                 elif (isinstance(node, ast.ImportFrom) and node.module
                         and node.module.split(".")[0] in watched):
                     for alias in node.names:
-                        bound[alias.asname or alias.name] = (
+                        bound.setdefault(alias.asname or alias.name,
+                                         set()).add(
                             f"{node.module}.{alias.name}")
 
             def dotted(expr):
+                """Every dotted path expr can mean, given the bindings."""
                 if isinstance(expr, ast.Name):
-                    return bound.get(expr.id)
+                    return bound.get(expr.id, set())
                 if isinstance(expr, ast.Attribute):
-                    base = dotted(expr.value)
-                    return None if base is None else f"{base}.{expr.attr}"
-                return None
+                    return {f"{base}.{expr.attr}"
+                            for base in dotted(expr.value)}
+                return set()
 
-            for node in ast.walk(tree):
-                if not isinstance(node, ast.Call):
-                    continue
-                target = dotted(node.func)
-                if target is None or "." not in target:
+            for node, target in ((node, target)
+                                 for node in ast.walk(tree)
+                                 if isinstance(node, ast.Call)
+                                 for target in sorted(dotted(node.func))):
+                if "." not in target:
                     continue
                 module, name = target.rsplit(".", 1)
                 where = f"{os.path.basename(path)}:{node.lineno}"
