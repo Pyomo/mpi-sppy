@@ -294,7 +294,34 @@ class AdmmWrapper():
                 where it is present. Otherwise it has a probability 0.
         """
         return self.varprob_dict[s]
-    
+
+    def release_scenario_models(self, models):
+        """Hand the wrapper the models a checkpoint resume swapped in.
+
+        Unlike a plain PH run, an ADMM run builds every scenario at startup
+        whether or not it is about to resume -- the wrapper needs the built
+        models to assemble consensus lists, variable probabilities and node
+        names -- so a resume that swaps dilled models into ``local_scenarios``
+        leaves the freshly built ones alive here, and the run carries two
+        copies of every scenario for its whole life. On large MIPs that is the
+        memory the checkpoint was supposed to save. Pointing the wrapper at
+        the reloaded models is what drops the second copy.
+
+        ``varprob_dict`` goes too, and it has to: it is keyed by scenario
+        *object*, so it would keep the discarded models alive on its own, and
+        every entry in it addresses a model that is no longer in the run.
+        Dropping it is safe because variable probabilities are consumed once,
+        at ``SPBase`` construction, and their result already rode back in the
+        dill -- the reloaded model's own ``_mpisppy_data`` masks and
+        fixed-at-0 dummy vars are authoritative from here on (design section
+        8.2, item 3). Anything that called ``var_prob_list`` after this point
+        would have been reading probabilities for a discarded model.
+        """
+        for sname, model in models.items():
+            if sname in self.local_scenarios:
+                self.local_scenarios[sname] = model
+        self.varprob_dict = {}
+
     def assign_variable_probs(self, verbose=False):
         self.varprob_dict = {}
 

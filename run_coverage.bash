@@ -221,11 +221,14 @@ run_phase "test_incumbent_writing (serial)" \
 run_phase "test_checkpoint (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_checkpoint.py -v
 
-# The cylinders checkpoint harness spawns its own mpiexec jobs (one per A/B
-# leg, in a fresh process, as the design's acceptance gate asks), so it is
-# launched serially here rather than under mpiexec.
+# The cylinders and multi-rank checkpoint harnesses spawn their own mpiexec
+# jobs (one per A/B leg, in a fresh process, as the design's acceptance gate
+# asks), so they are launched serially here rather than under mpiexec.
 run_phase "test_checkpoint_cylinders (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_checkpoint_cylinders.py -v
+
+run_phase "test_checkpoint_multirank (spawns mpiexec)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_checkpoint_multirank.py -v
 
 run_phase "test_iis_on_infeasible (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_iis_on_infeasible.py -v

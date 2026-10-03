@@ -454,6 +454,20 @@ class TestAFailedSpokeWriteIsNotRetriedEveryPass(unittest.TestCase):
                              msg="a new incumbent was not tried after an "
                                  "earlier write failed")
 
+    def test_a_failure_on_any_rank_is_reported_by_that_rank(self):
+        """Each rank writes its own file, so a failure on rank 1 is rank 1's
+        alone; a rank-0-only warning left it silent."""
+        from mpisppy.extensions import checkpointer as mod
+        ext = self._checkpointer()
+        ext.opt.cylinder_rank = 1
+        writer = mock.Mock(side_effect=OSError("disk full"))
+        with mock.patch.object(mod.ckpt, "write_spoke_incumbent", writer), \
+             mock.patch.object(mod, "global_toc") as toc:
+            ext._spoke_checkpoint()
+        (message, prints), _ = toc.call_args
+        self.assertIn("rank 1", message)
+        self.assertTrue(prints, msg="rank 1's failure was not printed")
+
     def test_a_nan_incumbent_is_not_retried_either(self):
         """NaN != NaN, so an equality test alone makes an unchanged NaN
         incumbent look new on every pass. A fresh NaN object each pass, so
@@ -612,16 +626,28 @@ class TestEveryWriterProbesItsOwnFile(unittest.TestCase):
     def _probe_names(self, global_ranks):
         """The probe file each of these ranks leaves behind, in order."""
         from mpisppy.extensions.checkpointer import Checkpointer
+        import mpisppy.utils.checkpointing as ckpt
+
+        # The probe moved out to checkpointing.probe_directory_is_writable
+        # once several ranks per cylinder had to agree on it. Drive whichever
+        # one this branch actually calls, so the property is tested where it
+        # lives rather than where it used to.
+        helper = getattr(ckpt, "probe_directory_is_writable", None)
         seen = []
         with tempfile.TemporaryDirectory() as ckpt_dir:
             for gr in global_ranks:
-                ext = Checkpointer.__new__(Checkpointer)
-                ext.ckpt_dir = ckpt_dir
                 opt = types.SimpleNamespace(global_rank=gr, cylinder_rank=0)
-                # Run only the probe, with os.remove stubbed so the file it
-                # would clean up stays visible to the assertion.
-                with mock.patch("mpisppy.extensions.checkpointer.os.remove"):
-                    Checkpointer._probe_directory(ext, opt)
+                # Stub the cleanup so the file each probe would remove stays
+                # visible to the assertion.
+                if helper is not None:
+                    with mock.patch("mpisppy.utils.checkpointing.os.remove"):
+                        helper(opt, ckpt_dir)
+                else:
+                    ext = Checkpointer.__new__(Checkpointer)
+                    ext.ckpt_dir = ckpt_dir
+                    with mock.patch(
+                            "mpisppy.extensions.checkpointer.os.remove"):
+                        Checkpointer._probe_directory(ext, opt)
                 seen = sorted(os.listdir(ckpt_dir))
         return seen
 

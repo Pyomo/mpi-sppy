@@ -20,12 +20,11 @@ Checkpointing is entirely opt-in. With neither ``--checkpoint-dir`` nor
 ask for it pays nothing.
 
 .. note::
-   The current implementation covers a **PH hub with one rank per cylinder**,
-   run on its own or with spokes, with plain scenarios or stoch-ADMM. A run
-   that writes checkpoints is refused at startup if any cylinder that
-   checkpoints has more than one rank. Proper bundles are not yet covered by a resume test. See
-   ``doc/designs/checkpointing_design.md`` for the full design and the phased
-   rollout.
+   The current implementation covers a **synchronous PH hub**, run on its own
+   or with spokes, on any number of ranks per cylinder, with plain scenarios,
+   proper bundles, or stoch-ADMM. Other hub types (notably ``--APH``) are
+   refused at startup. See ``doc/designs/checkpointing_design.md`` for the full
+   design and the phased rollout.
 
 Writing a checkpoint
 --------------------
@@ -256,7 +255,10 @@ Those files are deliberately not synchronised with the hub's: a spoke writes
 when it improves, the hub writes at iteration boundaries, and neither waits
 for the other. A spoke whose file is missing -- because the earlier run
 stopped before it found anything, or because that spoke was not in the earlier
-run at all -- simply starts without an incumbent and says so in the log.
+run at all -- simply starts without an incumbent and says so in the log. A
+spoke on several ranks keeps one file per rank, and if they do not all hold
+the same incumbent -- a write failed on one rank, say -- it starts without
+one too, and says why.
 
 Each file is named for the spoke's class and for which spoke of that class it
 is, rather than for the cylinder's position in the wheel, because which
@@ -289,6 +291,25 @@ Use one checkpoint directory per run. Two runs sharing one share a manifest and
 will overwrite each other. A run that is not resuming from its own
 ``--checkpoint-dir`` removes the ``spokes/`` files an earlier run left there,
 so a later resume cannot pick up another study's incumbent.
+
+Cylinders that span several ranks
+---------------------------------
+
+Each rank holds a different slice of the scenarios, so one checkpoint is the
+whole set of per-rank files, and it is committed only once every rank has
+written its own. If any rank cannot write, none of them publishes: the previous
+checkpoint stays on disk as the resumable one and the run carries on to try
+again at the next checkpoint point. There is no state in which some ranks have
+advanced their checkpoint and others have not.
+
+Each rank that failed logs its own cause. Rank 0 always logs the failure too,
+naming the failing rank when it is not one itself.
+
+The cost is that the ranks wait for each other at each write, which the
+bracketing ``toc`` lines include -- the slowest rank sets the pace.
+
+Nothing in this coordination reaches beyond one cylinder: a hub and its spokes
+never wait on each other, and neither do two spokes.
 
 What it costs
 -------------
@@ -331,20 +352,21 @@ package::
 unserializable by what its ``scenario_creator`` closes over -- most commonly a
 Pyomo rule written as a nested function that reads ``cfg`` directly, which pulls
 the whole configuration object into the model. See :ref:`scenario_creator` for
-the pattern and the fix. Checkpointing checks every scenario at setup rather than
-discovering the problem at the first write, and the error
-names the offending rule.
+the pattern and the fix. Checkpointing serializes every scenario on every rank
+at setup rather than discovering the problem at the first write, and the error
+names the offending rule and the scenario it was found in.
 
 **The synchronous PH hub only.** ``--APH`` and the other hub types are refused
 at startup when either ``--checkpoint-dir`` or ``--resume-from`` is given, as
-is any cylinder that checkpoints with more than one rank, an unwritable directory, an unimplemented
-backend, scenario names that would collide once made filename-safe, and any
-configuration where the checkpointing extension would not actually be
-attached. ``--EF`` and the write-only modes (``--pickle-bundles-dir``,
-``--pickle-scenarios-dir``, ``--write-scenario-lp-mps-files-dir``) are refused
-for the same reason: none of them runs the iterative algorithm a checkpoint
-describes. The intent is that checkpointing either works or says so at startup,
-rather than running for hours and writing nothing.
+are an unwritable directory (checked from every rank -- on a cluster a path can
+be writable from some nodes and not others), an unimplemented backend, scenario
+names that would collide once made filename-safe, and any configuration where
+the checkpointing extension would not actually be attached. ``--EF`` and the
+write-only modes (``--pickle-bundles-dir``, ``--pickle-scenarios-dir``,
+``--write-scenario-lp-mps-files-dir``) are refused for the same reason: none of
+them runs the iterative algorithm a checkpoint describes. The intent is that
+checkpointing either works or says so at startup, rather than running for hours
+and writing nothing.
 
 **Extension and converger state is not yet part of a checkpoint.** Extensions
 that accumulate their own state across iterations -- the rho updaters,

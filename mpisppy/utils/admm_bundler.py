@@ -377,3 +377,22 @@ class AdmmBundler:
             list of (int, float): (variable_id, probability) pairs.
         """
         return self._bundle_varprob[bundle_model]
+
+    def release_scenario_models(self, models):
+        """Drop the bundle models a checkpoint resume replaced.
+
+        The bundler builds bundles on the fly and keeps no dictionary of them,
+        with one exception: ``_bundle_varprob`` is keyed by the bundle *model*
+        object, so after a resume swaps dilled bundles into
+        ``local_scenarios`` it is the sole remaining reference to the freshly
+        built ones -- a second full copy of every local bundle, held for the
+        life of the run.
+
+        Dropping it is safe for the reason the wrappers' ``varprob_dict`` is:
+        variable probabilities are consumed once, at ``SPBase`` construction,
+        and the mask and fixed-at-0 dummy vars they produced rode back in the
+        dill (design section 8.2, item 3). ``models`` is unused here because
+        there is nothing left to repoint at -- the bundler is asked for a
+        bundle by name and builds it, rather than holding one.
+        """
+        self._bundle_varprob = {}

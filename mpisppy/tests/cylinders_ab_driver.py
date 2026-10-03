@@ -47,6 +47,76 @@ _restored_values = {}
 _first_inner_bound = {}
 
 
+def _num(value):
+    return None if value is None else float(value)
+
+
+def _probability_mask(opt):
+    """The per-nonant probability coefficients and the zero-probability mask.
+
+    Only ADMM runs make these interesting: the wrapper gives a nonant a
+    probability of zero in every subproblem but the one that owns it, and
+    mpi-sppy masks W (not prox) accordingly. They are keyed by variable
+    *identity* at construction and only their result lands on the model, so
+    they are the part of an ADMM resume most likely to come back wrong -- and
+    to come back wrong quietly, since a run with a broken mask still solves
+    and still reports numbers (design section 8.2, item 3).
+    """
+    mask = {}
+    for sname, s in opt.local_scenarios.items():
+        data = s._mpisppy_data
+        for ndn, coeffs in getattr(data, "prob_coeff", {}).items():
+            values = coeffs.tolist() if hasattr(coeffs, "tolist") \
+                else [float(coeffs)]
+            mask[f"{sname}|prob_coeff|{ndn}"] = [float(v) for v in values]
+        for ndn, m in getattr(data, "prob0_mask", {}).items():
+            values = m.tolist() if hasattr(m, "tolist") else [float(m)]
+            mask[f"{sname}|prob0_mask|{ndn}"] = [float(v) for v in values]
+    return mask
+
+
+def _fixed_variable_values(opt):
+    """Every fixed variable, by name and value.
+
+    ADMM adds dummy vars fixed at 0 after construction; they are not nonants,
+    so the nonant-keyed state below never looks at them. A resume that lost
+    their fixedness would relax the consensus structure silently.
+    """
+    import pyomo.environ as pyo
+    fixed = {}
+    for sname, s in opt.local_scenarios.items():
+        for v in s.component_data_objects(pyo.Var):
+            if v.is_fixed():
+                fixed[f"{sname}|{v.name}"] = _num(v.value)
+    return fixed
+
+
+def _model_holder_is_current(opt):
+    """Does whoever built the scenarios point at the models the run iterates?
+
+    None when the scenario_creator is a plain function, which holds nothing.
+    False is the ADMM double-memory bug (design section 8.2, item 2): the
+    wrapper still referencing the freshly built models a resume replaced, so
+    the run carries two copies of every scenario. Nothing else in the run
+    reads the wrapper's dictionary, so only a test looking here can see it.
+    """
+    holder = getattr(getattr(opt, "scenario_creator", None), "__self__", None)
+    if holder is None:
+        return None
+    for attr in ("local_admm_stoch_subproblem_scenarios", "local_scenarios"):
+        held = getattr(holder, attr, None)
+        if isinstance(held, dict) and held:
+            return all(held[sname] is s
+                       for sname, s in opt.local_scenarios.items()
+                       if sname in held)
+    # AdmmBundler holds its bundles as the keys of a dict, not by name.
+    held = getattr(holder, "_bundle_varprob", None)
+    if isinstance(held, dict):
+        current = set(map(id, opt.local_scenarios.values()))
+        return all(id(model) in current for model in held)
+    return None
+
+
 def _hub_snapshot(wheel):
     """The hub's final state, in a shape JSON can hold and a test can diff.
 
@@ -54,6 +124,11 @@ def _hub_snapshot(wheel):
     process boundary. Values are the iterate itself -- nonant values and
     fixedness, and the per-nonant Params that drive the next iteration -- plus
     the scalars a resume is supposed to carry forward.
+
+    One snapshot per hub *rank*: on a multi-rank hub each rank owns a
+    different slice of the scenarios, so a comparison that only looked at rank
+    0 would leave every other rank's restore unchecked -- which is most of
+    what phase 2 added.
     """
     opt = wheel.spcomm.opt
     state = {}
@@ -66,13 +141,18 @@ def _hub_snapshot(wheel):
                 if param is not None:
                     state[f"{sname}|{pname}|{ndn_i}"] = float(param[ndn_i]._value)
 
-    def _num(value):
-        return None if value is None else float(value)
-
     return {
         "iteration": int(getattr(opt, "_PHIter", 0)),
         "resumed": bool(getattr(opt, "_resumed_from_checkpoint", False)),
         "resume_iteration": int(getattr(opt, "_resume_iteration", 0)),
+        "cylinder_rank": int(opt.cylinder_rank),
+        "n_proc": int(opt.n_proc),
+        "scenario_names": sorted(opt.local_scenarios),
+        # Collective (it all-reduces over the cylinder), which is fine because
+        # every hub rank builds a snapshot. On a MIP with alternate optima
+        # this is the quantity the determinism contract compares to a
+        # tolerance, where the per-variable state legitimately differs.
+        "objective": _num(opt.Eobjective()),
         "trivial_bound": _num(getattr(opt, "trivial_bound", None)),
         "best_bound_obj_val": _num(getattr(opt, "best_bound_obj_val", None)),
         "best_solution_obj_val": _num(
@@ -84,6 +164,18 @@ def _hub_snapshot(wheel):
         "last_ib_idx": wheel.spcomm.last_ib_idx,
         "first_BestInnerBound": _num(_first_inner_bound.get("value")),
         "state": state,
+        # Which Objective each scenario's Eobjective actually reads. A resume
+        # rebuilds saved_objectives from the reloaded models, and on a model
+        # whose objective was replaced after creation -- CVaR deactivates the
+        # risk-neutral one and activates WITH_CVAR -- resolving to the
+        # deactivated original would be silently wrong rather than an error.
+        "active_objective_names": {
+            sname: opt.saved_objectives[sname].name
+            for sname in opt.local_scenarios
+        },
+        "probability_mask": _probability_mask(opt),
+        "fixed_variables": _fixed_variable_values(opt),
+        "model_holder_is_current": _model_holder_is_current(opt),
     }
 
 
@@ -166,13 +258,30 @@ def main():
     if wheel is None:
         return
     if wheel.on_hub():
-        with open(out_path, "w") as f:
-            json.dump(_hub_snapshot(wheel), f)
-    elif wheel.cylinder_rank == 0:
+        snapshot = _hub_snapshot(wheel)
+        # Rank 0's snapshot also lands at the bare path, which is what the
+        # single-rank-per-cylinder harness reads. The per-rank copies are what
+        # the multi-rank harness compares, and rank 0 writes both rather than
+        # having the two tests disagree about where the hub's answer lives.
+        if wheel.cylinder_rank == 0:
+            with open(out_path, "w") as f:
+                json.dump(snapshot, f)
+        with open(f"{out_path}.hubrank{wheel.cylinder_rank:04d}", "w") as f:
+            json.dump(snapshot, f)
+    else:
         marker = _spoke_marker(wheel)
-        if marker is not None:
+        if marker is None:
+            return
+        if wheel.cylinder_rank == 0:
             with open(f"{out_path}.spoke{wheel.strata_rank}", "w") as f:
                 json.dump(marker, f)
+        # And every rank's own, under a name the single-rank harness's
+        # ".spoke" prefix does not match: a spoke's ranks each restore their
+        # own file, and only comparing them shows whether they agree.
+        marker["cylinder_rank"] = int(wheel.cylinder_rank)
+        with open(f"{out_path}.byrank.spoke{wheel.strata_rank}"
+                  f".{wheel.cylinder_rank:04d}", "w") as f:
+            json.dump(marker, f)
 
 
 if __name__ == "__main__":

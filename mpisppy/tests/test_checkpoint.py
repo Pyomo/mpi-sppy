@@ -611,7 +611,9 @@ class TestResumeABFarmer(unittest.TestCase):
         hub = os.path.join(self.ckpt_dir, "hub")
         enospc = OSError(errno.ENOSPC, "No space left on device")
         with mock.patch.object(checkpointing, fail_in, side_effect=enospc):
-            with self.assertRaises(OSError):
+            # OSError from rank 0's publish; a failure while staging is
+            # agreed across ranks and re-raised as RuntimeError.
+            with self.assertRaises((OSError, RuntimeError)):
                 checkpointing.write_checkpoint(opt, self.ckpt_dir,
                                                self.STOP + 1)
         self.assertEqual(sorted(os.listdir(hub)), [f"gen_{self.STOP:04d}"])
@@ -642,15 +644,16 @@ class TestResumeABFarmer(unittest.TestCase):
         os.makedirs(os.path.join(hub, f"gen_{self.STOP + 1:04d}.tmp"))
         os.makedirs(os.path.join(hub, f"gen_{self.STOP + 1:04d}"))
         seen = []
-        real = checkpointing._stage_and_publish
+        real = checkpointing._write_models
 
         def spy(*args, **kwargs):
             seen.append(sorted(os.listdir(hub)))
             return real(*args, **kwargs)
 
-        with mock.patch.object(checkpointing, "_stage_and_publish", spy):
+        with mock.patch.object(checkpointing, "_write_models", spy):
             checkpointing.write_checkpoint(opt, self.ckpt_dir, self.STOP + 2)
-        self.assertEqual(seen, [[f"gen_{self.STOP:04d}"]])
+        self.assertEqual(seen, [[f"gen_{self.STOP:04d}",
+                                 f"gen_{self.STOP + 2:04d}.tmp"]])
 
     def test_failure_keeps_the_retired_copy_the_manifest_depends_on(self):
         """After a kill between the publishing renames, the manifest's
@@ -664,7 +667,9 @@ class TestResumeABFarmer(unittest.TestCase):
         enospc = OSError(errno.ENOSPC, "No space left on device")
         with mock.patch.object(checkpointing, "_fsync_dir",
                                side_effect=enospc):
-            with self.assertRaises(OSError):
+            # OSError from rank 0's publish; a failure while staging is
+            # agreed across ranks and re-raised as RuntimeError.
+            with self.assertRaises((OSError, RuntimeError)):
                 checkpointing.write_checkpoint(opt, self.ckpt_dir,
                                                self.STOP + 1)
         self.assertEqual(sorted(os.listdir(hub)),
@@ -782,6 +787,33 @@ class TestResumeRefusesMismatch(unittest.TestCase):
         with self.assertRaises(checkpointing.CheckpointMismatch) as ctx:
             _make_ph(options, scenario_names=["scen0", "scen1"]).ph_main()
         self.assertIn("scenario", str(ctx.exception).lower())
+
+    def test_a_leaf_missing_a_key_the_resume_reads_is_refused_at_load(self):
+        """Iter0 reads the bounds outside any agreement, just before a
+        collective, so the load -- which runs inside one -- has to refuse a
+        leaf without them rather than leave one rank to raise KeyError."""
+        manifest = checkpointing._read_manifest(self.ckpt_dir)
+        leaf_path = os.path.join(
+            self.ckpt_dir, checkpointing.HUB_SUBDIR,
+            checkpointing._generation_dirname(manifest["generation"]),
+            checkpointing._leaf_filename(0))
+        with open(leaf_path, "rb") as f:
+            original = f.read()
+        try:
+            for key in checkpointing.LEAF_KEYS_READ_ON_RESUME:
+                with self.subTest(key=key):
+                    leaf = pickle.loads(original)
+                    del leaf[key]
+                    with open(leaf_path, "wb") as f:
+                        pickle.dump(leaf, f)
+                    resumed = _make_ph(_options(4, resume_from=self.ckpt_dir))
+                    with self.assertRaises(
+                            checkpointing.CheckpointMismatch) as ctx:
+                        checkpointing.load_checkpoint(resumed, self.ckpt_dir)
+                    self.assertIn(key, str(ctx.exception))
+        finally:
+            with open(leaf_path, "wb") as f:
+                f.write(original)
 
     def test_missing_manifest_is_refused_clearly(self):
         options = _options(4, resume_from=os.path.join(self._tmp.name, "nope"))
@@ -1057,10 +1089,20 @@ class TestSetupRefusals(unittest.TestCase):
             opt._restore_from_checkpoint_if_resuming()
         self.assertIn("not implemented", str(ctx.exception))
 
-    def test_multirank_is_refused_at_setup(self):
-        with self.assertRaises(RuntimeError) as ctx:
-            Checkpointer(self._stub(n_proc=2))
-        self.assertIn("single rank", str(ctx.exception))
+    def test_multirank_is_accepted_at_setup(self):
+        """Phase 2 removed the single-rank refusal.
+
+        Only the setup gate is checked here -- a real multi-rank write needs
+        real ranks, which `test_checkpoint_multirank.py` supplies under
+        mpiexec. This is what keeps the refusal from creeping back in.
+        """
+        opt = self._stub(n_proc=2)
+        # A two-rank cylinder agrees on its setup steps, so it needs a comm
+        # that can; the single-rank fallback mpi-sppy uses without mpi4py
+        # has no allgather.
+        opt.mpicomm = _TwoRankComm()
+        ckpt = Checkpointer(opt)
+        self.assertTrue(ckpt.write_enabled)
 
     def test_unwritable_directory_is_refused_at_setup(self):
         stub = self._stub()
@@ -2091,6 +2133,26 @@ def _solution_by_name(opt):
     }
 
 
+class _TwoRankComm:
+    """A cylinder comm for two ranks that agree on everything: each
+    collective answers as though the other rank sent what this one did."""
+
+    def Get_size(self):
+        return 2
+
+    def Get_rank(self):
+        return 0
+
+    def allgather(self, value):
+        return [value, value]
+
+    def bcast(self, value, root=0):
+        return value
+
+    def Barrier(self):
+        pass
+
+
 class TestSpokeIncumbentFile(unittest.TestCase):
     """The spoke's own checkpoint: the best xhat, by variable name.
 
@@ -2328,6 +2390,25 @@ class TestSpokeIncumbentFile(unittest.TestCase):
             checkpointing.load_spoke_incumbent(
                 resumed, self.ckpt_dir, self.CYLINDER, 2)
 
+    def test_a_file_missing_an_agreed_key_is_refused_at_load(self):
+        """agree_on_spoke_incumbent reads these two before its collective,
+        so a file without one has to be refused by the load, which runs
+        inside an agreement, not by a KeyError on one rank."""
+        for key in ("best_solution_obj_val", "best_inner_bound"):
+            with self.subTest(key=key):
+                _, path = self._write_one()
+                with open(path, "rb") as f:
+                    state = pickle.load(f)
+                del state[key]
+                with open(path, "wb") as f:
+                    pickle.dump(state, f)
+                resumed = _xhat_eval(resume_from=self.ckpt_dir)
+                with self.assertRaises(checkpointing.CheckpointMismatch) \
+                        as ctx:
+                    checkpointing.load_spoke_incumbent(
+                        resumed, self.ckpt_dir, self.CYLINDER, 2)
+                self.assertIn(key, str(ctx.exception))
+
     def test_a_variable_the_model_no_longer_has_is_refused(self):
         """A partially restored incumbent is a solution that was never
         feasible for anything."""
@@ -2559,16 +2640,20 @@ class TestSpokeInnerBoundsToRestore(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
-    def _file(self, cylinder, ordinal, state):
-        path = os.path.join(self.ckpt_dir, "spokes",
-                            checkpointing._spoke_filename(cylinder, ordinal, 0))
+    def _file(self, cylinder, ordinal, state, rank=0):
+        path = os.path.join(
+            self.ckpt_dir, "spokes",
+            checkpointing._spoke_filename(cylinder, ordinal, rank))
         with open(path, "wb") as f:
             pickle.dump(state, f)
 
-    def _incumbent(self, cylinder, ordinal, bound):
+    def _incumbent(self, cylinder, ordinal, bound, rank=0, n_proc=1,
+                   objective=None):
         self._file(cylinder, ordinal, {
             "format_version": checkpointing.FORMAT_VERSION,
-            "kind": "spoke-incumbent", "best_inner_bound": bound})
+            "kind": "spoke-incumbent", "best_inner_bound": bound,
+            "best_solution_obj_val": bound if objective is None else objective,
+            "geometry": {"n_proc": n_proc, "rank": rank}}, rank=rank)
 
     def _found(self, *classes):
         return checkpointing.spoke_inner_bounds_to_restore(
@@ -2609,6 +2694,35 @@ class TestSpokeInnerBoundsToRestore(unittest.TestCase):
             with self.subTest(bound=bound):
                 self._incumbent("XhatShuffle", 0, bound)
                 self.assertEqual(self._found(self.Hub, self.XhatShuffle), [])
+
+    def test_a_spoke_whose_ranks_agree_is_credited(self):
+        for rank in (0, 1):
+            self._incumbent("XhatShuffle", 0, -100.0, rank=rank, n_proc=2)
+        self.assertEqual(self._found(self.Hub, self.XhatShuffle),
+                         [(1, -100.0)])
+
+    def test_a_spoke_with_a_rank_missing_is_not_credited(self):
+        """The spoke's ranks drop an incumbent one of them has no file for,
+        so the hub must not credit it: the spoke would write a solution that
+        is not the one whose objective the hub reports."""
+        self._incumbent("XhatShuffle", 0, -100.0, rank=0, n_proc=2)
+        self.assertEqual(self._found(self.Hub, self.XhatShuffle), [])
+
+    def test_a_spoke_whose_ranks_disagree_is_not_credited(self):
+        self._incumbent("XhatShuffle", 0, -100.0, rank=0, n_proc=2)
+        self._incumbent("XhatShuffle", 0, -90.0, rank=1, n_proc=2)
+        self.assertEqual(self._found(self.Hub, self.XhatShuffle), [])
+        self._incumbent("XhatShuffle", 0, -100.0, rank=1, n_proc=2,
+                        objective=-99.0)
+        self.assertEqual(self._found(self.Hub, self.XhatShuffle), [])
+
+    def test_ranks_agreeing_on_the_objective_alone_are_not_credited(self):
+        """The spoke's ranks compare the inner bound too
+        (agree_on_spoke_incumbent), so the hub must as well."""
+        self._incumbent("XhatShuffle", 0, -100.0, rank=0, n_proc=2)
+        self._incumbent("XhatShuffle", 0, -90.0, rank=1, n_proc=2,
+                        objective=-100.0)
+        self.assertEqual(self._found(self.Hub, self.XhatShuffle), [])
 
     def test_a_pickle_that_is_not_a_dict_is_skipped(self):
         self._file("XhatShuffle", 0, ["not", "a", "dict"])

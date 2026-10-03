@@ -1116,8 +1116,18 @@ class SPOpt(SPBase):
 
         Warning:
             We are counting on Pyomo indices not to change order between save
-            and restoration. THIS WILL NOT WORK ON BUNDLES (Feb 2019) but
-            hopefully does not need to.
+            and restoration.
+
+        Note:
+            Bundles need nothing special here, contrary to a warning this
+            docstring carried from 2019 to 2026. That warning was about the
+            *loose* bundles of the time, which were not subproblems in their
+            own right; loose bundling was removed, and a proper bundle is a
+            first-class entry in ``local_scenarios`` carrying its own
+            ``nonant_indices``. So this loop and ``_save_nonants`` walk
+            exactly the same variables in the same order for a bundle as for
+            a plain scenario. Re-verified when checkpointing was validated on
+            ``--scenarios-per-bundle`` (design section 8.1).
         """
         for k,s in self.local_scenarios.items():
 
