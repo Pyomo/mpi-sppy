@@ -390,7 +390,8 @@ a resumed run enforces at the same iteration an uninterrupted one would.
 Without it, each run applies the fraction to its own ``--max-iterations``, and
 a resumed run enforces on its own schedule. The time fraction is always of the
 run's own ``--time-limit``. A run that stops before the study's fraction stops
-with integrality still relaxed; the run that resumes it enforces it.
+with integrality still relaxed, unless the time or convergence condition
+enforced it first; the run that resumes it enforces it.
 
 Two things this does not cover:
 
