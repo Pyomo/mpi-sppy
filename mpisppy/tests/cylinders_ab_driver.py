@@ -109,6 +109,11 @@ def _model_holder_is_current(opt):
             return all(held[sname] is s
                        for sname, s in opt.local_scenarios.items()
                        if sname in held)
+    # AdmmBundler holds its bundles as the keys of a dict, not by name.
+    held = getattr(holder, "_bundle_varprob", None)
+    if isinstance(held, dict):
+        current = set(map(id, opt.local_scenarios.values()))
+        return all(id(model) in current for model in held)
     return None
 
 

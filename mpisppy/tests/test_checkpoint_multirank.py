@@ -35,8 +35,9 @@ does resume as tomorrow's job.
 
 The instances are the ones section 11.1 assigns to this phase: farmer with the
 scenarios spread evenly and unevenly, proper bundles (section 8.1), the
-``sizes`` MIP, a full multi-rank wheel, and stoch-ADMM (section 8.2), whose
-wrapper is where a resume has the most to get wrong.
+``sizes`` MIP, a full multi-rank wheel, and stoch-ADMM with and without
+bundles (section 8.2), whose wrapper is where a resume has the most to get
+wrong.
 """
 
 import ast
@@ -711,6 +712,45 @@ class TestStochAdmmMultiRank(_MultiRankABMixin, unittest.TestCase):
         for snap in self.reference:
             self.assertTrue(snap["model_holder_is_current"],
                             msg="the probe found no ADMM wrapper to check")
+
+
+@unittest.skipIf(not solver_available, "no solver is available")
+@unittest.skipIf(not mpiexec_available, "mpiexec is not available")
+class TestBundledStochAdmmMultiRank(_MultiRankABMixin, unittest.TestCase):
+    """stoch-ADMM with proper bundles across ranks (design section 8.2).
+
+    ``--scenarios-per-bundle`` hands scenario creation to ``AdmmBundler``
+    instead of ``Stoch_AdmmWrapper``, and the bundler keeps the bundles it
+    built for a different reason and under a different attribute, so the
+    wrapper test above says nothing about it.
+    """
+
+    NP = 4
+    HUB_RANKS = 2
+    MODULE = _STOCH_DISTR
+    #: AdmmBundler requires one bundle per ADMM subproblem, holding every
+    #: stochastic scenario, so --scenarios-per-bundle equals --num-stoch-scens.
+    MODEL_ARGS = ("--stoch-admm", "--num-stoch-scens", "2",
+                  "--num-admm-subproblems", "3", "--scenarios-per-bundle", "2",
+                  "--default-rho", "10")
+    SPOKE_ARGS = ("--xhatxbar",)
+
+    def test_the_subproblems_really_are_bundles(self):
+        names = [n for snap in self.reference for n in snap["scenario_names"]]
+        self.assertTrue(all(n.startswith("Bundle") for n in names),
+                        msg=f"expected bundles, got {names}")
+
+    def test_the_bundler_does_not_keep_the_replaced_models(self):
+        """Otherwise a resumed bundled run holds two copies of every bundle
+        (section 8.2, item 2)."""
+        for snap in self.resumed:
+            self.assertTrue(
+                snap["model_holder_is_current"],
+                msg=f"rank {snap['cylinder_rank']}: the ADMM bundler still "
+                    f"points at the bundles the resume replaced")
+        for snap in self.reference:
+            self.assertTrue(snap["model_holder_is_current"],
+                            msg="the probe found no ADMM bundler to check")
 
 
 @unittest.skipIf(not solver_available, "no solver is available")

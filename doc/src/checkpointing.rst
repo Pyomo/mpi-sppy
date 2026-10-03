@@ -517,8 +517,8 @@ next checkpoint point tries again if the run gets that far, as `Writing a
 checkpoint`_ describes. There is no state in which some ranks have advanced
 their checkpoint and others have not.
 
-You get two log lines from such a failure: one from the rank that failed,
-carrying the actual cause, and one from rank 0 naming that rank.
+Each rank that failed logs its own cause. Rank 0 always logs the failure too,
+naming the failing rank when it is not one itself.
 
 The cost is that the ranks wait for each other at each write, which the
 bracketing ``toc`` lines include -- the slowest rank sets the pace.
