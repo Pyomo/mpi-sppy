@@ -1569,10 +1569,12 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
                "not built. The value comes from the command line the wheel "
                "hands every rank, and nothing else is consulted."),
         "ScenarioCycler._fill_nodescen_dict": (
-            1, "no scenario fits some nonleaf node. What it walks is the "
-               "cursor every rank adopted (agree_spoke_restore broadcasts "
-               "rank 0's) and the scenario order, which is drawn from one "
-               "fixed seed, so every rank walks the same list."),
+            1, "no scenario fits some nonleaf node. Reached from "
+               "restore_state's epoch rebuild, which runs before the "
+               "restored position is taken, so it walks from the fresh "
+               "cycler's position over the scenario order, drawn from one "
+               "fixed seed, and the nonleaf nodes, built from the whole "
+               "scenario tree. All three are the same on every rank."),
     }
 
     #: Checkpointing calls that agree across the cylinder themselves, so they
