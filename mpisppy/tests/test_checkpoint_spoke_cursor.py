@@ -160,6 +160,28 @@ class TestScenarioCyclerState(unittest.TestCase):
         other.restore_state(cycler.checkpoint_state())
         self.assertEqual(other.get_next()["ROOT"], "scen0")
 
+    def _saved_away_from_a_fresh_cycler(self):
+        """A cursor that differs from a fresh cycler's in every field a
+        two-stage cycler moves: position, best, current scenario, and the
+        scenarios tried.
+
+        So a refusal that wrote one of them before deciding shows up as a
+        changed cycler; a cursor that matched a fresh cycler on best, say,
+        could not tell a half-applied restore from an untouched one.
+        """
+        cycler = _cycler(self.NAMES)
+        for _ in range(3):
+            cycler.get_next()
+        cycler.best = "scen2"
+        return cycler.checkpoint_state()
+
+    def assert_refused_and_untouched(self, cycler, before, warnings, name):
+        self.assertEqual(len(warnings), 1)
+        self.assertIn(name, warnings[0])
+        self.assertEqual(cycler.checkpoint_state(), before,
+                         msg="a refused cursor was half applied")
+        self.assertEqual(cycler.get_next()["ROOT"], "scen0")
+
     def test_a_cursor_missing_a_key_is_refused_and_changes_nothing(self):
         """A same-version file whose cursor lacks a key is discarded whole.
 
@@ -168,33 +190,67 @@ class TestScenarioCyclerState(unittest.TestCase):
         scenario order, with a warning, rather than raising a KeyError out of
         the spoke's main() and taking the incumbent down with it.
         """
-        saved = _cycler_after(self.NAMES, 3)
+        saved = self._saved_away_from_a_fresh_cycler()
         for key in saved:
             with self.subTest(missing=key):
                 damaged = {k: v for k, v in saved.items() if k != key}
                 cycler = _cycler(self.NAMES)
                 before = cycler.checkpoint_state()
                 warnings = cycler.restore_state(damaged)
-                self.assertEqual(len(warnings), 1)
-                if key != "order_fingerprint":
-                    self.assertIn(key, warnings[0])
-                self.assertEqual(cycler.checkpoint_state(), before,
-                                 msg="a refused cursor was half applied")
-                self.assertEqual(cycler.get_next()["ROOT"], "scen0")
+                self.assert_refused_and_untouched(
+                    cycler, before, warnings,
+                    "different scenario order" if key == "order_fingerprint"
+                    else key)
 
-    def test_loop_state_missing_a_key_is_refused_with_a_warning(self):
+    def test_a_cursor_with_a_bad_value_is_refused_and_changes_nothing(self):
+        saved = self._saved_away_from_a_fresh_cycler()
+        for key, value in (("cycle_idx", len(self.NAMES)),
+                           ("cycle_idx", "2"), ("cycle_idx", True),
+                           ("best", 3), ("cur_root_scen", 3),
+                           ("scenarios_this_epoch", None),
+                           ("scenarios_this_epoch", [1]),
+                           ("reversed", "no"), ("nodescen_dict", None),
+                           ("nodescen_dict", {"ROOT": 3})):
+            with self.subTest(key=key, value=value):
+                cycler = _cycler(self.NAMES)
+                before = cycler.checkpoint_state()
+                warnings = cycler.restore_state(dict(saved, **{key: value}))
+                self.assert_refused_and_untouched(cycler, before, warnings,
+                                                  key)
+
+    def test_loop_state_missing_a_key_or_bad_is_refused_with_a_warning(self):
         from mpisppy.cylinders.xhatshufflelooper_bounder import (
             XhatShuffleInnerBound)
-        saved = {"xh_iter": 4, "cursor": _cycler_after(self.NAMES, 3)}
-        for key in saved:
-            with self.subTest(missing=key):
+        saved = {"xh_iter": 4, "cursor": self._saved_away_from_a_fresh_cycler()}
+        cases = [(f"no {key}", key, {k: v for k, v in saved.items()
+                                     if k != key}) for key in saved]
+        cases += [(f"xh_iter={value!r}", "xh_iter", dict(saved, xh_iter=value))
+                  for value in (None, "4", -1, True)]
+        cases.append(("not a dict", "cursor", ["not", "a", "dict"]))
+        for label, name, state in cases:
+            with self.subTest(case=label):
                 spoke = types.SimpleNamespace(
                     scenario_cycler=_cycler(self.NAMES), xh_iter=1)
-                warnings = XhatShuffleInnerBound.restore_loop_state(
-                    spoke, {k: v for k, v in saved.items() if k != key})
+                before = spoke.scenario_cycler.checkpoint_state()
+                warnings = XhatShuffleInnerBound.restore_loop_state(spoke,
+                                                                    state)
                 self.assertEqual(len(warnings), 1)
-                self.assertIn(key, warnings[0])
+                self.assertIn(name, warnings[0])
                 self.assertEqual(spoke.xh_iter, 1)
+                self.assertEqual(spoke.scenario_cycler.checkpoint_state(),
+                                 before,
+                                 msg="the cursor was restored although the "
+                                     "loop state was refused")
+
+    def test_progress_of_a_loop_state_that_is_not_a_dict_is_none(self):
+        """Read on a resume in place before the restore runs, so it must not
+        raise on what the restore would refuse."""
+        from mpisppy.cylinders.xhatshufflelooper_bounder import (
+            XhatShuffleInnerBound)
+        for state in (None, ["cursor"], "cursor"):
+            with self.subTest(state=state):
+                self.assertIsNone(
+                    XhatShuffleInnerBound.loop_state_progress(None, state))
 
     def test_the_fingerprint_is_order_sensitive(self):
         """The same names shuffled differently must not compare equal."""

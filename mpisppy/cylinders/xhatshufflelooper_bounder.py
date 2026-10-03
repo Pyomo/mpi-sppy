@@ -217,7 +217,7 @@ class XhatShuffleInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
         has to count those. The cursor moves only when a subproblem was
         actually solved, which is the thing worth a write.
         """
-        return None if state is None else state.get("cursor")
+        return state.get("cursor") if isinstance(state, dict) else None
 
     def restore_loop_state(self, state):
         """Put the cursor back where the checkpoint left it.
@@ -233,6 +233,12 @@ class XhatShuffleInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
             return [f"the checkpointed xhatshuffle loop state has no "
                     f"{', '.join(missing)}, so this spoke explores from the "
                     f"start again."]
+        xh_iter = state["xh_iter"]
+        if (not isinstance(xh_iter, int) or isinstance(xh_iter, bool)
+                or xh_iter < 0):
+            return ["the checkpointed xhatshuffle loop state has a bad value "
+                    "for xh_iter, so this spoke explores from the start "
+                    "again."]
         warnings = self.scenario_cycler.restore_state(state["cursor"])
         if not warnings:
             # The file records the pass that completed, so the resumed loop
@@ -323,6 +329,45 @@ class ScenarioCycler:
         blob = "\n".join(f"{i}:{name}" for i, name in self._shuffled_scenarios)
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
+    def _cursor_problem(self, state):
+        """What is wrong with a cursor of the current format, or None.
+
+        A file of the current format version can still be hand-edited, or
+        written before a change to checkpoint_state() that did not raise the
+        version, so the keys and the types of the values are checked rather
+        than assumed.
+        """
+        missing = sorted(set(self.checkpoint_state()) - set(state))
+        if missing:
+            return f"has no {', '.join(missing)}"
+
+        def is_name(value):
+            return value is None or isinstance(value, str)
+
+        idx = state["cycle_idx"]
+        bad = []
+        if (not isinstance(idx, int) or isinstance(idx, bool)
+                or not 0 <= idx < self._num_scenarios):
+            bad.append("cycle_idx")
+        if not is_name(state["best"]):
+            bad.append("best")
+        if not is_name(state["cur_root_scen"]):
+            bad.append("cur_root_scen")
+        tried = state["scenarios_this_epoch"]
+        if (not isinstance(tried, (list, tuple))
+                or not all(isinstance(n, str) for n in tried)):
+            bad.append("scenarios_this_epoch")
+        if not isinstance(state["reversed"], bool):
+            bad.append("reversed")
+        nodes = state["nodescen_dict"]
+        if (not isinstance(nodes, dict)
+                or not all(isinstance(k, str) and is_name(v)
+                           for k, v in nodes.items())):
+            bad.append("nodescen_dict")
+        if bad:
+            return f"has a bad value for {', '.join(bad)}"
+        return None
+
     def checkpoint_state(self):
         """Where this cycler has got to, as plain data.
 
@@ -356,13 +401,12 @@ class ScenarioCycler:
             return ["the checkpointed xhatshuffle cursor was taken against a "
                     "different scenario order, so its position means nothing "
                     "here; this spoke explores from the start again."]
-        # Checked before anything is changed, so a cursor missing a key is
+        # Checked before anything is changed, so a damaged cursor is
         # discarded whole rather than half applied.
-        missing = sorted(set(self.checkpoint_state()) - set(state))
-        if missing:
-            return [f"the checkpointed xhatshuffle cursor has no "
-                    f"{', '.join(missing)}, so this spoke explores from the "
-                    f"start again."]
+        problem = self._cursor_problem(state)
+        if problem is not None:
+            return [f"the checkpointed xhatshuffle cursor {problem}, so this "
+                    f"spoke explores from the start again."]
 
         # `best` first: the epoch rebuild below reads it to decide where the
         # epoch starts. The position is overwritten afterwards either way, but

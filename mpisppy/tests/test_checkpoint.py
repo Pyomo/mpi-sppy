@@ -3935,26 +3935,78 @@ class TestChildProcessesImportTheCheckoutUnderTest(unittest.TestCase):
             child.startswith(os.path.realpath(REPO_ROOT) + os.sep),
             msg=f"the child imported {child}, not the checkout at {REPO_ROOT}")
 
+    #: Launchers that start a process through the shell or replace this one;
+    #: they take no env= of their own, so the checkpoint tests must not use
+    #: them at all.
+    OS_LAUNCHERS = ("system", "popen", "exec", "spawn")
+
     def test_every_launch_in_the_checkpoint_tests_passes_the_environment(self):
+        """Every process the checkpoint tests or their drivers start is given
+        env=subprocess_env(), however the launcher was imported.
+
+        A call reached as ``subprocess.run``, through an alias of the module,
+        or as a name imported from it, counts; so does anything in os that
+        starts a process, which cannot take the environment and is refused.
+        Passing env= is not enough: env=None or env=os.environ is the
+        inherited environment again.
+        """
         import ast
         import glob
         tests_dir = os.path.dirname(os.path.abspath(__file__))
-        missing = []
-        for path in sorted(glob.glob(os.path.join(tests_dir,
-                                                  "test_checkpoint*.py"))):
+        paths = sorted(glob.glob(os.path.join(tests_dir, "test_checkpoint*.py"))
+                       + glob.glob(os.path.join(tests_dir, "*_driver.py")))
+        self.assertIn("test_checkpoint_multirank.py",
+                      {os.path.basename(p) for p in paths})
+        problems = []
+        for path in paths:
             with open(path) as f:
                 tree = ast.parse(f.read())
+            module_aliases = {"subprocess": set(), "os": set()}
+            imported_names = set()
             for node in ast.walk(tree):
-                if (isinstance(node, ast.Call)
-                        and isinstance(node.func, ast.Attribute)
-                        and isinstance(node.func.value, ast.Name)
-                        and node.func.value.id == "subprocess"
-                        and not any(k.arg == "env" for k in node.keywords)):
-                    missing.append(f"{os.path.basename(path)}:{node.lineno}")
-        self.assertEqual(missing, [],
-                         msg="these subprocess calls do not pass "
-                             "env=subprocess_env(), so their children may "
-                             "import a different checkout's mpisppy")
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.name in module_aliases:
+                            module_aliases[alias.name].add(
+                                alias.asname or alias.name)
+                elif (isinstance(node, ast.ImportFrom)
+                        and node.module == "subprocess"):
+                    imported_names.update(a.asname or a.name
+                                          for a in node.names)
+                elif (isinstance(node, ast.ImportFrom) and node.module == "os"
+                        and any(a.name.startswith(self.OS_LAUNCHERS)
+                                for a in node.names)):
+                    problems.append(f"{os.path.basename(path)}:{node.lineno} "
+                                    f"imports a process launcher from os")
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                where = f"{os.path.basename(path)}:{node.lineno}"
+                is_os_attr = (isinstance(func, ast.Attribute)
+                              and isinstance(func.value, ast.Name)
+                              and func.value.id in module_aliases["os"])
+                if is_os_attr and func.attr.startswith(self.OS_LAUNCHERS):
+                    problems.append(f"{where} starts a process through "
+                                    f"os.{func.attr}, which takes no env=")
+                    continue
+                launches = ((isinstance(func, ast.Attribute)
+                             and isinstance(func.value, ast.Name)
+                             and func.value.id in module_aliases["subprocess"])
+                            or (isinstance(func, ast.Name)
+                                and func.id in imported_names))
+                if not launches:
+                    continue
+                env = next((k.value for k in node.keywords if k.arg == "env"),
+                           None)
+                if not (isinstance(env, ast.Call)
+                        and isinstance(env.func, ast.Name)
+                        and env.func.id == "subprocess_env"):
+                    problems.append(f"{where} does not pass "
+                                    f"env=subprocess_env()")
+        self.assertEqual(problems, [],
+                         msg="these launches may start a child that imports "
+                             "a different checkout's mpisppy")
 
 
 if __name__ == "__main__":

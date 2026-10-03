@@ -56,7 +56,8 @@ import unittest
 import mpisppy.tests.multirank_agreement_driver as agreement_driver
 import mpisppy.utils.checkpointing as checkpointing
 from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
-from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
+from mpisppy.cylinders.xhatshufflelooper_bounder import (ScenarioCycler,
+                                                         XhatShuffleInnerBound)
 from mpisppy.extensions.checkpointer import Checkpointer
 from mpisppy.phbase import PHBase
 from mpisppy.tests.utils import get_solver, subprocess_env
@@ -1502,16 +1503,18 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
          XhatInnerBoundBase._restore_extension_state_if_resuming),
         ("XhatShuffleInnerBound._restore_loop_state_if_resuming",
          XhatShuffleInnerBound._restore_loop_state_if_resuming),
+        # Listed as well as reached: the call to it goes through
+        # self.scenario_cycler, an attribute whose class the closure cannot
+        # resolve from the source, and following such calls by name instead
+        # drags in every mpisppy method sharing the name.
+        ("ScenarioCycler.restore_state", ScenarioCycler.restore_state),
     )
 
-    #: What a resume read and holds for a spoke until its loop asks: the
-    #: Checkpointer's attributes and the accessor that hands them over. A
-    #: function that reads any of these is on a restore path, so it belongs in
-    #: PATHS; test_every_reader_of_the_restored_state_is_a_path checks that.
-    RESTORED_STATE_NAMES = frozenset({
-        "restored_loop_state", "restored_extension_state",
-        "_checkpointed_loop_state",
-    })
+    #: The accessors that hand a spoke what a resume read for it. Together
+    #: with every ``restored_*`` attribute the Checkpointer assigns, these are
+    #: the names whose readers are on a restore path and so belong in PATHS;
+    #: test_every_reader_of_the_restored_state_is_a_path checks that.
+    RESTORED_STATE_ACCESSOR_NAMES = frozenset({"_checkpointed_loop_state"})
 
     #: Readers that only return what they read to their caller. They are not
     #: paths themselves; their callers are, by the rule above.
@@ -1565,6 +1568,11 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
             1, "--checkpoint-backend names a backend that is designed but "
                "not built. The value comes from the command line the wheel "
                "hands every rank, and nothing else is consulted."),
+        "ScenarioCycler._fill_nodescen_dict": (
+            1, "no scenario fits some nonleaf node. What it walks is the "
+               "cursor every rank adopted (agree_spoke_restore broadcasts "
+               "rank 0's) and the scenario order, which is drawn from one "
+               "fixed seed, so every rank walks the same list."),
     }
 
     #: Checkpointing calls that agree across the cylinder themselves, so they
@@ -1802,37 +1810,57 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
         """A restore step reached only from a spoke's main() is invisible to
         the closure walk unless its function is listed in PATHS, which is how
         the xhatshuffle cursor restore was once missed. So find every reader
-        rather than trusting the list."""
+        rather than trusting the list.
+
+        Reads the source files rather than importing them, so a module that
+        cannot be imported here is still read, and takes the held names from
+        the Checkpointer's own assignments, so a new one is covered without
+        being added here.
+        """
         import ast
-        import importlib
-        import pkgutil
-        modules = ["mpisppy.phbase"]
-        for package_name in self.NAME_FALLBACK_PACKAGES:
-            package = importlib.import_module(package_name)
-            modules += [m.name for m in pkgutil.walk_packages(
-                package.__path__, f"{package_name}.")]
+        import mpisppy
+        checkpointer_tree = ast.parse(inspect.getsource(
+            inspect.getmodule(Checkpointer)))
+        held = {node.attr for node in ast.walk(checkpointer_tree)
+                if isinstance(node, ast.Attribute)
+                and isinstance(node.ctx, ast.Store)
+                and node.attr.startswith("restored_")}
+        self.assertIn("restored_loop_state", held,
+                      msg="no held state found, so the scan proves nothing")
+        names = held | self.RESTORED_STATE_ACCESSOR_NAMES
+
+        def reads(func):
+            for node in ast.walk(func):
+                if (isinstance(node, ast.Attribute)
+                        and isinstance(node.ctx, ast.Load)
+                        and node.attr in names):
+                    return True
+                if isinstance(node, ast.Constant) and node.value in names:
+                    return True
+            return False
+
+        root = os.path.dirname(os.path.abspath(mpisppy.__file__))
+        tests = os.path.join(root, "tests")
         readers = set()
-        for module_name in modules:
-            try:
-                module = importlib.import_module(module_name)
-                tree = ast.parse(inspect.getsource(module))
-            except Exception:
-                continue    # an optional dependency, or no source
-            for cls in (n for n in ast.walk(tree)
-                        if isinstance(n, ast.ClassDef)):
-                for func in cls.body:
-                    if not isinstance(func, (ast.FunctionDef,
-                                             ast.AsyncFunctionDef)):
-                        continue
-                    for node in ast.walk(func):
-                        name = (node.attr if isinstance(node, ast.Attribute)
-                                and isinstance(node.ctx, ast.Load)
-                                else node.value
-                                if isinstance(node, ast.Constant)
-                                else None)
-                        if name in self.RESTORED_STATE_NAMES:
-                            readers.add(f"{cls.name}.{func.name}")
-                            break
+        for directory, _, files in os.walk(root):
+            if directory == tests or directory.startswith(tests + os.sep):
+                continue
+            for fname in files:
+                if not fname.endswith(".py"):
+                    continue
+                with open(os.path.join(directory, fname)) as f:
+                    tree = ast.parse(f.read())
+                for node in tree.body:
+                    if isinstance(node, (ast.FunctionDef,
+                                         ast.AsyncFunctionDef)):
+                        if reads(node):
+                            readers.add(node.name)
+                    elif isinstance(node, ast.ClassDef):
+                        for func in node.body:
+                            if (isinstance(func, (ast.FunctionDef,
+                                                  ast.AsyncFunctionDef))
+                                    and reads(func)):
+                                readers.add(f"{node.name}.{func.name}")
         self.assertIn("XhatShuffleInnerBound._restore_loop_state_if_resuming",
                       readers, msg="the scan found nothing, so it proves "
                                    "nothing")
