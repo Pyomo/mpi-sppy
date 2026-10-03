@@ -63,6 +63,74 @@ example of use.
    Some examples do both, which can be little confusing.
 
 
+.. _checkpointing_your_extension:
+
+Checkpointing your extension
+----------------------------
+
+A run with ``--checkpoint-dir`` (see :ref:`checkpointing`) saves the scenario
+models, so anything your extension keeps *on a model* comes back on a resume
+by itself. Anything it keeps on *itself* does not. If that state decides what
+the extension does next -- a history, a counter, a record of what it already
+fixed -- implement two methods:
+
+.. code-block:: python
+
+   from mpisppy.extensions.extension import Extension
+
+   class MoveCounter(Extension):
+       """Counts, for each nonant, the iterations in which it moved."""
+
+       def __init__(self, ph):
+           super().__init__(ph)
+           self.moves = {}   # (scenario name, variable name) -> count
+           self.last = {}    # (scenario name, variable name) -> value
+
+       def enditer(self):
+           for sname, s in self.opt.local_scenarios.items():
+               for xvar in s._mpisppy_data.nonant_indices.values():
+                   key = (sname, xvar.name)
+                   if key in self.last and xvar.value != self.last[key]:
+                       self.moves[key] = self.moves.get(key, 0) + 1
+                   self.last[key] = xvar.value
+
+       def checkpoint_state(self):
+           return {"moves": dict(self.moves), "last": dict(self.last)}
+
+       def restore_state(self, state):
+           self.moves = dict(state["moves"])
+           self.last = dict(state["last"])
+
+The rules:
+
+- Return plain data -- dicts, lists, numbers, strings, tuples. Key by
+  variable *name* or by ``(node name, index)``, never by a Pyomo object or
+  its ``id()``: a resume replaces every model, so a saved reference points at
+  an object that no longer exists.
+- ``restore_state`` runs once, near the end of iteration 0, after
+  ``pre_iter0`` and ``post_iter0``. Rebuild whatever you derive from the
+  models in those hooks as usual; ``restore_state`` then puts back what the
+  models cannot tell you.
+- Make no MPI calls in either method. On a cylinder with several ranks each
+  rank saves and restores its own scenarios' state, and a collective call
+  reached by some ranks and not others hangs the run.
+- State is matched to extensions by class name, so renaming the class
+  between the stop and the resume drops its state; the resume says so.
+- ``restore_state`` may return a sentence saying what it could not put back
+  exactly; the resume prints it with its other warnings.
+
+If your extension keeps no such state, say so instead:
+
+.. code-block:: python
+
+   class MyExtension(Extension):
+       checkpoint_stateless = True
+
+Do one or the other. A resumed run names every attached extension that has
+done neither, because it cannot tell "keeps nothing" from "nobody decided".
+The declaration is not inherited: a subclass of a stateless extension has to
+make its own. A converger takes the same two answers, with the same methods.
+
 PH extensions
 -------------
 
