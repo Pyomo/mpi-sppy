@@ -878,6 +878,45 @@ class TestIntegerRelaxThenEnforceRelaxedAtTheStop(_IntegerRelaxMixin,
         self.assert_objective_agrees(*self.run_ab())
 
 
+@unittest.skipIf(not solver_available, "no solver is available")
+class TestIntegerRelaxThenEnforceOnTheStudysSchedule(_IntegerRelaxMixin,
+                                                     unittest.TestCase):
+    """With --stop-at-iteration-number, enforcement follows the study.
+
+    Every leg is given the study bound, so the ratio is a fraction of the
+    study rather than of the leg. At 0.5 over a 4-iteration study the
+    uninterrupted run enforces at iteration 3. A leg that counted its own
+    budget would not: resumed after iteration 2 with 2 iterations left, half
+    of its budget is 1, so it would solve iteration 3 relaxed and enforce
+    at 4.
+    """
+
+    RATIO = 0.5
+
+    def setUp(self):
+        super().setUp()
+        self.EXTRA_OPTIONS = dict(self.EXTRA_OPTIONS,
+                                  stop_at_iteration_number=self.N)
+
+    def test_the_resumed_run_enforces_where_the_uninterrupted_one_did(self):
+        reference, stopped, resumed = self.run_ab()
+        want = _extension(reference, _RelaxationProbe).per_iteration
+        relaxed = set(reference.local_scenarios)
+        self.assertEqual(want, [relaxed, relaxed, set(), set()],
+                         msg="the uninterrupted run did not enforce at "
+                             "iteration 3, so this test proves nothing")
+        self.assertEqual(_relaxed_models(stopped), relaxed,
+                         msg="the stop did not land while still relaxed")
+        self.assertEqual(
+            _extension(resumed, _RelaxationProbe).per_iteration,
+            want[self.STOP:],
+            msg="the resumed run enforced at a different iteration than "
+                "the uninterrupted one")
+
+    def test_resume_matches_the_uninterrupted_run(self):
+        self.assert_objective_agrees(*self.run_ab())
+
+
 def _read_leaf(ckpt_dir, generation):
     path = os.path.join(ckpt_dir, "hub", f"gen_{generation:04d}",
                         "hub_rank_0000.pkl")

@@ -383,6 +383,14 @@ The rho-setting extensions do not *recompute* rho at the resume itself: the
 checkpointed rho -- including whatever adaptation had happened by the write --
 carries over, and the extensions resume their per-iteration updates from there.
 
+``integer_relax_then_enforce`` decides when to enforce integrality from a
+fraction of a budget. Give every run of the study
+``--stop-at-iteration-number`` and the iteration fraction is of the study, so
+a resumed run enforces at the same iteration an uninterrupted one would.
+Without it, each run applies the fraction to its own ``--max-iterations``, and
+a resumed run enforces on its own schedule. The time fraction is always of the
+run's own ``--time-limit``.
+
 Two things this does not cover:
 
 * **Your own extension carries nothing unless you say so.** If it keeps state
