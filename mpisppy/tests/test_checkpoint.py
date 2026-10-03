@@ -3935,15 +3935,18 @@ class TestChildProcessesImportTheCheckoutUnderTest(unittest.TestCase):
             child.startswith(os.path.realpath(REPO_ROOT) + os.sep),
             msg=f"the child imported {child}, not the checkout at {REPO_ROOT}")
 
-    #: os functions that start a process or replace or fork this one. None
-    #: takes an env= of the kind subprocess does, so the checkpoint tests
-    #: must not use them at all. Matched as name prefixes.
+    #: os functions that start a process or replace or fork this one. They
+    #: are not checked for the environment they are given, since some take it
+    #: positionally and some not at all; the checkpoint tests must use
+    #: subprocess instead. Matched as name prefixes.
     OS_LAUNCHERS = ("system", "popen", "exec", "spawn", "posix_spawn", "fork")
     #: Launchers that take env=, by module, which must be given
     #: env=subprocess_env().
+    ASYNCIO_LAUNCHERS = {"create_subprocess_exec", "create_subprocess_shell"}
     ENV_LAUNCHERS = {
         "subprocess": {"run", "Popen", "call", "check_call", "check_output"},
-        "asyncio": {"create_subprocess_exec", "create_subprocess_shell"},
+        "asyncio": ASYNCIO_LAUNCHERS,
+        "asyncio.subprocess": ASYNCIO_LAUNCHERS,
     }
     #: subprocess functions that start a process but take no env=.
     NO_ENV_LAUNCHERS = {"getoutput", "getstatusoutput"}
@@ -3953,11 +3956,20 @@ class TestChildProcessesImportTheCheckoutUnderTest(unittest.TestCase):
         env=subprocess_env(), however the launcher was imported.
 
         Resolves the module behind a call through ``import x``,
-        ``import x as y``, ``import x.sub`` (which binds ``x``) and
-        ``from x import f [as g]``. Passing some env= is not enough: env=None
-        or env=os.environ is the inherited environment again, so the value
-        must be the call ``subprocess_env()`` itself. Not followed: a module
-        reached through getattr or reassigned to another name.
+        ``import x as y``, ``import x.sub`` (which binds ``x``),
+        ``from x import f [as g]`` and ``from x import sub [as s]``, and
+        through dotted chains such as ``asyncio.subprocess.f``. Passing some
+        env= is not enough: env=None or env=os.environ is the inherited
+        environment again, so the value must be the call
+        ``subprocess_env()`` itself, written as a keyword.
+
+        Not followed, so a launch written these ways is not checked:
+        ``from x import *``; a module or launcher held in a variable or
+        passed along (``f = os.system``, ``functools.partial``, getattr);
+        launchers outside os, subprocess and asyncio, such as ``pty.spawn``,
+        ``multiprocessing`` or mpi4py's ``Comm.Spawn``. And a correct launch
+        whose env is built first and passed as a variable, or through
+        ``**kwargs``, is reported, as is a local name that shadows ``os``.
         """
         import ast
         import glob
@@ -3971,38 +3983,43 @@ class TestChildProcessesImportTheCheckoutUnderTest(unittest.TestCase):
         for path in paths:
             with open(path) as f:
                 tree = ast.parse(f.read())
-            module_of = {}      # a bound name -> the watched module it is
-            function_of = {}    # a bound name -> (module, function)
+            bound = {}      # a name in this file -> the dotted path it means
             for node in ast.walk(tree):
                 if isinstance(node, ast.Import):
                     for alias in node.names:
+                        top = alias.name.split(".")[0]
+                        if top not in watched:
+                            continue
                         if alias.asname is None:
-                            top = alias.name.split(".")[0]
-                            if top in watched:
-                                module_of[top] = top
-                        elif alias.name in watched:
-                            module_of[alias.asname] = alias.name
-                elif (isinstance(node, ast.ImportFrom)
-                        and node.module in watched):
+                            bound[top] = top
+                        else:
+                            bound[alias.asname] = alias.name
+                elif (isinstance(node, ast.ImportFrom) and node.module
+                        and node.module.split(".")[0] in watched):
                     for alias in node.names:
-                        function_of[alias.asname or alias.name] = (
-                            node.module, alias.name)
+                        bound[alias.asname or alias.name] = (
+                            f"{node.module}.{alias.name}")
+
+            def dotted(expr):
+                if isinstance(expr, ast.Name):
+                    return bound.get(expr.id)
+                if isinstance(expr, ast.Attribute):
+                    base = dotted(expr.value)
+                    return None if base is None else f"{base}.{expr.attr}"
+                return None
+
             for node in ast.walk(tree):
                 if not isinstance(node, ast.Call):
                     continue
-                func = node.func
-                if (isinstance(func, ast.Attribute)
-                        and isinstance(func.value, ast.Name)
-                        and func.value.id in module_of):
-                    module, name = module_of[func.value.id], func.attr
-                elif isinstance(func, ast.Name) and func.id in function_of:
-                    module, name = function_of[func.id]
-                else:
+                target = dotted(node.func)
+                if target is None or "." not in target:
                     continue
+                module, name = target.rsplit(".", 1)
                 where = f"{os.path.basename(path)}:{node.lineno}"
                 if module == "os" and name.startswith(self.OS_LAUNCHERS):
                     problems.append(f"{where} starts a process through "
-                                    f"os.{name}, which takes no env=")
+                                    f"os.{name}; use subprocess with "
+                                    f"env=subprocess_env()")
                 elif module == "subprocess" and name in self.NO_ENV_LAUNCHERS:
                     problems.append(f"{where} starts a process through "
                                     f"subprocess.{name}, which takes no env=")
