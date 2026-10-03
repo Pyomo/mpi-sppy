@@ -389,7 +389,8 @@ fraction of a budget. Give every run of the study
 a resumed run enforces at the same iteration an uninterrupted one would.
 Without it, each run applies the fraction to its own ``--max-iterations``, and
 a resumed run enforces on its own schedule. The time fraction is always of the
-run's own ``--time-limit``.
+run's own ``--time-limit``. A run that stops before the study's fraction stops
+with integrality still relaxed; the run that resumes it enforces it.
 
 Two things this does not cover:
 
