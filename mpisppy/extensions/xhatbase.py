@@ -92,6 +92,10 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                 keys are comms (i.e., tree nodes); values are dicts with keys
                 that are scenario names and values that are ranks
     """
+
+    #: Nothing to carry across a resume. comms and _EFs are rebuilt from
+    #: the models on a resumed run.
+    checkpoint_stateless = True
     def __init__(self, opt):
         super().__init__(opt)
         self.cylinder_rank = self.opt.cylinder_rank

@@ -1,9 +1,10 @@
 # Checkpoint / Resume for mpi-sppy — Design
 
-Status: **phases 1a, 4 and 2 implemented** — a synchronous PH hub, on any
+Status: **phases 1a, 4, 2 and 3 implemented** — a synchronous PH hub, on any
 number of ranks per cylinder, alone or in a wheel with spokes, over plain
-scenarios, proper bundles or stoch-ADMM. Phase 1b is retired (its two test
-instances landed in phase 2). Phases 3 and 5 remain design; phase 6 is
+scenarios, proper bundles or stoch-ADMM, with stateful extensions and
+convergers carrying their own state across the stop. Phase 1b is retired (its
+two test instances landed in phase 2). Phase 5 remains design; phase 6 is
 unplanned. See §11. Where this document and the shipped code have disagreed,
 the code is authoritative and this document has been corrected — §8 in
 particular records a design that was tried, failed, and was replaced. Scope:
@@ -414,7 +415,12 @@ Consequences:
 
 - **Model-attached tracker state (`fixer`) rides in the dilled model** for free —
   consistent with the nonant fixedness it pairs with (§5.1). Under leaf-rebuild it
-  must be gathered explicitly.
+  must be gathered explicitly. **"For free" turned out to mean "free of
+  serialization", not "safe":** `Fixer.populate` runs from `post_iter0` on a
+  resumed run as well and zeroed every restored count, so the extension had to be
+  told the run is resuming (Phase 3). The general lesson is that a hook which
+  *initializes* model-attached state has to be resume-aware even though the state
+  itself needs no serialization work.
 - **Extension-object state is never on a model**, so it needs a serialization
   contract regardless of backend. The `Extension` base has none today; add
   `checkpoint_state()` / `restore_state()` (no-ops by default; implemented by rho
@@ -1186,11 +1192,93 @@ as a branch stacked on the 1a PR.
     `test_checkpoint_cylinders.py` (Phase 4) and this file are both wired into
     `run_coverage.bash` and `test_pr_and_main.yml` here; Phase 4 had left its
     file unwired.
-- **Phase 3 — Extension-object state contract.** `checkpoint_state`/`restore_state`
-  on `Extension`; implement for rho updaters, `fixer`, `slammer`, convergers.
-  (Model-attached `fixer` counter and nonant fixedness ride in the dill.) Test: PH
-  + norm-rho-updater, PH + `fixer`, PH + `slammer` each resume with state intact
-  and consistent with variable fixedness.
+- **Phase 3 — Extension-object state contract. Implemented.**
+  `checkpoint_state`/`restore_state` on `Extension` **and on `Converger`** (no-ops
+  by default), aggregated by `gather_extension_state` into the hub leaf, keyed by
+  class name — names are what survives a resume, and name keying is also what lets
+  a resume with a different extension set report what it could not restore instead
+  of dropping it silently. `MultiExtension` is flattened away as the container it
+  is. Implemented for `NormRhoUpdater`, `MultRhoUpdater`, `Dyn_Rho_extension_base`
+  (so `sep_rho`/`sensi_rho`/`grad_rho` at once), `fixer`, `slammer`,
+  `wtracker_extension` (the last `wlen + 1` W
+  sets, which its end-of-run report reads) and `SepRho`'s cost coefficients
+  (read from the objective as written, which a resumed objective no longer
+  is). `Converger` has the same `checkpoint_stateless` declaration as
+  `Extension`, and all three shipped convergers make it:
+  `norm_rho_converger` and `fracintsnotconv` recompute everything each
+  iteration, and `primal_dual_converger`'s one piece of history, `prev_xbars`,
+  is what its constructor reads from the resumed models.
+
+  **Restore runs at the end of `Iter0`, not in the resume branch**, and the
+  ordering is the whole trick: extensions rebuild their bookkeeping from the
+  models in `pre_iter0`/`post_iter0` (`Fixer.populate` and `Slammer.pre_iter0`
+  both do), and the converger is not constructed until the last few lines of
+  `Iter0`. Restoring any earlier is restoring into something that is about to be
+  overwritten, or does not exist yet.
+
+  `integer_relax_then_enforce` declares itself stateless: whether the integers
+  are relaxed is a model transformation, so it rides in the dill, and its
+  `pre_iter0` reads the state back from the reloaded models. When it enforces
+  is a fraction of a budget. With `--stop-at-iteration-number` the iteration
+  fraction is of the study (iterations `0 .. stop_at`), so a resumed run
+  enforces where an uninterrupted one would with nothing carried; without it,
+  or where the loop does not honour that bound (APH, which never sets
+  `_stop_iteration`), the only budget is the run's own `--max-iterations`. The time fraction is
+  always of the run's own `--time-limit`, which is a per-job wall clock.
+  Carrying the first run's budget instead was rejected: it retraces a killed
+  run resubmitted for its remaining iterations, but for a study planned as
+  several shorter runs it would enforce at a fraction of the first run.
+
+  Two defects turned up that were not divergences but outright breakage, and
+  each is worth recording because neither was visible from the design:
+
+  1. **`--sep-rho`, `--sensi-rho` and `--grad-rho` crashed on the first iteration
+     after a resume**, with a bare `KeyError` out of `WTracker.W_diff`, which
+     indexes a W history the resumed run did not have. The checkpoint now carries
+     the three entries that call reads — not the whole tracker, which grows by one
+     entry per iteration. `--sep-rho` then crashed one line later, at its first
+     rho recompute: it reads its cost coefficients from the objective as the
+     user wrote it, and on a resumed model that objective holds W and the
+     quadratic prox. They now cross the checkpoint by scenario name.
+  2. **`Fixer.populate` zeroed the very counts the dill had just restored.** §5.5
+     says the fixer's `conv_iter_count` "rides in the dilled model for free"; it
+     does, and then the fixer's own `post_iter0` hook — which runs on a resumed run
+     too — reset every countdown. Model-attached state is not automatically safe;
+     it is only safe from *serialization*.
+
+  A third is a divergence rather than a break, and it generalizes: `slammer`,
+  `relaxed_ph_fixer` and `reduced_costs_fixer` each build a "modeler fixed this"
+  set at `pre_iter0` by reading `xvar.fixed`. On a resumed run every mid-run
+  fixing is already applied, so each filed its own earlier fixings as the
+  modeler's — permanently off limits, and for `reduced_costs_fixer` also missing
+  from the denominator of its fix-fraction target. They now ask
+  `SPOpt.was_initially_fixed`, which is the `_initial_fixed_varibles` baseline
+  §9 item 11 already restores by name. The last two are outside the phase's
+  named scope but have the identical defect and the identical one-line fix.
+
+  Tests: `test_checkpoint_extensions.py` — A/B resume with `NormRhoUpdater`,
+  `MultRhoUpdater`, `SepRho`, `fixer` (on `sizes`), `slammer`,
+  `integer_relax_then_enforce` (on `sizes`, stopped once in each integrality
+  state, with a probe extension recording what the subproblems looked like
+  *during* the resumed leg's iterations — the end of the run cannot tell a
+  re-relaxed leg from a clean one; one more class stops and resumes under
+  `--stop-at-iteration-number` and checks it enforces at the uninterrupted
+  run's iteration)
+  and `primal_dual_converger` (stopping at the uninterrupted run's iteration,
+  with no warning). The farmer cases assert bit-identity. `sizes` is a MIP and
+  can resume onto an alternate optimum, so there the fixer case compares what
+  ends up fixed and the relax-then-enforce cases the objective. The stateful
+  cases also check the carried state by name. Plus contract unit tests for the
+  aggregation, the flattening, and a resume with a changed extension or
+  converger set. Each fix was verified
+  to be load-bearing by reverting it and watching the matching test fail.
+
+  **Not done here: the same contract on the spoke side.** §5.5 says the contract
+  serves hub and xhatter extensions alike, and the methods are on the base class
+  so it does — but the spoke's incumbent file does not gather them, because no
+  xhatter extension currently holds state that a resume needs. The one that will
+  is the spoke cursor, and that is Phase 5, which should carry the gathering with
+  it rather than shipping an unused mechanism now.
 - **Phase 4 — Cylinders / spokes.**
   - *The write hook — implemented.* `Extension.maybe_checkpoint`, called
     directly by `iterk_loop` (after every `enditer`) and once per pass by each

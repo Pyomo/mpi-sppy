@@ -23,6 +23,11 @@ import mpisppy.utils.sputils as sputils
 
 class Gapper(mpisppy.extensions.extension.Extension):
 
+    #: Nothing to carry across a resume. The adaptive mipgap it sets lives
+    #: on the opt object's solver-options layer, not here; this object
+    #: only reads its schedule.
+    checkpoint_stateless = True
+
     def __init__(self, ph):
         self.ph = ph
         self.cylinder_rank = self.ph.cylinder_rank

@@ -16,6 +16,8 @@ import mpisppy.MPI as MPI
 import numpy as np
 
 class NormRhoConverger(mpisppy.convergers.converger.Converger):
+    #: Everything it compares is recomputed from the current iterate.
+    checkpoint_stateless = True
 
     def __init__(self, ph):
         if 'norm_rho_converger_options' in ph.options and \

@@ -19,6 +19,10 @@ class CoeffRho(mpisppy.extensions.extension.Extension):
     Determine rho as a linear function of the objective coefficient
     """
 
+    #: Nothing to carry across a resume. Sets rho once from the objective
+    #: coefficients and keeps nothing.
+    checkpoint_stateless = True
+
     def __init__(self, ph):
         self.ph = ph
         self.multiplier = 1.0

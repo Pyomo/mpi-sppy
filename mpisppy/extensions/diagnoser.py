@@ -23,6 +23,10 @@ class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
     Args:
         ph (PH object): the calling object
     """
+
+    #: Nothing to carry across a resume. Reports on each iteration from
+    #: the models; remembers nothing between them.
+    checkpoint_stateless = True
     def __init__(self, ph):
         dirname = ph.options["diagnoser_options"]["diagnoser_outdir"]
         if os.path.exists(dirname):

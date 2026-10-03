@@ -59,6 +59,9 @@ def add_options_to_config(cfg):
 class WXBarWriter(mpisppy.extensions.extension.Extension):
     """ Extension class for writing the W values
     """
+    #: It holds only its configuration; what it writes is the current W.
+    checkpoint_stateless = True
+
     def __init__(self, ph):
 
         assert 'cfg' in ph.options

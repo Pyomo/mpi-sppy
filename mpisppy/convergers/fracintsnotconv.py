@@ -28,6 +28,10 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
         comms (dict): key is node name; val is a comm object
         rank (int): mpi process rank
     """
+
+    #: Everything it compares is recomputed from the current iterate.
+    checkpoint_stateless = True
+
     def __init__(self, phb):
         options = phb.options
         self.name = "fractintsnotconv"

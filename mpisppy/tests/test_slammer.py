@@ -114,7 +114,25 @@ def _make_opt(scenarios, slammer_options):
         options={"slammer_options": slammer_options},
     )
     opt.local_scenario_names = list(opt.local_scenarios.keys())
+    _attach_initial_fixed_baseline(opt)
     return opt
+
+
+def _attach_initial_fixed_baseline(opt):
+    """Mirror SPOpt's record of which nonants were fixed when the run started.
+
+    The Slammer asks this rather than reading ``xvar.fixed``, because on a run
+    resumed from a checkpoint every mid-run fixing is already applied and
+    ``xvar.fixed`` would file the extension's own earlier slams as the
+    modeler's. Captured here at construction, which is when SPOpt captures it.
+    """
+    initially_fixed = ComponentSet()
+    for scenario in opt.local_scenarios.values():
+        for var in scenario._mpisppy_data.nonant_indices.values():
+            if var.fixed:
+                initially_fixed.add(var)
+    opt._initial_fixed_varibles = initially_fixed
+    opt.was_initially_fixed = initially_fixed.__contains__
 
 
 def _build(directives, scenario_specs, slam_start_iter=1, iters_between_slams=1,

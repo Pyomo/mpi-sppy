@@ -1257,6 +1257,45 @@ class PHBase(mpisppy.spopt.SPOpt):
         if release is not None:
             release(models)
 
+    def _restore_extension_state_if_resuming(self):
+        """Hand every extension and the converger their checkpointed state.
+
+        Called at the very end of ``Iter0``, and the timing is the whole
+        point. Extensions rebuild their bookkeeping from the models in
+        ``pre_iter0``/``post_iter0`` -- ``Fixer.populate`` and
+        ``Slammer.pre_iter0`` both do -- so restoring any earlier would simply
+        have it overwritten by setup that thinks the run is starting. The
+        converger is later still: ``Iter0`` constructs it a few lines above
+        here, so this is the first moment it exists to restore into.
+
+        A no-op on a run that is not resuming, and on a resumed run whose
+        extensions have no state of their own.
+        """
+        if not self._resumed_from_checkpoint:
+            return
+        state = self._checkpoint_leaf_state.get("extension_state")
+        rank0 = self.cylinder_rank == 0
+        # Agreed, like every other step of a restore: an extension puts its
+        # state back on the models *this* rank owns, so one that cannot is a
+        # refusal one rank makes alone -- and the iteration waiting after this
+        # is collective. An extension's restore_state must therefore not be
+        # collective itself; the hook says so.
+        messages = checkpointing.run_agreed(
+            self, lambda: checkpointing.restore_extension_state(self, state),
+            "hand their extensions the checkpointed state, so none of them "
+            "resumes")
+        for message in messages:
+            global_toc(f"WARNING: {message}", rank0)
+        if not checkpointing.converger_state_is_carried(self, state):
+            global_toc(
+                "WARNING: this run's converger does not carry state across a "
+                "checkpoint, so it starts fresh on this resumed run. A "
+                "converger that accumulates history across iterations may "
+                "therefore terminate the run at a different iteration than "
+                "an uninterrupted run would. Implement checkpoint_state and "
+                "restore_state on the converger to fix this.",
+                rank0)
+
     def _restore_from_checkpoint_if_resuming(self):
         """Splice a checkpoint's scenario models into this run, if resuming.
 
@@ -1377,16 +1416,10 @@ class PHBase(mpisppy.spopt.SPOpt):
                    f"(iteration {self._resume_iteration})",
                    self.cylinder_rank == 0)
 
-        if self.ph_converger is not None:
-            # No converger state rides in a checkpoint; Iter0 constructs the
-            # converger fresh, downstream of this splice, so one that
-            # accumulates history restarts empty at iteration N+1.
-            global_toc(
-                "WARNING: converger state is not part of a checkpoint. The "
-                "converger starts fresh on this resumed run, so one that "
-                "accumulates history across iterations may terminate the run "
-                "at a different iteration than an uninterrupted run would.",
-                self.cylinder_rank == 0)
+        # The converger warning is not issued here: the converger object does
+        # not exist yet (Iter0 constructs it downstream of this splice), so
+        # whether its state can be carried is not yet knowable. See
+        # _restore_extension_state_if_resuming, which runs once it does.
 
     def Iter0(self):
         """ Create solvers and perform the initial PH solve (with no dual
@@ -1599,6 +1632,11 @@ class PHBase(mpisppy.spopt.SPOpt):
             self._attach_PH_to_objective_after_iter0()
 
         self.reenable_W_and_prox()
+
+        # Last thing in Iter0, because everything an extension or converger
+        # rebuilds from the models on the way through has now run and would
+        # otherwise overwrite what is restored here.
+        self._restore_extension_state_if_resuming()
 
         # Clear the dynamic-overrides overlay at the iter0→iterk
         # transition: static iterk options come from the layer fold,

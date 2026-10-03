@@ -2775,6 +2775,8 @@ class TestVaridToNonantIndexRestored(unittest.TestCase):
                         f"varid_to_nonant_index after the resume; the map "
                         f"still holds the writing process's ids")
                 self.assertEqual(varids[id(var)], ndn_i)
+            self.assertEqual(len(varids), len(s._mpisppy_data.nonant_indices),
+                             msg=f"{sname}: stale ids were left behind")
 
     def test_the_consumer_that_crashes_does_not(self):
         """is_zero_prob indexes the map rather than testing membership, so a

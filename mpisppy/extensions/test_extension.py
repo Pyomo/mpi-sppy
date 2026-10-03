@@ -17,6 +17,10 @@ class TestExtension(mpisppy.extensions.extension.Extension):
     Args:
         spo (SPOpt object): the calling object
     """
+
+    #: Nothing to carry across a resume. A hook-order probe with no state
+    #: that outlives an iteration.
+    checkpoint_stateless = True
     def __init__(self, spo):
         super().__init__(spo)
         self.who_is_called = set()
