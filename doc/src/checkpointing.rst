@@ -594,13 +594,14 @@ and writing nothing.
 
 **Extension and converger state is part of a checkpoint.** Extensions that
 accumulate their own state across iterations carry it across a stop: the rho
-updaters (``--norm-rho``, ``--mult-rho``, ``--sep-rho``, ``--sensi-rho``,
-``--grad-rho``), ``fixer``, ``slammer`` and the W tracker (``--wtracker``). So
-a resumed run using one of them follows the same trajectory an uninterrupted
-run would, rather than merely continuing correctly from the right models. The
-shipped convergers need nothing carried: each either recomputes what it
-compares from the current iterate or, like the primal-dual converger, rebuilds
-it correctly from the resumed models.
+updaters (``--use-norm-rho-updater``, ``--sep-rho``, ``--sensi-rho``,
+``--grad-rho``, and ``MultRhoUpdater`` when a driver attaches it), the fixer
+(``--fixer``), the slammer (``--slamming-directives-file``) and the W tracker
+(``--wtracker``). So a resumed run using one of them follows the same
+trajectory an uninterrupted run would, rather than merely continuing correctly
+from the right models. The shipped convergers need nothing carried: each
+either recomputes what it compares from the current iterate or, like the
+primal-dual converger, rebuilds it correctly from the resumed models.
 
 The rho-setting extensions do not *recompute* rho at the resume itself: the
 checkpointed rho -- including whatever adaptation had happened by the write --

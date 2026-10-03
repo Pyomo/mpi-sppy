@@ -16,8 +16,9 @@ spoke communication is bypassed here: reduced costs are passed in directly so
 the fix/unfix decision logic can be checked deterministically without MPI or a
 solver.
 
-Note: pre_iter0() classifies any *already fixed* variable as modeler-fixed (to
-be left alone forever).  So to exercise the unfix paths we fix the
+Note: pre_iter0() classifies a variable that was fixed when the run started
+as modeler-fixed (to be left alone forever); _build takes that baseline from
+the specs' 'modeler_fixed' flags. To exercise the unfix paths we fix the
 "heuristic-fixed" variables only after pre_iter0(), exactly as the real
 iteration loop would.
 """
@@ -249,6 +250,49 @@ class Test_skips_and_guards(unittest.TestCase):
         # would otherwise be released stays fixed (no unfixing happens)
         ext.reduced_costs_fixing(np.array([np.nan]))
         self.assertTrue(v[0].fixed)
+
+
+class Test_fixings_from_before_a_resume(unittest.TestCase):
+    """A resumed run arrives with this extension's mid-run fixings applied.
+
+    pre_iter0 must classify a nonant by whether it was fixed when the run
+    started, not by whether it is fixed now; otherwise every fixing made
+    before the stop is filed as the modeler's and never unfixed again. The
+    resume is simulated by fixing a variable after the baseline was taken and
+    running pre_iter0 again, which is the state a resumed run's pre_iter0
+    sees.
+    """
+
+    def test_reduced_costs_fixer(self):
+        ext, v = _build([
+            {"lb": 0, "ub": 10, "value": 0.0, "xbar": 0.0, "integer": True},
+            {"lb": 0, "ub": 10, "value": 3.0, "xbar": 3.0, "integer": True,
+             "modeler_fixed": True},
+        ])
+        v[0].fix(0.0)       # fixed by this extension before the stop
+        ext.pre_iter0()
+        self.assertNotIn((NDN, 0), ext._modeler_fixed_nonants,
+                         msg="its own earlier fixing was filed as the "
+                             "modeler's")
+        self.assertIn((NDN, 0), ext._integer_nonants,
+                      msg="its own earlier fixing dropped out of the "
+                          "denominator of the fix-fraction target")
+        self.assertIn((NDN, 1), ext._modeler_fixed_nonants)
+
+    def test_relaxed_ph_fixer(self):
+        from mpisppy.extensions.relaxed_ph_fixer import RelaxedPHFixer
+        rc_ext, v = _build([
+            {"lb": 0, "ub": 10, "value": 0.0, "xbar": 0.0},
+            {"lb": 0, "ub": 10, "value": 3.0, "xbar": 3.0,
+             "modeler_fixed": True},
+        ])
+        ext = RelaxedPHFixer(rc_ext.opt)
+        v[0].fix(0.0)       # fixed by this extension before the stop
+        ext.pre_iter0()
+        self.assertNotIn((NDN, 0), ext._modeler_fixed_nonants,
+                         msg="its own earlier fixing was filed as the "
+                             "modeler's")
+        self.assertIn((NDN, 1), ext._modeler_fixed_nonants)
 
 
 class Test_fix_decisions_maximize(unittest.TestCase):

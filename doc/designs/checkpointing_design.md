@@ -1282,7 +1282,7 @@ as a branch stacked on the 1a PR.
   of dropping it silently. `MultiExtension` is flattened away as the container it
   is. Implemented for `NormRhoUpdater`, `MultRhoUpdater`, `Dyn_Rho_extension_base`
   (so `sep_rho`/`sensi_rho`/`grad_rho` at once), `fixer`, `slammer`,
-  `integer_relax_then_enforce`, `wtracker_extension` (the last `wlen + 1` W
+  `wtracker_extension` (the last `wlen + 1` W
   sets, which its end-of-run report reads) and `SepRho`'s cost coefficients
   (read from the objective as written, which a resumed objective no longer
   is). `Converger` has the same `checkpoint_stateless` declaration as
@@ -1298,18 +1298,14 @@ as a branch stacked on the 1a PR.
   `Iter0`. Restoring any earlier is restoring into something that is about to be
   overwritten, or does not exist yet.
 
-  Three defects turned up that were not divergences but outright breakage, and
-  each is worth recording because none was visible from the design:
+  `integer_relax_then_enforce` declares itself stateless: whether the integers
+  are relaxed is a model transformation, so it rides in the dill, and its
+  `pre_iter0` reads the state back from the reloaded models.
 
-  1. **`varid_to_nonant_index` came back full of dead ids.** It maps
-     `id(vardata) → (ndn, i)` and lives on the model, so dill returns it intact
-     and meaningless — the integers are the addresses of the objects that were
-     serialized. The same identity-keying hazard as §9 item 11 and §8.2 item 3,
-     and the one that hid longest, because the rho setter is skipped on a resume
-     and every other consumer is optional; the fixer was the first to look
-     something up and get a `KeyError` with an eleven-digit number in it. The
-     resume branch now rebuilds it.
-  2. **`--sep-rho`, `--sensi-rho` and `--grad-rho` crashed on the first iteration
+  Two defects turned up that were not divergences but outright breakage, and
+  each is worth recording because neither was visible from the design:
+
+  1. **`--sep-rho`, `--sensi-rho` and `--grad-rho` crashed on the first iteration
      after a resume**, with a bare `KeyError` out of `WTracker.W_diff`, which
      indexes a W history the resumed run did not have. The checkpoint now carries
      the three entries that call reads — not the whole tracker, which grows by one
@@ -1317,27 +1313,13 @@ as a branch stacked on the 1a PR.
      rho recompute: it reads its cost coefficients from the objective as the
      user wrote it, and on a resumed model that objective holds W and the
      quadratic prox. They now cross the checkpoint by scenario name.
-  3. **`Fixer.populate` zeroed the very counts the dill had just restored.** §5.5
+  2. **`Fixer.populate` zeroed the very counts the dill had just restored.** §5.5
      says the fixer's `conv_iter_count` "rides in the dilled model for free"; it
      does, and then the fixer's own `post_iter0` hook — which runs on a resumed run
      too — reset every countdown. Model-attached state is not automatically safe;
      it is only safe from *serialization*.
 
-  4. **A resumed run relaxed integrality the study had already enforced.**
-     `integer_relax_then_enforce` applies a Pyomo transformation, so the
-     relaxation itself rides in the dill; what did not ride was the
-     extension's record of whether it had happened, and the extension is
-     rebuilt on a resumed run. `pre_iter0` then applied the transformation a
-     second time, to models that came back from the checkpoint already
-     enforced — so the resumed run solved relaxed subproblems where the
-     uninterrupted one solved integral ones, and enforced again later from a
-     different iterate. The flag is now checkpointed and `pre_iter0` leaves a
-     resumed run's models alone, the checkpoint being the authority on which
-     state they are in. This is a different shape from the three above: not
-     state that biases a decision, but state without which a *model
-     transformation* is silently reapplied.
-
-  A fifth is a divergence rather than a break, and it generalizes: `slammer`,
+  A third is a divergence rather than a break, and it generalizes: `slammer`,
   `relaxed_ph_fixer` and `reduced_costs_fixer` each build a "modeler fixed this"
   set at `pre_iter0` by reading `xvar.fixed`. On a resumed run every mid-run
   fixing is already applied, so each filed its own earlier fixings as the
@@ -1352,10 +1334,14 @@ as a branch stacked on the 1a PR.
   `integer_relax_then_enforce` (on `sizes`, stopped once in each integrality
   state, with a probe extension recording what the subproblems looked like
   *during* the resumed leg's iterations — the end of the run cannot tell a
-  re-relaxed leg from a clean one) and `primal_dual_converger` (stopping at
-  the uninterrupted run's iteration, with no warning), each asserting
-  both bit-identity *and* the specific state by name, plus contract unit tests for the aggregation, the flattening,
-  and a resume with a changed extension or converger set. Each fix was verified
+  re-relaxed leg from a clean one; this one pins the stateless declaration)
+  and `primal_dual_converger` (stopping at the uninterrupted run's iteration,
+  with no warning). The farmer cases assert bit-identity. `sizes` is a MIP and
+  can resume onto an alternate optimum, so there the fixer case compares what
+  ends up fixed and the relax-then-enforce cases the objective. The stateful
+  cases also check the carried state by name. Plus contract unit tests for the
+  aggregation, the flattening, and a resume with a changed extension or
+  converger set. Each fix was verified
   to be load-bearing by reverting it and watching the matching test fail.
 
   **Also here: the dual cylinders' own PH state.** `relaxed_ph` and `ph_dual`

@@ -1552,55 +1552,6 @@ class TestFilenameSanitizing(unittest.TestCase):
         checkpointing.check_filename_collisions(SCENARIO_NAMES)
 
 
-@unittest.skipIf(not solver_available,
-                 "no solver is available for the A/B resume harness")
-class TestVaridToNonantIndexIsRebuilt(unittest.TestCase):
-    """The id-keyed map on the model must be rebuilt after the swap.
-
-    `varid_to_nonant_index` maps `id(vardata)` to `(ndn, i)` and lives on the
-    scenario model, so dill brings it back -- and every key in it is dead. The
-    integers are the addresses of the objects that were serialized, which say
-    nothing about the objects that came out, so the dict survives the round
-    trip looking perfectly intact while mapping nothing at all.
-
-    It is the same identity-keying hazard as the initially-fixed baseline
-    above, and the one that hid longest: the rho setter is skipped on a resume
-    and the other consumers are optional, so nothing tripped over it until the
-    fixer -- which looks up every one of its variables this way -- was first
-    resumed. Anything that hands it an id from a live variable gets a KeyError
-    with an eleven-digit number in it and no clue where the number came from.
-    """
-
-    def setUp(self):
-        self._tmp = tempfile.TemporaryDirectory()
-        self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
-
-    def tearDown(self):
-        self._tmp.cleanup()
-
-    def test_every_live_nonant_id_resolves_after_a_resume(self):
-        stopped = _make_ph(_options(1, ckpt_dir=self.ckpt_dir))
-        stopped.ph_main()
-
-        resumed = _make_ph(_options(2, resume_from=self.ckpt_dir))
-        resumed.PH_Prep()
-        resumed.Iter0()
-        self.assertTrue(resumed._resumed_from_checkpoint)
-
-        for sname, s in resumed.local_scenarios.items():
-            mapping = s._mpisppy_data.varid_to_nonant_index
-            for ndn_i, var in s._mpisppy_data.nonant_indices.items():
-                self.assertIn(
-                    id(var), mapping,
-                    msg=f"{sname}: the reloaded model's own nonant is not in "
-                        f"its varid map, so anything keyed by variable id -- "
-                        f"a rho setter, the fixer -- raises KeyError")
-                self.assertEqual(mapping[id(var)], ndn_i)
-            self.assertEqual(len(mapping),
-                             len(s._mpisppy_data.nonant_indices),
-                             msg=f"{sname}: stale ids were left behind")
-
-
 class TestFixedNonantBaseline(unittest.TestCase):
     """The initially-fixed baseline must survive the model swap, by name.
 
@@ -3335,6 +3286,8 @@ class TestVaridToNonantIndexRestored(unittest.TestCase):
                         f"varid_to_nonant_index after the resume; the map "
                         f"still holds the writing process's ids")
                 self.assertEqual(varids[id(var)], ndn_i)
+            self.assertEqual(len(varids), len(s._mpisppy_data.nonant_indices),
+                             msg=f"{sname}: stale ids were left behind")
 
     def test_the_consumer_that_crashes_does_not(self):
         """is_zero_prob indexes the map rather than testing membership, so a
@@ -3384,15 +3337,11 @@ class TestIntegerRelaxThenEnforceResume(unittest.TestCase):
         resumed.pre_iter0()
 
         resumed.integer_relaxer.apply_to.assert_not_called()
+        self.assertTrue(resumed._integers_relaxed,
+                        msg="a resumed run must know its models are relaxed")
         self.assertIs(m._relaxed_integer_vars, undo_map,
                       msg="the undo map was replaced, so unrelaxing would "
                           "restore nothing")
-        # Which state the models are in is checkpointed extension state on
-        # this branch, restored after this hook, rather than inferred from
-        # whether the Suffix is present.
-        resumed.restore_state(ext.checkpoint_state())
-        self.assertTrue(resumed._integers_relaxed,
-                        msg="a resumed run must know its models are relaxed")
 
     def test_the_integrality_actually_comes_back(self):
         m = self._model()

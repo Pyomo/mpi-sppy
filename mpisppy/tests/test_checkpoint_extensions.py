@@ -740,16 +740,14 @@ class _RelaxationProbe(Extension):
 class _IntegerRelaxMixin(_ABMixin):
     """Relax-then-enforce across a stop, on a MIP.
 
-    The relaxation is a model transformation, so it rides in the dill; the
-    extension's record of whether it has happened does not, and the extension
-    is rebuilt on a resumed run. Before this state was carried, ``pre_iter0``
-    applied the transformation again to models that came back from the
-    checkpoint -- so a study that had already enforced integrality went back
-    to solving relaxed subproblems, and enforced a second time later from a
-    different iterate.
+    The extension keeps no checkpointed state: the relaxation is a model
+    transformation, so it rides in the dill, and ``pre_iter0`` reads which
+    state the reloaded models are in from them. These classes pin that a
+    resumed run neither relaxes again what the study had enforced nor
+    forgets that it is still relaxed.
 
     The ratio decides which state the checkpoint is taken in, and both are
-    worth pinning: ``0.25`` enforces before the stop, ``1.1`` puts both the
+    worth pinning: ``0.1`` enforces before the stop, ``1.1`` puts both the
     iteration and the time condition out of reach so the run is still relaxed
     when it writes.
     """
@@ -771,10 +769,6 @@ class _IntegerRelaxMixin(_ABMixin):
         from mpisppy.extensions.integer_relax_then_enforce import (
             IntegerRelaxThenEnforce)
         return [IntegerRelaxThenEnforce, _RelaxationProbe]
-
-    def _extension_state(self, generation):
-        leaf = _read_leaf(self.ckpt_dir, generation)
-        return leaf["extension_state"]["extensions"]["IntegerRelaxThenEnforce"]
 
     def assert_objective_agrees(self, reference, _stopped, resumed):
         """The comparison a MIP supports, in place of bit-identity.
@@ -821,8 +815,6 @@ class TestIntegerRelaxThenEnforceEnforcedAtTheStop(_IntegerRelaxMixin,
         self.assertEqual(_relaxed_models(stopped), set(),
                          msg="the stopped run was still relaxed, so the "
                              "checkpoint was not taken after enforcement")
-        self.assertEqual(self._extension_state(self.STOP),
-                         {"integers_relaxed": False})
 
     def test_a_resumed_run_does_not_re_relax_what_was_enforced(self):
         """Every iteration of the resumed leg solves what the study enforced.
@@ -867,8 +859,6 @@ class TestIntegerRelaxThenEnforceRelaxedAtTheStop(_IntegerRelaxMixin,
     def test_the_stop_really_did_land_while_relaxed(self):
         _, stopped, _ = self.run_ab()
         self.assertEqual(_relaxed_models(stopped), set(stopped.local_scenarios))
-        self.assertEqual(self._extension_state(self.STOP),
-                         {"integers_relaxed": True})
 
     def test_a_resumed_run_comes_back_relaxed_and_knows_it(self):
         """The models keep the relaxation; the extension has to agree.
