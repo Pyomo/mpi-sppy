@@ -18,47 +18,54 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
         enforcing the integality constraints after some condition.
     """
 
+    #: Whether the integers are relaxed is a model transformation, so it rides
+    #: in the dilled models, and pre_iter0 reads it back from them on a resume.
+    checkpoint_stateless = True
+
     def __init__(self, opt):
         super().__init__(opt)
         self.integer_relaxer = pyo.TransformationFactory('core.relax_integer_vars')
         options = opt.options.get("integer_relax_then_enforce_options", {})
         # fraction of iterations or time to spend in relaxed mode
         self.ratio = options.get("ratio", 0.5)
-        # Whether the subproblems are relaxed right now. On a resumed run the
-        # models arrive relaxed or not according to what the study did before
-        # the stop, and restore_state puts this back in step with them.
-        self._integers_relaxed = False
 
 
     def pre_iter0(self):
-        if self.opt._resumed_from_checkpoint:
-            # The reloaded models already carry the study's relaxation state.
-            # Relaxing them again would undo an enforcement the study had
-            # already made, so the resumed run would solve relaxed
-            # subproblems where the uninterrupted run solved integral ones --
-            # and enforce a second time later, from a different iterate. The
-            # flag that says which state they are in is restored at the end of
-            # Iter0, which is after this hook by design.
+        if getattr(self.opt, "_resumed_from_checkpoint", False):
+            # The reloaded models carry whatever this extension had already
+            # done to them, and Pyomo keeps the undo map in a
+            # _relaxed_integer_vars Suffix on each one. Relaxing a second time
+            # replaces that Suffix with an empty one, so _unrelax_integers
+            # restores nothing while still announcing that it enforced
+            # integrality, and the run answers the relaxation. The models say
+            # which state they are in: the transformation deletes the Suffix
+            # when it undoes itself.
+            self._integers_relaxed = any(
+                hasattr(s, "_relaxed_integer_vars")
+                for s in self.opt.local_scenarios.values())
+            if self._integers_relaxed:
+                global_toc(f"{self.__class__.__name__}: resuming with "
+                           "integrality still relaxed",
+                           self.opt.cylinder_rank == 0)
+            else:
+                # Either the run that wrote the checkpoint had already
+                # enforced integrality, in which case there is nothing left to
+                # do, or this extension was added to a command whose
+                # checkpoint was written without it. The models are this
+                # extension's only record, so the two are indistinguishable
+                # from here, and relaxing now would change the algorithm
+                # mid-study.
+                global_toc(f"WARNING: {self.__class__.__name__}: the "
+                           "checkpointed models are not relaxed, so "
+                           "integrality stays enforced for this leg. If this "
+                           "extension was not on the run that wrote the "
+                           "checkpoint, it does nothing here.",
+                           self.opt.cylinder_rank == 0)
             return
         global_toc(f"{self.__class__.__name__}: relaxing integrality constraints", self.opt.cylinder_rank == 0)
         for s in self.opt.local_scenarios.values():
             self.integer_relaxer.apply_to(s) 
         self._integers_relaxed = True
-
-    def checkpoint_state(self):
-        """Whether the subproblems were relaxed when the checkpoint was taken.
-
-        The relaxation itself is a model transformation, so it rides in the
-        dill with the models. What no model carries is this object's record of
-        it, and a resumed run builds a fresh extension: one that believed the
-        integers were still relaxed would try to undo a relaxation that is not
-        there, and one that believed they were enforced would leave a relaxed
-        study relaxed for the rest of its life.
-        """
-        return {"integers_relaxed": self._integers_relaxed}
-
-    def restore_state(self, state):
-        self._integers_relaxed = state["integers_relaxed"]
 
     def _unrelax_integers(self):
         for sub in self.opt.local_scenarios.values():
