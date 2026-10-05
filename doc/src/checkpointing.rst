@@ -422,7 +422,8 @@ Two things this does not cover:
   ``checkpoint_state()``/``restore_state(state)``, or
   ``checkpoint_stateless = True``. That matters more than it sounds: a converger decides when
   the run stops, so one that accumulates history can terminate a resumed run at a
-  different iteration than an uninterrupted one.
+  different iteration than an uninterrupted one. See
+  :ref:`checkpointing_your_converger`.
 
 If you resume with a *different* set of extensions than the checkpoint was
 written with, that is allowed -- the hub's iterate is still valid -- and the run
