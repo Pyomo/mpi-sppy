@@ -132,3 +132,22 @@ Unfortunately, the word "converger" is also used to describe spokes that return 
 for the purpose of measuring overall convergence (as opposed to convergence within the hub
 algorithm.)  This word is used fairly deep in the code to distinguish spokes
 that return bounds.
+
+.. _checkpointing_your_converger:
+
+Checkpointing your converger
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you write your own converger and use :ref:`checkpointing`, it has to say
+what happens to its state across a stop and a resume, the same way an
+extension does (see :ref:`checkpointing_your_extension`). A converger that
+keeps history between iterations, such as an earlier iterate it compares
+against, implements ``checkpoint_state()`` and ``restore_state(state)``. One
+that recomputes everything from the current iterate sets
+``checkpoint_stateless = True`` on its class. The convergers shipped with
+mpi-sppy do the latter.
+
+A converger that does neither starts fresh on a resumed run, and the run says
+so in the log. Because the converger decides when the run stops, a fresh
+start can end a resumed run at a different iteration than an uninterrupted
+run would.

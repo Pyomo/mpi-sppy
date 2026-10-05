@@ -1348,7 +1348,9 @@ class PHBase(mpisppy.spopt.SPOpt):
                 "converger that accumulates history across iterations may "
                 "therefore terminate the run at a different iteration than "
                 "an uninterrupted run would. Implement checkpoint_state and "
-                "restore_state on the converger to fix this.",
+                "restore_state on the converger, or set "
+                "checkpoint_stateless = True on its class if it keeps no "
+                "state, to fix this.",
                 rank0)
 
     def _restore_from_checkpoint_if_resuming(self):

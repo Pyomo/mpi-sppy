@@ -129,7 +129,7 @@ If your extension keeps no such state, say so instead:
 Do one or the other. A resumed run names every attached extension that has
 done neither, because it cannot tell "keeps nothing" from "nobody decided".
 The declaration is not inherited: a subclass of a stateless extension has to
-make its own. A converger takes the same two answers, with the same methods.
+make its own.
 
 PH extensions
 -------------
