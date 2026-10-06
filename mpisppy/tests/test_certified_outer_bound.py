@@ -1152,6 +1152,36 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
         # and the load failure costs tightness, not the bound
         self.assertIsNotNone(second._mpisppy_data.outer_bound)
 
+    def test_a_failed_dual_load_claims_no_bound(self):
+        """The load fails in a scenario that then produces no bound at all.
+
+        The no-bound warning says there is none; the load warning must not
+        contradict it with "their bound is looser but still valid".
+        """
+        from pyomo.solvers.plugins.solvers.persistent_solver import (
+            PersistentSolver)
+
+        class _RaisingPersistent(PersistentSolver):
+            def __init__(self):
+                pass
+
+            def load_duals(self, cons_to_load=None):
+                raise RuntimeError("duals unavailable")
+
+        scenario = self._scenario_with_no_bound_and_a_missing_dual()
+        scenario._solver_plugin = _RaisingPersistent()
+        spoke = self._spoke_over(scenario)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            spoke.lagrangian()
+        messages = [str(w.message) for w in caught]
+        self.assertIsNone(scenario._mpisppy_data.outer_bound)
+        self.assertTrue(any("no bound" in m for m in messages), messages)
+        load = [m for m in messages if "loading the duals" in m]
+        self.assertEqual(len(load), 1, messages)
+        self.assertNotIn("still valid", load[0])
+        self.assertNotIn("bound is", load[0])
+
     def test_a_scenario_with_no_bound_is_not_silent(self):
         """Dropping the false message is only an improvement if something
         true replaces it. It reached neither failure list, so nothing did."""

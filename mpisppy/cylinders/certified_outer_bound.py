@@ -233,9 +233,9 @@ class CertifiedOuterBound(LagrangianOuterBound):
                 f"{len(fbbt_failed)} scenario(s) on rank "
                 f"{self.cylinder_rank}, for example {fbbt_failed[0]}. Their "
                 "variable boxes are used as the model states them, untightened, "
-                "so the bound from those scenarios is looser than it could be. "
-                "The certificate is unaffected otherwise; this message is "
-                "printed once."
+                "which costs tightness and never validity -- a variable left "
+                "unbounded can cost the bound altogether, and the no-bound "
+                "warning says so if it does. This message is printed once."
             ),
         )
 
@@ -683,7 +683,9 @@ class CertifiedOuterBound(LagrangianOuterBound):
         # Its own key rather than a clause in the missing-duals message: that
         # message names one example row, and fires once per run, so a failed
         # load in any other scenario -- or in one that then produced no bound
-        # -- was never reported.
+        # -- was never reported. For the same reason the message claims no
+        # bound for these scenarios: one of them may have produced none, and
+        # the no-bound warning says so.
         load_failures = sorted(dual_load_failed.items())
         self._warn_once_collectively(
             "load_duals_failed",
@@ -694,7 +696,7 @@ class CertifiedOuterBound(LagrangianOuterBound):
                 f"{self.cylinder_rank}, for example scenario "
                 f"{load_failures[0][0]}: {load_failures[0][1]}. Their "
                 "constraints are taken with multiplier zero, which weak duality "
-                "admits, so their bound is looser but still valid. Printed once."
+                "admits: that costs tightness, never validity. Printed once."
             ),
         )
 
