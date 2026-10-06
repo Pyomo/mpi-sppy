@@ -42,6 +42,13 @@ certified_outer_bound
 An outer bound for problems whose scenario subproblems are **convex and
 continuous**, enabled with ``--certified-outer-bound``.
 
+**Most runs do not need this spoke.** It is for subproblem solvers that return
+no outer bound of their own, such as Ipopt and other NLP solvers. With a MIP
+solver such as Gurobi, CPLEX or Xpress, the Lagrangian spoke (``--lagrangian``)
+and the other outer-bound spokes use the bound the solver reports, and that is
+usually the better choice. A model with integer variables cannot use this spoke
+at all.
+
 The Lagrangian spoke gets its bound from the solver's dual bound. A local NLP
 solver such as Ipopt reports none, so on a convex NLP that spoke produces
 nothing usable. Some solver interfaces instead report the objective value at the
