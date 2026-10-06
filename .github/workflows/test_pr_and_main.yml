@@ -941,6 +941,60 @@ jobs:
           conda install mpi4py "numpy" setuptools
           pip install cplex xpress
 
+      - name: setup the program
+        run: |
+          pip install -e ".[test]"
+
+      - name: run farmer tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          coverage run $COV_ARGS test_conf_int_farmer.py
+
+      - name: run aircond tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          coverage run $COV_ARGS test_conf_int_aircond.py
+
+      - name: run mrp tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          coverage run $COV_ARGS test_mrp_generic.py
+
+      - name: run farmer_mrp_generic.bash
+        timeout-minutes: 10
+        run: |
+          cd examples/farmer/CI
+          bash farmer_mrp_generic.bash
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-confidence-intervals
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
+  # Split from confidence-intervals, where these steps took about six of its
+  # eight minutes and made it the last job to finish.
+  bootstrap:
+    name: bootstrap confidence interval tests
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+      - name: Install dependencies
+        run: |
+          conda install mpi4py "numpy" setuptools
+          pip install cplex xpress
+
       # the bootstrap epi-spline distributions fit with a nonlinear solver, so
       # without ipopt those tests skip; this is how Pyomo's own CI gets ipopt
       - name: Install the Ipopt system libraries
@@ -989,30 +1043,6 @@ jobs:
         run: |
           pip install -e ".[test]"
 
-      - name: run farmer tests
-        timeout-minutes: 10
-        run: |
-          cd mpisppy/tests
-          coverage run $COV_ARGS test_conf_int_farmer.py
-
-      - name: run aircond tests
-        timeout-minutes: 10
-        run: |
-          cd mpisppy/tests
-          coverage run $COV_ARGS test_conf_int_aircond.py
-
-      - name: run mrp tests
-        timeout-minutes: 10
-        run: |
-          cd mpisppy/tests
-          coverage run $COV_ARGS test_mrp_generic.py
-
-      - name: run farmer_mrp_generic.bash
-        timeout-minutes: 10
-        run: |
-          cd examples/farmer/CI
-          bash farmer_mrp_generic.bash
-
       - name: run bootstrap CI tests (serial)
         timeout-minutes: 10
         run: |
@@ -1033,7 +1063,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-confidence-intervals
+          name: coverage-bootstrap
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
           include-hidden-files: true
@@ -1540,6 +1570,7 @@ jobs:
       - mps
       - smps
       - confidence-intervals
+      - bootstrap
       - test-generic-pyomo-released
       - test-gradient-rho
       - test-pysp
