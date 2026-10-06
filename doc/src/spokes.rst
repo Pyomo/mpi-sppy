@@ -57,6 +57,10 @@ converged is needed: a truncated or sloppy solve gives a loose bound rather than
 bound. At an exact KKT point the correction vanishes and the bound equals the
 subproblem optimum.
 
+**How tight the bound is depends mostly on the variable bounds.** Away from an
+exact KKT point the correction grows with the width of the box, so wide or
+missing variable bounds give a weak bound, or none; see *Variable bounds* below.
+
 Cost is one solve per scenario per iteration, the same as the Lagrangian spoke.
 
 .. warning::
@@ -111,8 +115,6 @@ Cost is one solve per scenario per iteration, the same as the Lagrangian spoke.
    convex and unsupported alike -- so the expression has to be rewritten in
    terms ``differentiate`` knows, or this spoke left off the run.
 
-Two things determine whether the bound is any good:
-
 **Variable bounds.** The certificate minimizes over the box of variable bounds,
 so its looseness is roughly ``sum_i |d_i phi| * (width of the box in the
 descending direction)``. Tight bounds give a tight bound; enormous ones give a
@@ -120,6 +122,9 @@ valid but useless number. ``fbbt`` runs first to recover bounds implied by the
 constraints. A variable still unbounded afterwards produces a warning at setup,
 and the spoke reports nothing on iterations where that variable's gradient
 component is nonzero -- it stays quiet rather than sending a wrong number.
+The bounds matter for validity as well as tightness: the model has to be convex
+over them as stated (see the convexity warning above), so a restriction such as
+``x >= 0`` that the convexity depends on belongs in the variable's bounds.
 
 **Failed solves.** This spoke is an optional source of a bound, so losing a
 solve means one thing: no bound for that iteration. Nothing about a subproblem

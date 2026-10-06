@@ -1123,7 +1123,9 @@ class Config(pyofig.ConfigDict):
         self.add_to_config('certified_outer_bound',
                               description="have a certified_outer_bound spoke "
                                           "(certified Lagrangian outer bound for "
-                                          "convex continuous subproblems; see spokes.rst)",
+                                          "convex continuous subproblems; its "
+                                          "tightness depends on tight variable "
+                                          "bounds; see spokes.rst)",
                               domain=bool,
                               default=False)
 
