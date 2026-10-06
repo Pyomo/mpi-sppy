@@ -320,7 +320,7 @@ The set on which this is required is $B$, the box of variable bounds as the
 model states them.  Convexity only where the other constraints hold is not
 enough: $x^3 - 3x \le z$ is convex in $x$ only for $x \ge 0$, and with $x \ge 0$
 written as a constraint and a wider bound on $x$, $g_s$ is not convex on $B$,
-and neither is $\varphi_s$ whenever that row's multiplier is positive.  The tightenings of Remark~\ref{rem:boxtighten} only shrink $B$, so convexity
+which the requirement above rules out.  The tightenings of Remark~\ref{rem:boxtighten} only shrink $B$, so convexity
 on the stated box carries over to the tightened one; the implementation does not
 rely on a tightening to supply convexity, since bounds tightening does not
 always succeed.

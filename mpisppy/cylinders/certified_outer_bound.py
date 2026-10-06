@@ -603,6 +603,19 @@ class CertifiedOuterBound(LagrangianOuterBound):
                     # and advice for it, for something nobody classified.
                     tag, detail = (scenario_reason[0] if scenario_reason
                                    else ("unclassified", "no reason recorded"))
+                    # An unbounded box in a scenario with dual-less rows has
+                    # two candidate causes, and only this scenario's own list
+                    # can tell them apart: a correct multiplier may cancel the
+                    # gradient component that points at the missing bound.
+                    # Pointing at another warning instead was wrong twice --
+                    # the load warning is printed once per run and may name a
+                    # different scenario, and a non-persistent solver that
+                    # imports no dual for a row has no warning at all.
+                    if tag == "unbounded_box" and scenario_no_dual:
+                        tag = "unbounded_box_missing_duals"
+                        detail = (f"{detail}; {len(scenario_no_dual)} "
+                                  "constraint(s) of this scenario had no "
+                                  f"dual, for example {scenario_no_dual[0]}")
                     no_bound_by_cause.setdefault(tag, []).append(
                         f"{sname} ({detail})")
 
@@ -646,11 +659,16 @@ class CertifiedOuterBound(LagrangianOuterBound):
             "unbounded_box": (
                 "the box minimization was unbounded below",
                 "Giving that variable a finite bound is the fix -- the "
-                "example above names it and the side it is missing -- unless "
-                "the duals for that scenario failed to load (a separate "
-                "warning says so): zero multipliers can leave a gradient "
-                "component that correct ones cancel, and then loading the "
-                "duals is the fix.",
+                "example above names it and the side it is missing.",
+            ),
+            "unbounded_box_missing_duals": (
+                "the box minimization was unbounded below, in a scenario "
+                "where some constraints had no dual",
+                "Those constraints were taken with multiplier zero, and "
+                "correct multipliers may cancel the gradient component that "
+                "points at the missing bound, so check first that the solver "
+                "returns their duals. Giving the variable named a finite bound "
+                "also restores a bound.",
             ),
             "non_finite": (
                 "the arithmetic produced a non-finite value",  # detail says which

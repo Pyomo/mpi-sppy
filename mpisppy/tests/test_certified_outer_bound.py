@@ -1195,7 +1195,7 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
         # bounding the variable.
         self.assertIn("or the bound altogether", load[0])
         unbounded = next(m for m in messages if "unbounded below" in m)
-        self.assertIn("loading the duals is the fix", unbounded)
+        self.assertIn("returns their duals", unbounded)
 
     def test_missing_duals_warning_does_not_contradict_no_bound(self):
         """Scen0 has a bound and a dual-less row; Scen1 has no bound.
@@ -1229,14 +1229,32 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
         messages = [str(w.message) for w in caught]
         self.assertTrue(any("no bound" in m for m in messages),
                         f"silent: an empty 'N' column with no reason. {messages}")
-        # and it names WHICH cause, with advice that fits it
-        self.assertTrue(
-            any("unbounded below" in m for m in messages), messages)
-        self.assertTrue(any("finite bound is the fix" in m for m in messages),
-                        messages)
-        # and it names the variable and the side, from the engine
-        self.assertTrue(any("no finite lower bound" in m for m in messages),
-                        messages)
+        # and it names WHICH cause, with advice that fits it. Row c has no
+        # dual here, and with its real dual (1.0) phi is constant and there
+        # IS a bound, so "bound the variable" alone would be the wrong fix.
+        unbounded = next(m for m in messages if "unbounded below" in m)
+        self.assertIn("some constraints had no dual", unbounded)
+        self.assertIn("returns their duals", unbounded)
+        self.assertNotIn("is the fix", unbounded)
+        # and it names the variable and the side, from the engine, and the row
+        self.assertIn("no finite lower bound", unbounded)
+        self.assertIn("for example c", unbounded)
+
+    def test_an_unbounded_box_with_every_dual_says_bound_the_variable(self):
+        """The same model with row c's dual imported (as zero): nothing is
+        missing, so the unbounded variable is the cause and the advice says
+        so -- no hedging about duals."""
+        scenario = self._scenario_with_no_bound_and_a_missing_dual()
+        scenario.dual[scenario.c] = 0.0
+        spoke = self._spoke_over(scenario)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            spoke.lagrangian()
+        messages = [str(w.message) for w in caught]
+        self.assertIsNone(scenario._mpisppy_data.outer_bound)
+        unbounded = next(m for m in messages if "unbounded below" in m)
+        self.assertIn("finite bound is the fix", unbounded)
+        self.assertNotIn("had no dual", unbounded)
 
     def test_a_non_finite_value_is_not_blamed_on_unbounded_variables(self):
         """One flat key, or one message naming two causes, sends the user
