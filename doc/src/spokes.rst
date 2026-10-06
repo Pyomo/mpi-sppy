@@ -140,17 +140,19 @@ hard-fails on an unrecognized keyword rather than ignoring it, so a perfectly
 ordinary run (a MIP solver and its options for the hub, this spoke attached
 alongside) would otherwise kill the spoke on its first solve. Pass this spoke's
 solver settings, including a thread count if its solver takes one, through
-``--certified-outer-bound-solver-options``.
+``--certified-outer-bound-solver-options``,
+``--certified-outer-bound-solver-options-file``, or a
+``spokes.certified_outer_bound`` block in the ``--solver-options-file``.
 
 **An inexact or ill-conditioned solve is safe.** The certificate assumes nothing
 about the accuracy of the solve. The model is convex by assumption, so it has no
 non-global local minima, and a solver returning a sub-optimal answer can only mean
 it stopped short of converging -- an inexact point with inexact multipliers, and
-the bound holds for any point and any ``lam >= 0``. The point need not even lie
-in the box: the minimization runs over the box while the point only has to be
-somewhere the objective is convex and differentiable, which is what makes the
-certificate cover the slightly-out-of-bounds iterate ``bound_relax_factor``
-can produce. Ill-conditioning does not enter either:
+the bound holds for any point in the box and any ``lam >= 0``. The point the
+solver returns need not lie in the box: the certificate first moves each
+variable that is outside its bounds onto the nearer bound, which covers the
+slightly-out-of-bounds iterate ``bound_relax_factor`` can produce, and a solver
+whose tolerances allow more. Ill-conditioning does not enter either:
 the certificate evaluates the objective and one gradient, and inverts nothing, so
 there is no linear solve for a condition number to amplify. What both cost is
 tightness. The looseness term grows as the point moves away from optimal, so a

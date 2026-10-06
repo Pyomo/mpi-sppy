@@ -262,6 +262,9 @@ run_phase "serial unit tests (serial)" \
 run_phase "test_certified_outer_bound (mpiexec -np 2)" \
     mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py -m pytest mpisppy/tests/test_certified_outer_bound.py -v
 
+run_phase "test_certified_outer_bound_persistent (mpiexec -np 2)" \
+    mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py -m pytest mpisppy/tests/test_certified_outer_bound_persistent.py -v
+
 # The CI ipopt-tests job also smoke-tests the documented command line, and
 # without the same run here local and CI coverage disagree on that path.
 # Not in a subshell: run_phase increments a global counter, which a subshell

@@ -217,17 +217,17 @@ Call the right-hand side `q̂_s`. Then
 and the cylinder reports `Σ_s p_s q̂_s`. One gradient evaluation and a loop over
 variables — no second solve, no tolerance argument, no feasibility requirement on `v̂`.
 
-Note what `v̂` is *not* required to be. It need not be feasible, it need not be
-optimal, and it need not lie in `B`: the minimization is over `v ∈ B`, while `v̂`
-only has to be a point where `φ_s` is convex and differentiable, which is why the
-hypothesis is an open set containing `B` rather than `B` itself. That is not
-pedantry. Ipopt's `bound_relax_factor` relaxes the variable bounds by a small
-amount before solving, so the point it returns can sit slightly *outside* `B` —
-and a theorem stated for `v̂ ∈ B` would not cover the points this cylinder
-actually receives. The closed form above needs no adjustment for it: minimizing
-`∂_i φ · (v_i − v̂_i)` over `[lo_i, hi_i]` picks the endpoint the sign of the
-gradient selects wherever `v̂_i` happens to sit, and a `v̂` far outside the box
-costs looseness, never validity.
+Note what `v̂` is *not* required to be. It need not be feasible and it need not
+be optimal. The theorem allows a `v̂` outside `B` too, provided `φ_s` is convex on
+an open convex set containing both, but the implementation does not lean on
+that: it first moves each component of the returned point that lies outside its
+bounds onto the nearer bound, so `v̂ ∈ B` always and convexity is needed only
+around `B`. A point outside `B` is what solvers hand back -- Ipopt's
+`bound_relax_factor` relaxes the variable bounds by a small amount before
+solving, and a solver's feasibility tolerance does the same -- and outside `B`
+`φ_s` need not be convex (`x³` on `[0, 10]` is not, below 0), so evaluating the
+tangent there could give a number above the optimum. The returned values are
+restored after the certificate is computed.
 
 **Looseness has a closed form, and it is the box width that sets it.** Each term is
 `|∂_i φ|` times the distance from `v̂_i` to the far end of its interval, so

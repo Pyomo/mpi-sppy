@@ -1531,6 +1531,9 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
+          # gurobipy for test_certified_outer_bound_persistent.py: the spoke on
+          # a persistent solver interface, which loads duals differently.
+          pip install gurobipy
 
       - name: Install Ipopt's system libraries
         # The idaes-ext binary carries no RPATH and resolves libgfortran,
@@ -1625,6 +1628,12 @@ jobs:
         run: |
           mpiexec -np 2 coverage run $COV_ARGS -m mpi4py -m pytest -v \
             mpisppy/tests/test_certified_outer_bound.py
+
+      - name: run the certified_outer_bound spoke on a persistent solver
+        timeout-minutes: 10
+        run: |
+          mpiexec -np 2 coverage run $COV_ARGS -m mpi4py -m pytest -v \
+            mpisppy/tests/test_certified_outer_bound_persistent.py
 
       - name: smoke-test the driver command line
         # Stands in for a run_all.py entry: it exercises the same thing (the

@@ -500,8 +500,10 @@ Precedence at the same iteration / predicate, lowest to highest:
    (CLI sugar).
 
 This ordering describes every spoke but ``--certified-outer-bound``, which takes
-none of the global layers and not the ``--max-solver-threads`` cap; only
-``--certified-outer-bound-solver-options`` reaches it.
+none of the global layers and not the ``--max-solver-threads`` cap. Only its own
+layers reach it: the ``spokes.certified_outer_bound`` block of the
+``--solver-options-file``, ``--certified-outer-bound-solver-options-file``, and
+``--certified-outer-bound-solver-options``.
 
 More specific predicates always win for any iteration that matches
 both: at ``k = 7``, an ``starting_at_iter: {"5": …}`` entry overrides

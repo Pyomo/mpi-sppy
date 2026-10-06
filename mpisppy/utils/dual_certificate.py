@@ -426,6 +426,30 @@ def certified_lower_bound(model, sign_convention="ipopt", eps_rel=1e-9,
         missing_duals.extend(skipped)
     vlist = list(identify_variables(phi, include_fixed=False))
 
+    # The theorem evaluates phi at a point of the box B, where phi is convex.
+    # A solver may return a point slightly outside its bounds (Ipopt's
+    # bound_relax_factor, a MIP solver's feasibility tolerance), and phi need
+    # not be convex there -- x**3 on [0, 10] is not, below 0. Clamping into B
+    # puts the point where the theorem holds; any point of B will do. The
+    # returned values are put back afterwards, because the spoke's models
+    # outlive this call.
+    saved = [v.value for v in vlist]
+    try:
+        for v in vlist:
+            if v.value is None:
+                continue
+            if v.lb is not None and v.value < v.lb:
+                v.set_value(v.lb, skip_validation=True)
+            elif v.ub is not None and v.value > v.ub:
+                v.set_value(v.ub, skip_validation=True)
+        return _certify_at_point(phi, vlist, eps_rel, no_bound_reason)
+    finally:
+        for v, val in zip(vlist, saved):
+            v.set_value(val, skip_validation=True)
+
+
+def _certify_at_point(phi, vlist, eps_rel, no_bound_reason):
+    """certified_lower_bound's arithmetic, at the point the variables hold."""
     correction = 0.0
     if vlist:
         grad = [float(g) for g in

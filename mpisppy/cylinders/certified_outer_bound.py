@@ -471,6 +471,8 @@ class CertifiedOuterBound(LagrangianOuterBound):
         # otherwise buy, and it is not a trade worth making.
         failures_by_class = {}
         no_dual = []
+        # scenario key -> what load_duals raised, for a persistent solver
+        dual_load_failed = {}
         # Keyed by CAUSE, for the reason failures_by_class is keyed by class:
         # one flat key is consumed by whichever cause happens to arrive first
         # and silences every other one for the rest of the run. The three are
@@ -494,6 +496,21 @@ class CertifiedOuterBound(LagrangianOuterBound):
                 s._mpisppy_data.outer_bound = None
                 no_bound_by_cause.setdefault("no_solution", []).append(sname)
                 continue
+            # spopt loads only the primal values from a persistent solver
+            # (load_vars); the duals stay in the solver until asked for. Not
+            # asking took every constraint with multiplier zero -- still
+            # valid, but on farmer with gurobi_persistent a bound of -753,500
+            # where plain gurobi gives -109,500. Cleared first, so a failed
+            # load leaves no duals from an earlier iteration behind and shows
+            # up in the missing-duals warning below, with its exception.
+            plugin = getattr(s, "_solver_plugin", None)
+            if plugin is not None and sputils.is_persistent(plugin):
+                s.dual.clear()
+                try:
+                    plugin.load_duals()
+                except Exception as e:               # noqa: BLE001
+                    dual_load_failed.setdefault(
+                        sname, f"{type(e).__name__}: {e}")
             # Into a per-scenario list, merged into no_dual only if the call
             # produces A BOUND -- not merely if it returns; see the `else`
             # below. certified_lower_bound extends missing_duals BEFORE the
@@ -552,7 +569,7 @@ class CertifiedOuterBound(LagrangianOuterBound):
                 # it could be but still valid" said of a scenario that has no
                 # bound, and the missing_duals key burnt for the run.
                 if s._mpisppy_data.outer_bound is not None:
-                    no_dual.extend(scenario_no_dual)
+                    no_dual.extend((sname, con) for con in scenario_no_dual)
                 else:
                     # Returning None raises nothing, so without this the
                     # scenario reaches neither failures_by_class nor no_dual
@@ -663,15 +680,24 @@ class CertifiedOuterBound(LagrangianOuterBound):
                     f"the scenarios named. {advice} Printed once per cause."
                 ),
             )
+        def _missing_duals_message():
+            sname, con = no_dual[0]
+            nscen = len({sn for sn, _ in no_dual})
+            why = (f" Loading the duals from the persistent solver raised "
+                   f"{dual_load_failed[sname]}."
+                   if sname in dual_load_failed else "")
+            return (
+                f"certified_outer_bound: {len(no_dual)} constraint(s) in "
+                f"{nscen} scenario(s) on rank {self.cylinder_rank} had no dual "
+                f"imported, for example {con} in scenario {sname}.{why} They "
+                "are taken with multiplier zero, which weak duality admits, so "
+                "the bound is looser than it could be but still valid."
+            )
+
         self._warn_once_collectively(
             "missing_duals",
             bool(no_dual),
-            lambda: (
-                f"certified_outer_bound: {len(no_dual)} constraint(s) had no dual "
-                f"imported, for example {no_dual[0]}. They are taken with "
-                "multiplier zero, which weak duality admits, so the bound is "
-                "looser than it could be but still valid."
-            ),
+            _missing_duals_message,
         )
         return self.opt.Ebound(verbose)
 

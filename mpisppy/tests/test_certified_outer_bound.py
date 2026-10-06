@@ -1113,6 +1113,12 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
         messages = [str(w.message) for w in caught]
         self.assertIsNotNone(scenario._mpisppy_data.outer_bound, messages)
         self.assertTrue(any("still valid" in m for m in messages), messages)
+        # The count is per rank and the row is per scenario, so the message
+        # has to say which of each -- by the local_scenarios key, since the
+        # model itself is unnamed.
+        warning = next(m for m in messages if "still valid" in m)
+        self.assertIn("on rank 0", warning)
+        self.assertIn("c in scenario Scen0", warning)
 
     def test_a_scenario_with_no_bound_is_not_silent(self):
         """Dropping the false message is only an improvement if something

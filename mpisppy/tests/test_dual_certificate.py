@@ -227,15 +227,12 @@ class TestCertificateMath(unittest.TestCase):
 
 
 class TestPointOutsideTheBox(unittest.TestCase):
-    """`v̂` need not lie in `B`, and Ipopt's `v̂` sometimes does not.
+    """The returned point need not lie in `B`, and Ipopt's sometimes does not.
 
-    The theorem's hypothesis is convexity on an OPEN SET CONTAINING `B`, not on
-    `B` -- the minimization runs over `v in B` while `v̂` only has to be a point
-    where phi is convex and differentiable. That distinction is load-bearing
-    rather than pedantic: `bound_relax_factor` relaxes the variable bounds
-    before solving, so the point Ipopt returns can sit slightly outside `B`,
-    and a certificate that required `v̂ in B` would not cover the points this
-    cylinder is actually handed.
+    `bound_relax_factor` relaxes the variable bounds before solving, and a
+    solver's feasibility tolerance does the same, so the point can sit outside
+    `B` -- where phi need not be convex. certified_lower_bound clamps it into
+    `B` first, which is where the theorem's convexity hypothesis is checked.
     """
 
     def _qhat(self, vhat):
@@ -262,11 +259,34 @@ class TestPointOutsideTheBox(unittest.TestCase):
         self.assertAlmostEqual(self._qhat(1.0), 1.0, places=12)
         self.assertAlmostEqual(self._qhat(0.99), self._qhat(1.0), delta=0.05)
 
-    def test_far_outside_costs_looseness_not_validity(self):
-        # Monotone in the distance, and always below the optimum.
-        near, far = self._qhat(0.5), self._qhat(-4.0)
-        self.assertLess(far, near)
-        self.assertLessEqual(near, 1.0 + 1e-12)
+    def test_a_point_outside_is_evaluated_at_the_nearer_bound(self):
+        # Clamped onto x = 1, the optimum, however far below it the point is.
+        for vhat in (0.5, -4.0):
+            with self.subTest(vhat=vhat):
+                self.assertAlmostEqual(self._qhat(vhat), 1.0, places=12)
+        self.assertAlmostEqual(self._qhat(7.0), self._qhat(3.0), places=12)
+
+    def test_phi_nonconvex_outside_the_box_stays_valid(self):
+        # x**3 is convex on [0, 10] and not below 0. Evaluated at x = -1 the
+        # tangent gave 2.0 for a problem whose optimum is 0.
+        for vhat in (-1.0, -1e-3):
+            with self.subTest(vhat=vhat):
+                m = pyo.ConcreteModel()
+                m.x = pyo.Var(bounds=(0, 10), initialize=vhat)
+                m.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
+                m.obj = pyo.Objective(expr=m.x ** 3)
+                self.assertLessEqual(
+                    certified_lower_bound(m, sign_convention="ipopt",
+                                          eps_rel=0.0),
+                    0.0)
+
+    def test_the_returned_point_is_restored(self):
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var(bounds=(1, 3), initialize=-4.0)
+        m.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
+        m.obj = pyo.Objective(expr=m.x ** 2)
+        certified_lower_bound(m, sign_convention="ipopt", eps_rel=0.0)
+        self.assertEqual(m.x.value, -4.0)
 
 
 class TestCushion(unittest.TestCase):
