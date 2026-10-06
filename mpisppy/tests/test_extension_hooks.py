@@ -199,6 +199,31 @@ class TestFWPHSmoothing(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "smoothing"):
                     fw.fwph_main()
 
+    def test_fwph_refuses_integer_relax_then_enforce(self):
+        # Both manage integrality on the same models: FWPH's LP warm start
+        # deletes the Suffix the extension undoes from, and enforcing
+        # mid-run breaks FWPH's next MIP solve. Refused at construction,
+        # before anything is solved.
+        from mpisppy.extensions.integer_relax_then_enforce import (
+            IntegerRelaxThenEnforce)
+        from mpisppy.opt.fwph import FWPH
+        options = {
+            "solver_name": "gurobi", "PHIterLimit": 2,
+            "defaultPHrho": 1, "convthresh": 1e-8, "verbose": False,
+            "display_timing": False, "display_progress": False,
+            "smoothed": 0, "toc": False,
+            "FW_iter_limit": 5, "FW_weight": 0.0,
+            "FW_conv_thresh": 1e-4, "stop_check_tol": 1e-5,
+            "FW_LP_start_iterations": 0, "FW_verbose": False,
+            "mip_solver_options": {}, "qp_solver_options": {},
+            "iter0_solver_options": None, "iterk_solver_options": None,
+        }
+        with self.assertRaisesRegex(RuntimeError, "FWPH hub"):
+            FWPH(options, [f"Scenario{i+1}" for i in range(3)],
+                 farmer.scenario_creator, farmer.scenario_denouement,
+                 scenario_creator_kwargs={"crops_multiplier": 1},
+                 extensions=IntegerRelaxThenEnforce)
+
     def test_the_fwph_spoke_zeroes_smoothing(self):
         # A caller reusing a PH hub's options dict brings smoothed along, and
         # options_check only fills in a missing key -- so the spoke has to

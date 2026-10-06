@@ -36,7 +36,11 @@ Generic checks (run for every field):
   (the last id that ``get_receive_buffer`` accepted). An optional
   ``ctx.last_write_id`` provides an additional, stricter baseline.
 - Data region: no ``inf`` values; no ``NaN`` values once
-  ``write_id >= 1``.
+  ``write_id >= 1``. ``RECENT_XHATS`` is a circular buffer of several
+  versions, and a version not yet written is still ``NaN``, so for it
+  only the first ``min(write_id, V)`` versions are checked, where ``V``
+  is ``ctx.recent_xhats_versions``. The spoke's shutdown sweep supplies
+  ``V``; without it the ``NaN`` check skips ``RECENT_XHATS``.
 - Padding region (between ``logical_len`` and ``padded_len``) remains
   ``NaN`` — its canonical state from ``communicator_array``. A finite
   value anywhere in padding is a write that ran past the field's

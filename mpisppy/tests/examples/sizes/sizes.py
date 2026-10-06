@@ -40,6 +40,31 @@ def scenario_denouement(rank, scenario_name, scenario):
     pass
 
 
+#=========
+# The three hooks generic_cylinders needs to drive this model from a command
+# line. Their absence is why the checkpoint tests originally had to reach for
+# the copy under examples/, which is not installed with the package; these
+# mirror that copy so a test can name this module and get the same model.
+def scenario_names_creator(num_scens, start=None):
+    # The sizes data files are one-based.
+    if start is None:
+        start = 1
+    return [f"Scenario{i}" for i in range(start, start + num_scens)]
+
+
+#=========
+def inparser_adder(cfg):
+    cfg.num_scens_required()
+    cfg.mip_options()
+
+
+#=========
+def kw_creator(cfg):
+    if cfg.num_scens not in (3, 10):
+        raise RuntimeError(f"num_scens must be 3 or 10; was {cfg.num_scens}")
+    return {"scenario_count": cfg.num_scens}
+
+
 def _rho_setter(scen):
     """ rho values for the scenario.
     Args:

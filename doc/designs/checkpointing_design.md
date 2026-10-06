@@ -1,12 +1,14 @@
 # Checkpoint / Resume for mpi-sppy — Design
 
-Status: **phase 1a and phase 4 implemented** (PH hub, serial or with spokes;
-see §11). Phases 2, 3 and 5 are
-still design. Where this document and the shipped code have disagreed, the code
-is authoritative and this document has been corrected — §8 in particular records
-a design that was tried, failed, and was replaced. Scope: checkpoint a
-running mpi-sppy job so it can be stopped and resumed later. Must work on multiple
-MPI ranks and for cylinder (hub-and-spoke) runs.
+Status: **phases 1a, 4 and 2 implemented** — a synchronous PH hub, on any
+number of ranks per cylinder, alone or in a wheel with spokes, over plain
+scenarios, proper bundles or stoch-ADMM. Phase 1b is retired (its two test
+instances landed in phase 2). Phases 3 and 5 remain design; phase 6 is
+unplanned. See §11. Where this document and the shipped code have disagreed,
+the code is authoritative and this document has been corrected — §8 in
+particular records a design that was tried, failed, and was replaced. Scope:
+checkpoint a running mpi-sppy job so it can be stopped and resumed later. Must
+work on multiple MPI ranks and for cylinder (hub-and-spoke) runs.
 
 **Companion notes** (`notes/`):
 
@@ -651,10 +653,18 @@ leaf-rebuild path iterates `nonant_indices` identically. Holds whether bundles a
 in memory (`--scenarios-per-bundle`) or pickled (`--pickle-bundles-dir` /
 `--unpickle-bundles-dir`).
 
-One cleanup: `_restore_nonants` still carries a 2019 comment that it "will not work
-on bundles" (`spopt.py`). That predates proper bundles and refers to the removed
-loose mechanism; re-verify and refresh it when bundle checkpointing is validated
-(Phase 2).
+**Validated in Phase 2**, and it needed no bundle-specific code: a multi-rank
+farmer run under `--scenarios-per-bundle` stops and resumes bit-identically,
+with one `.dill` per bundle named after the bundle
+(`TestBundlesMultiRankHub`, `test_checkpoint_multirank.py`). Bundle names carry
+no usable scenario index, which is one more reason §10 forbids
+`sputils.extract_num` in file names.
+
+One cleanup, now done: `_restore_nonants` carried a 2019 comment that it "will
+not work on bundles" (`spopt.py`). That predated proper bundles and referred to
+the removed loose mechanism; `_save_nonants` and `_restore_nonants` walk
+`local_scenarios` and `nonant_indices` identically for a bundle and a plain
+scenario, so the comment was refreshed to say so.
 
 ### 8.2 ADMM (deterministic and stochastic)
 
@@ -662,7 +672,19 @@ loose mechanism; re-verify and refresh it when bundle checkpointing is validated
 `utils/stoch_admmWrapper.py`) are plain PH hubs over *wrapped* scenarios, so
 the checkpoint machinery applies in principle — but the wrapper path breaks
 several assumptions made elsewhere in this design. Each of the following must
-be honored or checkpointing will not work for ADMM:
+be honored or checkpointing will not work for ADMM.
+
+**All six are implemented and validated as of Phase 2**, by
+`TestStochAdmmMultiRank` in `test_checkpoint_multirank.py` (items 1–4),
+`TestBundledStochAdmmMultiRank` in the same file (item 5) and
+`TestStochAdmmCylindersResumeAB` in `test_checkpoint_cylinders.py` (item 6).
+Item 2 needed code: `release_scenario_models` on `AdmmWrapper`,
+`Stoch_AdmmWrapper` and `AdmmBundler`, called from the resume branch. The rest
+held as designed. The stoch-ADMM instance is deliberately run with **three**
+ADMM subproblems: with two, every consensus variable happens to appear in both
+subproblems, so no nonant gets probability zero and no dummy var is added —
+the mask and dummy-var checks would pass while testing nothing, and the tests
+assert that the instance actually exercises them.
 
 1. **Scenario naming and file discovery.** The existing pickle paths that §4
    builds on are *hard-refused* for ADMM (`_check_admm_compatibility`,
@@ -687,7 +709,13 @@ be honored or checkpointing will not work for ADMM:
    remain referenced by `wrapper.local_admm_stoch_subproblem_scenarios` and by
    the `cfg._admm_variable_probability` bound method — a *persistent* 2×
    per-rank model footprint for large MIPs. The reload branch must release or
-   replace the wrapper-held fresh models (§9, item 2).
+   replace the wrapper-held fresh models (§9, item 2). **Done**: each holder
+   grew a `release_scenario_models(models)` method that repoints its model
+   dictionary at the reloaded models and drops its `varprob_dict` (which is
+   keyed by scenario *object* and so would hold the discarded models alive on
+   its own); `PHBase._release_scenario_creator_held_models` calls it
+   duck-typed, via `scenario_creator.__self__`, so a plain-function creator
+   costs nothing and the list of wrapper internals stays in the wrapper.
 3. **`variable_probability` is object-identity-keyed.** The wrapper's
    `varprob_dict` maps scenario *object* → `(id(var), prob)` pairs
    (`stoch_admmWrapper.py`; `AdmmBundler._bundle_varprob` likewise). This is
@@ -724,6 +752,10 @@ be honored or checkpointing will not work for ADMM:
    PoC-ing — validate a stoch-ADMM mid-run round-trip early
    (`mpisppy/tests/examples/stoch_distr` is the vehicle,
    `test_stoch_admmWrapper.py` the harness; §11 Phases 2 and 4).
+   **Validated**: `stoch_distr` stops and resumes bit-identically on the hub's
+   primal state, serially (Phase 4) and across ranks (Phase 2), with the
+   probability mask, the fixed-at-0 dummy vars and the rewritten scenario tree
+   all coming back intact. dill handled the cycles as hoped.
 5. **Bundled stoch-ADMM.** `--stoch-admm --scenarios-per-bundle`
    (`AdmmBundler`) creates bundles on the fly as EFs; they are first-class
    subproblems and should dill like other proper bundles (§8.1). Its
@@ -819,6 +851,65 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
    deleted once the manifest is in place. Retaining more than one checkpoint is
    **not supported**: exactly one committed generation exists at any time (plus
    the in-progress one transiently during a publish).
+
+   **Across ranks** (Phase 2) the same commit point covers the whole cylinder,
+   and three rules make that work — all of them in `write_checkpoint`:
+
+   - *The directory work is rank 0's alone.* Every rank computes the same
+     staging and generation paths, so letting each create, rename and delete
+     them is ranks destroying each other's files. Rank 0 prepares the staging
+     directory and performs the entire publish; the others only write their own
+     rank-tagged files into it.
+   - *Barriers bracket the shared directory.* One after rank 0 clears staging,
+     so no rank writes into a directory about to be cleared; one after the
+     writes, so rank 0 does not publish a generation still missing files.
+   - *Failure is agreed on, not discovered.* A failed write warns and lets the
+     run continue (§8), which on one rank is a return and on several is a
+     deadlock — the failing rank skips the barrier the others are waiting at.
+     So each rank reports its own success, an `Allreduce(MIN)` over the
+     cylinder tells every rank the lowest failing rank (or that there was
+     none), and either all publish or none does. A generation is therefore
+     all-or-nothing across ranks, which is what makes the manifest's promise —
+     that it names a *complete* checkpoint — true for the cylinder and not just
+     for one rank. The rank that succeeded still raises, naming the rank that
+     has the real diagnosis, so the log carries one cause rather than *n−1*
+     misleading ones. Reporting takes one extra step: the warning is normally
+     printed by rank 0 alone, which is precisely the rank that *lacks* the
+     cause, so the exception carries `mpisppy_failed_locally` and the failing
+     rank prints too. Without it the log said only "some rank failed" — caught
+     by `TestOneRankFailingDoesNotHangTheOthers`, which sabotages one rank's
+     write under `mpiexec` and checks the job returns rather than hanging.
+
+   The write *trigger* needs no agreement, and that is load-bearing rather than
+   lucky: `--checkpoint-every-iterations` makes it a pure function of the
+   absolute iteration number and the iteration limit, both identical on every
+   rank of a synchronous PH cylinder, so the ranks arrive at the barrier
+   together without being asked. Any trigger that is not a pure function of the
+   iteration count — the elapsed-time triggers this design declined to
+   implement, for instance — reintroduces rank skew and must go through
+   `allreduce_or` before the barrier or it deadlocks the write.
+
+   The setup-time dillability probe (§9, item 8's companion in
+   `probe_model_is_dillable`) is collective for the same reason: an undillable
+   model is usually rank-local, and a rank raising alone would leave the others
+   to hang at the first write barrier, turning a clear refusal into a silent
+   stall.
+
+   The *spoke* incumbent write stays uncoordinated (item 6). Each rank writes
+   only its own file, and the incumbent objective that gates the write comes
+   from an all-reduced objective evaluation, so the ranks are already in step
+   without a barrier. In step about *when* is not the same as one incumbent,
+   though: a write can fail on one rank, or a kill can land between the
+   ranks' renames, leaving files from different incumbents. The restore
+   therefore allgathers each rank's (objective, inner bound) and keeps the
+   incumbent only if every rank has a file and they all match; otherwise every
+   rank drops it (`agree_on_spoke_incumbent`). Restoring a different
+   best-so-far on each rank makes the ranks reach different verdicts on the
+   same candidate, after which the hub rejects everything the spoke sends or
+   the spoke hangs in its own broadcast.
+   The resumed hub, which takes its inner bound from the same files (§5.4),
+   applies the same rule to every rank's file (`_ranks_agree`), so it never
+   credits a spoke with an incumbent the spoke's ranks dropped.
 8. **A `Checkpointer` extension** that writes on its active triggers; restore
    itself is the in-core resume branch (item 2), with extension
    `restore_state` hooks (item 3) fired from it before `iterk_loop`:
@@ -1001,8 +1092,20 @@ CI solvers:
 - **`sizes`** — the MIP target: warm start taken on resume, incumbent carried.
 
 The phase bullets below say where each instance enters (Phase 1a: serial
-farmer; Phase 1b: farmer+CVaR and `sizes`; Phase 2: multi-rank, bundles,
-stoch-ADMM; Phase 4: cylinders, including a stoch-ADMM configuration).
+farmer; Phase 4: cylinders, including a stoch-ADMM configuration; Phase 2:
+everything else — multi-rank, bundles, stoch-ADMM across ranks, and the two
+instances Phase 1b was holding, farmer+CVaR and `sizes`).
+
+One note on the MIP branch of the comparison. Running `sizes` under
+deterministic solver settings would let it be compared bit-identically, but CI
+picks whichever of CPLEX/Gurobi/Xpress is installed and they do not agree on
+what "deterministic" configures, so the shipped test takes the default-settings
+branch above: the key *set* of the iterate is compared on every rank (which is
+what would catch a resume that re-attached the W or prox terms), the expected
+objective is compared to a stated relative tolerance, and the incumbent and the
+carried-forward trivial bound are checked directly. The per-variable values are
+deliberately not compared — a MIP with alternate optima can legitimately resume
+onto a different one.
 
 Phase 1 is split into two review-sized PRs. Phase 1a is the whole serial
 stop-and-resume story with the single trigger the primary use case actually
@@ -1040,35 +1143,49 @@ as a branch stacked on the 1a PR.
   `--checkpoint-every-iterations`; `toc` on
   both ends of every write (§9 item 10); and setup-time refusal of every
   configuration not supported — a non-PH hub (APH inherits this wiring through
-  `aph_hub`), more than one rank, an unimplemented backend, an unwritable
+  `aph_hub`), more than one rank (lifted in Phase 2), an unimplemented backend, an unwritable
   directory, and any run where the extension would not actually be attached.
   CLI flags `--checkpoint-dir`,
   `--checkpoint-backend`, `--resume-from`, with a clear error when
   `dill` is not installed (it is an optional `extras` dependency). Tests (the
   §11.1 A/B harness, serial): **farmer** bit-identical A vs B; no iter-0
   subproblem solve occurs on resume; geometry/cfg mismatch refused.
-- **Phase 1b — The harder instances (the triggers are gone).**
+- **Phase 1b — Retired; its instances landed in Phase 2.**
   `--checkpoint-every-iterations` shipped in 1a, and `--checkpoint-every-seconds`
   and the anticipated one-shot `--checkpoint-before-seconds` are **not
   implemented and not planned**: §8 records why writing at every completed
-  iteration subsumes them. What is left of this phase is the harder test
-  instances, which the phase that needs them should absorb rather than wait
-  for. Tests: **farmer + `--cvar`** bit-identical A vs B — the
-  mutate-after-creation case, where the resume branch's `saved_objectives`
-  refresh must resolve to `WITH_CVAR` and not the deactivated original;
-  **`sizes`** (MIP) — bit-identical under deterministic solver settings, and
-  under default settings run continues correctly, incumbent preserved, warm start
-  taken (mid-run model dill round-trip proven, §6).
-- **Phase 2 — Multi-rank + bundles + stoch-ADMM.** Barriers, rank-tagged files,
-  single-generation atomic publish. Validate with **proper bundles** (§8.1) and
-  refresh the stale `_restore_nonants` comment. Validate **stoch-ADMM** (§8.2):
-  the wrapper-mutated model dill round-trip (item 4), file naming with wrapped
-  scenario names (item 1), wrapper-held fresh models released on resume (item
-  2), and the probability mask + dummy-var fixedness surviving restore (item
-  3) — `mpisppy/tests/examples/stoch_distr` is the vehicle. Tests (the §11.1
-  A/B harness under `mpiexec`): MIP stop+resume compared on every rank, incl.
-  uneven distribution and `--scenarios-per-bundle`; a stoch-distr
-  (`--stoch-admm`) A/B stop+resume; mismatch refusal.
+  iteration subsumes them. All that was left of this phase was the harder test
+  instances, and Phase 2 absorbed both rather than leaving a phase standing
+  that adds no machinery: **farmer + `--cvar`** and **`sizes`** are cases in
+  `test_checkpoint_multirank.py`. Nothing is outstanding here; the bullet
+  survives only so the numbering elsewhere in this document still resolves.
+- **Phase 2 — Multi-rank + bundles + stoch-ADMM. Implemented.** The cluster
+  unlock: `Checkpointer` no longer refuses a cylinder with more than one rank.
+  - *The multi-rank write protocol* — rank-tagged files in a shared staging
+    generation, barriers around it, rank-0-only publish, and a collective
+    failure agreement so a warn-and-continue write failure cannot deadlock the
+    ranks that succeeded. Spelled out in §9, item 7. The setup-time dillability
+    probe became collective for the same reason.
+  - *Bundles* (§8.1) needed no code at all — a proper bundle is a first-class
+    subproblem — and validating that is what let the stale `_restore_nonants`
+    bundle comment be refreshed.
+  - *stoch-ADMM* (§8.2) needed one thing: `release_scenario_models` on the two
+    wrappers and the bundler, called from the resume branch, so a resumed run
+    stops carrying two copies of every scenario (item 2). Items 1, 3, 4 and 5
+    held as designed and are now pinned by tests.
+  - *`mpisppy/tests/examples/sizes/sizes.py`* grew the three hooks
+    `generic_cylinders` needs (`scenario_names_creator`, `inparser_adder`,
+    `kw_creator`), mirroring the copy under `examples/`, so the MIP instance
+    can be named from a test without depending on a directory that is not
+    installed with the package.
+  - *Tests* — `test_checkpoint_multirank.py`, the §11.1 A/B harness with every
+    leg its own `mpiexec` job and **every hub rank** compared, not just rank 0:
+    farmer evenly and unevenly split, `--scenarios-per-bundle`, farmer +
+    `--cvar`, `sizes` (MIP), a full 6-rank wheel with two ranks per cylinder,
+    stoch-ADMM, and refusal of a resume onto a different rank count.
+    `test_checkpoint_cylinders.py` (Phase 4) and this file are both wired into
+    `run_coverage.bash` and `test_pr_and_main.yml` here; Phase 4 had left its
+    file unwired.
 - **Phase 3 — Extension-object state contract.** `checkpoint_state`/`restore_state`
   on `Extension`; implement for rho updaters, `fixer`, `slammer`, convergers.
   (Model-attached `fixer` counter and nonant fixedness ride in the dill.) Test: PH
@@ -1163,14 +1280,17 @@ Resolved (given the §1 use case):
   contract: probabilities are consumed only at `SPBase` construction; after the
   reload swap, the reloaded model's `_mpisppy_data` masks and fixed-at-0
   dummy/surrogate vars are authoritative, and `var_prob_list` is never called
-  with a reloaded model. Validation is scheduled (Phase 2).
+  with a reloaded model. **Validated in Phase 2**, and the release step that
+  drops the wrapper's `varprob_dict` is what makes "never called with a
+  reloaded model" enforced rather than merely intended.
 - **Mid-run MIP model dill round-trip** — was the load-bearing unvalidated
   assumption; **validated by the MIP dill-reload PoC** (§6), including the
   linearized-prox cuts, in-process and cross-process, with serial stop→reload→
   continue bit-identical under a deterministic solver. The stoch-ADMM
-  wrapper-mutated variant of the same assumption is not yet validated — that is
-  a scheduled validation item (§6; §8.2, item 4; §11 Phase 2), not an open
-  design question.
+  wrapper-mutated variant of the same assumption is **also validated** as of
+  Phase 2 (§8.2, item 4): dill carried the inline dummy vars, the rewritten
+  `ScenarioNode`s with their unattached cost expressions, the rescaled
+  objective and the probability masks, serially and across ranks.
 
 Deferred:
 

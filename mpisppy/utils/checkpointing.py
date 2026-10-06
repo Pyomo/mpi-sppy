@@ -34,8 +34,10 @@ import re
 import shutil
 import hashlib
 
+import numpy as np
 from pyomo.common.dependencies import attempt_import
 
+import mpisppy.MPI as MPI
 import mpisppy.utils.pickle_bundle as pickle_bundle
 
 dill, dill_available = attempt_import("dill")
@@ -286,6 +288,150 @@ def _fsync_dir(path):
         os.close(fd)
 
 
+###############################################################################
+# Multi-rank coordination.
+#
+# A checkpoint generation spans every rank of the cylinder: each rank holds a
+# different slice of the scenarios, so a resumable generation is the *set* of
+# per-rank files, and the manifest flip that publishes it must not happen until
+# every one of them is on disk. Three things follow, and each is a rule the
+# single-rank code did not need.
+#
+# * **The directory work is rank 0's alone.** Every rank computes the same
+#   staging and generation paths, so letting each one create, rename and delete
+#   them means ranks destroying each other's files. Rank 0 prepares the staging
+#   directory and performs the whole publish; the others only write their own
+#   rank-tagged files into it.
+# * **Barriers bracket the shared directory.** One before the writes, so no
+#   rank writes into a directory rank 0 is about to clear, and one after them
+#   (the failure agreement below doubles as it), so rank 0 does not publish a
+#   generation that is still missing files.
+# * **Failure is agreed on, not discovered.** A mid-run write failure warns and
+#   lets the run continue (section 8), which on one rank is a return and on
+#   several is a deadlock: the rank that failed skips the barrier the others
+#   are waiting at. So every rank reports whether its own write succeeded, all
+#   ranks learn the answer together, and either all of them publish or none
+#   does. The generation is therefore all-or-nothing, which is what makes the
+#   manifest's promise -- that it names a *complete* checkpoint -- true across
+#   ranks and not just within one.
+#
+# * **A refusal is agreed on too.** Setting a checkpoint up and restoring one
+#   are per-rank work throughout -- this rank's scenario names, this rank's
+#   node, the file named after this rank -- so every refusal on those paths is
+#   one a single rank can make while the others walk on into the next
+#   collective. ``run_agreed`` runs each such step on every rank and raises on
+#   all of them or on none, which is what turns a rank-local refusal into an
+#   error message. Anything added to those paths belongs inside it;
+#   ``test_checkpoint_multirank.py`` checks that nothing sits beside it.
+#
+# The write *trigger* needs no such agreement. It is a pure function of the
+# absolute iteration number and the iteration limit (see
+# ``Checkpointer._should_write``), both of which are identical on every rank of
+# a synchronous PH cylinder, so the ranks arrive at the barrier together
+# without being asked. Any trigger that is not a pure function of the iteration
+# count -- an elapsed-time trigger, say -- would reintroduce rank skew and
+# deadlock here, and would have to be put through ``allreduce_or`` first.
+###############################################################################
+
+#: Sentinel meaning "no rank failed" in the failure agreement below. Larger
+#: than any rank, so MIN over the ranks picks a real failure whenever there is
+#: one and this value only when there is none.
+_NO_FAILURE = np.iinfo(np.int32).max
+
+
+def _cylinder_comm(opt):
+    """The comm to coordinate a checkpoint over, or None when there is one rank.
+
+    This is the *cylinder's* comm, not COMM_WORLD: a hub and its spokes
+    checkpoint independently and must never wait on each other (section 9,
+    item 6). Returning None for a single-rank cylinder keeps the serial path
+    free of MPI calls entirely, so nothing here depends on an MPI installation
+    being present.
+    """
+    if int(getattr(opt, "n_proc", 1)) <= 1:
+        return None
+    return opt.mpicomm
+
+
+def _barrier(comm):
+    if comm is not None:
+        comm.Barrier()
+
+
+def _first_failing_rank(comm, rank, failed):
+    """Agree across the cylinder on whether -- and where -- a write failed.
+
+    Returns the lowest rank that failed, or None if none did. Collective, so
+    it is also the barrier that guarantees every rank has finished writing
+    before rank 0 publishes.
+    """
+    if comm is None:
+        return rank if failed else None
+    local = np.array([rank if failed else _NO_FAILURE], dtype=np.int32)
+    worst = np.zeros(1, dtype=np.int32)
+    comm.Allreduce(local, worst, op=MPI.MIN)
+    return None if int(worst[0]) == _NO_FAILURE else int(worst[0])
+
+
+def run_agreed(opt, work, what):
+    """Run one local step of checkpoint setup or restore, and agree on it.
+
+    Every step of setting a checkpoint up and of restoring one is inherently
+    per rank: it reads a file named after this rank, checks it against the
+    scenarios this rank owns, or writes from the node this rank is on. So
+    each of them can fail on one rank and succeed on the others -- and the
+    step after it is collective. A rank that raised on its own has left the
+    others waiting at a collective it will never reach, and neither way that
+    ends is the one wanted: ``python -m mpi4py`` aborts the whole job holding
+    that one rank's traceback, and a plain ``python`` launch leaves it sitting
+    in the collective until its wall-clock limit with nothing in the log.
+
+    So agree first. ``work`` is called on every rank, the ranks exchange
+    whether it raised, and either all of them raise or none does. The message
+    names how many ranks failed and what each of them said, which is the
+    diagnosis a rank-local raise loses -- it aborts the job holding one
+    rank's traceback while the collective's own explanation never runs -- and
+    the raise on a rank that did fail chains its own exception underneath.
+
+    Anything ``work`` raises is reported, not only ``CheckpointMismatch``: an
+    unreadable file, a full disk or a short read strand the other ranks in
+    exactly the same way. The type is kept in the message.
+
+    ``what`` completes the sentence "N of M ranks of this cylinder could
+    not ...", so it reads as a verb phrase and says what follows from the
+    failure ("read their checkpoint, so none of them uses one").
+
+    Returns whatever ``work`` returns. Collective: every rank of the cylinder
+    must call it, and none of them may skip it on a condition the other ranks
+    do not share.
+    """
+    try:
+        result, failure = work(), None
+    except Exception as exc:
+        result, failure = None, exc
+    comm = _cylinder_comm(opt)
+    if comm is None:
+        if failure is not None:
+            # One rank, so there is nobody to agree with and nothing to add:
+            # the caller's own exception, with its own type and traceback.
+            raise failure
+        return result
+    failures = comm.allgather(
+        None if failure is None else f"{type(failure).__name__}: {failure}")
+    by_message = {}
+    for rank, message in enumerate(failures):
+        if message is not None:
+            by_message.setdefault(message, []).append(rank)
+    if not by_message:
+        return result
+    detail = "; ".join(
+        f"{len(ranks)} rank(s), lowest {min(ranks)}: {message}"
+        for message, ranks in by_message.items())
+    raise CheckpointMismatch(
+        f"{sum(len(r) for r in by_message.values())} of {comm.Get_size()} "
+        f"ranks of this cylinder could not {what}. {detail}"
+    ) from failure
+
 def require_implemented_backend(backend):
     """Refuse a backend that is only designed, or not known at all.
 
@@ -299,7 +445,6 @@ def require_implemented_backend(backend):
             f"The only supported backend is '{DILL_RELOAD_BACKEND}'."
         )
 
-
 def require_dill(backend):
     if backend == DILL_RELOAD_BACKEND and not dill_available:
         raise RuntimeError(
@@ -310,6 +455,42 @@ def require_dill(backend):
         )
 
 
+
+
+def probe_directory_is_writable(opt, ckpt_dir):
+    """Create the checkpoint directory and prove this rank can write in it.
+
+    Called once at setup. Discovering only at write time that the path is
+    unwritable would mean the run never checkpoints. Every rank probes,
+    because on a cluster the checkpoint directory can be unwritable from some
+    nodes and not others, and that is exactly the failure worth catching
+    before a multi-hour run rather than at its first write.
+
+    Per rank, and so a step the caller has to agree on: see
+    :func:`run_agreed`.
+
+    The probe file is named for the *global* rank, not the cylinder rank.
+    Several cylinders write into one directory and each of them numbers its
+    own ranks from zero, so a cylinder-rank name has one copy per cylinder:
+    whichever probes second removes the file the first is still using, and
+    that one fails with a FileNotFoundError naming a directory that is
+    perfectly writable. Global ranks are unique across the job, which is the
+    scope this needs.
+    """
+    try:
+        os.makedirs(ckpt_dir, exist_ok=True)
+        probe = os.path.join(
+            ckpt_dir,
+            f".mpisppy_write_probe_"
+            f"{int(getattr(opt, 'global_rank', opt.cylinder_rank)):04d}")
+        with open(probe, "w"):
+            pass
+        os.remove(probe)
+    except OSError as exc:
+        raise RuntimeError(
+            f"Cannot write to the checkpoint directory '{ckpt_dir}' from "
+            f"rank {opt.cylinder_rank} ({type(exc).__name__}: {exc})."
+        ) from exc
 
 
 def probe_model_is_dillable(opt):
@@ -333,7 +514,15 @@ def probe_model_is_dillable(opt):
     fail at every write, survive each failure by design, and finish having
     published nothing at all, which is the outcome the setup-time refusal
     exists to rule out.
+
+    Collective, for the same reason the write is: the ranks own different
+    scenarios, so an undillable model is usually rank-local. A rank that
+    raised on its own would leave the others to go on and hang at the first
+    write barrier, turning a clear setup refusal into a job that stalls with
+    no message. Every rank therefore learns that some rank failed and raises,
+    naming the one that has the real diagnosis.
     """
+    failure = None
     for sname, s in opt.local_scenarios.items():
         solver_plugin = getattr(s, "_solver_plugin", None)
         if solver_plugin is not None:
@@ -341,15 +530,30 @@ def probe_model_is_dillable(opt):
         try:
             dill.dumps(s)
         except Exception as exc:
-            raise RuntimeError(
+            failure = RuntimeError(
                 "Checkpointing is enabled, but no checkpoint could ever be "
                 "written.\n\n"
                 + pickle_bundle.describe_dill_failure(
                     s, exc, what=f"scenario '{sname}'")
-            ) from exc
+            )
+            failure.__cause__ = exc
+            break
         finally:
             if solver_plugin is not None:
                 s._solver_plugin = solver_plugin
+
+    comm = _cylinder_comm(opt)
+    failing_rank = _first_failing_rank(comm, int(opt.cylinder_rank),
+                                       failure is not None)
+    if failing_rank is None:
+        return
+    if failure is not None:
+        raise failure
+    raise RuntimeError(
+        f"Checkpointing is enabled, but no checkpoint could ever be written: "
+        f"rank {failing_rank} has a scenario model that cannot be "
+        f"serialized. See that rank's message for which one and why."
+    )
 
 
 def geometry(opt):
@@ -390,102 +594,170 @@ def initially_fixed_nonant_names(opt):
 def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
     """Write and atomically publish one checkpoint generation.
 
-    The rank writes its own files into a temporary generation directory, which
-    is renamed into place; the manifest is then rewritten (itself
-    temp-then-rename) to point at the new generation. That manifest flip is the
-    single commit point, so a kill before it leaves the previous checkpoint
-    intact and a kill after it leaves the new one. The prior generation is
-    deleted once the manifest names its replacement. Each rename step is
-    followed by an fsync of the directory that recorded it, so the commit
-    point holds across a power loss and not just a kill.
+    Collective over the cylinder. Every rank writes its own rank-tagged files
+    into a shared staging directory that rank 0 prepared; the ranks then agree
+    on whether all of those writes succeeded, and only if they did does rank 0
+    rename the staging directory into place and rewrite the manifest (itself
+    temp-then-rename) to point at it. That manifest flip is the single commit
+    point, so a kill before it leaves the previous checkpoint intact and a kill
+    after it leaves the new one. The prior generation is deleted once the
+    manifest names its replacement. Each rename step is followed by an fsync of
+    the directory that recorded it, so the commit point holds across a power
+    loss and not just a kill.
+
+    Raising here is what makes the write all-or-nothing: if *any* rank failed,
+    every rank raises, no manifest is written, and the caller
+    (``Checkpointer.maybe_checkpoint``) warns and carries on with the previous
+    generation still published and still resumable.
     """
+    # Checked before anything rank-local: it depends only on the backend name
+    # and whether dill is importable, so every rank reaches the same verdict
+    # and there is nothing to agree on.
     require_dill(backend)
-    check_filename_collisions(opt.local_scenarios)
 
+    comm = _cylinder_comm(opt)
+    rank = int(opt.cylinder_rank)
+    is_publisher = rank == 0
     hub_dir = os.path.join(ckpt_dir, HUB_SUBDIR)
-    # A failed write can leave a staged or published-but-uncommitted
-    # generation behind. Reclaim it before staging another: on a full disk the
-    # orphan is what makes the retry fail, so the sweep after a successful
-    # write would never be reached.
-    _sweep_uncommitted_generations(ckpt_dir, hub_dir)
-    try:
-        final_dir = _stage_and_publish(opt, ckpt_dir, hub_dir, generation,
-                                       backend)
-    except Exception:
-        # The manifest still names the previous generation (or nothing), so
-        # everything else is garbage; give the disk back now rather than at
-        # the next checkpoint point.
-        _sweep_uncommitted_generations(ckpt_dir, hub_dir)
-        raise
+    final_dir = os.path.join(hub_dir, _generation_dirname(generation))
+    staging_dir = f"{final_dir}.tmp"
 
-    # Sweep everything the manifest does not name, rather than only the
-    # generation the previous manifest did. A kill between any two publishing
-    # steps can leave a directory behind, and deleting just the known
-    # predecessor would let those accumulate for the life of the run.
-    _sweep_stale_generations(hub_dir, keep=int(generation))
+    # Rank 0's directory preparation is guarded like every other rank-local
+    # step, and for the same reason: if it raised straight out of here, rank 0
+    # would never reach the barrier below and every other rank would wait at
+    # it for the rest of the job.
+    failure = None
+    if is_publisher:
+        try:
+            # A failed publish can leave a published-but-uncommitted
+            # generation behind. Reclaim it before staging another: on a full
+            # disk the orphan is what makes the retry fail, so the sweep after
+            # a successful write would never be reached.
+            _sweep_uncommitted_generations(ckpt_dir, hub_dir)
+            if os.path.isdir(staging_dir):
+                shutil.rmtree(staging_dir)
+            os.makedirs(staging_dir, exist_ok=True)
+        except Exception as exc:
+            failure = exc
+    # No rank may write into the staging directory until rank 0 has cleared
+    # and recreated it, or its files are deleted out from under it.
+    _barrier(comm)
+
+    try:
+        if failure is not None:
+            raise failure
+        # Every rank makes the directory anyway: it costs nothing when it is
+        # already there, and on a network filesystem the barrier does not
+        # guarantee rank 0's mkdir is visible here yet.
+        os.makedirs(staging_dir, exist_ok=True)
+        # Redundant if the setup-time check passed -- local_scenarios does not
+        # change during a run -- but it is per-rank data, so it belongs inside
+        # the guarded region rather than ahead of the barrier.
+        check_filename_collisions(opt.local_scenarios)
+        model_files = _write_models(opt, staging_dir, rank, backend)
+        leaf = {
+            "format_version": FORMAT_VERSION,
+            "backend": backend,
+            "generation": int(generation),
+            "geometry": geometry(opt),
+            "structural_fingerprint": structural_fingerprint(opt.options),
+            "model_files": model_files,
+            "initially_fixed_nonants": initially_fixed_nonant_names(opt),
+            "trivial_bound": _as_float_or_none(
+                getattr(opt, "trivial_bound", None)),
+            "best_bound_obj_val": _as_float_or_none(
+                getattr(opt, "best_bound_obj_val", None)),
+            "best_solution_obj_val": _as_float_or_none(
+                getattr(opt, "best_solution_obj_val", None)),
+            "best_outer_bound": _hub_best_outer_bound(opt),
+        }
+        _atomic_write_bytes(
+            os.path.join(staging_dir, _leaf_filename(rank)),
+            lambda f: pickle.dump(leaf, f),
+        )
+        _fsync_dir(staging_dir)
+    except Exception as exc:
+        failure = exc
+
+    # Collective, and therefore also the barrier that says every rank has
+    # finished writing. Nothing below may run before it.
+    failing_rank = _first_failing_rank(comm, rank, failure is not None)
+    if failing_rank is not None:
+        if is_publisher:
+            # Leave no half-written generation behind; the previous checkpoint
+            # (if any) stays published, since the manifest was never touched.
+            shutil.rmtree(staging_dir, ignore_errors=True)
+        raise _write_failure(opt, ckpt_dir, failure, failing_rank, rank)
+
+    # Publishing is rank 0's alone and comes after the last collective, so a
+    # failure in it cannot desynchronize anyone: rank 0 raises and warns, the
+    # other ranks return, the manifest still names the previous generation and
+    # the next checkpoint point retries.
+    if is_publisher:
+        try:
+            _publish_generation(opt, ckpt_dir, hub_dir, final_dir,
+                                staging_dir, generation, backend)
+        except Exception:
+            # The manifest still names the previous generation (or nothing),
+            # so everything else is garbage; give the disk back now rather
+            # than at the next checkpoint point.
+            _sweep_uncommitted_generations(ckpt_dir, hub_dir)
+            raise
 
     return final_dir
 
 
-def _stage_and_publish(opt, ckpt_dir, hub_dir, generation, backend):
-    """Write this rank's files for one generation and flip the manifest to it.
+def _write_failure(opt, ckpt_dir, failure, failing_rank, rank):
+    """The exception every rank raises when any rank's write failed.
 
-    Returns the published generation directory. Sweeping what this leaves
-    behind is the caller's job.
+    A rank that succeeded still has to raise -- the generation is
+    all-or-nothing -- but it has no exception of its own to describe, so it
+    names the rank that does. Otherwise a multi-rank failure would print one
+    real diagnosis and n-1 misleading ones.
+
+    The exception carries ``mpisppy_failed_locally`` so the caller can decide
+    who reports it. Warnings are normally printed by rank 0 alone, which would
+    silence exactly the rank holding the cause.
     """
-    rank = int(opt.cylinder_rank)
-    final_dir = os.path.join(hub_dir, _generation_dirname(generation))
-    staging_dir = f"{final_dir}.tmp"
-
-    if os.path.isdir(staging_dir):
-        shutil.rmtree(staging_dir)
-    os.makedirs(staging_dir, exist_ok=True)
-
-    try:
-        model_files = _write_models(opt, staging_dir, rank, backend)
-    except Exception as exc:
-        # Leave no half-written generation behind; the previous checkpoint (if
-        # any) stays published, since the manifest was never touched.
-        shutil.rmtree(staging_dir, ignore_errors=True)
-        if isinstance(exc, ValueError):
-            raise
-        first = next(iter(opt.local_scenarios.values()), None)
-        detail = (pickle_bundle.describe_dill_failure(first, exc,
-                                                      what="scenario model")
-                  if first is not None
-                  else f"{type(exc).__name__}: {exc}")
-        raise RuntimeError(
-            f"Failed to write the checkpoint to '{ckpt_dir}'. Any previously "
-            f"published checkpoint is untouched.\n\n" + detail
-        ) from exc
-
-    leaf = {
-        "format_version": FORMAT_VERSION,
-        "backend": backend,
-        "generation": int(generation),
-        "geometry": geometry(opt),
-        "structural_fingerprint": structural_fingerprint(opt.options),
-        "model_files": model_files,
-        "initially_fixed_nonants": initially_fixed_nonant_names(opt),
-        "trivial_bound": _as_float_or_none(getattr(opt, "trivial_bound", None)),
-        "best_bound_obj_val": _as_float_or_none(
-            getattr(opt, "best_bound_obj_val", None)),
-        "best_solution_obj_val": _as_float_or_none(
-            getattr(opt, "best_solution_obj_val", None)),
-        "best_outer_bound": _hub_best_outer_bound(opt),
-    }
-    _atomic_write_bytes(
-        os.path.join(staging_dir, _leaf_filename(rank)),
-        lambda f: pickle.dump(leaf, f),
+    if failure is None:
+        err = RuntimeError(
+            f"Rank {failing_rank} could not write its part of the checkpoint "
+            f"in '{ckpt_dir}', so this generation was abandoned on every "
+            f"rank. See that rank's message for the cause. Any previously "
+            f"published checkpoint is untouched."
+        )
+        err.mpisppy_failed_locally = False
+        return err
+    # A bad backend is a programming/configuration error, not a disk problem:
+    # it must not be dressed up as a transient write failure.
+    if isinstance(failure, ValueError):
+        failure.mpisppy_failed_locally = True
+        return failure
+    first = next(iter(opt.local_scenarios.values()), None)
+    detail = (pickle_bundle.describe_dill_failure(first, failure,
+                                                  what="scenario model")
+              if first is not None
+              else f"{type(failure).__name__}: {failure}")
+    where = "" if failing_rank == rank else f" (first failure on rank {failing_rank})"
+    err = RuntimeError(
+        f"Failed to write the checkpoint to '{ckpt_dir}'{where}. Any "
+        f"previously published checkpoint is untouched.\n\n" + detail
     )
-    _fsync_dir(staging_dir)
+    err.mpisppy_failed_locally = True
+    return err
 
-    # Publishing order matters. The manifest is the commit point, so the
-    # generation it currently names must stay on disk and intact until the
-    # replacement is fully published -- otherwise a kill in between destroys
-    # the only checkpoint. Stage under a name nothing points at, publish, then
-    # sweep. Writing the same generation number twice therefore lands in a
-    # scratch directory first rather than deleting the live one.
+
+def _publish_generation(opt, ckpt_dir, hub_dir, final_dir, staging_dir,
+                        generation, backend):
+    """Commit the staged generation. Rank 0 only, once every rank has written.
+
+    Publishing order matters. The manifest is the commit point, so the
+    generation it currently names must stay on disk and intact until the
+    replacement is fully published -- otherwise a kill in between destroys the
+    only checkpoint. Stage under a name nothing points at, publish, then sweep.
+    Writing the same generation number twice therefore lands in a scratch
+    directory first rather than deleting the live one.
+    """
     scratch_dir = f"{final_dir}.incoming"
     if os.path.isdir(scratch_dir):
         shutil.rmtree(scratch_dir)
@@ -517,7 +789,11 @@ def _stage_and_publish(opt, ckpt_dir, hub_dir, generation, backend):
         "structural_fingerprint": structural_fingerprint(opt.options),
     })
 
-    return final_dir
+    # Sweep everything the manifest does not name, rather than only the
+    # generation the previous manifest did. A kill between any two steps above
+    # can leave a directory behind, and deleting just the known predecessor
+    # would let those accumulate for the life of the run.
+    _sweep_stale_generations(hub_dir, keep=int(generation))
 
 
 def _sweep_uncommitted_generations(ckpt_dir, hub_dir):
@@ -625,6 +901,14 @@ def _read_manifest(ckpt_dir, missing_ok=False):
         return json.load(f)
 
 
+#: The hub leaf keys a resume reads by name. The load refuses a leaf missing
+#: any of them, so the refusal is agreed across the hub's ranks.
+LEAF_KEYS_READ_ON_RESUME = (
+    "generation", "initially_fixed_nonants", "trivial_bound",
+    "best_bound_obj_val", "best_outer_bound", "best_solution_obj_val",
+)
+
+
 def load_checkpoint(opt, ckpt_dir):
     """Load this rank's checkpoint, refusing a mismatch with a clear error.
 
@@ -683,6 +967,18 @@ def load_checkpoint(opt, ckpt_dir):
         )
     with open(leaf_path, "rb") as f:
         leaf = pickle.load(f)
+
+    # Checked here, inside the agreement the load runs in, because Iter0
+    # reads the bounds outside one, before the hub's next collective: a leaf
+    # without one would raise KeyError on that rank alone and leave the
+    # others waiting in it.
+    missing = [key for key in LEAF_KEYS_READ_ON_RESUME if key not in leaf]
+    if missing:
+        raise CheckpointMismatch(
+            f"The checkpoint state '{leaf_path}' has no "
+            f"{', '.join(missing)}, so it was not written by this mpi-sppy "
+            f"or has been damaged."
+        )
 
     have = sorted(opt.local_scenarios.keys())
     want = leaf["geometry"]["scenario_names"]
@@ -849,6 +1145,17 @@ def load_spoke_incumbent(opt, ckpt_dir, cylinder, ordinal):
             f"{state.get('format_version')}, but this mpi-sppy writes "
             f"version {FORMAT_VERSION}."
         )
+    # Checked here, inside the agreement the load runs in, because
+    # agree_on_spoke_incumbent reads both before its collective: a file
+    # without one would raise KeyError on that rank alone and leave the
+    # others waiting in the gather.
+    missing = [key for key in ("best_solution_obj_val", "best_inner_bound")
+               if key not in state]
+    if missing:
+        raise CheckpointMismatch(
+            f"The incumbent file '{path}' has no {' or '.join(missing)}, so "
+            f"it was not written by this mpi-sppy or has been damaged."
+        )
     if state.get("structural_fingerprint") != structural_fingerprint(opt.options):
         raise CheckpointMismatch(
             f"The incumbent file '{path}' was written by a run configured "
@@ -865,6 +1172,57 @@ def load_spoke_incumbent(opt, ckpt_dir, cylinder, ordinal):
     return state
 
 
+def _ranks_agree(held):
+    """True when every rank of a spoke holds an incumbent file and they all
+    carry the same ``(objective, inner bound)``. ``held`` has one entry per
+    rank, None for a rank with no file.
+
+    The one rule for adopting a spoke's incumbent, shared by the spoke's
+    ranks (``agree_on_spoke_incumbent``) and by the resumed hub
+    (``spoke_inner_bounds_to_restore``), which must credit a spoke only with
+    an incumbent the spoke will keep.
+    """
+    return None not in held and len(set(held)) == 1
+
+
+def agree_on_spoke_incumbent(opt, state):
+    """Keep a loaded spoke incumbent only if every rank loaded the same one.
+
+    Each rank of a spoke writes its own file, so a write that fails on one
+    rank (a full disk on one node, an objective the write refuses) or a kill
+    between the ranks' renames leaves files from different incumbents. The
+    ranks stay in step only because each compares the same all-reduced
+    candidate objective against the same best-so-far; restore different
+    best-so-far values and they reach different verdicts, publish different
+    numbers of times -- after which the hub rejects everything the spoke
+    sends -- or walk different scenario orders into a collective and hang.
+
+    Returns ``(state, reason)``: the state unchanged when every rank has a
+    file and they all carry the same objective and inner bound; ``(None,
+    None)`` when no rank has one; otherwise ``(None, reason)`` on every rank.
+    Dropping it is safe because the file is an optimization: the spoke starts
+    without an incumbent, as it would with no checkpoint.
+
+    Collective: every rank of the cylinder must call it.
+    """
+    comm = _cylinder_comm(opt)
+    if comm is None:
+        return state, None
+    mine = None if state is None else (state["best_solution_obj_val"],
+                                       state["best_inner_bound"])
+    everyone = comm.allgather(mine)
+    if all(v is None for v in everyone):
+        return None, None
+    if _ranks_agree(everyone):
+        return state, None
+    missing = [rank for rank, v in enumerate(everyone) if v is None]
+    held = {v for v in everyone if v is not None}
+    reason = f"the files hold (objective, inner bound) {sorted(held, key=str)}"
+    if missing:
+        reason = f"rank(s) {missing} have no file; {reason}"
+    return None, reason
+
+
 def spoke_inner_bounds_to_restore(communicators, ckpt_dir):
     """``[(strata rank, inner bound)]`` for each spoke in this run that has
     an incumbent file in ``ckpt_dir`` -- the bounds the spokes are about to
@@ -878,8 +1236,11 @@ def spoke_inner_bounds_to_restore(communicators, ckpt_dir):
     publishes an improvement before it writes it, and a failed write is not
     retried).
 
-    Only rank 0's file is read. A file that cannot be read is skipped rather
-    than refused here; the spoke that owns it raises on it.
+    A spoke with several ranks keeps its incumbent only if every rank's file
+    is there and they agree (``agree_on_spoke_incumbent``), so the same rule
+    decides here. How many ranks wrote is read from rank 0's file. A file
+    that cannot be read is skipped rather than refused here; the spoke that
+    owns it raises on it.
     """
     names = [d["spcomm_class"].__name__ for d in communicators]
     found = []
@@ -887,20 +1248,32 @@ def spoke_inner_bounds_to_restore(communicators, ckpt_dir):
         if strata_rank == 0:
             continue
         ordinal = names[:strata_rank].count(name)
-        path = os.path.join(ckpt_dir, SPOKES_SUBDIR,
-                            _spoke_filename(name, ordinal, 0))
-        if not os.path.exists(path):
-            continue
-        # Anything that goes wrong with one file skips that file. Raising
-        # here would stop hub rank 0 alone, and the other hub ranks would
-        # wait for it forever.
-        try:
+
+        def read(rank):
+            path = os.path.join(ckpt_dir, SPOKES_SUBDIR,
+                                _spoke_filename(name, ordinal, rank))
+            if not os.path.exists(path):
+                return None
             with open(path, "rb") as f:
-                state = pickle.load(f)
-            if (state.get("format_version") != FORMAT_VERSION
-                    or state.get("kind") != "spoke-incumbent"):
+                return pickle.load(f)
+
+        # Anything that goes wrong with one spoke's files skips that spoke.
+        # Raising here would stop hub rank 0 alone, and the other hub ranks
+        # would wait for it forever.
+        try:
+            first = read(0)
+            if first is None:
                 continue
-            bound = float(state["best_inner_bound"])
+            states = [first] + [read(rank) for rank in
+                                range(1, int(first["geometry"]["n_proc"]))]
+            held = [None if s is None
+                    or s.get("format_version") != FORMAT_VERSION
+                    or s.get("kind") != "spoke-incumbent"
+                    else (s["best_solution_obj_val"], s["best_inner_bound"])
+                    for s in states]
+            if not _ranks_agree(held):
+                continue
+            bound = float(first["best_inner_bound"])
         except Exception:
             continue
         if math.isfinite(bound):

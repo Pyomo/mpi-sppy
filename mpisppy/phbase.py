@@ -1233,6 +1233,30 @@ class PHBase(mpisppy.spopt.SPOpt):
         # of the y-coordinate tolerance the user supplied.
         self.prox_approx_tol = math.sqrt(self.prox_approx_tol)
 
+    def _release_scenario_creator_held_models(self, models):
+        """Tell whoever built the scenarios that a resume replaced them.
+
+        Most ``scenario_creator``s are plain functions that hand a model over
+        and forget it, so this does nothing. The ADMM paths are the exception
+        (design section 8.2, item 2): their creator is a bound method of a
+        wrapper or bundler that keeps its own references to every model it
+        built. Those references outlive the swap, so without this a resumed
+        ADMM run holds two copies of every local scenario -- the reloaded ones
+        it iterates and the fresh ones it does not -- for the rest of the run,
+        which on large MIPs is precisely the memory a checkpoint exists to
+        save.
+
+        Duck-typed on purpose: the holder knows which of its attributes point
+        at models, and asking it is what keeps that knowledge in one place
+        instead of spreading a list of wrapper internals through the resume
+        branch.
+        """
+        holder = getattr(getattr(self, "scenario_creator", None),
+                         "__self__", None)
+        release = getattr(holder, "release_scenario_models", None)
+        if release is not None:
+            release(models)
+
     def _restore_from_checkpoint_if_resuming(self):
         """Splice a checkpoint's scenario models into this run, if resuming.
 
@@ -1266,6 +1290,25 @@ class PHBase(mpisppy.spopt.SPOpt):
             self.options.get("checkpoint_backend",
                              checkpointing.DILL_RELOAD_BACKEND))
 
+        # The splice below is this rank's own work from end to end: it reads
+        # the file named after this rank and checks it against the scenarios
+        # this rank owns, so it refuses on the ranks the checkpoint does not
+        # match and returns on the others. The next thing Iter0 does is
+        # collective, so a rank-local refusal would leave the rest of the
+        # cylinder waiting for a rank that has already gone -- the resume
+        # would hang instead of refusing. Every rank refuses or none does.
+        checkpointing.run_agreed(
+            self, lambda: self._splice_checkpoint(ckpt_dir),
+            "restore the checkpoint into this run, so none of them resumes")
+
+    def _splice_checkpoint(self, ckpt_dir):
+        """Load this rank's checkpoint and put it in place of the fresh run.
+
+        Local by nature and agreed by the caller; see
+        ``checkpointing.run_agreed``. Nothing in here may be collective, for
+        the same reason: the ranks it would synchronize have not agreed yet
+        that they are all still here.
+        """
         leaf, models = checkpointing.load_checkpoint(self, ckpt_dir)
 
         for sname, model in models.items():
@@ -1284,6 +1327,8 @@ class PHBase(mpisppy.spopt.SPOpt):
         # iterates it; a plain PH has no such attribute.
         if getattr(self, "local_subproblems", None) is not None:
             self.local_subproblems = self.local_scenarios
+
+        self._release_scenario_creator_held_models(models)
 
         # varid_to_nonant_index maps id(vardata) -> (ndn, i). dill faithfully
         # brings the dict back, and every key in it is dead: the integers are
