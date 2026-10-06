@@ -81,6 +81,15 @@ Cost is one solve per scenario per iteration, the same as the Lagrangian spoke.
    not convex at all. Getting this wrong yields an outer bound that can exceed
    the true optimum.
 
+   The objective and the constraint bodies have to be convex (or concave, per
+   the table) over the **variable bounds as the model states them**, not merely
+   where the other constraints hold. ``x**3 - 3*x <= z`` is convex only for
+   ``x >= 0``; written with ``x >= 0`` as a constraint and a wider bound on
+   ``x``, it is outside the theorem, and the bound can exceed the optimum. Put
+   such a restriction in the variable's bounds. The ``fbbt`` tightening
+   described below can shrink the box further, but it is not relied on for
+   convexity, since it does not always succeed.
+
    What *is* checked, as a hard error at setup: discrete variables, nonlinear
    equality constraints, nonlinear two-sided (ranged) constraints, a
    maximization objective, a ``dual`` Suffix
@@ -128,9 +137,10 @@ this spoke runs an NLP solver. Any solver that returns constraint duals into a
 Pyomo ``dual`` Suffix can be used, for example Knitro or, on a convex QP or
 QCP, Gurobi. The duals are read with Ipopt's sign convention, which is the only
 one that has been checked against known multipliers; Gurobi agrees with it on the
-farmer example. A solver whose signs differ still gives a valid bound, because
-any multipliers do, but a loose one. A solver that returns no duals gives the
-looser bound that zero multipliers give, and the spoke warns. None of this lets
+farmer example. A solver whose signs differ, or that returns no duals (the spoke
+warns), can only loosen the bound, because any multipliers give a valid one --
+or cost it altogether, where zero multipliers leave a gradient component
+pointing at an unbounded side of the box. Neither can make it invalid. None of this lets
 the spoke certify a non-convex model, and if the model has integer variables
 the spoke is inapplicable whatever solver runs it.
 

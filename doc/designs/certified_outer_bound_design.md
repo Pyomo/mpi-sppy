@@ -624,7 +624,10 @@ another's message for the run:
 
 - **`fbbt` proved a scenario infeasible**, or **could not analyze it**. The call
   is made to tighten the box and build a diagnostic, so nothing it raises is
-  worth ending the run; the box is then used as the model states it.
+  worth ending the run; the box is then used as the model states it. That is
+  safe only because the model is required to be convex over its stated
+  bounds: a model convex only on the box fbbt would have produced can get an
+  invalid bound when fbbt fails.
 - **A variable with no finite bound after `fbbt`** (§6.1).
 - **The certificate raised**, keyed by exception class. A model this cylinder
   targets can still defeat Pyomo's `differentiate` at a particular point —
@@ -639,8 +642,10 @@ another's message for the run:
   recording a cause; it is unreachable today and says so rather than guessing at
   one of the three.
 - **A constraint whose dual was not imported.** Taken with multiplier zero,
-  which weak duality admits, so the bound is looser but still valid. Reported
-  only for scenarios that actually produced a bound.
+  which weak duality admits: that costs tightness, never validity. Reported
+  only for scenarios that actually produced a bound. The message does not say
+  the run has a bound, because Ebound is all-or-nothing and another scenario
+  may have none.
 
 Hard errors at setup are, by contrast, raised **collectively**: those conditions
 are rank-local too, so a bare `raise` on the offending rank leaves its peers in

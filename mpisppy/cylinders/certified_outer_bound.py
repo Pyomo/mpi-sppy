@@ -204,8 +204,13 @@ class CertifiedOuterBound(LagrangianOuterBound):
                 # too, so the warning reports the exception class and message
                 # rather than just a count.
                 #
-                # Tightening is only ever an improvement, so losing it costs
-                # looseness and nothing else. Redo the scan without fbbt -- a
+                # Tightening only shrinks the box. Validity rests on the model
+                # being convex over its variable bounds as stated, which
+                # spokes.rst requires, so losing the tightening costs looseness
+                # -- or the bound, where a variable is left unbounded -- and
+                # nothing else. A model convex only on the box fbbt would have
+                # produced is outside that requirement, and with fbbt failing
+                # its certificate can exceed the optimum. Redo the scan without fbbt -- a
                 # pure component_data_objects walk that cannot itself raise --
                 # to keep the unbounded-variable diagnostic.
                 fbbt_failed.append(f"{sname} ({type(e).__name__}: {e})")
@@ -232,10 +237,12 @@ class CertifiedOuterBound(LagrangianOuterBound):
                 f"certified_outer_bound: bounds tightening could not analyze "
                 f"{len(fbbt_failed)} scenario(s) on rank "
                 f"{self.cylinder_rank}, for example {fbbt_failed[0]}. Their "
-                "variable boxes are used as the model states them, untightened, "
-                "which costs tightness and never validity -- a variable left "
-                "unbounded can cost the bound altogether, and the no-bound "
-                "warning says so if it does. This message is printed once."
+                "variable boxes are used as the model states them, untightened. "
+                "That costs tightness, or the bound altogether where a variable "
+                "is left unbounded. The bound stays valid only if the model is "
+                "convex over its variable bounds as stated, which this spoke "
+                "requires (see spokes.rst); tightening is not relied on for "
+                "convexity. This message is printed once."
             ),
         )
 
@@ -695,8 +702,9 @@ class CertifiedOuterBound(LagrangianOuterBound):
                 f"solver raised for {len(load_failures)} scenario(s) on rank "
                 f"{self.cylinder_rank}, for example scenario "
                 f"{load_failures[0][0]}: {load_failures[0][1]}. Their "
-                "constraints are taken with multiplier zero, which weak duality "
-                "admits: that costs tightness, never validity. Printed once."
+                "constraints without a loaded dual are taken with multiplier "
+                "zero, which weak duality admits: that costs tightness, never "
+                "validity. Printed once."
             ),
         )
 
@@ -707,8 +715,8 @@ class CertifiedOuterBound(LagrangianOuterBound):
                 f"certified_outer_bound: {len(no_dual)} constraint(s) in "
                 f"{nscen} scenario(s) on rank {self.cylinder_rank} had no dual "
                 f"imported, for example {con} in scenario {sname}. They are "
-                "taken with multiplier zero, which weak duality admits, so the "
-                "bound is looser than it could be but still valid."
+                "taken with multiplier zero, which weak duality admits: that "
+                "costs tightness, never validity."
             )
 
         self._warn_once_collectively(

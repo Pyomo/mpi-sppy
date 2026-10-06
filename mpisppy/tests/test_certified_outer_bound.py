@@ -667,6 +667,13 @@ class TestFbbtExceptionsStandDown(unittest.TestCase):
                 self.assertTrue(
                     any("could not analyze" in str(w.message) for w in caught),
                     "stood down silently; it should say the box is untightened")
+                # Validity rests on convexity over the stated bounds, not on
+                # the tightening; the warning must not promise more.
+                message = next(str(w.message) for w in caught
+                               if "could not analyze" in str(w.message))
+                self.assertIn("convex over its variable bounds as stated",
+                              message)
+                self.assertNotIn("never validity", message)
 
     def test_the_warning_names_the_exception_class(self):
         # The wide catch swallows a genuine bug in our own code too, so the
@@ -1075,11 +1082,11 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
             warnings.simplefilter("always")
             spoke.lagrangian()
         self.assertIsNone(scenario._mpisppy_data.outer_bound)
-        # "looser than it could be but still valid" is false of a scenario
-        # that produced no bound at all, and saying it burns the warn-once
-        # key so a real tightness loss later is never reported.
+        # The missing-duals warning describes a tightness loss, which is false
+        # of a scenario that produced no bound at all, and issuing it burns the
+        # warn-once key so a real tightness loss later is never reported.
         self.assertFalse(
-            any("still valid" in str(w.message) for w in caught),
+            any("had no dual imported" in str(w.message) for w in caught),
             [str(w.message) for w in caught])
 
     def _scenario_with_a_bound_and_a_missing_dual(self):
@@ -1112,11 +1119,12 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
             spoke.lagrangian()
         messages = [str(w.message) for w in caught]
         self.assertIsNotNone(scenario._mpisppy_data.outer_bound, messages)
-        self.assertTrue(any("still valid" in m for m in messages), messages)
+        self.assertTrue(any("had no dual imported" in m for m in messages),
+                        messages)
         # The count is per rank and the row is per scenario, so the message
         # has to say which of each -- by the local_scenarios key, since the
         # model itself is unnamed.
-        warning = next(m for m in messages if "still valid" in m)
+        warning = next(m for m in messages if "had no dual imported" in m)
         self.assertIn("on rank 0", warning)
         self.assertIn("c in scenario Scen0", warning)
 
@@ -1181,6 +1189,27 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
         self.assertEqual(len(load), 1, messages)
         self.assertNotIn("still valid", load[0])
         self.assertNotIn("bound is", load[0])
+
+    def test_missing_duals_warning_does_not_contradict_no_bound(self):
+        """Scen0 has a bound and a dual-less row; Scen1 has no bound.
+
+        Ebound is all-or-nothing, so the run has no bound this iteration and
+        another warning says so; the missing-duals warning about Scen0 must
+        not say the bound is still valid.
+        """
+        first = self._scenario_with_a_bound_and_a_missing_dual()
+        second = self._scenario_with_no_bound_and_a_missing_dual()
+        spoke = self._spoke_over(first)
+        spoke.opt.local_scenarios = {"Scen0": first, "Scen1": second}
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            spoke.lagrangian()
+        messages = [str(w.message) for w in caught]
+        self.assertTrue(any("NO bound" in m for m in messages), messages)
+        missing = [m for m in messages if "had no dual imported" in m]
+        self.assertEqual(len(missing), 1, messages)
+        self.assertNotIn("still valid", missing[0])
+        self.assertNotIn("bound is", missing[0])
 
     def test_a_scenario_with_no_bound_is_not_silent(self):
         """Dropping the false message is only an improvement if something
