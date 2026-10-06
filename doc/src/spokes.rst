@@ -43,11 +43,13 @@ An outer bound for problems whose scenario subproblems are **convex and
 continuous**, enabled with ``--certified-outer-bound``.
 
 **Most runs do not need this spoke.** It is for subproblem solvers that return
-no outer bound of their own, such as Ipopt and other NLP solvers. With a MIP
-solver such as Gurobi, CPLEX or Xpress, the Lagrangian spoke (``--lagrangian``)
-and the other outer-bound spokes use the bound the solver reports, and that is
-usually the better choice. A model with integer variables cannot use this spoke
-at all.
+no outer bound of their own, such as Ipopt and other local NLP solvers. With a
+MIP solver such as Gurobi, CPLEX or Xpress, the Lagrangian spoke
+(``--lagrangian``) and the other outer-bound spokes use the bound the solver
+reports, and that is usually the better choice; on a continuous model some
+solver interfaces report a number there that is within solver tolerance of a
+bound but is not one (see below). A model with integer variables cannot use
+this spoke at all.
 
 The Lagrangian spoke gets its bound from the solver's dual bound. A local NLP
 solver such as Ipopt reports none, so on a convex NLP that spoke produces
@@ -64,9 +66,12 @@ converged is needed: a truncated or sloppy solve gives a loose bound rather than
 bound. At an exact KKT point the correction vanishes and the bound equals the
 subproblem optimum.
 
-**How tight the bound is depends mostly on the variable bounds.** Away from an
-exact KKT point the correction grows with the width of the box, so wide or
-missing variable bounds give a weak bound, or none; see *Variable bounds* below.
+**How tight the bound is depends on two things: how close the solve stops to a
+KKT point, and how tight the variable bounds are.** The correction is zero at an
+exact KKT point and grows with both the distance from one and the width of the
+box. A loose box can make even a good solve's bound weak, and a variable with no
+bound in the direction its gradient points gives no bound at all; see *Variable
+bounds* below.
 
 Cost is one solve per scenario per iteration, the same as the Lagrangian spoke.
 
