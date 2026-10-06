@@ -624,7 +624,8 @@ another's message for the run:
 
 - **`fbbt` proved a scenario infeasible**, or **could not analyze it**. The call
   is made to tighten the box and build a diagnostic, so nothing it raises is
-  worth ending the run; the box is then used as the model states it. That is
+  worth ending the run; the box is then used without tightening, or with
+  whatever fbbt managed before it raised. That is
   safe only because the model is required to be convex over its stated
   bounds: a model convex only on the box fbbt would have produced can get an
   invalid bound when fbbt fails.

@@ -237,7 +237,8 @@ class CertifiedOuterBound(LagrangianOuterBound):
                 f"certified_outer_bound: bounds tightening could not analyze "
                 f"{len(fbbt_failed)} scenario(s) on rank "
                 f"{self.cylinder_rank}, for example {fbbt_failed[0]}. Their "
-                "variable boxes are used as the model states them, untightened. "
+                "variable boxes are used without tightening, or with whatever "
+                "fbbt managed before it failed. "
                 "That costs tightness, or the bound altogether where a variable "
                 "is left unbounded. The bound stays valid only if the model is "
                 "convex over its variable bounds as stated, which this spoke "
@@ -645,7 +646,11 @@ class CertifiedOuterBound(LagrangianOuterBound):
             "unbounded_box": (
                 "the box minimization was unbounded below",
                 "Giving that variable a finite bound is the fix -- the "
-                "example above names it and the side it is missing.",
+                "example above names it and the side it is missing -- unless "
+                "the duals for that scenario failed to load (a separate "
+                "warning says so): zero multipliers can leave a gradient "
+                "component that correct ones cancel, and then loading the "
+                "duals is the fix.",
             ),
             "non_finite": (
                 "the arithmetic produced a non-finite value",  # detail says which
@@ -703,8 +708,9 @@ class CertifiedOuterBound(LagrangianOuterBound):
                 f"{self.cylinder_rank}, for example scenario "
                 f"{load_failures[0][0]}: {load_failures[0][1]}. Their "
                 "constraints without a loaded dual are taken with multiplier "
-                "zero, which weak duality admits: that costs tightness, never "
-                "validity. Printed once."
+                "zero, which weak duality admits: that costs tightness, or the "
+                "bound altogether where it leaves a gradient component pointing "
+                "at an unbounded side of the box, never validity. Printed once."
             ),
         )
 

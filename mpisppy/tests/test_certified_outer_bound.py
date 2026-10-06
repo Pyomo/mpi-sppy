@@ -1153,7 +1153,7 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
             warnings.simplefilter("always")
             spoke.lagrangian()
         messages = [str(w.message) for w in caught]
-        load = [m for m in messages if "loading the duals" in m]
+        load = [m for m in messages if "loading the duals from the persistent" in m]
         self.assertEqual(len(load), 1, messages)
         self.assertIn("scenario Scen1", load[0])
         self.assertIn("RuntimeError: duals unavailable", load[0])
@@ -1185,10 +1185,17 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
         messages = [str(w.message) for w in caught]
         self.assertIsNone(scenario._mpisppy_data.outer_bound)
         self.assertTrue(any("no bound" in m for m in messages), messages)
-        load = [m for m in messages if "loading the duals" in m]
+        load = [m for m in messages if "loading the duals from the persistent" in m]
         self.assertEqual(len(load), 1, messages)
         self.assertNotIn("still valid", load[0])
         self.assertNotIn("bound is", load[0])
+        # Here the zero multipliers are what cost the bound -- with the real
+        # dual phi is constant -- so the load warning must say a load failure
+        # can do that, and the no-bound advice must not send the user only to
+        # bounding the variable.
+        self.assertIn("or the bound altogether", load[0])
+        unbounded = next(m for m in messages if "unbounded below" in m)
+        self.assertIn("loading the duals is the fix", unbounded)
 
     def test_missing_duals_warning_does_not_contradict_no_bound(self):
         """Scen0 has a bound and a dual-less row; Scen1 has no bound.
