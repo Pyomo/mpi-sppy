@@ -192,11 +192,11 @@ cylinder (solve, take λ, solve the dual, report) does not give a valid bound.
 
 ### 3.3 What does give one: a linear underestimator over the box
 
-`φ_s` is convex on an **open set containing** `B` — not merely on `B`, which
-matters below — so for any `v̂` in that set the tangent at `v̂` lies below it:
+`φ_s` is convex on `B`, so for any `v̂ ∈ B` at which `φ_s` is differentiable
+the tangent at `v̂` lies below it on `B`:
 
 ```
-    φ_s(v) ≥ φ_s(v̂) + ∇φ_s(v̂)ᵀ (v − v̂)       for all v
+    φ_s(v) ≥ φ_s(v̂) + ∇φ_s(v̂)ᵀ (v − v̂)       for all v ∈ B
 ```
 
 Minimizing the right-hand side over the box is separable and closed-form, so
@@ -211,23 +211,22 @@ Minimizing the right-hand side over the box is separable and closed-form, so
 Call the right-hand side `q̂_s`. Then
 
 ```
-    q̂_s  ≤  L_s(W_s)      for ANY v̂, ANY λ ≥ 0, ANY μ
+    q̂_s  ≤  L_s(W_s)      for ANY v̂ ∈ B, ANY λ ≥ 0, ANY μ
 ```
 
 and the cylinder reports `Σ_s p_s q̂_s`. One gradient evaluation and a loop over
 variables — no second solve, no tolerance argument, no feasibility requirement on `v̂`.
 
 Note what `v̂` is *not* required to be. It need not be feasible and it need not
-be optimal. The theorem allows a `v̂` outside `B` too, provided `φ_s` is convex on
-an open convex set containing both, but the implementation does not lean on
-that: it first moves each component of the returned point that lies outside its
-bounds onto the nearer bound, so `v̂ ∈ B` always and convexity is needed only
-around `B`. A point outside `B` is what solvers hand back -- Ipopt's
-`bound_relax_factor` relaxes the variable bounds by a small amount before
-solving, and a solver's feasibility tolerance does the same -- and outside `B`
-`φ_s` need not be convex (`x³` on `[0, 10]` is not, below 0), so evaluating the
-tangent there could give a number above the optimum. The returned values are
-restored after the certificate is computed.
+be optimal. It does have to lie in `B`, and the point a solver returns may not:
+Ipopt's `bound_relax_factor` relaxes the variable bounds by a small amount before
+solving, and other solvers' feasibility tolerances do the same. So the
+implementation first moves each component of the returned point that lies
+outside its bounds onto the nearer bound. Evaluating at the returned point
+instead would need `φ_s` convex on a convex set containing both `B` and that
+point, which nothing about the model promises: `x³` on `[0, 10]` is convex on the
+box and not below 0, and at `v̂ = −1` the formula gives 2 for a minimum of 0. The
+returned values are restored after the certificate is computed.
 
 **Looseness has a closed form, and it is the box width that sets it.** Each term is
 `|∂_i φ|` times the distance from `v̂_i` to the far end of its interval, so

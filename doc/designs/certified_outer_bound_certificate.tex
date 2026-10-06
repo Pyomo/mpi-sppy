@@ -23,7 +23,7 @@
 
 \title{A certified outer bound for convex NLP scenario subproblems}
 \author{mpi-sppy \\ \small companion to \texttt{doc/designs/certified\_outer\_bound\_design.md}}
-\date{2 October 2026}
+\date{6 October 2026}
 
 \begin{document}
 \maketitle
@@ -163,8 +163,8 @@ not by itself certify anything.
 \section{The box underestimator}
 
 \begin{theorem}[Certified bound]\label{thm:main}
-Let $U$ be an open convex set containing both $B$ and $\vhat$, and suppose
-$\varphi_s$ is convex on $U$ and differentiable at $\vhat$.  Define
+Let $\vhat \in B$, and suppose $\varphi_s$ is convex on $B$ and differentiable
+at $\vhat$.  Define
 \begin{equation}\label{eq:qhat}
   \qhat_s(\vhat) \;=\; \varphi_s(\vhat)
     \;+\; \sum_{i=1}^{n} \; \inf_{t \in [l_i,u_i]}
@@ -195,7 +195,7 @@ tangent-plane inequality on $B$, a coordinatewise lower bound on its linear
 term, and the evaluation of each $m_i$.
 
 \emph{Step 1: the tangent plane lies below $\varphi_s$ on $B$.}  Fix
-$v \in B$.  Both $v$ and $\vhat$ lie in the convex set $U$, so for
+$v \in B$.  Both $v$ and $\vhat$ lie in the convex set $B$, so for
 $\theta \in (0,1]$ convexity gives
 $\varphi_s\bigl(\vhat + \theta(v - \vhat)\bigr)
   \le (1-\theta)\,\varphi_s(\vhat) + \theta\,\varphi_s(v)$, which rearranges to
@@ -228,10 +228,23 @@ in place of $l_i$.  If $c_i = 0$ it is identically zero.  This is
 \end{proof}
 
 \begin{corollary}\label{cor:anypoint}
-$\qhat_s(\vhat) \le L_s(\W_s)$ for \emph{any} $\vhat \in U$ at which
+$\qhat_s(\vhat) \le L_s(\W_s)$ for \emph{any} $\vhat \in B$ at which
 $\varphi_s$ is differentiable, \emph{any} $\lambda \ge 0$ and \emph{any} $\mu$.  In particular
 $\vhat$ need not be optimal, and need not even be feasible for \eqref{eq:sub}.
 \end{corollary}
+
+A solver can return a point outside $B$: Ipopt's \texttt{bound\_relax\_factor}
+relaxes the variable bounds slightly before solving, and other solvers' feasibility
+tolerances do the same.  The implementation therefore replaces each component
+$\vhat_i$ that lies outside $[l_i, u_i]$ by the nearer endpoint before applying
+Theorem~\ref{thm:main}, which puts $\vhat$ in $B$ and asks for convexity of
+$\varphi_s$ on $B$ only.  Evaluating at the returned point instead would need
+$\varphi_s$ convex on a convex set containing both $B$ and that point, which the
+model gives no reason to expect.  For $\varphi_s(x) = x^3$ on $B = [0, 10]$,
+convex on $B$ and not below $0$, the point $\vhat = -1$ gives
+$\varphi_s(\vhat) = -1$, $\partial \varphi_s(\vhat) = 3$ and
+$\qhat_s = -1 + 3\,(0 - (-1)) = 2$, above the minimum $0$.  At the clamped point
+$\vhat = 0$ the same formula gives $0$.
 
 Corollary~\ref{cor:anypoint} is the whole point.  The certificate consumes the
 iterate the solver happened to stop at and the multipliers it happened to
@@ -459,8 +472,8 @@ construction rests on, the tangent-plane inequality \eqref{eq:tangent},
                      + \nabla \varphi_s(\vhat)^{\top} (v - \vhat)
   \qquad \text{for every } v \in B,
 \]
-is a pointwise consequence of convexity on $U$.  It holds exactly, at every
-$\vhat \in U$ at which $\varphi_s$ is differentiable, with no error constant and no dependence on the conditioning of anything.
+is a pointwise consequence of convexity on $B$.  It holds exactly, at every
+$\vhat \in B$ at which $\varphi_s$ is differentiable, with no error constant and no dependence on the conditioning of anything.
 Conditioning governs how loose the plane is away from $\vhat$; it cannot change
 which side of $\varphi_s$ the plane lies on.  What it does change is the size of
 $\nabla \varphi_s(\vhat)$ and the quality of the multipliers, and both push
@@ -571,6 +584,7 @@ object here & in the code \\
 \midrule
 $\varphi_s$ in \eqref{eq:phi}      & \texttt{\_lagrangian\_expression} \\
 $\qhat_s$ in \eqref{eq:qhat}       & \texttt{certified\_lower\_bound} \\
+clamping $\vhat$ into $B$          & \texttt{certified\_lower\_bound} \\
 decidable hypotheses               & \texttt{check\_model\_is\_certifiable} \\
 box tightening, strong form        & \texttt{unbounded\_variables} (\texttt{fbbt}) \\
 Remark~\ref{rem:rounding} cushion  & \texttt{eps\_rel} \\

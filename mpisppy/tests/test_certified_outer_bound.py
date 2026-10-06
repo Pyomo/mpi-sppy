@@ -1120,6 +1120,38 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
         self.assertIn("on rank 0", warning)
         self.assertIn("c in scenario Scen0", warning)
 
+    def test_a_failed_persistent_dual_load_is_reported(self):
+        """Scen0 has a dual-less row and no plugin; Scen1's load_duals raises.
+
+        The missing-duals warning names Scen0's row, so a failed load reported
+        only as a clause of it was never printed for Scen1.
+        """
+        from pyomo.solvers.plugins.solvers.persistent_solver import (
+            PersistentSolver)
+
+        class _RaisingPersistent(PersistentSolver):
+            def __init__(self):
+                pass
+
+            def load_duals(self, cons_to_load=None):
+                raise RuntimeError("duals unavailable")
+
+        first = self._scenario_with_a_bound_and_a_missing_dual()
+        second = self._scenario_with_a_bound_and_a_missing_dual()
+        second._solver_plugin = _RaisingPersistent()
+        spoke = self._spoke_over(first)
+        spoke.opt.local_scenarios = {"Scen0": first, "Scen1": second}
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            spoke.lagrangian()
+        messages = [str(w.message) for w in caught]
+        load = [m for m in messages if "loading the duals" in m]
+        self.assertEqual(len(load), 1, messages)
+        self.assertIn("scenario Scen1", load[0])
+        self.assertIn("RuntimeError: duals unavailable", load[0])
+        # and the load failure costs tightness, not the bound
+        self.assertIsNotNone(second._mpisppy_data.outer_bound)
+
     def test_a_scenario_with_no_bound_is_not_silent(self):
         """Dropping the false message is only an improvement if something
         true replaces it. It reached neither failure list, so nothing did."""

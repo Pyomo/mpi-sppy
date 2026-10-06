@@ -1531,9 +1531,6 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          # gurobipy for test_certified_outer_bound_persistent.py: the spoke on
-          # a persistent solver interface, which loads duals differently.
-          pip install gurobipy
 
       - name: Install Ipopt's system libraries
         # The idaes-ext binary carries no RPATH and resolves libgfortran,
@@ -1630,8 +1627,14 @@ jobs:
             mpisppy/tests/test_certified_outer_bound.py
 
       - name: run the certified_outer_bound spoke on a persistent solver
+        # gurobipy is installed here, after the steps above, and not with the
+        # other dependencies: test_certified_outer_bound.py picks its
+        # comparison solver from the commercial ones first, so with gurobipy
+        # present it would stop testing the spoke on glpk -- this job is the
+        # only place glpk is installed.
         timeout-minutes: 10
         run: |
+          pip install gurobipy
           mpiexec -np 2 coverage run $COV_ARGS -m mpi4py -m pytest -v \
             mpisppy/tests/test_certified_outer_bound_persistent.py
 

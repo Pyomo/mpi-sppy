@@ -501,8 +501,8 @@ class CertifiedOuterBound(LagrangianOuterBound):
             # asking took every constraint with multiplier zero -- still
             # valid, but on farmer with gurobi_persistent a bound of -753,500
             # where plain gurobi gives -109,500. Cleared first, so a failed
-            # load leaves no duals from an earlier iteration behind and shows
-            # up in the missing-duals warning below, with its exception.
+            # load leaves no duals from an earlier iteration behind; it has a
+            # warning of its own below.
             plugin = getattr(s, "_solver_plugin", None)
             if plugin is not None and sputils.is_persistent(plugin):
                 s.dual.clear()
@@ -680,18 +680,33 @@ class CertifiedOuterBound(LagrangianOuterBound):
                     f"the scenarios named. {advice} Printed once per cause."
                 ),
             )
+        # Its own key rather than a clause in the missing-duals message: that
+        # message names one example row, and fires once per run, so a failed
+        # load in any other scenario -- or in one that then produced no bound
+        # -- was never reported.
+        load_failures = sorted(dual_load_failed.items())
+        self._warn_once_collectively(
+            "load_duals_failed",
+            bool(load_failures),
+            lambda: (
+                f"certified_outer_bound: loading the duals from the persistent "
+                f"solver raised for {len(load_failures)} scenario(s) on rank "
+                f"{self.cylinder_rank}, for example scenario "
+                f"{load_failures[0][0]}: {load_failures[0][1]}. Their "
+                "constraints are taken with multiplier zero, which weak duality "
+                "admits, so their bound is looser but still valid. Printed once."
+            ),
+        )
+
         def _missing_duals_message():
             sname, con = no_dual[0]
             nscen = len({sn for sn, _ in no_dual})
-            why = (f" Loading the duals from the persistent solver raised "
-                   f"{dual_load_failed[sname]}."
-                   if sname in dual_load_failed else "")
             return (
                 f"certified_outer_bound: {len(no_dual)} constraint(s) in "
                 f"{nscen} scenario(s) on rank {self.cylinder_rank} had no dual "
-                f"imported, for example {con} in scenario {sname}.{why} They "
-                "are taken with multiplier zero, which weak duality admits, so "
-                "the bound is looser than it could be but still valid."
+                f"imported, for example {con} in scenario {sname}. They are "
+                "taken with multiplier zero, which weak duality admits, so the "
+                "bound is looser than it could be but still valid."
             )
 
         self._warn_once_collectively(
