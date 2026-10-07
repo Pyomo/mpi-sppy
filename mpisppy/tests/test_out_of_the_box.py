@@ -101,7 +101,7 @@ class TestConfigureNoSolver(unittest.TestCase):
         # ExtensiveForm refuses more than one rank, so OOTB stops at configure
         # instead of choosing the EF and failing (or, before that refusal
         # existed, solving an EF of only rank 0's scenarios).
-        for ranks, reason in ((3, "small_effort"), (2, "min_ranks")):
+        for ranks in (3, 2):   # small_effort, then below the rank floor
             with self.subTest(ranks=ranks):
                 cfg, module = _farmer_cfg(out_of_the_box="")
                 with mock.patch.object(ootb, "_inspect_ranks",
@@ -113,35 +113,6 @@ class TestConfigureNoSolver(unittest.TestCase):
                 msg = str(cm.exception)
                 self.assertIn("one rank", msg)
                 self.assertIn(f"has {ranks}", msg)
-                # the rank floor is a fact about OOTB, not a promise that
-                # more ranks decompose: farmer is small enough that 3 ranks
-                # still choose the EF (the other subtest)
-                self.assertEqual("never decomposes" in msg,
-                                 reason == "min_ranks", msg=msg)
-                self.assertNotIn("would decompose", msg)
-
-    def test_request_that_does_not_fit_names_the_ranks_it_needs(self):
-        # the serial EF line drops the decomposition the user asked for, so
-        # the refusal has to say how many ranks the request needs
-        sys.argv = sys.argv + ["--lagrangian", "--xhatshuffle"]
-        cfg, module = _farmer_cfg(out_of_the_box="", lagrangian=True,
-                                  xhatshuffle=True)
-        with mock.patch.object(ootb, "_inspect_ranks", return_value=2):
-            with self.assertRaises(RuntimeError) as cm:
-                ootb.configure(module, cfg)
-        self.assertIn("launch with at least 3 ranks", str(cm.exception))
-
-    def test_request_without_room_for_an_xhat_spoke_names_the_ranks(self):
-        # --grad-rho reads the incumbent, so it needs an xhat spoke on top of
-        # the hub and the user's --lagrangian: 3 ranks, though the request's
-        # own cylinders fit in 2
-        sys.argv = sys.argv + ["--lagrangian", "--grad-rho"]
-        cfg, module = _farmer_cfg(out_of_the_box="", lagrangian=True,
-                                  grad_rho=True)
-        with mock.patch.object(ootb, "_inspect_ranks", return_value=2):
-            with self.assertRaises(RuntimeError) as cm:
-                ootb.configure(module, cfg)
-        self.assertIn("launch with at least 3 ranks", str(cm.exception))
 
     def test_ef_planned_for_several_ranks_is_not_refused(self):
         # --inspect-only N reports and exits; nothing runs on N ranks

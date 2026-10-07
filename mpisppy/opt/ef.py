@@ -96,7 +96,8 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
                 f"The extensive form must run on one rank, but there are "
                 f"{n_proc}: each rank would get only some of the scenarios and "
                 f"solve an EF of those, giving a wrong objective and solution. "
-                f"Run it with python, without mpiexec.")
+                f"Run it on one rank: with python, or with a launcher set to "
+                f"one task (e.g. srun -n 1 -c N).")
         super().__init__(
             options,
             all_scenario_names,

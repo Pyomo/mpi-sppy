@@ -147,8 +147,8 @@ went). For example, a serial farmer run reports::
           --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi_persistent
     ...
     [out-of-the-box] Suggestions:
-      * Ran the monolithic EF because only 1 MPI rank(s) were available; OOTB
-        considers decomposing only with >= 3 ranks (hub + bound spokes).
+      * Ran the monolithic EF because only 1 MPI rank(s) were available; with
+        >= 3 ranks OOTB would decompose (hub + bound spokes).
 
 The equivalent command line is anchored with the module and scenario
 specification and lists every flag OOTB added, so you can paste it (dropping
