@@ -20,6 +20,8 @@ Run the EF with ``python``, not under ``mpiexec``. ``ExtensiveForm`` raises an
 error when there is more than one rank, because each rank would get only some of
 the scenarios and solve an EF of those. On one rank it runs, but warns: a launcher
 can bind the process to a single core, which every solver thread then shares.
+If a launcher such as ``srun`` is how you reach a compute node, give the rank the
+node's cores (``srun -c N``, for example).
 
 
 ``mpisppy.opt.ef.ExtensiveForm`` Class

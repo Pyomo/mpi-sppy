@@ -25,20 +25,21 @@ logger = logging.getLogger("mpisppy.ef")
 _LAUNCHER_ENV_VARS = ("OMPI_COMM_WORLD_SIZE", "PMI_RANK", "PMI_SIZE", "PMIX_RANK")
 
 
-def _launched_by_mpiexec():
+def _launched_by_mpi_launcher():
     return any(v in os.environ for v in _LAUNCHER_ENV_VARS)
 
 
-def _mpiexec_warning():
-    msg = ("The extensive form was launched under mpiexec. It runs on one "
-           "rank either way, and a launcher can bind that rank to one core, "
-           "which every solver thread then shares")
+def _launcher_warning():
+    msg = ("The extensive form was started by an MPI launcher (mpiexec, srun, "
+           "...). It runs on one rank either way, and a launcher can bind "
+           "that rank to one core, which every solver thread then shares")
     if hasattr(os, "sched_getaffinity"):
         usable = len(os.sched_getaffinity(0))
         total = os.cpu_count()
         if total is not None and usable < total:
             msg += f" (this process may use {usable} of the {total} CPUs)"
-    return msg + ". Run it with python, without mpiexec."
+    return msg + (". Run it with python, or give this rank the node's cores "
+                  "(e.g. srun -c N).")
 
 
 class ExtensiveForm(mpisppy.spbase.SPBase):
@@ -105,8 +106,8 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         )        
 
         self.bundling = True
-        if _launched_by_mpiexec():
-            logger.warning(_mpiexec_warning())
+        if _launched_by_mpi_launcher() and not suppress_warnings:
+            logger.warning(_launcher_warning())
         required = ["solver"]
         self._options_check(required, self.options)
         self.solver = pyo.SolverFactory(self.options["solver"])

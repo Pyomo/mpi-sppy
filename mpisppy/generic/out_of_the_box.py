@@ -119,6 +119,7 @@ class ChosenArg:
 class Decision:
     run_ef: bool = False
     ef_reason: str | None = None          # "min_ranks" | "few_scens" | "user" ...
+    request_ranks: int | None = None      # ranks the user's request needs, if too few
     chosen_solver: str | None = None
     problem_class: str | None = None      # LP|MIP|QP|MIQP|NLP|MINLP (base/plus)
     num_cylinders: int = 1                # hub + spokes actually configured
@@ -305,11 +306,12 @@ def recommend(facts: Facts, policy: dict) -> Decision:
         # Asked for, but genuinely does not fit. Say so rather than silently
         # running something else.
         d.run_ef, d.ef_reason = True, "request_too_big"
+        d.request_ranks = need_for_request
         forced = ", ".join(sorted(requested))
         choose("--EF", None,
                f"user requested decomposition ({forced}) needs "
                f"{need_for_request} ranks but only {facts.num_ranks} are "
-               f"available; running the EF instead")
+               f"available; choosing the EF instead")
     elif facts.num_ranks < ef["min_ranks_for_decomposition"]:
         d.run_ef, d.ef_reason = True, "min_ranks"
         choose("--EF", None,
@@ -502,11 +504,12 @@ def recommend(facts: Facts, policy: dict) -> Decision:
             # No room for one. Decomposing would crash in do_decomp, so treat
             # it like any other request that does not fit and run the EF.
             d.run_ef, d.ef_reason = True, "request_too_big"
+            d.request_ranks = _requested_cylinders(facts.user_flags) + 1
             choose("--EF", None,
                    f"{needed} reads the incumbent and needs a spoke to "
                    f"publish one, but {facts.num_ranks} rank(s) cannot host "
                    f"the hub, the spokes you asked for, and one more; "
-                   f"running the EF instead")
+                   f"choosing the EF instead")
             # This bail-out happens AFTER the decomposition decisions above,
             # so drop them: an EF run has no PH prox to linearize and reads
             # EF_solver_name, not solver_name. Leaving them made the trace and
@@ -912,8 +915,8 @@ def _sg_ran_ef_few_ranks(d, facts, policy, outcome):
     if d.run_ef and d.ef_reason == "min_ranks":
         need = policy["ef_fallback"]["min_ranks_for_decomposition"]
         return (f"Ran the monolithic EF because only {facts.num_ranks} MPI "
-                f"rank(s) were available; with >= {need} ranks OOTB would "
-                f"decompose (hub + bound spokes).")
+                f"rank(s) were available; OOTB considers decomposing only "
+                f"with >= {need} ranks (hub + bound spokes).")
     return None
 
 
@@ -1504,8 +1507,11 @@ def configure(module, cfg) -> OOTBState:
                f"equivalent command line above, which has no mpiexec.")
         if decision.ef_reason == "min_ranks":
             floor = policy["ef_fallback"]["min_ranks_for_decomposition"]
-            msg += (f" With at least {floor} ranks out-of-the-box would "
-                    f"decompose instead.")
+            msg += (f" Below {floor} ranks out-of-the-box never "
+                    f"decomposes.")
+        elif decision.ef_reason == "request_too_big":
+            msg += (f" To run the decomposition you asked for, launch with "
+                    f"at least {decision.request_ranks} ranks.")
         raise RuntimeError(msg)
 
     apply_decision(decision, cfg)

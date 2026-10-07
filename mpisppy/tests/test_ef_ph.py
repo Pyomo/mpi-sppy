@@ -1066,14 +1066,15 @@ class Test_EF_launch(unittest.TestCase):
     """ExtensiveForm and how it was launched (issues #877, #878). Solver-free:
     only the constructor runs."""
 
-    def _ef(self):
+    def _ef(self, **kwargs):
         import mpisppy.opt.ef
         import mpisppy.tests.examples.farmer as farmer
         return mpisppy.opt.ef.ExtensiveForm(
             {"solver": solver_name},
             farmer.scenario_names_creator(3),
             farmer.scenario_creator,
-            scenario_creator_kwargs={"num_scens": 3})
+            scenario_creator_kwargs={"num_scens": 3},
+            **kwargs)
 
     def test_refuses_more_than_one_rank(self):
         # SPBase spreads the scenarios over the ranks, so each rank would
@@ -1102,7 +1103,10 @@ class Test_EF_launch(unittest.TestCase):
                 os.environ[var] = "1"
                 self._ef()
                 warn.assert_called_once()
-                self.assertIn("without mpiexec", warn.call_args[0][0])
+                self.assertIn("Run it with python", warn.call_args[0][0])
+                warn.reset_mock()
+                self._ef(suppress_warnings=True)
+                warn.assert_not_called()
         # a plain python run (even a singleton MPI init) sets none of them
         with mock.patch.dict(os.environ, clean, clear=True), \
                 mock.patch.object(mpisppy.opt.ef.logger, "warning") as warn:
