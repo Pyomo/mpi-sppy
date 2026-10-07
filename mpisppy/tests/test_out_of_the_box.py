@@ -313,7 +313,12 @@ class TestSuggestionGenerators(unittest.TestCase):
     def test_few_ranks_and_minus(self):
         facts = ootb.Facts("m", 1, set(), 3, effort="minus")
         d = ootb.Decision(run_ef=True, ef_reason="min_ranks")
-        self.assertTrue(any("only 1 MPI" in m for m in self._msgs(d, facts)))
+        msgs = [m for m in self._msgs(d, facts) if "only 1 MPI" in m]
+        self.assertEqual(len(msgs), 1)
+        # no promise that more ranks decompose: a small model still gets the
+        # EF at the floor, and is then refused under mpiexec
+        self.assertNotIn("would decompose", msgs[0])
+        self.assertIn("by itself", msgs[0])
 
     def test_no_persistent_and_more_ranks(self):
         facts = ootb.Facts("m", 6, set(), 10, effort="base")

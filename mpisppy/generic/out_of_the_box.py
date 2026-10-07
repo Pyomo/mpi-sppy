@@ -912,8 +912,8 @@ def _sg_ran_ef_few_ranks(d, facts, policy, outcome):
     if d.run_ef and d.ef_reason == "min_ranks":
         need = policy["ef_fallback"]["min_ranks_for_decomposition"]
         return (f"Ran the monolithic EF because only {facts.num_ranks} MPI "
-                f"rank(s) were available; with >= {need} ranks OOTB would "
-                f"decompose (hub + bound spokes).")
+                f"rank(s) were available; below {need} ranks OOTB does not "
+                f"choose to decompose by itself (hub + bound spokes).")
     return None
 
 
