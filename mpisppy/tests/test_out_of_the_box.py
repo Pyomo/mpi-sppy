@@ -22,6 +22,7 @@ import os
 import shlex
 import sys
 import unittest
+from unittest import mock
 
 import pyomo.environ as pyo
 
@@ -95,6 +96,32 @@ class TestConfigureNoSolver(unittest.TestCase):
         spb = cfg.get("scenarios_per_bundle")
         self.assertIsNotNone(spb)                     # 60 scens -> bundles
         self.assertEqual(60 % int(spb), 0)
+
+    def test_ef_on_several_ranks_is_refused(self):
+        # ExtensiveForm refuses more than one rank, so OOTB stops at configure
+        # instead of choosing the EF and failing (or, before that refusal
+        # existed, solving an EF of only rank 0's scenarios).
+        for ranks, reason in ((3, "small_effort"), (2, "min_ranks")):
+            with self.subTest(ranks=ranks):
+                cfg, module = _farmer_cfg(out_of_the_box="")
+                with mock.patch.object(ootb, "_inspect_ranks",
+                                       return_value=ranks), \
+                        mock.patch.object(ootb, "apply_decision") as applied:
+                    with self.assertRaises(RuntimeError) as cm:
+                        ootb.configure(module, cfg)
+                applied.assert_not_called()
+                msg = str(cm.exception)
+                self.assertIn("one rank", msg)
+                self.assertIn(f"has {ranks}", msg)
+                # only the rank floor case can be fixed by adding ranks
+                self.assertEqual("would decompose" in msg,
+                                 reason == "min_ranks", msg=msg)
+
+    def test_ef_planned_for_several_ranks_is_not_refused(self):
+        # --inspect-only N reports and exits; nothing runs on N ranks
+        cfg, module = _farmer_cfg(out_of_the_box="", inspect_only="3")
+        state = ootb.configure(module, cfg)
+        self.assertTrue(state.decision.run_ef)
 
     def test_report_suggestions_runs(self):
         cfg, module = _farmer_cfg(out_of_the_box="", inspect_only="1")
@@ -221,9 +248,7 @@ class TestCommandLineAndFlags(unittest.TestCase):
         self.assertNotIn("--num-scens", msg)
 
     def test_ef_command_line_is_serial(self):
-        # An EF is one monolithic solve; echoing mpiexec would tell the reader
-        # to do the thing ExtensiveForm itself warns about ("Creating an
-        # ExtensiveForm object in parallel. Why?").
+        # An EF must run on one rank, so the line must not echo mpiexec.
         facts = ootb.Facts("farmer", 6, set(), 6, scen_anchor="--num-scens 6")
         d = ootb.Decision(run_ef=True)
         cl = d.command_line(facts)
@@ -234,42 +259,6 @@ class TestCommandLineAndFlags(unittest.TestCase):
         # a decomposition still gets the parallel launcher
         cl2 = ootb.Decision(run_ef=False).command_line(facts)
         self.assertIn("mpiexec -np 6", cl2)
-
-    def _ef_msgs(self, facts, ef_reason):
-        d = ootb.Decision(run_ef=True, ef_reason=ef_reason)
-        return ootb.make_suggestions(d, facts, ootb.load_policy())
-
-    def test_ef_under_mpiexec_is_called_out(self):
-        facts = ootb.Facts("farmer", 6, set(), 6)
-        self.assertTrue(any("idled" in m for m in self._ef_msgs(facts,
-                                                                "small_effort")),
-                        msg="no suggestion about wasting ranks on an EF")
-
-    def test_ef_suggestion_only_when_decomposing_was_available(self):
-        facts = ootb.Facts("farmer", 6, set(), 6)
-        # the EF is the only sensible choice at one rank
-        solo = ootb.Facts("farmer", 1, set(), 6)
-        self.assertFalse(any("idled" in m
-                             for m in self._ef_msgs(solo, "small_effort")))
-        # the policy REFUSED to decompose at this rank count, so telling the
-        # reader to decompose would contradict the suggestion beside it
-        for reason in ("min_ranks", "request_too_big"):
-            with self.subTest(reason=reason):
-                self.assertFalse(any("idled" in m
-                                     for m in self._ef_msgs(facts, reason)))
-        # --inspect-only reports and exits, so nothing was solved and nothing
-        # idled -- in EITHER form, with a planned rank count or without
-        planned = ootb.Facts("farmer", 512, set(), 6, inspect_only=True)
-        self.assertFalse(any("idled" in m
-                             for m in self._ef_msgs(planned, "small_effort")))
-        bare = ootb.Facts("farmer", 6, set(), 6, inspect_only=True)
-        self.assertFalse(any("idled" in m
-                             for m in self._ef_msgs(bare, "small_effort")))
-        # an explicit --EF below the rank floor: OOTB would not have
-        # decomposed there either, so do not tell the reader to
-        below_floor = ootb.Facts("farmer", 2, set(), 6)
-        self.assertFalse(any("idled" in m
-                             for m in self._ef_msgs(below_floor, "user")))
 
     def test_command_line_has_no_anchor_when_the_model_takes_none(self):
         # netdes declares no --num-scens; printing a derived one gave a line

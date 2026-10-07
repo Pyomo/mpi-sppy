@@ -14,8 +14,32 @@ import numbers
 import mpisppy.utils.sputils as sputils
 import pathlib
 import os
+from mpisppy import MPI
 
 logger = logging.getLogger("mpisppy.ef")
+
+# Set by a process manager in each process it starts: OpenMPI's mpiexec,
+# PMI-based launchers (MPICH's hydra and others), and PMIx launchers (OpenMPI
+# 5, srun --mpi=pmix). A plain ``python`` run sets none of them, even after
+# mpi4py has initialized MPI as a singleton.
+_LAUNCHER_ENV_VARS = ("OMPI_COMM_WORLD_SIZE", "PMI_RANK", "PMI_SIZE", "PMIX_RANK")
+
+
+def _launched_by_mpiexec():
+    return any(v in os.environ for v in _LAUNCHER_ENV_VARS)
+
+
+def _mpiexec_warning():
+    msg = ("The extensive form was launched under mpiexec. It runs on one "
+           "rank either way, and a launcher can bind that rank to one core, "
+           "which every solver thread then shares")
+    if hasattr(os, "sched_getaffinity"):
+        usable = len(os.sched_getaffinity(0))
+        total = os.cpu_count()
+        if total is not None and usable < total:
+            msg += f" (this process may use {usable} of the {total} CPUs)"
+    return msg + ". Run it with python, without mpiexec."
+
 
 class ExtensiveForm(mpisppy.spbase.SPBase):
     """ Create and solve an extensive form. 
@@ -63,6 +87,15 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         mutable_probability=None,
     ):
         """ Create the EF and associated solver. """
+        # SPBase spreads the scenarios over the ranks, so with more than one
+        # rank each would build and solve an EF of only its own scenarios.
+        n_proc = MPI.COMM_WORLD.Get_size()
+        if n_proc > 1:
+            raise RuntimeError(
+                f"The extensive form must run on one rank, but there are "
+                f"{n_proc}: each rank would get only some of the scenarios and "
+                f"solve an EF of those, giving a wrong objective and solution. "
+                f"Run it with python, without mpiexec.")
         super().__init__(
             options,
             all_scenario_names,
@@ -72,8 +105,8 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         )        
 
         self.bundling = True
-        if self.n_proc > 1 and self.cylinder_rank == 0:
-            logger.warning("Creating an ExtensiveForm object in parallel. Why?")
+        if _launched_by_mpiexec():
+            logger.warning(_mpiexec_warning())
         required = ["solver"]
         self._options_check(required, self.options)
         self.solver = pyo.SolverFactory(self.options["solver"])

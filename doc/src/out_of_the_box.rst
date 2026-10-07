@@ -51,10 +51,11 @@ so plainly if it cannot.
     python -m mpisppy.generic_cylinders --module-name farmer --num-scens 3 \
         --out-of-the-box
 
-    # 3+ ranks, but farmer is a small LP, so OOTB still solves the EF; it
-    # decomposes only when the problem is big or hard enough to pay for it
-    mpiexec -np 3 python -m mpi4py -m mpisppy.generic_cylinders \
-        --module-name farmer --num-scens 6 --out-of-the-box
+    # plan for 3 ranks without launching them: farmer is a small LP, so OOTB
+    # still chooses the EF; it decomposes only when the problem is big or
+    # hard enough to pay for it
+    python -m mpisppy.generic_cylinders --module-name farmer --num-scens 6 \
+        --out-of-the-box --inspect-only 3
 
 OOTB prints the configuration it chose, the **equivalent explicit command line**
 (so you can reproduce, learn from, and tweak it), runs the model, and then prints
@@ -63,7 +64,7 @@ a prioritized **Suggestions** list.
 .. note::
    OOTB decomposes only when it expects the decomposition to pay off. The base
    tier estimates how long the monolithic EF would take and, if that is within
-   budget, solves the EF even when several ranks are available -- because for a
+   budget, chooses the EF even when several ranks are available -- because for a
    small or fast-solving model the EF *is* the right call. On a fast machine with
    a commercial solver, the bundled examples (farmer, sizes, aircond) are cheap
    enough that ``--out-of-the-box`` chooses the EF for all of them. To exercise
@@ -103,8 +104,8 @@ In order, OOTB chooses:
    separate option: it governs the EF and is not used as the decomposition
    solver.
 #. **Extensive form vs. decomposition.** With fewer than three ranks there is no
-   useful cylinder configuration (hub + at least two spokes), so OOTB solves the
-   **EF**. Above the rank floor, OOTB still solves the EF when the whole problem
+   useful cylinder configuration (hub + at least two spokes), so OOTB chooses the
+   **EF**. Above the rank floor, OOTB still chooses the EF when the whole problem
    is small enough to expect a quick monolithic solve (see *Effort and the EF
    gate* below). Otherwise it decomposes. If you explicitly request a
    decomposition (any spoke or a non-default hub) and have enough ranks, OOTB
@@ -152,10 +153,10 @@ went). For example, a serial farmer run reports::
 The equivalent command line is anchored with the module and scenario
 specification and lists every flag OOTB added, so you can paste it (dropping
 ``--out-of-the-box``) to reproduce or modify the run. When OOTB chose the
-extensive form the line is **serial** -- an EF is one monolithic solve, so
-running it under ``mpiexec`` just has the other ranks build the same model and
-idle. If you launch an EF under ``mpiexec`` anyway, both mpi-sppy and the
-Suggestions list say so.
+extensive form the line is **serial**: an EF must run on one rank, because with
+more ranks each rank would get only some of the scenarios. If OOTB chooses the EF
+while running on more than one rank, it prints that line and stops without
+solving; run the line it printed.
 
 Effort tiers (how deeply OOTB inspects the model)
 -------------------------------------------------
