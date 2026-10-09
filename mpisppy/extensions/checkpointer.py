@@ -138,6 +138,7 @@ See ``doc/designs/checkpointing_design.md``.
 
 import os
 import shutil
+import math
 import time
 
 from mpisppy import global_toc
@@ -184,9 +185,15 @@ class Checkpointer(Extension):
         #: --checkpoint-before-seconds S, or None. See _deadline_is_near.
         before = options.get("checkpoint_before_seconds", None)
         self.before_seconds = None if before is None else float(before)
-        if self.before_seconds is not None and self.before_seconds <= 0:
+        # Finite as well as positive: NaN and +inf both pass "<= 0", and
+        # either makes the deadline test false on every iteration, which
+        # would switch off a safeguard the user asked for without a word.
+        if self.before_seconds is not None and not (
+                math.isfinite(self.before_seconds)
+                and self.before_seconds > 0):
             raise RuntimeError(
-                f"--checkpoint-before-seconds must be positive, got "
+                f"--checkpoint-before-seconds must be a finite positive "
+                f"number, got "
                 f"{self.before_seconds}. It is a wall-clock deadline measured "
                 f"from the start of this run."
             )
@@ -765,6 +772,10 @@ class Checkpointer(Extension):
         if self.before_seconds is None or self._before_seconds_fired:
             return False
         last = getattr(self.opt, "_last_iteration_seconds", None)
+        # Read back from a checkpoint on a resume, so not to be trusted to be
+        # a number: a NaN would make the test below false for good.
+        if last is not None and not math.isfinite(last):
+            last = None
         elapsed = time.perf_counter() - self.opt.start_time
         near = self.opt.allreduce_or(
             elapsed + (0.0 if last is None else last) >= self.before_seconds)
@@ -949,7 +960,8 @@ class Checkpointer(Extension):
                 best_inner_bound=getattr(spoke, "best_inner_bound", None),
                 loop_state=loop_state,
                 class_count=self._class_ordinal_and_count()[1],
-                extension_state=extension_state)
+                extension_state=extension_state,
+                progress=progress)
         except Exception as exc:
             self._last_failed_obj = obj
             # Printed by the rank that failed, whichever it is: each rank

@@ -2024,12 +2024,22 @@ class TestCheckpointBeforeSecondsDecision(unittest.TestCase):
         warning = self._failed_write_warning(last)
         self.assertIn("no later write will try again", warning)
 
-    def test_a_nonpositive_deadline_is_refused_at_setup(self):
-        for bad in (0.0, -5.0):
+    def test_a_nonpositive_or_non_finite_deadline_is_refused_at_setup(self):
+        """NaN and +inf pass "<= 0" and would make the deadline test false
+        on every iteration, switching the safeguard off without a word."""
+        for bad in (0.0, -5.0, float("nan"), float("inf")):
             with self.subTest(bad=bad):
                 with self.assertRaises(RuntimeError) as ctx:
                     self._checkpointer(bad)
-                self.assertIn("must be positive", str(ctx.exception))
+                self.assertIn("must be a finite positive number",
+                              str(ctx.exception))
+
+    def test_a_non_finite_iteration_duration_is_ignored(self):
+        """It is read back from a checkpoint on a resume; a NaN there would
+        make the deadline never fire. It is treated as unknown instead."""
+        ext = self._checkpointer(100.0)
+        self._clock(ext, elapsed=100.5, last_iteration=float("nan"))
+        self.assertTrue(ext._should_write())
 
     def test_the_deadline_is_not_structural(self):
         """A resume may set a different deadline -- the second leg of a study
@@ -2763,6 +2773,33 @@ class TestSpokeIncumbentFile(unittest.TestCase):
                 entry["inner_bound"], incumbent[sname],
                 msg=f"{sname}: the file carries the objective of a solve "
                     "that came after the incumbent it stores")
+
+    def test_a_write_is_identified_by_objective_and_cursor(self):
+        """Since a spoke also writes when only its cursor moves, the
+        objective alone no longer tells two writes apart; ranks holding
+        files from different writes must not be taken as one checkpoint."""
+        same = checkpointing.spoke_write_id(-10.0, {"cycle_idx": 3})
+        self.assertEqual(same, checkpointing.spoke_write_id(
+            -10.0, {"cycle_idx": 3}))
+        moved = checkpointing.spoke_write_id(-10.0, {"cycle_idx": 4})
+        self.assertNotEqual(same, moved)
+        verdict, _ = checkpointing._one_write_verdict(
+            2, 2, [checkpointing.XHAT_WRITE_KEY({"write_id": same}),
+                   checkpointing.XHAT_WRITE_KEY({"write_id": moved})])
+        self.assertEqual(verdict, "differ")
+        # A file written before there was a write_id falls back to the
+        # objective, as before.
+        self.assertEqual(
+            checkpointing.XHAT_WRITE_KEY({"best_solution_obj_val": -10.0}),
+            -10.0)
+
+    def test_the_file_records_its_write_id(self):
+        opt = _xhat_eval(ckpt_dir=self.ckpt_dir)
+        _set_and_cache_solution(opt, 10.0)
+        state = checkpointing.spoke_incumbent_state(
+            opt, self.CYLINDER, 2, progress={"cycle_idx": 1})
+        self.assertEqual(state["write_id"], checkpointing.spoke_write_id(
+            state["best_solution_obj_val"], {"cycle_idx": 1}))
 
     def test_an_unchanged_incumbent_is_not_rebuilt(self):
         """A spoke writes on nearly every evaluation, and keying the values

@@ -366,6 +366,23 @@ class ScenarioCycler:
             bad.append("nodescen_dict")
         if bad:
             return f"has a bad value for {', '.join(bad)}"
+
+        # Well formed, but does it describe this run? A name that is not one
+        # of this run's scenarios would reach _try_one as a scenario to
+        # evaluate, and a node set that is not this tree's would leave a
+        # node with no scenario to try.
+        known = set(self._shuffled_snames)
+        names = [state["best"], state["cur_root_scen"],
+                 *state["scenarios_this_epoch"], *nodes.values()]
+        unknown = sorted({n for n in names if n is not None and n not in known})
+        if unknown:
+            return f"names scenarios this run does not have ({unknown[:3]})"
+        # _create_nodescen_dict fills every nonleaf node each epoch, or just
+        # ROOT for a two-stage problem.
+        expected = set(self._nonleaves) if self._multi else {"ROOT"}
+        if set(nodes) != expected:
+            return (f"covers tree nodes {sorted(nodes)}, not this run's "
+                    f"{sorted(expected)}")
         return None
 
     def checkpoint_state(self):

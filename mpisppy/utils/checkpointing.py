@@ -417,8 +417,9 @@ def agree_one_write(opt, state, key):
     * ``"agreed"``  -- every rank has one, all from the same write; detail is
       the agreed value.
 
-    ``key`` names the field that identifies the write: the objective of the
-    cached solution for an xhat spoke, the iteration for a dual cylinder.
+    ``key`` identifies the write: a field name (the iteration, for a dual
+    cylinder) or a function of the state (``spoke_write_id``, for an xhat
+    spoke).
 
     Collective. Every rank of the cylinder must call it, including the ranks
     whose ``state`` is None.
@@ -435,13 +436,30 @@ def agree_one_write(opt, state, key):
     # generation -- so ranks from one write hold the identical value and an
     # exact comparison is the right one. Gathered rather than reduced so a
     # warning can name what disagrees, which is what a user needs to see.
-    values = comm.allgather(state.get(key))
+    values = comm.allgather(key(state) if callable(key) else state.get(key))
     return _one_write_verdict(have, size, values)
 
 
-#: The field that identifies an xhat spoke's write: the objective of the
-#: cached solution.
-XHAT_WRITE_KEY = "best_solution_obj_val"
+def spoke_write_id(objective, progress):
+    """An identifier for one write of an xhat spoke's file, the same on every
+    rank that made that write.
+
+    The objective alone no longer identifies a write: a spoke also writes when
+    its loop cursor moves with the incumbent unchanged, so two files with the
+    same objective can be from different moments -- and each rank restores its
+    own extension state from its own file. Both inputs are collective (the
+    objective an Eobjective reduction, the cursor the same on every rank of
+    the loop), so ranks that wrote together compute the same identifier.
+    """
+    payload = json.dumps(_canonical([objective, progress]), sort_keys=True)
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def XHAT_WRITE_KEY(state):
+    """What identifies an xhat spoke's write in its file: the ``write_id``
+    recorded at the write, or the objective for a file written before there
+    was one."""
+    return state.get("write_id", state.get("best_solution_obj_val"))
 
 
 def _one_write_verdict(have, size, values):
@@ -1433,7 +1451,8 @@ def _values_by_name(s, cache):
 
 def spoke_incumbent_state(opt, cylinder, ordinal, best_inner_bound=None,
                           loop_state=None, class_count=None,
-                          extension_state=GATHER_EXTENSION_STATE):
+                          extension_state=GATHER_EXTENSION_STATE,
+                          progress=None):
     """The dict written by ``write_spoke_incumbent``, or None if there is
     nothing to write yet. ``_cache_best_solution`` caches every scenario at
     once, so one scenario without a cache means none has one."""
@@ -1491,6 +1510,10 @@ def spoke_incumbent_state(opt, cylinder, ordinal, best_inner_bound=None,
         "best_inner_bound": _as_float_or_none(best_inner_bound),
         "best_solution_obj_val": _as_float_or_none(
             getattr(opt, "best_solution_obj_val", None)),
+        # Identifies this write across the spoke's ranks; see spoke_write_id.
+        "write_id": spoke_write_id(
+            _as_float_or_none(getattr(opt, "best_solution_obj_val", None)),
+            progress),
         "solutions": solutions,
         # Where the spoke's own loop had got to. Only xhatshuffle has such a
         # place; every other xhatter re-evaluates from scratch when new
@@ -1507,7 +1530,8 @@ def spoke_incumbent_state(opt, cylinder, ordinal, best_inner_bound=None,
 def write_spoke_incumbent(opt, ckpt_dir, cylinder, ordinal,
                           best_inner_bound=None, loop_state=None,
                           class_count=None,
-                          extension_state=GATHER_EXTENSION_STATE):
+                          extension_state=GATHER_EXTENSION_STATE,
+                          progress=None):
     """Write this spoke's best incumbent, latest-wins. Returns the path, or
     None when there is no incumbent to write.
 
@@ -1521,7 +1545,8 @@ def write_spoke_incumbent(opt, ckpt_dir, cylinder, ordinal,
                                   best_inner_bound=best_inner_bound,
                                   loop_state=loop_state,
                                   class_count=class_count,
-                                  extension_state=extension_state)
+                                  extension_state=extension_state,
+                                  progress=progress)
     if state is None:
         return None
     spokes_dir = os.path.join(ckpt_dir, SPOKES_SUBDIR)
@@ -1636,7 +1661,7 @@ def spoke_inner_bounds_to_restore(communicators, ckpt_dir):
             present = [s for s in states if s is not None]
             verdict, _ = _one_write_verdict(
                 len(present), len(states),
-                [s[XHAT_WRITE_KEY] for s in present])
+                [XHAT_WRITE_KEY(s) for s in present])
             if verdict != "agreed":
                 continue
             bound = float(first["best_inner_bound"])
@@ -1840,28 +1865,36 @@ def load_dual_spoke_state(opt, ckpt_dir, cylinder, ordinal):
 def restore_dual_spoke_state(opt, state):
     """Put W and the nonanticipative values back on this cylinder's models.
 
-    A W entry that no longer resolves is an error rather than a skipped key:
-    a cylinder carrying half the study's duals and half of zero is not a
-    continuation of anything, and it would show up only as a bound that
-    quietly stopped improving.
+    A W entry or a nonant value that no longer resolves is an error rather
+    than a skipped key: a cylinder carrying half the study's duals and half of
+    zero is not a continuation of anything, and it would show up only as a
+    bound that quietly stopped improving. The nonant values matter as much as
+    W: the next xbar is computed from them, and a missing one would be left at
+    the throwaway Iter0 solve's value.
+
+    Every scenario is checked before any model is changed, so a refusal leaves
+    the models as Iter0 left them rather than partly restored.
     """
     for sname, s in opt.local_scenarios.items():
         entry = state["duals"][sname]
-        model = s._mpisppy_model
         nonants = s._mpisppy_data.nonant_indices
-        saved_w = entry["W"]
-        missing = [ndn_i for ndn_i in nonants if ndn_i not in saved_w]
-        if missing:
+        missing_w = [ndn_i for ndn_i in nonants if ndn_i not in entry["W"]]
+        missing_x = [var.name for var in nonants.values()
+                     if var.name not in entry["values"]]
+        if missing_w or missing_x:
             raise CheckpointMismatch(
-                f"The checkpointed dual weights for scenario '{sname}' are "
-                f"missing {len(missing)} nonanticipative variable(s) this "
-                f"model has (e.g. {missing[:3]}), so they cannot be restored."
+                f"The checkpointed dual state for scenario '{sname}' is "
+                f"missing {len(missing_w)} dual weight(s) and "
+                f"{len(missing_x)} nonant value(s) this model has (e.g. "
+                f"{(missing_w + missing_x)[:3]}), so it cannot be restored."
             )
-        by_name = entry["values"]
-        for ndn_i, var in nonants.items():
+    for sname, s in opt.local_scenarios.items():
+        entry = state["duals"][sname]
+        model = s._mpisppy_model
+        saved_w, by_name = entry["W"], entry["values"]
+        for ndn_i, var in s._mpisppy_data.nonant_indices.items():
             model.W[ndn_i]._value = saved_w[ndn_i]
-            if var.name in by_name:
-                var._value = by_name[var.name]
+            var._value = by_name[var.name]
 
 
 #: How far the restored E[W] may stray from the E[W] recorded with the file,
@@ -1916,6 +1949,15 @@ def require_restored_duals_match_their_file(opt, cylinder, generation,
         for i, Wbar in enumerate(Wbars):
             want = float(recorded[ndn][i])
             size = float(sizes[ndn][i])
+            # A NaN anywhere here makes the excess NaN, and every comparison
+            # with NaN is false, so it would pass the check below unseen.
+            if not all(math.isfinite(x) for x in (float(Wbar), want, size)):
+                raise CheckpointMismatch(
+                    f"The dual weights {cylinder} wrote at its iteration "
+                    f"{generation} are not finite at node {ndn}, index {i} "
+                    f"(restored E[W] {float(Wbar)}, recorded {want}, size "
+                    f"{size}), so they cannot be checked. Remove the file to "
+                    f"start this cylinder from W = 0.")
             tolerance = opt.E1_tolerance + RESTORED_WBAR_RTOL * size
             excess = abs(float(Wbar) - want) / tolerance
             if worst is None or excess > worst[0]:

@@ -218,6 +218,23 @@ class TestScenarioCyclerState(unittest.TestCase):
                 self.assert_refused_and_untouched(cycler, before, warnings,
                                                   key)
 
+    def test_a_cursor_naming_another_runs_scenarios_is_refused(self):
+        """Well formed but not this run's: a name that is not one of its
+        scenarios would reach _try_one, and a node set that is not this
+        tree's would leave a node with nothing to try."""
+        saved = self._saved_away_from_a_fresh_cycler()
+        for key, value in (("best", "scen99"), ("cur_root_scen", "scen99"),
+                           ("scenarios_this_epoch", ["scen0", "scen99"]),
+                           ("nodescen_dict", {"ROOT": "scen99"}),
+                           ("nodescen_dict", {"ROOT": "scen0", "ROOT_0": "scen1"}),
+                           ("nodescen_dict", {})):
+            with self.subTest(key=key, value=value):
+                cycler = _cycler(self.NAMES)
+                before = cycler.checkpoint_state()
+                warnings = cycler.restore_state(dict(saved, **{key: value}))
+                self.assertEqual(len(warnings), 1)
+                self.assertEqual(cycler.checkpoint_state(), before)
+
     def test_loop_state_missing_a_key_or_bad_is_refused_with_a_warning(self):
         from mpisppy.cylinders.xhatshufflelooper_bounder import (
             XhatShuffleInnerBound)
@@ -507,6 +524,63 @@ class TestRestoredDualsMustMatchTheirFile(unittest.TestCase):
         self._set_W(opt, {"scen0": 1e9, "scen1": -5e8, "scen2": -5e8 + 3e5})
         with self.assertRaises(checkpointing.CheckpointMismatch):
             self._check(opt, recorded)
+
+    def test_non_finite_numbers_are_refused(self):
+        """A NaN makes every comparison false, so without an explicit check
+        it would pass as a match."""
+        for where in ("recorded", "restored"):
+            with self.subTest(where=where):
+                opt = self._prepped_ph()
+                recorded = self._recorded(opt, {"scen0": 10.0, "scen1": -4.0,
+                                                "scen2": -6.0})
+                if where == "recorded":
+                    ndn = next(iter(recorded))
+                    recorded[ndn] = [float("nan")] * len(recorded[ndn])
+                else:
+                    self._set_W(opt, {"scen0": float("nan"), "scen1": -4.0,
+                                      "scen2": -6.0})
+                with self.assertRaises(checkpointing.CheckpointMismatch) as cm:
+                    self._check(opt, recorded)
+                self.assertIn("not finite", str(cm.exception))
+
+
+class TestDualStateRestoreRefusesBeforeChanging(unittest.TestCase):
+    """A dual file missing a nonant's value is refused, and no model is
+    touched: the value would otherwise stay at the throwaway Iter0 solve's,
+    and the next xbar is computed from it."""
+
+    def _state(self, opt, drop=None):
+        duals = {}
+        for sname, s in opt.local_scenarios.items():
+            nonants = s._mpisppy_data.nonant_indices
+            duals[sname] = {
+                "W": {ndn_i: 5.0 for ndn_i in nonants},
+                "values": {v.name: 7.0 for v in nonants.values()}}
+        if drop is not None:
+            sname = list(duals)[-1]
+            name = next(iter(duals[sname][drop]))
+            del duals[sname][drop][name]
+        return {"duals": duals}
+
+    def _snapshot(self, opt):
+        return {(sname, ndn_i): (s._mpisppy_model.W[ndn_i]._value, v._value)
+                for sname, s in opt.local_scenarios.items()
+                for ndn_i, v in s._mpisppy_data.nonant_indices.items()}
+
+    def test_a_complete_file_is_restored(self):
+        opt = TestRestoredDualsMustMatchTheirFile()._prepped_ph()
+        checkpointing.restore_dual_spoke_state(opt, self._state(opt))
+        self.assertEqual(set(self._snapshot(opt).values()), {(5.0, 7.0)})
+
+    def test_a_missing_entry_is_refused_and_nothing_changes(self):
+        for drop in ("W", "values"):
+            with self.subTest(drop=drop):
+                opt = TestRestoredDualsMustMatchTheirFile()._prepped_ph()
+                before = self._snapshot(opt)
+                with self.assertRaises(checkpointing.CheckpointMismatch):
+                    checkpointing.restore_dual_spoke_state(
+                        opt, self._state(opt, drop=drop))
+                self.assertEqual(self._snapshot(opt), before)
 
 
 if __name__ == "__main__":
