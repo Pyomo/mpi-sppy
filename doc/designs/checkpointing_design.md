@@ -1327,11 +1327,12 @@ as a branch stacked on the 1a PR.
   - `RelaxedPHFixer` decides from the current spoke buffer, xbar and the
     models' fixedness, so it carries only its display count. Its pre-iteration
     0 fix-at-bounds pass belongs to the start of the study and is skipped on a
-    resume; the wait for the spoke's first buffer is kept. It does not
-    retrace an uninterrupted run: the relaxed-PH spoke it reads from is not
-    checkpointed and restarts from W = 0, so after the stop it hands the fixer
-    different relaxed solutions, and the fixer unfixes any restored fixing
-    they disagree with.
+    resume; the wait for the spoke's first buffer is kept. The relaxed-PH
+    spoke it reads from resumes from its checkpointed W (the dual cylinders'
+    own PH state, above), not W = 0, but its buffers arrive asynchronously, so an exact
+    retrace is not claimed or tested. A spoke that restarted from W = 0 would
+    hand the fixer different relaxed solutions after the stop, and the fixer
+    would unfix any restored fixing they disagree with.
   - `ReducedCostsFixer` carries the reduced costs it fixes from, the bound
     that decides whether new ones are accepted, and its count, and skips its
     pre-iteration-0 pass on a resume. Iter0's spoke sync runs before the
@@ -1344,7 +1345,9 @@ as a branch stacked on the 1a PR.
     its buffered rows at every checkpoint, and a resumed run keeps the files'
     rows through the checkpoint's iteration instead of truncating them, and
     sets its files up at the end of a resumed run that ran no iterations. On
-    any spoke it still starts its files over: no spoke writes extension state.
+    a spoke it still starts its files over: cfg_vanilla attaches it to the
+    hub and to the Lagrangian-family, reduced-costs, xfeas and dual spokes,
+    and none of those writes extension state (only the xhat spokes do).
 
   `WOscillationMonitor` (W trajectories, recurrence trackers, an internal
   slammer) and `CrossScenarioExtension` (whose `post_iter0` replaces model

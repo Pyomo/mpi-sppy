@@ -601,14 +601,19 @@ updaters (``--use-norm-rho-updater``, ``--sep-rho``, ``--sensi-rho``,
 trajectory an uninterrupted run would, rather than merely continuing correctly
 from the right models.
 
+The shipped convergers need nothing carried: each either recomputes what it
+compares from the current iterate or, like the primal-dual converger, rebuilds
+it correctly from the resumed models.
+
 The two fixers driven by a spoke, ``--rc-fixer`` (with ``--reduced-costs``) and
-``--relaxed-ph-fixer``, carry their own state too, but the spokes they read
-from are not checkpointed and start over on a resume. A resumed run using either continues correctly from
-the right models; it does not follow the uninterrupted run's trajectory. The PH
-tracker (``--ph-track-progress``) continues the hub's files across a resume;
-on a spoke it starts them over. The shipped convergers need nothing carried: each
-either recomputes what it compares from the current iterate or, like the
-primal-dual converger, rebuilds it correctly from the resumed models.
+``--relaxed-ph-fixer``, carry their own state too, and a resumed run using
+either continues correctly from the right models, but neither is promised to
+follow the uninterrupted run's trajectory. The reduced-costs spoke is not
+checkpointed and starts over on a resume. The relaxed-PH spoke resumes from
+its checkpointed W (see the dual cylinders above), but its buffers reach the
+hub asynchronously, and an exact retrace is not tested. The PH tracker
+(``--ph-track-progress``) continues the hub's files across a resume; on a
+spoke it starts them over.
 
 The rho-setting extensions do not *recompute* rho at the resume itself: the
 checkpointed rho -- including whatever adaptation had happened by the write --
