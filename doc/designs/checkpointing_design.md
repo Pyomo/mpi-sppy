@@ -1555,10 +1555,15 @@ as a branch stacked on the 1a PR.
   **The write gate changed**, and the cost argument is what justifies it. Before
   this phase a spoke wrote only when its incumbent improved, which is rare. The
   cursor moves far more often — but *every cursor move is the result of a
-  subproblem solve*, so a small pickle and a rename per move is negligible
-  against what caused it, while a pass that solves nothing still writes nothing.
-  That last case is the one that has to stay cheap, since the loop spins while
-  it waits on the hub. The write right after a restore carries the cursor and
+  subproblem solve*, so the writes are bounded by the solves, and a pass that
+  solves nothing still writes nothing. That last case is the one that has to
+  stay cheap, since the loop spins while it waits on the hub. Each write
+  pickles the whole cached incumbent (every variable of every local scenario)
+  and fsyncs twice, so its cost is small next to a MIP subproblem solve but
+  not next to a tiny LP: on farmer (6 scenarios, gurobi_persistent) a review
+  measured 2.9 ms per write against 3.8 ms per evaluation, about 64% added to
+  the spoke's evaluation time. A write that carries only the cursor when the
+  incumbent has not changed would remove most of that; it is not done here. The write right after a restore carries the cursor and
   extension state it just read rather than asking the spoke for them: the
   spoke is handed the cursor only once its loop exists, after `pre_iter0`, and
   the extension state at the end of `xhat_prep`, so asking would write fresh
@@ -1571,7 +1576,12 @@ as a branch stacked on the 1a PR.
 
   **The spoke-side extension state phase 3 deferred landed here too**, restored
   at the end of `xhat_prep` — after `post_iter0`, for exactly the reason the hub
-  restores at the end of `Iter0`.
+  restores at the end of `Iter0`. The restore lives on `InnerBoundNonantSpoke`,
+  not on the xhat base, because every spoke the Checkpointer is attached to
+  writes its extensions' state: the L-shaped xhatter and the slammers call it
+  at the end of their own prep (they run no extension `post_iter0`). An
+  earlier version restored only in `xhat_prep`, so those three wrote the state
+  and then silently dropped it on a resume.
 
   Tests: `test_checkpoint_spoke_cursor.py` (the cursor round trip, that a
   restored cycler offers the same scenarios next as one that never stopped, that

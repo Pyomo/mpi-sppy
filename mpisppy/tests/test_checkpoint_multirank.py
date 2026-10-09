@@ -55,7 +55,7 @@ import unittest
 
 import mpisppy.tests.multirank_agreement_driver as agreement_driver
 import mpisppy.utils.checkpointing as checkpointing
-from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
+from mpisppy.cylinders.spoke import InnerBoundNonantSpoke
 from mpisppy.cylinders.xhatshufflelooper_bounder import (ScenarioCycler,
                                                          XhatShuffleInnerBound)
 from mpisppy.extensions.checkpointer import Checkpointer
@@ -1501,8 +1501,8 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
         ("PHBase._restore_extension_state_if_resuming",
          PHBase._restore_extension_state_if_resuming),
         ("Checkpointer.post_iter0", Checkpointer.post_iter0),
-        ("XhatInnerBoundBase._restore_extension_state_if_resuming",
-         XhatInnerBoundBase._restore_extension_state_if_resuming),
+        ("InnerBoundNonantSpoke._restore_extension_state_if_resuming",
+         InnerBoundNonantSpoke._restore_extension_state_if_resuming),
         ("XhatShuffleInnerBound._restore_loop_state_if_resuming",
          XhatShuffleInnerBound._restore_loop_state_if_resuming),
         # Listed as well as reached: the call to it goes through
@@ -1543,7 +1543,7 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
                                     "require_restored_duals_match_their_file"),
         "Checkpointer._report_unclaimed_spoke_files":
             ("unclaimed_spoke_files",),
-        "XhatInnerBoundBase._restore_extension_state_if_resuming":
+        "InnerBoundNonantSpoke._restore_extension_state_if_resuming":
             ("restore_extension_state_on_a_spoke",),
     }
 

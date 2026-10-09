@@ -778,6 +778,47 @@ class TestEverySpokeGivenTheCheckpointerDrivesIt(unittest.TestCase):
                 spoke.restore_checkpointed_incumbent()   # must not raise
                 spoke.maybe_checkpoint()
 
+    def test_each_one_restores_its_extensions_state(self):
+        """Every one of these writes its extensions' state, so every one has
+        to hand it back on a resume. The L-shaped xhatter and the slammers
+        used to write it and drop it: only xhat_prep restored it."""
+        import inspect
+        import mpisppy.cylinders.xhatbase as xhatbase
+        for name, cls, mod in self._classes():
+            with self.subTest(spoke=name):
+                source = inspect.getsource(
+                    xhatbase if issubclass(cls, xhatbase.XhatInnerBoundBase)
+                    else mod)
+                self.assertIn(
+                    "self._restore_extension_state_if_resuming()", source,
+                    msg=f"{name}'s prep never hands its extensions the state "
+                        f"its Checkpointer read, so a resume drops it")
+
+    def test_the_restore_reaches_the_extension(self):
+        """Run the shared restore on each spoke, single rank: the state the
+        Checkpointer read is handed to the extension it belongs to."""
+        from mpisppy.extensions.extension import Extension
+
+        class _Counter(Extension):
+            def checkpoint_state(self):
+                return {"n": 0}
+
+            def restore_state(self, state):
+                self.restored = state
+
+        for name, cls, _ in self._classes():
+            with self.subTest(spoke=name):
+                counter = _Counter.__new__(_Counter)
+                holder = types.SimpleNamespace(restored_extension_state={
+                    "extensions": {"_Counter": {"n": 7}}, "converger": None})
+                spoke = cls.__new__(cls)
+                spoke.opt = types.SimpleNamespace(
+                    n_proc=1, cylinder_rank=0, convobject=None,
+                    extobject=types.SimpleNamespace(
+                        extdict={"Holder": holder, "_Counter": counter}))
+                spoke._restore_extension_state_if_resuming()
+                self.assertEqual(counter.restored, {"n": 7})
+
 
 class TestEveryWriterProbesItsOwnFile(unittest.TestCase):
     """Several cylinders share one --checkpoint-dir and all of them probe it.

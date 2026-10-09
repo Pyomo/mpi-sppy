@@ -17,6 +17,8 @@ from mpisppy.cylinders.spcommunicator import SPCommunicator, SendCircularBuffer
 from mpisppy.cylinders.spwindow import Field
 from mpisppy.debug_utils.buffer_inspect import InspectContext, inspect_buffer
 from mpisppy.utils import sputils
+import mpisppy.utils.checkpointing as ckpt
+from mpisppy import global_toc
 
 
 class Spoke(SPCommunicator):
@@ -420,6 +422,39 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke, InnerBoundSpoke):
         """
         if self.opt.extensions is not None:
             self.opt.extobject.pre_iter0()
+
+    def _restore_extension_state_if_resuming(self):
+        """Hand this spoke's extensions the state a resume read for them.
+
+        Call it from the spoke's prep, after every hook in which an extension
+        rebuilds its bookkeeping from the models (post_iter0, for the xhat
+        spokes), and before the loop. Every spoke the Checkpointer is attached
+        to writes its extensions' state, so every one has to call this, or
+        the state is written and then silently dropped on a resume.
+        """
+        ext = getattr(self.opt, "extobject", None)
+        if ext is None:
+            return
+        candidates = list(getattr(ext, "extdict", {}).values()) + [ext]
+        state = None
+        for candidate in candidates:
+            state = getattr(candidate, "restored_extension_state", None)
+            if state is not None:
+                break
+        # Agreed, and reached whether or not this rank has state to hand
+        # over: an extension puts its state back on the models this rank
+        # owns, so one that cannot is a refusal one rank makes alone, and
+        # the spoke's loop that follows is collective. What there is to
+        # restore was agreed when the file was read (agree_spoke_restore),
+        # so the ranks arrive here with the same answer.
+        messages = ckpt.run_agreed(
+            self.opt,
+            lambda: [] if state is None
+            else ckpt.restore_extension_state(self.opt, state),
+            "hand their extensions the checkpointed state, so none of them "
+            "resumes")
+        for message in messages:
+            global_toc(f"WARNING: {message}", self.cylinder_rank == 0)
 
     def maybe_checkpoint(self):
         """Offer the extensions a checkpoint point, once per loop pass.

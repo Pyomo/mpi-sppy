@@ -13,20 +13,26 @@ that does not ask for checkpointing pays nothing at all -- the extension is
 never constructed and none of its hooks exist. This extension decides *when*
 to write; ``mpisppy/utils/checkpointing.py`` owns the on-disk format.
 
-One class serves two cylinders, because they hold different halves of the
-answer:
+One class serves three kinds of cylinder, because each holds a different
+part of the answer:
 
 * **On the PH hub** it writes the iterate -- the scenario models and the
   non-model state around them -- at completed iterations. The hub's *restore*
   is not here: it lives in ``PHBase.Iter0``, because splicing reloaded models
   in has to happen mid-startup, before solvers are created.
-* **On an xhat spoke** it writes that spoke's best incumbent, by variable
-  name, whenever the incumbent improves, and restores it in ``pre_iter0``
-  (which ``xhat_prep`` calls once before the spoke's loop starts). The hub's
-  checkpoint does not carry the best solution -- that lives in
+* **On an inner-bound spoke** (the xhat spokes, the L-shaped xhatter and
+  the slammers) it writes that spoke's best incumbent, by variable name, with
+  the spoke's loop position (xhatshuffle's cursor) and its extensions' state.
+  It writes when the incumbent improves or the cursor moves, right after a
+  restore, and when the spoke finalizes. It restores the incumbent in
+  ``pre_iter0``, which the spoke's prep calls once before its loop starts.
+  The hub's checkpoint does not carry the best solution -- that lives in
   ``best_solution_cache`` on the spoke -- so without this a resumed cylinders
   run would restore its iterate perfectly and still throw away the answer it
   had found.
+* **On a dual cylinder** (``relaxed_ph``, ``ph_dual``) it writes the
+  cylinder's own W, and restores it in ``post_iter0``, so the cylinder feeds
+  the hub from where it stopped rather than from W = 0.
 
 A run that gives ``--resume-from`` without ``--checkpoint-dir`` still gets the
 extension, with writing switched off: reading is a spoke's whole job here.
@@ -204,10 +210,12 @@ class Checkpointer(Extension):
         # reaches its first write and discovers it cannot finish one.
         ckpt.require_implemented_backend(self.backend)
 
-        # One class, two jobs. On the hub it writes the PH iterate, models and
-        # all. On an xhat spoke it writes only that spoke's best incumbent, by
-        # variable name -- no models, no generations, no dill (which is why
-        # the dill checks below are hub-only).
+        # One class, three jobs. On the hub it writes the PH iterate, models
+        # and all. On an inner-bound spoke it writes that spoke's best
+        # incumbent by variable name, with its loop position and extension
+        # state; on a dual cylinder, that cylinder's W. Neither spoke kind
+        # writes models, generations or dill (which is why the dill checks
+        # below are hub-only).
         #
         # The invariant the hub write rests on -- the write happens after the
         # solve, so W and the nonants agree -- is a property of the
@@ -889,10 +897,11 @@ class Checkpointer(Extension):
 
         Two things can move. The incumbent improves rarely. The **loop cursor**
         moves whenever the spoke tries another scenario, which is more often --
-        but every cursor move is the result of a subproblem solve, so a small
-        pickle and a rename per move is negligible against what caused it. A
-        pass that solves nothing writes nothing, which is the case that has to
-        stay cheap and does.
+        but every cursor move is the result of a subproblem solve, so writes
+        are bounded by solves. A pass that solves nothing writes nothing,
+        which is the case that has to stay cheap and does. A write is not
+        free, though: it pickles the whole cached incumbent and fsyncs twice,
+        which is small next to a MIP solve and comparable to a tiny LP's.
 
         Failures warn rather than raise, for the hub's reason and one more:
         this file is an optimization. Losing it costs a resumed run the
