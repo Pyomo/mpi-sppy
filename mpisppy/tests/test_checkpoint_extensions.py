@@ -238,6 +238,39 @@ class TestNormRhoUpdaterResume(_ABMixin, unittest.TestCase):
 
 
 @unittest.skipIf(not solver_available, "no solver is available")
+class TestPrimalDualRhoResume(_ABMixin, unittest.TestCase):
+    """Compares each iteration's xbars against the previous ones.
+
+    Without the restore a resumed run takes the "first time through" branch
+    of miditer: it records the xbars and makes no rho update that iteration,
+    which an uninterrupted run does make.
+    """
+
+    N = 6
+    STOP = 3
+    EXTRA_OPTIONS = {"primal_dual_rho_options": {"verbose": False,
+                                                 "rho_update_threshold": 1.5}}
+
+    def ext_classes(self):
+        from mpisppy.extensions.primal_dual_rho import PrimalDualRho
+        return [PrimalDualRho]
+
+    def test_resume_is_bit_identical(self):
+        reference, _, resumed = self.run_ab()
+        self.assert_bit_identical(reference, resumed)
+
+    def test_rho_really_changes_after_the_stop(self):
+        """Otherwise the comparison above cannot see the restore."""
+        _, stopped, resumed = self.run_ab()
+        before = {k: v for k, v in _primal_snapshot(stopped).items()
+                  if "|rho|" in k}
+        after = {k: v for k, v in _primal_snapshot(resumed).items()
+                 if "|rho|" in k}
+        self.assertNotEqual(before, after,
+                            msg="no rho changed after the resume")
+
+
+@unittest.skipIf(not solver_available, "no solver is available")
 class TestMultRhoUpdaterResume(_ABMixin, unittest.TestCase):
     """A rho updater that anchors a ratio once and scales from it forever.
 
@@ -1389,6 +1422,293 @@ class TestACheckpointedRunRefusesBeforeSolving(unittest.TestCase):
         ph.ph_main()
 
 
+class TestXhatFeasibilityCutKeysContinue(unittest.TestCase):
+    """The cuts ride in the models, and so does the key of the next one.
+
+    A counter on the extension restarted at 0 on a resume, and even restored
+    it came back only at the end of Iter0 -- after Iter0's spoke sync, which
+    can already install a cut. Reading the next key from the model leaves
+    nothing to restore and nothing to race.
+    """
+
+    def _extension_with_cuts(self, n_cuts):
+        import pyomo.environ as pyo
+        from mpisppy.extensions.xhat_feasibility_cut_extension import \
+            XhatFeasibilityCutExtension
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var([0, 1], domain=pyo.Binary)
+        m._mpisppy_model = pyo.Block()
+        m._mpisppy_model.xhat_feasibility_cuts = pyo.Constraint(pyo.Any)
+        m._mpisppy_data = types.SimpleNamespace(
+            nonant_indices={("ROOT", 0): m.x[0], ("ROOT", 1): m.x[1]})
+        m._solver_plugin = None
+        for key in range(1, n_cuts + 1):
+            m._mpisppy_model.xhat_feasibility_cuts[key] = (
+                0.0, float(key) - m.x[0], None)
+        ext = XhatFeasibilityCutExtension.__new__(XhatFeasibilityCutExtension)
+        ext.opt = types.SimpleNamespace(local_scenarios={"s": m})
+        ext._row_len = 3
+        return ext, m
+
+    def test_it_has_nothing_to_carry(self):
+        ext, _ = self._extension_with_cuts(3)
+        self.assertIsNone(ext.checkpoint_state())
+
+    def test_a_cut_on_restored_models_does_not_overwrite_one_before_it(self):
+        """A fresh extension object over models that already hold three cuts,
+        as on a resume, with no restore_state having run."""
+        ext, m = self._extension_with_cuts(3)
+        cuts = m._mpisppy_model.xhat_feasibility_cuts
+        before = {k: str(cuts[k].body) for k in cuts}
+        ext._install_cuts([5.0, 1.0, -1.0, 1])
+        self.assertEqual(sorted(cuts.keys()), [1, 2, 3, 4])
+        self.assertEqual({k: str(cuts[k].body) for k in before}, before)
+
+    def test_restored_models_without_the_component_get_one(self):
+        """A resume that attaches the extension to a checkpoint written
+        without it: setup_hub's component was on the replaced models."""
+        ext, m = self._extension_with_cuts(0)
+        m._mpisppy_model.del_component("xhat_feasibility_cuts")
+        ext._install_cuts([5.0, 1.0, -1.0, 1])
+        self.assertEqual(
+            sorted(m._mpisppy_model.xhat_feasibility_cuts.keys()), [1])
+
+    def test_a_zero_row_does_not_use_a_key(self):
+        ext, m = self._extension_with_cuts(2)
+        ext._install_cuts([0.0, 0.0, 0.0, 6.0, -1.0, 1.0, 2])
+        self.assertEqual(
+            sorted(m._mpisppy_model.xhat_feasibility_cuts.keys()), [1, 2, 3])
+
+    def test_keys_start_at_one_on_a_fresh_run(self):
+        ext, m = self._extension_with_cuts(0)
+        ext._install_cuts([5.0, 1.0, -1.0, 6.0, -1.0, 1.0, 2])
+        self.assertEqual(
+            sorted(m._mpisppy_model.xhat_feasibility_cuts.keys()), [1, 2])
+
+
+class TestRelaxedPHFixerResume(unittest.TestCase):
+    """Its decisions need nothing saved; its one-time pass must not rerun."""
+
+    def _fixer(self, resumed):
+        from mpisppy.extensions.relaxed_ph_fixer import RelaxedPHFixer
+        fixer = RelaxedPHFixer.__new__(RelaxedPHFixer)
+        fixer.opt = types.SimpleNamespace(_resumed_from_checkpoint=resumed,
+                                          spcomm=None)
+        fixer.relaxed_nonant_buf = types.SimpleNamespace(
+            id=lambda: 1, value_array=lambda: [0.0])
+        fixer.passes = []
+        fixer.relaxed_ph_fixing = (
+            lambda sol, pre_iter0=False: fixer.passes.append(pre_iter0))
+        fixer._heuristic_fixed_vars = {"s0": 0, "s1": 0}
+        return fixer
+
+    def test_a_fresh_run_makes_the_pre_iter0_pass(self):
+        fixer = self._fixer(resumed=False)
+        fixer.iter0_post_solver_creation()
+        self.assertEqual(fixer.passes, [True])
+
+    def test_a_resumed_run_does_not(self):
+        fixer = self._fixer(resumed=True)
+        fixer.iter0_post_solver_creation()
+        self.assertEqual(fixer.passes, [])
+
+    def test_the_count_round_trips(self):
+        stopped = self._fixer(resumed=False)
+        stopped._heuristic_fixed_vars = {"s0": 4, "s1": 2}
+        state = pickle.loads(pickle.dumps(stopped.checkpoint_state()))
+        resumed = self._fixer(resumed=True)
+        resumed.restore_state(state)
+        self.assertEqual(resumed._heuristic_fixed_vars, {"s0": 4, "s1": 2})
+
+
+class TestReducedCostsFixerResume(unittest.TestCase):
+    """The reduced costs it fixes from, and the bound that gates new ones."""
+
+    def _fixer(self, resumed):
+        from mpisppy.extensions.reduced_costs_fixer import ReducedCostsFixer
+        fixer = ReducedCostsFixer.__new__(ReducedCostsFixer)
+        fixer.opt = types.SimpleNamespace(_resumed_from_checkpoint=resumed)
+        fixer._fix_fraction_target_pre_iter0 = 0.5
+        fixer._fix_fraction_target_iter0 = 0.25
+        fixer._best_outer_bound = -float("inf")
+        fixer._outer_bound_update = lambda new, old: new > old
+        fixer._current_reduced_costs = None
+        fixer._heuristic_fixed_vars = 0
+        return fixer
+
+    def test_a_resumed_run_skips_the_pre_iter0_pass(self):
+        fixer = self._fixer(resumed=True)
+        # Reaching the spoke wait would fail here: there is no buffer.
+        fixer.iter0_post_solver_creation()
+        self.assertEqual(fixer.fix_fraction_target, 0.0)
+
+    def test_iter0s_sync_on_a_resume_fixes_nothing(self):
+        """The reduced-costs spoke restarts on a resume, and Iter0's sync runs
+        before restore_state, while the best bound is still -inf. Reduced
+        costs it sends then are recorded, not fixed from; the restore keeps
+        the checkpoint's when its bound is better, and fixing resumes at the
+        next iteration from those."""
+        import numpy as np
+        fixer = self._fixer(resumed=True)
+        fixer._fix_fraction_target_iterK = 0.75
+        fixer._rc_fixer_require_improving_lagrangian = True
+        fixer.verbose = False
+        fixer.opt.cylinder_rank = 0
+        fixer.opt.spcomm = types.SimpleNamespace(
+            get_receive_buffer=lambda *a, **k: True)
+        fixer.reduced_costs_spoke_index = 0
+        fixer.reduced_cost_buf = types.SimpleNamespace(
+            is_new=lambda: True, id=lambda: 1,
+            value_array=lambda: np.array([7.0, 7.0]))
+        fixer.outer_bound_buf = types.SimpleNamespace(
+            id=lambda: 1, value_array=lambda: np.array([-1000.0]))
+        fixings = []
+        fixer.reduced_costs_fixing = lambda rc, **k: fixings.append(rc)
+
+        fixer.iter0_post_solver_creation()
+        fixer.sync_with_spokes()
+        self.assertEqual(fixings, [],
+                         msg="Iter0's sync fixed from a restarted spoke")
+        fixer.post_iter0_after_sync()
+        fixer.restore_state({"best_outer_bound": 12.5,
+                             "current_reduced_costs": [1.0, 2.0],
+                             "heuristic_fixed_vars": 3.0})
+        self.assertEqual(fixer._best_outer_bound, 12.5)
+        self.assertEqual(fixer._current_reduced_costs.tolist(), [1.0, 2.0])
+        self.assertEqual(fixer.fix_fraction_target, 0.75)
+
+    def test_the_state_round_trips(self):
+        import numpy as np
+        stopped = self._fixer(resumed=False)
+        stopped._best_outer_bound = 12.5
+        stopped._current_reduced_costs = np.array([0.0, 3.0, -1.0])
+        stopped._heuristic_fixed_vars = 7.0
+        state = pickle.loads(pickle.dumps(stopped.checkpoint_state()))
+        resumed = self._fixer(resumed=True)
+        resumed.restore_state(state)
+        self.assertEqual(resumed._best_outer_bound, 12.5)
+        self.assertEqual(resumed._current_reduced_costs.tolist(),
+                         [0.0, 3.0, -1.0])
+        self.assertEqual(resumed._heuristic_fixed_vars, 7.0)
+
+    def test_newer_reduced_costs_from_iter0_are_kept(self):
+        """Iter0's spoke sync runs before the restore; reduced costs it took
+        at a better bound than the checkpoint's are newer than the saved ones."""
+        import numpy as np
+        resumed = self._fixer(resumed=True)
+        resumed._best_outer_bound = 20.0
+        resumed._current_reduced_costs = np.array([9.0])
+        resumed.restore_state({"best_outer_bound": 12.5,
+                               "current_reduced_costs": [1.0],
+                               "heuristic_fixed_vars": 3.0})
+        self.assertEqual(resumed._best_outer_bound, 20.0)
+        self.assertEqual(resumed._current_reduced_costs.tolist(), [9.0])
+        self.assertEqual(resumed._heuristic_fixed_vars, 3.0)
+
+
+class TestPHTrackerFilesContinue(unittest.TestCase):
+    """A resumed run continues the tracker's files instead of truncating them."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _tracked(self):
+        from mpisppy.extensions.phtracker import TrackedData
+        tracked = TrackedData("xbars", self._tmp.name)
+        tracked.initialize_fnames()
+        return tracked
+
+    def _rows(self, tracked):
+        import pandas as pd
+        return pd.read_csv(tracked.fname)["iteration"].tolist()
+
+    def test_rows_after_the_checkpoint_are_dropped(self):
+        tracked = self._tracked()
+        tracked.initialize_df(["iteration", "x"])
+        for it in range(6):
+            tracked.add_row([it, float(it)])
+        tracked.write_out_data()
+        # The resumed run, continuing from iteration 3.
+        resumed = self._tracked()
+        resumed.initialize_df(["iteration", "x"], keep_through=3)
+        self.assertEqual(self._rows(resumed), [0, 1, 2, 3])
+        self.assertEqual(resumed.seen_iters, {0, 1, 2, 3})
+        resumed.add_row([4, 4.0])
+        resumed.write_out_data()
+        self.assertEqual(self._rows(resumed), [0, 1, 2, 3, 4])
+
+    def test_a_fresh_run_still_starts_over(self):
+        tracked = self._tracked()
+        tracked.initialize_df(["iteration", "x"])
+        tracked.add_row([0, 0.0])
+        tracked.write_out_data()
+        again = self._tracked()
+        again.initialize_df(["iteration", "x"])
+        self.assertEqual(self._rows(again), [])
+
+    def test_a_checkpoint_writes_out_what_is_buffered(self):
+        from mpisppy.extensions.phtracker import PHTracker
+        tracker = PHTracker.__new__(PHTracker)
+        tracker.finished_init = True
+        tracker._rank = 0
+        tracker.spcomm = None
+        tracker.opt = types.SimpleNamespace(_PHIter=2)
+        tracked = self._tracked()
+        tracked.initialize_df(["iteration", "x"])
+        tracked.add_row([1, 1.0])
+        tracked.add_row([2, 2.0])
+        tracker.track_dict = {"xbars": tracked}
+        self.assertEqual(tracker.checkpoint_state(), {"through_iteration": 2})
+        self.assertEqual(self._rows(tracked), [1, 2])
+
+
+@unittest.skipIf(not solver_available, "no solver is available")
+class TestPHTrackerResume(_ABMixin, unittest.TestCase):
+    """End to end: the stopped-and-resumed run's tracker file matches the
+    uninterrupted run's, rather than holding only the resumed iterations."""
+
+    N = 5
+    STOP = 2
+
+    def ext_classes(self):
+        from mpisppy.extensions.phtracker import PHTracker
+        return [PHTracker]
+
+    def _ph(self, max_iters, **ckpt_kwargs):
+        folder = os.path.join(
+            self._tmp.name, "ab" if ckpt_kwargs else "reference")
+        self.EXTRA_OPTIONS = {"phtracker_options": {
+            "results_folder": folder, "track_xbars": True, "write_every": 3}}
+        return super()._ph(max_iters, **ckpt_kwargs)
+
+    def _rows(self, which):
+        import pandas as pd
+        folder = os.path.join(self._tmp.name, which)
+        (cylinder,) = os.listdir(folder)
+        return pd.read_csv(os.path.join(folder, cylinder, "xbars.csv"))
+
+    def test_a_resume_that_runs_no_iterations_finishes(self):
+        """A resumed run skips Iter0's solve loop, so with no iterations left
+        the tracker was never set up when post_everything ran."""
+        stopped = self._ph(self.STOP, ckpt_dir=self.ckpt_dir)
+        stopped.ph_main()
+        resumed = self._ph(0, resume_from=self.ckpt_dir)
+        resumed.ph_main()
+        self.assertEqual(self._rows("ab")["iteration"].tolist(),
+                         list(range(self.STOP + 1)))
+
+    def test_the_file_matches_the_uninterrupted_run(self):
+        self.run_ab()
+        want, got = self._rows("reference"), self._rows("ab")
+        self.assertEqual(got["iteration"].tolist(),
+                         want["iteration"].tolist())
+        self.assertTrue(want.equals(got),
+                        msg="the resumed run's tracked xbars differ")
+
+
 class TestShippedExtensionsAnswerTheQuestion(unittest.TestCase):
     """Every shipped extension either carries its state or says it has none.
 
@@ -1401,11 +1721,7 @@ class TestShippedExtensionsAnswerTheQuestion(unittest.TestCase):
     #: Extensions that keep state across iterations and do not yet carry it.
     #: A checkpointed run refuses each of them at startup, since a resume
     #: with one would not retrace an uninterrupted run.
-    UNANSWERED = {
-        "CrossScenarioExtension", "PHTracker", "PrimalDualRho",
-        "ReducedCostsFixer", "RelaxedPHFixer", "TimedMIPGapCB",
-        "WOscillationMonitor", "XhatFeasibilityCutExtension",
-    }
+    UNANSWERED = {"CrossScenarioExtension", "WOscillationMonitor"}
 
     #: Where shipped extensions and convergers live. Not only
     #: mpisppy.extensions: the W and xbar file extensions are in utils, and

@@ -375,7 +375,14 @@ updaters (``--use-norm-rho-updater``, ``--sep-rho``, ``--sensi-rho``,
 (``--fixer``), the slammer (``--slamming-directives-file``) and the W tracker
 (``--wtracker``). So a resumed run using one of them follows the same
 trajectory an uninterrupted run would, rather than merely continuing correctly
-from the right models. The shipped convergers need nothing carried: each
+from the right models.
+
+The two fixers driven by a spoke, ``--rc-fixer`` (with ``--reduced-costs``) and
+``--relaxed-ph-fixer``, carry their own state too, but the spokes they read
+from are not checkpointed and start over on a resume. A resumed run using either continues correctly from
+the right models; it does not follow the uninterrupted run's trajectory. The PH
+tracker (``--ph-track-progress``) continues the hub's files across a resume;
+on a spoke it starts them over. The shipped convergers need nothing carried: each
 either recomputes what it compares from the current iterate or, like the
 primal-dual converger, rebuilds it correctly from the resumed models.
 
@@ -411,10 +418,9 @@ Two things this does not cover:
   decided" look the same, and the second one is a run that quietly stops
   retracing an uninterrupted one.
 
-  Some of the shipped extensions keep state and do not carry it yet, so a
-  checkpointed run refuses them: ``PrimalDualRho``, ``WOscillationMonitor``,
-  ``ReducedCostsFixer``, ``RelaxedPHFixer``, ``CrossScenarioExtension``,
-  ``TimedMIPGapCB``, ``PHTracker`` and ``XhatFeasibilityCutExtension``.
+  Two of the shipped extensions keep state and do not carry it yet, so a
+  checkpointed run refuses them: ``WOscillationMonitor`` and
+  ``CrossScenarioExtension``.
 * **A converger is held to the same rule.** It implements
   ``checkpoint_state()``/``restore_state(state)``, as a no-op pair if it keeps
   no state, or a checkpointed run refuses it at startup. That matters more than

@@ -46,7 +46,23 @@ class RelaxedPHFixer(Extension):
         if self.relaxed_nonant_buf.id() == 0:
             while not self.opt.spcomm.get_receive_buffer(self.relaxed_nonant_buf, Field.RELAXED_NONANTS_VALS, self.relaxed_ph_spoke_index):
                 continue
+        # The fix-at-bounds pass belongs to the start of the study. A resumed
+        # run arrives with the fixings the earlier run made already on the
+        # models, and running the pass again here would fix variables an
+        # uninterrupted run never fixes at this point. The wait above still
+        # applies, so the first miditer reads a real buffer.
+        if getattr(self.opt, "_resumed_from_checkpoint", False):
+            return
         self.relaxed_ph_fixing(self.relaxed_nonant_buf.value_array(), pre_iter0=True)
+
+    def checkpoint_state(self):
+        # Every fixing decision reads the current buffer, xbar and the
+        # models' fixedness, all of which a resume has. This count only feeds
+        # the verbose printout, but without it that printout restarts at 0.
+        return {"heuristic_fixed_vars": dict(self._heuristic_fixed_vars)}
+
+    def restore_state(self, state):
+        self._heuristic_fixed_vars.update(state["heuristic_fixed_vars"])
 
     def register_receive_fields(self):
         spcomm = self.opt.spcomm
