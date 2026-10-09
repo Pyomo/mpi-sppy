@@ -1558,12 +1558,18 @@ as a branch stacked on the 1a PR.
   subproblem solve*, so the writes are bounded by the solves, and a pass that
   solves nothing still writes nothing. That last case is the one that has to
   stay cheap, since the loop spins while it waits on the hub. Each write
-  pickles the whole cached incumbent (every variable of every local scenario)
-  and fsyncs twice, so its cost is small next to a MIP subproblem solve but
-  not next to a tiny LP: on farmer (6 scenarios, gurobi_persistent) a review
-  measured 2.9 ms per write against 3.8 ms per evaluation, about 64% added to
-  the spoke's evaluation time. A write that carries only the cursor when the
-  incumbent has not changed would remove most of that; it is not done here. The write right after a restore carries the cursor and
+  pickles the whole cached incumbent (every variable of every local scenario,
+  keyed by name) and fsyncs twice. Keying the values by name was almost all
+  of the cost -- Pyomo builds each `var.name` on demand, about 2 us per
+  variable, about 350 ms per write on the 164,000-variable UC test instance
+  -- so the name-keyed dict is now built once per incumbent and reused until
+  the incumbent changes (`_values_by_name`). What is left is the pickle, the
+  file write and the two fsyncs: measured at 2.5 ms on 10-scenario farmer
+  (almost all fsync) and 13 ms on UC, on a laptop NVMe disk; a network
+  filesystem's fsync is slower. That is small next to a MIP subproblem solve
+  but not next to a tiny LP's. A write that carries only the cursor when the
+  incumbent has not changed, and a lighter fsync policy for it, are tracked
+  separately. The write right after a restore carries the cursor and
   extension state it just read rather than asking the spoke for them: the
   spoke is handed the cursor only once its loop exists, after `pre_iter0`, and
   the extension state at the end of `xhat_prep`, so asking would write fresh

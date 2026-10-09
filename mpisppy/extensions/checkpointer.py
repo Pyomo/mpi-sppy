@@ -902,6 +902,8 @@ class Checkpointer(Extension):
         which is the case that has to stay cheap and does. A write is not
         free, though: it pickles the whole cached incumbent and fsyncs twice,
         which is small next to a MIP solve and comparable to a tiny LP's.
+        (Keying the incumbent by variable name used to dominate; it is now
+        done once per incumbent, see checkpointing._values_by_name.)
 
         Failures warn rather than raise, for the hub's reason and one more:
         this file is an optimization. Losing it costs a resumed run the

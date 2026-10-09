@@ -2764,6 +2764,36 @@ class TestSpokeIncumbentFile(unittest.TestCase):
                 msg=f"{sname}: the file carries the objective of a solve "
                     "that came after the incumbent it stores")
 
+    def test_an_unchanged_incumbent_is_not_rebuilt(self):
+        """A spoke writes on nearly every evaluation, and keying the values
+        by name is almost all of a write's cost on a large model. The dict is
+        built once per incumbent and reused until the incumbent changes."""
+        import pyomo.environ as pyo
+        opt = _xhat_eval(ckpt_dir=self.ckpt_dir)
+        _set_and_cache_solution(opt, 10.0)
+        first = checkpointing.spoke_incumbent_state(opt, self.CYLINDER, 2)
+        # Later solves move the live variables but not the incumbent.
+        for s in opt.local_scenarios.values():
+            for v in s.component_data_objects(pyo.Var):
+                if v.value is not None:
+                    v.set_value(v.value + 1.0, skip_validation=True)
+        second = checkpointing.spoke_incumbent_state(opt, self.CYLINDER, 2)
+        for sname in first["solutions"]:
+            self.assertIs(second["solutions"][sname]["values"],
+                          first["solutions"][sname]["values"],
+                          msg=f"{sname}: rebuilt for an unchanged incumbent")
+
+        # An improvement replaces the cache, so the dict follows it.
+        _set_and_cache_solution(opt, 5.0)
+        third = checkpointing.spoke_incumbent_state(opt, self.CYLINDER, 2)
+        for sname, s in opt.local_scenarios.items():
+            values = third["solutions"][sname]["values"]
+            self.assertIsNot(values, first["solutions"][sname]["values"])
+            self.assertEqual(
+                values,
+                {v.name: x for v, x in
+                 s._mpisppy_data.best_solution_cache.items()})
+
     def test_the_restored_objective_is_the_one_the_spoke_republishes(self):
         """And it stays that one once the resumed spoke starts working.
 

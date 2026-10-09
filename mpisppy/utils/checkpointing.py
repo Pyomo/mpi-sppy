@@ -1412,6 +1412,25 @@ def load_checkpoint(opt, ckpt_dir):
 GATHER_EXTENSION_STATE = object()
 
 
+def _values_by_name(s, cache):
+    """This scenario's cached solution keyed by variable name, built once
+    per incumbent.
+
+    A spoke writes on nearly every evaluation (its loop cursor moves), while
+    the incumbent changes rarely, and building the dict is almost all of a
+    write's cost: Pyomo builds each ``var.name`` on demand, about 2 us per
+    variable, so a 160,000-variable UC instance paid about 350 ms per write
+    to rebuild a dict that had not changed. ``_cache_best_solution`` replaces
+    the cache object on every improvement and nothing edits one in place, so
+    the object's identity says whether the dict is still current.
+    """
+    memo = getattr(s._mpisppy_data, "_checkpoint_values_by_name", None)
+    if memo is None or memo[0] is not cache:
+        memo = (cache, {var.name: value for var, value in cache.items()})
+        s._mpisppy_data._checkpoint_values_by_name = memo
+    return memo[1]
+
+
 def spoke_incumbent_state(opt, cylinder, ordinal, best_inner_bound=None,
                           loop_state=None, class_count=None,
                           extension_state=GATHER_EXTENSION_STATE):
@@ -1448,7 +1467,7 @@ def spoke_incumbent_state(opt, cylinder, ordinal, best_inner_bound=None,
                 f"with the values and is read downstream as a real number")
         solutions[sname] = {
             "inner_bound": objective,
-            "values": {var.name: value for var, value in cache.items()},
+            "values": _values_by_name(s, cache),
         }
     return {
         "format_version": FORMAT_VERSION,
