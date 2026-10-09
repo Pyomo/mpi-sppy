@@ -1424,11 +1424,6 @@ class PHBase(mpisppy.spopt.SPOpt):
                    f"(iteration {self._resume_iteration})",
                    self.cylinder_rank == 0)
 
-        # The converger warning is not issued here: the converger object does
-        # not exist yet (Iter0 constructs it downstream of this splice), so
-        # whether its state can be carried is not yet knowable. See
-        # _restore_extension_state_if_resuming, which runs once it does.
-
     def Iter0(self):
         """ Create solvers and perform the initial PH solve (with no dual
         weights or prox terms).

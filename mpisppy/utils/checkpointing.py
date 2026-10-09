@@ -603,8 +603,10 @@ def initially_fixed_nonant_names(opt):
 # next iteration than the uninterrupted run would have, so the runs diverge --
 # quietly, since nothing is missing and nothing raises.
 #
-# The contract is two no-op methods on ``Extension`` and ``Converger``. This
-# module aggregates them, keyed by class name, because names are what survives
+# The contract is two methods on ``Extension`` and ``Converger``, which the
+# base classes leave raising: a checkpointed run refuses at startup any class
+# that does not override both (require_state_contract). This module
+# aggregates them, keyed by class name, because names are what survives
 # a resume: object identity does not, and attach order is not stable enough to
 # index by. Name keying is also what lets a resume with a *different* extension
 # set do something sensible -- entries with no matching extension are reported
@@ -617,7 +619,8 @@ def _extension_objects(opt):
 
     ``MultiExtension`` is a container, not an extension with state of its own,
     so it is flattened away -- and flattened recursively, since nothing stops
-    one from holding another. Two extensions of the same class would collide
+    one from holding another. An empty one yields nothing: it is still a
+    container, not an extension that failed to implement the hooks. Two extensions of the same class would collide
     on the name key, but ``MultiExtension.extdict`` is itself keyed by class
     name, so they cannot both be attached in the first place.
     """
@@ -628,7 +631,7 @@ def _extension_objects(opt):
     while stack:
         obj = stack.pop()
         extdict = getattr(obj, "extdict", None)
-        if extdict:
+        if extdict is not None:
             stack.extend(extdict.values())
         else:
             yield type(obj).__name__, obj
