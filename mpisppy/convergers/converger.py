@@ -27,13 +27,6 @@ class Converger:
         Args:
             opt (SPBase): The SPBase object for the current model
     '''
-    #: True on a converger that has nothing to carry across a checkpoint,
-    #: so a resume does not warn that it starts fresh. The same declaration
-    #: as ``Extension.checkpoint_stateless``, and deliberately not inherited
-    #: for the same reason: the check reads the class's own ``__dict__``, so a
-    #: subclass that adds state to a stateless parent is warned about.
-    checkpoint_stateless = False
-
     def __init__(self, opt):
         self.conv = None  # intended to be the value used for comparison
 
@@ -61,15 +54,18 @@ class Converger:
             current iterate against an earlier one keeps that earlier one on
             the converger object, where no model carries it and a resume
             would otherwise start it empty. A converger that recomputes
-            everything from the current iterate has no state: leave this
-            returning None and set ``checkpoint_stateless = True`` on the
-            class, or every resume warns that it starts fresh.
+            everything from the current iterate has no state: override this
+            to return None, and ``restore_state`` to do nothing.
 
-            Convergers decide when the run *stops*, so getting this wrong is
-            not just a divergence: a resumed run can terminate at a different
-            iteration than the uninterrupted one would have.
+            Optional, but not silently: the base raises, and a run with
+            checkpointing or a resume refuses at startup a converger that
+            does not override both. Convergers decide when the run *stops*,
+            so getting this wrong is not just a divergence: a resumed run can
+            terminate at a different iteration than the uninterrupted one
+            would have.
         '''
-        return None
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement checkpoint_state")
 
     def restore_state(self, state):
         '''Restore what checkpoint_state() returned, on a resumed run.
@@ -81,4 +77,5 @@ class Converger:
             Not collective, for the reason Extension.restore_state gives:
             the restore runs inside an agreement across the cylinder's ranks.
         '''
-        pass
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement restore_state")

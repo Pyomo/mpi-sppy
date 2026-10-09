@@ -29,8 +29,12 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
         rank (int): mpi process rank
     """
 
-    #: Everything it compares is recomputed from the current iterate.
-    checkpoint_stateless = True
+    # Everything it compares is recomputed from the current iterate.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
 
     def __init__(self, phb):
         options = phb.options

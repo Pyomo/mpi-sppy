@@ -23,9 +23,13 @@ def lpize(varname):
 
 class Scenario_lp_mps_files(mpisppy.extensions.extension.Extension):
 
-    #: Nothing to carry across a resume. Writes files at one hook and
-    #: keeps nothing.
-    checkpoint_stateless = True
+    # Nothing to carry across a resume. Writes files at one hook and
+    # keeps nothing.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
 
     def __init__(self, ph):
         self.ph = ph

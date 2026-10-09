@@ -664,31 +664,69 @@ def gather_extension_state(opt):
     return {"extensions": extensions, "converger": converger}
 
 
-def extensions_without_a_state_contract(opt):
-    """Yield the name of every attached extension that answers neither question.
+def _overrides_state_hooks(cls, base):
+    """Whether ``cls`` overrides each of the two state hooks of ``base``.
 
-    An extension says what happens to its state across a resume in one of two
-    ways: it implements ``checkpoint_state``, or it declares
-    ``checkpoint_stateless``. Answering neither is not the same as having no
-    state -- it is nobody having decided -- and the two used to look identical
-    from here, because the base-class hook returns None and this function only
-    ever reported checkpoint entries with no extension. The reverse direction,
-    an extension with no entry, was silent, which is how a shipped rho updater
-    with exactly the state this phase carries for its neighbours went unnoticed.
-
-    ``checkpoint_state`` is matched with inheritance, since a subclass of an
-    extension that implements it inherits a real implementation.
-    ``checkpoint_stateless`` is matched without, so a subclass that adds state
-    to a stateless parent is named instead of covered by it.
+    Compared on the class, not on an instance: a bound method is a new object
+    on every attribute access, so it is never the base's function.
     """
+    return (cls.checkpoint_state is not base.checkpoint_state,
+            cls.restore_state is not base.restore_state)
+
+
+def require_state_contract(opt):
+    """Refuse a checkpointed run whose extensions or converger have not said
+    what happens to their state across a resume.
+
+    The base ``checkpoint_state`` and ``restore_state`` raise, so an extension
+    that overrides neither would end the run at its first checkpoint write --
+    hours in, on a long run -- and one that overrides only
+    ``checkpoint_state`` would end it at the resume, which is worse. Both are
+    known from the classes alone, before anything is solved, so they are
+    refused here instead. A class with no state says so by overriding both to
+    return None and do nothing.
+
+    Reads only the classes attached, which every rank of the cylinder was
+    given identically, so every rank refuses or none does.
+    """
+    from mpisppy.convergers.converger import Converger
     from mpisppy.extensions.extension import Extension
-    for name, ext in _extension_objects(opt):
-        cls = type(ext)
-        if cls.checkpoint_state is not Extension.checkpoint_state:
-            continue
-        if cls.__dict__.get("checkpoint_stateless", False):
-            continue
-        yield name
+    classes = [(name, type(ext), Extension)
+               for name, ext in _extension_objects(opt)]
+    converger_class = getattr(opt, "ph_converger", None)
+    if converger_class is not None:
+        classes.append((converger_class.__name__, converger_class, Converger))
+
+    neither, half = [], []
+    for name, cls, base in classes:
+        saves, restores = _overrides_state_hooks(cls, base)
+        if not saves and not restores:
+            neither.append(name)
+        elif saves != restores:
+            half.append(f"{name} (implements "
+                        f"{'checkpoint_state' if saves else 'restore_state'} "
+                        f"only)")
+    if not neither and not half:
+        return
+    problems = []
+    if neither:
+        problems.append(
+            f"these do not say what happens to their state across a resume: "
+            f"{', '.join(sorted(neither))}. One that decides what to do next "
+            f"from what it did earlier -- a history, a counter, a record of "
+            f"what it already changed -- would not retrace an uninterrupted "
+            f"run")
+    if half:
+        problems.append(
+            f"these implement one of the two state hooks without the other: "
+            f"{', '.join(sorted(half))}")
+    raise RuntimeError(
+        "Checkpointing (--checkpoint-dir or --resume-from) needs every "
+        "attached extension and the converger to implement both "
+        "checkpoint_state and restore_state; " + "; and ".join(problems) +
+        ". Implement both on each class named; one with no state of its own "
+        "returns None from checkpoint_state and does nothing in "
+        "restore_state. Or run without checkpointing.")
 
 
 def restore_extension_state(opt, state):
@@ -699,24 +737,12 @@ def restore_extension_state(opt, state):
     still valid), so it should say clearly what it could not restore instead
     of refusing the whole checkpoint. The caller prints them.
 
-    Reported in both directions. A checkpoint entry with no extension means
-    state that could not be handed to anybody. An extension that has neither
-    implemented ``checkpoint_state`` nor declared ``checkpoint_stateless``
-    means state nobody has decided about -- which is not the same as an
-    extension added since the checkpoint, and used to be indistinguishable
-    from one.
+    Every attached extension has implemented both hooks by the time this
+    runs -- require_state_contract refused the run at startup otherwise -- so
+    what is left to report is a checkpoint entry with no extension to hand it
+    to, and a converger that differs from the checkpoint's.
     """
     warnings = []
-    missing = sorted(extensions_without_a_state_contract(opt))
-    if missing:
-        warnings.append(
-            f"these attached extensions carry no state across the resume: "
-            f"{', '.join(missing)}. Each keeps whatever it had at the start of "
-            f"a fresh run, so one that decides what to do next from what it "
-            f"did earlier -- a history, a counter, a record of what it already "
-            f"changed -- will not retrace an uninterrupted run. Implement "
-            f"checkpoint_state and restore_state on it, or set "
-            f"checkpoint_stateless = True to say it has nothing to carry.")
     if not state:
         return warnings
 
@@ -751,25 +777,6 @@ def restore_extension_state(opt, state):
         else:
             convobject.restore_state(saved["state"])
     return warnings
-
-
-def converger_state_is_carried(opt, state):
-    """Whether the run's converger (if any) had its state restored.
-
-    The resume warns when a converger starts fresh, because one that
-    accumulates history can then terminate the run at a different iteration
-    than an uninterrupted run would. That warning is right for a converger
-    that does not implement the contract and wrong for one that does, so the
-    resume asks here rather than warning unconditionally.
-    """
-    convobject = getattr(opt, "convobject", None)
-    if convobject is None:
-        return True
-    if type(convobject).__dict__.get("checkpoint_stateless", False):
-        return True
-    saved = (state or {}).get("converger")
-    return (saved is not None
-            and saved["class"] == type(convobject).__name__)
 
 
 def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):

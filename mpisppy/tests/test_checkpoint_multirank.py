@@ -1072,6 +1072,8 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
         ("Checkpointer.__init__", Checkpointer.__init__),
         ("Checkpointer.pre_iter0", Checkpointer.pre_iter0),
         ("Checkpointer._restore_incumbent", Checkpointer._restore_incumbent),
+        ("PHBase._require_state_contract_if_checkpointing",
+         PHBase._require_state_contract_if_checkpointing),
         ("PHBase._restore_from_checkpoint_if_resuming",
          PHBase._restore_from_checkpoint_if_resuming),
         ("PHBase._restore_extension_state_if_resuming",
@@ -1117,6 +1119,10 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
             1, "--checkpoint-backend names a backend that is designed but "
                "not built. The value comes from the command line the wheel "
                "hands every rank, and nothing else is consulted."),
+        "require_state_contract": (
+            1, "an attached extension or the converger does not override "
+               "both state hooks. It reads only the classes, which every "
+               "rank of the cylinder is given identically."),
     }
 
     #: Checkpointing calls that agree across the cylinder themselves, so they
@@ -1133,8 +1139,10 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
     #: they arrive at the same one on every rank or raise on all of them.
     #: Nothing that touches a file or a model belongs here.
     CANNOT_FAIL_ON_ONE_RANK = frozenset({
-        "converger_state_is_carried",
         "require_implemented_backend",
+        "require_state_contract",
+        "_extension_objects",
+        "_overrides_state_hooks",
     })
 
     #: Functions, by qualified name, that catch every failure of the work

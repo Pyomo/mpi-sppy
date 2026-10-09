@@ -174,19 +174,6 @@ class Extension:
         '''
         pass
 
-    #: Set True on an extension that has been looked at and found to keep no
-    #: state of its own across a stop and resume -- no history, no counter, no
-    #: record of what it has already changed. It is the other way of answering
-    #: the question ``checkpoint_state`` answers, and a resumed run names every
-    #: attached extension that has answered neither, because an extension that
-    #: keeps state and carries none takes a different action at the next
-    #: iteration than the uninterrupted run would.
-    #:
-    #: Deliberately not inherited: the check reads the class's own ``__dict__``,
-    #: so a subclass that adds state to a stateless parent is named rather than
-    #: quietly covered by its parent's answer. Declare it on each class.
-    checkpoint_stateless = False
-
     def checkpoint_state(self):
         ''' Return this extension's own state as picklable plain data, or
             None if it has none worth carrying across a stop and resume.
@@ -213,11 +200,20 @@ class Extension:
             nonant index or by variable *name*, as the rest of the checkpoint
             code does.
 
+            An extension with no such state -- no history, no counter, no
+            record of what it has already changed -- overrides this to return
+            None, and ``restore_state`` to do nothing. That is a decision
+            somebody made after looking, which is why the base does not make
+            it: the base raises, and a run with checkpointing or a resume
+            refuses at startup any attached extension that does not override
+            both. Runs without checkpointing never call either.
+
             Called by the Checkpointer at each checkpoint point, which is
             always the end of a completed iteration. See
             doc/designs/checkpointing_design.md section 5.5.
         '''
-        return None
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement checkpoint_state")
 
     def restore_state(self, state):
         ''' Restore what checkpoint_state() returned, on a resumed run.
@@ -238,7 +234,8 @@ class Extension:
             in the next collective -- and an MPI call in here would be that
             collective, reached by some ranks and not others.
         '''
-        pass
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement restore_state")
 
 
 class MultiExtension(Extension):

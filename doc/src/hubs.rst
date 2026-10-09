@@ -143,11 +143,10 @@ what happens to its state across a stop and a resume, the same way an
 extension does (see :ref:`checkpointing_your_extension`). A converger that
 keeps history between iterations, such as an earlier iterate it compares
 against, implements ``checkpoint_state()`` and ``restore_state(state)``. One
-that recomputes everything from the current iterate sets
-``checkpoint_stateless = True`` on its class. The convergers shipped with
-mpi-sppy do the latter.
+that recomputes everything from the current iterate implements them too, with
+``checkpoint_state`` returning None and ``restore_state`` doing nothing. The
+convergers shipped with mpi-sppy do the latter.
 
-A converger that does neither starts fresh on a resumed run, and the run says
-so in the log. Because the converger decides when the run stops, a fresh
-start can end a resumed run at a different iteration than an uninterrupted
-run would.
+A converger that does neither, or only one, is refused when a checkpointed run
+starts. Because the converger decides when the run stops, a fresh start could
+end a resumed run at a different iteration than an uninterrupted run would.
