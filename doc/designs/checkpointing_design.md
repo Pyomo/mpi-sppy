@@ -1245,7 +1245,10 @@ as a branch stacked on the 1a PR.
   - `RelaxedPHFixer` decides from the current spoke buffer, xbar and the
     models' fixedness, so it carries only its display count. Its pre-iteration
     0 fix-at-bounds pass belongs to the start of the study and is skipped on a
-    resume; the wait for the spoke's first buffer is kept.
+    resume; the wait for the spoke's first buffer is kept. It retraces an
+    uninterrupted run only if the relaxed-PH spoke it reads from resumes its
+    own W. A spoke that restarts from W = 0 on a resume hands it different
+    relaxed solutions after the stop.
   - `ReducedCostsFixer` carries the reduced costs it fixes from, the bound
     that decides whether new ones are accepted, and its count, and skips its
     pre-iteration-0 pass on a resume. Reduced costs Iter0's spoke sync took at
