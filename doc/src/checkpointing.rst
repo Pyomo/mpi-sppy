@@ -625,29 +625,26 @@ Two things this does not cover:
   ``restore_state(state)`` on it. Return plain data keyed by variable *name* or
   by ``(node name, index)``, never Pyomo objects: a resume replaces every
   model, so a saved variable reference addresses something that no longer
-  exists. If it keeps no such state, set ``checkpoint_stateless = True`` on the
-  class instead.
+  exists. If it keeps no such state, implement both anyway: return None from
+  ``checkpoint_state()`` and do nothing in ``restore_state(state)``.
 
-  Do one or the other. A resumed run names every attached extension that has
-  done neither, because from the outside "keeps nothing" and "nobody decided"
-  look the same, and the second one is a run that quietly stops retracing an
-  uninterrupted one. The declaration is deliberately not inherited: a subclass
-  that adds state to a stateless parent is named rather than covered by its
-  parent's answer.
+  This is required, not optional. A run with ``--checkpoint-dir`` or
+  ``--resume-from`` refuses to start -- before anything is solved -- if an
+  attached extension implements neither method, or only one of them, and the
+  message names each one. From the outside "keeps nothing" and "nobody
+  decided" look the same, and the second one is a run that quietly stops
+  retracing an uninterrupted one.
 
-  Some of the shipped extensions are in that unanswered set and say so at the
-  resume -- ``PrimalDualRho``, ``WOscillationMonitor``, ``ReducedCostsFixer``,
-  ``RelaxedPHFixer``, ``CrossScenarioExtension``, ``TimedMIPGapCB``,
-  ``PHTracker`` and ``XhatFeasibilityCutExtension``. Using one across a resume
-  works and continues from the right models; it will not retrace an
-  uninterrupted run.
-* **A converger with no such implementation still starts fresh**, and the resume
-  says so in the log. The same two answers are available to a converger:
-  ``checkpoint_state()``/``restore_state(state)``, or
-  ``checkpoint_stateless = True``. That matters more than it sounds: a converger decides when
-  the run stops, so one that accumulates history can terminate a resumed run at a
-  different iteration than an uninterrupted one. See
-  :ref:`checkpointing_your_converger`.
+  Some of the shipped extensions keep state and do not carry it yet, so a
+  checkpointed run refuses them: ``PrimalDualRho``, ``WOscillationMonitor``,
+  ``ReducedCostsFixer``, ``RelaxedPHFixer``, ``CrossScenarioExtension``,
+  ``TimedMIPGapCB``, ``PHTracker`` and ``XhatFeasibilityCutExtension``.
+* **A converger is held to the same rule.** It implements
+  ``checkpoint_state()``/``restore_state(state)``, as a no-op pair if it keeps
+  no state, or a checkpointed run refuses it at startup. That matters more than
+  it sounds: a converger decides when the run stops, so one that accumulates
+  history and starts fresh could terminate a resumed run at a different
+  iteration than an uninterrupted one. See :ref:`checkpointing_your_converger`.
 
 If you resume with a *different* set of extensions than the checkpoint was
 written with, that is allowed -- the hub's iterate is still valid -- and the run

@@ -736,6 +736,13 @@ class _RelaxationProbe(Extension):
     def enditer(self):
         self.per_iteration.append(_relaxed_models(self.opt))
 
+    # A test probe; nothing of its own to carry across a resume.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
+
 
 class _IntegerRelaxMixin(_ABMixin):
     """Relax-then-enforce across a stop, on a MIP.
@@ -1067,10 +1074,13 @@ class _StatefulExtension(Extension):
 
 
 class _StatelessExtension(Extension):
-    # Says so, rather than merely being so: an extension that answers
-    # neither question is named at the resume, and the name of this one
-    # is the whole claim it makes.
-    checkpoint_stateless = True
+    # Says so, rather than merely being so: an extension that overrides
+    # neither hook is refused at the start of a checkpointed run.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
 
 
 class _FakeOpt:
@@ -1082,18 +1092,26 @@ class _FakeOpt:
 class TestExtensionStateContract(unittest.TestCase):
     """The aggregation itself, without a solver in the way."""
 
-    def test_the_base_extension_has_no_state(self):
-        ext = _StatelessExtension(None)
-        self.assertIsNone(ext.checkpoint_state())
-        # Must not raise: an extension that never opted in is still handed
-        # nothing, and doing nothing with it is the correct response.
-        ext.restore_state(None)
+    def test_the_base_extension_hooks_raise(self):
+        """Not a no-op: having no state is a decision a subclass makes."""
+        ext = Extension(None)
+        with self.assertRaises(NotImplementedError):
+            ext.checkpoint_state()
+        with self.assertRaises(NotImplementedError):
+            ext.restore_state(None)
 
-    def test_the_base_converger_has_no_state(self):
+    def test_the_base_converger_hooks_raise(self):
         from mpisppy.convergers.converger import Converger
-        conv = Converger(None)
-        self.assertIsNone(conv.checkpoint_state())
-        conv.restore_state(None)
+
+        class _Bare(Converger):
+            def is_converged(self):
+                return False
+
+        conv = _Bare(None)
+        with self.assertRaises(NotImplementedError):
+            conv.checkpoint_state()
+        with self.assertRaises(NotImplementedError):
+            conv.restore_state(None)
 
     def test_stateless_extensions_are_left_out_entirely(self):
         """The common case must add nothing to the file."""
@@ -1158,13 +1176,6 @@ class TestExtensionStateContract(unittest.TestCase):
                                 "state": {"prev_xbars": {}}}})
         self.assertEqual(len(warnings), 1)
         self.assertIn("PrimalDualConverger", warnings[0])
-        self.assertFalse(checkpointing.converger_state_is_carried(
-            opt, {"converger": {"class": "PrimalDualConverger"}}))
-
-    def test_no_converger_carries_trivially(self):
-        """Nothing to lose means nothing to warn about."""
-        self.assertTrue(
-            checkpointing.converger_state_is_carried(_FakeOpt(), None))
 
 
 @unittest.skipIf(not solver_available, "no solver is available")
@@ -1219,17 +1230,14 @@ class TestFixerCountsAreNotZeroedOnResume(unittest.TestCase):
                                  f"its own setup hook on the way back in")
 
 
-class TestTheStateContractIsAnsweredBothWays(unittest.TestCase):
-    """An extension with no checkpoint entry used to be indistinguishable from
-    one that correctly has no state.
+class TestTheStateContractIsRequiredAtStartup(unittest.TestCase):
+    """A checkpointed run refuses, before any solve, a class that would fail
+    later.
 
-    restore_extension_state reported a checkpoint entry with no extension, and
-    said nothing in the other direction, on the reasoning that an extension
-    added since the checkpoint "is starting fresh because it never ran, which
-    is correct". True for that case, and it also covered every extension that
-    keeps state and never implemented the hook -- which is a different thing
-    and is not correct. An extension now answers the question one of two ways,
-    and a resumed run names the ones that answered neither.
+    The base hooks raise, so an extension that overrides neither would end
+    the run at its first checkpoint write, and one that overrides only
+    checkpoint_state would end it at the resume. Both are visible from the
+    classes, so require_state_contract refuses them up front.
     """
 
     class _Implements(Extension):
@@ -1239,71 +1247,141 @@ class TestTheStateContractIsAnsweredBothWays(unittest.TestCase):
         def restore_state(self, state):
             pass
 
-    class _Declares(Extension):
-        checkpoint_stateless = True
+    class _Stateless(Extension):
+        def checkpoint_state(self):
+            return None
+
+        def restore_state(self, state):
+            pass
 
     class _AnswersNeither(Extension):
         pass
 
-    class _SubclassOfDeclares(_Declares):
-        """Adds state to a stateless parent."""
+    class _SavesOnly(Extension):
+        def checkpoint_state(self):
+            return {"n": 1}
+
+    class _RestoresOnly(Extension):
+        def restore_state(self, state):
+            pass
 
     class _SubclassOfImplements(_Implements):
         """Inherits a real implementation."""
 
-    def _named(self, *classes):
-        opt = types.SimpleNamespace(
+    def _opt(self, *classes, converger=None):
+        return types.SimpleNamespace(
             extobject=types.SimpleNamespace(
-                extdict={c.__name__: c.__new__(c) for c in classes}))
-        return sorted(checkpointing.extensions_without_a_state_contract(opt))
+                extdict={c.__name__: c.__new__(c) for c in classes}),
+            ph_converger=converger)
 
-    def test_implementing_the_hook_answers_it(self):
-        self.assertEqual(self._named(self._Implements), [])
+    def _refusal(self, *classes, converger=None):
+        with self.assertRaises(RuntimeError) as cm:
+            checkpointing.require_state_contract(
+                self._opt(*classes, converger=converger))
+        return str(cm.exception)
 
-    def test_declaring_statelessness_answers_it(self):
-        self.assertEqual(self._named(self._Declares), [])
-
-    def test_answering_neither_is_named(self):
-        self.assertEqual(self._named(self._AnswersNeither),
-                         ["_AnswersNeither"])
-
-    def test_the_declaration_is_not_inherited(self):
-        """A subclass that adds state to a stateless parent must be named, or
-        the declaration becomes the same silence it was meant to remove."""
-        self.assertEqual(self._named(self._SubclassOfDeclares),
-                         ["_SubclassOfDeclares"])
+    def test_implementing_both_hooks_passes(self):
+        checkpointing.require_state_contract(
+            self._opt(self._Implements, self._Stateless))
 
     def test_the_implementation_is_inherited(self):
-        """Unlike the declaration: a subclass of an extension that implements
-        the hook really does carry its state."""
-        self.assertEqual(self._named(self._SubclassOfImplements), [])
+        checkpointing.require_state_contract(
+            self._opt(self._SubclassOfImplements))
 
-    def test_the_warning_is_raised_with_no_checkpointed_state_at_all(self):
-        """A checkpoint written by a run whose extensions all had nothing to
-        say carries no extension state, and the early return for that used to
-        skip everything below it."""
-        opt = types.SimpleNamespace(
-            extobject=types.SimpleNamespace(
-                extdict={"_AnswersNeither": self._AnswersNeither.__new__(
-                    self._AnswersNeither)}))
-        warnings = checkpointing.restore_extension_state(opt, None)
-        self.assertEqual(len(warnings), 1)
-        self.assertIn("_AnswersNeither", warnings[0])
-        self.assertIn("checkpoint_stateless", warnings[0])
+    def test_answering_neither_is_refused_by_name(self):
+        message = self._refusal(self._Implements, self._AnswersNeither)
+        self.assertIn("_AnswersNeither", message)
+        self.assertNotIn("_Implements", message)
+
+    def test_half_an_implementation_is_refused(self):
+        """Saving state that can never be restored would fail at the resume,
+        which is the worst moment to find out."""
+        message = self._refusal(self._SavesOnly, self._RestoresOnly)
+        self.assertIn("_SavesOnly (implements checkpoint_state only)",
+                      message)
+        self.assertIn("_RestoresOnly (implements restore_state only)",
+                      message)
+
+    def test_every_offender_is_named_at_once(self):
+        message = self._refusal(self._AnswersNeither, self._SavesOnly)
+        self.assertIn("_AnswersNeither", message)
+        self.assertIn("_SavesOnly", message)
+
+    def test_a_converger_that_answers_neither_is_refused(self):
+        from mpisppy.convergers.converger import Converger
+
+        class _BareConverger(Converger):
+            def is_converged(self):
+                return False
+
+        message = self._refusal(self._Implements, converger=_BareConverger)
+        self.assertIn("_BareConverger", message)
+
+    def test_an_xhat_spoke_refuses_before_restoring(self):
+        """A spoke writes its extensions' state with its incumbent, so the
+        Checkpointer checks them in pre_iter0, before the restore and long
+        before the spoke's first write."""
+        restored = []
+        fake = types.SimpleNamespace(
+            dual_spoke_mode=False, spoke_mode=True,
+            opt=self._opt(self._Implements, self._AnswersNeither),
+            _restore_incumbent=lambda: restored.append(1))
+        with self.assertRaises(RuntimeError) as cm:
+            Checkpointer.pre_iter0(fake)
+        self.assertIn("_AnswersNeither", str(cm.exception))
+        self.assertEqual(restored, [])
+
+    def test_a_shipped_converger_passes(self):
+        from mpisppy.convergers.primal_dual_converger import \
+            PrimalDualConverger
+        checkpointing.require_state_contract(
+            self._opt(self._Implements, converger=PrimalDualConverger))
+
+
+@unittest.skipIf(not solver_available, "no solver is available")
+class TestACheckpointedRunRefusesBeforeSolving(unittest.TestCase):
+    """The refusal is reached through Iter0, before the first solve."""
+
+    class _AnswersNeither(Extension):
+        pass
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_refused_at_iter0(self):
+        ph = _make_ph(_options(2, ckpt_dir=self.ckpt_dir),
+                      [self._AnswersNeither])
+        ph.PH_Prep()
+        solves = []
+        ph.solve_loop = lambda *a, **k: solves.append(1)
+        with self.assertRaises(RuntimeError) as cm:
+            ph.Iter0()
+        self.assertIn("_AnswersNeither", str(cm.exception))
+        self.assertEqual(solves, [])
+
+    def test_not_checked_without_checkpointing(self):
+        """A run that never checkpoints never calls the hooks, so an
+        extension that skipped them is no concern of its."""
+        ph = _make_ph(_options(1), [self._AnswersNeither])
+        ph.ph_main()
 
 
 class TestShippedExtensionsAnswerTheQuestion(unittest.TestCase):
     """Every shipped extension either carries its state or says it has none.
 
-    The point of the declaration is that adding an extension makes somebody
-    decide. This pins the ones already decided, so a new one cannot join the
-    unanswered set unnoticed -- and names the ones still unanswered, each of
-    which is a known open question rather than an oversight.
+    The point of the base hooks raising is that adding an extension makes
+    somebody decide. This pins the ones already decided, so a new one cannot
+    join the unanswered set unnoticed -- and names the ones still unanswered,
+    each of which is a known open question rather than an oversight.
     """
 
     #: Extensions that keep state across iterations and do not yet carry it.
-    #: Every name here is a resumed run that will not retrace an uninterrupted
-    #: one; they warn at runtime for exactly that reason.
+    #: A checkpointed run refuses each of them at startup, since a resume
+    #: with one would not retrace an uninterrupted run.
     UNANSWERED = {
         "CrossScenarioExtension", "PHTracker", "PrimalDualRho",
         "ReducedCostsFixer", "RelaxedPHFixer", "TimedMIPGapCB",
@@ -1350,23 +1428,32 @@ class TestShippedExtensionsAnswerTheQuestion(unittest.TestCase):
         self.assertIn("PrimalDualConverger", found)
         unanswered = {
             name for name, cls in found.items()
-            if cls.checkpoint_state is Converger.checkpoint_state
-            and not cls.__dict__.get("checkpoint_stateless", False)}
+            if checkpointing._overrides_state_hooks(cls, Converger)
+            != (True, True)}
         self.assertEqual(unanswered, set(),
-                         msg="a converger answers neither question, so every "
-                             "resume with it warns that it starts fresh")
+                         msg="a converger does not implement both state "
+                             "hooks, so every checkpointed run with it is "
+                             "refused")
 
     def test_the_unanswered_set_is_exactly_what_is_recorded(self):
+        classes = self._all_extension_classes()
+        half = {
+            name for name, cls in classes.items()
+            if len(set(checkpointing._overrides_state_hooks(cls, Extension)))
+            == 2}
+        self.assertEqual(half, set(),
+                         msg="a shipped extension implements one state hook "
+                             "without the other")
         unanswered = {
-            name for name, cls in self._all_extension_classes().items()
-            if cls.checkpoint_state is Extension.checkpoint_state
-            and not cls.__dict__.get("checkpoint_stateless", False)}
+            name for name, cls in classes.items()
+            if checkpointing._overrides_state_hooks(cls, Extension)
+            == (False, False)}
         self.assertEqual(
             unanswered, self.UNANSWERED,
-            msg="an extension joined or left the set that answers neither "
-                "question. If you added one, implement checkpoint_state or "
-                "set checkpoint_stateless = True; if you answered one, drop "
-                "it from UNANSWERED here.")
+            msg="an extension joined or left the set that implements neither "
+                "state hook. If you added one, implement checkpoint_state and "
+                "restore_state (returning None and doing nothing if it has no "
+                "state); if you answered one, drop it from UNANSWERED here.")
 
 
 if __name__ == "__main__":

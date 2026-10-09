@@ -18,11 +18,15 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
         enforcing the integality constraints after some condition.
     """
 
-    #: Whether the integers are relaxed is a model transformation, so it rides
-    #: in the dilled models, and pre_iter0 reads it back from them on a resume.
-    #: When to enforce is computed from the options and the iteration count,
-    #: which a resumed run has too.
-    checkpoint_stateless = True
+    # Whether the integers are relaxed is a model transformation, so it rides
+    # in the dilled models, and pre_iter0 reads it back from them on a resume.
+    # When to enforce is computed from the options and the iteration count,
+    # which a resumed run has too.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
 
     def __init__(self, opt):
         # FWPH manages integrality on these same models itself: its LP warm

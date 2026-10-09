@@ -1341,17 +1341,24 @@ class PHBase(mpisppy.spopt.SPOpt):
             "resumes")
         for message in messages:
             global_toc(f"WARNING: {message}", rank0)
-        if not checkpointing.converger_state_is_carried(self, state):
-            global_toc(
-                "WARNING: this run's converger does not carry state across a "
-                "checkpoint, so it starts fresh on this resumed run. A "
-                "converger that accumulates history across iterations may "
-                "therefore terminate the run at a different iteration than "
-                "an uninterrupted run would. Implement checkpoint_state and "
-                "restore_state on the converger, or set "
-                "checkpoint_stateless = True on its class if it keeps no "
-                "state, to fix this.",
-                rank0)
+
+    def _require_state_contract_if_checkpointing(self):
+        """Refuse, before anything is solved, a checkpointed run that would
+        fail at its first checkpoint write or at its resume.
+
+        Called at the start of ``Iter0``. The extensions are constructed by
+        then and the converger class is known, which is all the check reads.
+        Hub only. The xhat spokes write their extensions' state too, and the
+        Checkpointer checks theirs in its pre_iter0; the dual cylinders write
+        W and no extension state.
+        """
+        if not (self.options.get("checkpoint_dir", None)
+                or self.options.get("resume_from", None)):
+            return
+        from mpisppy.opt.ph import PH
+        if not isinstance(self, PH):
+            return
+        checkpointing.require_state_contract(self)
 
     def _restore_from_checkpoint_if_resuming(self):
         """Splice a checkpoint's scenario models into this run, if resuming.
@@ -1516,6 +1523,8 @@ class PHBase(mpisppy.spopt.SPOpt):
         iter0_start_time = time.perf_counter()
         self._PHIter = 0
         self._save_original_nonants()
+
+        self._require_state_contract_if_checkpointing()
 
         # Resume, if asked: swap the checkpointed models in *before* solvers
         # are created, so _create_solvers attaches a solver (and, for a

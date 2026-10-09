@@ -19,9 +19,14 @@ class MinMaxAvg(mpisppy.extensions.xhatbase.XhatBase):
         ph (PH object): the calling object
     """
 
-    #: Nothing to carry across a resume. Computes and prints per-iteration
-    #: statistics; keeps none of them.
-    checkpoint_stateless = True
+    # Nothing to carry across a resume. Computes and prints per-iteration
+    # statistics; keeps none of them.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
+
     def __init__(self, ph):
         super().__init__(ph)
         self.compstr = self.opt.options["avgminmax_name"]

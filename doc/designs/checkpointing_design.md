@@ -291,10 +291,9 @@ W/xbar/nonants to the spokes — they start from checkpointed state
 immediately); the `rho_setter` is skipped, as are the `post_iter0` rho
 recomputations of the rho-setting extensions (rho rides in the reloaded model,
 and recomputing it at the splice would clobber whatever adaptation had happened
-by the checkpoint); the converger is constructed as usual, and since no
-converger state rides in a checkpoint, the resume warns that a
-history-accumulating converger restarts empty (the `checkpoint_state` /
-`restore_state` contract of §9, item 3, has not shipped). `pre_iter0` fires
+by the checkpoint); the converger is constructed as usual, and its own state is handed back to
+it at the end of `Iter0` through the `checkpoint_state` / `restore_state`
+contract (§9, Phase 3). `pre_iter0` fires
 *after* the splice, so extension hooks act on the models the run will actually
 iterate rather than on fresh models the splice discards.
 
@@ -426,7 +425,8 @@ Consequences:
   itself needs no serialization work.
 - **Extension-object state is never on a model**, so it needs a serialization
   contract regardless of backend. The `Extension` base has none today; add
-  `checkpoint_state()` / `restore_state()` (no-ops by default; implemented by rho
+  `checkpoint_state()` / `restore_state()` (the base raises, and a checkpointed
+  run refuses at startup a class that overrides neither or only one; implemented by rho
   updaters, `fixer`, `slammer`, convergers), aggregated by the `Checkpointer`
   (§9, item 3). The same contract serves hub and xhatter extensions
   (`MultiExtension`).
@@ -869,7 +869,8 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
    distinct branch from the leaf-rebuild "build fresh, overlay values" path;
    the `Checkpointer` picks the branch from `--checkpoint-backend`.
 3. **Extension `checkpoint_state` / `restore_state` contract** on `Extension`
-   (no-ops by default; implemented by rho updaters, `fixer`, `slammer`,
+   (the base raises; a checkpointed run refuses at startup a class that does
+   not override both; implemented by rho updaters, `fixer`, `slammer`,
    convergers). Covers **extension-object** state under both backends;
    model-attached state (`fixer`'s `conv_iter_count`) rides in the dill under
    dill-reload but must be gathered explicitly under leaf-rebuild (§5.5). The
@@ -1275,8 +1276,8 @@ as a branch stacked on the 1a PR.
     `run_coverage.bash` and `test_pr_and_main.yml` here; Phase 4 had left its
     file unwired.
 - **Phase 3 — Extension-object state contract. Implemented.**
-  `checkpoint_state`/`restore_state` on `Extension` **and on `Converger`** (no-ops
-  by default), aggregated by `gather_extension_state` into the hub leaf, keyed by
+  `checkpoint_state`/`restore_state` on `Extension` **and on `Converger`**,
+  aggregated by `gather_extension_state` into the hub leaf, keyed by
   class name — names are what survives a resume, and name keying is also what lets
   a resume with a different extension set report what it could not restore instead
   of dropping it silently. `MultiExtension` is flattened away as the container it
@@ -1285,11 +1286,31 @@ as a branch stacked on the 1a PR.
   `wtracker_extension` (the last `wlen + 1` W
   sets, which its end-of-run report reads) and `SepRho`'s cost coefficients
   (read from the objective as written, which a resumed objective no longer
-  is). `Converger` has the same `checkpoint_stateless` declaration as
-  `Extension`, and all three shipped convergers make it:
-  `norm_rho_converger` and `fracintsnotconv` recompute everything each
-  iteration, and `primal_dual_converger`'s one piece of history, `prev_xbars`,
-  is what its constructor reads from the resumed models.
+  is). The three shipped convergers have no state to carry and implement
+  both hooks as such: `norm_rho_converger` and `fracintsnotconv` recompute
+  everything each iteration, and `primal_dual_converger`'s one piece of
+  history, `prev_xbars`, is what its constructor reads from the resumed models.
+
+  **The base hooks raise `NotImplementedError`, and a checkpointed run refuses
+  at startup any class that does not override both.** Optional, then, in the
+  sense that a run without checkpointing never calls them, but never silently
+  so. A no-op default made "keeps no state" and "nobody decided"
+  indistinguishable; an earlier version of this phase added a non-inherited
+  `checkpoint_stateless` flag to tell them apart and warned at the resume.
+  Raising removes the flag -- a class with no state overrides both hooks to
+  return None and do nothing -- and the startup check
+  (`checkpointing.require_state_contract`, called at the start of
+  `PHBase.Iter0` on a PH hub with `--checkpoint-dir` or `--resume-from`) is
+  what keeps a raise from ending a run at its first checkpoint write, or a
+  class that overrides only `checkpoint_state` from ending it at the resume.
+  It reads only the attached classes, which every rank was given identically,
+  so it needs no agreement across the ranks. It refuses rather than warns: a
+  warning would leave a run whose checkpoints are known to be incomplete
+  running for hours. The cost is that a stateless subclass of a stateless
+  parent is covered by the parent's override, where the flag was
+  deliberately not inherited; and the eight shipped extensions that keep
+  state without carrying it (listed in `TestShippedExtensionsAnswerTheQuestion`)
+  cannot be used with checkpointing until they do.
 
   **Restore runs at the end of `Iter0`, not in the resume branch**, and the
   ordering is the whole trick: extensions rebuild their bookkeeping from the
@@ -1298,7 +1319,7 @@ as a branch stacked on the 1a PR.
   `Iter0`. Restoring any earlier is restoring into something that is about to be
   overwritten, or does not exist yet.
 
-  `integer_relax_then_enforce` declares itself stateless: whether the integers
+  `integer_relax_then_enforce` has no state of its own to carry: whether the integers
   are relaxed is a model transformation, so it rides in the dill, and its
   `pre_iter0` reads the state back from the reloaded models. When it enforces
   is a fraction of a budget. With `--stop-at-iteration-number` the iteration

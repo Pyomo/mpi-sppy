@@ -124,12 +124,17 @@ If your extension keeps no such state, say so instead:
 .. code-block:: python
 
    class MyExtension(Extension):
-       checkpoint_stateless = True
+       def checkpoint_state(self):
+           return None
 
-Do one or the other. A resumed run names every attached extension that has
-done neither, because it cannot tell "keeps nothing" from "nobody decided".
-The declaration is not inherited: a subclass of a stateless extension has to
-make its own.
+       def restore_state(self, state):
+           pass
+
+Do one or the other. The base methods raise ``NotImplementedError``, and a run
+with ``--checkpoint-dir`` or ``--resume-from`` refuses to start, before any
+solve, if an attached extension does not override both -- because it cannot
+tell "keeps nothing" from "nobody decided". A run without checkpointing never
+calls either method.
 
 PH extensions
 -------------

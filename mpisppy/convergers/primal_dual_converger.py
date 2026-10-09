@@ -21,12 +21,16 @@ class PrimalDualConverger(mpisppy.convergers.converger.Converger):
         Dual convergence is measured as
         rho * ||\bar{x}_{t} - \bar{x}_{t-1}||_1
     """
-    #: Its one piece of history, ``prev_xbars``, comes back right on its own.
-    #: On a resume Iter0 builds this converger after the checkpointed models
-    #: are spliced in and computes no xbar, so ``__init__`` reads the xbars
-    #: of the last checkpointed iteration -- which is what ``prev_xbars``
-    #: held when the checkpoint was written.
-    checkpoint_stateless = True
+    # Its one piece of history, ``prev_xbars``, comes back right on its own.
+    # On a resume Iter0 builds this converger after the checkpointed models
+    # are spliced in and computes no xbar, so ``__init__`` reads the xbars
+    # of the last checkpointed iteration -- which is what ``prev_xbars``
+    # held when the checkpoint was written.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
 
     def __init__(self, ph):
         """ Initialization method for the PrimalDualConverger class."""

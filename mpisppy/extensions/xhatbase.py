@@ -93,9 +93,14 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                 that are scenario names and values that are ranks
     """
 
-    #: Nothing to carry across a resume. comms and _EFs are rebuilt from
-    #: the models on a resumed run.
-    checkpoint_stateless = True
+    # Nothing to carry across a resume. comms and _EFs are rebuilt from
+    # the models on a resumed run.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
+
     def __init__(self, opt):
         super().__init__(opt)
         self.cylinder_rank = self.opt.cylinder_rank

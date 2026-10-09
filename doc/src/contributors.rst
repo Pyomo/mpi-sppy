@@ -15,10 +15,12 @@ Extensions, convergers and checkpointing
 
 A new extension or converger must say what happens to its state when a run is
 checkpointed and resumed: implement ``checkpoint_state()`` and
-``restore_state(state)``, or set ``checkpoint_stateless = True`` on the class.
-:ref:`checkpointing_your_extension` shows both. ``TestShippedExtensionsAnswerTheQuestion`` in
+``restore_state(state)`` -- as a pair that returns None and does nothing, if it
+keeps no state. The base methods raise, and a checkpointed run refuses at
+startup a class that does not override both. :ref:`checkpointing_your_extension`
+shows both forms. ``TestShippedExtensionsAnswerTheQuestion`` in
 ``mpisppy/tests/test_checkpoint_extensions.py`` fails for an extension or
-converger in the repository that does neither.
+converger in the repository that does neither, or only one.
 
 If yours keeps state, add a case to ``test_checkpoint_extensions.py`` that
 subclasses ``_ABMixin``. Give it ``ext_classes()``; its ``run_ab()`` runs

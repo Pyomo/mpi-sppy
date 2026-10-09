@@ -150,11 +150,15 @@ def _same_objective(a, b):
 class Checkpointer(Extension):
     """Write a resumable checkpoint at each completed PH iteration."""
 
-    #: Nothing to carry across a resume. This is the extension doing the
-    #: checkpointing. Its attributes describe the file it last wrote and
-    #: what a resume handed it, both established fresh on every run; there
-    #: is nothing here for it to carry to itself.
-    checkpoint_stateless = True
+    # Nothing to carry across a resume. This is the extension doing the
+    # checkpointing. Its attributes describe the file it last wrote and
+    # what a resume handed it, both established fresh on every run; there
+    # is nothing here for it to carry to itself.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
 
     def __init__(self, opt):
         super().__init__(opt)
@@ -342,6 +346,10 @@ class Checkpointer(Extension):
         if self.spoke_mode:
             # xhat_prep calls this once, before the spoke's loop starts, which
             # is the spoke's equivalent of the hub's resume branch in Iter0.
+            # A spoke writes its extensions' state with its incumbent, so it
+            # refuses one that cannot be written here, as the hub does at the
+            # start of Iter0, rather than at its first write.
+            ckpt.require_state_contract(self.opt)
             self._restore_incumbent()
             return
         if not self.write_enabled:
