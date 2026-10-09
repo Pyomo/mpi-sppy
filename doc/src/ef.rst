@@ -16,6 +16,14 @@ The simplest way to solve the EF is via ``generic_cylinders.py`` with the
 
 See :ref:`generic_cylinders` for full details on EF-related command-line options.
 
+Run the EF on one rank, with ``python`` rather than ``mpiexec``.
+``ExtensiveForm`` raises an error when there is more than one rank, because each
+rank would get only some of the scenarios and solve an EF of those. On one rank
+under a launcher it runs, but warns: a launcher can bind the process to a single
+core, which every solver thread then shares. If a launcher such as ``srun`` is how
+you reach a compute node, run one task and give it the node's cores
+(``srun -n 1 -c N``, for example).
+
 
 ``mpisppy.opt.ef.ExtensiveForm`` Class
 ---------------------------------------

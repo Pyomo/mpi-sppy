@@ -109,8 +109,9 @@ To run Progressive Hedging with bound-computing spokes, use ``mpiexec`` (or ``mp
         --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01
 
 .. note::
-   If you are solving the EF directly, you do not need ``mpiexec``.
-   Only decomposition methods (PH, APH, etc.) require MPI.
+   If you are solving the EF directly, do not use ``mpiexec``.
+   Only decomposition methods (PH, APH, etc.) require MPI; see
+   :ref:`EF directly`.
 
 Choosing a Hub Algorithm
 -------------------------
