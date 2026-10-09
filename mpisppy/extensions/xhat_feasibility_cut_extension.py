@@ -55,7 +55,6 @@ class XhatFeasibilityCutExtension(Extension):
         self._nonant_len = None  # filled in at setup_hub
         self._row_len = None
         self._recv_buffers = []  # one per emitting spoke; register_receive_fields
-        self._install_counter = 0  # monotonic key for the ConstraintList
 
     # ---- two-stage-only precondition (V1) --------------------------------
 
@@ -137,15 +136,20 @@ class XhatFeasibilityCutExtension(Extension):
         for s in self.opt.local_scenarios.values():
             s._mpisppy_model.xhat_feasibility_cuts = pyo.Constraint(pyo.Any)
 
+    # Nothing to carry across a resume. The cuts ride in the models, and the
+    # key of the next one is read from them (_next_cut_key), so a cut that
+    # arrives in the resumed Iter0's spoke sync -- before any restore_state
+    # runs -- cannot reuse the key of a restored cut.
     def checkpoint_state(self):
-        # The cuts themselves are on the models, so they come back with them;
-        # the key the next cut gets does not. Restarting the counter at 0 would
-        # give the first cut after a resume the key of the first cut before
-        # it, overwriting that cut on the restored model.
-        return {"install_counter": self._install_counter}
+        return None
 
     def restore_state(self, state):
-        self._install_counter = state["install_counter"]
+        pass
+
+    def _next_cut_key(self):
+        any_s = next(iter(self.opt.local_scenarios.values()))
+        return max(any_s._mpisppy_model.xhat_feasibility_cuts.keys(),
+                   default=0) + 1
 
     def register_send_fields(self):
         # We do not send anything; the spoke is the sender.
@@ -190,8 +194,7 @@ class XhatFeasibilityCutExtension(Extension):
             # fewer cuts than the header claims if we ever tighten that.
             if rhs_constant == 0.0 and all(c == 0.0 for c in coefs):
                 continue
-            self._install_counter += 1
-            key = self._install_counter
+            key = self._next_cut_key()
             for s in self.opt.local_scenarios.values():
                 linear_vars = list(s._mpisppy_data.nonant_indices.values())
                 # Constraint form: rhs_constant + sum coef_i x_i >= 0

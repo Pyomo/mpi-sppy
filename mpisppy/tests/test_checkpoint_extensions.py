@@ -1423,10 +1423,12 @@ class TestACheckpointedRunRefusesBeforeSolving(unittest.TestCase):
 
 
 class TestXhatFeasibilityCutKeysContinue(unittest.TestCase):
-    """The cuts ride in the models; the key the next one gets does not.
+    """The cuts ride in the models, and so does the key of the next one.
 
-    Restarting the counter at 0 gives the first cut after a resume key 1,
-    which overwrites the restored model's first cut.
+    A counter on the extension restarted at 0 on a resume, and even restored
+    it came back only at the end of Iter0 -- after Iter0's spoke sync, which
+    can already install a cut. Reading the next key from the model leaves
+    nothing to restore and nothing to race.
     """
 
     def _extension_with_cuts(self, n_cuts):
@@ -1446,29 +1448,27 @@ class TestXhatFeasibilityCutKeysContinue(unittest.TestCase):
         ext = XhatFeasibilityCutExtension.__new__(XhatFeasibilityCutExtension)
         ext.opt = types.SimpleNamespace(local_scenarios={"s": m})
         ext._row_len = 3
-        ext._install_counter = n_cuts
         return ext, m
 
-    def test_the_counter_round_trips(self):
+    def test_it_has_nothing_to_carry(self):
         ext, _ = self._extension_with_cuts(3)
-        state = pickle.loads(pickle.dumps(ext.checkpoint_state()))
-        fresh, _ = self._extension_with_cuts(0)
-        fresh.restore_state(state)
-        self.assertEqual(fresh._install_counter, 3)
+        self.assertIsNone(ext.checkpoint_state())
 
-    def test_a_cut_after_the_resume_does_not_overwrite_one_before_it(self):
+    def test_a_cut_on_restored_models_does_not_overwrite_one_before_it(self):
+        """A fresh extension object over models that already hold three cuts,
+        as on a resume, with no restore_state having run."""
         ext, m = self._extension_with_cuts(3)
-        state = ext.checkpoint_state()
-        # A resumed run: same models (they came back in the dill), a fresh
-        # extension object, then the restore.
-        fresh, _ = self._extension_with_cuts(0)
-        fresh.opt = ext.opt
-        fresh.restore_state(state)
-        before = str(m._mpisppy_model.xhat_feasibility_cuts[1].body)
-        fresh._install_cuts([5.0, 1.0, -1.0, 1])
         cuts = m._mpisppy_model.xhat_feasibility_cuts
+        before = {k: str(cuts[k].body) for k in cuts}
+        ext._install_cuts([5.0, 1.0, -1.0, 1])
         self.assertEqual(sorted(cuts.keys()), [1, 2, 3, 4])
-        self.assertEqual(str(cuts[1].body), before)
+        self.assertEqual({k: str(cuts[k].body) for k in before}, before)
+
+    def test_keys_start_at_one_on_a_fresh_run(self):
+        ext, m = self._extension_with_cuts(0)
+        ext._install_cuts([5.0, 1.0, -1.0, 6.0, -1.0, 1.0, 2])
+        self.assertEqual(
+            sorted(m._mpisppy_model.xhat_feasibility_cuts.keys()), [1, 2])
 
 
 class TestRelaxedPHFixerResume(unittest.TestCase):
@@ -1639,6 +1639,16 @@ class TestPHTrackerResume(_ABMixin, unittest.TestCase):
         folder = os.path.join(self._tmp.name, which)
         (cylinder,) = os.listdir(folder)
         return pd.read_csv(os.path.join(folder, cylinder, "xbars.csv"))
+
+    def test_a_resume_that_runs_no_iterations_finishes(self):
+        """A resumed run skips Iter0's solve loop, so with no iterations left
+        the tracker was never set up when post_everything ran."""
+        stopped = self._ph(self.STOP, ckpt_dir=self.ckpt_dir)
+        stopped.ph_main()
+        resumed = self._ph(0, resume_from=self.ckpt_dir)
+        resumed.ph_main()
+        self.assertEqual(self._rows("ab")["iteration"].tolist(),
+                         list(range(self.STOP + 1)))
 
     def test_the_file_matches_the_uninterrupted_run(self):
         self.run_ab()

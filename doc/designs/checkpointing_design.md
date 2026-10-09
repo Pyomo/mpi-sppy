@@ -1236,9 +1236,12 @@ as a branch stacked on the 1a PR.
     options and its callback is reinstalled before every solve.
   - `PrimalDualRho` carries its previous xbars, as `NormRhoUpdater` does, and
     a resume retraces an uninterrupted run bit-identically.
-  - `XhatFeasibilityCutExtension` carries the key its next cut gets. The cuts
-    ride in the models; a counter restarted at 0 would overwrite the first of
-    them with the first cut after the resume.
+  - `XhatFeasibilityCutExtension` has nothing to carry. The cuts ride in the
+    models, and it reads the key of the next cut from them. It used to keep a
+    counter, which a resume restarted at 0 so the first cut after it
+    overwrote the first restored one; carrying the counter instead would not
+    have been enough, since Iter0's spoke sync can install a cut before the
+    restore at the end of Iter0.
   - `RelaxedPHFixer` decides from the current spoke buffer, xbar and the
     models' fixedness, so it carries only its display count. Its pre-iteration
     0 fix-at-bounds pass belongs to the start of the study and is skipped on a
@@ -1251,7 +1254,8 @@ as a branch stacked on the 1a PR.
     not checkpointed and restarts.
   - `PHTracker` does not affect the solution, only its files. It writes out
     its buffered rows at every checkpoint, and a resumed run keeps the files'
-    rows through the checkpoint's iteration instead of truncating them. On a
+    rows through the checkpoint's iteration instead of truncating them, and
+    sets its files up at the end of a resumed run that ran no iterations. On a
     dual cylinder, which writes no extension state, it still starts its files
     over.
 

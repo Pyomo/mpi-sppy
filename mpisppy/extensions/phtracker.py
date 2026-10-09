@@ -626,6 +626,12 @@ class PHTracker(Extension):
                 self._track_var_to_func[track_var]['track']()
 
     def post_everything(self):
+        # A resumed run skips Iter0's solve loop, so if it then runs no
+        # iterations -- already at --stop-at-iteration-number, or converged on
+        # the restored bounds -- pre_solve_loop never ran. Set up here, which
+        # also keeps the earlier run's rows rather than leaving no files.
+        if not self.finished_init:
+            self.finish_init()
         for track_var in self.track_dict.keys():
                 self._track_var_to_func[track_var]['track'](final=True)
                 self._track_var_to_func[track_var]['finalize'](var=track_var)
