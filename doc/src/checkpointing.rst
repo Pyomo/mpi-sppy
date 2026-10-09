@@ -411,10 +411,9 @@ Two things this does not cover:
   decided" look the same, and the second one is a run that quietly stops
   retracing an uninterrupted one.
 
-  Some of the shipped extensions keep state and do not carry it yet, so a
-  checkpointed run refuses them: ``PrimalDualRho``, ``WOscillationMonitor``,
-  ``ReducedCostsFixer``, ``RelaxedPHFixer``, ``CrossScenarioExtension``,
-  ``TimedMIPGapCB``, ``PHTracker`` and ``XhatFeasibilityCutExtension``.
+  Two of the shipped extensions keep state and do not carry it yet, so a
+  checkpointed run refuses them: ``WOscillationMonitor`` and
+  ``CrossScenarioExtension``.
 * **A converger is held to the same rule.** It implements
   ``checkpoint_state()``/``restore_state(state)``, as a no-op pair if it keeps
   no state, or a checkpointed run refuses it at startup. That matters more than

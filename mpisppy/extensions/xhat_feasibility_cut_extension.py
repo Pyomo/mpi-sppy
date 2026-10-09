@@ -137,6 +137,16 @@ class XhatFeasibilityCutExtension(Extension):
         for s in self.opt.local_scenarios.values():
             s._mpisppy_model.xhat_feasibility_cuts = pyo.Constraint(pyo.Any)
 
+    def checkpoint_state(self):
+        # The cuts themselves are on the models, so they come back with them;
+        # the key the next cut gets does not. Restarting the counter at 0 would
+        # give the first cut after a resume the key of the first cut before
+        # it, overwriting that cut on the restored model.
+        return {"install_counter": self._install_counter}
+
+    def restore_state(self, state):
+        self._install_counter = state["install_counter"]
+
     def register_send_fields(self):
         # We do not send anything; the spoke is the sender.
         return
