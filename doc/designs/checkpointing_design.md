@@ -1308,9 +1308,48 @@ as a branch stacked on the 1a PR.
   warning would leave a run whose checkpoints are known to be incomplete
   running for hours. The cost is that a stateless subclass of a stateless
   parent is covered by the parent's override, where the flag was
-  deliberately not inherited; and the eight shipped extensions that keep
-  state without carrying it (listed in `TestShippedExtensionsAnswerTheQuestion`)
-  cannot be used with checkpointing until they do.
+  deliberately not inherited; and a shipped extension that keeps state
+  without carrying it (listed in `TestShippedExtensionsAnswerTheQuestion`)
+  cannot be used with checkpointing until it does.
+
+  Eight shipped extensions were in that set when the refusal landed. Six now
+  carry what they need:
+  - `TimedMIPGapCB` has nothing to carry: its time curve comes from the
+    options and its callback is reinstalled before every solve.
+  - `PrimalDualRho` carries its previous xbars, as `NormRhoUpdater` does, and
+    a resume retraces an uninterrupted run bit-identically.
+  - `XhatFeasibilityCutExtension` has nothing to carry. The cuts ride in the
+    models, and it reads the key of the next cut from them. It used to keep a
+    counter, which a resume restarted at 0 so the first cut after it
+    overwrote the first restored one; carrying the counter instead would not
+    have been enough, since Iter0's spoke sync can install a cut before the
+    restore at the end of Iter0.
+  - `RelaxedPHFixer` decides from the current spoke buffer, xbar and the
+    models' fixedness, so it carries only its display count. Its pre-iteration
+    0 fix-at-bounds pass belongs to the start of the study and is skipped on a
+    resume; the wait for the spoke's first buffer is kept. It does not
+    retrace an uninterrupted run: the relaxed-PH spoke it reads from is not
+    checkpointed and restarts from W = 0, so after the stop it hands the fixer
+    different relaxed solutions, and the fixer unfixes any restored fixing
+    they disagree with.
+  - `ReducedCostsFixer` carries the reduced costs it fixes from, the bound
+    that decides whether new ones are accepted, and its count, and skips its
+    pre-iteration-0 pass on a resume. Iter0's spoke sync runs before the
+    restore, so on a resume its fix-fraction target is zero there: reduced
+    costs that sync takes are recorded but not fixed from, and are kept over
+    the saved ones only if their bound is better. It does not retrace an
+    uninterrupted run exactly: the reduced-costs spoke itself is not
+    checkpointed and restarts.
+  - `PHTracker` does not affect the solution, only its files. It writes out
+    its buffered rows at every checkpoint, and a resumed run keeps the files'
+    rows through the checkpoint's iteration instead of truncating them, and
+    sets its files up at the end of a resumed run that ran no iterations. On
+    any spoke it still starts its files over: no spoke writes extension state.
+
+  `WOscillationMonitor` (W trajectories, recurrence trackers, an internal
+  slammer) and `CrossScenarioExtension` (whose `post_iter0` replaces model
+  components a resume restores) need more than this and stay refused; they
+  are tracked as issue #903.
 
   **Restore runs at the end of `Iter0`, not in the resume branch**, and the
   ordering is the whole trick: extensions rebuild their bookkeeping from the

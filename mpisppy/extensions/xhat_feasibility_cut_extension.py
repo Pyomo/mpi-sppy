@@ -55,7 +55,6 @@ class XhatFeasibilityCutExtension(Extension):
         self._nonant_len = None  # filled in at setup_hub
         self._row_len = None
         self._recv_buffers = []  # one per emitting spoke; register_receive_fields
-        self._install_counter = 0  # monotonic key for the ConstraintList
 
     # ---- two-stage-only precondition (V1) --------------------------------
 
@@ -137,6 +136,32 @@ class XhatFeasibilityCutExtension(Extension):
         for s in self.opt.local_scenarios.values():
             s._mpisppy_model.xhat_feasibility_cuts = pyo.Constraint(pyo.Any)
 
+    # Nothing to carry across a resume. The cuts ride in the models, and the
+    # key of the next one is read from them (_next_cut_key), so a cut that
+    # arrives in the resumed Iter0's spoke sync -- before any restore_state
+    # runs -- cannot reuse the key of a restored cut.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
+
+    def _next_cut_key(self):
+        """The first key no installed cut uses.
+
+        Also gives every local model the cut component if it lacks one.
+        setup_hub adds it, but on a resume the models it added it to are
+        replaced by the checkpointed ones, which have it only if the run that
+        wrote them had this extension attached.
+        """
+        for s in self.opt.local_scenarios.values():
+            if not hasattr(s._mpisppy_model, "xhat_feasibility_cuts"):
+                s._mpisppy_model.xhat_feasibility_cuts = \
+                    pyo.Constraint(pyo.Any)
+        any_s = next(iter(self.opt.local_scenarios.values()))
+        return max(any_s._mpisppy_model.xhat_feasibility_cuts.keys(),
+                   default=0) + 1
+
     def register_send_fields(self):
         # We do not send anything; the spoke is the sender.
         return
@@ -172,6 +197,9 @@ class XhatFeasibilityCutExtension(Extension):
         if n_cuts <= 0:
             return
         row_len = self._row_len
+        # Read once per buffer, not per row: the scan is over every cut
+        # installed so far.
+        key = self._next_cut_key()
         for k in range(n_cuts):
             row = buf[k * row_len : (k + 1) * row_len]
             rhs_constant = float(row[0])
@@ -180,8 +208,6 @@ class XhatFeasibilityCutExtension(Extension):
             # fewer cuts than the header claims if we ever tighten that.
             if rhs_constant == 0.0 and all(c == 0.0 for c in coefs):
                 continue
-            self._install_counter += 1
-            key = self._install_counter
             for s in self.opt.local_scenarios.values():
                 linear_vars = list(s._mpisppy_data.nonant_indices.values())
                 # Constraint form: rhs_constant + sum coef_i x_i >= 0
@@ -197,3 +223,4 @@ class XhatFeasibilityCutExtension(Extension):
                     s._solver_plugin.add_constraint(
                         s._mpisppy_model.xhat_feasibility_cuts[key]
                     )
+            key += 1
