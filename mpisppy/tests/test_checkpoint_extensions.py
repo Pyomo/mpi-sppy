@@ -1464,6 +1464,21 @@ class TestXhatFeasibilityCutKeysContinue(unittest.TestCase):
         self.assertEqual(sorted(cuts.keys()), [1, 2, 3, 4])
         self.assertEqual({k: str(cuts[k].body) for k in before}, before)
 
+    def test_restored_models_without_the_component_get_one(self):
+        """A resume that attaches the extension to a checkpoint written
+        without it: setup_hub's component was on the replaced models."""
+        ext, m = self._extension_with_cuts(0)
+        m._mpisppy_model.del_component("xhat_feasibility_cuts")
+        ext._install_cuts([5.0, 1.0, -1.0, 1])
+        self.assertEqual(
+            sorted(m._mpisppy_model.xhat_feasibility_cuts.keys()), [1])
+
+    def test_a_zero_row_does_not_use_a_key(self):
+        ext, m = self._extension_with_cuts(2)
+        ext._install_cuts([0.0, 0.0, 0.0, 6.0, -1.0, 1.0, 2])
+        self.assertEqual(
+            sorted(m._mpisppy_model.xhat_feasibility_cuts.keys()), [1, 2, 3])
+
     def test_keys_start_at_one_on_a_fresh_run(self):
         ext, m = self._extension_with_cuts(0)
         ext._install_cuts([5.0, 1.0, -1.0, 6.0, -1.0, 1.0, 2])
