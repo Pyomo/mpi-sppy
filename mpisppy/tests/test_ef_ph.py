@@ -1062,5 +1062,57 @@ class Test_mutable_probability(unittest.TestCase):
             ef._compute_unconditional_node_probabilities(force=True)
 
 
+class Test_EF_launch(unittest.TestCase):
+    """ExtensiveForm and how it was launched (issues #877, #878). Solver-free:
+    only the constructor runs."""
+
+    def _ef(self, **kwargs):
+        import mpisppy.opt.ef
+        import mpisppy.tests.examples.farmer as farmer
+        return mpisppy.opt.ef.ExtensiveForm(
+            {"solver": solver_name},
+            farmer.scenario_names_creator(3),
+            farmer.scenario_creator,
+            scenario_creator_kwargs={"num_scens": 3},
+            **kwargs)
+
+    def test_refuses_more_than_one_rank(self):
+        # SPBase spreads the scenarios over the ranks, so each rank would
+        # solve an EF of only its own share -- a wrong answer, not just waste
+        from unittest import mock
+        import mpisppy.opt.ef
+        import mpisppy.spbase
+        fake_mpi = mock.MagicMock()
+        fake_mpi.COMM_WORLD.Get_size.return_value = 2
+        with mock.patch.object(mpisppy.opt.ef, "MPI", fake_mpi), \
+                mock.patch.object(mpisppy.spbase.SPBase, "__init__") as base:
+            with self.assertRaises(RuntimeError) as cm:
+                self._ef()
+        base.assert_not_called()   # refused before any scenario is built
+        self.assertIn("one rank", str(cm.exception))
+
+    def test_warns_under_mpiexec_on_one_rank(self):
+        from unittest import mock
+        import mpisppy.opt.ef
+        launcher_vars = mpisppy.opt.ef._LAUNCHER_ENV_VARS
+        clean = {k: v for k, v in os.environ.items() if k not in launcher_vars}
+        for var in launcher_vars:
+            with self.subTest(var=var), \
+                    mock.patch.dict(os.environ, clean, clear=True), \
+                    mock.patch.object(mpisppy.opt.ef.logger, "warning") as warn:
+                os.environ[var] = "1"
+                self._ef()
+                warn.assert_called_once()
+                self.assertIn("Run it with python", warn.call_args[0][0])
+                warn.reset_mock()
+                self._ef(suppress_warnings=True)
+                warn.assert_not_called()
+        # a plain python run (even a singleton MPI init) sets none of them
+        with mock.patch.dict(os.environ, clean, clear=True), \
+                mock.patch.object(mpisppy.opt.ef.logger, "warning") as warn:
+            self._ef()
+            warn.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()

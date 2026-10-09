@@ -45,6 +45,9 @@ class InspectContext:
     nonant_lower: Optional[np.ndarray] = None
     nonant_upper: Optional[np.ndarray] = None
     spbase: Optional[Any] = None
+    # Number of versions in the RECENT_XHATS circular buffer. Without it the
+    # NaN check skips RECENT_XHATS: versions not yet written are still NaN.
+    recent_xhats_versions: Optional[int] = None
 
     def get_nonant_count(self) -> Optional[int]:
         if self.nonant_count is not None:
@@ -102,7 +105,7 @@ def inspect_buffer(buf,
         ctx = InspectContext()
     report = Report()
 
-    _check_generic(buf, report, ctx, send=send)
+    _check_generic(buf, fld, report, ctx, send=send)
     checker = CHECKERS.get(fld)
     if checker is not None:
         checker(buf, report, ctx)
@@ -116,7 +119,8 @@ def inspect_buffer(buf,
 # ---- generic checks ---------------------------------------------------------
 
 
-def _check_generic(buf, report: Report, ctx: InspectContext, *, send: bool) -> None:
+def _check_generic(buf, fld: Field, report: Report, ctx: InspectContext,
+                   *, send: bool) -> None:
     logical = buf.array()
     raw_id = logical[-1]
     write_id = _check_write_id_slot(raw_id, report)
@@ -128,7 +132,7 @@ def _check_generic(buf, report: Report, ctx: InspectContext, *, send: bool) -> N
         # about whether NaNs are "expected initial state" or corruption.
         return
 
-    _check_data_nan_consistency(buf, write_id, report)
+    _check_data_nan_consistency(buf, fld, write_id, report, ctx)
 
     if send:
         if write_id != buf.id():
@@ -194,10 +198,21 @@ def _check_padding_is_nan(buf, report: Report) -> None:
         )
 
 
-def _check_data_nan_consistency(buf, write_id: int, report: Report) -> None:
+def _check_data_nan_consistency(buf, fld: Field, write_id: int,
+                                report: Report, ctx: InspectContext) -> None:
     data = buf.value_array()
-    has_nan = bool(np.any(np.isnan(data)))
     has_inf = bool(np.any(np.isinf(data)))
+    written = data
+    if fld == Field.RECENT_XHATS:
+        # A circular buffer: publish k writes version k % V, so until the
+        # producer has published V times, versions write_id .. V-1 still hold
+        # their initial NaN.
+        versions = ctx.recent_xhats_versions
+        if versions is None or versions < 1 or len(data) % versions != 0:
+            written = data[:0]
+        else:
+            written = data[:min(write_id, versions) * (len(data) // versions)]
+    has_nan = bool(np.any(np.isnan(written)))
     if write_id >= 1 and has_nan:
         report.add(
             "data contains NaN but write_id >= 1 (publish should have "

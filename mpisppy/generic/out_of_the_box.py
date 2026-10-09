@@ -103,7 +103,7 @@ class Facts:
     # effect -- see gather_facts.
     scen_anchor: str | None = None
     # True under --inspect-only in any form: the run stops before solving, so
-    # a past-tense suggestion ("the other N-1 idled") describes no event. With
+    # an EF chosen for N ranks is not refused (see configure). With
     # --inspect-only N the rank count is a plan too, not an allocation.
     inspect_only: bool = False
 
@@ -138,11 +138,8 @@ class Decision:
         that silently dropped the solver and any requested spoke, which is what
         the docs tell people to paste.
         """
-        # An EF run is one monolithic solve on one rank: the other ranks build
-        # the same model and then sit idle, and ExtensiveForm itself warns
-        # ("Creating an ExtensiveForm object in parallel. Why?"). So the line
-        # to reproduce an EF decision is a plain serial one -- echoing mpiexec
-        # would be telling the reader to do the thing OOTB is warning about.
+        # An EF must run on one rank (ExtensiveForm refuses more), so the
+        # line to reproduce an EF decision is a plain serial one.
         if self.run_ef:
             parts = ["python -m mpisppy.generic_cylinders",
                      f"--module-name {facts.module_name}"]
@@ -915,8 +912,8 @@ def _sg_ran_ef_few_ranks(d, facts, policy, outcome):
     if d.run_ef and d.ef_reason == "min_ranks":
         need = policy["ef_fallback"]["min_ranks_for_decomposition"]
         return (f"Ran the monolithic EF because only {facts.num_ranks} MPI "
-                f"rank(s) were available; with >= {need} ranks OOTB would "
-                f"decompose (hub + bound spokes).")
+                f"rank(s) were available; below {need} ranks OOTB does not "
+                f"choose to decompose by itself (hub + bound spokes).")
     return None
 
 
@@ -987,30 +984,6 @@ _MIQP_CLASSES = frozenset({"MIQP", "MINLP"})
 _QUADRATIC_CLASSES = frozenset({"QP", "MIQP", "NLP", "MINLP"})
 
 
-# EF reasons where decomposing WAS available and OOTB (or the user) chose the
-# monolith anyway. "min_ranks" and "request_too_big" are not here: the policy
-# refused to decompose at that rank count, so telling the reader to decompose
-# would contradict _sg_ran_ef_few_ranks in the same list.
-_EF_COULD_HAVE_DECOMPOSED = frozenset({"small_effort", "few_scens", "user"})
-
-
-def _sg_ef_under_mpiexec(d, facts, policy, outcome):
-    # The rank floor has to be tested too, not just the reason: an explicit
-    # --EF is matched before the floor is ever consulted, so ef_reason "user"
-    # can carry a rank count at which OOTB would never have decomposed --
-    # and then this would tell the reader to do what the policy refuses.
-    floor = policy["ef_fallback"]["min_ranks_for_decomposition"]
-    if (d.run_ef and facts.num_ranks > 1 and not facts.inspect_only
-            and facts.num_ranks >= floor
-            and d.ef_reason in _EF_COULD_HAVE_DECOMPOSED):
-        return (f"Solved the extensive form on one rank while {facts.num_ranks} "
-                f"were allocated: the other {facts.num_ranks - 1} built the same "
-                "model and then idled. Run an EF serially (python -m "
-                "mpisppy.generic_cylinders ..., no mpiexec), or give the ranks "
-                "something to do by decomposing.")
-    return None
-
-
 def _sg_more_ranks(d, facts, policy, outcome):
     cap = policy["spoke_ladder"]["max_cylinders"]
     if not d.run_ef and d.num_cylinders < cap:
@@ -1032,7 +1005,6 @@ def _sg_minus_no_bundling(d, facts, policy, outcome):
 SUGGESTION_GENERATORS = [
     _sg_request_too_big,
     _sg_ran_ef_few_ranks,
-    _sg_ef_under_mpiexec,
     _sg_no_class_solver,
     _sg_no_persistent_solver,
     _sg_linearized_prox,
@@ -1523,6 +1495,14 @@ def configure(module, cfg) -> OOTBState:
             print(f"  - {note}")
         print("[out-of-the-box] equivalent command line:\n  "
               + decision.command_line(facts))
+
+    # ExtensiveForm refuses more than one rank; stop here, where the reason
+    # for choosing the EF is still on the screen.
+    if decision.run_ef and facts.num_ranks > 1 and not facts.inspect_only:
+        msg = (f"out-of-the-box chose the extensive form, which must run on "
+               f"one rank, but this run has {facts.num_ranks}. Run the "
+               f"equivalent command line above, which has no mpiexec.")
+        raise RuntimeError(msg)
 
     apply_decision(decision, cfg)
     return OOTBState(decision=decision, facts=facts, policy=policy, effort=effort)
