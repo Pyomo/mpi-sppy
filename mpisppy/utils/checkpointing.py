@@ -590,9 +590,10 @@ def agree_spoke_restore(opt, state):
     if verdict == "differ":
         return None, (
             f"the ranks of this spoke checkpointed different incumbents "
-            f"(objectives {detail}), so none of them restores one: the "
-            f"files were written at different passes, and half of one xhat "
-            f"beside half of another is not a solution this study ever found")
+            f"({len(set(detail))} different writes across {len(detail)} "
+            f"ranks), so none of them restores one: the files were written "
+            f"at different passes, and half of one xhat beside half of "
+            f"another is not a solution this study ever found")
     comm = _cylinder_comm(opt)
     if comm is not None:
         # Rank 0's, on every rank. Which rank is arbitrary -- what matters is

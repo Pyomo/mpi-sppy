@@ -80,6 +80,16 @@ _STOCH_DISTR = "mpisppy.tests.examples.stoch_distr.stoch_distr"
 mpiexec_available = shutil.which("mpiexec") is not None
 
 
+def _as_if_written_with_objective(state, objective):
+    """Give a spoke file another objective the way a real write would: its
+    write_id is computed from the objective and the cursor, so a file from a
+    different write has a different one. Changing the objective alone would
+    leave the old id behind and describe no write that ever happened."""
+    state["best_solution_obj_val"] = objective
+    cursor = (state.get("loop_state") or {}).get("cursor")
+    state["write_id"] = checkpointing.spoke_write_id(objective, cursor)
+
+
 def _run_leg(tmpdir, name, np, module, model_args, spoke_args, extra_args,
              check=True):
     """Run one mpiexec job. Returns (CompletedProcess, out_path)."""
@@ -551,7 +561,8 @@ class TestTornSpokeIncumbentIsDropped(unittest.TestCase):
             state = pickle.load(f)
         # An older, worse incumbent: what rank 1 still holds when its latest
         # write failed and rank 0's succeeded.
-        state["best_solution_obj_val"] += 100.0
+        _as_if_written_with_objective(
+            state, state["best_solution_obj_val"] + 100.0)
         state["best_inner_bound"] += 100.0
         with open(path, "wb") as f:
             pickle.dump(state, f)
@@ -1121,8 +1132,8 @@ class TestMultiRankSpokeCursorAgreement(unittest.TestCase):
                 "would pass without exercising anything")
         # An incumbent from a different pass: what a stop landing between the
         # two ranks' writes leaves when one of them has just improved.
-        state["best_solution_obj_val"] = \
-            float(state["best_solution_obj_val"]) - 1.0
+        _as_if_written_with_objective(
+            state, float(state["best_solution_obj_val"]) - 1.0)
         with open(paths[-1], "wb") as f:
             pickle.dump(state, f)
 

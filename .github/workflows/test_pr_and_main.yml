@@ -139,10 +139,6 @@ jobs:
         run: |
           # [doc] too: this job runs "make doctest" below
           pip install -e ".[test,doc]"
-          # Lets a step that sets COVERAGE_PROCESS_START measure the Python
-          # processes its tests launch, such as the checkpoint tests' mpiexec
-          # legs. A step that does not set it is unaffected.
-          python -c "import pathlib, site; pathlib.Path(site.getsitepackages()[0], 'coverage_startup.pth').write_text('import coverage; coverage.process_startup()\\n')"
 
       - name: Test EF/PH
         run: |
@@ -250,6 +246,75 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_vss.py -v
 
+      - name: Test prox_approx end-to-end
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_prox_approx_e2e.py -v
+
+      - name: Test timed mipgap
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_timed_mipgap.py -v
+
+      - name: Test termination callback
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/utils/callbacks/termination/tests/test_termination.py -v
+
+      - name: Test window distribution
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_window_distribution.py -v
+
+      - name: Test RMA guard
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_mvapich_rma_guard.py -v
+
+      - name: Test docs
+        run: |
+          cd ./doc/
+          make doctest
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-regression
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
+  checkpoint:
+    # Split out of "Basic regression tests": these take most of that job's
+    # time (the multi-rank and cylinder suites launch an mpiexec job per A/B
+    # leg), and a failure here was reported only as the regression check
+    # failing, minutes in.
+    name: Checkpoint/resume tests
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+
+          # pyomo + pybind11 explicit: the build-extensions step below runs
+          # before the editable install; solvers are in no extra (licensing)
+          pip install pyomo pybind11 cplex gurobipy xpress highspy
+
+      - name: Build pyomo extensions
+        run: |
+          # we don't need it all; just APPSI's extensions
+          pyomo build-extensions || python -c "from pyomo.contrib.appsi.cmodel import cmodel_available; exit(0) if bool(cmodel_available) else exit(1)"
+
+      - name: setup the program
+        run: |
+          pip install -e ".[test]"
+          # Lets a step that sets COVERAGE_PROCESS_START measure the Python
+          # processes its tests launch -- the mpiexec legs below. A step that
+          # does not set it is unaffected.
+          python -c "import pathlib, site; pathlib.Path(site.getsitepackages()[0], 'coverage_startup.pth').write_text('import coverage; coverage.process_startup()\\n')"
+
       - name: Test checkpoint/resume
         env:
           COVERAGE_FILE: ${{ github.workspace }}/.coverage
@@ -296,36 +361,11 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_checkpoint_profile.py -v
 
-      - name: Test prox_approx end-to-end
-        run: |
-          coverage run $COV_ARGS -m pytest mpisppy/tests/test_prox_approx_e2e.py -v
-
-      - name: Test timed mipgap
-        run: |
-          coverage run $COV_ARGS -m pytest mpisppy/tests/test_timed_mipgap.py -v
-
-      - name: Test termination callback
-        run: |
-          coverage run $COV_ARGS -m pytest mpisppy/utils/callbacks/termination/tests/test_termination.py -v
-
-      - name: Test window distribution
-        run: |
-          coverage run $COV_ARGS -m pytest mpisppy/tests/test_window_distribution.py -v
-
-      - name: Test RMA guard
-        run: |
-          coverage run $COV_ARGS -m pytest mpisppy/tests/test_mvapich_rma_guard.py -v
-
-      - name: Test docs
-        run: |
-          cd ./doc/
-          make doctest
-
       - name: Upload coverage data
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-regression
+          name: coverage-checkpoint
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
           include-hidden-files: true
@@ -1588,6 +1628,7 @@ jobs:
       - power_cep_notebook
       - nompi4py
       - regression
+      - checkpoint
       - runall_persistent_part1
       - runall_persistent_part2
       - runall_part1
