@@ -44,7 +44,11 @@ class Spoke(SPCommunicator):
         inspected non-verbose. InspectContext.spbase is set so checkers
         that need nonant length pick it up via the fallback.
         """
-        ctx = InspectContext(spbase=self.opt)
+        ctx = InspectContext(
+            spbase=self.opt,
+            recent_xhats_versions=(self._field_lengths[Field.RECENT_XHATS]
+                                   // self._field_lengths[Field.BEST_XHAT]),
+        )
         shutdown_key = self._make_key(Field.SHUTDOWN, 0)
 
         rep = inspect_buffer(shutdown_buf, Field.SHUTDOWN, ctx,

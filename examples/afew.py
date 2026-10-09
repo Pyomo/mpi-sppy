@@ -48,8 +48,12 @@ badguys = dict()
 
 def do_one(dirname, progname, np, argstring):
     os.chdir(dirname)
-    runstring = "mpiexec {} -np {} python {} -m mpi4py {} {}".\
-                format(mpiexec_arg, np, python_args, progname, argstring)
+    # One rank runs without mpiexec, which can bind it to a single core.
+    if np == 1:
+        runstring = "python {} {} {}".format(python_args, progname, argstring)
+    else:
+        runstring = "mpiexec {} -np {} python {} -m mpi4py {} {}".\
+                    format(mpiexec_arg, np, python_args, progname, argstring)
     print(runstring)
     code = os.system(runstring)
     if code != 0:

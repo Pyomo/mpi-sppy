@@ -15,7 +15,9 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from mpisppy.cylinders.spcommunicator import RecvArray, SendArray
+from mpisppy.cylinders.spcommunicator import (
+    RecvArray, SendArray, SendCircularBuffer,
+)
 from mpisppy.cylinders.spoke import Spoke
 from mpisppy.cylinders.spwindow import Field
 from mpisppy.debug_utils import InspectContext, Report, inspect_buffer
@@ -316,6 +318,69 @@ class TestBestXhatChecks(unittest.TestCase):
                             for f in rep.findings))
 
 
+# ---- RECENT_XHATS checks ----------------------------------------------------
+
+
+# RECENT_XHATS layout used below: V versions, each L values wide.
+_V, _L = 3, 2
+
+
+def _publish_recent_xhats(circ, buf, versions):
+    """Publish each array in versions the way Spoke.send_latest_xhat does."""
+    for values in versions:
+        circ.next_value_array_reference()[:] = values
+        buf._next_write_id()
+
+
+class TestRecentXhatsChecks(unittest.TestCase):
+    """RECENT_XHATS is circular: versions not yet written are still NaN."""
+
+    def _send_buf(self, versions):
+        buf = SendArray(_V * _L)
+        _publish_recent_xhats(SendCircularBuffer(buf, _L, _V), buf, versions)
+        return buf
+
+    def _ctx(self):
+        return InspectContext(recent_xhats_versions=_V)
+
+    def test_partly_filled_send_buffer_passes(self):
+        buf = self._send_buf([[1.0, 2.0], [3.0, 4.0]])
+        rep = inspect_buffer(buf, Field.RECENT_XHATS, self._ctx(), send=True)
+        self.assertTrue(rep.ok, msg=str(rep))
+
+    def test_partly_filled_recv_buffer_passes(self):
+        sent = self._send_buf([[1.0, 2.0]])
+        buf = RecvArray(_V * _L)
+        buf._array[:] = sent.array()
+        buf._id = sent.id()
+        rep = inspect_buffer(buf, Field.RECENT_XHATS, self._ctx(), send=False)
+        self.assertTrue(rep.ok, msg=str(rep))
+
+    def test_nan_in_written_version_is_finding(self):
+        buf = self._send_buf([[1.0, 2.0], [3.0, float("nan")]])
+        rep = inspect_buffer(buf, Field.RECENT_XHATS, self._ctx(), send=True)
+        self.assertFalse(rep.ok)
+        self.assertIn("NaN", str(rep))
+
+    def test_nan_after_wraparound_is_finding(self):
+        # Four publishes into three versions: every version has been written.
+        buf = self._send_buf([[1.0, 2.0], [3.0, 4.0],
+                              [float("nan"), 6.0], [7.0, 8.0]])
+        rep = inspect_buffer(buf, Field.RECENT_XHATS, self._ctx(), send=True)
+        self.assertFalse(rep.ok)
+        self.assertIn("NaN", str(rep))
+
+    def test_without_version_count_skips_nan_check_only(self):
+        buf = self._send_buf([[1.0, 2.0]])
+        rep = inspect_buffer(buf, Field.RECENT_XHATS, InspectContext(),
+                             send=True)
+        self.assertTrue(rep.ok, msg=str(rep))
+        buf[1] = float("inf")
+        rep = inspect_buffer(buf, Field.RECENT_XHATS, InspectContext(),
+                             send=True)
+        self.assertIn("inf", str(rep))
+
+
 # ---- report and verbose -----------------------------------------------------
 
 
@@ -391,7 +456,8 @@ class TestConfigFlagWiring(unittest.TestCase):
 
 
 def _make_spoke_stub(shutdown_buf, *, inspect_on=True,
-                     extra_recv=None, send=None, nonant_length=None):
+                     extra_recv=None, send=None, nonant_length=None,
+                     field_lengths=None):
     """Build a duck-typed stub sufficient to drive Spoke.got_kill_signal.
 
     extra_recv: optional dict mapping (Field, origin) -> RecvArray that the
@@ -399,6 +465,8 @@ def _make_spoke_stub(shutdown_buf, *, inspect_on=True,
     send: optional dict mapping Field -> SendArray for the send-side sweep.
     nonant_length: if set, exposed via stub.opt.nonant_length so checkers
         that fall back to spbase pick it up.
+    field_lengths: optional Field -> length dict; the sweep reads the
+        BEST_XHAT and RECENT_XHATS entries to size the circular buffer.
     """
     stub = SimpleNamespace()
     recv = {(Field.SHUTDOWN, 0): shutdown_buf}
@@ -416,6 +484,8 @@ def _make_spoke_stub(shutdown_buf, *, inspect_on=True,
     )
     if nonant_length is not None:
         stub.opt.nonant_length = nonant_length
+    stub._field_lengths = field_lengths or {Field.BEST_XHAT: 1,
+                                            Field.RECENT_XHATS: 1}
     stub.cylinder_rank = 0
     stub.strata_rank = 1
     stub.global_rank = 1
@@ -551,6 +621,29 @@ class TestSpokeGotKillSignalWarning(unittest.TestCase):
                 Field.OBJECTIVE_OUTER_BOUND: good_outer_send,
             },
             nonant_length=3,
+        )
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            fired = Spoke.got_kill_signal(stub)
+        self.assertTrue(fired)
+
+    def test_sweep_partly_filled_recent_xhats_emits_no_warning(self):
+        # Fewer publishes than versions before shutdown (issue #898).
+        good_shutdown = RecvArray(1)
+        good_shutdown._array[0] = 1.0
+        good_shutdown._array[-1] = 1.0
+        good_shutdown._id = 1
+
+        recent = SendArray(_V * _L)
+        _publish_recent_xhats(SendCircularBuffer(recent, _L, _V), recent,
+                              [[1.0, 2.0], [3.0, 4.0]])
+
+        stub = _make_spoke_stub(
+            good_shutdown,
+            inspect_on=True,
+            send={Field.RECENT_XHATS: recent},
+            field_lengths={Field.BEST_XHAT: _L, Field.RECENT_XHATS: _V * _L},
         )
 
         with warnings.catch_warnings():
