@@ -192,6 +192,30 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         rho_avg = sum_rho / num_rhos
         global_toc(f"Rho values recomputed - average rank 0 rho={rho_avg}")
         
+    def checkpoint_state(self):
+        """Adds the cost coefficients to what the dynamic-rho base carries.
+
+        They are read from the objective as the user wrote it, which is only
+        true before iteration 0 adds W and the prox term: on a resumed model
+        the same call finds the quadratic prox and raises. So they cross the
+        checkpoint by scenario name -- the cache is keyed by scenario object,
+        and a resume builds new ones.
+        """
+        state = super().checkpoint_state()
+        state["nonant_cost_coeffs"] = {
+            sname: dict(self._nonant_cost_coeffs[s])
+            for sname, s in self.opt.local_scenarios.items()
+            if s in self._nonant_cost_coeffs}
+        return state
+
+    def restore_state(self, state):
+        super().restore_state(state)
+        by_name = state["nonant_cost_coeffs"]
+        self._nonant_cost_coeffs = {
+            s: dict(by_name[sname])
+            for sname, s in self.opt.local_scenarios.items()
+            if sname in by_name}
+
     def pre_iter0(self):
         pass
 

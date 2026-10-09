@@ -197,5 +197,48 @@ class Dyn_Rho_extension_base(mpisppy.extensions.extension.Extension):
     def enditer(self):
         pass
 
+    def checkpoint_state(self):
+        """The convergence histories, and the two W snapshots W_diff reads.
+
+        `_update_recommended` decides whether to recompute rho this iteration
+        by comparing the last two entries of each cache, so a resumed run with
+        empty caches cannot make that decision the same way -- and, for the
+        dual criterion, declines to update at all until four iterations have
+        accumulated again.
+
+        The `WTracker` entries are not a nicety: without them `--sep-rho`,
+        `--sensi-rho` and `--grad-rho` all died with a bare `KeyError` at the
+        first iteration after a resume. `W_diff` indexes `local_Ws` at its own
+        `ph_iter` and at `ph_iter - 1` -- and note that it reads `ph_iter`
+        *before* refreshing it, so those are the two iterations before the one
+        it is being called for. It also evaluates `local_Ws[0]` on the way
+        through, which only means anything at iteration 0 (it is what makes
+        the first difference zero).
+
+        So exactly three entries are carried, and they are the three that
+        call will read. Not the whole tracker: `local_Ws` grows by one entry
+        per iteration -- scenarios times nonants of floats each -- so saving
+        all of it would make the checkpoint grow with the length of the run to
+        carry history nothing reads. If a future consumer of this tracker
+        needs a window rather than a single step back, this is the line that
+        has to grow with it.
+        """
+        if not self.primal_conv_cache and not self.dual_conv_cache:
+            return None
+        wanted = {0, self.wt.ph_iter, self.wt.ph_iter - 1}
+        local_Ws = {k: v for k, v in self.wt.local_Ws.items() if k in wanted}
+        return {
+            "primal_conv_cache": list(self.primal_conv_cache),
+            "dual_conv_cache": list(self.dual_conv_cache),
+            "wtracker_local_Ws": local_Ws,
+            "wtracker_ph_iter": self.wt.ph_iter,
+        }
+
+    def restore_state(self, state):
+        self.primal_conv_cache = list(state["primal_conv_cache"])
+        self.dual_conv_cache = list(state["dual_conv_cache"])
+        self.wt.local_Ws.update(state["wtracker_local_Ws"])
+        self.wt.ph_iter = state["wtracker_ph_iter"]
+
     def post_everything(self):
         pass

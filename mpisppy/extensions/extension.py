@@ -174,6 +174,69 @@ class Extension:
         '''
         pass
 
+    def checkpoint_state(self):
+        ''' Return this extension's own state as picklable plain data, or
+            None if it has none worth carrying across a stop and resume.
+
+            State that lives on a *scenario model* needs nothing here: the
+            checkpoint dills the models, so it comes back on its own and
+            comes back consistent with the variable values and fixedness it
+            pairs with. This hook is for state on the extension *object*,
+            which no model carries and which is therefore lost outright
+            unless it is written down.
+
+            It matters for any extension whose behavior depends on what it
+            did in earlier iterations -- a rho updater comparing against the
+            previous xbar, a fixer counting how long a variable has been
+            converged, a slammer remembering what it already pinned. Such an
+            extension that starts fresh on a resumed run does not merely lose
+            a statistic; it takes a different action at the next iteration
+            than the uninterrupted run would have, and the two runs diverge
+            from there.
+
+            Return plain data (dicts, lists, numbers, strings, tuples), not
+            Pyomo objects: a resume replaces every model, so a saved vardata
+            addresses something that no longer exists. Key by ``(ndn, i)``
+            nonant index or by variable *name*, as the rest of the checkpoint
+            code does.
+
+            An extension with no such state -- no history, no counter, no
+            record of what it has already changed -- overrides this to return
+            None, and ``restore_state`` to do nothing. That is a decision
+            somebody made after looking, which is why the base does not make
+            it: the base raises, and a run with checkpointing or a resume
+            refuses at startup any attached extension that does not override
+            both. Runs without checkpointing never call either.
+
+            Called by the Checkpointer at each checkpoint point, which is
+            always the end of a completed iteration. See
+            doc/designs/checkpointing_design.md section 5.5.
+        '''
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement checkpoint_state")
+
+    def restore_state(self, state):
+        ''' Restore what checkpoint_state() returned, on a resumed run.
+
+            Called once, near the end of Iter0 -- deliberately *after*
+            pre_iter0 and post_iter0 have run, because those hooks are where
+            extensions rebuild their bookkeeping from the models, and
+            restoring first would simply have it overwritten.
+
+            ``state`` is whatever this extension's own checkpoint_state()
+            produced; entries are matched to extensions by class name, so an
+            extension that was not attached when the checkpoint was written
+            is never called.
+
+            Not collective. Every restore runs inside an agreement across
+            the cylinder's ranks (checkpointing.run_agreed), which is what
+            keeps a restore that fails on one rank from stranding the others
+            in the next collective -- and an MPI call in here would be that
+            collective, reached by some ranks and not others.
+        '''
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement restore_state")
+
 
 class MultiExtension(Extension):
     """ Container for all the extension classes we are using.

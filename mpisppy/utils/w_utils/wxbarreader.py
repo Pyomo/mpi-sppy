@@ -62,6 +62,14 @@ def add_options_to_config(cfg):
 class WXBarReader(mpisppy.extensions.extension.Extension):
     """ Extension class for reading W values
     """
+    # It holds only its configuration, and a resumed run does not read the
+    # files at all: W and xbar come from the checkpoint.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
+
     def __init__(self, ph):
 
         assert 'cfg' in ph.options

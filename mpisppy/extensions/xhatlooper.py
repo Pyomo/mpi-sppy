@@ -18,6 +18,16 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
         opt (SPBase object): problem that we are bounding
         rank (int): mpi process rank of currently running process
     """
+
+    # Nothing to carry across a resume. Re-evaluates from scratch
+    # whenever it runs; its objective attributes are results it reports,
+    # not decisions it carries.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
+
     def __init__(self, ph):
         super().__init__(ph)
         self.options = ph.options["xhat_looper_options"]

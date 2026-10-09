@@ -127,6 +127,10 @@ class WTracker():
             wlen (int): desired window length
             reportlen (int): max rows in each report
             stdevthresh (float): threshold for a good enough std dev
+        Returns:
+            None once the report is written, or compute_moving_stats's
+            warning string when the window could not be filled -- the caller
+            is the one that may know why it could not.
         NOTE:
             For large problems, this will create a lot of garbage for the collector
         """
@@ -145,7 +149,8 @@ class WTracker():
         # Either the (wlist, window_stats) pair or a warning string; indexing
         # the string with [1] used to write its second character as the report.
         wstats = self.compute_moving_stats(wlen)
-        if not isinstance(wstats, str):
+        shortfall = wstats if isinstance(wstats, str) else None
+        if shortfall is None:
             wstats = wstats[1]
             Wsdf = pd.DataFrame.from_dict(wstats, orient='index',
                                           columns=["mean", "stdev"])
@@ -178,7 +183,8 @@ class WTracker():
             by_absCV[0:reportlen].to_csv(path_or_buf=cvname, header=True, index=True, index_label=None, mode='w')
         else:  # not enough data
             with open(fname, "a") as fil:
-                fil.write(wstats)   # warning string
+                fil.write(shortfall)   # warning string
+        return shortfall
 
 
     def W_diff(self):
@@ -202,11 +208,12 @@ class WTracker():
         first = min(k for k in self.local_Ws if k >= 0)
         if -1 not in self.local_Ws:
             self.local_Ws[-1] = self.local_Ws[first]
-        # A resumed run has no W history from before the iteration it resumed
-        # at, so its first passes have nothing to difference against and
-        # report the zero difference an uninterrupted run reports at its own
-        # first iterations. A checkpoint does not carry a rho updater's
-        # history; doc/src/checkpointing.rst says so.
+        # A rho updater that carries its tracker across a checkpoint
+        # (Dyn_Rho_extension_base.checkpoint_state) restores the two entries
+        # read here. One that does not resumes with no W history from before
+        # the iteration it resumed at, so its first passes have nothing to
+        # difference against and report the zero difference an uninterrupted
+        # run reports at its own first iterations.
         curr_Ws = self.local_Ws.get(cI, self.local_Ws[first])
         prev_Ws = self.local_Ws.get(cI - 1, curr_Ws)
         global_diff = np.zeros(1)

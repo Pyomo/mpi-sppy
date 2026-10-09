@@ -282,7 +282,12 @@ class Slammer(Extension):
             name = xvar.name
             self._name_of[ndn_i] = name
             local_names.append(name)
-            if xvar.fixed:
+            # "Fixed by the modeler", not "fixed right now": on a run resumed
+            # from a checkpoint every mid-run fixing is already in place, so
+            # asking xvar.fixed here would file this extension's own earlier
+            # slams -- and the fixer's fixings -- as the modeler's, drop them
+            # from the eligibility map, and never reconsider them.
+            if self.opt.was_initially_fixed(xvar):
                 self._modeler_fixed.add(ndn_i)
                 continue  # modeler-fixed nonants are never slammed
             d = resolve_directive(self.directives, name)
@@ -494,6 +499,28 @@ class Slammer(Extension):
             print(f"(rank0) Slammer: slammed {name} to {value} via "
                   f"'{direction}' (priority {priority}); "
                   f"total slammed = {len(self._slammed)}")
+
+    def checkpoint_state(self):
+        """What this Slammer has already slammed, and to what value.
+
+        Slams are sticky, so `_slammed` is both the record of what was done
+        and the list of what would have to be released to undo it. The
+        nonants in it are fixed on the reloaded models, so a resumed run is
+        already prevented from slamming them twice by the fixedness check
+        alone -- but a run that had forgotten them would report the wrong
+        totals, would answer `slam_nonant` on one of them with "not eligible"
+        rather than "already slammed", and would slam it again the moment
+        anything else unfixed it.
+
+        `(ndn, i)` keys, which mean the same thing on the reloaded models.
+        JSON is not involved, so the tuples survive as tuples.
+        """
+        if not self._slammed:
+            return None
+        return {"slammed": dict(self._slammed)}
+
+    def restore_state(self, state):
+        self._slammed = dict(state["slammed"])
 
     def post_everything(self):
         if self.verbose and self.opt.cylinder_rank == 0:

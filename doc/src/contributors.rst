@@ -10,6 +10,25 @@ cd to the examples directory to look at and run ``run_all.py``. Notice that
 As a general rule, you should leave them in your local examples directory
 for regression testing and do not push them to the main repository.
 
+Extensions, convergers and checkpointing
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A new extension or converger must say what happens to its state when a run is
+checkpointed and resumed: implement ``checkpoint_state()`` and
+``restore_state(state)`` -- as a pair that returns None and does nothing, if it
+keeps no state. The base methods raise, and a checkpointed run refuses at
+startup a class that does not override both. :ref:`checkpointing_your_extension`
+shows both forms. ``TestShippedExtensionsAnswerTheQuestion`` in
+``mpisppy/tests/test_checkpoint_extensions.py`` fails for an extension or
+converger in the repository that does neither, or only one.
+
+If yours keeps state, add a case to ``test_checkpoint_extensions.py`` that
+subclasses ``_ABMixin``. Give it ``ext_classes()``; its ``run_ab()`` runs
+your extension straight through and again with a stop and a resume, and
+``assert_bit_identical`` compares the two. Check the restored state itself as
+well, so the test cannot pass just because the model reaches the same iterate
+without it. ``TestSlammerResume`` is a short example.
+
 import mpi
 ^^^^^^^^^^
 

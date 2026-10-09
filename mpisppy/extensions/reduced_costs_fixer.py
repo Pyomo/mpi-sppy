@@ -68,7 +68,14 @@ class ReducedCostsFixer(Extension):
         self.nonant_length = self.opt.nonant_length
         for k,s in self.opt.local_scenarios.items():
             for ndn_i, xvar in s._mpisppy_data.nonant_indices.items():
-                if xvar.fixed:
+                # Fixed when the run started, not fixed right now -- a run
+                # resumed from a checkpoint arrives with its mid-run fixings
+                # already applied, and this extension both fixes and unfixes,
+                # so reading xvar.fixed here would make it treat its own
+                # earlier fixings as the modeler's: never unfixed again, and
+                # missing from _integer_nonants, which is the denominator of
+                # its fix-fraction target.
+                if self.opt.was_initially_fixed(xvar):
                     self._modeler_fixed_nonants.add(ndn_i)
                     continue
                 if xvar.is_integer():
