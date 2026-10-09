@@ -1331,6 +1331,14 @@ class TestTheStateContractIsRequiredAtStartup(unittest.TestCase):
         self.assertIn("_AnswersNeither", str(cm.exception))
         self.assertEqual(restored, [])
 
+    def test_an_empty_multiextension_is_a_container_not_an_offender(self):
+        """A hub resume needs no Checkpointer, so a run can legitimately have
+        a MultiExtension holding nothing."""
+        opt = types.SimpleNamespace(extobject=MultiExtension(None, []),
+                                    ph_converger=None)
+        self.assertEqual(list(checkpointing._extension_objects(opt)), [])
+        checkpointing.require_state_contract(opt)
+
     def test_a_shipped_converger_passes(self):
         from mpisppy.convergers.primal_dual_converger import \
             PrimalDualConverger
@@ -1362,6 +1370,31 @@ class TestACheckpointedRunRefusesBeforeSolving(unittest.TestCase):
             ph.Iter0()
         self.assertIn("_AnswersNeither", str(cm.exception))
         self.assertEqual(solves, [])
+
+    def test_refused_on_a_resume_alone(self):
+        """--resume-from without --checkpoint-dir is checked too. The refusal
+        comes before the splice, so it is reached even though the directory
+        it names holds no checkpoint."""
+        ph = _make_ph(_options(2, resume_from=self.ckpt_dir),
+                      [self._AnswersNeither])
+        ph.PH_Prep()
+        with self.assertRaises(RuntimeError) as cm:
+            ph.Iter0()
+        self.assertIn("_AnswersNeither", str(cm.exception))
+
+    def test_a_converger_is_refused_at_iter0(self):
+        from mpisppy.convergers.converger import Converger
+
+        class _BareConverger(Converger):
+            def is_converged(self):
+                return False
+
+        ph = _make_ph(_options(2, ckpt_dir=self.ckpt_dir), [],
+                      ph_converger=_BareConverger)
+        ph.PH_Prep()
+        with self.assertRaises(RuntimeError) as cm:
+            ph.Iter0()
+        self.assertIn("_BareConverger", str(cm.exception))
 
     def test_not_checked_without_checkpointing(self):
         """A run that never checkpoints never calls the hooks, so an
