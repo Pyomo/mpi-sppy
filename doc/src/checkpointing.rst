@@ -375,7 +375,14 @@ updaters (``--use-norm-rho-updater``, ``--sep-rho``, ``--sensi-rho``,
 (``--fixer``), the slammer (``--slamming-directives-file``) and the W tracker
 (``--wtracker``). So a resumed run using one of them follows the same
 trajectory an uninterrupted run would, rather than merely continuing correctly
-from the right models. The shipped convergers need nothing carried: each
+from the right models.
+
+The two fixers driven by a spoke, ``--rc-fixer`` (with ``--reduced-costs``) and
+``--relaxed-ph-fixer``, carry their own state too, but the spokes they read
+from are not checkpointed and start over on a resume. A resumed run using either continues correctly from
+the right models; it does not follow the uninterrupted run's trajectory. The PH
+tracker (``--ph-track-progress``) continues the hub's files across a resume;
+on a spoke it starts them over. The shipped convergers need nothing carried: each
 either recomputes what it compares from the current iterate or, like the
 primal-dual converger, rebuilds it correctly from the resumed models.
 

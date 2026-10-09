@@ -1245,22 +1245,24 @@ as a branch stacked on the 1a PR.
   - `RelaxedPHFixer` decides from the current spoke buffer, xbar and the
     models' fixedness, so it carries only its display count. Its pre-iteration
     0 fix-at-bounds pass belongs to the start of the study and is skipped on a
-    resume; the wait for the spoke's first buffer is kept. It retraces an
-    uninterrupted run only if the relaxed-PH spoke it reads from resumes its
-    own W. A spoke that restarts from W = 0 on a resume hands it different
-    relaxed solutions after the stop.
+    resume; the wait for the spoke's first buffer is kept. It does not
+    retrace an uninterrupted run: the relaxed-PH spoke it reads from is not
+    checkpointed and restarts from W = 0, so after the stop it hands the fixer
+    different relaxed solutions, and the fixer unfixes any restored fixing
+    they disagree with.
   - `ReducedCostsFixer` carries the reduced costs it fixes from, the bound
     that decides whether new ones are accepted, and its count, and skips its
-    pre-iteration-0 pass on a resume. Reduced costs Iter0's spoke sync took at
-    a better bound than the checkpoint's are kept over the saved ones. It does
-    not retrace an uninterrupted run exactly: the reduced-costs spoke itself is
-    not checkpointed and restarts.
+    pre-iteration-0 pass on a resume. Iter0's spoke sync runs before the
+    restore, so on a resume its fix-fraction target is zero there: reduced
+    costs that sync takes are recorded but not fixed from, and are kept over
+    the saved ones only if their bound is better. It does not retrace an
+    uninterrupted run exactly: the reduced-costs spoke itself is not
+    checkpointed and restarts.
   - `PHTracker` does not affect the solution, only its files. It writes out
     its buffered rows at every checkpoint, and a resumed run keeps the files'
     rows through the checkpoint's iteration instead of truncating them, and
-    sets its files up at the end of a resumed run that ran no iterations. On a
-    dual cylinder, which writes no extension state, it still starts its files
-    over.
+    sets its files up at the end of a resumed run that ran no iterations. On
+    any spoke it still starts its files over: no spoke writes extension state.
 
   `WOscillationMonitor` (W trajectories, recurrence trackers, an internal
   slammer) and `CrossScenarioExtension` (whose `post_iter0` replaces model

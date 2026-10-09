@@ -1525,7 +1525,42 @@ class TestReducedCostsFixerResume(unittest.TestCase):
         fixer = self._fixer(resumed=True)
         # Reaching the spoke wait would fail here: there is no buffer.
         fixer.iter0_post_solver_creation()
-        self.assertEqual(fixer.fix_fraction_target, 0.25)
+        self.assertEqual(fixer.fix_fraction_target, 0.0)
+
+    def test_iter0s_sync_on_a_resume_fixes_nothing(self):
+        """The reduced-costs spoke restarts on a resume, and Iter0's sync runs
+        before restore_state, while the best bound is still -inf. Reduced
+        costs it sends then are recorded, not fixed from; the restore keeps
+        the checkpoint's when its bound is better, and fixing resumes at the
+        next iteration from those."""
+        import numpy as np
+        fixer = self._fixer(resumed=True)
+        fixer._fix_fraction_target_iterK = 0.75
+        fixer._rc_fixer_require_improving_lagrangian = True
+        fixer.verbose = False
+        fixer.opt.cylinder_rank = 0
+        fixer.opt.spcomm = types.SimpleNamespace(
+            get_receive_buffer=lambda *a, **k: True)
+        fixer.reduced_costs_spoke_index = 0
+        fixer.reduced_cost_buf = types.SimpleNamespace(
+            is_new=lambda: True, id=lambda: 1,
+            value_array=lambda: np.array([7.0, 7.0]))
+        fixer.outer_bound_buf = types.SimpleNamespace(
+            id=lambda: 1, value_array=lambda: np.array([-1000.0]))
+        fixings = []
+        fixer.reduced_costs_fixing = lambda rc, **k: fixings.append(rc)
+
+        fixer.iter0_post_solver_creation()
+        fixer.sync_with_spokes()
+        self.assertEqual(fixings, [],
+                         msg="Iter0's sync fixed from a restarted spoke")
+        fixer.post_iter0_after_sync()
+        fixer.restore_state({"best_outer_bound": 12.5,
+                             "current_reduced_costs": [1.0, 2.0],
+                             "heuristic_fixed_vars": 3.0})
+        self.assertEqual(fixer._best_outer_bound, 12.5)
+        self.assertEqual(fixer._current_reduced_costs.tolist(), [1.0, 2.0])
+        self.assertEqual(fixer.fix_fraction_target, 0.75)
 
     def test_the_state_round_trips(self):
         import numpy as np

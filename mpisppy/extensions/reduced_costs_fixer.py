@@ -86,8 +86,16 @@ class ReducedCostsFixer(Extension):
         # resumed run arrives with the earlier run's fixings on the models and
         # gets its reduced costs back in restore_state, so it neither waits
         # for the spoke nor fixes again here.
+        #
+        # Nor in Iter0's spoke sync, which runs before restore_state: the
+        # reduced-costs spoke is not checkpointed, so what it sends then comes
+        # from a restarted spoke, and with the best bound still at its initial
+        # value it would be accepted and fixed from. A zero target lets that
+        # sync record the reduced costs without fixing anything; restore_state
+        # then chooses between them and the saved ones, and
+        # post_iter0_after_sync sets the per-iteration target as usual.
         if getattr(self.opt, "_resumed_from_checkpoint", False):
-            self.fix_fraction_target = self._fix_fraction_target_iter0
+            self.fix_fraction_target = 0.0
             return
         self.fix_fraction_target = self._fix_fraction_target_pre_iter0
         if self.fix_fraction_target > 0:
