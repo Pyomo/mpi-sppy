@@ -511,6 +511,30 @@ class TestConfigChecker(unittest.TestCase):
         self._add_log_dir_keys(cfg, hub_only=False, log_dir=None)
         cfg.checker()
 
+    def _make_checkpoint_cfg(self, **values):
+        """A checker-runnable Config carrying the real checkpoint flags."""
+        cfg = self._make_rho_cfg()
+        cfg.checkpoint_args()
+        for k, v in values.items():
+            cfg[k] = v
+        return cfg
+
+    def test_checkpoint_before_seconds_without_a_directory_raises(self):
+        """Ignoring it would leave exactly the run the option protects --
+        one stopped by a wall clock -- with no checkpoint at its deadline."""
+        cfg = self._make_checkpoint_cfg(checkpoint_before_seconds=60.0)
+        with self.assertRaises(ValueError) as ctx:
+            cfg.checker()
+        self.assertIn("--checkpoint-dir", str(ctx.exception))
+
+    def test_checkpoint_before_seconds_with_a_directory_does_not_raise(self):
+        cfg = self._make_checkpoint_cfg(checkpoint_before_seconds=60.0,
+                                        checkpoint_dir="somewhere")
+        cfg.checker()
+
+    def test_checkpoint_flags_default_off_does_not_raise(self):
+        self._make_checkpoint_cfg().checker()
+
 
 class TestSharedOptionsLogDir(unittest.TestCase):
     """Tests for solver_log_dir propagation through cfg_vanilla.shared_options."""

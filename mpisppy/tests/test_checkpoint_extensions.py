@@ -1350,6 +1350,20 @@ class TestTheStateContractIsRequiredAtStartup(unittest.TestCase):
         message = self._refusal(self._Implements, converger=_BareConverger)
         self.assertIn("_BareConverger", message)
 
+    def test_an_xhat_spoke_refuses_before_restoring(self):
+        """A spoke writes its extensions' state with its incumbent, so the
+        Checkpointer checks them in pre_iter0, before the restore and long
+        before the spoke's first write."""
+        restored = []
+        fake = types.SimpleNamespace(
+            dual_spoke_mode=False, spoke_mode=True,
+            opt=self._opt(self._Implements, self._AnswersNeither),
+            _restore_incumbent=lambda: restored.append(1))
+        with self.assertRaises(RuntimeError) as cm:
+            Checkpointer.pre_iter0(fake)
+        self.assertIn("_AnswersNeither", str(cm.exception))
+        self.assertEqual(restored, [])
+
     def test_an_empty_multiextension_is_a_container_not_an_offender(self):
         """A hub resume needs no Checkpointer, so a run can legitimately have
         a MultiExtension holding nothing."""

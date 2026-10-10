@@ -123,17 +123,48 @@ def _Compute_Xbar(opt, verbose=False):
                            opt.cylinder_rank, k, ndn, node.nonant_vardata_list[i].name,
                            pyo.value(s._mpisppy_model.xbars[(ndn,i)]))
 
-def _Compute_Wbar(opt, verbose=False, repair=True):
-    """ Seldom used (mainly for diagnostics); gather  Wbar for each node.
+def Wbar_by_node(opt):
+    """E[W] per tree node: the probability-weighted sum of W over scenarios.
+
+    PH keeps this at zero -- sum_s p_s W_s = 0 is the dual feasibility a
+    Lagrangian bound built from W relies on -- so every entry of what comes
+    back should be zero up to the drift of accumulating it in floating point,
+    which is a fraction of the size of the weights themselves (see
+    W_magnitude_by_node). It is what makes W a point in the orthogonal
+    complement of the nonanticipativity subspace.
+
+    Collective: the scenarios of a node are spread over the ranks, so the sum
+    is an Allreduce over that node's comm and every rank gets the same
+    answer. Returns {node name: numpy array over the node's nonants}.
+
+    NOTE: the invariant holds because Update_W adds rho * (x_s - xbar) with
+    the same rho in every scenario and an xbar that is the probability
+    weighted mean. A scenario-dependent rho would not preserve it, and would
+    need something else to restore E[W] = 0 before the weights are used as
+    duals.
 
     Args:
         opt (phbase or xhat_eval object): object with the local scenarios
-        verbose (boolean):
-            If True, prints verbose output.
-        repair (boolean):
-            If True, normalize the W values so EW = 0
-
     """
+    return _prob_weighted_W_by_node(opt, magnitude=False)
+
+
+def W_magnitude_by_node(opt):
+    """E[|W|] per tree node: how big the numbers behind E[W] are.
+
+    The companion to Wbar_by_node, for judging one of its entries. Whether a
+    given E[W] is "zero" is a question about the size of the terms that were
+    summed to get it: a sum of 1e-6 is float dust beside weights of 1e6 and a
+    real violation beside weights of 1e-3. Same collective shape.
+
+    Args:
+        opt (phbase or xhat_eval object): object with the local scenarios
+    """
+    return _prob_weighted_W_by_node(opt, magnitude=True)
+
+
+def _prob_weighted_W_by_node(opt, magnitude):
+    """Sum_s p_s W_s per node, or sum_s p_s |W_s| when magnitude is True."""
     nodenames = [] # to transmit to comms
     local_concats = {}   # keys are tree node names
     global_concats =  {} # values are concat of xbar and xsqbar
@@ -163,6 +194,8 @@ def _Compute_Wbar(opt, verbose=False, repair=True):
             Wnonants_array = np.fromiter((pyo.value(s._mpisppy_model.W[idx]) for idx in s._mpisppy_data.nonant_indices if idx[0] == ndn),
                                         dtype='d', count=nlen)
             probs = s._mpisppy_data.prob_coeff[ndn] * np.ones(nlen)
+            if magnitude:
+                Wnonants_array = np.abs(Wnonants_array)
             Wbars += probs * Wnonants_array
 
     # compute node xbar values(reduction)
@@ -171,6 +204,22 @@ def _Compute_Wbar(opt, verbose=False, repair=True):
             [local_concats[nodename], MPI.DOUBLE],
             [global_concats[nodename], MPI.DOUBLE],
             op=MPI.SUM)
+
+    return global_concats
+
+
+def _Compute_Wbar(opt, verbose=False, repair=True):
+    """ Seldom used (mainly for diagnostics); gather  Wbar for each node.
+
+    Args:
+        opt (phbase or xhat_eval object): object with the local scenarios
+        verbose (boolean):
+            If True, prints verbose output.
+        repair (boolean):
+            If True, normalize the W values so EW = 0
+
+    """
+    global_concats = Wbar_by_node(opt)
 
     # check the Wbar
     for k,s in opt.local_scenarios.items():
@@ -259,6 +308,13 @@ class PHBase(mpisppy.spopt.SPOpt):
     _resumed_from_checkpoint = False
     _resume_iteration = 0
     _checkpoint_leaf_state = None
+
+    #: Wall-clock seconds of the most recent full PH iteration, as of the
+    #: checkpoint hook: --checkpoint-before-seconds has to ask there whether
+    #: there is time for another iteration. Measured between consecutive
+    #: passes through the same point in iterk_loop (see there). None until
+    #: the first iteration's solve is done.
+    _last_iteration_seconds = None
 
     #: Absolute number of the last iteration this run may perform, set by
     #: iterk_loop from --max-iterations (which bounds the run) and
@@ -1293,8 +1349,9 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         Called at the start of ``Iter0``. The extensions are constructed by
         then and the converger class is known, which is all the check reads.
-        Hub only: the xhat spokes checkpoint their incumbent, not their
-        extensions' state.
+        Hub only. The xhat spokes write their extensions' state too, and the
+        Checkpointer checks theirs in its pre_iter0; the dual cylinders write
+        W and no extension state.
         """
         if not (self.options.get("checkpoint_dir", None)
                 or self.options.get("resume_from", None)):
@@ -1313,6 +1370,13 @@ class PHBase(mpisppy.spopt.SPOpt):
         """
         ckpt_dir = self.options.get("resume_from", None)
         if not ckpt_dir:
+            return
+
+        # A dual cylinder runs PH without being the hub, and the hub's
+        # checkpoint is not its: splicing the hub's scenarios in here would
+        # replace this cylinder's models with a copy of another cylinder's.
+        # It restores its own W instead, in Checkpointer.post_iter0.
+        if self.options.get("checkpoint_role", "hub") != "hub":
             return
 
         # The write side refuses non-PH hubs (Checkpointer.__init__), and this
@@ -1705,9 +1769,10 @@ class PHBase(mpisppy.spopt.SPOpt):
                            f"{stop_at} was already reached at iteration "
                            f"{self._resume_iteration}",
                            self.cylinder_rank == 0)
+        cycle_mark = time.perf_counter()
         for self._PHIter in range(self._resume_iteration + 1,
                                   self._stop_iteration + 1):
-            iteration_start_time = time.time()
+            iteration_start_time = time.perf_counter()
 
             if dprogress:
                 global_toc(f"Initiating PH Iteration {self._PHIter}\n", self.cylinder_rank == 0)
@@ -1794,6 +1859,16 @@ class PHBase(mpisppy.spopt.SPOpt):
             # (see issue #762).
             self._check_prox_solve_succeeded()
 
+            # The duration --checkpoint-before-seconds predicts from, taken
+            # between passes through this point, so it is one whole iteration
+            # ending with this solve: the previous iteration's enditer,
+            # checkpoint write, sync and enditer_after_sync, then this one's
+            # start and solve. In the first iteration of a run, which has no
+            # previous pass, it starts where the loop starts instead.
+            now = time.perf_counter()
+            self._last_iteration_seconds = now - cycle_mark
+            cycle_mark = now
+
             if have_extensions:
                 self.extobject.enditer()
                 # The checkpoint write has its own hook, fired here rather
@@ -1828,7 +1903,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                 print("")
                 print("After PH Iteration",self._PHIter)
                 print("Scaled PHBase Convergence Metric=",self.conv)
-                print("Iteration time: %6.2f" % (time.time() - iteration_start_time))
+                print("Iteration time: %6.2f" % (time.perf_counter() - iteration_start_time))
                 print("Elapsed time:   %6.2f" % (time.perf_counter() - self.start_time))
 
             if dconvergence_detail:

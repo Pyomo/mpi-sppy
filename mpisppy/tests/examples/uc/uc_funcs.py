@@ -90,6 +90,32 @@ def scenario_denouement(rank, scenario_name, scenario):
 #    print("Second stage cost for scenario",scenario_name,"is",pyo.value(scenario.StageCost["SecondStage"]))
     pass
 
+#=========
+# The three hooks generic_cylinders needs, so that this copy can be driven
+# from a command line the way the examples/uc copy is. The data directory
+# beside this file holds three scenarios and the callbacks above take no
+# arguments, so there is nothing to configure but the count.
+def scenario_names_creator(num_scens, start=None):
+    # 1-based: the data directory holds Node1 .. Node3.
+    if start is None:
+        start = 1
+    return [f"Scenario{i}" for i in range(start, start + num_scens)]
+
+
+#=========
+def inparser_adder(cfg):
+    cfg.num_scens_required()
+    cfg.mip_options()
+
+
+#=========
+def kw_creator(cfg):
+    if cfg.num_scens != 3:
+        raise RuntimeError(
+            f"this copy of uc_funcs has data for 3 scenarios; was {cfg.num_scens}")
+    return {}
+
+
 def scenario_rhosa(scenario_instance):
 
     return scenario_rhos(scenario_instance)

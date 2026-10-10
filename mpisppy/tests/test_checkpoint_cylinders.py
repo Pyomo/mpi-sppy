@@ -41,7 +41,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from mpisppy.tests.utils import get_solver
+from mpisppy.tests.utils import get_solver, subprocess_env
 
 solver_available, solver_name, persistent_available, persistent_solver_name = \
     get_solver()
@@ -96,7 +96,8 @@ class _ResumeABMixin:
             *extra_args,
         ]
         result = subprocess.run(cmd, capture_output=True, text=True,
-                                timeout=1800, check=False)
+                                timeout=1800, check=False,
+                                env=subprocess_env())
         self.assertEqual(
             result.returncode, 0,
             msg=f"leg {name!r} failed:\n{result.stdout[-4000:]}\n"
@@ -296,6 +297,44 @@ class TestFarmerCylindersResumeAB(_ResumeABMixin, unittest.TestCase):
     SPOKE_ARGS = ("--lagrangian", "--xhatshuffle")
     INCUMBENT_SPOKE = "XhatShuffleInnerBound"
 
+    def test_the_xhatshuffle_cursor_survives_the_stop(self):
+        """The spoke picks its exploration up rather than starting over.
+
+        This leaves no trace in the answer -- farmer is deterministic, so the
+        resumed spoke reaches the same incumbent whether it walks on from
+        where it was or from the start of the order -- so the only way to see
+        it is to ask the spoke what it was handed.
+        """
+        _, stopped, resumed = self._run_ab()
+
+        self.assertTrue(
+            any(s["final_loop_state"] for s in stopped["spokes"]),
+            msg=f"the xhatshuffle spoke tracked no cursor: "
+                f"{stopped['spokes']}")
+
+        # "applied", not "read": the Checkpointer reads the file in pre_iter0
+        # whether or not the loop ever adopts what it found, so watching the
+        # read would score a discarded cursor as a success.
+        applied = [s for s in resumed["spokes"] if s["applied_loop_state"]]
+        self.assertTrue(
+            applied,
+            msg=f"no spoke adopted a restored cursor: {resumed['spokes']}")
+        # Against the file rather than the stopped run's final counter: the
+        # write happens at the bottom of a pass and the counter advances
+        # afterwards, so the two legitimately differ by one pass.
+        self.assertEqual(applied[0]["applied_loop_state"],
+                         self._checkpointed_loop_state(),
+                         msg="the spoke restored something other than the "
+                             "cursor its own checkpoint held")
+
+    def _checkpointed_loop_state(self):
+        """The loop state sitting in the xhat spoke's checkpoint file."""
+        spokes_dir = os.path.join(self.ckpt_dir, "spokes")
+        for fname in sorted(os.listdir(spokes_dir)):
+            if fname.startswith(f"spoke_{self.INCUMBENT_SPOKE}"):
+                with open(os.path.join(spokes_dir, fname), "rb") as f:
+                    return pickle.load(f)["loop_state"]
+        raise AssertionError(f"no {self.INCUMBENT_SPOKE} file in {spokes_dir}")
 
     def test_a_bound_the_spoke_never_wrote_is_not_restored(self):
         """The hub's last word can be newer than a spoke's file: a spoke
@@ -344,6 +383,71 @@ class TestStochAdmmCylindersResumeAB(_ResumeABMixin, unittest.TestCase):
     SPOKE_ARGS = ("--lagrangian", "--xhatxbar")
     INCUMBENT_SPOKE = "XhatXbarInnerBound"
 
+    def test_a_spoke_without_a_cursor_carries_none(self):
+        """xhatxbar re-evaluates from scratch whenever new nonants arrive, so
+        it has no loop position worth resuming, and neither it nor its
+        checkpoint file claims one."""
+        _, stopped, _ = self._run_ab()
+        (marker,) = [s for s in stopped["spokes"]
+                     if s["cylinder"] == self.INCUMBENT_SPOKE]
+        self.assertIsNone(marker["final_loop_state"])
+        spokes_dir = os.path.join(self.ckpt_dir, "spokes")
+        (fname,) = [f for f in os.listdir(spokes_dir)
+                    if f.startswith(f"spoke_{self.INCUMBENT_SPOKE}")]
+        with open(os.path.join(spokes_dir, fname), "rb") as f:
+            self.assertIsNone(pickle.load(f)["loop_state"])
+
+
+@unittest.skipIf(not solver_available, "no solver is available")
+@unittest.skipIf(not mpiexec_available, "mpiexec is not available")
+class TestADroppedSpokeFileIsReported(unittest.TestCase):
+    """Resume without a spoke that held an incumbent, and the run says so.
+
+    The spoke that would have reported the file is the one that is not
+    running, so it falls to the hub. Without this the dropped spoke's
+    incumbent -- possibly the study's best -- was left behind in silence.
+    """
+
+    COMMON = ("--module-name", _FARMER, "--num-scens", "3",
+              "--default-rho", "1", "--lagrangian",
+              "--intra-hub-conv-thresh", "-1", "--rel-gap", "0.0",
+              "--abs-gap", "0.0")
+
+    def _run(self, np, *args):
+        cmd = ["mpiexec", "-np", str(np), sys.executable, "-m", "mpi4py",
+               "-m", "mpisppy.generic_cylinders", "--solver-name",
+               solver_name, *self.COMMON, *args]
+        result = subprocess.run(cmd, capture_output=True, text=True,
+                                timeout=1800, check=False,
+                                env=subprocess_env())
+        self.assertEqual(result.returncode, 0,
+                         msg=result.stdout[-4000:] + result.stderr[-4000:])
+        return result.stdout
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.ckpt_dir = os.path.join(cls._tmp.name, "ckpt")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def test_only_the_dropped_spoke_is_named(self):
+        self._run(4, "--xhatshuffle", "--xhatxbar", "--max-iterations", "3",
+                  "--checkpoint-dir", self.ckpt_dir)
+        written = os.listdir(os.path.join(self.ckpt_dir, "spokes"))
+        self.assertTrue(any("XhatXbarInnerBound" in f for f in written),
+                        msg=f"xhatxbar wrote no incumbent to drop: {written}")
+        same = self._run(4, "--xhatshuffle", "--xhatxbar",
+                         "--max-iterations", "1",
+                         "--resume-from", self.ckpt_dir)
+        self.assertNotIn("no such cylinder runs", same)
+        dropped = self._run(3, "--xhatshuffle", "--max-iterations", "1",
+                            "--resume-from", self.ckpt_dir)
+        self.assertIn("holds a file for XhatXbarInnerBound", dropped)
+        self.assertNotIn("holds a file for XhatShuffleInnerBound", dropped)
+
 
 class TestRestoredIncumbentIsRepublished(unittest.TestCase):
     """A spoke that restores an incumbent has written nothing to the directory
@@ -365,6 +469,10 @@ class TestRestoredIncumbentIsRepublished(unittest.TestCase):
             options={"resume_from": resume_from},
             spcomm=types.SimpleNamespace(
                 best_inner_bound=None,
+                # XhatBase's default: the whole loop state is the progress.
+                # Spelled out because a SimpleNamespace inherits nothing, and
+                # the restore path reads this on branches that carry a cursor.
+                loop_state_progress=lambda state: state,
                 send_bound=lambda v: None,
                 send_best_xhat=lambda: None,
             ),
@@ -423,13 +531,18 @@ class TestAFailedSpokeWriteIsNotRetriedEveryPass(unittest.TestCase):
     def _checkpointer(self):
         from mpisppy.extensions.checkpointer import Checkpointer
         ext = Checkpointer.__new__(Checkpointer)
+        self.cursor = 0
         ext.opt = types.SimpleNamespace(
             options={}, best_solution_obj_val=-108382.22, cylinder_rank=0,
-            spcomm=types.SimpleNamespace(best_inner_bound=-108382.22))
+            spcomm=types.SimpleNamespace(
+                best_inner_bound=-108382.22,
+                checkpoint_loop_state=lambda: {"cursor": self.cursor},
+                loop_state_progress=lambda state: state["cursor"]))
         ext.ckpt_dir = "/tmp/ck"
         ext.write_enabled = True
         ext.spoke_mode = True
         ext._last_written_obj = None
+        ext._last_written_loop_progress = None
         ext._last_failed_obj = None
         ext._spoke_identity = lambda: ("XhatShuffleInnerBound", 0)
         ext._class_ordinal_and_count = lambda: (0, 1)
@@ -448,11 +561,65 @@ class TestAFailedSpokeWriteIsNotRetriedEveryPass(unittest.TestCase):
                                  "after its write failed")
             self.assertEqual(toc.call_count, 1)
 
+            # The cursor moves far more often than the incumbent improves.
+            for step in range(1, 50):
+                self.cursor = step
+                ext._spoke_checkpoint()
+            self.assertEqual(writer.call_count, 1,
+                             msg="a cursor move alone retried a write that "
+                                 "failed for this incumbent")
+
             ext.opt.best_solution_obj_val = -108500.0
             ext._spoke_checkpoint()
             self.assertEqual(writer.call_count, 2,
                              msg="a new incumbent was not tried after an "
                                  "earlier write failed")
+
+    def test_a_dual_cylinder_failure_is_reported_by_that_rank(self):
+        from mpisppy.extensions import checkpointer as mod
+        ext = self._checkpointer()
+        ext.opt.cylinder_rank = 1
+        ext.opt._PHIter = 3
+        writer = mock.Mock(side_effect=OSError("disk full"))
+        with mock.patch.object(mod.ckpt, "write_dual_spoke_state", writer), \
+             mock.patch("mpisppy.phbase.Wbar_by_node", return_value={}), \
+             mock.patch.object(mod, "global_toc") as toc:
+            ext._dual_spoke_checkpoint()
+        (message, prints), _ = toc.call_args
+        self.assertIn("rank 1", message)
+        self.assertTrue(prints, msg="rank 1's failure was not printed")
+
+    def test_a_dual_cylinder_names_the_extensions_it_does_not_carry(self):
+        from mpisppy.extensions import checkpointer as mod
+        from mpisppy.extensions.checkpointer import Checkpointer
+        ext = self._checkpointer()
+        ext.dual_spoke_mode = True
+        ext.opt.options = {"resume_from": "/tmp/ck"}
+        other = type("GradRho", (), {})()
+        ext.opt.extobject = types.SimpleNamespace(
+            extdict={"Checkpointer": ext, "GradRho": other})
+        ext._spoke_identity = lambda: ("PHDualSpoke", 0)
+        assert isinstance(ext, Checkpointer)
+        state = {"generation": 3, "class_count": None, "Wbar": {}}
+
+        def restore(found):
+            with mock.patch.object(mod.ckpt, "run_agreed",
+                                   return_value=found), \
+                 mock.patch.object(mod.ckpt, "agree_dual_spoke_restore",
+                                   return_value=(found, None)), \
+                 mock.patch.object(mod.ckpt,
+                                   "require_restored_duals_match_their_file"), \
+                 mock.patch("mpisppy.phbase.Wbar_by_node"), \
+                 mock.patch("mpisppy.phbase.W_magnitude_by_node"), \
+                 mock.patch.object(mod, "global_toc") as toc:
+                ext.post_iter0()
+            return " ".join(str(c.args[0]) for c in toc.call_args_list)
+
+        said = restore(state)
+        self.assertIn("GradRho", said)
+        self.assertNotIn("Checkpointer", said)
+        # Nothing restored, so nothing to say about what was not carried.
+        self.assertNotIn("GradRho", restore(None))
 
     def test_a_failure_on_any_rank_is_reported_by_that_rank(self):
         """Each rank writes its own file, so a failure on rank 1 is rank 1's
@@ -610,6 +777,47 @@ class TestEverySpokeGivenTheCheckpointerDrivesIt(unittest.TestCase):
                 spoke.opt = types.SimpleNamespace(extensions=None)
                 spoke.restore_checkpointed_incumbent()   # must not raise
                 spoke.maybe_checkpoint()
+
+    def test_each_one_restores_its_extensions_state(self):
+        """Every one of these writes its extensions' state, so every one has
+        to hand it back on a resume. The L-shaped xhatter and the slammers
+        used to write it and drop it: only xhat_prep restored it."""
+        import inspect
+        import mpisppy.cylinders.xhatbase as xhatbase
+        for name, cls, mod in self._classes():
+            with self.subTest(spoke=name):
+                source = inspect.getsource(
+                    xhatbase if issubclass(cls, xhatbase.XhatInnerBoundBase)
+                    else mod)
+                self.assertIn(
+                    "self._restore_extension_state_if_resuming()", source,
+                    msg=f"{name}'s prep never hands its extensions the state "
+                        f"its Checkpointer read, so a resume drops it")
+
+    def test_the_restore_reaches_the_extension(self):
+        """Run the shared restore on each spoke, single rank: the state the
+        Checkpointer read is handed to the extension it belongs to."""
+        from mpisppy.extensions.extension import Extension
+
+        class _Counter(Extension):
+            def checkpoint_state(self):
+                return {"n": 0}
+
+            def restore_state(self, state):
+                self.restored = state
+
+        for name, cls, _ in self._classes():
+            with self.subTest(spoke=name):
+                counter = _Counter.__new__(_Counter)
+                holder = types.SimpleNamespace(restored_extension_state={
+                    "extensions": {"_Counter": {"n": 7}}, "converger": None})
+                spoke = cls.__new__(cls)
+                spoke.opt = types.SimpleNamespace(
+                    n_proc=1, cylinder_rank=0, convobject=None,
+                    extobject=types.SimpleNamespace(
+                        extdict={"Holder": holder, "_Counter": counter}))
+                spoke._restore_extension_state_if_resuming()
+                self.assertEqual(counter.restored, {"n": 7})
 
 
 class TestEveryWriterProbesItsOwnFile(unittest.TestCase):

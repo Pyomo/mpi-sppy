@@ -1,11 +1,13 @@
 # Checkpoint / Resume for mpi-sppy — Design
 
-Status: **phases 1a, 4, 2 and 3 implemented** — a synchronous PH hub, on any
-number of ranks per cylinder, alone or in a wheel with spokes, over plain
-scenarios, proper bundles or stoch-ADMM, with stateful extensions and
-convergers carrying their own state across the stop. Phase 1b is retired (its
-two test instances landed in phase 2). Phase 5 remains design; phase 6 is
-unplanned. See §11. Where this document and the shipped code have disagreed,
+Status: **every planned phase is implemented** — 1a, 4, 2, 3 and 5. A
+synchronous PH hub, on any number of ranks per cylinder, alone or in a wheel
+with spokes, over plain scenarios, proper bundles or stoch-ADMM, with stateful
+extensions and convergers carrying their own state across the stop and the xhat
+spoke resuming its own exploration where it left off. Phase 1b is retired (its
+two test instances landed in phase 2). Phase 6 (the leaf-rebuild backend)
+remains deliberately unplanned — the primary use case is fully served without
+it. See §11. Where this document and the shipped code have disagreed,
 the code is authoritative and this document has been corrected — §8 in
 particular records a design that was tried, failed, and was replaced. Scope:
 checkpoint a running mpi-sppy job so it can be stopped and resumed later. Must
@@ -74,7 +76,8 @@ as a future option but **not currently planned** (§4, §11 Phase 6).
   previous checkpoint is preserved by atomic publication (§9), not by catching the
   signal and checkpointing in response. Where a known walltime is the hazard,
   `--checkpoint-before-seconds` (§8) is the answer instead of a signal handler:
-  it writes at the last iteration boundary preceding a user-supplied deadline.
+  it writes once, at the first iteration boundary where one more iteration as
+  long as the last would cross a user-supplied deadline.
 
 ---
 
@@ -385,8 +388,8 @@ None of this lives on a hub scenario model, so it is restored as leaf data under
   them back. So **"keep the best xhat" requires checkpointing the spoke
   incumbent**, not just hub bounds. The spoke checkpoints its own cache **on its
   own schedule**, independent of the hub checkpoint (§9, item 6): at the bottom
-  of each loop pass in which `best_solution_obj_val` changed, right after a
-  restore, and once more in `finalize`. Its writer is
+  of each loop pass in which `best_solution_obj_val` changed or the loop cursor
+  moved, right after a restore, and once more in `finalize`. Its writer is
   `Checkpointer._spoke_checkpoint` calling `write_spoke_incumbent`, which share
   no code with `_maybe_write_incumbent_on_improvement`. Serialize the `ComponentMap` **by variable name** (`{var.name: value}`)
   and rebuild by name lookup on the reconstructed model.
@@ -437,10 +440,15 @@ Consequences:
 
 - xhatshuffle seeds its stream to a fixed `42` and samples **once**
   (`main()` in `xhatshufflelooper_bounder.py`) — deterministic, no RNG state to save.
-- The `ScenarioCycler` cursor and `xh_iter` are **local variables inside `main()`**
-  — unreachable. Exact spoke-cursor resume needs them hoisted onto `self` (Phase
-  5). Without it the spoke restarts its cursor; this only changes *which* scenario
-  it tries next, not the preserved best (restored from §5.4).
+- The `ScenarioCycler` cursor and `xh_iter` were **local variables inside
+  `main()`** — unreachable. **Phase 5 hoisted them onto `self`** and carries the
+  cursor in the spoke's file. Without it the spoke restarted its cursor; that
+  only changes *which* scenario it tries next, not the preserved best (restored
+  from §5.4). What survives is `best` (where the next epoch starts), the cycle
+  position and the direction: the first pass after a resume always begins a
+  new epoch, because the hub's nonants are new to the resumed run, and that
+  resets the tried set and the current scenario exactly as it does in an
+  uninterrupted run.
 - lagrangian / lagranger spokes use **no RNG**; their bound is deterministic given
   the hub's `W`. State to carry: `_PHIter`, `trivial_bound`, last `bound`, received
   `localWs`.
@@ -588,22 +596,23 @@ Consequences, all deliberate:
   hiccup — is different: the previously published generation is untouched and
   remains resumable, while the optimization progress a raise would destroy
   lives only in memory. So `Checkpointer.maybe_checkpoint` catches the write error,
-  reports it loudly, and retries at the next iteration boundary.
+  reports it loudly, and retries at the next multiple of K, at the
+  `--checkpoint-before-seconds` write if that has not happened yet, or at the
+  last iteration of the budget, if the run gets that far (a stop on
+  convergence, the cylinders' gap, `--max-stalled-iters` or `--time-limit`
+  writes nothing more); a failed deadline write, and a failure at the last
+  iteration, are not retried.
 - The **incidental benefit**: because every write now precedes any
   `post_everything`, an xhat evaluation can no longer contaminate a checkpoint,
   which closes §9 item 4 without separate machinery.
 
 **Triggers.** The periodic and anticipated triggers below were designed against
-the terminal-checkpoint model. Writing at every completed iteration (K = 1)
-subsumes what they were for — a checkpoint from the last completed iteration
-always exists, so `--checkpoint-every-seconds` and the anticipatory
-`--checkpoint-before-seconds` have no gap left to fill. With K > 1 they do: the
-latest checkpoint can be up to K−1 iterations old, and a stop before the first
-multiple of K leaves none at all. Neither is implemented in this phase;
-`--checkpoint-before-seconds` is the one worth building, as that follow-up.
-What remained genuinely useful was the opposite of insurance: a way to write
-**less** often, to buy back the per-iteration cost on models with many cheap
-scenarios.
+the terminal-checkpoint model. Writing at completed iterations subsumes most of
+what they were for — a checkpoint from a recent completed iteration always
+exists, so `--checkpoint-every-seconds` and the anticipatory
+`--checkpoint-before-seconds` looked to have no gap left to fill. What remained
+genuinely useful was the opposite of insurance: a way to write **less** often,
+to buy back the per-iteration cost on models with many cheap scenarios.
 
 `--checkpoint-every-iterations K` **is implemented** and is that control; its
 meaning inverted along the way — it is a cost control, not a safety net. Writes
@@ -625,8 +634,49 @@ only stop knowable at the hook — convergence, the user converger and
 `--time-limit` are all decided in the *next* iteration's top half, and the
 cylinder-convergence test fires after the hook.
 
-The original rationale for the other two triggers is preserved below for the
-record.
+**`--checkpoint-before-seconds S` is implemented**, and it is there because the
+"no gap left to fill" argument above quietly assumed `K = 1`. Nobody runs K = 1
+on the models this feature is for — serializing every scenario every iteration
+is the cost K exists to avoid — and at K > 1 a run against a wall clock stops
+*between* multiples of K. It can also stop before the first one, in which case
+there is no checkpoint at all, and the directory still holds `spokes/`, so it
+looks like checkpointing worked. `--time-limit` does not help: it is compared
+against elapsed time in exactly one place, at the top of an iteration
+(`phbase.py`), never during a solve, so it overshoots by up to a full iteration
+and forces no write.
+
+So at each completed iteration `Checkpointer._deadline_is_near` asks whether *another* iteration would carry
+the run past S seconds of elapsed wall clock — `elapsed +
+_last_iteration_seconds >= S`, where `_last_iteration_seconds` is the most
+recent whole iteration, ending with the solve just done (item 9) — and writes
+if it would. Three properties are
+load-bearing:
+
+- **The test goes through `allreduce_or`.** Elapsed wall clock is rank-local,
+  and the hub write is a collective bracketed by barriers, so a rank that
+  believed its own clock alone would hang the cylinder for the rest of the job.
+  It is asked at every completed iteration, before the iteration-count tests,
+  so until it fires every rank reaches the collective at every completed
+  iteration (after it fires, every rank skips it alike); a checkpoint point that
+  lands near the deadline is then the deadline write rather than being
+  followed by another at the next iteration. `TestDeadlineOnOneRankDoesNotHangTheOthers`
+  (`test_checkpoint_multirank.py`, driver `multirank_deadline_driver.py`) skews
+  the clock on one rank of two and asserts the job returns; without the
+  `allreduce_or` it hangs.
+- **It latches.** Past the deadline every later iteration also qualifies, and
+  writing at all of them is the per-iteration cost K was set to avoid, at the
+  point in the run where the user has said time is short.
+- **Nothing is added to S.** The estimate is the plain measured duration of the
+  most recent iteration (item 9), and no margin is added for the write the
+  trigger itself causes. That cost is legible in the log from the bracketing
+  `toc` (item 10), and sizing S around it is the user's to do — mpi-sppy does
+  not estimate a user's number for them.
+
+`--checkpoint-every-seconds` is still not implemented and still has no case:
+between K and the deadline trigger, the stops that come up are covered.
+
+The original rationale for the two seconds-based triggers is preserved below
+for the record.
 
 **Other options**
 
@@ -834,14 +884,15 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
 5. **Geometry / cfg fingerprint** (§5.7) with a clear refusal on mismatch.
 6. **Async per-spoke incumbent checkpoints — no hub↔spoke coordination.** Each
    spoke serializes its *own* best incumbent (the best xhat solution values, §5.4)
-   and bound — at the bottom of each loop pass in which its incumbent changed,
-   right after a restore, and once more in `finalize` — to its own rank-tagged
-   file with the same atomic write (item 7). The write after a restore and the
-   one in `finalize` are there because a spoke loop can exit at its top check
-   without reaching a bottom: a short resume whose hub finishes during the
-   spoke's prep would otherwise leave a directory whose hub checkpoint has no
-   incumbent beside it. Spokes are **not** synchronized to the hub's
-   checkpoint iteration: the determinism contract (§7) makes bounds/incumbent
+   and bound — at the bottom of each loop pass in which its incumbent changed or
+   its cursor moved, right after a restore, and once more in `finalize` — to
+   its own rank-tagged file with the same atomic write (item 7). The write
+   after a restore and the one in `finalize` are there because a spoke loop
+   can exit at its top check without reaching a bottom: a short resume whose
+   hub finishes during the spoke's prep would otherwise leave a directory
+   whose hub checkpoint has no incumbent beside it. Spokes are **not**
+   synchronized to the hub's checkpoint iteration: the determinism contract
+   (§7) makes bounds/incumbent
    best-so-far, not bit-reproducible, so a globally-consistent "snapshot at
    iteration `k`" across cylinders is unnecessary. On resume the hub restores its
    primal state while each spoke reloads its latest incumbent/bound. The reload
@@ -887,14 +938,14 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
      by `TestOneRankFailingDoesNotHangTheOthers`, which sabotages one rank's
      write under `mpiexec` and checks the job returns rather than hanging.
 
-   The write *trigger* needs no agreement, and that is load-bearing rather than
-   lucky: `--checkpoint-every-iterations` makes it a pure function of the
-   absolute iteration number and the iteration limit, both identical on every
-   rank of a synchronous PH cylinder, so the ranks arrive at the barrier
-   together without being asked. Any trigger that is not a pure function of the
-   iteration count — the elapsed-time triggers this design declined to
-   implement, for instance — reintroduces rank skew and must go through
-   `allreduce_or` before the barrier or it deadlocks the write.
+   The iteration-count triggers need no agreement, and that is load-bearing
+   rather than lucky: `--checkpoint-every-iterations` makes them a pure
+   function of the absolute iteration number and the iteration limit, both
+   identical on every rank of a synchronous PH cylinder, so the ranks arrive at
+   the barrier together without being asked. A trigger that is not a pure
+   function of the iteration count reintroduces rank skew and must go through
+   `allreduce_or` before the barrier or it deadlocks the write; the elapsed-time
+   trigger, `--checkpoint-before-seconds`, does exactly that.
 
    The setup-time dillability probe (§9, item 8's companion in
    `probe_model_is_dillable`) is collective for the same reason: an undillable
@@ -902,20 +953,41 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
    to hang at the first write barrier, turning a clear refusal into a silent
    stall.
 
+   *And so is every other refusal on the setup and restore paths.* The probe
+   was fixed on its own, and then the same defect was found and fixed at the
+   spoke's load, and then at the dual cylinder's — three rounds, each moving
+   it rather than removing it, with the tests green in between. The rule is
+   therefore a property of the paths and not of any call on them: **every
+   local step of setting a checkpoint up or restoring one runs inside
+   `checkpointing.run_agreed`**, which calls it on every rank of the cylinder,
+   exchanges whether it raised, and raises on all of them or on none, naming
+   how many could not do it and what each said. Steps swept: the setup
+   refusals in `Checkpointer.__init__` (dill, filename collisions, the
+   directory write probe), the hub's splice (`PHBase._splice_checkpoint`), an
+   xhat spoke's incumbent load and restore, extension state on the hub and on
+   a spoke, and a dual cylinder's W load and restore. Anything added to these
+   paths belongs inside it, and `TestEveryCheckpointStepOnThosePathsIsAgreed`
+   fails when something is written beside it instead;
+   `TestNoRankLocalRaiseOnTheCheckpointPaths` fails one step inside each
+   agreement on one rank and requires the job to end with the agreement's
+   message. An extension's `restore_state` must therefore not be collective:
+   it runs inside one of these agreements.
+
    The *spoke* incumbent write stays uncoordinated (item 6). Each rank writes
    only its own file, and the incumbent objective that gates the write comes
    from an all-reduced objective evaluation, so the ranks are already in step
    without a barrier. In step about *when* is not the same as one incumbent,
    though: a write can fail on one rank, or a kill can land between the
    ranks' renames, leaving files from different incumbents. The restore
-   therefore allgathers each rank's (objective, inner bound) and keeps the
-   incumbent only if every rank has a file and they all match; otherwise every
-   rank drops it (`agree_on_spoke_incumbent`). Restoring a different
-   best-so-far on each rank makes the ranks reach different verdicts on the
-   same candidate, after which the hub rejects everything the spoke sends or
-   the spoke hangs in its own broadcast.
+   therefore keeps the incumbent only if every rank has a file and they all
+   hold the same objective, and otherwise every rank drops it
+   (`agree_spoke_restore`, which also agrees on the loop cursor). Restoring
+   a different best-so-far on each rank makes the ranks reach different
+   verdicts on the same candidate, after which the hub rejects everything the
+   spoke sends or the spoke hangs in its own broadcast.
    The resumed hub, which takes its inner bound from the same files (§5.4),
-   applies the same rule to every rank's file (`_ranks_agree`), so it never
+   decides by the same rule (`_one_write_verdict`, shared with
+   `agree_one_write`) and takes rank 0's bound as the spoke does, so it never
    credits a spoke with an incumbent the spoke's ranks dropped.
 8. **A `Checkpointer` extension** that writes on its active triggers; restore
    itself is the in-core resume branch (item 2), with extension
@@ -925,11 +997,13 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
      `allreduce_or(now − last_checkpoint ≥ S)` so all ranks decide together
      (mirroring the `time_limit` check in `phbase.py`), avoiding a rank-skew
      deadlock at the write barrier.
-   - *anticipated one-shot* (`--checkpoint-before-seconds`) — also at the hook,
-     testing `allreduce_or(elapsed + last_iteration_seconds ≥ S)` with the same
-     collective pattern, then latching so it fires at most once (§8). It needs the
-     most-recent iteration duration (item 9); everything else it shares with the
-     periodic path.
+   - *anticipated one-shot* (`--checkpoint-before-seconds`) — **implemented**,
+     at the hook, testing `allreduce_or(elapsed + last_iteration_seconds ≥ S)`
+     with the same collective pattern, then latching so it fires at most once
+     (§8). It needs the most-recent iteration duration (item 9); everything
+     else it shares with the periodic path. It is asked at every completed
+     iteration, before the iteration-count tests, so until it fires every
+     rank reaches the collective at every completed iteration.
    - *at each completed iteration* — after the subproblem solve, the only point
      in the loop where the dual weights and the nonants describe the same
      iteration (§8). There is no terminal trigger and no
@@ -961,13 +1035,26 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
    extension that nothing ever called. The lagrangian/lagranger loops call
    `enditer` per pass but nothing calls `maybe_checkpoint` for them (§5.6
    lists what they would carry).
-9. **Most-recent iteration duration kept on `self`.** `iterk_loop` (`phbase.py`)
-   times each iteration into a *local* `iteration_start_time`, used only by the
-   `display_progress` print. `--checkpoint-before-seconds` needs that duration at
-   the checkpoint hook, so record it on the object (e.g. `self._last_iteration_seconds`) as
-   each iteration completes — and record iteration 0's duration the same way, since
-   it is the seed the first time the trigger is tested (§8). Nothing else in PH
-   changes: no new hook, no change to the loop's control flow.
+9. **Most-recent iteration duration kept on `self`. Implemented.** `iterk_loop`
+   (`phbase.py`) timed each iteration into a *local* `iteration_start_time`, used
+   only by the `display_progress` print. `--checkpoint-before-seconds` needs an
+   iteration's duration at the checkpoint hook, so it is recorded on the object
+   as `self._last_iteration_seconds`. Nothing else in PH changed: no new hook, no
+   change to the loop's control flow.
+
+   It is taken between consecutive passes through one point in the loop, just
+   after the solve and before `enditer`, so it is one whole iteration — the
+   previous iteration's `enditer`, checkpoint write, sync and
+   `enditer_after_sync`, then this one's start and solve — and it ends with the
+   iteration the hook is deciding about. An earlier version timed each
+   iteration from its top to its bottom and recorded it at the bottom, so the
+   hook saw the iteration *before* the one ending — iteration 0 at the end of
+   iteration 1 — and an iteration 1 much slower than iteration 0 (the first
+   proximal solve) could pass the last safe boundary without writing. In the
+   first iteration of a run there is no previous pass, so the duration starts
+   where the loop starts; nothing is seeded from iteration 0 or carried
+   in the checkpoint (a resumed run's iteration 0 reloads models, so its timing
+   would have described a reload anyway).
 10. **`toc` on both ends of every checkpoint write.** The `Checkpointer` emits a
     `global_toc` when a write begins and another when it completes — on every
     trigger, hub and spokes alike, gated on `cylinder_rank == 0` so a multi-rank
@@ -1158,10 +1245,10 @@ as a branch stacked on the 1a PR.
   §11.1 A/B harness, serial): **farmer** bit-identical A vs B; no iter-0
   subproblem solve occurs on resume; geometry/cfg mismatch refused.
 - **Phase 1b — Retired; its instances landed in Phase 2.**
-  `--checkpoint-every-iterations` shipped in 1a, and `--checkpoint-every-seconds`
-  and the anticipated one-shot `--checkpoint-before-seconds` are **not
-  implemented and not planned**: §8 records why writing at every completed
-  iteration subsumes them. All that was left of this phase was the harder test
+  `--checkpoint-every-iterations` shipped in 1a and the anticipated one-shot
+  `--checkpoint-before-seconds` shipped later (§8, once the K = 1 assumption
+  behind dropping it was seen to be wrong); `--checkpoint-every-seconds` is
+  **not implemented and not planned**. All that was left of this phase was the harder test
   instances, and Phase 2 absorbed both rather than leaving a phase standing
   that adds no machinery: **farmer + `--cvar`** and **`sizes`** are cases in
   `test_checkpoint_multirank.py`. Nothing is outstanding here; the bullet
@@ -1245,11 +1332,12 @@ as a branch stacked on the 1a PR.
   - `RelaxedPHFixer` decides from the current spoke buffer, xbar and the
     models' fixedness, so it carries only its display count. Its pre-iteration
     0 fix-at-bounds pass belongs to the start of the study and is skipped on a
-    resume; the wait for the spoke's first buffer is kept. It does not
-    retrace an uninterrupted run: the relaxed-PH spoke it reads from is not
-    checkpointed and restarts from W = 0, so after the stop it hands the fixer
-    different relaxed solutions, and the fixer unfixes any restored fixing
-    they disagree with.
+    resume; the wait for the spoke's first buffer is kept. The relaxed-PH
+    spoke it reads from resumes from its checkpointed W (the dual cylinders'
+    own PH state, above), not W = 0, but its buffers arrive asynchronously, so an exact
+    retrace is not claimed or tested. A spoke that restarted from W = 0 would
+    hand the fixer different relaxed solutions after the stop, and the fixer
+    would unfix any restored fixing they disagree with.
   - `ReducedCostsFixer` carries the reduced costs it fixes from, the bound
     that decides whether new ones are accepted, and its count, and skips its
     pre-iteration-0 pass on a resume. Iter0's spoke sync runs before the
@@ -1262,7 +1350,9 @@ as a branch stacked on the 1a PR.
     its buffered rows at every checkpoint, and a resumed run keeps the files'
     rows through the checkpoint's iteration instead of truncating them, and
     sets its files up at the end of a resumed run that ran no iterations. On
-    any spoke it still starts its files over: no spoke writes extension state.
+    a spoke it still starts its files over: cfg_vanilla attaches it to the
+    hub and to the Lagrangian-family, reduced-costs, xfeas and dual spokes,
+    and none of those writes extension state (only the xhat spokes do).
 
   `WOscillationMonitor` (W trajectories, recurrence trackers, an internal
   slammer) and `CrossScenarioExtension` (whose `post_iter0` replaces model
@@ -1333,6 +1423,72 @@ as a branch stacked on the 1a PR.
   converger set. Each fix was verified
   to be load-bearing by reverting it and watching the matching test fail.
 
+  **Also here: the dual cylinders' own PH state.** `relaxed_ph` and `ph_dual`
+  run PH without being the hub, and the hub's checkpoint dills the hub's
+  scenarios, not theirs — so a resumed wheel restored the hub exactly and then
+  fed it duals from a cylinder starting at W = 0. Under `--ph-primal-hub` that
+  is the hub's own W, so the state the checkpoint most carefully preserved was
+  immediately overwritten by one that had been thrown away. These cylinders now
+  write W and the nonanticipative values, by `(ndn, i)` and by name, to a file
+  in `spokes/` named for the cylinder, at every completed iteration of their own
+  loop — it is a couple of floats per nonant, and the iteration that produced it
+  was a round of subproblem solves, so there is no cadence to divide. The
+  restore is `Checkpointer.post_iter0`: the cylinder's Iter0 runs and solves as
+  usual and its result is then overwritten, which costs one solve round and
+  keeps the cylinder an ordinary PH object with solvers created and prox terms
+  spliced.
+
+  What the restore checks before the cylinder publishes anything. The file's
+  metadata answers "does this describe this model?" — format version,
+  structural fingerprint, this rank's scenario names, a weight for every
+  nonant, and (across ranks) one iteration for all of them. None of that looks
+  at the numbers, and the numbers become another cylinder's bound:
+  `LagrangianOuterBound` receives these weights as `Field.DUALS` and turns them
+  into an outer bound the hub keeps as best-so-far. So the file also records
+  E[W] per node as the writing run computed it (`phbase.Wbar_by_node`, one
+  allreduce per iteration of the cylinder), and the restore ends by computing
+  it again from the restored models and refusing a file whose weights do not
+  reproduce it. That catches an edited file and changed scenario
+  probabilities; it compares a sum per variable, so it would not catch W
+  exchanged between two scenarios of equal probability. The tolerance is
+  `E1_tolerance` plus a millionth of the size of the weights being summed
+  (`phbase.W_magnitude_by_node`), relative so that a large-cost model is not
+  refused for its own rounding; in practice the two sums are of the same
+  numbers and agree exactly. Measured on farmer: adding 1.0 to one scenario's
+  weights is refused by name. The sums are allreduces and come out the same
+  on every rank, but each rank compares them with the E[W] in its own file,
+  so the comparison is agreed across the cylinder like the load: one damaged
+  file refuses on every rank rather than on one, which would leave the
+  others waiting in `Compute_Xbar`.
+
+  An earlier version refused weights whose E[W] was not zero, which is the
+  dual feasibility a Lagrangian bound relies on. PH keeps it only when rho is
+  the same in every scenario for a given nonant: with a scenario-dependent
+  rho the run that wrote the checkpoint finished normally and its resume was
+  refused, blaming the file. A resume should do what the run it continues
+  was doing, so the check is now of the file, not of the algorithm. Whether
+  the Lagrangian bound is valid under a scenario-dependent rho is a question
+  about PH that the uninterrupted run already has.
+
+  Three things this deliberately does not do. It does not dill the cylinder's
+  models: rho comes back from the rho setter, xbar from the values, the prox
+  terms from `PH_Prep`, and carrying them would be carrying a copy of a
+  derivation. It does not synchronize the cylinder with the hub — the file
+  records the cylinder's own iteration count for the log and nothing compares
+  it to the hub's generation, because these cylinders spin far ahead (62 of
+  their iterations by the hub's third, measured on `sizes`) and §9 item 6 keeps
+  spokes uncoordinated on purpose. And it does not let `--stop-at-iteration-
+  number` reach the cylinder, whose `PHIterLimit` is deliberately enormous: a
+  study bound counts *hub* iterations, and applying it to this loop would stop
+  the cylinder at that count and starve the hub of duals.
+
+  The Checkpointer had two kinds of cylinder and now has three. It could tell
+  the first two apart by the class of the `opt` it was attached to; a dual
+  cylinder's is a `PHBase`, which is neither, so `cfg_vanilla` passes
+  `role="dual_spoke"` and the extension is told. `PHBase.Iter0`'s resume branch
+  refuses the same role: splicing the hub's scenarios into this cylinder would
+  replace its models with a copy of another cylinder's.
+
   **Not done here: the same contract on the spoke side.** §5.5 says the contract
   serves hub and xhatter extensions alike, and the methods are on the base class
   so it does — but the spoke's incumbent file does not gather them, because no
@@ -1365,7 +1521,7 @@ as a branch stacked on the 1a PR.
     for its inner bound, so its gap reflects the answer the run already had
     from the first resumed iteration on (§5.4). A hub that is not resuming from its own
     `--checkpoint-dir` removes `spokes/` at setup, so a later resume cannot
-    restore an earlier study's incumbent. `--resume-from` without `--checkpoint-dir`
+    restore an earlier study's incumbent or dual weights. `--resume-from` without `--checkpoint-dir`
     attaches the extension with writing switched off, since on a spoke the
     restore *is* the extension's job.
   - *The A/B tests — implemented.* `test_checkpoint_cylinders.py` runs each
@@ -1388,8 +1544,62 @@ as a branch stacked on the 1a PR.
   valid best-so-far — **plus a stoch-ADMM cylinders configuration** (§8.2,
   item 6: no FWPH; `xhatshuffle` with `--stage2-ef-solver-name`, or
   `xhatxbar`).
-- **Phase 5 — Exact spoke continuity (optional).** Hoist `ScenarioCycler`/`xh_iter`
-  onto `self`; checkpoint the cursor (+ RNG getstate if a stream becomes stateful).
+- **Phase 5 — Exact spoke continuity. Implemented.** `ScenarioCycler` and
+  `xh_iter` are on `self`, and the cursor rides in the spoke's own file
+  alongside the incumbent.
+
+  **No RNG state is carried, and none is needed** (§5.6): xhatshuffle seeds its
+  stream to a fixed `42` and samples once, so a resumed spoke reproduces the
+  shuffled order exactly. Only the *position* in that order is checkpointed —
+  and a position means nothing against a different list, so the file carries a
+  SHA-256 fingerprint of the order it was taken against. A cursor whose
+  fingerprint no longer matches is discarded with a warning rather than raising:
+  the same file carries the incumbent, which is the part worth keeping, and
+  re-exploring from the start is a cost rather than an error.
+
+  **The write gate changed**, and the cost argument is what justifies it. Before
+  this phase a spoke wrote only when its incumbent improved, which is rare. The
+  cursor moves far more often — but *every cursor move is the result of a
+  subproblem solve*, so the writes are bounded by the solves, and a pass that
+  solves nothing still writes nothing. That last case is the one that has to
+  stay cheap, since the loop spins while it waits on the hub. Each write
+  pickles the whole cached incumbent (every variable of every local scenario,
+  keyed by name) and fsyncs twice. Keying the values by name was almost all
+  of the cost -- Pyomo builds each `var.name` on demand, about 2 us per
+  variable, about 350 ms per write on the 164,000-variable UC test instance
+  -- so the name-keyed dict is now built once per incumbent and reused until
+  the incumbent changes (`_values_by_name`). What is left is the pickle, the
+  file write and the two fsyncs: measured at 2.5 ms on 10-scenario farmer
+  (almost all fsync) and 13 ms on UC, on a laptop NVMe disk; a network
+  filesystem's fsync is slower. That is small next to a MIP subproblem solve
+  but not next to a tiny LP's. A write that carries only the cursor when the
+  incumbent has not changed, and a lighter fsync policy for it, are tracked
+  separately. The write right after a restore carries the cursor and
+  extension state it just read rather than asking the spoke for them: the
+  spoke is handed the cursor only once its loop exists, after `pre_iter0`, and
+  the extension state at the end of `xhat_prep`, so asking would write fresh
+  ones over the restored ones.
+
+  **Only xhatshuffle has a cursor.** `xhatlooper`, `xhatxbar` and
+  `xhatspecific` re-evaluate from scratch whenever new nonants arrive, so their
+  loop counters describe nothing a resume could use; `checkpoint_loop_state`
+  returns None on the base class and they inherit it.
+
+  **The spoke-side extension state phase 3 deferred landed here too**, restored
+  at the end of `xhat_prep` — after `post_iter0`, for exactly the reason the hub
+  restores at the end of `Iter0`. The restore lives on `InnerBoundNonantSpoke`,
+  not on the xhat base, because every spoke the Checkpointer is attached to
+  writes its extensions' state: the L-shaped xhatter and the slammers call it
+  at the end of their own prep (they run no extension `post_iter0`). An
+  earlier version restored only in `xhat_prep`, so those three wrote the state
+  and then silently dropped it on a resume.
+
+  Tests: `test_checkpoint_spoke_cursor.py` (the cursor round trip, that a
+  restored cycler offers the same scenarios next as one that never stopped, that
+  an exhausted epoch is not re-offered, and the changed-order refusal), plus two
+  cases in `test_checkpoint_cylinders.py` under `mpiexec`. The cylinders test
+  asserts what the loop **adopted**, not what the Checkpointer read — the first
+  version watched the read, and disabling the restore entirely still passed it.
 - **Phase 6 — Leaf-rebuild backend + broader coverage (not currently planned).**
   A possible future phase, deferred: the primary use case is fully served by the
   dill-reload backend (Phases 1–4), so this is recorded for when a lighter,
