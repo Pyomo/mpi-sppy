@@ -130,7 +130,10 @@ NON_STRUCTURAL_CFG_KEYS = frozenset({
     "lagrangian", "xhatshuffle", "xhatxbar", "xhatlshaped", "fwph",
     "subgradient", "ph_primal_hub", "ph_dual", "relaxed_ph",
     "ph_xfeas_spoke", "lagranger", "xhatlooper", "xhatspecific",
-    "slammax", "slammin",
+    "slammax", "slammin", "certified_outer_bound",
+    # The certified spoke's cushion only loosens the bound that spoke
+    # reports; the hub keeps its best outer bound across a resume either way.
+    "certified_outer_bound_cushion",
     # How the run was set up, not what problem it is. out-of-the-box prints an
     # equivalent command line and invites the user to reuse it, so leaving
     # these structural refuses a resume of exactly the line it printed.
