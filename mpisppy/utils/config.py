@@ -48,7 +48,22 @@ If you want a positional arg, you have to DIY:
 """
 
 import argparse
+import math
+
 import pyomo.common.config as pyofig
+
+
+def _finite_nonnegative_float(value):
+    """A float in [0, inf).  pyofig.NonNegativeFloat admits inf; this does not.
+
+    Used for options that are subtracted from a computed quantity, where inf
+    silently turns a finite result into -inf.
+    """
+    value = float(value)
+    if not (math.isfinite(value) and value >= 0.0):
+        raise ValueError(
+            f"Expected a finite non-negative float, but received {value}")
+    return value
 
 # class to inherit from ConfigDict with a name field
 class Config(pyofig.ConfigDict):
@@ -1101,6 +1116,44 @@ class Config(pyofig.ConfigDict):
                                        "requires convex recourse)",
                            domain=bool,
                            default=False)
+
+
+    def certified_outer_bound_args(self):
+
+        self.add_to_config('certified_outer_bound',
+                              description="have a certified_outer_bound spoke "
+                                          "(certified Lagrangian outer bound for "
+                                          "convex continuous subproblems; its "
+                                          "tightness depends on tight variable "
+                                          "bounds; see spokes.rst)",
+                              domain=bool,
+                              default=False)
+
+        self.add_to_config('certified_outer_bound_rank_ratio',
+                              description="MPI ranks for the certified_outer_bound "
+                                          "spoke relative to the hub (flexible rank "
+                                          "assignments; default 1.0 = equal)",
+                              domain=float,
+                              default=1.0)
+
+        # No add_mipgap_specs: the spoke refuses discrete variables, so there is
+        # no mip gap. Offering the flags would suggest otherwise.
+        # The spoke's solver defaults to ipopt when this is left unset (applied
+        # in cfg_vanilla.certified_outer_bound_spoke; add_solver_specs itself
+        # defaults every solver name to None).
+        self.add_solver_specs("certified_outer_bound")
+
+        # A dedicated domain, not NonNegativeFloat: the cushion is SUBTRACTED,
+        # so a negative value raises the reported bound above the theorem's
+        # quantity, and NonNegativeFloat accepts inf, which drives the reported
+        # bound to -inf. Neither result is an outer bound.
+        self.add_to_config('certified_outer_bound_cushion',
+                           description="relative cushion subtracted from the "
+                                       "certified bound: report q - eps*(1+|q|). "
+                                       "Last-bit hygiene against floating point, "
+                                       "not a proof-carrying margin; 0 disables",
+                           domain=_finite_nonnegative_float,
+                           default=1e-9)
 
 
     def reduced_costs_args(self):
