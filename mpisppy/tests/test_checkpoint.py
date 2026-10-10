@@ -86,20 +86,6 @@ def _options(max_iters, ckpt_dir=None, resume_from=None, **overrides):
 _LATE_STOP_ITERATION = 3
 
 
-def _strip_leaf_key(ckpt_dir, key):
-    """Delete a key from the published leaf file, standing in for a checkpoint
-    written before that key existed."""
-    generation = _published_generation(ckpt_dir)
-    gen_dir = os.path.join(ckpt_dir, checkpointing.HUB_SUBDIR,
-                           checkpointing._generation_dirname(generation))
-    path = os.path.join(gen_dir, checkpointing._leaf_filename(0))
-    with open(path, "rb") as f:
-        leaf = pickle.load(f)
-    del leaf[key]
-    with open(path, "wb") as f:
-        pickle.dump(leaf, f)
-
-
 def _published_generation(ckpt_dir):
     """The generation the manifest names, or None if nothing was published."""
     path = os.path.join(ckpt_dir, "manifest.json")
@@ -259,20 +245,65 @@ class DeadlineApproacher(Extension):
 _BEFORE_SECONDS = 100.0
 
 
-class IterationCostStamper(Extension):
-    """Stamp an unmistakable iteration duration into the checkpoint.
+class SlowTail(Extension):
+    """Make the end of iteration 1 slow, after its checkpoint hook.
 
-    `enditer` runs after the solve and before the checkpoint hook, so what it
-    stamps is what gets written; the loop overwrites it with the real
-    measurement straight afterwards. That is what makes it a usable probe --
-    a duration that could not possibly have been measured, sitting in the file
-    and nowhere else.
+    `enditer_after_sync` runs after the hook, so the sleep is not part of what
+    the hook measures in iteration 1; it belongs to the whole iteration that
+    iteration 2's hook measures. In iteration 2, `enditer` puts the clock
+    `MARGIN` seconds short of the deadline, so the deadline write lands at
+    iteration 2 only if that measurement reaches back into iteration 1's
+    tail.
     """
 
-    STAMP = 12345.0
+    MARGIN = 0.5
+    SLEEP = 1.0
+
+    def enditer_after_sync(self):
+        if self.opt._PHIter == 1:
+            time.sleep(self.SLEEP)
 
     def enditer(self):
-        self.opt._last_iteration_seconds = self.STAMP
+        if self.opt._PHIter == 2:
+            self.opt.start_time = (
+                time.perf_counter() - (_BEFORE_SECONDS - self.MARGIN))
+
+    # A test probe; nothing of its own to carry across a resume.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
+
+
+class SlowFirstIteration(Extension):
+    """Make the first iteration of a run slow for real, with the deadline
+    just ahead of it.
+
+    The deadline trigger has to judge by the iteration that is ending, not
+    by the one before it -- iteration 0, or nothing at all on a resume. Here
+    `miditer`, which runs before the solve, sleeps `SLEEP` seconds, and
+    `enditer`, which runs after the duration is measured and before the
+    checkpoint hook, puts the clock `MARGIN` seconds short of the deadline.
+    Elapsed time alone does not clear it; this iteration's measured duration
+    does. Iteration 0 of farmer takes well under `MARGIN`, so a trigger that
+    judged by it would stay silent here.
+    """
+
+    MARGIN = 2.0
+    SLEEP = 3.0
+
+    def _first(self):
+        return self.opt._PHIter == self.opt._resume_iteration + 1
+
+    def miditer(self):
+        if self._first():
+            time.sleep(self.SLEEP)
+
+    def enditer(self):
+        if self._first():
+            self.opt.start_time = (
+                time.perf_counter() - (_BEFORE_SECONDS - self.MARGIN))
 
     # A test probe; nothing of its own to carry across a resume.
     def checkpoint_state(self):
@@ -320,8 +351,10 @@ def _extension_class(name):
         return ClockRewinder
     if name == "deadline_approacher":
         return DeadlineApproacher
-    if name == "cost_stamper":
-        return IterationCostStamper
+    if name == "slow_first_iteration":
+        return SlowFirstIteration
+    if name == "slow_tail":
+        return SlowTail
     if name == "sep_rho":
         from mpisppy.extensions.sep_rho import SepRho
         return SepRho
@@ -2034,13 +2067,6 @@ class TestCheckpointBeforeSecondsDecision(unittest.TestCase):
                 self.assertIn("must be a finite positive number",
                               str(ctx.exception))
 
-    def test_a_non_finite_iteration_duration_is_ignored(self):
-        """It is read back from a checkpoint on a resume; a NaN there would
-        make the deadline never fire. It is treated as unknown instead."""
-        ext = self._checkpointer(100.0)
-        self._clock(ext, elapsed=100.5, last_iteration=float("nan"))
-        self.assertTrue(ext._should_write())
-
     def test_the_deadline_is_not_structural(self):
         """A resume may set a different deadline -- the second leg of a study
         usually gets a different slot -- and must not be refused for it."""
@@ -2106,6 +2132,29 @@ class TestCheckpointBeforeSeconds(unittest.TestCase):
         _, writes = self._run(self.N)
         self.assertEqual(writes, [DeadlineApproacher.ITERATION, self.N])
 
+    def test_it_judges_by_the_iteration_that_is_ending(self):
+        """A slow iteration 1 after a fast iteration 0 is written at
+        iteration 1. Predicting from the iteration before it skipped it."""
+        _, writes = self._run(self.N,
+                              extra_names=("slow_first_iteration",))
+        self.assertEqual(writes, [1, self.N])
+
+    def test_an_iteration_includes_the_previous_ones_tail(self):
+        """From the second iteration on, what the hook measures is a whole
+        iteration: it includes the end of the previous one -- its sync and
+        enditer_after_sync -- not only this one's start and solve."""
+        _, writes = self._run(self.N, extra_names=("slow_tail",))
+        self.assertEqual(writes, [2, self.N])
+
+    def test_a_resumed_run_judges_by_its_own_first_iteration(self):
+        """The first iteration of a resumed run has no earlier iteration of
+        its own to go on, and must still be measured."""
+        self._run(2, before_seconds=None, extra_names=())
+        self.assertEqual(_published_generation(self.ckpt_dir), 2)
+        _, writes = self._run(self.N, resume_from=self.ckpt_dir,
+                              extra_names=("slow_first_iteration",))
+        self.assertEqual(writes, [3, 2 + self.N])
+
     def test_without_the_deadline_only_the_final_iteration_is_written(self):
         """The same run, minus the option: what the deadline write adds."""
         _, writes = self._run(self.N, before_seconds=None)
@@ -2156,70 +2205,6 @@ class TestCheckpointBeforeSeconds(unittest.TestCase):
         got = _primal_snapshot(resumed)
         worst = max((abs(want[k] - got[k]) for k in want), default=0.0)
         self.assertLessEqual(worst, 1e-9)
-
-
-@unittest.skipIf(not solver_available,
-                 "no solver is available to time a PH iteration")
-class TestIterationDurationIsRecorded(unittest.TestCase):
-    """`PHBase._last_iteration_seconds`: the deadline trigger's estimate.
-
-    It is the plain measured duration of the most recent completed iteration.
-    mpi-sppy does not pad it and does not add anything for the write it may
-    trigger; the write's own cost is bracketed by `toc` in the log, and
-    leaving room for it is the user's to do when choosing S.
-    """
-
-    def setUp(self):
-        self._tmp = tempfile.TemporaryDirectory()
-        self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
-
-    def tearDown(self):
-        self._tmp.cleanup()
-
-    def test_iteration_zero_seeds_it(self):
-        """The first time the trigger is tested, no iteration of the loop has
-        finished yet, so iteration 0 is what there is to go on."""
-        ph = _make_ph(_options(0, PHIterLimit=0))
-        ph.ph_main()
-        self.assertIsNotNone(ph._last_iteration_seconds)
-        self.assertGreater(ph._last_iteration_seconds, 0.0)
-
-    def test_it_tracks_the_iterations(self):
-        ph = _make_ph(_options(3))
-        ph.ph_main()
-        self.assertIsNotNone(ph._last_iteration_seconds)
-        self.assertGreater(ph._last_iteration_seconds, 0.0)
-
-    def test_it_is_carried_across_a_resume(self):
-        """A resumed run's own iteration 0 reloads models instead of solving
-        them, so timing it describes a reload and not a PH iteration. The
-        checkpoint carries a real measurement, and that is the seed."""
-        ph = _make_ph(_options(2, ckpt_dir=self.ckpt_dir),
-                      extra_names=("cost_stamper",))
-        ph.ph_main()
-        self.assertEqual(_published_generation(self.ckpt_dir), 2)
-
-        # Resuming with a per-run budget of zero runs no iterations at all,
-        # so what is read here is the seed and nothing else.
-        resumed = _make_ph(_options(0, resume_from=self.ckpt_dir))
-        resumed.ph_main()
-        self.assertEqual(resumed._PHIter, 2)
-        self.assertEqual(resumed._last_iteration_seconds,
-                         IterationCostStamper.STAMP)
-
-    def test_a_checkpoint_without_one_falls_back_to_iteration_zero(self):
-        """Checkpoints written before the duration was carried have no such
-        key; a resume from one seeds itself and does not fail."""
-        ph = _make_ph(_options(2, ckpt_dir=self.ckpt_dir))
-        ph.ph_main()
-        _strip_leaf_key(self.ckpt_dir, "last_iteration_seconds")
-
-        # Again with nothing to do, so what is checked is the seed itself and
-        # not a duration a resumed iteration happened to measure.
-        resumed = _make_ph(_options(0, resume_from=self.ckpt_dir))
-        resumed.ph_main()
-        self.assertIsNotNone(resumed._last_iteration_seconds)
-        self.assertGreater(resumed._last_iteration_seconds, 0.0)
 
 
 class TestConfigureExtensionsComposes(unittest.TestCase):

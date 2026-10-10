@@ -749,12 +749,13 @@ class Checkpointer(Extension):
         asks whether *another* iteration would carry the run past S seconds of
         elapsed wall clock, and writes now if it would.
 
-        The estimate of "another iteration" is the last one measured
-        (``PHBase._last_iteration_seconds``), seeded by iteration 0. That is
-        the whole model: mpi-sppy does not pad it, and S is not adjusted for
-        the write it triggers. The write's own cost is bracketed by ``toc`` in
-        ``_write`` so it can be read off a log rather than guessed at, and
-        leaving room for it is the user's to do when choosing S.
+        The estimate of "another iteration" is the most recent whole one,
+        ending with the solve just done (``PHBase._last_iteration_seconds``;
+        ``iterk_loop`` says what it covers). That is the whole model: mpi-sppy
+        does not pad it, and S is not adjusted for the write it triggers. The
+        write's own cost is bracketed by ``toc`` in ``_write`` so it can be
+        read off a log rather than guessed at, and leaving room for it is the
+        user's to do when choosing S.
 
         **The test goes through allreduce_or**, because elapsed wall clock is
         rank-local and the hub write is a collective bracketed by barriers: a
@@ -772,10 +773,6 @@ class Checkpointer(Extension):
         if self.before_seconds is None or self._before_seconds_fired:
             return False
         last = getattr(self.opt, "_last_iteration_seconds", None)
-        # Read back from a checkpoint on a resume, so not to be trusted to be
-        # a number: a NaN would make the test below false for good.
-        if last is not None and not math.isfinite(last):
-            last = None
         elapsed = time.perf_counter() - self.opt.start_time
         near = self.opt.allreduce_or(
             elapsed + (0.0 if last is None else last) >= self.before_seconds)

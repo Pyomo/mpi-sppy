@@ -647,7 +647,9 @@ and forces no write.
 
 So at each completed iteration `Checkpointer._deadline_is_near` asks whether *another* iteration would carry
 the run past S seconds of elapsed wall clock — `elapsed +
-_last_iteration_seconds >= S` — and writes if it would. Three properties are
+_last_iteration_seconds >= S`, where `_last_iteration_seconds` is the most
+recent whole iteration, ending with the solve just done (item 9) — and writes
+if it would. Three properties are
 load-bearing:
 
 - **The test goes through `allreduce_or`.** Elapsed wall clock is rank-local,
@@ -1035,21 +1037,24 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
    lists what they would carry).
 9. **Most-recent iteration duration kept on `self`. Implemented.** `iterk_loop`
    (`phbase.py`) timed each iteration into a *local* `iteration_start_time`, used
-   only by the `display_progress` print. `--checkpoint-before-seconds` needs that
-   duration at the checkpoint hook, so it is recorded on the object as
-   `self._last_iteration_seconds` as each iteration completes — and iteration 0's
-   the same way, since it is the seed the first time the trigger is tested (§8).
-   Nothing else in PH changed: no new hook, no change to the loop's control flow.
+   only by the `display_progress` print. `--checkpoint-before-seconds` needs an
+   iteration's duration at the checkpoint hook, so it is recorded on the object
+   as `self._last_iteration_seconds`. Nothing else in PH changed: no new hook, no
+   change to the loop's control flow.
 
-   Two details the implementation had to settle. The duration covers the *whole*
-   iteration, including any checkpoint written inside it, because the question
-   being asked is whether there is room for another whole iteration. And the
-   value **rides in the checkpoint**, so a resume seeds from a measured PH
-   iteration: a resumed run's own iteration 0 reloads models instead of solving
-   them, so timing it would describe a reload and hand the trigger an
-   underestimate on the first iteration of exactly the leg — the second day of a
-   two-day study — that the option exists for. A checkpoint written before that
-   key existed simply falls back to iteration 0.
+   It is taken between consecutive passes through one point in the loop, just
+   after the solve and before `enditer`, so it is one whole iteration — the
+   previous iteration's `enditer`, checkpoint write, sync and
+   `enditer_after_sync`, then this one's start and solve — and it ends with the
+   iteration the hook is deciding about. An earlier version timed each
+   iteration from its top to its bottom and recorded it at the bottom, so the
+   hook saw the iteration *before* the one ending — iteration 0 at the end of
+   iteration 1 — and an iteration 1 much slower than iteration 0 (the first
+   proximal solve) could pass the last safe boundary without writing. In the
+   first iteration of a run there is no previous pass, so the duration starts
+   where the loop starts; nothing is seeded from iteration 0 or carried
+   in the checkpoint (a resumed run's iteration 0 reloads models, so its timing
+   would have described a reload anyway).
 10. **`toc` on both ends of every checkpoint write.** The `Checkpointer` emits a
     `global_toc` when a write begins and another when it completes — on every
     trigger, hub and spokes alike, gated on `cylinder_rank == 0` so a multi-rank

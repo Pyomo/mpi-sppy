@@ -1055,14 +1055,6 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
                 getattr(opt, "best_bound_obj_val", None)),
             "best_solution_obj_val": _as_float_or_none(
                 getattr(opt, "best_solution_obj_val", None)),
-            # How long a PH iteration of this run takes, so a resume can seed
-            # --checkpoint-before-seconds with a measurement instead of with
-            # its own iteration 0, which on a resume reloads models rather
-            # than solving them. This is the iteration *before* the one being
-            # written -- the current one is not over until after this write --
-            # which is the recent iteration the trigger wants either way.
-            "last_iteration_seconds": _as_float_or_none(
-                getattr(opt, "_last_iteration_seconds", None)),
             "best_outer_bound": _hub_best_outer_bound(opt),
         }
         _atomic_write_bytes(
