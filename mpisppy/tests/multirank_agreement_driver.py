@@ -54,6 +54,9 @@ STEPS = {
     # the file and then puts the values back, agreeing on each.
     "load_spoke_incumbent": (ckpt, "load_spoke_incumbent"),
     "restore_spoke_incumbent": (ckpt, "restore_spoke_incumbent"),
+    # Restore, at the end of the hub's Iter0:
+    # PHBase._restore_extension_state_if_resuming.
+    "restore_extension_state": (ckpt, "restore_extension_state"),
 }
 
 

@@ -75,11 +75,22 @@ class Fixer(mpisppy.extensions.extension.Extension):
 
         self.iter0_fixer_tuples = {} # caller data
         self.fixer_tuples = {} # caller data
-        self.threshold = {}  
-        self.iter0_threshold = {}  
+        self.threshold = {}
+        self.iter0_threshold = {}
         # This count dict drives the loops later
         # NOTE: every scenario has a list.
         for k,s in self.local_scenarios.items():
+            # The counts say how many consecutive iterations each nonant has
+            # held still, and that is the trajectory: a nonant one iteration
+            # short of its threshold gets fixed next iteration, and one reset
+            # to zero does not. They ride in the checkpoint on the model
+            # itself, consistent with the fixedness they pair with -- but
+            # this hook runs on a resumed run too, and zeroing them here
+            # would throw that away and restart every countdown, which is
+            # exactly the divergence the checkpoint is meant to prevent.
+            checkpointed_counts = getattr(s._mpisppy_data, "conv_iter_count",
+                                          None) \
+                if getattr(self.ph, "_resumed_from_checkpoint", False) else None
             s._mpisppy_data.conv_iter_count = {} # key is (ndn, i)
 
             self.iter0_fixer_tuples[s], self.fixer_tuples[s] = \
@@ -98,7 +109,9 @@ class Fixer(mpisppy.extensions.extension.Extension):
             if self.fixer_tuples[s] is not None:
                 for (varid, th, nb, lb, ub) in self.fixer_tuples[s]:
                     (ndn, i) = s._mpisppy_data.varid_to_nonant_index[varid]
-                    s._mpisppy_data.conv_iter_count[(ndn, i)] = 0
+                    s._mpisppy_data.conv_iter_count[(ndn, i)] = 0 \
+                        if checkpointed_counts is None \
+                        else checkpointed_counts.get((ndn, i), 0)
                     if (ndn, i) not in self.threshold:
                         self.threshold[(ndn, i)] = th
                     else:
@@ -282,6 +295,29 @@ class Fixer(mpisppy.extensions.extension.Extension):
 
     def enditer(self):
         return
+
+    def checkpoint_state(self):
+        """The two running totals this extension keeps on itself.
+
+        The state that actually drives the fixing -- the per-nonant
+        `conv_iter_count`, and which nonants are already fixed -- lives on the
+        scenario models, so it rides in the checkpoint with them and comes
+        back consistent with the variable fixedness it pairs with (see
+        `populate`, which has to be told not to zero it on a resume). What is
+        left here are the totals reported in the log; without them a resumed
+        run counts only the fixings it did after the stop and understates the
+        study.
+        """
+        if not self.fixed_so_far and not self.fixed_prior_iter0:
+            return None
+        return {
+            "fixed_so_far": self.fixed_so_far,
+            "fixed_prior_iter0": self.fixed_prior_iter0,
+        }
+
+    def restore_state(self, state):
+        self.fixed_so_far = state["fixed_so_far"]
+        self.fixed_prior_iter0 = state["fixed_prior_iter0"]
 
     def post_everything(self):
         self._dp("Final unique vars fixed by fixer= %s" % \

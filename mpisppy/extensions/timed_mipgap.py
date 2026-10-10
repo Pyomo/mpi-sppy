@@ -41,6 +41,14 @@ class TimedMIPGapCB(mpisppy.extensions.extension.Extension):
         self.ph = ph
         self._set_options()
 
+    # Nothing to carry across a resume. The time curve is rebuilt from the
+    # options and the callback is reinstalled before every solve.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
+
     def _set_options(self):
         ph = self.ph
         if 'timed_mipgap' not in ph.options:

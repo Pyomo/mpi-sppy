@@ -18,6 +18,16 @@ class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
         spo (SPOpt object): the calling object
         rank (int): mpi process rank of currently running process
     """
+
+    # Nothing to carry across a resume. Re-evaluates from scratch
+    # whenever it runs; its objective attributes are results it reports,
+    # not decisions it carries.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
+
     def __init__(self, spo):
         super().__init__(spo)
         self.options = spo.options["xhat_specific_options"]

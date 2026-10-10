@@ -45,13 +45,30 @@ class TrackedData():
         #if self.plot:
         self.plot_fname = os.path.join(self.folder, f'{name}.png')
 
-    def initialize_df(self, columns):
+    def initialize_df(self, columns, keep_through=None):
         """ Initialize the dataframe for saving the data and write out the column names
-        as future rows will be appended to the dataframe
+        as future rows will be appended to the dataframe.
+
+        ``keep_through`` is the iteration a resumed run continues from: the
+        file the earlier run wrote is kept up to it rather than truncated.
         """
         self.columns = columns
         self.df = pd.DataFrame(columns=columns)
-        self.df.to_csv(self.fname, index=False, header=True)
+        if keep_through is not None and os.path.exists(self.fname):
+            self.keep_rows_through(keep_through)
+        else:
+            self.df.to_csv(self.fname, index=False, header=True)
+
+    def keep_rows_through(self, iteration):
+        """ On a resumed run, keep what the earlier run wrote up to the
+        checkpoint's iteration and drop anything it wrote after it, which the
+        resumed run is about to compute again.
+        """
+        old = pd.read_csv(self.fname)
+        old = old[old['iteration'] <= iteration]
+        old.to_csv(self.fname, index=False, header=True)
+        self.seen_iters = set(old['iteration'].tolist())
+        self.df = pd.DataFrame(columns=self.columns)
 
     def add_row(self, row):
         """ Add a row to the dataframe;
@@ -133,6 +150,8 @@ class PHTracker(Extension):
         self.cylinder_folder = None
         self.track_dict = None
         self.finished_init = False
+        # The iteration a resumed run continues from, set by restore_state.
+        self._resume_through = None
 
     def finish_init(self):
         """ Finish initialization of the extension as we need the spcomm object
@@ -244,14 +263,45 @@ class PHTracker(Extension):
 
         if self._rank == 0 and track_var not in self._reduce_types:
             df_columns.insert(0, 'iteration')
-            self.track_dict[track_var].initialize_df(df_columns)
+            self.track_dict[track_var].initialize_df(
+                df_columns, keep_through=self._resume_through)
         else:
             comm = self.opt.comms['ROOT']
             df_columns = comm.gather(df_columns, root=0)
             if self._rank == 0:
                 df_columns = df_columns[0]
                 df_columns.insert(0, 'iteration')
-                self.track_dict[track_var].initialize_df(df_columns)
+                self.track_dict[track_var].initialize_df(
+                    df_columns, keep_through=self._resume_through)
+
+    def checkpoint_state(self):
+        """ The iteration the tracked files are complete through.
+
+        Writes out the rows buffered since the last write first (only every
+        ``write_every`` iterations otherwise), so the files on disk hold every
+        row up to this checkpoint and a run killed after it loses none of them.
+        """
+        if not self.finished_init:
+            return {"through_iteration": None}
+        if self._rank == 0:
+            for tracked in self.track_dict.values():
+                if len(tracked.df) > 0:
+                    tracked.write_out_data()
+        return {"through_iteration": self.curr_iter}
+
+    def restore_state(self, state):
+        """ Continue the earlier run's files instead of starting them over.
+
+        Usually runs before the files are opened, which happens lazily at the
+        first solve loop; if they already are, trim them now.
+        """
+        self._resume_through = state["through_iteration"]
+        if self._resume_through is None:
+            return
+        if self.finished_init and self._rank == 0:
+            for tracked in self.track_dict.values():
+                if os.path.exists(tracked.fname):
+                    tracked.keep_rows_through(self._resume_through)
 
     def _add_data_and_write(self, track_var, data, gather=True, final=False):
         """ Gather the data from all ranks and write it out
@@ -576,6 +626,12 @@ class PHTracker(Extension):
                 self._track_var_to_func[track_var]['track']()
 
     def post_everything(self):
+        # A resumed run skips Iter0's solve loop, so if it then runs no
+        # iterations -- already at --stop-at-iteration-number, or converged on
+        # the restored bounds -- pre_solve_loop never ran. Set up here, which
+        # also keeps the earlier run's rows rather than leaving no files.
+        if not self.finished_init:
+            self.finish_init()
         for track_var in self.track_dict.keys():
                 self._track_var_to_func[track_var]['track'](final=True)
                 self._track_var_to_func[track_var]['finalize'](var=track_var)

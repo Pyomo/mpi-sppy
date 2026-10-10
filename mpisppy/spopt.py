@@ -1340,6 +1340,24 @@ class SPOpt(SPBase):
                 if v.name in wanted:
                     self._initial_fixed_varibles.add(v)
 
+    def was_initially_fixed(self, xvar):
+        """True if this nonant was already fixed when the *run* started.
+
+        The distinction extensions need and `xvar.fixed` cannot make: a
+        nonant fixed by the modeler in the scenario_creator is off limits,
+        while one an extension fixed mid-run is that extension's own doing and
+        may be unfixed again.
+
+        Reading `xvar.fixed` at setup answers the question correctly only for
+        a run that starts from scratch. A run resumed from a checkpoint starts
+        with every mid-run fixing already applied -- that is the point of the
+        checkpoint -- so an extension building its baseline that way would
+        record everything it had fixed before the stop as the modeler's, and
+        never touch it again. This set is built once, at construction, and
+        rebuilt by name on a resume, so it means the same thing either way.
+        """
+        return xvar in self._initial_fixed_varibles
+
     def _can_update_best_bound(self):
         for s in self.local_scenarios.values():
             for v in s._mpisppy_data.nonant_indices.values():

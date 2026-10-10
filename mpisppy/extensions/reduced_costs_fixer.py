@@ -68,13 +68,35 @@ class ReducedCostsFixer(Extension):
         self.nonant_length = self.opt.nonant_length
         for k,s in self.opt.local_scenarios.items():
             for ndn_i, xvar in s._mpisppy_data.nonant_indices.items():
-                if xvar.fixed:
+                # Fixed when the run started, not fixed right now -- a run
+                # resumed from a checkpoint arrives with its mid-run fixings
+                # already applied, and this extension both fixes and unfixes,
+                # so reading xvar.fixed here would make it treat its own
+                # earlier fixings as the modeler's: never unfixed again, and
+                # missing from _integer_nonants, which is the denominator of
+                # its fix-fraction target.
+                if self.opt.was_initially_fixed(xvar):
                     self._modeler_fixed_nonants.add(ndn_i)
                     continue
                 if xvar.is_integer():
                     self._integer_nonants.add(ndn_i)
 
     def iter0_post_solver_creation(self):
+        # The pre-iteration-0 pass belongs to the start of the study. A
+        # resumed run arrives with the earlier run's fixings on the models and
+        # gets its reduced costs back in restore_state, so it neither waits
+        # for the spoke nor fixes again here.
+        #
+        # Nor in Iter0's spoke sync, which runs before restore_state: the
+        # reduced-costs spoke is not checkpointed, so what it sends then comes
+        # from a restarted spoke, and with the best bound still at its initial
+        # value it would be accepted and fixed from. A zero target lets that
+        # sync record the reduced costs without fixing anything; restore_state
+        # then chooses between them and the saved ones, and
+        # post_iter0_after_sync sets the per-iteration target as usual.
+        if getattr(self.opt, "_resumed_from_checkpoint", False):
+            self.fix_fraction_target = 0.0
+            return
         self.fix_fraction_target = self._fix_fraction_target_pre_iter0
         if self.fix_fraction_target > 0:
             # wait for the reduced costs
@@ -85,6 +107,31 @@ class ReducedCostsFixer(Extension):
                     continue
             self.sync_with_spokes(pre_iter0 = True)
         self.fix_fraction_target = self._fix_fraction_target_iter0
+
+    def checkpoint_state(self):
+        # The reduced costs it fixes from every iteration, whether or not new
+        # ones arrived, and the bound that decides whether the next ones are
+        # accepted. Without them a resumed run fixes nothing until the spoke
+        # sends new reduced costs, and then accepts them whatever their bound.
+        rc = self._current_reduced_costs
+        return {
+            "best_outer_bound": float(self._best_outer_bound),
+            "current_reduced_costs": None if rc is None else rc.tolist(),
+            "heuristic_fixed_vars": self._heuristic_fixed_vars,
+        }
+
+    def restore_state(self, state):
+        self._heuristic_fixed_vars = state["heuristic_fixed_vars"]
+        # Runs at the end of Iter0, after its spoke sync. If that sync already
+        # accepted reduced costs at a better bound than the checkpoint's, they
+        # are newer than anything saved, so they stay.
+        if (self._current_reduced_costs is not None
+                and self._outer_bound_update(self._best_outer_bound,
+                                             state["best_outer_bound"])):
+            return
+        self._best_outer_bound = state["best_outer_bound"]
+        rc = state["current_reduced_costs"]
+        self._current_reduced_costs = None if rc is None else np.array(rc)
 
     def post_iter0_after_sync(self):
         self.fix_fraction_target = self._fix_fraction_target_iterK

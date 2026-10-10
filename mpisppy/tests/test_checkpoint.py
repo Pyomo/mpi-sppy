@@ -117,6 +117,13 @@ class StateRecorder(Extension):
     def enditer(self):
         self._record()
 
+    # A test probe; nothing of its own to carry across a resume.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
+
 
 class MidIterMutator(Extension):
     """Mutate model state in miditer, the way shipped extensions do.
@@ -139,6 +146,13 @@ class MidIterMutator(Extension):
                 first = next(iter(s._mpisppy_data.nonant_indices.values()))
                 first.fix(first._value)
 
+    # A test probe; nothing of its own to carry across a resume.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
+
 
 class EndIterMutator(Extension):
     """Mutate model state in enditer, which a user extension is free to do.
@@ -152,6 +166,13 @@ class EndIterMutator(Extension):
         for s in self.opt.local_scenarios.values():
             for ndn_i in s._mpisppy_data.nonant_indices:
                 s._mpisppy_model.rho[ndn_i]._value *= 1.05
+
+    # A test probe; nothing of its own to carry across a resume.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
 
 class ClockRewinder(Extension):
     """Trip the --time-limit break at a chosen iteration, without a clock race.
@@ -174,6 +195,13 @@ class ClockRewinder(Extension):
         if self.opt._PHIter == _LATE_STOP_ITERATION:
             self.opt.start_time -= (self.opt.options["time_limit"] + 1.0)
 
+    # A test probe; nothing of its own to carry across a resume.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
+
 
 class PreIter0Tagger(Extension):
     """Tag the models pre_iter0 sees, so a test can tell whether the hook ran
@@ -183,6 +211,13 @@ class PreIter0Tagger(Extension):
     def pre_iter0(self):
         for s in self.opt.local_scenarios.values():
             s._pre_iter0_saw_this_model = True
+
+    # A test probe; nothing of its own to carry across a resume.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
 
 
 def _extension_class(name):
@@ -1863,6 +1898,13 @@ class _HookRecorder(Extension):
     def maybe_checkpoint(self):
         self.calls += 1
 
+    # A test probe; nothing of its own to carry across a resume.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
+
 
 class TestCheckpointHookDispatch(unittest.TestCase):
     """The dedicated hook exists on the extension interface and dispatches."""
@@ -2810,6 +2852,8 @@ class TestVaridToNonantIndexRestored(unittest.TestCase):
                         f"varid_to_nonant_index after the resume; the map "
                         f"still holds the writing process's ids")
                 self.assertEqual(varids[id(var)], ndn_i)
+            self.assertEqual(len(varids), len(s._mpisppy_data.nonant_indices),
+                             msg=f"{sname}: stale ids were left behind")
 
     def test_the_consumer_that_crashes_does_not(self):
         """is_zero_prob indexes the map rather than testing membership, so a

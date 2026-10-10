@@ -18,6 +18,16 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
         enforcing the integality constraints after some condition.
     """
 
+    # Whether the integers are relaxed is a model transformation, so it rides
+    # in the dilled models, and pre_iter0 reads it back from them on a resume.
+    # When to enforce is computed from the options and the iteration count,
+    # which a resumed run has too.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
+
     def __init__(self, opt):
         # FWPH manages integrality on these same models itself: its LP warm
         # start relaxes and then restores them, deleting the
@@ -60,9 +70,10 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
                 # Either the run that wrote the checkpoint had already
                 # enforced integrality, in which case there is nothing left to
                 # do, or this extension was added to a command whose
-                # checkpoint was written without it. A checkpoint carries no
-                # extension state, so the two are indistinguishable from here,
-                # and relaxing now would change the algorithm mid-study.
+                # checkpoint was written without it. The models are this
+                # extension's only record, so the two are indistinguishable
+                # from here, and relaxing now would change the algorithm
+                # mid-study.
                 global_toc(f"WARNING: {self.__class__.__name__}: the "
                            "checkpointed models are not relaxed, so "
                            "integrality stays enforced for this leg. If this "
@@ -95,7 +106,9 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
         # _relaxed_integer_vars.
         if not self._integers_relaxed:
             return
-        # time is running out
+        # time is running out. Measured from the start of this run, on every
+        # run: --time-limit is a limit on this job's wall clock, so a fraction
+        # of it means a fraction of this job's time, resumed or not.
         #
         # Each rank has its own clock, so without allreduce_or the ranks stop
         # relaxing at different iterations: some would solve MIPs while the
@@ -109,14 +122,25 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
             global_toc(f"{self.__class__.__name__}: enforcing integrality constraints, ran so far for more than {self.opt.options['time_limit']*self.ratio} seconds", self.opt.cylinder_rank == 0)
             self._unrelax_integers()
             return
-        # iterations are running out. Both sides are measured from where this
-        # run started, because _PHIter counts the study: on a resume it is
-        # already past any fraction of this run's iteration budget, and
-        # comparing the two directly would enforce integrality immediately.
-        start = getattr(self.opt, "_resume_iteration", 0)
-        stop = getattr(self.opt, "_stop_iteration", None)
-        if stop is None:
-            stop = start + int(self.opt.options["PHIterLimit"])
+        # iterations are running out. With --stop-at-iteration-number the
+        # study's length is known, so the fraction is of the whole study:
+        # every run of it, and a run that never stopped, enforces at the same
+        # iteration. Only where the loop honours that bound, though, which is
+        # where it sets _stop_iteration; APH's loop ignores the option and
+        # runs to PHIterLimit. Otherwise the only budget is this run's own,
+        # so both sides are measured from where this run started -- _PHIter
+        # counts the study, and on a resume it is already past any fraction
+        # of this run's budget, so comparing the two directly would enforce
+        # at once.
+        stop_at = self.opt.options.get("stop_at_iteration_number", None)
+        if (stop_at is not None
+                and getattr(self.opt, "_stop_iteration", None) is not None):
+            start, stop = 0, int(stop_at)
+        else:
+            start = getattr(self.opt, "_resume_iteration", 0)
+            stop = getattr(self.opt, "_stop_iteration", None)
+            if stop is None:
+                stop = start + int(self.opt.options["PHIterLimit"])
         if (self.opt._PHIter - start) > (stop - start) * self.ratio:
             global_toc(f"{self.__class__.__name__}: enforcing integrality constraints, ran so far for {self.opt._PHIter - 1} iterations", self.opt.cylinder_rank == 0)
             self._unrelax_integers()

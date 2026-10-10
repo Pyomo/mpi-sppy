@@ -133,6 +133,16 @@ def _same_objective(a, b):
 class Checkpointer(Extension):
     """Write a resumable checkpoint at each completed PH iteration."""
 
+    # Nothing to carry across a resume. This is the extension doing the
+    # checkpointing. Its attributes describe the file it last wrote and
+    # what a resume handed it, both established fresh on every run; there
+    # is nothing here for it to carry to itself.
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
+
     def __init__(self, opt):
         super().__init__(opt)
         options = opt.options

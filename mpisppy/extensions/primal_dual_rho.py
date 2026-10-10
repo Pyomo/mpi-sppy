@@ -103,6 +103,18 @@ class PrimalDualRho(mpisppy.extensions.extension.Extension):
         self._ph.comms["ROOT"].Allreduce(local_sum_diff, global_sum_diff, op=MPI.SUM)
         return global_sum_diff[0]
 
+    def checkpoint_state(self):
+        # The xbars of the last completed iteration, which miditer compares
+        # the next ones against. Without them a resumed run takes the "first
+        # time through" branch below and skips one rho update that an
+        # uninterrupted run makes. Keyed by (ndn, i); this rank's own.
+        if self.prev_xbars is None:
+            return None
+        return {"prev_xbars": dict(self.prev_xbars)}
+
+    def restore_state(self, state):
+        self.prev_xbars = dict(state["prev_xbars"])
+
     def miditer(self):
         if self.prev_xbars is None:
             self.prev_xbars = self._get_xbars()

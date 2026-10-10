@@ -110,6 +110,32 @@ class TestIntegerRelaxThenEnforce(unittest.TestCase):
                 self.assertFalse(irte._integers_relaxed,
                                  f"the {label} condition did not unrelax")
 
+    def test_the_study_bound_sets_the_schedule_where_the_loop_honours_it(self):
+        # --stop-at-iteration-number 6 with --max-iterations 20 at ratio 0.5:
+        # a PH loop stops at 6 and sets _stop_iteration, so enforcing waits
+        # for half the study (past iteration 3). APH's loop ignores the bound
+        # and never sets _stop_iteration; there the budget is still the 20
+        # iterations it runs (past iteration 10).
+        from mpisppy.extensions.integer_relax_then_enforce import (
+            IntegerRelaxThenEnforce)
+        for label, stop_iteration, phiter, relaxed in (
+                ("PH, before half the study", 6, 3, True),
+                ("PH, past half the study", 6, 4, False),
+                ("APH-like, past half the bound", None, 4, True),
+                ("APH-like, past half its own run", None, 11, False)):
+            with self.subTest(case=label):
+                ph = _make_ph(PHIterLimit=20, stop_at_iteration_number=6)
+                ph.PH_Prep()
+                for s in ph.local_scenarios.values():
+                    s._solver_plugin = None
+                irte = IntegerRelaxThenEnforce(ph)
+                irte.pre_iter0()
+                ph._stop_iteration = stop_iteration
+                ph._PHIter = phiter
+                ph.conv = 1.0
+                irte.miditer()
+                self.assertEqual(irte._integers_relaxed, relaxed)
+
     def test_no_reduction_when_there_is_no_time_limit(self):
         # time_limit is rank-identical, so an unset one is False everywhere
         # and reducing it every iteration of the hub's loop is an Allreduce

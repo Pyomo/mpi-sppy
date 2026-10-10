@@ -167,5 +167,26 @@ class NormRhoUpdater(mpisppy.extensions.extension.Extension):
     def enditer(self):
         pass
 
+    def checkpoint_state(self):
+        """The previous iteration's xbars, which is the whole state here.
+
+        `miditer` computes the dual residual as rho * |xbar - previous xbar|,
+        so `_prev_avg` is what makes this iteration's rho update depend on the
+        last one. A resumed run that started with it empty would take the
+        `if not self._prev_avg` branch: it would snapshot and **skip the rho
+        update entirely** for that iteration, then carry the resulting rho --
+        different from the uninterrupted run's -- for the rest of the run.
+
+        Keys are `(node name, index)` tuples, which mean the same thing on the
+        reloaded models; the vardata they correspond to do not survive a
+        resume, but nothing here refers to those.
+        """
+        if not self._prev_avg:
+            return None
+        return {"prev_avg": dict(self._prev_avg)}
+
+    def restore_state(self, state):
+        self._prev_avg = dict(state["prev_avg"])
+
     def post_everything(self):
         pass

@@ -105,5 +105,42 @@ class MultRhoUpdater(mpisppy.extensions.extension.Extension):
     def enditer(self):
         pass
 
+    def checkpoint_state(self):
+        """The rho/convergence ratio, and the best convergence seen so far.
+
+        This extension holds rho at a constant multiple of the convergence
+        metric, but only ever *improves* it: `best_conv` is the gate, and
+        `_first_rho` with `first_c` are the ratio it scales from. All three
+        are set once, early, and then read for the rest of the run.
+
+        A resumed run without them starts with `best_conv = inf`, so the first
+        iteration after the stop counts as a new best whatever it is, and
+        `_first_rho is None` sends it back through `_attach_rho_ratio_data` --
+        which re-anchors the ratio on the *checkpointed* rho and the current
+        convergence rather than the run's original ones. Every later rho is
+        then scaled from the wrong baseline.
+
+        `best_conv` is saved even when the ratio has not been anchored yet:
+        the two advance independently (`_attach_rho_ratio_data` declines to
+        anchor when the convergence metric is None or exactly at the
+        tolerance), so a checkpoint can legitimately hold one without the
+        other.
+        """
+        if self._first_rho is None and self.best_conv == float("inf"):
+            return None
+        return {
+            "first_rho": None if self._first_rho is None
+                         else dict(self._first_rho),
+            "first_c": getattr(self, "first_c", None),
+            "best_conv": self.best_conv,
+        }
+
+    def restore_state(self, state):
+        saved_rho = state["first_rho"]
+        self._first_rho = None if saved_rho is None else dict(saved_rho)
+        if state["first_c"] is not None:
+            self.first_c = state["first_c"]
+        self.best_conv = state["best_conv"]
+
     def post_everything(self):
         pass
