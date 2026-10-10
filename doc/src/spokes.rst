@@ -161,7 +161,7 @@ pointing at an unbounded side of the box. Neither can make it invalid. None of t
 the spoke certify a non-convex model, and if the model has integer variables
 the spoke is inapplicable whatever solver runs it.
 
-**Solver options.** Unlike every other spoke, this one does **not** inherit the
+**Solver options.** Unlike other spokes, this one does **not** inherit the
 global ``--solver-options`` or the ``--max-solver-threads`` cap. Ipopt
 hard-fails on an unrecognized keyword rather than ignoring it, so a perfectly
 ordinary run (a MIP solver and its options for the hub, this spoke attached

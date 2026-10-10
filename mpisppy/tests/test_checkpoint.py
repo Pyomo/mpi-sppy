@@ -2390,6 +2390,41 @@ class TestSpokeIncumbentFile(unittest.TestCase):
             checkpointing.load_spoke_incumbent(
                 resumed, self.ckpt_dir, self.CYLINDER, 2)
 
+    def test_resume_may_add_the_certified_outer_bound_spoke(self):
+        """Like --lagrangian, --certified-outer-bound changes which cylinders
+        run, not what problem the checkpoint describes, and its cushion only
+        loosens the bound that spoke reports. The cfg is folded from the
+        options the spoke really registers, so a renamed option shows up
+        here rather than as a refused resume."""
+        import mpisppy.utils.cfg_vanilla as vanilla
+        from mpisppy.utils.config import Config
+
+        def folded(**overrides):
+            cfg = Config()
+            cfg.popular_args()
+            cfg.checkpoint_args()
+            cfg.certified_outer_bound_args()
+            cfg.checkpoint_dir = self.ckpt_dir
+            for key, value in overrides.items():
+                cfg[key] = value
+            hub_dict = {"opt_kwargs": {"options": {}}}
+            vanilla.add_checkpointing(hub_dict, cfg)
+            return hub_dict["opt_kwargs"]["options"][
+                "checkpoint_structural_cfg"]
+
+        opt = _xhat_eval(ckpt_dir=self.ckpt_dir)
+        opt.options["checkpoint_structural_cfg"] = folded()
+        _set_and_cache_solution(opt, 1.0)
+        checkpointing.write_spoke_incumbent(
+            opt, self.ckpt_dir, self.CYLINDER, 2, best_inner_bound=-42.0)
+
+        resumed = _xhat_eval(resume_from=self.ckpt_dir)
+        resumed.options["checkpoint_structural_cfg"] = folded(
+            certified_outer_bound=True, certified_outer_bound_cushion=1e-6)
+        state = checkpointing.load_spoke_incumbent(
+            resumed, self.ckpt_dir, self.CYLINDER, 2)
+        self.assertIsNotNone(state)
+
     def test_a_file_missing_an_agreed_key_is_refused_at_load(self):
         """agree_on_spoke_incumbent reads these two before its collective,
         so a file without one has to be refused by the load, which runs
