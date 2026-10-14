@@ -1776,7 +1776,9 @@ class _ScenTree():
     
     
 ######## Utility to attach the one and only node to a two-stage scenario #######
-def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None, surrogate_nonant_list=None, do_uniform=True):
+def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None,
+                     surrogate_nonant_list=None, do_uniform=True,
+                     linear_surrogate_definitions=None):
     """ Create a root node as a list to attach to a scenario model
     Args:
         model (ConcreteModel): model to which this will be attached
@@ -1796,6 +1798,11 @@ def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None, surrog
               fix nonants to calculate solutions, and the EF creator.
               NOTE: These types of variables are typically artificially added
                     to the model to capture hierarchical model features.
+        linear_surrogate_definitions (list of LinearSurrogateDefinition):
+              Linear Pyomo expressions of ordinary nonants. mpi-sppy creates
+              the auxiliary variables and linking constraints, registers them
+              as surrogate nonants, and derives their rho values from the
+              expression variables.
         do_uniform (boolean): controls a side-effect to deal with missing probs
 
     Note: 
@@ -1805,6 +1812,7 @@ def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None, surrog
         scenario_tree.ScenarioNode("ROOT", 1.0, 1, firstobj, varlist, model,
                                    nonant_ef_suppl_list = nonant_ef_suppl_list,
                                    surrogate_nonant_list = surrogate_nonant_list,
+                                   linear_surrogate_definitions = linear_surrogate_definitions,
                                   )
     ]
     if do_uniform:

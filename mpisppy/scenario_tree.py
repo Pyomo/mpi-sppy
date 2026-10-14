@@ -11,6 +11,7 @@
 import logging
 
 import mpisppy.utils.sputils as sputils
+from mpisppy.utils.linear_surrogate import build_linear_surrogates
 from pyomo.common.collections import ComponentSet
 
 logger = logging.getLogger("mpisppy.scenario_tree")
@@ -50,6 +51,9 @@ class ScenarioNode:
             .. NOTE::
               These types of variables are typically artificially added
               to the model to capture hierarchical model features.
+      linear_surrogate_definitions (list of LinearSurrogateDefinition):
+            Linear expressions of ordinary nonants for which mpi-sppy creates
+            and registers auxiliary surrogate nonants.
       parent_name (str): name of the parent node
 
     Lists:
@@ -58,7 +62,8 @@ class ScenarioNode:
     """
     def __init__(self, name, cond_prob, stage, cost_expression,
                  nonant_list, scen_model, nonant_ef_suppl_list=None,
-                 surrogate_nonant_list=None, parent_name=None):
+                 surrogate_nonant_list=None, parent_name=None,
+                 linear_surrogate_definitions=None):
         """Initialize a ScenarioNode object. Assume most error detection is
         done elsewhere.
         """
@@ -69,6 +74,7 @@ class ScenarioNode:
         self.nonant_list = nonant_list
         self.nonant_ef_suppl_list = nonant_ef_suppl_list
         self.surrogate_nonant_list = surrogate_nonant_list
+        self.linear_surrogate_definitions = linear_surrogate_definitions
         self.parent_name = parent_name # None for ROOT
         # now make the vardata lists
         if self.nonant_list is not None:
@@ -99,3 +105,7 @@ class ScenarioNode:
             self.surrogate_vardatas = ComponentSet(surrogate_vardatas)
         else:
             self.surrogate_vardatas = ComponentSet()
+
+        self.linear_surrogate_data = build_linear_surrogates(
+            self, scen_model, linear_surrogate_definitions
+        )

@@ -120,6 +120,15 @@ criteria:
 See ``dyn_rho_base.py`` for implementation details on how updates are
 computed.
 
+Linear Surrogate Rho
+--------------------
+
+Surrogates created with ``LinearSurrogateDefinition`` receive a rho derived
+from their ordinary source nonants after the configured rho setter and after
+every dynamic rho update. See :ref:`surrogate_nonant_list` for the model API
+and formula. Bare variables passed through ``surrogate_nonant_list`` retain
+their normal rho and are not modified by this derived-rho step.
+
 Norm Rho Updater (``--use-norm-rho-updater``)
 ----------------------------------------------
 

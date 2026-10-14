@@ -160,6 +160,13 @@ class ProperBundler():
 
             # Get an arbitrary scenario.
             scen = bundle.component(snames[0])
+            from mpisppy.utils.linear_surrogate import remap_linear_surrogate_data
+            source_root = next(
+                node for node in scen._mpisppy_node_list
+                if node.name == "ROOT"
+            )
+            bundle._mpisppy_node_list[0].linear_surrogate_data = \
+                remap_linear_surrogate_data(source_root, bundle.ref_vars)
             if len(scen._mpisppy_node_list) > 1 and self.bunBFs is None:
                 raise RuntimeError("You are creating proper bundles for a\n"
                       "multi-stage problem, but without cfg.branching_factors.\n"

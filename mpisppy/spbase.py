@@ -18,7 +18,7 @@ import pyomo.environ as pyo
 from mpisppy.utils import nice_join, sputils
 from mpisppy import global_toc
 
-from pyomo.common.collections import ComponentSet
+from pyomo.common.collections import ComponentMap, ComponentSet
 from mpisppy import MPI
 
 logger = logging.getLogger("SPBase")
@@ -123,6 +123,7 @@ class SPBase:
         self._attach_nonant_indices()
         self._attach_varid_to_nonant_index()
         self._create_communicators()
+        self._verify_linear_surrogates()
         self._verify_nonant_lengths()
         if not self.options.get("turn_off_names_check", False):
             self._verify_nonant_names()
@@ -205,6 +206,63 @@ class SPBase:
             if val != int(max_val[0]):
                 raise RuntimeError(f"Tree node {ndn} has scenarios with different numbers of non-anticipative "
                         f"variables: {val} vs. max {max_val[0]}")
+
+    def _verify_linear_surrogates(self):
+        """Check node ownership and definitions across all scenarios."""
+        local_signatures = {}
+        for sname, scenario in self.local_scenarios.items():
+            owners = ComponentMap()
+            for node in scenario._mpisppy_node_list:
+                for var in node.nonant_vardata_list:
+                    if var in node.surrogate_vardatas:
+                        continue
+                    if var not in owners:
+                        owners[var] = []
+                    owners[var].append(node.name)
+
+            for node in scenario._mpisppy_node_list:
+                for data in node.linear_surrogate_data:
+                    for source in data.sources:
+                        source_owners = owners[source]
+                        if source_owners != [node.name]:
+                            raise RuntimeError(
+                                f"Scenario {sname}: source nonant "
+                                f"'{source.name}' for linear surrogate "
+                                f"'{data.name}' must belong only to node "
+                                f"'{node.name}', but belongs to "
+                                f"{source_owners}."
+                            )
+
+                signatures = tuple(
+                    data.signature for data in node.linear_surrogate_data
+                )
+                if node.name not in local_signatures:
+                    local_signatures[node.name] = (signatures, sname)
+                elif signatures != local_signatures[node.name][0]:
+                    ref_scenario = local_signatures[node.name][1]
+                    raise RuntimeError(
+                        f"Linear surrogate definitions on node '{node.name}' "
+                        f"differ between scenarios '{ref_scenario}' and "
+                        f"'{sname}'."
+                    )
+
+        for node_name, (signatures, _) in local_signatures.items():
+            signature_bytes = repr(signatures).encode()
+            digest = hashlib.sha256(signature_bytes).digest()[:4]
+            local_hash = np.frombuffer(digest, dtype=np.int32).copy()
+            max_hash = np.zeros(1, dtype=np.int32)
+            min_hash = np.zeros(1, dtype=np.int32)
+            self.comms[node_name].Allreduce(
+                [local_hash, MPI.INT], [max_hash, MPI.INT], op=MPI.MAX
+            )
+            self.comms[node_name].Allreduce(
+                [local_hash, MPI.INT], [min_hash, MPI.INT], op=MPI.MIN
+            )
+            if max_hash[0] != min_hash[0]:
+                raise RuntimeError(
+                    f"Linear surrogate definitions on node '{node_name}' "
+                    "do not match across ranks."
+                )
 
     def _verify_nonant_names(self):
         """Verify that nonant variable names match across scenarios.
@@ -341,14 +399,22 @@ class SPBase:
         for (sname, scenario) in self.local_scenarios.items():
             _nonant_indices = dict()
             _all_surrogate_nonants = ComponentSet()
+            _linear_surrogate_data = []
+            _initial_fixed_nonants = ComponentSet()
             nlens = scenario._mpisppy_data.nlens        
             for node in scenario._mpisppy_node_list:
                 ndn = node.name
                 for i in range(nlens[ndn]):
                     _nonant_indices[ndn,i] = node.nonant_vardata_list[i]
                 _all_surrogate_nonants.update(node.surrogate_vardatas)
+                _linear_surrogate_data.extend(node.linear_surrogate_data)
+                _initial_fixed_nonants.update(
+                    node.initially_fixed_nonant_vardatas
+                )
             scenario._mpisppy_data.nonant_indices = _nonant_indices
             scenario._mpisppy_data.all_surrogate_nonants = _all_surrogate_nonants
+            scenario._mpisppy_data.linear_surrogate_data = _linear_surrogate_data
+            scenario._mpisppy_data.initial_fixed_nonants = _initial_fixed_nonants
         self.nonant_length = len(_nonant_indices)
         # sanity check the nonant length
         for s in self.local_scenarios.values():

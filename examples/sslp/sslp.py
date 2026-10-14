@@ -13,6 +13,7 @@
 import os
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.extensions.fixer as fixer
+from mpisppy.utils.linear_surrogate import LinearSurrogateDefinition
 
 import model.ReferenceModel as ref
 
@@ -29,20 +30,21 @@ def scenario_creator(scenario_name, data_dir=None, surrogate=False, cfg=None):
     model = ref.model.create_instance(fname, name=scenario_name)
 
     if surrogate:
-        model.total_facilities = ref.Var(within=ref.NonNegativeIntegers, bounds=(0, model.NumServers))
-
-        @model.Constraint()
-        def total_facilities_constr(m):
-            return (0, sum(m.FacilityOpen.values()) - m.total_facilities)
-
-        surrogate_nonant_list = [model.total_facilities,]
+        linear_surrogate_definitions = [
+            LinearSurrogateDefinition(
+                name="total_facilities",
+                expression=sum(model.FacilityOpen.values()),
+            )
+        ]
     else:
-        surrogate_nonant_list = []
+        linear_surrogate_definitions = []
 
     # now attach the one and only tree node (ROOT is a reserved word)
     model._mpisppy_node_list = [
         scenario_tree.ScenarioNode(
-            "ROOT", 1.0, 1, model.FirstStageCost, [model.FacilityOpen], model, surrogate_nonant_list=surrogate_nonant_list
+            "ROOT", 1.0, 1, model.FirstStageCost,
+            [model.FacilityOpen], model,
+            linear_surrogate_definitions=linear_surrogate_definitions,
         )
     ]
     model._mpisppy_probability = "uniform"

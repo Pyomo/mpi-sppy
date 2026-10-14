@@ -1311,9 +1311,9 @@ class SPOpt(SPBase):
     def _create_fixed_nonant_cache(self):
         self._initial_fixed_varibles = ComponentSet()
         for s in self.local_scenarios.values():
-            for v in s._mpisppy_data.nonant_indices.values():
-                if v.fixed:
-                    self._initial_fixed_varibles.add(v)
+            self._initial_fixed_varibles.update(
+                s._mpisppy_data.initial_fixed_nonants
+            )
 
     def _restore_fixed_nonant_baseline(self, names_by_scenario):
         """Rebuild `_initial_fixed_varibles` from checkpointed variable names.
