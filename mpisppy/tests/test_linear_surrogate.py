@@ -91,6 +91,39 @@ def test_lagranger_rederives_around_weight_update(monkeypatch):
     ]
 
 
+def test_lagranger_applies_iteration_zero_rescale(monkeypatch):
+    import mpisppy.cylinders.lagranger_bounder as lagranger_bounder
+
+    calls = []
+    opt = SimpleNamespace(
+        extensions=None,
+        current_solver_options={"stale": True},
+    )
+    monkeypatch.setattr(
+        lagranger_bounder,
+        "set_derived_surrogate_rhos",
+        lambda seen_opt: calls.append("derive"),
+    )
+    spoke = SimpleNamespace(
+        opt=opt,
+        rho_rescale_factors={0: 0.5, 1: 0.1},
+        lagrangian_prep=lambda: calls.append("prep"),
+        _jensens_enabled=lambda: False,
+        _rescale_rho=lambda factor: calls.append(("rescale", factor)),
+        _lagrangian=lambda iteration: calls.append(("solve", iteration)),
+        got_kill_signal=lambda: True,
+    )
+
+    lagranger_bounder.LagrangerOuterBound.main(spoke)
+
+    assert calls == [
+        "prep",
+        ("rescale", 0.5),
+        "derive",
+        ("solve", 0),
+    ]
+
+
 def _model():
     model = pyo.ConcreteModel(name="scenario")
     model.x = pyo.Var([1, 2], initialize={1: 2, 2: 3})

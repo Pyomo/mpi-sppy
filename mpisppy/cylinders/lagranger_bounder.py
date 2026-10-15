@@ -110,6 +110,11 @@ class LagrangerOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinders
         # otherwise track it, so we flip it manually across the
         # iter0→iterk boundary.
         self.opt._PHIter = 0
+        if self.rho_rescale_factors is not None\
+           and 0 in self.rho_rescale_factors:
+            self._rescale_rho(self.rho_rescale_factors[0])
+        # pre_iter0 and the optional rescale may both change source rhos.
+        set_derived_surrogate_rhos(self.opt)
         self.trivial_bound = self._lagrangian(0)
         if extensions:
             self.opt.extobject.post_iter0()
