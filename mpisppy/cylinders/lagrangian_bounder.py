@@ -29,7 +29,6 @@ class _LagrangianMixin:
         # Iter0 (which is where the PH hub attaches it).
         self.opt.PH_Prep(attach_prox=False, defer_attach=False)
         self.opt._reenable_W()
-        set_derived_surrogate_rhos(self.opt)
         self.opt._create_solvers()
 
     def lagrangian(self, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):

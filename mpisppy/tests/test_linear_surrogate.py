@@ -26,7 +26,7 @@ from mpisppy.utils.linear_surrogate import (
 )
 
 
-def test_lagrangian_prep_derives_rho_before_solver_creation(monkeypatch):
+def test_lagrangian_prep_allows_unset_source_rhos(monkeypatch):
     import mpisppy.cylinders.lagrangian_bounder as lagrangian_bounder
 
     calls = []
@@ -38,7 +38,7 @@ def test_lagrangian_prep_derives_rho_before_solver_creation(monkeypatch):
     monkeypatch.setattr(
         lagrangian_bounder,
         "set_derived_surrogate_rhos",
-        lambda seen_opt: calls.append(("derive", seen_opt)),
+        lambda seen_opt: pytest.fail("rho was derived before initialization"),
     )
     spoke = SimpleNamespace(opt=opt)
 
@@ -47,7 +47,6 @@ def test_lagrangian_prep_derives_rho_before_solver_creation(monkeypatch):
     assert calls == [
         ("prep", {"attach_prox": False, "defer_attach": False}),
         "enable W",
-        ("derive", opt),
         "solvers",
     ]
 
@@ -130,7 +129,7 @@ def test_lagranger_applies_iteration_zero_rescale(monkeypatch):
     monkeypatch.setattr(
         lagranger_bounder,
         "set_derived_surrogate_rhos",
-        lambda seen_opt: calls.append("derive"),
+        lambda seen_opt: pytest.fail("rho was derived before post_iter0"),
     )
     spoke = SimpleNamespace(
         opt=opt,
@@ -147,8 +146,74 @@ def test_lagranger_applies_iteration_zero_rescale(monkeypatch):
     assert calls == [
         "prep",
         ("rescale", 0.5),
-        "derive",
         ("solve", 0),
+    ]
+
+
+def test_lagranger_waits_for_post_iter0_rho_initialization(monkeypatch):
+    import mpisppy.cylinders.lagranger_bounder as lagranger_bounder
+
+    calls = []
+    opt = SimpleNamespace(
+        extensions=object(),
+        rho_ready=False,
+        options={"verbose": False},
+        current_solver_options={},
+        Compute_Xbar=lambda **kw: calls.append("xbar"),
+        Update_W=lambda **kw: calls.append("update W"),
+    )
+
+    def post_iter0():
+        calls.append("post_iter0 initializes rho")
+        opt.rho_ready = True
+
+    opt.extobject = SimpleNamespace(
+        pre_iter0=lambda: calls.append("pre_iter0"),
+        post_iter0=post_iter0,
+        post_iter0_after_sync=lambda: None,
+        miditer=lambda: calls.append("miditer"),
+        enditer=lambda: None,
+        enditer_after_sync=lambda: None,
+    )
+
+    def derive(seen_opt):
+        assert seen_opt.rho_ready
+        calls.append("derive")
+
+    monkeypatch.setattr(
+        lagranger_bounder, "set_derived_surrogate_rhos", derive
+    )
+    kill_signals = iter((False, True))
+    spoke = SimpleNamespace(
+        opt=opt,
+        rho_rescale_factors=None,
+        localnonants=np.asarray([np.nan]),
+        lagrangian_prep=lambda: calls.append("prep"),
+        _jensens_enabled=lambda: False,
+        _lagrangian=lambda iteration: calls.append(("solve", iteration)),
+        _write_W_and_xbar=lambda iteration: None,
+        got_kill_signal=lambda: next(kill_signals),
+    )
+    spoke._update_weights_and_solve = lambda iteration: (
+        lagranger_bounder.LagrangerOuterBound._update_weights_and_solve(
+            spoke, iteration
+        )
+    )
+
+    lagranger_bounder.LagrangerOuterBound.main(spoke)
+
+    assert calls.index("post_iter0 initializes rho") < calls.index("derive")
+    assert calls == [
+        "prep",
+        "pre_iter0",
+        ("solve", 0),
+        "post_iter0 initializes rho",
+        "xbar",
+        "derive",
+        "update W",
+        "miditer",
+        "derive",
+        ("solve", 1),
     ]
 
 
