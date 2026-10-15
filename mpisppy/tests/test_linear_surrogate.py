@@ -489,6 +489,35 @@ def test_derived_rho_uses_median_and_squared_coefficients():
     assert pyo.value(model._mpisppy_model.rho["ROOT", 2]) == pytest.approx(6)
 
 
+def test_grad_rho_average_ignores_unset_derived_target(monkeypatch):
+    import mpisppy.extensions.grad_rho as grad_rho_module
+
+    source_index = ("ROOT", 0)
+    target_index = ("ROOT", 1)
+    scenario = SimpleNamespace(
+        _mpisppy_data=SimpleNamespace(
+            nonant_indices={source_index: object(), target_index: object()},
+            linear_surrogate_target_indices=frozenset({target_index}),
+        ),
+        _mpisppy_model=SimpleNamespace(rho={
+            source_index: SimpleNamespace(_value=8.0),
+            target_index: SimpleNamespace(_value=None),
+        }),
+    )
+    grad = object.__new__(grad_rho_module.GradRho)
+    grad.opt = SimpleNamespace(local_scenarios={"s": scenario})
+    grad._compute_and_update_rho = lambda: None
+    messages = []
+    monkeypatch.setattr(
+        grad_rho_module, "global_toc",
+        lambda message: messages.append(message),
+    )
+
+    grad.compute_and_update_rho()
+
+    assert messages == ["Rho values recomputed - average rank 0 rho=8.0"]
+
+
 @pytest.mark.skipif(
     not pyo.SolverFactory("highs").available(False), reason="HiGHS unavailable"
 )
