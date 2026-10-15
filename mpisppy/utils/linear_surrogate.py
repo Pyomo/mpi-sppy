@@ -64,6 +64,9 @@ class _LinearSurrogateData:
     coefficients: tuple
     rho_multiplier: float
     signature: tuple
+    target_index: tuple = None
+    source_indices: tuple = ()
+    inverse_coefficient_squares: object = None
 
 
 def _ensure_container(model):
@@ -178,6 +181,9 @@ def build_linear_surrogates(node, model, definitions):
             coefficients=coefficients,
             rho_multiplier=definition.rho_multiplier,
             signature=signature,
+            inverse_coefficient_squares=np.reciprocal(
+                np.square(np.asarray(coefficients, dtype="d"))
+            ),
         ))
 
     return answer
@@ -195,24 +201,38 @@ def set_derived_surrogate_rhos(ph):
         )
         if not data_items:
             continue
-        nonant_map = ComponentMap(
-            (var, ndn_i)
-            for ndn_i, var in scenario._mpisppy_data.nonant_indices.items()
-        )
         for data in data_items:
-            target_index = nonant_map[data.target]
-            scaled_source_rhos = [
-                pyo.value(scenario._mpisppy_model.rho[nonant_map[source]])
-                / coef**2
-                for source, coef in zip(data.sources, data.coefficients)
-            ]
-            rho = data.rho_multiplier * float(np.median(scaled_source_rhos))
+            source_rhos = np.fromiter(
+                (
+                    scenario._mpisppy_model.rho[index]._value
+                    for index in data.source_indices
+                ),
+                dtype="d",
+                count=len(data.source_indices),
+            )
+            rho = data.rho_multiplier * float(np.median(
+                source_rhos * data.inverse_coefficient_squares
+            ))
             if not math.isfinite(rho) or rho <= 0:
                 raise ValueError(
                     f"Derived rho for linear surrogate '{data.name}' on "
                     f"scenario '{scenario.name}' is not positive and finite: {rho}."
                 )
-            scenario._mpisppy_model.rho[target_index] = rho
+            scenario._mpisppy_model.rho[data.target_index] = rho
+
+
+def prepare_linear_surrogate_data(scenario):
+    """Resolve vardata references to nonant indices once at setup."""
+    data_items = getattr(scenario._mpisppy_data, "linear_surrogate_data", ())
+    if not data_items:
+        return
+    nonant_map = ComponentMap(
+        (var, ndn_i)
+        for ndn_i, var in scenario._mpisppy_data.nonant_indices.items()
+    )
+    for data in data_items:
+        data.target_index = nonant_map[data.target]
+        data.source_indices = tuple(nonant_map[source] for source in data.sources)
 
 
 def remap_linear_surrogate_data(source_node, ref_vars):
@@ -237,5 +257,6 @@ def remap_linear_surrogate_data(source_node, ref_vars):
             coefficients=data.coefficients,
             rho_multiplier=data.rho_multiplier,
             signature=data.signature,
+            inverse_coefficient_squares=data.inverse_coefficient_squares.copy(),
         ))
     return answer

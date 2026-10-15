@@ -16,6 +16,7 @@ import weakref
 import numpy as np
 import pyomo.environ as pyo
 from mpisppy.utils import nice_join, sputils
+from mpisppy.utils.linear_surrogate import prepare_linear_surrogate_data
 from mpisppy import global_toc
 
 from pyomo.common.collections import ComponentMap, ComponentSet
@@ -415,6 +416,7 @@ class SPBase:
             scenario._mpisppy_data.all_surrogate_nonants = _all_surrogate_nonants
             scenario._mpisppy_data.linear_surrogate_data = _linear_surrogate_data
             scenario._mpisppy_data.initial_fixed_nonants = _initial_fixed_nonants
+            prepare_linear_surrogate_data(scenario)
         self.nonant_length = len(_nonant_indices)
         # sanity check the nonant length
         for s in self.local_scenarios.values():

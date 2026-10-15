@@ -17,6 +17,7 @@ from mpisppy.scenario_tree import ScenarioNode
 from mpisppy.opt.ph import PH
 from mpisppy.utils.linear_surrogate import (
     LinearSurrogateDefinition,
+    prepare_linear_surrogate_data,
     set_derived_surrogate_rhos,
 )
 
@@ -129,6 +130,7 @@ def test_derived_rho_uses_median_and_squared_coefficients():
             ("ROOT", 2): 999,
         },
     )
+    prepare_linear_surrogate_data(model)
     ph = SimpleNamespace(local_scenarios={"s": model})
 
     set_derived_surrogate_rhos(ph)
