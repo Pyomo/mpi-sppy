@@ -44,7 +44,7 @@ def test_builds_auxiliary_var_constraint_and_metadata():
     model = _model()
     node = _node(model, model.x[1] + 2 * model.x[2])
 
-    target = model._mpisppy_linear_surrogates.total.value
+    target = model._mpisppy_model.linear_surrogate_vars["ROOT", "total"]
     assert node.nonant_vardata_list[-1] is target
     assert target in node.surrogate_vardatas
     assert len(node.linear_surrogate_data) == 1
@@ -54,7 +54,7 @@ def test_builds_auxiliary_var_constraint_and_metadata():
 
     target.set_value(8)
     assert pyo.value(
-        model._mpisppy_linear_surrogates.total.definition.body
+        model._mpisppy_model.linear_surrogate_constraints["ROOT", "total"].body
     ) == pytest.approx(0)
 
 
@@ -71,7 +71,7 @@ def test_modeler_fixed_source_is_folded_only_for_rho():
     target = data.target
     target.set_value(18)
     assert pyo.value(
-        model._mpisppy_linear_surrogates.total.definition.body
+        model._mpisppy_model.linear_surrogate_constraints["ROOT", "total"].body
     ) == pytest.approx(0)
 
 

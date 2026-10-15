@@ -44,10 +44,9 @@ class LinearSurrogateDefinition:
     rho_multiplier: float = 1.0
 
     def __post_init__(self):
-        if not isinstance(self.name, str) or not self.name or "." in self.name:
+        if not isinstance(self.name, str) or not self.name:
             raise ValueError(
-                "LinearSurrogateDefinition.name must be a nonempty local "
-                "Pyomo component name (and may not contain '.')."
+                "LinearSurrogateDefinition.name must be a nonempty string."
             )
         if not math.isfinite(self.rho_multiplier) or self.rho_multiplier <= 0:
             raise ValueError("Linear surrogate rho_multiplier must be positive and finite.")
@@ -69,17 +68,28 @@ class _LinearSurrogateData:
     inverse_coefficient_squares: object = None
 
 
-def _ensure_container(model):
-    name = "_mpisppy_linear_surrogates"
-    block = model.component(name)
-    if block is None:
-        model.add_component(name, pyo.Block(concrete=True))
-        block = model.component(name)
-    elif not isinstance(block, pyo.Block):
-        raise ValueError(
-            f"Model component '{name}' already exists and is not a Pyomo Block."
+def _ensure_mpisppy_components(model):
+    if not hasattr(model, "_mpisppy_model"):
+        model._mpisppy_model = pyo.Block(
+            name="For mpi-sppy Pyomo additions to the scenario model"
         )
-    return block
+    block = model._mpisppy_model
+    if not isinstance(block, pyo.Block):
+        raise ValueError(
+            "A model using LinearSurrogateDefinition must have a Pyomo Block "
+            "at _mpisppy_model."
+        )
+    if not hasattr(block, "linear_surrogate_vars"):
+        block.linear_surrogate_vars = pyo.Var(
+            pyo.Any, domain=pyo.Reals, dense=False
+        )
+        block.linear_surrogate_constraints = pyo.Constraint(
+            pyo.Any
+        )
+    return (
+        block.linear_surrogate_vars,
+        block.linear_surrogate_constraints,
+    )
 
 
 def build_linear_surrogates(node, model, definitions):
@@ -93,7 +103,7 @@ def build_linear_surrogates(node, model, definitions):
     if definitions is None:
         return []
 
-    container = _ensure_container(model)
+    surrogate_vars, surrogate_constraints = _ensure_mpisppy_components(model)
     answer = []
 
     for definition in definitions:
@@ -102,7 +112,8 @@ def build_linear_surrogates(node, model, definitions):
                 "linear_surrogate_definitions entries must be "
                 "LinearSurrogateDefinition objects."
             )
-        if container.component(definition.name) is not None:
+        key = (node.name, definition.name)
+        if key in surrogate_vars:
             raise ValueError(
                 f"Duplicate linear surrogate name '{definition.name}' on node "
                 f"'{node.name}'."
@@ -155,14 +166,8 @@ def build_linear_surrogates(node, model, definitions):
                 "source coefficient."
             )
 
-        subblock = pyo.Block(concrete=True)
-        container.add_component(definition.name, subblock)
-        subblock.value = pyo.Var(domain=pyo.Reals)
-        subblock.definition = pyo.Constraint(
-            expr=subblock.value == definition.expression
-        )
-
-        target = subblock.value
+        target = surrogate_vars[key]
+        surrogate_constraints[key] = target == definition.expression
         node.nonant_vardata_list.append(target)
         node.surrogate_vardatas.add(target)
 
