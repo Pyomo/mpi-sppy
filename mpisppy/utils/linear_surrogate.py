@@ -211,7 +211,7 @@ def finalize_linear_surrogates(scenario):
                     if var in coefficient_by_source
                 ),
                 constant,
-                data.rho_multiplier,
+                float(data.rho_multiplier),
             )
             data.inverse_coefficient_squares = np.reciprocal(
                 np.square(np.asarray(coefficients, dtype="d"))
