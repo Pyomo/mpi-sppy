@@ -107,6 +107,9 @@ run_phase "test_options_reach_solver (serial; gurobi-only)" \
 run_phase "test_nonant_validation (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_nonant_validation.py -v
 
+run_phase "test_linear_surrogate (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_linear_surrogate.py -v
+
 run_phase "test_rho_enforcement (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_rho_enforcement.py -v
 
