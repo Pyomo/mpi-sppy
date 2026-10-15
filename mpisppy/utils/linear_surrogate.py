@@ -59,13 +59,15 @@ class _LinearSurrogateData:
     name: str
     node_name: str
     target: object
-    sources: tuple
-    coefficients: tuple
+    expression: object
     rho_multiplier: float
-    signature: tuple
+    sources: tuple = ()
+    coefficients: tuple = ()
+    signature: tuple = None
     target_index: tuple = None
     source_indices: tuple = ()
     inverse_coefficient_squares: object = None
+    finalized: bool = False
 
 
 def _ensure_mpisppy_components(model):
@@ -93,13 +95,8 @@ def _ensure_mpisppy_components(model):
 
 
 def build_linear_surrogates(node, model, definitions):
-    """Validate and build the definitions attached to one ScenarioNode."""
-    ordinary_nonants = ComponentSet(
-        var for var in node.nonant_vardata_list
-        if var not in node.surrogate_vardatas
-    )
-    initially_fixed = ComponentSet(v for v in ordinary_nonants if v.fixed)
-    node.initially_fixed_nonant_vardatas = initially_fixed
+    """Build targets now; normalize expressions after scenario creation."""
+    node.initially_fixed_nonant_vardatas = ComponentSet()
     if definitions is None:
         return []
 
@@ -119,81 +116,106 @@ def build_linear_surrogates(node, model, definitions):
                 f"'{node.name}'."
             )
 
-        mutable_params = list(identify_mutable_parameters(definition.expression))
-        if mutable_params:
-            names = ", ".join(param.name for param in mutable_params)
-            raise ValueError(
-                f"Linear surrogate '{definition.name}' contains mutable "
-                f"parameter(s): {names}. Coefficients and constants must not "
-                "change after scenario ingestion."
-            )
-
-        expression_vars = list(identify_variables(
-            definition.expression, include_fixed=True
-        ))
-        if not expression_vars:
-            raise ValueError(
-                f"Linear surrogate '{definition.name}' contains no variables."
-            )
-        outside = [var.name for var in expression_vars if var not in ordinary_nonants]
-        if outside:
-            raise ValueError(
-                f"Every variable in linear surrogate '{definition.name}' must "
-                f"be an ordinary nonant on node '{node.name}'. Invalid "
-                f"variable(s): {', '.join(outside)}."
-            )
-
-        # With modeler-fixed variables folded, the remaining expression must
-        # be affine. This is deliberately done now, before mpi-sppy can fix
-        # variables algorithmically.
-        repn = generate_standard_repn(definition.expression, compute_values=True)
-        if not repn.is_linear():
-            raise ValueError(
-                f"Linear surrogate '{definition.name}' is not linear after "
-                "modeler-fixed variables are folded."
-            )
-
-        sources = tuple(repn.linear_vars or ())
-        coefficients = tuple(float(pyo.value(c)) for c in (repn.linear_coefs or ()))
-        if not sources:
-            raise ValueError(
-                f"Linear surrogate '{definition.name}' has no unfixed source "
-                "variables after modeler-fixed variables are folded."
-            )
-        if any(not math.isfinite(c) or c == 0 for c in coefficients):
-            raise ValueError(
-                f"Linear surrogate '{definition.name}' has a zero or non-finite "
-                "source coefficient."
-            )
-
         target = surrogate_vars[key]
         surrogate_constraints[key] = target == definition.expression
         node.nonant_vardata_list.append(target)
         node.surrogate_vardatas.add(target)
 
-        constant = float(pyo.value(repn.constant)) if repn.constant is not None else 0.0
-        signature = (
-            definition.name,
-            tuple(sorted(
-                (var.name, coef) for var, coef in zip(sources, coefficients)
-            )),
-            constant,
-            definition.rho_multiplier,
-        )
         answer.append(_LinearSurrogateData(
             name=definition.name,
             node_name=node.name,
             target=target,
-            sources=sources,
-            coefficients=coefficients,
+            expression=definition.expression,
             rho_multiplier=definition.rho_multiplier,
-            signature=signature,
-            inverse_coefficient_squares=np.reciprocal(
-                np.square(np.asarray(coefficients, dtype="d"))
-            ),
         ))
 
     return answer
+
+
+def finalize_linear_surrogates(scenario):
+    """Normalize definitions once the scenario creator has returned."""
+    for node in scenario._mpisppy_node_list:
+        if getattr(node, "_linear_surrogates_finalized", False):
+            continue
+        ordinary_nonants = ComponentSet(
+            var for var in node.nonant_vardata_list
+            if var not in node.surrogate_vardatas
+        )
+        node.initially_fixed_nonant_vardatas = ComponentSet(
+            var for var in ordinary_nonants if var.fixed
+        )
+
+        for data in node.linear_surrogate_data:
+            if data.finalized:
+                continue
+            mutable_params = list(identify_mutable_parameters(data.expression))
+            if mutable_params:
+                names = ", ".join(param.name for param in mutable_params)
+                raise ValueError(
+                    f"Linear surrogate '{data.name}' contains mutable "
+                    f"parameter(s): {names}. Coefficients and constants must "
+                    "not change after scenario ingestion."
+                )
+
+            expression_vars = list(identify_variables(
+                data.expression, include_fixed=True
+            ))
+            if not expression_vars:
+                raise ValueError(
+                    f"Linear surrogate '{data.name}' contains no variables."
+                )
+            outside = [
+                var.name for var in expression_vars
+                if var not in ordinary_nonants
+            ]
+            if outside:
+                raise ValueError(
+                    f"Every variable in linear surrogate '{data.name}' must "
+                    f"be an ordinary nonant on node '{node.name}'. Invalid "
+                    f"variable(s): {', '.join(outside)}."
+                )
+
+            repn = generate_standard_repn(data.expression, compute_values=True)
+            if not repn.is_linear():
+                raise ValueError(
+                    f"Linear surrogate '{data.name}' is not linear after "
+                    "modeler-fixed variables are folded."
+                )
+            sources = tuple(repn.linear_vars or ())
+            coefficients = tuple(
+                float(pyo.value(c)) for c in (repn.linear_coefs or ())
+            )
+            if not sources:
+                raise ValueError(
+                    f"Linear surrogate '{data.name}' has no unfixed source "
+                    "variables after modeler-fixed variables are folded."
+                )
+            if any(not math.isfinite(c) or c == 0 for c in coefficients):
+                raise ValueError(
+                    f"Linear surrogate '{data.name}' has a zero or non-finite "
+                    "source coefficient."
+                )
+
+            constant = (
+                float(pyo.value(repn.constant))
+                if repn.constant is not None else 0.0
+            )
+            data.sources = sources
+            data.coefficients = coefficients
+            data.signature = (
+                data.name,
+                tuple(sorted(
+                    (var.name, coef)
+                    for var, coef in zip(sources, coefficients)
+                )),
+                constant,
+                data.rho_multiplier,
+            )
+            data.inverse_coefficient_squares = np.reciprocal(
+                np.square(np.asarray(coefficients, dtype="d"))
+            )
+            data.finalized = True
+        node._linear_surrogates_finalized = True
 
 
 def set_derived_surrogate_rhos(ph):
@@ -264,10 +286,12 @@ def remap_linear_surrogate_data(source_node, ref_vars):
             name=data.name,
             node_name=data.node_name,
             target=target,
+            expression=None,
+            rho_multiplier=data.rho_multiplier,
             sources=sources,
             coefficients=data.coefficients,
-            rho_multiplier=data.rho_multiplier,
             signature=data.signature,
             inverse_coefficient_squares=data.inverse_coefficient_squares.copy(),
+            finalized=True,
         ))
     return answer

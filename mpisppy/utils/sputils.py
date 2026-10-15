@@ -259,6 +259,9 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
         name: scenario_creator(name, **scenario_creator_kwargs)
         for name in scenario_names
     }
+    from mpisppy.utils.linear_surrogate import finalize_linear_surrogates
+    for scenario in scen_dict.values():
+        finalize_linear_surrogates(scenario)
 
     if (len(scen_dict) == 0):
         raise RuntimeError("create_EF() received empty scenario list")
@@ -370,6 +373,10 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
             sum to 1 (as a full EF does) and is therefore NOT supported for
             bundles, whose member probabilities sum to less than 1.
     """
+    from mpisppy.utils.linear_surrogate import finalize_linear_surrogates
+    for scenario in scen_dict.values():
+        finalize_linear_surrogates(scenario)
+
     is_min, clear = _models_have_same_sense(scen_dict)
     if (not clear):
         raise RuntimeError('Cannot build the extensive form out of models '

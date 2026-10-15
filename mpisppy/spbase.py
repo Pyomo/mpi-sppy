@@ -16,7 +16,10 @@ import weakref
 import numpy as np
 import pyomo.environ as pyo
 from mpisppy.utils import nice_join, sputils
-from mpisppy.utils.linear_surrogate import prepare_linear_surrogate_data
+from mpisppy.utils.linear_surrogate import (
+    finalize_linear_surrogates,
+    prepare_linear_surrogate_data,
+)
 from mpisppy import global_toc
 
 from pyomo.common.collections import ComponentMap, ComponentSet
@@ -118,6 +121,8 @@ class SPBase:
             )
         self.bundling = False
         self._create_scenarios(scenario_creator_kwargs)
+        for scenario in self.local_scenarios.values():
+            finalize_linear_surrogates(scenario)
         self._look_and_leap()
         self._compute_unconditional_node_probabilities()
         self._attach_nlens()

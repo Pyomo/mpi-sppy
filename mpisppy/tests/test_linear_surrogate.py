@@ -20,6 +20,7 @@ from mpisppy.spopt import SPOpt
 from mpisppy.utils.rho_utils import assign_rho_with_fallback
 from mpisppy.utils.linear_surrogate import (
     LinearSurrogateDefinition,
+    finalize_linear_surrogates,
     prepare_linear_surrogate_data,
     set_derived_surrogate_rhos,
 )
@@ -163,10 +164,13 @@ def _node(model, expression, **definition_kwargs):
     definition = LinearSurrogateDefinition(
         "total", expression, **definition_kwargs
     )
-    return ScenarioNode(
+    node = ScenarioNode(
         "ROOT", 1.0, 1, model.obj, [model.x], model,
         linear_surrogate_definitions=[definition],
     )
+    model._mpisppy_node_list = [node]
+    finalize_linear_surrogates(model)
+    return node
 
 
 def test_optimizer_fixed_baseline_uses_all_current_nonants():
@@ -245,6 +249,62 @@ def test_modeler_fixed_source_is_folded_only_for_rho():
     ) == pytest.approx(0)
 
 
+def test_source_fixed_after_node_construction_is_folded_at_ingestion():
+    model = _model()
+    definition = LinearSurrogateDefinition(
+        "total", model.x[1] + 3 * model.x[2]
+    )
+    node = ScenarioNode(
+        "ROOT", 1.0, 1, model.obj, [model.x], model,
+        linear_surrogate_definitions=[definition],
+    )
+    model.x[1].fix(2)
+    model._mpisppy_node_list = [node]
+
+    finalize_linear_surrogates(model)
+
+    data = node.linear_surrogate_data[0]
+    assert data.sources == (model.x[2],)
+    assert data.coefficients == (3.0,)
+    assert model.x[1] in node.initially_fixed_nonant_vardatas
+
+
+def test_all_sources_fixed_after_node_construction_is_rejected():
+    model = _model()
+    definition = LinearSurrogateDefinition(
+        "total", model.x[1] + model.x[2]
+    )
+    node = ScenarioNode(
+        "ROOT", 1.0, 1, model.obj, [model.x], model,
+        linear_surrogate_definitions=[definition],
+    )
+    model.x.fix(2)
+    model._mpisppy_node_list = [node]
+
+    with pytest.raises(ValueError, match="no unfixed source variables"):
+        finalize_linear_surrogates(model)
+
+
+def test_finalization_does_not_absorb_later_mpisppy_fixing():
+    model = _model()
+    definition = LinearSurrogateDefinition(
+        "total", model.x[1] + 2 * model.x[2]
+    )
+    node = ScenarioNode(
+        "ROOT", 1.0, 1, model.obj, [model.x], model,
+        linear_surrogate_definitions=[definition],
+    )
+    model._mpisppy_node_list = [node]
+    finalize_linear_surrogates(model)
+
+    model.x[1].fix(2)
+    finalize_linear_surrogates(model)
+
+    data = node.linear_surrogate_data[0]
+    assert data.sources == (model.x[1], model.x[2])
+    assert model.x[1] not in node.initially_fixed_nonant_vardatas
+
+
 def test_rejects_variable_outside_the_node():
     model = _model()
     with pytest.raises(ValueError, match="ordinary nonant on node 'ROOT'.*y"):
@@ -267,12 +327,14 @@ def test_rejects_mutable_parameter():
 def test_rejects_legacy_surrogate_as_source():
     model = _model()
     definition = LinearSurrogateDefinition("total", model.x[1] + model.y)
+    node = ScenarioNode(
+        "ROOT", 1.0, 1, model.obj, [model.x], model,
+        surrogate_nonant_list=[model.y],
+        linear_surrogate_definitions=[definition],
+    )
+    model._mpisppy_node_list = [node]
     with pytest.raises(ValueError, match="Invalid variable.*y"):
-        ScenarioNode(
-            "ROOT", 1.0, 1, model.obj, [model.x], model,
-            surrogate_nonant_list=[model.y],
-            linear_surrogate_definitions=[definition],
-        )
+        finalize_linear_surrogates(model)
 
 
 def test_derived_rho_uses_median_and_squared_coefficients():
