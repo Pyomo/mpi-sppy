@@ -131,6 +131,19 @@ The existing ``surrogate_nonant_list`` remains supported for nonlinear,
 user-owned, or otherwise custom surrogate variables. Such variables retain
 the existing rho policy and do not use derived rho.
 
+.. warning::
+
+   A linear surrogate introduces a redundant multiplier. For
+   :math:`z=Ax+b`, the effective multiplier in the original variable space is
+   :math:`W_x+A^T W_z`, while PH stores and updates :math:`W_x` and
+   :math:`W_z` separately. Consequently, mpi-sppy features that inspect W or
+   make decisions from W currently operate on this augmented product-space
+   representation. This applies to diagnostics, convergence measures,
+   oscillation detection, rho updates, and multiplier output whenever they
+   use W. Their results may differ from an analysis based on the projected
+   original-space multiplier. Projecting linear-surrogate multipliers back
+   into the original space is not yet implemented.
+
 Multi-stage
 -----------
 

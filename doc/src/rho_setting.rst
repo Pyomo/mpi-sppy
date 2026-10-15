@@ -129,6 +129,12 @@ every dynamic rho update. See :ref:`surrogate_nonant_list` for the model API
 and formula. Bare variables passed through ``surrogate_nonant_list`` retain
 their normal rho and are not modified by this derived-rho step.
 
+Linear surrogates also introduce redundant W components. Any rho strategy
+that examines W currently sees the augmented product-space representation,
+not the effective multiplier projected into the original variable space. See
+the warning under :ref:`surrogate_nonant_list` before combining linear
+surrogates with W-based rho strategies.
+
 Norm Rho Updater (``--use-norm-rho-updater``)
 ----------------------------------------------
 
