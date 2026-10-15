@@ -174,7 +174,9 @@ def build_linear_surrogates(node, model, definitions):
         constant = float(pyo.value(repn.constant)) if repn.constant is not None else 0.0
         signature = (
             definition.name,
-            tuple((var.name, coef) for var, coef in zip(sources, coefficients)),
+            tuple(sorted(
+                (var.name, coef) for var, coef in zip(sources, coefficients)
+            )),
             constant,
             definition.rho_multiplier,
         )

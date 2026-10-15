@@ -16,6 +16,7 @@ import pytest
 
 from mpisppy.scenario_tree import ScenarioNode
 from mpisppy.opt.ph import PH
+from mpisppy.spopt import SPOpt
 from mpisppy.utils.rho_utils import assign_rho_with_fallback
 from mpisppy.utils.linear_surrogate import (
     LinearSurrogateDefinition,
@@ -108,6 +109,34 @@ def _node(model, expression, **definition_kwargs):
     )
 
 
+def test_optimizer_fixed_baseline_uses_all_current_nonants():
+    model = _model()
+    model.y.fix(1)
+    node = ScenarioNode(
+        "ROOT", 1.0, 1, model.obj, [model.x], model,
+        surrogate_nonant_list=[model.y],
+    )
+    # This fixing occurs after ScenarioNode captured the normalization-time
+    # state, but before optimizer construction.
+    model.x[1].fix(2)
+    model._mpisppy_data = SimpleNamespace(
+        nonant_indices={
+            ("ROOT", i): var
+            for i, var in enumerate(node.nonant_vardata_list)
+        },
+    )
+    opt = SimpleNamespace(local_scenarios={"s": model})
+
+    SPOpt._create_fixed_nonant_cache(opt)
+
+    assert model.y in opt._initial_fixed_varibles
+    assert model.x[1] in opt._initial_fixed_varibles
+    assert SPOpt._can_update_best_bound(opt)
+
+    model.x[2].fix(3)
+    assert not SPOpt._can_update_best_bound(opt)
+
+
 def test_builds_auxiliary_var_constraint_and_metadata():
     model = _model()
     node = _node(model, model.x[1] + 2 * model.x[2])
@@ -124,6 +153,19 @@ def test_builds_auxiliary_var_constraint_and_metadata():
     assert pyo.value(
         model._mpisppy_model.linear_surrogate_constraints["ROOT", "total"].body
     ) == pytest.approx(0)
+
+
+def test_signature_ignores_expression_term_order():
+    first = _model()
+    second = _model()
+
+    first_node = _node(first, first.x[1] + 2 * first.x[2])
+    second_node = _node(second, 2 * second.x[2] + second.x[1])
+
+    assert (
+        first_node.linear_surrogate_data[0].signature
+        == second_node.linear_surrogate_data[0].signature
+    )
 
 
 def test_modeler_fixed_source_is_folded_only_for_rho():
