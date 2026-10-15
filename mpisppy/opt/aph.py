@@ -18,6 +18,7 @@ import pyomo.environ as pyo
 import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.phbase as ph_base
 import mpisppy.utils.sputils as sputils
+from mpisppy.utils.linear_surrogate import set_derived_surrogate_rhos
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
@@ -920,6 +921,7 @@ class APH(ph_base.PHBase):
             # slight divergence from PH, where mid-iter is before conv
             if have_extensions:
                 self.extobject.miditer()
+                set_derived_surrogate_rhos(self)
             
             teeme = ("tee-rank0-solves" in self.options) \
                  and (self.options["tee-rank0-solves"]

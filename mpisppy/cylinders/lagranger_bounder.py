@@ -16,6 +16,7 @@ import mpisppy.cylinders.spoke
 import mpisppy.utils.w_utils.wxbarutils
 from mpisppy.cylinders.lagrangian_bounder import _LagrangianMixin
 from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
+from mpisppy.utils.linear_surrogate import set_derived_surrogate_rhos
 
 class LagrangerOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
     """Indepedent Lagrangian that takes x values as input and updates its own W.
@@ -36,10 +37,6 @@ class LagrangerOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinders
         self.opt._save_nonants()
 
     def _lagrangian(self, iternum):
-        # see if rho should be rescaled
-        if self.rho_rescale_factors is not None\
-           and iternum in self.rho_rescale_factors:
-            self._rescale_rho(self.rho_rescale_factors[iternum])
         # Until the first nonants arrive, _update_weights_and_solve computes
         # xbar from the x values left behind by this solve, so we cannot skip
         # loading the solution. Once they have arrived they never go back to
@@ -71,6 +68,11 @@ class LagrangerOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinders
 
     def _update_weights_and_solve(self, iternum):
         extensions = self.opt.extensions is not None
+        # Scheduled rho changes must take effect before this iteration's W
+        # update. Generated surrogate rhos follow their ordinary sources.
+        if self.rho_rescale_factors is not None\
+           and iternum in self.rho_rescale_factors:
+            self._rescale_rho(self.rho_rescale_factors[iternum])
         # Work with the nonants that we have (and we might not have any yet).
         # Only update if the nonants are not nan:
         #   otherwise xbar / w will be undefined!
@@ -79,9 +81,12 @@ class LagrangerOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinders
             self.opt._restore_nonants()
         verbose = self.opt.options["verbose"]
         self.opt.Compute_Xbar(verbose=verbose)
+        # This also picks up rho changes made during post_iter0 or enditer.
+        set_derived_surrogate_rhos(self.opt)
         self.opt.Update_W(verbose=verbose)
         if extensions:
             self.opt.extobject.miditer()
+            set_derived_surrogate_rhos(self.opt)
         ## writes Ws here
         self._write_W_and_xbar(iternum)
         return self._lagrangian(iternum)

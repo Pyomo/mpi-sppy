@@ -9,6 +9,7 @@
 import mpisppy.cylinders.spoke
 import mpisppy.utils.sputils as sputils
 from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
+from mpisppy.utils.linear_surrogate import set_derived_surrogate_rhos
 
 class _LagrangianMixin:
 
@@ -28,6 +29,7 @@ class _LagrangianMixin:
         # Iter0 (which is where the PH hub attaches it).
         self.opt.PH_Prep(attach_prox=False, defer_attach=False)
         self.opt._reenable_W()
+        set_derived_surrogate_rhos(self.opt)
         self.opt._create_solvers()
 
     def lagrangian(self, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):

@@ -10,6 +10,7 @@
 
 from types import SimpleNamespace
 
+import numpy as np
 import pyomo.environ as pyo
 import pytest
 
@@ -21,6 +22,72 @@ from mpisppy.utils.linear_surrogate import (
     prepare_linear_surrogate_data,
     set_derived_surrogate_rhos,
 )
+
+
+def test_lagrangian_prep_derives_rho_before_solver_creation(monkeypatch):
+    import mpisppy.cylinders.lagrangian_bounder as lagrangian_bounder
+
+    calls = []
+    opt = SimpleNamespace(
+        PH_Prep=lambda **kw: calls.append(("prep", kw)),
+        _reenable_W=lambda: calls.append("enable W"),
+        _create_solvers=lambda: calls.append("solvers"),
+    )
+    monkeypatch.setattr(
+        lagrangian_bounder,
+        "set_derived_surrogate_rhos",
+        lambda seen_opt: calls.append(("derive", seen_opt)),
+    )
+    spoke = SimpleNamespace(opt=opt)
+
+    lagrangian_bounder._LagrangianMixin.lagrangian_prep(spoke)
+
+    assert calls == [
+        ("prep", {"attach_prox": False, "defer_attach": False}),
+        "enable W",
+        ("derive", opt),
+        "solvers",
+    ]
+
+
+def test_lagranger_rederives_around_weight_update(monkeypatch):
+    import mpisppy.cylinders.lagranger_bounder as lagranger_bounder
+
+    calls = []
+    extension = SimpleNamespace(miditer=lambda: calls.append("miditer"))
+    opt = SimpleNamespace(
+        extensions=object(),
+        extobject=extension,
+        options={"verbose": False},
+        Compute_Xbar=lambda **kw: calls.append("xbar"),
+        Update_W=lambda **kw: calls.append("update W"),
+    )
+    monkeypatch.setattr(
+        lagranger_bounder,
+        "set_derived_surrogate_rhos",
+        lambda seen_opt: calls.append("derive"),
+    )
+    spoke = SimpleNamespace(
+        opt=opt,
+        localnonants=np.asarray([np.nan]),
+        rho_rescale_factors={3: 2.0},
+        _rescale_rho=lambda factor: calls.append(("rescale", factor)),
+        _write_W_and_xbar=lambda iteration: calls.append("write"),
+        _lagrangian=lambda iteration: calls.append("solve"),
+    )
+
+    lagranger_bounder.LagrangerOuterBound._update_weights_and_solve(spoke, 3)
+
+    assert calls == [
+        ("rescale", 2.0),
+        "xbar",
+        "derive",
+        "update W",
+        "miditer",
+        "derive",
+        "write",
+        "solve",
+    ]
 
 
 def _model():
