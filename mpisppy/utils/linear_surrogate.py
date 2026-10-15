@@ -202,12 +202,14 @@ def finalize_linear_surrogates(scenario):
             )
             data.sources = sources
             data.coefficients = coefficients
+            coefficient_by_source = ComponentMap(zip(sources, coefficients))
             data.signature = (
                 data.name,
-                tuple(sorted(
-                    (var.name, coef)
-                    for var, coef in zip(sources, coefficients)
-                )),
+                tuple(
+                    (position, coefficient_by_source[var])
+                    for position, var in enumerate(node.nonant_vardata_list)
+                    if var in coefficient_by_source
+                ),
                 constant,
                 data.rho_multiplier,
             )

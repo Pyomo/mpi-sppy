@@ -297,6 +297,45 @@ def test_signature_ignores_expression_term_order():
     )
 
 
+def test_signature_uses_nonant_positions_when_name_check_is_disabled():
+    def scenario_creator(name):
+        model = pyo.ConcreteModel(name=name)
+        var_name = f"x_{name}"
+        setattr(model, var_name, pyo.Var(bounds=(0, 10)))
+        source = getattr(model, var_name)
+        model.obj = pyo.Objective(expr=source)
+        definition = LinearSurrogateDefinition("total", 2 * source)
+        model._mpisppy_node_list = [ScenarioNode(
+            "ROOT", 1.0, 1, model.obj, [source], model,
+            linear_surrogate_definitions=[definition],
+        )]
+        model._mpisppy_probability = 0.5
+        return model
+
+    options = {
+        "solver_name": "highs",
+        "PHIterLimit": 1,
+        "defaultPHrho": 1,
+        "convthresh": -1,
+        "verbose": False,
+        "display_timing": False,
+        "display_progress": False,
+        "solver_options_layers": [],
+        "smoothed": 0,
+        "asynchronousPH": False,
+        "toc": False,
+        "turn_off_names_check": True,
+    }
+
+    ph = PH(options, ["s1", "s2"], scenario_creator)
+
+    signatures = [
+        scenario._mpisppy_node_list[0].linear_surrogate_data[0].signature
+        for scenario in ph.local_scenarios.values()
+    ]
+    assert signatures[0] == signatures[1]
+
+
 def test_modeler_fixed_source_is_folded_only_for_rho():
     model = _model()
     model.x[1].fix(2)
