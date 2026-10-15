@@ -80,6 +80,7 @@ class LagrangianOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinder
         if self.opt.options.get("subgradient_while_waiting", False):
             # compute a subgradient step
             self.opt.Compute_Xbar(self.verbose)
+            set_derived_surrogate_rhos(self.opt)
             self.opt.Update_W(self.verbose)
             bound = self.lagrangian(warmstart=warmstart)
             if bound is not None:

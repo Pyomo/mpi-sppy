@@ -51,6 +51,33 @@ def test_lagrangian_prep_derives_rho_before_solver_creation(monkeypatch):
     ]
 
 
+def test_lagrangian_waiting_path_rederives_before_weight_update(monkeypatch):
+    import mpisppy.cylinders.lagrangian_bounder as lagrangian_bounder
+
+    calls = []
+    opt = SimpleNamespace(
+        options={"subgradient_while_waiting": True},
+        Compute_Xbar=lambda verbose: calls.append("xbar"),
+        Update_W=lambda verbose: calls.append("update W"),
+    )
+    monkeypatch.setattr(
+        lagrangian_bounder,
+        "set_derived_surrogate_rhos",
+        lambda seen_opt: calls.append("derive"),
+    )
+    spoke = SimpleNamespace(
+        opt=opt,
+        verbose=False,
+        lagrangian=lambda **kw: calls.append("solve"),
+    )
+
+    lagrangian_bounder.LagrangianOuterBound.do_while_waiting_for_new_Ws(
+        spoke
+    )
+
+    assert calls == ["xbar", "derive", "update W", "solve"]
+
+
 def test_lagranger_rederives_around_weight_update(monkeypatch):
     import mpisppy.cylinders.lagranger_bounder as lagranger_bounder
 
