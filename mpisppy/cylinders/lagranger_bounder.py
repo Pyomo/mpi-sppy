@@ -48,7 +48,14 @@ class LagrangerOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinders
         # IMPORTANT: the scalings accumulate.
         # E.g., 0.5 then 2.0 gets you back where you started.
         for (sname, scenario) in self.opt.local_scenarios.items():
+            derived_targets = getattr(
+                scenario._mpisppy_data,
+                "linear_surrogate_target_indices",
+                (),
+            )
             for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items():
+                if ndn_i in derived_targets:
+                    continue
                 scenario._mpisppy_model.rho[ndn_i] *= rf
 
     def _write_W_and_xbar(self, iternum):

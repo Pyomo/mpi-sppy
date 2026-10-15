@@ -186,10 +186,11 @@ def test_lagranger_waits_for_post_iter0_rho_initialization(monkeypatch):
     kill_signals = iter((False, True))
     spoke = SimpleNamespace(
         opt=opt,
-        rho_rescale_factors=None,
+        rho_rescale_factors={1: 0.1},
         localnonants=np.asarray([np.nan]),
         lagrangian_prep=lambda: calls.append("prep"),
         _jensens_enabled=lambda: False,
+        _rescale_rho=lambda factor: calls.append(("rescale", factor)),
         _lagrangian=lambda iteration: calls.append(("solve", iteration)),
         _write_W_and_xbar=lambda iteration: None,
         got_kill_signal=lambda: next(kill_signals),
@@ -208,6 +209,7 @@ def test_lagranger_waits_for_post_iter0_rho_initialization(monkeypatch):
         "pre_iter0",
         ("solve", 0),
         "post_iter0 initializes rho",
+        ("rescale", 0.1),
         "xbar",
         "derive",
         "update W",
@@ -215,6 +217,40 @@ def test_lagranger_waits_for_post_iter0_rho_initialization(monkeypatch):
         "derive",
         ("solve", 1),
     ]
+
+
+def test_lagranger_rescale_skips_unset_derived_target():
+    import mpisppy.cylinders.lagranger_bounder as lagranger_bounder
+
+    class MutableRho:
+        def __init__(self, value):
+            self._value = value
+
+        def __imul__(self, factor):
+            self._value *= factor
+            return self
+
+    source_index = ("ROOT", 0)
+    target_index = ("ROOT", 1)
+    rho = {
+        source_index: MutableRho(8.0),
+        target_index: MutableRho(None),
+    }
+    scenario = SimpleNamespace(
+        _mpisppy_data=SimpleNamespace(
+            nonant_indices={source_index: object(), target_index: object()},
+            linear_surrogate_target_indices=frozenset({target_index}),
+        ),
+        _mpisppy_model=SimpleNamespace(rho=rho),
+    )
+    spoke = SimpleNamespace(
+        opt=SimpleNamespace(local_scenarios={"s": scenario})
+    )
+
+    lagranger_bounder.LagrangerOuterBound._rescale_rho(spoke, 0.1)
+
+    assert rho[source_index]._value == pytest.approx(0.8)
+    assert rho[target_index]._value is None
 
 
 def _model():
