@@ -15,6 +15,7 @@ import pytest
 
 from mpisppy.scenario_tree import ScenarioNode
 from mpisppy.opt.ph import PH
+from mpisppy.utils.rho_utils import assign_rho_with_fallback
 from mpisppy.utils.linear_surrogate import (
     LinearSurrogateDefinition,
     prepare_linear_surrogate_data,
@@ -133,6 +134,20 @@ def test_derived_rho_uses_median_and_squared_coefficients():
     prepare_linear_surrogate_data(model)
     ph = SimpleNamespace(local_scenarios={"s": model})
 
+    report_state = {}
+    ph.cylinder_rank = 0
+    assign_rho_with_fallback(
+        ph, 1.0, "TestRho", report_state,
+        lambda scenario, index: (
+            0.0 if index == ("ROOT", 2)
+            else scenario._mpisppy_model.rho[index]._value
+        ),
+    )
+    # Primary setters leave the derived target alone and do not report its
+    # intentionally zero objective coefficient as a fallback.
+    assert pyo.value(model._mpisppy_model.rho["ROOT", 2]) == pytest.approx(999)
+    assert report_state["TestRho"] == 0
+
     set_derived_surrogate_rhos(ph)
 
     # median(4/1**2, 16/2**2) * 1.5 == 6
@@ -197,6 +212,15 @@ def test_ph_applies_derived_rho_after_user_rho_setter():
         )
         target_rhos.append(pyo.value(model._mpisppy_model.rho[target_index]))
     assert target_rhos == pytest.approx([4, 4])
+
+    # FWPH swaps position-equivalent QP vardatas into each node and then
+    # rebuilds nonant_indices. Cached MIP indices must survive that swap.
+    for model in ph.local_scenarios.values():
+        model.qp_nonants = pyo.Var(range(3))
+        model._mpisppy_node_list[0].nonant_vardata_list = list(
+            model.qp_nonants.values()
+        )
+    ph._attach_nonant_indices()
 
 
 def test_scenario_ingestion_rejects_different_coefficients():

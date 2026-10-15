@@ -230,6 +230,7 @@ def prepare_linear_surrogate_data(scenario):
     """Resolve vardata references to nonant indices once at setup."""
     data_items = getattr(scenario._mpisppy_data, "linear_surrogate_data", ())
     if not data_items:
+        scenario._mpisppy_data.linear_surrogate_target_indices = frozenset()
         return
     nonant_map = ComponentMap(
         (var, ndn_i)
@@ -238,6 +239,9 @@ def prepare_linear_surrogate_data(scenario):
     for data in data_items:
         data.target_index = nonant_map[data.target]
         data.source_indices = tuple(nonant_map[source] for source in data.sources)
+    scenario._mpisppy_data.linear_surrogate_target_indices = frozenset(
+        data.target_index for data in data_items
+    )
 
 
 def remap_linear_surrogate_data(source_node, ref_vars):

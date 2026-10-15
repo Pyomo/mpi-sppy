@@ -122,6 +122,8 @@ class SPBase:
         self._compute_unconditional_node_probabilities()
         self._attach_nlens()
         self._attach_nonant_indices()
+        for scenario in self.local_scenarios.values():
+            prepare_linear_surrogate_data(scenario)
         self._attach_varid_to_nonant_index()
         self._create_communicators()
         self._verify_linear_surrogates()
@@ -416,7 +418,6 @@ class SPBase:
             scenario._mpisppy_data.all_surrogate_nonants = _all_surrogate_nonants
             scenario._mpisppy_data.linear_surrogate_data = _linear_surrogate_data
             scenario._mpisppy_data.initial_fixed_nonants = _initial_fixed_nonants
-            prepare_linear_surrogate_data(scenario)
         self.nonant_length = len(_nonant_indices)
         # sanity check the nonant length
         for s in self.local_scenarios.values():
