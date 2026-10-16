@@ -2,6 +2,9 @@
 source = mpisppy
 parallel = true
 concurrency = multiprocessing
+# Child processes started through COVERAGE_PROCESS_START include some that
+# never import mpisppy; they should not print a warning saying so.
+disable_warnings = module-not-imported, no-data-collected
 
 [report]
 omit =

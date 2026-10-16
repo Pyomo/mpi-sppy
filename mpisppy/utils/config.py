@@ -215,6 +215,15 @@ class Config(pyofig.ConfigDict):
             _bad_options("--cc-indicator-var (chance constraint) is currently "
                          "supported only with --EF")
 
+        # --checkpoint-before-seconds asks for a write, and --checkpoint-dir is
+        # the only thing that says where. Silently ignoring it would leave a
+        # run that was configured for a deadline with no checkpoint at the
+        # deadline, which is the failure the option exists to prevent.
+        if (self.get("checkpoint_before_seconds", None) is not None
+                and self.get("checkpoint_dir", None) is None):
+            _bad_options("--checkpoint-before-seconds requires "
+                         "--checkpoint-dir (there is nowhere to write)")
+
         # Slamming options other than the directives file are meaningless
         # without it; require the file so that a run with no slamming options
         # behaves exactly as it does today (total backward compatibility).
@@ -826,6 +835,20 @@ class Config(pyofig.ConfigDict):
                            "always written (default 1)",
                            domain=int,
                            default=1)
+
+        self.add_to_config("checkpoint_before_seconds",
+                           description="also write a checkpoint at the end of "
+                           "the first iteration after which one more as long "
+                           "as the last would pass S seconds from the start "
+                           "of the run, for a run that "
+                           "will be stopped by a wall clock rather than by an "
+                           "iteration limit; the estimate is the duration of "
+                           "the most recent iteration, nothing is added for "
+                           "the write itself (its cost is reported in the log "
+                           "by every write), and it fires at most once "
+                           "(default None)",
+                           domain=float,
+                           default=None)
 
         self.add_to_config("stop_at_iteration_number",
                            description="absolute iteration number at which to "

@@ -44,8 +44,8 @@ import ast
 import importlib
 import inspect
 import json
-import pickle
 import os
+import pickle
 import shutil
 import subprocess
 import sys
@@ -55,9 +55,12 @@ import unittest
 
 import mpisppy.tests.multirank_agreement_driver as agreement_driver
 import mpisppy.utils.checkpointing as checkpointing
+from mpisppy.cylinders.spoke import InnerBoundNonantSpoke
+from mpisppy.cylinders.xhatshufflelooper_bounder import (ScenarioCycler,
+                                                         XhatShuffleInnerBound)
 from mpisppy.extensions.checkpointer import Checkpointer
 from mpisppy.phbase import PHBase
-from mpisppy.tests.utils import get_solver
+from mpisppy.tests.utils import get_solver, subprocess_env
 
 solver_available, solver_name, persistent_available, persistent_solver_name = \
     get_solver()
@@ -65,6 +68,7 @@ solver_available, solver_name, persistent_available, persistent_solver_name = \
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _DRIVER = os.path.join(_HERE, "cylinders_ab_driver.py")
 _FAILURE_DRIVER = os.path.join(_HERE, "multirank_failure_driver.py")
+_DEADLINE_DRIVER = os.path.join(_HERE, "multirank_deadline_driver.py")
 _AGREEMENT_DRIVER = os.path.join(_HERE, "multirank_agreement_driver.py")
 #: generic_cylinders resolves --module-name with importlib, so these are dotted
 #: names rather than paths -- which also makes the legs independent of the
@@ -74,6 +78,16 @@ _SIZES = "mpisppy.tests.examples.sizes.sizes"
 _STOCH_DISTR = "mpisppy.tests.examples.stoch_distr.stoch_distr"
 
 mpiexec_available = shutil.which("mpiexec") is not None
+
+
+def _as_if_written_with_objective(state, objective):
+    """Give a spoke file another objective the way a real write would: its
+    write_id is computed from the objective and the cursor, so a file from a
+    different write has a different one. Changing the objective alone would
+    leave the old id behind and describe no write that ever happened."""
+    state["best_solution_obj_val"] = objective
+    cursor = (state.get("loop_state") or {}).get("cursor")
+    state["write_id"] = checkpointing.spoke_write_id(objective, cursor)
 
 
 def _run_leg(tmpdir, name, np, module, model_args, spoke_args, extra_args,
@@ -96,7 +110,7 @@ def _run_leg(tmpdir, name, np, module, model_args, spoke_args, extra_args,
         *extra_args,
     ]
     result = subprocess.run(cmd, capture_output=True, text=True,
-                            timeout=3600, check=False)
+                            timeout=3600, check=False, env=subprocess_env())
     if check and result.returncode != 0:
         raise AssertionError(
             f"leg {name!r} failed:\n{result.stdout[-4000:]}\n"
@@ -116,16 +130,17 @@ def _hub_ranks(out_path):
     return sorted(snapshots, key=lambda s: s["cylinder_rank"])
 
 
-def _spoke_ranks(out_path):
-    """Every spoke rank's restore marker for a leg, ordered by strata then
-    rank."""
+def _spoke_ranks(out_path, cylinder):
+    """Every rank's marker for one spoke cylinder, ordered by rank."""
     directory = os.path.dirname(out_path)
-    prefix = f"{os.path.basename(out_path)}.byrank.spoke"
+    prefix = f"{os.path.basename(out_path)}.cyl"
     markers = []
     for fname in sorted(os.listdir(directory)):
         if fname.startswith(prefix):
             with open(os.path.join(directory, fname)) as f:
-                markers.append(json.load(f))
+                marker = json.load(f)
+            if marker["cylinder"] == cylinder:
+                markers.append(marker)
     return markers
 
 
@@ -492,7 +507,8 @@ class TestFarmerMultiRankCylinders(_MultiRankABMixin, unittest.TestCase):
             msg=f"expected one incumbent file per spoke rank: {written}")
 
     def test_every_spoke_rank_restores_the_same_incumbent(self):
-        markers = _spoke_ranks(os.path.join(self._tmp.name, "B2.json"))
+        markers = _spoke_ranks(os.path.join(self._tmp.name, "B2.json"),
+                               "XhatShuffleInnerBound")
         self.assertEqual([m["cylinder_rank"] for m in markers],
                          list(range(self.SPOKE_RANKS)))
         restored = {m["restored_incumbent_obj"] for m in markers}
@@ -506,58 +522,13 @@ class TestFarmerMultiRankCylinders(_MultiRankABMixin, unittest.TestCase):
         """Against the hub's inner bound, which is where the spoke's
         incumbent arrives -- the hub's best_solution_obj_val is never set."""
         restored = _spoke_ranks(
-            os.path.join(self._tmp.name, "B2.json"))[0]["restored_incumbent_obj"]
+            os.path.join(self._tmp.name, "B2.json"),
+            "XhatShuffleInnerBound")[0]["restored_incumbent_obj"]
         for snap in self.resumed:
             self.assertLessEqual(
                 snap["BestInnerBound"], restored,
                 msg=f"rank {snap['cylinder_rank']}: the resumed run reports "
                     f"a worse incumbent than the one it restored")
-
-
-class TestSpokeRanksAgreeOnOneIncumbent(unittest.TestCase):
-    """agree_on_spoke_incumbent, with the other ranks' answers supplied."""
-
-    class _Comm:
-        def __init__(self, others):
-            self.others = others
-
-        def allgather(self, mine):
-            return [mine] + list(self.others)
-
-    def _agree(self, mine, *others):
-        import types
-        opt = types.SimpleNamespace(n_proc=1 + len(others),
-                                    mpicomm=self._Comm(others))
-        state = None if mine is None else {
-            "best_solution_obj_val": mine[0], "best_inner_bound": mine[1]}
-        return checkpointing.agree_on_spoke_incumbent(opt, state)
-
-    def test_the_same_incumbent_everywhere_is_kept(self):
-        state, reason = self._agree((-5.0, -5.0), (-5.0, -5.0))
-        self.assertIsNotNone(state)
-        self.assertIsNone(reason)
-
-    def test_no_file_anywhere_is_no_incumbent_and_no_warning(self):
-        self.assertEqual(self._agree(None, None), (None, None))
-
-    def test_one_rank_without_a_file_drops_it_everywhere(self):
-        for mine, other in (((-5.0, -5.0), None), (None, (-5.0, -5.0))):
-            with self.subTest(mine=mine):
-                state, reason = self._agree(mine, other)
-                self.assertIsNone(state)
-                self.assertIn("have no file", reason)
-
-    def test_different_incumbents_are_dropped_everywhere(self):
-        state, reason = self._agree((-5.0, -5.0), (-4.0, -4.0))
-        self.assertIsNone(state)
-        self.assertIn("-4.0", reason)
-
-    def test_one_rank_needs_no_agreement(self):
-        import types
-        opt = types.SimpleNamespace(n_proc=1)
-        state = {"best_solution_obj_val": -5.0, "best_inner_bound": -5.0}
-        self.assertEqual(checkpointing.agree_on_spoke_incumbent(opt, state),
-                         (state, None))
 
 
 @unittest.skipIf(not solver_available, "no solver is available")
@@ -590,7 +561,8 @@ class TestTornSpokeIncumbentIsDropped(unittest.TestCase):
             state = pickle.load(f)
         # An older, worse incumbent: what rank 1 still holds when its latest
         # write failed and rank 0's succeeded.
-        state["best_solution_obj_val"] += 100.0
+        _as_if_written_with_objective(
+            state, state["best_solution_obj_val"] + 100.0)
         state["best_inner_bound"] += 100.0
         with open(path, "wb") as f:
             pickle.dump(state, f)
@@ -610,11 +582,11 @@ class TestTornSpokeIncumbentIsDropped(unittest.TestCase):
                              self.result.stderr[-4000:])
 
     def test_it_says_why(self):
-        self.assertIn("do not hold the same checkpointed incumbent",
+        self.assertIn("checkpointed different incumbents",
                       self.result.stdout)
 
     def test_no_spoke_rank_restores_either_one(self):
-        markers = _spoke_ranks(self.out_path)
+        markers = _spoke_ranks(self.out_path, "XhatShuffleInnerBound")
         self.assertEqual(len(markers), 2)
         for m in markers:
             self.assertIsNone(
@@ -632,7 +604,8 @@ class TestTornSpokeIncumbentIsDropped(unittest.TestCase):
                 snap["first_BestInnerBound"], float("inf"),
                 msg=f"hub rank {snap['cylinder_rank']} restored an incumbent "
                     f"the spoke's ranks did not agree on")
-        spoke = {m["strata_rank"]: m for m in _spoke_ranks(self.out_path)
+        spoke = {m["strata_rank"]: m
+                 for m in _spoke_ranks(self.out_path, "XhatShuffleInnerBound")
                  if m["cylinder_rank"] == 0}
         for snap in _hub_ranks(self.out_path):
             credited = spoke.get(snap["last_ib_idx"])
@@ -868,7 +841,8 @@ class TestOneRankFailingDoesNotHangTheOthers(unittest.TestCase):
         # second when it finishes at all: what this is really measuring is
         # whether the job returns.
         self.result = subprocess.run(cmd, capture_output=True, text=True,
-                                     timeout=600, check=False)
+                                     timeout=600, check=False,
+                                     env=subprocess_env())
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -929,6 +903,458 @@ class TestOneRankFailingDoesNotHangTheOthers(unittest.TestCase):
 
 @unittest.skipIf(not solver_available, "no solver is available")
 @unittest.skipIf(not mpiexec_available, "mpiexec is not available")
+class TestDeadlineOnOneRankDoesNotHangTheOthers(unittest.TestCase):
+    """``--checkpoint-before-seconds`` is the one trigger that is rank-local.
+
+    Every other checkpoint point is a pure function of the iteration number, so
+    the ranks arrive at the write together without being asked. Elapsed wall
+    clock is not, and the ranks of a cylinder do not share a clock: a rank that
+    believed its own and started writing would wait in the write's barrier for
+    ranks that went on with the iteration, and the job would burn its
+    allocation with nothing in the log.
+
+    So the driver puts one rank a year past the deadline and leaves the other
+    where it was. The run either agrees -- through ``allreduce_or`` -- and
+    writes on both ranks, or it hangs; there is no third outcome, which is what
+    makes the timeout below an assertion rather than a guess.
+
+    The cadence is set past the iteration count so that nothing but the
+    deadline (and the final iteration, which is always written) can produce a
+    write, and the deadline is set to an hour that a farmer LP has no other way
+    of reaching.
+    """
+
+    N = 4
+    SKEW_AT = 2
+    SKEW_RANK = 1
+    DEADLINE = 3600.0
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
+        cmd = [
+            "mpiexec", "-np", "2",
+            sys.executable, "-m", "mpi4py", _DEADLINE_DRIVER,
+            "--skew-on-rank", str(self.SKEW_RANK),
+            "--skew-at-generation", str(self.SKEW_AT),
+            "--module-name", _FARMER, "--num-scens", "6",
+            "--default-rho", "1", "--solver-name", solver_name,
+            "--max-iterations", str(self.N),
+            "--intra-hub-conv-thresh", "-1",
+            "--rel-gap", "0.0", "--abs-gap", "0.0",
+            "--checkpoint-dir", self.ckpt_dir,
+            "--checkpoint-every-iterations", "100",
+            "--checkpoint-before-seconds", str(self.DEADLINE),
+        ]
+        # Generous, but it is a timeout on a farmer LP that finishes in under a
+        # second when it finishes at all: what this is really measuring is
+        # whether the job returns.
+        self.result = subprocess.run(cmd, capture_output=True, text=True,
+                                     timeout=600, check=False,
+                                     env=subprocess_env())
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_the_run_finishes(self):
+        self.assertEqual(
+            self.result.returncode, 0,
+            msg=f"the run did not survive a one-rank deadline:\n"
+                f"{self.result.stdout[-4000:]}\n{self.result.stderr[-4000:]}")
+        self.assertIn("Reached user-specified limit", self.result.stdout,
+                      msg="the run did not reach its iteration limit")
+
+    def test_the_deadline_wrote_the_skewed_generation(self):
+        """Off cadence and not the last iteration, so the deadline is the only
+        thing that could have written it -- and one rank's clock was enough."""
+        self.assertIn(f"Checkpoint written at iteration {self.SKEW_AT}",
+                      self.result.stdout)
+        self.assertIn("--checkpoint-before-seconds", self.result.stdout)
+
+    def test_every_rank_wrote_its_slice(self):
+        """A generation spans the ranks, so a write that only the skewed rank
+        joined would leave a generation that cannot be resumed."""
+        gen_dir = os.path.join(self.ckpt_dir, "hub",
+                               f"gen_{self.SKEW_AT:04d}")
+        # gen_0002 is retired by the final iteration's write, so the run's own
+        # log is what says both ranks were in it; what remains checkable here
+        # is that the generation that replaced it is whole.
+        final_dir = os.path.join(self.ckpt_dir, "hub", f"gen_{self.N:04d}")
+        self.assertFalse(os.path.isdir(gen_dir))
+        leaves = sorted(f for f in os.listdir(final_dir)
+                        if f.startswith("hub_rank_") and f.endswith(".pkl"))
+        self.assertEqual(leaves,
+                         ["hub_rank_0000.pkl", "hub_rank_0001.pkl"])
+
+    def test_it_fires_once_and_not_on_every_later_iteration(self):
+        """The skewed rank stays past the deadline for the rest of the run.
+        Without the latch, every iteration after it would write."""
+        written = [line for line in self.result.stdout.splitlines()
+                   if "Checkpoint written at iteration" in line]
+        self.assertEqual(len(written), 2, msg=f"expected the deadline write "
+                                              f"and the final one: {written}")
+
+    def test_the_deadline_checkpoint_is_resumable(self):
+        """Resume from the deadline's own generation, not the one that
+        replaced it: rerun with the iteration limit at the skew point so the
+        final-iteration rule cannot write anything later."""
+        cmd = [
+            "mpiexec", "-np", "2",
+            sys.executable, "-m", "mpi4py", _DEADLINE_DRIVER,
+            "--skew-on-rank", str(self.SKEW_RANK),
+            "--skew-at-generation", str(self.SKEW_AT),
+            "--module-name", _FARMER, "--num-scens", "6",
+            "--default-rho", "1", "--solver-name", solver_name,
+            "--max-iterations", str(self.SKEW_AT),
+            "--intra-hub-conv-thresh", "-1",
+            "--rel-gap", "0.0", "--abs-gap", "0.0",
+            "--checkpoint-dir", self.ckpt_dir,
+            "--checkpoint-every-iterations", "100",
+            "--checkpoint-before-seconds", str(self.DEADLINE),
+        ]
+        subprocess.run(cmd, capture_output=True, text=True, timeout=600,
+                       check=True, env=subprocess_env())
+        self.assertEqual(_published_generation(self.ckpt_dir)["generation"],
+                         self.SKEW_AT)
+
+        _, out_path = _run_leg(
+            self._tmp.name, "resume", 2, _FARMER,
+            ("--num-scens", "6", "--default-rho", "1"), (),
+            ("--max-iterations", str(self.N),
+             "--resume-from", self.ckpt_dir))
+        for snap in _hub_ranks(out_path):
+            self.assertTrue(snap["resumed"])
+            self.assertEqual(snap["resume_iteration"], self.SKEW_AT)
+
+
+@unittest.skipIf(not solver_available, "no solver is available")
+@unittest.skipIf(not mpiexec_available, "mpiexec is not available")
+class TestMultiRankSpokeCursorAgreement(unittest.TestCase):
+    """A multi-rank xhat spoke resumes onto one cursor, not one per rank.
+
+    The ranks of an xhatshuffle spoke explore together: they pick the same
+    scenario and ``_try_one`` broadcasts its nonants from the rank that owns
+    it. Each rank writes its own checkpoint file at the bottom of its own
+    pass, though, so a stop can land between two of those writes and leave
+    files whose cursors disagree -- and a rank that never found an incumbent
+    writes no file at all. Resuming each rank onto whatever its own file says
+    makes the ranks pick different scenarios and broadcast from different
+    roots, and the objective that reaches the hub is then a blend of several
+    scenarios' solutions, reported as an ordinary feasible inner bound with
+    no error and no warning.
+
+    Both tests manufacture the disagreement by editing what the stopped leg
+    wrote. Racing the two ranks' writes would produce it only sometimes,
+    which is no way to guard against it.
+    """
+
+    NP = 6
+    MODULE = _FARMER
+    MODEL_ARGS = ("--num-scens", "6", "--default-rho", "1")
+    SPOKE_ARGS = ("--lagrangian", "--xhatshuffle")
+    STOP = 2
+    RESUME_FOR = 2
+    SPOKE = "XhatShuffleInnerBound"
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
+        _run_leg(self._tmp.name, "B1", self.NP, self.MODULE, self.MODEL_ARGS,
+                 self.SPOKE_ARGS,
+                 ("--max-iterations", str(self.STOP),
+                  "--checkpoint-dir", self.ckpt_dir))
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _spoke_files(self):
+        """This spoke's checkpoint files, one per rank, ordered by rank."""
+        spokes_dir = os.path.join(self.ckpt_dir, "spokes")
+        names = sorted(f for f in os.listdir(spokes_dir)
+                       if f.startswith(f"spoke_{self.SPOKE}"))
+        self.assertGreater(
+            len(names), 1,
+            msg=f"expected one file per spoke rank, got {names}")
+        return [os.path.join(spokes_dir, n) for n in names]
+
+    def _resume(self):
+        result, out_path = _run_leg(
+            self._tmp.name, "B2", self.NP, self.MODULE, self.MODEL_ARGS,
+            self.SPOKE_ARGS,
+            ("--max-iterations", str(self.RESUME_FOR),
+             "--resume-from", self.ckpt_dir))
+        return result, _spoke_ranks(out_path, self.SPOKE)
+
+    def test_the_ranks_adopt_one_cursor(self):
+        paths = self._spoke_files()
+        with open(paths[-1], "rb") as f:
+            state = pickle.load(f)
+        self.assertIsNotNone(
+            state["loop_state"],
+            msg="the stopped leg checkpointed no cursor, so this test would "
+                "pass without exercising anything")
+        # Wind the last rank's file back a pass: what a stop that landed
+        # between the two ranks' writes leaves behind.
+        state["loop_state"]["xh_iter"] = int(state["loop_state"]["xh_iter"]) - 1
+        cursor = state["loop_state"]["cursor"]
+        cursor["cycle_idx"] = max(0, int(cursor["cycle_idx"]) - 1)
+        with open(paths[-1], "wb") as f:
+            pickle.dump(state, f)
+
+        _, markers = self._resume()
+        self.assertGreater(len(markers), 1,
+                           msg=f"expected a marker per spoke rank: {markers}")
+        adopted = [m["applied_loop_state"] for m in markers]
+        for marker in markers:
+            self.assertIsNotNone(
+                marker["applied_loop_state"],
+                msg="a spoke rank adopted no cursor at all")
+        distinct = {json.dumps(a, sort_keys=True) for a in adopted}
+        self.assertEqual(
+            len(distinct), 1,
+            msg=f"the spoke's ranks resumed onto {len(distinct)} different "
+                f"cursors: {adopted}")
+
+    def test_ranks_holding_different_incumbents_stop_the_whole_restore(self):
+        """Half of one xhat beside half of another is not a solution.
+
+        The cached values cannot be agreed by broadcast -- each rank owns
+        different scenarios -- so what is agreed is whether they all came
+        from the same pass. The objective of the cached solution says so:
+        every rank reads it out of the same reduction.
+        """
+        paths = self._spoke_files()
+        with open(paths[-1], "rb") as f:
+            state = pickle.load(f)
+        self.assertIsNotNone(
+            state["best_solution_obj_val"],
+            msg="the stopped leg checkpointed no incumbent, so this test "
+                "would pass without exercising anything")
+        # An incumbent from a different pass: what a stop landing between the
+        # two ranks' writes leaves when one of them has just improved.
+        _as_if_written_with_objective(
+            state, float(state["best_solution_obj_val"]) - 1.0)
+        with open(paths[-1], "wb") as f:
+            pickle.dump(state, f)
+
+        result, markers = self._resume()
+        for marker in markers:
+            self.assertIsNone(
+                marker["restored_incumbent_obj"],
+                msg="a spoke rank restored values from a pass that another "
+                    "rank of the same spoke did not checkpoint")
+        self.assertIn("checkpointed different incumbents", result.stdout,
+                      msg="the run declined to restore without saying so")
+
+    def test_a_file_that_does_not_match_stops_every_rank(self):
+        """A load that refuses on some ranks and not others.
+
+        The refusal is per rank -- the file is named after the rank and
+        checked against the scenarios that rank owns -- and the agreement
+        that follows is collective, so a rank-local raise leaves the others
+        waiting for a rank that has gone. The plainest way in is a resume
+        with a different rank count; this manufactures the same split
+        directly, which does not depend on how ranks divide scenarios.
+        """
+        paths = self._spoke_files()
+        os.remove(paths[0])
+        with open(paths[-1], "rb") as f:
+            state = pickle.load(f)
+        state["format_version"] = 0
+        with open(paths[-1], "wb") as f:
+            pickle.dump(state, f)
+
+        result, _ = _run_leg(
+            self._tmp.name, "B2", self.NP, self.MODULE, self.MODEL_ARGS,
+            self.SPOKE_ARGS,
+            ("--max-iterations", str(self.RESUME_FOR),
+             "--resume-from", self.ckpt_dir),
+            check=False)
+        self.assertNotEqual(result.returncode, 0,
+                            msg="a checkpoint that does not match this run "
+                                "was accepted")
+        self.assertIn(
+            "could not read their checkpoint", result.stdout + result.stderr,
+            msg="the run died on one rank's traceback without the agreement "
+                "saying how many ranks could not read theirs")
+
+    def test_a_rank_without_a_file_stops_the_whole_restore(self):
+        """Half an incumbent is not a solution the study ever found."""
+        paths = self._spoke_files()
+        os.remove(paths[-1])
+
+        result, markers = self._resume()
+        for marker in markers:
+            self.assertIsNone(
+                marker["restored_incumbent_obj"],
+                msg="a spoke rank restored an incumbent although another "
+                    "rank of the same spoke had no file to restore from")
+        self.assertIn("ranks of this spoke have a checkpointed incumbent",
+                      result.stdout,
+                      msg="the run declined to restore without saying so")
+
+
+@unittest.skipIf(not solver_available, "no solver is available")
+@unittest.skipIf(not mpiexec_available, "mpiexec is not available")
+class TestScenarioDependentRhoDualResume(unittest.TestCase):
+    """A dual cylinder resumes when rho differs by scenario.
+
+    PH keeps sum_s p_s W_s = 0 only with the same rho in every scenario. The
+    restore used to require exactly that, so this run wrote its checkpoint
+    at exit 0 and its resume died at startup, blaming the file.
+    """
+
+    NP = 4
+    MODULE = "mpisppy.tests.examples.farmer_scenario_rho"
+    MODEL_ARGS = ("--num-scens", "6", "--default-rho", "1")
+    SPOKE_ARGS = ("--lagrangian", "--xhatshuffle", "--relaxed-ph",
+                  "--ph-primal-hub")
+    CYLINDER = "RelaxedPHSpoke"
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.ckpt_dir = os.path.join(cls._tmp.name, "ckpt")
+        _run_leg(cls._tmp.name, "B1", cls.NP, cls.MODULE, cls.MODEL_ARGS,
+                 cls.SPOKE_ARGS, ("--max-iterations", "4",
+                                  "--checkpoint-dir", cls.ckpt_dir))
+        cls.result, cls.out_path = _run_leg(
+            cls._tmp.name, "B2", cls.NP, cls.MODULE, cls.MODEL_ARGS,
+            cls.SPOKE_ARGS, ("--max-iterations", "2",
+                             "--resume-from", cls.ckpt_dir),
+            check=False)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def test_the_weights_really_do_not_sum_to_zero(self):
+        """Otherwise this is an ordinary resume and tests nothing new."""
+        spokes = os.path.join(self.ckpt_dir, "spokes")
+        (name,) = [f for f in os.listdir(spokes)
+                   if f.startswith(f"spoke_{self.CYLINDER}")]
+        with open(os.path.join(spokes, name), "rb") as f:
+            wbar = pickle.load(f)["Wbar"]
+        self.assertGreater(max(abs(v) for vals in wbar.values()
+                               for v in vals), 1e-3)
+
+    def test_the_resume_finishes(self):
+        self.assertEqual(self.result.returncode, 0,
+                         msg=self.result.stdout[-4000:] +
+                             self.result.stderr[-4000:])
+
+    def test_the_dual_cylinder_restored_its_weights(self):
+        (marker,) = _spoke_ranks(self.out_path, self.CYLINDER)
+        self.assertIsNotNone(marker["restored_dual_generation"])
+
+
+@unittest.skipIf(not solver_available, "no solver is available")
+@unittest.skipIf(not mpiexec_available, "mpiexec is not available")
+class TestMultiRankDualWeightAgreement(unittest.TestCase):
+    """A multi-rank dual cylinder restores one iteration's W, not one each.
+
+    W is per scenario and so per rank, and there is nothing to broadcast --
+    but the iteration it belongs to is the cylinder's. Ranks that restore W
+    from different iterations hand ``Compute_Xbar`` an allreduce over values
+    from two points of the run, and under ``--ph-primal-hub`` that blended W
+    is what the hub's W is built from. Like the xhat case, it costs no error
+    and no warning.
+
+    Each rank writes at the bottom of its own iteration and a failed write
+    warns and carries on, so the files really can disagree; the tests
+    manufacture that by editing what the stopped leg wrote.
+    """
+
+    NP = 4
+    MODULE = _FARMER
+    MODEL_ARGS = ("--num-scens", "6", "--default-rho", "1")
+    SPOKE_ARGS = ("--relaxed-ph",)
+    STOP = 2
+    RESUME_FOR = 2
+    CYLINDER = "RelaxedPHSpoke"
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        # Removed here rather than in tearDown, which unittest does not call
+        # when setUp raises -- and the leg below raises on a failed run.
+        self.addCleanup(self._tmp.cleanup)
+        self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
+        _run_leg(self._tmp.name, "B1", self.NP, self.MODULE, self.MODEL_ARGS,
+                 self.SPOKE_ARGS,
+                 ("--max-iterations", str(self.STOP),
+                  "--checkpoint-dir", self.ckpt_dir))
+
+    def _dual_files(self):
+        """This cylinder's checkpoint files, one per rank, ordered by rank."""
+        spokes_dir = os.path.join(self.ckpt_dir, "spokes")
+        names = sorted(f for f in os.listdir(spokes_dir)
+                       if f.startswith(f"spoke_{self.CYLINDER}"))
+        self.assertGreater(
+            len(names), 1,
+            msg=f"expected one file per cylinder rank, got {names}")
+        return [os.path.join(spokes_dir, n) for n in names]
+
+    def _resume(self):
+        result, out_path = _run_leg(
+            self._tmp.name, "B2", self.NP, self.MODULE, self.MODEL_ARGS,
+            self.SPOKE_ARGS,
+            ("--max-iterations", str(self.RESUME_FOR),
+             "--resume-from", self.ckpt_dir))
+        markers = _spoke_ranks(out_path, self.CYLINDER)
+        self.assertGreater(
+            len(markers), 1,
+            msg=f"expected a marker per cylinder rank: {markers}")
+        return result, markers
+
+    def test_the_ranks_restore_the_same_iteration(self):
+        """The undisturbed case, so the tests below cannot pass vacuously."""
+        _, markers = self._resume()
+        generations = {m["restored_dual_generation"] for m in markers}
+        self.assertEqual(
+            len(generations), 1,
+            msg=f"the cylinder's ranks restored W from {len(generations)} "
+                f"different iterations: {generations}")
+        self.assertNotIn(None, generations,
+                         msg="no rank restored any dual weights at all")
+
+    def test_ranks_holding_different_iterations_stop_the_whole_restore(self):
+        paths = self._dual_files()
+        with open(paths[-1], "rb") as f:
+            state = pickle.load(f)
+        self.assertIsNotNone(state["generation"])
+        # W from the iteration before: what a stop landing between the two
+        # ranks' writes leaves behind.
+        state["generation"] = int(state["generation"]) - 1
+        with open(paths[-1], "wb") as f:
+            pickle.dump(state, f)
+
+        result, markers = self._resume()
+        for marker in markers:
+            self.assertIsNone(
+                marker["restored_dual_generation"],
+                msg="a rank restored W from an iteration another rank of the "
+                    "same cylinder did not checkpoint")
+        self.assertIn("dual weights from different iterations",
+                      result.stdout,
+                      msg="the run declined to restore without saying so")
+
+    def test_a_rank_without_a_file_stops_the_whole_restore(self):
+        paths = self._dual_files()
+        os.remove(paths[-1])
+
+        result, markers = self._resume()
+        for marker in markers:
+            self.assertIsNone(
+                marker["restored_dual_generation"],
+                msg="a rank restored W although another rank of the same "
+                    "cylinder had no file to restore from")
+        self.assertIn("ranks of this cylinder have checkpointed dual weights",
+                      result.stdout,
+                      msg="the run declined to restore without saying so")
+
+
+@unittest.skipIf(not solver_available, "no solver is available")
+@unittest.skipIf(not mpiexec_available, "mpiexec is not available")
 class TestNoRankLocalRaiseOnTheCheckpointPaths(unittest.TestCase):
     """A failure in setting a checkpoint up or restoring one ends the job.
 
@@ -959,10 +1385,15 @@ class TestNoRankLocalRaiseOnTheCheckpointPaths(unittest.TestCase):
     traceback while the agreement's own explanation never runs.
     """
 
+    #: Three cylinders of two ranks each, which is what it takes for one run
+    #: to reach every path: the hub's, an xhat spoke's and a dual cylinder's.
+    #: No lagrangian beside them -- it checkpoints nothing, and a bound spoke
+    #: cannot choose between two cylinders publishing the nonants it reads.
     NP = 6
+    RANKS_PER_CYLINDER = 2
     MODULE = _FARMER
     MODEL_ARGS = ("--num-scens", "6", "--default-rho", "1")
-    SPOKE_ARGS = ("--lagrangian", "--xhatshuffle")
+    SPOKE_ARGS = ("--xhatshuffle", "--relaxed-ph")
     #: The rank of its own cylinder that the injected step fails on. Any rank
     #: but 0: rank 0 is the one that publishes and prints, so a failure there
     #: is the case least likely to go unnoticed.
@@ -1004,7 +1435,8 @@ class TestNoRankLocalRaiseOnTheCheckpointPaths(unittest.TestCase):
         ]
         try:
             return subprocess.run(cmd, capture_output=True, text=True,
-                                  timeout=self.TIMEOUT, check=False)
+                                  timeout=self.TIMEOUT, check=False,
+                                  env=subprocess_env())
         except subprocess.TimeoutExpired:
             self.fail(
                 f"the job never came back after {step} failed on one rank: "
@@ -1026,7 +1458,8 @@ class TestNoRankLocalRaiseOnTheCheckpointPaths(unittest.TestCase):
                     msg=f"a rank that could not {step} was ignored and the "
                         f"run reported success:\n{output[-4000:]}")
                 self.assertIn(
-                    f"1 of {self.NP // 3} ranks of this cylinder could not",
+                    f"1 of {self.RANKS_PER_CYLINDER} ranks of this cylinder "
+                    f"could not",
                     output,
                     msg=f"the job died on one rank's traceback rather than on "
                         f"the agreement, which is what leaves the other ranks "
@@ -1078,7 +1511,29 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
          PHBase._restore_from_checkpoint_if_resuming),
         ("PHBase._restore_extension_state_if_resuming",
          PHBase._restore_extension_state_if_resuming),
+        ("Checkpointer.post_iter0", Checkpointer.post_iter0),
+        ("InnerBoundNonantSpoke._restore_extension_state_if_resuming",
+         InnerBoundNonantSpoke._restore_extension_state_if_resuming),
+        ("XhatShuffleInnerBound._restore_loop_state_if_resuming",
+         XhatShuffleInnerBound._restore_loop_state_if_resuming),
+        # Listed as well as reached: the call to it goes through
+        # self.scenario_cycler, an attribute whose class the closure cannot
+        # resolve from the source, and following such calls by name instead
+        # drags in every mpisppy method sharing the name.
+        ("ScenarioCycler.restore_state", ScenarioCycler.restore_state),
     )
+
+    #: The accessors that hand a spoke what a resume read for it. Together
+    #: with every ``restored_*`` attribute the Checkpointer assigns, these are
+    #: the names whose readers are on a restore path and so belong in PATHS;
+    #: test_every_reader_of_the_restored_state_is_a_path checks that.
+    RESTORED_STATE_ACCESSOR_NAMES = frozenset({"_checkpointed_loop_state"})
+
+    #: Readers that only return what they read to their caller. They are not
+    #: paths themselves; their callers are, by the rule above.
+    RESTORED_STATE_ACCESSORS = frozenset({
+        "XhatInnerBoundBase._checkpointed_loop_state",
+    })
 
     #: Every agreement reached from those paths, by the function it is
     #: written in and in the order it appears there, named by the step
@@ -1094,6 +1549,13 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
         "PHBase._restore_from_checkpoint_if_resuming": ("load_checkpoint",),
         "PHBase._restore_extension_state_if_resuming":
             ("restore_extension_state",),
+        "Checkpointer.post_iter0": ("load_dual_spoke_state",
+                                    "restore_dual_spoke_state",
+                                    "require_restored_duals_match_their_file"),
+        "Checkpointer._report_unclaimed_spoke_files":
+            ("unclaimed_spoke_files",),
+        "InnerBoundNonantSpoke._restore_extension_state_if_resuming":
+            ("restore_extension_state_on_a_spoke",),
     }
 
     #: The raises reached from these paths that every rank of a cylinder
@@ -1103,12 +1565,12 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
     #: an agreement, which is the whole subject of this class.
     RANK_INDEPENDENT_RAISES = {
         "Checkpointer.__init__": (
-            3, "the options and the cylinder's class: an --checkpoint-every "
-               "below 1, neither writing nor resuming, and spoke mode on "
-               "something that is not an Xhat_Eval. Every rank of the wheel "
-               "is given the same command line. The backend refusal is the "
-               "fourth of these and now lives in "
-               "require_implemented_backend, below."),
+            4, "the options and the cylinder's class: an --checkpoint-every "
+               "below 1, a --checkpoint-before-seconds that is not positive, "
+               "neither writing nor resuming, and spoke mode on something "
+               "that is not an Xhat_Eval. Every rank of the wheel is given "
+               "the same command line. The backend refusal is a fifth of "
+               "these and now lives in require_implemented_backend, below."),
         "Checkpointer._spoke_identity": (
             1, "the cylinder has no spcomm, which is a property of how the "
                "wheel was built rather than of anything this rank read."),
@@ -1119,6 +1581,13 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
             1, "--checkpoint-backend names a backend that is designed but "
                "not built. The value comes from the command line the wheel "
                "hands every rank, and nothing else is consulted."),
+        "ScenarioCycler._fill_nodescen_dict": (
+            1, "no scenario fits some nonleaf node. Reached from "
+               "restore_state's epoch rebuild, which runs before the "
+               "restored position is taken, so it walks from the fresh "
+               "cycler's position over the scenario order, drawn from one "
+               "fixed seed, and the nonleaf nodes, built from the whole "
+               "scenario tree. All three are the same on every rank."),
         "require_state_contract": (
             1, "an attached extension or the converger does not override "
                "both state hooks. It reads only the classes, which every "
@@ -1130,7 +1599,8 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
     AGREE_THEMSELVES = frozenset({
         "run_agreed",
         "probe_model_is_dillable",
-        "agree_on_spoke_incumbent",
+        "agree_spoke_restore",
+        "agree_dual_spoke_restore",
     })
 
     #: And calls that need no agreement because there is nothing in them for
@@ -1140,8 +1610,9 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
     #: Nothing that touches a file or a model belongs here.
     CANNOT_FAIL_ON_ONE_RANK = frozenset({
         "require_implemented_backend",
-        "require_state_contract",
+        # Walks the extension object's attributes; reads no file or model.
         "_extension_objects",
+        "require_state_contract",
         "_overrides_state_hooks",
     })
 
@@ -1354,6 +1825,70 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
         return out
 
     # ---- the properties ------------------------------------------------
+
+    def test_every_reader_of_the_restored_state_is_a_path(self):
+        """A restore step reached only from a spoke's main() is invisible to
+        the closure walk unless its function is listed in PATHS, which is how
+        the xhatshuffle cursor restore was once missed. So find every reader
+        rather than trusting the list.
+
+        Reads the source files rather than importing them, so a module that
+        cannot be imported here is still read, and takes the held names from
+        the Checkpointer's own assignments, so a new one is covered without
+        being added here.
+        """
+        import ast
+        import mpisppy
+        checkpointer_tree = ast.parse(inspect.getsource(
+            inspect.getmodule(Checkpointer)))
+        held = {node.attr for node in ast.walk(checkpointer_tree)
+                if isinstance(node, ast.Attribute)
+                and isinstance(node.ctx, ast.Store)
+                and node.attr.startswith("restored_")}
+        self.assertIn("restored_loop_state", held,
+                      msg="no held state found, so the scan proves nothing")
+        names = held | self.RESTORED_STATE_ACCESSOR_NAMES
+
+        def reads(func):
+            for node in ast.walk(func):
+                if (isinstance(node, ast.Attribute)
+                        and isinstance(node.ctx, ast.Load)
+                        and node.attr in names):
+                    return True
+                if isinstance(node, ast.Constant) and node.value in names:
+                    return True
+            return False
+
+        root = os.path.dirname(os.path.abspath(mpisppy.__file__))
+        tests = os.path.join(root, "tests")
+        readers = set()
+        for directory, _, files in os.walk(root):
+            if directory == tests or directory.startswith(tests + os.sep):
+                continue
+            for fname in files:
+                if not fname.endswith(".py"):
+                    continue
+                with open(os.path.join(directory, fname)) as f:
+                    tree = ast.parse(f.read())
+                for node in tree.body:
+                    if isinstance(node, (ast.FunctionDef,
+                                         ast.AsyncFunctionDef)):
+                        if reads(node):
+                            readers.add(node.name)
+                    elif isinstance(node, ast.ClassDef):
+                        for func in node.body:
+                            if (isinstance(func, (ast.FunctionDef,
+                                                  ast.AsyncFunctionDef))
+                                    and reads(func)):
+                                readers.add(f"{node.name}.{func.name}")
+        self.assertIn("XhatShuffleInnerBound._restore_loop_state_if_resuming",
+                      readers, msg="the scan found nothing, so it proves "
+                                   "nothing")
+        paths = {name for name, _ in self.PATHS}
+        self.assertEqual(
+            readers - paths - self.RESTORED_STATE_ACCESSORS, set(),
+            msg="these functions read what a resume restored but are not in "
+                "PATHS, so nothing checks that their steps are agreed")
 
     def test_no_checkpointing_step_is_called_outside_an_agreement(self):
         for name, entry in self.PATHS:
