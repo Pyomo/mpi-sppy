@@ -448,10 +448,11 @@ when it has something new to record, the hub writes at iteration boundaries,
 and neither waits for the other. A spoke whose file is missing -- because the
 earlier run stopped before it found anything, or because that spoke was not in
 the earlier run at all -- simply starts without an incumbent and says so in
-the log. The xhatshuffle cursor is written beside the incumbent, so such a
-spoke also walks its scenarios from the beginning. A spoke on several ranks
-keeps one file per rank, and if they do not all hold the same incumbent -- a
-write failed on one rank, say -- it starts without one too, and says why.
+the log. An xhatshuffle spoke with no file also starts its walk through the
+scenarios from the beginning, since its place in that walk is kept in the same
+file. A spoke on several ranks keeps one file per rank, and if they do not
+all hold the same incumbent -- a write failed on one rank, say -- it starts
+without one too, and says why.
 
 Each file is named for the spoke's class and for which spoke of that class it
 is, rather than for the cylinder's position in the wheel, because which

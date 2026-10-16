@@ -1874,11 +1874,12 @@ def restore_dual_spoke_state(opt, state):
     W: the next xbar is computed from them, and a missing one would be left at
     the throwaway Iter0 solve's value.
 
-    So is a weight or a value that is not a finite number. A None or a
-    string raises in the Wbar_by_node that follows, on this rank alone and
-    outside any agreement, while the other ranks wait in its allreduce. A NaN
-    nonant passes the E[W] check, which looks only at W, and then becomes
-    the next xbar.
+    So is a weight or a value that is not a finite number. A None weight
+    raises in the Wbar_by_node that follows, on this rank alone and outside
+    any agreement, while the other ranks wait in its allreduce. A string
+    either raises there too or is read there as a number and fails later, in
+    Update_W. A NaN nonant passes the E[W] check, which looks only at W, and
+    then becomes the next xbar.
 
     Every scenario is checked before any model is changed, so a refusal leaves
     the models as Iter0 left them rather than partly restored.

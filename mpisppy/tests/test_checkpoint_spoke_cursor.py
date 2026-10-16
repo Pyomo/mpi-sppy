@@ -583,9 +583,10 @@ class TestDualStateRestoreRefusesBeforeChanging(unittest.TestCase):
                 self.assertEqual(self._snapshot(opt), before)
 
     def test_a_value_that_is_not_a_finite_number_is_refused(self):
-        """A None or a string would raise in Wbar_by_node on this rank alone,
-        outside any agreement; a NaN nonant would pass the E[W] check and
-        become the next xbar."""
+        """A None weight would raise in Wbar_by_node on this rank alone,
+        outside any agreement; a numeric string would pass it and the E[W]
+        check and fail in Update_W; a NaN nonant would pass the E[W] check
+        and become the next xbar."""
         for where in ("W", "values"):
             for bad in (None, "7.0", float("nan"), float("inf")):
                 with self.subTest(where=where, bad=bad):
