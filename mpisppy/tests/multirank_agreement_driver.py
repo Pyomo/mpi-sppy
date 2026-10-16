@@ -41,32 +41,71 @@ from mpisppy import generic_cylinders
 INJECTED = "INJECTED FAILURE"
 
 #: One step inside each agreement on the setup and restore paths, named by the
-#: module attribute to replace. Each takes the cylinder's ``opt`` as its first
-#: argument, which is how the sabotage picks a single rank: the ranks of every
-#: cylinder that reaches the step are numbered from zero, so this fails on one
-#: rank of that cylinder and leaves the others to discover it.
+#: module attribute to replace and, where two cylinders take the same step,
+#: by the class of the ``opt`` to fail it on. Each step takes that ``opt`` as
+#: its first argument, which is how the sabotage picks a single rank: the
+#: ranks of every cylinder that reaches the step are numbered from zero, so
+#: this fails on one rank of that cylinder and leaves the others to discover
+#: it.
 STEPS = {
     # Setup, on every cylinder that checkpoints: Checkpointer.__init__.
-    "probe_directory_is_writable": (ckpt, "probe_directory_is_writable"),
+    "probe_directory_is_writable": (ckpt, "probe_directory_is_writable", None),
     # Restore, on the hub: PHBase._restore_from_checkpoint_if_resuming.
-    "load_checkpoint": (ckpt, "load_checkpoint"),
+    "load_checkpoint": (ckpt, "load_checkpoint", None),
     # Restore, on an xhat spoke: Checkpointer._restore_incumbent, which reads
     # the file and then puts the values back, agreeing on each.
-    "load_spoke_incumbent": (ckpt, "load_spoke_incumbent"),
-    "restore_spoke_incumbent": (ckpt, "restore_spoke_incumbent"),
-    # Restore, at the end of the hub's Iter0:
-    # PHBase._restore_extension_state_if_resuming.
-    "restore_extension_state": (ckpt, "restore_extension_state"),
+    "load_spoke_incumbent": (ckpt, "load_spoke_incumbent", None),
+    "restore_spoke_incumbent": (ckpt, "restore_spoke_incumbent", None),
+    # Restore, at the end of the hub's Iter0 and again at the end of a
+    # spoke's xhat_prep. Two agreements, one for each, so each is failed
+    # where it lives: the hub's would otherwise end the job first every time
+    # and the spoke's would never be reached.
+    "restore_extension_state": (ckpt, "restore_extension_state", "PH"),
+    "restore_extension_state_on_a_spoke":
+        (ckpt, "restore_extension_state", "Xhat_Eval"),
+    # Restore, on a dual cylinder: Checkpointer.post_iter0, which reads W,
+    # puts it back, and checks it reproduces the E[W] its file recorded,
+    # agreeing on each.
+    "load_dual_spoke_state": (ckpt, "load_dual_spoke_state", None),
+    "restore_dual_spoke_state": (ckpt, "restore_dual_spoke_state", None),
+    "require_restored_duals_match_their_file":
+        (ckpt, "require_restored_duals_match_their_file", None),
+    # Restore, on the hub: Checkpointer.post_iter0, which lists the spoke
+    # files no cylinder of this run will read.
+    "unclaimed_spoke_files": (ckpt, "unclaimed_spoke_files", None),
 }
+
+
+def _seed_spoke_extension_state():
+    """Give an xhat spoke something to restore for its extensions.
+
+    An extension's state reaches a spoke through its incumbent file, and no
+    extension mpi-sppy ships attaches to an xhat spoke with state of its own,
+    so the spoke's restore is normally handed None and its agreement does
+    nothing. Seeding an empty entry -- on every rank, so they all still take
+    the same path -- is what makes the step below reachable at all.
+    """
+    real = ckpt.load_spoke_incumbent
+
+    def seeding(opt, *args, **kwargs):
+        state = real(opt, *args, **kwargs)
+        if state is not None and state.get("extension_state") is None:
+            state["extension_state"] = {"extensions": {}}
+        return state
+
+    ckpt.load_spoke_incumbent = seeding
 
 
 def _sabotage(step, cylinder_rank):
     """Make one rank's ``step`` raise, on every cylinder that runs it."""
-    module, attribute = STEPS[step]
+    module, attribute, on_class = STEPS[step]
+    if step == "restore_extension_state_on_a_spoke":
+        _seed_spoke_extension_state()
     real = getattr(module, attribute)
 
     def failing(opt, *args, **kwargs):
-        if int(opt.cylinder_rank) == cylinder_rank:
+        if (int(opt.cylinder_rank) == cylinder_rank
+                and (on_class is None or type(opt).__name__ == on_class)):
             print(f"{INJECTED}: {step} on cylinder rank {cylinder_rank} of "
                   f"{type(opt).__name__}", flush=True)
             raise RuntimeError(f"{step} failed (injected by the test)")

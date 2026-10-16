@@ -938,13 +938,15 @@ def add_wxbar_read_write(hub_dict, cfg):
             })
     return hub_dict
 
-def add_checkpointing(cylinder_dict, cfg):
+def add_checkpointing(cylinder_dict, cfg, role="hub"):
     """Attach the Checkpointer extension and forward its options.
 
-    Used for the PH hub and for the xhat spokes, which checkpoint the best
+    Used for the PH hub, for the xhat spokes, which checkpoint the best
     solution they have found (the hub checkpoint does not carry it -- see
-    section 9 item 6 of the design). The extension knows which of the two it
-    is attached to; everything here is the same either way.
+    section 9 item 6 of the design), and for the dual cylinders, which
+    checkpoint the W they produce. The extension can tell the first two apart
+    by the opt class it is attached to; ``role`` is how it learns about the
+    third, whose opt is a PH like the hub's.
 
     Both --checkpoint-dir (write) and --resume-from (read) are handled here.
     On the hub, resuming does not need the extension -- that resume branch
@@ -969,14 +971,30 @@ def add_checkpointing(cylinder_dict, cfg):
             {"checkpoint_dir": cfg.get("checkpoint_dir", None),
              "checkpoint_backend": cfg.checkpoint_backend,
              "checkpoint_every_iterations": cfg.checkpoint_every_iterations,
+             # Forwarded to the spokes too, which ignore it: they write
+             # whenever they have something new, so there is nothing for a
+             # deadline to anticipate.
+             "checkpoint_before_seconds":
+                 cfg.get("checkpoint_before_seconds", None),
+             # Which of the three kinds of cylinder this is. The extension
+             # can tell an xhat spoke from the hub by its opt class, but a
+             # dual cylinder runs PH too, so it is told.
+             "checkpoint_role": role,
             })
 
     # Outside the guard above: --stop-at-iteration-number bounds the study,
     # and a study is one or more runs, so it is meaningful on its own. A run
     # that sets it without asking for checkpointing gets a plain "stop at this
     # iteration number" rather than an option that is silently dropped.
-    cylinder_dict["opt_kwargs"]["options"]["stop_at_iteration_number"] = \
-        cfg.get("stop_at_iteration_number", None)
+    #
+    # Not for a dual cylinder, which counts its own iterations and is given a
+    # deliberately enormous PHIterLimit so that it runs until the hub is done.
+    # A study bound is a number of *hub* iterations; letting it reach the
+    # cylinder's own loop would stop it at that count and starve the hub of
+    # duals for the rest of the run.
+    if role != "dual_spoke":
+        cylinder_dict["opt_kwargs"]["options"]["stop_at_iteration_number"] = \
+            cfg.get("stop_at_iteration_number", None)
 
     if _hasit(cfg, 'resume_from'):
         cylinder_dict["opt_kwargs"]["options"]["resume_from"] = cfg.resume_from
@@ -1535,6 +1553,9 @@ def ph_dual_spoke(
     options["display_timing"] = False
 
     add_ph_tracking(ph_dual_spoke, cfg, spoke=True)
+    # Same reason as relaxed_ph below: the W this cylinder produces is state
+    # no other cylinder's checkpoint holds.
+    add_checkpointing(ph_dual_spoke, cfg, role="dual_spoke")
 
     return ph_dual_spoke
 
@@ -1576,6 +1597,10 @@ def relaxed_ph_spoke(
     options["display_timing"] = False
 
     add_ph_tracking(relaxed_ph_spoke, cfg, spoke=True)
+    # This cylinder produces the W the primal hub iterates on, so a resumed
+    # wheel that let it start from zero would hand the hub a different dual
+    # than the study had reached.
+    add_checkpointing(relaxed_ph_spoke, cfg, role="dual_spoke")
 
     return relaxed_ph_spoke
 

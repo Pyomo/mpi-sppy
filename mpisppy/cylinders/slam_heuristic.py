@@ -58,6 +58,7 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
         # As for the L-shaped xhatter: cfg_vanilla attaches the Checkpointer
         # to this spoke through _Xhat_Eval_spoke_foundation.
         self.restore_checkpointed_incumbent()
+        self._restore_extension_state_if_resuming()
 
     def extract_local_candidate_soln(self):
         num_scen = len(self.opt.local_scenarios)

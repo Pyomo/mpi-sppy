@@ -51,6 +51,10 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
 
         self.opt._save_nonants() # make the cache
 
+        # This spoke runs no extension post_iter0, so nothing after this
+        # point would overwrite what the restore puts back.
+        self._restore_extension_state_if_resuming()
+
         # iter0 stuff done; Xhat_Eval's subsequent solves pull the
         # iterk fold directly from _effective_solver_options.
         ### end iter0 stuff

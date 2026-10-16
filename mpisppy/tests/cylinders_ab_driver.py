@@ -196,18 +196,35 @@ def _spoke_marker(wheel):
 
     A test cannot otherwise tell a restored incumbent from one the spoke
     re-found on its own: farmer is deterministic, so the resumed spoke
-    converges on the same answer either way.
+    converges on the same answer either way. The same goes for the loop
+    cursor, which leaves no trace in the answer at all.
     """
     ext = _checkpointer(wheel.spcomm.opt)
     if ext is None:
         return None
+    spoke = wheel.spcomm
     return {
-        "cylinder": type(wheel.spcomm).__name__,
-        "strata_rank": wheel.spcomm.strata_rank,
+        "cylinder": type(spoke).__name__,
+        "strata_rank": spoke.strata_rank,
         # What this spoke holds at the end: the objective of the solution
-        # it would write if the hub credits it with the inner bound.
-        "best_solution_obj_val": wheel.spcomm.opt.best_solution_obj_val,
+        # it would write if the hub credits it with the inner bound. None on
+        # a dual cylinder, which holds no solution.
+        "best_solution_obj_val": getattr(spoke.opt, "best_solution_obj_val",
+                                         None),
         "restored_incumbent_obj": ext.restored_incumbent_obj,
+        # The iteration a dual cylinder's restored W was written at, or None
+        # on a cylinder that has no such state or did not restore any.
+        "restored_dual_generation": getattr(ext, "restored_dual_generation",
+                                            None),
+        # What the loop actually *adopted*, not what the Checkpointer read.
+        # The two differ whenever a cursor is read and then refused, and a
+        # test that watched the read would score that as a success.
+        "applied_loop_state": getattr(spoke, "applied_loop_state", None),
+        # Only the xhatter spokes have a loop with a place in it. The dual
+        # cylinders run PH, whose iterate is not a cursor.
+        "final_loop_state": (spoke.checkpoint_loop_state()
+                             if hasattr(spoke, "checkpoint_loop_state")
+                             else None),
         "restored_values": _restored_values or None,
     }
 
@@ -272,15 +289,17 @@ def main():
         marker = _spoke_marker(wheel)
         if marker is None:
             return
+        # Rank 0's marker lands at the ".spoke<strata>" name the
+        # single-rank-per-cylinder harnesses read. The per-rank copies go
+        # under a different prefix on purpose: those harnesses collect
+        # everything named ".spoke*", and a second file per spoke would
+        # arrive there as a second spoke.
         if wheel.cylinder_rank == 0:
             with open(f"{out_path}.spoke{wheel.strata_rank}", "w") as f:
                 json.dump(marker, f)
-        # And every rank's own, under a name the single-rank harness's
-        # ".spoke" prefix does not match: a spoke's ranks each restore their
-        # own file, and only comparing them shows whether they agree.
         marker["cylinder_rank"] = int(wheel.cylinder_rank)
-        with open(f"{out_path}.byrank.spoke{wheel.strata_rank}"
-                  f".{wheel.cylinder_rank:04d}", "w") as f:
+        with open(f"{out_path}.cyl{wheel.strata_rank}"
+                  f"rank{wheel.cylinder_rank:04d}", "w") as f:
             json.dump(marker, f)
 
 
