@@ -126,22 +126,25 @@ def _Compute_Xbar(opt, verbose=False):
 def Wbar_by_node(opt):
     """E[W] per tree node: the probability-weighted sum of W over scenarios.
 
-    PH keeps this at zero -- sum_s p_s W_s = 0 is the dual feasibility a
-    Lagrangian bound built from W relies on -- so every entry of what comes
-    back should be zero up to the drift of accumulating it in floating point,
-    which is a fraction of the size of the weights themselves (see
-    W_magnitude_by_node). It is what makes W a point in the orthogonal
-    complement of the nonanticipativity subspace.
+    sum_s p_s W_s = 0 is the dual feasibility a Lagrangian bound built from W
+    relies on, and is what makes W a point in the orthogonal complement of the
+    nonanticipativity subspace. PH's Update_W keeps it when rho is the same in
+    every scenario: it adds rho * (x_s - xbar), and xbar is the probability
+    weighted mean, so the additions sum to zero when rho factors out. Then
+    every entry of what comes back is zero up to the drift of accumulating it
+    in floating point, which is a fraction of the size of the weights
+    themselves (see W_magnitude_by_node).
+
+    It is not guaranteed. The rho setter is called once per scenario and may
+    return a different rho for each, and then E[W] moves away from zero.
+    _Compute_Wbar is the only code that tries to put it back, and the only
+    caller is APH when the option display_convergence_detail is set. It
+    subtracts only on cylinder rank 0's scenarios, so on more than one rank
+    it does not bring E[W] to zero.
 
     Collective: the scenarios of a node are spread over the ranks, so the sum
     is an Allreduce over that node's comm and every rank gets the same
     answer. Returns {node name: numpy array over the node's nonants}.
-
-    NOTE: the invariant holds because Update_W adds rho * (x_s - xbar) with
-    the same rho in every scenario and an xbar that is the probability
-    weighted mean. A scenario-dependent rho would not preserve it, and would
-    need something else to restore E[W] = 0 before the weights are used as
-    duals.
 
     Args:
         opt (phbase or xhat_eval object): object with the local scenarios
