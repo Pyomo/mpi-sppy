@@ -1858,6 +1858,12 @@ def load_dual_spoke_state(opt, ckpt_dir, cylinder, ordinal):
     return state
 
 
+def _is_finite_number(value):
+    """True for an int or float (numpy's included) that is not NaN or inf."""
+    return (isinstance(value, (int, float, np.integer, np.floating))
+            and math.isfinite(value))
+
+
 def restore_dual_spoke_state(opt, state):
     """Put W and the nonanticipative values back on this cylinder's models.
 
@@ -1867,6 +1873,12 @@ def restore_dual_spoke_state(opt, state):
     bound that quietly stopped improving. The nonant values matter as much as
     W: the next xbar is computed from them, and a missing one would be left at
     the throwaway Iter0 solve's value.
+
+    So is a weight or a value that is not a finite number. A None or a
+    string raises in the Wbar_by_node that follows, on this rank alone and
+    outside any agreement, while the other ranks wait in its allreduce. A NaN
+    nonant passes the E[W] check, which looks only at W, and then becomes
+    the next xbar.
 
     Every scenario is checked before any model is changed, so a refusal leaves
     the models as Iter0 left them rather than partly restored.
@@ -1883,6 +1895,17 @@ def restore_dual_spoke_state(opt, state):
                 f"missing {len(missing_w)} dual weight(s) and "
                 f"{len(missing_x)} nonant value(s) this model has (e.g. "
                 f"{(missing_w + missing_x)[:3]}), so it cannot be restored."
+            )
+        bad = [(ndn_i, entry["W"][ndn_i]) for ndn_i in nonants
+               if not _is_finite_number(entry["W"][ndn_i])]
+        bad += [(var.name, entry["values"][var.name])
+                for var in nonants.values()
+                if not _is_finite_number(entry["values"][var.name])]
+        if bad:
+            raise CheckpointMismatch(
+                f"The checkpointed dual state for scenario '{sname}' has "
+                f"{len(bad)} dual weight(s) or nonant value(s) that are not "
+                f"finite numbers (e.g. {bad[:3]}), so it cannot be restored."
             )
     for sname, s in opt.local_scenarios.items():
         entry = state["duals"][sname]

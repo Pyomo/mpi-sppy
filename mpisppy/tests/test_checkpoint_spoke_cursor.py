@@ -582,6 +582,24 @@ class TestDualStateRestoreRefusesBeforeChanging(unittest.TestCase):
                         opt, self._state(opt, drop=drop))
                 self.assertEqual(self._snapshot(opt), before)
 
+    def test_a_value_that_is_not_a_finite_number_is_refused(self):
+        """A None or a string would raise in Wbar_by_node on this rank alone,
+        outside any agreement; a NaN nonant would pass the E[W] check and
+        become the next xbar."""
+        for where in ("W", "values"):
+            for bad in (None, "7.0", float("nan"), float("inf")):
+                with self.subTest(where=where, bad=bad):
+                    opt = TestRestoredDualsMustMatchTheirFile()._prepped_ph()
+                    before = self._snapshot(opt)
+                    state = self._state(opt)
+                    entries = state["duals"][list(state["duals"])[-1]][where]
+                    entries[next(iter(entries))] = bad
+                    with self.assertRaises(
+                            checkpointing.CheckpointMismatch) as cm:
+                        checkpointing.restore_dual_spoke_state(opt, state)
+                    self.assertIn("not finite numbers", str(cm.exception))
+                    self.assertEqual(self._snapshot(opt), before)
+
 
 if __name__ == "__main__":
     unittest.main()
