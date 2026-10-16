@@ -145,7 +145,16 @@ def assign_rho_with_fallback(opt, default_rho, source, report_state,
     """
     defaulted = set()
     for s in opt.local_scenarios.values():
+        derived_targets = getattr(
+            s._mpisppy_data, "linear_surrogate_target_indices", ()
+        )
         for ndn_i, rho in s._mpisppy_model.rho.items():
+            # Linear-surrogate rho is a derived quantity applied after all
+            # primary setters/updaters. Do not temporarily assign or report a
+            # fallback based on the target's intentionally zero objective
+            # coefficient.
+            if ndn_i in derived_targets:
+                continue
             rho._value, used_default = resolve_rho(value_fn(s, ndn_i), default_rho)
             if used_default:
                 defaulted.add(ndn_i)

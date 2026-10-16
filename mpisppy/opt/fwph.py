@@ -29,6 +29,7 @@ from mpisppy import global_toc
 from pyomo.repn.standard_repn import generate_standard_repn
 from mpisppy.utils import nice_join
 from mpisppy.utils.sputils import find_active_objective
+from mpisppy.utils.linear_surrogate import set_derived_surrogate_rhos
 from pyomo.core.expr.visitor import replace_expressions
 from pyomo.core.expr.numeric_expr import LinearExpression
 
@@ -254,6 +255,10 @@ class FWPH(mpisppy.phbase.PHBase):
 
             if (self.extensions): 
                 self.extobject.miditer()
+
+            # FWPH has its own iteration loop, so mirror PHBase's final rho
+            # transformation after extensions have updated ordinary rhos.
+            set_derived_surrogate_rhos(self)
 
             if (self.ph_converger):
                 self._swap_nonant_vars()

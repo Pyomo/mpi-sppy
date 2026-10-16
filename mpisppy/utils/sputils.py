@@ -259,6 +259,9 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
         name: scenario_creator(name, **scenario_creator_kwargs)
         for name in scenario_names
     }
+    from mpisppy.utils.linear_surrogate import finalize_linear_surrogates
+    for scenario in scen_dict.values():
+        finalize_linear_surrogates(scenario)
 
     if (len(scen_dict) == 0):
         raise RuntimeError("create_EF() received empty scenario list")
@@ -370,6 +373,10 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
             sum to 1 (as a full EF does) and is therefore NOT supported for
             bundles, whose member probabilities sum to less than 1.
     """
+    from mpisppy.utils.linear_surrogate import finalize_linear_surrogates
+    for scenario in scen_dict.values():
+        finalize_linear_surrogates(scenario)
+
     is_min, clear = _models_have_same_sense(scen_dict)
     if (not clear):
         raise RuntimeError('Cannot build the extensive form out of models '
@@ -1776,7 +1783,9 @@ class _ScenTree():
     
     
 ######## Utility to attach the one and only node to a two-stage scenario #######
-def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None, surrogate_nonant_list=None, do_uniform=True):
+def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None,
+                     surrogate_nonant_list=None, do_uniform=True,
+                     linear_surrogate_definitions=None):
     """ Create a root node as a list to attach to a scenario model
     Args:
         model (ConcreteModel): model to which this will be attached
@@ -1796,6 +1805,11 @@ def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None, surrog
               fix nonants to calculate solutions, and the EF creator.
               NOTE: These types of variables are typically artificially added
                     to the model to capture hierarchical model features.
+        linear_surrogate_definitions (list of LinearSurrogateDefinition):
+              Linear Pyomo expressions of ordinary nonants. mpi-sppy creates
+              the auxiliary variables and linking constraints, registers them
+              as surrogate nonants, and derives their rho values from the
+              expression variables.
         do_uniform (boolean): controls a side-effect to deal with missing probs
 
     Note: 
@@ -1805,6 +1819,7 @@ def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None, surrog
         scenario_tree.ScenarioNode("ROOT", 1.0, 1, firstobj, varlist, model,
                                    nonant_ef_suppl_list = nonant_ef_suppl_list,
                                    surrogate_nonant_list = surrogate_nonant_list,
+                                   linear_surrogate_definitions = linear_surrogate_definitions,
                                   )
     ]
     if do_uniform:
