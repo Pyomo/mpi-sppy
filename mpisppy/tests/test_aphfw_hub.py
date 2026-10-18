@@ -1,0 +1,95 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
+"""Tests for the optional C++ FW-APH hub (--aphfw-hub).
+
+The hub needs the compiled aphfw_cpp module, which a normal install does not
+build, so most of this file checks that mpi-sppy is unaffected when it is
+missing. The end-to-end run is skipped unless aphfw_cpp can be imported.
+"""
+import importlib.util
+import os
+import runpy
+import subprocess
+import sys
+import unittest
+from unittest.mock import patch
+
+import mpisppy.utils.config as config
+from mpisppy.generic.parsing import add_driver_args
+from mpisppy.tests.utils import get_solver
+
+solver_available, solver_name, _, _ = get_solver()
+aphfw_cpp_available = importlib.util.find_spec("aphfw_cpp") is not None
+
+
+def _cfg(**values):
+    cfg = config.Config()
+    add_driver_args(cfg)
+    for name, value in values.items():
+        cfg[name] = value
+    return cfg
+
+
+class TestAphfwOptional(unittest.TestCase):
+    """Without the C++ build, nothing but --aphfw-hub notices."""
+
+    def test_import_does_not_load_aphfw_cpp(self):
+        code = ("import sys; import mpisppy.opt.aphfw, mpisppy.generic.hub, "
+                "mpisppy.cylinders.hub, mpisppy.utils.cfg_vanilla; "
+                "print('aphfw_cpp' in sys.modules)")
+        out = subprocess.run([sys.executable, "-c", code], check=True,
+                             capture_output=True, text=True,
+                             env=dict(os.environ))
+        self.assertEqual(out.stdout.strip().splitlines()[-1], "False")
+
+    def test_flag_is_registered(self):
+        cfg = _cfg()
+        self.assertIn("aphfw_hub", cfg)
+        self.assertFalse(cfg.aphfw_hub)
+        self.assertIn("aphfw_hub", config.Config.HUBS)
+
+    def test_missing_build_gives_build_instructions(self):
+        from mpisppy.opt.aphfw import _import_aphfw_cpp
+        # A None entry makes the import fail whether or not it is built.
+        with patch.dict(sys.modules, {"aphfw_cpp": None}):
+            with self.assertRaisesRegex(RuntimeError, "cmake -S mpisppy/aphfw_cpp"):
+                _import_aphfw_cpp()
+
+    def test_one_hub_only(self):
+        cfg = _cfg(aphfw_hub=True, fwph_hub=True)
+        with self.assertRaisesRegex(ValueError, "Only one hub"):
+            cfg.checker()
+
+    def test_rejects_integer_relax_then_enforce(self):
+        from mpisppy.utils.cfg_vanilla import _check_aphfw_compat
+        with self.assertRaisesRegex(RuntimeError, "integer-relax-then-enforce"):
+            _check_aphfw_compat(_cfg(aphfw_hub=True,
+                                     integer_relax_then_enforce=True))
+
+
+@unittest.skipIf(not aphfw_cpp_available, "aphfw_cpp is not built")
+@unittest.skipIf(not solver_available, "no MIP solver available")
+class TestAphfwHubRun(unittest.TestCase):
+
+    def test_farmer_hub_only(self):
+        argv = [
+            "generic_cylinders",
+            "--module-name", "mpisppy.tests.examples.farmer",
+            "--num-scens", "3",
+            "--solver-name", solver_name,
+            "--aphfw-hub",
+            "--default-rho", "1",
+            "--aphfw-max-cycles", "5",
+        ]
+        with patch.object(sys, "argv", argv):
+            runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
+
+
+if __name__ == "__main__":
+    unittest.main()

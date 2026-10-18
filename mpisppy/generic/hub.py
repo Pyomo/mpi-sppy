@@ -56,6 +56,14 @@ def build_hub_dict(cfg, beans, scenario_creator_kwargs,
                        variable_probability=variable_probability,
                        all_nodenames=all_nodenames,
                    )
+    elif cfg.get("aphfw_hub", False):
+        hub_dict = vanilla.aphfw_hub(*beans,
+                                     scenario_creator_kwargs=scenario_creator_kwargs,
+                                     ph_extensions=None,
+                                     rho_setter=rho_setter,
+                                     variable_probability=variable_probability,
+                                     all_nodenames=all_nodenames,
+                                     )
     elif cfg.ph_primal_hub:
         hub_dict = vanilla.ph_primal_hub(*beans,
                                   scenario_creator_kwargs=scenario_creator_kwargs,
