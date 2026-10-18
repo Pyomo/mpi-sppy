@@ -1,6 +1,8 @@
 mpi-sppy
 ========
 
+[![A COIN-OR Project](https://coin-or.github.io/coin-or-badge.png)](https://www.coin-or.org)
+
 Optimization under uncertainty for [Pyomo](https://pyomo.org) and other models.
 
 [Documentation is available at readthedocs](https://mpi-sppy.readthedocs.io/en/latest/) and
