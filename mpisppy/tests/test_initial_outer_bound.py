@@ -1,11 +1,19 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 import math
 import unittest
 from types import SimpleNamespace
 
+import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.cylinders.spcommunicator import SPCommunicator
 from mpisppy.tests.examples import farmer
 from mpisppy.utils.config import Config
-import mpisppy.utils.cfg_vanilla as vanilla
 
 
 def _communicator(is_minimizing, initial_outer_bound=None):
