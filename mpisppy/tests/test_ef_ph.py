@@ -381,7 +381,7 @@ class Test_sizes(unittest.TestCase):
 
         
     @unittest.skipIf(not persistent_available,
-                     "%s solver is not available" % (persistent_solver_name,))
+                     f"{persistent_solver_name} solver is not available")
     def test_persistent_basic(self):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 10
@@ -1033,7 +1033,7 @@ class Test_mutable_probability(unittest.TestCase):
         # different build rather than at the first update.
         import mpisppy.tests.examples.hydro.hydro as hydro
         bfs = [3, 3]
-        snames = ["Scen%d" % (i + 1) for i in range(9)]
+        snames = [f"Scen{i + 1}" for i in range(9)]
         kwargs = dict(
             options={"solver": solver_name, "mutable_probability": True},
             all_scenario_names=snames,

@@ -1132,7 +1132,7 @@ def option_string_to_dict(ostr):
             solver_options[option_key] = None
         else:
             raise RuntimeError("Illegally formed subsolve directive"\
-                               + " option=%s detected" % this_option_string)
+                               + f" option={this_option_string} detected")
     return solver_options
 
 
@@ -1574,8 +1574,7 @@ def scens_to_ranks(scen_count, n_proc, rank, branching_factors = None):
         raise RuntimeError("scens_to_ranks called, but cannot import mpi4py")
     if scen_count < n_proc:
         raise RuntimeError(
-            "More MPI ranks (%d) supplied than needed given the number of scenarios (%d) "
-            % (n_proc, scen_count)
+            f"More MPI ranks ({n_proc}) supplied than needed given the number of scenarios ({scen_count}) "
         )
 
     # for now, we are treating two-stage as a special case
@@ -1902,8 +1901,7 @@ def find_objective(pyomomodel, active=False):
         return obj[0]
     if active or len(obj) > 1:
         raise RuntimeError("Could not identify exactly one active "
-                           "Objective for model '%s' (found %d objectives)"
-                           % (pyomomodel.name, len(obj)))
+                           f"Objective for model '{pyomomodel.name}' (found {len(obj)} objectives)")
     # search again for a single inactive objective
     obj = list(pyomomodel.component_data_objects(
         Objective, descend_into=True))
@@ -1997,7 +1995,7 @@ def create_nodenames_from_branching_factors(BFS):
         old_stage_nodes = stage_nodes
         stage_nodes = []
         for k in range(len(old_stage_nodes)):
-            stage_nodes += ['%s_%i'%(old_stage_nodes[k],b) for b in range(bf)]
+            stage_nodes += [f'{old_stage_nodes[k]}_{b}' for b in range(bf)]
         nodenames += stage_nodes
     return nodenames
 

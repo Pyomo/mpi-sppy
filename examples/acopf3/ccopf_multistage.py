@@ -245,7 +245,7 @@ def pysp2_callback(
 #=============================================================================
 def scenario_denouement(rank, scenario_name, scenario):
 
-    print("Solution for scenario=%s - rank=%d" % (scenario_name, rank))
+    print(f"Solution for scenario={scenario_name} - rank={rank}")
 
     print("LINE OUTAGE INFORMATION")
     for enode in scenario._enodes:
@@ -256,25 +256,25 @@ def scenario_denouement(rank, scenario_name, scenario):
 
     for gen in gens:
 
-        print("GEN: %4s PG:" % gen, end="")
+        print(f"GEN: {gen:>4} PG:", end="")
 
         previous_val = None
         for stage in stages:
             current_val = pyo.value(getattr(scenario, "stage_models_"+str(stage)).pg[gen])
             if previous_val is None:
-                print("%6.2f -->> " % current_val, end=" ")
+                print(f"{current_val:6.2f} -->> ", end=" ")
             else:
                 print("%6.2f" % (current_val-previous_val), end=" ")
             previous_val = current_val
         print("")
 
-        print("GEN: %4s QG:" % gen, end="")
+        print(f"GEN: {gen:>4} QG:", end="")
 
         previous_val = None
         for stage in stages:
             current_val = pyo.value(getattr(scenario, "stage_models_"+str(stage)).qg[gen])
             if previous_val is None:
-                print("%6.2f -->> " % current_val, end=" ")
+                print(f"{current_val:6.2f} -->> ", end=" ")
             else:
                 print("%6.2f" % (current_val-previous_val), end=" ")
             previous_val = current_val

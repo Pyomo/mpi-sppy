@@ -142,7 +142,7 @@ def side_gig(synchro, msg = None):
     """
     if synchro._rank == 0:
         print ("   (rank 0) ^*^* side_gig msg=", str(msg))
-    logging.debug("enter side gig on rank %d" % rank)
+    logging.debug(f"enter side gig on rank {rank}")
 
     # Just to demonstrate how to do it, we will just return if nothing
     # changed in the first reduce.
@@ -164,10 +164,10 @@ def side_gig(synchro, msg = None):
             allthesame = False
             break
     if allthesame:
-        logging.debug("Skipping intermediate side_gig on rank %d" % rank)
+        logging.debug(f"Skipping intermediate side_gig on rank {rank}")
         return
 
-    logging.debug("Doing intermediate side_gig on rank %d" % rank)
+    logging.debug(f"Doing intermediate side_gig on rank {rank}")
     # It is OK for us to directly at global_data on the synchro because
     # the side_gig is "part of" the listener, the listener has the lock,
     # and only the listener updates global_data on the syncrho.
@@ -225,7 +225,7 @@ np.random.seed(seed)
 # Note: at this point the first reduce is the only reduce
 Lens = collections.OrderedDict({"FirstReduce": {"ROOT": 2+n_proc}})
 if rank == 0:
-    logging.debug("iters %d, sleep %f, seed %d" % (iters, sleep, seed))
+    logging.debug(f"iters {iters}, sleep {sleep:f}, seed {seed}")
 # "ROOT" is required to be the name of the global comm
 synchronizer = listener_util.Synchronizer(comms = {"ROOT": fullcomm},
                                        Lens = Lens,
@@ -240,7 +240,7 @@ synchronizer.run(args, kwargs)
 ### now demo the use of a listener side gig between two reductions ###
 if rank == 0:
     print ("testing side gig")
-logging.debug("testing side gig on rank %d" % rank)
+logging.debug(f"testing side gig on rank {rank}")
 
 kwargs = {"msg": "Oh wow, the side gig is running"}
 Lens = collections.OrderedDict({"FirstReduce": {"ROOT": 2+n_proc},

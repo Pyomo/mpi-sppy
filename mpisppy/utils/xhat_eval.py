@@ -166,10 +166,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_time, root=0)
             if self.cylinder_rank == 0:
                 print("Pyomo solve times (seconds):")
-                print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
-                      (np.min(all_pyomo_solve_times),
-                      np.mean(all_pyomo_solve_times),
-                      np.max(all_pyomo_solve_times)))
+                print(f"\tmin={np.min(all_pyomo_solve_times):4.2f} mean={np.mean(all_pyomo_solve_times):4.2f} max={np.max(all_pyomo_solve_times):4.2f}")
                 
     #======================================================================   
     def Eobjective(self, verbose=False, fct=None):

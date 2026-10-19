@@ -585,10 +585,8 @@ class SPOpt(SPBase):
             if self.cylinder_rank == 0:
                 apst = [pst for l_pst in all_pyomo_solve_times for pst in l_pst]
                 print("Pyomo solve times (seconds):")
-                print("\tmin=%4.2f@%d mean=%4.2f max=%4.2f@%d" %
-                      (np.min(apst), np.argmin(apst),
-                       np.mean(apst),
-                       np.max(apst), np.argmax(apst)))
+                print(f"\tmin={np.min(apst):4.2f}@{np.argmin(apst)} mean={np.mean(apst):4.2f} "
+                      f"max={np.max(apst):4.2f}@{np.argmax(apst)}")
 
 
     def Eobjective(self, verbose=False):
@@ -1300,8 +1298,7 @@ class SPOpt(SPBase):
                 if len(asit) == 0:
                     print("Set instance times not available.")
                 else:
-                    print("Set instance times: \tmin=%4.2f mean=%4.2f max=%4.2f" %
-                      (np.min(asit), np.mean(asit), np.max(asit)))
+                    print(f"Set instance times: \tmin={np.min(asit):4.2f} mean={np.mean(asit):4.2f} max={np.max(asit):4.2f}")
 
     def _create_fixed_nonant_cache(self):
         self._initial_fixed_varibles = ComponentSet()
@@ -1379,17 +1376,17 @@ def set_instance_retry(subproblem, solver_plugin, subproblem_name):
         try:
             solver_plugin.set_instance(subproblem)
             if num_retry_attempts > 0:
-                print("Acquired solver license (call to set_instance() for scenario=%s) after %d retry attempts" % (sname, num_retry_attempts))
+                print(f"Acquired solver license (call to set_instance() for scenario={sname}) after {num_retry_attempts} retry attempts")
             break
         # pyomo presently has no general way to trap a license acquisition
         # error - so we're stuck with trapping on "any" exception. not ideal.
         except Exception:
             if num_retry_attempts == 0:
-                print("Failed to acquire solver license (call to set_instance() for scenario=%s) after first attempt" % (sname))
+                print(f"Failed to acquire solver license (call to set_instance() for scenario={sname}) after first attempt")
             else:
-                print("Failed to acquire solver license (call to set_instance() for scenario=%s) after %d retry attempts" % (sname, num_retry_attempts))
+                print(f"Failed to acquire solver license (call to set_instance() for scenario={sname}) after {num_retry_attempts} retry attempts")
             if num_retry_attempts == MAX_ACQUIRE_LICENSE_RETRY_ATTEMPTS:
-                raise RuntimeError("Failed to acquire solver license - call to set_instance() for scenario=%s failed after %d retry attempts" % (sname, num_retry_attempts))
+                raise RuntimeError(f"Failed to acquire solver license - call to set_instance() for scenario={sname} failed after {num_retry_attempts} retry attempts")
             else:
                 sleep_time = random.random()
                 print(f"Sleeping for {sleep_time:.2f} seconds before re-attempting")

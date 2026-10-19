@@ -57,7 +57,7 @@ class TestPHMainFarmer(unittest.TestCase):
         return dict(self.options)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_farmer_obj(self):
         """PH on farmer should approach the EF optimal."""
         ph = mpisppy.opt.ph.PH(
@@ -75,7 +75,7 @@ class TestPHMainFarmer(unittest.TestCase):
         self.assertLess(tbound, FARMER_EF_OBJ)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_farmer_nonants_converge(self):
         """After PH, farmer nonants should be close across scenarios."""
         ph = mpisppy.opt.ph.PH(
@@ -102,7 +102,7 @@ class TestPHMainFarmer(unittest.TestCase):
                             f"Nonant {key} spread {spread} too large")
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_farmer_no_finalize(self):
         """PH.ph_main() with finalize=False returns None for Eobj."""
         ph = mpisppy.opt.ph.PH(
@@ -117,7 +117,7 @@ class TestPHMainFarmer(unittest.TestCase):
         self.assertIsNotNone(tbound)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_farmer_xhatlooper_obj(self):
         """PH with XhatLooper should find a good xhat."""
         from mpisppy.extensions.xhatlooper import XhatLooper
@@ -138,7 +138,7 @@ class TestPHMainFarmer(unittest.TestCase):
         self.assertAlmostEqual(obj, FARMER_EF_OBJ, delta=500)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_farmer_frac_converger(self):
         """FractionalConverger on farmer (LP) converges immediately."""
         from mpisppy.convergers.fracintsnotconv import FractionalConverger
@@ -158,7 +158,7 @@ class TestPHMainFarmer(unittest.TestCase):
         self.assertLess(tbound, FARMER_EF_OBJ)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_farmer_diagnoser(self):
         """Diagnoser should create per-scenario output files."""
         from mpisppy.extensions.diagnoser import Diagnoser
@@ -193,7 +193,7 @@ class TestPHMainFarmer(unittest.TestCase):
                 shutil.rmtree(diagdir)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_farmer_avgminmaxer(self):
         """MinMaxAvg should run and produce valid statistics."""
         from mpisppy.extensions.avgminmaxer import MinMaxAvg
@@ -226,7 +226,7 @@ class TestPHMainFarmer(unittest.TestCase):
         return bool(repn.quadratic_vars) or (repn.nonlinear_expr is not None)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_iter0_uses_user_objective(self):
         """W/prox terms are absent during iteration 0 and attached afterward.
 
@@ -265,7 +265,7 @@ class TestPHMainFarmer(unittest.TestCase):
                          "W should be re-enabled after Iter0")
 
     @unittest.skipIf(not persistent_available,
-                     "%s solver is not available" % (persistent_solver_name,))
+                     f"{persistent_solver_name} solver is not available")
     def test_iter0_defers_with_prox_approx_persistent(self):
         """Deferred attach works with prox linearization on a persistent solver.
 
@@ -327,7 +327,7 @@ class TestPHMainSizes(unittest.TestCase):
         return dict(self.options)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_sizes_obj_range(self):
         """PH on sizes should produce an objective in a reasonable range."""
         ph = mpisppy.opt.ph.PH(
@@ -346,7 +346,7 @@ class TestPHMainSizes(unittest.TestCase):
         self.assertLess(tbound, obj)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_sizes_frac_converger_exercises_ints(self):
         """FractionalConverger on sizes actually counts integer variables."""
         from mpisppy.convergers.fracintsnotconv import FractionalConverger
@@ -367,7 +367,7 @@ class TestPHMainSizes(unittest.TestCase):
         self.assertIsNotNone(conv)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_sizes_fixer(self):
         """Fixer extension should fix some integer variables."""
         from mpisppy.extensions.fixer import Fixer

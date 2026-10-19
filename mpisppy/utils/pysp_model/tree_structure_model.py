@@ -280,8 +280,7 @@ def ScenarioTreeModelFromNetworkX(
             unique_stage_names.add(stage_name)
         if cnt != num_stages:
             raise ValueError(
-                "incorrect number of stages names (%s), should be %s"
-                % (cnt, num_stages))
+                f"incorrect number of stages names ({cnt}), should be {num_stages}")
         if len(unique_stage_names) != cnt:
             raise ValueError("all stage names were not unique")
     else:
@@ -294,9 +293,8 @@ def ScenarioTreeModelFromNetworkX(
         if node_name_attribute is not None:
             if node_name_attribute not in tree.nodes[u]:
                 raise KeyError(
-                    "node '%s' missing node name "
-                    "attribute: '%s'"
-                    % (u, node_name_attribute))
+                    f"node '{u}' missing node name "
+                    f"attribute: '{node_name_attribute}'")
             node_name = tree.nodes[u][node_name_attribute]
         else:
             node_name = u
@@ -310,9 +308,8 @@ def ScenarioTreeModelFromNetworkX(
             if scenario_name_attribute is not None:
                 if scenario_name_attribute not in tree.nodes[u]:
                     raise KeyError(
-                        "node '%s' missing scenario name "
-                        "attribute: '%s'"
-                        % (u, scenario_name_attribute))
+                        f"node '{u}' missing scenario name "
+                        f"attribute: '{scenario_name_attribute}'")
                 scenario_name = tree.nodes[u][scenario_name_attribute]
             else:
                 scenario_name = u
@@ -340,8 +337,7 @@ def ScenarioTreeModelFromNetworkX(
             if edge_probability_attribute is not None:
                 if edge_probability_attribute not in edge:
                     raise KeyError(
-                        "edge '(%s, %s)' missing probability attribute: '%s'"
-                        % (pred[u], u, edge_probability_attribute))
+                        f"edge '({pred[u]}, {u})' missing probability attribute: '{edge_probability_attribute}'")
                 probability = edge[edge_probability_attribute]
             else:
                 probability = 1.0/len(succ[pred[u]])
@@ -372,9 +368,8 @@ def ScenarioTreeModelFromNetworkX(
                     pyomo.core.value(m.ConditionalProbability[child_name])
             if abs(total_probability - 1.0) > 1e-5:
                 raise ValueError(
-                    "edge probabilities leaving node '%s' "
-                    "do not sum to 1 (total=%r)"
-                    % (u, total_probability))
+                    f"edge probabilities leaving node '{u}' "
+                    f"do not sum to 1 (total={total_probability!r})")
         else:
             # a leaf node
             scenario_name = node_to_scenario[u]

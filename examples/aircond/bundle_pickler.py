@@ -53,8 +53,7 @@ def main():
 
     if numbuns < n_proc:
         raise RuntimeError(
-            "More MPI ranks (%d) supplied than needed given the number of bundles (%d) "
-            % (n_proc, numbuns)
+            f"More MPI ranks ({n_proc}) supplied than needed given the number of bundles ({numbuns}) "
         )
 
     avg = numbuns / n_proc

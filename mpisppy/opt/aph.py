@@ -325,7 +325,7 @@ class APH(ph_base.PHBase):
         # If we are still here, we have enough to do the calculations
         logging.debug(f'^^^ debug good to go  listener_side_gig on cylinder_rank {self.cylinder_rank}; xbarin={xbarin}')
         if verbose and self.cylinder_rank == 0:
-            print ("(%d)" % xbarin)
+            print (f"({xbarin})")
             
         # set the xbar, xsqbar, and ybar in all the scenarios
         for k,s in self.local_scenarios.items():
@@ -786,12 +786,10 @@ class APH(ph_base.PHBase):
 
         if dtiming:
             print("Pyomo solve times (seconds):")
-            print("\trank=,%d, n=,%d, min=,%4.2f, mean=,%4.2f, max=,%4.2f" %
-                  (self.global_rank,
-                   len(pyomo_solve_times),
-                   np.min(pyomo_solve_times),
-                   np.mean(pyomo_solve_times),
-                   np.max(pyomo_solve_times)))
+            print(f"\trank=,{self.global_rank}, n=,{len(pyomo_solve_times)}, "
+                  f"min=,{np.min(pyomo_solve_times):4.2f}, "
+                  f"mean=,{np.mean(pyomo_solve_times):4.2f}, "
+                  f"max=,{np.max(pyomo_solve_times):4.2f}")
 
         return dispatch_list
 
@@ -951,7 +949,7 @@ class APH(ph_base.PHBase):
             if self.use_lag:
                 self._update_foropt(dlist)
 
-        logging.debug('Setting synchronizer.quitting on rank %d' % self.cylinder_rank)
+        logging.debug(f'Setting synchronizer.quitting on rank {self.cylinder_rank}')
         self.synchronizer.quitting = 1
 
     #====================================================================
