@@ -9,6 +9,7 @@
 import mpisppy.cylinders.spoke
 import mpisppy.utils.sputils as sputils
 from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
+from mpisppy.utils.linear_surrogate import set_derived_surrogate_rhos
 
 class _LagrangianMixin:
 
@@ -78,6 +79,7 @@ class LagrangianOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinder
         if self.opt.options.get("subgradient_while_waiting", False):
             # compute a subgradient step
             self.opt.Compute_Xbar(self.verbose)
+            set_derived_surrogate_rhos(self.opt)
             self.opt.Update_W(self.verbose)
             bound = self.lagrangian(warmstart=warmstart)
             if bound is not None:

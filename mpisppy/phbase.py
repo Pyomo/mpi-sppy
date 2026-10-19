@@ -22,6 +22,7 @@ import mpisppy.utils.checkpointing as checkpointing
 
 from mpisppy.utils.prox_approx import ProxApproxManager
 from mpisppy.utils.rho_utils import check_rhos_positive
+from mpisppy.utils.linear_surrogate import set_derived_surrogate_rhos
 from mpisppy import global_toc
 
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
@@ -1665,6 +1666,9 @@ class PHBase(mpisppy.spopt.SPOpt):
             else:
                 self._use_rho_setter(False)
 
+        if not self._resumed_from_checkpoint:
+            set_derived_surrogate_rhos(self)
+
         # Central enforcement of rho > 0 once all initial rho-setting is done
         # (defaults, post_iter0 rho extensions, and any rho_setter); see issue #560.
         check_rhos_positive(self, source="after Iter0 rho setup")
@@ -1799,6 +1803,11 @@ class PHBase(mpisppy.spopt.SPOpt):
             #global_toc('Rank: {} - After convergence_diff'.format(self.cylinder_rank), True)
             if have_extensions:
                 self.extobject.miditer()
+
+            # Extensions may update ordinary rhos in miditer. Derived
+            # surrogate rhos are always the final rho transformation before
+            # the next PH solve.
+            set_derived_surrogate_rhos(self)
 
             # The hub object takes precedence
             # over the converger, such that

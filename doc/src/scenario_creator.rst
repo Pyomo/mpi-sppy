@@ -87,6 +87,63 @@ The nonanticipativity of these variables should be implied by the nonanticipativ
 These variables are sometimes useful to help iterative algorithms converge faster by capturing hierarchical model decisions.
 See ``examples/sslp/sslp.py`` for an example, where the single surrogate nonanticipative variable captures the total number of installed servers.
 
+Linear Surrogate Definitions
+----------------------------
+
+For a surrogate that is an affine expression of ordinary nonants, prefer a
+``LinearSurrogateDefinition`` over manually creating the auxiliary variable
+and constraint. For example::
+
+   from mpisppy.utils.linear_surrogate import LinearSurrogateDefinition
+
+   total_capacity = LinearSurrogateDefinition(
+       name="total_capacity",
+       expression=sum(model.UnitSize[g] * model.Build[g] for g in model.G),
+   )
+   sputils.attach_root_node(
+       model,
+       model.FirstStageCost,
+       [model.Build],
+       linear_surrogate_definitions=[total_capacity],
+   )
+
+mpi-sppy verifies that the expression is linear and that all of its variables
+are ordinary nonants on the same node. It then creates the auxiliary variable
+and linking constraint and registers the variable as a surrogate nonant.
+Mutable parameters are not permitted in the expression because its
+coefficients and constant must remain unchanged after scenario ingestion.
+
+The rho for a generated surrogate is derived after all ordinary rho setters
+and updaters have run. For :math:`z=\sum_i a_i x_i+b`, mpi-sppy uses
+
+.. math::
+
+   \rho_z = \gamma\,\operatorname{median}_i
+             \left(\frac{\rho_i}{a_i^2}\right),
+
+where :math:`\gamma` is the definition's optional ``rho_multiplier``. This
+scaling is invariant to the units used for each source term. Variables fixed
+by the modeler when the scenario is ingested remain in the linking constraint
+but are folded out of the rho calculation. Variables fixed later by mpi-sppy
+remain ordinary sources.
+
+The existing ``surrogate_nonant_list`` remains supported for nonlinear,
+user-owned, or otherwise custom surrogate variables. Such variables retain
+the existing rho policy and do not use derived rho.
+
+.. warning::
+
+   A linear surrogate introduces a redundant multiplier. For
+   :math:`z=Ax+b`, the effective multiplier in the original variable space is
+   :math:`W_x+A^T W_z`, while PH stores and updates :math:`W_x` and
+   :math:`W_z` separately. Consequently, mpi-sppy features that inspect W or
+   make decisions from W currently operate on this augmented product-space
+   representation. This applies to diagnostics, convergence measures,
+   oscillation detection, rho updates, and multiplier output whenever they
+   use W. Their results may differ from an analysis based on the projected
+   original-space multiplier. Projecting linear-surrogate multipliers back
+   into the original space is not yet implemented.
+
 Multi-stage
 -----------
 
@@ -120,4 +177,3 @@ model every time you run, this might be a very significant
 speed-up. (To be extra clear: this suggestion is not related to
 pickling scenarios using mpisppy, but rather to a modeler pickling a
 common base model and using it).
-

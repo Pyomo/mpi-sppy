@@ -186,7 +186,12 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         sum_rho = 0.0
         num_rhos = 0   # could be computed...
         for sname, s in self.opt.local_scenarios.items():
+            derived_targets = getattr(
+                s._mpisppy_data, "linear_surrogate_target_indices", ()
+            )
             for ndn_i, nonant in s._mpisppy_data.nonant_indices.items():
+                if ndn_i in derived_targets:
+                    continue
                 sum_rho += s._mpisppy_model.rho[ndn_i]._value
                 num_rhos += 1
         rho_avg = sum_rho / num_rhos

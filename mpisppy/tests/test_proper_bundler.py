@@ -24,7 +24,9 @@ import pyomo.environ as pyo
 
 import mpisppy.opt.ph
 import mpisppy.utils.sputils as sputils
+from mpisppy.scenario_tree import ScenarioNode
 from mpisppy.utils import config
+from mpisppy.utils.linear_surrogate import LinearSurrogateDefinition
 from mpisppy.utils.proper_bundler import ProperBundler
 from mpisppy.tests.utils import get_solver, limit_solver_threads
 
@@ -160,6 +162,62 @@ class _ModuleWithFixedNonant:
         return {}
 
     scenario_creator = staticmethod(_scenario_with_fixed_nonants)
+
+
+def _scenario_with_late_fixed_surrogate_source(sname, fix_all=False, **kwargs):
+    m = pyo.ConcreteModel(name=sname)
+    m.x = pyo.Var([0, 1], bounds=(0, 10))
+    m.obj = pyo.Objective(expr=m.x[0] + m.x[1])
+    definition = LinearSurrogateDefinition(
+        "total", m.x[0] + 2 * m.x[1]
+    )
+    m._mpisppy_node_list = [ScenarioNode(
+        "ROOT", 1.0, 1, m.obj, [m.x], m,
+        linear_surrogate_definitions=[definition],
+    )]
+    # Deliberately fix after ScenarioNode construction but before returning.
+    m.x[0].fix(1)
+    if fix_all:
+        m.x[1].fix(2)
+    m._mpisppy_probability = "uniform"
+    return m
+
+
+class _ModuleWithLateFixedSurrogateSource:
+    @staticmethod
+    def scenario_names_creator(num_scens, start=None):
+        if start is None:
+            start = 0
+        return [f"scen{i}" for i in range(start, start + num_scens)]
+
+    @staticmethod
+    def kw_creator(cfg):
+        return {}
+
+    scenario_creator = staticmethod(_scenario_with_late_fixed_surrogate_source)
+
+
+class TestLinearSurrogateBundleWithLateFixing(unittest.TestCase):
+    def _bundler(self):
+        cfg = _make_cfg(num_scens=2, scenarios_per_bundle=2)
+        pb = ProperBundler(_ModuleWithLateFixedSurrogateSource)
+        pb.set_bunBFs(cfg)
+        return pb, cfg
+
+    def test_bundle_remaps_only_unfixed_sources(self):
+        pb, cfg = self._bundler()
+        bundle = pb.scenario_creator("Bundle_0_1", **pb.kw_creator(cfg))
+
+        data = bundle._mpisppy_node_list[0].linear_surrogate_data[0]
+        self.assertEqual(len(data.sources), 1)
+        self.assertEqual(data.coefficients, (2.0,))
+
+    def test_bundle_rejects_all_sources_fixed_after_node_creation(self):
+        pb, cfg = self._bundler()
+        kwargs = pb.kw_creator(cfg)
+        kwargs["fix_all"] = True
+        with self.assertRaisesRegex(ValueError, "no unfixed source variables"):
+            pb.scenario_creator("Bundle_0_1", **kwargs)
 
 
 class TestNonantCostCoeffsBundleWithFixedNonants(unittest.TestCase):
