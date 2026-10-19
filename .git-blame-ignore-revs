@@ -1,0 +1,11 @@
+# Commits that only reformat code, skipped by `git blame` so it shows the
+# commit that last changed what a line does.  GitHub's blame view reads
+# this file automatically; locally, run once per clone:
+#
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# A PR that adds a commit here must be merged with a merge commit, not a
+# squash or rebase, so that the SHA listed is the one on main.
+
+# Sort and group imports (I001 sweep, step 8 of #908)
+fa46d21ccca60f1fcb5dd609345be3edb3ad7054
