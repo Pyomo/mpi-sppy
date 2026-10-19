@@ -342,7 +342,7 @@ class ScenarioTreeInstanceFactory:
                 logger.error("Failed to extract reference model python file "
                              "from path specification: %s"
                              % (model))
-                raise IOError("path does not exist: %s"
+                raise OSError("path does not exist: %s"
                               % (self._model_filename))
             assert self._model_filename is not None
             assert self._model_filename.endswith(".py")
@@ -507,7 +507,7 @@ class ScenarioTreeInstanceFactory:
                 logger.error("Failed to extract data directory "
                              "from path specification: %s"
                              % (data))
-                raise IOError("path does not exist: %s"
+                raise OSError("path does not exist: %s"
                               % (self._data_directory))
 
     def __getstate__(self):

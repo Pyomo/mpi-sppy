@@ -19,7 +19,7 @@ def _read_obj_terms_from_mps(mps_path: str):
     obj_terms = []
     section = None
 
-    with open(mps_path, "r") as f:
+    with open(mps_path) as f:
         for raw in f:
             line = raw.strip()
             if not line or line.startswith("*"):

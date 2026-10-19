@@ -19,7 +19,7 @@ from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
 from pyomo.common.dependencies import attempt_import, pandas as pd
 plt, plt_available = attempt_import('matplotlib.pyplot')
 
-class TrackedData():
+class TrackedData:
     ''' A class to manage the data for a single variable (e.g. gaps, bounds, etc.)
     '''
     def __init__(self, name, folder, plot=False, verbose=False):

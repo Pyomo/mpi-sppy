@@ -39,7 +39,7 @@ from mpisppy import MPI  # for debugging
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-class Pyomo_guest():
+class Pyomo_guest:
     """
     Provide an interface to a model file for a Pyomo guest
     """

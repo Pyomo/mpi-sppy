@@ -20,7 +20,7 @@ import json
 # Use this random stream:
 gbdstream= np.random.RandomState()  # pylint: disable=no-member
 
-with open('gbd_data/gbd_extended_data.json','r') as openfile:
+with open('gbd_data/gbd_extended_data.json') as openfile:
    gbd_extended_data = json.load(openfile)
 
 def GBD_model_creator(seed):

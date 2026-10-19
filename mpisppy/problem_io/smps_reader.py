@@ -56,7 +56,7 @@ def parse_tim(tim_path):
     """
     stages = []
     in_periods = False
-    with open(tim_path, "r") as f:
+    with open(tim_path) as f:
         for raw in f:
             line = raw.strip()
             if not line or line.startswith("*"):
@@ -98,7 +98,7 @@ def parse_sto_discrete(sto_path):
     current_scen = None
     found_discrete = False
 
-    with open(sto_path, "r") as f:
+    with open(sto_path) as f:
         for raw in f:
             line = raw.strip()
             if not line or line.startswith("*"):
@@ -162,7 +162,7 @@ def get_var_order_from_mps(mps_path):
     var_names = []
     seen = set()
     section = None
-    with open(mps_path, "r", errors="replace") as f:
+    with open(mps_path, errors="replace") as f:
         for raw in f:
             line = raw.strip()
             if not line or line.startswith("*"):
@@ -200,7 +200,7 @@ def get_rhs_name_from_mps(mps_path):
         str: the RHS name (e.g., "RHS1")
     """
     section = None
-    with open(mps_path, "r", errors="replace") as f:
+    with open(mps_path, errors="replace") as f:
         for raw in f:
             line = raw.strip()
             if not line or line.startswith("*"):
@@ -227,7 +227,7 @@ def get_bounds_name_from_mps(mps_path):
         str or None: the bounds name (e.g., "BND1"), or None if no BOUNDS section
     """
     section = None
-    with open(mps_path, "r", errors="replace") as f:
+    with open(mps_path, errors="replace") as f:
         for raw in f:
             line = raw.strip()
             if not line or line.startswith("*"):
@@ -262,7 +262,7 @@ def get_bound_types_from_mps(mps_path, bounds_name):
     """
     bound_types = {}
     section = None
-    with open(mps_path, "r", errors="replace") as f:
+    with open(mps_path, errors="replace") as f:
         for raw in f:
             line = raw.strip()
             if not line or line.startswith("*"):

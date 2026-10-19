@@ -1088,11 +1088,11 @@ class FWPH(mpisppy.phbase.PHBase):
             QP._mpisppy_model.W = pyo.Param(
                 mip._mpisppy_data.nonant_indices.keys(), mutable=True, initialize=mip._mpisppy_model.W
             )
-            ph_term = pyo.quicksum((
+            ph_term = pyo.quicksum(
                 QP._mpisppy_model.W[nni] * QP.x[nni] +
                 (mip._mpisppy_model.rho[nni] / 2.) * (QP.x[nni] - mip._mpisppy_model.xbars[nni]) * (QP.x[nni] - mip._mpisppy_model.xbars[nni])
                 for nni in mip._mpisppy_data.nonant_indices
-            ))
+            )
 
             if self.is_minimizing:
                 QP.obj = pyo.Objective(expr=new+ph_term, sense=pyo.minimize)

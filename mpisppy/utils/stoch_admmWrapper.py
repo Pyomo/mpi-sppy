@@ -121,7 +121,7 @@ def _consensus_vars_number_creator(consensus_vars):
             consensus_vars_number[var] += 1
     return consensus_vars_number
 
-class Stoch_AdmmWrapper(): #add scenario_tree
+class Stoch_AdmmWrapper: #add scenario_tree
     """ Defines an interface to all strata (hubs and spokes)
 
         Args:

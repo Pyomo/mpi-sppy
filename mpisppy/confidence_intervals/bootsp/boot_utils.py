@@ -174,7 +174,7 @@ def cfg_from_json(json_fname):
         Used by the simulation code
     """
     try:
-        with open(json_fname, "r") as read_file:
+        with open(json_fname) as read_file:
             options = json.load(read_file)
     except Exception:
         print(f"Could not read the json file: {json_fname}")

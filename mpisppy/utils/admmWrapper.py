@@ -223,7 +223,7 @@ def _consensus_vars_number_creator(consensus_vars):
             print(f"The consensus variable {var} appears in a single subproblem")
     return consensus_vars_number
 
-class AdmmWrapper():
+class AdmmWrapper:
     """ This class assigns variable probabilities and creates wrapper for the scenario creator
 
         Args:

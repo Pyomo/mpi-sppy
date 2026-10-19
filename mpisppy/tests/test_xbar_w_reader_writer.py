@@ -86,7 +86,7 @@ class Test_xbar_w_reader_writer_farmer(unittest.TestCase):
     
     def test_wwriter(self):
         self.ph_object = self._create_ph_farmer(ph_extensions=wxbarwriter.WXBarWriter, max_iter=5)
-        with open(self.temp_w_file_name, 'r') as f:
+        with open(self.temp_w_file_name) as f:
             read = csv.reader(f)
             rows = list(read)
             self.assertAlmostEqual(float(rows[1][2]), 70.84705093609978, places=5)
@@ -95,7 +95,7 @@ class Test_xbar_w_reader_writer_farmer(unittest.TestCase):
 
     def test_xbarwriter(self):
         self.ph_object = self._create_ph_farmer(ph_extensions=wxbarwriter.WXBarWriter, max_iter=5)
-        with open(self.temp_xbar_file_name, 'r') as f:
+        with open(self.temp_xbar_file_name) as f:
             read = csv.reader(f)
             rows = list(read)
             self.assertAlmostEqual(float(rows[1][1]), 274.2239371483933, places=5)

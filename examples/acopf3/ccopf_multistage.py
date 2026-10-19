@@ -253,7 +253,7 @@ def scenario_denouement(rank, scenario_name, scenario):
         enode.pprint()
 
     stages = list(scenario.stage_models.keys())
-    gens = sorted((g for g in getattr(scenario, "stage_models_"+str(1)).pg.keys()))
+    gens = sorted(g for g in getattr(scenario, "stage_models_"+str(1)).pg.keys())
 
     for gen in gens:
 

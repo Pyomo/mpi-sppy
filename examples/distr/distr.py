@@ -232,7 +232,7 @@ def _get_inter_region_dict(cfg, num_scens=None):
     if cfg.scalable:
         import json
         json_file_path = "data_params.json"
-        with open(json_file_path, 'r') as file:
+        with open(json_file_path) as file:
             data_params = json.load(file)
         all_nodes_dict = distr_data.all_nodes_dict_creator(cfg, data_params)
         all_DC_nodes = [DC_node for region in all_nodes_dict
@@ -253,7 +253,7 @@ def kw_creator(cfg):
     if cfg.scalable:
         import json
         json_file_path = "data_params.json"
-        with open(json_file_path, 'r') as file:
+        with open(json_file_path) as file:
             data_params = json.load(file)
         all_nodes_dict = distr_data.all_nodes_dict_creator(cfg, data_params)
         all_DC_nodes = [DC_node for region in all_nodes_dict

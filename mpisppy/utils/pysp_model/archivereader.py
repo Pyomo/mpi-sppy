@@ -58,7 +58,7 @@ except NameError:
 
 def ArchiveReaderFactory(dirname, **kwds):
     if not os.path.exists(ArchiveReader.normalize_name(dirname)):
-        raise IOError("Cannot find file or directory `" + dirname +
+        raise OSError("Cannot find file or directory `" + dirname +
                       "'\nPath expanded to: '" + ArchiveReader.normalize_name(
                           dirname) + "'")
     if ArchiveReader.isDir(dirname):
@@ -116,7 +116,7 @@ class ArchiveReader:
             f = gzip.GzipFile(ArchiveReader.normalize_name(name))
             f.read(1)
             f.close()
-        except IOError:
+        except OSError:
             return False
         return True
 
@@ -128,7 +128,7 @@ class ArchiveReader:
             f = bz2.BZ2File(ArchiveReader.normalize_name(name))
             f.read(1)
             f.close()
-        except IOError:
+        except OSError:
             return False
         except EOFError:
             return False
@@ -156,7 +156,7 @@ class ArchiveReader:
     def __init__(self, name, *args, **kwds):
         posixabsname = self.normalize_name(name)
         if not os.path.exists(posixabsname):
-            raise IOError("cannot find file or directory `" + posixabsname +
+            raise OSError("cannot find file or directory `" + posixabsname +
                           "'")
 
         self._abspath = os.path.dirname(posixabsname)
@@ -465,7 +465,7 @@ class ZipArchiveReader(_ziptar_base):
         except KeyError:
             # when this method is called we have already verified the name
             # existed in the list, so this must be a directory
-            raise IOError("Failed to open with zipfile, this must be a "
+            raise OSError("Failed to open with zipfile, this must be a "
                           "directory: %s" % (absolute_name))
         return f
 
@@ -494,7 +494,7 @@ class TarArchiveReader(_ziptar_base):
         if f is None:
             # when this method is called we have already verified the name
             # existed in the list, so this must be a directory
-            raise IOError("Failed to open with tarfile, this must be a "
+            raise OSError("Failed to open with tarfile, this must be a "
                           "directory: %s" % (absolute_name))
         return f
 
@@ -524,7 +524,7 @@ class DirArchiveReader(ArchiveReader):
         if self._subdir is not None:
             rootdir = posixpath.join(rootdir, self._subdir)
             if not os.path.exists(rootdir):
-                raise IOError(
+                raise OSError(
                     "Subdirectory '%s' does not exists in root directory: %s" %
                     (self._subdir, self._archive_name))
             self._names_list = self._walk(rootdir, maxdepth=self._maxdepth + 1)
@@ -658,7 +658,7 @@ class GzipFileArchiveReader(FileArchiveReader):
         if not gzip_available:
             raise ImportError("gzip support is disabled")
         self._suffix = kwds.pop('suffix', '.gz')
-        super(GzipFileArchiveReader, self).__init__(*args, **kwds)
+        super().__init__(*args, **kwds)
         if not self.isGzipFile(self._archive_name):
             raise TypeError("Unrecognized gzip format for file: %s" %
                             (self._archive_name))
@@ -692,7 +692,7 @@ class BZ2FileArchiveReader(FileArchiveReader):
     def __init__(self, *args, **kwds):
         if not bz2_available:
             raise ImportError("bz2 support is disabled")
-        super(BZ2FileArchiveReader, self).__init__(*args, **kwds)
+        super().__init__(*args, **kwds)
         if not self.isBZ2File(self._archive_name):
             raise TypeError("Unrecognized bzip2 format for file: %s" %
                             (self._archive_name))

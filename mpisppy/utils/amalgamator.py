@@ -254,7 +254,7 @@ def Amalgamator_parser(cfg, inparser_adder, extraargs_fct=None, use_command_line
     
 
 #========================================
-class Amalgamator():
+class Amalgamator:
     """Takes a scenario list and a scenario creator (and options)
     as input. The ides is to produce an outer bound on the objective function (solving the EF directly
     or by decomposition) and/or an x-hat with inner bound; however, what it does is controlled by

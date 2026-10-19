@@ -28,7 +28,7 @@ At each scenario tree node:
 
 """
 
-class ACTree():
+class ACTree:
     """
     Data for a scenario tree for ACOPF.
 
@@ -92,7 +92,7 @@ class ACTree():
         return allnames
         
             
-class TreeNode():
+class TreeNode:
     """
     Data for a tree node, but the node creates its own children
 

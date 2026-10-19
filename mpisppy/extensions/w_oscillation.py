@@ -240,7 +240,7 @@ def parse_detect_config(path):
     defaults.  Raises ``ValueError`` on a missing ``output_csv``, an empty or
     unknown ``methods`` block, or a bad ``report_mode``.
     """
-    with open(path, "r") as f:
+    with open(path) as f:
         cfg = json.load(f)
     return validate_detect_config(cfg, where=path)
 
@@ -300,7 +300,7 @@ def default_detect_config():
 def parse_interrupt_config(path):
     """Load and validate an ``--interrupt-W-oscillations`` JSON control file
     (see :func:`validate_interrupt_config`)."""
-    with open(path, "r") as f:
+    with open(path) as f:
         cfg = json.load(f)
     return validate_interrupt_config(cfg, where=path)
 

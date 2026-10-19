@@ -20,7 +20,7 @@ fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
 
-class SampleSubtree():
+class SampleSubtree:
     '''
     The Sample Subtree class is generating a scenario tree such that every
     scenario shares the same common nodes up to a starting stage t. These nodes

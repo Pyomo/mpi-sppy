@@ -18,7 +18,7 @@ def scenario_creator(scenario_name,
                      ):
     m = pyo.ConcreteModel(scenario_name)
 
-    with open(f"{scenario_name}.json",'r') as f:
+    with open(f"{scenario_name}.json") as f:
         scenario_data = json.load(f)
 
     # -----------------
@@ -200,9 +200,9 @@ def inparser_adder(cfg):
     pass
 
 def kw_creator(cfg):
-    with open('network_data.json','r') as f:
+    with open('network_data.json') as f:
         network_data = json.load(f)
-    with open('candidates_data.json','r') as f:
+    with open('candidates_data.json') as f:
         candidates_data = json.load(f)
 
     # For this small example, we have a fixed number of scenarios: 3
