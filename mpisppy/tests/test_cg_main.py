@@ -117,7 +117,7 @@ class TestCGMainFarmer(unittest.TestCase):
 
         if cg.cylinder_rank == 0:
             sname = cg.all_scenario_names[0]
-            x_vec = {i: 0.0 for i in cg.nonant_indices}
+            x_vec = dict.fromkeys(cg.nonant_indices, 0.0)
             cg.add_column_for_scenario(sname, 1.0, x_vec)
             added_again = cg.add_column_for_scenario(sname, 1.0, x_vec)
             self.assertFalse(added_again)

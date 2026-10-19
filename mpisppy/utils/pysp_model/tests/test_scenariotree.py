@@ -546,22 +546,22 @@ class TestScenarioTreeFromNetworkX(unittest.TestCase):
         G.add_edge("Root", "Child2", weight=0.2)
         model = ScenarioTreeModelFromNetworkX(G)
         self.assertEqual(
-            sorted(list(model.Stages)),
+            sorted(model.Stages),
             sorted(["Stage1", "Stage2"]))
         self.assertEqual(
-            sorted(list(model.Nodes)),
+            sorted(model.Nodes),
             sorted(["Root", "Child1", "Child2"]))
         self.assertEqual(
-            sorted(list(model.Children["Root"])),
+            sorted(model.Children["Root"]),
             sorted(["Child1", "Child2"]))
         self.assertEqual(
-            sorted(list(model.Children["Child1"])),
+            sorted(model.Children["Child1"]),
             sorted([]))
         self.assertEqual(
-            sorted(list(model.Children["Child2"])),
+            sorted(model.Children["Child2"]),
             sorted([]))
         self.assertEqual(
-            sorted(list(model.Scenarios)),
+            sorted(model.Scenarios),
             sorted(["Child1", "Child2"]))
         self.assertEqual(value(model.ConditionalProbability["Root"]), 1.0)
         self.assertEqual(value(model.ConditionalProbability["Child1"]), 0.8)
@@ -592,22 +592,22 @@ class TestScenarioTreeFromNetworkX(unittest.TestCase):
         G.add_edge("Root", "Child2", weight=0.2)
         model = ScenarioTreeModelFromNetworkX(G)
         self.assertEqual(
-            sorted(list(model.Stages)),
+            sorted(model.Stages),
             sorted(["Stage1", "Stage2"]))
         self.assertEqual(
-            sorted(list(model.Nodes)),
+            sorted(model.Nodes),
             sorted(["Root", "Child1", "Child2"]))
         self.assertEqual(
-            sorted(list(model.Children["Root"])),
+            sorted(model.Children["Root"]),
             sorted(["Child1", "Child2"]))
         self.assertEqual(
-            sorted(list(model.Children["Child1"])),
+            sorted(model.Children["Child1"]),
             sorted([]))
         self.assertEqual(
-            sorted(list(model.Children["Child2"])),
+            sorted(model.Children["Child2"]),
             sorted([]))
         self.assertEqual(
-            sorted(list(model.Scenarios)),
+            sorted(model.Scenarios),
             sorted(["Child1", "Child2"]))
         self.assertEqual(value(model.ConditionalProbability["Root"]), 1.0)
         self.assertEqual(value(model.ConditionalProbability["Child1"]), 0.8)
@@ -651,22 +651,22 @@ class TestScenarioTreeFromNetworkX(unittest.TestCase):
             stage_names=["T1","T2"],
             scenario_name_attribute="scenario")
         self.assertEqual(
-            sorted(list(model.Stages)),
+            sorted(model.Stages),
             sorted(["T1", "T2"]))
         self.assertEqual(
-            sorted(list(model.Nodes)),
+            sorted(model.Nodes),
             sorted(["Root", "Child1", "Child2"]))
         self.assertEqual(
-            sorted(list(model.Children["Root"])),
+            sorted(model.Children["Root"]),
             sorted(["Child1", "Child2"]))
         self.assertEqual(
-            sorted(list(model.Children["Child1"])),
+            sorted(model.Children["Child1"]),
             sorted([]))
         self.assertEqual(
-            sorted(list(model.Children["Child2"])),
+            sorted(model.Children["Child2"]),
             sorted([]))
         self.assertEqual(
-            sorted(list(model.Scenarios)),
+            sorted(model.Scenarios),
             sorted(["S1", "S2"]))
         self.assertEqual(value(model.ConditionalProbability["Root"]), 1.0)
         self.assertEqual(value(model.ConditionalProbability["Child1"]), 0.8)
@@ -685,52 +685,52 @@ class TestScenarioTreeFromNetworkX(unittest.TestCase):
             G,
             edge_probability_attribute=None)
         self.assertEqual(
-            sorted(list(model.Stages)),
+            sorted(model.Stages),
             sorted(["Stage1", "Stage2", "Stage3"]))
         self.assertEqual(
-            sorted(list(model.Nodes)),
+            sorted(model.Nodes),
             sorted([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]))
         self.assertEqual(
-            sorted(list(model.Children[0])),
+            sorted(model.Children[0]),
             sorted([1,2,3]))
         self.assertEqual(
-            sorted(list(model.Children[1])),
+            sorted(model.Children[1]),
             sorted([4,5,6]))
         self.assertEqual(
-            sorted(list(model.Children[2])),
+            sorted(model.Children[2]),
             sorted([7,8,9]))
         self.assertEqual(
-            sorted(list(model.Children[3])),
+            sorted(model.Children[3]),
             sorted([10,11,12]))
         self.assertEqual(
-            sorted(list(model.Children[4])),
+            sorted(model.Children[4]),
             sorted([]))
         self.assertEqual(
-            sorted(list(model.Children[5])),
+            sorted(model.Children[5]),
             sorted([]))
         self.assertEqual(
-            sorted(list(model.Children[6])),
+            sorted(model.Children[6]),
             sorted([]))
         self.assertEqual(
-            sorted(list(model.Children[7])),
+            sorted(model.Children[7]),
             sorted([]))
         self.assertEqual(
-            sorted(list(model.Children[8])),
+            sorted(model.Children[8]),
             sorted([]))
         self.assertEqual(
-            sorted(list(model.Children[9])),
+            sorted(model.Children[9]),
             sorted([]))
         self.assertEqual(
-            sorted(list(model.Children[10])),
+            sorted(model.Children[10]),
             sorted([]))
         self.assertEqual(
-            sorted(list(model.Children[11])),
+            sorted(model.Children[11]),
             sorted([]))
         self.assertEqual(
-            sorted(list(model.Children[12])),
+            sorted(model.Children[12]),
             sorted([]))
         self.assertEqual(
-            sorted(list(model.Scenarios)),
+            sorted(model.Scenarios),
             sorted([4, 5, 6, 7, 8, 9, 10, 11, 12]))
         self.assertEqual(value(model.ConditionalProbability[0]), 1.0)
         self.assertAlmostEqual(value(model.ConditionalProbability[1]), 1.0/3)
@@ -771,28 +771,28 @@ class TestScenarioTreeFromNetworkX(unittest.TestCase):
             G,
             edge_probability_attribute=None)
         self.assertEqual(
-            sorted(list(model.Stages)),
+            sorted(model.Stages),
             sorted(["Stage1", "Stage2", "Stage3"]))
         self.assertEqual(
-            sorted(list(model.Nodes)),
+            sorted(model.Nodes),
             sorted(["R","0","1","00","01"]))
         self.assertEqual(
-            sorted(list(model.Children["R"])),
+            sorted(model.Children["R"]),
             sorted(["0", "1"]))
         self.assertEqual(
-            sorted(list(model.Children["0"])),
+            sorted(model.Children["0"]),
             sorted(["00","01"]))
         self.assertEqual(
-            sorted(list(model.Children["1"])),
+            sorted(model.Children["1"]),
             sorted([]))
         self.assertEqual(
-            sorted(list(model.Children["00"])),
+            sorted(model.Children["00"]),
             sorted([]))
         self.assertEqual(
-            sorted(list(model.Children["01"])),
+            sorted(model.Children["01"]),
             sorted([]))
         self.assertEqual(
-            sorted(list(model.Scenarios)),
+            sorted(model.Scenarios),
             sorted(["00", "01", "1"]))
         self.assertEqual(value(model.ConditionalProbability["R"]), 1.0)
         self.assertEqual(value(model.ConditionalProbability["0"]), 0.5)
@@ -819,20 +819,20 @@ class TestScenarioTreeFromNetworkX(unittest.TestCase):
             G,
             edge_probability_attribute=None)
         self.assertEqual(
-            sorted(list(model.Stages)),
+            sorted(model.Stages),
             sorted(["Stage1", "Stage2"]))
         self.assertEqual(
-            sorted(list(model.Nodes)),
+            sorted(model.Nodes),
             sorted(["r", "u0", "u1", "u2", "u3"]))
         self.assertEqual(
-            sorted(list(model.Children["r"])),
+            sorted(model.Children["r"]),
             sorted(["u0", "u1", "u2", "u3"]))
         for i in range(4):
             self.assertEqual(
-                sorted(list(model.Children["u"+str(i)])),
+                sorted(model.Children["u"+str(i)]),
                 sorted([]))
         self.assertEqual(
-            sorted(list(model.Scenarios)),
+            sorted(model.Scenarios),
             sorted(["u0", "u1", "u2", "u3"]))
         self.assertEqual(value(model.ConditionalProbability["r"]), 1.0)
         for i in range(4):

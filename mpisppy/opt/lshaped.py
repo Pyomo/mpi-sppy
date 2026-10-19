@@ -732,7 +732,7 @@ def _get_nonant_ids_EF(instance):
 
     ## this is for the cut variables, so we just need (and want)
     ## exactly one set of them
-    nonant_list = list(instance.ref_vars[ndn,i] for i in range(nlen))
+    nonant_list = [instance.ref_vars[ndn,i] for i in range(nlen)]
 
     ## this is for adjusting the objective, so needs all the nonants
     ## in the EF
@@ -782,7 +782,7 @@ def main():
     if MPI.COMM_WORLD.Get_rank() != 0:
         sys.stdout = open(os.devnull, 'w')
     scenario_names = ['scen' + str(i) for i in range(3)]
-    bounds = {i:-432000 for i in scenario_names}
+    bounds = dict.fromkeys(scenario_names, -432000)
     options = {
         "root_solver": "gurobi_persistent",
         "sp_solver": "gurobi_persistent",

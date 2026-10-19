@@ -173,7 +173,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                                      mode=Modes.reverse_symbolic,
                                      )
 
-            grad_dict = {ndn_i: 0 for ndn_i in s._mpisppy_data.nonant_indices}
+            grad_dict = dict.fromkeys(s._mpisppy_data.nonant_indices, 0)
             for bundle_key, partial in zip(wrt_keys, partials):
                 grad_dict[bundle_key] = grad_dict[bundle_key] + partial
             self.grad_exprs[s] = grad_dict
@@ -251,7 +251,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
         if self.indep_denom:
             grad_denom = self._scen_indep_denom()
-            loc_denom = {s: grad_denom for s in local_scens}
+            loc_denom = dict.fromkeys(local_scens, grad_denom)
         else:
             loc_denom = {s: self._scen_dep_denom(s)
                            for s in opt.local_scenarios.values()}

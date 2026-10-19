@@ -913,9 +913,9 @@ class SPBase:
             if len(var_values) == 0:
                 print("No variables to report (perhaps all are fixed?)")
                 return
-            scenario_names = sorted(set(x for (x,y) in var_values))
+            scenario_names = sorted({x for (x,y) in var_values})
             max_scenario_name_len = max(len(s) for s in scenario_names)
-            variable_names = sorted(set(y for (x,y) in var_values))
+            variable_names = sorted({y for (x,y) in var_values})
             max_variable_name_len = max(len(v) for v in variable_names)
             # the "10" below is a reasonable minimum for floating-point output
             value_field_len = max(10, max_scenario_name_len)

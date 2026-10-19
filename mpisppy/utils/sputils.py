@@ -53,7 +53,7 @@ def build_vardatalist(model, varlist=None):
     # if the varlist is None, then assume we want all the active variables
     if varlist is None:
         raise RuntimeError("varlist is None in scenario_tree.build_vardatalist")
-        vardatalist = [v for v in model.component_data_objects(pyo.Var, active=True, sort=True)]
+        vardatalist = list(model.component_data_objects(pyo.Var, active=True, sort=True))
     elif isinstance(varlist, (pyo.Var, IndexedComponent_slice)):
         # user provided a variable, not a list of variables. Let's work with it anyway
         varlist = [varlist]
@@ -959,7 +959,7 @@ def nonant_cache_from_ef(ef,verbose=False):
         nonant_cache (dict of numpy arrays): a special structure for nonant values
     """     
     nonant_cache = dict()
-    nodenames = set([ndn for (ndn,i) in ef.ref_vars])
+    nodenames = {ndn for (ndn,i) in ef.ref_vars}
     for ndn in sorted(nodenames):
         nonant_cache[ndn]=[]
         i = 0
@@ -1736,7 +1736,7 @@ class _ScenTree:
         # one processor for the cylinder is a special case
         if n_proc == 1:
             for nd in self.nonleaves:
-                scenario_names_to_rank[nd.name] = {s: 0 for s in self.ScenNames}
+                scenario_names_to_rank[nd.name] = dict.fromkeys(self.ScenNames, 0)
             return scenario_names_to_rank, [list(range(self.NumScens))], [0]*self.NumScens
 
         scen_count = len(self.ScenNames)
@@ -1748,7 +1748,7 @@ class _ScenTree:
         # scenario index -> rank
         list_of_ranks_per_scenario_idx = [ rank for rank, scen_idxs in enumerate(slices) for _ in scen_idxs ]
 
-        scenario_names_to_rank["ROOT"] = { s: rank for s,rank in zip(self.ScenNames, list_of_ranks_per_scenario_idx) }
+        scenario_names_to_rank["ROOT"] = dict(zip(self.ScenNames, list_of_ranks_per_scenario_idx))
 
         def _recurse_do_node(node):
             for child in node.kids:
@@ -1769,7 +1769,7 @@ class _ScenTree:
 
                 scenarios_in_nodes = self.ScenNames[first_scen_idx:last_scen_idx+1]
 
-                scenario_names_to_rank[child.name] = { s : rank for s,rank in zip(scenarios_in_nodes, within_comm_ranks_in_node) }
+                scenario_names_to_rank[child.name] = dict(zip(scenarios_in_nodes, within_comm_ranks_in_node))
 
                 if child not in self.NonLeafTerminals:
                     _recurse_do_node(child)
@@ -1953,7 +1953,7 @@ def nonant_cost_coeffs(s):
         nonant_varids = s._mpisppy_data.varid_to_nonant_index
 
     # initialize to 0
-    cost_coefs = {ndn_i: 0 for ndn_i in s._mpisppy_data.nonant_indices}
+    cost_coefs = dict.fromkeys(s._mpisppy_data.nonant_indices, 0)
     repn = generate_standard_repn(objective.expr, quadratic=False)
     for coef, var in zip(repn.linear_coefs, repn.linear_vars):
         if id(var) in nonant_varids:

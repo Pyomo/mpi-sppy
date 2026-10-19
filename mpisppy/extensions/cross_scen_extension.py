@@ -329,7 +329,7 @@ class CrossScenarioExtension(Extension):
 
             nonant_vardata_list = s._mpisppy_node_list[0].nonant_vardata_list
 
-            nonant_ids = set(id(var) for var in nonant_vardata_list)
+            nonant_ids = {id(var) for var in nonant_vardata_list}
 
             linear_coefs = list(repn.linear_coefs)
             linear_vars = list(repn.linear_vars)

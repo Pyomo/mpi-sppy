@@ -186,7 +186,7 @@ def extractComponentIndices(component, index_template):
 
     # from this point on, we're dealing with an indexed component.
     if index_template == "":
-        return [ndx for ndx in component]
+        return list(component)
 
     # if the input index template is not a tuple, make it one.
     # one-dimensional indices in pyomo are not tuples, but
