@@ -1129,9 +1129,9 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
     def test_linear_surrogate_definitions_hook(self):
         """Generated linear surrogates and their rho metadata survive the
         ADMM stage-node rewrite."""
+        from mpisppy import MPI
         from mpisppy.utils.linear_surrogate import LinearSurrogateDefinition
         from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
-        from mpisppy import MPI
 
         fs_cost, fs_varlist = self._hooks()
         admm = Stoch_AdmmWrapper(

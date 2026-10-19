@@ -369,6 +369,7 @@ class TestAdmmBundlerB3AdvancedHooks(unittest.TestCase):
 
     def test_linear_surrogate_definitions_forwarded(self):
         from unittest import mock
+
         from mpisppy.utils.linear_surrogate import LinearSurrogateDefinition
         mod = self._build_module_with_surrogate()
         bundler = AdmmBundler(
