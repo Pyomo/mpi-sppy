@@ -854,7 +854,7 @@ class UnivariateDiscrete(UnivariateDistribution):
         if abs(sumprob - 1) > tol: # could use gosm_options.cdf_tolerance
             raise ValueError("Discrete distribution with total prob="
                              +str(sumprob)+" tolerance="+str(tol))
-        super(UnivariateDiscrete, self).__init__()
+        super().__init__()
 
     def pdf(self, x):
         raise RuntimeError("pdf called for a discrete distribution.")

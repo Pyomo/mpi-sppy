@@ -460,12 +460,12 @@ class Test_sizes(unittest.TestCase):
         )
         conv, basic_obj, tbound = ph.ph_main()
         # The idea is to detect a change in Pyomo's writing of lp files
-        with open(os.path.join(tdir, "Scenario1_nonants.json"), "r") as jfile:
+        with open(os.path.join(tdir, "Scenario1_nonants.json")) as jfile:
             nonants_by_node = json.load(jfile)
         # vname is first name in the file            
         vname = nonants_by_node["treeData"]["ROOT"]["nonAnts"][0]
         gotit = False
-        with open(os.path.join(tdir, "Scenario1.lp"), 'r') as lpfile:
+        with open(os.path.join(tdir, "Scenario1.lp")) as lpfile:
             for line in lpfile:
                 if vname in line:
                     gotit = True

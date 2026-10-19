@@ -15,7 +15,7 @@ from pathlib import Path
 def load_colnames(col_path):
     """Return a 1-based list of AMPL variable names in column order."""
     names = []
-    with open(col_path, "r", encoding="utf-8") as f:
+    with open(col_path, encoding="utf-8") as f:
         for line in f:
             s = line.strip()
             if not s or s.startswith("#"):
@@ -70,7 +70,7 @@ def main():
     out_path = Path(args.output_csv)
 
     try:
-        with open(in_path, "r", encoding="utf-8", newline="") as fin, \
+        with open(in_path, encoding="utf-8", newline="") as fin, \
              open(out_path, "w", encoding="utf-8", newline="") as fout:
 
             reader = csv.reader(fin)

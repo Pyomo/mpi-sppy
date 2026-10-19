@@ -30,7 +30,7 @@ import mpisppy.utils.pickle_bundle as pickle_bundle
 #        the caller needs to worry about what is in what rank
 #        (local_scenarios might have bundle names, e.g.)
 
-class ProperBundler():
+class ProperBundler:
     """ Wrap model file functions so as to create proper bundles 
     it might pickle them or read them from a pickle file
 

@@ -121,7 +121,7 @@ def xhat_generator_farmer(scenario_names, solver_name=None, solver_options=None,
     return xhat
 
 
-class SeqSampling():
+class SeqSampling:
     """
     Computing a solution xhat and a confidence interval for the optimality gap sequentially,
     by taking an increasing number of scenarios.
@@ -338,7 +338,7 @@ class SeqSampling():
         maxroot = -(np.sqrt(b**2-4*a*c)+b)/(2*a)
         print(f"s={s}, t={t}, G={G}")
         print(f"a={a}, b={b},c={c},delta={b**2-4*a*c}")
-        print(f"At iteration {k}, we took n_k={int(np.ceil((maxroot**2)))}")
+        print(f"At iteration {k}, we took n_k={int(np.ceil(maxroot**2))}")
         return(int(np.ceil(maxroot**2)))
     
     

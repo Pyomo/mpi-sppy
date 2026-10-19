@@ -31,7 +31,7 @@ def remove_None(d):
     return d_copy
 
 
-class MMWConfidenceIntervals():
+class MMWConfidenceIntervals:
     """Takes a model and options as input. 
     Args:
         refmodel (str): path of the model we use (e.g. farmer, uc)

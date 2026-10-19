@@ -81,7 +81,7 @@ class RankRow:
 # ---------------------------
 
 def _load_json(path: str) -> Dict[str, Any]:
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -218,7 +218,7 @@ def _run_cmd(cmd: List[str]) -> Optional[str]:
 def _read_first_existing(paths: List[str]) -> Optional[str]:
     for p in paths:
         try:
-            with open(p, "r", encoding="utf-8") as f:
+            with open(p, encoding="utf-8") as f:
                 return f.read()
         except Exception:
             continue
@@ -492,7 +492,7 @@ def main() -> None:
             if args.from_cli:
                 cache_path = f"{f}.cli.txt"
                 if args.cache_cli and os.path.exists(cache_path):
-                    with open(cache_path, "r", encoding="utf-8") as cf:
+                    with open(cache_path, encoding="utf-8") as cf:
                         cli_text = cf.read()
                 else:
                     cli_text = _run_scalene_view_cli(f, reduced=args.reduced, columns=args.columns)

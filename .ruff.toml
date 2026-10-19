@@ -9,9 +9,14 @@
 # Further rules are added one family at a time (Pyomo/mpi-sppy#908):
 # W605 invalid escape sequence, W292 missing newline at end of file,
 # RUF100 unused noqa, PGH004 noqa without a rule code, PIE790 unnecessary
-# pass, PIE808 range(0, n).
+# pass, PIE808 range(0, n), and pyupgrade rules that drop Python 2 leftovers:
+# UP004 class X(object), UP008 super(Cls, self), UP009 coding declaration,
+# UP015 open(f, "r"), UP024 IOError and other OSError aliases, UP025 u"...",
+# UP034 extra parentheses, UP039 class X().
 lint.select = ["E4", "E7", "E9", "F", "W605", "W292", "RUF100", "PGH004",
-               "PIE790", "PIE808"]
+               "PIE790", "PIE808",
+               "UP004", "UP008", "UP009", "UP015", "UP024", "UP025", "UP034",
+               "UP039"]
 
 # ignore old Pyomo models
 extend-exclude = [

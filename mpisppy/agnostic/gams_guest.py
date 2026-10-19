@@ -34,7 +34,7 @@ GM_NAME = "PH___Model"  # to put in the new GAMS files
 this_dir = os.path.dirname(os.path.abspath(__file__))
 gamspy_base_dir = gamspy_base.__path__[0]
 
-class GAMS_guest():
+class GAMS_guest:
     """
     Provide an interface to a model file for a GAMS guest.
     
@@ -339,7 +339,7 @@ def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
     shutil.copy2(original_file_path, new_file_path)
     
     # Read the content of the new file
-    with open(new_file_path, 'r') as file:
+    with open(new_file_path) as file:
         lines = file.readlines()
     
     # The keyword is used to insert everything from PH.

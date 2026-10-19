@@ -2041,7 +2041,7 @@ class Config(pyofig.ConfigDict):
         so I'm adding that to the name.
         '''
         read_config_dict = dict()
-        with open(path_to_configfile,'r') as f:
+        with open(path_to_configfile) as f:
             line = f.readline()
             while line:
                 line = line.split('#',1)[0].strip() # Ignore anything that may come after an '#'

@@ -70,7 +70,7 @@ class Parameter:
     __str__ = __repr__
 
 
-class BaseDistribution(object):
+class BaseDistribution:
     # NOTE: this is the Python 2 spelling and has no effect in Python 3, where
     # the metaclass belongs in the class bases (metaclass=ABCMeta). It is left
     # as-is deliberately: switching it on would make UnivariateDiscrete

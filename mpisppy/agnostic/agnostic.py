@@ -23,7 +23,7 @@ from mpisppy.utils import sputils
 
 
 #========================================
-class Agnostic():
+class Agnostic:
     """
     Args:
         module (python module): None or the module with the callout fcts, 

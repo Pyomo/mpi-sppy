@@ -24,7 +24,7 @@ import threading
 import logging
 
 
-class Synchronizer(object):
+class Synchronizer:
     """
     Manage both Async and Sync communcation.
     Args:

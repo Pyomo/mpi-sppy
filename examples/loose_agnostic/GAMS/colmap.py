@@ -48,7 +48,7 @@ def load_dict_mapping(dict_path: str) -> dict[str, str]:
     mapping: dict[str, str] = {}
     in_variables_block = False
 
-    with open(dict_path, "r", encoding="utf-8", errors="ignore") as f:
+    with open(dict_path, encoding="utf-8", errors="ignore") as f:
         for line in f:
             s = line.strip()
 
@@ -123,7 +123,7 @@ def main():
     out_path = Path(args.output_csv)
 
     try:
-        with open(in_path, "r", encoding="utf-8", newline="") as fin, \
+        with open(in_path, encoding="utf-8", newline="") as fin, \
              open(out_path, "w", encoding="utf-8", newline="") as fout:
 
             reader = csv.reader(fin)

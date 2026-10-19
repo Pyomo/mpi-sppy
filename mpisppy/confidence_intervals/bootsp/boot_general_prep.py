@@ -71,7 +71,7 @@ if __name__ == '__main__':
     if "deterministic_data_json" in cfg:
         json_fname = cfg.deterministic_data_json
         try:
-            with open(json_fname, "r") as read_file:
+            with open(json_fname) as read_file:
                 detdata = json.load(read_file)
         except Exception:
             print(f"Could not read the json file: {json_fname}")

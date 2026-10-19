@@ -21,7 +21,7 @@ from pyomo.common.dependencies import pandas as pd
 import mpisppy.opt.ph
 import mpisppy.MPI as MPI
 
-class WTracker():
+class WTracker:
     """
     Args:
         PHB (PHBase): the object that has all the scenarios and _PHIter

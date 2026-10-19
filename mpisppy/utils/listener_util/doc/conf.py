@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 ###############################################################################
 # mpi-sppy: MPI-based Stochastic Programming in PYthon
 #
@@ -67,9 +66,9 @@ source_suffix = '.rst'
 root_doc = 'index'
 
 # General information about the project.
-project = u'PySP'
-copyright = u'2019, Sandia National Laboratories'
-author = u'David L. Woodruff'
+project = 'PySP'
+copyright = '2019, Sandia National Laboratories'
+author = 'David L. Woodruff'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the

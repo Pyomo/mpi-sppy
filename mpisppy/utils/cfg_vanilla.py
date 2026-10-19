@@ -1042,9 +1042,9 @@ def add_ph_tracking(cylinder_dict, cfg, spoke=False):
         for t_var in t_vars:
             if _hasit(cfg, f'track_{t_var}'):
                 trval = cfg[f'track_{t_var}']
-                if ((trval in {1, 4} or \
+                if (trval in {1, 4} or \
                     (not spoke and trval in {2, 5}) or \
-                    (spoke and trval in {3, 6}))):
+                    (spoke and trval in {3, 6})):
                     phtrackeroptions[f'track_{t_var}'] = True
 
                     if trval in {4, 5, 6}:

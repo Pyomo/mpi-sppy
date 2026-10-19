@@ -741,8 +741,8 @@ def _get_nonant_ids_EF(instance):
 
     nonant_ids = set()
     for s in snames:
-        nonant_ids.update( (id(v) for v in \
-                getattr(instance, s)._mpisppy_node_list[0].nonant_vardata_list)
+        nonant_ids.update( id(v) for v in \
+                getattr(instance, s)._mpisppy_node_list[0].nonant_vardata_list
                 )
     return nonant_list, nonant_ids 
 

@@ -21,7 +21,7 @@ def main():
     print(scen['d'])
 
 def parse(fname, scenario_ix=None):
-    with open(fname, 'r') as f:
+    with open(fname) as f:
         ''' Skip file header '''
         while (not f.readline().startswith('+')):
             continue

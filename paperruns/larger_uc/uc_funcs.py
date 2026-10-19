@@ -164,7 +164,7 @@ def _get_saved_rhos(fname):
     ''' Return a dict of trial rho values, indexed by variable name.
     '''
     rhos = dict()
-    with open(fname, 'r') as f:
+    with open(fname) as f:
         for line in f:
             line = line.split(',')
             vname = ','.join(line[:-1])

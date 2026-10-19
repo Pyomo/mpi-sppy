@@ -341,7 +341,7 @@ def kw_creator(cfg):
     if cfg.scalable:
         import json
         json_file_path = cfg.get("json_file_path", ifmissing="../distr/data_params.json")
-        with open(json_file_path, 'r') as file:
+        with open(json_file_path) as file:
             data_params = json.load(file)
         # In distr_data num_admm_subproblems is called num_scens
         if cfg.get("num_scens") is None:

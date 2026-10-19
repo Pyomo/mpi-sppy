@@ -28,7 +28,7 @@ class LagrangerOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinders
         super().lagrangian_prep()
         if "lagranger_rho_rescale_factors_json" in self.opt.options and\
             self.opt.options["lagranger_rho_rescale_factors_json"] is not None:
-            with open(self.opt.options["lagranger_rho_rescale_factors_json"], "r") as fin:
+            with open(self.opt.options["lagranger_rho_rescale_factors_json"]) as fin:
                 din = json.load(fin)
             self.rho_rescale_factors = {int(i): float(din[i]) for i in din}
         else:

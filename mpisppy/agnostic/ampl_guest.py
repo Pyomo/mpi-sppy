@@ -49,7 +49,7 @@ from mpisppy.utils import nice_join
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-class AMPL_guest():
+class AMPL_guest:
     """
     Provide an interface to a model file for an AMPL guest.
     

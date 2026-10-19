@@ -42,7 +42,7 @@ class _SCInterface(parapint.interfaces.MPIStochasticSchurComplementInteriorPoint
         models = models[1:]
         self.nonant_vars = list(ref_model._mpisppy_data.nonant_indices.keys())
 
-        super(_SCInterface, self).__init__(scenarios=all_scenario_names,
+        super().__init__(scenarios=all_scenario_names,
                                            nonanticipative_var_identifiers=self.nonant_vars,
                                            comm=comm,
                                            ownership_map=ownership_map)
@@ -74,7 +74,7 @@ class SchurComplement(SPBase):
                  mpicomm=None,
                  model_name=None,
                  suppress_warnings=False):
-        super(SchurComplement, self).__init__(options=options,
+        super().__init__(options=options,
                                               all_scenario_names=all_scenario_names,
                                               scenario_creator=scenario_creator,
                                               scenario_creator_kwargs=scenario_creator_kwargs,

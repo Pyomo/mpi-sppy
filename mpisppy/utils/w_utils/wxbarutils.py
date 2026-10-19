@@ -147,7 +147,7 @@ def _parse_W_csv_single(fname):
     if (not os.path.exists(fname)):
         raise RuntimeError('Could not find file {fn}'.format(fn=fname))
     results = dict()
-    with open(fname, 'r') as f:
+    with open(fname) as f:
         for line in f:
             if (line.startswith('#')):
                 continue
@@ -196,7 +196,7 @@ def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
     '''
     results = dict()
     seen = {name: False for name in scenario_names_local}
-    with open(fname, 'r') as f:
+    with open(fname) as f:
         for line in f:
             if (line.startswith('#')):
                 continue
@@ -348,7 +348,7 @@ def _parse_xbar_csv(fname):
             this way.
     '''
     results = dict()
-    with open(fname, 'r') as f:
+    with open(fname) as f:
         for line in f:
             if (line.startswith('#')):
                 continue

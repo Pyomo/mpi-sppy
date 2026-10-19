@@ -81,14 +81,14 @@ class TestArchiveReaderFactory(unittest.TestCase):
         try:
             ArchiveReaderFactory(
                 os.path.join(testdatadir, '_does_not_exist_'))
-        except IOError:
+        except OSError:
             pass
         else:
             self.fail(
                 "ArchiveReaderFactory should raise exception with nonexistent archive")
 
 
-class _TestArchiveReaderBaseNested(object):
+class _TestArchiveReaderBaseNested:
 
     archive_class = None
     archive_name = None
@@ -360,7 +360,7 @@ class TestZipArchiveReaderWin(_TestArchiveReaderBaseNested, unittest.TestCase):
     archive_name = 'win_archive_directory.zip'
 
 
-class _TestFileArchiveReaderBase(object):
+class _TestFileArchiveReaderBase:
 
     archive_class = None
     archive_name = None
