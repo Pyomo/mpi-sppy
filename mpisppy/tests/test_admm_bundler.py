@@ -367,6 +367,29 @@ class TestAdmmBundlerB3AdvancedHooks(unittest.TestCase):
         self.assertIn("advanced hook", msg)
         self.assertIn("first_stage_cost", msg)
 
+    def test_linear_surrogate_definitions_forwarded(self):
+        from unittest import mock
+
+        from mpisppy.utils.linear_surrogate import LinearSurrogateDefinition
+        mod = self._build_module_with_surrogate()
+        bundler = AdmmBundler(
+            module=mod,
+            first_stage_cost=lambda s: s.FirstStageCost,
+            first_stage_varlist=lambda s: s._fs_vars,
+            first_stage_linear_surrogate_definitions=lambda s: [
+                LinearSurrogateDefinition("fs_total", 2 * s.fs)],
+            **self._common_kwargs(),
+        )
+        import mpisppy.utils.sputils as sputils
+        real_attach = sputils.attach_root_node
+        definitions_seen = []
+        def spy(*args, **kwargs):
+            definitions_seen.extend(kwargs.get("linear_surrogate_definitions", ()))
+            return real_attach(*args, **kwargs)
+        with mock.patch.object(sputils, "attach_root_node", side_effect=spy):
+            bundler.scenario_creator(bundler.bundle_names_creator()[0])
+        self.assertTrue(definitions_seen)
+
 
 class TestAdmmArgs(unittest.TestCase):
     """Test admm_args, _count_cylinders, and _check_admm_compatibility."""

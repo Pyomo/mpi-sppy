@@ -156,6 +156,7 @@ class Stoch_AdmmWrapper: #add scenario_tree
             first_stage_cost=None,
             first_stage_varlist=None,
             first_stage_surrogate_nonant_list=None,
+            first_stage_linear_surrogate_definitions=None,
             first_stage_nonant_ef_suppl_list=None,
     ):
         assert len(options) == 0, "no options supported by stoch_admmWrapper"
@@ -184,6 +185,7 @@ class Stoch_AdmmWrapper: #add scenario_tree
         # them onto otherwise).
         advanced_hooks = {
             "first_stage_surrogate_nonant_list": first_stage_surrogate_nonant_list,
+            "first_stage_linear_surrogate_definitions": first_stage_linear_surrogate_definitions,
             "first_stage_nonant_ef_suppl_list": first_stage_nonant_ef_suppl_list,
         }
         present_advanced = [n for n, h in advanced_hooks.items() if h is not None]
@@ -232,6 +234,9 @@ class Stoch_AdmmWrapper: #add scenario_tree
                 if first_stage_surrogate_nonant_list is not None:
                     attach_kwargs["surrogate_nonant_list"] = \
                         first_stage_surrogate_nonant_list(s)
+                if first_stage_linear_surrogate_definitions is not None:
+                    attach_kwargs["linear_surrogate_definitions"] = \
+                        first_stage_linear_surrogate_definitions(s)
                 if first_stage_nonant_ef_suppl_list is not None:
                     attach_kwargs["nonant_ef_suppl_list"] = \
                         first_stage_nonant_ef_suppl_list(s)
@@ -461,6 +466,10 @@ class Stoch_AdmmWrapper: #add scenario_tree
                 # originally passed in.
                 user_surrogates = old_node.surrogate_nonant_list
                 user_ef_suppl = old_node.nonant_ef_suppl_list
+                generated_surrogates = [
+                    data.target for data in old_node.linear_surrogate_data]
+                if generated_surrogates:
+                    user_surrogates = list(user_surrogates or ()) + generated_surrogates
                 new_node = scenario_tree.ScenarioNode(
                     old_node.name,
                     old_node.cond_prob,
@@ -470,6 +479,9 @@ class Stoch_AdmmWrapper: #add scenario_tree
                     s,
                     nonant_ef_suppl_list=user_ef_suppl,
                     surrogate_nonant_list=user_surrogates)
+                new_node.linear_surrogate_definitions = \
+                    old_node.linear_surrogate_definitions
+                new_node.linear_surrogate_data = old_node.linear_surrogate_data
                 _tag_dummies_as_surrogate(new_node, dummy_varlist[stage-1])
                 s._mpisppy_node_list[stage-1] = new_node
 
