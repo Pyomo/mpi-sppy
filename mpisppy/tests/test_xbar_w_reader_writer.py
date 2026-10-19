@@ -83,7 +83,7 @@ class Test_xbar_w_reader_writer_farmer(unittest.TestCase):
     def setUp(self):
         self.cfg = _create_cfg()
         self.ph_object = None
-    
+
     def test_wwriter(self):
         self.ph_object = self._create_ph_farmer(ph_extensions=wxbarwriter.WXBarWriter, max_iter=5)
         with open(self.temp_w_file_name) as f:

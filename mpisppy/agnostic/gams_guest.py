@@ -37,7 +37,7 @@ gamspy_base_dir = gamspy_base.__path__[0]
 class GAMS_guest:
     """
     Provide an interface to a model file for a GAMS guest.
-    
+
     Args:
         model_file_name (str): name of Python file that has functions like scenario_creator
         gams_file_name (str): name of GAMS file that is passed to the model file
@@ -117,7 +117,7 @@ class GAMS_guest:
         # creates keywords for scenario creator
         return self.model_module.kw_creator(cfg)
 
-    
+
     # This is not needed for PH
     def sample_tree_scen_creator(self, sname, stage, sample_branching_factors, seed,
                                  given_scenario=None, **scenario_creator_kwargs):
@@ -144,22 +144,22 @@ class GAMS_guest:
         #print(f"In {global_rank=} for {scenario.name}: disabling prox")
         scenario._agnostic_dict["scenario"].sync_db.get_parameter("prox_on").first_record().value = 0
 
-        
+
     def _disable_W(self, Ag, scenario):
         #print(f"In {global_rank=} for {scenario.name}: disabling W")
         scenario._agnostic_dict["scenario"].sync_db.get_parameter("W_on").first_record().value = 0
 
-        
+
     def _reenable_prox(self, Ag, scenario):
         #print(f"In {global_rank=} for {scenario.name}: reenabling prox")
         scenario._agnostic_dict["scenario"].sync_db.get_parameter("prox_on").first_record().value = 1
 
-        
+
     def _reenable_W(self, Ag, scenario):
         #print(f"In {global_rank=} for {scenario.name}: reenabling W")
         scenario._agnostic_dict["scenario"].sync_db.get_parameter("W_on").first_record().value = 1
-        
-        
+
+
     def attach_PH_to_objective(self, Ag, sname, scenario, add_duals, add_prox):
         # Done in create_ph_model
         pass
@@ -195,7 +195,7 @@ class GAMS_guest:
         except Exception as e:
             solver_exception = e
             print(f"{solver_exception=}")
-        
+
         solve_ok = (1, 2, 7, 8, 15, 16, 17)
 
         #print(f"{gs.model_status=}, {gs.solver_status=}")
@@ -209,7 +209,7 @@ class GAMS_guest:
 
         if solver_exception is not None and need_solution:
             raise solver_exception
-        
+
         s._mpisppy_data.solution_available = True
 
         # For debugging, thisprints the weights of the PH model
@@ -275,7 +275,7 @@ class GAMS_guest:
                     gs.sync_db[f"{nonants_var}bar"].find_record(element).set_value(s._mpisppy_model.xbars[ndn_i].value)
                     i += 1
                 #print(f"for {s.name} in {global_rank=}, {rho_dict=}")
-            
+
 
     # local helper
     def _copy_nonants_from_host(self, s):
@@ -305,7 +305,7 @@ class GAMS_guest:
         # the host has already restored
         self._copy_nonants_from_host(s)
 
-        
+
     def _restore_original_fixedness(self, Ag, s):
         # the host has already restored
         #This doesn't seem to be used and may not work correctly
@@ -326,7 +326,7 @@ class GAMS_guest:
 
 def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
     """Copies the original file in original_file_path and creates a new file in new_file_path including the PH penalty, weights...
-    
+
     Args:
         original_file_path (str):
             The path (including the name of the gms file) of the original file
@@ -337,11 +337,11 @@ def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
     """
     # Copy the original file
     shutil.copy2(original_file_path, new_file_path)
-    
+
     # Read the content of the new file
     with open(new_file_path) as file:
         lines = file.readlines()
-    
+
     # The keyword is used to insert everything from PH.
     # For now the model was always defined three lines later to make life easier
     insert_keyword = "__InsertPH__here_Model_defined_three_lines_later"
@@ -358,7 +358,7 @@ def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
             gmodel_name = words[1]
             line = line.replace(gmodel_name, GM_NAME)
             lines[index] = line
-            
+
         if line.startswith("solve"):
             # Should be in the last lines. This line 
             words = re.findall(r'\b\w+\b', line)
@@ -380,12 +380,12 @@ def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
             line = line.replace(gmodel_name, GM_NAME)
             new_obj = "objective_ph"
             lines[index] = new_obj.join(line.rsplit(previous_objective, 1))
-            
+
         if insert_keyword in line:
             line_number = index
-    
+
     assert line_number is not None, "the insert_keyword is not used"
-    
+
     # Where the text will be inserted. After the comment
     insert_position = line_number + 2
 
@@ -436,12 +436,12 @@ def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
    ph_W_{nonant_variables}({nonants_support_set})        'ph weight'
    {nonant_variables}bar({nonants_support_set})        'ph average'
    rho_{nonant_variables}({nonants_support_set})         'ph rho'"""
-        
+
         parameter_definition2 = f"""
    ph_W_{nonant_variables}({nonants_support_set})        'ph weight'                   /set.{nonants_support_set} 0/
    {nonant_variables}bar({nonants_support_set})        'ph average'                  /set.{nonants_support_set} 0/
    rho_{nonant_variables}({nonants_support_set})         'ph rho'                      /set.{nonants_support_set} 0/"""
-        
+
         parameter_definition += f"""
    {nonant_variables}up({nonants_support_set})          'upper bound on {nonant_variables}'
    {nonant_variables}lo({nonants_support_set})          'lower bound on {nonant_variables}'"""
@@ -449,10 +449,10 @@ def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
         parameter_definition2 += f"""
    {nonant_variables}up({nonants_support_set})          'upper bound on {nonant_variables}'           /set.{nonants_support_set} 500/
    {nonant_variables}lo({nonants_support_set})          'lower bound on {nonant_variables}'           /set.{nonants_support_set} 0/"""
-        
+
         variable_definition += f"""
    PHpenalty_{nonant_variables}({nonants_support_set}) 'linearized prox penalty'"""
-        
+
         if LINEARIZED:
             linearized_inequation_definition += f"""
    PenLeft_{nonant_variables}({nonants_support_set}) 'left side of linearized PH penalty'
@@ -462,12 +462,12 @@ def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
             PHpenalty = f"PHpenalty_{nonant_variables}({nonants_support_set})"
         else:
             PHpenalty = f"({nonant_variables}({nonants_support_set}) - {nonant_variables}bar({nonants_support_set}))*({nonant_variables}({nonants_support_set}) - {nonant_variables}bar({nonants_support_set}))"
-        
+
         # This line is the only line where a cartesian set should appear with paranthesis for the sum. That is why we use nonants_paranthesis_support_set
         objective_ph_excess += f"""
                 +  W_on * sum({nonants_paranthesis_support_set}, ph_W_{nonant_variables}({nonants_support_set})*{nonant_variables}({nonants_support_set}))
                 +  prox_on * sum({nonants_paranthesis_support_set}, 0.5 * rho_{nonant_variables}({nonants_support_set}) * {PHpenalty})"""
-        
+
         if LINEARIZED:
             linearized_equation_expression += f"""
 PenLeft_{nonant_variables}({nonants_support_set}).. PHpenalty_{nonant_variables}({nonants_support_set}) =g= ({nonant_variables}.up({nonants_support_set}) - {nonant_variables}bar({nonants_support_set})) * ({nonant_variables}({nonants_support_set}) - {nonant_variables}bar({nonants_support_set}));
@@ -505,7 +505,7 @@ objective_ph_def..    objective_ph =e= {sign} {previous_objective} {objective_ph
     # Write the modified content back to the new file
     with open(new_file_path, 'w') as file:
         file.writelines(lines)
-    
+
     #print(f"Modified file saved as: {new_file_path}")
 
 
@@ -515,12 +515,12 @@ def file_name_creator(original_file_path):
         original_file_path (str): the path (including the name) of the original gms path
     """
     # Get the directory and filename
-        
+
     directory, filename = os.path.split(os.path.abspath(original_file_path))
     name, ext = os.path.splitext(filename)
 
     assert ext == ".gms", "the original data file should be a gms file"
-    
+
     # Create the new filename
     if LINEARIZED:
         new_filename = f"{name}_ph_linearized{ext}"
@@ -604,7 +604,7 @@ def adding_record_for_PH(nonants_name_pairs, cfg, all_ph_parameters_dicts, xlo_d
         of all the elements of the sets presented as tuples. It is useful if the set is a cartesian set: i,j then the elements
         will be of the shape (element_in_i,element_in_j). Some functions iterate over this set.
     """
-    
+
     ### Gather the list of non-anticipative variables and their sets from the job, to modify them and add PH related parameters
     nonant_sets_out_dict = {nonant_set_name: [job.out_db.get_set(elementary_set) for elementary_set in nonant_set_name.split(",")] for nonant_set_name, param_name in nonants_name_pairs}
 

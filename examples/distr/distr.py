@@ -89,7 +89,7 @@ def min_cost_distr_problem(local_dict, cfg, sense=pyo.minimize, max_revenue=None
                 return (0,0)
         else:
             raise ValueError(f"unknown node type for node {n}")
-        
+
     model.y = pyo.Var(local_dict["nodes"], bounds=slackBounds_rule)
 
     if cfg.ensure_xhat_feas:
@@ -100,14 +100,14 @@ def min_cost_distr_problem(local_dict, cfg, sense=pyo.minimize, max_revenue=None
                     + sum(local_dict["revenues"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["buyer nodes"]) \
                     + sum(2*max_revenue*(-model.y[n]) for n in local_dict["distribution center nodes"]) ,
                       sense=sense)
-    
+
     else:
         model.MinCost = pyo.Objective(expr=\
                         sum(local_dict["flow costs"][a]*model.flow[a] for a in local_dict["arcs"]) \
                         + sum(local_dict["production costs"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["factory nodes"]) \
                         + sum(local_dict["revenues"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["buyer nodes"]) ,
                         sense=sense)
-    
+
     def FlowBalance_rule(m, n):
         return sum(m.flow[a] for a in arcsout[n])\
         - sum(m.flow[a] for a in arcsin[n])\
@@ -286,7 +286,7 @@ def inparser_adder(cfg):
                       description="max number of nodes per region and per type",
                       domain=int,
                       default=4)
-    
+
     cfg.add_to_config("ensure_xhat_feas",
                       description="adds slacks with high costs to ensure the feasibility of xhat yet maintaining the optimal",
                       domain=bool,

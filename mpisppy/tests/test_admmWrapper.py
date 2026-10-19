@@ -62,7 +62,7 @@ class TestAdmmWrapper(unittest.TestCase):
 
     def tearDown(self):
         pass
-    
+
     def _cfg_creator(self, num_scens):
         cfg = config.Config()
 
@@ -88,7 +88,7 @@ class TestAdmmWrapper(unittest.TestCase):
                             scenario_creator_kwargs=scenario_creator_kwargs,
                             verbose=verbose,
                             )
-    
+
     def test_constructor(self):
         self._make_admm(2,verbose=True)
         for i in range(3,5):
@@ -108,7 +108,7 @@ class TestAdmmWrapper(unittest.TestCase):
         q = admm.admmWrapper_scenario_creator(sname)
         self.assertTrue(q.y__DC1DC2__.is_fixed())
         self.assertFalse(q.y["DC3_1DC1"].is_fixed())
-    
+
     def _slack_name(self, dummy_node):
         return f"y[{dummy_node}]"
 
@@ -122,13 +122,13 @@ class TestAdmmWrapper(unittest.TestCase):
         admm = self._make_admm(3)
         admm.consensus_vars["Region1"].append(self._slack_name("DC2DC3"))
         self.assertRaises(RuntimeError, admm.assign_variable_probs)
-        
+
     def test_assign_variable_probs_error2(self):
         admm = self._make_admm(3)
         admm.consensus_vars["Region1"].remove(self._slack_name("DC3_1DC1"))
         self.assertRaises(RuntimeError, admm.assign_variable_probs)
 
-    
+
     def _extracting_output(self, line):
         import re
         pattern = r'\[\s*\d+\.\d+\]\s+\d+\s+(?:L\s*B?|B\s*L?)?\s+([-.\d]+)\s+([-.\d]+)'
@@ -161,7 +161,7 @@ class TestAdmmWrapper(unittest.TestCase):
             os.chdir(_DISTR_DIR)
             objectives = {}
             command = command_line_pair[0].split()
-            
+
             result = subprocess.run(command, capture_output=True, text=True)
             # Filter out harmless MPI warnings from stderr
             stderr_lines = [line for line in result.stderr.splitlines()
@@ -170,7 +170,7 @@ class TestAdmmWrapper(unittest.TestCase):
             if stderr_lines:
                 print("Error output:")
                 raise RuntimeError(result.stderr)
-                
+
 
             # Check the standard output
             if result.stdout:
@@ -178,8 +178,8 @@ class TestAdmmWrapper(unittest.TestCase):
             else:
                 print(f"{result.stdout=}, {result.returncode=}")
                 raise RuntimeError(f"Cannot get output from {command=}")
-            
-                
+
+
             target_line = "Iter.           Best Bound  Best Incumbent      Rel. Gap        Abs. Gap"
             precedent_line_target = False
             i = 0
@@ -193,7 +193,7 @@ class TestAdmmWrapper(unittest.TestCase):
                     i += 1
                 elif target_line in line:
                     precedent_line_target = True
-            
+
             # For the EF
             command = command_line_pair[1].split()
             result = subprocess.run(command, capture_output=True, text=True)

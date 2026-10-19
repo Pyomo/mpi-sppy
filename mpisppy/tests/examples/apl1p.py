@@ -22,23 +22,23 @@ apl1pstream = np.random.RandomState()  # pylint: disable=no-member
 def APL1P_model_creator(seed):
     apl1pstream.seed(seed)
     random_array = apl1pstream.rand(6) #We only use 5 random numbers
-    
+
     #
     # Model
     #
-    
+
     model = pyo.ConcreteModel()
-    
+
     #
     # Parameters
     #
-    
+
     # generator
     model.G = [1,2]
-    
+
     # Demand level
     model.DL = [1,2,3]
-    
+
     # Availability
     avail_outcome = ([1.,0.9,0.5,0.1],[1.,0.9,0.7,0.1,0.0])
     avail_probability = ([0.2,0.3,0.4,0.1],[0.1,0.2,0.5,0.1,0.1])
@@ -48,15 +48,15 @@ def APL1P_model_creator(seed):
         rd = random_array[g]
         i = np.searchsorted(avail_cumprob[g-1],rd)
         return avail_outcome[g-1][i]
-    
+
     model.Availability = pyo.Param(model.G, within=pyo.NonNegativeReals,
                                initialize=availability_init)
-    
+
     # Min Capacity
     cmin_init = 1000
     model.Cmin = pyo.Param(model.G, within=pyo.NonNegativeReals, initialize=cmin_init)
-    
-    
+
+
     # Investment, aka Capacity costs
     invest = np.array([4.,2.5])
     def investment_init(m,g):
@@ -64,15 +64,15 @@ def APL1P_model_creator(seed):
 
     model.Investment = pyo.Param(model.G, within=pyo.NonNegativeReals,
                              initialize=investment_init)
-    
+
     # Operating Cost
     op_cost = np.array([[4.3,2.0,0.5],[8.7,4.0,1.0]])
     def operatingcost_init(m,g,dl):
         return(op_cost[g-1,dl-1])
-    
+
     model.OperatingCost = pyo.Param(model.G, model.DL, within=pyo.NonNegativeReals,
                                 initialize = operatingcost_init)
-    
+
     # Demand
     demand_outcome = [900,1000,1100,1200]
     demand_prob = [.15,.45,.25,.15]
@@ -82,61 +82,61 @@ def APL1P_model_creator(seed):
         rd = random_array[2+dl]
         i = np.searchsorted(demand_cumprob,rd)
         return demand_outcome[i]
-    
+
     model.Demand = pyo.Param(model.DL, within=pyo.NonNegativeReals,
                          initialize=demand_init)
-    
+
     # Cost of unserved demand
     unserved_cost =10.0
     model.CostUnservedDemand = pyo.Param(model.DL, within=pyo.NonNegativeReals,
                                      initialize=unserved_cost)
-    
+
     #
     # Variables
     #
-    
+
     # Capacity of generators
     model.CapacityGenerators = pyo.Var(model.G, domain=pyo.NonNegativeReals)
-    
+
     # Operation level
     model.OperationLevel = pyo.Var(model.G, model.DL, domain=pyo.NonNegativeReals)
-    
+
     # Unserved demand
     model.UnservedDemand = pyo.Var(model.DL, domain=pyo.NonNegativeReals)
-    
-    
+
+
     #
     # Constraints
     #
-    
+
     # Minimum capacity
     def MinimumCapacity_rule(model, g):
         return model.CapacityGenerators[g] >= model.Cmin[g]
-    
+
     model.MinimumCapacity = pyo.Constraint(model.G, rule=MinimumCapacity_rule)
-    
+
     # Maximum operating level
     def MaximumOperating_rule(model, g):
         return sum(model.OperationLevel[g, dl] for dl in model.DL) <= model.Availability[g] * model.CapacityGenerators[g]
-    
+
     model.MaximumOperating = pyo.Constraint(model.G, rule=MaximumOperating_rule)
-    
+
     # Satisfy demand
     def SatisfyDemand_rule(model, dl):
         return sum(model.OperationLevel[g, dl] for g in model.G) + model.UnservedDemand[dl] >= model.Demand[dl]
-    
+
     model.SatisfyDemand = pyo.Constraint(model.DL, rule=SatisfyDemand_rule)
-    
+
     #
     # Stage-specific cost computations
     #
-    
+
     def ComputeFirstStageCost_rule(model):
         return sum(model.Investment[g] * model.CapacityGenerators[g] for g in model.G)
-    
+
     model.FirstStageCost = pyo.Expression(rule=ComputeFirstStageCost_rule)
-    
-    
+
+
     def ComputeSecondStageCost_rule(model):
         expr = sum(
             model.OperatingCost[g, dl] * model.OperationLevel[g, dl] for g in model.G for dl in model.DL) + sum(
@@ -144,11 +144,11 @@ def APL1P_model_creator(seed):
         return expr
 
     model.SecondStageCost = pyo.Expression(rule=ComputeSecondStageCost_rule)
-    
-    
+
+
     def total_cost_rule(model):
         return model.FirstStageCost + model.SecondStageCost
-    
+
     model.Total_Cost_Objective = pyo.Objective(rule=total_cost_rule, sense=pyo.minimize)
 
     return(model)
@@ -157,7 +157,7 @@ def APL1P_model_creator(seed):
 def scenario_creator(sname, num_scens=None):
     scennum   = sputils.extract_num(sname)
     model = APL1P_model_creator(scennum)
-    
+
     # Create the list of nodes associated with the scenario (for two stage,
     # there is only one node associated with the scenario--leaf nodes are
     # ignored).
@@ -171,11 +171,11 @@ def scenario_creator(sname, num_scens=None):
             scen_model=model,
         )
     ]
-    
+
     #Add the probability of the scenario
     if num_scens is not None :
         model._mpisppy_probability = 1/num_scens
-    
+
     return(model)
 
 
@@ -186,7 +186,7 @@ def scenario_names_creator(num_scens,start=None):
     if (start is None) :
         start=0
     return [f"scen{i}" for i in range(start,start+num_scens)]
-        
+
 
 #=========
 def inparser_adder(inparser):
@@ -229,7 +229,7 @@ def xhat_generator_apl1p(scenario_names, solver_name="gurobi", solver_options=No
 
     '''
     num_scens = len(scenario_names)
-    
+
     ama_options = { "EF-2stage": True,
                     "EF_solver_name": solver_name,
                     "EF_solver_options": solver_options,
@@ -242,7 +242,7 @@ def xhat_generator_apl1p(scenario_names, solver_name="gurobi", solver_options=No
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
     ama.run()
-    
+
     # get the xhat
     xhat = sputils.nonant_cache_from_ef(ama.ef)
 

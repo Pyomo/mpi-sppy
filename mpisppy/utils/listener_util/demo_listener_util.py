@@ -48,7 +48,7 @@ def worker_bee(synchronizer, buzz=1e6, sting=100.0):
           For even more fun, we occasionally try to 
           reduce the listner sleep time but the listener might not see it since
           it might sleep through the whole thing. This is subtle.
-    
+
     We are going to track the time that each rank last reported just to show
     one way to do it. To spell out the way we will do it: 
     allocate n_proc of the vector to seconds_since_start and each rank 
@@ -96,7 +96,7 @@ def worker_bee(synchronizer, buzz=1e6, sting=100.0):
             logging.debug("**rank 0: iterstodo="+str(localiterstodo))
         for i in range(localiterstodo):
             local_sum_sofar += np.random.normal(0, sting)
-            
+
         local_iters_sofar += localiterstodo
         if rank == 0:
             logging.debug(f"rank 0: iterstodo {localiterstodo} iters sofar {local_iters_sofar} sum_so_far {local_sum_sofar}=")
@@ -124,7 +124,7 @@ def worker_bee(synchronizer, buzz=1e6, sting=100.0):
         print ("In case you are curious:\n rank \t last report *in* (sec)")
         for r in range(n_proc):
             print (r, "\t", global_concat["FirstReduce"]["ROOT"][2+r])
-            
+
 
 #=================================
 def side_gig(synchro, msg = None):
@@ -177,13 +177,13 @@ def side_gig(synchro, msg = None):
     lastsideresult = synchro.global_data["SecondReduce"]["ROOT"]
     logging.debug("In case you are curious, before this listener call to"\
                   +f"side_gig, the value of the secondreduce was {lastsideresult} on rank {rank}")
-    
+
     # dst, src
     np.copyto(side_gig.prev_red_prev_concat[cname],
               synchro.global_data[prevredname][cname])
-    
+
     # For the second reduce, we are going to sum the ranks, which is silly.
-    
+
     # Normally, the concats would be created once in an __init__, btw.
     local_concat = {"SecondReduce": {"ROOT": np.zeros(1, dtype='d')}}
     local_concat["SecondReduce"]["ROOT"][0] = rank
@@ -199,7 +199,7 @@ def side_gig(synchro, msg = None):
     # But it is not available now because the reduction has not been done yet.
 
 side_gig.prev_red_prev_concat = {}#[cname]=synchro.global_data[prevredname][cname]
-    
+
 
 ####### Main #######
 usemsg = "usage: python demo_listener_util.py iters sleep seed; e.g.,\n" + \

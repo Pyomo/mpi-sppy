@@ -101,9 +101,9 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
             _vb("    Infeasible")
         else:
             _vb("    Feasible, returning " + str(obj))
-            
+
         return obj, snamedict
-        
+
     def pre_iter0(self):
         if self.opt.multistage:
             raise RuntimeError("xhatclosest not done for multi-stage")
@@ -111,7 +111,7 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
     def post_iter0(self):
         # a little bit silly
         self.comms = self.opt.comms
-        
+
     def miditer(self):
         pass
 

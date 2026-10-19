@@ -33,7 +33,7 @@ def scenario_creator(
         num_scens=None, seedoffset=0
 ):
     """ Create a scenario for the (scalable) farmer example
-    
+
     Args:
         scenario_name (str):
             Name of the scenario to construct.
@@ -83,7 +83,7 @@ def scenario_creator(
     }
 
     return gd
-    
+
 #=========
 def scenario_names_creator(num_scens,start=None):
     if (start is None) :
@@ -98,13 +98,13 @@ def inparser_adder(cfg):
                       description="number of crops will be three times this (default 1)",
                       domain=int,
                       default=1)
-    
+
     cfg.add_to_config("farmer_with_integers",
                       description="make the version that has integers (default False)",
                       domain=bool,
                       default=False)
 
-    
+
 #=========
 def kw_creator(cfg):
     # creates keywords for scenario creator
@@ -154,27 +154,27 @@ def attach_Ws_and_prox(Ag, sname, scenario):
     gs.eval("param rho{Crops};")
     gs.eval("let {c in Crops}  rho[c] := 0;")
 
-    
+
 def _disable_prox(Ag, scenario):
     gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
     gs.get_parameter("prox_on").set(0)
 
-    
+
 def _disable_W(Ag, scenario):
     gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
     gs.get_parameter("W_on").set(0)
 
-    
+
 def _reenable_prox(Ag, scenario):
     gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
     gs.get_parameter("prox_on").set(1)
 
-    
+
 def _reenable_W(Ag, scenario):
     gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
     gs.get_parameter("W_on").set(1)
-    
-    
+
+
 def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     # Deal with prox linearization and approximation later,
     # i.e., just do the quadratic version
@@ -192,12 +192,12 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
         print("doing export to export.mod")
         gs.export_model("export.mod")
         raise
-        
+
     objstr = str(profitobj)
     phobjstr = ""
     if add_duals:
         phobjstr += " + W_on * sum{c in Crops} (W[c] * area[c])"
-        
+
     # Prox term (quadratic)
     if add_prox:
         """
@@ -245,7 +245,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
     # To acommdate the solve_one call from xhat_eval.py, we need to attach the obj fct value to s
 
     # time.sleep(np.random.uniform()/10)
-    
+
     _copy_Ws_xbars_rho_from_host(s)
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
@@ -266,7 +266,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
         #rhoParamDatas = list(gs.get_parameter("rho").instances())
         #print(f" in _solve_one {rhoParamDatas =} {global_rank =}")
     #### stop debugging
-    
+
     solver_name = s._solver_plugin.name
     gs.set_option("solver", solver_name)    
     if 'persistent' in solver_name:
@@ -284,13 +284,13 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
     #print(f"debug export to {fname}")
     #gs.export_model(f"{fname}.mod")
     #gs.export_data(f"{fname}.dat")
-    
+
     if gs.solve_result != "solved":
         s._mpisppy_data.solution_available = False
         if gripe:
             print (f"Solve failed for scenario {s.name} on rank {global_rank}")
             print(f"{gs.solve_result =}")
-            
+
     if solver_exception is not None and need_solution:
         raise solver_exception
 
@@ -356,10 +356,10 @@ def _copy_Ws_xbars_rho_from_host(s):
         print(f"debug export to {fname}")
         gs.export_model(f"{fname}.mod")
         gs.export_data(f"{fname}.dat")
-        
+
     else:
         pass  # presumably an xhatter; we should check, I suppose
-        
+
 
 # local helper
 def _copy_nonants_from_host(s):
@@ -380,7 +380,7 @@ def _restore_nonants(Ag, s):
     # the host has already restored
     _copy_nonants_from_host(s)
 
-    
+
 def _restore_original_fixedness(Ag, s):
     # The host has restored already
     #  Note that this also takes values from the host, which should be OK
@@ -396,5 +396,5 @@ def _fix_root_nonants(Ag, s):
     # the host has already fixed
     _copy_nonants_from_host(s)
 
-    
-    
+
+

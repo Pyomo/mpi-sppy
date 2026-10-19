@@ -81,7 +81,7 @@ def _variable_probability(scen):
         retlist.append((idv, 0))
     else:
         retlist.append((idv, 1/(scencnt-1)))
-        
+
     return retlist
 
 

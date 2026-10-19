@@ -56,7 +56,7 @@ class Test_sizes_abstract(unittest.TestCase):
         )
         assert ef is not None
 
-    
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_ef_solve(self):

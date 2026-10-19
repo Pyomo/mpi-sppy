@@ -50,7 +50,7 @@ def Fixer_tuple(xvar, th=None, nb=None, lb=None, ub=None):
     if  nb is not None and ub is not None and nb < ub:
         print ("warning: Fixer_tuple called for Var=", xvar.name,
                "with nb < ub, which means ub will be ignored.")
-        
+
     return (id(xvar), th, nb, lb, ub)
 
 class Fixer(mpisppy.extensions.extension.Extension):
@@ -147,7 +147,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
                 else:
                     s._mpisppy_data.conv_iter_count[ndn_i] = 0
                     ##print ("debug reset fix diff, tolval", diff, tolval)
-                    
+
     def iter0(self, local_scenarios):
 
         # modelers might have already fixed variables - count those up and output the result
@@ -271,7 +271,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
 
     def pre_iter0(self):
         return
-                                        
+
     def post_iter0(self):
         """ initialize data structures; that's all we can do at this point
         """

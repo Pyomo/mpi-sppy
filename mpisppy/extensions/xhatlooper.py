@@ -83,7 +83,7 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
                     raise RuntimeError("XhatLooper does not support a seed: "
                                        "a random permutation in snumlist "
                                        "is not implemented")
-        
+
         self.opt._save_nonants() # to cache for use in fixing
         # for the moment (dec 2019) treat two-stage as special
         if len(snumlists) == 1:
@@ -118,7 +118,7 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
     def post_iter0(self):
         # a little bit silly
         self.comms = self.opt.comms
-        
+
     def miditer(self):
         pass
 

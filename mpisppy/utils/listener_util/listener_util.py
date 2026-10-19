@@ -67,7 +67,7 @@ class Synchronizer:
         # The side gigs are very dangerous.
         self.listener_gigs = listener_gigs
         self.enable_side_gig = False # TBD should be gigs & indexed by reduction
-        
+
         self.global_quitting = 0
         self.quitting = 0
         self.work_fct = work_fct
@@ -120,7 +120,7 @@ class Synchronizer:
             self.global_quitting = 1
             print (f"\nERROR listener_util:cname={cname} len out={len(global_data_out[redname][cname])} Lens={self.Lens[redname][cname]}")
 
-            
+
     #########################################################################
     def compute_global_data(self, local_data_in,
                             global_data_out,

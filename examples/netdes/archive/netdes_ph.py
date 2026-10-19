@@ -49,7 +49,7 @@ def main():
         "defaultPHbeta": float(sys.argv[6]),
         "primal_dual_converger_options" : {"tol" : 1e-5}
     }
-    
+
     ph = PH(
         PH_options, 
         scenario_names,
@@ -62,7 +62,7 @@ def main():
     )
     conv, obj, triv = ph.ph_main()
     # Obj includes prox (only ok if we find a non-ant soln)
-    
+
     ph.post_solve_bound(verbose=False)
 
     variables = ph.gather_var_values_to_rank0()

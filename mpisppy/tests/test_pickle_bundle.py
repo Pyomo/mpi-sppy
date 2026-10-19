@@ -81,7 +81,7 @@ class Test_pickle_bundles(unittest.TestCase):
         self.tempdir = tempfile.TemporaryDirectory()
         self.tempdir_name = self.tempdir.name
         os.chdir(self.aircond_dir)
-        
+
     def tearDown(self):
         os.chdir(self.cwd)
 
@@ -449,4 +449,4 @@ class Test_dill_diagnostics_without_dill(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-    
+

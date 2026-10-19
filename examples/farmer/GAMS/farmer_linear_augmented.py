@@ -108,7 +108,7 @@ def create_model(scennum = 2):
     }
 
     return gd
-        
+
 
 if __name__ == "__main__":
 
@@ -139,7 +139,7 @@ if __name__ == "__main__":
     for ndn_i,gxvar in gd["nonants"].items():
         print(f"{ndn_i =}, {gxvar.get_level() =}")
     print(f" after repeat iter 0 solve {mi.model_status =}")
-    
+
     print("Here is where the trouble starts")
     print("\n Now let's try to simulate an iter 1 solve")
     print(f'{gd["ph"]["prox_on"] =}')
@@ -160,5 +160,5 @@ if __name__ == "__main__":
     for ndn_i,gxvar in gd["nonants"].items():
         print(f"{ndn_i =}, {gxvar.get_level() =}")
     """
-    
-    
+
+

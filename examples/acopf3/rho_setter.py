@@ -22,7 +22,7 @@ def generator_p_cost(md, g, output_level):
     if retval == 0:
         retval = 0.99 
     return retval
-        
+
 
 
 def ph_rhosetter_callback(scen):
@@ -33,11 +33,11 @@ def ph_rhosetter_callback(scen):
     numstages = len(scen._mpisppy_node_list)
     generator_set = scen._egret_md.attributes("generator")
     generator_names = generator_set["names"]
-    
+
     for egen in generator_names:
         for stage in range(1, numstages):
             pgen = scen.stage_models[stage].pg[egen] # pgen is a Var
-            
+
             lb = pgen.lb
             ub = pgen.ub
             mid = lb + (ub - lb)/2.0

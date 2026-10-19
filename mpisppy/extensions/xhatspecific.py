@@ -78,7 +78,7 @@ class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
     def post_iter0(self):
         # a little bit silly
         self.comms = self.opt.comms
-        
+
     def miditer(self):
         pass
 

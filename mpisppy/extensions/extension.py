@@ -310,7 +310,7 @@ class EFExtension:
     """ Abstract base class for extensions to general EF objects when used with generic_cylinders
     """
 
-    
+
     def __init__(self, ef_object):
         self.ef = ef_object
 
@@ -344,7 +344,7 @@ class EFMultiExtension(EFExtension):
         for constr in ext_classes:
             name = constr.__name__
             self.extdict[name] = constr(ef_object)
-   
+
     def pre_solve(self):
         """
         called after EF creation, before passing the model to the solver

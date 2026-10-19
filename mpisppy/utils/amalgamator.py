@@ -76,7 +76,7 @@ extensions_classes = {'fixer':Fixer,
                       #NOTE: Before adding other extensions classes there, create:
                       #         - a function for it in config.py
                       #         - a function add_EXTNAME in vanila.py (or cfg_vanilla)
-                      
+
                       }
 
 #==========
@@ -150,10 +150,10 @@ def from_module(mname, cfg, extraargs_fct=None, use_command_line=True):
         extraargs_fct (fct) : a function to add extra arguments, e.g. for MMW
         use_command_line (bool): should we take into account the command line to populate cfg ?
                                  default is True
-                    
+
     Returns:
         ama (Amalgamator): the instantiated object
-    
+
     """
     if not isinstance(cfg, config.Config):
         raise RuntimeError(f"amalgamator from_model bad cfg type={type(cfg)}; should be Config")
@@ -177,8 +177,8 @@ def from_module(mname, cfg, extraargs_fct=None, use_command_line=True):
                       m.kw_creator,
                       scenario_denouement=dn)
     return ama
-                
-        
+
+
 #==========
 def Amalgamator_parser(cfg, inparser_adder, extraargs_fct=None, use_command_line=True):
     """ Helper function for Amalgamator.
@@ -193,7 +193,7 @@ def Amalgamator_parser(cfg, inparser_adder, extraargs_fct=None, use_command_line
     """
 
     # TBD: should we copy?
-    
+
     if use_command_line:
         if _bool_option(cfg, "EF_2stage"):
             cfg.EF2()
@@ -208,25 +208,25 @@ def Amalgamator_parser(cfg, inparser_adder, extraargs_fct=None, use_command_line
                 raise RuntimeError("The problem type (2stage or mstage) must be specified")
             cfg.two_sided_args()
             cfg.mip_options()
-                
+
             #Adding cylinders
             if "cylinders" not in cfg:
                 raise RuntimeError("A cylinder list must be specified")
-            
+
             for cylinder in cfg['cylinders']:
                 #NOTE: This returns an error if the cylinder yyyy has no yyyy_args in config.py
                 add_options(cfg, cylinder)
-            
+
             #Adding extensions
             if "extensions" in cfg:
                 for extension in cfg['extensions']:
                     add_options(cfg, extension)
-    
+
         inparser_adder(cfg)
-        
+
         if extraargs_fct is not None:
             extraargs_fct()
-        
+
         prg = cfg.get("program_name")
         cfg.parse_command_line(prg)
 
@@ -251,7 +251,7 @@ def Amalgamator_parser(cfg, inparser_adder, extraargs_fct=None, use_command_line
             raise RuntimeError("For a multistage problem, cfg must have a 'branching_factors' attribute with branching factors")
 
     return cfg
-    
+
 
 #========================================
 class Amalgamator:
@@ -261,7 +261,7 @@ class Amalgamator:
     its constructor options and by user options.
 
     This thing basically wraps the functionality of the "standard" *_cylinder examples.
-    
+
     It may be an extenisble base class, but not abstract.
 
     Args:
@@ -292,7 +292,7 @@ class Amalgamator:
                 self.cfg.quick_assign("all_nodenames", domain=pyofig.ListOf(str), value=ndnms)
             else:
                 raise RuntimeError("For a multistage problem, please provide branching_factors or all_nodenames")
-        
+
     def run(self):
 
         """ Top-level execution."""
@@ -305,7 +305,7 @@ class Amalgamator:
             )
 
             tee_ef_solves = self.cfg.get('tee_ef_solves',False)
-            
+
             solver_name = self.solver_name
             solver = pyo.SolverFactory(solver_name)
             if hasattr(self, "solver_options") and (self.solver_options is not None):
@@ -321,11 +321,11 @@ class Amalgamator:
             if self.verbose:
                 global_toc("Completed EF solve")
 
-            
+
             self.EF_Obj = pyo.value(ef.EF_Obj)
 
             objs = sputils.get_objs(ef)
-            
+
             self.is_minimizing = objs[0].is_minimizing
             #TBD : Write a function doing this
             # The solver's Lower and Upper bounds bracket the optimal value, so
@@ -337,7 +337,7 @@ class Amalgamator:
                 self.best_outer_bound = results.Problem[0]['Upper bound']
                 self.best_inner_bound = results.Problem[0]['Lower bound']
             self.ef = ef
-            
+
             if 'write_solution' in self.cfg:
                 if 'first_stage_solution' in self.cfg['write_solution']:
                     sputils.write_ef_first_stage_solution(self.ef,
@@ -345,7 +345,7 @@ class Amalgamator:
                 if 'tree_solution' in self.cfg['write_solution']:
                     sputils.write_ef_tree_solution(self.ef,
                                                    self.cfg['write_solution']['tree_solution'])
-            
+
             self.xhats = sputils.nonant_cache_from_ef(ef)
             self.local_xhats = self.xhats  # Every scenario is local for EF
             self.first_stage_solution = {"ROOT": self.xhats["ROOT"]}
@@ -364,13 +364,13 @@ class Amalgamator:
             if self.is_multi:
                 beans["all_nodenames"] = self.cfg["all_nodenames"]
             hub_dict = hub_creator(**beans)
-            
+
             #Add extensions
             if 'extensions' in self.cfg:
                 for extension in self.cfg['extensions']:
                     extension_creator = getattr(vanilla, 'add_'+extension)
                     hub_dict = extension_creator(hub_dict, self.cfg)
-            
+
             #Create spoke dicts
             potential_spokes = find_spokes(self.cfg['cylinders'],
                                            self.is_multi)
@@ -384,33 +384,33 @@ class Amalgamator:
                     spoke_beans["scenario_dict"] = self.cfg["scenario_dict"]
                 spoke_dict = spoke_creator(**spoke_beans)
                 list_of_spoke_dict.append(spoke_dict)
-                
+
             ws =  WheelSpinner(hub_dict, list_of_spoke_dict)
             ws.run()
 
             spcomm = ws.spcomm
-            
+
             self.opt = spcomm.opt
             self.on_hub = ws.on_hub()
-            
+
             if self.on_hub:  # we are on a hub rank
                 self.best_inner_bound = spcomm.BestInnerBound
                 self.best_outer_bound = spcomm.BestOuterBound
                 #NOTE: We do not get bounds on every rank, only on hub
                 #      This should change if we want to use cylinders for MMW
-                
+
             # prior to June 2022, the wite options were a two-level dictionary; now flattened
             if 'first_stage_solution_csv' in self.cfg:
                 ws.write_first_stage_solution(self.cfg['first_stage_solution_csv'])
             if 'tree_solution_csv' in self.cfg:
                 ws.write_tree_solution(self.cfg['tree_solution_csv'])
-            
+
             if self.on_hub: #we are on a hub rank
                 a_sname = self.opt.local_scenario_names[0]
                 root = self.opt.local_scenarios[a_sname]._mpisppy_node_list[0]
                 self.first_stage_solution = {"ROOT":[pyo.value(var) for var in root.nonant_vardata_list]}
                 self.local_xhats = ws.local_nonant_cache()
-                
+
             #TODO: Add a xhats attribute, similar to the output of nonant_cache_from_ef
             #      It means doing a MPI operation over hub ranks
 

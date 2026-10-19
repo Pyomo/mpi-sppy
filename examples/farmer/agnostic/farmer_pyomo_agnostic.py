@@ -30,7 +30,7 @@ def scenario_creator(
 ):
     """ Create a scenario for the (scalable) farmer example, but
    but treat Pyomo as a guest language.
-    
+
     Args:
         scenario_name (str):
             Name of the scenario to construct.
@@ -61,7 +61,7 @@ def scenario_creator(
         "BFs": None
         }
     return gd
-    
+
 #=========
 def scenario_names_creator(num_scens,start=None):
     return farmer.scenario_names_creator(num_scens,start)
@@ -71,7 +71,7 @@ def scenario_names_creator(num_scens,start=None):
 def inparser_adder(cfg):
     farmer.inparser_adder(cfg)
 
-    
+
 #=========
 def kw_creator(cfg):
     # creates keywords for scenario creator
@@ -110,19 +110,19 @@ def attach_Ws_and_prox(Ag, sname, scenario):
 def _disable_prox(Ag, scenario):
     scenario._agnostic_dict["scenario"].prox_on._value = 0
 
-    
+
 def _disable_W(Ag, scenario):
     scenario._agnostic_dict["scenario"].W_on._value = 0
-    
-    
+
+
 def _reenable_prox(Ag, scenario):
     scenario._agnostic_dict["scenario"].prox_on._value = 1
 
-    
+
 def _reenable_W(Ag, scenario):
     scenario._agnostic_dict["scenario"].W_on._value = 1
-    
-    
+
+
 def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     # Deal with prox linearization and approximation later,
     # i.e., just do the quadratic version
@@ -130,7 +130,7 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     ### The host has xbars and computes without involving the guest language
     ### xbars = scenario._mpisppy_model.xbars
     ### but instead, we are going to make guest xbars like other guests
-    
+
 
     gd = scenario._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
@@ -142,7 +142,7 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     if add_duals:
         gs.WExpr = pyo.Expression(expr= sum(gs.W[ndn_i] * xvar for ndn_i,xvar in gd["nonants"].items()))
         ph_term += gs.W_on * gs.WExpr
-        
+
         # Prox term (quadratic)
         if (add_prox):
             prox_expr = 0.
@@ -158,14 +158,14 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
                     (xvarsqrd - 2.0 * gs.xbars[ndn_i] * xvar + gs.xbars[ndn_i]**2)
             gs.ProxExpr = pyo.Expression(expr=prox_expr)
             ph_term += gs.prox_on * gs.ProxExpr
-                    
+
             if gd["sense"] == pyo.minimize:
                 objfct.expr += ph_term
             elif gd["sense"] == pyo.maximize:
                 objfct.expr -= ph_term
             else:
                 raise RuntimeError(f"Unknown sense {gd['sense'] =}")
-            
+
 
 def solve_one(Ag, s, solve_keyword_args, gripe, tee=False, need_solution=True):
     # This needs to attach stuff to s (see solve_one in spopt.py)
@@ -237,7 +237,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee=False, need_solution=True):
                         "reported as stale. This usually means this variable "
                         "did not appear in any (active) components, and hence "
                         "was not communicated to the subproblem solver. ")
-                
+
             s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar._value
 
         # the next line ignore bundling
@@ -283,7 +283,7 @@ def _restore_nonants(Ag, s):
     # the host has already restored
     _copy_nonants_from_host(s)
 
-    
+
 def _restore_original_fixedness(Ag, s):
     _copy_nonants_from_host(s)
 
@@ -295,5 +295,5 @@ def _fix_nonants(Ag, s):
 def _fix_root_nonants(Ag, s):
     _copy_nonants_from_host(s)
 
-    
-    
+
+

@@ -484,7 +484,7 @@ class SPOpt(SPBase):
 
         # Time capture moved down August 2023
         pyomo_solve_time = time.time() - solve_start_time
-        
+
         if self.extensions is not None:
             results = self.extobject.post_solve(s, results)
 
@@ -1093,7 +1093,7 @@ class SPOpt(SPBase):
                 this_vardata.fix()
                 if persistent_solver is not None:
                     persistent_solver.update_var(this_vardata)
-                        
+
             Ag = getattr(self, "Ag", None)
             if Ag is not None:
                 Ag.callout_agnostic({"s": s})
@@ -1134,7 +1134,7 @@ class SPOpt(SPBase):
 
                 if persistent_solver is not None:
                     persistent_solver.update_var(vardata)
-                    
+
             Ag = getattr(self, "Ag", None)
             if Ag is not None:
                 Ag.callout_agnostic({"s": s})

@@ -58,7 +58,7 @@ def solve_EF_directly(admm,solver_name):
 def main():
 
     cfg = _parse_args()
-    
+
     n_cylinders = 1 # There is no spoke so we only use one cylinder
     admm, _ = stoch_distr_admm_cylinders._make_admm(cfg, n_cylinders) 
 

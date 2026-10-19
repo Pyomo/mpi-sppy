@@ -34,7 +34,7 @@ import mpisppy.utils.w_utils.wxbarutils
 import mpisppy.extensions.extension
 
 import mpisppy.MPI as MPI 
-                         
+
 n_proc = MPI.COMM_WORLD.Get_size()
 rank = MPI.COMM_WORLD.Get_rank()
 
@@ -75,7 +75,7 @@ class WXBarWriter(mpisppy.extensions.extension.Extension):
             return  # nothing to do here
         else:
             self.active = True
-        
+
         # Check a bunch of files
         w_fname, x_fname, sep_files = self.cfg.W_fname, self.cfg.Xbar_fname, self.cfg.separate_W_files
 
@@ -106,7 +106,7 @@ class WXBarWriter(mpisppy.extensions.extension.Extension):
 
     def post_iter0(self):
         pass
-        
+
     def miditer(self):
         pass
 

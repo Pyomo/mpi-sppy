@@ -16,7 +16,7 @@ def main():
     fname = 'data/network-10-10-L-01.dat'
     data = parse(fname)
     print(data['d'][9])
-    
+
     scen = parse(fname, scenario_ix=9)
     print(scen['d'])
 
@@ -77,7 +77,7 @@ def parse(fname, scenario_ix=None):
         'el': el,
     }
     return data
-        
+
 def _toVector(line, dtype=np.float64):
     return np.array(line.split(','), dtype=dtype)
 

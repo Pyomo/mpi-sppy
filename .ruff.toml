@@ -13,11 +13,13 @@
 # UP004 class X(object), UP008 super(Cls, self), UP009 coding declaration,
 # UP015 open(f, "r"), UP024 IOError and other OSError aliases, UP025 u"...",
 # UP034 extra parentheses, UP039 class X(); UP032 .format() calls and UP031
-# %-formatting that can be f-strings.
+# %-formatting that can be f-strings; W293 whitespace on a blank line.
+# W291 (trailing whitespace after text) is deliberately not selected.
 lint.select = ["E4", "E7", "E9", "F", "W605", "W292", "RUF100", "PGH004",
                "PIE790", "PIE808",
                "UP004", "UP008", "UP009", "UP015", "UP024", "UP025", "UP034",
-               "UP039", "UP032", "UP031"]
+               "UP039", "UP032", "UP031",
+               "W293"]
 
 # ignore old Pyomo models
 extend-exclude = [

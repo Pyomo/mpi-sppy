@@ -291,7 +291,7 @@ class Stoch_AdmmWrapper: #add scenario_tree
         self.number_admm_subproblems = len(self.admm_subproblem_names)
         self.all_nodenames = self.create_node_names(num_admm_subproblems=len(admm_subproblem_names), num_stoch_scens=len(stoch_scenario_names))
         self.assign_variable_probs(verbose=self.verbose)
-    
+
 
     def create_node_names(self, num_admm_subproblems, num_stoch_scens):
         # Normalize self.BFs to the original problem's branching factors.
@@ -413,7 +413,7 @@ class Stoch_AdmmWrapper: #add scenario_tree
                         # Going to replace the brackets
                         v2str = vstr.replace("[","__").replace("]","__") # To distinguish the consensus_vars fixed at 0
                         v = pyo.Var()
-                        
+
                         ### Lines equivalent to setattr(s, v2str, v) without warning
                         #s.del_component(v2str) UNUSEFUL
                         s.add_component(v2str, v) 

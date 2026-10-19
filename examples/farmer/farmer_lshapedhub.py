@@ -75,7 +75,7 @@ def main():
         "verbose": False,
         "root_scenarios":[all_scenario_names[len(all_scenario_names)//2]]
    }
-    
+
     # L-shaped hub
     hub_dict = {
         "hub_class": LShapedHub,
@@ -97,7 +97,7 @@ def main():
     # FWPH spoke
     if fwph:
         fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
-    
+
     if xhatlshaped:
         xhatlshaped_spoke = vanilla.xhatlshaped_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 

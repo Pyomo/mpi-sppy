@@ -71,7 +71,7 @@ if __name__ == "__main__":
         list_of_spoke_dict.append(xhatshuffle_spoke)
     if cfg.lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
-        
+
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
 
@@ -81,4 +81,4 @@ if __name__ == "__main__":
         wheel.write_first_stage_solution('farmer_cyl_nonants.npy',
                 first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer)
         wheel.write_tree_solution('farmer_full_solution')
-    
+

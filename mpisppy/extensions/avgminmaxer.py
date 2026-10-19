@@ -38,7 +38,7 @@ class MinMaxAvg(mpisppy.extensions.xhatbase.XhatBase):
         avgv, minv, maxv = self.opt.avg_min_max(self.compstr)
         if (self.cylinder_rank == 0):
             print ("  ### ", self.compstr,": avg, min, max, max-min", avgv, minv, maxv, maxv-minv)
-        
+
     def miditer(self):
         return
 

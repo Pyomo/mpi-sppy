@@ -52,7 +52,7 @@ def get_solver(persistent_OK=True):
     solvers = ["cplex","gurobi","xpress"]
     if persistent_OK:
         solvers = [n+e for e in ('_persistent', '') for n in solvers]
-    
+
     for solver_name in solvers:
         try:
             solver_available = pyo.SolverFactory(solver_name).available()
@@ -60,7 +60,7 @@ def get_solver(persistent_OK=True):
             solver_available = False
         if solver_available:
             break
-    
+
     if '_persistent' in solver_name:
         persistent_solver_name = solver_name
     else:
@@ -69,7 +69,7 @@ def get_solver(persistent_OK=True):
         persistent_available = pyo.SolverFactory(persistent_solver_name).available()
     except Exception:
         persistent_available = False
-    
+
     return solver_available, solver_name, persistent_available, persistent_solver_name
 
 def round_pos_sig(x, sig=1):

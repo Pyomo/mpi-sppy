@@ -52,7 +52,7 @@ class NormRhoConverger(mpisppy.convergers.converger.Converger):
         if not hasattr(self.ph, "_mpisppy_norm_rho_update_inuse")\
                        or not self.ph._mpisppy_norm_rho_update_inuse:
             raise RuntimeError("NormRhoConverger can only be used if NormRhoUpdater is")
-        
+
         log_rho_norm = math.log(self._compute_rho_norm(self.ph))
 
         ret_val = log_rho_norm < self.ph.options['convthresh']

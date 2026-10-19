@@ -1217,8 +1217,8 @@ class SPCommunicator:
 
             for value_array in recv_buf_circular.most_recent_value_arrays():
                 all_received_xhats.append(value_array.copy())
-        
-        
+
+
         if not is_new_any or not all_received_xhats:
             self.recent_xhats_list = []
             return False

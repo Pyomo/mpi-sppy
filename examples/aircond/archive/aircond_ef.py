@@ -48,11 +48,11 @@ if __name__ == "__main__":
     options = ama.options
     options['solver_options'] = options['EF_solver_options']
     xhat = sputils.nonant_cache_from_ef(ama.ef)
-   
-    
+
+
     num_batches = 10
     batch_size = 100
-    
+
     mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size, start = num_scens,
                         verbose=False)
     r=mmw.run(objective_gap=True)

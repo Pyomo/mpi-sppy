@@ -54,7 +54,7 @@ def inter_region_dict_creator(num_scens):
                                     (("Region1","DC1"),("Region3","DC3_1")): 50, (("Region3","DC3_1"),("Region1","DC1")): 50,\
                                     (("Region2","DC2"),("Region3","DC3_2")): 50, (("Region3","DC3_2"),("Region2","DC2")): 50,\
                                         }
-    
+
     elif num_scens == 4:
         inter_region_dict["arcs"] = [(("Region1","DC1"),("Region2","DC2")),(("Region2","DC2"),("Region1","DC1")),\
                                  (("Region1","DC1"),("Region3","DC3_1")),(("Region3","DC3_1"),("Region1","DC1")),\
@@ -74,7 +74,7 @@ def inter_region_dict_creator(num_scens):
                                   (("Region1","DC1"),("Region4","DC4")): 100, (("Region4","DC4"),("Region1","DC1")): 60,\
                                   (("Region4","DC4"),("Region2","DC2")): 20, (("Region2","DC2"),("Region4","DC4")): 40,\
                                     }
-    
+
     return inter_region_dict
 
 
@@ -132,7 +132,7 @@ def _is_partition(L, *lists):
     # Step 1: Verify that the union of all sublists contains all elements of L
     if set(L) != set().union(*lists):
         return False
-    
+
     # Step 2: Ensure each element in L appears in exactly one sublist
     for item in L:
         count = 0
@@ -141,7 +141,7 @@ def _is_partition(L, *lists):
                 count += 1
         if count != 1:
             return False
-    
+
     return True
 
 def region_dict_creator(scenario_name):
@@ -186,7 +186,7 @@ def region_dict_creator(scenario_name):
         region_dict["flow capacities"][("F1_2","B1_2")] = None
         region_dict["flow costs"] = {("F1_1","DC1"): 300, ("F1_2","DC1"): 500, ("DC1","B1_1"): 200,
             ("DC1","B1_2"): 400, ("F1_1","B1_1"): 700,  ("F1_2","B1_2"): 1000}
-        
+
     elif scenario_name=="Region2":
         # Creates data for Region2
         region_dict={"name": "Region2"}
@@ -219,7 +219,7 @@ def region_dict_creator(scenario_name):
             ("DC3_2","B3_2"): 100, ("DC3_1","DC3_2"): 70, ("DC3_2","DC3_1"): 50}
         region_dict["flow costs"] = {("F3_1","DC3_1"): 100, ("F3_2","DC3_2"): 100, ("DC3_1","B3_1"): 201,
             ("DC3_2","B3_2"): 200, ("DC3_1","DC3_2"): 100, ("DC3_2","DC3_1"): 100}
-    
+
     elif scenario_name == "Region4":
         # Creates data for Region4
         region_dict={"name": "Region4"}
@@ -234,7 +234,7 @@ def region_dict_creator(scenario_name):
         region_dict["revenues"] = {"B4_1": 900, "B4_2": 700}
         region_dict["flow capacities"] = {("F4_1","DC4"): 80, ("F4_2","DC4"): 60, ("DC4","B4_1"): 100, ("DC4","B4_2"): 100}
         region_dict["flow costs"] = {("F4_1","DC4"): 100, ("F4_2","DC4"): 80, ("DC4","B4_1"): 90, ("DC4","B4_2"): 70}
-        
+
     else:
         raise RuntimeError (f"unknown Region name {scenario_name}")
 
@@ -280,7 +280,7 @@ def min_cost_distr_problem(local_dict, sense=pyo.minimize):
             return (0,0)
         else:
             raise ValueError(f"unknown node type for node {n}")
-        
+
     model.y = pyo.Var(local_dict["nodes"], bounds=slackBounds_rule)
 
     model.MinCost = pyo.Objective(expr=\
@@ -288,7 +288,7 @@ def min_cost_distr_problem(local_dict, sense=pyo.minimize):
                     + sum(local_dict["production costs"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["factory nodes"]) \
                     + sum(local_dict["revenues"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["buyer nodes"]) ,
                       sense=sense)
-    
+
     def FlowBalance_rule(m, n):
         #we change the definition of the slack for target dummy nodes so that we have the slack from the source and from the target equal
         if n in local_dict["dummy nodes target"]:
@@ -323,10 +323,10 @@ def scenario_creator(scenario_name, num_scens=None):
     local_dict = dummy_nodes_generator(region_dict, inter_region_dict)
     # Generating the model
     model = min_cost_distr_problem(local_dict)
-    
+
     varlist = list()
     sputils.attach_root_node(model, model.MinCost, varlist)    
-    
+
     return model
 
 

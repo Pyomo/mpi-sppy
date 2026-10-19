@@ -82,7 +82,7 @@ def global_dict_creator(num_admm_subproblems, start=0):
         node_source = source[1]
         node_target = target[1]
         return (node_source, node_target)
-    
+
     for a in inter_region_dict["arcs"]:
         global_dict["arcs"].append(_extract_arc(a))
     for a in inter_region_dict["costs"]:

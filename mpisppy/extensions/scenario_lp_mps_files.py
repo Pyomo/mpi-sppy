@@ -93,7 +93,7 @@ class Scenario_lp_mps_files(mpisppy.extensions.extension.Extension):
                 rfile.write("varname,rho\n")
                 for name, rho in rhoList:
                     rfile.write(f"{name},{rho}\n")
-                                        
+
     def post_iter0(self):
         return
 

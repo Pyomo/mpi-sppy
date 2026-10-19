@@ -15,7 +15,7 @@ import mpisppy.utils.cfg_vanilla as vanilla
 
 def _parse_args():
     cfg = config.Config()
-    
+
     cfg.popular_args()
     cfg.num_scens_required()  # but not positional: you need --num-scens
     cfg.ph_args()
@@ -32,7 +32,7 @@ def _parse_args():
     return cfg
 
 def main():
-    
+
     cfg = _parse_args()
 
     num_scen = cfg.num_scens
@@ -48,13 +48,13 @@ def main():
 
     if num_scen not in (3, 10):
         raise RuntimeError(f"num_scen must the 3 or 10; was {num_scen}")
-    
+
     scenario_creator_kwargs = {"scenario_count": num_scen}
     scenario_creator = sizes.scenario_creator
     scenario_denouement = sizes.scenario_denouement
     all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
     rho_setter = sizes._rho_setter
-    
+
     if fixer:
         ph_ext = Fixer
     else:
@@ -80,7 +80,7 @@ def main():
     if cfg.default_rho is None:
         # since we are using a rho_setter anyway
         hub_dict.opt_kwargs.options["defaultPHrho"] = 1  
-    
+
     # FWPH spoke
     if fwph:
         fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
@@ -106,7 +106,7 @@ def main():
             *beans,
             scenario_creator_kwargs=scenario_creator_kwargs,
         )
-       
+
     # xhat using xbar bound spoke
     if xhatxbar:
         xhatxbar_spoke = vanilla.xhatxbar_spoke(
@@ -118,7 +118,7 @@ def main():
         reduced_costs_spoke = vanilla.reduced_costs_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = rho_setter)
-       
+
     list_of_spoke_dict = list()
     if fwph:
         list_of_spoke_dict.append(fw_spoke)

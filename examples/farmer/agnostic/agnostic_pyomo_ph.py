@@ -65,5 +65,5 @@ if __name__ == "__main__":
     else:
         print('Did not find a non-anticipative solution '
              f'(conv = {conv:.1e})')
-    
+
     ph.post_solve_bound(verbose=False)

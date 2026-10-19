@@ -52,7 +52,7 @@ def FixGaussian(minutes, acstream, mu, sigma):
     return retval
 
 #======= end repair functions =====
-    
+
 def _md_dict(epath):
     path = str(egret.__path__)
     left = path.find("'")
@@ -65,7 +65,7 @@ def _md_dict(epath):
 
     # look at egret/data/model_data.py for the format specification of md_dict
     return create_ModelData(test_case)
-    
+
 
 ####################################
 def pysp2_callback(
@@ -173,14 +173,14 @@ def pysp2_callback(
     setattr(full_scenario_model,
             "stage_models_"+str(1),
             full_scenario_model.stage_models[1]) 
-    
+
     for stage in range(2, numstages+1):
         #print ("stage={}".format(stage))
 
         stage_md_dict = copy.deepcopy(first_stage_md_dict)
         #print ("debug: processing node {}".format(enodes[stage-1].Name))
         lines_up_and_down(stage_md_dict, enodes[stage-1])
-        
+
         full_scenario_model.stage_models[stage], model_dict = \
             _egret_model(stage_md_dict)
         full_scenario_model.stage_models[stage].obj.deactivate()
@@ -205,10 +205,10 @@ def pysp2_callback(
                            ramp_coeff * full_scenario_model.ramping+\
                             sum(full_scenario_model.stage_models[stage].obj.expr\
                                     for stage in range(1,numstages+1)))
-    
+
     inst = full_scenario_model
     # end code from PySP1
-    
+
     node_list = list()
 
     parent_name = None
@@ -228,7 +228,7 @@ def pysp2_callback(
     if verbose:
         print(f"\nScenario creation for {scenario_name} on rank {rank}"
               f"    FailedLines (line,minutes)={enode.FailedLines}")
-            
+
     inst._mpisppy_node_list = node_list
     inst._mpisppy_probability = 1 / etree.numscens
     # solve it so subsequent code will have a good start
@@ -369,7 +369,7 @@ if __name__ == "__main__":
     scenario_names=["Scenario_"+str(i)\
                     for i in range(1,len(scenario_creator_kwargs["etree"].rootnode.ScenarioList)+1)]
 
-    
+
     # end options
     ef = sputils.create_EF(scenario_names,
                              pysp2_callback,

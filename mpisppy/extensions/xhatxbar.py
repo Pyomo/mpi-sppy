@@ -71,7 +71,7 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
                     if persistent_solver is not None:
                         persistent_solver.update_var(this_vardata)
 
-            
+
     #==========
     def xhat_tryit(self,
                    verbose=False,
@@ -132,7 +132,7 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
     def post_iter0(self):
         # a little bit silly
         self.comms = self.opt.comms
-        
+
     def miditer(self):
         pass
 

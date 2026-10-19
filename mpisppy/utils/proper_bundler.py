@@ -67,7 +67,7 @@ class ProperBundler:
                 raise RuntimeError(f"Bundles must consume the same number of entire second stage nodes: {beyond2size=} {bunsize=}")
             # we need bunBFs for EF formulation
             self.bunBFs = [bunsize // beyond2size] + BFs[1:]
-    
+
 
     def bundle_names_creator(self, num_buns, start=None, cfg=None):
         # Sets self.bunBFs, which is needed by scenario_creator, as a side effect.
@@ -92,7 +92,7 @@ class ProperBundler:
         # Add cfg in case it is not already there
         sc_kwargs["cfg"] = cfg
         return sc_kwargs
-    
+
     def scenario_creator(self, sname, **kwargs):
         """
         Wraps the module scenario_creator to return a bundle if the name

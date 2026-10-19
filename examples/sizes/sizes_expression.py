@@ -108,7 +108,7 @@ def _rho_setter(scen, **kwargs):
 
     if "RF" in kwargs and isinstance(kwargs["RF"], float):
         RF = kwargs["RF"]
-        
+
     cutrho = scen.UnitReductionCost * RF
 
     for i in scen.ProductSizes:

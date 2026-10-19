@@ -235,7 +235,7 @@ class TestScenarioTree(unittest.TestCase):
             for vardata in var.values():
                 assert vardata.name in root_derived_nonant_names
 
- 
+
     def test_singletonvar_noindextemplate(self):
         st_model = CreateConcreteTwoStageScenarioTreeModel(1)
         st_model.StageVariables['Stage1'].add("x")

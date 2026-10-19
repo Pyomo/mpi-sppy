@@ -16,7 +16,7 @@ from mpisppy import global_toc
 class Wtracker_extension(mpisppy.extensions.extension.Extension):
     """
         wrap the wtracker code as an extension
-        
+
         Args:
             opt (PHBase (inherets from SPOpt) object): gives the problem that we bound
 
@@ -43,7 +43,7 @@ class Wtracker_extension(mpisppy.extensions.extension.Extension):
 
     def post_iter0(self):
         pass
-        
+
     def miditer(self):
         pass
 
@@ -168,4 +168,4 @@ class Wtracker_extension(mpisppy.extensions.extension.Extension):
             f"wider one on its own.",
             self.opt.cylinder_rank == 0)
 
-        
+

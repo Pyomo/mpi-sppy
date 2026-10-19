@@ -68,6 +68,6 @@ class XhatSpecificInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
             ib_iter += 1
 
         dtm.debug(f'IB specific thread ran {ib_iter} iterations\n')
-    
+
 if __name__ == "__main__":
     print("no main.")

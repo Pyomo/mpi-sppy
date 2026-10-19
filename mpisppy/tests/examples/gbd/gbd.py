@@ -27,11 +27,11 @@ def GBD_model_creator(seed):
 
     gbdstream.seed(seed)
     random_array = gbdstream.rand(5) #We only use 5 random numbers
-    
+
     #
     # Model
     #
-    
+
     model = pyo.ConcreteModel()
     model.aircraftType = range(4)
     model.route = range(5)
@@ -49,7 +49,7 @@ def GBD_model_creator(seed):
     # excess / deficit demand in hundreds of passengers
     model.passengerSlack_pos = pyo.Var(model.route, within=pyo.NonNegativeReals)
     model.passengerSlack_neg = pyo.Var(model.route, within=pyo.NonNegativeReals)
-    
+
 
     #
     # Parameters
@@ -139,7 +139,7 @@ def GBD_model_creator(seed):
     #
     # Constraints
     #
-    
+
     # aircraft inventory constraint
     def AircraftSupply_rule(m, a):
         return sum(model.x[a,j] for j in model.route) + model.aircraftSlack[a] == model.numAircrafts[a]
@@ -178,7 +178,7 @@ def GBD_model_creator(seed):
 def scenario_creator(sname, num_scens=None):
     scennum   = sputils.extract_num(sname)
     model = GBD_model_creator(scennum)
-    
+
     # Create the list of nodes associated with the scenario (for two stage,
     # there is only one node associated with the scenario--leaf nodes are
     # ignored).
@@ -195,7 +195,7 @@ def scenario_creator(sname, num_scens=None):
     #Add the probability of the scenario
     if num_scens is not None :
         model._mpisppy_probability = 1/num_scens
-    
+
     return(model)
 
 
@@ -206,7 +206,7 @@ def scenario_names_creator(num_scens,start=None):
     if (start is None) :
         start=0
     return [f"scen{i}" for i in range(start,start+num_scens)]
-        
+
 
 #=========
 def inparser_adder(inparser):
@@ -249,7 +249,7 @@ def xhat_generator_gbd(scenario_names, solver_name="gurobi", solver_options=None
 
     '''
     num_scens = len(scenario_names)
-    
+
     ama_options = { "EF-2stage": True,
                     "EF_solver_name": solver_name,
                     "EF_solver_options": solver_options,
@@ -262,7 +262,7 @@ def xhat_generator_gbd(scenario_names, solver_name="gurobi", solver_options=None
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
     ama.run()
-    
+
     # get the xhat
     xhat = sputils.nonant_cache_from_ef(ama.ef)
 
@@ -273,7 +273,7 @@ if __name__ == "__main__":
     num_scens = 300
     solver_name = 'gurobi_direct'
     solver_options=None
-    
+
     scenario_names = scenario_names_creator(num_scens,start=6000)
 
     ama_options = { "EF-2stage": True,

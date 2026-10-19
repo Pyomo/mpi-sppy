@@ -19,7 +19,7 @@ from mpisppy import MPI
 import mpisppy.utils.sputils as sputils
 import mpisppy.spopt
 
-    
+
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
@@ -32,7 +32,7 @@ logger = logging.getLogger("mpisppy.utils.xhat_eval")
 ############################################################################
 class Xhat_Eval(mpisppy.spopt.SPOpt):
     """ See SPOpt for list of args. """
-    
+
     def __init__(
         self,
         options,
@@ -46,7 +46,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         extensions=None,
         extension_kwargs=None,
         ):
-        
+
         super().__init__(
             options,
             all_scenario_names,
@@ -59,7 +59,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             scenario_creator_kwargs=scenario_creator_kwargs,
             variable_probability=variable_probability,
         )
-        
+
         self.verbose = self.options['verbose']
         self._subproblems_solvers_created = False
         self.Ag = options.get("Ag", None)
@@ -167,7 +167,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             if self.cylinder_rank == 0:
                 print("Pyomo solve times (seconds):")
                 print(f"\tmin={np.min(all_pyomo_solve_times):4.2f} mean={np.mean(all_pyomo_solve_times):4.2f} max={np.max(all_pyomo_solve_times):4.2f}")
-                
+
     #======================================================================   
     def Eobjective(self, verbose=False, fct=None):
         """ Compute the expected value of the composition of the objective function 
@@ -182,11 +182,11 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         Args:
             verbose (boolean, optional):
                 If True, displays verbose output. Default False.
-            
+
             fct (function, optional):
                 A function R-->R^p, such as x|-->(x,x^2,x^3). Default is None
                 If fct is None, Eobjective returns the exepected value.
-                
+
 
         Returns:
             float or numpy.array:
@@ -197,11 +197,11 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         self._lazy_create_solvers()
         if fct is None:
             return super().Eobjective(verbose=verbose)
-        
+
         if not hasattr(self, "objs_dict"):
             raise RuntimeError("Values of the objective functions for each scenario"+
                                " at xhat have to be computed before running Eobjective")
-        
+
 
         local_Eobjs = []
         for k,s in self.local_scenarios.items():
@@ -215,8 +215,8 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         if len(global_Eobj)==1:
             global_Eobj = global_Eobj[0]
         return global_Eobj
-    
-    
+
+
     #==============
     def evaluate_one(self, nonant_cache,scenario_name,s):
         """ Evaluate xhat for one scenario.
@@ -224,7 +224,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         Args:
             nonant_cache(numpy vector): special numpy vector with nonant values (see spopt)
             scenario_name(str): TODO
-        
+
 
         Returns:
             Eobj (float or None): Expected value (or None if infeasible)
@@ -234,7 +234,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         self._fix_nonants(nonant_cache)
         if not hasattr(self, "objs_dict"):
             self.objs_dict = {}
-        
+
 
         solver_options = self.options["solver_options"] if "solver_options" in self.options else None
         k = scenario_name
@@ -245,11 +245,11 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                                           gripe=True,
                                           compute_val_at_nonant=True
                                           )
-        
+
         obj = self.objs_dict[k]
-        
+
         return obj
-    
+
     def evaluate(self, nonant_cache, fct=None):
         """ Do the optimization and compute the expected value of the composition of the objective function 
             and a given function fct across all scenarios.
@@ -268,20 +268,20 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         self._fix_nonants(nonant_cache)
 
         solver_options = self.options["solver_options"] if "solver_options" in self.options else None
-        
+
         self.solve_loop(solver_options=solver_options,
                         gripe=True,
                         tee=False,
                         verbose=self.verbose,
                         compute_val_at_nonant=True
                         )
-        
+
         Eobj = self.Eobjective(self.verbose,fct=fct)
 
         return Eobj
-    
-    
-    
+
+
+
     def fix_nonants_upto_stage(self,t,cache):
         """ Fix the Vars subject to non-anticipativity at given values for stages 1 to t.
             Loop over the scenarios to restore, but loop over subproblems
@@ -323,10 +323,10 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                         this_vardata.fix()
                         if persistent_solver is not None:
                             persistent_solver.update_var(this_vardata)
-        
-    
-    
-        
+
+
+
+
     #======================================================================
     def _fix_nonants_at_value(self):
         """ Fix the Vars subject to non-anticipativity at their current values.
@@ -381,7 +381,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             if verbose and self.cylinder_rank == 0:
                 print("  Feasible xhat found")
             return self.Eobjective(verbose=verbose)
-    
+
 
 
 

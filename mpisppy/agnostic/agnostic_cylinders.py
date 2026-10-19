@@ -69,13 +69,13 @@ def _parse_args(m):
 
 def main(model_fname, module, cfg):
     """ main is outside __main__ for testing
-    
+
     Args:
         model_fname (str): the module name from the command line)
         module (Python module): from model_fname (redundant)
         cfg (Pyomo config object): parsed arguments
     """
-    
+
     supported_guests = {"Pyomo", "AMPL", "GAMS"}
     # special hack to support bundles
     if hasattr(module, "bundle_hack"):
@@ -86,7 +86,7 @@ def main(model_fname, module, cfg):
         from mpisppy.agnostic.pyomo_guest import Pyomo_guest
         pg = Pyomo_guest(model_fname)
         Ag = agnostic.Agnostic(pg, cfg)
-        
+
     elif cfg.guest_language == "AMPL":
         assert cfg.ampl_model_file is not None, "If the guest language is AMPL, you need ampl-model-file"
         from mpisppy.agnostic.ampl_guest import AMPL_guest
@@ -143,7 +143,7 @@ def main(model_fname, module, cfg):
         list_of_spoke_dict.append(xhatshuffle_spoke)
     if cfg.lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
-        
+
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
 

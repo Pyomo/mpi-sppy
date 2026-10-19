@@ -64,13 +64,13 @@ def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs
         prod = prod//bf
         nodenames.append(str(s//prod))
         s = s%prod
-    
+
     stagelist = [int(x) for x in nodenames[1:]]
     for t in range(1,len(nodenames)):
         aircondstream.seed(start_seed+sputils.node_idx(stagelist[:t],sample_branching_factors))
         d = min(max_d,max(min_d,d+aircondstream.normal(mu_dev,sigma_dev)))
         demands.append(d)
-    
+
     return demands,nodenames
 
 def general_rho_setter(scenario_instance, rho_scale_factor=1.0):
@@ -97,7 +97,7 @@ def _StageModel_creator(time, demand, last_stage, **kwargs):
 
     def _kw(pname):
         return kwargs.get(pname, parms[pname][1])
-    
+
     model = pyo.ConcreteModel()
     model.T = [time]
 
@@ -116,7 +116,7 @@ def _StageModel_creator(time, demand, last_stage, **kwargs):
 
     model.max_T = 25 # this is for the start-up cost constraints, 
     model.bigM = model.Capacity * model.max_T
-    
+
     model.start_ups = _kw("start_ups")
 
     if model.start_ups:
@@ -126,11 +126,11 @@ def _StageModel_creator(time, demand, last_stage, **kwargs):
     # Negative Inventory Cost
     model.NegInventoryCost = _kw("NegInventoryCost")
     model.QuadShortCoeff = _kw("QuadShortCoeff")
-    
+
     #Variables
     model.RegularProd = pyo.Var(domain=pyo.NonNegativeReals,
                                 bounds = (0, model.bigM))
-    
+
     model.OvertimeProd = pyo.Var(domain=pyo.NonNegativeReals,
                                 bounds = (0, model.bigM))
 
@@ -172,7 +172,7 @@ def _StageModel_creator(time, demand, last_stage, **kwargs):
     else:
         assert model.QuadShortCoeff >= 0, model.QuadShortCoeff
         model.InvenCostExpr =  pyo.Expression(expr = model.LinInvenCostExpr)
-    
+
     #Objective
     def stage_objective(m):
         expr =  m.RegularProdCost*m.RegularProd +\
@@ -184,7 +184,7 @@ def _StageModel_creator(time, demand, last_stage, **kwargs):
         return expr
 
     model.StageObjective = pyo.Objective(rule=stage_objective,sense=pyo.minimize)
-    
+
     return model
 
 #Assume that demands has been drawn before
@@ -193,7 +193,7 @@ def aircond_model_creator(demands, **kwargs):
     # branching_factors=None, num_scens=None, mu_dev=0, sigma_dev=40, start_seed=0, start_ups=None):
     # typing aids...
     start_ups = kwargs.get("start_ups", parms["start_ups"][1])
-    
+
     model = pyo.ConcreteModel()
     num_stages = len(demands)
     model.T = range(1,num_stages+1) #Stages 1,2,...,T
@@ -201,12 +201,12 @@ def aircond_model_creator(demands, **kwargs):
     if model.T[-1] > model.max_T:
         raise RuntimeError(
             f'The number of stages exceeds {model.max_T}')
-    
+
     model.start_ups = start_ups
 
     #Parameters
     model.BeginInventory = kwargs.get("BeginInventory", parms["BeginInventory"][1])
-    
+
     #Creating stage models
     model.stage_models = {}
     for t in model.T:
@@ -215,7 +215,7 @@ def aircond_model_creator(demands, **kwargs):
                                                     last_stage=last_stage, **kwargs)
 
     #Constraints
-    
+
     def material_balance_rule(m,t):
         if t == 1:
             return(m.BeginInventory+m.stage_models[t].RegularProd +\
@@ -229,11 +229,11 @@ def aircond_model_creator(demands, **kwargs):
     model.MaterialBalance = pyo.Constraint(model.T, rule=material_balance_rule)
 
     #Objectives
-    
+
     #Disactivating stage objectives
     for t in model.T:
         model.stage_models[t].StageObjective.deactivate()
-    
+
     def stage_cost(stage_m):
         expr = stage_m.RegularProdCost*stage_m.RegularProd +\
                stage_m.OvertimeProdCost*stage_m.OvertimeProd +\
@@ -241,16 +241,16 @@ def aircond_model_creator(demands, **kwargs):
         if stage_m.start_ups:
             expr += stage_m.StartUpCost * stage_m.StartUp
         return expr
-    
+
     def total_cost_rule(m):
         return(sum(stage_cost(m.stage_models[t]) for t in m.T))
     model.TotalCostObjective = pyo.Objective(rule = total_cost_rule,
                                              sense = pyo.minimize)
-    
+
     #Last step
     for t in model.T:
         setattr(model, "stage_model_"+str(t), model.stage_models[t])
-    
+
     return model
 
 def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
@@ -261,7 +261,7 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
 
         nonant_list=[model.stage_models[stage].RegularProd,
                      model.stage_models[stage].OvertimeProd]
-        
+
         nonant_ef_suppl_list = [model.stage_models[stage].Inventory]
         if model.start_ups:
             nonant_ef_suppl_list.append(model.stage_models[stage].StartUp)
@@ -305,7 +305,7 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
                              )
     return(TreeNodes)
 
-        
+
 def scenario_creator(sname, **kwargs):
 
     if "branching_factors" not in kwargs:
@@ -313,10 +313,10 @@ def scenario_creator(sname, **kwargs):
     branching_factors = kwargs["branching_factors"]
 
     demands,nodenames = _demands_creator(sname, branching_factors, root_name="ROOT", **kwargs)
-    
+
     model = aircond_model_creator(demands, **kwargs)
-    
-    
+
+
     #Constructing the nodes used by the scenario
     model._mpisppy_node_list = MakeNodesforScen(model, nodenames, branching_factors)
     #model._mpisppy_probability = 1 / np.prod(branching_factors)
@@ -338,7 +338,7 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
         scenario (Pyomo concrete model): A scenario for sname with data in stages < stage determined
                                          by the arguments
     """
-    
+
     # Finding demands from stage 1 to t
     starting_d = scenario_creator_kwargs.get("starting_d", parms["starting_d"][1])
     if given_scenario is None:
@@ -351,23 +351,23 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
 
     kwargs = scenario_creator_kwargs.copy()
     kwargs["start_seed"] = seed
-        
+
     #Finding demands for stages after t (note the dynamic seed)
     future_demands,nodenames = _demands_creator(sname, sample_branching_factors, 
                                                 root_name='ROOT'+'_0'*(stage-1), **kwargs)
-    
+
     demands = past_demands+future_demands[1:] #The demand at the starting stage is in both past and future demands
-    
+
     model = aircond_model_creator(demands, **scenario_creator_kwargs)
-    
+
     model._mpisppy_probability = 1/np.prod(sample_branching_factors)
-    
+
     #Constructing the nodes used by the scenario
     model._mpisppy_node_list = MakeNodesforScen(model, nodenames, sample_branching_factors,
                                                 starting_stage=stage)
-    
+
     return model
-                
+
 
 #=========
 def scenario_names_creator(num_scens,start=None):
@@ -376,7 +376,7 @@ def scenario_names_creator(num_scens,start=None):
     if (start is None) :
         start=0
     return [f"scen{i}" for i in range(start,start+num_scens)]
-        
+
 
 #=========
 def inparser_adder(cfg):
@@ -410,7 +410,7 @@ def inparser_adder(cfg):
     _doone("OvertimeProdCost", helptext="Overtime (or subcontractor) production cost")
     _doone("NegInventoryCost", helptext="Linear coefficient for backorders (should be negative; not used in last stage)")
     _doone("QuadShortCoeff", helptext="Coefficient for backorders squared (should be nonnegative; not used in last stage)")
-    
+
 
 #=========
 def kw_creator(cfg, optionsin=None):
@@ -428,9 +428,9 @@ def kw_creator(cfg, optionsin=None):
     options = optionsin if optionsin is not None else dict()
     if "kwargs" in options:
         return options["kwargs"]
-    
+
     kwargs = dict()
-    
+
     def _kwarg(option_name, default = None, arg_name=None):
         # options trumps args
         retval = options.get(option_name)
@@ -442,7 +442,7 @@ def kw_creator(cfg, optionsin=None):
         retval = cfg.get(aname)
         retval = default if retval is None else retval
         kwargs[option_name] = retval
-            
+
     # Linked to the scenario_creator and inparser_adder
     # for confidence intervals, we need to see if the values are in args
     _kwarg("branching_factors")
@@ -507,7 +507,7 @@ def xhat_generator_aircond(scenario_names, solver_name=None, solver_options=None
     -------
     xhat: str
         A generated xhat, solution to the approximate problem induced by scenario_names.
-        
+
     NOTE: This tool only works when the file is in mpisppy. In SPInstances, 
             you must change the from_module line.
 
@@ -515,7 +515,7 @@ def xhat_generator_aircond(scenario_names, solver_name=None, solver_options=None
     num_scens = len(scenario_names)
     assert branching_factors is not None, "branching factors must be supplied to xhat_generator_aircond"
     assert solver_name is not None, "solver_name must be supplied to xhat_generator_aircond"
-    
+
     cfg = config.Config()
     cfg.quick_assign("EF_mstage", bool, True)
     cfg.quick_assign("EF_solver_name", str, solver_name)
@@ -536,7 +536,7 @@ def xhat_generator_aircond(scenario_names, solver_name=None, solver_options=None
     ama.scenario_names = scenario_names
     ama.verbose = False
     ama.run()
-    
+
     # get the xhat
     xhat = sputils.nonant_cache_from_ef(ama.ef)
 
@@ -602,7 +602,7 @@ if __name__ == "__main__":
     print('run time: ', time.time()-t0)
     print("inner bound =", ama.best_inner_bound)
     print("outer bound =", ama.best_outer_bound)
-    
+
     xhat = sputils.nonant_cache_from_ef(ama.ef)
     print('xhat_one = ', xhat['ROOT'])
 
@@ -611,6 +611,6 @@ if __name__ == "__main__":
         for bf in bfs:
             bf_string = bf_string + bf + '_'
         np.savetxt('aircond_start_ups='+str(start_ups)+bf_string+'zhatstar.txt', xhat['ROOT'])
-   
-        
-        
+
+
+

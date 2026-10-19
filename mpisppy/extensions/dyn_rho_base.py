@@ -22,11 +22,11 @@ import warnings
 class Dyn_Rho_extension_base(mpisppy.extensions.extension.Extension):
     """
     This extension enables dynamic rho, e.g. gradient or sensitivity based.
-    
+
     Args:
        opt (PHBase object): gives the problem
        cfg (Config object): config object
-    
+
     """
     def __init__(self, opt, cfg):
         super().__init__(opt)
@@ -55,7 +55,7 @@ class Dyn_Rho_extension_base(mpisppy.extensions.extension.Extension):
         with warnings.catch_warnings():
             warnings.filterwarnings('error')
             # dlw Nov 2024: Is this lagged one iteration (that is not horrible)
-            
+
             curr_conv, last_conv = self.primal_conv_cache[-1], self.primal_conv_cache[-2]
             try:
                 primal_diff =  np.abs((last_conv - curr_conv) / last_conv)

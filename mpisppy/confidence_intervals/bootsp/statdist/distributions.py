@@ -380,7 +380,7 @@ class UnivariateGaussianKernelDistribution(UnivariateDistribution):
         # separate arguments
         return self.kernel.resample(n, seed)
 
-   
+
 
 
 @register_distribution(name="univariate-epispline", ndim=1)
@@ -833,7 +833,7 @@ class UnivariateDiscrete(UnivariateDistribution):
         """
         if not isinstance(breakpoints, OrderedDict):
             raise RuntimeError("DiscreteDistribution expecting breakpoints to be a dict")
-            
+
         self.breakpoints = breakpoints
         # check the breakpoints
         tol = 1e-6
@@ -858,13 +858,13 @@ class UnivariateDiscrete(UnivariateDistribution):
 
     def pdf(self, x):
         raise RuntimeError("pdf called for a discrete distribution.")
-        
+
     def cdf(self, x):
         """
             Cummulative Distribution Function: prob(X < x), which is weird
             Args:
                 x (float): The value where you want to compute the cdf
-    
+
             Returns:
                 (float) The value of the cumulative density function of this distribution on x.
         """
@@ -906,10 +906,10 @@ class UnivariateDiscrete(UnivariateDistribution):
         # if the probs dont' quite sum to one...
         val, prob = list(self.breakpoints.items())[-1]
         return val
-    
+
     def rect_prob(self,down,up):
         """
-        
+
         Args:
             up (float): the upper values where you want to compute the probability
             down (float): the upper values where you want to compute the probability

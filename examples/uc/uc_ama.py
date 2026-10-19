@@ -10,7 +10,7 @@
 An example of using amalgamator with 3 cylinders and one extension 
 To execute this:
     mpiexec -np 3 python uc_ama.py --default-rho=1 --num-scens=3 --fixer-tol=1e-2
-    
+
 WARNING:
     num-scens must be taken as a valid value, i.e. among (3,5,10,25,50,100)
 """

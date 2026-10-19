@@ -420,7 +420,7 @@ class LShapedHub(Hub):
         self.put_send_buffer(nonant_send_buffer, Field.NONANTS_VALS)
 
         return
-    
+
 
 
 class CGHub(Hub):
@@ -499,11 +499,11 @@ class CGHub(Hub):
         self.put_send_buffer(nonant_send_buffer, self.nonant_field)
 
         return
-     
+
     @property
     def nonant_field(self):
         return Field.NONANTS_VALS 
-    
+
 
 class DCGHub(CGHub):
     def main(self):

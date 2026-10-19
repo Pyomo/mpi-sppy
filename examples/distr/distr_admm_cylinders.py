@@ -137,7 +137,7 @@ def main():
         wheel.write_first_stage_solution('distr_cyl_nonants.npy',
                 first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer)
         wheel.write_tree_solution('distr_full_solution')
-    
+
     if global_rank == 0:
         best_objective = wheel.spcomm.BestInnerBound
         print(f"{best_objective=}")

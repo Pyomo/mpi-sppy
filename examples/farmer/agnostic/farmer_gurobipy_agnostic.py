@@ -21,7 +21,7 @@ farmerstream = np.random.RandomState()
 
 def scenario_creator(scenario_name, use_integer=False, sense=GRB.MINIMIZE, crops_multiplier=1, num_scens=None, seedoffset=0):
     """ Create a scenario for the (scalable) farmer example
-    
+
     Args:
         scenario_name (str):
             Name of the scenario to construct.
@@ -61,7 +61,7 @@ def scenario_creator(scenario_name, use_integer=False, sense=GRB.MINIMIZE, crops
     model = gp.Model(scenname)
     # Silence gurobi output
     model.setParam('OutputFlag', 0)
-    
+
     crops = ["WHEAT", "CORN", "SUGAR_BEETS"]
     CROPS = [f"{crop}{i}" for i in range(crops_multiplier) for crop in crops]
 
@@ -89,7 +89,7 @@ def scenario_creator(scenario_name, use_integer=False, sense=GRB.MINIMIZE, crops
     }
 
     yield_vals = {crop: Yield[basenames[basenum]][crop.rstrip("0123456789")] + (farmerstream.rand() if groupnum != 0 else 0) for crop in CROPS}
-    
+
     # Variables
     DevotedAcreage = model.addVars(CROPS, vtype=GRB.INTEGER if use_integer else GRB.CONTINUOUS, lb=0.0, ub=TOTAL_ACREAGE, name="DevotedAcreage")
     QuantitySubQuotaSold = model.addVars(CROPS, lb=0.0, name="QuantitySubQuotaSold")
@@ -144,7 +144,7 @@ def inparser_adder(cfg):
                       description="number of crops will be three times this (default 1)",
                       domain=int,
                       default=1)
-    
+
     cfg.add_to_config("farmer_with_integers",
                       description="make the version that has integers (default False)",
                       domain=bool,
@@ -243,7 +243,7 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
         # Put the x^2 in the objective function
         obj += nonant_sq
         nonant_sqs[i] = nonant_sq
-    
+
     # Update model and gd
     gs.update()
     gd["nonant_sqs"] = nonant_sqs
@@ -272,15 +272,15 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
         return
 
     s._mpisppy_data.solution_available = True
-    
+
     # Objective value extraction
     objval = gs.getObjective().getValue()
-    
+
     if gd["sense"] == gp.GRB.MINIMIZE:
         s._mpisppy_data.outer_bound = objval
     else:
         s._mpisppy_data.outer_bound = objval
-    
+
     # Copy the non-anticipative variable values from guest to host scenario
     for ndn_i, gxvar in gd["nonants"].items():
         grb_var = gs.getVarByName(gxvar.VarName)
@@ -290,7 +290,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
                 "was not found in the Gurobi model."
             )
         s._mpisppy_data.nonant_indices[ndn_i]._value = grb_var.X
-    
+
     # Store the objective function value in the host scenario
     s._mpisppy_data.inner_bound = objval
 

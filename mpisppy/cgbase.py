@@ -60,7 +60,7 @@ class CGBase(mpisppy.spopt.SPOpt):
             variable_probability (callable, optional):
                 Function to set variable specific probabilities.
     """
-    
+
 
 
     def __init__(
@@ -91,20 +91,20 @@ class CGBase(mpisppy.spopt.SPOpt):
             variable_probability=variable_probability,
         )
         global_toc("Initializing CGBase")
-       
+
         # Get indices of nonanticipative variables from any scenario
         any_scen = next(iter(self.local_scenarios.values()))
         self.nonant_indices = list(any_scen._mpisppy_data.nonant_indices.keys())
         # Columns are added to the master problem as they are generated.
         self.cols = pyo.NonNegativeIntegers
-        
+
         # Track next available column slot for each scenario
         self.next_col = {
             sname: 0 for sname in self.all_scenario_names
         }
         # Track unique columns to avoid duplicates
         self.column_hashes = {sname: set() for sname in self.all_scenario_names}
-        
+
         self.rmp_obj_val=None
         self.outer_bound_candidate=None
         self.best_bound_obj_val=None
@@ -147,27 +147,27 @@ class CGBase(mpisppy.spopt.SPOpt):
             "mp_solver_options"]
         self._options_check(required, self.options)
 
-    
+
 
     def CG_Prep(self):
         """
         Build master problem, compute nonanticipative variables cost coefficients, and set dual parameters.
         """
-                
+
         self.compute_nonant_obj_coefs()
         if(self.cylinder_rank == 0):
             self.mp = self.build_master_model()
 
         self.problem_is_lp = self._problem_is_lp()
-        
+
         self.attach_duals_for_subproblem()
-    
+
     def attach_duals_for_subproblem(self):
         """
         Attach the duals to the models in `local_scenarios` for use when setting the reduced cost.
         """
         for (sname, scenario) in self.local_scenarios.items():
-            
+
             scenario._mpisppy_model.pi = pyo.Param(
                 scenario._mpisppy_data.nonant_indices.keys(),
                 initialize=0.0,
@@ -178,7 +178,7 @@ class CGBase(mpisppy.spopt.SPOpt):
                 mutable=True
             )
 
-           
+
     def build_master_model(self):
         """Build the restricted master problem (RMP)."""
         rmp= pyo.ConcreteModel()
@@ -220,7 +220,7 @@ class CGBase(mpisppy.spopt.SPOpt):
         )
 
         return rmp
-    
+
     def compute_nonant_obj_coefs(self):
         """
         Build a dictionary of coefficients for nonanticipative variables in the original objective.
@@ -278,7 +278,7 @@ class CGBase(mpisppy.spopt.SPOpt):
                     expr=model.base_obj_expr - redcost_term,
                     sense=pyo.maximize
                 )
-       
+
     def extract_duals_from_mp(self):
         """
         Extract dual values for nonanticipativity and convexity constraints from the master problem.
@@ -294,7 +294,7 @@ class CGBase(mpisppy.spopt.SPOpt):
         for s in self.mp.scen:
             constr = self.mp.Convexity[s]
             mu[s] = self.mp.dual[constr]
-        
+
         return pi, mu
 
     def add_column_for_scenario(self, sname, cost, x_vec):
@@ -316,10 +316,10 @@ class CGBase(mpisppy.spopt.SPOpt):
 
         self.column_hashes[sname].add(key)
 
-  
+
         c = self.next_col[sname]
         self.mp.cols.add(c)
- 
+
         self.mp.col_cost[sname, c] = float(cost)
         col_var = self.mp.w[sname, c]
 
@@ -332,8 +332,8 @@ class CGBase(mpisppy.spopt.SPOpt):
         self.mp.obj.expr += self.mp.col_cost[sname, c] * col_var
 
         self.next_col[sname] = c + 1
-    
-            
+
+
     def update_subproblem_duals_from_mp(self, pi_values, mu_values):
         """
         Update scenario-dependent duals after solving the master problem.
@@ -345,7 +345,7 @@ class CGBase(mpisppy.spopt.SPOpt):
 
         if not hasattr(self, "mp"):
             raise RuntimeError("MP model (self.mp) has not been built")
-        
+
         for sname, scenario in self.local_scenarios.items():
             model = scenario
             if pi_values is not None:
@@ -357,7 +357,7 @@ class CGBase(mpisppy.spopt.SPOpt):
                             f"when updating pi"
                         )
                     model._mpisppy_model.pi[i] = pi_values[key]
-            
+
             if mu_values is not None:
                 if sname not in mu_values:
                     raise KeyError(
@@ -377,24 +377,24 @@ class CGBase(mpisppy.spopt.SPOpt):
 
         if initial_xbar is None:
             initial_xbar = {i: 0.0 for i in self.nonant_indices}
-        
+
         for sname, scenario in self.local_scenarios.items():
             for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items():
                 target_val = initial_xbar[ndn_i]
                 xvar.fix(target_val)
-        
+
         local_results = self.build_columns()
         for sname, scenario in self.local_scenarios.items():
             for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items():
                 xvar.unfix()
-            
+
         return local_results
-    
+
     def build_columns(self):
         """
         Build columns for all local scenarios.
         """
-        
+
         self.solve_loop( self.options["sp_solver_options"], tee=False,warmstart=True)
         local_results = []
         for sname, scenario in self.local_scenarios.items():
@@ -426,10 +426,10 @@ class CGBase(mpisppy.spopt.SPOpt):
         """
         Create solvers and build initial columns and add them to the master problem.
         """
-        
+
         global_toc("Creating solvers")
         self._create_solvers()
-      
+
 
         # RMP (master) solver
         master_solver_name = self.options["solver_name"]
@@ -442,11 +442,11 @@ class CGBase(mpisppy.spopt.SPOpt):
         if self.cylinder_rank == 0:
             self.initial_columns_list= all_results
         self.initial_columns_list = self.mpicomm.bcast(self.initial_columns_list, root=0)
-        
+
         self.set_subproblem_objective()
         # 2) Build initial columns (one per scenario)
         global_toc("Building initial columns")
-         
+
         # 2) Build initial columns (one per scenario)
         global_toc("Building initial columns")
         local_results=self.build_initial_columns(initial_xbar=None)
@@ -476,7 +476,7 @@ class CGBase(mpisppy.spopt.SPOpt):
 
 
 
-    
+
     def solve_loop(self, solver_options=None,
                    dtiming=False,
                    gripe=False,
@@ -532,7 +532,7 @@ class CGBase(mpisppy.spopt.SPOpt):
 
         """
         self.update_subproblem_duals_from_mp(self.pi_values, self.mu_values)
-        
+
         super().solve_loop(
             solver_options=solver_options,
             dtiming=dtiming,
@@ -614,7 +614,7 @@ class CGBase(mpisppy.spopt.SPOpt):
                 reduced_cost = 0
                 local_results.append((sname, reduced_cost, scen_cost, xvec))
         return local_results
-    
+
     def build_columns_from_spoke(self, xhat):
         """
         Build columns for each scenario based on a single xhat.
@@ -635,7 +635,7 @@ class CGBase(mpisppy.spopt.SPOpt):
             list: List of tuples with scenario name, reduced cost, scenario cost, and variable values.
         """
         return self._build_columns_from_xhat_list(self.spcomm.recent_xhats_list)    
-    
+
     def iterk_loop(self):
         """ Perform all CG iterations after iteration 0.
 
@@ -650,9 +650,9 @@ class CGBase(mpisppy.spopt.SPOpt):
 
         """
         dprogress = self.options["display_progress"]
-        
+
         max_iterations = int(self.options["CGIterLimit"])
-        
+
 
         for self._CGIter in range(1, max_iterations+1):
             iteration_start_time = time.time()
@@ -665,7 +665,7 @@ class CGBase(mpisppy.spopt.SPOpt):
                 rmp_obj=self.solve_master_problem()
                 self.rmp_obj_val=rmp_obj
                 self.pi_values, self.mu_values = self.extract_duals_from_mp()
-                
+
             # Broadcast dual values to all ranks
             self.pi_values = self.mpicomm.bcast(self.pi_values, root=0)
             self.mu_values = self.mpicomm.bcast(self.mu_values, root=0)
@@ -682,7 +682,7 @@ class CGBase(mpisppy.spopt.SPOpt):
                     local_results_xhat_recent=self.build_columns_recent_xhats()
                 if self.spcomm.is_new_xfeas:
                     local_results_xfeas=self.build_columns_from_spoke(self.spcomm.xfeas)
-            
+
             all_results_xhat_recent = self.mpicomm.gather(local_results_xhat_recent, root=0)
             all_results_xfeas = self.mpicomm.gather(local_results_xfeas, root=0)
 
@@ -702,7 +702,7 @@ class CGBase(mpisppy.spopt.SPOpt):
                     self.outer_bound_candidate = None
                 else:
                     self.outer_bound_candidate = self.rmp_obj_val + sum_redcosts
-                
+
                 # Update bounds and convergence metric
                 if self.problem_is_lp:
                     self.best_solution_obj_val= self.rmp_obj_val
@@ -719,7 +719,7 @@ class CGBase(mpisppy.spopt.SPOpt):
                         self.conv=(self.rmp_obj_val-self.best_bound_obj_val)/abs(self.best_bound_obj_val)
                     else:
                         self.conv=(self.best_bound_obj_val-self.rmp_obj_val)/abs(self.best_bound_obj_val)
-                
+
                 if dprogress:
                     print("")
                     print("After CG Iteration",self._CGIter)
@@ -762,7 +762,7 @@ class CGBase(mpisppy.spopt.SPOpt):
         self.master_solver.solve(self.mp, tee=False)
         obj_value = pyo.value(self.mp.obj)
         return obj_value
-    
+
     def solve_ip_master_problem(self):
         """
         Solve the current master problem (RMP) with all available columns.
@@ -771,7 +771,7 @@ class CGBase(mpisppy.spopt.SPOpt):
         """
         for var in self.mp.w.values():
             var.domain = pyo.Binary 
-        
+
         self.master_solver.solve(self.mp)
         obj_value = pyo.value(self.mp.obj)
         return obj_value

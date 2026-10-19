@@ -371,11 +371,11 @@ def check_args(cfg):
         raise RuntimeError(f"Directory to load pickled bundle files from not found: {cfg.unpickle_bundles_dir}")
     if cfg.get("unpickle_scenarios_dir") is not None and not os.path.isdir(cfg.unpickle_scenarios_dir):
         raise RuntimeError(f"Directory to load pickled scenarios files from not found: {cfg.unpickle_scenarios_dir}")
-    
+
 
 def have_proper_bundles(cfg):
     """ boolean to indicate we have pickled bundles"""
     return cfg.get("scenarios_per_bundle") is not None\
         and cfg.scenarios_per_bundle > 0
-        
+
 

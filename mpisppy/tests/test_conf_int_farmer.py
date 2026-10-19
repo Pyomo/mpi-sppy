@@ -90,19 +90,19 @@ class Test_confint_farmer(unittest.TestCase):
                           xhat,
                           cfg['num_batches'], batch_size = cfg["batch_size"], start = cfg['num_scens'])
         assert MMW is not None
-    
+
     def test_xhat_read_write(self):
         path = tempfile.mkstemp(prefix="xhat",suffix=".npy")[1]
         ciutils.write_xhat(self.xhat,path=path)
         x = ciutils.read_xhat(path, delete_file=True)
         self.assertEqual(list(x['ROOT']), list(self.xhat['ROOT']))
-    
+
     def test_xhat_read_write_txt(self):
         path = tempfile.mkstemp(prefix="xhat",suffix=".npy")[1]
         ciutils.writetxt_xhat(self.xhat,path=path)
         x = ciutils.readtxt_xhat(path, delete_file=True)
         self.assertEqual(list(x['ROOT']), list(self.xhat['ROOT']))
-    
+
     def test_ama_creator(self):
         cfg = self._get_base_options()
         ama_options = cfg()
@@ -111,7 +111,7 @@ class Test_confint_farmer(unittest.TestCase):
                                      cfg=ama_options,
                                      use_command_line=False)   
         assert ama_object is not None
-        
+
     def test_seqsampling_creator(self):
         optionsBM = config.Config()
         confidence_config.confidence_config(optionsBM)
@@ -183,13 +183,13 @@ class Test_confint_farmer(unittest.TestCase):
         ama_object.run()
         obj = round_pos_sig(ama_object.EF_Obj,2)
         self.assertEqual(obj, -130000)
-    
+
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")      
     def test_xhat_eval_creator(self):
         options = self._get_xhatEval_options()
-        
+
         MMW_options = self._get_base_options()
         scenario_creator_kwargs = MMW_options['kwargs']
         scenario_creator_kwargs['num_scens'] = MMW_options['batch_size']
@@ -200,7 +200,7 @@ class Test_confint_farmer(unittest.TestCase):
                        scenario_creator_kwargs=scenario_creator_kwargs
                        )
         assert ev is not None
-        
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")      
     def test_xhat_eval_evaluate(self):
@@ -214,11 +214,11 @@ class Test_confint_farmer(unittest.TestCase):
                    scenario_denouement=None,
                    scenario_creator_kwargs=scenario_creator_kwargs
                    )
-        
+
         xhat = ciutils.read_xhat(self.xhat_path)
         obj = round_pos_sig(ev.evaluate(xhat),2)
         self.assertEqual(obj, -1300000.0)
- 
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")  
     def test_xhat_eval_evaluate_one(self):
@@ -238,7 +238,7 @@ class Test_confint_farmer(unittest.TestCase):
         obj = ev.evaluate_one(xhat,k,ev.local_scenarios[k])
         obj = round_pos_sig(obj,2)
         self.assertEqual(obj, -48000.0)
-      
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")  
     def test_MMW_running(self):
@@ -306,7 +306,7 @@ class Test_confint_farmer(unittest.TestCase):
         s = estim['s']
         G,s = round_pos_sig(G,3),round_pos_sig(s,3)
         self.assertEqual((G,s), (-456.0,944.0))
-        
+
     def test_seqsampling_scenario_disjoint_draws(self):
         """Two-stage SeqSampling must draw disjoint scenario-name ranges
         across iterations.
@@ -447,4 +447,4 @@ class Test_confint_farmer(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-    
+

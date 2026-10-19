@@ -142,7 +142,7 @@ class _SPIntervalTightenerBase(_SPPresolver):
 
             if stop:
                 break
-           
+
             same_nonant_bounds, global_lower_bounds, global_upper_bounds = (
                 self._compare_nonant_bounds()
             )
