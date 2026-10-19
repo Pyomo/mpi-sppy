@@ -29,7 +29,6 @@ class Extension:
         -------
         None
         '''
-        pass
 
     def register_send_fields(self):
         '''
@@ -46,7 +45,6 @@ class Extension:
         -------
         None
         '''
-        pass
 
     def sync_with_spokes(self):
         '''
@@ -56,7 +54,6 @@ class Extension:
         -------
         None
         '''
-        pass
 
     def pre_solve(self, subproblem):
         '''
@@ -70,7 +67,6 @@ class Extension:
         -------
         None
         '''
-        pass
 
     def post_solve(self, subproblem, results):
         '''
@@ -91,26 +87,22 @@ class Extension:
         ''' Method called before every solve loop within
             mpisppy.spot.SPOpt.solve_loop()
         '''
-        pass
 
     def post_solve_loop(self):
         ''' Method called after every solve loop within
             mpisppy.spot.SPOpt.solve_loop()
         '''
-        pass
 
     def pre_iter0(self):
         ''' When this method is called, all scenarios have been created, and
             the dual/prox terms have been attached to the objective, but the
             solvers have not yet been created.
         '''
-        pass
 
     def iter0_post_solver_creation(self):
         ''' When this method is called, PH iteration 0 has been initiated and
             all solver objects have been created.
         '''
-        pass
 
     def post_iter0(self):
         ''' Method called after the first PH iteration.
@@ -118,14 +110,12 @@ class Extension:
             completed, and we have ensured that none of the models are
             infeasible. The rho_setter, if present, has not yet been applied.
         '''
-        pass
 
     def post_iter0_after_sync(self):
         ''' Method called after the first PH iteration, after the
             synchronization of sending messages between cylinders
             has completed.
         '''
-        pass
 
     def miditer(self):
         ''' Method called after x-bar has been computed and the dual weights
@@ -133,20 +123,17 @@ class Extension:
             If a converger is present, this method is called between the
             convergence_value() method and the is_converged() method.
         '''
-        pass
 
     def enditer(self):
         ''' Method called after the solve_loop(), but before the next x-bar and
             weight update.
         '''
-        pass
 
     def enditer_after_sync(self):
         ''' Method called after the solve_loop(), after the
             synchronization of sending messages between cylinders
             has completed.
         '''
-        pass
 
     def maybe_checkpoint(self):
         ''' Method called at each point where the algorithm's state is
@@ -163,7 +150,6 @@ class Extension:
             checkpoint writer; see mpisppy/extensions/checkpointer.py and
             doc/designs/checkpointing_design.md.
         '''
-        pass
 
     def post_everything(self):
         ''' Method called after the termination of the algorithm.
@@ -172,7 +158,6 @@ class Extension:
             within self.opt.mpicomm until the scenario_denouement has completed
             on all other ranks.
         '''
-        pass
 
     def checkpoint_state(self):
         ''' Return this extension's own state as picklable plain data, or
@@ -334,7 +319,6 @@ class EFExtension:
         """
         called after EF creation, before passing the model to the solver
         """
-        pass
 
     def post_solve(self, results):
         """

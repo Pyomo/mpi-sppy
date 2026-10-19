@@ -62,7 +62,6 @@ class _ProxApproxManager:
         '''
         create a cut at val
         '''
-        pass
 
     def check_and_add_value(self, val, tolerance):
         idx = bisect(self.cut_values, val)

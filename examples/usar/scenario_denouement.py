@@ -22,4 +22,3 @@ def scenario_denouement(
         name: Unused.
         scenario: Unused.
     """
-    pass

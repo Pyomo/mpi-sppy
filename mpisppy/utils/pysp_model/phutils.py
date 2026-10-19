@@ -81,7 +81,7 @@ def indexToString(index):
         return "["+str(index)+"]"
 
     result = "["
-    for i in range(0,len(index)):
+    for i in range(len(index)):
         result += str(index[i])
         if i != len(index) - 1:
             result += ","

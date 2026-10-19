@@ -616,12 +616,10 @@ class SPCommunicator:
     def main(self):
         """ Every hub/spoke must have a main function
         """
-        pass
 
     def sync(self):
         """ Every hub/spoke may have a sync function
         """
-        pass
 
     def is_converged(self):
         """ Every hub/spoke may have a is_converged function
@@ -633,13 +631,11 @@ class SPCommunicator:
             which does some final calculations/flushing to
             disk after convergence
         """
-        pass
 
     def hub_finalize(self):
         """ Every hub may have another finalize function,
             which collects any results from finalize
         """
-        pass
 
     def allreduce_or(self, val):
         return self.opt.allreduce_or(val)
