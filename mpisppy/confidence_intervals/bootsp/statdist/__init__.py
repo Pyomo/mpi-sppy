@@ -10,4 +10,4 @@
 # distribution_factory re-export lets callers write statdist.distribution_factory(...).
 
 from mpisppy.confidence_intervals.bootsp.statdist.distribution_factory import distribution_factory  # noqa: F401
-from mpisppy.confidence_intervals.bootsp.statdist.distributions import *  # noqa: F401,F403
+from mpisppy.confidence_intervals.bootsp.statdist.distributions import *  # noqa: F403

@@ -315,7 +315,7 @@ def main():
     z_star = None
     try:
         z_star = _solve_ef(cfg)
-    except Exception as e:                          # noqa: BLE001
+    except Exception as e:
         print(f"EF solve failed, skipping quality section: {e}")
     if z_star is not None:
         q_labels = ([lab for lab, _ in _INTERVENTIONS]

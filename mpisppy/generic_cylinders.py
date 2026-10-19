@@ -15,9 +15,9 @@ import sys
 from mpisppy import MPI, global_toc
 
 # Re-export public API for backwards compatibility
-from mpisppy.generic.decomp import (do_decomp,  # noqa: F401
+from mpisppy.generic.decomp import (do_decomp,
                                    refuse_checkpointing_without_a_hub)
-from mpisppy.generic.mmw import do_mmw  # noqa: F401
+from mpisppy.generic.mmw import do_mmw
 
 from mpisppy.generic.parsing import model_fname, load_module, parse_args, proper_bundles, name_lists
 from mpisppy.generic.ef import do_EF
