@@ -3628,10 +3628,7 @@ class TestGradRhoReadsTheUsersGradientOnAResume(unittest.TestCase):
         resumed, grad = self._resumed_grad_rho()
         for s in resumed.local_scenarios.values():
             ph = s._mpisppy_model
-            grad.grad_exprs[s] = {
-                ndn_i: ph.W_on + ph.prox_on
-                for ndn_i in s._mpisppy_data.nonant_indices
-            }
+            grad.grad_exprs[s] = dict.fromkeys(s._mpisppy_data.nonant_indices, ph.W_on + ph.prox_on)
             observed = grad._eval_grad_exprs(s, None)
             self.assertTrue(
                 observed and all(v == 0 for v in observed.values()),

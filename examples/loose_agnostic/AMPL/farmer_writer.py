@@ -215,7 +215,7 @@ def _nonant_names_from_mps(
 
     if missing:
         # Helpful debug: show a preview of what we saw
-        preview = [ell for ell in col_lines[:10]]
+        preview = list(col_lines[:10])
         raise ValueError(
             "Some nonants were not found in .col. "
             f"Missing keys (normalized inside []): {missing}. "

@@ -196,7 +196,7 @@ def _feasible_solution(mname,scenario,xhat_one,branching_factors,seed,cfg,
         subtree.run()
         xhats.append(subtree.xhat_at_stage)
         seed+=sputils.number_of_nodes(branching_factors[(t-1):])
-    xhat_dict = {ndn:xhat for (ndn,xhat) in zip(nodenames,xhats)}
+    xhat_dict = dict(zip(nodenames,xhats))
     return xhat_dict,seed
 
 def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed, cfg,

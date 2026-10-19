@@ -231,7 +231,7 @@ class _StubSensiRho(_SensiRhoBase):
         self._sensis = sensis
 
     def get_nonant_sensitivites(self):
-        return {s: self._sensis for s in self.ph.local_scenarios.values()}
+        return dict.fromkeys(self.ph.local_scenarios.values(), self._sensis)
 
 
 def _make_sensi_ph(xvals, xbars, default_rho=1.0):

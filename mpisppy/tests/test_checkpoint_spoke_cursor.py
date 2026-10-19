@@ -551,7 +551,7 @@ class TestDualStateRestoreRefusesBeforeChanging(unittest.TestCase):
         for sname, s in opt.local_scenarios.items():
             nonants = s._mpisppy_data.nonant_indices
             duals[sname] = {
-                "W": {ndn_i: 5.0 for ndn_i in nonants},
+                "W": dict.fromkeys(nonants, 5.0),
                 "values": {v.name: 7.0 for v in nonants.values()}}
         if drop is not None:
             sname = list(duals)[-1]

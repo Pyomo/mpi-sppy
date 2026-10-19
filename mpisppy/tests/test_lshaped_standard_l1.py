@@ -160,7 +160,7 @@ class TestStandardL1CutGenerator(unittest.TestCase):
             "root_solver": solver_name,
             "sp_solver": solver_name,
             "sp_solver_options": {},
-            "valid_eta_lb": {name: -1e6 for name in names},
+            "valid_eta_lb": dict.fromkeys(names, -1e6),
             "lshaped_cut_generator": "not_a_generator",
         }
         ls = LShapedMethod(
@@ -254,7 +254,7 @@ class TestStandardL1LShapedSolve(unittest.TestCase):
             "root_solver": solver_name,
             "sp_solver": solver_name,
             "sp_solver_options": {},
-            "valid_eta_lb": {name: -1e6 for name in names},
+            "valid_eta_lb": dict.fromkeys(names, -1e6),
             "max_iter": 20,
             "verbose": False,
         }
@@ -299,7 +299,7 @@ class TestStandardL1LShapedSolve(unittest.TestCase):
             "root_solver": solver_name,
             "sp_solver": solver_name,
             "sp_solver_options": {},
-            "valid_eta_lb": {name: 0.0 for name in names},
+            "valid_eta_lb": dict.fromkeys(names, 0.0),
             "lshaped_cut_generator": "standard_l1",
             "max_iter": 10,
             "verbose": False,

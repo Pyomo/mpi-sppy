@@ -270,9 +270,7 @@ class _FakeOpt:
         # Satisfy attributes XhatBase.__init__ expects.
         self.cylinder_rank = 0
         self.n_proc = 1
-        self.scenario_names_to_rank = {"ROOT": {
-            sname: 0 for sname in sp.local_scenarios
-        }}
+        self.scenario_names_to_rank = {"ROOT": dict.fromkeys(sp.local_scenarios, 0)}
 
 
 def _make_xhatbase(sp, cuts_count=3):

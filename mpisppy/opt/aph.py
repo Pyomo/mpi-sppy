@@ -738,8 +738,8 @@ class APH(ph_base.PHBase):
             # reminder: dispatchrecord is sname:[(iter,phi)...]
             if self.round_robin_dispatch:
                 # TBD: check this sort
-                sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
-                                                     key=lambda item: item[1][-1])}
+                sortedbyI = dict(sorted(self.dispatchrecord.items(),
+                                        key=lambda item: item[1][-1]))
                 _vb("  sortedbyI={}.format(sortedbyI)")
                 # There is presumably a pythonic way to do this...
                 retval = list()

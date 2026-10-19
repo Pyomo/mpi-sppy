@@ -197,7 +197,7 @@ def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
             this way.
     '''
     results = dict()
-    seen = {name: False for name in scenario_names_local}
+    seen = dict.fromkeys(scenario_names_local, False)
     with open(fname) as f:
         for line in f:
             if (line.startswith('#')):
@@ -245,8 +245,8 @@ def _check_W(w_val_dict, PHB, rank):
     # By this point, we are certain that
     # w_val_dict.keys() == PHB.local_scenarios.keys()
     for (sname, scenario) in PHB.local_scenarios.items():
-        vn_model = set([var.name for node in scenario._mpisppy_node_list
-                                 for var  in node.nonant_vardata_list])
+        vn_model = {var.name for node in scenario._mpisppy_node_list
+                             for var  in node.nonant_vardata_list}
         vn_provided = set(w_val_dict[sname].keys())
         diff = vn_model.difference(vn_provided)
         if diff:
@@ -369,8 +369,8 @@ def _check_xbar(xbar_val_dict, PHB):
     '''
     sname = list(PHB.local_scenarios.keys())[0]
     scenario = PHB.local_scenarios[sname]
-    var_names = set([var.name for node in scenario._mpisppy_node_list
-                          for var  in node.nonant_vardata_list])
+    var_names = {var.name for node in scenario._mpisppy_node_list
+                              for var  in node.nonant_vardata_list}
     provided_vars = set(xbar_val_dict.keys())
     set1 = var_names.difference(provided_vars)
     if set1:
