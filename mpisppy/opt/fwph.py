@@ -274,7 +274,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     secs = time.perf_counter() - self.start_time
                     self._output(self._local_bound, self._fwph_best_bound, self.conv, secs)
                     global_toc(
-                        "FWPH convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.options["convthresh"]),
+                        f'FWPH convergence metric={self.conv:f} dropped below user-supplied threshold={self.options["convthresh"]:f}',
                         self.cylinder_rank == 0,
                     )
                     break
@@ -325,7 +325,7 @@ class FWPH(mpisppy.phbase.PHBase):
             #       times on different threads. This can especially mess up finalization.
             #       As a guard, we'll put a barrier here.
             self.mpicomm.Barrier()
-            global_toc("Reached user-specified limit=%d on number of FWPH iterations" % max_iterations, self.cylinder_rank == 0)
+            global_toc(f"Reached user-specified limit={max_iterations} on number of FWPH iterations", self.cylinder_rank == 0)
 
     def fwph_solve_loop(
             self,

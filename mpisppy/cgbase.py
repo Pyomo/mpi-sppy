@@ -750,7 +750,7 @@ class CGBase(mpisppy.spopt.SPOpt):
             #       times on different threads. This can especially mess up finalization.
             #       As a guard, we'll put a barrier here.
             self.mpicomm.Barrier()
-            global_toc("Reached user-specified limit=%d on number of CG iterations" % max_iterations, self.cylinder_rank == 0)
+            global_toc(f"Reached user-specified limit={max_iterations} on number of CG iterations", self.cylinder_rank == 0)
 
 
     def solve_master_problem(self):

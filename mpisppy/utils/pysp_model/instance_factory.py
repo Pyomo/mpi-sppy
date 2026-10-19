@@ -91,8 +91,7 @@ def _extract_pathspec(
         the next time it is called.
     """
 
-    logger.debug("expanding pathspec %s to %s"
-                 % (pathspec, os.path.expanduser(pathspec)))
+    logger.debug(f"expanding pathspec {pathspec} to {os.path.expanduser(pathspec)}")
     pathspec = os.path.expanduser(pathspec)
 
     if archives is None:
@@ -113,8 +112,8 @@ def _extract_pathspec(
             extension = os.path.splitext(default_basename)[1].strip()
             assert extension != ''
             if archive_subdir.endswith(extension):
-                logger.debug("recognized extension type '%s' appears "
-                             "after comma, treating as file" % (extension))
+                logger.debug(f"recognized extension type '{extension}' appears "
+                             "after comma, treating as file")
                 basename = os.path.basename(archive_subdir)
                 archive_subdir = os.path.dirname(archive_subdir).strip()
         if archive_subdir == '':
@@ -124,8 +123,7 @@ def _extract_pathspec(
         normalized_location = \
             ArchiveReader.normalize_name(pathspec)
 
-    logger.debug("normalized pathspec: (%s, %s, %s)"
-                 % (normalized_location, archive_subdir, basename))
+    logger.debug(f"normalized pathspec: ({normalized_location}, {archive_subdir}, {basename})")
     if ArchiveReader.isArchivedFile(normalized_location):
         logger.debug("pathspec defines a recognized archive type")
         for prev_archive_inputs, prev_archive, prev_unarchived_dir \
@@ -146,7 +144,7 @@ def _extract_pathspec(
                     else:
                         unarchived_dir = posixpath.join(unarchived_dir,
                                                         archive_subdir)
-                logger.debug("unarchived directory: %s" % (unarchived_dir))
+                logger.debug(f"unarchived directory: {unarchived_dir}")
                 break
         else: # if no break occurs in previous for-loop
             archive = ArchiveReaderFactory(
@@ -158,7 +156,7 @@ def _extract_pathspec(
                              archive,
                              unarchived_dir))
             logger.debug("New archive opened. Temporary archive "
-                         "extraction directory: %s" % (unarchived_dir))
+                         f"extraction directory: {unarchived_dir}")
             archive.extractall(path=unarchived_dir)
         if basename is not None:
             filename = posixpath.join(unarchived_dir, basename)
@@ -166,7 +164,7 @@ def _extract_pathspec(
             filename = posixpath.join(unarchived_dir, default_basename)
         else:
             filename = unarchived_dir
-        logger.debug("extracted filename: %s" % (filename))
+        logger.debug(f"extracted filename: {filename}")
     else:
         logger.debug("pathspec defines a standard path")
         if archive_subdir is not None:
@@ -198,8 +196,8 @@ def _find_reference_model_or_callback(src):
         callback = getattr(module, "pysp_instance_creation_callback")
         if not hasattr(callback,"__call__"):
             raise TypeError("'pysp_instance_creation_callback' "
-                            "object found in source '%s' is not "
-                            "callable" % (src))
+                            f"object found in source '{src}' is not "
+                            "callable")
     else:
         matching_names = []
         for attr_name in dir_module:
@@ -208,11 +206,10 @@ def _find_reference_model_or_callback(src):
                 reference_model = obj
                 matching_names.append(attr_name)
         if len(matching_names) > 1:
-            raise ValueError("Multiple objects found in source '%s' "
+            raise ValueError(f"Multiple objects found in source '{src}' "
                              "that could be a reference model. Make "
                              "sure there is only one Pyomo model in "
-                             "the source file. Object names: %s"
-                             % (str(matching_names)))
+                             f"the source file. Object names: {matching_names}")
 
     return module, reference_model, callback
 
@@ -232,8 +229,8 @@ def _find_scenariotree(src=None, module=None):
         callback = getattr(module, "pysp_scenario_tree_model_callback")
         if not hasattr(callback,"__call__"):
             raise TypeError("'pysp_scenario_tree_model_callback' "
-                            "object found in source '%s' is not "
-                            "callable" % (src))
+                            f"object found in source '{src}' is not "
+                            "callable")
         attrs = [(None, callback())]
     else:
         attrs = [(attr_name,getattr(module, attr_name))
@@ -251,13 +248,12 @@ def _find_scenariotree(src=None, module=None):
             scenario_tree_model = obj
             matching_names.append(attr_name)
     if len(matching_names) > 1:
-        raise ValueError("Multiple objects found in source '%s' "
+        raise ValueError(f"Multiple objects found in source '{src}' "
                          "that could act as a scenario tree "
                          "specification. Make sure there is only "
                          "one Pyomo model, ScenarioTree, or "
                          "networkx.DiGraph object in the source "
-                         "file. Object names: %s"
-                         % (str(matching_names)))
+                         f"file. Object names: {matching_names}")
 
     return module, scenario_tree_object, scenario_tree_model
 
@@ -340,10 +336,8 @@ class ScenarioTreeInstanceFactory:
                                   archives=self._archives)
             if not os.path.exists(self._model_filename):
                 logger.error("Failed to extract reference model python file "
-                             "from path specification: %s"
-                             % (model))
-                raise OSError("path does not exist: %s"
-                              % (self._model_filename))
+                             f"from path specification: {model}")
+                raise OSError(f"path does not exist: {self._model_filename}")
             assert self._model_filename is not None
             assert self._model_filename.endswith(".py")
             (self._model_module,
@@ -355,17 +349,15 @@ class ScenarioTreeInstanceFactory:
                 raise AttributeError(
                     "No reference Pyomo model or "
                     "'pysp_instance_creation_callback' "
-                    "function object found in src: %s"
-                    % (self._model_filename))
+                    f"function object found in src: {self._model_filename}")
         elif hasattr(model, "__call__"):
             logger.debug("A model callback function was provided.")
             self._model_callback = model
         else:
             if not isinstance(model, (_BlockData, Block)):
                 raise TypeError(
-                    "model argument object has incorrect type: %s. "
-                    "Must be a string type, a callback, or a Pyomo model."
-                    % (type(model)))
+                    f"model argument object has incorrect type: {type(model)}. "
+                    "Must be a string type, a callback, or a Pyomo model.")
             logger.debug("A model object was provided.")
             self._model_object = model
 
@@ -385,8 +377,7 @@ class ScenarioTreeInstanceFactory:
             self._scenario_tree_model = scenario_tree
         elif isinstance(scenario_tree, str):
             logger.debug("scenario tree input is a string, attempting "
-                         "to load file specification: %s"
-                         % (scenario_tree))
+                         f"to load file specification: {scenario_tree}")
             self._scenario_tree_filename = None
             if not scenario_tree.endswith(".py"):
                 self._scenario_tree_filename, self._archives = \
@@ -395,8 +386,7 @@ class ScenarioTreeInstanceFactory:
                                       archives=self._archives)
                 if not os.path.exists(self._scenario_tree_filename):
                     logger.debug("Failed to extract scenario tree structure "
-                                 ".dat file from path specification: %s"
-                                 % (scenario_tree))
+                                 f".dat file from path specification: {scenario_tree}")
                     self._scenario_tree_filename = None
             if self._scenario_tree_filename is None:
                 self._scenario_tree_filename, self._archives = \
@@ -405,13 +395,12 @@ class ScenarioTreeInstanceFactory:
                                       archives=self._archives)
                 if not os.path.exists(self._scenario_tree_filename):
                     logger.debug("Failed to locate scenario tree structure "
-                                 ".py file with path specification: %s"
-                                 % (scenario_tree))
+                                 f".py file with path specification: {scenario_tree}")
                     self._scenario_tree_filename = None
             if self._scenario_tree_filename is None:
                 raise ValueError("Failed to extract scenario tree structure "
                                  "file with .dat or .py extension from path "
-                                 "specification: %s" % (scenario_tree))
+                                 f"specification: {scenario_tree}")
             elif self._scenario_tree_filename.endswith(".py"):
                 if self._scenario_tree_filename == self._model_filename:
                     # try not to clobber the model import
@@ -429,8 +418,7 @@ class ScenarioTreeInstanceFactory:
                     raise AttributeError(
                         "No scenario tree or "
                         "'pysp_scenario_tree_model_callback' "
-                        "function found in src: %s"
-                        % (self._scenario_tree_filename))
+                        f"function found in src: {self._scenario_tree_filename}")
             elif self._scenario_tree_filename.endswith(".dat"):
                 self._scenario_tree_model = \
                     CreateAbstractScenarioTreeModel().\
@@ -466,9 +454,9 @@ class ScenarioTreeInstanceFactory:
                 (not isinstance(self._scenario_tree_model,
                                 networkx.DiGraph))):
                 raise TypeError(
-                    "scenario tree model object has incorrect type: %s. "
+                    f"scenario tree model object has incorrect type: {type(scenario_tree)}. "
                     "Must be a string type,  Pyomo model, or a "
-                    "networkx.DiGraph object." % (type(scenario_tree)))
+                    "networkx.DiGraph object.")
             if isinstance(self._scenario_tree_model, (_BlockData, Block)):
                 if not self._scenario_tree_model.is_constructed():
                     raise ValueError(
@@ -478,13 +466,11 @@ class ScenarioTreeInstanceFactory:
         if data is None:
             if self.scenario_tree_directory() is not None:
                 logger.debug("data directory is set to the scenario tree "
-                             "directory: %s"
-                             % (self.scenario_tree_directory()))
+                             f"directory: {self.scenario_tree_directory()}")
                 self._data_directory = self.scenario_tree_directory()
             elif self.model_directory() is not None:
                 logger.debug("data directory is set to the reference model "
-                             "directory: %s"
-                             % (self.model_directory()))
+                             f"directory: {self.model_directory()}")
                 self._data_directory = self.model_directory()
             else:
                 if (self._model_callback is None) and \
@@ -497,18 +483,15 @@ class ScenarioTreeInstanceFactory:
                 logger.debug("no data directory is required")
         else:
             logger.debug("data location is provided, attempting "
-                         "to load specification: %s"
-                         % (data))
+                         f"to load specification: {data}")
             self._data_directory, self._archives = \
                 _extract_pathspec(data,
                                   None,
                                   archives=self._archives)
             if not os.path.exists(self._data_directory):
                 logger.error("Failed to extract data directory "
-                             "from path specification: %s"
-                             % (data))
-                raise OSError("path does not exist: %s"
-                              % (self._data_directory))
+                             f"from path specification: {data}")
+                raise OSError(f"path does not exist: {self._data_directory}")
 
     def __getstate__(self):
         self.close()
@@ -565,13 +548,13 @@ class ScenarioTreeInstanceFactory:
         assert not self._closed
         if not scenario_tree.contains_scenario(scenario_name):
             raise ValueError("ScenarioTree does not contain scenario "
-                             "with name %s." % (scenario_name))
+                             f"with name {scenario_name}.")
 
         scenario = scenario_tree.get_scenario(scenario_name)
         node_name_list = [n._name for n in scenario._node_list]
 
         if verbose:
-            print("Creating instance for scenario=%s" % (scenario_name))
+            print(f"Creating instance for scenario={scenario_name}")
 
         scenario_instance = None
 
@@ -637,21 +620,19 @@ class ScenarioTreeInstanceFactory:
                     elif os.path.exists(scenario_data_filename+'.yaml'):
                         if not yaml_available:
                             raise ValueError(
-                                "Found yaml data file for scenario '%s' "
-                                "but he PyYAML module is not available"
-                                % (scenario_name))
+                                f"Found yaml data file for scenario '{scenario_name}' "
+                                "but he PyYAML module is not available")
                         scenario_data_filename = \
                             scenario_data_filename+".yaml"
                         with open(scenario_data_filename) as f:
                             data = yaml.load(f, **yaml_load_args)
                     else:
                         raise RuntimeError(
-                            "Cannot find a data file for scenario '%s' "
-                            "in directory: %s\nRecognized formats: .dat, "
-                            ".yaml" % (scenario_name, self.data_directory()))
+                            f"Cannot find a data file for scenario '{scenario_name}' "
+                            f"in directory: {self.data_directory()}\nRecognized formats: .dat, "
+                            ".yaml")
                     if verbose:
-                        print("Data for scenario=%s loads from file=%s"
-                              % (scenario_name, scenario_data_filename))
+                        print(f"Data for scenario={scenario_name} loads from file={scenario_data_filename}")
                     if data is None:
                         scenario_instance = \
                             self._model_object.create_instance(
@@ -674,17 +655,15 @@ class ScenarioTreeInstanceFactory:
                         if not os.path.exists(node_data_filename):
                             raise RuntimeError(
                                 "Cannot find a data file for scenario tree "
-                                "node '%s' in directory: %s\nRecognized "
-                                "formats: .dat" % (node_name,
-                                                   self.data_directory()))
+                                f"node '{node_name}' in directory: {self.data_directory()}\nRecognized "
+                                "formats: .dat")
                         data_files.append(node_data_filename)
 
                     scenario_data = DataPortal(model=self._model_object)
                     for data_file in data_files:
                         if verbose:
-                            print("Node data for scenario=%s partially "
-                                  "loading from file=%s"
-                                  % (scenario_name, data_file))
+                            print(f"Node data for scenario={scenario_name} partially "
+                                  f"loading from file={data_file}")
                         scenario_data.load(filename=data_file)
 
                     scenario_instance = self._model_object.create_instance(
@@ -708,8 +687,7 @@ class ScenarioTreeInstanceFactory:
                     verbose=verbose)
 
         except:
-            logger.error("Failed to create model instance for scenario=%s"
-                         % (scenario_name))
+            logger.error(f"Failed to create model instance for scenario={scenario_name}")
             raise
 
         return scenario_instance
@@ -783,8 +761,7 @@ class ScenarioTreeInstanceFactory:
                         "A bundles file can not be used when the "
                         "scenario tree input was not a Pyomo "
                         "model or ScenarioStructure.dat file.")
-                logger.debug("attempting to locate bundle file for input: %s"
-                             % (bundles))
+                logger.debug(f"attempting to locate bundle file for input: {bundles}")
                 # we interpret the scenario bundle specification in one of
                 # two ways. if the supplied name is a file, it is used
                 # directly. otherwise, it is interpreted as the root of a
@@ -798,18 +775,16 @@ class ScenarioTreeInstanceFactory:
                     if self.data_directory() is None:
                         raise ValueError(
                             "Could not locate bundle .dat file from input "
-                            "'%s'. Path does not exist and there is no data "
-                            "directory to search in." % (orig_input))
+                            f"'{orig_input}'. Path does not exist and there is no data "
+                            "directory to search in.")
                     bundles = os.path.join(self.data_directory(), bundles)
                 if not os.path.exists(bundles):
                     raise ValueError("Could not locate bundle .dat file "
-                                     "from input '%s' as absolute path or "
-                                     "relative to data directory: %s"
-                                     % (orig_input, self.data_directory()))
+                                     f"from input '{orig_input}' as absolute path or "
+                                     f"relative to data directory: {self.data_directory()}")
 
                 if verbose:
-                    print("Scenario tree bundle specification filename=%s"
-                          % (bundles))
+                    print(f"Scenario tree bundle specification filename={bundles}")
 
                 scenario_tree_model = scenario_tree_model.clone()
                 scenario_tree_model.Bundling = True

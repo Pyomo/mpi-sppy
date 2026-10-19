@@ -548,14 +548,13 @@ class ScenarioTree:
                 if (len(stage_variable_ids[node_stage_id]) == 0) and \
                    (len(node_variable_ids[node_id]) == 0):
                     raise ValueError(
-                        "Scenario tree node %s, belonging to stage %s, "
+                        f"Scenario tree node {node_id}, belonging to stage {node_stage_id}, "
                         "has not been declared with any variables. "
                         "To fix this error, make sure that one of "
-                        "the sets StageVariables[%s] or NodeVariables[%s] "
+                        f"the sets StageVariables[{node_stage_id}] or NodeVariables[{node_id}] "
                         "is declared with at least one variable string "
                         "template (e.g., x, x[*]) on the scenario tree "
-                        "or in ScenarioStructure.dat."
-                        % (node_id, node_stage_id, node_stage_id, node_id))
+                        "or in ScenarioStructure.dat.")
 
         #
         # construct the actual tree objects
@@ -574,13 +573,11 @@ class ScenarioTree:
         for tree_node_name in node_ids:
 
             if tree_node_name not in node_stage_ids:
-                raise ValueError("No stage is assigned to tree node=%s"
-                                 % (tree_node_name))
+                raise ValueError(f"No stage is assigned to tree node={tree_node_name}")
 
             stage_name = value(node_stage_ids[tree_node_name])
             if stage_name not in self._stage_map:
-                raise ValueError("Unknown stage=%s assigned to tree node=%s"
-                                 % (stage_name, tree_node_name))
+                raise ValueError(f"Unknown stage={stage_name} assigned to tree node={tree_node_name}")
 
             node_stage = self._stage_map[stage_name]
             new_tree_node = ScenarioTreeNode(
@@ -645,16 +642,12 @@ class ScenarioTree:
                             child_node._parent = this_node
                         else:
                             raise ValueError(
-                                "Multiple parents specified for tree node=%s; "
-                                "existing parent node=%s; conflicting parent "
-                                "node=%s"
-                                % (child_id,
-                                   child_node._parent.name,
-                                   this_node.name))
+                                f"Multiple parents specified for tree node={child_id}; "
+                                f"existing parent node={child_node._parent.name}; conflicting parent "
+                                f"node={this_node.name}")
                     else:
-                        raise ValueError("Unknown child tree node=%s specified "
-                                         "for tree node=%s"
-                                         % (child_id, this_node.name))
+                        raise ValueError(f"Unknown child tree node={child_id} specified "
+                                         f"for tree node={this_node.name}")
 
         # at this point, the scenario tree nodes and the stages are set - no
         # two-pass logic necessary when constructing scenarios.
@@ -663,14 +656,12 @@ class ScenarioTree:
             new_scenario._name = scenario_name
 
             if scenario_name not in scenario_leaf_ids:
-                raise ValueError("No leaf tree node specified for scenario=%s"
-                                 % (scenario_name))
+                raise ValueError(f"No leaf tree node specified for scenario={scenario_name}")
             else:
                 scenario_leaf_node_name = value(scenario_leaf_ids[scenario_name])
                 if scenario_leaf_node_name not in self._tree_node_map:
-                    raise ValueError("Uknown tree node=%s specified as leaf "
-                                     "of scenario=%s" %
-                                     (scenario_leaf_node_name, scenario_name))
+                    raise ValueError(f"Uknown tree node={scenario_leaf_node_name} specified as leaf "
+                                     f"of scenario={scenario_name}")
                 else:
                     new_scenario._leaf_node = \
                         self._tree_node_map[scenario_leaf_node_name]
@@ -833,10 +824,9 @@ class ScenarioTree:
                     node.retain = True
 
         except KeyError:
-            raise ValueError("Scenario=%s selected for "
+            raise ValueError(f"Scenario={scenario_name} selected for "
                              "bundling not present in "
-                             "scenario tree"
-                             % (scenario_name))
+                             "scenario tree")
 
         # scan for any non-retained scenarios and tree nodes.
         scenarios_to_delete = []
@@ -1138,8 +1128,8 @@ class ScenarioTree:
     def add_bundle(self, name, scenario_bundle_list):
 
         if name in self._scenario_bundle_map:
-            raise ValueError("Cannot add a new bundle with name '%s', a bundle "
-                             "with that name already exists." % (name))
+            raise ValueError(f"Cannot add a new bundle with name '{name}', a bundle "
+                             "with that name already exists.")
 
         bundle_scenario_tree = self.make_compressed(scenario_bundle_list,
                                                     normalize=True)
@@ -1157,8 +1147,8 @@ class ScenarioTree:
     def remove_bundle(self, name):
 
         if name not in self._scenario_bundle_map:
-            raise KeyError("Cannot remove bundle with name '%s', no bundle "
-                           "with that name exists." % (name))
+            raise KeyError(f"Cannot remove bundle with name '{name}', no bundle "
+                           "with that name exists.")
         bundle = self._scenario_bundle_map[name]
         del self._scenario_bundle_map[name]
         self._scenario_bundles.remove(bundle)
@@ -1182,10 +1172,8 @@ class ScenarioTree:
                 scenario_bundle_list.append(self._scenarios[random_list[i]].name)
 
             if verbose:
-                print("Downsampling scenario tree - retained %s "
-                      "scenarios: %s"
-                      % (len(scenario_bundle_list),
-                         str(scenario_bundle_list)))
+                print(f"Downsampling scenario tree - retained {len(scenario_bundle_list)} "
+                      f"scenarios: {str(scenario_bundle_list)}")
 
             self.compress(scenario_bundle_list) # do the downsampling
         finally:
@@ -1230,10 +1218,8 @@ class ScenarioTree:
                 if abs(1.0 - sum_probabilities) > 0.000001:
                     raise ValueError("ScenarioTree validation failed. "
                                      "Reason: child conditional "
-                                     "probabilities for tree node=%s "
-                                     " sum to %s"
-                                     % (tree_node.name,
-                                        sum_probabilities))
+                                     f"probabilities for tree node={tree_node.name} "
+                                     f" sum to {sum_probabilities}")
 
         # ensure that there is only one root node in the tree
         num_roots = 0
@@ -1253,8 +1239,7 @@ class ScenarioTree:
             if len(tree_node._scenarios) == 0:
                 raise ValueError("ScenarioTree validation failed. "
                                  "Reason: there are no scenarios "
-                                 "associated with tree node=%s"
-                                 % (tree_node.name))
+                                 f"associated with tree node={tree_node.name}")
                 return False
 
         return True
@@ -1308,23 +1293,23 @@ class ScenarioTree:
         print("")
         for tree_node_name in sorted(self._tree_node_map.keys()):
             tree_node = self._tree_node_map[tree_node_name]
-            print("\tName=%s" % (tree_node_name))
+            print(f"\tName={tree_node_name}")
             if tree_node._stage is not None:
-                print("\tStage=%s" % (tree_node._stage._name))
+                print(f"\tStage={tree_node._stage._name}")
             else:
                 print("\t Stage=None")
             if tree_node._parent is not None:
-                print("\tParent=%s" % (tree_node._parent._name))
+                print(f"\tParent={tree_node._parent._name}")
             else:
                 print("\tParent=" + "None")
             if tree_node._conditional_probability is not None:
-                print("\tConditional probability=%4.4f" % tree_node._conditional_probability)
+                print(f"\tConditional probability={tree_node._conditional_probability:4.4f}")
             else:
                 print("\tConditional probability=" + "***Undefined***")
             print("\tChildren:")
             if len(tree_node._children) > 0:
                 for child_node in sorted(tree_node._children, key=lambda x: x._name):
-                    print("\t\t%s" % (child_node._name))
+                    print(f"\t\t{child_node._name}")
             else:
                 print("\t\tNone")
             print("\tScenarios:")
@@ -1332,7 +1317,7 @@ class ScenarioTree:
                 print("\t\tNone")
             else:
                 for scenario in sorted(tree_node._scenarios, key=lambda x: x._name):
-                    print("\t\t%s" % (scenario._name))
+                    print(f"\t\t{scenario._name}")
             if len(tree_node._variable_templates) > 0:
                 print("\tVariables: ")
                 for variable_name in sorted(tree_node._variable_templates.keys()):
@@ -1354,10 +1339,10 @@ class ScenarioTree:
         print("Stages:")
         for stage_name in sorted(self._stage_map.keys()):
             stage = self._stage_map[stage_name]
-            print("\tName=%s" % (stage_name))
+            print(f"\tName={stage_name}")
             print("\tTree Nodes: ")
             for tree_node in sorted(stage._tree_nodes, key=lambda x: x._name):
-                print("\t\t%s" % (tree_node._name))
+                print(f"\t\t{tree_node._name}")
             if len(stage._variable_templates) > 0:
                 print("\tVariables: ")
                 for variable_name in sorted(stage._variable_templates.keys()):
@@ -1390,23 +1375,23 @@ class ScenarioTree:
         print("Scenarios:")
         for scenario_name in sorted(self._scenario_map.keys()):
             scenario = self._scenario_map[scenario_name]
-            print("\tName=%s" % (scenario_name))
-            print("\tProbability=%4.4f" % scenario._probability)
+            print(f"\tName={scenario_name}")
+            print(f"\tProbability={scenario._probability:4.4f}")
             if scenario._leaf_node is None:
                 print("\tLeaf node=None")
             else:
-                print("\tLeaf node=%s" % (scenario._leaf_node._name))
+                print(f"\tLeaf node={scenario._leaf_node._name}")
             print("\tTree node sequence:")
             for tree_node in scenario._node_list:
-                print("\t\t%s" % (tree_node._name))
+                print(f"\t\t{tree_node._name}")
             print("")
         print("----------------------------------------------------")
         if len(self._scenario_bundles) > 0:
             print("Scenario Bundles:")
             for bundle_name in sorted(self._scenario_bundle_map.keys()):
                 scenario_bundle = self._scenario_bundle_map[bundle_name]
-                print("\tName=%s" % (bundle_name))
-                print("\tProbability=%4.4f" % scenario_bundle._probability            )
+                print(f"\tName={bundle_name}")
+                print(f"\tProbability={scenario_bundle._probability:4.4f}"            )
                 sys.stdout.write("\tScenarios:  ")
                 for scenario_name in sorted(scenario_bundle._scenario_names):
                     sys.stdout.write(str(scenario_name)+' ')
@@ -1423,30 +1408,17 @@ class ScenarioTree:
     def save_to_dot(self, filename):
 
         def _visit_node(node):
-            f.write("%s%s [label=\"%s\"];\n"
-                    % (node.name,
-                       id(node),
-                       str(node.name)+("\n(%.6g)" % (node._probability))))
+            f.write(f'{node.name}{id(node)} '
+                    f'[label="{node.name}\n({node._probability:.6g})"];\n')
             for child_node in node._children:
                 _visit_node(child_node)
-                f.write("%s%s -> %s%s [label=\"%.6g\"];\n"
-                        % (node.name,
-                           id(node),
-                           child_node.name,
-                           id(child_node),
-                           child_node._conditional_probability))
+                f.write(f"{node.name}{id(node)} -> {child_node.name}{id(child_node)} [label=\"{child_node._conditional_probability:.6g}\"];\n")
             if len(node._children) == 0:
                 assert len(node._scenarios) == 1
                 scenario = node._scenarios[0]
-                f.write("%s%s [label=\"%s\"];\n"
-                        % (scenario.name,
-                           id(scenario),
-                           "scenario\n"+str(scenario.name)))
-                f.write("%s%s -> %s%s [style=dashed];\n"
-                        % (node.name,
-                           id(node),
-                           scenario.name,
-                           id(scenario)))
+                f.write(f'{scenario.name}{id(scenario)} '
+                        f'[label="scenario\n{scenario.name}"];\n')
+                f.write(f"{node.name}{id(node)} -> {scenario.name}{id(scenario)} [style=dashed];\n")
 
         with open(filename, 'w') as f:
 

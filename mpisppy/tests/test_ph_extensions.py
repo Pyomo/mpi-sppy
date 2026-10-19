@@ -52,7 +52,7 @@ class TestMultRhoUpdater(unittest.TestCase):
         return dict(self.options)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_mult_rho_updater_runs(self):
         """MultRhoUpdater should adjust rho values during PH."""
         from mpisppy.extensions.mult_rho_updater import MultRhoUpdater
@@ -77,7 +77,7 @@ class TestMultRhoUpdater(unittest.TestCase):
         self.assertIsNotNone(obj)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_mult_rho_updater_default_options(self):
         """MultRhoUpdater should work with no explicit mult_rho_options."""
         from mpisppy.extensions.mult_rho_updater import MultRhoUpdater
@@ -127,7 +127,7 @@ class TestWtrackerExtension(unittest.TestCase):
         return dict(self.options)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_wtracker_extension(self):
         """Wtracker_extension should track W values and produce report files."""
         from mpisppy.extensions.wtracker_extension import Wtracker_extension
@@ -160,7 +160,7 @@ class TestWtrackerExtension(unittest.TestCase):
         self.assertIn("nonants", content)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_wtracker_direct(self):
         """WTracker used directly should compute moving stats."""
         from mpisppy.utils.w_utils.wtracker import WTracker

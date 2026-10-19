@@ -298,7 +298,7 @@ class DCG(mpisppy.cgbase.CGBase):
             #       times on different threads. This can especially mess up finalization.
             #       As a guard, we'll put a barrier here.
             self.mpicomm.Barrier()
-            global_toc("Reached user-specified limit=%d on number of DCG iterations" % max_iterations, self.cylinder_rank == 0)        
+            global_toc(f"Reached user-specified limit={max_iterations} on number of DCG iterations", self.cylinder_rank == 0)        
 
 
 if __name__ == "__main__":

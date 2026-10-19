@@ -1817,7 +1817,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                     break
             if self.conv is not None:
                 if self.conv < self.options["convthresh"]:
-                    global_toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.options["convthresh"]), self.cylinder_rank == 0)
+                    global_toc(f'Convergence metric={self.conv:f} dropped below user-supplied threshold={self.options["convthresh"]:f}', self.cylinder_rank == 0)
                     break
             if self.options["time_limit"] is not None:
                 time_to_stop = self.allreduce_or( (time.perf_counter() - self.start_time) >= self.options["time_limit"] )
@@ -1935,10 +1935,10 @@ class PHBase(mpisppy.spopt.SPOpt):
                 # contradictory account of the same non-event.
                 pass
             elif stop_at is not None and self._stop_iteration == stop_at:
-                global_toc("Reached user-specified stop_at_iteration_number=%d, "
-                           "ending the study" % stop_at, self.cylinder_rank == 0)
+                global_toc(f"Reached user-specified stop_at_iteration_number={stop_at}, "
+                           "ending the study", self.cylinder_rank == 0)
             else:
-                global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.cylinder_rank == 0)
+                global_toc(f"Reached user-specified limit={max_iterations} on number of PH iterations", self.cylinder_rank == 0)
 
 
     def post_loops(self, extensions=None):

@@ -613,10 +613,10 @@ class LShapedMethod(spbase.SPBase):
         for self.iter in range(max_iter):
             if verbose and self.cylinder_rank == 0:
                 if self.iter > 0:
-                    print("Current Iteration:", self.iter + 1, "Time Elapsed:", "%7.2f" % (time.time() - t), "Time Spent on Last Master:", "%7.2f" % t1,
-                          "Time Spent Generating Last Cut Set:", "%7.2f" % t2, "Current Objective:", "%7.2f" % m.obj.expr())
+                    print("Current Iteration:", self.iter + 1, "Time Elapsed:", f"{time.time() - t:7.2f}", "Time Spent on Last Master:", f"{t1:7.2f}",
+                          "Time Spent Generating Last Cut Set:", f"{t2:7.2f}", "Current Objective:", f"{m.obj.expr():7.2f}")
                 else:
-                    print("Current Iteration:", self.iter + 1, "Time Elapsed:", "%7.2f" % (time.time() - t), "Current Objective: -Inf")
+                    print("Current Iteration:", self.iter + 1, "Time Elapsed:", f"{time.time() - t:7.2f}", "Current Objective: -Inf")
             t1 = time.time()
             x_vals = np.zeros(len(self.root_vars))
             eta_vals = np.zeros(self.scenario_count)

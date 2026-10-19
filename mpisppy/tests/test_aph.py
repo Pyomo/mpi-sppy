@@ -80,7 +80,7 @@ class Test_aph_sizes(unittest.TestCase):
         assert aph is not None
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_aph_basic(self):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
@@ -99,7 +99,7 @@ class Test_aph_sizes(unittest.TestCase):
         print (f"tbound ={tbound} (was=224106)")
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_APHgamma(self):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
@@ -121,7 +121,7 @@ class Test_aph_sizes(unittest.TestCase):
 
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_use_lag(self):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
@@ -142,7 +142,7 @@ class Test_aph_sizes(unittest.TestCase):
 
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_running_dump(self):
         # just see if "display_convergence_detail" causes a crash
         options = self._copy_of_base_options()
@@ -192,7 +192,7 @@ class Test_aph_farmer(unittest.TestCase):
         return [f"Scenario{i+1}" for i in range(cnt)]
         
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_aph_farmer_basic30(self):
         Aoptions = self._copy_of_base_options()
         Aoptions["PHIterLimit"] = 2
@@ -219,7 +219,7 @@ class Test_aph_farmer(unittest.TestCase):
         self.assertEqual(objgot, objtarget)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_aph_farmer_dispatch(self):
         Aoptions = self._copy_of_base_options()
         Aoptions["PHIterLimit"] = 2

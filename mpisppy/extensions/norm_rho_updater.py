@@ -151,17 +151,14 @@ class NormRhoUpdater(mpisppy.extensions.extension.Extension):
                     if self._verbose and ph.cylinder_rank == 0 and action is not None:
                         if first:
                             first = False
-                            first_line = ("Updating rho values:\n%21s %40s %16s %16s %16s"
-                                          % ("Action",
-                                             "Variable",
-                                             "Primal Residual",
-                                             "Dual Residual",
-                                             "New Rho"))
+                            first_line = ("Updating rho values:\n"
+                                          f"{'Action':>21} {'Variable':>40} "
+                                          f"{'Primal Residual':>16} {'Dual Residual':>16} "
+                                          f"{'New Rho':>16}")
                             print(first_line)
                         if first_scenario:
-                            print("%21s %40s %16g %16g %16g"
-                                  % (action, s._mpisppy_data.nonant_indices[ndn_i].name,
-                                     primal_resid, dual_resid, rho.value))
+                            print(f"{action:>21} {s._mpisppy_data.nonant_indices[ndn_i].name:>40} "
+                                  f"{primal_resid:16g} {dual_resid:16g} {rho.value:16g}")
                 first_scenario = False
 
     def enditer(self):

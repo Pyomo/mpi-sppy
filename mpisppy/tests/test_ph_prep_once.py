@@ -89,7 +89,7 @@ class TestPHPrepRunsOnce(unittest.TestCase):
         ph.PH_Prep()                        # the corrected call goes through
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_a_second_ph_main_is_refused(self):
         # ph_main preps, so this is the same refusal reached the way a user
         # would reach it.
@@ -99,7 +99,7 @@ class TestPHPrepRunsOnce(unittest.TestCase):
             ph.ph_main()
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_one_run_still_works(self):
         ph = _make_ph(PHIterLimit=5)
         conv, obj, trivial_bound = ph.ph_main()

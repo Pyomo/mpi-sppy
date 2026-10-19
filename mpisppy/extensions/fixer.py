@@ -184,18 +184,15 @@ class Fixer(mpisppy.extensions.extension.Extension):
                         # if we are still here, it is converged
                         if nb is not None:
                             xvar.fix(xb)
-                            self._vb("Fixed0 nb %s %s at %s" % \
-                                     (s.name, xvar.name, str(xvar._value)))
+                            self._vb(f"Fixed0 nb {s.name} {xvar.name} at {str(xvar._value)}")
                             was_fixed = True
                         elif lb is not None and xb - xvar.lb < self.boundtol:
                             xvar.fix(xvar.lb)
-                            self._vb("Fixed0 lb %s %s at %s" % \
-                                     (s.name, xvar.name, str(xvar._value)))
+                            self._vb(f"Fixed0 lb {s.name} {xvar.name} at {str(xvar._value)}")
                             was_fixed = True
                         elif ub is not None and xvar.ub - xb < self.boundtol:
                             xvar.fix(xvar.ub)
-                            self._vb("Fixed0 ub %s %s at %s" % \
-                                     (s.name, xvar.name, str(xvar._value)))
+                            self._vb(f"Fixed0 ub {s.name} {xvar.name} at {str(xvar._value)}")
                             was_fixed = True
 
                     if was_fixed:
@@ -210,7 +207,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
 
         self.fixed_prior_iter0 += raw_fixed_on_arrival / len(local_scenarios)
         self.fixed_so_far += raw_fixed_this_iter / len(local_scenarios)
-        self._dp("Unique vars fixed so far - %d (%d prior to iteration 0)" % (self.fixed_so_far+self.fixed_prior_iter0, self.fixed_prior_iter0))
+        self._dp(f"Unique vars fixed so far - {int(self.fixed_so_far+self.fixed_prior_iter0)} ({int(self.fixed_prior_iter0)} prior to iteration 0)")
         if raw_fixed_this_iter % len(local_scenarios) != 0:
             raise RuntimeError ("Variation in fixing across scenarios detected "
                                 "in fixer.py (iter0)")
@@ -248,20 +245,17 @@ class Fixer(mpisppy.extensions.extension.Extension):
                         was_fixed = False
                         if  nb is not None and nb <= fx:
                             xvar.fix(xbar)
-                            self._vb("Fixed nb %s %s at %s" % \
-                                     (s.name, xvar.name, str(xvar._value)))
+                            self._vb(f"Fixed nb {s.name} {xvar.name} at {str(xvar._value)}")
                             was_fixed = True
                         elif lb is not None and lb < fx \
                              and xb - xvar.lb < self.boundtol:
                             xvar.fix(xvar.lb)
-                            self._vb("Fixed lb %s %s at %s" % \
-                                     (s.name, xvar.name, str(xvar._value)))
+                            self._vb(f"Fixed lb {s.name} {xvar.name} at {str(xvar._value)}")
                             was_fixed = True
                         elif ub is not None and ub < fx \
                              and xvar.ub - xb < self.boundtol:
                             xvar.fix(xvar.ub)
-                            self._vb("Fixed ub %s %s at %s" % \
-                                     (s.name, xvar.name, str(xvar._value)))
+                            self._vb(f"Fixed ub {s.name} {xvar.name} at {str(xvar._value)}")
                             was_fixed = True
 
                     if was_fixed:
@@ -270,7 +264,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
                             s._solver_plugin.update_var(xvar)
 
         self.fixed_so_far += raw_fixed_this_iter / len(self.local_scenarios)
-        self._dp("Unique vars fixed so far - %d (%d prior to iteration 0)" % (self.fixed_so_far+self.fixed_prior_iter0, self.fixed_prior_iter0))
+        self._dp(f"Unique vars fixed so far - {int(self.fixed_so_far+self.fixed_prior_iter0)} ({int(self.fixed_prior_iter0)} prior to iteration 0)")
         if raw_fixed_this_iter % len(self.local_scenarios) != 0:
             raise RuntimeError ("Variation in fixing across scenarios detected "
                                 "in fixer.py")
@@ -320,6 +314,5 @@ class Fixer(mpisppy.extensions.extension.Extension):
         self.fixed_prior_iter0 = state["fixed_prior_iter0"]
 
     def post_everything(self):
-        self._dp("Final unique vars fixed by fixer= %s" % \
-                      (self.fixed_so_far))
+        self._dp(f"Final unique vars fixed by fixer= {self.fixed_so_far}")
 

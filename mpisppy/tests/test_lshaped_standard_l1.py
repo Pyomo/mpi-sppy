@@ -247,8 +247,7 @@ class TestStandardL1CutGenerator(unittest.TestCase):
 class TestStandardL1LShapedSolve(unittest.TestCase):
     @unittest.skipUnless(
         standard_l1_solver_available,
-        "%s solver is not available or is not supported by standard_l1"
-        % (solver_name,),
+        f"{solver_name} solver is not available or is not supported by standard_l1",
     )
     def test_farmer_lshaped_standard_l1(self):
         names = farmer.scenario_names_creator(3)
@@ -274,8 +273,7 @@ class TestStandardL1LShapedSolve(unittest.TestCase):
 
     @unittest.skipUnless(
         standard_l1_solver_available,
-        "%s solver is not available or is not supported by standard_l1"
-        % (solver_name,),
+        f"{solver_name} solver is not available or is not supported by standard_l1",
     )
     def test_infeasible_recourse_generates_l1_feasibility_cuts(self):
         names = ["low", "high"]
