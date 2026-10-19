@@ -13,8 +13,11 @@
 """
 
 import math
+
 import pyomo.environ as pyo
+
 import mpisppy.convergers.converger
+
 
 class FractionalConverger(mpisppy.convergers.converger.Converger):
     """ Illustrate a class to contain data used by the converger 

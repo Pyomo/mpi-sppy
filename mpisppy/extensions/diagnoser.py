@@ -15,8 +15,11 @@
 
 import datetime as dt
 import os
+
 import pyomo.environ as pyo
+
 import mpisppy.extensions.xhatbase
+
 
 class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
     """

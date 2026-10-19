@@ -8,17 +8,17 @@
 ###############################################################################
 
 import abc
-import time
-import os
 import math
+import os
+import time
 import warnings
 
-from mpisppy.cylinders.spcommunicator import SPCommunicator, SendCircularBuffer
+import mpisppy.utils.checkpointing as ckpt
+from mpisppy import global_toc
+from mpisppy.cylinders.spcommunicator import SendCircularBuffer, SPCommunicator
 from mpisppy.cylinders.spwindow import Field
 from mpisppy.debug_utils.buffer_inspect import InspectContext, inspect_buffer
 from mpisppy.utils import sputils
-import mpisppy.utils.checkpointing as ckpt
-from mpisppy import global_toc
 
 
 class Spoke(SPCommunicator):

@@ -7,9 +7,9 @@
 # full copyright and license information.
 ###############################################################################
 
-from mpisppy.cylinders.spwindow import Field
-from mpisppy.cylinders.spoke import Spoke
 from mpisppy.cylinders.hub import PHHub
+from mpisppy.cylinders.spoke import Spoke
+from mpisppy.cylinders.spwindow import Field
 
 
 class _PHDualSpokeBase(Spoke, PHHub):

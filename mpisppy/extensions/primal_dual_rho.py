@@ -8,9 +8,11 @@
 ###############################################################################
 
 import numpy as np
+
 import mpisppy.extensions.extension
 import mpisppy.MPI as MPI
 from mpisppy import global_toc
+
 
 class PrimalDualRho(mpisppy.extensions.extension.Extension):
     """ Increase / decrease rho globally based on primal-dual metrics

@@ -412,6 +412,7 @@ class TestConfigArgRegistration(unittest.TestCase):
         mpisppy.generic.parsing.parse_args."""
         import sys
         import types
+
         import mpisppy.generic.parsing as parsing
 
         stub = types.ModuleType("__stub_model_for_parse_args__")

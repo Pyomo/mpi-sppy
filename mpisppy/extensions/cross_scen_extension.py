@@ -6,18 +6,20 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+import math
+import sys
+
+import numpy as np
+import pyomo.environ as pyo
+from pyomo.core.expr.numeric_expr import LinearExpression
+from pyomo.repn.standard_repn import generate_standard_repn
+
+import mpisppy.MPI as mpi
+import mpisppy.utils.sputils as sputils
+from mpisppy.cylinders.spwindow import Field
 from mpisppy.extensions.extension import Extension
 from mpisppy.utils.sputils import find_active_objective
-from pyomo.repn.standard_repn import generate_standard_repn
-from pyomo.core.expr.numeric_expr import LinearExpression
-from mpisppy.cylinders.spwindow import Field
 
-import pyomo.environ as pyo
-import sys
-import math
-import mpisppy.utils.sputils as sputils
-import numpy as np
-import mpisppy.MPI as mpi
 
 class CrossScenarioExtension(Extension):
     def __init__(self, spbase_object):
@@ -327,7 +329,7 @@ class CrossScenarioExtension(Extension):
 
             nonant_vardata_list = s._mpisppy_node_list[0].nonant_vardata_list
 
-            nonant_ids = set(id(var) for var in nonant_vardata_list)
+            nonant_ids = {id(var) for var in nonant_vardata_list}
 
             linear_coefs = list(repn.linear_coefs)
             linear_vars = list(repn.linear_vars)

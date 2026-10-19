@@ -10,11 +10,13 @@
 
 # Network Flow - various formulations
 # DLW, May 2025: I am suspicious about the three-stage consensus variables. 
-import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
-import numpy as np
 import re
+
+import numpy as np
+import pyomo.environ as pyo
+
 import mpisppy.scenario_tree as scenario_tree
+import mpisppy.utils.sputils as sputils
 
 # This version present in the test slightly differs from the original 
 # as it allows a three-stage problem
@@ -185,7 +187,7 @@ def region_dict_creator(admm_subproblem_name): #in this precise example region_d
         region_dict["production costs"] = {"F1_1": 50, "F1_2": 80}
         region_dict["revenues"] = {"B1_1": 800, "B1_2": 900}
         # most capacities are 50, so start there and then override
-        region_dict["flow capacities"] = {a: 50 for a in region_dict["arcs"]}
+        region_dict["flow capacities"] = dict.fromkeys(region_dict["arcs"], 50)
         region_dict["flow capacities"][("F1_1","B1_1")] = None
         region_dict["flow capacities"][("F1_2","B1_2")] = None
         region_dict["flow costs"] = {("F1_1","DC1"): 300, ("F1_2","DC1"): 500, ("DC1","B1_1"): 200,

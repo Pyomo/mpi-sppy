@@ -23,10 +23,12 @@ __all__ = ['ArchiveReaderFactory', 'ArchiveReader', 'ZipArchiveReader',
            'GzipFileArchiveReader', 'BZ2FileArchiveReader']
 
 import os
-import tempfile
-import shutil
 import posixpath
+import shutil
+import tempfile
+
 from pyomo.common.dependencies import attempt_import
+
 zipfile, zipfile_available = attempt_import("zipfile")
 tarfile, tarfile_available = attempt_import("tarfile")
 gzip, gzip_available = attempt_import("gzip")

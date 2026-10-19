@@ -8,16 +8,18 @@
 ###############################################################################
 
 import abc
-import math
 import logging
+import math
+
 import mpisppy.log
-
-from mpisppy.cylinders.spcommunicator import RecvArray, SPCommunicator,RecvCircularBuffer
-
 from mpisppy import global_toc
-
-from mpisppy.cylinders.spwindow import Field
 from mpisppy.cylinders.fwph_cylinder import FWPH_Cylinder
+from mpisppy.cylinders.spcommunicator import (
+    RecvArray,
+    RecvCircularBuffer,
+    SPCommunicator,
+)
+from mpisppy.cylinders.spwindow import Field
 
 # Could also pass, e.g., sys.stdout instead of a filename
 mpisppy.log.setup_logger(__name__,

@@ -15,11 +15,15 @@
 # UP034 extra parentheses, UP039 class X(); UP032 .format() calls and UP031
 # %-formatting that can be f-strings; W293 whitespace on a blank line.
 # W291 (trailing whitespace after text) is deliberately not selected.
+# I001 sorted, grouped imports; C4 needless conversions and comprehensions
+# (e.g. sorted(list(x)), set([...]), {k: 0 for k in xs}).
 lint.select = ["E4", "E7", "E9", "F", "W605", "W292", "RUF100", "PGH004",
                "PIE790", "PIE808",
                "UP004", "UP008", "UP009", "UP015", "UP024", "UP025", "UP034",
                "UP039", "UP032", "UP031",
-               "W293"]
+               "W293", "I001", "C4"]
+# dict() and list() are as clear as {} and [], so C408 is not enforced.
+lint.ignore = ["C408"]
 
 # ignore old Pyomo models
 extend-exclude = [

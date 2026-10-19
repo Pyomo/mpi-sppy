@@ -13,28 +13,32 @@ IMPORTANT:
 version matter a lot, so we often just do smoke tests.
 """
 
-import os
+import contextlib
 import glob
 import io
-import contextlib
-import re
 import json
+import os
+import re
 import shutil
 import unittest
+
 import pandas as pd
 import pyomo.environ as pyo
+
 import mpisppy.opt.ph
 import mpisppy.phbase
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.rho_utils as rho_utils
-from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
-                                               scenario_denouement, \
-                                               _rho_setter
 import mpisppy.tests.examples.hydro.hydro as hydro
+import mpisppy.utils.rho_utils as rho_utils
+import mpisppy.utils.sputils as sputils
 from mpisppy.extensions.mult_rho_updater import MultRhoUpdater
 from mpisppy.extensions.xhatspecific import XhatSpecific
 from mpisppy.extensions.xhatxbar import XhatXbar
-from mpisppy.tests.utils import get_solver,round_pos_sig,limit_solver_threads
+from mpisppy.tests.examples.sizes.sizes import (
+    _rho_setter,
+    scenario_creator,
+    scenario_denouement,
+)
+from mpisppy.tests.utils import get_solver, limit_solver_threads, round_pos_sig
 
 __version__ = 0.56
 
@@ -582,8 +586,8 @@ class Test_sizes(unittest.TestCase):
         from mpisppy.extensions.extension import MultiExtension
         from mpisppy.extensions.fixer import Fixer
         from mpisppy.extensions.mipgapper import Gapper
-        from mpisppy.extensions.xhatlooper import XhatLooper
         from mpisppy.extensions.xhatclosest import XhatClosest
+        from mpisppy.extensions.xhatlooper import XhatLooper
 
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
@@ -604,8 +608,8 @@ class Test_sizes(unittest.TestCase):
         from mpisppy.extensions.extensions import MultiExtension
         from mpisppy.extensions.fixer import Fixer
         from mpisppy.extensions.mipgapper import Gapper
-        from mpisppy.extensions.xhatlooper import XhatLooper
         from mpisppy.extensions.xhatclosest import XhatClosest
+        from mpisppy.extensions.xhatlooper import XhatLooper
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
         multi_ext = {"ext_classes": [Fixer, Gapper, XhatLooper, XhatClosest]}
@@ -1080,6 +1084,7 @@ class Test_EF_launch(unittest.TestCase):
         # SPBase spreads the scenarios over the ranks, so each rank would
         # solve an EF of only its own share -- a wrong answer, not just waste
         from unittest import mock
+
         import mpisppy.opt.ef
         import mpisppy.spbase
         fake_mpi = mock.MagicMock()
@@ -1093,6 +1098,7 @@ class Test_EF_launch(unittest.TestCase):
 
     def test_warns_under_mpiexec_on_one_rank(self):
         from unittest import mock
+
         import mpisppy.opt.ef
         launcher_vars = mpisppy.opt.ef._LAUNCHER_ENV_VARS
         clean = {k: v for k, v in os.environ.items() if k not in launcher_vars}

@@ -14,19 +14,19 @@ For the ADMM vocabulary used below (before-wrap scenario, wrapped
 scenario, wrap, ADMM subproblem, ...), see the module docstring of
 mpisppy.utils.admmWrapper.
 """
-import tempfile
-import unittest
+import os
 import subprocess
 import sys
+import tempfile
+import unittest
 
 from pyomo.common.config import ConfigDict
 
-import mpisppy.utils.pickle_bundle as pickle_bundle
-import mpisppy.tests.examples.stoch_distr.stoch_distr_admm_cylinders as stoch_distr_admm_cylinders
 import mpisppy.tests.examples.stoch_distr.stoch_distr as stoch_distr
-from mpisppy.utils import config
+import mpisppy.tests.examples.stoch_distr.stoch_distr_admm_cylinders as stoch_distr_admm_cylinders
+import mpisppy.utils.pickle_bundle as pickle_bundle
 from mpisppy.tests.utils import get_solver
-import os
+from mpisppy.utils import config
 
 # Parse --python-args (extra args inserted after "python" in subcommands, e.g. for coverage)
 python_args = ""
@@ -417,9 +417,10 @@ class TestStochAdmmWrapper(unittest.TestCase):
         disappear.
         """
         import pyomo.environ as pyo
+
         import mpisppy.utils.sputils as sputils
-        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
         from mpisppy import MPI
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
 
         def scenario_creator(sname, **kwargs):
             parts = sname.split("_")
@@ -595,6 +596,7 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
         """Return a scenario_creator that either does or does not call
         sputils.attach_root_node, otherwise identical."""
         import pyomo.environ as pyo
+
         import mpisppy.utils.sputils as sputils
 
         def scenario_creator(sname, **kwargs):
@@ -658,8 +660,8 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
         attach_root_node, the wrapper must attach the root itself and
         produce a valid _mpisppy_node_list with the consensus stage
         appended."""
-        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
         from mpisppy import MPI
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
 
         fs_cost, fs_varlist = self._hooks()
         admm = Stoch_AdmmWrapper(
@@ -687,8 +689,8 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
         first-stage entries pre-merged into consensus_vars by hand
         (i.e. wrap operates on equivalent inputs and yields equivalent
         wrapped scenarios)."""
-        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
         from mpisppy import MPI
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
 
         fs_cost, fs_varlist = self._hooks()
         admm_hooks = Stoch_AdmmWrapper(
@@ -729,8 +731,8 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
         that does NOT pre-merge first-stage Vars, the wrapper merges
         them at construction time so the final self.consensus_vars
         carries both admm-consensus and first-stage entries."""
-        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
         from mpisppy import MPI
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
 
         fs_cost, fs_varlist = self._hooks()
         admm = Stoch_AdmmWrapper(
@@ -754,8 +756,9 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
         consensus_vars must contain only ITS OWN first-stage Vars,
         not the other ADMM subproblem's."""
         import pyomo.environ as pyo
-        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
+
         from mpisppy import MPI
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
 
         def per_sub_scenario_creator(sname, **kwargs):
             parts = sname.split("_")
@@ -803,8 +806,9 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
         VarData IDs that miss varprob_dict, tripping a KeyError in
         variable_probability."""
         import pyomo.environ as pyo
-        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
+
         from mpisppy import MPI
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
 
         def indexed_fs_scenario_creator(sname, **kwargs):
             parts = sname.split("_")
@@ -855,8 +859,8 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
         place of (or mixed with) name strings.  The wrapper's normalized
         consensus_vars and the resulting nonant lists must match the
         string-form result."""
-        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
         from mpisppy import MPI
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
 
         fs_cost, fs_varlist = self._hooks()
         sc = self._minimal_scenario_creator(call_attach=False)
@@ -906,8 +910,8 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
         """Hooks defined AND scenario_creator also calls
         attach_root_node — error so the user knows the hooks make the
         manual call redundant (rather than silently overwriting it)."""
-        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
         from mpisppy import MPI
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
 
         fs_cost, fs_varlist = self._hooks()
         with self.assertRaises(RuntimeError) as cm:
@@ -924,8 +928,8 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
     def test_no_hooks_no_attach_errors(self):
         """No hooks AND scenario_creator skips attach_root_node — error
         with a message pointing at both remediation options."""
-        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
         from mpisppy import MPI
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
 
         with self.assertRaises(RuntimeError) as cm:
             Stoch_AdmmWrapper(
@@ -941,8 +945,8 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
     def test_wrapper_half_hooks_errors(self):
         """Exactly one hook passed to the wrapper — both-or-neither
         contract violated."""
-        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
         from mpisppy import MPI
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
 
         fs_cost, fs_varlist = self._hooks()
         for kw in (
@@ -963,6 +967,7 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
         """The setup_stoch_admm-level check fires before the wrapper-level
         check, naming the user's module in the error message."""
         import types
+
         from mpisppy.generic.admm import setup_stoch_admm
 
         fs_cost, _ = self._hooks()
@@ -1006,6 +1011,7 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
     def test_setup_stoch_admm_with_bundles_half_hooks_errors(self):
         """The bundled path enforces the same both-or-neither contract."""
         import types
+
         from mpisppy.generic.admm import setup_stoch_admm_with_bundles
 
         fs_cost, _ = self._hooks()
@@ -1072,8 +1078,8 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
         receives surrogate_nonant_list and nonant_ef_suppl_list, and
         the surrogate/EF-suppl Vars survive the wrapper's stage rewrite
         on the resulting wrapped scenario's root node."""
-        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
         from mpisppy import MPI
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
 
         fs_cost, fs_varlist = self._hooks()
         admm = Stoch_AdmmWrapper(
@@ -1099,8 +1105,8 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
         """B.3: only one of the two advanced hooks supplied is fine
         (they are independent of each other; each is independent of
         the other but both depend on the two core hooks)."""
-        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
         from mpisppy import MPI
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
 
         fs_cost, fs_varlist = self._hooks()
         admm = Stoch_AdmmWrapper(
@@ -1150,8 +1156,8 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
         also supplying first_stage_cost / first_stage_varlist is an
         error -- there is nothing for the wrapper to attach the
         advanced lists onto."""
-        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
         from mpisppy import MPI
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
 
         for kw in (
             {"first_stage_surrogate_nonant_list": lambda s: []},
@@ -1248,6 +1254,7 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
         """B.3: the setup_stoch_admm-level discovery rejects a module
         that defines an advanced hook without the two core hooks."""
         import types
+
         from mpisppy.generic.admm import setup_stoch_admm
 
         module = types.SimpleNamespace(
@@ -1434,6 +1441,7 @@ class TestStochAdmmDefaultNaming(unittest.TestCase):
         package default split — what a user would write after the
         phase-D example migration."""
         import pyomo.environ as pyo
+
         from mpisppy.utils.stoch_admmWrapper import (
             default_split_admm_stoch_subproblem_scenario_name as split,
         )
@@ -1458,11 +1466,11 @@ class TestStochAdmmDefaultNaming(unittest.TestCase):
     def test_wrapper_split_none_uses_default(self):
         """Stoch_AdmmWrapper(split=None, ...) must resolve to the
         package default split function."""
+        from mpisppy import MPI
         from mpisppy.utils.stoch_admmWrapper import (
             Stoch_AdmmWrapper,
             default_combining_names,
         )
-        from mpisppy import MPI
 
         admm_names = ["A", "B"]
         stoch_names = ["S1", "S2"]
@@ -1532,6 +1540,7 @@ class TestStochAdmmDefaultNaming(unittest.TestCase):
         inverse-pair contract; _discover_naming_helpers must raise
         before the wrapper or downstream code runs."""
         import types
+
         from mpisppy.generic.admm import _discover_naming_helpers
 
         only_combining = types.SimpleNamespace(
@@ -1559,6 +1568,7 @@ class TestStochAdmmDefaultNaming(unittest.TestCase):
         inverse pair would decode names through the default split at
         runtime and ValueError; catch the inconsistency at setup."""
         import types
+
         from mpisppy.generic.admm import setup_stoch_admm
 
         module = types.SimpleNamespace(
@@ -1589,6 +1599,7 @@ class TestStochAdmmDefaultNaming(unittest.TestCase):
         composes with the user's combining_names (not the package
         default combiner)."""
         import types
+
         from mpisppy.generic.admm import setup_stoch_admm
 
         def combining(a, s):

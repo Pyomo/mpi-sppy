@@ -6,7 +6,10 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+import time
+
 import pytest
+from pyomo.environ import SolverFactory
 
 import mpisppy.utils.callbacks.termination.termination_callbacks as termination_callbacks_module
 from mpisppy.utils.callbacks.termination.termination_callbacks import (
@@ -14,9 +17,7 @@ from mpisppy.utils.callbacks.termination.termination_callbacks import (
     supports_termination_callback,
 )
 from mpisppy.utils.callbacks.termination.tests.markshare2 import model
-from pyomo.environ import SolverFactory
 
-import time
 
 class _TestTermination:
     def __init__(self):

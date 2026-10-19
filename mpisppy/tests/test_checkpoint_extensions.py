@@ -807,7 +807,8 @@ class _IntegerRelaxMixin(_ABMixin):
 
     def ext_classes(self):
         from mpisppy.extensions.integer_relax_then_enforce import (
-            IntegerRelaxThenEnforce)
+            IntegerRelaxThenEnforce,
+        )
         return [IntegerRelaxThenEnforce, _RelaxationProbe]
 
     def assert_objective_agrees(self, reference, _stopped, resumed):
@@ -830,7 +831,8 @@ class _IntegerRelaxMixin(_ABMixin):
 
     def _flag(self, ph):
         from mpisppy.extensions.integer_relax_then_enforce import (
-            IntegerRelaxThenEnforce)
+            IntegerRelaxThenEnforce,
+        )
         return _extension(ph, IntegerRelaxThenEnforce)._integers_relaxed
 
 
@@ -1057,8 +1059,7 @@ class TestPrimalDualConvergerResume(_ABMixin, unittest.TestCase):
         return []
 
     def _ph(self, max_iters, **ckpt_kwargs):
-        from mpisppy.convergers.primal_dual_converger import (
-            PrimalDualConverger)
+        from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
         options = _options(max_iters, **ckpt_kwargs)
         options["primal_dual_converger_options"] = {"tol": 1.0,
                                                     "verbose": False}
@@ -1373,8 +1374,7 @@ class TestTheStateContractIsRequiredAtStartup(unittest.TestCase):
         checkpointing.require_state_contract(opt)
 
     def test_a_shipped_converger_passes(self):
-        from mpisppy.convergers.primal_dual_converger import \
-            PrimalDualConverger
+        from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
         checkpointing.require_state_contract(
             self._opt(self._Implements, converger=PrimalDualConverger))
 
@@ -1447,8 +1447,10 @@ class TestXhatFeasibilityCutKeysContinue(unittest.TestCase):
 
     def _extension_with_cuts(self, n_cuts):
         import pyomo.environ as pyo
-        from mpisppy.extensions.xhat_feasibility_cut_extension import \
-            XhatFeasibilityCutExtension
+
+        from mpisppy.extensions.xhat_feasibility_cut_extension import (
+            XhatFeasibilityCutExtension,
+        )
         m = pyo.ConcreteModel()
         m.x = pyo.Var([0, 1], domain=pyo.Binary)
         m._mpisppy_model = pyo.Block()

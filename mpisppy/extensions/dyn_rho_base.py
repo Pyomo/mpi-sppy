@@ -10,14 +10,15 @@
 # A dynamic rho base class that assumes a member function compute_and_update_rho
 # As of Nov 2024, it mainly provides services
 
-import numpy as np
-import mpisppy.MPI as MPI
-
-import mpisppy.extensions.extension
-from mpisppy.utils.w_utils.wtracker import WTracker
-
 # for trapping numpy warnings
 import warnings
+
+import numpy as np
+
+import mpisppy.extensions.extension
+import mpisppy.MPI as MPI
+from mpisppy.utils.w_utils.wtracker import WTracker
+
 
 class Dyn_Rho_extension_base(mpisppy.extensions.extension.Extension):
     """

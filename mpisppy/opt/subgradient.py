@@ -7,8 +7,8 @@
 # full copyright and license information.
 ###############################################################################
 
-import mpisppy.opt.ph
 import mpisppy.MPI as _mpi
+import mpisppy.opt.ph
 import mpisppy.spopt
 
 _global_rank = _mpi.COMM_WORLD.Get_rank()

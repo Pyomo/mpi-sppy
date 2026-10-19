@@ -14,15 +14,15 @@
 #  so we need modifications of the vanilla dicts.
 # Notice also that this uses MutliExtensions
 import json
+
 import uc_funcs as uc
 
-from mpisppy.utils.sputils import spin_the_wheel
+from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
-from mpisppy.utils import baseparsers
-from mpisppy.utils import vanilla
-from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
+from mpisppy.utils import baseparsers, vanilla
+from mpisppy.utils.sputils import spin_the_wheel
 
 
 def _parse_args():

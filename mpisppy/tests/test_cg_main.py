@@ -13,14 +13,15 @@
 import unittest
 
 import pyomo.environ as pyo
+
+import mpisppy.MPI as mpi
 import mpisppy.opt.cg
 import mpisppy.tests.examples.farmer as farmer
 import mpisppy.utils.sputils as sputils
-from mpisppy.tests.examples.sizes.sizes import scenario_creator as sizes_creator, \
-                                               scenario_denouement as sizes_denouement
-from mpisppy.tests.utils import get_solver, limit_solver_threads
 from mpisppy.cgbase import CGBase
-import mpisppy.MPI as mpi
+from mpisppy.tests.examples.sizes.sizes import scenario_creator as sizes_creator
+from mpisppy.tests.examples.sizes.sizes import scenario_denouement as sizes_denouement
+from mpisppy.tests.utils import get_solver, limit_solver_threads
 
 solver_available, solver_name, persistent_available, persistent_solver_name = get_solver(persistent_OK=False)
 
@@ -116,7 +117,7 @@ class TestCGMainFarmer(unittest.TestCase):
 
         if cg.cylinder_rank == 0:
             sname = cg.all_scenario_names[0]
-            x_vec = {i: 0.0 for i in cg.nonant_indices}
+            x_vec = dict.fromkeys(cg.nonant_indices, 0.0)
             cg.add_column_for_scenario(sname, 1.0, x_vec)
             added_again = cg.add_column_for_scenario(sname, 1.0, x_vec)
             self.assertFalse(added_again)

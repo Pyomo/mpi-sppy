@@ -8,10 +8,10 @@
 ###############################################################################
 import netdes
 
-from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
+from mpisppy.spin_the_wheel import WheelSpinner
+from mpisppy.utils import config
 
 write_solution = True
 

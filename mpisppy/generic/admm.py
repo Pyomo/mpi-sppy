@@ -12,9 +12,9 @@ from mpisppy import MPI
 from mpisppy.utils.admmWrapper import AdmmWrapper
 from mpisppy.utils.stoch_admmWrapper import (
     Stoch_AdmmWrapper,
+    default_admm_stoch_subproblem_scenario_names_creator,
     default_combining_names,
     default_split_admm_stoch_subproblem_scenario_name,
-    default_admm_stoch_subproblem_scenario_names_creator,
 )
 
 

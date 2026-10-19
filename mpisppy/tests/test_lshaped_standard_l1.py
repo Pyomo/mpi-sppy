@@ -11,16 +11,15 @@ import unittest
 import pyomo.environ as pyo
 from pyomo.core.expr.visitor import identify_variables
 
+import mpisppy.utils.sputils as sputils
 from mpisppy.opt.lshaped import LShapedMethod
+from mpisppy.tests.examples import farmer
+from mpisppy.tests.utils import get_solver
 from mpisppy.utils.lshaped_cuts import (
     StandardL1CutGenerator,
     _StandardL1SubproblemData,
     solver_dual_sign_convention,
 )
-from mpisppy.tests.examples import farmer
-from mpisppy.tests.utils import get_solver
-import mpisppy.utils.sputils as sputils
-
 
 solver_available, solver_name, _, _ = get_solver()
 standard_l1_solver_available = (
@@ -161,7 +160,7 @@ class TestStandardL1CutGenerator(unittest.TestCase):
             "root_solver": solver_name,
             "sp_solver": solver_name,
             "sp_solver_options": {},
-            "valid_eta_lb": {name: -1e6 for name in names},
+            "valid_eta_lb": dict.fromkeys(names, -1e6),
             "lshaped_cut_generator": "not_a_generator",
         }
         ls = LShapedMethod(
@@ -255,7 +254,7 @@ class TestStandardL1LShapedSolve(unittest.TestCase):
             "root_solver": solver_name,
             "sp_solver": solver_name,
             "sp_solver_options": {},
-            "valid_eta_lb": {name: -1e6 for name in names},
+            "valid_eta_lb": dict.fromkeys(names, -1e6),
             "max_iter": 20,
             "verbose": False,
         }
@@ -300,7 +299,7 @@ class TestStandardL1LShapedSolve(unittest.TestCase):
             "root_solver": solver_name,
             "sp_solver": solver_name,
             "sp_solver_options": {},
-            "valid_eta_lb": {name: 0.0 for name in names},
+            "valid_eta_lb": dict.fromkeys(names, 0.0),
             "lshaped_cut_generator": "standard_l1",
             "max_iter": 10,
             "verbose": False,

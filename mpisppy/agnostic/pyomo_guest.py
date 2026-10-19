@@ -31,11 +31,12 @@ provide hooks to:
   be handy for testing. All that needs to be done, is to attach
   the nonant varlist as _nonant_vars to the scenario when it is created.
 """
-import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
 from pyomo.opt import SolutionStatus, TerminationCondition
 
+import mpisppy.utils.sputils as sputils
 from mpisppy import MPI  # for debugging
+
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 

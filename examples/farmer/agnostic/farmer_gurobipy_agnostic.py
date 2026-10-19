@@ -8,12 +8,15 @@
 ###############################################################################
 # In this example, Gurobipy is the guest language
 import gurobipy as gp
-from gurobipy import GRB
-import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
 import numpy as np
+import pyomo.environ as pyo
+from gurobipy import GRB
+
+import mpisppy.utils.sputils as sputils
+
 # debugging
 from mpisppy import MPI
+
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 

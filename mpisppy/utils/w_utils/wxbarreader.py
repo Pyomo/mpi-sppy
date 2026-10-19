@@ -31,11 +31,12 @@
     Modified: DTM, Aug 2019
 '''
 
-import mpisppy.utils.w_utils.wxbarutils
-import os # For checking if files exist
-from mpisppy import global_toc
+import os  # For checking if files exist
+
 import mpisppy.extensions.extension
 import mpisppy.MPI as MPI
+import mpisppy.utils.w_utils.wxbarutils
+from mpisppy import global_toc
 
 n_proc = MPI.COMM_WORLD.Get_size()
 rank = MPI.COMM_WORLD.Get_rank()

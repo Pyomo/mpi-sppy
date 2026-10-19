@@ -6,25 +6,24 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
-import numpy as np
 import itertools
-import time
 import sys
-import mpisppy.spbase as spbase
+import time
 
-from mpisppy import MPI
-from pyomo.core.plugins.transform.discrete_vars import RelaxIntegerVars
-from mpisppy.utils.sputils import find_active_objective
-from mpisppy.utils.lshaped_cuts import LShapedCutGenerator, StandardL1CutGenerator
-from mpisppy.spopt import set_instance_retry
-from pyomo.core import (
-    SOSConstraint, Constraint, Var
-)
-from pyomo.core.expr.visitor import identify_variables
-from pyomo.repn.standard_repn import generate_standard_repn
+import numpy as np
+import pyomo.environ as pyo
+from pyomo.core import Constraint, SOSConstraint, Var
 from pyomo.core.expr.numeric_expr import LinearExpression
+from pyomo.core.expr.visitor import identify_variables
+from pyomo.core.plugins.transform.discrete_vars import RelaxIntegerVars
+from pyomo.repn.standard_repn import generate_standard_repn
+
+import mpisppy.spbase as spbase
+import mpisppy.utils.sputils as sputils
+from mpisppy import MPI
+from mpisppy.spopt import set_instance_retry
+from mpisppy.utils.lshaped_cuts import LShapedCutGenerator, StandardL1CutGenerator
+from mpisppy.utils.sputils import find_active_objective
 
 
 class LShapedMethod(spbase.SPBase):
@@ -733,7 +732,7 @@ def _get_nonant_ids_EF(instance):
 
     ## this is for the cut variables, so we just need (and want)
     ## exactly one set of them
-    nonant_list = list(instance.ref_vars[ndn,i] for i in range(nlen))
+    nonant_list = [instance.ref_vars[ndn,i] for i in range(nlen)]
 
     ## this is for adjusting the objective, so needs all the nonants
     ## in the EF
@@ -776,13 +775,14 @@ def _init_vars(varlist):
 
 
 def main():
-    import mpisppy.tests.examples.farmer as ref
     import os
+
+    import mpisppy.tests.examples.farmer as ref
     # Turn off output from all ranks except rank 1
     if MPI.COMM_WORLD.Get_rank() != 0:
         sys.stdout = open(os.devnull, 'w')
     scenario_names = ['scen' + str(i) for i in range(3)]
-    bounds = {i:-432000 for i in scenario_names}
+    bounds = dict.fromkeys(scenario_names, -432000)
     options = {
         "root_solver": "gurobi_persistent",
         "sp_solver": "gurobi_persistent",

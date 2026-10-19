@@ -27,8 +27,8 @@ import unittest
 import numpy as np
 
 from mpisppy import MPI
-from mpisppy.cylinders.spwindow import Field, SPWindow, padded_len_n_doubles
 from mpisppy.cylinders.overlap_map import compute_overlap_segments
+from mpisppy.cylinders.spwindow import Field, SPWindow, padded_len_n_doubles
 
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()

@@ -12,13 +12,14 @@
 
 import os
 from statistics import NormalDist
-import numpy as np
-from numpy.random import default_rng
-import pyomo.environ as pyo
 
+import numpy as np
+import pyomo.environ as pyo
+from numpy.random import default_rng
+
+import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.xhat_eval as xhat_eval
-import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
 
 # The communicators live in boot_utils so there is a single source of truth.
 comm = boot_utils.comm
@@ -142,7 +143,7 @@ def require_minimizing_module(cfg, module):
     """
     names = module.scenario_names_creator(1, start=0)
     probe = module.scenario_creator(names[0], **module.kw_creator(cfg))
-    objs = [o for o in probe.component_data_objects(pyo.Objective, active=True)]
+    objs = list(probe.component_data_objects(pyo.Objective, active=True))
     if objs:
         _require_minimization(objs[0].sense == pyo.minimize, "this model")
 

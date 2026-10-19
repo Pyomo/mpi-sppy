@@ -11,9 +11,10 @@
 # Adapted from the PySP extension adaptive_rho_converger, authored by Gabriel Hackebeil
 
 import math
-import mpisppy.extensions.extension
 
 import numpy as np
+
+import mpisppy.extensions.extension
 import mpisppy.MPI as MPI
 
 _norm_rho_defaults = {'convergence_tolerance' : 1e-4,

@@ -16,10 +16,12 @@
 
     Takes about 4 seconds to execute, with all the sleep() calls.
 '''
+import sys
+import time
+
 import mpi4py.MPI as mpi
 import numpy as np
-import time
-import sys
+
 
 def main():
     if mpi.COMM_WORLD.Get_size() == 1:

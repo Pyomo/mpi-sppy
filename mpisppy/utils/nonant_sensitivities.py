@@ -8,7 +8,6 @@
 ###############################################################################
 
 import numpy as np
-
 import pyomo.environ as pyo
 
 # pynumero / KKT helpers pull in scipy at import time; defer them into
@@ -70,6 +69,7 @@ def nonant_sensitivies(s):
     # lets scipy-free environments import _bundle_consensus_groups and
     # the rest of the module without failure.
     from pyomo.contrib.pynumero.linalg.scipy_interface import ScipyLU
+
     from mpisppy.utils.kkt.interface import InteriorPointInterface
 
     # first, solve the subproblems with Ipopt,

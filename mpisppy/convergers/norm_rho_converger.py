@@ -10,10 +10,12 @@
 # Adapted from the PySP extension adaptive_rho_converger, authored by Gabriel Hackebeil
 
 import math
-import mpisppy.convergers.converger
 
-import mpisppy.MPI as MPI
 import numpy as np
+
+import mpisppy.convergers.converger
+import mpisppy.MPI as MPI
+
 
 class NormRhoConverger(mpisppy.convergers.converger.Converger):
     # Everything it compares is recomputed from the current iterate.

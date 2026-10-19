@@ -10,14 +10,13 @@
 # Serial (not cylinders)
 
 import sys
-import mpisppy.phbase
+
+from sizes import _rho_setter, scenario_creator, scenario_denouement
+
 import mpisppy.opt.ph
+import mpisppy.phbase
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 from mpisppy.extensions.xhatclosest import XhatClosest
-from sizes import scenario_creator, \
-                  scenario_denouement, \
-                  _rho_setter
-
 
 if __name__ == "__main__":
 

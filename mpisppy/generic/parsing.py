@@ -8,17 +8,16 @@
 ###############################################################################
 """CLI arg parsing and module loading for generic_cylinders."""
 
-import sys
-import os
 import importlib
 import inspect
+import os
+import sys
 
 import numpy as np
 import pyomo.common.config as pyofig
 
 import mpisppy.utils.config as config
 import mpisppy.utils.sputils as sputils
-
 
 _IMPLICIT_MODULES = {
     "--smps-dir": "mpisppy.problem_io.smps_module",

@@ -52,9 +52,8 @@ import time
 from dataclasses import dataclass
 
 import mpisppy.utils.config as config
-from mpisppy.generic import parsing
 from mpisppy.generic import out_of_the_box as ootb
-
+from mpisppy.generic import parsing
 
 # Validator settings (NOT policy): the two layer-3 auto-flag thresholds.
 EF_GAP_TARGET = 0.01          # flag an EF that misses this MIP gap ...

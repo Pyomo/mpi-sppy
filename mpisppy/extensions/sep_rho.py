@@ -9,12 +9,13 @@
 
 import warnings
 
-import mpisppy.extensions.dyn_rho_base
 import numpy as np
+
+import mpisppy.extensions.dyn_rho_base
 import mpisppy.MPI as MPI
 from mpisppy import global_toc
-from mpisppy.utils.sputils import nonant_cost_coeffs
 from mpisppy.utils.rho_utils import assign_rho_with_fallback
+from mpisppy.utils.sputils import nonant_cost_coeffs
 
 
 class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):

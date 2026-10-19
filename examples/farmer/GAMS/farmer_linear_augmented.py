@@ -9,8 +9,10 @@
 # to assist with debugging (a lot of stuff here is really needed)
 import os
 import sys
+
 import gams
 import gamspy_base
+
 
 def create_model(scennum = 2):
     # create a model and return a dictionary describing it

@@ -26,12 +26,10 @@
 import warnings
 
 import pyomo.environ as pyo
-
 from pyomo.contrib.fbbt.fbbt import InfeasibleConstraintException
 
-from mpisppy import MPI
-
 import mpisppy.utils.sputils as sputils
+from mpisppy import MPI
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.utils.dual_certificate import (
     CertificateError,

@@ -6,11 +6,11 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import pandas as pd
-import numpy as np
-
 import os
 from shutil import copyfile
+
+import numpy as np
+import pandas as pd
 
 input_filename = "./wind_actuals_ARMA/simulations_of_target_mape_45.1.csv"
 

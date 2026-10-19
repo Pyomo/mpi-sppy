@@ -17,15 +17,20 @@ import math
 from collections import OrderedDict
 
 import numpy as np
+
 # scipy is an optional dependency; import it lazily so the empirical
 # bootstrap path stays scipy-free (mmw_ci.py uses the same pattern).
 from pyomo.common.dependencies import scipy
 
-from mpisppy.confidence_intervals.bootsp.statdist.distribution_factory import register_distribution
-from mpisppy.confidence_intervals.bootsp.statdist.base_distribution import Parameter
-from mpisppy.confidence_intervals.bootsp.statdist.base_distribution import UnivariateDistribution
-from mpisppy.confidence_intervals.bootsp.statdist.utilities import memoize_method
 from mpisppy.confidence_intervals.bootsp.statdist import splines
+from mpisppy.confidence_intervals.bootsp.statdist.base_distribution import (
+    Parameter,
+    UnivariateDistribution,
+)
+from mpisppy.confidence_intervals.bootsp.statdist.distribution_factory import (
+    register_distribution,
+)
+from mpisppy.confidence_intervals.bootsp.statdist.utilities import memoize_method
 
 epsilon = 1e-12
 

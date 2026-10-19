@@ -8,6 +8,7 @@
 ###############################################################################
 
 import pyomo.environ as pyo
+
 import mpisppy.extensions.extension
 
 """ Code for WW style fixing of integers. This can be used

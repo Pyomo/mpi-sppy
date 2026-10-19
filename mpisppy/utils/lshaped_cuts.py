@@ -8,22 +8,21 @@
 ###############################################################################
 """Cut generators used by the mpi-sppy L-shaped method."""
 
+import logging
 from dataclasses import dataclass
 
-from pyomo.core.base.block import declare_custom_block
+import numpy as np
+import pyomo.contrib.benders.benders_cuts as bc
+import pyomo.environ as pe
 from pyomo.core import Constraint, Var
+from pyomo.core.base.block import declare_custom_block
 from pyomo.core.base.componentuid import ComponentUID
 from pyomo.core.base.PyomoModel import ModelSolutions
-import pyomo.environ as pe
 from pyomo.solvers.plugins.solvers.persistent_solver import PersistentSolver
-import pyomo.contrib.benders.benders_cuts as bc
 
 from mpisppy import MPI
 from mpisppy.spopt import set_instance_retry
 from mpisppy.utils.sputils import find_active_objective
-
-import logging
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -429,9 +428,7 @@ class StandardL1CutGenerator:
         subproblem._mpisppy_l1_obj = pe.Objective(expr=subproblem._mpisppy_l1_z)
         subproblem._mpisppy_l1_cons = pe.ConstraintList()
         z = subproblem._mpisppy_l1_z
-        original_cons = [
-            c for c in subproblem.component_data_objects(Constraint, active=True, descend_into=True)
-        ]
+        original_cons = list(subproblem.component_data_objects(Constraint, active=True, descend_into=True))
         for c in original_cons:
             body = c.body
             if c.equality:

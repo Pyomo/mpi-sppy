@@ -8,16 +8,17 @@
 ###############################################################################
 # script to estimate zhat from a given xhat for a given model
 
-import sys
 import importlib
+import sys
+
 import numpy as np
 from pyomo.common.dependencies import scipy
-from mpisppy.confidence_intervals import sample_tree
-from mpisppy.utils import sputils
-from mpisppy.confidence_intervals import ciutils
-from mpisppy.utils.xhat_eval import Xhat_Eval
+
+from mpisppy.confidence_intervals import ciutils, sample_tree
+from mpisppy.utils import config, sputils
 from mpisppy.utils.sputils import option_string_to_dict
-from mpisppy.utils import config
+from mpisppy.utils.xhat_eval import Xhat_Eval
+
 
 def evaluate_sample_trees(xhat_one, 
                           num_samples,

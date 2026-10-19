@@ -10,10 +10,12 @@
 the nonant structure for each scenario (yes, for two stage problems this
 json file will be the same for all scenarios.)
 """
-import os
 import json
-import mpisppy.extensions.extension
+import os
+
 import pyomo.core.base.label as pyomo_label
+
+import mpisppy.extensions.extension
 
 
 def lpize(varname):

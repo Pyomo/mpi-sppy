@@ -10,14 +10,14 @@
 # Feb 2026: the layout tuple is (offset, logical_len, padded_len) with offset += padded_len
 #   (we are padding to 512 bit boundaries to avoid collisions with solvers who do that)
 
-from mpisppy import MPI
+import enum
 
 import numpy as np
 import numpy.typing as nptyping
-
-import enum
-
 import pyomo.environ as pyo
+
+from mpisppy import MPI
+
 
 class Field(enum.IntEnum):
     SHUTDOWN=-1000

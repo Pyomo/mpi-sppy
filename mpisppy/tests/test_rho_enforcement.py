@@ -19,28 +19,26 @@ variable (rho multiplies the proximal/consensus term). These tests cover:
     ``rho_setter`` that returns a non-positive value (solver required).
 """
 
+import contextlib
 import io
 import types
-import contextlib
 import unittest
 
 import pyomo.environ as pyo
 
-import mpisppy.opt.ph
 import mpisppy.MPI as MPI
+import mpisppy.opt.ph
+from mpisppy.extensions.coeff_rho import CoeffRho
+from mpisppy.extensions.sensi_rho import _SensiRhoBase
+from mpisppy.generic.decomp import _get_rho_setter
+from mpisppy.tests.examples.farmer import scenario_creator, scenario_denouement
+from mpisppy.tests.utils import get_solver
 from mpisppy.utils.rho_utils import (
+    RHO_ZERO_TOL,
     check_rhos_positive,
     report_zero_rho_fallback,
     resolve_rho,
-    RHO_ZERO_TOL,
 )
-from mpisppy.generic.decomp import _get_rho_setter
-
-from mpisppy.extensions.sensi_rho import _SensiRhoBase
-from mpisppy.extensions.coeff_rho import CoeffRho
-
-from mpisppy.tests.utils import get_solver
-from mpisppy.tests.examples.farmer import scenario_creator, scenario_denouement
 
 solver_available, solver_name, *_ = get_solver()
 
@@ -233,7 +231,7 @@ class _StubSensiRho(_SensiRhoBase):
         self._sensis = sensis
 
     def get_nonant_sensitivites(self):
-        return {s: self._sensis for s in self.ph.local_scenarios.values()}
+        return dict.fromkeys(self.ph.local_scenarios.values(), self._sensis)
 
 
 def _make_sensi_ph(xvals, xbars, default_rho=1.0):

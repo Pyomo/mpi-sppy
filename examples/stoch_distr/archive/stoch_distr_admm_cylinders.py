@@ -13,18 +13,19 @@
 # generic driver.
 import os
 import sys
+
 # stoch_distr.py lives one directory up (examples/stoch_distr/).
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import mpisppy.utils.stoch_admmWrapper as stoch_admmWrapper
-
 import stoch_distr
 
-from mpisppy.spin_the_wheel import WheelSpinner
-import mpisppy.utils.sputils as sputils
-from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
+import mpisppy.utils.sputils as sputils
+import mpisppy.utils.stoch_admmWrapper as stoch_admmWrapper
 from mpisppy import MPI
+from mpisppy.spin_the_wheel import WheelSpinner
+from mpisppy.utils import config
+
 global_rank = MPI.COMM_WORLD.Get_rank()
 
 write_solution = False

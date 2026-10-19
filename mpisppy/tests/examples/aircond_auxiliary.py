@@ -17,11 +17,11 @@ doc/src/feasible_xhat.rst.
 
 import numpy as np
 
-from mpisppy.utils.xhat_helpers import ef_xhat_nonants
 from mpisppy.tests.examples.aircond import (
     scenario_creator,
     scenario_names_creator,
 )
+from mpisppy.utils.xhat_helpers import ef_xhat_nonants
 
 
 def feasible_xhat_creator(

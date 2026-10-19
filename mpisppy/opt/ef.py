@@ -6,14 +6,16 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import mpisppy.spbase
-import pyomo.environ as pyo
 import logging
 import math
 import numbers
-import mpisppy.utils.sputils as sputils
-import pathlib
 import os
+import pathlib
+
+import pyomo.environ as pyo
+
+import mpisppy.spbase
+import mpisppy.utils.sputils as sputils
 from mpisppy import MPI
 
 logger = logging.getLogger("mpisppy.ef")

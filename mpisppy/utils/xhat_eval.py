@@ -10,15 +10,15 @@
 # To test: python xhat_eval.py --num-scens=3 --EF-solver-name=cplex
 
 import inspect
-import pyomo.environ as pyo
 import logging
+
 import numpy as np
+import pyomo.environ as pyo
 
 import mpisppy.log
-from mpisppy import MPI
-import mpisppy.utils.sputils as sputils
 import mpisppy.spopt
-
+import mpisppy.utils.sputils as sputils
+from mpisppy import MPI
 
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()

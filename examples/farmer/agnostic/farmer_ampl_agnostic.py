@@ -16,12 +16,13 @@ This file tries to show many ways to do things in AMPLpy,
 but not necessarily the best ways in all cases.
 """
 
-from amplpy import AMPL
-import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
 import numpy as np
+import pyomo.environ as pyo
+from amplpy import AMPL
 
+import mpisppy.utils.sputils as sputils
 from mpisppy import MPI  # for debugging
+
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 

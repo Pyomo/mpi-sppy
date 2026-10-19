@@ -10,10 +10,9 @@
 
 import hydro_cylinders
 
-from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.cfg_vanilla as vanilla
+from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils.pysp_model import PySPModel
-
 
 write_solution = True
 

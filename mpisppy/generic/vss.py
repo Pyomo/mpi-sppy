@@ -38,10 +38,9 @@ import numpy as np
 import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils
-from mpisppy import global_toc, MPI
-from mpisppy.utils import xhat_eval
-from mpisppy.utils import solver_spec
+from mpisppy import MPI, global_toc
 from mpisppy.generic.parsing import name_lists, proper_bundles
+from mpisppy.utils import solver_spec, xhat_eval
 
 
 def vss_prep(module, cfg):

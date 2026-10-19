@@ -54,7 +54,6 @@ from mpisppy import global_toc
 from mpisppy.extensions.extension import Extension
 from mpisppy.extensions.slammer import Slammer
 
-
 # Method names recognized in the JSON "methods" block.
 VALID_METHODS = ("zero_crossings", "w_hash_recurrence")
 VALID_REPORT_MODES = ("on_detect", "final", "every_check")

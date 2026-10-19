@@ -21,31 +21,26 @@
 
 __all__ = ('ScenarioTreeInstanceFactory',)
 
-import os
-import posixpath
-import tempfile
-import shutil
 import copy
 import logging
+import os
+import posixpath
+import shutil
+import tempfile
 
-from .archivereader import (ArchiveReaderFactory,
-                            ArchiveReader)
-
-from pyomo.dataportal import DataPortal
-from pyomo.core import (Block,
-                        AbstractModel)
-from pyomo.core.base.block import _BlockData
-from pyomo.common.dependencies import yaml, yaml_available, yaml_load_args
-from pyomo.common.gc_manager import PauseGC
+from pyomo.common.dependencies import networkx, yaml, yaml_available, yaml_load_args
+from pyomo.common.dependencies import networkx_available as has_networkx
 from pyomo.common.fileutils import import_file
-from .tree_structure_model import \
-    (CreateAbstractScenarioTreeModel,
-     ScenarioTreeModelFromNetworkX)
-from .tree_structure import \
-    ScenarioTree
+from pyomo.common.gc_manager import PauseGC
+from pyomo.core import AbstractModel, Block
+from pyomo.core.base.block import _BlockData
+from pyomo.dataportal import DataPortal
 
-from pyomo.common.dependencies import (
-    networkx, networkx_available as has_networkx
+from .archivereader import ArchiveReader, ArchiveReaderFactory
+from .tree_structure import ScenarioTree
+from .tree_structure_model import (
+    CreateAbstractScenarioTreeModel,
+    ScenarioTreeModelFromNetworkX,
 )
 
 logger = logging.getLogger("mpisppy.utils.pysp_model")
@@ -679,8 +674,7 @@ class ScenarioTreeInstanceFactory:
             scenario_instance._name = scenario_name
 
             if compile_instance:
-                from pyomo.repn.beta.matrix import \
-                    compile_block_linear_constraints
+                from pyomo.repn.beta.matrix import compile_block_linear_constraints
                 compile_block_linear_constraints(
                     scenario_instance,
                     "_PySP_compiled_linear_constraints",

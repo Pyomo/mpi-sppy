@@ -7,9 +7,12 @@
 # 2026 (to appear).
 ###############################################################################
 
-import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
 import json
+
+import pyomo.environ as pyo
+
+import mpisppy.utils.sputils as sputils
+
 
 def scenario_creator(scenario_name,
                      network_data=dict(),
@@ -46,7 +49,7 @@ def scenario_creator(scenario_name,
     # -----------------
     # Scenario demand aggregated by node
     # -----------------
-    d_by_node = {n: 0.0 for n in nodes}
+    d_by_node = dict.fromkeys(nodes, 0.0)
     for did, rec in scenario_data.get("demands", {}).items():
         d_by_node[str(rec["node"])] += float(rec["demand"])
 

@@ -7,14 +7,15 @@
 # full copyright and license information.
 ###############################################################################
 # In this example, Gurobipy is the guest language
-import gurobipy as gp
-from gurobipy import GRB
-import pyomo.environ as pyo
-import examples.farmer.farmer as farmer
 import example.farmer.farmer_gurobipy_mod as farmer_gurobipy_mod
+import gurobipy as gp
 import numpy as np
+import pyomo.environ as pyo
+from gurobipy import GRB
 
+import examples.farmer.farmer as farmer
 from mpisppy import MPI  # for debugging
+
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 

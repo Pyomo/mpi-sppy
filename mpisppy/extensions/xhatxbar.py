@@ -9,9 +9,10 @@
 # Try xbar as xhat.
 
 
-import mpisppy.utils.sputils as sputils
 import mpisppy.extensions.xhatbase
 import mpisppy.phbase as phbase
+import mpisppy.utils.sputils as sputils
+
 
 class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
     """

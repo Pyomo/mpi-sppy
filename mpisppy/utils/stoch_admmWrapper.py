@@ -7,16 +7,16 @@
 # full copyright and license information.
 ###############################################################################
 #creating the class stoch_admmWrapper
-import mpisppy.utils.sputils as sputils
-import pyomo.environ as pyo
-import mpisppy.scenario_tree as scenario_tree
 import numpy as np
+import pyomo.environ as pyo
+
+import mpisppy.scenario_tree as scenario_tree
+import mpisppy.utils.sputils as sputils
 from mpisppy.utils.admmWrapper import (
     _admm_normalize_consensus_vars,
     _first_stage_var_names,
     _merge_first_stage_into_consensus_vars,
 )
-
 
 # Default delimiter for the naming inverse-pair below.  Verbose enough
 # to be unambiguous in shells, filenames, and CSV columns; printable

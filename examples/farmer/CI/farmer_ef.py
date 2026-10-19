@@ -12,11 +12,13 @@
 # This shows two ways to get parameters to the EF for solution; both are fairly short.
 
 import sys
+
 import farmer
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.solver_spec as solver_spec
-from mpisppy.utils import config
 import pyomo.environ as pyo
+
+import mpisppy.utils.solver_spec as solver_spec
+import mpisppy.utils.sputils as sputils
+from mpisppy.utils import config
 
 
 def main_no_cfg():

@@ -12,13 +12,13 @@
 
 import re
 import sys
-from mpisppy.utils import config
-from pyomo.common.fileutils import import_file
-from mpisppy.utils.sputils import option_string_to_dict
-from mpisppy.confidence_intervals import ciutils
-from mpisppy.confidence_intervals import mmw_ci
-from mpisppy import global_toc
 
+from pyomo.common.fileutils import import_file
+
+from mpisppy import global_toc
+from mpisppy.confidence_intervals import ciutils, mmw_ci
+from mpisppy.utils import config
+from mpisppy.utils.sputils import option_string_to_dict
 
 if __name__ == "__main__":
     global_toc("Start mmw_conf")

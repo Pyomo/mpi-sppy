@@ -9,13 +9,15 @@
 
 import math
 import time
+
 import pyomo.environ as pyo
-
-import mpisppy.utils.sputils as sputils
-import mpisppy.spopt
-
-from mpisppy import global_toc
 from pyomo.repn import generate_standard_repn
+
+import mpisppy.spopt
+import mpisppy.utils.sputils as sputils
+from mpisppy import global_toc
+
+
 class CGBase(mpisppy.spopt.SPOpt):
     """ Base class for all CG-based algorithms.
 
@@ -99,9 +101,7 @@ class CGBase(mpisppy.spopt.SPOpt):
         self.cols = pyo.NonNegativeIntegers
 
         # Track next available column slot for each scenario
-        self.next_col = {
-            sname: 0 for sname in self.all_scenario_names
-        }
+        self.next_col = dict.fromkeys(self.all_scenario_names, 0)
         # Track unique columns to avoid duplicates
         self.column_hashes = {sname: set() for sname in self.all_scenario_names}
 
@@ -376,7 +376,7 @@ class CGBase(mpisppy.spopt.SPOpt):
         """
 
         if initial_xbar is None:
-            initial_xbar = {i: 0.0 for i in self.nonant_indices}
+            initial_xbar = dict.fromkeys(self.nonant_indices, 0.0)
 
         for sname, scenario in self.local_scenarios.items():
             for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items():

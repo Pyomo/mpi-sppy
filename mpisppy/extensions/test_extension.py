@@ -12,6 +12,7 @@
 
 import mpisppy.extensions.xhatbase
 
+
 class TestExtension(mpisppy.extensions.extension.Extension):
     """
     Args:

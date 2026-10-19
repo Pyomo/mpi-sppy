@@ -19,11 +19,11 @@ import sys
 
 from mpi4py import MPI
 
-from mpisppy.tests.utils import get_solver
-from mpisppy.utils import config
+import mpisppy.tests.examples.farmer as farmer
 from mpisppy.generic.mrp import _cylinder_xhat_generator
 from mpisppy.generic.parsing import add_decomp_args
-import mpisppy.tests.examples.farmer as farmer
+from mpisppy.tests.utils import get_solver
+from mpisppy.utils import config
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
