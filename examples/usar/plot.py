@@ -6,7 +6,7 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-"""Functions for obtaining and plotting team schedules.
+r"""Functions for obtaining and plotting team schedules.
 
 The problem of assigning departures to teams and obtaining team-specific
 rescue schedules is reduced to strongly connecting subgraphs of

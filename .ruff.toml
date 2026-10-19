@@ -5,7 +5,10 @@
 # makes lint behavior independent of the ruff version, so the version number in
 # .github/workflows/test_pr_and_main.yml can be raised without a repo-wide
 # sweep.  See Pyomo/mpi-sppy#813.
-lint.select = ["E4", "E7", "E9", "F"]
+#
+# Further rules are added one family at a time (Pyomo/mpi-sppy#908):
+# W605 invalid escape sequence, W292 missing newline at end of file.
+lint.select = ["E4", "E7", "E9", "F", "W605", "W292"]
 
 # ignore old Pyomo models
 extend-exclude = [
