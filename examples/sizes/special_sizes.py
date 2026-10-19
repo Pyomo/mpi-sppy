@@ -8,8 +8,11 @@
 ###############################################################################
 # special sizes to support exotic options
 import os
+
 import models.ReferenceModel as ref
+
 import mpisppy.utils.sputils as sputils
+
 
 def scenario_creator(scenario_name, scenario_count=None):
     if scenario_count not in (3, 10):

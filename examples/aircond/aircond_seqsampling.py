@@ -10,9 +10,10 @@
 #
 
 import numpy as np
-import mpisppy.tests.examples.aircond as aircond
-import mpisppy.confidence_intervals.multi_seqsampling as multi_seqsampling
+
 import mpisppy.confidence_intervals.confidence_config as conf_config
+import mpisppy.confidence_intervals.multi_seqsampling as multi_seqsampling
+import mpisppy.tests.examples.aircond as aircond
 from mpisppy.utils import config
 
 

@@ -8,13 +8,13 @@
 ###############################################################################
 
 import re
+
 import pyomo.environ as pyo
 
 # NOTE: a caller attaches the comms (e.g. pre_iter0)
-
 import mpisppy.extensions.extension
-import mpisppy.utils.w_utils.wxbarutils as wxbarutils
 import mpisppy.utils.sputils as sputils
+import mpisppy.utils.w_utils.wxbarutils as wxbarutils
 
 
 def pack_no_good_feasibility_cut(opt):

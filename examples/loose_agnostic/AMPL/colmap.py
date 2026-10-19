@@ -12,6 +12,7 @@ import csv
 import sys
 from pathlib import Path
 
+
 def load_colnames(col_path):
     """Return a 1-based list of AMPL variable names in column order."""
     names = []

@@ -14,6 +14,7 @@
 
 from pyomo.opt.results import SolutionStatus, SolverStatus, TerminationCondition
 
+
 def check_user_termination_callback_signature(user_termination_callback):
 
     import inspect

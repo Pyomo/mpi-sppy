@@ -18,8 +18,10 @@
 
 import numpy as np
 from pyomo.common.dependencies import pandas as pd
-import mpisppy.opt.ph
+
 import mpisppy.MPI as MPI
+import mpisppy.opt.ph
+
 
 class WTracker:
     """

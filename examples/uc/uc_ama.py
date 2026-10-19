@@ -14,10 +14,12 @@ To execute this:
 WARNING:
     num-scens must be taken as a valid value, i.e. among (3,5,10,25,50,100)
 """
-import mpisppy.utils.amalgamator as amalgamator
-from uc_funcs import id_fix_list_fct
-from mpisppy.utils import config
 import pyomo.common.config as pyofig
+from uc_funcs import id_fix_list_fct
+
+import mpisppy.utils.amalgamator as amalgamator
+from mpisppy.utils import config
+
 
 def main():
     solution_files = {"first_stage_solution":"uc_first_stage.csv",

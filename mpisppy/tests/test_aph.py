@@ -16,14 +16,14 @@ version matter a lot, so we often just do smoke tests for sizes.
 """
 
 import unittest
-from math import log10, floor
+from math import floor, log10
+
+import mpisppy.MPI as mpi
 import mpisppy.opt.aph
 import mpisppy.phbase
-from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
-                                               scenario_denouement
 import mpisppy.tests.examples.farmer as farmer
+from mpisppy.tests.examples.sizes.sizes import scenario_creator, scenario_denouement
 from mpisppy.tests.utils import get_solver
-import mpisppy.MPI as mpi
 
 __version__ = 0.6
 solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()

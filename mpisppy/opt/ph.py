@@ -8,9 +8,11 @@
 ###############################################################################
 # PH-specific code
 
-import mpisppy.phbase
 import shutil
+
 import mpisppy.MPI as mpi
+import mpisppy.phbase
+
 
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
 def profile(filename=None, comm=mpi.COMM_WORLD):
@@ -113,8 +115,8 @@ if __name__ == "__main__":
     PHopt["PHIterLimit"] = 5 # the converger will probably stop it.
     PHopt["asynchronousPH"] = False
 
-    from mpisppy.extensions.xhatlooper import XhatLooper
     from mpisppy.convergers.fracintsnotconv import FractionalConverger
+    from mpisppy.extensions.xhatlooper import XhatLooper
     PHopt["xhat_looper_options"] =  {"xhat_solver_options":\
                                      PHopt["iterk_solver_options"],
                                      "scen_limit": 3,

@@ -16,16 +16,17 @@ but not necessarily the best ways in any case.
 
 import itertools
 import os
-import gams
-import gamspy_base
+import re
 import shutil
 import tempfile
-import re
 
+import gams
+import gamspy_base
 import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
 
+import mpisppy.utils.sputils as sputils
 from mpisppy import MPI  # for debugging
+
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 

@@ -6,16 +6,17 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-from mpisppy.spbase import SPBase
-import pyomo.environ as pyo
 import logging
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
 import parapint
-from typing import List, Callable, Dict, Optional, Tuple, Any, Union
+import pyomo.environ as pyo
 from pyomo.core.base.block import _BlockData
 from pyomo.core.base.var import _GeneralVarData
-from mpisppy import MPI
-from mpisppy.utils.sputils import find_active_objective
 
+from mpisppy import MPI
+from mpisppy.spbase import SPBase
+from mpisppy.utils.sputils import find_active_objective
 
 logger = logging.getLogger('mpisppy.sc')
 

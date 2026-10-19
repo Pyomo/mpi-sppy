@@ -30,10 +30,10 @@
 '''
 
 import os
-import mpisppy.utils.w_utils.wxbarutils
-import mpisppy.extensions.extension
 
-import mpisppy.MPI as MPI 
+import mpisppy.extensions.extension
+import mpisppy.MPI as MPI
+import mpisppy.utils.w_utils.wxbarutils
 
 n_proc = MPI.COMM_WORLD.Get_size()
 rank = MPI.COMM_WORLD.Get_rank()

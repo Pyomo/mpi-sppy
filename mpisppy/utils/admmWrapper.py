@@ -68,9 +68,11 @@ root-node Vars
     node-list data structure.
 """
 
-import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
+
+import mpisppy.utils.sputils as sputils
 from mpisppy import MPI
+
 global_rank = MPI.COMM_WORLD.Get_rank()
 
 def _admm_normalize_consensus_vars(consensus_vars, *, tuple_form):

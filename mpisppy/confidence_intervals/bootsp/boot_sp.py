@@ -12,13 +12,14 @@
 
 import os
 from statistics import NormalDist
-import numpy as np
-from numpy.random import default_rng
-import pyomo.environ as pyo
 
+import numpy as np
+import pyomo.environ as pyo
+from numpy.random import default_rng
+
+import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.xhat_eval as xhat_eval
-import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
 
 # The communicators live in boot_utils so there is a single source of truth.
 comm = boot_utils.comm

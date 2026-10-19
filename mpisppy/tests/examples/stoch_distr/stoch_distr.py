@@ -10,11 +10,13 @@
 
 # Network Flow - various formulations
 # DLW, May 2025: I am suspicious about the three-stage consensus variables. 
-import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
-import numpy as np
 import re
+
+import numpy as np
+import pyomo.environ as pyo
+
 import mpisppy.scenario_tree as scenario_tree
+import mpisppy.utils.sputils as sputils
 
 # This version present in the test slightly differs from the original 
 # as it allows a three-stage problem

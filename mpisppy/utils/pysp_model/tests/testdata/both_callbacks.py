@@ -16,7 +16,7 @@
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
 
-from pyomo.environ import AbstractModel, Var, Param, Expression, Objective, Constraint
+from pyomo.environ import AbstractModel, Constraint, Expression, Objective, Param, Var
 
 model = AbstractModel()
 model.x = Var()

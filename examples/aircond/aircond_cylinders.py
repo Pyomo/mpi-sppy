@@ -10,17 +10,20 @@
 # Use bundle_pickler.py to create bundle pickles
 # NOTE: As of 3 March 2022, you can't compare pickle bundle problems with non-pickled. See _demands_creator in aircondB.py for more discusion.
 
-import numpy as np
 import itertools
-from mpisppy import global_toc
-from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.utils.sputils import first_stage_nonant_npy_serializer, option_string_to_dict
-from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
+
+import numpy as np
+
 import mpisppy.tests.examples.aircond as aircond
 import mpisppy.tests.examples.aircondB as aircondB  # pickle bundle version
-from mpisppy.utils import pickle_bundle
-from mpisppy.utils import amalgamator
+import mpisppy.utils.cfg_vanilla as vanilla
+from mpisppy import global_toc
+from mpisppy.spin_the_wheel import WheelSpinner
+from mpisppy.utils import amalgamator, config, pickle_bundle
+from mpisppy.utils.sputils import (
+    first_stage_nonant_npy_serializer,
+    option_string_to_dict,
+)
 
 # construct a node-scenario dictionary a priori for xhatspecific_spoke,
 # according to naming convention for this problem

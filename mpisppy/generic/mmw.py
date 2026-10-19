@@ -9,7 +9,7 @@
 """MMW confidence interval computation for generic_cylinders."""
 
 import mpisppy.utils.sputils as sputils
-from mpisppy import global_toc, MPI
+from mpisppy import MPI, global_toc
 
 
 def mmw_requested(cfg):
@@ -43,8 +43,8 @@ def do_mmw(module_fname, cfg, wheel=None):
     """
     import os
     import tempfile
-    from mpisppy.confidence_intervals import mmw_ci
-    from mpisppy.confidence_intervals import ciutils
+
+    from mpisppy.confidence_intervals import ciutils, mmw_ci
 
     # MMWConfidenceIntervals expects an importable module name, not a file path.
     # load_module (in parsing.py) already added the directory to sys.path,

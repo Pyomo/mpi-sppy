@@ -11,10 +11,11 @@
 # so the extensive-form optimum and the bootstrap draws are reproducible and
 # solver-independent. This "unique" variant has a unique optimal solution.
 
+import numpy as np
 import pyomo.environ as pyo
+
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
-import numpy as np
 
 # Use this random stream:
 sstream = np.random.RandomState()

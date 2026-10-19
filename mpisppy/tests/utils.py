@@ -10,9 +10,9 @@
 
 import os
 import tempfile
+from math import floor, log10
 
 import pyomo.environ as pyo
-from math import log10, floor
 
 from mpisppy.utils import sputils
 

@@ -37,11 +37,11 @@ import types
 import unittest
 from unittest import mock
 
-import mpisppy.utils.checkpointing as checkpointing
 import mpisppy.tests.examples.farmer as farmer
+import mpisppy.utils.checkpointing as checkpointing
+from mpisppy.cylinders.hub import PHHub
 from mpisppy.extensions.checkpointer import Checkpointer
 from mpisppy.extensions.extension import Extension
-from mpisppy.cylinders.hub import PHHub
 from mpisppy.opt.ph import PH
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.tests.utils import REPO_ROOT, get_solver, subprocess_env
@@ -1366,8 +1366,8 @@ class TestCheckpointingSurvivedGuard(unittest.TestCase):
             self._cfg(checkpoint_dir="/tmp/x"))
 
     def test_accepts_when_composed_under_multiextension(self):
-        from mpisppy.generic.decomp import _check_checkpointing_survived
         from mpisppy.extensions.extension import MultiExtension
+        from mpisppy.generic.decomp import _check_checkpointing_survived
         _check_checkpointing_survived(
             self._hub_dict(extensions=MultiExtension,
                            ext_classes=[Checkpointer, StateRecorder]),
@@ -2217,11 +2217,11 @@ class TestConfigureExtensionsComposes(unittest.TestCase):
     """
 
     def test_checkpointer_survives_ext_class_flags(self):
-        from mpisppy.generic.parsing import add_decomp_args
-        from mpisppy.generic.extensions import configure_extensions
-        from mpisppy.generic.decomp import _check_checkpointing_survived
         from mpisppy.extensions.extension import MultiExtension
         from mpisppy.extensions.wtracker_extension import Wtracker_extension
+        from mpisppy.generic.decomp import _check_checkpointing_survived
+        from mpisppy.generic.extensions import configure_extensions
+        from mpisppy.generic.parsing import add_decomp_args
 
         cfg = Config()
         add_decomp_args(cfg)
@@ -2426,8 +2426,7 @@ class TestXhatterLoopsOfferCheckpointPoints(unittest.TestCase):
         self.assertEqual(recorder.calls, 3)
 
     def test_xhatspecific(self):
-        from mpisppy.cylinders.xhatspecific_bounder import (
-            XhatSpecificInnerBound)
+        from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
         recorder = self._drive(
             XhatSpecificInnerBound,
             {"xhat_specific_options": {"xhat_scenario_dict": {"ROOT": "s0"}}},
@@ -2451,8 +2450,7 @@ class TestXhatterLoopsOfferCheckpointPoints(unittest.TestCase):
         spoke.try_scenario_dict = lambda _: False
 
     def test_xhatshuffle(self):
-        from mpisppy.cylinders.xhatshufflelooper_bounder import (
-            XhatShuffleInnerBound)
+        from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
         recorder = self._drive(
             XhatShuffleInnerBound, self._shuffle_options(), kill_after=3,
             extra=self._shuffle_extra)
@@ -2466,8 +2464,7 @@ class TestXhatterLoopsOfferCheckpointPoints(unittest.TestCase):
         improved the incumbent, and the pass offers it a write before
         returning.
         """
-        from mpisppy.cylinders.xhatshufflelooper_bounder import (
-            XhatShuffleInnerBound)
+        from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
 
         def extra(spoke):
             self._shuffle_extra(spoke)
@@ -2596,6 +2593,7 @@ def _publish_best_xhat(opt):
     need a wheel and an MPI window to read one array back.
     """
     import numpy as np
+
     from mpisppy.cylinders.spoke import InnerBoundNonantSpoke
     from mpisppy.cylinders.spwindow import Field
 
@@ -3452,8 +3450,10 @@ class TestIntegerRelaxThenEnforceResume(unittest.TestCase):
 
     def _extension(self, scenarios, resumed):
         import types
+
         from mpisppy.extensions.integer_relax_then_enforce import (
-            IntegerRelaxThenEnforce)
+            IntegerRelaxThenEnforce,
+        )
         opt = types.SimpleNamespace(
             options={"integer_relax_then_enforce_options": {"ratio": 0.5}},
             local_scenarios=scenarios,
@@ -3781,6 +3781,7 @@ class TestWXBarReaderResume(unittest.TestCase):
 
     def _reader(self, resumed):
         import types
+
         from mpisppy.utils.w_utils.wxbarreader import WXBarReader
         reader = WXBarReader.__new__(WXBarReader)
         reader.not_active = False

@@ -17,8 +17,10 @@
 # from candidate_sample_size of them, and the bootstrap resamples the rest.
 
 import os
+
 import numpy as np
 import pyomo.environ as pyo
+
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
 

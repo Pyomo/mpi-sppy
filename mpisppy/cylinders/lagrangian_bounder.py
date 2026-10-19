@@ -11,6 +11,7 @@ import mpisppy.utils.sputils as sputils
 from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
 from mpisppy.utils.linear_surrogate import set_derived_surrogate_rhos
 
+
 class _LagrangianMixin:
 
     # A Lagrangian solve is only ever asked for its outer bound, so by default

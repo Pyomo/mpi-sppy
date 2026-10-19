@@ -26,6 +26,7 @@
 #       --num-scens 10 --EF --solver-name gurobi --cc-indicator-var served --cc-alpha 0.2
 
 import pyomo.environ as pyo
+
 import mpisppy.utils.sputils as sputils
 
 UNIT_CAPACITY_COST = 1.0

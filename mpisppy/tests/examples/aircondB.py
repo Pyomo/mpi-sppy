@@ -12,11 +12,13 @@
 # Feb 2022: Changed all inventory cost coefficients to be positive numbers
 # exccept Last Inventory cost, which should be negative.
 import os
+
 import numpy as np
 import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.pickle_bundle as pickle_bundle
+
 import mpisppy.tests.examples.aircond as base_aircond
+import mpisppy.utils.pickle_bundle as pickle_bundle
+import mpisppy.utils.sputils as sputils
 from mpisppy.utils.sputils import attach_root_node
 
 # Use this random stream:

@@ -9,7 +9,8 @@
 
 import pyomo.environ as pyo
 
-from mpisppy.spbase import _put_var_vals_in_component_map_dict 
+from mpisppy.spbase import _put_var_vals_in_component_map_dict
+
 
 def test_component_map_usage():
     m = pyo.ConcreteModel()

@@ -16,15 +16,15 @@
 # as it allows to consider a three stage example
 
 # Driver file for stochastic admm
-import mpisppy.utils.stoch_admmWrapper as stoch_admmWrapper
 # import stoch_distr ## It is necessary for the test to have the full direction
 import mpisppy.tests.examples.stoch_distr.stoch_distr as stoch_distr
-
-from mpisppy.spin_the_wheel import WheelSpinner
-import mpisppy.utils.sputils as sputils
-from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
+import mpisppy.utils.sputils as sputils
+import mpisppy.utils.stoch_admmWrapper as stoch_admmWrapper
 from mpisppy import MPI
+from mpisppy.spin_the_wheel import WheelSpinner
+from mpisppy.utils import config
+
 global_rank = MPI.COMM_WORLD.Get_rank()
 
 write_solution = False

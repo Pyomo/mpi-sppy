@@ -7,8 +7,10 @@
 # full copyright and license information.
 ###############################################################################
 import pyomo.environ as pyo
+
 import mpisppy.utils.sputils as sputils
 from mpisppy.extensions.extension import Extension
+
 
 class NetworkDesignTracker(Extension):
 

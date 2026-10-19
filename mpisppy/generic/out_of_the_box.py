@@ -1137,6 +1137,7 @@ def _detect_available_solvers(candidates) -> set:
     duration of the probe only.
     """
     import logging
+
     import pyomo.environ as pyo
 
     quieted = [logging.getLogger(n)

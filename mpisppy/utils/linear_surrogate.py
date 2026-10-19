@@ -15,8 +15,8 @@ agreement of ``z``; explicitly hedging ``z`` adds a useful aggregate direction
 without changing the stochastic program.
 """
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 
 import numpy as np
 import pyomo.environ as pyo

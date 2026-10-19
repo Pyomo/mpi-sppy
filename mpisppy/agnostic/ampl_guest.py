@@ -41,11 +41,12 @@ See farmer_ample_agnostic.py for an example where indexes are retained.
 
 """
 
-import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
 
+import mpisppy.utils.sputils as sputils
 from mpisppy import MPI  # for debuggig
 from mpisppy.utils import nice_join
+
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 

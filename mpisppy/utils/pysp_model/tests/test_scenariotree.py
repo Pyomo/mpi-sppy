@@ -20,22 +20,20 @@
 # Copied with modification from pysp/tests/unit/test_scenariotree.py
 
 import pyomo.common.unittest as unittest
+from pyomo.common.dependencies import networkx
+from pyomo.common.dependencies import networkx_available as has_networkx
+from pyomo.core import Block, ConcreteModel, Expression, Objective, Set, Var, value
 
-from mpisppy.utils.pysp_model.tree_structure_model import \
-    (ScenarioTreeModelFromNetworkX,
-     CreateConcreteTwoStageScenarioTreeModel)
-from mpisppy.utils.pysp_model.tree_structure import ScenarioTree
-from mpisppy.utils.pysp_model.pysp_model import _get_nonant_list, _get_derived_nonant_list
-from pyomo.core import (ConcreteModel,
-                        Set,
-                        Var,
-                        Expression,
-                        Objective,
-                        Block,
-                        value)
-from pyomo.common.dependencies import (
-    networkx, networkx_available as has_networkx
+from mpisppy.utils.pysp_model.pysp_model import (
+    _get_derived_nonant_list,
+    _get_nonant_list,
 )
+from mpisppy.utils.pysp_model.tree_structure import ScenarioTree
+from mpisppy.utils.pysp_model.tree_structure_model import (
+    CreateConcreteTwoStageScenarioTreeModel,
+    ScenarioTreeModelFromNetworkX,
+)
+
 
 def _get_names(iterable):
     return [_.name for _ in iterable]

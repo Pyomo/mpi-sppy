@@ -9,11 +9,11 @@
 # udpated April 20
 # specific xhat supplied (copied from xhatlooper_bounder by DLW, Dec 2019)
 
-from mpisppy.extensions.xhatspecific import XhatSpecific
-from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
-from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
-
 import logging
+
+from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
+from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
+from mpisppy.extensions.xhatspecific import XhatSpecific
 
 
 ############################################################################

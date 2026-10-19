@@ -10,8 +10,8 @@ r"""Provides a function which creates `ConcreteModel`\s for scenarios."""
 from typing import Dict, Sequence
 
 import pyomo.environ as pyo
-
 from abstract import abstract_model
+
 import mpisppy.scenario_tree
 import mpisppy.utils.sputils
 

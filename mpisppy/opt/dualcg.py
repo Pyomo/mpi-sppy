@@ -9,11 +9,15 @@
 
 
 
-import mpisppy.MPI as mpi
-import mpisppy.cgbase
-import pyomo.environ as pyo
-from mpisppy import global_toc
 import time
+
+import pyomo.environ as pyo
+
+import mpisppy.cgbase
+import mpisppy.MPI as mpi
+from mpisppy import global_toc
+
+
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
 def profile(filename=None, comm=mpi.COMM_WORLD):
     pass

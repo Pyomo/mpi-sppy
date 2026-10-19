@@ -8,22 +8,21 @@
 ###############################################################################
 """Cut generators used by the mpi-sppy L-shaped method."""
 
+import logging
 from dataclasses import dataclass
 
-from pyomo.core.base.block import declare_custom_block
+import numpy as np
+import pyomo.contrib.benders.benders_cuts as bc
+import pyomo.environ as pe
 from pyomo.core import Constraint, Var
+from pyomo.core.base.block import declare_custom_block
 from pyomo.core.base.componentuid import ComponentUID
 from pyomo.core.base.PyomoModel import ModelSolutions
-import pyomo.environ as pe
 from pyomo.solvers.plugins.solvers.persistent_solver import PersistentSolver
-import pyomo.contrib.benders.benders_cuts as bc
 
 from mpisppy import MPI
 from mpisppy.spopt import set_instance_retry
 from mpisppy.utils.sputils import find_active_objective
-
-import logging
-import numpy as np
 
 logger = logging.getLogger(__name__)
 

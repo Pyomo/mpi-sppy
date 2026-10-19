@@ -21,8 +21,8 @@ so PH can distribute bundles across ranks independently.
 import numpy as np
 import pyomo.environ as pyo
 
-import mpisppy.utils.sputils as sputils
 import mpisppy.scenario_tree as scenario_tree
+import mpisppy.utils.sputils as sputils
 from mpisppy.utils.admmWrapper import (
     _admm_normalize_consensus_vars,
     _first_stage_var_names,

@@ -10,9 +10,11 @@
 # TBD: we should consider restructuring this and moving the capability to spbase
 
 import os
+
 import numpy as np
-import mpisppy.utils.sputils as sputils
+
 import mpisppy.utils.pickle_bundle as pickle_bundle
+import mpisppy.utils.sputils as sputils
 
 # Development notes:
 # 2 stage Cases:

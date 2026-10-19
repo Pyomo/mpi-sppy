@@ -8,12 +8,11 @@
 ###############################################################################
 import numpy as np
 
-
-from mpisppy.extensions.extension import Extension
 from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
+from mpisppy.cylinders.spwindow import Field
+from mpisppy.extensions.extension import Extension
 from mpisppy.utils.sputils import is_persistent
 
-from mpisppy.cylinders.spwindow import Field
 
 class ReducedCostsFixer(Extension):
 

@@ -21,6 +21,7 @@
 
 import abc
 
+
 class Converger:
     ''' Abstract base class for converger monitors.
 

@@ -21,8 +21,9 @@
 #
 # special scalable farmer for stress-testing
 
-import pyomo.environ as pyo
 import numpy as np
+import pyomo.environ as pyo
+
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
 

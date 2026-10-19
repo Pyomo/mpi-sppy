@@ -8,16 +8,16 @@
 ###############################################################################
 # Utilities shared by the bootstrap confidence-interval code.
 
-import json
 import enum
-import inspect
 import importlib
-import mpisppy.utils.config as config
+import inspect
+import json
 
 # The mpi-sppy MPI shim lets Windows users run this code without MPI.
 # These communicators are defined once here and imported by the estimator
 # and driver modules so there is a single source of truth.
 import mpisppy.MPI as MPI
+import mpisppy.utils.config as config
 
 comm = MPI.COMM_WORLD
 n_proc = comm.Get_size()

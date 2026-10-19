@@ -19,33 +19,32 @@
 # need a nonlinear solver (ipopt), so those tests are skipped when ipopt is
 # absent.
 
-import os
-import sys
-import math
-import inspect
 import glob
-import json
 import importlib.util
+import inspect
+import json
+import math
+import os
 import subprocess
+import sys
 import tempfile
 import types
 import unittest
-from unittest import mock
 from collections import OrderedDict
+from unittest import mock
 
 import numpy as np
-from pyomo.common.dependencies import scipy
 import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
-from mpisppy.tests.utils import get_solver, round_pos_sig
+from pyomo.common.dependencies import scipy
 
-import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
 import mpisppy.confidence_intervals.bootsp.boot_sp as boot_sp
-import mpisppy.confidence_intervals.bootsp.smoothed_boot_sp as smoothed_boot_sp
-import mpisppy.confidence_intervals.bootsp.user_boot as user_boot
+import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
 import mpisppy.confidence_intervals.bootsp.simulate_boot as simulate_boot
+import mpisppy.confidence_intervals.bootsp.smoothed_boot_sp as smoothed_boot_sp
 import mpisppy.confidence_intervals.bootsp.statdist.distributions as statdist_distributions
 import mpisppy.confidence_intervals.bootsp.statdist.utilities as statdist_utilities
+import mpisppy.confidence_intervals.bootsp.user_boot as user_boot
+import mpisppy.utils.sputils as sputils
 from mpisppy.confidence_intervals.bootsp.statdist.base_distribution import (
     Parameter,
     UnivariateDistribution,
@@ -53,6 +52,7 @@ from mpisppy.confidence_intervals.bootsp.statdist.base_distribution import (
 from mpisppy.confidence_intervals.bootsp.statdist.distribution_factory import (
     distribution_factory,
 )
+from mpisppy.tests.utils import get_solver, round_pos_sig
 
 sputils.disable_tictoc_output()
 
@@ -1492,8 +1492,9 @@ class Test_review_regressions(unittest.TestCase):
         # the caller reads model.a/w0/u0 straight off the instance, so a solve
         # that stopped early used to yield a density built from a partial
         # iterate, and one that loaded nothing surfaced far away as a TypeError
-        from mpisppy.confidence_intervals.bootsp.statdist import splines
         from pyomo.opt import TerminationCondition
+
+        from mpisppy.confidence_intervals.bootsp.statdist import splines
 
         class _Results:
             class solver:

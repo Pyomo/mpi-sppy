@@ -8,11 +8,12 @@
 ###############################################################################
 """Tests for nonant name validation in spbase.py."""
 import unittest
+
 import pyomo.environ as pyo
 
 import mpisppy.opt.ef
+from examples.farmer import bad_farmer, farmer
 from mpisppy.tests.utils import get_solver
-from examples.farmer import farmer, bad_farmer
 
 solver_available, solver_name, persistent_available, persistent_solver_name = get_solver()
 

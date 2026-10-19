@@ -7,11 +7,13 @@
 # full copyright and license information.
 ###############################################################################
 
-from math import isclose
 from array import array
 from bisect import bisect
+from math import isclose
+
 from pyomo.common.dependencies import scipy
 from pyomo.core.expr.numeric_expr import LinearExpression
+
 
 # helpers for distance from y = x**2
 def _f_ls(val, x_pnt, y_pnt):

@@ -12,6 +12,7 @@
 '''
 import numpy as np
 
+
 def main():
     fname = 'data/network-10-10-L-01.dat'
     data = parse(fname)

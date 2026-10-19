@@ -6,24 +6,23 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import time
 import logging
 import math
+import time
 import warnings
 
 import numpy as np
-import mpisppy.MPI as MPI
-
 import pyomo.environ as pyo
 
-import mpisppy.utils.sputils as sputils
+import mpisppy.MPI as MPI
 import mpisppy.spopt
 import mpisppy.utils.checkpointing as checkpointing
-
+import mpisppy.utils.sputils as sputils
+from mpisppy import global_toc
+from mpisppy.utils.linear_surrogate import set_derived_surrogate_rhos
 from mpisppy.utils.prox_approx import ProxApproxManager
 from mpisppy.utils.rho_utils import check_rhos_positive
-from mpisppy.utils.linear_surrogate import set_derived_surrogate_rhos
-from mpisppy import global_toc
+
 
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
 def profile(filename=None, comm=MPI.COMM_WORLD):

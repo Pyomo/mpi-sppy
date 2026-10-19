@@ -8,10 +8,13 @@
 ###############################################################################
 
 import time
+
 import pyomo.environ as pyo
+
 import mpisppy.extensions.extension
-from mpisppy.utils.sputils import is_persistent
 from mpisppy import global_toc
+from mpisppy.utils.sputils import is_persistent
+
 
 class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
     """ Class for relaxing integer variables, running PH, and then

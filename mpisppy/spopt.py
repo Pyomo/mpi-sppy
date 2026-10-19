@@ -8,26 +8,24 @@
 ###############################################################################
 # base class for hub and for spoke strata
 
-import os
-import logging
-import time
-import math
 import inspect
-import random
+import logging
+import math
+import os
 import pathlib
+import random
+import time
 import warnings
 
 import numpy as np
-from mpisppy import MPI
-
 import pyomo.environ as pyo
-from pyomo.opt import SolverFactory
 from pyomo.common.collections import ComponentSet
+from pyomo.opt import SolverFactory
 
-from mpisppy.spbase import SPBase
 import mpisppy.utils.sputils as sputils
-
+from mpisppy import MPI
 from mpisppy.opt.presolve import SPPresolve
+from mpisppy.spbase import SPBase
 
 logger = logging.getLogger("SPOpt")
 logger.setLevel(logging.WARN)
@@ -860,8 +858,8 @@ class SPOpt(SPBase):
         """
         # Lazy import: keep pyomo.contrib.iis off the non-feature path.
         from pyomo.contrib.iis import (
-            write_iis,
             compute_infeasibility_explanation,
+            write_iis,
         )
 
         method = self._resolve_iis_method()

@@ -12,10 +12,10 @@
 # parallel version
 
 import numpy as np
-import mpisppy.tests.examples.aircondB as aircondB
-from mpisppy.utils import config
 
+import mpisppy.tests.examples.aircondB as aircondB
 from mpisppy import MPI
+from mpisppy.utils import config
 
 n_proc = MPI.COMM_WORLD.Get_size()
 my_rank = MPI.COMM_WORLD.Get_rank()

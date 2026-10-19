@@ -12,15 +12,14 @@
 
 import os
 
-from pyomo.dataportal import DataPortal
-
-
-import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
-
-import egret.parsers.prescient_dat_parser as pdp
 import egret.data.model_data as md
 import egret.models.unit_commitment as uc
+import egret.parsers.prescient_dat_parser as pdp
+import pyomo.environ as pyo
+from pyomo.dataportal import DataPortal
+
+import mpisppy.utils.sputils as sputils
+
 
 def pysp_instance_creation_callback(scenario_name):
 

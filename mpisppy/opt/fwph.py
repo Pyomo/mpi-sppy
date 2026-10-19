@@ -16,26 +16,26 @@
     Current implementation supports parallelism.
 '''
 
-import mpisppy.phbase
-import mpisppy.utils.sputils as sputils
+import math
+import random
+import time
+
 import numpy as np
 import pyomo.environ as pyo
-import time
-import random
-import math
-
-from mpisppy import MPI
-from mpisppy import global_toc
-from pyomo.repn.standard_repn import generate_standard_repn
-from mpisppy.utils import nice_join
-from mpisppy.utils.sputils import find_active_objective
-from mpisppy.utils.linear_surrogate import set_derived_surrogate_rhos
-from pyomo.core.expr.visitor import replace_expressions
 from pyomo.core.expr.numeric_expr import LinearExpression
+from pyomo.core.expr.visitor import replace_expressions
+from pyomo.repn.standard_repn import generate_standard_repn
 
-from mpisppy.cylinders.xhatshufflelooper_bounder import ScenarioCycler
+import mpisppy.phbase
+import mpisppy.utils.sputils as sputils
+from mpisppy import MPI, global_toc
 from mpisppy.cylinders.spwindow import Field
+from mpisppy.cylinders.xhatshufflelooper_bounder import ScenarioCycler
 from mpisppy.extensions.xhatbase import XhatBase
+from mpisppy.utils import nice_join
+from mpisppy.utils.linear_surrogate import set_derived_surrogate_rhos
+from mpisppy.utils.sputils import find_active_objective
+
 
 class FWPH(mpisppy.phbase.PHBase):
 

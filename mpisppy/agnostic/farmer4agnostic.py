@@ -20,8 +20,9 @@
 #  ___________________________________________________________________________
 #
 
-import pyomo.environ as pyo
 import numpy as np
+import pyomo.environ as pyo
+
 import mpisppy.utils.sputils as sputils
 
 # Use this random stream:
