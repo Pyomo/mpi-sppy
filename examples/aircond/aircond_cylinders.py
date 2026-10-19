@@ -327,8 +327,7 @@ def main():
 
     fname = 'aircond_cyl_nonants.npy'
     if wheel.global_rank == 0:
-        print("BestInnerBound={} and BestOuterBound={}".\
-              format(wheel.BestInnerBound, wheel.BestOuterBound))
+        print(f"BestInnerBound={wheel.BestInnerBound} and BestOuterBound={wheel.BestOuterBound}")
         if cfg.write_solution:
             print(f"Writing first stage solution to {fname}")
     # all ranks need to participate because only the winner will write

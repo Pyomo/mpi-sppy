@@ -69,7 +69,7 @@ if __name__ == "__main__":
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
 
-    all_scenario_names = ['scen{}'.format(sn) for sn in range(scen_count)]
+    all_scenario_names = [f'scen{sn}' for sn in range(scen_count)]
     rho_setter = farmer._rho_setter if hasattr(farmer, '_rho_setter') else None
     scenario_creator_kwargs = {
         'use_integer': True,
@@ -177,5 +177,4 @@ if __name__ == "__main__":
     if wheel.global_rank == 0:  # we are the reporting hub rank
         print(f"BestInnerBound={wheel.BestInnerBound} and BestOuterBound={wheel.BestOuterBound}")
 
-    print("End time={} for global rank={}". \
-          format(datetime.datetime.now(), global_rank))
+    print(f"End time={datetime.datetime.now()} for global rank={global_rank}")

@@ -38,9 +38,8 @@ def parse(fname, scenario_ix=None):
         if (scenario_ix is not None):
             ''' Read the provided scenario '''
             if (scenario_ix < 0 or scenario_ix >= K):
-                raise ValueError('Provided scenario index ({}) could '
-                                 'not be found ({} total scenarios)'.format(
-                                        scenario_ix, K))
+                raise ValueError(f'Provided scenario index ({scenario_ix}) could '
+                                 f'not be found ({K} total scenarios)')
             for k in range(scenario_ix):
                 for _ in range(4):
                     f.readline()

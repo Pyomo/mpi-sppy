@@ -50,10 +50,9 @@ def do_one(dirname, progname, np, argstring):
     os.chdir(dirname)
     # One rank runs without mpiexec, which can bind it to a single core.
     if np == 1:
-        runstring = "python {} {} {}".format(python_args, progname, argstring)
+        runstring = f"python {python_args} {progname} {argstring}"
     else:
-        runstring = "mpiexec {} -np {} python {} -m mpi4py {} {}".\
-                    format(mpiexec_arg, np, python_args, progname, argstring)
+        runstring = f"mpiexec {mpiexec_arg} -np {np} python {python_args} -m mpi4py {progname} {argstring}"
     print(runstring)
     code = os.system(runstring)
     if code != 0:
@@ -64,7 +63,7 @@ def do_one(dirname, progname, np, argstring):
     os.chdir("..")
 
 print("** Starting sizes_demo **")
-do_one("sizes", "sizes_demo.py", 1, " {}".format(solver_name))
+do_one("sizes", "sizes_demo.py", 1, f" {solver_name}")
 
 print("** Starting regular sizes **")
 do_one("sizes",
@@ -72,7 +71,7 @@ do_one("sizes",
        4,
        "--num-scens=3 --max-iterations=5 "
        "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
-       "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
+       f"--default-rho=1 --solver-name={solver_name} --with-display-progress")
 
 print("** Starting special sizes **")
 do_one("sizes",
@@ -80,14 +79,14 @@ do_one("sizes",
        4,
        "--num-scens=3 --max-iterations=5 "
        "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
-       "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
+       f"--default-rho=1 --solver-name={solver_name} --with-display-progress")
 
 if len(badguys) > 0:
     print("\nBad Guys:")
     for i,v in badguys.items():
-        print("Directory={}".format(i))
+        print(f"Directory={i}")
         for c in v:
-            print("    {}".format(c))
+            print(f"    {c}")
         sys.exit(1)
 else:
     print("\nAll OK.")

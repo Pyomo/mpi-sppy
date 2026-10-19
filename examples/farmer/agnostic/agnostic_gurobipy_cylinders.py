@@ -43,7 +43,7 @@ if __name__ == "__main__":
 
     scenario_creator = Ag.scenario_creator
     scenario_denouement = farmer_gurobipy_agnostic.scenario_denouement   # should we go though Ag?
-    all_scenario_names = ['scen{}'.format(sn) for sn in range(cfg.num_scens)]
+    all_scenario_names = [f'scen{sn}' for sn in range(cfg.num_scens)]
 
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)

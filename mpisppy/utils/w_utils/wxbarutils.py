@@ -145,7 +145,7 @@ def _parse_W_csv_single(fname):
         and ignored.
     '''
     if (not os.path.exists(fname)):
-        raise RuntimeError('Could not find file {fn}'.format(fn=fname))
+        raise RuntimeError(f'Could not find file {fname}')
     results = dict()
     with open(fname) as f:
         for line in f:

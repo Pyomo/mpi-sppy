@@ -104,7 +104,7 @@ def distribution_factory(name):
         distribution = distribution_registry[name.lower()]
     except KeyError:
         possible_names = '\n'.join(sorted(distribution_registry.keys(), key=str.lower))
-        raise NameError("The specified distribution {} is unrecognized. "
-                        "Possible distributions are:\n{}".format(name, possible_names))
+        raise NameError(f"The specified distribution {name} is unrecognized. "
+                        f"Possible distributions are:\n{possible_names}")
 
     return distribution

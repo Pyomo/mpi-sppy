@@ -95,8 +95,8 @@ class Test_aph_sizes(unittest.TestCase):
         )
 
         conv, obj, tbound = aph.APH_main(spcomm=None)
-        print ("objthing={}, (was=-2435908)".format(obj))
-        print ("tbound ={} (was=224106)".format(tbound))
+        print (f"objthing={obj}, (was=-2435908)")
+        print (f"tbound ={tbound} (was=224106)")
 
     @unittest.skipIf(not solver_available,
                      "%s solver is not available" % (solver_name,))
@@ -117,7 +117,7 @@ class Test_aph_sizes(unittest.TestCase):
 
         conv, obj, tbound = aph.APH_main(spcomm=None)
         print (f"APHgamma={a}; objthing={obj}")
-        print ("tbound ={}".format(tbound))
+        print (f"tbound ={tbound}")
 
 
     @unittest.skipIf(not solver_available,
@@ -138,7 +138,7 @@ class Test_aph_sizes(unittest.TestCase):
 
         conv, obj, tbound = aph.APH_main(spcomm=None)
         print (f"use lag objthing={obj}")
-        print ("tbound ={}".format(tbound))
+        print (f"tbound ={tbound}")
 
 
     @unittest.skipIf(not solver_available,

@@ -156,8 +156,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             try:
                 xhats["ROOT"] = self.comms["ROOT"].bcast(xhat, root=src_rank)
             except:
-                print("rank=",self.cylinder_rank, "xhats bcast failed on src_rank={}"\
-                      .format(src_rank))
+                print("rank=",self.cylinder_rank, f"xhats bcast failed on src_rank={src_rank}")
                 print("root comm size={}".format(self.comms["ROOT"].size))
                 raise
         elif stage2_ef_solver_name is None:  # regular multi-stage
@@ -194,8 +193,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                 try:
                     xhats[ndn] = self.comms[ndn].bcast(xhats[ndn], root=src_rank)
                 except:
-                    print("rank=",self.cylinder_rank, "xhats bcast failed on ndn={}, src_rank={}"\
-                          .format(ndn,src_rank))
+                    print("rank=",self.cylinder_rank, f"xhats bcast failed on ndn={ndn}, src_rank={src_rank}")
                     raise
         else:  # we are multi-stage with stage2ef
             # Form an ef for all local scenarios and then fix the first stage
@@ -211,8 +209,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             try:
                 xhats["ROOT"] = self.comms["ROOT"].bcast(xhat, root=src_rank)
             except:
-                print("rank=",self.cylinder_rank, "xhats bcast failed on src_rank={}"\
-                      .format(src_rank))
+                print("rank=",self.cylinder_rank, f"xhats bcast failed on src_rank={src_rank}")
                 print("root comm size={}".format(self.comms["ROOT"].size))
                 raise
             # now form the EF for the appropriate number of second-stage scenario tree nodes

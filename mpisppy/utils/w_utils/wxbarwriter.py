@@ -84,15 +84,14 @@ class WXBarWriter(mpisppy.extensions.extension.Extension):
                   'No values will be saved.')
 
         if (w_fname and (not sep_files) and os.path.exists(w_fname) and rank==0):
-            print('Warning: specified W_fname ({fn})'.format(fn=w_fname) +
+            print(f'Warning: specified W_fname ({w_fname})' +
                   ' already exists. Results will be appended to this file.')
         elif (w_fname and sep_files and (not os.path.exists(w_fname)) and rank==0):
-            print('Warning: path {path} does not exist. Creating...'.format(
-                    path=w_fname))
+            print(f'Warning: path {w_fname} does not exist. Creating...')
             os.makedirs(w_fname, exist_ok=True)
 
         if (x_fname and os.path.exists(x_fname) and rank==0):
-            print('Warning: specified Xbar_fname ({fn})'.format(fn=x_fname) +
+            print(f'Warning: specified Xbar_fname ({x_fname})' +
                   ' already exists. Results will be appended to this file.')
 
         self.PHB = ph

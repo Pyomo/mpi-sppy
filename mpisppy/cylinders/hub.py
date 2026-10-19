@@ -176,7 +176,7 @@ class Hub(SPCommunicator):
         """
         my_bounds = self.send_buffers[Field.BEST_OBJECTIVE_BOUNDS]
         self._populate_boundsout_cache(my_bounds.array())
-        logging.debug("hub is sending bounds={}".format(my_bounds))
+        logging.debug(f"hub is sending bounds={my_bounds}")
         self.put_send_buffer(my_bounds, Field.BEST_OBJECTIVE_BOUNDS)
         return
 
@@ -328,7 +328,7 @@ class PHPrimalHub(Hub):
             for xvar in s._mpisppy_data.nonant_indices.values():
                 nonant_send_buffer[ci] = xvar._value
                 ci += 1
-        logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
+        logging.debug(f"hub is sending X nonants={nonant_send_buffer}")
 
         self.put_send_buffer(nonant_send_buffer, self.nonant_field)
 
@@ -349,7 +349,7 @@ class PHHub(PHPrimalHub):
         # NOTE: my_ws.array() and self.w_send_buffer should be the same array.
         my_ws = self.send_buffers[Field.DUALS]
         self.opt._populate_W_cache(my_ws.array(), padding=1)
-        logging.debug("hub is sending Ws={}".format(my_ws.array()))
+        logging.debug(f"hub is sending Ws={my_ws.array()}")
 
         self.put_send_buffer(my_ws, Field.DUALS)
 
@@ -415,7 +415,7 @@ class LShapedHub(Hub):
                 ## Grab the value from the associated root variable
                 nonant_send_buffer[ci] = nonant_to_root_var_map[xvar]._value
                 ci += 1
-        logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
+        logging.debug(f"hub is sending X nonants={nonant_send_buffer}")
 
         self.put_send_buffer(nonant_send_buffer, Field.NONANTS_VALS)
 
@@ -494,7 +494,7 @@ class CGHub(Hub):
             for xvar in s._mpisppy_data.nonant_indices.values():
                 nonant_send_buffer[ci] = xvar._value
                 ci += 1
-        logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
+        logging.debug(f"hub is sending X nonants={nonant_send_buffer}")
 
         self.put_send_buffer(nonant_send_buffer, self.nonant_field)
 

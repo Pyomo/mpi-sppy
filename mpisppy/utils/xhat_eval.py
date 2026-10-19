@@ -98,8 +98,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             objfct = self.saved_objectives[k]
             if self.verbose:
                 print ("caller", inspect.stack()[1][3])
-                print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
-                       .format(k, s._mpisppy_probability, pyo.value(objfct), objfct.expr))
+                print (f"E_Obj Scenario {k}, prob={s._mpisppy_probability}, Obj={pyo.value(objfct)}, ObjExpr={objfct.expr}")
             self.objs_dict[k] = pyo.value(objfct)
 
         return(pyomo_solve_time)
@@ -143,7 +142,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         def _vb(msg):
             if verbose and self.cylinder_rank == 0:
                 print ("(rank0) " + msg)
-        logger.debug("  early solve_loop for rank={}".format(self.cylinder_rank))
+        logger.debug(f"  early solve_loop for rank={self.cylinder_rank}")
 
         if compute_val_at_nonant:
             self.objs_dict={}
@@ -151,7 +150,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         for k,s in self.local_scenarios.items():
             if tee:
                 print(f"Tee solve for {k} on global rank {self.global_rank}")
-            logger.debug("  in loop solve_loop k={}, rank={}".format(k, self.cylinder_rank))
+            logger.debug(f"  in loop solve_loop k={k}, rank={self.cylinder_rank}")
 
             pyomo_solve_time = self.solve_one(solver_options, k, s,
                                               dtiming=dtiming,
@@ -311,13 +310,11 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                 if node.stage<=t:
                     ndn = node.name
                     if ndn not in cache:
-                        raise RuntimeError("Could not find {} in {}"\
-                                           .format(ndn, cache))
+                        raise RuntimeError(f"Could not find {ndn} in {cache}")
                     if cache[ndn] is None:
-                        raise RuntimeError("Empty cache for scen={}, node={}".format(k, ndn))
+                        raise RuntimeError(f"Empty cache for scen={k}, node={ndn}")
                     if len(cache[ndn]) != nlens[ndn]:
-                        raise RuntimeError("Needed {} nonant Vars for {}, got {}"\
-                                           .format(nlens[ndn], ndn, len(cache[ndn])))
+                        raise RuntimeError(f"Needed {nlens[ndn]} nonant Vars for {ndn}, got {len(cache[ndn])}")
                     for i in range(nlens[ndn]): 
                         this_vardata = node.nonant_vardata_list[i]
                         if this_vardata in node.surrogate_vardatas:

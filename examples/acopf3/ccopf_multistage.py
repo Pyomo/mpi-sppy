@@ -137,8 +137,7 @@ def pysp2_callback(
             else:
                 print("enode.LinesUp=", enode.LinesUp)
                 print("enode.FailedLines=", enode.FailedLines)
-                raise RuntimeError("Branch (line) {} neither up nor down in scenario {}".\
-                               format(this_branch[0], scenario_name))
+                raise RuntimeError(f"Branch (line) {this_branch[0]} neither up nor down in scenario {scenario_name}")
     def _egret_model(md_dict):
         # the exact acopf model is hard-wired here:
         md_dict.data['system']['load_mismatch_cost'] = load_mismatch_cost
@@ -328,12 +327,10 @@ if __name__ == "__main__":
     repair_fct = FixFast
     verbose = False
     if allbutlast % n_proc != 0 and n_proc % allbutlast != 0:
-        raise RuntimeError("allbutlast={} must divide n_proc={}, or vice-versa".\
-                           format(allbutlast, n_proc))
+        raise RuntimeError(f"allbutlast={allbutlast} must divide n_proc={n_proc}, or vice-versa")
     # TBD: comment this out and try -np 4 with bfs of 2 3 0 (strange sense error)
     if nscen % n_proc != 0:
-        raise RuntimeError("nscen={} must be a multiple of n_proc={}".\
-                           format(nscen, n_proc))
+        raise RuntimeError(f"nscen={nscen} must be a multiple of n_proc={n_proc}")
 
     convex_relaxation = True
     print(f"Convex relaxation = {convex_relaxation}")
@@ -389,12 +386,8 @@ if __name__ == "__main__":
     for (sname, smodel) in sputils.ef_scenarios(ef):
         print (sname)
         for stage in smodel.stage_models:
-            print ("   Stage {}".format(stage))
+            print (f"   Stage {stage}")
             for gen in smodel.stage_models[stage].pg:
-                 print ("      gen={} pg={}, qg={}"\
-                        .format(gen,
-                                pyo.value(smodel.stage_models[stage].pg[gen]),
-                                pyo.value(smodel.stage_models[stage].qg[gen])))
-            print ("   obj={}".format(pyo.value(smodel.objective)))
-    print("EF objective value for case {}={}".\
-          format(pyo.value(casename), pyo.value(ef.EF_Obj)))
+                 print (f"      gen={gen} pg={pyo.value(smodel.stage_models[stage].pg[gen])}, qg={pyo.value(smodel.stage_models[stage].qg[gen])}")
+            print (f"   obj={pyo.value(smodel.objective)}")
+    print(f"EF objective value for case {pyo.value(casename)}={pyo.value(ef.EF_Obj)}")

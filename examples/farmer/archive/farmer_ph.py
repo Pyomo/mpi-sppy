@@ -59,7 +59,7 @@ def main():
     }
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
-    all_scenario_names = ['scen{}'.format(sn) for sn in range(num_scen)]
+    all_scenario_names = [f'scen{sn}' for sn in range(num_scen)]
     scenario_creator_kwargs = {
         'use_integer': use_int,
         "crops_multiplier": crops_multiplier,

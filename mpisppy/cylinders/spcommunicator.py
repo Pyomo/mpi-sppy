@@ -605,7 +605,7 @@ class SPCommunicator:
         return my_fa
 
     def register_send_field(self, field: Field, length: int = -1) -> SendArray:
-        assert field not in self.send_buffers, "Field {} is already registered".format(field)
+        assert field not in self.send_buffers, f"Field {field} is already registered"
         if length == -1:
             length = self._field_lengths[field]
         my_fa = SendArray(length)
