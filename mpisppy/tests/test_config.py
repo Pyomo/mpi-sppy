@@ -228,7 +228,7 @@ class TestConfigPopularArgs(unittest.TestCase):
         self.assertFalse(self.cfg.verbose)
 
 
-class TestConfigTwoSidedArgs(unittest.TestCase):
+class TestConfigTwoSidedArgsInitialOuterBound(unittest.TestCase):
     def test_initial_outer_bound_default(self):
         cfg = Config()
         cfg.two_sided_args()
