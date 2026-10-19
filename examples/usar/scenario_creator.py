@@ -6,7 +6,7 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-"""Provides a function which creates `ConcreteModel`\s for scenarios."""
+r"""Provides a function which creates `ConcreteModel`\s for scenarios."""
 from typing import Dict, Sequence
 
 import pyomo.environ as pyo

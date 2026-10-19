@@ -66,7 +66,7 @@ V = TypeVar("V")
 def index(
     values: Iterable[V], idx: Iterable, *other_idxs: Iterable
 ) -> Dict[Any, V]:
-    """Indexes `values` for inclusion in a Pyomo data dict.
+    r"""Indexes `values` for inclusion in a Pyomo data dict.
 
     Args:
         values: An iterable of values for the returned dict.
