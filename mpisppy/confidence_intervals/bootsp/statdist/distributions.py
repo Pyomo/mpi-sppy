@@ -194,9 +194,9 @@ class UnivariateStudentDistribution(UnivariateDistribution):
             var (float): The variance parameter
         """
         if df <= 2:
-            raise ValueError("A student's t distribution with df={} has no "
+            raise ValueError(f"A student's t distribution with df={df} has no "
                              "finite variance, so it cannot be given the "
-                             "variance {}.".format(df, var))
+                             f"variance {var}.")
         self.df = df
         self.mean = mean
         self.var = var
@@ -439,8 +439,8 @@ class UnivariateEpiSplineDistribution(UnivariateDistribution):
 
         # Construction of Parameter objects
         params = []
-        params.extend([Parameter('tau_{}'.format(i), self.tau[i]) for i in self.tau])
-        params.extend([Parameter('a_{}'.format(i), self.a[i]) for i in self.a])
+        params.extend([Parameter(f'tau_{i}', self.tau[i]) for i in self.tau])
+        params.extend([Parameter(f'a_{i}', self.a[i]) for i in self.a])
         params.append(Parameter('delta', self.delta))
         params.append(Parameter('w0', self.w0))
         params.append(Parameter('u0', self.u0))

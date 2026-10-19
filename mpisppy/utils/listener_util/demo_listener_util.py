@@ -86,12 +86,10 @@ def worker_bee(synchronizer, buzz=1e6, sting=100.0):
            == synchronizer.sleep_secs[0]:
             old_sleep[0] = synchronizer.sleep_secs[0]
             synchronizer.sleep_secs[0] /= 10
-            logging.debug ("TRYING to reduce sleep to {} from rank={}".\
-                   format(synchronizer.sleep_secs[0], rank))
+            logging.debug (f"TRYING to reduce sleep to {synchronizer.sleep_secs[0]} from rank={rank}")
         elif old_sleep[0] != synchronizer.sleep_secs[0]:
             synchronizer.sleep_secs[0] = old_sleep[0]
-            logging.debug ("putting sleep back to {} from rank={}".\
-                   format(synchronizer.sleep_secs[0], rank))
+            logging.debug (f"putting sleep back to {synchronizer.sleep_secs[0]} from rank={rank}")
 
         localiterstodo = int(np.random.uniform() * buzz / n_proc)
         if rank == 0:
@@ -101,8 +99,7 @@ def worker_bee(synchronizer, buzz=1e6, sting=100.0):
             
         local_iters_sofar += localiterstodo
         if rank == 0:
-            logging.debug("rank 0: iterstodo {} iters sofar {} sum_so_far {}="\
-                          .format(localiterstodo, local_iters_sofar, local_sum_sofar))
+            logging.debug(f"rank 0: iterstodo {localiterstodo} iters sofar {local_iters_sofar} sum_so_far {local_sum_sofar}=")
         local_concat["FirstReduce"]["ROOT"][0] = local_iters_sofar
         local_concat["FirstReduce"]["ROOT"][1] = local_sum_sofar
         local_concat["FirstReduce"]["ROOT"][2+rank] \
@@ -116,16 +113,14 @@ def worker_bee(synchronizer, buzz=1e6, sting=100.0):
         global_iters_sofar = global_concat["FirstReduce"]["ROOT"][0]
         global_sum = global_concat["FirstReduce"]["ROOT"][1]
         if rank == 0:
-            logging.debug("   rank 0: global_iters {} global_sum_so_far {}"\
-                          .format(global_iters_sofar, global_sum))
+            logging.debug(f"   rank 0: global_iters {global_iters_sofar} global_sum_so_far {global_sum}")
 
     # tell the listener threads to shut down
     synchronizer.quitting = 1
 
     if rank == 0:
         print ("Rank 0 termination")
-        print ("Based on {} iterations, the average was {}".\
-               format(global_iters_sofar, global_sum / global_iters_sofar))
+        print (f"Based on {global_iters_sofar} iterations, the average was {global_sum / global_iters_sofar}")
         print ("In case you are curious:\n rank \t last report *in* (sec)")
         for r in range(n_proc):
             print (r, "\t", global_concat["FirstReduce"]["ROOT"][2+r])
@@ -181,8 +176,7 @@ def side_gig(synchro, msg = None):
     # this particular side_gig is very silly
     lastsideresult = synchro.global_data["SecondReduce"]["ROOT"]
     logging.debug("In case you are curious, before this listener call to"\
-                  +"side_gig, the value of the secondreduce was {} on rank {}"\
-                  .format(lastsideresult, rank))
+                  +f"side_gig, the value of the secondreduce was {lastsideresult} on rank {rank}")
     
     # dst, src
     np.copyto(side_gig.prev_red_prev_concat[cname],

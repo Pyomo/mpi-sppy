@@ -605,11 +605,11 @@ class FWPH(mpisppy.phbase.PHBase):
         stop_check_tol = self.FW_options.get("stop_check_tol", 1e-4)
         if (self.is_minimizing and stop_check < -stop_check_tol):
             print('Warning (fwph): convergence quantity Gamma^t = '
-                 '{sc:.2e} (should be non-negative)'.format(sc=stop_check))
+                 f'{stop_check:.2e} (should be non-negative)')
             print('Try decreasing the MIP gap tolerance and re-solving')
         elif (not self.is_minimizing and stop_check > stop_check_tol):
             print('Warning (fwph): convergence quantity Gamma^t = '
-                 '{sc:.2e} (should be non-positive)'.format(sc=stop_check))
+                 f'{stop_check:.2e} (should be non-positive)')
             print('Try decreasing the MIP gap tolerance and re-solving')
         if self.is_minimizing:
             return float(stop_check)
@@ -625,7 +625,7 @@ class FWPH(mpisppy.phbase.PHBase):
         stop_check_tol = self.FW_options.get("stop_check_tol", 1e-4)
         if (self.is_minimizing and stop_check < -stop_check_tol):
             print('Warning (fwph): convergence quantity Gamma^t = '
-                 '{sc:.2e} (should be non-negative)'.format(sc=stop_check))
+                 f'{stop_check:.2e} (should be non-negative)')
             print('Something is wrong with the automatic gap settings in fwph_objgap')
         return float(stop_check)
 
@@ -1014,15 +1014,11 @@ class FWPH(mpisppy.phbase.PHBase):
 
     def _output(self, bound, best_bound, diff, secs):
         if (self.cylinder_rank == 0 and self.vb):
-            print('{itr:3d} {bound:12.4f} {best_bound:12.4f} {diff:12.4e} {secs:11.1f}s'.format(
-                    itr=self._PHIter, bound=bound, best_bound=best_bound, 
-                    diff=diff, secs=secs))
+            print(f'{self._PHIter:3d} {bound:12.4f} {best_bound:12.4f} {diff:12.4e} {secs:11.1f}s')
         if (self.cylinder_rank == 0 and 'save_file' in self.FW_options.keys()):
             fname = self.FW_options['save_file']
             with open(fname, 'a') as f:
-                f.write('{itr:d},{bound:.16f},{best_bound:.16f},{diff:.16f},{secs:.16f}\n'.format(
-                    itr=self._PHIter, bound=bound, best_bound=best_bound,
-                    diff=diff, secs=secs))
+                f.write(f'{self._PHIter:d},{bound:.16f},{best_bound:.16f},{diff:.16f},{secs:.16f}\n')
 
     def _output_header(self):
         if (self.cylinder_rank == 0 and self.vb):
@@ -1051,8 +1047,7 @@ class FWPH(mpisppy.phbase.PHBase):
             for block in weights:
                 for (scenario_name, wts) in block.items():
                     for (var_name, weight_val) in wts.items():
-                        row = '{sn},{vn},{wv:.16f}\n'.format(
-                            sn=scenario_name, vn=var_name, wv=weight_val)
+                        row = f'{scenario_name},{var_name},{weight_val:.16f}\n'
                         f.write(row)
 
     def save_xbars(self, fname):
@@ -1069,7 +1064,7 @@ class FWPH(mpisppy.phbase.PHBase):
         xbars = self._get_xbars() # None if rank != 0
         with open(fname, 'w') as f:
             for (var_name, xbs) in xbars.items():
-                row = '{vn},{vv:.16f}\n'.format(vn=var_name, vv=xbs)
+                row = f'{var_name},{xbs:.16f}\n'
                 f.write(row)
 
     def _set_QP_objective(self):

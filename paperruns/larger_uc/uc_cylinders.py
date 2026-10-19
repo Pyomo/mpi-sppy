@@ -60,8 +60,7 @@ def main():
 
     scensavail = [3,50,100,250,500,750,1000]
     if num_scen not in scensavail:
-        raise RuntimeError("num-scen was {}, but must be in {}".\
-                           format(num_scen, scensavail))
+        raise RuntimeError(f"num-scen was {num_scen}, but must be in {scensavail}")
     
     scenario_creator_kwargs = {
         "scenario_count": num_scen,

@@ -165,12 +165,12 @@ class TreeNode:
                                               newname, 1/prevbf, acstream))
                     
     def pprint(self):
-        print("Node Name={}, Stage={}".format(self.Name, self.stage))
+        print(f"Node Name={self.Name}, Stage={self.stage}")
         if self.Parent is not None:
-            print("   Parent Name={}".format(self.Parent.Name))
+            print(f"   Parent Name={self.Parent.Name}")
         else:
             print("   (no parent)")
-        print("   FailedLines={}".format(self.FailedLines))
+        print(f"   FailedLines={self.FailedLines}")
 
 if __name__ == "__main__":
 
@@ -179,7 +179,7 @@ if __name__ == "__main__":
     testtree = ACTree(3, [2, 2], 1134, acstream,
                       0.2, [5,15,30], FixFast, [0,1,2,3,4,5])
     for sn in range(1,testtree.numscens+1):
-        print ("nodes in scenario {}".format(sn))
+        print (f"nodes in scenario {sn}")
         for node in testtree.Nodes_for_Scenario(sn):
             # print ("  ",node.Name)
             # print("      ", node.FailedLines)

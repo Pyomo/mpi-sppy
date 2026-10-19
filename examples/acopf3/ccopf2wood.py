@@ -222,8 +222,7 @@ def main():
         ph_end_time = dt.datetime.now()
         IB = wheel_spinner.BestInnerBound
         OB = wheel_spinner.BestOuterBound
-        print("BestInnerBound={} and BestOuterBound={}".\
-              format(IB, OB))
+        print(f"BestInnerBound={IB} and BestOuterBound={OB}")
         with open(appfile, "a") as f:
             f.write(", "+str(IB)+", "+str(OB)+", "+str(spcomm.opt._PHIter))
             f.write(", "+str((ph_end_time - start_time).total_seconds()))

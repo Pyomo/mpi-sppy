@@ -114,15 +114,11 @@ class Synchronizer:
         if len(local_data_in[redname][cname]) \
            != self.Lens[redname][cname]:
             self.global_quitting = 1
-            print ("\nERROR listener_util:cname={} len in={} Lens={}".\
-                   format(cname, len(local_data_in[redname][cname]),
-                          self.Lens[redname][cname]))
+            print (f"\nERROR listener_util:cname={cname} len in={len(local_data_in[redname][cname])} Lens={self.Lens[redname][cname]}")
         if len(global_data_out[redname][cname]) \
            != self.Lens[redname][cname]:
             self.global_quitting = 1
-            print ("\nERROR listener_util:cname={} len out={} Lens={}".\
-                   format(cname, len(global_data_out[redname][cname]),
-                          self.Lens[redname][cname]))
+            print (f"\nERROR listener_util:cname={cname} len out={len(global_data_out[redname][cname])} Lens={self.Lens[redname][cname]}")
 
             
     #########################################################################
@@ -243,8 +239,7 @@ class Synchronizer:
             As of March 2019, not used internally (duplicates code in compute)
         """
         if self.asynch:
-            logging.debug('Enter _usafe_get_global_data, redname={}'\
-                          .format(redname))
+            logging.debug(f'Enter _usafe_get_global_data, redname={redname}')
             for cname in self.Lens[redname].keys():
                 if self.Lens[redname][cname] == 0:
                     continue
@@ -267,8 +262,7 @@ class Synchronizer:
             As of March 2019, not used internally (duplicates code in compute)
         """
         if self.asynch:
-            logging.debug('Enter _usafe_put_local_data, redname={}'\
-                          .format(redname))
+            logging.debug(f'Enter _usafe_put_local_data, redname={redname}')
             for cname in self.Lens[redname].keys():
                 if self.Lens[redname][cname] == 0:
                     continue
@@ -327,7 +321,7 @@ class Synchronizer:
             try:
                 time.sleep(sleep_touse[0])
             except:
-                print("sleep_touse={}".format(sleep_touse))
+                print(f"sleep_touse={sleep_touse}")
                 raise
         logging.debug('Exiting listener on Rank %d' % rank)
 

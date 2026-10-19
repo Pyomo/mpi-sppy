@@ -65,8 +65,7 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
         """
         def _vb(msg):
             if verbose and self.cylinder_rank == 0:
-                print ("    rank {} xhat_looper: {}".\
-                       format(self.cylinder_rank,msg))
+                print (f"    rank {self.cylinder_rank} xhat_looper: {msg}")
         obj = None
         sname = None
         snumlists = dict()

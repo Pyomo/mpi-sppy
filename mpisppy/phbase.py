@@ -106,8 +106,7 @@ def _Compute_Xbar(opt, verbose=False):
 
     # set the xbar and xsqbar in all the scenarios
     for k,s in opt.local_scenarios.items():
-        logger.debug('  top of assign xbar loop for {} on rank {}'.\
-                     format(k, opt.cylinder_rank))
+        logger.debug(f'  top of assign xbar loop for {k} on rank {opt.cylinder_rank}')
         nlens = s._mpisppy_data.nlens
         for node in s._mpisppy_node_list:
             ndn = node.name
@@ -227,8 +226,7 @@ def _Compute_Wbar(opt, verbose=False, repair=True):
 
     # check the Wbar
     for k,s in opt.local_scenarios.items():
-        logger.debug('  top of Wbar loop for {} on rank {}'.\
-                     format(k, opt.cylinder_rank))
+        logger.debug(f'  top of Wbar loop for {k} on rank {opt.cylinder_rank}')
         nlens = s._mpisppy_data.nlens
         for node in s._mpisppy_node_list:
             ndn = node.name
@@ -1562,7 +1560,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             self._iter0_use_pickled_solution()
         else:
             if self.options["verbose"]:
-                print ("About to call PH Iter0 solve loop on rank={}".format(self.cylinder_rank))
+                print (f"About to call PH Iter0 solve loop on rank={self.cylinder_rank}")
             global_toc("Entering solve loop in PHBase.Iter0")
 
             self.solve_loop(solver_options=self._effective_solver_options(self._PHIter),
@@ -1574,7 +1572,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                             )
 
             if self.options["verbose"]:
-                print ("PH Iter0 solve loop complete on rank={}".format(self.cylinder_rank))
+                print (f"PH Iter0 solve loop complete on rank={self.cylinder_rank}")
 
         self._update_E1()  # Apologies for doing this after the solves...
         if (abs(1 - self.E1) > self.E1_tolerance):

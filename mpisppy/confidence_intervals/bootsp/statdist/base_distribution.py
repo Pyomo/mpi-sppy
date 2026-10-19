@@ -65,7 +65,7 @@ class Parameter:
         self.instantiated = value is not None
 
     def __repr__(self):
-        return "Parameter({},{})".format(self.name, self.value)
+        return f"Parameter({self.name},{self.value})"
 
     __str__ = __repr__
 
@@ -150,11 +150,11 @@ class BaseDistribution:
     def __str__(self):
         string = self.name + ': '
         for parameter in self.parameters:
-            string += '\n{}: {}'.format(parameter.name, parameter.value)
+            string += f'\n{parameter.name}: {parameter.value}'
         return string
 
     def __repr__(self):
-        return "Distribution({})".format(self.name)
+        return f"Distribution({self.name})"
 
 
 class UnivariateDistribution(BaseDistribution):

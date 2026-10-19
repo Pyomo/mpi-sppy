@@ -551,14 +551,14 @@ class SPOpt(SPBase):
             if verbose and self.cylinder_rank == 0:
                 print ("(rank0) " + msg)
         _vb("Entering solve_loop function.")
-        logger.debug("  early solve_loop for rank={}".format(self.cylinder_rank))
+        logger.debug(f"  early solve_loop for rank={self.cylinder_rank}")
 
         if self.extensions is not None:
             self.extobject.pre_solve_loop()
 
         pyomo_solve_times = list()
         for k,s in self.local_scenarios.items():
-            logger.debug("  in loop solve_loop k={}, rank={}".format(k, self.cylinder_rank))
+            logger.debug(f"  in loop solve_loop k={k}, rank={self.cylinder_rank}")
             if tee:
                 print(f"Tee solve for {k} on global rank {self.global_rank}")
             pyomo_solve_times.append(
@@ -619,8 +619,7 @@ class SPOpt(SPBase):
                 local_Eobjs.append(s._mpisppy_probability * s._mpisppy_data.inner_bound)
             if verbose:
                 print ("caller", inspect.stack()[1][3])
-                print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
-                       .format(k, s._mpisppy_probability, pyo.value(objfct), objfct.expr))
+                print (f"E_Obj Scenario {k}, prob={s._mpisppy_probability}, Obj={pyo.value(objfct)}, ObjExpr={objfct.expr}")
 
         local_Eobj = np.array([math.fsum(local_Eobjs)])
         global_Eobj = np.zeros(1)
@@ -666,7 +665,7 @@ class SPOpt(SPBase):
 
         local_Ebounds = []
         for k,s in self.local_scenarios.items():
-            logger.debug("  in loop Ebound k={}, rank={}".format(k, self.cylinder_rank))
+            logger.debug(f"  in loop Ebound k={k}, rank={self.cylinder_rank}")
             try:
                 eb = s._mpisppy_probability * float(s._mpisppy_data.outer_bound)
             except:
@@ -675,8 +674,7 @@ class SPOpt(SPBase):
             local_Ebounds.append(eb)
             if verbose:
                 print ("caller", inspect.stack()[1][3])
-                print ("E_Bound Scenario {}, prob={}, bound={}"\
-                       .format(k, s._mpisppy_probability, s._mpisppy_data.outer_bound))
+                print (f"E_Bound Scenario {k}, prob={s._mpisppy_probability}, bound={s._mpisppy_data.outer_bound}")
 
         if extra_sum_terms is not None:
             local_Ebound_list = [math.fsum(local_Ebounds)] + list(extra_sum_terms)
@@ -1029,13 +1027,11 @@ class SPOpt(SPBase):
             for node in s._mpisppy_node_list:
                 ndn = node.name
                 if ndn not in cache:
-                    raise RuntimeError("Could not find {} in {}"\
-                                       .format(ndn, cache))
+                    raise RuntimeError(f"Could not find {ndn} in {cache}")
                 if cache[ndn] is None:
-                    raise RuntimeError("Empty cache for scen={}, node={}".format(k, ndn))
+                    raise RuntimeError(f"Empty cache for scen={k}, node={ndn}")
                 if len(cache[ndn]) != nlens[ndn]:
-                    raise RuntimeError("Needed {} nonant Vars for {}, got {}"\
-                                       .format(nlens[ndn], ndn, len(cache[ndn])))
+                    raise RuntimeError(f"Needed {nlens[ndn]} nonant Vars for {ndn}, got {len(cache[ndn])}")
                 for i in range(nlens[ndn]):
                     this_vardata = node.nonant_vardata_list[i]
                     if this_vardata in node.surrogate_vardatas:
@@ -1081,10 +1077,9 @@ class SPOpt(SPBase):
                     break
 
             if rootnode is None:
-                raise RuntimeError("Could not find a 'ROOT' node in scen {}"\
-                                   .format(k))
+                raise RuntimeError(f"Could not find a 'ROOT' node in scen {k}")
             if root_cache is None:
-                raise RuntimeError("Empty root cache for scen={}".format(k))
+                raise RuntimeError(f"Empty root cache for scen={k}")
             if len(root_cache) != nlens['ROOT']:
                 raise RuntimeError("Needed {} nonant Vars for 'ROOT', got {}"\
                                    .format(nlens['ROOT'], len(root_cache)))

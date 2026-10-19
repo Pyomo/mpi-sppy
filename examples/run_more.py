@@ -54,13 +54,12 @@ def do_one(dirname, progname, np, argstring):
     os.chdir(dirname)
     # One rank runs without mpiexec, which can bind it to a single core.
     if np == 1:
-        runstring = "python -u {} {} {}".format(python_args, progname, argstring)
+        runstring = f"python -u {python_args} {progname} {argstring}"
     else:
-        runstring = "mpiexec {} -np {} python -u {} -m mpi4py {} {}".\
-                    format(mpiexec_arg, np, python_args, progname, argstring)
+        runstring = f"mpiexec {mpiexec_arg} -np {np} python -u {python_args} -m mpi4py {progname} {argstring}"
     # The top process output seems to be cached by github actions
     # so we need oputput in the system call to help debug
-    code = os.system("echo {} && {}".format(runstring, runstring))
+    code = os.system(f"echo {runstring} && {runstring}")
     if code != 0:
         if dirname not in badguys:
             badguys[dirname] = [runstring]
@@ -136,12 +135,12 @@ time_one("FarmerLinProx", "farmer/archive", "farmer_cylinders.py", 3,
        "--num-scens 3 --default-rho=1.0 --max-iterations=50 "
        "--display-progress --rel-gap=0.0 --abs-gap=0.0 "
        "--linearize-proximal-terms --proximal-linearization-tolerance=1.e-6 "
-       "--solver-name={} --lagrangian --xhatshuffle".format(solver_name))
+       f"--solver-name={solver_name} --lagrangian --xhatshuffle")
 
 time_one("AircondAMA", "aircond", "aircond_ama.py", 3,
        "--branching-factors \'3 3\' --max-iterations=100 "
        "--default-rho=1 --lagrangian --xhatshuffle "
-       "--solver-name={}".format(solver_name))
+       f"--solver-name={solver_name}")
 
 # --- APH farmer tests (also covered by test_aph.py) ---
 
@@ -173,7 +172,7 @@ do_one("farmer/CI",
 do_one("hydro", "hydro_cylinders.py", 3,
        "--branching-factors \"3 3\" --max-iterations=100 "
        "--default-rho=1 --xhatshuffle --lagrangian "
-       "--solver-name={}".format(solver_name))
+       f"--solver-name={solver_name}")
 
 # --- Aircond sequential sampling (also covered by test_conf_int_aircond.py) ---
 
@@ -193,9 +192,9 @@ do_one("aircond",
 if len(badguys) > 0:
     print("\nBad Guys:")
     for i,v in badguys.items():
-        print("Directory={}".format(i))
+        print(f"Directory={i}")
         for c in v:
-            print("    {}".format(c))
+            print(f"    {c}")
     sys.exit(1)
 else:
     print("\nAll OK.")

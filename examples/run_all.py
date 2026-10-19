@@ -62,8 +62,7 @@ nouc = False
 if len(sys.argv) > 3:
     nouc = True
     if sys.argv[3] != "nouc":
-        raise RuntimeError("Third arg can only be nouc (you have {})".\
-                           format(sys.argv[3]))
+        raise RuntimeError(f"Third arg can only be nouc (you have {sys.argv[3]})")
 
 badguys = dict()
 
@@ -91,13 +90,12 @@ def do_one(dirname, progname, np, argstring):
     os.chdir(dirname)
     # One rank runs without mpiexec, which can bind it to a single core.
     if np == 1:
-        runstring = "python -u {} {} {}".format(python_args, progname, argstring)
+        runstring = f"python -u {python_args} {progname} {argstring}"
     else:
-        runstring = "mpiexec {} -np {} python -u {} -m mpi4py {} {}".\
-                    format(mpiexec_arg, np, python_args, progname, argstring)
+        runstring = f"mpiexec {mpiexec_arg} -np {np} python -u {python_args} -m mpi4py {progname} {argstring}"
     # The top process output seems to be cached by github actions
     # so we need oputput in the system call to help debug
-    code = os.system("echo {} && {}".format(runstring, runstring))
+    code = os.system(f"echo {runstring} && {runstring}")
     if code != 0:
         if dirname not in badguys:
             badguys[dirname] = [runstring]
@@ -116,7 +114,7 @@ def do_one_mmw(dirname, modname, runefstring, npyfile, mmwargstring):
     # solve ef, save .npy file (file name hardcoded in progname at the moment)
     if python_args:
         runefstring = runefstring.replace("python ", f"python {python_args} ", 1)
-    code = os.system("echo {} && {}".format(runefstring, runefstring))
+    code = os.system(f"echo {runefstring} && {runefstring}")
 
     if code!=0:
         if dirname not in badguys:
@@ -125,9 +123,8 @@ def do_one_mmw(dirname, modname, runefstring, npyfile, mmwargstring):
             badguys[dirname].append(runefstring)
     # run mmw, remove .npy file
     else:
-        runstring = "python {} -m mpisppy.confidence_intervals.mmw_conf {} --xhatpath {} {}".\
-                    format(python_args, modname, npyfile, mmwargstring)
-        code = os.system("echo {} && {}".format(runstring, runstring))
+        runstring = f"python {python_args} -m mpisppy.confidence_intervals.mmw_conf {modname} --xhatpath {npyfile} {mmwargstring}"
+        code = os.system(f"echo {runstring} && {runstring}")
         if code != 0:
             if dirname not in badguys:
                 badguys[dirname] = [runstring]
@@ -170,46 +167,46 @@ if run_first_part:
                 "--subsample-size 5 --nB 8 --smoothed-B-I 3 "
                 "--smoothed-center-sample-size 20", np=2)
     do_one("farmer/CI", "farmer_ef.py", 1,
-           "1 3 {}".format(solver_name))
+           f"1 3 {solver_name}")
     # for farmer_cylinders, the first arg is num_scens and is required
     do_one("farmer/archive", "farmer_cylinders.py",  3,
-           "--num-scens 3 --max-iterations=50 --default-rho=1 --solver-name={} "
+           f"--num-scens 3 --max-iterations=50 --default-rho=1 --solver-name={solver_name} "
            "--primal-dual-converger --primal-dual-converger-tol=0.5 --lagrangian --xhatshuffle "
-           "--intra-hub-conv-thresh -0.1 --rel-gap=1e-6".format(solver_name))
+           "--intra-hub-conv-thresh -0.1 --rel-gap=1e-6")
     do_one("farmer/archive", "farmer_cylinders.py",  5,
-           "--num-scens 3 --max-iterations=20 --default-rho=1 --solver-name={} "
+           f"--num-scens 3 --max-iterations=20 --default-rho=1 --solver-name={solver_name} "
            "--use-norm-rho-converger --use-norm-rho-updater --rel-gap=1e-6 --lagrangian --lagranger "
            "--xhatshuffle --fwph --W-fname=out_ws.txt --Xbar-fname=out_xbars.txt "
            "--ph-track-progress --track-convergence=4 --track-xbar=4 --track-nonants=4 "
-           "--track-duals=4".format(solver_name))
+           "--track-duals=4")
     do_one("farmer/archive", "farmer_cylinders.py",  5,
-           "--num-scens 3 --max-iterations=20 --default-rho=1 --solver-name={} "
+           f"--num-scens 3 --max-iterations=20 --default-rho=1 --solver-name={solver_name} "
            "--use-norm-rho-converger --use-norm-rho-updater --lagrangian --lagranger --xhatshuffle --fwph "
-           "--init-W-fname=out_ws.txt --init-Xbar-fname=out_xbars.txt --ph-track-progress --track-convergence=4 "  "--track-xbar=4 --track-nonants=4 --track-duals=4 ".format(solver_name))
+           "--init-W-fname=out_ws.txt --init-Xbar-fname=out_xbars.txt --ph-track-progress --track-convergence=4 "  "--track-xbar=4 --track-nonants=4 --track-duals=4 ")
     do_one("farmer", "farmer_lshapedhub.py", 2,
            "--num-scens 3 --max-iterations=50 "
-           "--solver-name={} --rel-gap=0.0 "
-           "--xhatlshaped --max-solver-threads=1".format(solver_name))
+           f"--solver-name={solver_name} --rel-gap=0.0 "
+           "--xhatlshaped --max-solver-threads=1")
     do_one("farmer", "../../mpisppy/generic_cylinders.py", 2,
            "--module-name farmer --num-scens 3 --max-iterations=50 "
-           "--solver-name={} --rel-gap=0.0 "
+           f"--solver-name={solver_name} --rel-gap=0.0 "
            "--lshaped-hub --xhatlshaped "
            "--lshaped-cut-generator standard_l1 "
-           "--max-solver-threads=1".format(solver_name))
+           "--max-solver-threads=1")
     do_one("farmer/archive", "farmer_cylinders.py", 3,
            "--num-scens 3 --max-iterations=50 "
            "--default-rho=1 "
-           "--solver-name={} --lagranger --xhatlooper".format(solver_name))
+           f"--solver-name={solver_name} --lagranger --xhatlooper")
     do_one("farmer", "../../mpisppy/generic_cylinders.py", 3,
            "--module-name farmer --num-scens 6 "
            "--rel-gap 0.001 --max-iterations=50 "
            "--grad-rho --grad-order-stat 0.5 "
-           "--default-rho=2 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
+           f"--default-rho=2 --solver-name={solver_name} --lagrangian --xhatshuffle")
     do_one("farmer", "../../mpisppy/generic_cylinders.py", 3,
            "--module-name farmer --num-scens 6 "
            "--rel-gap 0.001 --max-iterations=50 "
            "--grad-rho --indep-denom "
-           "--default-rho=2 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
+           f"--default-rho=2 --solver-name={solver_name} --lagrangian --xhatshuffle")
     # risk-averse (CVaR): eta is just another first-stage var, so the cylinders
     # run unchanged with --cvar added.  eta has a much larger cost scale than the
     # acreage variables, so use a cost-aware rho (grad-rho) instead of a uniform
@@ -218,25 +215,25 @@ if run_first_part:
            "--module-name farmer --num-scens 6 "
            "--rel-gap 0.001 --max-iterations=50 "
            "--default-rho=2 --grad-rho --grad-order-stat 0.5 "
-           "--solver-name={} --lagrangian --xhatshuffle "
-           "--cvar --cvar-weight 2.0 --cvar-alpha 0.8".format(solver_name))
+           f"--solver-name={solver_name} --lagrangian --xhatshuffle "
+           "--cvar --cvar-weight 2.0 --cvar-alpha 0.8")
     do_one("relief", "../../mpisppy/generic_cylinders.py", 2,
            "--module-name relief --max-iterations=50 "
-           "--solver-name={} --rel-gap=1E-4 "
+           f"--solver-name={solver_name} --rel-gap=1E-4 "
            "--lshaped-hub --xhatlshaped "
            "--lshaped-cut-generator standard_l1 "
-           "--max-solver-threads=1".format(solver_name))
+           "--max-solver-threads=1")
     do_one("farmer", "../../mpisppy/generic_cylinders.py", 4,
            "--module-name farmer --num-scens 6 "
            "--rel-gap 0.001 --max-iterations=50 "
            "--ph-primal-hub --ph-dual --ph-dual-rescale-rho-factor=0.1 "
-           "--default-rho=2 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
+           f"--default-rho=2 --solver-name={solver_name} --lagrangian --xhatshuffle")
     do_one("farmer", "../../mpisppy/generic_cylinders.py", 4,
            "--module-name farmer "
            "--num-scens 6 --max-iterations=50 --grad-rho --grad-order-stat 0.5 "
            "--ph-dual-grad-order-stat 0.3 "
            "--ph-primal-hub --ph-dual --ph-dual-rescale-rho-factor=0.1 --ph-dual-rho-multiplier 0.2 "
-           "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
+           f"--default-rho=1 --solver-name={solver_name} --lagrangian --xhatshuffle")
 
     # VSS report (--vss). Two runs, because do_vss has two call sites in
     # generic_cylinders that supply RP differently: the --EF path (RP from
@@ -246,20 +243,20 @@ if run_first_part:
     # average_scenario_creator, which --vss requires.
     do_one("farmer", "../../mpisppy/generic_cylinders.py", 1,
            "--module-name farmer --num-scens 6 --EF "
-           "--EF-solver-name={} --vss".format(solver_name))
+           f"--EF-solver-name={solver_name} --vss")
     do_one("farmer", "../../mpisppy/generic_cylinders.py", 3,
            "--module-name farmer --num-scens 6 "
            "--rel-gap 0.001 --max-iterations=50 --default-rho=1 "
-           "--solver-name={} --lagrangian --xhatshuffle --vss".format(solver_name))
+           f"--solver-name={solver_name} --lagrangian --xhatshuffle --vss")
 
     # dcap (SIPLIB) read from SMPS files via the generic driver. Passing
     # --smps-dir selects mpisppy.problem_io.smps_module automatically, so no
     # model module is needed. dcap233_200 is the full 200-scenario instance.
     do_one("dcap", "../../mpisppy/generic_cylinders.py", 3,
-           "--smps-dir dcap233_200 --solver-name={} "
+           f"--smps-dir dcap233_200 --solver-name={solver_name} "
            "--max-iterations=5 --default-rho=1 "
            "--lagrangian --xhatshuffle --rel-gap=1e-4 "
-           "--intra-hub-conv-thresh=-0.1".format(solver_name))
+           "--intra-hub-conv-thresh=-0.1")
 
     do_one("farmer/from_pysp", "concrete_ampl.py", 1, solver_name)
     do_one("farmer/from_pysp", "abstract.py", 1, solver_name)
@@ -279,7 +276,7 @@ if run_first_part:
            "--relaxed-ph --relaxed-ph-fixer --xhatshuffle "
            "--linearize-proximal-terms "
            "--rel-gap=0.0 "
-           "--solver-name={}".format(solver_name))
+           f"--solver-name={solver_name}")
 
     # usar (urban search and rescue). Has its own extensive_form.py and
     # wheel_spinner.py drivers (Config-based, use vanilla factories).
@@ -313,8 +310,8 @@ if run_first_part:
     direct_solver_name = solver_name.replace("_persistent", "_direct") if "_persistent" in solver_name else solver_name
     do_one("netdes", "netdes_cylinders.py", 4,
            "--max-iterations=3 --instance-name=network-10-20-L-01 "
-           "--solver-name={} --rel-gap=0.0 --default-rho=10000 --presolve --obbt --obbt-solver={} "
-           "--slammax --subgradient-hub --xhatshuffle --cross-scenario-cuts --max-solver-threads=2".format(solver_name, direct_solver_name))
+           f"--solver-name={solver_name} --rel-gap=0.0 --default-rho=10000 --presolve --obbt --obbt-solver={direct_solver_name} "
+           "--slammax --subgradient-hub --xhatshuffle --cross-scenario-cuts --max-solver-threads=2")
 
     # Same netdes instance via the generic driver. --slammax,
     # --cross-scenario-cuts, and the OBBT presolve flags are not wired
@@ -326,7 +323,7 @@ if run_first_part:
            "--instance-name=network-10-20-L-01 --netdes-data-path ./data "
            "--rel-gap=0.0 --default-rho=10000 --presolve "
            "--subgradient-hub --xhatshuffle --max-solver-threads=2 "
-           "--solver-name={}".format(solver_name))
+           f"--solver-name={solver_name}")
 
     # Smoke-test netdes's average_scenario_creator end-to-end on both
     # jensens paths. PH hub + lagrangian + xhatshuffle = 3 cylinders.
@@ -345,7 +342,7 @@ if run_first_part:
            "--lagrangian --xhatshuffle "
            "--lagrangian-try-jensens-first --xhatshuffle-try-jensens-first "
            "--max-solver-threads=2 "
-           "--solver-name={}".format(solver_name))
+           f"--solver-name={solver_name}")
 
     # Smoke-test netdes's feasible_xhat_creator end-to-end via the
     # xhat-feasible-first flag. Discovery: cfg_vanilla auto-imports
@@ -361,7 +358,7 @@ if run_first_part:
            "--lagrangian-try-jensens-first "
            "--xhatshuffle-try-feasible-xhat-first "
            "--max-solver-threads=2 "
-           "--solver-name={}".format(solver_name))
+           f"--solver-name={solver_name}")
 
 # -------- Second part: sizes, sslp, hydro, aircond, MMW --------
 if run_second_part:
@@ -371,7 +368,7 @@ if run_second_part:
            3,
            "--config-file=sizes_config.txt "
            "--num-scens=10 "
-           "--solver-name={}".format(solver_name))
+           f"--solver-name={solver_name}")
 
     # Same sizes run via the generic driver; the rst-documented
     # sizes_cylinders.py above stays in the rotation for illustration.
@@ -380,7 +377,7 @@ if run_second_part:
            "--default-rho=1 --lagrangian --xhatxbar "
            "--linearize-proximal-terms "
            "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
-           "--solver-name={}".format(solver_name))
+           f"--solver-name={solver_name}")
 
     do_one("sizes",
            "sizes_cylinders.py",
@@ -389,12 +386,12 @@ if run_second_part:
            "--num-scens=10 --max-iterations=5 "
            "--default-rho=1 --lagrangian --xhatxbar "
            "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
-           "--solver-name={}".format(solver_name))
+           f"--solver-name={solver_name}")
 
     # 3-scenario EF via the generic driver (replaces the archived sizes_pysp.py)
     do_one("sizes", "../../mpisppy/generic_cylinders.py", 1,
            "--module-name sizes --num-scens=3 --EF "
-           "--EF-solver-name={}".format(solver_name))
+           f"--EF-solver-name={solver_name}")
     # sslp via the generic driver (sslp.py exposes --instance-name,
     # --sslp-data-path, and --surrogate-nonant through its inparser_adder).
     do_one("sslp", "../../mpisppy/generic_cylinders.py", 4,
@@ -408,7 +405,7 @@ if run_second_part:
            "--linearize-proximal-terms "
            "--rel-gap=0.0 --surrogate-nonant "
            "--use-primal-dual-rho-updater --primal-dual-rho-update-threshold=10 "
-           "--solver-name={}".format(solver_name))
+           f"--solver-name={solver_name}")
 
     do_one("sslp", "../../mpisppy/generic_cylinders.py", 4,
            "--module-name sslp --instance-name=sslp_15_45_10 "
@@ -417,12 +414,12 @@ if run_second_part:
            "--max-iterations=10 --default-rho=10 "
            "--xhatshuffle --xhatshuffle-rank-ratio=0.01 "
            "--sep-rho --surrogate-nonant "
-           "--solver-name={}".format(solver_name))
+           f"--solver-name={solver_name}")
 
     do_one("hydro", "hydro_cylinders.py", 3,
            "--branching-factors \"3 3\" --max-iterations=100 "
            "--default-rho=1 --xhatshuffle --lagrangian "
-           "--solver-name={} --stage2-ef-solver-name={}".format(solver_name, solver_name))
+           f"--solver-name={solver_name} --stage2-ef-solver-name={solver_name}")
 
     # Same hydro run via the generic driver (replaces the archived PySP
     # custom driver; hydro_cylinders.py above is kept for its rst references).
@@ -430,13 +427,13 @@ if run_second_part:
            "--module-name hydro --branching-factors \"3 3\" "
            "--max-iterations=100 --default-rho=1 "
            "--xhatshuffle --lagrangian "
-           "--stage2-ef-solver-name={} --solver-name={}".format(solver_name, solver_name))
+           f"--stage2-ef-solver-name={solver_name} --solver-name={solver_name}")
 
     # the next might hang with 6 ranks
     do_one("aircond", "aircond_cylinders.py", 3,
            "--branching-factors \"4 3 2\" --max-iterations=100 "
            "--default-rho=1 --lagrangian --xhatshuffle "
-           "--solver-name={}".format(solver_name))
+           f"--solver-name={solver_name}")
 
     # Same aircond run via the generic driver. generic_cylinders requires
     # --stage2-ef-solver-name with multistage xhatshuffle (aircond.py doesn't
@@ -446,11 +443,11 @@ if run_second_part:
            "--module-name ../../mpisppy/tests/examples/aircond "
            "--branching-factors \"4 3 2\" --max-iterations=100 "
            "--default-rho=1 --lagrangian --xhatxbar "
-           "--solver-name={}".format(solver_name))
+           f"--solver-name={solver_name}")
     do_one("aircond", "aircond_ama.py", 3,
            "--branching-factors \"3 3\" --max-iterations=100 "
            "--default-rho=1 --lagrangian --xhatshuffle "
-           "--solver-name={}".format(solver_name))
+           f"--solver-name={solver_name}")
 
     # aircondMulti: multi-product aircond, model module in
     # mpisppy/tests/examples/aircondMulti.py. generic_cylinders needs
@@ -460,7 +457,7 @@ if run_second_part:
            "--module-name ../../mpisppy/tests/examples/aircondMulti "
            "--branching-factors \"3 3\" --max-iterations=5 "
            "--default-rho=1 --lagrangian --xhatxbar "
-           "--solver-name={}".format(solver_name))
+           f"--solver-name={solver_name}")
 
     #=========MMW TESTS==========
     # do_one_mmw is special
@@ -481,7 +478,7 @@ if not nouc:
            "--lagrangian --xhatshuffle "
            "--num-scens=3 --max-iterations=5 "
            "--iter0-mipgap=0.01 --iterk-mipgap=0.001 --linearize-proximal-terms "
-           "--default-rho=1 --solver-name={} --display-progress".format(solver_name))
+           f"--default-rho=1 --solver-name={solver_name} --display-progress")
 
     do_one("sizes",
            "sizes_cylinders.py",
@@ -489,7 +486,7 @@ if not nouc:
            "--num-scens=3 --max-iterations=5 "
            "--iter0-mipgap=0.01 --iterk-mipgap=0.005 "
            "--default-rho=1 --lagrangian --xhatshuffle --fwph "
-           "--solver-name={} --display-progress --display-timing".format(solver_name))
+           f"--solver-name={solver_name} --display-progress --display-timing")
 
     if egret_avail():
         print("\nSlow runs ahead...\n")
@@ -515,32 +512,32 @@ if not nouc:
                "--lagrangian-iter0-mipgap=1e-7 --fwph "
                " --lagrangian --xhatshuffle "
                "--ph-mipgaps-json=phmipgaps.json "
-               "--solver-name={}".format(solver_name))
+               f"--solver-name={solver_name}")
         do_one("uc", "uc_lshaped.py", 2,
                "--max-iterations=5 "
                "--default-rho=1 --num-scens=3 --xhatlshaped "
-               "--solver-name={} --max-solver-threads=1".format(solver_name))
+               f"--solver-name={solver_name} --max-solver-threads=1")
         do_one("uc", "uc_cylinders.py", 3,
                "--run-aph --max-iterations=2 "
                "--default-rho=1 --num-scens=3 --max-solver-threads=2 "
                "--lagrangian-iter0-mipgap=1e-7 --lagrangian --xhatshuffle "
                "--ph-mipgaps-json=phmipgaps.json "
-               "--solver-name={}".format(solver_name))
+               f"--solver-name={solver_name}")
         # as of May 2022, this one works well, but outputs some crazy messages
         do_one("uc", "uc_ama.py", 3,
               "--max-iterations=2 "
                "--default-rho=1 --num-scens=3 "
                "--fixer-tol=1e-2 --lagranger --xhatshuffle "
-               "--solver-name={}".format(solver_name))
+               f"--solver-name={solver_name}")
 
-        do_one("sizes", "sizes_demo.py", 1, " {}".format(solver_name))
+        do_one("sizes", "sizes_demo.py", 1, f" {solver_name}")
 
 if len(badguys) > 0:
     print("\nBad Guys:")
     for i,v in badguys.items():
-        print("Directory={}".format(i))
+        print(f"Directory={i}")
         for c in v:
-            print("    {}".format(c))
+            print(f"    {c}")
     sys.exit(1)
 else:
     print("\nAll OK.")

@@ -31,7 +31,7 @@ class XhatSpecificInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
         """
         rank = self.cylinder_rank
         dtm = logging.getLogger(f'dtm{rank}')
-        logging.debug("Enter xhatspecific main on rank {}".format(rank))
+        logging.debug(f"Enter xhatspecific main on rank {rank}")
 
         # What to try does not change, but the data in the scenarios should
         xhat_scenario_dict = self.opt.options["xhat_specific_options"]\
@@ -46,16 +46,13 @@ class XhatSpecificInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
 
         ib_iter = 1  # ib is for inner bound
         while (not self.got_kill_signal()):
-            logging.debug('   IB loop iter={} on rank {}'.\
-                          format(ib_iter, rank))
+            logging.debug(f'   IB loop iter={ib_iter} on rank {rank}')
             # _log_values(ib_iter, self._locals, dtm)
 
-            logging.debug('   IB got from opt on rank {}'.\
-                          format(rank))
+            logging.debug(f'   IB got from opt on rank {rank}')
             if self.update_nonants():
-                logging.debug('  and its new! on rank {}'.\
-                              format(rank))
-                logging.debug('  localnonants={}'.format(str(self.localnonants)))
+                logging.debug(f'  and its new! on rank {rank}')
+                logging.debug(f'  localnonants={str(self.localnonants)}')
 
                 self.opt._put_nonant_cache(self.localnonants)  # don't really need all caches
                 # just for sending the values to other scenarios

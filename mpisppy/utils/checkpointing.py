@@ -642,10 +642,10 @@ def agree_dual_spoke_restore(opt, state):
 def require_dill(backend):
     if backend == DILL_RELOAD_BACKEND and not dill_available:
         raise RuntimeError(
-            "The '{}' checkpoint backend requires dill, which is not "
+            f"The '{backend}' checkpoint backend requires dill, which is not "
             "installed. Install the optional dependencies with "
             "'pip install mpi-sppy[extras]' (or 'pip install dill'), or "
-            "choose a different --checkpoint-backend.".format(backend)
+            "choose a different --checkpoint-backend."
         )
 
 
