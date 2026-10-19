@@ -8,10 +8,11 @@
 ###############################################################################
 import sizes
 
-from mpisppy.utils import config
-from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.extensions.fixer import Fixer
 import mpisppy.utils.cfg_vanilla as vanilla
+from mpisppy.extensions.fixer import Fixer
+from mpisppy.spin_the_wheel import WheelSpinner
+from mpisppy.utils import config
+
 
 def _parse_args():
     cfg = config.Config()

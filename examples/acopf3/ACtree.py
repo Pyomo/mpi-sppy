@@ -13,8 +13,10 @@
 # NOTE: mpisppy needs non-leaf, non-ROOT nodes to have names ending in a serial #
 # CHANGE: Jan 2020: fail prob is per line
 
-import numpy as np
 import copy
+
+import numpy as np
+
 
 def FixFast(minutes):
     return True

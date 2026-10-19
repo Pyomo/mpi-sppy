@@ -11,9 +11,11 @@ import os
 import sys
 
 from pyomo.environ import SolverFactory
-from mpisppy.utils.pysp_model import PySPModel
-from mpisppy.opt.ph import PH
+
 from mpisppy.extensions.xhatclosest import XhatClosest
+from mpisppy.opt.ph import PH
+from mpisppy.utils.pysp_model import PySPModel
+
 
 def _print_usage():
     print('Usage: "concrete_ampl.py solver" where solver is a pyomo solver name')

@@ -16,9 +16,11 @@ notes by dlw:
    - If a function in mpisppy has two callouts (a rarity), then the kwargs need to distinguish.
 """
 
-import sys
 import inspect
+import sys
+
 import pyomo.environ as pyo
+
 from mpisppy.utils import sputils
 
 

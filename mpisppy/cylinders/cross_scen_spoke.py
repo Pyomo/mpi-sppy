@@ -7,14 +7,15 @@
 # full copyright and license information.
 ###############################################################################
 
-from pyomo.repn.standard_repn import generate_standard_repn
-from mpisppy import MPI
-from mpisppy.utils.lshaped_cuts import LShapedCutGenerator  # pylint: disable=E0611
-from mpisppy.cylinders.spwindow import Field
-from mpisppy.cylinders.spoke import Spoke
-
 import numpy as np
 import pyomo.environ as pyo
+from pyomo.repn.standard_repn import generate_standard_repn
+
+from mpisppy import MPI
+from mpisppy.cylinders.spoke import Spoke
+from mpisppy.cylinders.spwindow import Field
+from mpisppy.utils.lshaped_cuts import LShapedCutGenerator  # pylint: disable=E0611
+
 
 class CrossScenarioCutSpoke(Spoke):
 

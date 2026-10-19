@@ -13,11 +13,12 @@
 #
 # New CLI args: --num-products (int, default 2), --cost-spread (float, default 0.1)
 ###############################################################################
-import pyomo.environ as pyo
 import numpy as np
+import pyomo.common.config as pyofig
+import pyomo.environ as pyo
+
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
-import pyomo.common.config as pyofig
 
 # Module-level random stream (re-seeded per node per product)
 aircondstream = np.random.RandomState()  # pylint: disable=no-member

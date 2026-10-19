@@ -22,7 +22,6 @@
 __all__ = ()
 
 import pyomo.core
-
 from pyomo.common.dependencies import attempt_import
 
 # The code below conforms to the networkx>=2.0 API
@@ -30,7 +29,12 @@ networkx, networkx_available = attempt_import('networkx', minimum_version="2.0")
 
 def CreateAbstractScenarioTreeModel():
     from pyomo.core import (
-        AbstractModel, Set, Param, Boolean, Any, UnitInterval,
+        AbstractModel,
+        Any,
+        Boolean,
+        Param,
+        Set,
+        UnitInterval,
     )
 
     model = AbstractModel()

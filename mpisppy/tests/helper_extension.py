@@ -9,7 +9,9 @@
 # This is an extension to be used for testing.
 
 from collections import defaultdict
+
 import mpisppy.extensions.xhatbase
+
 
 class TestHelperExtension(mpisppy.extensions.extension.Extension):
     """

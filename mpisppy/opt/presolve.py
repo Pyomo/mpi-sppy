@@ -20,11 +20,10 @@ import abc
 import weakref
 
 import numpy as np
-
-from pyomo.common.errors import InfeasibleConstraintException, DeferredImportError
-from pyomo.contrib.appsi.fbbt import IntervalTightener
-from pyomo.contrib.alternative_solutions.obbt import obbt_analysis
 import pyomo.environ as pyo
+from pyomo.common.errors import DeferredImportError, InfeasibleConstraintException
+from pyomo.contrib.alternative_solutions.obbt import obbt_analysis
+from pyomo.contrib.appsi.fbbt import IntervalTightener
 
 from mpisppy import MPI, global_toc
 

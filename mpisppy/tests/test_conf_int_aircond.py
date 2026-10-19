@@ -13,23 +13,22 @@
 
 import os
 import tempfile
-import numpy as np
 import unittest
 
-
-from mpisppy.tests.utils import get_solver, round_pos_sig
-import mpisppy.utils.sputils as sputils
-import mpisppy.tests.examples.aircond as aircond
-
-import mpisppy.confidence_intervals.mmw_ci as MMWci
-import mpisppy.utils.amalgamator as ama
-from mpisppy.utils.xhat_eval import Xhat_Eval
-import mpisppy.confidence_intervals.seqsampling as seqsampling
-import mpisppy.confidence_intervals.multi_seqsampling as multi_seqsampling
-import mpisppy.confidence_intervals.confidence_config as confidence_config
-import mpisppy.confidence_intervals.ciutils as ciutils
-from mpisppy.utils import config
+import numpy as np
 import pyomo.common.config as pyofig
+
+import mpisppy.confidence_intervals.ciutils as ciutils
+import mpisppy.confidence_intervals.confidence_config as confidence_config
+import mpisppy.confidence_intervals.mmw_ci as MMWci
+import mpisppy.confidence_intervals.multi_seqsampling as multi_seqsampling
+import mpisppy.confidence_intervals.seqsampling as seqsampling
+import mpisppy.tests.examples.aircond as aircond
+import mpisppy.utils.amalgamator as ama
+import mpisppy.utils.sputils as sputils
+from mpisppy.tests.utils import get_solver, round_pos_sig
+from mpisppy.utils import config
+from mpisppy.utils.xhat_eval import Xhat_Eval
 
 __version__ = 0.4
 

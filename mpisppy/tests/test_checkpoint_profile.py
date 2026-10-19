@@ -84,8 +84,7 @@ from unittest import mock
 
 import pyomo.environ as pyo
 
-from mpisppy.tests.utils import (get_solver, solver_takes_model_size,
-                                 subprocess_env)
+from mpisppy.tests.utils import get_solver, solver_takes_model_size, subprocess_env
 
 solver_available, solver_name, persistent_available, persistent_solver_name = \
     get_solver()

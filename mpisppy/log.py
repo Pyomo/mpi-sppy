@@ -42,8 +42,9 @@ To log an exception and capture the stack trace
       logging.error("Exception occurred", exc_info=True)
 
 """
-import sys
 import logging
+import sys
+
 log_format = '%(message)s'
 
 # configure the root logger for mpisppy

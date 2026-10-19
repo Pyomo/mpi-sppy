@@ -27,8 +27,8 @@ import argparse
 
 import farmer
 
-from mpisppy.opt.ef import ExtensiveForm
 import mpisppy.utils.sputils as sputils
+from mpisppy.opt.ef import ExtensiveForm
 
 
 def make_probability_vector(scenario_names, low_yield_weight):

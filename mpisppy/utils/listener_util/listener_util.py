@@ -16,12 +16,14 @@
 Prior to October 2024, to avoid errors from Pyomo we used:
                 solve_keyword_args["use_signal_handling"] = False
 """
-import numpy as np
 import collections
-import mpisppy.MPI as mpi
-import time
-import threading
 import logging
+import threading
+import time
+
+import numpy as np
+
+import mpisppy.MPI as mpi
 
 
 class Synchronizer:

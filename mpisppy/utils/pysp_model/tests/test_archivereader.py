@@ -14,17 +14,25 @@
 # This file was originally part of PyUtilib, available: https://github.com/PyUtilib/pyutilib
 # Copied with modification from pyutilib/misc/tests/test_archivereader.py
 
-import os
 import fnmatch
+import os
 import posixpath
 
 import pyomo.common.unittest as unittest
 
-from mpisppy.utils.pysp_model.archivereader import \
-    ArchiveReaderFactory, DirArchiveReader, FileArchiveReader, \
-    TarArchiveReader, ZipArchiveReader, BZ2FileArchiveReader, \
-    GzipFileArchiveReader, tarfile_available, zipfile_available, \
-    gzip_available, bz2_available
+from mpisppy.utils.pysp_model.archivereader import (
+    ArchiveReaderFactory,
+    BZ2FileArchiveReader,
+    DirArchiveReader,
+    FileArchiveReader,
+    GzipFileArchiveReader,
+    TarArchiveReader,
+    ZipArchiveReader,
+    bz2_available,
+    gzip_available,
+    tarfile_available,
+    zipfile_available,
+)
 
 currdir = os.path.dirname(os.path.abspath(__file__))
 testdatadir = os.path.join(currdir, 'archivereader')

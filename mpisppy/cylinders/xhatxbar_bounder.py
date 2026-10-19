@@ -9,12 +9,13 @@
 # udpated April 20
 # xbar from xhat (copied from xhat specific, DLW Feb 2023)
 
-import pyomo.environ as pyo
-from mpisppy.extensions.xhatxbar import XhatXbar
-from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
-from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
-
 import logging
+
+import pyomo.environ as pyo
+
+from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
+from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
+from mpisppy.extensions.xhatxbar import XhatXbar
 
 
 def _attach_xbars(opt):

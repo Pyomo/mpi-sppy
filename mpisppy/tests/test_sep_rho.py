@@ -20,8 +20,8 @@ so the per-variable arithmetic can be checked exactly, with no solver.
 """
 
 import types
-import warnings
 import unittest
+import warnings
 
 import pyomo.environ as pyo
 

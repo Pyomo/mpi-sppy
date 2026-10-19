@@ -8,20 +8,20 @@
 ###############################################################################
 # Amalgamator.py starting point; DLW March 2021
 # To test : python amalgamator.py 10 --solver-name=cplex --default-rho=1
+import copy
 import importlib
 import inspect
-import pyomo.environ as pyo
-import copy
+
 import pyomo.common.config as pyofig
-from mpisppy.utils import config
-import mpisppy.utils.solver_spec as solver_spec
+import pyomo.environ as pyo
 
-from mpisppy.spin_the_wheel import WheelSpinner
-import mpisppy.utils.sputils as sputils
 import mpisppy.utils.cfg_vanilla as vanilla
+import mpisppy.utils.solver_spec as solver_spec
+import mpisppy.utils.sputils as sputils
 from mpisppy import global_toc
-
 from mpisppy.extensions.fixer import Fixer
+from mpisppy.spin_the_wheel import WheelSpinner
+from mpisppy.utils import config
 
 """Takes a scenario list and a scenario creator (and options)
 as input and produces an outer bound on the objective function (solving the EF directly

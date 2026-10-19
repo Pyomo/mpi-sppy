@@ -13,13 +13,15 @@
 # univariate-normal distributions (empirical path) or from distributions fitted
 # to the sample data (smoothed path), so importing this example needs statdist.
 
-import os
 import json
+import os
+
 import numpy as np
 import pyomo.environ as pyo
+
+import mpisppy.confidence_intervals.bootsp.statdist as statdist
 import mpisppy.scenario_tree as scenario_tree  # noqa: F401  (kept for parity/attach_root_node users)
 import mpisppy.utils.sputils as sputils
-import mpisppy.confidence_intervals.bootsp.statdist as statdist
 from mpisppy.confidence_intervals.bootsp.statdist.sampler import Sampler
 
 # Use this random stream:

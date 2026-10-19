@@ -20,7 +20,9 @@
 
 import numpy as np
 import pyomo.environ as pyo
+
 import mpisppy.scenario_tree as stree
+
 
 def scenario_creator(
     scenario_name, solar_filename=None, use_LP=False, lam=None,

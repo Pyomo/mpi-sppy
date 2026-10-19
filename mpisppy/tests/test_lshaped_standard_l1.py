@@ -11,16 +11,15 @@ import unittest
 import pyomo.environ as pyo
 from pyomo.core.expr.visitor import identify_variables
 
+import mpisppy.utils.sputils as sputils
 from mpisppy.opt.lshaped import LShapedMethod
+from mpisppy.tests.examples import farmer
+from mpisppy.tests.utils import get_solver
 from mpisppy.utils.lshaped_cuts import (
     StandardL1CutGenerator,
     _StandardL1SubproblemData,
     solver_dual_sign_convention,
 )
-from mpisppy.tests.examples import farmer
-from mpisppy.tests.utils import get_solver
-import mpisppy.utils.sputils as sputils
-
 
 solver_available, solver_name, _, _ = get_solver()
 standard_l1_solver_available = (

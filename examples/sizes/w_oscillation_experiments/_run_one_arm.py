@@ -34,10 +34,11 @@ def main():
     arm = json.load(open(sys.argv[1]))
 
     import sizes
-    from mpisppy.utils import config
+    from w_osc_experiment_ext import WOscExperimentMonitor
+
     import mpisppy.utils.cfg_vanilla as vanilla
     from mpisppy.spin_the_wheel import WheelSpinner
-    from w_osc_experiment_ext import WOscExperimentMonitor
+    from mpisppy.utils import config
 
     # Build a Config as sizes_cylinders.py does, but feed argv programmatically.
     sys.argv = [

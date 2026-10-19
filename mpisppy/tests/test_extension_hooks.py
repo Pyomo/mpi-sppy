@@ -46,7 +46,8 @@ class TestIntegerRelaxThenEnforce(unittest.TestCase):
         # iteration fraction. Pyomo's undo deletes _relaxed_integer_vars, so
         # the second call in one pass raises.
         from mpisppy.extensions.integer_relax_then_enforce import (
-            IntegerRelaxThenEnforce)
+            IntegerRelaxThenEnforce,
+        )
         ph = _make_ph(time_limit=600, PHIterLimit=100)
         ph.PH_Prep()
         for s in ph.local_scenarios.values():
@@ -66,7 +67,8 @@ class TestIntegerRelaxThenEnforce(unittest.TestCase):
         # not collective, so deciding it per rank leaves some ranks solving
         # MIPs and the rest LPs in the same iteration.
         from mpisppy.extensions.integer_relax_then_enforce import (
-            IntegerRelaxThenEnforce)
+            IntegerRelaxThenEnforce,
+        )
         ph = _make_ph(time_limit=600, PHIterLimit=100)
         ph.PH_Prep()
         for s in ph.local_scenarios.values():
@@ -94,7 +96,8 @@ class TestIntegerRelaxThenEnforce(unittest.TestCase):
         # run can also reach the fraction of its iteration limit, or come
         # near convergence, with the clock nowhere near the limit.
         from mpisppy.extensions.integer_relax_then_enforce import (
-            IntegerRelaxThenEnforce)
+            IntegerRelaxThenEnforce,
+        )
         for label, phiter, conv in (("iterations", 51, 1.0),
                                     ("convergence", 1, 1e-9)):
             with self.subTest(condition=label):
@@ -117,7 +120,8 @@ class TestIntegerRelaxThenEnforce(unittest.TestCase):
         # and never sets _stop_iteration; there the budget is still the 20
         # iterations it runs (past iteration 10).
         from mpisppy.extensions.integer_relax_then_enforce import (
-            IntegerRelaxThenEnforce)
+            IntegerRelaxThenEnforce,
+        )
         for label, stop_iteration, phiter, relaxed in (
                 ("PH, before half the study", 6, 3, True),
                 ("PH, past half the study", 6, 4, False),
@@ -141,7 +145,8 @@ class TestIntegerRelaxThenEnforce(unittest.TestCase):
         # and reducing it every iteration of the hub's loop is an Allreduce
         # for a known answer.
         from mpisppy.extensions.integer_relax_then_enforce import (
-            IntegerRelaxThenEnforce)
+            IntegerRelaxThenEnforce,
+        )
         ph = _make_ph(PHIterLimit=100)
         ph.PH_Prep()
         for s in ph.local_scenarios.values():
@@ -165,8 +170,7 @@ class TestCrossScenarioDisableEnable(unittest.TestCase):
         # reenable_W stayed False and _enable_W_and_prox never put W back --
         # every later iteration solved without the dual term while W_disabled
         # reported the run as normal.
-        from mpisppy.extensions.cross_scen_extension import (
-            CrossScenarioExtension)
+        from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
         ph = _make_ph()
         ph.PH_Prep()
         for s in ph.local_scenarios.values():
@@ -231,7 +235,8 @@ class TestFWPHSmoothing(unittest.TestCase):
         # mid-run breaks FWPH's next MIP solve. Refused at construction,
         # before anything is solved.
         from mpisppy.extensions.integer_relax_then_enforce import (
-            IntegerRelaxThenEnforce)
+            IntegerRelaxThenEnforce,
+        )
         from mpisppy.opt.fwph import FWPH
         options = {
             "solver_name": "gurobi", "PHIterLimit": 2,
@@ -254,8 +259,8 @@ class TestFWPHSmoothing(unittest.TestCase):
         # A caller reusing a PH hub's options dict brings smoothed along, and
         # options_check only fills in a missing key -- so the spoke has to
         # zero it the way fwph_hub does, or the run aborts at fwph_main.
-        from mpisppy.utils import config
         import mpisppy.utils.cfg_vanilla as vanilla
+        from mpisppy.utils import config
         cfg = config.Config()
         cfg.popular_args()
         cfg.ph_args()

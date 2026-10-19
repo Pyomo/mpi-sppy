@@ -7,13 +7,15 @@
 # full copyright and license information.
 ###############################################################################
 import math
-import pyomo.environ as pyo
+
 import numpy as np
+import pyomo.environ as pyo
+
+from mpisppy import MPI, global_toc
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.spwindow import Field
-from mpisppy.utils.sputils import is_persistent
 from mpisppy.utils.nonant_sensitivities import _bundle_consensus_groups
-from mpisppy import MPI, global_toc
+from mpisppy.utils.sputils import is_persistent
 
 
 def _assert_consensus_rc_loaded(scenario, consensus_groups):

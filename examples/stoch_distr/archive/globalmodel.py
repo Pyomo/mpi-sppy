@@ -15,13 +15,16 @@
 
 import os
 import sys
+
 # stoch_distr.py lives one directory up (examples/stoch_distr/).
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pyomo.environ as pyo
 import stoch_distr
+
 import mpisppy.tests.examples.distr.distr_data as distr_data
 from mpisppy.utils import config
+
 
 def _parse_args():
     # create a config object and parse

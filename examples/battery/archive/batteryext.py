@@ -8,6 +8,7 @@
 ###############################################################################
 import mpisppy.extension
 
+
 class BatteryExtension(mpisppy.extension.Extension):
 
     def __init__(self, ph, rank, n_proc):

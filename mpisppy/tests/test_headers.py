@@ -10,8 +10,8 @@
 from pathlib import Path
 
 import pytest
-
 from addheader.add import FileFinder, detect_files
+
 import mpisppy
 
 yaml = pytest.importorskip("yaml")

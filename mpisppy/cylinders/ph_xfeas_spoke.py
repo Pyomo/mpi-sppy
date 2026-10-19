@@ -7,8 +7,10 @@
 # full copyright and license information.
 ###############################################################################
 
-from mpisppy.cylinders.spoke import Spoke, Field
 import pyomo.environ as pyo
+
+from mpisppy.cylinders.spoke import Field, Spoke
+
 
 class PHXFeasSpoke(Spoke):
     send_fields = (*Spoke.send_fields, Field.XFEAS)

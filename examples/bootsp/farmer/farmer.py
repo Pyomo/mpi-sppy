@@ -11,11 +11,12 @@
 # distribution (unif(0,1) by default, or a fitted distribution on the smoothed
 # path), so importing this example needs the statdist library.
 
-import pyomo.environ as pyo
 import numpy as np
+import pyomo.environ as pyo
+
+import mpisppy.confidence_intervals.bootsp.statdist as statdist
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
-import mpisppy.confidence_intervals.bootsp.statdist as statdist
 from mpisppy.confidence_intervals.bootsp.statdist.sampler import Sampler
 
 # Use this random stream:

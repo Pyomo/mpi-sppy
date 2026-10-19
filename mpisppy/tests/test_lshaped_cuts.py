@@ -13,8 +13,8 @@
 
 import unittest
 
-import pyomo.environ as pyo
 import pyomo.contrib.benders.benders_cuts as bc
+import pyomo.environ as pyo
 
 from mpisppy.utils.lshaped_cuts import LShapedCutGenerator
 

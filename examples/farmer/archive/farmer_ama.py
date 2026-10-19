@@ -17,6 +17,7 @@ WARNING:
 import mpisppy.utils.amalgamator as amalgamator
 from mpisppy.utils import config
 
+
 def main():
 
     cfg = config.Config()

@@ -13,19 +13,20 @@
 #  so we need modifications of the vanilla dicts.
 # Notice also that this uses MutliExtensions
 import json
+
 import uc_funcs as uc
 
+import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.sputils as sputils
-from mpisppy.spin_the_wheel import WheelSpinner
-
+from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
+from mpisppy.extensions.grad_rho import GradRho
 from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.xhatclosest import XhatClosest
-from mpisppy.extensions.grad_rho import GradRho
+from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
-from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
+
 
 def _parse_args():
     cfg = config.Config()

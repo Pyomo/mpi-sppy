@@ -10,9 +10,11 @@
 # Started by dlw Aug 2023
 
 import farmer_pyomo_agnostic
+
+import mpisppy.agnostic.agnostic as agnostic
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
-import mpisppy.agnostic.agnostic as agnostic
+
 
 def _farmer_parse_args():
     # create a config object and parse JUST FOR TESTING

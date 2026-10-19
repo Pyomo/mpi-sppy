@@ -6,13 +6,14 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import farmer
-from mpisppy.opt import ef, sc
 import logging
-from mpisppy import MPI
 import sys
+
+import farmer
 import pyomo.environ as pyo
 
+from mpisppy import MPI
+from mpisppy.opt import ef, sc
 
 if MPI.COMM_WORLD.Get_rank() == 0:
     logging.basicConfig(level=logging.INFO)

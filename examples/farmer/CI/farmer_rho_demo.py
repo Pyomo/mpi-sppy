@@ -15,18 +15,16 @@
 
 import farmer
 
+import mpisppy.utils.cfg_vanilla as vanilla
+import mpisppy.utils.sputils as sputils
+from mpisppy.convergers.norm_rho_converger import NormRhoConverger
+from mpisppy.extensions.extension import MultiExtension
+from mpisppy.extensions.grad_rho import GradRho
+from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
+
 # Make it all go
 from mpisppy.spin_the_wheel import WheelSpinner
-import mpisppy.utils.sputils as sputils
-
 from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
-
-from mpisppy.extensions.extension import MultiExtension
-
-from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
-from mpisppy.convergers.norm_rho_converger import NormRhoConverger
-from mpisppy.extensions.grad_rho import GradRho
 
 write_solution = False
 

@@ -14,14 +14,15 @@ version matter a lot, so we often just do smoke tests.
 """
 
 import unittest
-import numpy as np
-from mpisppy.utils import config
 
-import mpisppy.utils.cfg_vanilla as vanilla
+import numpy as np
+
 import mpisppy.tests.examples.farmer as farmer
+import mpisppy.utils.cfg_vanilla as vanilla
+from mpisppy.extensions.grad_rho import GradRho
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.tests.utils import get_solver
-from mpisppy.extensions.grad_rho import GradRho
+from mpisppy.utils import config
 
 __version__ = 0.3
 

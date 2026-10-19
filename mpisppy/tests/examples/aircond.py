@@ -10,15 +10,17 @@
 # Dec 2021; numerous enhancements by DLW; do not change defaults
 # Feb 2022: Changed all inventory cost coefficients to be positive numbers
 # except Last Inventory cost, which should be negative.
-import pyomo.environ as pyo
-import numpy as np
-import time
-import mpisppy.scenario_tree as scenario_tree
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgamator as amalgamator
 import argparse
-from mpisppy.utils import config
+import time
+
+import numpy as np
 import pyomo.common.config as pyofig
+import pyomo.environ as pyo
+
+import mpisppy.scenario_tree as scenario_tree
+import mpisppy.utils.amalgamator as amalgamator
+import mpisppy.utils.sputils as sputils
+from mpisppy.utils import config
 
 # Use this random stream:
 aircondstream = np.random.RandomState()  # pylint: disable=no-member

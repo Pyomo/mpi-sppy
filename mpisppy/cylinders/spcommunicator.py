@@ -24,12 +24,18 @@ import logging
 import os
 import time
 import warnings
-import numpy as np
 from math import inf, isfinite
 
+import numpy as np
+
 from mpisppy import MPI, global_toc
-from mpisppy.cylinders.spwindow import Field, FieldLengths, SPWindow, padded_len_n_doubles
 from mpisppy.cylinders.overlap_map import OverlapSegment, compute_overlap_segments
+from mpisppy.cylinders.spwindow import (
+    Field,
+    FieldLengths,
+    SPWindow,
+    padded_len_n_doubles,
+)
 from mpisppy.utils.rank_apportionment import (
     apportion_ranks,
     cylinder_bases,

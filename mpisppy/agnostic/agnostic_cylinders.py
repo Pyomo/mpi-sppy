@@ -14,11 +14,13 @@ and feed it to the Agnostic object.
 I think it can be a pretty general cylinders program?
 """
 import sys
-from mpisppy.spin_the_wheel import WheelSpinner
+
+import mpisppy.agnostic.agnostic as agnostic
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
-import mpisppy.agnostic.agnostic as agnostic
 import mpisppy.utils.sputils as sputils
+from mpisppy.spin_the_wheel import WheelSpinner
+
 
 def _setup_args(m):
     # m is the model file module

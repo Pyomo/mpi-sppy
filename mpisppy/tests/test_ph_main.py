@@ -15,13 +15,14 @@ import shutil
 import unittest
 
 import pyomo.environ as pyo
+
+import mpisppy.MPI as mpi
 import mpisppy.opt.ph
 import mpisppy.tests.examples.farmer as farmer
-from mpisppy.tests.examples.sizes.sizes import scenario_creator as sizes_creator, \
-                                               scenario_denouement as sizes_denouement, \
-                                               id_fix_list_fct
+from mpisppy.tests.examples.sizes.sizes import id_fix_list_fct
+from mpisppy.tests.examples.sizes.sizes import scenario_creator as sizes_creator
+from mpisppy.tests.examples.sizes.sizes import scenario_denouement as sizes_denouement
 from mpisppy.tests.utils import get_solver
-import mpisppy.MPI as mpi
 
 solver_available, solver_name, persistent_available, persistent_solver_name = get_solver()
 
@@ -219,6 +220,7 @@ class TestPHMainFarmer(unittest.TestCase):
     def _objective_has_quadratic(self, s):
         """True if the active objective has any quadratic/nonlinear part."""
         from pyomo.repn import generate_standard_repn
+
         import mpisppy.utils.sputils as sputils
         obj = sputils.find_active_objective(s)
         repn = generate_standard_repn(obj.expr, compute_values=False,

@@ -11,8 +11,8 @@ import csv
 import glob
 import io
 import os
-import sys
 import runpy
+import sys
 import tempfile
 import unittest
 from types import SimpleNamespace
@@ -152,10 +152,12 @@ class TestGenericCylindersCVaR(unittest.TestCase):
     @unittest.skipIf(not solver_available, "no MIP solver available")
     def test_cvar_ef_matches_direct_build(self):
         import re
+
         import pyomo.environ as pyo
-        import mpisppy.utils.sputils as sputils
-        import mpisppy.utils.cvar as cvar
+
         import mpisppy.tests.examples.farmer as farmer
+        import mpisppy.utils.cvar as cvar
+        import mpisppy.utils.sputils as sputils
 
         weight, alpha = 1.5, 0.75
 

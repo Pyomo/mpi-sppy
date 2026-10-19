@@ -12,6 +12,7 @@
 
 import mpisppy.extensions.xhatbase
 
+
 class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
     """
     Args:

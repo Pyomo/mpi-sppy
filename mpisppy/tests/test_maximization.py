@@ -25,13 +25,14 @@
 # because it requires mpiexec.
 
 import unittest
+
 import pyomo.environ as pyo
 
-import mpisppy.utils.sputils as sputils
 import mpisppy.opt.ph
-from mpisppy.opt.subgradient import Subgradient
-from mpisppy.opt.lshaped import LShapedMethod
+import mpisppy.utils.sputils as sputils
 from mpisppy.opt.fwph import FWPH
+from mpisppy.opt.lshaped import LShapedMethod
+from mpisppy.opt.subgradient import Subgradient
 from mpisppy.tests.examples import farmer
 from mpisppy.tests.utils import get_solver, limit_solver_threads
 

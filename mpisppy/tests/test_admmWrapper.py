@@ -15,21 +15,23 @@ For the ADMM vocabulary used below (before-wrap scenario, wrapped
 scenario, wrap, ADMM subproblem, ...), see the module docstring of
 mpisppy.utils.admmWrapper.
 """
+import os
+import subprocess
+import sys
 import unittest
+
 import pyomo.environ as pyo
+
+import mpisppy.tests.examples.distr.distr as distr
 import mpisppy.utils.admmWrapper as admmWrapper
+from mpisppy import MPI
+from mpisppy.tests.utils import get_solver
+from mpisppy.utils import config
 from mpisppy.utils.admmWrapper import (
     _admm_normalize_consensus_vars,
     _first_stage_var_names,
     _merge_first_stage_into_consensus_vars,
 )
-import mpisppy.tests.examples.distr.distr as distr
-from mpisppy.utils import config
-from mpisppy.tests.utils import get_solver
-from mpisppy import MPI
-import subprocess
-import os
-import sys
 
 # Parse --python-args (extra args inserted after "python" in subcommands, e.g. for coverage)
 python_args = ""

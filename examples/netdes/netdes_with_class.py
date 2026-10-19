@@ -15,10 +15,13 @@
 '''
 
 import os
-import mpisppy.utils.sputils as sputils
-import pyomo.environ as pyo
+
 import numpy as np
+import pyomo.environ as pyo
 from parse import parse
+
+import mpisppy.utils.sputils as sputils
+
 
 #=========
 def inparser_adder(cfg):

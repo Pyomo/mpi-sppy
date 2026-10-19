@@ -19,7 +19,6 @@ import mpisppy.tests.examples.farmer as farmer
 import mpisppy.utils.sputils as sputils
 from mpisppy.tests.utils import get_solver, limit_solver_threads
 
-
 solver_available, solver_name, persistent_available, persistent_solver_name = get_solver(persistent_OK=False)
 
 fullcomm = mpi.COMM_WORLD

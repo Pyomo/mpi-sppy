@@ -24,8 +24,9 @@
 # For coverage: python generic_tester.py gurobi_persistent "" "" --python-args="-m coverage run --parallel-mode --source=mpisppy"
 
 import os
-import sys
 import shutil
+import sys
+
 import numpy as np
 from numpy.linalg import norm
 

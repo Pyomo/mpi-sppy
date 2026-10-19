@@ -38,7 +38,6 @@ from mpisppy.extensions.xhat_feasibility_cut_extension import (
 )
 from mpisppy.spbase import SPBase
 
-
 # ---------------------------------------------------------------------------
 # Minimal scenario creators (pure Pyomo, no solver required).
 # ---------------------------------------------------------------------------
@@ -714,6 +713,7 @@ class TestConfigArgRegistration(unittest.TestCase):
         mpisppy.generic.parsing.parse_args."""
         import sys
         import types
+
         import mpisppy.generic.parsing as parsing
 
         stub = types.ModuleType("__stub_model_for_parse_args__")
@@ -772,10 +772,10 @@ class TestCfgVanillaPlumbing(unittest.TestCase):
                          hub_dict["opt_kwargs"]["options"])
 
     def test_add_xhat_feasibility_cuts_attaches_extension_when_on(self):
-        from mpisppy.utils import cfg_vanilla as vanilla
         from mpisppy.extensions.xhat_feasibility_cut_extension import (
             XhatFeasibilityCutExtension,
         )
+        from mpisppy.utils import cfg_vanilla as vanilla
         cfg = self._cfg(xhat_cap=7)
         hub_dict = {"opt_kwargs": {"options": {}}}
         vanilla.add_xhat_feasibility_cuts(hub_dict, cfg)
@@ -807,7 +807,7 @@ class TestFieldLengthsPicksUpCap(unittest.TestCase):
     ``opt.options['xhat_feasibility_cuts_count']``."""
 
     def test_field_length_reflects_cap(self):
-        from mpisppy.cylinders.spwindow import FieldLengths, Field
+        from mpisppy.cylinders.spwindow import Field, FieldLengths
         sp = _make_sp(_binary_two_stage_scenario, num=2, cuts_count=5)
         # FieldLengths wants opt.nonant_length; SPBase sets that up.
         fl = FieldLengths(sp)
@@ -815,7 +815,7 @@ class TestFieldLengthsPicksUpCap(unittest.TestCase):
         self.assertEqual(fl[Field.XHAT_FEASIBILITY_CUT], 5 * 4 + 1)
 
     def test_field_length_off_is_one(self):
-        from mpisppy.cylinders.spwindow import FieldLengths, Field
+        from mpisppy.cylinders.spwindow import Field, FieldLengths
         sp = _make_sp(_binary_two_stage_scenario, num=2, cuts_count=0)
         fl = FieldLengths(sp)
         # With cap=0 the buffer collapses to just the trailing count slot.
@@ -828,8 +828,8 @@ class TestGenericExtensionsWiring(unittest.TestCase):
     positive. We minimally construct the cfg the function reads."""
 
     def _make_configured_cfg(self, cuts_count):
-        from mpisppy.utils import config as cfgmod
         from mpisppy.generic.parsing import add_decomp_args
+        from mpisppy.utils import config as cfgmod
         cfg = cfgmod.Config()
         # configure_extensions reads the decomposition flags registered by
         # add_decomp_args (the single source of truth the real drivers use),
@@ -849,10 +849,10 @@ class TestGenericExtensionsWiring(unittest.TestCase):
         return {"opt_kwargs": {"options": {}}}
 
     def test_configure_extensions_attaches_when_on(self):
-        from mpisppy.generic.extensions import configure_extensions
         from mpisppy.extensions.xhat_feasibility_cut_extension import (
             XhatFeasibilityCutExtension,
         )
+        from mpisppy.generic.extensions import configure_extensions
         cfg = self._make_configured_cfg(cuts_count=3)
         hub = self._fake_hub_dict()
         configure_extensions(hub, module=None, cfg=cfg)
@@ -867,10 +867,10 @@ class TestGenericExtensionsWiring(unittest.TestCase):
         )
 
     def test_configure_extensions_skipped_when_off(self):
-        from mpisppy.generic.extensions import configure_extensions
         from mpisppy.extensions.xhat_feasibility_cut_extension import (
             XhatFeasibilityCutExtension,
         )
+        from mpisppy.generic.extensions import configure_extensions
         cfg = self._make_configured_cfg(cuts_count=0)
         hub = self._fake_hub_dict()
         configure_extensions(hub, module=None, cfg=cfg)

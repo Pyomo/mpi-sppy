@@ -6,12 +6,13 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import unittest
-import sys
 import os
-import parapint
-from mpisppy import MPI
+import sys
+import unittest
 
+import parapint
+
+from mpisppy import MPI
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()

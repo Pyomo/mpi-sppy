@@ -7,9 +7,10 @@
 # full copyright and license information.
 ###############################################################################
 # IMPORTANT: parens in variable names will become underscore (_)
-import mip   # from coin-or (pip install mip)
-from mip.exceptions import ParameterNotAvailable
+import mip  # from coin-or (pip install mip)
 import pyomo.environ as pyo
+from mip.exceptions import ParameterNotAvailable
+
 
 # the following giant function is provided because CBC seems to have
 #  trouble parsing free format MPS files.

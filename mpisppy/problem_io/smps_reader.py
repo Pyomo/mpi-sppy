@@ -18,8 +18,8 @@ The .cor file is read by mps_reader.read_mps_and_create_pyomo_model.
 This module parses .tim and .sto, and provides functions to create
 scenario Pyomo models with the appropriate modifications.
 """
-import os
 import glob
+import os
 
 
 def _find_smps_files(smps_dir):

@@ -704,8 +704,9 @@ class TestFWPHOptionsChecksWarnings(unittest.TestCase):
         return stub
 
     def _run(self, stub):
-        import io
         import contextlib
+        import io
+
         from mpisppy.opt.fwph import FWPH
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):

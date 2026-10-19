@@ -7,10 +7,11 @@
 # full copyright and license information.
 ###############################################################################
 # Network Flow - various formulations
-import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
-import mpisppy.tests.examples.distr.distr_data as distr_data
 import numpy as np
+import pyomo.environ as pyo
+
+import mpisppy.tests.examples.distr.distr_data as distr_data
+import mpisppy.utils.sputils as sputils
 
 # In this file, we create a (linear) inter-region minimal cost distribution problem.
 # Our data, gives the constraints inside each in region in region_dict_creator

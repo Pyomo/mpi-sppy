@@ -10,12 +10,14 @@
 # This is the python model file for AMPL farmer.
 # It will work with farmer.mod and slight deviations.
 
-from amplpy import AMPL
-import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
-import mpisppy.agnostic.examples.farmer as farmer
 import numpy as np
+import pyomo.environ as pyo
+from amplpy import AMPL
+
+import mpisppy.agnostic.examples.farmer as farmer
+import mpisppy.utils.sputils as sputils
 from mpisppy import MPI  # for debugging
+
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 

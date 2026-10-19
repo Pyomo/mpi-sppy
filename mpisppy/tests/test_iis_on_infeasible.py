@@ -25,21 +25,21 @@ control flow without standing up SPBase/MPI infrastructure (the same approach
 used by test_incumbent_writing.py).
 """
 
-import os
 import glob
-import types
+import os
 import tempfile
+import types
 import unittest
 from unittest.mock import MagicMock, patch
 
 import pyomo.environ as pyo
 
+import mpisppy.utils.cfg_vanilla as vanilla
+import mpisppy.utils.sputils as sputils
 from mpisppy.spopt import SPOpt
+from mpisppy.tests.utils import get_solver
 from mpisppy.utils.config import Config
 from mpisppy.utils.xhat_eval import Xhat_Eval
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.cfg_vanilla as vanilla
-from mpisppy.tests.utils import get_solver
 
 # Non-persistent base name keeps the solver-gated paths simple (the
 # explanation path builds the solver via SolverFactory and solves directly).

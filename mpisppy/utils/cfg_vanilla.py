@@ -16,8 +16,10 @@ import json
 import warnings
 
 import mpisppy.MPI as MPI
+
 # Hub and spoke SPBase classes
 import mpisppy.utils.sputils as sputils
+
 
 def _hasit(cfg, argname):
     # aside: Config objects act like a dict or an object
@@ -353,8 +355,8 @@ def ph_hub(
         variable_probability=None,
         all_nodenames=None,
 ):
-    from mpisppy.opt.ph import PH
     from mpisppy.cylinders.hub import PHHub
+    from mpisppy.opt.ph import PH
     shoptions = shared_options(cfg, is_hub=True)
     options = copy.deepcopy(shoptions)
     options["convthresh"] = cfg.intra_hub_conv_thresh
@@ -403,8 +405,8 @@ def cg_hub(
         variable_probability=None,
         all_nodenames=None,
 ):
-    from mpisppy.opt.cg import CG
     from mpisppy.cylinders.hub import CGHub
+    from mpisppy.opt.cg import CG
 
     shoptions = shared_options(cfg)
     options = copy.deepcopy(shoptions)# most of them are not needed but otherwise cep_cylinder crashes
@@ -451,8 +453,8 @@ def dualcg_hub(
         variable_probability=None,
         all_nodenames=None,
 ):
-    from mpisppy.opt.dualcg import DCG      # Your dual CG optimizer class
-    from mpisppy.cylinders.hub import DCGHub   # Your dual CG hub class
+    from mpisppy.cylinders.hub import DCGHub  # Your dual CG hub class
+    from mpisppy.opt.dualcg import DCG  # Your dual CG optimizer class
     shoptions = shared_options(cfg)
     options = copy.deepcopy(shoptions)# most of them are not needed but otherwise cep_cylinder crashes
     odictsp = sputils.option_string_to_dict(cfg.sp_solver_options)
@@ -527,8 +529,8 @@ def aph_hub(cfg,
     variable_probability=None,
     all_nodenames=None,
 ):
-    from mpisppy.opt.aph import APH
     from mpisppy.cylinders.hub import APHHub
+    from mpisppy.opt.aph import APH
     # TBD: March 2023: multiple extensions needs work
     hub_dict = ph_hub(cfg,
                       scenario_creator,
@@ -565,8 +567,8 @@ def subgradient_hub(cfg,
     variable_probability=None,
     all_nodenames=None,
 ):
-    from mpisppy.opt.subgradient import Subgradient
     from mpisppy.cylinders.hub import SubgradientHub
+    from mpisppy.opt.subgradient import Subgradient
     shoptions = shared_options(cfg, is_hub=True)
     options = copy.deepcopy(shoptions)
     options["convthresh"] = cfg.intra_hub_conv_thresh
@@ -611,8 +613,8 @@ def fwph_hub(cfg,
     variable_probability=None,
     all_nodenames=None,
 ):
-    from mpisppy.opt.fwph import FWPH
     from mpisppy.cylinders.hub import FWPHHub
+    from mpisppy.opt.fwph import FWPH
     shoptions = shared_options(cfg, is_hub=True)
     options = copy.deepcopy(shoptions)
     options["convthresh"] = cfg.intra_hub_conv_thresh
@@ -1125,8 +1127,8 @@ def fwph_spoke(
     all_nodenames=None,
     rho_setter=None,
 ):
-    from mpisppy.opt.fwph import FWPH
     from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
+    from mpisppy.opt.fwph import FWPH
     shoptions = shared_options(cfg)
     options = copy.deepcopy(shoptions)
 
@@ -1447,8 +1449,8 @@ def subgradient_spoke(
     extension_kwargs=None,
     average_scenario_creator=None,
 ):
-    from mpisppy.opt.subgradient import Subgradient
     from mpisppy.cylinders.subgradient_bounder import SubgradientOuterBound
+    from mpisppy.opt.subgradient import Subgradient
     subgradient_spoke = _PHBase_spoke_foundation(
         SubgradientOuterBound,
         cfg,
@@ -1850,7 +1852,7 @@ def lshaped_hub(
         scenario_creator_kwargs=None,
 ):
     from mpisppy.cylinders.hub import LShapedHub
-    from mpisppy.opt.lshaped import LShapedMethod    
+    from mpisppy.opt.lshaped import LShapedMethod
     hub_dict = {
         "hub_class": LShapedHub,
         "hub_kwargs": {
@@ -1880,8 +1882,8 @@ def cross_scenario_cuts_spoke(
     all_nodenames=None,
 ):
 
-    from mpisppy.opt.lshaped import LShapedMethod
     from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
+    from mpisppy.opt.lshaped import LShapedMethod
     if _hasit(cfg, "max_solver_threads"):
         sp_solver_options = {"threads":cfg.max_solver_threads}
     else:
@@ -1925,7 +1927,7 @@ def ef_options(cfg,
     '''
     vanilla options for an EF object with generic_cylinders
     '''
-    import mpisppy.utils.solver_spec as solver_spec    
+    import mpisppy.utils.solver_spec as solver_spec
 
     sroot, solver_name, solver_options = solver_spec.solver_specification(cfg, "EF")
 

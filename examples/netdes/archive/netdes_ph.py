@@ -8,12 +8,14 @@
 ###############################################################################
 ''' Solve the EF of the network problems
 '''
-from netdes import scenario_creator, scenario_denouement
-from mpisppy.opt.ph import PH
-from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
-from mpisppy.extensions.xhatclosest import XhatClosest
 import os
 import sys
+
+from netdes import scenario_creator, scenario_denouement
+
+from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
+from mpisppy.extensions.xhatclosest import XhatClosest
+from mpisppy.opt.ph import PH
 
 
 def main():

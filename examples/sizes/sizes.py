@@ -7,9 +7,12 @@
 # full copyright and license information.
 ###############################################################################
 import os
-import pyomo.environ as pyo
+
 import models.ReferenceModel as ref
+import pyomo.environ as pyo
+
 import mpisppy.utils.sputils as sputils
+
 
 def scenario_creator(scenario_name, scenario_count=None):
     if scenario_count not in (3, 10):

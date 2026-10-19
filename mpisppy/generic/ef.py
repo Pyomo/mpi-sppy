@@ -12,10 +12,9 @@ import pyomo.environ as pyo
 
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.sputils as sputils
-from mpisppy.opt.ef import ExtensiveForm
 from mpisppy import global_toc
-
 from mpisppy.generic.parsing import name_lists
+from mpisppy.opt.ef import ExtensiveForm
 
 
 def do_EF(module, cfg, scenario_creator, scenario_creator_kwargs,

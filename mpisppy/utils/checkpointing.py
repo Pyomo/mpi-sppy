@@ -26,13 +26,13 @@ iteration counter, bounds, and the initially-fixed-nonant baseline -- is written
 alongside as a small pickle of plain data.
 """
 
+import hashlib
 import json
 import math
 import os
 import pickle
 import re
 import shutil
-import hashlib
 
 import numpy as np
 from pyomo.common.dependencies import attempt_import

@@ -7,8 +7,9 @@
 # full copyright and license information.
 ###############################################################################
 
-import mpisppy.MPI as mpi
 import mpisppy.cgbase
+import mpisppy.MPI as mpi
+
 
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
 def profile(filename=None, comm=mpi.COMM_WORLD):

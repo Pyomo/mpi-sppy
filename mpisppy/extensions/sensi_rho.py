@@ -7,8 +7,8 @@
 # full copyright and license information.
 ###############################################################################
 
-from mpisppy import global_toc
 import mpisppy.extensions.dyn_rho_base
+from mpisppy import global_toc
 from mpisppy.utils.nonant_sensitivities import nonant_sensitivies
 from mpisppy.utils.rho_utils import assign_rho_with_fallback
 

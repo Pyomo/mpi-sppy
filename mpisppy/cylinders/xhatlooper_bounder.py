@@ -7,11 +7,12 @@
 # full copyright and license information.
 ###############################################################################
 # updated April 2020
-from mpisppy.extensions.xhatlooper import XhatLooper
-from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
-from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
 import logging
+
 import mpisppy.log
+from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
+from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
+from mpisppy.extensions.xhatlooper import XhatLooper
 
 # Could also pass, e.g., sys.stdout instead of a filename
 mpisppy.log.setup_logger("mpisppy.cylinders.xhatlooper_bounder",

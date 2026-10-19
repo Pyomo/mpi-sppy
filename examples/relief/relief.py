@@ -7,9 +7,12 @@
 # 2026 (to appear).
 ###############################################################################
 
-import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
 import json
+
+import pyomo.environ as pyo
+
+import mpisppy.utils.sputils as sputils
+
 
 def scenario_creator(scenario_name,
                      network_data=dict(),

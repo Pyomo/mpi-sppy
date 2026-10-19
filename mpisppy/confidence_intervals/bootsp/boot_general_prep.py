@@ -14,15 +14,16 @@
 # a file), then find a candidate solution using the reserved
 # candidate_sample_size scenarios and compute the corresponding optimality gap.
 
-import sys
 import json
+import sys
+
 import numpy as np
 import pyomo.environ as pyo
 
-import mpisppy.utils.sputils as sputils
-import mpisppy.confidence_intervals.ciutils as ciutils
-import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
 import mpisppy.confidence_intervals.bootsp.boot_sp as boot_sp
+import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
+import mpisppy.confidence_intervals.ciutils as ciutils
+import mpisppy.utils.sputils as sputils
 
 
 def find_optimal(cfg, module):

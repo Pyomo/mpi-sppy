@@ -25,7 +25,6 @@ import numpy as np
 
 from mpisppy.cylinders.spwindow import Field
 
-
 # ---- public dataclasses -----------------------------------------------------
 
 

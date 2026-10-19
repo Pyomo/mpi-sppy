@@ -14,6 +14,7 @@
 """
 import argparse
 
+
 def _common_args(inparser):
     # NOTE: if you want abbreviations, override the arguments in your example
     # do not add abbreviations here.

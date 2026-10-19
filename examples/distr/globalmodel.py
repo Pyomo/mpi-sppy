@@ -12,10 +12,12 @@
 # python globalmodel.py --solver-name cplex_direct --num-scens 3
 
 
-import pyomo.environ as pyo
 import distr
 import distr_data
+import pyomo.environ as pyo
+
 from mpisppy.utils import config
+
 
 def _parse_args():
     # create a config object and parse

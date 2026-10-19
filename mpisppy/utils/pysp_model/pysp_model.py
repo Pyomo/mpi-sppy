@@ -11,6 +11,7 @@ import logging
 import pyomo.environ as pyo
 
 from mpisppy.scenario_tree import ScenarioNode as mpisppyScenarioNode
+
 from .instance_factory import ScenarioTreeInstanceFactory
 
 logger = logging.getLogger("mpisppy.utils.pysp_model")

@@ -11,8 +11,7 @@ import os
 
 import matplotlib.pyplot as plt
 import pyomo.environ as pyo
-
-from plot import plot_walks, plot_gantt
+from plot import plot_gantt, plot_walks
 
 
 def walks_writer(
