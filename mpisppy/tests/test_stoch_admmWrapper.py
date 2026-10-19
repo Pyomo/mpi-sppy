@@ -1120,6 +1120,31 @@ class TestStochAdmmWrapperFirstStageHooks(unittest.TestCase):
             # No EF-suppl Vars attached.
             self.assertNotIn(s.e, root.nonant_ef_suppl_vardata_list)
 
+    def test_linear_surrogate_definitions_hook(self):
+        """Generated linear surrogates and their rho metadata survive the
+        ADMM stage-node rewrite."""
+        from mpisppy.utils.linear_surrogate import LinearSurrogateDefinition
+        from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
+        from mpisppy import MPI
+
+        fs_cost, fs_varlist = self._hooks()
+        admm = Stoch_AdmmWrapper(
+            options={},
+            scenario_creator=self._scenario_creator_with_surrogate_and_ef_suppl(),
+            mpicomm=MPI.COMM_WORLD,
+            first_stage_cost=fs_cost,
+            first_stage_varlist=fs_varlist,
+            first_stage_linear_surrogate_definitions=lambda s: [
+                LinearSurrogateDefinition("fs_total", 2 * s.fs)],
+            **self._common_kwargs(),
+        )
+        for s in admm.local_admm_stoch_subproblem_scenarios.values():
+            root = s._mpisppy_node_list[0]
+            self.assertEqual(len(root.linear_surrogate_data), 1)
+            data = root.linear_surrogate_data[0]
+            self.assertIn(data.target, root.surrogate_vardatas)
+            self.assertTrue(any(v is data.target for v in root.nonant_vardata_list))
+
     def test_advanced_hook_without_core_hooks_errors(self):
         """B.3: passing an advanced hook to Stoch_AdmmWrapper without
         also supplying first_stage_cost / first_stage_varlist is an

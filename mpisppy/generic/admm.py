@@ -227,10 +227,13 @@ def _discover_first_stage_hooks(module):
 
     first_stage_surrogate_nonant_list = getattr(
         module, "first_stage_surrogate_nonant_list", None)
+    first_stage_linear_surrogate_definitions = getattr(
+        module, "first_stage_linear_surrogate_definitions", None)
     first_stage_nonant_ef_suppl_list = getattr(
         module, "first_stage_nonant_ef_suppl_list", None)
     advanced = {
         "first_stage_surrogate_nonant_list": first_stage_surrogate_nonant_list,
+        "first_stage_linear_surrogate_definitions": first_stage_linear_surrogate_definitions,
         "first_stage_nonant_ef_suppl_list": first_stage_nonant_ef_suppl_list,
     }
     present_advanced = [n for n, h in advanced.items() if h is not None]
@@ -248,6 +251,7 @@ def _discover_first_stage_hooks(module):
         "first_stage_cost": first_stage_cost,
         "first_stage_varlist": first_stage_varlist,
         "first_stage_surrogate_nonant_list": first_stage_surrogate_nonant_list,
+        "first_stage_linear_surrogate_definitions": first_stage_linear_surrogate_definitions,
         "first_stage_nonant_ef_suppl_list": first_stage_nonant_ef_suppl_list,
     }
 
