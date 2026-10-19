@@ -428,9 +428,7 @@ class StandardL1CutGenerator:
         subproblem._mpisppy_l1_obj = pe.Objective(expr=subproblem._mpisppy_l1_z)
         subproblem._mpisppy_l1_cons = pe.ConstraintList()
         z = subproblem._mpisppy_l1_z
-        original_cons = [
-            c for c in subproblem.component_data_objects(Constraint, active=True, descend_into=True)
-        ]
+        original_cons = list(subproblem.component_data_objects(Constraint, active=True, descend_into=True))
         for c in original_cons:
             body = c.body
             if c.equality:

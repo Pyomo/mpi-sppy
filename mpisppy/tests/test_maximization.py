@@ -144,7 +144,7 @@ class Test_maximization(unittest.TestCase):
                 "sp_solver": solver_name,
                 "sp_solver_options": {},
                 # supply valid (loose) outer bounds to skip the eta-bound solve
-                "valid_eta_lb": {n: -1e6 for n in self.names},
+                "valid_eta_lb": dict.fromkeys(self.names, -1e6),
             }
             ls = LShapedMethod(
                 options,

@@ -290,8 +290,7 @@ def aircondMulti_model_creator(demands_by_product, **kwargs):
     begin_inv_total = kwargs.get("BeginInventory", parms["BeginInventory"][1])
     # Plain Python dict — not a Pyomo Param — so material_balance_rule can
     # use m.BeginInventory[p] as a numeric value in a Pyomo expression.
-    model.BeginInventory = {p: begin_inv_total / num_products
-                            for p in range(num_products)}
+    model.BeginInventory = dict.fromkeys(range(num_products), begin_inv_total / num_products)
 
     # Create stage sub-models
     model.stage_models = {}

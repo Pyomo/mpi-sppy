@@ -567,7 +567,7 @@ def pre_instantiation_for_PH(ws, new_file_name, nonants_name_pairs, stoch_param_
     # The parameters don't exist yet in the model instance, so they need to be redefined using the job
     stoch_sets_out_dict = {param_name: [job.out_db.get_set(elementary_set) for elementary_set in set_name.split(",")] for set_name, param_name in stoch_param_name_pairs}
     stoch_sets_sync_dict = {param_name: [_add_or_get_set(mi, out_elementary_set) for out_elementary_set in out_elementary_sets] for param_name, out_elementary_sets in stoch_sets_out_dict.items()}
-    glist = [gams.GamsModifier(mi.sync_db.add_parameter_dc(param_name, [sync_elementary_set for sync_elementary_set in sync_elementary_sets])) for param_name, sync_elementary_sets in stoch_sets_sync_dict.items()]
+    glist = [gams.GamsModifier(mi.sync_db.add_parameter_dc(param_name, list(sync_elementary_sets))) for param_name, sync_elementary_sets in stoch_sets_sync_dict.items()]
 
     ph_W_dict = {nonant_variables_name: mi.sync_db.add_parameter_dc(f"ph_W_{nonant_variables_name}", nonants_support_set_name.split(","), "ph weight") for nonants_support_set_name, nonant_variables_name in nonants_name_pairs}
     xbar_dict = {nonant_variables_name: mi.sync_db.add_parameter_dc(f"{nonant_variables_name}bar", nonants_support_set_name.split(","), "xbar") for nonants_support_set_name, nonant_variables_name in nonants_name_pairs}
@@ -609,7 +609,7 @@ def adding_record_for_PH(nonants_name_pairs, cfg, all_ph_parameters_dicts, xlo_d
     ### Gather the list of non-anticipative variables and their sets from the job, to modify them and add PH related parameters
     nonant_sets_out_dict = {nonant_set_name: [job.out_db.get_set(elementary_set) for elementary_set in nonant_set_name.split(",")] for nonant_set_name, param_name in nonants_name_pairs}
 
-    nonant_set_sync_dict = {nonant_set_name: [element for element in itertools.product(*[[rec.keys[0] for rec in out_elementary_set] for out_elementary_set in out_elementary_sets])] for nonant_set_name, out_elementary_sets in nonant_sets_out_dict.items()}
+    nonant_set_sync_dict = {nonant_set_name: list(itertools.product(*[[rec.keys[0] for rec in out_elementary_set] for out_elementary_set in out_elementary_sets])) for nonant_set_name, out_elementary_sets in nonant_sets_out_dict.items()}
 
     for nonants_name_pair in nonants_name_pairs:
         nonants_set_name, nonant_variables_name = nonants_name_pair

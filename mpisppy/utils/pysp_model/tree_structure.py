@@ -970,7 +970,7 @@ class ScenarioTree:
             compressed_tree._stages[-1]._scenario_tree = compressed_tree
 
         compressed_tree._stage_map = \
-            dict((stage.name, stage) for stage in compressed_tree._stages)
+            {stage.name: stage for stage in compressed_tree._stages}
 
         #
         # Copy Scenario and Node Data
@@ -1071,7 +1071,7 @@ class ScenarioTree:
                 compressed_tree_scenario._stale[compressed_tree_node.name] = set()
 
         compressed_tree._scenario_map = \
-            dict((scenario.name, scenario) for scenario in compressed_tree._scenarios)
+            {scenario.name: scenario for scenario in compressed_tree._scenarios}
 
         #
         # Handle re-normalization of probabilities if requested

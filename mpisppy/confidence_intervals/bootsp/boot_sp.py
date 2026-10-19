@@ -143,7 +143,7 @@ def require_minimizing_module(cfg, module):
     """
     names = module.scenario_names_creator(1, start=0)
     probe = module.scenario_creator(names[0], **module.kw_creator(cfg))
-    objs = [o for o in probe.component_data_objects(pyo.Objective, active=True)]
+    objs = list(probe.component_data_objects(pyo.Objective, active=True))
     if objs:
         _require_minimization(objs[0].sense == pyo.minimize, "this model")
 

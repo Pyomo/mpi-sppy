@@ -880,7 +880,7 @@ def _rank_layout(total: int, ratios: list, spoke_names: list) -> tuple:
         divisible = True
     else:
         per = max(1, total // len(ratios))
-        split = {nm: per for nm in names}
+        split = dict.fromkeys(names, per)
         divisible = total % len(ratios) == 0
     return max(split.values()), split, divisible
 
