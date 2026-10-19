@@ -13,6 +13,7 @@
 
 import mpisppy.extensions.xhatbase
 
+
 class MinMaxAvg(mpisppy.extensions.xhatbase.XhatBase):
     """
     Args:

@@ -11,10 +11,11 @@
 #   python -m mpisppy.confidence_intervals.bootsp.user_boot <module> --options
 
 import sys
-import mpisppy.confidence_intervals.ciutils as ciutils
-import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
+
 import mpisppy.confidence_intervals.bootsp.boot_sp as boot_sp
+import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
 import mpisppy.confidence_intervals.bootsp.smoothed_boot_sp as smoothed_boot_sp
+import mpisppy.confidence_intervals.ciutils as ciutils
 
 my_rank = boot_utils.my_rank
 

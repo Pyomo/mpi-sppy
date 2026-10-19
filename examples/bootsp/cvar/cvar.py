@@ -11,10 +11,12 @@
 # (empirical path) or from a statdist distribution fitted to the sample data
 # (smoothed path), so importing this example needs the statdist library.
 
+import numpy as np
 import pyomo.environ as pyo
+
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
-import numpy as np
+
 # importing Sampler pulls in the statdist package; the smoothed path fits a
 # distribution (upstream) and samples it here, so cvar itself needs only Sampler
 from mpisppy.confidence_intervals.bootsp.statdist.sampler import Sampler

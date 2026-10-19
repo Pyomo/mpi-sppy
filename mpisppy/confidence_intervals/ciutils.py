@@ -8,18 +8,19 @@
 ###############################################################################
 # Utility functions for mmw, sequantial sampling and sample trees
 
-import os
-import math
 import importlib
+import math
+import os
+
 import numpy as np
-import mpisppy.MPI as mpi
 import pyomo.environ as pyo
 
-import mpisppy.utils.sputils as sputils
-from mpisppy import global_toc
-import mpisppy.utils.xhat_eval as xhat_eval
-import mpisppy.utils.amalgamator as ama
 import mpisppy.confidence_intervals.sample_tree as sample_tree
+import mpisppy.MPI as mpi
+import mpisppy.utils.amalgamator as ama
+import mpisppy.utils.sputils as sputils
+import mpisppy.utils.xhat_eval as xhat_eval
+from mpisppy import global_toc
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()

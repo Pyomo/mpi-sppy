@@ -8,10 +8,11 @@
 ###############################################################################
 from __future__ import annotations  # avoid potential troubles with mpi4py
 
-from pyomo.common.timing import TicTocTimer as _TTT
 from pyomo.common.dependencies import numpy_available as _np_avail
+from pyomo.common.timing import TicTocTimer as _TTT
 
-from mpisppy.MPI import COMM_WORLD, haveMPI as haveMPI
+from mpisppy.MPI import COMM_WORLD
+from mpisppy.MPI import haveMPI as haveMPI
 from mpisppy.utils.mpi_abort import abort_on_uncaught_exception
 
 # Register numpy types in Pyomo, see https://github.com/Pyomo/pyomo/issues/3091

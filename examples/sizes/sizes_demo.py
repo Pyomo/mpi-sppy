@@ -11,18 +11,17 @@
 # Serial (not cylinders)
 
 import sys
+
 import pyomo.environ as pyo
-import mpisppy.phbase
+from sizes import _rho_setter, id_fix_list_fct, scenario_creator, scenario_denouement
+
 import mpisppy.opt.ph
+import mpisppy.phbase
+from mpisppy.extensions.avgminmaxer import MinMaxAvg
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
-from mpisppy.extensions.avgminmaxer import MinMaxAvg
 from mpisppy.extensions.wtracker_extension import Wtracker_extension
-from sizes import scenario_creator, \
-                  scenario_denouement, \
-                  _rho_setter, \
-                  id_fix_list_fct
 
 ScenCount = 10  # 3 or 10
 

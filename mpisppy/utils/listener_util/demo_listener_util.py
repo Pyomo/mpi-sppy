@@ -12,12 +12,14 @@
 # NOTE: If you have runtime error in this code, then you will need to kill
 #       the listener threads.
 
-import sys
 import collections
-import numpy as np
-import mpisppy.MPI as mpi
 import datetime as dt
 import logging
+import sys
+
+import numpy as np
+
+import mpisppy.MPI as mpi
 import mpisppy.utils.listener_util.listener_util as listener_util
 
 startdt = dt.datetime.now()

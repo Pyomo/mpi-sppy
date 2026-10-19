@@ -8,11 +8,12 @@
 ###############################################################################
 import sslp
 
-from mpisppy.spin_the_wheel import WheelSpinner
+import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.primal_dual_rho import PrimalDualRho
+from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
+
 
 def _parse_args():
     cfg = config.Config()

@@ -9,6 +9,7 @@
 # This file is used in the tests and should not be modified!
 
 import pyomo.environ as pyo
+
 import mpisppy.utils.sputils as sputils
 
 # In this file, we create a (linear) inter-region minimal cost distribution problem.

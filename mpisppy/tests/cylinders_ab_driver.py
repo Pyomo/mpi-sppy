@@ -32,9 +32,9 @@ it.
 import json
 import sys
 
+import mpisppy.utils.checkpointing as ckpt
 from mpisppy import generic_cylinders
 from mpisppy.cylinders.hub import PHHub
-import mpisppy.utils.checkpointing as ckpt
 
 #: The incumbent a resumed spoke holds right after restoring it, by scenario
 #: and variable name. Recorded at the restore because the spoke may improve

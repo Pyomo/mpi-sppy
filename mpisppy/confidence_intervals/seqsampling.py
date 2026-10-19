@@ -13,18 +13,19 @@
 
 # see also multi_seqsampling.py, which has a class derived from this class
 
-import mpisppy.MPI as mpi
-import mpisppy.utils.sputils as sputils
+import importlib
+
 import numpy as np
 from pyomo.common.dependencies import scipy
-import importlib
-from mpisppy import global_toc
-from mpisppy.utils import config
-import mpisppy.utils.solver_spec as solver_spec
 
-import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.confidence_intervals.ciutils as ciutils
 import mpisppy.confidence_intervals.confidence_config as confidence_config
+import mpisppy.MPI as mpi
+import mpisppy.utils.amalgamator as amalgamator
+import mpisppy.utils.solver_spec as solver_spec
+import mpisppy.utils.sputils as sputils
+from mpisppy import global_toc
+from mpisppy.utils import config
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()

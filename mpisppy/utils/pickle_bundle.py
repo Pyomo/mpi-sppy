@@ -17,7 +17,9 @@
 
 import inspect
 import os
+
 from pyomo.common.dependencies import attempt_import
+
 dill, dill_available = attempt_import("dill")
 
 # Bound the search in _closures_reachable_from so a large model cannot turn a

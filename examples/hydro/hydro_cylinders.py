@@ -11,12 +11,10 @@
 
 import hydro
 
+import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.sputils as sputils
-
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
-
 
 write_solution = True
 

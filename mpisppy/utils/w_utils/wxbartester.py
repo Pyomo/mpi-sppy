@@ -10,11 +10,11 @@
 '''
 
 import mpisppy.tests.examples.uc.uc_funcs as uc_funcs
-# this version is locked to three scenarios
+from mpisppy.opt.ph import PH
 
+# this version is locked to three scenarios
 from mpisppy.utils.w_utils.wxbarreader import WXBarReader
 
-from mpisppy.opt.ph import PH
 
 def nonsense(arg1, arg2, arg3): # Empty scenario_denouement
     pass

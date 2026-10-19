@@ -7,22 +7,24 @@
 # full copyright and license information.
 ###############################################################################
 # test mps utilities
-import os
 import json
-import types
+import os
 import shutil
 import tempfile
+import types
 import unittest
+
+import mip  # pip install mip (from coin-or)
+import pyomo.environ as pyo
 from mip import OptimizationStatus
-import mpisppy.problem_io.mps_reader as mps_reader
+
 import mpisppy.problem_io.mps_module as mps_module
-import mpisppy.utils.sputils as sputils
+import mpisppy.problem_io.mps_reader as mps_reader
 import mpisppy.utils.config as config
 import mpisppy.utils.proper_bundler as proper_bundler
+import mpisppy.utils.sputils as sputils
 from mpisppy.generic.parsing import name_lists
 from mpisppy.tests.utils import get_solver, limit_solver_threads
-import pyomo.environ as pyo
-import mip  # pip install mip (from coin-or)
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _EXAMPLES_DIR = os.path.join(_THIS_DIR, "examples")

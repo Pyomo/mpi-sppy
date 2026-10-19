@@ -12,11 +12,12 @@
 # See LICENSE.md in this directory for full copyright and license information.
 ###############################################################################
 
-from pyomo.contrib.pynumero.interfaces import pyomo_nlp
-from pyomo.contrib.pynumero.sparse import BlockMatrix, BlockVector
 import numpy as np
 from pyomo.common.dependencies import scipy
 from pyomo.common.timing import HierarchicalTimer
+from pyomo.contrib.pynumero.interfaces import pyomo_nlp
+from pyomo.contrib.pynumero.sparse import BlockMatrix, BlockVector
+
 
 class InteriorPointInterface:
     def __init__(self, pyomo_model):

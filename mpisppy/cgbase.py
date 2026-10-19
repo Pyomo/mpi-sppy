@@ -9,13 +9,15 @@
 
 import math
 import time
+
 import pyomo.environ as pyo
-
-import mpisppy.utils.sputils as sputils
-import mpisppy.spopt
-
-from mpisppy import global_toc
 from pyomo.repn import generate_standard_repn
+
+import mpisppy.spopt
+import mpisppy.utils.sputils as sputils
+from mpisppy import global_toc
+
+
 class CGBase(mpisppy.spopt.SPOpt):
     """ Base class for all CG-based algorithms.
 

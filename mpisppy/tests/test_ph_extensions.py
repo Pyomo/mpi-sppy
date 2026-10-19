@@ -14,12 +14,12 @@ import glob
 import os
 import unittest
 
+import mpisppy.MPI as mpi
 import mpisppy.opt.ph
 import mpisppy.tests.examples.farmer as farmer
-from mpisppy.tests.examples.sizes.sizes import scenario_creator as sizes_creator, \
-                                               scenario_denouement as sizes_denouement
+from mpisppy.tests.examples.sizes.sizes import scenario_creator as sizes_creator
+from mpisppy.tests.examples.sizes.sizes import scenario_denouement as sizes_denouement
 from mpisppy.tests.utils import get_solver
-import mpisppy.MPI as mpi
 
 solver_available, solver_name, persistent_available, persistent_solver_name = get_solver()
 

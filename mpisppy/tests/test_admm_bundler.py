@@ -16,11 +16,13 @@ mpisppy.utils.admmWrapper.
 """
 import types
 import unittest
+
 import pyomo.environ as pyo
+
 import mpisppy.tests.examples.stoch_distr.stoch_distr as stoch_distr
-from mpisppy.utils.admm_bundler import AdmmBundler
-from mpisppy.utils import config
 from mpisppy.tests.utils import get_solver
+from mpisppy.utils import config
+from mpisppy.utils.admm_bundler import AdmmBundler
 
 solver_available, solver_name, persistent_available, persistent_solver_name = get_solver()
 
@@ -581,6 +583,7 @@ class TestMultistageXhatShuffleWarning(unittest.TestCase):
 
     def test_warn_when_stage2_missing(self):
         import warnings
+
         from mpisppy.generic.parsing import name_lists
         cfg, module = self._make_multistage_cfg(stage2=None)
         with warnings.catch_warnings(record=True) as caught:
@@ -594,6 +597,7 @@ class TestMultistageXhatShuffleWarning(unittest.TestCase):
 
     def test_no_warn_when_stage2_set(self):
         import warnings
+
         from mpisppy.generic.parsing import name_lists
         cfg, module = self._make_multistage_cfg(stage2="gurobi")
         with warnings.catch_warnings(record=True) as caught:

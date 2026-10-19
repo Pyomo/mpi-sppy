@@ -39,8 +39,8 @@ import tempfile
 import types
 import unittest
 
-import mpisppy.utils.checkpointing as checkpointing
 import mpisppy.tests.examples.farmer as farmer
+import mpisppy.utils.checkpointing as checkpointing
 from mpisppy.cylinders.xhatshufflelooper_bounder import ScenarioCycler
 from mpisppy.opt.ph import PH
 from mpisppy.tests.utils import get_solver
@@ -236,8 +236,7 @@ class TestScenarioCyclerState(unittest.TestCase):
                 self.assertEqual(cycler.checkpoint_state(), before)
 
     def test_loop_state_missing_a_key_or_bad_is_refused_with_a_warning(self):
-        from mpisppy.cylinders.xhatshufflelooper_bounder import (
-            XhatShuffleInnerBound)
+        from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
         saved = {"xh_iter": 4, "cursor": self._saved_away_from_a_fresh_cycler()}
         cases = [(f"no {key}", key, {k: v for k, v in saved.items()
                                      if k != key}) for key in saved]
@@ -262,8 +261,7 @@ class TestScenarioCyclerState(unittest.TestCase):
     def test_progress_of_a_loop_state_that_is_not_a_dict_is_none(self):
         """Read on a resume in place before the restore runs, so it must not
         raise on what the restore would refuse."""
-        from mpisppy.cylinders.xhatshufflelooper_bounder import (
-            XhatShuffleInnerBound)
+        from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
         for state in (None, ["cursor"], "cursor"):
             with self.subTest(state=state):
                 self.assertIsNone(
@@ -310,8 +308,7 @@ class _CursorSpokeStub:
         # Delegated to the real spoke rather than reimplemented: a stub that
         # answers this itself cannot notice when the real projection changes,
         # which is how an idle pass came to rewrite the file on every pass.
-        from mpisppy.cylinders.xhatshufflelooper_bounder import (
-            XhatShuffleInnerBound)
+        from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
         return XhatShuffleInnerBound.loop_state_progress(self, state)
 
 
@@ -327,7 +324,7 @@ class TestSpokeWritesWhenTheCursorMoves(unittest.TestCase):
     """
 
     def setUp(self):
-        from mpisppy.tests.test_checkpoint import _xhat_eval, _set_and_cache_solution
+        from mpisppy.tests.test_checkpoint import _set_and_cache_solution, _xhat_eval
         self._tmp = tempfile.TemporaryDirectory()
         self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
         self.opt = _xhat_eval(ckpt_dir=self.ckpt_dir)
@@ -455,7 +452,7 @@ class TestRestoredDualsMustMatchTheirFile(unittest.TestCase):
         return Wbar_by_node(opt)
 
     def _check(self, opt, recorded, generation=7):
-        from mpisppy.phbase import Wbar_by_node, W_magnitude_by_node
+        from mpisppy.phbase import W_magnitude_by_node, Wbar_by_node
         checkpointing.require_restored_duals_match_their_file(
             opt, self.CYLINDER, generation, recorded,
             Wbar_by_node(opt), W_magnitude_by_node(opt))

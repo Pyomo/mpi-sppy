@@ -39,10 +39,12 @@
 '''
 
 import os
+
 import numpy as np
 import pyomo.environ as pyo
-from mpisppy.utils import nice_join
 from pyomo.common.collections import ComponentSet
+
+from mpisppy.utils import nice_join
 
 ''' W utilities '''
 

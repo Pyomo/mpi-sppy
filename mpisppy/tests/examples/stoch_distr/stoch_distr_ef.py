@@ -13,13 +13,14 @@
 # This file can be executed thanks to python stoch_distr_ef.py --num-stoch-scens 2 --solver-name xpress --num-stoch-scens 2 --num-admm-subproblems 3
 
 # Solves the stochastic distribution problem 
+import pyomo.environ as pyo
 import stoch_distr
 import stoch_distr_admm_cylinders
-import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils
-from mpisppy.utils import config
 from mpisppy import MPI
+from mpisppy.utils import config
+
 global_rank = MPI.COMM_WORLD.Get_rank()
 
 

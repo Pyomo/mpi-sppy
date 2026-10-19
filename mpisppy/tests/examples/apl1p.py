@@ -10,11 +10,12 @@
 #We use costs from Bailey, Jensen and Morton, Response Surface Analysis of Two-Stage Stochastic Linear Programming with Recourse
 #(costs are 10x higher than in the original [Infanger 1992] paper)
 
-import pyomo.environ as pyo
 import numpy as np
+import pyomo.environ as pyo
+
 import mpisppy.scenario_tree as scenario_tree
-import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
+import mpisppy.utils.sputils as sputils
 
 # Use this random stream:
 apl1pstream = np.random.RandomState()  # pylint: disable=no-member

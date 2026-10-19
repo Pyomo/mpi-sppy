@@ -8,12 +8,13 @@
 ###############################################################################
 import abc
 import logging
-import mpisppy.log
-import mpisppy.utils.sputils as sputils
-import mpisppy.cylinders.spoke as spoke
-import mpisppy.MPI as mpi
+
 import numpy as np
 
+import mpisppy.cylinders.spoke as spoke
+import mpisppy.log
+import mpisppy.MPI as mpi
+import mpisppy.utils.sputils as sputils
 from mpisppy.utils.xhat_eval import Xhat_Eval
 
 # Could also pass, e.g., sys.stdout instead of a filename

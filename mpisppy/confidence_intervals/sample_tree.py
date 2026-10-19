@@ -8,13 +8,14 @@
 ###############################################################################
 #Code for sampling for multistage problem
 
-import numpy as np
-import mpisppy.MPI as mpi
 import importlib
 
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgamator as amalgamator
+import numpy as np
+
 import mpisppy.confidence_intervals.ciutils as ciutils
+import mpisppy.MPI as mpi
+import mpisppy.utils.amalgamator as amalgamator
+import mpisppy.utils.sputils as sputils
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
@@ -271,6 +272,7 @@ def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed,
 if __name__ == "__main__":
     # This main program is provided to developers can run quick tests.
     import pyomo.common.config as pyofig
+
     from mpisppy.utils import config
 
     branching_factors = [3,2,4,4]

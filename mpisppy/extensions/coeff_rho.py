@@ -7,11 +7,10 @@
 # full copyright and license information.
 ###############################################################################
 
-from mpisppy import global_toc
 import mpisppy.extensions.extension
-
-from mpisppy.utils.sputils import nonant_cost_coeffs
+from mpisppy import global_toc
 from mpisppy.utils.rho_utils import assign_rho_with_fallback
+from mpisppy.utils.sputils import nonant_cost_coeffs
 
 
 class CoeffRho(mpisppy.extensions.extension.Extension):

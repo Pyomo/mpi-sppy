@@ -12,6 +12,7 @@
 
 import mpisppy.extensions.xhatbase
 
+
 class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
     """
     Args:

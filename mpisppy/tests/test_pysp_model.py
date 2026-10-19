@@ -6,18 +6,20 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import unittest
-import pyomo.environ as pyo
 import os.path
+import unittest
 
-from mpisppy.utils.pysp_model import PySPModel
-from mpisppy.tests.test_ef_ph import _get_ph_base_options,\
-                                     solver_available,\
-                                     round_pos_sig
-from mpisppy.tests.utils import limit_solver_threads
+import pyomo.environ as pyo
 
 import mpisppy.opt.ef
 import mpisppy.opt.ph
+from mpisppy.tests.test_ef_ph import (
+    _get_ph_base_options,
+    round_pos_sig,
+    solver_available,
+)
+from mpisppy.tests.utils import limit_solver_threads
+from mpisppy.utils.pysp_model import PySPModel
 
 file_dir = os.path.dirname(os.path.abspath(__file__))
 sizes_dir = os.path.join(file_dir,'examples','sizes')

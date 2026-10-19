@@ -8,8 +8,9 @@
 ###############################################################################
 # multistage (4-stage) example using aircond model. Can be any number of stages, does not support unbalanced trees
 import numpy as np
-import mpisppy.utils.sputils as sputils
+
 import mpisppy.utils.amalgamator as amalgamator
+import mpisppy.utils.sputils as sputils
 
 # Use this random stream:
 aircondstream = np.random.RandomState()

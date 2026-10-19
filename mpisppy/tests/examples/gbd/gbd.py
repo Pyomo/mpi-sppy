@@ -10,12 +10,14 @@
 #From original Ferguson and Dantzig 1956
 #Extended scenarios as done in Seq Sampling by B&M
 
-import pyomo.environ as pyo
-import numpy as np
-import mpisppy.scenario_tree as scenario_tree
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgamator as amalgamator
 import json
+
+import numpy as np
+import pyomo.environ as pyo
+
+import mpisppy.scenario_tree as scenario_tree
+import mpisppy.utils.amalgamator as amalgamator
+import mpisppy.utils.sputils as sputils
 
 # Use this random stream:
 gbdstream= np.random.RandomState()  # pylint: disable=no-member

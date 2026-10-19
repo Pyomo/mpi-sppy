@@ -14,13 +14,14 @@
 # the command line parameters for both (so either way,
 # many command line parameters will be ignored). 
 
-import numpy as np
 import farmer
-from mpisppy.utils import config
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgamator as amalgamator
-import mpisppy.confidence_intervals.seqsampling as seqsampling
+import numpy as np
+
 import mpisppy.confidence_intervals.confidence_config as confidence_config
+import mpisppy.confidence_intervals.seqsampling as seqsampling
+import mpisppy.utils.amalgamator as amalgamator
+import mpisppy.utils.sputils as sputils
+from mpisppy.utils import config
 
 
 #============================

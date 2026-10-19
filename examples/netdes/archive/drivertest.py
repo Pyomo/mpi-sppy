@@ -9,19 +9,20 @@
 # DLW version: add Xhat
 import netdes
 
-# Hub and spoke SPBase classes
-from mpisppy.phbase import PHBase
-from mpisppy.opt.ph import PH
-from mpisppy.opt.fwph import FWPH
 # Hub and spoke SPCommunicator classes
 from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
+from mpisppy.cylinders.hub import PHHub
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
-from mpisppy.cylinders.hub import PHHub
+from mpisppy.opt.fwph import FWPH
+from mpisppy.opt.ph import PH
+
+# Hub and spoke SPBase classes
+from mpisppy.phbase import PHBase
+
 # Make it all go
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils.xhat_eval import Xhat_Eval
-
 
 if __name__=="__main__":
     """ For testing and debugging only 

@@ -19,12 +19,10 @@ import unittest
 import pyomo.environ as pyo
 from pyomo.common.dependencies import DeferredImportError
 
-import mpisppy.utils.pickle_bundle as pickle_bundle
-from mpisppy.utils.config import Config
-
 import mpisppy.MPI as mpi
-
+import mpisppy.utils.pickle_bundle as pickle_bundle
 from mpisppy.tests.utils import get_solver
+from mpisppy.utils.config import Config
 
 # Parse --python-args (extra args inserted after "python" in subcommands, e.g. for coverage)
 python_args = ""

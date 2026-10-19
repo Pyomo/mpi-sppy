@@ -47,7 +47,6 @@ import mpisppy.MPI as MPI
 from mpisppy.extensions.extension import Extension
 from mpisppy.utils.sputils import is_persistent
 
-
 # Ordered set of legal direction tokens (see the design, §3).
 VALID_DIRECTIONS = ("lb", "ub", "nearest", "anywhere", "min", "max")
 

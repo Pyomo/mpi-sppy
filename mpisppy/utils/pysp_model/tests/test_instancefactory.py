@@ -20,25 +20,25 @@
 # Copied with modification from pysp/tests/unit/test_instancefactory.py
 
 import os
-import sys
 import shutil
+import sys
 import tempfile
-from os.path import join, dirname, abspath, exists
+from os.path import abspath, dirname, exists, join
 
 import pyomo.common.unittest as unittest
 from pyomo.common.dependencies import networkx_available as has_networkx
-
 from pyomo.common.dependencies import yaml_available
-from mpisppy.utils.pysp_model.instance_factory import \
-    (ScenarioTreeInstanceFactory,
-     _find_reference_model_or_callback,
-     _find_scenariotree)
-from mpisppy.utils.pysp_model.tree_structure_model import \
-    CreateAbstractScenarioTreeModel
-from mpisppy.utils.pysp_model.tree_structure import \
-    ScenarioTree
 from pyomo.common.fileutils import import_file
 
+from mpisppy.utils.pysp_model.instance_factory import (
+    ScenarioTreeInstanceFactory,
+    _find_reference_model_or_callback,
+    _find_scenariotree,
+)
+from mpisppy.utils.pysp_model.tree_structure import ScenarioTree
+from mpisppy.utils.pysp_model.tree_structure_model import (
+    CreateAbstractScenarioTreeModel,
+)
 
 thisfile = abspath(__file__)
 thisdir = dirname(thisfile)

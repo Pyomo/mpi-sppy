@@ -7,9 +7,10 @@
 # full copyright and license information.
 ###############################################################################
 # Network Flow - various formulations
-import pyomo.environ as pyo
-import distr_data
 import time
+
+import distr_data
+import pyomo.environ as pyo
 
 # In this file, we create a (linear) inter-region minimal cost distribution problem.
 # Our data, gives the constraints inside each in region in region_dict_creator

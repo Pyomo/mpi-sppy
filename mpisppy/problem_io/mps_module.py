@@ -42,15 +42,17 @@ note to dlw from dlw:
   You should also offer other types of nonants in the json
 
 """
-import os
-import re
 import glob
 import json
 import math
-import mpisppy.scenario_tree as scenario_tree
-import mpisppy.utils.sputils as sputils
+import os
+import re
+
 import mpisppy.problem_io.mps_reader as mps_reader
+import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.rho_utils as rho_utils
+import mpisppy.utils.sputils as sputils
+
 # assume you can get the path from config, set in kw_creator as a side-effect
 mps_files_directory = None
 

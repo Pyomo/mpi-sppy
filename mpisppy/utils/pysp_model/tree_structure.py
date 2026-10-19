@@ -25,10 +25,10 @@ __all__ = ('ScenarioTreeNode',
            'ScenarioTreeBundle',
            'ScenarioTree')
 
-import sys
-import random
 import copy
 import logging
+import random
+import sys
 
 try:
     from collections import OrderedDict
@@ -36,11 +36,13 @@ except ImportError:                         #pragma:nocover
     from ordereddict import OrderedDict
 
 from pyomo.common.collections import ComponentMap
-from pyomo.core import (value, ComponentUID)
-from .phutils import (indexToString,
-                      isVariableNameIndexed,
-                      extractVariableNameAndIndex,
-                     )
+from pyomo.core import ComponentUID, value
+
+from .phutils import (
+    extractVariableNameAndIndex,
+    indexToString,
+    isVariableNameIndexed,
+)
 
 logger = logging.getLogger("mpisppy.utils.pysp_model")
 

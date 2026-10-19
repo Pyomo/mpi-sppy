@@ -16,9 +16,11 @@ WARNING:
 """
 import numpy as np
 import pyomo.common.config as pyofig
+
+import mpisppy.tests.examples.aircond as aircond
 import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.utils.config as config
-import mpisppy.tests.examples.aircond as aircond
+
 
 def main():
     solution_files = {"first_stage_solution":"aircond_first_stage.csv",

@@ -33,11 +33,11 @@ from pyomo.common.collections import ComponentSet
 
 import mpisppy.utils.config as config
 from mpisppy.extensions.slammer import (
-    Slammer,
+    VALID_DIRECTIONS,
     SlamDirective,
+    Slammer,
     parse_directives_file,
     resolve_directive,
-    VALID_DIRECTIONS,
 )
 
 NDN = "ROOT"

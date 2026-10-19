@@ -9,16 +9,18 @@
 """
 This abstract base class is the parent class of all distribution classes.
 """
-from abc import ABCMeta, abstractmethod
 import os
+from abc import ABCMeta, abstractmethod
 
 import numpy as np
+
 # scipy is an optional dependency; import it lazily so the empirical
 # bootstrap path stays scipy-free. matplotlib (also optional) is imported
 # locally in the plotting methods below.
 from pyomo.common.dependencies import scipy
 
 from mpisppy.confidence_intervals.bootsp.statdist.utilities import memoize_method
+
 
 class Parameter:
     """

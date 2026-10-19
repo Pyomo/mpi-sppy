@@ -16,20 +16,19 @@
 # for every correct solver; the locked values below are compared with
 # round_pos_sig to absorb floating-point noise.
 
+import json
 import os
 import sys
-import json
-import types
 import tempfile
+import types
 import unittest
 
+import mpisppy.confidence_intervals.bootsp.boot_sp as boot_sp
+import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
+import mpisppy.confidence_intervals.bootsp.simulate_boot as simulate_boot
+import mpisppy.confidence_intervals.bootsp.user_boot as user_boot
 import mpisppy.utils.sputils as sputils
 from mpisppy.tests.utils import get_solver, round_pos_sig
-
-import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
-import mpisppy.confidence_intervals.bootsp.boot_sp as boot_sp
-import mpisppy.confidence_intervals.bootsp.user_boot as user_boot
-import mpisppy.confidence_intervals.bootsp.simulate_boot as simulate_boot
 
 sputils.disable_tictoc_output()
 
@@ -232,6 +231,7 @@ class Test_boot_sp(unittest.TestCase):
         # interval at 0 -- so a maximization run would silently report [0, 0].
         # It must raise instead (maximization either works or errors).
         import pyomo.environ as pyo
+
         import mpisppy.scenario_tree as scenario_tree
 
         def _make(sense):

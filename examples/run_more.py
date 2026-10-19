@@ -18,8 +18,9 @@
 
 import os
 import sys
-import pandas as pd
 from datetime import datetime as dt
+
+import pandas as pd
 
 # Parse --python-args (extra args inserted after "python" in subcommands, e.g. for coverage)
 python_args = ""

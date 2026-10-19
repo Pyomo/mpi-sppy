@@ -12,8 +12,9 @@ try:
     haveMPI = True
 
 except ImportError:
-    import numpy as _np
     import copy as _cp
+
+    import numpy as _np
 
     UNDEFINED = -1
     SUM = _np.sum

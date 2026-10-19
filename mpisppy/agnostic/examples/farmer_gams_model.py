@@ -7,11 +7,13 @@
 # full copyright and license information.
 ###############################################################################
 import os
-import gamspy_base
-import mpisppy.utils.sputils as sputils
-import mpisppy.agnostic.farmer4agnostic as farmer
 
-from mpisppy import MPI # for debugging
+import gamspy_base
+
+import mpisppy.agnostic.farmer4agnostic as farmer
+import mpisppy.utils.sputils as sputils
+from mpisppy import MPI  # for debugging
+
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 

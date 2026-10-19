@@ -13,17 +13,17 @@ IMPORTANT:
 version matter a lot, so we often just do smoke tests.
 """
 
+import csv
 import os
 import unittest
-import csv
-from mpisppy.utils import config
 
-import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.tests.examples.farmer as farmer
-from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.tests.utils import get_solver
+import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.w_utils.wxbarreader as wxbarreader
 import mpisppy.utils.w_utils.wxbarwriter as wxbarwriter
+from mpisppy.spin_the_wheel import WheelSpinner
+from mpisppy.tests.utils import get_solver
+from mpisppy.utils import config
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _W_TEST_DATA_DIR = os.path.join(_THIS_DIR, "examples", "w_test_data")

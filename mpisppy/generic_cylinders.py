@@ -15,16 +15,22 @@ import sys
 from mpisppy import MPI, global_toc
 
 # Re-export public API for backwards compatibility
-from mpisppy.generic.decomp import (do_decomp,
-                                   refuse_checkpointing_without_a_hub)
-from mpisppy.generic.mmw import do_mmw
-
-from mpisppy.generic.parsing import model_fname, load_module, parse_args, proper_bundles, name_lists
+from mpisppy.generic.decomp import do_decomp, refuse_checkpointing_without_a_hub
 from mpisppy.generic.ef import do_EF
-from mpisppy.generic.scenario_io import (write_bundles, write_scenarios,
-                                          read_pickled_scenario,
-                                          write_scenario_lp_mps_files_only)
-from mpisppy.generic.mmw import mmw_requested
+from mpisppy.generic.mmw import do_mmw, mmw_requested
+from mpisppy.generic.parsing import (
+    load_module,
+    model_fname,
+    name_lists,
+    parse_args,
+    proper_bundles,
+)
+from mpisppy.generic.scenario_io import (
+    read_pickled_scenario,
+    write_bundles,
+    write_scenario_lp_mps_files_only,
+    write_scenarios,
+)
 
 
 ##########################################################################
@@ -89,8 +95,13 @@ def main():
 
     # ADMM setup: wraps scenario_creator and attaches variable_probability to cfg
     if cfg.get("admm", ifmissing=False) or cfg.get("stoch_admm", ifmissing=False):
-        from mpisppy.generic.admm import setup_admm, setup_stoch_admm, \
-            setup_stoch_admm_with_bundles, _count_cylinders, _check_admm_compatibility
+        from mpisppy.generic.admm import (
+            _check_admm_compatibility,
+            _count_cylinders,
+            setup_admm,
+            setup_stoch_admm,
+            setup_stoch_admm_with_bundles,
+        )
         _check_admm_compatibility(cfg)
         # ADMM wrappers synthesize dummy nonants with renamed components
         # (e.g. y[F1_1] -> y__F1_1__) for subproblems that don't own a
@@ -116,8 +127,10 @@ def main():
            or cfg.get("stoch_admm", ifmissing=False):
             raise RuntimeError(
                 "--cvar cannot (yet) be combined with proper bundles or ADMM")
-        from mpisppy.utils.cvar import cvar_scenario_creator, \
-            compute_cvar_eta_bounds_by_solve
+        from mpisppy.utils.cvar import (
+            compute_cvar_eta_bounds_by_solve,
+            cvar_scenario_creator,
+        )
         method = cfg.get("cvar_eta_bound_method", ifmissing="fbbt")
         eta_lb = cfg.get("cvar_eta_lb", ifmissing=None)
         eta_ub = cfg.get("cvar_eta_ub", ifmissing=None)

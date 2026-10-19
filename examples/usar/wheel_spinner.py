@@ -17,15 +17,15 @@ import itertools
 import os
 
 import pyomo.common.config
-
-from config import add_wheel_spinner_args, add_common_args
+from config import add_common_args, add_wheel_spinner_args
 from generate_data import generate_coords, generate_data
+from scenario_creator import scenario_creator
+from scenario_denouement import scenario_denouement
+from write_solutions import gantt_writer, walks_writer
+
 import mpisppy.spin_the_wheel
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config
-from scenario_creator import scenario_creator
-from scenario_denouement import scenario_denouement
-from write_solutions import walks_writer, gantt_writer
 
 SUPPORTED_SPOKES = (
     "fwph",

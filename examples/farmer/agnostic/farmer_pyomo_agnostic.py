@@ -15,12 +15,13 @@ still written in Python, it just needs to interact
 with the guest language
 """
 
+import farmer  # the native farmer (makes a few things easy)
 import pyomo.environ as pyo
 from pyomo.opt import SolutionStatus, TerminationCondition
-import farmer   # the native farmer (makes a few things easy)
 
 # for debuggig
 from mpisppy import MPI
+
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 

@@ -14,10 +14,8 @@ import os
 import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils
-from mpisppy import global_toc, MPI
-
+from mpisppy import MPI, global_toc
 from mpisppy.generic.parsing import name_lists
-
 
 # ----------------------------------------------------------------------------
 # Pre-pickle preprocessing pipeline
@@ -244,8 +242,9 @@ def write_scenarios(module, cfg, scenario_creator, scenario_creator_kwargs,
         scenario_denouement: denouement function
         comm: MPI communicator
     """
-    import mpisppy.utils.pickle_bundle as pickle_bundle
     import shutil
+
+    import mpisppy.utils.pickle_bundle as pickle_bundle
     assert hasattr(cfg, "num_scens")
     ScenCount = cfg.num_scens
 
@@ -314,8 +313,9 @@ def write_bundles(module, cfg, scenario_creator, scenario_creator_kwargs, comm):
         scenario_creator_kwargs: kwargs for scenario creator
         comm: MPI communicator
     """
-    import mpisppy.utils.pickle_bundle as pickle_bundle
     import shutil
+
+    import mpisppy.utils.pickle_bundle as pickle_bundle
     assert hasattr(cfg, "num_scens")
     ScenCount = cfg.num_scens
     bsize = int(cfg.scenarios_per_bundle)
@@ -375,8 +375,8 @@ def write_scenario_lp_mps_files_only(module, cfg, scenario_creator,
         scenario_denouement: denouement function
         bundle_wrapper: ProperBundler or None
     """
-    from mpisppy.spbase import SPBase
     from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
+    from mpisppy.spbase import SPBase
 
     all_scenario_names, all_nodenames = name_lists(module, cfg,
                                                    bundle_wrapper=bundle_wrapper)

@@ -8,23 +8,22 @@
 ###############################################################################
 # JPW and DLW; July 2019; ccopf create scenario instances for line outages
 # extended Fall 2019 by DLW
-import egret
-import egret.models.acopf as eac
-import egret.models.ac_relaxations as eac_relax
-from egret.parsers.matpower_parser import create_ModelData
-import mpisppy.scenario_tree as scenario_tree
-import mpisppy.utils.sputils as sputils
-
-import ACtree as ET
-
+import copy
 import os
 import sys
-import copy
-import scipy
-import numpy as np
-import mpisppy.MPI as mpi
 
+import ACtree as ET
+import egret
+import egret.models.ac_relaxations as eac_relax
+import egret.models.acopf as eac
+import numpy as np
 import pyomo.environ as pyo
+import scipy
+from egret.parsers.matpower_parser import create_ModelData
+
+import mpisppy.MPI as mpi
+import mpisppy.scenario_tree as scenario_tree
+import mpisppy.utils.sputils as sputils
 
 comm = mpi.COMM_WORLD
 rank = comm.Get_rank()

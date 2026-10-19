@@ -9,26 +9,24 @@
 # Base and utility functions for mpisppy
 # Note to developers: things called spcomm are way more than just a comm; SPCommunicator
 
-import pyomo.environ as pyo
 import contextlib
-import sys
+import importlib
+import inspect
 import os
 import re
-import numpy as np
-import inspect
-import importlib
-import mpisppy.scenario_tree as scenario_tree
-
+import sys
 from enum import IntEnum
-from pyomo.core import Objective
-from pyomo.repn import generate_standard_repn
 
-from mpisppy import MPI, haveMPI
+import numpy as np
+import pyomo.environ as pyo
+from pyomo.core import Objective
+from pyomo.core.base.indexed_component_slice import IndexedComponent_slice
 from pyomo.core.expr.numeric_expr import LinearExpression
 from pyomo.opt import SolutionStatus, TerminationCondition
-from pyomo.core.base.indexed_component_slice import IndexedComponent_slice
+from pyomo.repn import generate_standard_repn
 
-from mpisppy import tt_timer
+import mpisppy.scenario_tree as scenario_tree
+from mpisppy import MPI, haveMPI, tt_timer
 
 global_rank = MPI.COMM_WORLD.Get_rank()
 

@@ -26,8 +26,8 @@ from mpisppy.utils.prox_approx import (
     ProxApproxManagerContinuous,
     ProxApproxManagerDiscrete,
     _compute_mb,
-    _f_ls,
     _df_ls,
+    _f_ls,
 )
 
 NDN_I = ("ROOT", 0)

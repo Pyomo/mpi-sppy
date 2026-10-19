@@ -8,10 +8,13 @@
 ###############################################################################
 ''' Solve the EF of the network problems
 '''
-from mpisppy.opt.ef import ExtensiveForm
-from netdes import scenario_creator
-import pyomo.environ as pyo
 import sys
+
+import pyomo.environ as pyo
+from netdes import scenario_creator
+
+from mpisppy.opt.ef import ExtensiveForm
+
 
 def main():
     # inst = "network-10-20-L-01"

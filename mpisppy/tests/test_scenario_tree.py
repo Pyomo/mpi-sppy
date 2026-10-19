@@ -11,8 +11,8 @@
 import unittest
 
 import pyomo.environ as pyo
-from pyomo.core.base.var import VarData
 from pyomo.common.collections import ComponentSet
+from pyomo.core.base.var import VarData
 
 from mpisppy.scenario_tree import ScenarioNode
 

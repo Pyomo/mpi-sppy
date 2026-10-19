@@ -8,15 +8,17 @@
 ###############################################################################
 # APH
 
-import numpy as np
-import math
 import collections
-import time
 import logging
-import mpisppy.MPI as mpi
+import math
+import time
+
+import numpy as np
 import pyomo.environ as pyo
-import mpisppy.utils.listener_util.listener_util as listener_util
+
+import mpisppy.MPI as mpi
 import mpisppy.phbase as ph_base
+import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils.linear_surrogate import set_derived_surrogate_rhos
 

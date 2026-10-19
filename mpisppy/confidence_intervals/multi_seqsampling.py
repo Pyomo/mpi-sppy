@@ -10,21 +10,21 @@
 # This extension of SeqSampling works for multistage, using independent 
 # scenarios instead of a single scenario tree.
 
-import pyomo.environ as pyo
-import pyomo.common.config as pyofig
-import mpisppy.MPI as mpi
-import mpisppy.utils.sputils as sputils
-import mpisppy.confidence_intervals.confidence_config as confidence_config
-from mpisppy.utils import config
 import numpy as np
-from mpisppy import global_toc
+import pyomo.common.config as pyofig
+import pyomo.environ as pyo
 
-import mpisppy.utils.amalgamator as amalgamator
-import mpisppy.utils.xhat_eval as xhat_eval
 import mpisppy.confidence_intervals.ciutils as ciutils
+import mpisppy.confidence_intervals.confidence_config as confidence_config
+import mpisppy.confidence_intervals.sample_tree as sample_tree
+import mpisppy.MPI as mpi
+import mpisppy.utils.amalgamator as amalgamator
+import mpisppy.utils.sputils as sputils
+import mpisppy.utils.xhat_eval as xhat_eval
+from mpisppy import global_toc
 from mpisppy.confidence_intervals.seqsampling import SeqSampling
 from mpisppy.tests.examples.aircond import xhat_generator_aircond
-import mpisppy.confidence_intervals.sample_tree as sample_tree
+from mpisppy.utils import config
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()

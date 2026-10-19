@@ -20,8 +20,8 @@ import csv
 import io
 import json
 import os
-import sys
 import runpy
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch

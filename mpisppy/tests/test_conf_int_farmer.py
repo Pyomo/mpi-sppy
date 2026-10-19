@@ -13,22 +13,21 @@
 
 import os
 import tempfile
-import numpy as np
 import unittest
 
+import numpy as np
 import pyomo.environ as pyo
-import mpisppy.MPI as mpi
 
-from mpisppy.tests.utils import get_solver, round_pos_sig
-import mpisppy.tests.examples.farmer as farmer
-
-import mpisppy.confidence_intervals.mmw_ci as MMWci
-import mpisppy.utils.amalgamator as ama
-from mpisppy.utils.xhat_eval import Xhat_Eval
-import mpisppy.confidence_intervals.seqsampling as seqsampling
 import mpisppy.confidence_intervals.ciutils as ciutils
-from mpisppy.utils import config
 import mpisppy.confidence_intervals.confidence_config as confidence_config
+import mpisppy.confidence_intervals.mmw_ci as MMWci
+import mpisppy.confidence_intervals.seqsampling as seqsampling
+import mpisppy.MPI as mpi
+import mpisppy.tests.examples.farmer as farmer
+import mpisppy.utils.amalgamator as ama
+from mpisppy.tests.utils import get_solver, round_pos_sig
+from mpisppy.utils import config
+from mpisppy.utils.xhat_eval import Xhat_Eval
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()

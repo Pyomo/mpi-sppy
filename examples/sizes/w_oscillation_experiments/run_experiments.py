@@ -148,6 +148,7 @@ def _solve_ef(cfg):
     (the yardstick for both x-quality and W-quality). Returns z* or None."""
     sys.path.insert(0, os.path.dirname(_HERE))   # the examples/sizes dir (sizes)
     import sizes
+
     from mpisppy.opt.ef import ExtensiveForm
     names = [f"Scenario{i + 1}" for i in range(cfg["num_scens"])]
     ef = ExtensiveForm({"solver": cfg["solver"]}, names, sizes.scenario_creator,

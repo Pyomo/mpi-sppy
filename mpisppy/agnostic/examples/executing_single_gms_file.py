@@ -7,6 +7,7 @@
 # full copyright and license information.
 ###############################################################################
 import os
+
 import gams
 import gamspy_base
 

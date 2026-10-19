@@ -7,17 +7,18 @@
 # full copyright and license information.
 ###############################################################################
 
-import mpisppy.extensions.dyn_rho_base
 import numpy as np
-from pyomo.core.expr.calculus.derivatives import differentiate
-from pyomo.core.expr.calculus.derivatives import Modes
 import pyomo.environ as pyo
+from pyomo.core.expr.calculus.derivatives import Modes, differentiate
+
+import mpisppy.extensions.dyn_rho_base
 import mpisppy.MPI as MPI
-from mpisppy import global_toc
 import mpisppy.utils.sputils as sputils
+from mpisppy import global_toc
+from mpisppy.cylinders.spwindow import Field
 from mpisppy.utils.nonant_sensitivities import _bundle_consensus_groups
 from mpisppy.utils.rho_utils import assign_rho_with_fallback
-from mpisppy.cylinders.spwindow import Field
+
 
 class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
     """

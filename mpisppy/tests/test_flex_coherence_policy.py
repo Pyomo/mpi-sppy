@@ -24,16 +24,16 @@ disturbing the receive buffer, and a later coherent read then succeeds."""
 import unittest
 
 import numpy as np
-from mpisppy import MPI
 
+from mpisppy import MPI
+from mpisppy.cylinders.overlap_map import OverlapSegment
 from mpisppy.cylinders.spcommunicator import (
-    SPCommunicator,
+    _STRICT_COHERENCE_FIELDS,
     RecvArray,
+    SPCommunicator,
     coherence_miss_rate,
     reduce_source_write_ids,
-    _STRICT_COHERENCE_FIELDS,
 )
-from mpisppy.cylinders.overlap_map import OverlapSegment
 from mpisppy.cylinders.spwindow import Field, padded_len_n_doubles
 
 

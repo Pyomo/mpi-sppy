@@ -10,11 +10,12 @@
 # This is the python model file for AMPL farmer.
 # It will work with farmer.mod and slight deviations.
 
-from amplpy import AMPL
-import mpisppy.utils.sputils as sputils
 import numpy as np
+from amplpy import AMPL
 
+import mpisppy.utils.sputils as sputils
 from mpisppy import MPI  # for debugging
+
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
