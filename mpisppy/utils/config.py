@@ -632,6 +632,12 @@ class Config(pyofig.ConfigDict):
     def two_sided_args(self):
         # add commands to  and also return the result
 
+        self.add_to_config("initial_outer_bound",
+                            description="certified outer bound available before the hub starts "
+                            "(default None)",
+                            domain=float,
+                            default=None)
+
         self.add_to_config("rel_gap",
                             description="relative termination gap (default 0.05)",
                             domain=float,

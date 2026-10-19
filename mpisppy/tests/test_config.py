@@ -228,6 +228,20 @@ class TestConfigPopularArgs(unittest.TestCase):
         self.assertFalse(self.cfg.verbose)
 
 
+class TestConfigTwoSidedArgs(unittest.TestCase):
+    def test_initial_outer_bound_default(self):
+        cfg = Config()
+        cfg.two_sided_args()
+        self.assertIsNone(cfg.initial_outer_bound)
+
+    def test_initial_outer_bound_parses_from_cli(self):
+        cfg = Config()
+        cfg.two_sided_args()
+        with patch("sys.argv", ["prog", "--initial-outer-bound", "12.5"]):
+            cfg.parse_command_line("prog")
+        self.assertEqual(cfg.initial_outer_bound, 12.5)
+
+
 class TestConfigLShapedArgs(unittest.TestCase):
     """Tests for L-shaped CLI options."""
 
