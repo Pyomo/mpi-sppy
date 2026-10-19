@@ -60,7 +60,7 @@ class DCG(mpisppy.cgbase.CGBase):
         self.Iter0()
         if (verbose):
             print(f'Completed {self.__class__.__name__} Iter0 on global rank {global_rank}')
-        
+
         self.iterk_loop()
 
         if finalize:
@@ -70,7 +70,7 @@ class DCG(mpisppy.cgbase.CGBase):
             Eobj = None
 
         return self.conv, Eobj
-    
+
     def build_master_model(self):
         """Build the dual of the restricted master problem (dRMP)."""
         m = pyo.ConcreteModel()
@@ -99,14 +99,14 @@ class DCG(mpisppy.cgbase.CGBase):
             initialize=_init_dual_center_pi,
             mutable=True,
             )
-        
+
         m.epsilon = pyo.Param(initialize=1, mutable=True)
 
         def pi_sum_rule(m, *idx):
             return sum(m.pi[s, idx] for s in m.scen) == -self.nonant_obj_coef[idx]
 
         m.pi_sum = pyo.Constraint(m.nonant_indices, rule=pi_sum_rule)
-        
+
         def mu_sum_expr_rule(m):
             return sum(m.mu[s] for s in m.scen)
         m.mu_sum = pyo.Expression(rule=mu_sum_expr_rule)
@@ -124,7 +124,7 @@ class DCG(mpisppy.cgbase.CGBase):
             sense=pyo.maximize if self.is_minimizing else pyo.minimize,
         )
         return m   
-    
+
     def update_dual_center(self):
         """
         Update the regularization center if the outer bound candidate improved.
@@ -152,7 +152,7 @@ class DCG(mpisppy.cgbase.CGBase):
                 m.dual_center_pi[s, i] = pyo.value(m.pi[s, i])
 
         self.dual_center_outer_bound = self.outer_bound_candidate
-    
+
     def extract_duals_from_mp(self):
         """
         Extract dual values for nonanticipativity and convexity constraints from the dual master problem variables.
@@ -162,12 +162,12 @@ class DCG(mpisppy.cgbase.CGBase):
         for i in self.mp.nonant_indices:
             for s in self.mp.scen:
                 pi[s, i] = pyo.value(self.mp.pi[s, i])
-        
+
         for s in self.mp.scen:
             mu[s] = pyo.value(self.mp.mu[s])
 
         return pi, mu
-    
+
     def add_column_for_scenario(self, sname, cost, x_vec):
         """
         Add a new column for scenario sname to the RMP.
@@ -208,9 +208,9 @@ class DCG(mpisppy.cgbase.CGBase):
 
         """
         dprogress = self.options["display_progress"]
-        
+
         max_iterations = int(self.options["CGIterLimit"])
-        
+
 
         for self._CGIter in range(1, max_iterations+1):
             iteration_start_time = time.time()
@@ -223,7 +223,7 @@ class DCG(mpisppy.cgbase.CGBase):
                 self.solve_master_problem()
                 self.rmp_obj_val=pyo.value(self.mp.mu_sum)
                 self.pi_values, self.mu_values = self.extract_duals_from_mp()
-                
+
             # Broadcast dual values to all ranks
             self.pi_values = self.mpicomm.bcast(self.pi_values, root=0)
             self.mu_values = self.mpicomm.bcast(self.mu_values, root=0)
@@ -257,7 +257,7 @@ class DCG(mpisppy.cgbase.CGBase):
                     self.dual_center_outer_bound = None
 
                 self.update_dual_center()
-                
+
                 # Update outer bound and convergence metric.
                 if self.outer_bound_candidate is not None:
                     if self.best_bound_obj_val is None:
@@ -271,7 +271,7 @@ class DCG(mpisppy.cgbase.CGBase):
                         self.conv=(self.rmp_obj_val-self.best_bound_obj_val)/abs(self.best_bound_obj_val)
                     else:
                         self.conv=(self.best_bound_obj_val-self.rmp_obj_val)/abs(self.best_bound_obj_val)
-                
+
                 if dprogress:
                     print("")
                     print("After DCG Iteration",self._CGIter)
@@ -279,7 +279,7 @@ class DCG(mpisppy.cgbase.CGBase):
                     print("Scaled DCG Convergence Metric=",self.conv)
                     print("Iteration time: %6.2f" % (time.time() - iteration_start_time))
                     print("Elapsed time:   %6.2f" % (time.perf_counter() - self.start_time))
-                
+
             # Broadcast both bounds and the convergence metric so is_converged()
             # reaches the same verdict on every hub rank (see CGBase.iterk_loop).
             self.best_bound_obj_val = self.mpicomm.bcast(self.best_bound_obj_val, root=0)

@@ -43,7 +43,7 @@ class NetDes:
     def __init__(self, cfg):
         self.cfg = cfg
 
-        
+
     def scenario_creator(self, scenario_name, path=None):
         if path is None:
             raise RuntimeError('Must provide the name of the .dat file '

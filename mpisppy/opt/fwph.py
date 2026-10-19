@@ -38,7 +38,7 @@ from mpisppy.cylinders.spwindow import Field
 from mpisppy.extensions.xhatbase import XhatBase
 
 class FWPH(mpisppy.phbase.PHBase):
-    
+
     def __init__(
         self,
         options,
@@ -405,7 +405,7 @@ class FWPH(mpisppy.phbase.PHBase):
         '''
         mip = self.local_scenarios[model_name]
         qp  = self.local_QP_subproblems[model_name]
-    
+
         # Set the QP dual weights to the correct values.
         scen_mip = self.local_scenarios[model_name]
 
@@ -679,7 +679,7 @@ class FWPH(mpisppy.phbase.PHBase):
 
             x_indices is a list of tuples of the form...
                 (node name, variable index)
-            
+
             Must be called after the subproblems (MIPs AND QPs) are created.
         '''
         for mip in self.local_scenarios.values():
@@ -884,7 +884,7 @@ class FWPH(mpisppy.phbase.PHBase):
             QP._mpisppy_data.nonant_indices = pyo.Reference(QP.x)
 
             self.local_QP_subproblems[name] = QP
-                
+
     def _initialize_QP_var_values(self):
         ''' Set the value of the QP variables to be equal to the values of the
             corresponding MIP variables.
@@ -1069,7 +1069,7 @@ class FWPH(mpisppy.phbase.PHBase):
 
     def _set_QP_objective(self):
         ''' Attach dual weights, objective function and solver to each QP.
-        
+
             QP dual weights are initialized to the MIP dual weights.
         '''
 
@@ -1167,7 +1167,7 @@ class FWPH(mpisppy.phbase.PHBase):
 
                 Reruns SPBase._attach_nonant_indices so that the scenario 
                 _nonant_indices dictionary has the correct variable pointers
-                
+
                 Updates nonant_vardata_list but NOT nonant_list.
         '''
         for s, nonant_data in self._QP_nonants.items():

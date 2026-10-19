@@ -201,7 +201,7 @@ class Config(pyofig.ConfigDict):
            and not (self.get("ph_dual") or self.get("relaxed_ph")):
             _bad_options("--ph-primal-hub is used only when there is a cylinder that provideds Ws "
                          "such as --ph-dual or --relaxed-ph")
-        
+
         if self.get("rc_fixer") and not self.get("reduced_costs"):
             _bad_options("--rc-fixer requires --reduced-costs")
 
@@ -535,7 +535,7 @@ class Config(pyofig.ConfigDict):
                             description="Spaces delimited branching factors (e.g., 2 2)",
                             domain=pyofig.ListOf(int, pyofig.PositiveInt),
                             default=None)
-    
+
     def add_stage2_ef_solver_name_arg(self):
         if "stage2_ef_solver_name" in self:
             return
@@ -625,7 +625,7 @@ class Config(pyofig.ConfigDict):
                            domain=pyofig.In(["pyomo_feasibility",
                                              "standard_l1"]),
                            default="standard_l1")
-        
+
 
     ##### common additions to the command line #####
 
@@ -660,7 +660,7 @@ class Config(pyofig.ConfigDict):
         self.add_mipgap_specs()
 
     def aph_args(self):
-        
+
         self.add_to_config(name="APH",
                            description="Use APH instead of PH (default False)",
                            domain=bool,
@@ -1192,17 +1192,17 @@ class Config(pyofig.ConfigDict):
                             description="verbose output for reduced costs",
                             domain=bool,
                             default=False)
-        
+
         self.add_to_config('rc_debug',
                             description="debug output for reduced costs",
                             domain=bool,
                             default=False)
-        
+
         self.add_to_config('rc_fixer',
                             description="use the reduced cost fixer",
                             domain=bool,
                             default=False)
-        
+
         self.add_to_config('rc_fixer_require_improving_lagrangian',
                             description="Only consider fixing / unfixing variables after the lagrangian "
                                         "bound computed by the reduced cost spoke has improved. (default False)",
@@ -1223,12 +1223,12 @@ class Config(pyofig.ConfigDict):
                             description="target fix fraction for rc fixer in first iteration",
                             domain=float,
                             default=0.0)
-        
+
         self.add_to_config('rc_fix_fraction_iterk',
                             description="target fix fraction for rc fixer in subsequent iterations",
                             domain=float,
                             default=0.0)
-        
+
         self.add_to_config('rc_bound_tol',
                             description="tol to consider vars at bound",
                             domain=float,
@@ -1680,7 +1680,7 @@ class Config(pyofig.ConfigDict):
                               "scenario cuts (default 0.01)",
                               domain=float,
                               default=0.01)
-        
+
     # note: grad_rho_args was subsumed by gradient_args
 
     def gradient_args(self):
@@ -1732,7 +1732,7 @@ class Config(pyofig.ConfigDict):
                            description="primal threshold for diff during dynamic rho calcs",
                            domain=float,
                            default=0.1)
-        
+
         self.add_to_config("dynamic_rho_dual_thresh",
                            description="dual threshold for dirr during dynamic rho calcs",
                            domain=float,
@@ -2030,7 +2030,7 @@ class Config(pyofig.ConfigDict):
                                                                          output_dir=output_dir))
 
         # Override values from the file with any args specified in command line
-        
+
         args = self.import_argparse(args)
         return args
 

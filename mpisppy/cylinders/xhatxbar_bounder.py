@@ -85,7 +85,7 @@ class XhatXbarInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
             ib_iter += 1
 
         dtm.debug(f'IB xbar thread ran {ib_iter} iterations\n')
-    
+
         # for debugging
         #print("output .txt files for debugging in xhatxbar_bounder.py")
         #for k,s in self.opt.local_scenarios.items():

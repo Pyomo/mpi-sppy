@@ -87,7 +87,7 @@ class Test_sizes(unittest.TestCase):
         )
         model.NumProducedFirstStage[5].fix(1134) # 3scen -> 45k
         return model
-        
+
     def test_disable_tictoc(self):
         import mpisppy.utils.sputils as utils
         print("disabling tictoc output")
@@ -280,14 +280,14 @@ class Test_sizes(unittest.TestCase):
             scenario_denouement,
             scenario_creator_kwargs={"scenario_count": 3},
         )
-    
+
         conv, obj, tbound = ph.ph_main()
 
         # Actually, if it is still fixed for one scenario, probably fixed forall.
         for k,s in ph.local_scenarios.items():
             self.assertEqual(pyo.value(s.NumProducedFirstStage[5]), 1134)
             self.assertTrue(s.NumProducedFirstStage[5].is_fixed())
-        
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_ph_basic(self):
@@ -336,7 +336,7 @@ class Test_sizes(unittest.TestCase):
         for k,s in ph.local_scenarios.items():
             self.assertTrue(s.NumProducedFirstStage[5].is_fixed())
             self.assertEqual(pyo.value(s.NumProducedFirstStage[5]), 1134)
-        
+
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
@@ -355,7 +355,7 @@ class Test_sizes(unittest.TestCase):
         sig1obj = round_pos_sig(obj,1)
         self.assertEqual(200000.0, sig1obj)
 
-        
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_ph_write_read(self):
@@ -379,7 +379,7 @@ class Test_sizes(unittest.TestCase):
         os.remove(fname)
         self.assertEqual(len(rholist), rholen)  # not a deep test...
 
-        
+
     @unittest.skipIf(not persistent_available,
                      f"{persistent_solver_name} solver is not available")
     def test_persistent_basic(self):
@@ -409,7 +409,7 @@ class Test_sizes(unittest.TestCase):
         sig2basic = round_pos_sig(basic_obj,2)
         sig2pobj = round_pos_sig(pobj,2)
         self.assertEqual(sig2basic, sig2pobj)
-        
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_xhat_extension(self):
@@ -472,8 +472,8 @@ class Test_sizes(unittest.TestCase):
                     break
         assert gotit, f"The first nonant in Scenario1_nonants.json ({vname}) not found in Scenario1.lp"
         print(f"   deleting f{tdir}")
-        
-        
+
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_wtracker_extension(self):
@@ -520,7 +520,7 @@ class Test_sizes(unittest.TestCase):
             extensions=Wtracker_extension,
         )
         conv, basic_obj, tbound = ph.ph_main()
-        
+
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
@@ -548,7 +548,7 @@ class Test_sizes(unittest.TestCase):
             self.assertTrue(s.NumProducedFirstStage[5].is_fixed())
             self.assertEqual(pyo.value(s.NumProducedFirstStage[5]), 1134)
 
-            
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_xhatlooper_bound(self):
@@ -573,7 +573,7 @@ class Test_sizes(unittest.TestCase):
         dopts = sputils.option_string_to_dict("mipgap=0.0001")
         objbound = ph.post_solve_bound(solver_options=dopts, verbose=False)
         self.assertGreaterEqual(xhatobj+1.e-6, objbound)
-        
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def smoke_for_extensions(self):
@@ -641,7 +641,7 @@ class Test_sizes(unittest.TestCase):
         sig2obj = round_pos_sig(obj,2)
         self.assertEqual(sig2obj, 230000)
 
-            
+
 #*****************************************************************************
 class Test_hydro(unittest.TestCase):
     """ Test the mpisppy code using hydro (three stages)."""
@@ -650,7 +650,7 @@ class Test_hydro(unittest.TestCase):
         retval = _get_ph_base_options()
         retval["branching_factors"] = [3, 3]
         return retval
-    
+
 
     def setUp(self):
         self.options = self._copy_of_base_options()
@@ -711,7 +711,7 @@ class Test_hydro(unittest.TestCase):
         self.assertIn(60, pgt2_vals)
         os.remove("delme.csv")
 
-        
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_ef_csv(self):
@@ -727,7 +727,7 @@ class Test_hydro(unittest.TestCase):
             solver.set_instance(ef)
         results = solver.solve(ef, tee=False)
         pyo.assert_optimal_termination(results)
-    
+
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
@@ -751,7 +751,7 @@ class Test_hydro(unittest.TestCase):
         sig2eobj = round_pos_sig(ph.Eobjective(), 2)
         self.assertEqual(190, sig2eobj)
 
-        
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_ph_xhat_specific(self):

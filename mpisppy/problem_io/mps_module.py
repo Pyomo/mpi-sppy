@@ -114,7 +114,7 @@ def scenario_creator(sname, cfg=None):
                          )
         parent_ndn = ndn
         stage += 1
-        
+
     model._mpisppy_probability = scenProb
     model._mpisppy_node_list = treeNodes
 
@@ -279,7 +279,7 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
     # assert two stage, then do the usual for two stages?
     pass
 
-    
+
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
     pass

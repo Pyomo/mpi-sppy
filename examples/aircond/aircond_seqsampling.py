@@ -28,7 +28,7 @@ def main(cfg):
     num_scens = np.prod(BFs)
 
     scenario_names = ['Scenario' + str(i) for i in range(num_scens)]
-    
+
     xhat_gen_kwargs = {"scenario_names": scenario_names,
                         "solver_name": cfg.solver_name,
                         "solver_options": None,
@@ -60,7 +60,7 @@ def main(cfg):
                                 stopping_criterion="BPL",
                                 solving_type="EF_mstage",
                                 )
-        
+
     xhat = sampler.run()
     return xhat
 
@@ -74,7 +74,7 @@ def _parse_args():
     conf_config.BPL_config(cfg)  # --help will show both BM and BPL
 
     aircond.inparser_adder(cfg)
-    
+
     cfg.add_to_config("solver_name",
                       description = "solver name (e.g. gurobi)",
                       domain = str,
@@ -95,7 +95,7 @@ def _parse_args():
                       default=None)
 
     cfg.parse_command_line("farmer_sequential")
-    
+
     if cfg.BM_vs_BPL is None:
         raise RuntimeError("--BM-vs-BPL must be given.")
     if cfg.BM_vs_BPL != "BM" and cfg.BM_vs_BPL != "BPL":

@@ -37,7 +37,7 @@ def scenario_creator(
         num_scens=None, seedoffset=0
 ):
     """ Create a scenario for the (scalable) farmer example.
-    
+
     Args:
         scenario_name (str):
             Name of the scenario to construct, which might be a bundle.
@@ -94,7 +94,7 @@ def scenario_creator(
         else:
             model._mpisppy_probability = "uniform"
         return model
-    
+
     elif "bund" == scenario_name[:4] or "Bund" == scenario_name[:4]:
         firstnum = int(scenario_name.split("_")[1])
         lastnum = int(scenario_name.split("_")[2])
@@ -140,7 +140,7 @@ def pysp_instance_creation_callback(
     # scenarios come in groups of three
     scengroupnum = sputils.extract_num(scenario_name)
     scenario_base_name = scenario_name.rstrip("0123456789")
-    
+
     model = pyo.ConcreteModel(scenario_name)
 
     def crops_init(m):
@@ -165,7 +165,7 @@ def pysp_instance_creation_callback(
            for crop in ['WHEAT', 'CORN', 'SUGAR_BEETS']:
                outdict[crop+str(i)] = indict[crop]
         return outdict
-        
+
     model.PriceQuota = _scale_up_data(
         {'WHEAT':100000.0,'CORN':100000.0,'SUGAR_BEETS':6000.0})
 
@@ -294,7 +294,7 @@ def inparser_adder(cfg):
                       description="number of crops will be three times this (default 1)",
                       domain=int,
                       default=1)
-    
+
     cfg.add_to_config("farmer_with_integers",
                       description="make the version that has integers (default False)",
                       domain=bool,
@@ -303,7 +303,7 @@ def inparser_adder(cfg):
                       description="number of scenarios per bundle (default 0, which means no bundles, as does 1)",
                       domain=int,
                       default=0)
-    
+
 
 #=========
 def kw_creator(cfg):
@@ -367,4 +367,4 @@ def bundle_hack(cfg):
         original_num_scens = cfg.num_scens
         cfg.num_scens = numbuns
 
-        
+

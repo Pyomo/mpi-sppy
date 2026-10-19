@@ -41,7 +41,7 @@ def stoch_param_name_pairs_creator():
 
 def scenario_creator(scenario_name, mi, job, cfg=None):
     """ Create a scenario for the (scalable) farmer example.
-    
+
     Args:
         scenario_name (str):
             Name of the scenario to construct.
@@ -69,7 +69,7 @@ def scenario_creator(scenario_name, mi, job, cfg=None):
 
     return mi
 
-        
+
 #=========
 def scenario_names_creator(num_scens,start=None):
     return farmer.scenario_names_creator(num_scens,start)
@@ -79,7 +79,7 @@ def scenario_names_creator(num_scens,start=None):
 def inparser_adder(cfg):
     farmer.inparser_adder(cfg)
 
-    
+
 #=========
 def kw_creator(cfg):
     # creates keywords for scenario creator

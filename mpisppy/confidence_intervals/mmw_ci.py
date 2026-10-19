@@ -14,7 +14,7 @@ import numpy as np
 from pyomo.common.dependencies import scipy
 import importlib
 from mpisppy import global_toc
-    
+
 import mpisppy.utils.amalgamator as ama
 import mpisppy.confidence_intervals.ciutils as ciutils
 
@@ -45,14 +45,14 @@ class MMWConfidenceIntervals:
         start (int): first scenario used to run the MMW estimator, 
                     default None
                 If start is None, then start=options[num_scens]+options[start] is used
-    
+
     Note:
         cfg can include the following things:
             -The type of our solving. for now, MMWci only support EF, so it must
             have an attribute 'EF-2stage' or 'EF-mstage' set equal to True
             - Solver-related options ('EF_solver_name' and 'EF_solver_options')
-            
-    
+
+
     """
     def __init__(self,
                  refmodel,
@@ -77,7 +77,7 @@ class MMWConfidenceIntervals:
         if start is None :
             raise RuntimeError( "Start must be specified")
         self.start = start
-            
+
         #Type of our problem
         if ama._bool_option(cfg, "EF_2stage"):
             self.type = "EF_2stage"
@@ -90,12 +90,12 @@ class MMWConfidenceIntervals:
         else:
             raise RuntimeError("Only EF is currently supported; "
                 "cfg should have an attribute 'EF-2stage' or 'EF-mstage' set to True")
-        
+
         #Check if refmodel and args have all needed attributes
         everything = ["scenario_names_creator", "scenario_creator", "kw_creator"]
         if self.multistage:
             everything[0] = "sample_tree_scen_creator"
-    
+
         you_can_have_it_all = True
         for ething in everything:
             if not hasattr(self.refmodel, ething):
@@ -103,7 +103,7 @@ class MMWConfidenceIntervals:
                 you_can_have_it_all = False
         if not you_can_have_it_all:
             raise RuntimeError(f"Module {refmodel} not complete for MMW")
-        
+
         if "EF_solver_name" not in self.cfg:
             raise RuntimeError("EF_solver_name not in Argument list for MMW")
 
@@ -113,7 +113,7 @@ class MMWConfidenceIntervals:
 
         #Compute the nonant xhat (the one used in the left term of MMW (9) ) using
         #                                                        the first scenarios
-        
+
         ############### get the parameters
         start = self.start
         scenario_denouement = self.refmodel.scenario_denouement
@@ -122,7 +122,7 @@ class MMWConfidenceIntervals:
         num_batches = self.num_batches
         batch_size = self.batch_size
         sample_cfg = self.cfg()  # ephemeral changes
-        
+
         #Some options are specific to 2-stage or multi-stage problems
         if self.multistage:
             sampling_branching_factors = ciutils.branching_factors_from_numscens(batch_size,self.numstages)
@@ -138,7 +138,7 @@ class MMWConfidenceIntervals:
         solver_name = self.cfg['EF_solver_name']
         solver_options = self.cfg.get('EF_solver_options')
         solver_options = remove_None(solver_options)
-            
+
         #Now we compute for each batch the whole Gn term from MMW (9)
 
         G = np.zeros(num_batches) #the Gbar of MMW (10)
@@ -182,15 +182,15 @@ class MMWConfidenceIntervals:
         minimizing = estim.get("is_minimizing", True)
         gap_inner_bound = (Gbar if minimizing else -Gbar) + epsilon_g
         gap_outer_bound = 0
- 
+
         self.result={"gap_inner_bound": gap_inner_bound,
                       "gap_outer_bound": gap_outer_bound,
                       "Gbar": Gbar,
                       "std": s_g,
                       "Glist": G}
-        
+
         return(self.result)
-        
-        
+
+
 if __name__ == "__main__":
     raise RuntimeError("mmw_ci does not have a __main__")

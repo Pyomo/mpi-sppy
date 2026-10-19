@@ -73,7 +73,7 @@ if __name__ == "__main__":
     options["wtracker_options"] ={"wlen": 4,
                                   "reportlen": 6,
                                   "stdevthresh": 0.1}
-    
+
 
     all_scenario_names = list()
     for sn in range(ScenCount):
@@ -108,7 +108,7 @@ if __name__ == "__main__":
         extensions=MultiExtension,
         extension_kwargs=multi_ext,
     )
-    
+
     conv, obj, tbound = ph.ph_main()
     if ph.cylinder_rank == 0:
          print ("Trival bound =",tbound)
@@ -117,7 +117,7 @@ if __name__ == "__main__":
     #quit()
 
     ############ test W and xbar writers and special joint reader  ############
-    
+
     newph = mpisppy.opt.ph.PH(
         options,
         all_scenario_names,
@@ -131,7 +131,7 @@ if __name__ == "__main__":
 
     conv, obj, tbound = newph.ph_main()
     #####
-    
+
     newph = mpisppy.opt.ph.PH(
         options,
         all_scenario_names,
@@ -177,7 +177,7 @@ if __name__ == "__main__":
         scenario_denouement,
         scenario_creator_kwargs={"scenario_count": ScenCount},
     )
-    
+
     conv = ph.ph_main(rho_setter=_rho_setter)
 
     ### avg, min, max extension #####
@@ -196,5 +196,5 @@ if __name__ == "__main__":
     options["avgminmax_name"] =  "FirstStageCost"
     conv, obj, bnd = ph.ph_main()
 
-    
+
 

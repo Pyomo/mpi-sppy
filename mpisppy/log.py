@@ -16,19 +16,19 @@ Examples
 To use the logger in your code, add the following 
 after your import
 .. code-block:: python
-   
+
    import logging
    logger = logging.getLogger('mpisppy.path.to.module')
 
 Then, you can use the standard logging functions
 .. code-block:: python
-   
+
    logger.debug('message')
    logger.info('message')
    logger.warning('message')
    logger.error('message')
    logger.critical('message')
-   
+
 Note that by default, any message that has a logging level
 of warning or higher (warning, error, critical) will be
 logged.

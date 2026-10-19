@@ -137,7 +137,7 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
 
     def post_iter0(self):
         pass
-        
+
     def miditer(self):
         ''' Called before the solveloop is called '''
 

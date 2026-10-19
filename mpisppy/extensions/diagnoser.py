@@ -63,7 +63,7 @@ class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
                 f.write(str(dt.datetime.now())+", diagnoser\n")
 
         self.write_loop()
-        
+
     def miditer(self):
         return
 

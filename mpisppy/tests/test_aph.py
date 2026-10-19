@@ -63,7 +63,7 @@ class Test_aph_sizes(unittest.TestCase):
         for k,v in self.Baseoptions.items():
             retval[k] = v
         return retval
-        
+
     def test_make_aph(self):
         """ Just smoke to verify construction"""
         options = self._copy_of_base_options()
@@ -190,7 +190,7 @@ class Test_aph_farmer(unittest.TestCase):
 
     def _make_scenario_names(self, cnt):
         return [f"Scenario{i+1}" for i in range(cnt)]
-        
+
     @unittest.skipIf(not solver_available,
                      f"{solver_name} solver is not available")
     def test_aph_farmer_basic30(self):

@@ -83,7 +83,7 @@ def pack_no_good_feasibility_cut(opt):
 class XhatBase(mpisppy.extensions.extension.Extension):
     """
         Any inherited class must implement the preiter0, postiter etc. methods
-        
+
         Args:
             opt (SPOpt object): gives the problem that we bound
 
@@ -109,7 +109,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
 
         self.scenario_name_to_rank = opt.scenario_names_to_rank
         # dict: scenario names --> LOCAL rank number (needed mainly for xhat)
-        
+
      #**********
     def _try_one(self, snamedict, solver_options=None, verbose=False,
                  restore_nonants=True, stage2_ef_solver_name=None, branching_factors=None):
@@ -144,7 +144,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             sopt = dict(solver_options)
             Tee = sopt["Tee"]
             del sopt["Tee"]
-        
+
         # For now, we are going to treat two-stage as a special case
         if len(snamedict) == 1:
             sname = snamedict["ROOT"]  # also serves as an assert
@@ -267,7 +267,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                     if restore_nonants:
                         self.opt._restore_nonants()
                     return None
-               
+
             # feasible xhat found, so finish up 2EF part and return
             if verbose and src_rank == self.cylinder_rank:
                 print("   Feasible xhat found:")
@@ -416,7 +416,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
     def post_iter0(self):
         # the base class needs this
         self.comms = self.opt.comms
-        
+
 """
 May 2020, DLW
 Simple tree with branching factors (arbitrary trees later)

@@ -65,13 +65,13 @@ def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs
         prod = prod//bf
         nodenames.append(str(s//prod))
         s = s%prod
-    
+
     stagelist = [int(x) for x in nodenames[1:]]
     for t in range(1,len(nodenames)):
         aircondstream.seed(start_seed+sputils.node_idx(stagelist[:t],sample_branching_factors))
         d = min(max_d,max(min_d,d+aircondstream.normal(mu_dev,sigma_dev)))
         demands.append(d)
-    
+
     return demands,nodenames
 
 def general_rho_setter(scenario_instance, rho_scale_factor=1.0):
@@ -104,7 +104,7 @@ def aircond_model_creator(demands, **kwargs):
 def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
     return base_aircond.MakeNodesforScen(model,nodenames,branching_factors,starting_stage=starting_stage)
 
-        
+
 def scenario_creator(sname, **kwargs):
     """
     NOTE: modified Feb/March 2022 to be able to return a bundle if the name
@@ -120,7 +120,7 @@ def scenario_creator(sname, **kwargs):
         bunBFs = [bunsize // beyond2size] + branching_factors[1:]  # branching factors in the bundle
         return bunBFs
 
-    
+
     # NOTE: start seed is not used here (noted Feb 2022)
     start_seed = kwargs['start_seed']
     if "branching_factors" not in kwargs:
@@ -175,13 +175,13 @@ def scenario_creator(sname, **kwargs):
         return bundle
     else:
         raise RuntimeError (f"Scenario name does not have scen or Bundle: {sname}")
-        
+
 
 def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
                              given_scenario=None, **scenario_creator_kwargs):
     return base_aircond.sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
                              given_scenario=given_scenario, **scenario_creator_kwargs)
-                
+
 
 #=========
 def scenario_names_creator(num_scens,start=None):
@@ -190,14 +190,14 @@ def scenario_names_creator(num_scens,start=None):
     if (start is None) :
         start=0
     return [f"scen{i}" for i in range(start,start+num_scens)]
-        
+
 
 #=========
 def inparser_adder(cfg):
     base_aircond.inparser_adder(cfg)
     # special "proper" bundle arguments
     cfg.proper_bundle_config()
-    
+
 
 #=========
 def kw_creator(options=None):
@@ -226,6 +226,6 @@ def xhat_generator_aircond(scenario_names, solver_name="gurobi", solver_options=
 
 if __name__ == "__main__":
     print("not directly runnable.")
-   
-        
-        
+
+
+

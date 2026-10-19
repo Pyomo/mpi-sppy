@@ -61,7 +61,7 @@ class TestStochAdmmWrapper(unittest.TestCase):
 
     def tearDown(self):
         pass
-    
+
     def _cfg_creator(self, num_stoch_scens, num_admm_subproblems):
         # Needs to be modified
         cfg = config.Config()
@@ -71,7 +71,7 @@ class TestStochAdmmWrapper(unittest.TestCase):
         cfg.num_admm_subproblems = num_admm_subproblems
 
         return cfg
-    
+
     def _make_admm(self, num_stoch_scens, num_admm_subproblems, verbose=False):
         cfg = self._cfg_creator(num_stoch_scens, num_admm_subproblems)
         admm, all_admm_stoch_subproblem_scenario_names = stoch_distr_admm_cylinders._make_admm(cfg,n_cylinders=1,verbose=verbose)
@@ -87,7 +87,7 @@ class TestStochAdmmWrapper(unittest.TestCase):
         cfg.quick_assign("num_batches", int, 2)
         cfg.quick_assign("batch_size", int, 10)
 
-    
+
     def test_constructor(self):
         for num_stoch_scens in range(3,5):
             for num_admm_subproblems in range(3,5):
@@ -107,7 +107,7 @@ class TestStochAdmmWrapper(unittest.TestCase):
         q = admm.admmWrapper_scenario_creator(sname)
         self.assertTrue(q.y__DC1DC2__.is_fixed())
         self.assertFalse(q.y["DC3_1DC1"].is_fixed())
-    
+
     def test_get_scenario_unscaled(self):
         admm = self._make_admm(4, 3)
         sname = "ADMM_STOCH_Region1_StochasticScenario1"
@@ -121,13 +121,13 @@ class TestStochAdmmWrapper(unittest.TestCase):
         admm = self._make_admm(2,3)
         admm.consensus_vars["Region1"].append((self._slack_name("DC2DC3"),2)) # The variable is added in the second stage
         self.assertRaises(RuntimeError, admm.assign_variable_probs, admm)
-        
+
     def test_assign_variable_probs_error2(self):
         admm = self._make_admm(2,3)
         admm.consensus_vars["Region1"].remove((self._slack_name("DC3_1DC1"),2))
         self.assertRaises(RuntimeError, admm.assign_variable_probs, admm)
 
-    
+
     def _extracting_output(self, line):
         import re
         pattern = r'\[\s*\d+\.\d+\]\s+\d+\s+(?:L\s*B?|B\s*L?)?\s+([-.\d]+)\s+([-.\d]+)'
@@ -171,7 +171,7 @@ class TestStochAdmmWrapper(unittest.TestCase):
             os.chdir(target_directory)
             objectives = {}
             command = command_line_pairs[j][0].split()
-            
+
             result = subprocess.run(command, capture_output=True, text=True)
             # Filter out harmless MPI warnings from stderr
             stderr_lines = [line for line in result.stderr.splitlines()
@@ -199,7 +199,7 @@ class TestStochAdmmWrapper(unittest.TestCase):
                     i += 1
                 elif target_line in line:
                     precedent_line_target = True
-            
+
             # For the EF
             command = command_line_pairs[j][1].split()
             result = subprocess.run(command, capture_output=True, text=True)
@@ -216,7 +216,7 @@ class TestStochAdmmWrapper(unittest.TestCase):
                 raise RuntimeError("The output could not be read to capture the values")
             assert correct_order, f' We obtained {objectives["outer bound"]=}, {objectives["EF objective"]=}, {objectives["inner bound"]=}'
             os.chdir(original_dir)
-    
+
 
 
     def _extracting_outer_bound(self, stdout):

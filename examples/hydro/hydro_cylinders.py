@@ -56,10 +56,10 @@ def main():
     scenario_creator = hydro.scenario_creator
     scenario_denouement = hydro.scenario_denouement
     rho_setter = None
-    
+
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
-    
+
     # Vanilla PH hub
     hub_dict = vanilla.ph_hub(*beans,
                               scenario_creator_kwargs=scenario_creator_kwargs,
@@ -78,7 +78,7 @@ def main():
 
 
     # xhat looper bound spoke
-    
+
     if xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans,
                                                       all_nodenames=all_nodenames,
@@ -101,7 +101,7 @@ def main():
 
     if wheel.global_rank == 0:  # we are the reporting hub rank
         print(f"BestInnerBound={wheel.BestInnerBound} and BestOuterBound={wheel.BestOuterBound}")
-    
+
     if write_solution:
         wheel.write_first_stage_solution('hydro_first_stage.csv')
         wheel.write_tree_solution('hydro_full_solution')

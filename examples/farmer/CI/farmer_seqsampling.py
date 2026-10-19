@@ -50,7 +50,7 @@ def xhat_generator_farmer(scenario_names, solver_name=None, solver_options=None,
     -------
     xhat: str
         A generated xhat, solution to the approximate problem induced by scenario_names.
-        
+
     NOTE: This tool only works when the file is in mpisppy. In SPInstances, 
             you must change the from_module line.
 
@@ -65,19 +65,19 @@ def xhat_generator_farmer(scenario_names, solver_name=None, solver_options=None,
     cfg.quick_assign("num_scens", int, num_scens)
     cfg.quick_assign("_mpisppy_probability", float, 1/num_scens)
     cfg.quick_assign("start_seed", int, start_seed)
-    
+
     #We use from_module to build easily an Amalgamator object
     ama = amalgamator.from_module("farmer", cfg, use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
     ama.verbose = False
     ama.run()
-    
+
     # get the xhat
     xhat = sputils.nonant_cache_from_ef(ama.ef)
 
     return {'ROOT': xhat['ROOT']}
-    
+
 
 
 def main(cfg):
@@ -93,9 +93,9 @@ def main(cfg):
     assert cfg.EF_solver_name is not None
     solver_name = cfg.EF_solver_name
     crops_multiplier = cfg.crops_multiplier
-    
+
     scenario_names = ['Scenario' + str(i) for i in range(scen_count)]
-    
+
     xhat_gen_kwargs = {"scenario_names": scenario_names,
                        "solver_name": solver_name,
                        "solver_options": None,
@@ -129,7 +129,7 @@ def main(cfg):
 def _parse_args():
     # create a config object and parse
     cfg = config.Config()
-    
+
     cfg.num_scens_required()
 
     farmer.inparser_adder(cfg)
@@ -180,14 +180,14 @@ def _parse_args():
         raise RuntimeError("--BM-vs_BPL must be given.")
     if cfg.BM_vs_BPL != "BM" and cfg.BM_vs_BPL != "BPL":
         raise RuntimeError(f"--BM-vs_BPL must be BM or BPL (you gave {cfg.BM_vs_BMPL})")
-    
+
     return cfg
 
 
 if __name__ == '__main__':
 
     cfg = _parse_args()
-    
+
     results = main(cfg)
     print("Final gap confidence interval results:", results)
 

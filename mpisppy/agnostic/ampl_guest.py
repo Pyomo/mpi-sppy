@@ -52,7 +52,7 @@ global_rank = fullcomm.Get_rank()
 class AMPL_guest:
     """
     Provide an interface to a model file for an AMPL guest.
-    
+
     Args:
         model_file_name (str): name of Python file that has functions like scenario_creator
         ampl_file_name (str): name of AMPL file that is passed to the model file
@@ -75,7 +75,7 @@ class AMPL_guest:
                 if "binary" in str(v) or "integer" in str(v):
                     return True
             return False
-        
+
         s, prob, nonant_vardata_list, obj_fct = self.model_module.scenario_creator(scenario_name,
                                                                      self.ampl_file_name,
                                                                      **kwargs)
@@ -344,7 +344,7 @@ class AMPL_guest:
             gs.get_parameter("xbars").set_values(xbarsdict)
         else:
             pass  # presumably an xhatter; we should check, I suppose
-        
+
 
     # local helper
     def _copy_nonants_from_host(self, s):

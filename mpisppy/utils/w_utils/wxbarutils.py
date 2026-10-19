@@ -15,9 +15,9 @@
     Could stand to be re-factored a bit.
 
     When reading/writing the weight files, there are two options.
-        
+
      1. All weights are stored in a single main file. 
-        
+
             Reading: Set "init_W_fname" to the location of the main file
             containing all of the weights.
 
@@ -25,7 +25,7 @@
             contain all the weights.
 
      2. Each scenario's weights are stored in separate, individual files.
-        
+
             Reading: Set "init_W_fname" to the directory containing the weight
             files. This directory must contain one file per scenario, each
             named <scenario_name>_weights.csv. Set "init_separate_W_files" to
@@ -103,7 +103,7 @@ def set_W_from_file(fname, PHB, rank, sep_files=False, disable_check=False):
             individual files, one per scenario. The files must be contained in
             the same directory, and must be named <sname>_weights.csv for each
             scenario name <sname>.
-    
+
     Notes:
         Calls _check_W, which ensures that all required values were specified,
         and that the specified weights satisfy the dual feasibility condition 
@@ -159,7 +159,7 @@ def _parse_W_csv_single(fname):
 
 def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
     ''' Read a csv file containing weight information. 
-        
+
         Args:
             fname (str) -- Filename of csv file to read
             scenario_names_local (list of str) -- List of local scenario names
@@ -170,7 +170,7 @@ def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
         Return:
             results (dict) -- Doubly-nested dict mapping 
                 results[scenario_name][var_name] --> weight value (float)
-    
+
         Notes:
             This function is only called if sep_files=False, i.e., if all of
             the weights are stored in a single root file. The file must be
@@ -204,7 +204,7 @@ def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
             sname = line[0]
             vname = ','.join(line[1:-1])
             wval  = float(line[-1])
-            
+
             if (sname not in scenario_names_global):
                 if (rank == 0):
                     print('WARNING: Ignoring unknown scenario name', sname)
@@ -222,9 +222,9 @@ def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
             f"rank {rank} could not find the following scenarios in the provided weight file: "
             f"{nice_join(missing, conjunction=None)}."
         )
-        
+
     return results
-            
+
 def _check_W(w_val_dict, PHB, rank):
     '''
     Args:
@@ -235,7 +235,7 @@ def _check_W(w_val_dict, PHB, rank):
 
     Notes:
         Checks for three conditions:
-         
+
          1. Missing variables --> raises a RuntimeError
          2. Extra variables --> prints a warning
          3. Dual feasibility --> raises a RuntimeError
@@ -256,7 +256,7 @@ def _check_W(w_val_dict, PHB, rank):
             print(f'Removing unknown variables: {nice_join(diff, conjunction=None)}.')
             for vname in diff:
                 w_val_dict[sname].pop(vname, None)
-        
+
     # At this point, we are sure that every local 
     # scenario has the same set of variables
     probs = {name: model._mpisppy_probability for (name, model) in
@@ -326,12 +326,12 @@ def set_xbar_from_file(fname, PHB):
 
 def _parse_xbar_csv(fname):
     ''' Read a csv file containing weight information. 
-        
+
         Args:
             fname (str) -- Filename of csv file to read
         Return:
             results (dict) -- Dict mapping var_name --> variable value (float)
-    
+
         Notes:
             The file must be formatted as:
 
@@ -355,7 +355,7 @@ def _parse_xbar_csv(fname):
             line  = line.split(',')
             vname = ','.join(line[:-1])
             val  = float(line[-1])
-            
+
             results[vname] = val
 
     return results

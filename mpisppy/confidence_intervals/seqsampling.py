@@ -55,7 +55,7 @@ def is_needed(cfg, needed_things, message=""):
                            f"{needed_things}\n"
                            f"missing: {absent}\n"
                            f"{message}")
-        
+
 
 def add_options(cfg, optional_things):
     # allow for defaults on options that Bayraksan et al establish 
@@ -100,7 +100,7 @@ def xhat_generator_farmer(scenario_names, solver_name=None, solver_options=None,
 
     '''
     num_scens = len(scenario_names)
-    
+
     cfg = config.Config()
     cfg.quick_assign("EF_2stage", bool, True)
     cfg.quick_assign("EF_solver_name", str, solver_name)
@@ -114,7 +114,7 @@ def xhat_generator_farmer(scenario_names, solver_name=None, solver_options=None,
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
     ama.run()
-    
+
     # get the xhat
     xhat = sputils.nonant_cache_from_ef(ama.ef)
 
@@ -125,7 +125,7 @@ class SeqSampling:
     """
     Computing a solution xhat and a confidence interval for the optimality gap sequentially,
     by taking an increasing number of scenarios.
-    
+
     Args:
         refmodel (str): path of the model we use (e.g. farmer, uc)
         xhat_generator (function): a function that takes scenario_names (and 
@@ -152,7 +152,7 @@ class SeqSampling:
                             (default is 0.95)
                         -Some other parameters, depending on what model 
                             (BM or BPL, deterministic or sequential sampling)
-                        
+
         stochastic_sampling (bool, default False):  should we compute sample sizes using estimators ?
             if stochastic_sampling is True, we compute sample size using §5 of [Bayraksan and Pierre-Louis]
             else, we compute them using [Bayraksan and Morton] technique
@@ -162,7 +162,7 @@ class SeqSampling:
             Must be one of 'EF-2stage' and 'EF-mstage' (for problems with more than 2 stages).
             Solving methods outside EF are not supported yet.
     """
-    
+
     def __init__(self,
                  refmodel,
                  xhat_generator,
@@ -170,7 +170,7 @@ class SeqSampling:
                  stochastic_sampling = False,
                  stopping_criterion = "BM",
                  solving_type = "None"):
-        
+
         if not isinstance(cfg, config.Config):
             raise RuntimeError(f"SeqSampling bad cfg type={type(cfg)}; should be Config")
         self.refmodel = importlib.import_module(refmodel)
@@ -182,7 +182,7 @@ class SeqSampling:
         self.solving_type = solving_type
         self.sample_size_ratio = cfg.get("sample_size_ratio", 1)
         self.xhat_gen_kwargs = cfg.get("xhat_gen_kwargs", {})
-        
+
         #Check if refmodel has all needed attributes
         everything = ["scenario_names_creator",
                  "scenario_creator",
@@ -206,8 +206,8 @@ class SeqSampling:
 
         if self.stochastic_sampling :
             add_options(cfg, {"n0min": 50})
-                
-                
+
+
         if self.stopping_criterion == "BM":
             needed_things = ["BM_eps_prime","BM_hprime","BM_eps","BM_h","BM_p"]
             is_needed(cfg, needed_things)
@@ -225,7 +225,7 @@ class SeqSampling:
             setattr(self, oname, cfg[oname]) # Set every option as an attribute
         sroot, self.solver_name, self.solver_options = solver_spec.solver_specification(cfg, ["EF",""])
         assert self.solver_name is not None
-        
+
         #Check the solving_type, and find if the problem is multistage
         two_stage_types = ['EF_2stage']
         multistage_types = ['EF_mstage']
@@ -237,7 +237,7 @@ class SeqSampling:
             raise RuntimeError(f"The solving_type {self.solving_type} is not supported. "
                                f"If you want to run a 2-stage problem, please use a solving_type in {two_stage_types}. "
                                f"If you want to run a multistage stage problem, please use a solving_type in {multistage_types}")
-        
+
         #Check the multistage options
         if self.multistage:
             needed_things = ["branching_factors"]
@@ -249,7 +249,7 @@ class SeqSampling:
             if not hasattr(cfg, 'kf_xhat') or cfg['kf_xhat'] != 1:
                 print("kf_Gs must be 1 for multi-stage, so assigning 1")
                 cfg.quick_assign("kf_xhat", int, 1)
-        
+
         #Get the stopping criterion
         if self.stopping_criterion == "BM":
             self.stop_criterion = self.bm_stopping_criterion
@@ -257,7 +257,7 @@ class SeqSampling:
             self.stop_criterion = self.bpl_stopping_criterion
         else:
             raise RuntimeError("Only BM and BPL criteria are supported.")
-            
+
         #Get the function computing sample size
         if self.stochastic_sampling:
             self.sample_size = self.stochastic_sampsize
@@ -267,26 +267,26 @@ class SeqSampling:
             self.sample_size = self.bpl_fsp_sampsize
         else:
             raise RuntimeError("Only BM and BPL sample sizes are supported yet")
-        
+
         #To be sure to always use new scenarios, we set a ScenCount that is 
         #telling us how many scenarios has been used so far
         self.ScenCount = 0
-        
+
         #If we are running a multistage problem, we also need a seed count
         self.SeedCount = 0
-            
-            
+
+
     def bm_stopping_criterion(self,G,s,nk):
         # arguments defined in [bm2011]
         return(G>self.BM_hprime*s+self.BM_eps_prime)
-    
+
     def bpl_stopping_criterion(self,G,s,nk):
         # arguments defined in [bpl2012]
         t = scipy.stats.t.ppf(self.confidence_level,nk-1)
         sample_error = t*s/np.sqrt(nk)
         inflation_factor = 1/np.sqrt(nk)
         return(G+sample_error+inflation_factor>self.BPL_eps)
-    
+
     def bm_sampsize(self,k,G,s,nk_m1, r=2):
         # arguments defined in [bm2011]
         h = self.BM_h
@@ -304,7 +304,7 @@ class SeqSampling:
                 j = np.arange(1,1000)
                 s = sum(np.power(j,-p*np.log(j)))
                 c = max(1,2*np.log(s/(np.sqrt(2*np.pi)*(1-confidence_level))))
-            
+
             lower_bound = (c+2*p* np.log(k)**2)/((h-hprime)**2)
         else :
             # Computing n_k as in (14) of [Bayraksan and Morton, 2009]
@@ -316,15 +316,15 @@ class SeqSampling:
                 j = np.arange(1,1000)
                 s = sum(np.exp(-p*np.power(j,2*q/r)))
                 c = max(1,2*np.log(s/(np.sqrt(2*np.pi)*(1-confidence_level))))
-            
+
             lower_bound = (c+2*p*np.power(k,2*q/r))/((h-hprime)**2)   
         #print(f"nk={lower_bound}")
         return int(np.ceil(lower_bound))
-    
+
     def bpl_fsp_sampsize(self,k,G,s,nk_m1):
         # arguments defined in [bpl2012]
         return(int(np.ceil(self.BPL_c0+self.BPL_c1*self.functions_dict["growth_function"](k))))
-        
+
     def stochastic_sampsize(self,k,G,s,nk_m1):
         # arguments defined in [bpl2012]
         if (k==1):
@@ -340,8 +340,8 @@ class SeqSampling:
         print(f"a={a}, b={b},c={c},delta={b**2-4*a*c}")
         print(f"At iteration {k}, we took n_k={int(np.ceil(maxroot**2))}")
         return(int(np.ceil(maxroot**2)))
-    
-    
+
+
     def _min_only_guard(self, is_minimizing):
         # Sequential sampling's BM/BPL stopping criteria and sample-size rules
         # assume a non-negative, shrinking optimality gap, which holds only for
@@ -369,13 +369,13 @@ class SeqSampling:
                                  "will be used. The class IndepScens_SeqSampling uses independent samples and therefor has better theoretical support.")
         refmodel = self.refmodel
         mult = self.sample_size_ratio # used to set m_k= mult*n_k
-        
-        
+
+
         #----------------------------Step 0 -------------------------------------#
         #Initialization
         k =1
-        
-        
+
+
         #Computing the lower bound for n_1
 
 
@@ -390,9 +390,9 @@ class SeqSampling:
                     raise RuntimeError("Parameter q should be greater than 1.")
                 s = sum(np.exp(-self.BM_p*np.power(j,2*self.BM_q/r)))
             self.c = max(1,2*np.log(s/(np.sqrt(2*np.pi)*(1-self.confidence_level))))
-                
+
         lower_bound_k = self.sample_size(k, None, None, None)
-        
+
         #Computing xhat_1.
 
         #We use sample_size_ratio*n_k observations to compute xhat_k
@@ -401,7 +401,7 @@ class SeqSampling:
             mk = np.prod(xhat_branching_factors)
             self.xhat_gen_kwargs['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
             xhat_scenario_names = refmodel.scenario_names_creator(mk)
-            
+
         else:
             mk = int(np.floor(mult*lower_bound_k))
             xhat_scenario_names = refmodel.scenario_names_creator(mk, start=self.ScenCount)
@@ -417,12 +417,12 @@ class SeqSampling:
                                    solver_options=self.solver_options,
                                      **xgo)
 
-    
+
         #----------------------------Step 1 -------------------------------------#
         #Computing n_1 and associated scenario names
         if self.multistage:
             self.SeedCount += sputils.number_of_nodes(xhat_branching_factors)
-            
+
             gap_branching_factors = ciutils.scalable_branching_factors(lower_bound_k, self.cfg['branching_factors'])
             nk = np.prod(gap_branching_factors)
             estimator_scenario_names = refmodel.scenario_names_creator(nk)
@@ -433,7 +433,7 @@ class SeqSampling:
                                                                        start=self.ScenCount)
             sample_options = None
             self.ScenCount+= nk
-        
+
         #Computing G_nkand s_k associated with xhat_1
 
         lcfg = self.cfg()   # local copy
@@ -452,7 +452,7 @@ class SeqSampling:
         Gk,sk = estim['G'],estim['s']
         if self.multistage:
             self.SeedCount = estim['seed']
-        
+
         #----------------------------Step 2 -------------------------------------#
 
         while( self.stop_criterion(Gk,sk,nk) and k<maxit):
@@ -461,14 +461,14 @@ class SeqSampling:
             nk_m1 = nk #n_{k-1}
             mk_m1 = mk
             lower_bound_k = self.sample_size(k, Gk, sk, nk_m1)
-            
+
             #Computing m_k and associated scenario names
             if self.multistage:
                 xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, lcfg['branching_factors'])
                 mk = np.prod(xhat_branching_factors)
                 self.xhat_gen_kwargs['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
                 xhat_scenario_names = refmodel.scenario_names_creator(mk)
-            
+
             else:
                 mk = int(np.floor(mult*lower_bound_k))
                 assert mk>= mk_m1, "Our sample size should be increasing"
@@ -482,7 +482,7 @@ class SeqSampling:
                     xhat_scenario_names+= refmodel.scenario_names_creator(mk-mk_m1,
                                                                           start=self.ScenCount)
                     self.ScenCount+= mk-mk_m1
-            
+
             #Computing xhat_k
             xgo = self.xhat_gen_kwargs.copy()
             xgo.pop("solver_name", None)  # it will be given explicitly
@@ -492,11 +492,11 @@ class SeqSampling:
                                          solver_name=self.solver_name,
                                          solver_options=self.solver_options,
                                          **xgo)
-            
+
             #Computing n_k and associated scenario names
             if self.multistage:
                 self.SeedCount += sputils.number_of_nodes(xhat_branching_factors)
-                
+
                 gap_branching_factors = ciutils.scalable_branching_factors(lower_bound_k, lcfg['branching_factors'])
                 nk = np.prod(gap_branching_factors)
                 estimator_scenario_names = refmodel.scenario_names_creator(nk)
@@ -515,8 +515,8 @@ class SeqSampling:
                                                                                start=self.ScenCount)
                     self.ScenCount+= (nk-nk_m1)
                 sample_options = None
-            
-            
+
+
             #Computing G_k and s_k
             lcfg['num_scens'] = nk
             estim = ciutils.gap_estimators(xhat_k, self.refmodelname,
@@ -555,10 +555,10 @@ class SeqSampling:
 if __name__ == "__main__":
     # for developer testing
     solver_name = "cplex"
-    
+
     refmodel = "mpisppy.tests.examples.farmer"
     farmer_opt_dict = {"crops_multiplier":3}
-    
+
     # create three options configurations, then use one of them
 
     # relative width

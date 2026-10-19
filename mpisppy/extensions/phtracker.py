@@ -344,7 +344,7 @@ class PHTracker(Extension):
             hub_inner_bound = self.spcomm.BestInnerBound
             hub_outer_bound = self.spcomm.BestOuterBound
         return hub_outer_bound, hub_inner_bound, spoke_bound
-    
+
     def _get_rc(self):
         if not isinstance(self.spcomm, ReducedCostsSpoke):
             return None

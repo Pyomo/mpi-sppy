@@ -25,7 +25,7 @@ from mpisppy.utils.xhat_eval import Xhat_Eval
 
 if __name__=="__main__":
     """ For testing and debugging only 
-    
+
         Race a Lagrangian spoke against an FWPH spoke
         to compute and outer bound for a network design problem
     """

@@ -392,7 +392,7 @@ class SPBase:
                     raise RuntimeError("The leaf node associated with this scenario is not on all_nodenames"
                         f"Its last non-leaf node {s._mpisppy_node_list[stmax].name} has no first child {s._mpisppy_node_list[stmax].name+'_0'}")
             local_ict.append(time.time() - instance_creation_start_time)
-            
+
         if self.options.get("display_timing", False):
             all_instance_creation_times = self.mpicomm.gather(
                 local_ict, root=0
@@ -446,7 +446,7 @@ class SPBase:
                 scenario._mpisppy_data.cistart[ndn] = sofar
                 sofar += ndn_len
 
-                
+
     def _attach_varid_to_nonant_index(self):
         """ Create a map from the id of nonant variables to their Pyomo index.
         """
@@ -455,7 +455,7 @@ class SPBase:
             # from the id of vardata object back its _nonant_index.
             scenario._mpisppy_data.varid_to_nonant_index =\
                 {id(var): ndn_i for ndn_i, var in scenario._mpisppy_data.nonant_indices.items()}
-            
+
 
     def _create_communicators(self):
 
@@ -492,7 +492,7 @@ class SPBase:
                 if sname in self.local_scenarios:
                     if rank != comm.Get_rank():
                         raise RuntimeError(f"For the node {nodename}, the scenario {sname} has the rank {rank} from scenario_names_to_rank and {comm.Get_rank()} from its comm.")
-                        
+
         ## ensure we've set things up correctly for all local scenarios
         for sname in self.local_scenarios:
             for nodename, comm in self.comms.items():
@@ -573,7 +573,7 @@ class SPBase:
                 sum_probs[(ndn,i)] = sum_probs.get((ndn,i),0.0) + prob
             didit += len(variable_probability)
             skipped += len(s._mpisppy_data.varid_to_nonant_index) - didit
-        
+
         """ this needs to be MPIized; but check below should do the trick
         for (ndn,i),prob in sum_probs.items():
             if not math.isclose(prob, 1.0, abs_tol=self.E1_tolerance):

@@ -111,7 +111,7 @@ def _make_admm(cfg, n_cylinders, verbose=None):
                            first_stage_varlist=stoch_distr.first_stage_varlist,
                            )
     return admm, all_admm_stoch_subproblem_scenario_names
-    
+
 
 def _wheel_creator(cfg, n_cylinders, scenario_creator, variable_probability, all_nodenames, all_admm_stoch_subproblem_scenario_names, scenario_creator_kwargs=None): #the wrapper doesn't need any kwarg
     # ADMM creates scenarios with different variable naming conventions,
@@ -188,7 +188,7 @@ def main(cfg):
 
     n_cylinders = _count_cylinders(cfg)
     admm, all_admm_stoch_subproblem_scenario_names = _make_admm(cfg, n_cylinders)
-    
+
     scenario_creator = admm.admmWrapper_scenario_creator # scenario_creator used locally (i.e., in this file)
     #note that the stoch_admmWrapper scenario_creator wrapper doesn't take any arguments
     variable_probability = admm.var_prob_list

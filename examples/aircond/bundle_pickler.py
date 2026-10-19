@@ -64,11 +64,11 @@ def main():
 
     #print(f"{slices=}")
     #print(f"{local_bundle_names=}")
-    
+
     for bname in local_bundle_names:
         aircondB.scenario_creator(bname, **kwargs)
-    
+
 
 if __name__ == "__main__":
     main()
-    
+

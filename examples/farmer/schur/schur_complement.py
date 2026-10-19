@@ -31,7 +31,7 @@ def solve_with_extensive_form(scen_count):
     options['solver'] = 'cplex_direct'
     scenario_kwargs = dict()
     scenario_kwargs['use_integer'] = False
-    
+
     opt = ef.ExtensiveForm(options=options,
                            all_scenario_names=scenario_names,
                            scenario_creator=farmer.scenario_creator,

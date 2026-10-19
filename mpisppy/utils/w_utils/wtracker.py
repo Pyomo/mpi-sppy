@@ -29,10 +29,10 @@ class WTracker:
     - A utility to track W and compute interesting statistics and/or log the w values
     - We are going to take a comm as input so we can do a gather if we want to,
     so be careful if you use this with APH (you might want to call it from a lagrangian spoke)
-    
+
     """
 
-    
+
     def __init__(self, PHB):
         self.local_Ws = dict()  #  [iteration][sname](list of W vals)
         self.PHB = PHB
@@ -47,7 +47,7 @@ class WTracker:
         else:
             raise RuntimeError("WTracker created before its PHBase object has _PHIter")
 
-        
+
     def grab_local_Ws(self):
         """ Get the W values from the PHB that we are following
             NOTE: we assume this is called only once per iteration
@@ -144,7 +144,7 @@ class WTracker:
             fil.write(f"Moving Stats W Report at iteration {self.ph_iter}\n")
             fil.write(f"    {len(self.varnames)} nonants\n"
                       f"    {len(self.PHB.local_scenario_names)} scenarios\n")
-            
+
         total_traces = len(self.varnames) * len(self.PHB.local_scenario_names)
         # Either the (wlist, window_stats) pair or a warning string; indexing
         # the string with [1] used to write its second character as the report.
@@ -266,14 +266,14 @@ class WTracker:
                     if np.abs(window_stats[(varname, sname)][1]) >= np.abs(stdevthresh * window_stats[(varname, sname)][0]): #stdev scaled by mean
                         return (f"WTRACKER BAD: at least one scaled stdev is bigger than {stdevthresh}")
             return (f"WTRACKER GOOD: all scaled stdev are smaller than {stdevthresh}")
-    
-    
+
+
 
 
 if __name__ == "__main__":
     # for ad hoc developer testing
     solver_name = "cplex"
-    
+
     import mpisppy.tests.examples.farmer as farmer
     options = {}
     options["asynchronousPH"] = False
@@ -291,7 +291,7 @@ if __name__ == "__main__":
         options["iter0_solver_options"] = {"mipgap": 0.001}
         options["iterk_solver_options"] = {"mipgap": 0.00001}
 
-    
+
     options["PHIterLimit"] = 1
     ph = mpisppy.opt.ph.PH(
         options,

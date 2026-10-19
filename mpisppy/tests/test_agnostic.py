@@ -89,7 +89,7 @@ class Test_Agnostic_pyomo(unittest.TestCase):
     def test_agnostic_pyomo_constructor(self):
         cfg = _farmer_cfg()
         agnostic.Agnostic(farmer_pyomo_agnostic, cfg)
-        
+
 
     def test_agnostic_pyomo_scenario_creator(self):
         cfg = _farmer_cfg()
@@ -213,7 +213,7 @@ class Test_Agnostic_AMPL(unittest.TestCase):
         cfg.max_iterations = 5
         cfg.ampl_model_file = "../agnostic/examples/farmer.mod"
         agnostic_cylinders.main(model_fname, module, cfg)
-        
+
 
 @unittest.skipIf(not have_GAMS, "skipping GAMS")
 class Test_Agnostic_GAMS(unittest.TestCase):

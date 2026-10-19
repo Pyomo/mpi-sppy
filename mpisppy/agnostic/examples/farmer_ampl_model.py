@@ -29,7 +29,7 @@ def scenario_creator(scenario_name, ampl_file_name,
         num_scens=None, seedoffset=0
 ):
     """ Create a scenario for the (scalable) farmer example
-    
+
     Args:
         scenario_name (str):
             Name of the scenario to construct.
@@ -50,7 +50,7 @@ def scenario_creator(scenario_name, ampl_file_name,
         seedoffset (int): used by confidence interval code
 
     NOTE: for ampl, the names will be tuples name, index
-    
+
     Returns:
         ampl_model (AMPL object): the AMPL model
         prob (float or "uniform"): the scenario probability
@@ -81,7 +81,7 @@ def scenario_creator(scenario_name, ampl_file_name,
         print("big troubles!!; we can't find the objective function")
         raise
     return ampl, "uniform", areaVarDatas, obj_fct
-    
+
 #=========
 def scenario_names_creator(num_scens,start=None):
     return farmer.scenario_names_creator(num_scens,start)
@@ -91,7 +91,7 @@ def scenario_names_creator(num_scens,start=None):
 def inparser_adder(cfg):
     farmer.inparser_adder(cfg)
 
-    
+
 #=========
 def kw_creator(cfg):
     # creates keywords for scenario creator

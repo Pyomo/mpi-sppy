@@ -46,7 +46,7 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
         self._rank = phb.cylinder_rank
         if self.verbose:
             print ("Created converger=",self.name)
-        
+
     def _convergence_value(self):
         """ compute the fraction of *not* converged ints
         Args:

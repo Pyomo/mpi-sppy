@@ -26,7 +26,7 @@ write_solution = True
 def _parse_args():
     # create a config object and parse
     cfg = config.Config()
-    
+
     cfg.num_scens_required()
     cfg.popular_args()
     cfg.two_sided_args()
@@ -61,9 +61,9 @@ def _parse_args():
     cfg.parse_command_line("farmer_cylinders")
     return cfg
 
-    
+
 def main():
-    
+
     cfg = _parse_args()
 
     num_scen = cfg.num_scens
@@ -80,7 +80,7 @@ def main():
             ph_converger = NormRhoConverger
     else:
         ph_converger = None
-    
+
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
     all_scenario_names = [f'scen{sn}' for sn in range(num_scen)]
@@ -141,7 +141,7 @@ def main():
     # xhat shuffle bound spoke
     if cfg.xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
-        
+
     list_of_spoke_dict = list()
     if cfg.fwph:
         list_of_spoke_dict.append(fw_spoke)

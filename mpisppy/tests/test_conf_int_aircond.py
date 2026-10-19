@@ -96,7 +96,7 @@ class Test_confint_aircond(unittest.TestCase):
         retval = {i: [200.0,0] for i in ndns}
         return retval
 
-        
+
     def setUp(self):
         self.xhat = {'ROOT': np.array([200.0, 0.0])}  # really xhat_1
         tmpxhat = tempfile.mkstemp(prefix="xhat",suffix=".npy")
@@ -107,10 +107,10 @@ class Test_confint_aircond(unittest.TestCase):
     def tearDown(self):
          os.remove(self.xhat_path)
 
-        
+
     def _eval_creator(self):
         xh_options = self._get_xhatEval_options()
-        
+
         MMW_options, scenario_creator_kwargs = self._get_base_options()
         branching_factors= global_BFs
         scen_count = np.prod(branching_factors)
@@ -132,7 +132,7 @@ class Test_confint_aircond(unittest.TestCase):
                                      cfg=options,
                                      use_command_line=False)   
         assert ama_object is not None
-        
+
     def test_MMW_constructor(self):
         options, scenario_creator_kwargs = self._get_base_options()
         xhat = ciutils.read_xhat(self.xhat_path)
@@ -166,10 +166,10 @@ class Test_confint_aircond(unittest.TestCase):
                                 solving_type="EF_mstage",
                                 )
 
-        
+
     def test_indepscens_seqsampling_creator(self):
         options, scenario_creator_kwargs = self._get_base_options()
-        
+
         # We want a very small instance for testing on GitHub.
         optionsBM = config.Config()
         confidence_config.confidence_config(optionsBM)
@@ -211,7 +211,7 @@ class Test_confint_aircond(unittest.TestCase):
         ev = self._eval_creator()
         assert ev is not None
 
-        
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")      
     def test_xhat_eval_evaluate(self):
@@ -256,7 +256,7 @@ class Test_confint_aircond(unittest.TestCase):
         bound = round_pos_sig(r['gap_inner_bound'],2)
         self.assertEqual((s,bound), (33.0, 130.0))
 
-   
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_gap_estimators(self):
@@ -281,14 +281,14 @@ class Test_confint_aircond(unittest.TestCase):
         # April 2022: s seems to depend a little on the solver. TBD: look into this
         self.assertEqual(G, 69.6)
 
-    
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_indepscens_seqsampling_running(self):
         options, scenario_creator_kwargs = self._get_base_options()
         branching_factors= global_BFs
         xhat_gen_options = self._get_xhat_gen_options(branching_factors)
-        
+
         # We want a very small instance for testing on GitHub.
         optionsBM = config.Config()
         confidence_config.confidence_config(optionsBM)
@@ -322,4 +322,4 @@ class Test_confint_aircond(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-    
+

@@ -106,7 +106,7 @@ def rebaseline_xhat(dirname, modname, np, argstring, baseline_dir):
 def _check_baseline_xhat(modname, argstring, baseline_dir, tol=1e-6):
     # return true if OK, False otherwise
     # compare the baseline_dir to XHAT_TEMP
-    
+
     xhat = np.load(os.path.join(XHAT_TEMP, f"{modname}.npy"))
     base_xhat = np.load(os.path.join(baseline_dir, f"{modname}.npy"))
     d2 = norm(xhat - base_xhat, 2)

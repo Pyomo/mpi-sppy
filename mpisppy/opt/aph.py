@@ -82,7 +82,7 @@ class APH(ph_base.PHBase):
         self.Lens["FirstReduce"]["ROOT"] += self.n_proc  # for time of update
         # tau, phi, pusqnorm, pvsqnorm, pwsqnorm, pzsqnorm, secs
         self.Lens["SecondReduce"]["ROOT"] += 6 + self.n_proc
-        
+
 
     #============================
     def __init__(
@@ -238,10 +238,10 @@ class APH(ph_base.PHBase):
         using it when they are zero
 
         """
-        
+
         uk = self.global_pusqnorm
         vk = self.global_pvsqnorm
-        
+
         # Note June, 2023: We are waiting until we get values greater
         # than 0 for the norms. Iteration 3 is arbitrary
         if self._PHIter <= 3:
@@ -268,7 +268,7 @@ class APH(ph_base.PHBase):
                     )
                     self.uk1 = uk
                     self.vk1 = vk
-                    
+
         self.APHgamma = gamma
 
         return self.APHgamma
@@ -326,7 +326,7 @@ class APH(ph_base.PHBase):
         logging.debug(f'^^^ debug good to go  listener_side_gig on cylinder_rank {self.cylinder_rank}; xbarin={xbarin}')
         if verbose and self.cylinder_rank == 0:
             print (f"({xbarin})")
-            
+
         # set the xbar, xsqbar, and ybar in all the scenarios
         for k,s in self.local_scenarios.items():
             nlens = s._mpisppy_data.nlens
@@ -383,7 +383,7 @@ class APH(ph_base.PHBase):
                                      * self.uk[sname][(ndn,i)])
                     scen_vsqnorm += (pyo.value(s._mpisppy_model.ybars[(ndn,i)]) \
                                      * pyo.value(s._mpisppy_model.ybars[(ndn,i)]))
-                   
+
             # Note by DLW April 2023: You need to move the probs up for multi-stage
             if not s._mpisppy_data.has_variable_probability:
                 # NOTE: The p is not true but we avoid changing the
@@ -398,13 +398,13 @@ class APH(ph_base.PHBase):
             if self.use_dynamic_gamma:
                 gamma = self._calculate_APHgamma(synchro) # update APHgamma
                 print('dynamic gamma=', gamma, 'i=', i, 'sname=', sname)
-            
+
             # I don't think s._mpisppy_dat.has_variable_probability is needed here
             new_tau_summand += (
                 pyo.value(s._mpisppy_probability) \
                 * (scen_usqnorm + scen_vsqnorm/self.APHgamma)
             )
-            
+
         # tauk is the expectation of the sum sum of squares; update for this calc
         logging.debug(f'  in side-gig, old global_tau={self.global_tau}')
         logging.debug(f'  in side-gig, old summand={self.tau_summand}')
@@ -436,7 +436,7 @@ class APH(ph_base.PHBase):
                                                  self.local_concats)
         self.synchronizer.enable_side_gig = False  # we did it
         logging.debug(f' exit side_gid on rank {self.cylinder_rank}')
-        
+
     #============================
     def Compute_Averages(self, verbose=False):
         """Gather ybar, xbar and x squared bar for each node 
@@ -534,7 +534,7 @@ class APH(ph_base.PHBase):
         self.local_concats["FirstReduce"]["ROOT"][3*nlens["ROOT"]+self.cylinder_rank] \
             = secs_sofar
         logging.debug(f'Compute_Averages at secs_sofar {secs_sofar} on rank {self.cylinder_rank}')
-                    
+
         self.synchronizer.compute_global_data(self.local_concats,
                                               self.node_concats,
                                               enable_side_gig = True,
@@ -567,7 +567,7 @@ class APH(ph_base.PHBase):
         self.global_pzsqnorm = self.node_concats["SecondReduce"]["ROOT"][5]
 
         logging.debug(f'Assigned global tau {self.global_tau} and phi {self.global_phi} on rank {self.cylinder_rank}')
- 
+
     #============================
     def Update_theta_zw(self, verbose):
         """
@@ -604,7 +604,7 @@ class APH(ph_base.PHBase):
                         factor = 1 + rho_val
                     s._mpisppy_model.rho[(ndn,i)] = pyo.value(s._mpisppy_model.rho[(ndn,i)]) * factor
                     # print(f'rho={pyo.value(s._mpisppy_model.rho[(ndn,i)])}')
-                    
+
         logging.debug(f'Iter {self._PHIter} assigned theta {self.theta} on rank {self.cylinder_rank}')
 
         oldpw = self.local_pwsqnorm
@@ -644,14 +644,14 @@ class APH(ph_base.PHBase):
         # The values we just computed can't be in the global yet, so update here
         self.global_pwsqnorm += (self.local_pwsqnorm - oldpw)
         self.global_pzsqnorm += (self.local_pzsqnorm - oldpz)
-                
+
     #============================
     def Compute_Convergence(self, verbose=False):
         """
         The convergence metric is the sqrt of the sum of
         probability weighted unorm scaled by the probability weighted w norm
         probability weighted vnorm scaled by the probability weighted z norm
- 
+
         Returns:
             update self.conv if appropriate
         """
@@ -854,7 +854,7 @@ class APH(ph_base.PHBase):
         # We have the "bottom of the loop at the top"
         # so we need a dlist to get the ball rolling (it might not be used)
         dlist = [(sn, 0.0) for sn in self.local_scenario_names]
-        
+
         # put dispatch_frac on the object so extensions can modify it
         self.dispatch_frac = self.options["dispatch_frac"]\
                              if "dispatch_frac" in self.options else 1
@@ -909,7 +909,7 @@ class APH(ph_base.PHBase):
             if have_extensions:
                 self.extobject.miditer()
                 set_derived_surrogate_rhos(self)
-            
+
             teeme = ("tee-rank0-solves" in self.options) \
                  and (self.options["tee-rank0-solves"]
                       and self.cylinder_rank == 0)
@@ -991,7 +991,7 @@ class APH(ph_base.PHBase):
             # lag: we will support lagging back only to the last solve
             # IMPORTANT: pyomo does not support a second reference so no:
             # scenario._mpisppy_model.z_foropt = scenario._mpisppy_model.z
-            
+
             if self.use_lag:
                 scenario._mpisppy_model.z_foropt = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                          initialize = 0.0,
@@ -999,12 +999,12 @@ class APH(ph_base.PHBase):
                 scenario._mpisppy_model.W_foropt = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                          initialize = 0.0,
                                          mutable = True)
-                
+
             objfct = self.saved_objectives[sname]
-                
+
             if self.use_lag:
                 assert not scenario._mpisppy_data.has_variable_probability
-                   
+
                 for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
                     # proximal term
                     objfct.expr +=  scenario._mpisppy_model.prox_on * \

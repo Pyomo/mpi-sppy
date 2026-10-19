@@ -110,7 +110,7 @@ def main():
         lines.append(this_branch[0])
 
     acstream = np.random.RandomState()
-        
+
     scenario_creator_kwargs["etree"] = etree.ACTree(number_of_stages,
                                     branching_factors,
                                     seed,
@@ -217,7 +217,7 @@ def main():
             'all_nodenames': all_nodenames
         },
     }
-    
+
     list_of_spoke_dict = [ub2]
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
@@ -231,6 +231,6 @@ def main():
                 f.write(", "+str(IB)+", "+str(OB)+", "+str(wheel.spcomm.opt._PHIter))
                 f.write(", "+str((ph_end_time - start_time).total_seconds()))
 
-                
+
 if __name__=='__main__':
     main()

@@ -195,5 +195,5 @@ if __name__ == "__main__":
         print(f"Variable: {v.name}")
         for index in v:
             print(f"  Index: {index}, Value: {v[index].value}")
-        
-    
+
+

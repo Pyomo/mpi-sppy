@@ -62,7 +62,7 @@ def branching_factors_from_numscens(numscens,num_stages):
     Since most use cases are balanced trees, for now, we do not create unbalanced trees. 
     If numscens cannot be written as the product of a num_stages branching factors,
     we take numscens <-numscens+1
-    
+
     Parameters
     -----------
     numscens : int
@@ -95,7 +95,7 @@ def scalable_branching_factors(numscens, ref_branching_factors):
     containing at least numscens leaf nodes, and scaled like ref_branching_factors.
     For instance, if numscens=233 and ref_branching_factors=[5,3,2], it returns [10,6,4], 
     branching factors for a 240-leafs tree
-    
+
     NOTE: This method increasing in priority first stages branching factors,
           so that a branching factor is an increasing function of numscens
 
@@ -127,7 +127,7 @@ def scalable_branching_factors(numscens, ref_branching_factors):
         i+=1
     new_branching_factors = list(new_branching_factors.astype(int))
     return new_branching_factors
-        
+
 def is_sorted(nodelist):
     #Take a list of scenario_tree.ScenarioNode and check that it is well constructed
     parent=None
@@ -137,7 +137,7 @@ def is_sorted(nodelist):
                                f"The stage {node.stage} node is the {t+1}th element of the list."
                                f"The node {node.name} has a parent named {node.parent_name}, but is right after the node {parent}")
         parent = node.name
-        
+
 def writetxt_xhat(xhat,path="xhat.txt",num_stages=2):
     if num_stages ==2:
         np.savetxt(path,xhat['ROOT'])
@@ -158,7 +158,7 @@ def write_xhat(xhat,path="xhat.npy",num_stages=2):
         np.save(path,xhat['ROOT'])
     else:
         raise RuntimeError("Only 2-stage is suported to write/read xhat to a file")
-    
+
 
 def read_xhat(path="xhat.npy",num_stages=2,delete_file=False):
     if num_stages==2:
@@ -237,7 +237,7 @@ def gap_estimators(xhat_one,
     Returns G and s evaluated at xhat.
     If ArRP>1, G and s are pooled, from a number ArRP of estimators,
         computed with different scenario trees.
-    
+
 
     Parameters
     ----------
@@ -282,11 +282,11 @@ def gap_estimators(xhat_one,
         raise RuntimeError("Only EF solve for the approximate problem is supported yet.")
     else:
         is_multi = (solving_type=="EF_mstage")
-    
+
     m = importlib.import_module(mname)
     ama.check_module_ama(m)
     scenario_creator_kwargs=m.kw_creator(cfg)
-        
+
     if is_multi:
         try:
             branching_factors = sample_options['branching_factors']
@@ -327,10 +327,10 @@ def gap_estimators(xhat_one,
         # is_minimizing from the last one; run()'s min-only guard reads it
         # regardless of ArRP.
         return {"G": G, "s": s, "seed": start, "is_minimizing": tmp['is_minimizing']}
-    
+
 
     #A1RP
-    
+
     #We start by computing the optimal solution to the approximate problem induced by our scenarios
     if is_multi:
         #Sample a scenario tree: this is a subtree, but starting from stage 1
@@ -362,21 +362,21 @@ def gap_estimators(xhat_one,
         ama_object.verbose = False
         ama_object.run()
         start += len(scenario_names)
-        
+
     #Optimal solution of the approximate problem
     zn_star = ama_object.best_outer_bound
     #Associated policies
     xstars = sputils.nonant_cache_from_ef(ama_object.ef)
-    
+
     #Then, we evaluate the function value induced by the scenario at xstar.
-    
+
     if is_multi:
         # Find feasible policies (i.e. xhats) for every non-leaf nodes
         if len(samp_tree.ef._ef_scenario_names)>1:
             local_scenarios = {sname:getattr(samp_tree.ef,sname) for sname in samp_tree.ef._ef_scenario_names}
         else:
             local_scenarios = {samp_tree.ef._ef_scenario_names[0]:samp_tree.ef}
-            
+
         xhats,start = sample_tree.walking_tree_xhats(mname,
                                                     local_scenarios,
                                                     xhat_one['ROOT'],
@@ -385,7 +385,7 @@ def gap_estimators(xhat_one,
                                                     cfg,
                                                     solver_name=solver_name,
                                                     solver_options=solver_options)
-        
+
         #Compute then the average function value with this policy
         scenario_creator_kwargs = samp_tree.ama.kwargs
         all_nodenames = sputils.create_nodenames_from_branching_factors(branching_factors)
@@ -393,7 +393,7 @@ def gap_estimators(xhat_one,
         #In a 2 stage problem, the only non-leaf is the ROOT node
         xhats = xhat_one
         all_nodenames = None
-    
+
     xhat_eval_options = {"iter0_solver_options": None,
                          "iterk_solver_options": None,
                          "display_timing": False,
@@ -412,7 +412,7 @@ def gap_estimators(xhat_one,
     objs_at_xhat = ev.objs_dict
     zn_star=ev.evaluate(xstars)
     objs_at_xstar = ev.objs_dict
-    
+
     eval_scen_at_xhat = []
     eval_scen_at_xstar = []
     scen_probs = []
@@ -420,7 +420,7 @@ def gap_estimators(xhat_one,
         eval_scen_at_xhat.append(objs_at_xhat[k])
         eval_scen_at_xstar.append(objs_at_xstar[k])
         scen_probs.append(s._mpisppy_probability)
-    
+
     scen_gaps = np.array(eval_scen_at_xhat)-np.array(eval_scen_at_xstar)
     local_gap = np.dot(scen_gaps,scen_probs)
     local_ssq = np.dot(scen_gaps**2,scen_probs)
@@ -434,11 +434,11 @@ def gap_estimators(xhat_one,
         print(f"G = {G}")
     sample_var = (ssq - G**2)/(1-prob_sqnorm) #Unbiased sample variance
     s = np.sqrt(sample_var)
-    
+
     use_relative_error = (np.abs(zn_star)>1)
     sense = pyo.minimize if ev.is_minimizing else pyo.maximize
     G = correcting_numeric(G,cfg,objfct=obj_at_xhat,
                            relative_error=use_relative_error, sense=sense)
-  
+
     #objective_gap removed Sept.29 2022
     return {"G":G,"s":s,"seed":start,"is_minimizing":ev.is_minimizing}

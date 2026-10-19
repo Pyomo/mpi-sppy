@@ -33,7 +33,7 @@ def scenario_creator(
         num_scens=None, seedoffset=0
 ):
     """ Create a scenario for the (scalable) farmer example.
-    
+
     Args:
         scenario_name (str):
             Name of the scenario to construct.
@@ -70,7 +70,7 @@ def scenario_creator(
     # Create the concrete model object
     scengroupnum = sputils.extract_num(scenario_name)
     scenario_base_name = scenario_name.rstrip("0123456789")
-    
+
     model = pyo.ConcreteModel(scenario_name)
 
     def crops_init(m):
@@ -95,7 +95,7 @@ def scenario_creator(
            for crop in ['WHEAT', 'CORN', 'SUGAR_BEETS']:
                outdict[crop+str(i)] = indict[crop]
         return outdict
-        
+
     model.PriceQuota = _scale_up_data(
         {'WHEAT':100000.0,'CORN':100000.0,'SUGAR_BEETS':6000.0})
 
@@ -202,7 +202,7 @@ def scenario_creator(
     # Create the list of nodes associated with the scenario.
     varlist = [model.DevotedAcreage]
     sputils.attach_root_node(model, model.FirstStageCost, varlist)    
-    
+
     #Add the probability of the scenario
     if num_scens is not None :
         model._mpisppy_probability = 1/num_scens
@@ -219,7 +219,7 @@ def scenario_names_creator(num_scens,start=None):
     if (start is None) :
         start=0
     return [f"scen{i}" for i in range(start,start+num_scens)]
-        
+
 
 #=========
 def inparser_adder(cfg):
@@ -229,7 +229,7 @@ def inparser_adder(cfg):
                       description="number of crops will be three times this (default 1)",
                       domain=int,
                       default=1)
-    
+
     cfg.add_to_config("farmer_with_integers",
                       description="make the version that has integers (default False)",
                       domain=bool,

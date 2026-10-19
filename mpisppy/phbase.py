@@ -360,7 +360,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         # self.options (from super) will archive the original options.
         self.options = options
         self.Ag = options.get("Ag", None)  # The Agnostic Object
-        
+
         self.options_check()
         self.ph_converger = ph_converger
         self.rho_setter = rho_setter
@@ -1044,7 +1044,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                 objfct.expr += ph_term
             else:
                 objfct.expr -= ph_term
-            
+
             if self.Ag is not None:
                 self.Ag.callout_agnostic({"sname":sname, "scenario":scenario,
                                           "add_duals": add_duals, "add_prox": add_prox})

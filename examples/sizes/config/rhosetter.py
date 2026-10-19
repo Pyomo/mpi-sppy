@@ -17,7 +17,7 @@
 #  ___________________________________________________________________________
 #@pyomobook:
 def ph_rhosetter_callback(ph, scenario_tree, scenario):
-   
+
    MyRhoFactor = 1.0
 
    root_node = scenario_tree.findRootNode()

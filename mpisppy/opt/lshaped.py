@@ -335,7 +335,7 @@ class LShapedMethod(spbase.SPBase):
             nonant_shadow = pyo.Var(name=v.name)
             root.add_component(v.name, nonant_shadow)
             root_vars.append(nonant_shadow)
-        
+
         if self.has_root_scens:
             eta_indx = [scenario_name for scenario_name in self.all_scenario_names
                             if scenario_name not in self.root_scenarios]
@@ -359,7 +359,7 @@ class LShapedMethod(spbase.SPBase):
 
             for idx, s in enumerate(self.all_scenario_names):
                 self.valid_eta_lb[s] = all_etas_lb[idx]
-            
+
             # root may not have etas for every scenarios
             for s, v in self.root.eta.items():
                 v.setlb(self.valid_eta_lb[s])
@@ -378,7 +378,7 @@ class LShapedMethod(spbase.SPBase):
             ## hold the nonants and etas; rank0 will do 
             ## the optimizing
             self._create_shadow_root()
-        
+
     def attach_nonant_var_map(self, scenario_name):
         instance = self.local_scenarios[scenario_name]
 
@@ -700,7 +700,7 @@ class LShapedMethod(spbase.SPBase):
                             f"Final Objective: {m.obj.expr():7.2f}"
                         )
                     break
-        
+
         return res
 
 def _del_con(c):

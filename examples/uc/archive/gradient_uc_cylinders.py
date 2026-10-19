@@ -70,7 +70,7 @@ def _parse_args():
 
 
 def main():
-    
+
     cfg = _parse_args()
 
     num_scen = cfg.num_scens
@@ -86,7 +86,7 @@ def main():
     scensavail = [3,5,10,25,50,100]
     if num_scen not in scensavail:
         raise RuntimeError(f"num-scen was {num_scen}, but must be in {scensavail}")
-    
+
     scenario_creator_kwargs = {
         "scenario_count": num_scen,
         "path": str(num_scen) + "scenarios_r1",
@@ -98,7 +98,7 @@ def main():
         rho_setter = uc._rho_setter
     else:
         rho_setter = None
-    
+
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
@@ -113,7 +113,7 @@ def main():
                                   scenario_creator_kwargs=scenario_creator_kwargs,
                                   ph_extensions=MultiExtension,
                                   rho_setter = rho_setter)
-        
+
     # Extend and/or correct the vanilla dictionary
     ext_classes =  [Gapper]
     if fixer:
@@ -122,11 +122,11 @@ def main():
         ext_classes.append(CrossScenarioExtension)
     if cfg.xhat_closest_tree:
         ext_classes.append(XhatClosest)
-    
+
     if cfg.grad_rho:
         ext_classes.append(GradRho)
         hub_dict['opt_kwargs']['options']['grad_rho_options'] = {'cfg': cfg}
-        
+
     hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
     if cross_scenario_cuts:
         hub_dict["opt_kwargs"]["options"]["cross_scen_options"]\
@@ -154,7 +154,7 @@ def main():
         "verbose": cfg.verbose,
         "mipgapdict": mipgapdict
         }
-        
+
     if cfg.default_rho is None:
         # since we are using a rho_setter anyway
         hub_dict.opt_kwcfg.options["defaultPHrho"] = 1  
@@ -162,7 +162,7 @@ def main():
     if cfg.integer_relax_then_enforce:
         vanilla.add_integer_relax_then_enforce(hub_dict, cfg)
     ### end ph spoke ###
-    
+
     # FWPH spoke
     if fwph:
         fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
@@ -183,7 +183,7 @@ def main():
     # xhat shuffle bound spoke
     if xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
-       
+
     # cross scenario cut spoke
     if cross_scenario_cuts:
         cross_scenario_cuts_spoke = vanilla.cross_scenario_cuts_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)

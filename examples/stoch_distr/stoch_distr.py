@@ -109,7 +109,7 @@ def min_cost_distr_problem(local_dict, cfg, stoch_scenario_name, sense=pyo.minim
                 return (0,0)
         else:
             raise ValueError(f"unknown node type for node {n}")
-    
+
     model.y = pyo.Var(local_dict["nodes"], bounds=slackBounds_rule)
 
     def inventoryBounds_rule(model, n):
@@ -120,7 +120,7 @@ def min_cost_distr_problem(local_dict, cfg, stoch_scenario_name, sense=pyo.minim
 
     model.FirstStageCost = pyo.Expression(expr=\
                     sum(local_dict["production costs"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["factory nodes"]))
-    
+
     if ensure_xhat_feas:
         # too big penalty to allow the stack to be non-zero
         model.SecondStageCost = pyo.Expression(expr=\
@@ -136,7 +136,7 @@ def min_cost_distr_problem(local_dict, cfg, stoch_scenario_name, sense=pyo.minim
                             )
 
     model.MinCost = pyo.Objective(expr=model.FirstStageCost + model.SecondStageCost, sense=sense)
-    
+
     def FlowBalance_rule(m, n):
         if n in local_dict["factory nodes"]:
             # We generate pseudo randomly the loss on each factory node
@@ -260,7 +260,7 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, inter_reg
         in this example to access the non anticipative variables (which are common to 
         every stochastic scenario) and their stage. \n
         kwargs (opt): necessary in this example to call the scenario creator
-    
+
     Returns:
         dict: dictionary which keys are the subproblems and values are the list of 
         pairs (consensus_variable_name (str), stage (int)).
@@ -383,17 +383,17 @@ def inparser_adder(cfg):
                       description="mean percentage of scrap loss at the production",
                       domain=float,
                       default=5)
-    
+
     cfg.add_to_config("cv",
                       description="coefficient of variation of the loss at the production",
                       domain=float,
                       default=20)
-    
+
     cfg.add_to_config("initial_seed",
                       description="initial seed for generating the loss",
                       domain=int,
                       default=0)
-    
+
     ### For the scalable example
     cfg.add_to_config("scalable",
                       description="generate pseudo-random data parameterized by --mnpr instead of using the hardwired 2/3/4-region datasets",
@@ -404,7 +404,7 @@ def inparser_adder(cfg):
                       description="max number of nodes per region and per type",
                       domain=int,
                       default=4)
-    
+
     cfg.add_to_config("ensure_xhat_feas",
                       description="adds slacks with high costs to ensure the feasibility of xhat yet maintaining the optimal",
                       domain=bool,

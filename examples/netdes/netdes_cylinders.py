@@ -37,7 +37,7 @@ def _parse_args():
                         default=None)                
     cfg.parse_command_line("netdes_cylinders")
     return cfg
-    
+
 def main():
     cfg = _parse_args()
 
@@ -88,7 +88,7 @@ def main():
     if cross_scenario_cuts:
         hub_dict["opt_kwargs"]["options"]["cross_scen_options"]\
             = {"check_bound_improve_iterations" : cfg.cross_scenario_iter_cnt}
-        
+
     if cfg.reduced_costs:
         vanilla.add_reduced_costs_fixer(hub_dict, cfg)
 
@@ -106,7 +106,7 @@ def main():
         subgradient_spoke = vanilla.subgradient_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = None)
-        
+
     # xhat looper bound spoke
     if xhatlooper:
         xhatlooper_spoke = vanilla.xhatlooper_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)

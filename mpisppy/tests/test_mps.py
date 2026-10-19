@@ -63,7 +63,7 @@ class TestMPSReader(unittest.TestCase):
         print(f"{fname=}, {pyomo_obj=}")
         self.assertAlmostEqual(coin_obj, pyomo_obj, places=3,
                                delta=None, msg=None)
-        
+
     def test_mps_reader_scen0_densenames(self):
         self._reader_body(os.path.join(_EXAMPLES_DIR, "scen0_densenames.mps"))
 

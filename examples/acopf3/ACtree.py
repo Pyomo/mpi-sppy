@@ -56,7 +56,7 @@ class ACTree:
         self.numscens = 1
         for s in range(self.NumStages-1):
             self.numscens *= self.BFs[s]
-        
+
         # now make the tree by making the root
         self.rootnode = TreeNode(None, self,
                                  [i+1 for i in range(self.numscens)],
@@ -87,11 +87,11 @@ class ACTree:
                 for kid in node.kids:
                     retval += _progenynames(kid)
             return retval
-            
+
         allnames = _progenynames(self.rootnode)
         return allnames
-        
-            
+
+
 class TreeNode:
     """
     Data for a tree node, but the node creates its own children
@@ -163,7 +163,7 @@ class TreeNode:
                     prevbf = TreeInfo.BFs[self.stage-2]
                     self.kids.append(TreeNode(self, TreeInfo, scenlist,
                                               newname, 1/prevbf, acstream))
-                    
+
     def pprint(self):
         print(f"Node Name={self.Name}, Stage={self.stage}")
         if self.Parent is not None:
@@ -175,7 +175,7 @@ class TreeNode:
 if __name__ == "__main__":
 
     acstream = np.random.RandomState()
-    
+
     testtree = ACTree(3, [2, 2], 1134, acstream,
                       0.2, [5,15,30], FixFast, [0,1,2,3,4,5])
     for sn in range(1,testtree.numscens+1):

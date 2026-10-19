@@ -57,7 +57,7 @@ class CG(mpisppy.cgbase.CGBase):
         self.Iter0()
         if (verbose):
             print(f'Completed {self.__class__.__name__} Iter0 on global rank {global_rank}')
-        
+
         self.iterk_loop()
 
         if finalize:
@@ -105,4 +105,4 @@ if __name__ == "__main__":
                obj)
 
     dopts = sputils.option_string_to_dict("mipgap=0.001")
-   
+

@@ -136,7 +136,7 @@ def _common_args(inparser):
                         default=1.e-1)
 
     return parser
-    
+
 def make_parser(progname=None, num_scens_reqd=False):
     # make a parser for the program named progname
     # NOTE: if you want abbreviations, override the arguments in your example
@@ -167,7 +167,7 @@ def _basic_multistage(progname=None, num_scens_reqd=False):
                         nargs="*",
                         type=int,
                         default=None)
-        
+
     return parser
 
 
@@ -198,7 +198,7 @@ def make_EF2_parser(progname=None, num_scens_reqd=False):
             type=int,
             default=None,
         )
-        
+
     parser.add_argument("--EF-solver-name",
                         help = "solver name (default gurobi)",
                         dest="EF_solver_name",
@@ -218,7 +218,7 @@ def make_EF_multistage_parser(progname=None, num_scens_reqd=False):
     # NOTE: if you want abbreviations, override the arguments in your example
     # do not add abbreviations here.
     parser = _basic_multistage(progname=None)
-    
+
     if num_scens_reqd:
         parser.add_argument(
             "num_scens", help="Number of scenarios", type=int
@@ -231,7 +231,7 @@ def make_EF_multistage_parser(progname=None, num_scens_reqd=False):
             type=int,
             default=None,
         )
-        
+
     parser.add_argument("--EF-solver-name",
                         help = "solver name (default gurobi)",
                         dest="EF_solver_name",
@@ -261,7 +261,7 @@ def two_sided_args(inparser):
                         dest="abs_gap",
                         type=float,
                         default=0.)
-    
+
     parser.add_argument("--max-stalled-iters",
                         help="maximum iterations with no reduction in gap (default 100)",
                         dest="max_stalled_iters",

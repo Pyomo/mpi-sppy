@@ -18,7 +18,7 @@ import mpisppy.confidence_intervals.confidence_config as confidence_config
 from mpisppy.utils import config
 import numpy as np
 from mpisppy import global_toc
-    
+
 import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.utils.xhat_eval as xhat_eval
 import mpisppy.confidence_intervals.ciutils as ciutils
@@ -48,7 +48,7 @@ class IndepScens_SeqSampling(SeqSampling):
         self.numstages = len(self.cfg['branching_factors'])+1
         self.batch_branching_factors = [1]*(self.numstages-1)
         self.batch_size = 1
-    
+
     #TODO: Add an override specifier if it exists
     def run(self, maxit=200):
         # Do everything as specified by the options (maxit is provided as a safety net).
@@ -58,7 +58,7 @@ class IndepScens_SeqSampling(SeqSampling):
          #----------------------------Step 0 -------------------------------------#
         #Initialization
         k=1
-        
+
         if self.stopping_criterion == "BM":
             #Finding a constant used to compute nk
             r = 2 #TODO : we could add flexibility here
@@ -70,11 +70,11 @@ class IndepScens_SeqSampling(SeqSampling):
                     raise RuntimeError("Parameter BM_q should be greater than 1.")
                 s = sum(np.exp(-self.BM_p*np.power(j,2*self.BM_q/r)))
             self.c = max(1,2*np.log(s/(np.sqrt(2*np.pi)*(1-self.confidence_level))))
-        
+
         lower_bound_k = self.sample_size(k, None, None, None)
-        
+
         #Computing xhat_1.
-        
+
         #We use sample_size_ratio*n_k observations to compute xhat_k
         xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.cfg['branching_factors'])
         mk = np.prod(xhat_branching_factors)
@@ -93,12 +93,12 @@ class IndepScens_SeqSampling(SeqSampling):
 
         #----------------------------Step 1 -------------------------------------#
         #Computing n_1 and associated scenario names
-        
+
         nk = np.prod(ciutils.scalable_branching_factors(lower_bound_k, self.cfg['branching_factors'])) #To ensure the same growth that in the one-tree seqsampling
         estimator_scenario_names = refmodel.scenario_names_creator(nk)
-        
+
         #Computing G_nk and s_k associated with xhat_1
-        
+
         Gk, sk = self._gap_estimators_with_independent_scenarios(xhat_k,
                                                                 nk,
                                                                 estimator_scenario_names,
@@ -112,30 +112,30 @@ class IndepScens_SeqSampling(SeqSampling):
             k+=1
             nk_m1 = nk #n_{k-1}
             lower_bound_k = self.sample_size(k, Gk, sk, nk_m1)
-            
+
             #Computing m_k and associated scenario names
             xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.cfg['branching_factors'])
             mk = np.prod(xhat_branching_factors)
             self.xhat_gen_kwargs['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
             xhat_scenario_names = refmodel.scenario_names_creator(mk)
-            
+
             #Computing xhat_k
-           
+
             xgo = self.xhat_gen_kwargs.copy()
             xgo.pop("solver_options", None)  # it will be given explicitly
             xgo.pop("scenario_names", None)  # it will be given explicitly
             xhat_k = self.xhat_generator(xhat_scenario_names,
                                         solver_options=self.solver_options,
                                          **xgo)
-            
+
             #Computing n_k and associated scenario names
             self.SeedCount += sputils.number_of_nodes(xhat_branching_factors)
-            
+
             nk = np.prod(ciutils.scalable_branching_factors(lower_bound_k, self.cfg['branching_factors'])) #To ensure the same growth that in the one-tree seqsampling
             nk += self.batch_size - nk%self.batch_size
             estimator_scenario_names = refmodel.scenario_names_creator(nk)
-            
-            
+
+
             Gk, sk = self._gap_estimators_with_independent_scenarios(xhat_k,nk,estimator_scenario_names,scenario_denouement)
 
             if (k%10==0):
@@ -195,7 +195,7 @@ class IndepScens_SeqSampling(SeqSampling):
         cfg.quick_assign("num_scens", int, nk)
         cfg.quick_assign("_mpisppy_probability", float, 1/nk)
         cfg.quick_assign("start_seed", int, self.SeedCount)        
-        
+
         pseudo_branching_factors = [nk]+[1]*(self.numstages-2)
         cfg.quick_assign('branching_factors', pyofig.ListOf(int), pseudo_branching_factors)
         ama = amalgamator.Amalgamator(cfg, 
@@ -219,7 +219,7 @@ class IndepScens_SeqSampling(SeqSampling):
                                                      self.cfg,
                                                     solver_name=self.solver_name,
                                                     solver_options=self.solver_options)
-        
+
         #Compute then the average function value with this policy
         all_nodenames = sputils.create_nodenames_from_branching_factors(pseudo_branching_factors)
         xhat_eval_options = {"iter0_solver_options": None,
@@ -240,7 +240,7 @@ class IndepScens_SeqSampling(SeqSampling):
         objs_at_xhat = ev.objs_dict
         ev.evaluate(xstars)
         objs_at_xstar = ev.objs_dict
-        
+
         eval_scen_at_xhat = []
         eval_scen_at_xstar = []
         scen_probs = []
@@ -248,8 +248,8 @@ class IndepScens_SeqSampling(SeqSampling):
             eval_scen_at_xhat.append(objs_at_xhat[k])
             eval_scen_at_xstar.append(objs_at_xstar[k])
             scen_probs.append(s._mpisppy_probability)
-    
-        
+
+
         scen_gaps = np.array(eval_scen_at_xhat)-np.array(eval_scen_at_xstar)
         local_gap = np.dot(scen_gaps,scen_probs)
         local_ssq = np.dot(scen_gaps**2,scen_probs)
@@ -263,17 +263,17 @@ class IndepScens_SeqSampling(SeqSampling):
             print(f"G = {G}")
         sample_var = (ssq - G**2)/(1-prob_sqnorm) #Unbiased sample variance
         sk = np.sqrt(sample_var)
-        
+
         use_relative_error = (np.abs(zstar)>1)
         self._is_minimizing = ev.is_minimizing
         sense = pyo.minimize if ev.is_minimizing else pyo.maximize
         Gk = ciutils.correcting_numeric(G,cfg,objfct=obj_at_xhat,
                                relative_error=use_relative_error, sense=sense)
-        
+
         self.SeedCount = start
-        
+
         return Gk,sk
-    
+
 
 if __name__ == "__main__":
     # For use by confidence interval develepors who need a quick test.
@@ -312,7 +312,7 @@ if __name__ == "__main__":
     optionsBM.quick_assign("start_ups", bool, False)
     optionsBM.quick_assign("EF_mstage", bool, True)
     ##optionsBM.quick_assign("cylinders", pyofig.ListOf(str), ['ph'])
-       
+
     # fixed width, fully sequential
     optionsFSP = config.Config()
     confidence_config.confidence_config(optionsFSP)
@@ -329,7 +329,7 @@ if __name__ == "__main__":
     optionsFSP.quick_assign("start_ups", bool, False)
     optionsBM.quick_assign("EF_mstage", bool, True)
     ##optionsFSP.quick_assign("cylinders", pyofig.ListOf(str), ['ph'])
-   
+
     aircondpb = IndepScens_SeqSampling("mpisppy.tests.examples.aircond",
                                        xhat_generator_aircond, 
                                        optionsBM,
@@ -339,5 +339,5 @@ if __name__ == "__main__":
     res = aircondpb.run(maxit=50)
     print(res)
 
-    
-    
+
+

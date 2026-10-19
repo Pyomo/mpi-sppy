@@ -326,7 +326,7 @@ def lshaped_options(cfg):
         odict = sputils.option_string_to_dict(cfg.solver_options)
     else:
         odict=dict()
-    
+
     lshoptions = {
         "root_solver": cfg.solver_name,
         "sp_solver": cfg.solver_name,
@@ -337,7 +337,7 @@ def lshaped_options(cfg):
         "verbose": False,
         "root_scenarios":None
    }
-    
+
     return lshoptions
 
 def ph_hub(
@@ -654,7 +654,7 @@ def ef_extension_adder(ef_dict, ext_class):
     logic copied from extension_adder(), adapted for EFExtensions
     '''
     from mpisppy.extensions.extension import EFMultiExtension
-    
+
     if "extensions" not in ef_dict or ef_dict["extensions"] is None:
         ef_dict["extensions"] = ext_class
     elif ef_dict["extensions"] == EFMultiExtension:
@@ -1922,7 +1922,7 @@ def ef_options(cfg,
     import mpisppy.utils.solver_spec as solver_spec    
 
     sroot, solver_name, solver_options = solver_spec.solver_specification(cfg, "EF")
-    
+
     ef_dict = {
         "scenario_creator": scenario_creator,
         "scenario_creator_kwargs": scenario_creator_kwargs,

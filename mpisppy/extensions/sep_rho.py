@@ -196,7 +196,7 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                 num_rhos += 1
         rho_avg = sum_rho / num_rhos
         global_toc(f"Rho values recomputed - average rank 0 rho={rho_avg}")
-        
+
     def checkpoint_state(self):
         """Adds the cost coefficients to what the dynamic-rho base carries.
 

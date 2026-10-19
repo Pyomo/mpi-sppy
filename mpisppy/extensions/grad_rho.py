@@ -62,7 +62,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
         for ndn_i, v in s._mpisppy_data.nonant_indices.items():
             scen_dep_denom[ndn_i] = abs(v._value - xbars[ndn_i]._value)
-            
+
         denom_max = max(scen_dep_denom.values())
 
         for ndn_i, v in s._mpisppy_data.nonant_indices.items():
@@ -274,7 +274,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                     ndn = node.name
                     local_nodenames.append(ndn)
                     nlen = nlens[ndn]
-                    
+
                     local_rhos[ndn] = np.zeros(nlen, dtype="d")
                     local_rho_mins[ndn] = np.zeros(nlen, dtype="d")
                     local_rho_maxes[ndn] = np.zeros(nlen, dtype="d")
@@ -432,7 +432,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
     def post_everything(self):
         pass
-    
+
     def register_receive_fields(self):
         spcomm = self.opt.spcomm
         best_xhat_ranks = spcomm.fields_to_ranks[Field.BEST_XHAT]

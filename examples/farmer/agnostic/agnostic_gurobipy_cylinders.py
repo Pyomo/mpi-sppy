@@ -70,7 +70,7 @@ if __name__ == "__main__":
         list_of_spoke_dict.append(xhatshuffle_spoke)
     if cfg.lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
-        
+
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
 

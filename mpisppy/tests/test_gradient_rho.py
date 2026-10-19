@@ -83,7 +83,7 @@ class Test_gradient_farmer(unittest.TestCase):
         self.cfg.max_iterations = 0
         self.ph_object = self._create_ph_farmer()
         self.ph_object.options["grad_rho_options"] = {"cfg": self.cfg}
-        
+
 
     def test_grad_rho_init(self):
         self.grad_object = GradRho(self.ph_object)

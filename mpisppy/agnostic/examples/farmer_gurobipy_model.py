@@ -23,7 +23,7 @@ farmerstream = np.random.RandomState()  # pylint: disable=no-member
 
 def scenario_creator(scenario_name, use_integer=False, sense=GRB.MINIMIZE, crops_multiplier=1, num_scens=None, seedoffset=0):
     """ Create a scenario for the (scalable) farmer example
-    
+
     Args:
         scenario_name (str):
             Name of the scenario to construct.
@@ -146,7 +146,7 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
         # Put the x^2 in the objective function
         obj += nonant_sq
         nonant_sqs[i] = nonant_sq
-    
+
     # Update model and gd
     gs.update()
     gd["nonant_sqs"] = nonant_sqs
@@ -180,15 +180,15 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
         return
 
     s._mpisppy_data.solution_available = True
-    
+
     # Objective value extraction
     objval = gs.getObjective().getValue()
-    
+
     if gd["sense"] == gp.GRB.MINIMIZE:
         s._mpisppy_data.outer_bound = objval
     else:
         s._mpisppy_data.outer_bound = objval
-    
+
     # Copy the non-anticipative variable values from guest to host scenario
     for ndn_i, gxvar in gd["nonants"].items():
         grb_var = gs.getVarByName(gxvar.VarName)
@@ -198,7 +198,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
                 "was not found in the Gurobi model."
             )
         s._mpisppy_data.nonant_indices[ndn_i]._value = grb_var.X
-    
+
     # Store the objective function value in the host scenario
     s._mpisppy_data.inner_bound = objval
 
