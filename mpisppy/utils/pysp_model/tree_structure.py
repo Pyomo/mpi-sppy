@@ -930,7 +930,7 @@ class ScenarioTree:
 
         # indices of the objects in the scenario tree bundle list
         bundles_to_delete = []
-        for i in range(0,len(self._scenario_bundles)):
+        for i in range(len(self._scenario_bundles)):
             scenario_bundle = self._scenario_bundles[i]
             for scenario_name in scenario_bundle._scenario_names:
                 if scenario_name not in self._scenario_map:

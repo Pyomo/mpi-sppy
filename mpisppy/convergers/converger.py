@@ -38,13 +38,11 @@ class Converger:
             current iteration--no more solves will be performed by SPBase.
             Otherwise, the iterations will continue.
         '''
-        pass
 
     def post_loops(self):
         '''Method called after the termination of the algorithm.
             This method is called after the post_loops of any extensions
         '''
-        pass
 
     def checkpoint_state(self):
         '''Return this converger's own state as picklable plain data, or None.

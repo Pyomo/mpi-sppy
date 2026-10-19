@@ -109,7 +109,6 @@ class BaseDistribution(object):
         Returns:
             float: the value of the pdf
         """
-        pass
 
     @classmethod
     @abstractmethod

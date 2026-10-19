@@ -28,7 +28,7 @@ os.mkdir(OUTDIR)
 
 copyfile("RootNode.dat", OUTDIR+os.sep+"RootNode.dat")
 
-for scenario_index in range(0,num_scenarios):
+for scenario_index in range(num_scenarios):
 
     outfile = open(OUTDIR+os.sep+"Node"+str(scenario_index+1)+".dat",'w')
     
@@ -38,7 +38,7 @@ for scenario_index in range(0,num_scenarios):
 
     print("param MinNondispatchablePower := ", file=outfile)
     
-    for hour in range(0,24):
+    for hour in range(24):
         wind_this_hour = 0.0 # this_column[hour]
         print("WIND", hour+1, wind_this_hour, file=outfile)
     for hour in range(24,48):
@@ -50,7 +50,7 @@ for scenario_index in range(0,num_scenarios):
 
     print("param MaxNondispatchablePower := ", file=outfile)
     
-    for hour in range(0,24):
+    for hour in range(24):
         wind_this_hour = this_column[hour] * scale_factor
         print("WIND", hour+1, wind_this_hour, file=outfile)
     for hour in range(24,48):

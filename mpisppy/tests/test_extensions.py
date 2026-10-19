@@ -29,12 +29,10 @@ from mpisppy.extensions.extension import (
 
 class _MockOpt:
     """Minimal mock of an SPOpt/PH object, sufficient to construct extensions."""
-    pass
 
 
 class _MockEF:
     """Minimal mock of an EF object, sufficient to construct EFExtensions."""
-    pass
 
 
 # ---------------------------------------------------------------------------

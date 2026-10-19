@@ -106,7 +106,6 @@ class _FakeSolverPlugin:
     this stub is neither, so the extension's persistent-solver branch
     is correctly skipped.
     """
-    pass
 
 
 def _attach_fake_solver_plugin(sp):
@@ -490,7 +489,6 @@ class _PersistentSolverStub:
     ``sputils.is_persistent`` checks ``isinstance(p, PersistentSolver)``,
     so we inherit from the real abstract base.
     """
-    pass
 
 
 class TestExtensionRegistrationAndSync(unittest.TestCase):

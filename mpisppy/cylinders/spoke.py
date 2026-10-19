@@ -92,7 +92,6 @@ class Spoke(SPCommunicator):
         regularly to ensure all ranks terminate
         with the Hub.
         """
-        pass
 
 
 class _BoundSpoke(Spoke):

@@ -98,6 +98,5 @@ def scenario_denouement(rank, scenario_name, scenario):
         for x_record in scenario._agnostic_dict["scenario"].sync_db.get_variable('x'):
             x_dict[x_record.get_keys()[0]] = x_record.get_level()
         print(f"In {scenario_name}: {x_dict}")
-    pass
     # (the fct in farmer won't work because the Var names don't match)
     #farmer.scenario_denouement(rank, scenario_name, scenario)

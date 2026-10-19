@@ -54,20 +54,17 @@ class Hub(SPCommunicator):
         """ To be called within the whichever optimization algorithm
             is being run on the hub (e.g. PH)
         """
-        pass
 
     @abc.abstractmethod
     def is_converged(self):
         """ The hub has the ability to halt the optimization algorithm on the
             hub before any local convergers.
         """
-        pass
 
     @abc.abstractmethod
     def current_iteration(self):
         """ Returns the current iteration count - however the hub defines it.
         """
-        pass
 
     @abc.abstractmethod
     def main(self):
@@ -340,7 +337,6 @@ class PHPrimalHub(Hub):
     def send_ws(self):
         """ Nonant hub; do not send Ws
         """
-        pass
 
 
 class PHHub(PHPrimalHub):
