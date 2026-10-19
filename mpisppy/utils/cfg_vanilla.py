@@ -370,7 +370,8 @@ def ph_hub(
 
     hub_dict = {
         "hub_class": PHHub,
-        "hub_kwargs": {"options": {"rel_gap": cfg.rel_gap,
+        "hub_kwargs": {"options": {"initial_outer_bound": cfg.initial_outer_bound,
+                                   "rel_gap": cfg.rel_gap,
                                    "abs_gap": cfg.abs_gap,
                                    "max_stalled_iters": cfg.max_stalled_iters}},
         "opt_class": PH,
@@ -421,7 +422,8 @@ def cg_hub(
     options["relaxed_nonant"]=cfg.relaxed_nonant    
     hub_dict = {
         "hub_class": CGHub,
-        "hub_kwargs": {"options": {"rel_gap": cfg.rel_gap,
+        "hub_kwargs": {"options": {"initial_outer_bound": cfg.initial_outer_bound,
+                                   "rel_gap": cfg.rel_gap,
                                    "abs_gap": cfg.abs_gap,
                                    "max_stalled_iters": cfg.max_stalled_iters}},
         "opt_class": CG,
@@ -464,7 +466,8 @@ def dualcg_hub(
     options["CGIterLimit"]=cfg.max_iterations  
     hub_dict = {
         "hub_class": DCGHub,   # <-- Use your dual hub class here
-        "hub_kwargs": {"options": {"rel_gap": cfg.rel_gap,
+        "hub_kwargs": {"options": {"initial_outer_bound": cfg.initial_outer_bound,
+                                   "rel_gap": cfg.rel_gap,
                                    "abs_gap": cfg.abs_gap,
                                    "max_stalled_iters": cfg.max_stalled_iters}},
         "opt_class": DCG,      # <-- Use your dual optimizer class here
@@ -574,7 +577,8 @@ def subgradient_hub(cfg,
 
     hub_dict = {
         "hub_class": SubgradientHub,
-        "hub_kwargs": {"options": {"rel_gap": cfg.rel_gap,
+        "hub_kwargs": {"options": {"initial_outer_bound": cfg.initial_outer_bound,
+                                   "rel_gap": cfg.rel_gap,
                                    "abs_gap": cfg.abs_gap,
                                    "max_stalled_iters": cfg.max_stalled_iters}},
         "opt_class": Subgradient,
@@ -629,7 +633,8 @@ def fwph_hub(cfg,
 
     hub_dict = {
         "hub_class": FWPHHub,
-        "hub_kwargs": {"options": {"rel_gap": cfg.rel_gap,
+        "hub_kwargs": {"options": {"initial_outer_bound": cfg.initial_outer_bound,
+                                   "rel_gap": cfg.rel_gap,
                                    "abs_gap": cfg.abs_gap,
                                    "max_stalled_iters": cfg.max_stalled_iters}},
         "opt_class": FWPH,
@@ -1852,6 +1857,7 @@ def lshaped_hub(
         "hub_class": LShapedHub,
         "hub_kwargs": {
             "options": {
+                "initial_outer_bound": cfg.initial_outer_bound,
                 "rel_gap": cfg.rel_gap,
                 "abs_gap": cfg.abs_gap,
             },

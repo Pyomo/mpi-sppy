@@ -24,7 +24,7 @@ import logging
 import os
 import time
 import warnings
-from math import inf
+from math import inf, isfinite
 
 import numpy as np
 
@@ -1296,6 +1296,14 @@ class SPCommunicator:
             self.BestOuterBound = inf
             self._inner_bound_update = lambda new, old : (new > old)
             self._outer_bound_update = lambda new, old : (new < old)
+
+        initial_outer_bound = (self.options or {}).get(
+            "initial_outer_bound", None)
+        if initial_outer_bound is not None:
+            if not isfinite(initial_outer_bound):
+                raise ValueError("initial_outer_bound must be finite")
+            self.BestOuterBound = self.OuterBoundUpdate(
+                initial_outer_bound, char="I")
 
     def compute_gaps(self):
         """ Compute the current absolute and relative gaps,
