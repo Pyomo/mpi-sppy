@@ -613,7 +613,7 @@ def validate_decisions_examples(policy: dict) -> list:
         try:
             module = _load_example_module(spec)
             cfg = _example_cfg(spec, module)
-        except Exception as e:                       # noqa: BLE001
+        except Exception as e:
             checks.append(Check("decision", f"example {name}: set up", False,
                                 f"{type(e).__name__}: {e}"))
             continue
@@ -622,7 +622,7 @@ def validate_decisions_examples(policy: dict) -> list:
                 cfg.inspect_only = str(nranks)       # plan as if nranks (no MPI)
                 facts = ootb.gather_facts(module, cfg, "base", policy)
                 d = ootb.recommend(facts, policy)
-            except Exception as e:                   # noqa: BLE001
+            except Exception as e:
                 checks.append(Check("decision",
                                     f"example {name} @ {nranks} ranks: recommend",
                                     False, f"{type(e).__name__}: {e}"))
@@ -776,7 +776,7 @@ def run_validation(policy_path: str, *, examples=False, run=False) -> dict:
               "checks": [], "runs": [], "ok": True}
     try:
         policy = ootb.load_policy(policy_path or None)
-    except Exception as e:                            # noqa: BLE001
+    except Exception as e:
         report["checks"].append(
             Check("static", "policy file parses", False,
                   f"{type(e).__name__}: {e}").as_dict())

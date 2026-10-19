@@ -256,7 +256,7 @@ class Pyomo_guest():
                 if not gxvar.fixed and gxvar.stale:
                     try:
                         float(pyo.value(gxvar))
-                    except:  # noqa
+                    except:  # noqa: E722
                         raise RuntimeError(
                             f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
                             "reported as stale. This usually means this variable "

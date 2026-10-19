@@ -187,7 +187,7 @@ def measure_example(spec: dict, solver_name: str, spb_grid, reps) -> list:  # pr
         try:
             seconds = _time_ef_solve(names, module.scenario_creator, kwargs,
                                      solver_name, reps)
-        except Exception as e:                            # noqa: BLE001
+        except Exception as e:
             print(f"  [{spec['name']} spb={spb}] solve failed: "
                   f"{type(e).__name__}: {e}", file=sys.stderr)
             continue

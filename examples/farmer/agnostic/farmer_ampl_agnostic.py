@@ -255,7 +255,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
         try:
             WParamDatas = list(gs.get_parameter("W").instances())
             print(f" ^^^ in _solve_one {WParamDatas =} {global_rank =}")
-        except:  # noqa
+        except:  # noqa: E722
             print(f"    ^^^^ no W for xhat {global_rank=}")
         #prox_on = gs.get_parameter("prox_on").value()
         #print(f" ^^^ in _solve_one {prox_on =} {global_rank =}")
@@ -310,7 +310,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
     for ndn_i, gxvar in gd["nonants"].items():
         try:   # not sure this is needed
             float(gxvar.value())
-        except:  # noqa
+        except:  # noqa: E722
             raise RuntimeError(
                 f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
                 "had no value. This usually means this variable "

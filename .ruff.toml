@@ -7,8 +7,9 @@
 # sweep.  See Pyomo/mpi-sppy#813.
 #
 # Further rules are added one family at a time (Pyomo/mpi-sppy#908):
-# W605 invalid escape sequence, W292 missing newline at end of file.
-lint.select = ["E4", "E7", "E9", "F", "W605", "W292"]
+# W605 invalid escape sequence, W292 missing newline at end of file,
+# RUF100 unused noqa, PGH004 noqa without a rule code.
+lint.select = ["E4", "E7", "E9", "F", "W605", "W292", "RUF100", "PGH004"]
 
 # ignore old Pyomo models
 extend-exclude = [

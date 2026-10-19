@@ -231,7 +231,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee=False, need_solution=True):
             if not gxvar.fixed and gxvar.stale:
                 try:
                     float(pyo.value(gxvar))
-                except:  # noqa
+                except:  # noqa: E722
                     raise RuntimeError(
                         f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
                         "reported as stale. This usually means this variable "

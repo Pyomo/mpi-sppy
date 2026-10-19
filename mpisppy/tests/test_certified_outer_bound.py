@@ -203,7 +203,7 @@ class TestFactoryWiring(unittest.TestCase):
         self.assertEqual(
             _spoke_options(cfg)["certified_outer_bound_cushion"], 1e-7)
 
-    def test_global_solver_options_do_not_leak(self):  # noqa: D401
+    def test_global_solver_options_do_not_leak(self):
         # The point of this test: Ipopt hard-fails on an unrecognized keyword
         # rather than ignoring it, so inheriting the global --solver-options
         # (meant for the hub's MIP solver) would kill this spoke on its first

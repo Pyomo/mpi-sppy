@@ -309,7 +309,7 @@ class AMPL_guest():
         for ndn_i, gxvar in gd["nonants"].items():
             try:   # not sure this is needed
                 float(gxvar.value())
-            except:  # noqa
+            except:  # noqa: E722
                 raise RuntimeError(
                     f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
                     "had no value. This usually means this variable "
