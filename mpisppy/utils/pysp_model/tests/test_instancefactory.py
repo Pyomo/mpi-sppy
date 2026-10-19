@@ -22,6 +22,7 @@
 import os
 import sys
 import shutil
+import tempfile
 from os.path import join, dirname, abspath, exists
 
 import pyomo.common.unittest as unittest
@@ -29,7 +30,9 @@ from pyomo.common.dependencies import networkx_available as has_networkx
 
 from pyomo.common.dependencies import yaml_available
 from mpisppy.utils.pysp_model.instance_factory import \
-    ScenarioTreeInstanceFactory
+    (ScenarioTreeInstanceFactory,
+     _find_reference_model_or_callback,
+     _find_scenariotree)
 from mpisppy.utils.pysp_model.tree_structure_model import \
     CreateAbstractScenarioTreeModel
 from mpisppy.utils.pysp_model.tree_structure import \
@@ -704,6 +707,26 @@ class Test(unittest.TestCase):
             self._check_factory(factory)
         self.assertEqual(len(factory._archives), 0)
         self.assertTrue("both_callbacks" in sys.modules)
+
+    def test_multiple_models_in_source(self):
+        # The error for a source with more than one candidate model must be
+        # the ValueError naming the source and the objects (it used to be a
+        # TypeError from a format string with too few arguments).
+        with tempfile.TemporaryDirectory() as tmpdir:
+            src = join(tmpdir, "two_models_in_source.py")
+            with open(src, "w") as f:
+                f.write("import pyomo.environ as pyo\n"
+                        "model_a = pyo.ConcreteModel()\n"
+                        "model_b = pyo.ConcreteModel()\n")
+            for find in (_find_reference_model_or_callback,
+                         _find_scenariotree):
+                with self.assertRaises(ValueError) as cm:
+                    find(src)
+                msg = str(cm.exception)
+                self.assertIn(src, msg)
+                self.assertIn("'model_a'", msg)
+                self.assertIn("'model_b'", msg)
+        sys.modules.pop("two_models_in_source", None)
 
 if __name__ == "__main__":
     unittest.main()
