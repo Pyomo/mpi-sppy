@@ -301,6 +301,7 @@ class Checkpointer(Extension):
         ``checkpointing.run_agreed``.
         """
         opt = self.opt
+        ckpt.require_checkpoint_structural_cfg(opt.options)
         if not self.spoke_mode and not self.dual_spoke_mode:
             ckpt.require_dill(self.backend)
 
@@ -734,7 +735,14 @@ class Checkpointer(Extension):
         """
         near = self._deadline_is_near()
         iteration = int(getattr(self.opt, "_PHIter", 0))
-        return (near or iteration % self.every == 0
+        # PHBase raises this transient flag only for an iteration that has
+        # made the cylinder converge. That completed state is the last one
+        # the run will have, so it must not be skipped merely because it is
+        # between ordinary cadence points. Evaluate _deadline_is_near first
+        # regardless: it contains the per-iteration collective that keeps
+        # the hub's ranks in step.
+        return (getattr(self.opt, "_force_checkpoint", False)
+                or near or iteration % self.every == 0
                 or self._is_final_iteration())
 
     def _deadline_is_near(self):

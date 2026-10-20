@@ -328,6 +328,15 @@ class _MultiRankABMixin:
                 snap["BestOuterBound"], snap["BestInnerBound"],
                 msg=f"rank {rank}: the outer bound crossed the incumbent")
             self.assertIsNotNone(checkpointed[rank])
+            # The stopped-leg snapshot is written after WheelSpinner
+            # finalizes the cylinders; hub_finalize may receive another spoke
+            # bound there. Compare the checkpoint with the first convergence
+            # check in the resumed process, rather than that later value.
+            self.assertAlmostEqual(
+                snap["first_BestOuterBound"], checkpointed[rank],
+                delta=1e-8 * max(1.0, abs(checkpointed[rank])),
+                msg=f"rank {rank}: resumed hub did not start from the "
+                    "checkpointed outer bound")
             self.assertGreaterEqual(
                 snap["BestOuterBound"], checkpointed[rank],
                 msg=f"rank {rank}: the resumed run ended with a weaker "

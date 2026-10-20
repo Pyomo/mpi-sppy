@@ -455,9 +455,28 @@ Consequences:
 
 ### 5.7 Geometry / cfg fingerprint — *checkpoint metadata*
 
-Each per-rank file records `{n_proc, rank, local scenario list}` and a cfg hash.
-Resume verifies the current layout matches and **refuses a mismatch with a clear
-error** (validated — §6).
+Each per-rank file records `{n_proc, rank, local scenario list}`, the exact
+scenario-to-model-file mapping, and a cfg hash; the manifest records the
+generation, backend, rank count and the same hash. Resume verifies that every
+leaf agrees with its manifest (format, backend, generation and fingerprint),
+then that its geometry and model-file mapping exactly match the current rank.
+It **refuses a mismatch with a clear error** rather than constructing a run from
+a mixture of fresh and restored models (validated — §6).
+
+The generic-cylinder path builds `checkpoint_structural_cfg` from every
+structural `Config` entry, including model-specific options. A direct
+PH/Xhat-API caller has no `Config` object for checkpointing to inspect and must
+provide that options-dict entry explicitly: a stable model/creator identifier
+and the creator inputs that can change the model. An empty dict is valid only
+when the creator has no structural inputs; omitting the entry is refused before
+a checkpoint is written or read.
+
+**Restart geometry is deliberately fixed.** A resumed cylinder must use the
+same number of ranks, the same cylinder-rank numbers, and the same local
+scenario assignment as the checkpoint. MPI geometry cannot change while a job
+is running, so successive generations of one job naturally share it; changing
+it between jobs would require redistributing dilled models and is not supported
+by this backend. A different rank count or assignment is refused, not remapped.
 
 ---
 
@@ -1012,13 +1031,15 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
      nothing read.
 
    **The write has its own hook, `maybe_checkpoint`** (*implemented*), rather
-   than riding on `enditer`. `iterk_loop` calls it directly, after every
-   extension's `enditer`, so what a checkpoint holds no longer depends on the
-   order extensions were attached in — including a model change a *user*
-   extension makes in its own `enditer`, which the earlier `enditer`-dispatched
-   write dropped for good (a resume starts at the next iteration, so that hook
-   never runs again). `enditer_after_sync` is not a substitute: it is skipped on
-   the cylinder-convergence break, so a run ending that way would write nothing.
+   than riding on `enditer`. `iterk_loop` calls it directly after the hub has
+   synchronized nonants, bounds and extension state. On the ordinary path it
+   also follows every extension's `enditer_after_sync`, so the checkpoint holds
+   any state that hook changed; a bound a spoke sent during `sync_bounds` is in
+   the same snapshot. This keeps the write independent of extension attachment
+   order, including a model change a *user* extension makes in either end hook.
+   Cylinder convergence is tested after synchronization, but the checkpoint is
+   still written before its break, so the final converged iteration is not lost;
+   as before, `enditer_after_sync` itself remains skipped on that break.
 
    The xhatter `main()` loops have no `enditer` to borrow, so they call the same
    hook (via `InnerBoundNonantSpoke.maybe_checkpoint`) once per pass, at the
@@ -1044,8 +1065,8 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
 
    It is taken between consecutive passes through one point in the loop, just
    after the solve and before `enditer`, so it is one whole iteration — the
-   previous iteration's `enditer`, checkpoint write, sync and
-   `enditer_after_sync`, then this one's start and solve — and it ends with the
+   previous iteration's `enditer`, synchronization, `enditer_after_sync` and
+   checkpoint write, then this one's start and solve — and it ends with the
    iteration the hook is deciding about. An earlier version timed each
    iteration from its top to its bottom and recorded it at the bottom, so the
    hook saw the iteration *before* the one ending — iteration 0 at the end of
@@ -1105,7 +1126,7 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
 
 ```
 <ckpt_dir>/
-  manifest.json                       # cfg hash, n_proc, backend, cylinder map, latest complete hub generation
+  manifest.json                       # cfg hash, n_proc, backend, latest complete hub generation
   hub/
     gen_<NNNN>/                        # NNNN = global PH iteration at the checkpoint
       hub_rank_<RRRR>.pkl             # non-model leaf state: iter counter, bounds, extension-object state
@@ -1124,6 +1145,14 @@ generation and records the backend so resume loads the right way. Under the `lea
 backend the `.dill` model files are replaced by numeric arrays inside the
 `hub_rank_*.pkl`. Use plain `pickle` for the numeric/leaf state; `dill` for the
 scenario models.
+
+The manifest and each rank leaf are one consistency unit on resume. The leaf
+must repeat the manifest's format, backend, generation and structural
+fingerprint, and its `{n_proc, rank, local scenario list}` plus its
+scenario-to-filename map must exactly match the current rank. These are
+consistency checks, not a checksum against arbitrary file tampering; their job
+is to refuse stale, misplaced or incomplete leaves before a model swap can
+produce a mixed run.
 
 `<S>` is the scenario's full name sanitized for the filesystem (or its index in
 the rank's local scenario list) — **never** `sputils.extract_num`, which is not

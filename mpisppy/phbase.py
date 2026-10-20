@@ -1970,8 +1970,8 @@ class PHBase(mpisppy.spopt.SPOpt):
 
             # The duration --checkpoint-before-seconds predicts from, taken
             # between passes through this point, so it is one whole iteration
-            # ending with this solve: the previous iteration's enditer,
-            # checkpoint write, sync and enditer_after_sync, then this one's
+            # ending with this solve: the previous iteration's enditer, sync,
+            # enditer_after_sync and checkpoint write, then this one's
             # start and solve. In the first iteration of a run, which has no
             # previous pass, it starts where the loop starts instead.
             now = time.perf_counter()
@@ -1980,19 +1980,6 @@ class PHBase(mpisppy.spopt.SPOpt):
 
             if have_extensions:
                 self.extobject.enditer()
-                # The checkpoint write has its own hook, fired here rather
-                # than from some extension's enditer, so a checkpoint holds
-                # the whole end-of-iteration state no matter what order
-                # extensions were attached in -- including any model change
-                # an extension made in the enditer just above, which a
-                # resume would otherwise drop for good.
-                #
-                # This is the last point in the iteration where the state is
-                # still coherent and reachable: enditer_after_sync is not a
-                # substitute, because it is skipped on the cylinder
-                # convergence break below, so a run that ends that way would
-                # write nothing.
-                self.extobject.maybe_checkpoint()
 
             if hasattr(self.spcomm, "sync_nonants"):
                 self.spcomm.sync_nonants()
@@ -2001,12 +1988,41 @@ class PHBase(mpisppy.spopt.SPOpt):
             elif hasattr(self.spcomm, "sync"):
                 self.spcomm.sync()
 
-            if self.spcomm and self.spcomm.is_converged():
+            # A checkpoint is an end-of-iteration snapshot, so it has to see
+            # the state the iteration actually leaves behind. In particular,
+            # sync_bounds can receive a spoke's new best outer/inner bound,
+            # and sync_extensions can change extension-owned state. Writing
+            # before either silently loses them on a resume.
+            cylinder_converged = bool(
+                self.spcomm and self.spcomm.is_converged())
+
+            # Keep the existing convergence semantics: this hook has always
+            # been skipped when the cylinder converges. On the ordinary path
+            # it is part of the completed iteration and belongs in the
+            # snapshot just like enditer above.
+            if have_extensions and not cylinder_converged:
+                self.extobject.enditer_after_sync()
+
+            # The dedicated hook keeps this independent of extension attach
+            # order. It deliberately runs on both paths: an iteration that
+            # causes cylinder convergence still needs a final, post-sync
+            # checkpoint rather than the one from its preceding iteration.
+            if have_extensions:
+                # Keep maybe_checkpoint's existing extension API: user
+                # extensions may override it without accepting arguments.
+                # Checkpointer reads this short-lived private flag to bypass
+                # its normal cadence for the completed iteration that ends
+                # the cylinder. The try/finally prevents the signal leaking
+                # into a later checkpoint point if another extension raises.
+                self._force_checkpoint = cylinder_converged
+                try:
+                    self.extobject.maybe_checkpoint()
+                finally:
+                    self._force_checkpoint = False
+
+            if cylinder_converged:
                 global_toc("Cylinder convergence", self.cylinder_rank == 0)
                 break
-
-            if have_extensions:
-                self.extobject.enditer_after_sync()
 
             if dprogress and self.cylinder_rank == 0:
                 print("")

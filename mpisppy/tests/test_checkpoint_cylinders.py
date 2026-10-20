@@ -262,12 +262,20 @@ class _ResumeABMixin:
             resumed["best_bound_obj_val"], stopped["best_bound_obj_val"],
             msg="the resumed hub did not carry the checkpointed best bound "
                 "across; it recomputed or discarded it")
-        # Against the checkpoint, not against the stopped leg's last word:
-        # a spoke's bound can reach the hub after the final checkpoint is
-        # written, and nothing carries that one.
+        # A hub checkpoint is a post-sync iteration snapshot. The stopped-leg
+        # snapshot is written after WheelSpinner finalizes the cylinders;
+        # hub_finalize may receive another spoke bound there, so its final
+        # BestOuterBound is not necessarily the value that was checkpointed.
+        # Compare the checkpoint with the first convergence check of the fresh
+        # resumed process instead.
         checkpointed = self._checkpointed_outer_bound()
         self.assertIsNotNone(checkpointed,
                              msg="the checkpoint recorded no outer bound")
+        self.assertAlmostEqual(
+            resumed["first_BestOuterBound"], checkpointed,
+            delta=1e-8 * max(1.0, abs(checkpointed)),
+            msg="the resumed hub did not begin with the checkpointed outer "
+                "bound")
         self.assertGreaterEqual(
             resumed["BestOuterBound"], checkpointed,
             msg="the resumed run ended with a weaker outer bound than its "
