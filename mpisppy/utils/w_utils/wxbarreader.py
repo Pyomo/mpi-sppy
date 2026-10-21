@@ -135,6 +135,7 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
         if self.x_fname:
             mpisppy.utils.w_utils.wxbarutils.set_xbar_from_file(self.x_fname, self.PHB)
             self.PHB._reenable_prox()
+            self.PHB.keep_supplied_xbar_through_iter0()
 
     def post_iter0(self):
         pass
