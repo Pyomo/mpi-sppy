@@ -194,6 +194,27 @@ class Test_xbar_w_reader_writer_farmer(unittest.TestCase):
                     self.assertAlmostEqual(v.value, expected[sname][v.name],
                                            places=2)
 
+    def test_wxbarreader_with_linearized_prox(self):
+        # Before iteration 0 the nonants have no values, so the prox
+        # approximation has to start from xbar rather than from a solution.
+        self.cfg.linearize_proximal_terms = True
+        ph = self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader,
+                                    max_iter=0)
+        for s in ph.local_scenarios.values():
+            for manager in s._mpisppy_data.xsqvar_prox_approx.values():
+                self.assertTrue(
+                    any(abs(c - manager.xbar.value) < 1e-9
+                        for c in manager.cut_values),
+                    f"no cut at xbar for {manager.xvar.name}")
+
+    def test_wreader_with_linearized_prox(self):
+        # W only: the prox term is off in iteration 0, and the first cuts
+        # come from the iteration-0 solution as on a cold run.
+        self.cfg.linearize_proximal_terms = True
+        ph = self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader,
+                                    max_iter=2, read_xbar=False)
+        self.assertEqual(ph._PHIter, 2)
+
     def test_wreader_leaves_pre_iter0_cost_coeffs_alone(self):
         def coeffs(ext_classes):
             self.setUp()

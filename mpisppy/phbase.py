@@ -776,6 +776,13 @@ class PHBase(mpisppy.spopt.SPOpt):
             persistent_solver = (s._solver_plugin if sputils.is_persistent(s._solver_plugin) else None)
             #print(f"total number of proximal cuts: {len(s._mpisppy_model.xsqvar_cuts)}")
             for prox_approx_manager in s._mpisppy_data.xsqvar_prox_approx.values():
+                if prox_approx_manager.xvar.value is None:
+                    # No solve has given this nonant a value yet: the prox
+                    # term is on in iteration 0 because WXBarReader supplied
+                    # xbar. Cut around xbar, where the prox term is centered.
+                    prox_approx_manager.add_cuts(prox_approx_manager.xbar.value,
+                                                 tol, persistent_solver)
+                    continue
                 prox_approx_manager.check_tol_add_cut(tol, persistent_solver)
                 prox_approx_manager.xvarsqrd._value = prox_approx_manager.xvar.value**2
 

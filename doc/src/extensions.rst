@@ -388,8 +388,10 @@ When the reader loads W (``--init-W-fname``) or xbar
 before the iteration-0 solve, so iteration 0 uses the values read. When
 only W is read, the iteration-0 bound is a Lagrangian bound for that W,
 not the trivial bound. When xbar is read, the prox term is on in
-iteration 0, so that solve gives no bound. Without the reader, PH adds
-those terms after iteration 0.
+iteration 0, so that solve gives no bound. That prox term uses
+``--default-rho``: a rho setter, SepRho, GradRho and the other rho
+extensions set rho after the iteration-0 solve. Without the reader, PH
+adds those terms after iteration 0.
 
 norm_rho_updater
 ^^^^^^^^^^^^^^^^
