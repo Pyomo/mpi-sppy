@@ -3786,14 +3786,18 @@ class TestWXBarReaderResume(unittest.TestCase):
         reader.x_fname = None
         reader.sep_files = False
         reader.cylinder_rank = 0
-        reader.PHB = types.SimpleNamespace(_resumed_from_checkpoint=resumed)
+        reader.PHB = types.SimpleNamespace(
+            _resumed_from_checkpoint=resumed,
+            request_PH_attach_before_iter0_solve=mock.Mock())
         return reader
 
     def test_a_resumed_run_does_not_read_the_files(self):
         import mpisppy.utils.w_utils.wxbarutils as wxbarutils
+        reader = self._reader(resumed=True)
         with mock.patch.object(wxbarutils, "set_W_from_file") as set_W:
-            self._reader(resumed=True).pre_iter0()
+            reader.pre_iter0()
         set_W.assert_not_called()
+        reader.PHB.request_PH_attach_before_iter0_solve.assert_not_called()
 
     def test_an_ordinary_run_still_reads_them(self):
         import mpisppy.utils.w_utils.wxbarutils as wxbarutils
@@ -3802,6 +3806,7 @@ class TestWXBarReaderResume(unittest.TestCase):
         with mock.patch.object(wxbarutils, "set_W_from_file") as set_W:
             reader.pre_iter0()
         set_W.assert_called_once()
+        reader.PHB.request_PH_attach_before_iter0_solve.assert_called_once()
 
     def _ph_stub(self, resume_from):
         import types

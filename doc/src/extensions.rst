@@ -383,6 +383,14 @@ WXBarWriter and WXBarReader
 There is an extension to write xbar and W values and another to read them.
 An example of their use is shown in ``examples.sizes.sizes_demo.py``
 
+When the reader loads W (``--init-W-fname``) or xbar
+(``--init-Xbar-fname``), the W and prox terms are put in the objective
+before the iteration-0 solve, so iteration 0 uses the values read. When
+only W is read, the iteration-0 bound is a Lagrangian bound for that W,
+not the trivial bound. When xbar is read, the prox term is on in
+iteration 0, so that solve gives no bound. Without the reader, PH adds
+those terms after iteration 0.
+
 norm_rho_updater
 ^^^^^^^^^^^^^^^^
 

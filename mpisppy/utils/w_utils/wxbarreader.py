@@ -131,10 +131,15 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
             mpisppy.utils.w_utils.wxbarutils.set_W_from_file(
                     self.w_fname, self.PHB, self.cylinder_rank,
                     sep_files=self.sep_files)
-            self.PHB._reenable_W() # This makes a big difference.
+            self.PHB._reenable_W()
         if self.x_fname:
             mpisppy.utils.w_utils.wxbarutils.set_xbar_from_file(self.x_fname, self.PHB)
             self.PHB._reenable_prox()
+        if names:
+            # PH attaches the W and prox terms after the iteration-0 solve by
+            # default, which would leave that solve ignoring what was just
+            # read.
+            self.PHB.request_PH_attach_before_iter0_solve()
 
     def post_iter0(self):
         pass

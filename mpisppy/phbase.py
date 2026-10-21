@@ -377,6 +377,8 @@ class PHBase(mpisppy.spopt.SPOpt):
         # Whether PH_Prep has run. It refuses a second time: this object's W,
         # rho and objective terms belong to one run. See PH_Prep.
         self._PH_prep_done = False
+        # Set by request_PH_attach_before_iter0_solve.
+        self._attach_before_iter0_solve = False
 
     @property
     def iter0_solver_options(self):
@@ -1049,6 +1051,20 @@ class PHBase(mpisppy.spopt.SPOpt):
                                           "add_duals": add_duals, "add_prox": add_prox})
 
 
+    def request_PH_attach_before_iter0_solve(self):
+        """ Ask Iter0 to splice the W and prox terms into the objectives
+        before the iteration-0 solve rather than after it, so that solve uses
+        whatever W (and xbar) an extension set in pre_iter0 -- WXBarReader,
+        for example. Iter0 does the splice once every pre_iter0 hook has run
+        and before it creates the solvers.
+
+        With the terms attached, the iteration-0 objective values give a
+        Lagrangian bound for the supplied W rather than the trivial bound.
+        Has no effect when the terms were attached in PH_Prep
+        (defer_attach=False) or the run resumed from a checkpoint.
+        """
+        self._attach_before_iter0_solve = True
+
     def _attach_PH_to_objective_after_iter0(self):
         """ Splice the W/prox terms into the objective after the iteration-0
         solve, and refresh any persistent solvers.
@@ -1491,7 +1507,8 @@ class PHBase(mpisppy.spopt.SPOpt):
 
     def Iter0(self):
         """ Create solvers and perform the initial PH solve (with no dual
-        weights or prox terms).
+        weights or prox terms, unless an extension called
+        request_PH_attach_before_iter0_solve).
 
         This function quits() if the scenario probabilities do not sum to one,
         or if any of the scenario subproblems are infeasible. It also calls the
@@ -1537,6 +1554,18 @@ class PHBase(mpisppy.spopt.SPOpt):
         # pointed at dead models.
         if have_extensions:
             self.extobject.pre_iter0()
+
+        # After pre_iter0 rather than inside the hook that asked for it:
+        # SepRho and CoeffRho read cost coefficients from the objective in
+        # their pre_iter0, and a W term already there would add to them.
+        # Before _create_solvers, so a persistent solver sees the terms
+        # without a second set_instance.
+        if getattr(self, "_deferred_ph_attach", False) \
+                and self._attach_before_iter0_solve:
+            self.attach_PH_to_objective(self._attach_duals,
+                                        self._attach_prox,
+                                        self._attach_smooth)
+            self._deferred_ph_attach = False
 
         global_toc("Creating solvers")
         self._create_solvers()
@@ -1695,8 +1724,9 @@ class PHBase(mpisppy.spopt.SPOpt):
         if dconvergence_detail:
             self.report_var_values_at_rank0(header="Convergence detail:", fixed_vars=False)
 
-        # Iteration 0 solved the user's original objective. Now (unless a
-        # caller already attached them in PH_Prep) splice the dual (W) and
+        # Unless the terms were attached already (in PH_Prep, or before the
+        # iteration-0 solve at an extension's request), iteration 0 solved
+        # the user's original objective. Now splice the dual (W) and
         # proximal terms into the subproblem objectives. Deferring to here
         # keeps the iteration-0 model structurally identical to what the user
         # passed in -- helpful for debugging and for LP-only solvers that
