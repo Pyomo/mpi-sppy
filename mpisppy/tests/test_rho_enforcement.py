@@ -39,6 +39,7 @@ from mpisppy.utils.rho_utils import (
     report_zero_rho_fallback,
     resolve_rho,
 )
+from mpisppy.utils.sputils import nonant_cost_coeffs
 
 solver_available, solver_name, *_ = get_solver()
 
@@ -313,16 +314,33 @@ class Test_coeff_rho(unittest.TestCase):
 
     def test_coeff_value_kept_and_zero_defaults(self):
         ph = _make_coeff_ph(coeffs=[3.0, 0.0], default_rho=1.0)
-        CoeffRho(ph).post_iter0()
+        ext = CoeffRho(ph)
+        ext.pre_iter0()
+        ext.post_iter0()
         rho = ph.local_scenarios["s0"]._mpisppy_model.rho
         self.assertAlmostEqual(rho[(NDN, 0)]._value, 3.0)  # |coeff| kept
         self.assertEqual(rho[(NDN, 1)]._value, 1.0)        # zero coeff -> default
 
     def test_multiplier_applied(self):
         ph = _make_coeff_ph(coeffs=[2.0], default_rho=1.0, multiplier=2.5)
-        CoeffRho(ph).post_iter0()
+        ext = CoeffRho(ph)
+        ext.pre_iter0()
+        ext.post_iter0()
         rho = ph.local_scenarios["s0"]._mpisppy_model.rho
         self.assertAlmostEqual(rho[(NDN, 0)]._value, 5.0)  # 2.0 * 2.5
+
+    def test_pre_iter0_cache_survives_heuristic_fixing(self):
+        ph = _make_coeff_ph(coeffs=[3.0], default_rho=1.0)
+        ext = CoeffRho(ph)
+        ext.pre_iter0()
+
+        scenario = ph.local_scenarios["s0"]
+        scenario.x[0].fix(1.0)  # as RelaxedPHFixer does before iteration 0
+        self.assertEqual(nonant_cost_coeffs(scenario)[(NDN, 0)], 0.0)
+
+        ext.post_iter0()
+        self.assertEqual(ext._nonant_cost_coeffs[scenario][(NDN, 0)], 3.0)
+        self.assertEqual(scenario._mpisppy_model.rho[(NDN, 0)]._value, 3.0)
 
 
 def _farmer_ph_options(default_rho=1.0):

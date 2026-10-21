@@ -223,7 +223,12 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             if sname in by_name}
 
     def pre_iter0(self):
-        pass
+        # Capture coefficients before iter0_post_solver_creation hooks (notably
+        # RelaxedPHFixer) can fix nonants. Pyomo folds fixed-variable terms
+        # into the standard representation's constant.
+        if not getattr(self.opt, "_resumed_from_checkpoint", False):
+            for s in self.opt.local_scenarios.values():
+                self.nonant_cost_coeffs(s)
 
     def post_iter0(self):
         if getattr(self.opt, "_resumed_from_checkpoint", False):
