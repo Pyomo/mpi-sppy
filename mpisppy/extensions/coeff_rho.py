@@ -36,6 +36,17 @@ class CoeffRho(mpisppy.extensions.extension.Extension):
             self.multiplier = ph.options["coeff_rho_options"]["multiplier"]
         # remembers the last reported zero-coefficient count to avoid log spam
         self._rho_report_state = {}
+        self._nonant_cost_coeffs = {}
+
+    def pre_iter0(self):
+        # This hook precedes heuristic fixing in iter0_post_solver_creation.
+        # Extract now because fixed-variable objective terms disappear into
+        # the constant in Pyomo's standard representation.
+        if not getattr(self.ph, "_resumed_from_checkpoint", False):
+            self._nonant_cost_coeffs = {
+                s: nonant_cost_coeffs(s)
+                for s in self.ph.local_scenarios.values()
+            }
 
     def post_iter0(self):
         if getattr(self.ph, "_resumed_from_checkpoint", False):
@@ -50,8 +61,9 @@ class CoeffRho(mpisppy.extensions.extension.Extension):
         # rho from this heuristic; they fall back to the positive default rho.
         # We report the fallback rather than substituting silently; see issue #560.
         default_rho = self.ph.options.get("defaultPHrho")
-        coeffs = {s: nonant_cost_coeffs(s) for s in self.ph.local_scenarios.values()}
         assign_rho_with_fallback(
             self.ph, default_rho, "CoeffRho", self._rho_report_state,
-            lambda s, ndn_i: abs(coeffs[s][ndn_i]) * self.multiplier)
+            lambda s, ndn_i: (
+                abs(self._nonant_cost_coeffs[s][ndn_i]) * self.multiplier
+            ))
         global_toc("Rho values updated by CoeffRho Extension", self.ph.cylinder_rank == 0)
