@@ -108,6 +108,15 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
                     "smoothing: the xbar read turns the prox term on in "
                     "iteration 0, and the smoothing term would come on with "
                     "it, centered on 0.")
+            # APH's prox term is centered on its own z, which nothing sets
+            # from the file, so the iteration-0 solve would be pulled toward
+            # z = 0 and its value reported as the trivial bound (issue #929).
+            import mpisppy.opt.aph
+            if isinstance(ph, mpisppy.opt.aph.APH):
+                raise RuntimeError(
+                    f"--init-Xbar-fname ({x_fname}) cannot be used with APH: "
+                    "APH's prox term is centered on its own z, not on the "
+                    "xbar read. --init-W-fname alone can be used with APH.")
 
         if (x_fname is None and w_fname is None and rank==0):
             print('Warning: no input files provided to WXBarReader. '

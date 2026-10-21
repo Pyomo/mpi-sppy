@@ -68,7 +68,8 @@ class Test_xbar_w_reader_writer_farmer(unittest.TestCase):
     """ Test the gradient code using farmer."""
 
     def _create_ph_farmer(self, ph_extensions=None, max_iter=100,
-                          extension_kwargs=None, read_xbar=True):
+                          extension_kwargs=None, read_xbar=True,
+                          hub_maker=vanilla.ph_hub):
         self.w_file_name = os.path.join(_W_TEST_DATA_DIR, 'w_file.csv')
         self.temp_w_file_name = os.path.join(_W_TEST_DATA_DIR, '_temp_w_file.csv')
         self.xbar_file_name = os.path.join(_W_TEST_DATA_DIR, 'xbar_file.csv')
@@ -80,7 +81,7 @@ class Test_xbar_w_reader_writer_farmer(unittest.TestCase):
         scenario_creator_kwargs = farmer.kw_creator(self.cfg)
         self.cfg.max_iterations = max_iter
         beans = (self.cfg, scenario_creator, scenario_denouement, all_scenario_names)
-        hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=scenario_creator_kwargs,
+        hub_dict = hub_maker(*beans, scenario_creator_kwargs=scenario_creator_kwargs,
                                   ph_extensions=ph_extensions, extension_kwargs=extension_kwargs)
         hub_dict['opt_kwargs']['options']['cfg'] = self.cfg
         if ph_extensions==wxbarwriter.WXBarWriter:
@@ -233,6 +234,22 @@ class Test_xbar_w_reader_writer_farmer(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "smoothing"):
             self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader,
                                    max_iter=0)
+
+    def test_xbar_with_APH_is_refused(self):
+        self.cfg.aph_args()
+        with self.assertRaisesRegex(RuntimeError, "APH"):
+            self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader,
+                                   max_iter=0, hub_maker=vanilla.aph_hub)
+
+    def test_wreader_with_APH(self):
+        # W alone is fine under APH: APH attaches its W term before
+        # iteration 0, so the solve uses the W read.
+        self.cfg.aph_args()
+        aph = self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader,
+                                     max_iter=1, read_xbar=False,
+                                     hub_maker=vanilla.aph_hub)
+        expected, _ = self._solve_iter0_outside_PH(with_xbar=False)
+        self.assertAlmostEqual(aph.trivial_bound, expected, places=3)
 
     def test_iter0_with_xbar_checks_the_solver_for_quadratics(self):
         # With xbar read, iteration 0 is the first quadratic solve, so the
