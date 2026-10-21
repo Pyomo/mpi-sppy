@@ -29,6 +29,7 @@ import mpisppy.utils.w_utils.wxbarreader as wxbarreader
 import mpisppy.utils.w_utils.wxbarutils as wxbarutils
 import mpisppy.utils.w_utils.wxbarwriter as wxbarwriter
 from mpisppy.extensions.extension import Extension, MultiExtension
+from mpisppy.extensions.sep_rho import SepRho
 from mpisppy.phbase import PHBase
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.tests.utils import get_solver
@@ -352,6 +353,100 @@ class Test_W_check_multistage(unittest.TestCase):
         fname = self._write_W({"ROOT_0": 1.0, "ROOT_1": -1.0})
         with self.assertRaisesRegex(RuntimeError, "at tree node ROOT_0"):
             wxbarutils.set_W_from_file(fname, self.ph, 0)
+
+class _Iter0XbarRecorder(Extension):
+    """ Records, in post_iter0, the nonant values and the xbar the rho
+    setters see there."""
+    def post_iter0(self):
+        self.seen = {
+            sname: {ndn_i: (v.value, s._mpisppy_model.xbars[ndn_i].value)
+                    for ndn_i, v in s._mpisppy_data.nonant_indices.items()}
+            for sname, s in self.opt.local_scenarios.items()}
+
+
+class Test_iter0_xbar_farmer(unittest.TestCase):
+    """ What xbar the post_iter0 hooks (SepRho, SensiRho, GradRho) see: the
+    mean of the iteration-0 solutions, unless WXBarReader supplied one."""
+
+    def setUp(self):
+        self.cfg = _create_cfg()
+        self.cfg.sep_rho_args()
+        self.cfg.dynamic_rho_args()
+        self.cfg.num_scens = 3
+        self.cfg.max_iterations = 0
+
+    def _run(self, ext_classes, w_file=False, xbar_file=False):
+        cfg = self.cfg
+        beans = (cfg, farmer.scenario_creator, farmer.scenario_denouement,
+                 farmer.scenario_names_creator(cfg.num_scens))
+        hub_dict = vanilla.ph_hub(
+            *beans, scenario_creator_kwargs=farmer.kw_creator(cfg),
+            ph_extensions=MultiExtension,
+            extension_kwargs={"ext_classes": ext_classes})
+        options = hub_dict['opt_kwargs']['options']
+        options['cfg'] = cfg
+        options["sep_rho_options"] = {"multiplier": 1.0, "cfg": cfg}
+        if w_file or xbar_file:
+            cfg.W_and_xbar_reader = True
+            if w_file:
+                cfg.init_W_fname = os.path.join(_W_TEST_DATA_DIR, 'w_file.csv')
+            if xbar_file:
+                cfg.init_Xbar_fname = os.path.join(_W_TEST_DATA_DIR, 'xbar_file.csv')
+        wheel = WheelSpinner(hub_dict, [])
+        wheel.spin()
+        return wheel.spcomm.opt
+
+    def _assert_xbar_is_iter0_mean(self, ph):
+        seen = ph.extobject.extdict["_Iter0XbarRecorder"].seen
+        mean = {}
+        for sname, s in ph.local_scenarios.items():
+            for ndn_i, (x, _) in seen[sname].items():
+                mean[ndn_i] = mean.get(ndn_i, 0.0) + s._mpisppy_probability * x
+        self.assertGreater(max(abs(m) for m in mean.values()), 1.0)
+        for sname in seen:
+            for ndn_i, (_, xbar) in seen[sname].items():
+                self.assertAlmostEqual(xbar, mean[ndn_i], places=6)
+
+    def test_cold_run_sees_iter0_mean(self):
+        self._assert_xbar_is_iter0_mean(self._run([_Iter0XbarRecorder]))
+
+    def test_W_only_sees_iter0_mean(self):
+        ph = self._run([wxbarreader.WXBarReader, _Iter0XbarRecorder], w_file=True)
+        self._assert_xbar_is_iter0_mean(ph)
+
+    def test_supplied_xbar_is_kept(self):
+        ph = self._run([wxbarreader.WXBarReader, _Iter0XbarRecorder],
+                       w_file=True, xbar_file=True)
+        supplied = {}
+        with open(os.path.join(_W_TEST_DATA_DIR, 'xbar_file.csv')) as f:
+            for vname, val in csv.reader(f):
+                supplied[vname] = float(val)
+        seen = ph.extobject.extdict["_Iter0XbarRecorder"].seen
+        for sname, s in ph.local_scenarios.items():
+            for ndn_i, v in s._mpisppy_data.nonant_indices.items():
+                self.assertAlmostEqual(seen[sname][ndn_i][1], supplied[v.name])
+
+    def test_sep_rho_uses_iter0_xbar(self):
+        # rho = |c| / max(1, E|x - xbar|) for farmer's continuous nonants,
+        # with xbar the iteration-0 mean (it used to be 0, giving |c| / E|x|).
+        ph = self._run([_Iter0XbarRecorder, SepRho])
+        seen = ph.extobject.extdict["_Iter0XbarRecorder"].seen
+        sep = ph.extobject.extdict["SepRho"]
+        mean = {}
+        for sname, s in ph.local_scenarios.items():
+            for ndn_i, (x, _) in seen[sname].items():
+                mean[ndn_i] = mean.get(ndn_i, 0.0) + s._mpisppy_probability * x
+        resid = {}
+        for sname, s in ph.local_scenarios.items():
+            for ndn_i, (x, _) in seen[sname].items():
+                resid[ndn_i] = resid.get(ndn_i, 0.0) \
+                    + s._mpisppy_probability * abs(x - mean[ndn_i])
+        for s in ph.local_scenarios.values():
+            costs = sep.nonant_cost_coeffs(s)
+            for ndn_i in s._mpisppy_data.nonant_indices:
+                self.assertAlmostEqual(
+                    s._mpisppy_model.rho[ndn_i].value,
+                    abs(costs[ndn_i]) / max(1, resid[ndn_i]), places=6)
 
 
 if __name__ == '__main__':

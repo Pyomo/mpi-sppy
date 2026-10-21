@@ -377,6 +377,8 @@ class PHBase(mpisppy.spopt.SPOpt):
         # Whether PH_Prep has run. It refuses a second time: this object's W,
         # rho and objective terms belong to one run. See PH_Prep.
         self._PH_prep_done = False
+        # Set by keep_supplied_xbar_through_iter0.
+        self._xbar_supplied = False
         # Set by request_PH_attach_before_iter0_solve.
         self._attach_before_iter0_solve = False
         # Whether this process's iteration-0 solve had the prox term on (an
@@ -1078,6 +1080,17 @@ class PHBase(mpisppy.spopt.SPOpt):
                                           "add_duals": add_duals, "add_prox": add_prox})
 
 
+    def keep_supplied_xbar_through_iter0(self):
+        """ Tell Iter0 that an extension set xbar in pre_iter0 (WXBarReader
+        reading --init-Xbar-fname, for example), so Iter0 must not replace it
+        with the mean of the iteration-0 solutions. The rho setters that run
+        in post_iter0 (SepRho, SensiRho, GradRho) then measure the iteration-0
+        solutions against the supplied xbar. Iteration 1 computes xbar from
+        the solutions as usual.
+        """
+        self._xbar_supplied = True
+
+
     def request_PH_attach_before_iter0_solve(self):
         """ Ask Iter0 to splice the W and prox terms into the objectives
         before the iteration-0 solve rather than after it, so that solve uses
@@ -1660,6 +1673,14 @@ class PHBase(mpisppy.spopt.SPOpt):
         #global_toc('Rank: {} - Building and solving models 0th iteration'.format(rank), True)
 
         #global_toc('Rank: {} - assigning rho'.format(rank), True)
+
+        # PH itself first computes xbar at the top of iteration 1, but the
+        # post_iter0 hooks need it now: SepRho, SensiRho and GradRho set rho
+        # from |x - xbar|, and the dynamic-rho caches start from it. Without
+        # this they see the xbars Param's initial 0. A resumed run's xbar came
+        # with the checkpoint, and a supplied one is kept on purpose.
+        if not self._resumed_from_checkpoint and not self._xbar_supplied:
+            self.Compute_Xbar(verbose)
 
         if have_extensions:
             self.extobject.post_iter0()
