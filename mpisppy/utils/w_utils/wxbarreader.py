@@ -99,6 +99,15 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
         if x_fname is not None and not resuming:
             if (not os.path.exists(x_fname)):
                 raise RuntimeError(f'Cannot find file {x_fname}')
+            # The smoothing term rides on the prox flag, so it would be on in
+            # the iteration-0 solve too, centered on z = 0 and with p not yet
+            # scaled by rho.
+            if ph.options.get("smoothed", 0):
+                raise RuntimeError(
+                    f"--init-Xbar-fname ({x_fname}) cannot be combined with "
+                    "smoothing: the xbar read turns the prox term on in "
+                    "iteration 0, and the smoothing term would come on with "
+                    "it, centered on 0.")
 
         if (x_fname is None and w_fname is None and rank==0):
             print('Warning: no input files provided to WXBarReader. '

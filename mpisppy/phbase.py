@@ -379,6 +379,9 @@ class PHBase(mpisppy.spopt.SPOpt):
         self._PH_prep_done = False
         # Set by request_PH_attach_before_iter0_solve.
         self._attach_before_iter0_solve = False
+        # Whether this process's iteration-0 solve had the prox term on (an
+        # xbar was supplied and the terms were attached before that solve).
+        self._iter0_solved_with_prox = False
 
     @property
     def iter0_solver_options(self):
@@ -776,7 +779,13 @@ class PHBase(mpisppy.spopt.SPOpt):
             persistent_solver = (s._solver_plugin if sputils.is_persistent(s._solver_plugin) else None)
             #print(f"total number of proximal cuts: {len(s._mpisppy_model.xsqvar_cuts)}")
             for prox_approx_manager in s._mpisppy_data.xsqvar_prox_approx.values():
-                if prox_approx_manager.xvar.value is None:
+                if prox_approx_manager.xvar.value is None \
+                        and not prox_approx_manager.xvar.fixed:
+                    if self._PHIter != 0:
+                        raise RuntimeError(
+                            f"{prox_approx_manager.xvar.name} has no value at "
+                            f"PH iteration {self._PHIter}, so the proximal "
+                            "approximation has no point to cut at.")
                     # No solve has given this nonant a value yet: the prox
                     # term is on in iteration 0 because WXBarReader supplied
                     # xbar. Cut around xbar, where the prox term is centered.
@@ -857,6 +866,18 @@ class PHBase(mpisppy.spopt.SPOpt):
         return (not self._prox_approx) and (not self.prox_disabled)
 
 
+    def _first_prox_solve(self):
+        """True during this process's first solve with the prox term on: the
+        iteration-0 solve when an xbar was supplied (see
+        request_PH_attach_before_iter0_solve), otherwise the first iteration
+        of this leg -- iteration 1, or the first one after a resume, which may
+        legitimately have switched solvers.
+        """
+        if self._PHIter == 0:
+            return self._iter0_solved_with_prox
+        return (self._PHIter == self._resume_iteration + 1
+                and not self._iter0_solved_with_prox)
+
     def _check_prox_solver_capability(self):
         """Proactive half of the quadratic-prox/solver compatibility check.
 
@@ -892,19 +913,20 @@ class PHBase(mpisppy.spopt.SPOpt):
         actionable message instead of leaving the user with the cryptic
         ``TerminationCondition=unknown`` from the failed solve.
 
-        Restricted to the first iterk solve of this process -- iteration 1,
-        or the first iteration after a resume, which may legitimately be
-        running a different solver (``solver_name`` is deliberately exempt
-        from the resume fingerprint). If that solve succeeds, the solver
-        supports quadratic objectives, so any later failure is a genuine
-        optimization issue rather than a capability problem. The "no solution
-        anywhere" test is reduced across ranks with ``allreduce_or`` so the
-        raise decision is identical on every rank (no MPI desynchronization);
+        Restricted to the first solve of this process with the prox term on
+        (see ``_first_prox_solve``): iteration 0 when an xbar was supplied,
+        otherwise iteration 1 or the first iteration after a resume, which may
+        legitimately be running a different solver (``solver_name`` is
+        deliberately exempt from the resume fingerprint). If that solve
+        succeeds, the solver supports quadratic objectives, so any later
+        failure is a genuine optimization issue rather than a capability
+        problem. The "no solution anywhere" test is reduced across ranks with
+        ``allreduce_or`` so the raise decision is identical on every rank (no
+        MPI desynchronization);
         a partial failure (some subproblems still solve) falls through to the
         existing behavior.
         """
-        if (self._PHIter != self._resume_iteration + 1
-                or not self._prox_is_quadratic()):
+        if not (self._first_prox_solve() and self._prox_is_quadratic()):
             return
         local_any_solution = any(
             s._mpisppy_data.solution_available
@@ -932,17 +954,15 @@ class PHBase(mpisppy.spopt.SPOpt):
         ``has_capability`` probe does not always catch them (the capability is
         reported inconsistently across Pyomo versions / solver interfaces).
 
-        Only the first quadratic solve of this process is treated this way --
-        iteration 1, or the first iteration after a resume, where a solver
-        switch is expressly permitted; a raise at a later iteration is a
+        Only the first quadratic solve of this process is treated this way
+        (see ``_first_prox_solve``); a raise at a later iteration is a
         genuine solve error and is left to propagate unchanged. When
         applicable this raises a new ``RuntimeError`` chained from ``exc``
         (so the original traceback is preserved); otherwise it returns and the
         caller re-raises ``exc`` as-is. The guard matches the reactive check, so
         MPI synchronization is unchanged beyond the raise that already occurred.
         """
-        if (self._PHIter != self._resume_iteration + 1
-                or not self._prox_is_quadratic()):
+        if not (self._first_prox_solve() and self._prox_is_quadratic()):
             return
         raise RuntimeError(
             f"Solver '{self.options.get('solver_name')}' raised an error on the "
@@ -1598,13 +1618,29 @@ class PHBase(mpisppy.spopt.SPOpt):
                 print (f"About to call PH Iter0 solve loop on rank={self.cylinder_rank}")
             global_toc("Entering solve loop in PHBase.Iter0")
 
-            self.solve_loop(solver_options=self._effective_solver_options(self._PHIter),
-                            dtiming=dtiming,
-                            gripe=True,
-                            tee=teeme,
-                            verbose=verbose,
-                            warmstart=sputils.WarmstartStatus.USER_SOLUTION,
-                            )
+            # PH's prox term is in the objective here only if it was attached
+            # before this solve, and on only if an extension supplied xbar.
+            # The same on every rank: it follows from the files read. (APH
+            # adds its own prox term instead, which this does not see.)
+            prox_attached = (getattr(self, "_attach_prox", False)
+                             and not getattr(self, "_deferred_ph_attach", False))
+            self._iter0_solved_with_prox = prox_attached and not self.prox_disabled
+            if self._iter0_solved_with_prox:
+                self._check_prox_solver_capability()
+
+            try:
+                self.solve_loop(solver_options=self._effective_solver_options(self._PHIter),
+                                dtiming=dtiming,
+                                gripe=True,
+                                tee=teeme,
+                                verbose=verbose,
+                                warmstart=sputils.WarmstartStatus.USER_SOLUTION,
+                                )
+            except Exception as e:
+                self._reraise_as_prox_capability_error(e)
+                raise
+            if self._iter0_solved_with_prox:
+                self._check_prox_solve_succeeded()
 
             if self.options["verbose"]:
                 print (f"PH Iter0 solve loop complete on rank={self.cylinder_rank}")
@@ -1676,6 +1712,12 @@ class PHBase(mpisppy.spopt.SPOpt):
                 self._checkpoint_leaf_state["best_solution_obj_val"]
             if restored_incumbent is not None:
                 self.best_solution_obj_val = restored_incumbent
+        elif self._iter0_solved_with_prox:
+            # The prox term makes these objective values no bound at all.
+            self.trivial_bound = None
+            global_toc("Iteration 0 was solved with the prox term on (xbar "
+                       "was supplied), so it gives no trivial bound",
+                       self.cylinder_rank == 0)
         else:
             self.trivial_bound = self.Ebound(verbose)
             if self.trivial_bound is not None and self._can_update_best_bound():
@@ -1878,7 +1920,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             # a quadratic objective; see issue #762. The gate is the first
             # iteration of this leg rather than iteration 1: a resumed run
             # starts past 1 and may legitimately have switched solvers.
-            if self._PHIter == self._resume_iteration + 1:
+            if self._first_prox_solve():
                 self._check_prox_solver_capability()
 
             try:

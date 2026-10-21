@@ -385,13 +385,21 @@ An example of their use is shown in ``examples.sizes.sizes_demo.py``
 
 When the reader loads W (``--init-W-fname``) or xbar
 (``--init-Xbar-fname``), the W and prox terms are put in the objective
-before the iteration-0 solve, so iteration 0 uses the values read. When
-only W is read, the iteration-0 bound is a Lagrangian bound for that W,
-not the trivial bound. When xbar is read, the prox term is on in
-iteration 0, so that solve gives no bound. That prox term uses
-``--default-rho``: a rho setter, SepRho, GradRho and the other rho
-extensions set rho after the iteration-0 solve. Without the reader, PH
-adds those terms after iteration 0.
+before the iteration-0 solve, so iteration 0 uses the values read.
+Without the reader, PH adds those terms after iteration 0.
+
+- When only W is read, the iteration-0 bound is a Lagrangian bound for
+  that W, not the trivial bound. The reader refuses W whose
+  probability-weighted sum over the scenarios of any tree node is not
+  zero, because the bound would not be valid.
+- When xbar is read, the prox term is on in iteration 0, so that solve
+  gives no bound and PH reports no trivial bound. That prox term uses
+  ``--default-rho``: a rho setter, SepRho, GradRho and the other rho
+  extensions set rho after the iteration-0 solve. Reading xbar cannot be
+  combined with smoothing.
+- With ``--iter0-from-pickle`` there is no iteration-0 solve: iteration 0
+  comes from the pickle, which was solved without W or xbar. The values
+  read take effect from iteration 1.
 
 norm_rho_updater
 ^^^^^^^^^^^^^^^^

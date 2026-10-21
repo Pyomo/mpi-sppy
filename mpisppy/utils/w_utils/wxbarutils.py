@@ -44,6 +44,7 @@ import numpy as np
 import pyomo.environ as pyo
 from pyomo.common.collections import ComponentSet
 
+import mpisppy.phbase
 from mpisppy.utils import nice_join
 
 ''' W utilities '''
@@ -107,24 +108,33 @@ def set_W_from_file(fname, PHB, rank, sep_files=False, disable_check=False):
             scenario name <sname>.
 
     Notes:
-        Calls _check_W, which ensures that all required values were specified,
-        and that the specified weights satisfy the dual feasibility condition 
-        sum_{s\in S} p_s * w_s = 0.
+        Unless disable_check, calls _check_W_names, which ensures that all
+        required values were specified, and _check_W_by_node, which ensures
+        that the weights satisfy the dual feasibility condition
+        sum_{s} p_s * w_s = 0 at every tree node. A Lagrangian bound computed
+        from the weights is valid only if they do.
+
+        Collective: every rank of the cylinder must call it. A rank that finds
+        a problem raises with its own message and the others raise too, so
+        none of them is left waiting at a later collective.
     '''
     scenario_names_local  = list(PHB.local_scenarios.keys())
     scenario_names_global = PHB.all_scenario_names
 
-    if (sep_files):
-        w_val_dict = dict()
-        for sname in scenario_names_local:
-            scenario_fname = os.path.join(fname, sname + '_weights.csv')
-            w_val_dict[sname] = _parse_W_csv_single(scenario_fname)
-    else:
-        w_val_dict = _parse_W_csv(fname, scenario_names_local,
-                                    scenario_names_global, rank)
+    def _read():
+        if (sep_files):
+            w_val_dict = dict()
+            for sname in scenario_names_local:
+                scenario_fname = os.path.join(fname, sname + '_weights.csv')
+                w_val_dict[sname] = _parse_W_csv_single(scenario_fname)
+        else:
+            w_val_dict = _parse_W_csv(fname, scenario_names_local,
+                                        scenario_names_global, rank)
+        if not disable_check:
+            _check_W_names(w_val_dict, PHB)
+        return w_val_dict
 
-    if not disable_check:
-        _check_W(w_val_dict, PHB, rank)
+    w_val_dict = _agreed(PHB, _read, f"read the weights in {fname}")
 
     mp = {(sname, var.name): (node.name, ix)
             for (sname, scenario) in PHB.local_scenarios.items()
@@ -136,6 +146,25 @@ def set_W_from_file(fname, PHB, rank, sep_files=False, disable_check=False):
             scenario = PHB.local_scenarios[sname]
             node_name, ix = mp[sname, vname]
             scenario._mpisppy_model.W[node_name, ix] = w_val_dict[sname][vname]
+
+    if not disable_check:
+        _check_W_by_node(PHB, fname)
+
+def _agreed(PHB, work, what):
+    ''' Run work() on every rank and raise on every rank if it raised on any.
+        work raises on one rank alone when that rank's scenarios are the ones
+        with the problem, and the others would then wait forever at the next
+        collective. ``what`` completes "Another rank could not ...".
+    '''
+    try:
+        result, failure = work(), None
+    except Exception as exc:
+        result, failure = None, exc
+    if PHB.allreduce_or(failure is not None):
+        if failure is not None:
+            raise failure
+        raise RuntimeError(f"Another rank could not {what}; its error says why.")
+    return result
 
 def _parse_W_csv_single(fname):
     ''' Read a file containing the weights for a single scenario. The file must
@@ -227,20 +256,17 @@ def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
 
     return results
 
-def _check_W(w_val_dict, PHB, rank):
+def _check_W_names(w_val_dict, PHB):
     '''
     Args:
-        w_val_dict (dict) -- doubly-nested dict mapping 
+        w_val_dict (dict) -- doubly-nested dict mapping
             w_val_dict[scenario_name][variable_name] = weight value.
         PHB (PHBase object) -- PHBase object
-        rank (int) -- local rank
 
     Notes:
-        Checks for three conditions:
-
-         1. Missing variables --> raises a RuntimeError
-         2. Extra variables --> prints a warning
-         3. Dual feasibility --> raises a RuntimeError
+        Raises a RuntimeError if a scenario misses one of its nonants, and
+        removes (with a message) weights for variables a scenario does not
+        have. Local to this rank.
     '''
     # By this point, we are certain that
     # w_val_dict.keys() == PHB.local_scenarios.keys()
@@ -259,24 +285,36 @@ def _check_W(w_val_dict, PHB, rank):
             for vname in diff:
                 w_val_dict[sname].pop(vname, None)
 
-    # At this point, we are sure that every local 
-    # scenario has the same set of variables
-    probs = {name: model._mpisppy_probability for (name, model) in
-                    PHB.local_scenarios.items()}
+#: How far from zero E[W] at a node may be, as a fraction of E[|W|] there, on
+#: top of an absolute 1e-7. PH keeps E[W] at zero only up to the drift of
+#: accumulating W in floating point, which grows with the size of the weights:
+#: W written by PH on hydro at rho 1e7 has E[W] of 3.5e-7.
+W_FILE_WBAR_RTOL = 1e-6
 
-    checks = dict()
-    for vname in vn_model: # Ensured vn_model = vn_provided
-        checks[vname] = sum(probs[name] * w_val_dict[name][vname]
-                            for name in PHB.local_scenarios.keys())
+def _check_W_by_node(PHB, fname):
+    '''
+    Raises a RuntimeError on every rank if, at some tree node, the
+    probability-weighted sum of the weights over that node's scenarios is not
+    zero for some nonant: more than 1e-7 + W_FILE_WBAR_RTOL * E[|W|] away from
+    it. Collective.
+    '''
+    bars = mpisppy.phbase.Wbar_by_node(PHB)
+    sizes = mpisppy.phbase.W_magnitude_by_node(PHB)
 
-    checks = PHB.comms['ROOT'].gather(checks, root=0)
-    if (rank == 0):
-        for vname in vn_model:
-            dual = sum(c[vname] for c in checks)
-            if (abs(dual) > 1e-7):
-                raise RuntimeError('Provided weights do not satisfy '
-                    r'dual feasibility: \sum_{scenarios} prob(s) * w(s) != 0. '
-                    'Error on variable ' + vname)
+    def _check():
+        names = {node.name: node.nonant_vardata_list
+                 for s in PHB.local_scenarios.values()
+                 for node in s._mpisppy_node_list}
+        for ndn, Wbars in bars.items():
+            for i, Wbar in enumerate(Wbars):
+                if abs(Wbar) > 1e-7 + W_FILE_WBAR_RTOL * sizes[ndn][i]:
+                    raise RuntimeError(
+                        f"The weights in {fname} do not satisfy dual "
+                        "feasibility: at tree node "
+                        f"{ndn}, sum over its scenarios of prob(s) * w(s) "
+                        f"= {Wbar} for {names[ndn][i].name}, not 0.")
+
+    _agreed(PHB, _check, f"accept the weights in {fname}")
 
 ''' X-bar utilities '''
 
