@@ -405,15 +405,9 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             self._get_grad_exprs()
             return
         global_toc("Using grad-rho rho setter")
-        # PHBase.Iter0 runs the iter0 solve loop before this hook but does not
-        # compute xbar (Compute_Xbar is first called in iterk_loop, i.e. at
-        # iteration 1). Until then the xbars Param sits at its attach_xbars
-        # init value of 0.0, which would make the rho denominator abs(x - xbar)
-        # collapse to abs(x) -- distance from zero rather than from the iter0
-        # consensus mean. Compute xbar from the iter0 solutions here so both
-        # the convergence caches (update_caches) and the rho denominator use
-        # the real mean.
-        self.opt.Compute_Xbar()
+        # PHBase.Iter0 has set xbar before this hook: the mean of the
+        # iteration-0 solutions, or the xbar WXBarReader supplied. Computing
+        # it again here would replace a supplied one.
         self.update_caches()
         self._get_grad_exprs()
         self.compute_and_update_rho()

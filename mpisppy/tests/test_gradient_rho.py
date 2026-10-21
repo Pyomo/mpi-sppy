@@ -103,28 +103,19 @@ class Test_gradient_farmer(unittest.TestCase):
                     acc[(ndn, i)] = acc.get((ndn, i), 0.0) + prob * v._value
         return acc
 
-    def test_post_iter0_uses_iter0_xbar_not_zero(self):
-        # Regression test: grad_rho must compute xbar from the iter0 solutions
-        # before it sets rho. PHBase.Iter0 runs the iter0 solve loop but does
-        # not call Compute_Xbar (that first happens in iterk_loop, i.e. at
-        # iteration 1), so when the post_iter0 hook fires the xbars Param is
-        # still at its 0.0 init value. Without computing xbar in post_iter0 the
-        # rho denominator abs(x - xbar) collapses to abs(x) -- distance from
-        # zero rather than from the iter0 consensus mean.
+    def test_post_iter0_keeps_the_xbar_iter0_set(self):
+        # PHBase.Iter0 sets xbar before post_iter0: the mean of the iteration-0
+        # solutions, or an xbar WXBarReader supplied. GradRho must use that
+        # and not recompute it, or a supplied xbar would be replaced.
+        # (Test_iter0_xbar_farmer in test_xbar_w_reader_writer.py checks
+        # what Iter0 sets.)
         ph = self.ph_object
-
-        # Reproduce the state Iter0 leaves the models in right before it calls
-        # the post_iter0 hook: iter0 solutions still on the Vars, xbars == 0.
+        supplied = {}
         for s in ph.local_scenarios.values():
-            for ndn_i in s._mpisppy_data.nonant_indices:
-                s._mpisppy_model.xbars[ndn_i]._value = 0.0
-
-        expected_xbar = self._reference_xbar(ph)
-        # The test only discriminates the fix if the true mean is nonzero.
-        self.assertTrue(
-            any(abs(v) > 1e-6 for v in expected_xbar.values()),
-            "iter0 xbar is all ~0; test cannot distinguish the fix",
-        )
+            for k, ndn_i in enumerate(s._mpisppy_data.nonant_indices):
+                supplied[ndn_i] = 17.0 + k
+                s._mpisppy_model.xbars[ndn_i]._value = supplied[ndn_i]
+        self.assertNotEqual(supplied, self._reference_xbar(ph))
 
         grad = GradRho(ph)
         grad.best_xhat_buf = _NanXhatBuf(ph)
@@ -132,14 +123,8 @@ class Test_gradient_farmer(unittest.TestCase):
 
         for s in ph.local_scenarios.values():
             for ndn_i in s._mpisppy_data.nonant_indices:
-                self.assertAlmostEqual(
-                    s._mpisppy_model.xbars[ndn_i]._value,
-                    expected_xbar[ndn_i],
-                    places=9,
-                    msg=f"xbar at {ndn_i} not set to the iter0 mean; "
-                        "post_iter0 did not Compute_Xbar before computing rho",
-                )
-
+                self.assertEqual(s._mpisppy_model.xbars[ndn_i]._value,
+                                 supplied[ndn_i])
 
 if __name__ == '__main__':
     unittest.main()
