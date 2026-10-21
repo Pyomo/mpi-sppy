@@ -15,17 +15,25 @@ version matter a lot, so we often just do smoke tests.
 
 import csv
 import os
+import tempfile
 import unittest
+from unittest import mock
 
+import pyomo.environ as pyo
+
+import mpisppy.opt.ph
 import mpisppy.tests.examples.farmer as farmer
+import mpisppy.tests.examples.hydro.hydro as hydro
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.w_utils.wxbarreader as wxbarreader
+import mpisppy.utils.w_utils.wxbarutils as wxbarutils
 import mpisppy.utils.w_utils.wxbarwriter as wxbarwriter
 from mpisppy.extensions.extension import Extension, MultiExtension
 from mpisppy.extensions.sep_rho import SepRho
+from mpisppy.phbase import PHBase
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.tests.utils import get_solver
-from mpisppy.utils import config
+from mpisppy.utils import config, sputils
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _W_TEST_DATA_DIR = os.path.join(_THIS_DIR, "examples", "w_test_data")
@@ -48,12 +56,20 @@ def _create_cfg():
     cfg.max_solver_threads = 1
     return cfg
 
+class _CostCoeffRecorder(Extension):
+    """ Records the nonant cost coefficients in pre_iter0, as SepRho and
+    CoeffRho read them there."""
+    def pre_iter0(self):
+        self.coeffs = {sname: sputils.nonant_cost_coeffs(s)
+                       for sname, s in self.opt.local_scenarios.items()}
+
 #*****************************************************************************
 
 class Test_xbar_w_reader_writer_farmer(unittest.TestCase):
     """ Test the gradient code using farmer."""
 
-    def _create_ph_farmer(self, ph_extensions=None, max_iter=100):
+    def _create_ph_farmer(self, ph_extensions=None, max_iter=100,
+                          extension_kwargs=None, read_xbar=True):
         self.w_file_name = os.path.join(_W_TEST_DATA_DIR, 'w_file.csv')
         self.temp_w_file_name = os.path.join(_W_TEST_DATA_DIR, '_temp_w_file.csv')
         self.xbar_file_name = os.path.join(_W_TEST_DATA_DIR, 'xbar_file.csv')
@@ -65,16 +81,19 @@ class Test_xbar_w_reader_writer_farmer(unittest.TestCase):
         scenario_creator_kwargs = farmer.kw_creator(self.cfg)
         self.cfg.max_iterations = max_iter
         beans = (self.cfg, scenario_creator, scenario_denouement, all_scenario_names)
-        hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=scenario_creator_kwargs, ph_extensions=ph_extensions)
+        hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=scenario_creator_kwargs,
+                                  ph_extensions=ph_extensions, extension_kwargs=extension_kwargs)
         hub_dict['opt_kwargs']['options']['cfg'] = self.cfg
         if ph_extensions==wxbarwriter.WXBarWriter:
             self.cfg.W_and_xbar_writer = True
             self.cfg.W_fname = self.temp_w_file_name
             self.cfg.Xbar_fname = self.temp_xbar_file_name
-        if ph_extensions==wxbarreader.WXBarReader:
+        if ph_extensions==wxbarreader.WXBarReader or \
+                wxbarreader.WXBarReader in (extension_kwargs or {}).get("ext_classes", []):
             self.cfg.W_and_xbar_reader = True
             self.cfg.init_W_fname = self.w_file_name
-            self.cfg.init_Xbar_fname = self.xbar_file_name
+            if read_xbar:
+                self.cfg.init_Xbar_fname = self.xbar_file_name
         list_of_spoke_dict = list()
         wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
         wheel.spin()
@@ -121,6 +140,202 @@ class Test_xbar_w_reader_writer_farmer(unittest.TestCase):
                 self.assertAlmostEqual(scenario._mpisppy_model.xbars[("ROOT", 0)]._value, 96.88717449844287)
 
 
+    def _solve_iter0_outside_PH(self, with_xbar):
+        # Independent of PH: min_x f_s(x) + W_s x, plus
+        # rho/2 (x - xbar)^2 when with_xbar, for each scenario, with W_s and
+        # xbar from the files. Returns sum_s p_s of the optimal values and the
+        # first-stage solution of each scenario.
+        W = {}
+        with open(self.w_file_name) as f:
+            for sname, vname, val in csv.reader(f):
+                W[sname, vname] = float(val)
+        xbar = {}
+        with open(self.xbar_file_name) as f:
+            for vname, val in csv.reader(f):
+                xbar[vname] = float(val)
+        rho = self.cfg.default_rho
+        kwargs = farmer.kw_creator(self.cfg)
+        names = farmer.scenario_names_creator(self.cfg.num_scens)
+        Eobj = 0.0
+        xs = {}
+        for sname in names:
+            m = farmer.scenario_creator(sname, **kwargs)
+            obj = sputils.find_active_objective(m)
+            nonants = [v for node in m._mpisppy_node_list
+                       for v in node.nonant_vardata_list]
+            obj.expr += sum(W[sname, v.name] * v for v in nonants)
+            if with_xbar:
+                obj.expr += sum(rho / 2.0 * (v - xbar[v.name])**2
+                                for v in nonants)
+            opt = pyo.SolverFactory(solver_name)
+            if sputils.is_persistent(opt):
+                opt.set_instance(m)
+                opt.solve()
+            else:
+                opt.solve(m)
+            Eobj += m._mpisppy_probability * pyo.value(obj)
+            xs[sname] = {v.name: v.value for v in nonants}
+        return Eobj, xs
+
+    def test_wreader_iter0_uses_W(self):
+        cold = self._create_ph_farmer(max_iter=0).trivial_bound
+        self.setUp()
+        warm = self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader,
+                                      max_iter=0, read_xbar=False).trivial_bound
+        expected, _ = self._solve_iter0_outside_PH(with_xbar=False)
+        self.assertGreater(abs(expected - cold), 1.0)
+        self.assertAlmostEqual(warm, expected, places=3)
+
+    def test_wxbarreader_iter0_uses_W_and_xbar(self):
+        ph = self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader,
+                                    max_iter=0)
+        _, expected = self._solve_iter0_outside_PH(with_xbar=True)
+        _, without_prox = self._solve_iter0_outside_PH(with_xbar=False)
+        # The prox term must move the solution, or matching it shows nothing.
+        self.assertGreater(
+            max(abs(expected[sname][vname] - without_prox[sname][vname])
+                for sname in expected for vname in expected[sname]), 1.0)
+        for sname, s in ph.local_scenarios.items():
+            for node in s._mpisppy_node_list:
+                for v in node.nonant_vardata_list:
+                    self.assertAlmostEqual(v.value, expected[sname][v.name],
+                                           places=2)
+
+    def test_wxbarreader_with_linearized_prox(self):
+        # Before iteration 0 the nonants have no values, so the prox
+        # approximation has to start from xbar rather than from a solution.
+        self.cfg.linearize_proximal_terms = True
+        ph = self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader,
+                                    max_iter=0)
+        for s in ph.local_scenarios.values():
+            for manager in s._mpisppy_data.xsqvar_prox_approx.values():
+                self.assertTrue(
+                    any(abs(c - manager.xbar.value) < 1e-9
+                        for c in manager.cut_values),
+                    f"no cut at xbar for {manager.xvar.name}")
+
+    def test_wreader_with_linearized_prox(self):
+        # W only: the prox term is off in iteration 0, and the first cuts
+        # come from the iteration-0 solution as on a cold run.
+        self.cfg.linearize_proximal_terms = True
+        ph = self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader,
+                                    max_iter=2, read_xbar=False)
+        self.assertEqual(ph._PHIter, 2)
+
+    def test_xbar_read_gives_no_trivial_bound(self):
+        # The prox term is in the iteration-0 objective, so those values are
+        # not a bound; W alone still gives one (test_wreader_iter0_uses_W).
+        ph = self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader,
+                                    max_iter=0)
+        self.assertIsNone(ph.trivial_bound)
+
+    def test_xbar_with_smoothing_is_refused(self):
+        self.cfg.smoothing = True
+        with self.assertRaisesRegex(RuntimeError, "smoothing"):
+            self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader,
+                                   max_iter=0)
+
+    def test_iter0_with_xbar_checks_the_solver_for_quadratics(self):
+        # With xbar read, iteration 0 is the first quadratic solve, so the
+        # capability check has to run before it, not before iteration 1.
+        with mock.patch("mpisppy.utils.sputils.solver_quadratic_objective_capability",
+                        return_value=False):
+            with self.assertRaisesRegex(RuntimeError, "linearize-proximal-terms"):
+                self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader,
+                                       max_iter=0)
+
+    def _iterations_checked_after_solve(self, read_xbar):
+        checked = []
+        real = PHBase._check_prox_solve_succeeded
+
+        def record(ph):
+            checked.append(ph._PHIter)
+            return real(ph)
+        with mock.patch.object(PHBase, "_check_prox_solve_succeeded",
+                               autospec=True, side_effect=record):
+            self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader,
+                                   max_iter=0, read_xbar=read_xbar)
+        return checked
+
+    def test_iter0_with_xbar_checks_its_solve(self):
+        self.assertEqual(self._iterations_checked_after_solve(True), [0])
+
+    def test_iter0_with_W_only_is_not_a_prox_solve(self):
+        self.assertEqual(self._iterations_checked_after_solve(False), [])
+
+    def test_prox_approx_refuses_a_nonant_without_value_after_iter0(self):
+        self.cfg.linearize_proximal_terms = True
+        ph = self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader,
+                                    max_iter=0)
+        s = next(iter(ph.local_scenarios.values()))
+        next(iter(s._mpisppy_data.nonant_indices.values()))._value = None
+        ph._PHIter = 1
+        with self.assertRaisesRegex(RuntimeError, "has no value at PH iteration 1"):
+            ph._update_prox_approx()
+
+    def test_wreader_leaves_pre_iter0_cost_coeffs_alone(self):
+        def coeffs(ext_classes):
+            self.setUp()
+            ph = self._create_ph_farmer(
+                ph_extensions=MultiExtension, max_iter=0,
+                extension_kwargs={"ext_classes": ext_classes})
+            return ph.extobject.extdict["_CostCoeffRecorder"].coeffs
+        cold = coeffs([_CostCoeffRecorder])
+        # The reader first, so its pre_iter0 has run when the recorder reads.
+        warm = coeffs([wxbarreader.WXBarReader, _CostCoeffRecorder])
+        self.assertEqual(cold.keys(), warm.keys())
+        for sname in cold:
+            for ndn_i, c in cold[sname].items():
+                self.assertAlmostEqual(warm[sname][ndn_i], c)
+
+
+class Test_W_check_multistage(unittest.TestCase):
+    """ Dual feasibility of a W file has to hold at every tree node, not just
+    summed over all scenarios: hydro has three stages, and W that cancels
+    across the stage-2 nodes but not within them is still infeasible."""
+
+    def setUp(self):
+        bfs = [3, 3]
+        options = {"solver_name": solver_name, "PHIterLimit": 0,
+                   "defaultPHrho": 1, "convthresh": 0.001, "verbose": False,
+                   "display_progress": False, "display_timing": False}
+        self.ph = mpisppy.opt.ph.PH(
+            options, [f"Scen{i+1}" for i in range(9)],
+            hydro.scenario_creator, hydro.scenario_denouement,
+            all_nodenames=sputils.create_nodenames_from_branching_factors(bfs),
+            scenario_creator_kwargs={"branching_factors": bfs})
+        self.ph.PH_Prep()
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+
+    def _write_W(self, stage2_by_node, root_by_scenario=None):
+        root_by_scenario = root_by_scenario or {}
+        fname = os.path.join(self.dir.name, "W.csv")
+        with open(fname, "w") as f:
+            for sname, s in self.ph.local_scenarios.items():
+                for node in s._mpisppy_node_list:
+                    if node.name == "ROOT":
+                        w = root_by_scenario.get(sname, 0.0)
+                    else:
+                        w = stage2_by_node.get(node.name, 0.0)
+                    for v in node.nonant_vardata_list:
+                        f.write(f"{sname},{v.name},{w!r}\n")
+        return fname
+
+    def test_feasible_W_is_accepted(self):
+        wxbarutils.set_W_from_file(self._write_W({}), self.ph, 0)
+
+    def test_large_W_with_rounding_drift_is_accepted(self):
+        # E[W] at ROOT is 1e-6 / 9, above an absolute 1e-7, but tiny beside
+        # weights of 1e7: the drift PH's own W shows at large rho.
+        fname = self._write_W({}, {"Scen1": 1e7 + 1e-6, "Scen2": -1e7})
+        wxbarutils.set_W_from_file(fname, self.ph, 0)
+
+    def test_W_infeasible_at_one_node_is_refused(self):
+        # +1 under ROOT_0 and -1 under ROOT_1 sum to 0 over all scenarios.
+        fname = self._write_W({"ROOT_0": 1.0, "ROOT_1": -1.0})
+        with self.assertRaisesRegex(RuntimeError, "at tree node ROOT_0"):
+            wxbarutils.set_W_from_file(fname, self.ph, 0)
 
 class _Iter0XbarRecorder(Extension):
     """ Records, in post_iter0, the nonant values and the xbar the rho
