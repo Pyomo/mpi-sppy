@@ -396,7 +396,8 @@ Without the reader, PH adds those terms after iteration 0.
   gives no bound and PH reports no trivial bound. That prox term uses
   ``--default-rho``: a rho setter, SepRho, GradRho and the other rho
   extensions set rho after the iteration-0 solve. Reading xbar cannot be
-  combined with smoothing.
+  combined with smoothing, and cannot be used with APH, whose prox term is
+  centered on its own z rather than on xbar. W alone can be read with APH.
 - With ``--iter0-from-pickle`` there is no iteration-0 solve: iteration 0
   comes from the pickle, which was solved without W or xbar. The values
   read take effect from iteration 1.
