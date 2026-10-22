@@ -16,7 +16,10 @@
 
     Takes about 4 seconds to execute, with all the sleep() calls.
 '''
-import mpi4py.MPI as mpi
+# Import through mpi-sppy so MPISPPY_MPI_PROGRESS_THREAD=1 selects its
+# MPI_THREAD_MULTIPLE initialization and shared progress thread. Without that
+# variable this remains the ordinary mpi4py-backed MPI interface.
+from mpisppy import MPI as mpi
 import numpy as np
 import time
 import sys
@@ -36,8 +39,10 @@ def main():
 
     if (rank == 0):
         buff[:] = 3. * np.ones(array_size, dtype='d')
+        print("rank 0 published 3.0", flush=True)
         time.sleep(3)
         buff[:] = np.arange(array_size)
+        print("rank 0 replaced buffer with arange", flush=True)
 
         win.Lock(1)
         win.Put((buff, array_size, mpi.DOUBLE), target_rank=1)
@@ -47,9 +52,19 @@ def main():
         buff = np.ones(array_size, dtype='d')
         time.sleep(1)
 
+        start = time.monotonic()
         win.Lock(0)
         win.Get((buff, array_size, mpi.DOUBLE), target_rank=0)
         win.Unlock(0)
+        elapsed = time.monotonic() - start
+
+        model = win.Get_attr(mpi.WIN_MODEL)
+        model_name = "unified" if model == mpi.WIN_UNIFIED else "separate"
+        print(
+            f"first Get: tail={buff[-1]!r}, elapsed={elapsed:.3f}s, "
+            f"window_model={model_name}",
+            flush=True,
+        )
 
         assert(buff[-1] == 3.)
 
