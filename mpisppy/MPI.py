@@ -131,16 +131,27 @@ if haveMPI and _enable_progress_thread:
     import threading as _threading
 
     try:
-        _progress_max_interval = (
-            float(_os.environ.get("MPISPPY_MPI_PROGRESS_INTERVAL_US", "500"))
-            * 1e-6
+        _progress_interval_us = float(
+            _os.environ.get("MPISPPY_MPI_PROGRESS_INTERVAL_US", "500")
         )
+        _progress_max_interval = _progress_interval_us * 1e-6
     except ValueError as _exc:
         raise RuntimeError(
             "MPISPPY_MPI_PROGRESS_INTERVAL_US must be a positive number"
         ) from _exc
     if not _math.isfinite(_progress_max_interval) or _progress_max_interval <= 0:
         raise RuntimeError("MPISPPY_MPI_PROGRESS_INTERVAL_US must be positive")
+    if COMM_WORLD.Get_rank() == 0:
+        _interval_source = (
+            "environment" if "MPISPPY_MPI_PROGRESS_INTERVAL_US" in _os.environ
+            else "default"
+        )
+        print(
+            "mpi-sppy MPI progress: "
+            f"MPISPPY_MPI_PROGRESS_INTERVAL_US={_progress_interval_us:g} "
+            f"({_interval_source})",
+            flush=True,
+        )
 
     _progress_stop = _threading.Event()
     _progress_active = _threading.Event()
