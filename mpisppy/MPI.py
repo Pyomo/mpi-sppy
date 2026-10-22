@@ -8,9 +8,13 @@
 ###############################################################################
 
 import os as _os
+import math as _math
+import time as _time
+from contextlib import contextmanager as _contextmanager
 
 
 _enable_progress_thread = _os.environ.get("MPISPPY_MPI_PROGRESS_THREAD") == "1"
+_progress_diagnostics = _os.environ.get("MPISPPY_MPI_PROGRESS_DIAGNOSTICS") == "1"
 
 try:
     if _enable_progress_thread:
@@ -118,19 +122,61 @@ except ImportError:
 
 if haveMPI and _enable_progress_thread:
     # Keep Open MPI making progress while the main application thread is in a
-    # solver or other non-MPI Python code.  Iprobe is non-destructive: it does
-    # not receive or reorder application messages.  The Event wait avoids a
-    # pure busy spin; batch scripts reserve one CPU in addition to solver
-    # threads for this thread.
+    # solver or other non-MPI Python code. Iprobe is non-destructive: it does
+    # not receive or reorder application messages. The worker is activated only
+    # around long compute regions: polling continuously would contend with the
+    # MPI_THREAD_MULTIPLE locks during normal MPI-heavy execution.
     import atexit as _atexit
     import threading as _threading
 
+    try:
+        _progress_max_interval = (
+            float(_os.environ.get("MPISPPY_MPI_PROGRESS_INTERVAL_US", "500"))
+            * 1e-6
+        )
+    except ValueError as _exc:
+        raise RuntimeError(
+            "MPISPPY_MPI_PROGRESS_INTERVAL_US must be a positive number"
+        ) from _exc
+    if not _math.isfinite(_progress_max_interval) or _progress_max_interval <= 0:
+        raise RuntimeError("MPISPPY_MPI_PROGRESS_INTERVAL_US must be positive")
+
     _progress_stop = _threading.Event()
+    _progress_active = _threading.Event()
+    _progress_state_lock = _threading.Lock()
+    _progress_active_count = 0
+    _progress_probes = 0
+    _progress_wakeups = 0
+    _progress_active_seconds = 0.0
 
     def _mpi_progress_loop():
+        global _progress_probes, _progress_wakeups, _progress_active_seconds
         while not _progress_stop.is_set():
-            COMM_WORLD.Iprobe(ANY_SOURCE, ANY_TAG)
-            _progress_stop.wait(0.0005)
+            _progress_active.wait()
+            if _progress_stop.is_set():
+                break
+
+            active_start = _time.monotonic()
+            with _progress_state_lock:
+                _progress_wakeups += 1
+            while _progress_active.is_set() and not _progress_stop.is_set():
+                COMM_WORLD.Iprobe(ANY_SOURCE, ANY_TAG)
+                with _progress_state_lock:
+                    _progress_probes += 1
+
+                # A short initial burst minimizes the latency of a new RMA
+                # operation. Back off for long solves to bound lock contention
+                # and CPU use, while retaining the configured worst-case delay.
+                elapsed = _time.monotonic() - active_start
+                if elapsed < 0.010:
+                    interval = min(50e-6, _progress_max_interval)
+                elif elapsed < 0.100:
+                    interval = min(250e-6, _progress_max_interval)
+                else:
+                    interval = _progress_max_interval
+                _progress_stop.wait(interval)
+            with _progress_state_lock:
+                _progress_active_seconds += _time.monotonic() - active_start
 
     _progress_thread = _threading.Thread(
         target=_mpi_progress_loop,
@@ -139,11 +185,54 @@ if haveMPI and _enable_progress_thread:
     )
     _progress_thread.start()
 
+    def _activate_mpi_progress():
+        global _progress_active_count
+        with _progress_state_lock:
+            _progress_active_count += 1
+            _progress_active.set()
+
+    def _deactivate_mpi_progress():
+        global _progress_active_count
+        with _progress_state_lock:
+            if _progress_active_count <= 0:
+                raise RuntimeError("unbalanced mpi-sppy MPI progress deactivation")
+            _progress_active_count -= 1
+            if _progress_active_count == 0:
+                _progress_active.clear()
+
     def _stop_mpi_progress_thread():
         _progress_stop.set()
+        _progress_active.set()
         _progress_thread.join(timeout=5)
+        if _progress_diagnostics:
+            with _progress_state_lock:
+                print(
+                    "mpi-sppy MPI progress: "
+                    f"rank={COMM_WORLD.Get_rank()}, probes={_progress_probes}, "
+                    f"wakeups={_progress_wakeups}, "
+                    f"active_seconds={_progress_active_seconds:.3f}",
+                    flush=True,
+                )
 
     # mpi4py registers its MPI finalizer while mpi4py.MPI is imported.  atexit
     # runs handlers in reverse registration order, so this stops the thread
     # before mpi4py finalizes MPI.
     _atexit.register(_stop_mpi_progress_thread)
+
+
+@_contextmanager
+def progress_active():
+    """Request MPI progress while executing a long non-MPI compute region.
+
+    This is a no-op unless ``MPISPPY_MPI_PROGRESS_THREAD=1`` was selected.
+    Nested uses are reference counted so an inner compute region cannot stop
+    progress requested by its caller.
+    """
+    if haveMPI and _enable_progress_thread:
+        _activate_mpi_progress()
+        try:
+            yield
+        finally:
+            _deactivate_mpi_progress()
+    else:
+        yield

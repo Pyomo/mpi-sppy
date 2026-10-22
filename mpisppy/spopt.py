@@ -365,21 +365,23 @@ class SPOpt(SPBase):
 
         Ag = getattr(self, "Ag", None)  # agnostic
         if Ag is not None:
-            assert not disable_pyomo_signal_handling, "Not thinking about agnostic APH yet"
-            kws = {"s": s, "solve_keyword_args": solve_keyword_args, "gripe": gripe, "tee": tee, "need_solution": need_solution}
-            Ag.callout_agnostic(kws)  # not going to use the return values
+            with MPI.progress_active():
+                assert not disable_pyomo_signal_handling, "Not thinking about agnostic APH yet"
+                kws = {"s": s, "solve_keyword_args": solve_keyword_args, "gripe": gripe, "tee": tee, "need_solution": need_solution}
+                Ag.callout_agnostic(kws)  # not going to use the return values
         else:
             #  didcallout = False  (returned true by the callout, but not used)
-            try:
-                with sputils.solver_log_stream(log_stream_path,
-                                               solve_keyword_args):
-                    results = s._solver_plugin.solve(s,
-                                                     **solve_keyword_args,
-                                                     load_solutions=False)
-                solver_exception = None
-            except Exception as e:
-                results = None
-                solver_exception = e
+            with MPI.progress_active():
+                try:
+                    with sputils.solver_log_stream(log_stream_path,
+                                                   solve_keyword_args):
+                        results = s._solver_plugin.solve(s,
+                                                         **solve_keyword_args,
+                                                         load_solutions=False)
+                    solver_exception = None
+                except Exception as e:
+                    results = None
+                    solver_exception = e
 
             # Record how this solve ended, so a caller that sees
             # solution_available == False can tell a genuine infeasibility
@@ -448,11 +450,12 @@ class SPOpt(SPBase):
                     else:
                         print("no results object, so solving agin with tee=True")
                         solve_keyword_args["tee"] = True
-                        with sputils.solver_log_stream(log_stream_path,
-                                                       solve_keyword_args):
-                            results = s._solver_plugin.solve(s,
-                                                     **solve_keyword_args,
-                                                     load_solutions=False)
+                        with MPI.progress_active():
+                            with sputils.solver_log_stream(log_stream_path,
+                                                           solve_keyword_args):
+                                results = s._solver_plugin.solve(s,
+                                                                 **solve_keyword_args,
+                                                                 load_solutions=False)
 
                 if solver_exception is not None:
                     raise solver_exception
