@@ -15,6 +15,7 @@ from contextlib import contextmanager as _contextmanager
 
 _enable_progress_thread = _os.environ.get("MPISPPY_MPI_PROGRESS_THREAD") == "1"
 _progress_diagnostics = _os.environ.get("MPISPPY_MPI_PROGRESS_DIAGNOSTICS") == "1"
+_progress_rank_context = None
 
 try:
     if _enable_progress_thread:
@@ -144,6 +145,7 @@ if haveMPI and _enable_progress_thread:
     _progress_stop = _threading.Event()
     _progress_active = _threading.Event()
     _progress_state_lock = _threading.Lock()
+    _progress_caller_state = _threading.local()
     _progress_active_count = 0
     _progress_probes = 0
     _progress_probe_seconds = 0.0
@@ -158,40 +160,110 @@ if haveMPI and _enable_progress_thread:
     _progress_compute_seconds = 0.0
     _progress_compute_process_cpu_seconds = 0.0
     _progress_compute_thread_cpu_seconds = 0.0
+    _progress_compute_start = 0.0
+    _progress_compute_process_cpu_start = 0.0
+    _progress_mpi_call_seconds = 0.0
+    _progress_gil_probe_seconds = 0.0
+    _progress_gil_wait_seconds = 0.0
+    _progress_wait_syscall_late_seconds = 0.0
+    _progress_max_gil_probe_seconds = 0.0
+    _progress_max_gil_wait_seconds = 0.0
+
+    _progress_native_diagnostics = (
+        _progress_diagnostics
+        and _os.environ.get("MPISPPY_MPI_PROGRESS_NATIVE_DIAGNOSTICS") == "1"
+    )
+    if _progress_native_diagnostics:
+        _native_module_path = _os.environ.get(
+            "MPISPPY_MPI_PROGRESS_NATIVE_MODULE"
+        )
+        if _native_module_path:
+            import importlib.util as _import_util
+            import sys as _sys
+
+            _native_spec = _import_util.spec_from_file_location(
+                "mpisppy._mpi_progress_native", _native_module_path
+            )
+            if _native_spec is None or _native_spec.loader is None:
+                raise RuntimeError(
+                    "Could not load native MPI progress helper at "
+                    f"{_native_module_path}"
+                )
+            _mpi_progress_native = _import_util.module_from_spec(_native_spec)
+            _sys.modules[_native_spec.name] = _mpi_progress_native
+            try:
+                _native_spec.loader.exec_module(_mpi_progress_native)
+            except Exception:
+                del _sys.modules[_native_spec.name]
+                raise
+        else:
+            try:
+                from mpisppy import _mpi_progress_native
+            except ImportError as _exc:
+                raise RuntimeError(
+                    "Native MPI progress diagnostics requested but the optional "
+                    "module is unavailable; set "
+                    "MPISPPY_MPI_PROGRESS_NATIVE_MODULE to its built path"
+                ) from _exc
+        _progress_stop_read_fd, _progress_stop_write_fd = _os.pipe()
 
     def _mpi_progress_loop():
-        global _progress_probes, _progress_probe_seconds
-        global _progress_max_probe_seconds, _progress_wakeups
-        global _progress_active_seconds, _progress_worker_thread_cpu_seconds
-        global _progress_worker_native_id
+        global _progress_probes, _progress_probe_seconds, _progress_max_probe_seconds
+        global _progress_wakeups, _progress_active_seconds
+        global _progress_worker_thread_cpu_seconds, _progress_worker_native_id
         global _progress_wait_late_seconds, _progress_max_wait_late_seconds
-        _progress_worker_native_id = _threading.get_native_id()
+        global _progress_mpi_call_seconds, _progress_gil_probe_seconds
+        global _progress_gil_wait_seconds
+        global _progress_wait_syscall_late_seconds
+        global _progress_max_gil_probe_seconds, _progress_max_gil_wait_seconds
+        probes = wakeups = 0
+        probe_seconds = max_probe_seconds = 0.0
+        active_seconds = wait_late_seconds = max_wait_late_seconds = 0.0
+        mpi_call_seconds = gil_probe_seconds = gil_wait_seconds = 0.0
+        wait_syscall_late_seconds = 0.0
+        max_gil_probe_seconds = max_gil_wait_seconds = 0.0
         if _progress_diagnostics:
+            _progress_worker_native_id = _threading.get_native_id()
             print(
                 "mpi-sppy MPI progress: "
                 f"rank={COMM_WORLD.Get_rank()}, "
-                f"worker_native_id={_progress_worker_native_id}",
+                f"worker_native_id={_progress_worker_native_id}, "
+                f"native_diagnostics={int(_progress_native_diagnostics)}",
                 flush=True,
             )
-        worker_cpu_start = _time.thread_time()
+            worker_cpu_start = _time.thread_time()
         while not _progress_stop.is_set():
             _progress_active.wait()
             if _progress_stop.is_set():
                 break
 
-            active_start = _time.monotonic()
-            with _progress_state_lock:
-                _progress_wakeups += 1
+            active_start = _time.monotonic()  # Needed for the polling backoff.
+            if _progress_diagnostics:
+                wakeups += 1
             while _progress_active.is_set() and not _progress_stop.is_set():
-                probe_start = _time.monotonic()
-                COMM_WORLD.Iprobe(ANY_SOURCE, ANY_TAG)
-                probe_seconds = _time.monotonic() - probe_start
-                with _progress_state_lock:
-                    _progress_probes += 1
-                    _progress_probe_seconds += probe_seconds
-                    _progress_max_probe_seconds = max(
-                        _progress_max_probe_seconds, probe_seconds
+                if _progress_native_diagnostics:
+                    probe_start = _time.monotonic()
+                    _, mpi_duration, gil_duration = (
+                        _mpi_progress_native.timed_iprobe(
+                            COMM_WORLD, ANY_SOURCE, ANY_TAG
+                        )
                     )
+                    probe_duration = _time.monotonic() - probe_start
+                    mpi_call_seconds += mpi_duration
+                    gil_probe_seconds += gil_duration
+                    max_gil_probe_seconds = max(
+                        max_gil_probe_seconds, gil_duration
+                    )
+                elif _progress_diagnostics:
+                    probe_start = _time.monotonic()
+                    COMM_WORLD.Iprobe(ANY_SOURCE, ANY_TAG)
+                    probe_duration = _time.monotonic() - probe_start
+                else:
+                    COMM_WORLD.Iprobe(ANY_SOURCE, ANY_TAG)
+                if _progress_diagnostics:
+                    probes += 1
+                    probe_seconds += probe_duration
+                    max_probe_seconds = max(max_probe_seconds, probe_duration)
 
                 # A short initial burst minimizes the latency of a new RMA
                 # operation. Back off for long solves to bound lock contention
@@ -203,19 +275,50 @@ if haveMPI and _enable_progress_thread:
                     interval = min(250e-6, _progress_max_interval)
                 else:
                     interval = _progress_max_interval
-                wake_deadline = _time.monotonic() + interval
-                _progress_stop.wait(interval)
-                if not _progress_stop.is_set():
-                    wait_late_seconds = max(0.0, _time.monotonic() - wake_deadline)
-                    with _progress_state_lock:
-                        _progress_wait_late_seconds += wait_late_seconds
-                        _progress_max_wait_late_seconds = max(
-                            _progress_max_wait_late_seconds, wait_late_seconds
+                if _progress_native_diagnostics:
+                    stopped, waited, gil_duration = (
+                        _mpi_progress_native.timed_wait(
+                            _progress_stop_read_fd, interval
                         )
-            with _progress_state_lock:
-                _progress_active_seconds += _time.monotonic() - active_start
-        with _progress_state_lock:
-            _progress_worker_thread_cpu_seconds += (
+                    )
+                    if not stopped and not _progress_stop.is_set():
+                        gil_wait_seconds += gil_duration
+                        max_gil_wait_seconds = max(
+                            max_gil_wait_seconds, gil_duration
+                        )
+                        wait_syscall_late_seconds += max(0.0, waited - interval)
+                        lateness = max(0.0, waited + gil_duration - interval)
+                    else:
+                        continue
+                elif _progress_diagnostics:
+                    wake_deadline = _time.monotonic() + interval
+                    _progress_stop.wait(interval)
+                    if _progress_stop.is_set():
+                        continue
+                    lateness = max(0.0, _time.monotonic() - wake_deadline)
+                else:
+                    _progress_stop.wait(interval)
+                    continue
+                wait_late_seconds += lateness
+                max_wait_late_seconds = max(max_wait_late_seconds, lateness)
+            if _progress_diagnostics:
+                active_seconds += _time.monotonic() - active_start
+        if _progress_diagnostics:
+            # Only this worker writes these fields; shutdown reads after join.
+            _progress_probes = probes
+            _progress_probe_seconds = probe_seconds
+            _progress_max_probe_seconds = max_probe_seconds
+            _progress_wakeups = wakeups
+            _progress_active_seconds = active_seconds
+            _progress_wait_late_seconds = wait_late_seconds
+            _progress_max_wait_late_seconds = max_wait_late_seconds
+            _progress_mpi_call_seconds = mpi_call_seconds
+            _progress_gil_probe_seconds = gil_probe_seconds
+            _progress_gil_wait_seconds = gil_wait_seconds
+            _progress_wait_syscall_late_seconds = wait_syscall_late_seconds
+            _progress_max_gil_probe_seconds = max_gil_probe_seconds
+            _progress_max_gil_wait_seconds = max_gil_wait_seconds
+            _progress_worker_thread_cpu_seconds = (
                 _time.thread_time() - worker_cpu_start
             )
 
@@ -227,29 +330,55 @@ if haveMPI and _enable_progress_thread:
     _progress_thread.start()
 
     def _activate_mpi_progress():
-        global _progress_active_count
+        global _progress_active_count, _progress_compute_start
+        global _progress_compute_process_cpu_start
         with _progress_state_lock:
+            if _progress_diagnostics and _progress_active_count == 0:
+                _progress_compute_start = _time.monotonic()
+                _progress_compute_process_cpu_start = _time.process_time()
             _progress_active_count += 1
             _progress_active.set()
 
     def _deactivate_mpi_progress():
-        global _progress_active_count
+        global _progress_active_count, _progress_compute_regions
+        global _progress_compute_seconds, _progress_compute_process_cpu_seconds
         with _progress_state_lock:
             if _progress_active_count <= 0:
                 raise RuntimeError("unbalanced mpi-sppy MPI progress deactivation")
             _progress_active_count -= 1
             if _progress_active_count == 0:
+                if _progress_diagnostics:
+                    _progress_compute_regions += 1
+                    _progress_compute_seconds += (
+                        _time.monotonic() - _progress_compute_start
+                    )
+                    _progress_compute_process_cpu_seconds += (
+                        _time.process_time() - _progress_compute_process_cpu_start
+                    )
                 _progress_active.clear()
 
     def _stop_mpi_progress_thread():
         _progress_stop.set()
         _progress_active.set()
+        if _progress_native_diagnostics:
+            _os.write(_progress_stop_write_fd, b"\0")
         _progress_thread.join(timeout=5)
+        worker_stopped = not _progress_thread.is_alive()
+        if _progress_native_diagnostics and not _progress_thread.is_alive():
+            _os.close(_progress_stop_read_fd)
+            _os.close(_progress_stop_write_fd)
         if _progress_diagnostics:
             with _progress_state_lock:
+                if not worker_stopped:
+                    print(
+                        "mpi-sppy MPI progress: worker did not stop; "
+                        "worker counters are incomplete",
+                        flush=True,
+                    )
                 print(
                     "mpi-sppy MPI progress: "
                     f"rank={COMM_WORLD.Get_rank()}, "
+                    f"{_format_progress_rank_context()}, "
                     f"compute_regions={_progress_compute_regions}, "
                     f"compute_seconds={_progress_compute_seconds:.3f}, "
                     "compute_process_cpu_seconds="
@@ -261,23 +390,78 @@ if haveMPI and _enable_progress_thread:
                 print(
                     "mpi-sppy MPI progress: "
                     f"rank={COMM_WORLD.Get_rank()}, probes={_progress_probes}, "
-                    f"probe_seconds={_progress_probe_seconds:.3f}, "
+                    f"{_format_progress_rank_context()}, "
+                    f"iprobe_round_trip_seconds={_progress_probe_seconds:.3f}, "
                     f"max_probe_ms={1000 * _progress_max_probe_seconds:.3f}, "
                     f"wakeups={_progress_wakeups}, "
                     f"active_seconds={_progress_active_seconds:.3f}, "
                     "worker_thread_cpu_seconds="
                     f"{_progress_worker_thread_cpu_seconds:.3f}, "
                     f"worker_native_id={_progress_worker_native_id}, "
-                    f"wait_late_seconds={_progress_wait_late_seconds:.3f}, "
-                    "max_wait_late_ms="
+                    f"wait_return_late_seconds="
+                    f"{_progress_wait_late_seconds:.3f}, "
+                    "max_wait_return_late_ms="
                     f"{1000 * _progress_max_wait_late_seconds:.3f}",
                     flush=True,
                 )
+                if _progress_native_diagnostics:
+                    print(
+                        "mpi-sppy MPI progress: "
+                        f"rank={COMM_WORLD.Get_rank()}, "
+                        f"{_format_progress_rank_context()}, "
+                        f"mpi_call_seconds={_progress_mpi_call_seconds:.3f}, "
+                        f"gil_probe_reacquire_seconds="
+                        f"{_progress_gil_probe_seconds:.3f}, "
+                        f"max_gil_probe_reacquire_ms="
+                        f"{1000 * _progress_max_gil_probe_seconds:.3f}, "
+                        f"gil_wait_reacquire_seconds="
+                        f"{_progress_gil_wait_seconds:.3f}, "
+                        f"max_gil_wait_reacquire_ms="
+                        f"{1000 * _progress_max_gil_wait_seconds:.3f}, "
+                        f"wait_syscall_late_seconds="
+                        f"{_progress_wait_syscall_late_seconds:.3f}",
+                        flush=True,
+                    )
 
     # mpi4py registers its MPI finalizer while mpi4py.MPI is imported.  atexit
     # runs handlers in reverse registration order, so this stops the thread
     # before mpi4py finalizes MPI.
     _atexit.register(_stop_mpi_progress_thread)
+
+
+def _format_progress_rank_context():
+    """Format cylinder identity for the opt-in MPI progress diagnostics."""
+    context = _progress_rank_context
+    if context is None:
+        return "role=unknown, spcomm_type=unknown, optimizer_type=unknown"
+    return (
+        f"role={context['role']}, "
+        f"spcomm_type={context['spcomm_type']}, "
+        f"optimizer_type={context['optimizer_type']}, "
+        f"strata_rank={context['strata_rank']}, "
+        f"cylinder_rank={context['cylinder_rank']}"
+    )
+
+
+def _set_progress_rank_context(role, spcomm_type, optimizer_type,
+                               strata_rank, cylinder_rank):
+    """Attach the hub/spoke identity once the wheel assigns this rank."""
+    global _progress_rank_context
+    if not (haveMPI and _enable_progress_thread and _progress_diagnostics):
+        return
+    with _progress_state_lock:
+        _progress_rank_context = {
+            "role": role,
+            "spcomm_type": spcomm_type,
+            "optimizer_type": optimizer_type,
+            "strata_rank": strata_rank,
+            "cylinder_rank": cylinder_rank,
+        }
+    print(
+        "mpi-sppy MPI progress context: "
+        f"rank={COMM_WORLD.Get_rank()}, {_format_progress_rank_context()}",
+        flush=True,
+    )
 
 
 @_contextmanager
@@ -286,28 +470,27 @@ def progress_active():
 
     This is a no-op unless ``MPISPPY_MPI_PROGRESS_THREAD=1`` was selected.
     Nested uses are reference counted so an inner compute region cannot stop
-    progress requested by its caller.
+    progress requested by its caller. Diagnostic wall and process CPU totals
+    measure the union of active regions; caller CPU is counted once per thread.
     """
-    global _progress_compute_regions, _progress_compute_seconds
-    global _progress_compute_process_cpu_seconds
     global _progress_compute_thread_cpu_seconds
     if haveMPI and _enable_progress_thread:
-        compute_start = _time.monotonic()
-        compute_process_cpu_start = _time.process_time()
-        compute_cpu_start = _time.thread_time()
+        if _progress_diagnostics:
+            depth = getattr(_progress_caller_state, "depth", 0)
+            if depth == 0:
+                compute_cpu_start = _time.thread_time()
+            _progress_caller_state.depth = depth + 1
         _activate_mpi_progress()
         try:
             yield
         finally:
             _deactivate_mpi_progress()
-            with _progress_state_lock:
-                _progress_compute_regions += 1
-                _progress_compute_seconds += _time.monotonic() - compute_start
-                _progress_compute_process_cpu_seconds += (
-                    _time.process_time() - compute_process_cpu_start
-                )
-                _progress_compute_thread_cpu_seconds += (
-                    _time.thread_time() - compute_cpu_start
-                )
+            if _progress_diagnostics:
+                _progress_caller_state.depth = depth
+                if depth == 0:
+                    with _progress_state_lock:
+                        _progress_compute_thread_cpu_seconds += (
+                            _time.thread_time() - compute_cpu_start
+                        )
     else:
         yield
