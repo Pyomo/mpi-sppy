@@ -146,11 +146,34 @@ if haveMPI and _enable_progress_thread:
     _progress_state_lock = _threading.Lock()
     _progress_active_count = 0
     _progress_probes = 0
+    _progress_probe_seconds = 0.0
+    _progress_max_probe_seconds = 0.0
     _progress_wakeups = 0
     _progress_active_seconds = 0.0
+    _progress_worker_thread_cpu_seconds = 0.0
+    _progress_worker_native_id = None
+    _progress_wait_late_seconds = 0.0
+    _progress_max_wait_late_seconds = 0.0
+    _progress_compute_regions = 0
+    _progress_compute_seconds = 0.0
+    _progress_compute_process_cpu_seconds = 0.0
+    _progress_compute_thread_cpu_seconds = 0.0
 
     def _mpi_progress_loop():
-        global _progress_probes, _progress_wakeups, _progress_active_seconds
+        global _progress_probes, _progress_probe_seconds
+        global _progress_max_probe_seconds, _progress_wakeups
+        global _progress_active_seconds, _progress_worker_thread_cpu_seconds
+        global _progress_worker_native_id
+        global _progress_wait_late_seconds, _progress_max_wait_late_seconds
+        _progress_worker_native_id = _threading.get_native_id()
+        if _progress_diagnostics:
+            print(
+                "mpi-sppy MPI progress: "
+                f"rank={COMM_WORLD.Get_rank()}, "
+                f"worker_native_id={_progress_worker_native_id}",
+                flush=True,
+            )
+        worker_cpu_start = _time.thread_time()
         while not _progress_stop.is_set():
             _progress_active.wait()
             if _progress_stop.is_set():
@@ -160,9 +183,15 @@ if haveMPI and _enable_progress_thread:
             with _progress_state_lock:
                 _progress_wakeups += 1
             while _progress_active.is_set() and not _progress_stop.is_set():
+                probe_start = _time.monotonic()
                 COMM_WORLD.Iprobe(ANY_SOURCE, ANY_TAG)
+                probe_seconds = _time.monotonic() - probe_start
                 with _progress_state_lock:
                     _progress_probes += 1
+                    _progress_probe_seconds += probe_seconds
+                    _progress_max_probe_seconds = max(
+                        _progress_max_probe_seconds, probe_seconds
+                    )
 
                 # A short initial burst minimizes the latency of a new RMA
                 # operation. Back off for long solves to bound lock contention
@@ -174,9 +203,21 @@ if haveMPI and _enable_progress_thread:
                     interval = min(250e-6, _progress_max_interval)
                 else:
                     interval = _progress_max_interval
+                wake_deadline = _time.monotonic() + interval
                 _progress_stop.wait(interval)
+                if not _progress_stop.is_set():
+                    wait_late_seconds = max(0.0, _time.monotonic() - wake_deadline)
+                    with _progress_state_lock:
+                        _progress_wait_late_seconds += wait_late_seconds
+                        _progress_max_wait_late_seconds = max(
+                            _progress_max_wait_late_seconds, wait_late_seconds
+                        )
             with _progress_state_lock:
                 _progress_active_seconds += _time.monotonic() - active_start
+        with _progress_state_lock:
+            _progress_worker_thread_cpu_seconds += (
+                _time.thread_time() - worker_cpu_start
+            )
 
     _progress_thread = _threading.Thread(
         target=_mpi_progress_loop,
@@ -208,9 +249,28 @@ if haveMPI and _enable_progress_thread:
             with _progress_state_lock:
                 print(
                     "mpi-sppy MPI progress: "
+                    f"rank={COMM_WORLD.Get_rank()}, "
+                    f"compute_regions={_progress_compute_regions}, "
+                    f"compute_seconds={_progress_compute_seconds:.3f}, "
+                    "compute_process_cpu_seconds="
+                    f"{_progress_compute_process_cpu_seconds:.3f}, "
+                    "compute_thread_cpu_seconds="
+                    f"{_progress_compute_thread_cpu_seconds:.3f}",
+                    flush=True,
+                )
+                print(
+                    "mpi-sppy MPI progress: "
                     f"rank={COMM_WORLD.Get_rank()}, probes={_progress_probes}, "
+                    f"probe_seconds={_progress_probe_seconds:.3f}, "
+                    f"max_probe_ms={1000 * _progress_max_probe_seconds:.3f}, "
                     f"wakeups={_progress_wakeups}, "
-                    f"active_seconds={_progress_active_seconds:.3f}",
+                    f"active_seconds={_progress_active_seconds:.3f}, "
+                    "worker_thread_cpu_seconds="
+                    f"{_progress_worker_thread_cpu_seconds:.3f}, "
+                    f"worker_native_id={_progress_worker_native_id}, "
+                    f"wait_late_seconds={_progress_wait_late_seconds:.3f}, "
+                    "max_wait_late_ms="
+                    f"{1000 * _progress_max_wait_late_seconds:.3f}",
                     flush=True,
                 )
 
@@ -228,11 +288,26 @@ def progress_active():
     Nested uses are reference counted so an inner compute region cannot stop
     progress requested by its caller.
     """
+    global _progress_compute_regions, _progress_compute_seconds
+    global _progress_compute_process_cpu_seconds
+    global _progress_compute_thread_cpu_seconds
     if haveMPI and _enable_progress_thread:
+        compute_start = _time.monotonic()
+        compute_process_cpu_start = _time.process_time()
+        compute_cpu_start = _time.thread_time()
         _activate_mpi_progress()
         try:
             yield
         finally:
             _deactivate_mpi_progress()
+            with _progress_state_lock:
+                _progress_compute_regions += 1
+                _progress_compute_seconds += _time.monotonic() - compute_start
+                _progress_compute_process_cpu_seconds += (
+                    _time.process_time() - compute_process_cpu_start
+                )
+                _progress_compute_thread_cpu_seconds += (
+                    _time.thread_time() - compute_cpu_start
+                )
     else:
         yield
