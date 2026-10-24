@@ -68,20 +68,25 @@ class Extension:
         None
         '''
 
+    def solve_subproblem(self, subproblem, solve, *, outer_bound_only=False):
+        '''Solve a subproblem, optionally wrapping or replacing the raw solve.
+
+        ``solve`` is a zero-argument callable that performs one fully
+        configured solver call, loads an available solution, and returns its
+        results. Implementations may call ``solve`` zero, one, or multiple
+        times, and must return the final results object. A replacement that
+        does not call ``solve`` assumes the same loading contract. Bound-only
+        solves do not load a candidate solution.
+        '''
+        return solve()
+
     def post_solve(self, subproblem, results):
-        '''
-        Method called after every subproblem solve
+        '''Observe a completed subproblem solve.
 
-        Inputs
-        ------
-        subproblem : Pyomo subproblem (could be a scenario or bundle)
-        results : Pyomo results object from initial solve or None if solve failed
-
-        Returns
-        -------
-        results : Pyomo results objects from most recent solve
+        The final solution status, bounds, and variable values have already
+        been recorded. Return values are ignored; use ``solve_subproblem`` to
+        replace or repeat the solve itself.
         '''
-        return results
 
     def pre_solve_loop(self):
         ''' Method called before every solve loop within
@@ -236,6 +241,20 @@ class MultiExtension(Extension):
             name = constr.__name__
             self.extdict[name] = constr(ph)
 
+        solve_overrides = [
+            extension
+            for extension in self.extdict.values()
+            if type(extension).solve_subproblem is not Extension.solve_subproblem
+        ]
+        if len(solve_overrides) > 1:
+            names = ", ".join(type(extension).__name__
+                              for extension in solve_overrides)
+            raise RuntimeError(
+                "Only one extension may override solve_subproblem; "
+                f"found: {names}")
+        self._solve_subproblem_extension = (
+            solve_overrides[0] if solve_overrides else None)
+
     def setup_hub(self):
         for lobject in self.extdict.values():
             lobject.setup_hub()
@@ -256,10 +275,16 @@ class MultiExtension(Extension):
         for lobject in self.extdict.values():
             lobject.pre_solve(subproblem)
 
+    def solve_subproblem(self, subproblem, solve, *, outer_bound_only=False):
+        if self._solve_subproblem_extension is None:
+            return super().solve_subproblem(
+                subproblem, solve, outer_bound_only=outer_bound_only)
+        return self._solve_subproblem_extension.solve_subproblem(
+            subproblem, solve, outer_bound_only=outer_bound_only)
+
     def post_solve(self, subproblem, results):
         for lobject in self.extdict.values():
-            results = lobject.post_solve(subproblem, results)
-        return results
+            lobject.post_solve(subproblem, results)
 
     def pre_solve_loop(self):
         for lobject in self.extdict.values():

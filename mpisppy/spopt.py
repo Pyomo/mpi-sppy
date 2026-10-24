@@ -368,12 +368,39 @@ class SPOpt(SPBase):
             Ag.callout_agnostic(kws)  # not going to use the return values
         else:
             #  didcallout = False  (returned true by the callout, but not used)
+            solution_load_exception = None
             try:
                 with sputils.solver_log_stream(log_stream_path,
                                                solve_keyword_args):
-                    results = s._solver_plugin.solve(s,
-                                                     **solve_keyword_args,
-                                                     load_solutions=False)
+                    def solve():
+                        nonlocal solution_load_exception
+                        solution_load_exception = None
+                        candidate_results = s._solver_plugin.solve(
+                            s, **solve_keyword_args, load_solutions=False)
+                        if (
+                            not outer_bound_only
+                            and not sputils.not_good_enough_results(
+                                candidate_results)
+                        ):
+                            try:
+                                if sputils.is_persistent(s._solver_plugin):
+                                    s._solver_plugin.load_vars()
+                                else:
+                                    s.solutions.load_from(candidate_results)
+                            except Exception as error:
+                                solution_load_exception = error
+                                if need_solution:
+                                    raise
+                        return candidate_results
+
+                    if self.extensions is None:
+                        results = solve()
+                    else:
+                        results = self.extobject.solve_subproblem(
+                            s,
+                            solve,
+                            outer_bound_only=outer_bound_only,
+                        )
                 solver_exception = None
             except Exception as e:
                 results = None
@@ -456,18 +483,10 @@ class SPOpt(SPBase):
                     raise solver_exception
 
             else:
-                try:
-                    if sputils.is_persistent(s._solver_plugin):
-                        s._solver_plugin.load_vars()
-                    else:
-                        s.solutions.load_from(results)
-                except Exception as e: # catch everything
-                    if need_solution:
-                        raise e
-                    else:
-                        s._mpisppy_data.solution_available = False
-                else:
+                if solution_load_exception is None:
                     s._mpisppy_data.solution_available = True
+                else:
+                    s._mpisppy_data.solution_available = False
                 if self.is_minimizing:
                     s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
                     s._mpisppy_data.inner_bound = results.Problem[0].Upper_bound
@@ -484,7 +503,7 @@ class SPOpt(SPBase):
         pyomo_solve_time = time.time() - solve_start_time
 
         if self.extensions is not None:
-            results = self.extobject.post_solve(s, results)
+            self.extobject.post_solve(s, results)
 
         return pyomo_solve_time + set_objective_time  # set_objective_time added Feb 2023
 

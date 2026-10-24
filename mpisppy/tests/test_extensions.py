@@ -18,6 +18,7 @@ No solver or MPI is required for these tests.
 """
 
 import unittest
+from unittest import mock
 
 from mpisppy.extensions.extension import (
     EFExtension,
@@ -69,10 +70,18 @@ class TestExtensionMethodReturnValues(unittest.TestCase):
     def test_pre_solve_returns_none(self):
         self.assertIsNone(self.ext.pre_solve(subproblem=None))
 
-    def test_post_solve_returns_results(self):
+    def test_solve_subproblem_calls_raw_solve(self):
+        sentinel = object()
+        result = self.ext.solve_subproblem(
+            subproblem=None,
+            solve=lambda: sentinel,
+        )
+        self.assertIs(result, sentinel)
+
+    def test_post_solve_returns_none(self):
         sentinel = object()
         result = self.ext.post_solve(subproblem=None, results=sentinel)
-        self.assertIs(result, sentinel)
+        self.assertIsNone(result)
 
     def test_pre_solve_loop_returns_none(self):
         self.assertIsNone(self.ext.pre_solve_loop())
@@ -133,7 +142,6 @@ class _TrackingExtension(Extension):
 
     def post_solve(self, subproblem, results):
         self.called.append("post_solve")
-        return results
 
     def pre_solve_loop(self):
         self.called.append("pre_solve_loop")
@@ -239,11 +247,57 @@ class TestMultiExtensionDelegation(unittest.TestCase):
         for ext in exts:
             self.assertIn("pre_solve", ext.called)
 
-    def test_post_solve_passes_results_through(self):
+    def test_solve_subproblem_uses_default_with_no_override(self):
+        multi, _ = self._make_multi(2)
+        multi._solve_subproblem_extension = None
+        sentinel = object()
+        solve = mock.Mock(return_value=sentinel)
+
+        result = multi.solve_subproblem(None, solve)
+
+        self.assertIs(result, sentinel)
+        solve.assert_called_once_with()
+
+    def test_solve_subproblem_uses_the_single_override(self):
+        calls = []
+
+        class SolverExtension(Extension):
+            def solve_subproblem(
+                    self, subproblem, solve, *, outer_bound_only=False):
+                calls.append("override")
+                return solve()
+
+        multi = MultiExtension(_MockOpt(), [_TrackingExtension, SolverExtension])
+        sentinel = object()
+
+        result = multi.solve_subproblem(None, lambda: sentinel)
+
+        self.assertIs(result, sentinel)
+        self.assertEqual(calls, ["override"])
+
+    def test_multiple_solve_subproblem_overrides_are_rejected(self):
+        class FirstSolverExtension(Extension):
+            def solve_subproblem(
+                    self, subproblem, solve, *, outer_bound_only=False):
+                return solve()
+
+        class SecondSolverExtension(Extension):
+            def solve_subproblem(
+                    self, subproblem, solve, *, outer_bound_only=False):
+                return solve()
+
+        with self.assertRaisesRegex(
+                RuntimeError,
+                "Only one extension may override solve_subproblem.*"
+                "FirstSolverExtension, SecondSolverExtension"):
+            MultiExtension(
+                _MockOpt(), [FirstSolverExtension, SecondSolverExtension])
+
+    def test_post_solve_is_observational(self):
         multi, exts = self._make_multi(1)
         sentinel = object()
         result = multi.post_solve(None, sentinel)
-        self.assertIs(result, sentinel)
+        self.assertIsNone(result)
         self.assertIn("post_solve", exts[0].called)
 
     def test_pre_solve_loop_delegated(self):
