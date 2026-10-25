@@ -12,7 +12,9 @@ mpiexec -np 2 python -m mpi4py test_with_cylinders.py
 
 """
 
+import time
 import unittest
+from unittest.mock import patch
 
 import pyomo.environ as pyo
 
@@ -241,8 +243,43 @@ class Test_farmer_with_cylinders(unittest.TestCase):
         # sent only its first message, and with cuts flowing the bound came
         # out above the optimum for 4 or more scenarios, from eta's huge
         # default lower bound.
+        from mpisppy.extensions.cross_scen_extension import (
+            CrossScenarioExtension,
+        )
         # The 4-scenario farmer optimum, from ExtensiveForm.
         FARMER4_OPT = -100975.99397650975
+        real_enditer = CrossScenarioExtension.enditer
+        timed_out = []
+
+        def waiting_enditer(ext):
+            # How soon the spoke's first cut arrives depends on the machine.
+            # Wait for one at iteration 1, so the rest of the run has cuts to
+            # compute the bound from. The spoke's setup takes seconds; the
+            # limit only has to end a run whose spoke never cuts inside CI's
+            # 10-minute step.
+            real_enditer(ext)
+            if ext.opt._PHIter != 1:
+                return
+            # Both decisions are agreed across the hub's ranks, and a time
+            # out ends the run normally rather than raising: an exception on
+            # the hub would leave the spoke waiting for a kill signal.
+            start = time.time()
+            while True:
+                ext.opt.spcomm.sync_nonants()
+                ext.sync_with_spokes()
+                have = int(all(_has_a_real_cut(s)
+                               for s in ext.opt.local_scenarios.values()))
+                if ext.opt.mpicomm.allreduce(have, op=MPI.MIN):
+                    return
+                late = int(time.time() - start > 120)
+                if ext.opt.mpicomm.allreduce(late, op=MPI.MAX):
+                    timed_out.append(True)
+                    return
+                time.sleep(0.01)
+
+        # Both runs first, then the assertions: an assertion that fails on
+        # rank 0 between runs would leave the other rank in the next run.
+        wheels = {}
         for sense in (pyo.minimize, pyo.maximize):
             self.cfg = _create_cfg()
             self.cfg.cross_scenario_cuts_args()
@@ -252,25 +289,42 @@ class Test_farmer_with_cylinders(unittest.TestCase):
             cut_spoke = vanilla.cross_scenario_cuts_spoke(
                 *beans, scenario_creator_kwargs=scenario_creator_kwargs)
             wheel = WheelSpinner(hub_dict, [cut_spoke])
-            wheel.spin()
-            if wheel.global_rank == 0:
-                s = next(iter(wheel.spcomm.opt.local_scenarios.values()))
-                batches = {key[0] for key in
-                           s._mpisppy_model.benders_cuts.keys()}
-                self.assertGreater(len(batches), 1,
-                                   msg="the hub got no cuts after the first")
-                tol = 1e-9 * abs(FARMER4_OPT)
-                # Better than PH's iteration-0 bound, so the extension did
-                # compute one from the cuts.
-                trivial = wheel.spcomm.opt.trivial_bound
-                if sense == pyo.minimize:
-                    self.assertLessEqual(wheel.BestOuterBound,
-                                         FARMER4_OPT + tol)
-                    self.assertGreater(wheel.BestOuterBound, trivial)
-                else:
-                    self.assertGreaterEqual(wheel.BestOuterBound,
-                                            -FARMER4_OPT - tol)
-                    self.assertLess(wheel.BestOuterBound, trivial)
+            with patch.object(CrossScenarioExtension, "enditer",
+                              waiting_enditer):
+                wheel.spin()
+            wheels[sense] = wheel
+        if wheels[pyo.minimize].global_rank != 0:
+            return
+        self.assertFalse(timed_out, msg="no cut arrived in 120 seconds")
+        tol = 1e-9 * abs(FARMER4_OPT)
+        for sense, wheel in wheels.items():
+            s = next(iter(wheel.spcomm.opt.local_scenarios.values()))
+            # A Benders cut, not the eta lower bounds the spoke sends first,
+            # which have no nonant term.
+            self.assertTrue(_has_a_real_cut(s),
+                            msg="the hub got no Benders cut")
+            # Better than PH's iteration-0 bound, so the extension did
+            # compute one from the cuts.
+            trivial = wheel.spcomm.opt.trivial_bound
+            if sense == pyo.minimize:
+                self.assertLessEqual(wheel.BestOuterBound, FARMER4_OPT + tol)
+                self.assertGreater(wheel.BestOuterBound, trivial)
+            else:
+                self.assertGreaterEqual(wheel.BestOuterBound,
+                                        -FARMER4_OPT - tol)
+                self.assertLess(wheel.BestOuterBound, trivial)
+
+
+def _has_a_real_cut(s):
+    """Whether a scenario holds a cut with a nonzero nonant coefficient."""
+    from pyomo.repn.standard_repn import generate_standard_repn
+    nonants = {id(v) for v in s._mpisppy_data.nonant_indices.values()}
+    for c in s._mpisppy_model.benders_cuts.values():
+        repn = generate_standard_repn(c.body)
+        if any(coef != 0 and id(v) in nonants
+               for coef, v in zip(repn.linear_coefs, repn.linear_vars)):
+            return True
+    return False
 
 
 #*****************************************************************************
