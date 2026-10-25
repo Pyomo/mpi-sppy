@@ -1728,11 +1728,11 @@ class TestPHTrackerResume(_ABMixin, unittest.TestCase):
 class TestCrossScenarioEtaOnlyRows(unittest.TestCase):
     """A cut row with no nonant term bounds one eta, and is kept as a bound.
 
-    The cut spoke sends its eta bound cut again whenever the hub's etas fall
-    below its bounds, and again when it restarts on a resume. Stored as cuts,
-    each copy would add a duplicate constraint and count as a new cut, which
-    triggers a bound check the uninterrupted run does not make. Which copies
-    reach the hub depends on timing, so this drives make_cuts directly.
+    The cut spoke sends its eta bound cut when it starts, so again when it
+    restarts on a resume. Stored as cuts, the copy would add duplicate
+    constraints and count as a new cut, which triggers a bound check the
+    uninterrupted run does not make. Whether it reaches the hub depends on
+    timing, so this drives make_cuts directly.
     """
 
     NAMES = ["scen0", "scen1"]

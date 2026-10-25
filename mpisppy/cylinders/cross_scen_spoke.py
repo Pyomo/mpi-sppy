@@ -129,12 +129,25 @@ class CrossScenarioCutSpoke(Spoke):
         if self.got_kill_signal():
             return
 
+        # set_eta_bounds combines the ranks' bounds with a MAX, and a rank
+        # that did not solve a scenario's bound problem holds a huge finite
+        # default for it, so a bound that came back non-finite would come
+        # out of it as that default. Note which ones did, first.
+        local_finite = np.fromiter(
+                (1 if self.opt.valid_eta_lb[s] is not None
+                 and np.isfinite(self.opt.valid_eta_lb[s]) else 0
+                 for s in self.opt.all_scenario_names),
+                dtype='i', count=len(self.opt.all_scenario_names))
+        all_finite = np.empty_like(local_finite)
+        self.cylinder_comm.Allreduce(local_finite, all_finite, op=MPI.MIN)
+
         ## This call is blocking, depending on the
         ## configuration. This necessitates the barrier
         ## above.
         self.opt.set_eta_bounds()
         self._eta_lb_array = np.fromiter(
-                (self.opt.valid_eta_lb[s] for s in self.opt.all_scenario_names),
+                (self.opt.valid_eta_lb[s] if all_finite[idx] else -np.inf
+                 for idx, s in enumerate(self.opt.all_scenario_names)),
                 dtype='d', count=len(self.opt.all_scenario_names))
         # Written once, to a field nothing else writes, so the hub reads the
         # bounds whenever it gets to them. The cut buffer is overwritten by
@@ -151,6 +164,10 @@ class CrossScenarioCutSpoke(Spoke):
         all_coefs = self.all_coefs
         all_coefs.value_array().fill(0.0)
         for idx, k in enumerate(self.opt.all_scenario_names):
+            # No bound for this scenario: leave its row zero, which the hub
+            # skips.
+            if not np.isfinite(self._eta_lb_array[idx]):
+                continue
             ## cut_array -- [ constant, eta_coef, *nonant_coefs ]
             ## this cut  -- [ LB, -1, *0s ], i.e., -1*\eta + LB <= 0
             all_coefs[row_len*idx] = self._eta_lb_array[idx]
@@ -308,6 +325,9 @@ class CrossScenarioCutSpoke(Spoke):
         row_len = 1+1+len(root_nonants)
         # all_coefs = np.zeros( self.nscen*row_len +1, dtype='d')
         all_coefs = self.all_coefs
+        # A scenario with no new cut gets a zero row, which the hub skips.
+        # Left as it was, its last cut would be sent, and added, again.
+        all_coefs.value_array().fill(0.0)
         for idx, k in enumerate(opt.all_scenario_names):
             if k in coef_dict:
                 all_coefs[row_len*idx:row_len*(idx+1)] = coef_dict[k]
