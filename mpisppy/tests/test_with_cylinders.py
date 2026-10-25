@@ -199,11 +199,15 @@ class Test_farmer_with_cylinders(unittest.TestCase):
     def test_wheel_sign_flip_equivalence(self):
         # Full-featured sign-flip equivalence: run the SAME PH-hub +
         # xhatshuffle-spoke wheel once minimizing and once maximizing (farmer
-        # negates its cost expression for sense=pyo.maximize). The two runs are
-        # exact mirror images, so every reported bound must be the negation of
-        # its counterpart, and each must bracket the optimum (+/-108390) on the
-        # correct, sense-dependent side: for max the incumbent (inner) bound is
-        # below the optimum and the outer bound above it; for min the reverse.
+        # negates its cost expression for sense=pyo.maximize). The hub's PH
+        # iterates are exact mirror images, so its outer bound must be the
+        # negation of its counterpart. Each bound must bracket the optimum
+        # (+/-108390) on the correct, sense-dependent side: for max the
+        # incumbent (inner) bound is below the optimum and the outer bound
+        # above it; for min the reverse.
+        # The inner bounds are not compared with each other: xhatshuffle runs
+        # asynchronously, so which incumbent each run ends on depends on
+        # timing (issue #936).
         FARMER_OPT = 108390.0
 
         def run(sense):
@@ -223,8 +227,7 @@ class Test_farmer_with_cylinders(unittest.TestCase):
             for w in (wmin, wmax):
                 self.assertIsNotNone(w.BestInnerBound)
                 self.assertIsNotNone(w.BestOuterBound)
-            # exact mirror equivalence of the full-run results
-            self.assertAlmostEqual(wmax.BestInnerBound, -wmin.BestInnerBound, 1)
+            # exact mirror equivalence of the hub's bound
             self.assertAlmostEqual(wmax.BestOuterBound, -wmin.BestOuterBound, 1)
             # max: incumbent (inner) <= optimum <= outer bound
             self.assertLessEqual(wmax.BestInnerBound, FARMER_OPT + 1.0)
