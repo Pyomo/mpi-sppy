@@ -19,7 +19,8 @@ from mpisppy.utils.lshaped_cuts import LShapedCutGenerator  # pylint: disable=E0
 
 class CrossScenarioCutSpoke(Spoke):
 
-    send_fields = (*Spoke.send_fields, Field.CROSS_SCENARIO_CUT)
+    send_fields = (*Spoke.send_fields, Field.CROSS_SCENARIO_CUT,
+                   Field.CROSS_SCENARIO_ETA_BOUNDS)
     receive_fields = (*Spoke.receive_fields, Field.NONANTS_VALS, Field.CROSS_SCENARIO_COST)
 
     def register_send_fields(self) -> None:
@@ -57,6 +58,7 @@ class CrossScenarioCutSpoke(Spoke):
         assert len(cs_cost_ranks) == 1
         assert nonant_ranks[0] == cs_cost_ranks[0]
         source_rank = nonant_ranks[0]
+        self._hub_rank = source_rank
 
         self.all_nonants = self.register_recv_field(Field.NONANTS_VALS, source_rank)
         self.all_etas = self.register_recv_field(Field.CROSS_SCENARIO_COST, source_rank)
@@ -134,6 +136,12 @@ class CrossScenarioCutSpoke(Spoke):
         self._eta_lb_array = np.fromiter(
                 (self.opt.valid_eta_lb[s] for s in self.opt.all_scenario_names),
                 dtype='d', count=len(self.opt.all_scenario_names))
+        # Written once, to a field nothing else writes, so the hub reads the
+        # bounds whenever it gets to them. The cut buffer is overwritten by
+        # the next cut.
+        eta_bounds = self.send_buffers[Field.CROSS_SCENARIO_ETA_BOUNDS]
+        eta_bounds.value_array()[:] = self._eta_lb_array
+        self.put_send_buffer(eta_bounds, Field.CROSS_SCENARIO_ETA_BOUNDS)
         self.make_eta_lb_cut()
 
     def make_eta_lb_cut(self):
@@ -313,11 +321,18 @@ class CrossScenarioCutSpoke(Spoke):
         # prep cut generation
         self.prep_cs_cuts()
 
-        # main loop
+        # The hub writes the nonants and the etas at different moments, so a
+        # pass seldom finds both new. Cut once each has been new since the
+        # last cut. get_receive_buffer agrees its answer across this
+        # cylinder's ranks, and make_cut is collective over them.
+        new_nonants = new_etas = False
         while not (self.got_kill_signal()):
-            if self.all_nonants.is_new() and self.all_etas.is_new():
+            new_nonants |= self.get_receive_buffer(
+                self.all_nonants, Field.NONANTS_VALS, self._hub_rank)
+            new_etas |= self.get_receive_buffer(
+                self.all_etas, Field.CROSS_SCENARIO_COST, self._hub_rank)
+            if new_nonants and new_etas:
                 self.make_cut()
-            ## End if
-        ## End while
+                new_nonants = new_etas = False
 
         return

@@ -7,7 +7,6 @@
 # full copyright and license information.
 ###############################################################################
 import math
-import sys
 
 import numpy as np
 import pyomo.environ as pyo
@@ -45,6 +44,11 @@ class CrossScenarioExtension(Extension):
 
         self.any_cuts = False
         self.iter_since_last_check = 0
+
+        # Whether every eta has a valid lower bound, from valid_eta_bound or
+        # from the cut spoke. Until then an eta with no cut on it leaves the
+        # bound problem unbounded, so the outer bound is not checked.
+        self._eta_lbs_known = False
 
     def _disable_W_and_prox(self):
         assert self.reenable_W is None
@@ -136,6 +140,12 @@ class CrossScenarioExtension(Extension):
             cached_ph_obj[k].activate()
 
     def get_from_cross_cuts(self):
+        if self.opt.spcomm.get_receive_buffer(
+            self.eta_bounds,
+            Field.CROSS_SCENARIO_ETA_BOUNDS,
+            self.cross_scenario_index,
+        ):
+            self._apply_eta_bounds(self.eta_bounds.array())
         self.opt.spcomm.get_receive_buffer(
             self.cuts,
             Field.CROSS_SCENARIO_CUT,
@@ -143,6 +153,25 @@ class CrossScenarioExtension(Extension):
         )
         if self.cuts.is_new():
             self.make_cuts(self.cuts.array())
+
+    def _apply_eta_bounds(self, bounds):
+        """Raise each eta's lower bound to the one the cut spoke computed.
+
+        These replace a huge default bound, which made the bound problems
+        numerically unreliable (issue #933).
+        """
+        for s in self.opt.local_scenarios.values():
+            persistent_solver = sputils.is_persistent(s._solver_plugin)
+            for idx, sn in enumerate(self.opt.all_scenario_names):
+                eta = s._mpisppy_model.eta[sn]
+                lb = float(bounds[idx])
+                if eta.lb is None or lb > eta.lb:
+                    eta.setlb(lb)
+                if eta.value is None or eta.value < eta.lb:
+                    eta.set_value(eta.lb)
+                if persistent_solver:
+                    s._solver_plugin.update_var(eta)
+        self._eta_lbs_known = True
 
     def send_to_cross_cuts(self):
 
@@ -168,7 +197,11 @@ class CrossScenarioExtension(Extension):
         ci = 0 ## index to all_etas buffer
         for k, s in self.opt.local_scenarios.items():
             for sn in self.opt.all_scenario_names:
-                all_etas[ci] = s._mpisppy_model.eta[sn]._value
+                # -inf until the etas have their bounds: the spoke then sends
+                # its eta bound cut again rather than cutting at meaningless
+                # etas.
+                all_etas[ci] = (s._mpisppy_model.eta[sn]._value
+                                if self._eta_lbs_known else -np.inf)
                 ci += 1
 
         self.opt.spcomm.put_send_buffer(all_etas, Field.CROSS_SCENARIO_COST)
@@ -277,6 +310,10 @@ class CrossScenarioExtension(Extension):
             Field.CROSS_SCENARIO_CUT,
             self.cross_scenario_index,
         )
+        self.eta_bounds = spcomm.register_recv_field(
+            Field.CROSS_SCENARIO_ETA_BOUNDS,
+            self.cross_scenario_index,
+        )
 
     def sync_with_spokes(self):
         self.send_to_cross_cuts()
@@ -302,12 +339,12 @@ class CrossScenarioExtension(Extension):
                 _eta_init = valid_eta_bound
             def _eta_bounds(m, k):
                 return _eta_init[k], None
+            self._eta_lbs_known = True
         else:
-            lb = (-sys.maxsize - 1) * 1. / len(opt.all_scenario_names)
-            def _eta_init(m, k):
-                return lb
+            # No bound until the cut spoke sends one; see _apply_eta_bounds.
+            _eta_init = None
             def _eta_bounds(m, k):
-                return lb, None
+                return None, None
 
         # eta is attached to each subproblem
         for k,s in opt.local_scenarios.items():
@@ -416,7 +453,8 @@ class CrossScenarioExtension(Extension):
 
         ## if its the second time or more with this IB, we'll only check
         ## if the last improved the OB, or if the OB is new itself (from somewhere else)
-        check = (self.check_bound_iterations is not None) and self.any_cuts and ( \
+        check = (self.check_bound_iterations is not None) and self.any_cuts \
+                and self._eta_lbs_known and ( \
                 (self.iter_at_cur_ib == self.check_bound_iterations) or \
                 (self.iter_at_cur_ib > self.check_bound_iterations and ob_new) or \
                 ((self.iter_since_last_check%self.check_bound_iterations == 0) and self.new_cuts))

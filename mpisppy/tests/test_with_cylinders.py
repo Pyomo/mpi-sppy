@@ -50,9 +50,9 @@ def _create_cfg():
 class Test_farmer_with_cylinders(unittest.TestCase):
     """ Test the find rho code using farmer."""
 
-    def _create_stuff(self, iters=5, sense=pyo.minimize):
+    def _create_stuff(self, iters=5, sense=pyo.minimize, num_scens=3):
         # assumes setup has been called; very specific...
-        self.cfg.num_scens = 3
+        self.cfg.num_scens = num_scens
         self.cfg.max_iterations = iters
         scenario_creator = farmer.scenario_creator
         scenario_denouement = farmer.scenario_denouement
@@ -232,6 +232,45 @@ class Test_farmer_with_cylinders(unittest.TestCase):
             # min: outer bound <= optimum <= incumbent (inner)
             self.assertGreaterEqual(wmin.BestInnerBound, -FARMER_OPT - 1.0)
             self.assertLessEqual(wmin.BestOuterBound, -FARMER_OPT + 1.0)
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_cross_scenario_cuts(self):
+        # The cut spoke has to keep sending cuts, and the bound the hub
+        # computes from them has to stay valid. Before issue #933 the spoke
+        # sent only its first message, and with cuts flowing the bound came
+        # out above the optimum for 4 or more scenarios, from eta's huge
+        # default lower bound.
+        # The 4-scenario farmer optimum, from ExtensiveForm.
+        FARMER4_OPT = -100975.99397650975
+        for sense in (pyo.minimize, pyo.maximize):
+            self.cfg = _create_cfg()
+            self.cfg.cross_scenario_cuts_args()
+            scenario_creator_kwargs, beans, hub_dict = self._create_stuff(
+                iters=20, sense=sense, num_scens=4)
+            vanilla.add_cross_scenario_cuts(hub_dict, self.cfg)
+            cut_spoke = vanilla.cross_scenario_cuts_spoke(
+                *beans, scenario_creator_kwargs=scenario_creator_kwargs)
+            wheel = WheelSpinner(hub_dict, [cut_spoke])
+            wheel.spin()
+            if wheel.global_rank == 0:
+                s = next(iter(wheel.spcomm.opt.local_scenarios.values()))
+                batches = {key[0] for key in
+                           s._mpisppy_model.benders_cuts.keys()}
+                self.assertGreater(len(batches), 1,
+                                   msg="the hub got no cuts after the first")
+                tol = 1e-9 * abs(FARMER4_OPT)
+                # Better than PH's iteration-0 bound, so the extension did
+                # compute one from the cuts.
+                trivial = wheel.spcomm.opt.trivial_bound
+                if sense == pyo.minimize:
+                    self.assertLessEqual(wheel.BestOuterBound,
+                                         FARMER4_OPT + tol)
+                    self.assertGreater(wheel.BestOuterBound, trivial)
+                else:
+                    self.assertGreaterEqual(wheel.BestOuterBound,
+                                            -FARMER4_OPT - tol)
+                    self.assertLess(wheel.BestOuterBound, trivial)
 
 
 #*****************************************************************************
