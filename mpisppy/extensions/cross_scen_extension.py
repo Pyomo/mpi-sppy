@@ -50,6 +50,40 @@ class CrossScenarioExtension(Extension):
         # bound problem unbounded, so the outer bound is not checked.
         self._eta_lbs_known = False
 
+        # Added to the spoke's cut ids to key benders_cuts and
+        # inner_bound_constr. Nonzero only on a resume; see post_iter0.
+        self._cut_key_offset = 0
+
+    def checkpoint_state(self):
+        """What decides when the outer bound is checked and whether a new
+        inner-bound constraint replaces the current one.
+
+        The cuts, eta and the EF objective are on the scenario models, so
+        the checkpoint carries them; post_iter0 reuses them on a resume.
+        reenable_W and reenable_prox are left out: post_iter0 sets and clears
+        them before it returns, so they are None at every checkpoint.
+        """
+        return {
+            "cur_ib": self.cur_ib,
+            "iter_at_cur_ib": self.iter_at_cur_ib,
+            "cur_ob": self.cur_ob,
+            "any_cuts": self.any_cuts,
+            "iter_since_last_check": self.iter_since_last_check,
+            "new_cuts": self.new_cuts,
+            "best_inner_bound": self.best_inner_bound,
+            "best_outer_bound": self.best_outer_bound,
+            "_eta_lbs_known": self._eta_lbs_known,
+        }
+
+    def restore_state(self, state):
+        # The restarted spoke writes its eta bounds once, and Iter0 may have
+        # read them already; a checkpoint written before the stopped run had
+        # them must not take that back, or the bound is never checked again.
+        eta_lbs_known = self._eta_lbs_known
+        for name, value in state.items():
+            setattr(self, name, value)
+        self._eta_lbs_known = self._eta_lbs_known or eta_lbs_known
+
     def _disable_W_and_prox(self):
         assert self.reenable_W is None
         assert self.reenable_prox is None
@@ -161,17 +195,19 @@ class CrossScenarioExtension(Extension):
         numerically unreliable (issue #933).
         """
         for s in self.opt.local_scenarios.values():
-            persistent_solver = sputils.is_persistent(s._solver_plugin)
             for idx, sn in enumerate(self.opt.all_scenario_names):
-                eta = s._mpisppy_model.eta[sn]
-                lb = float(bounds[idx])
-                if eta.lb is None or lb > eta.lb:
-                    eta.setlb(lb)
-                if eta.value is None or eta.value < eta.lb:
-                    eta.set_value(eta.lb)
-                if persistent_solver:
-                    s._solver_plugin.update_var(eta)
+                self._raise_eta_lb(s, sn, float(bounds[idx]))
         self._eta_lbs_known = True
+
+    @staticmethod
+    def _raise_eta_lb(s, sn, lb):
+        eta = s._mpisppy_model.eta[sn]
+        if eta.lb is None or lb > eta.lb:
+            eta.setlb(lb)
+        if eta.value is None or eta.value < eta.lb:
+            eta.set_value(eta.lb)
+        if sputils.is_persistent(s._solver_plugin):
+            s._solver_plugin.update_var(eta)
 
     def send_to_cross_cuts(self):
 
@@ -217,8 +253,9 @@ class CrossScenarioExtension(Extension):
         # rows are:
         # [ const, eta_coeff, *nonant_coeffs ]
         row_len = 1+1+self.nonant_len
-        outer_iter = int(coefs[-1])
+        outer_iter = int(coefs[-1]) + self._cut_key_offset
 
+        any_cut = False
         for sn,s in opt.local_scenarios.items():
             persistent_solver = sputils.is_persistent(s._solver_plugin)
             for idx, k in enumerate(opt.all_scenario_names):
@@ -227,6 +264,14 @@ class CrossScenarioExtension(Extension):
                 # which doesn't do anything
                 if (row == 0.).all():
                     continue
+                # A row with no nonant terms bounds eta alone: the spoke's
+                # eta bound cut, which it sends again whenever the etas fall
+                # below its bounds, and again when it restarts on a resume.
+                # Kept as a bound, so a resent copy adds nothing.
+                if row[1] < 0 and (row[2:] == 0.).all():
+                    self._raise_eta_lb(s, k, -row[0] / row[1])
+                    continue
+                any_cut = True
                 # rows are:
                 # [ const, eta_coeff, *nonant_coeffs ]
                 linear_const = row[0]
@@ -239,6 +284,9 @@ class CrossScenarioExtension(Extension):
                 s._mpisppy_model.benders_cuts[outer_iter, k] = (None, cut_expr, 0.)
                 if persistent_solver:
                     s._solver_plugin.add_constraint(s._mpisppy_model.benders_cuts[outer_iter, k])
+
+        if not any_cut:
+            return
 
         # NOTE: the LShaped code negates the objective, so
         #       we do the same here for consistency
@@ -328,6 +376,10 @@ class CrossScenarioExtension(Extension):
 
     def post_iter0(self):
         opt = self.opt
+        if all(hasattr(s._mpisppy_model, "benders_cuts")
+               for s in opt.local_scenarios.values()):
+            self._reuse_restored_cuts()
+            return
         # NOTE: the LShaped code negates the objective, so
         #       we do the same here for consistency
         if 'cross_scen_options' in opt.options and \
@@ -428,6 +480,26 @@ class CrossScenarioExtension(Extension):
 
         # try to get the initial eta LB cuts
         # (may not be available)
+        self.get_from_cross_cuts()
+
+    def _reuse_restored_cuts(self):
+        """On a resume, keep the eta variables, the EF objective and the cuts
+        the checkpointed models already carry.
+
+        Building them again would replace them, losing every cut. The
+        persistent solvers were created from the restored models, so they
+        already hold eta and the cuts.
+
+        The cut spoke does not checkpoint, so its cut ids start over. Offset
+        them past the restored keys, or a new cut would replace a restored
+        one with the same key.
+        """
+        keys = [key[0] if isinstance(key, tuple) else key
+                for s in self.opt.local_scenarios.values()
+                for container in (s._mpisppy_model.benders_cuts,
+                                  s._mpisppy_model.inner_bound_constr)
+                for key in container.keys()]
+        self._cut_key_offset = max(keys, default=0) + 1
         self.get_from_cross_cuts()
 
     def miditer(self):

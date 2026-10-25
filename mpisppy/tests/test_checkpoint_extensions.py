@@ -1725,6 +1725,97 @@ class TestPHTrackerResume(_ABMixin, unittest.TestCase):
                         msg="the resumed run's tracked xbars differ")
 
 
+class TestCrossScenarioEtaOnlyRows(unittest.TestCase):
+    """A cut row with no nonant term bounds one eta, and is kept as a bound.
+
+    The cut spoke sends its eta bound cut again whenever the hub's etas fall
+    below its bounds, and again when it restarts on a resume. Stored as cuts,
+    each copy would add a duplicate constraint and count as a new cut, which
+    triggers a bound check the uninterrupted run does not make. Which copies
+    reach the hub depends on timing, so this drives make_cuts directly.
+    """
+
+    NAMES = ["scen0", "scen1"]
+
+    def setUp(self):
+        import numpy as np
+        import pyomo.environ as pyo
+
+        from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
+        self.np = np
+
+        def model():
+            m = pyo.ConcreteModel()
+            m.x = pyo.Var(bounds=(0, 10))
+            m._mpisppy_model = pyo.Block()
+            m._mpisppy_model.eta = pyo.Var(self.NAMES)
+            m._mpisppy_model.benders_cuts = pyo.Constraint(pyo.Any)
+            m._mpisppy_model.inner_bound_constr = pyo.Constraint(pyo.Any)
+            m._mpisppy_model.EF_obj = pyo.Expression(expr=m.x)
+            m._mpisppy_data = types.SimpleNamespace(
+                nonant_indices={("ROOT", 0): m.x})
+            m._solver_plugin = None
+            return m
+
+        opt = types.SimpleNamespace(
+            multistage=False,
+            options={},
+            is_minimizing=True,
+            nonant_length=1,
+            all_scenario_names=self.NAMES,
+            local_scenarios={sn: model() for sn in self.NAMES},
+            spcomm=types.SimpleNamespace(BestInnerBound=float("inf"),
+                                         BestOuterBound=-float("inf")),
+        )
+        self.ext = CrossScenarioExtension(opt)
+        self.ext.setup_hub()
+        self.opt = opt
+
+    def _batch(self, rows, write_id):
+        return self.np.array([v for row in rows for v in row] + [write_id],
+                             dtype="d")
+
+    def test_an_eta_only_row_raises_the_bound_and_stores_no_cut(self):
+        # scen0's row: 5 - eta[scen0] <= 0. scen1's: 2 - eta[scen1] + 3 x <= 0.
+        self.ext.make_cuts(self._batch([[5., -1., 0.], [2., -1., 3.]], 1))
+        for s in self.opt.local_scenarios.values():
+            self.assertEqual(s._mpisppy_model.eta["scen0"].lb, 5.)
+            self.assertEqual(list(s._mpisppy_model.benders_cuts.keys()),
+                             [(1, "scen1")])
+        self.assertTrue(self.ext.new_cuts)
+
+    def test_a_batch_of_eta_bounds_is_not_a_new_cut(self):
+        # Finite bounds, so a batch that counted as cuts would add an
+        # inner-bound constraint.
+        self.opt.spcomm.BestInnerBound = 10.
+        self.opt.spcomm.BestOuterBound = 0.
+        self.ext.make_cuts(self._batch([[5., -1., 0.], [4., -1., 0.]], 1))
+        self.assertFalse(self.ext.new_cuts)
+        for s in self.opt.local_scenarios.values():
+            self.assertEqual(len(s._mpisppy_model.benders_cuts), 0)
+            self.assertEqual(len(s._mpisppy_model.inner_bound_constr), 0)
+            self.assertEqual(s._mpisppy_model.eta["scen1"].lb, 4.)
+
+
+class TestCrossScenarioRestoreKeepsEtaBounds(TestCrossScenarioEtaOnlyRows):
+    """On a resume the hub may read the restarted spoke's eta bounds during
+    Iter0, before the extension state is restored at its end. The spoke
+    writes them only once, so a checkpoint written before the stopped run
+    had them must not mark them unknown again."""
+
+    def test_bounds_read_before_the_restore_stay_known(self):
+        state = self.ext.checkpoint_state()
+        self.assertFalse(state["_eta_lbs_known"])
+        self.ext._apply_eta_bounds([5., 4.])
+        self.ext.restore_state(state)
+        self.assertTrue(self.ext._eta_lbs_known)
+
+    def test_bounds_known_at_the_checkpoint_are_restored(self):
+        state = dict(self.ext.checkpoint_state(), _eta_lbs_known=True)
+        self.ext.restore_state(state)
+        self.assertTrue(self.ext._eta_lbs_known)
+
+
 class TestShippedExtensionsAnswerTheQuestion(unittest.TestCase):
     """Every shipped extension either carries its state or says it has none.
 
@@ -1737,7 +1828,7 @@ class TestShippedExtensionsAnswerTheQuestion(unittest.TestCase):
     #: Extensions that keep state across iterations and do not yet carry it.
     #: A checkpointed run refuses each of them at startup, since a resume
     #: with one would not retrace an uninterrupted run.
-    UNANSWERED = {"CrossScenarioExtension", "WOscillationMonitor"}
+    UNANSWERED = {"WOscillationMonitor"}
 
     #: Where shipped extensions and convergers live. Not only
     #: mpisppy.extensions: the W and xbar file extensions are in utils, and

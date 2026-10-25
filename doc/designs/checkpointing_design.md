@@ -1354,10 +1354,23 @@ as a branch stacked on the 1a PR.
     hub and to the Lagrangian-family, reduced-costs, xfeas and dual spokes,
     and none of those writes extension state (only the xhat spokes do).
 
+  - `CrossScenarioExtension` keeps the eta variables, EF objective and cuts
+    the restored models carry: its `post_iter0` builds them only when the
+    models do not have them yet, since building them again would replace
+    them and lose every cut. The persistent solvers are created from the
+    restored models, so they already hold them. The cut spoke is not
+    checkpointed and its cut ids start over, so new cuts are keyed past the
+    largest restored key; otherwise a new cut would replace a restored one
+    with the same key. A cut row with no nonant term is applied as a bound
+    on eta rather than stored, so the eta bound cut the restarted spoke
+    sends again adds nothing. The extension carries the bounds and counters
+    that decide when it checks the outer bound, and whether eta has its
+    bounds yet. It does not retrace an uninterrupted run exactly: the
+    restarted spoke sends its cuts at different iterations.
+
   `WOscillationMonitor` (W trajectories, recurrence trackers, an internal
-  slammer) and `CrossScenarioExtension` (whose `post_iter0` replaces model
-  components a resume restores) need more than this and stay refused; they
-  are tracked as issue #903.
+  slammer) needs more than this and stays refused; it is tracked as issue
+  #903.
 
   **Restore runs at the end of `Iter0`, not in the resume branch**, and the
   ordering is the whole trick: extensions rebuild their bookkeeping from the
