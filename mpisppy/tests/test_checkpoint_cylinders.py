@@ -424,10 +424,15 @@ class TestCrossScenarioCutsResume(unittest.TestCase):
         cls._tmp = tempfile.TemporaryDirectory()
         ckpt_dir = os.path.join(cls._tmp.name, "ckpt")
         cls.reference = cls._leg("A", "--max-iterations", str(cls.N))
+        # Both legs wait at their last iteration until the hub holds a cut
+        # of their own, so the checkpoint has cuts to restore and the resume
+        # adds some, however slow the spoke is.
         cls.stopped = cls._leg("B1", "--max-iterations", str(cls.STOP),
-                               "--checkpoint-dir", ckpt_dir)
+                               "--checkpoint-dir", ckpt_dir,
+                               "--wait-for-cuts-at", str(cls.STOP))
         cls.resumed = cls._leg("B2", "--max-iterations",
-                               str(cls.N - cls.STOP), "--resume-from", ckpt_dir)
+                               str(cls.N - cls.STOP), "--resume-from", ckpt_dir,
+                               "--wait-for-cuts-at", str(cls.N))
 
     @classmethod
     def tearDownClass(cls):

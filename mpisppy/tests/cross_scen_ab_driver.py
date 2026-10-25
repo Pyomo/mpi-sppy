@@ -26,9 +26,11 @@ it.
 
 import json
 import sys
+import time
 
 from pyomo.core.expr.visitor import identify_variables
 
+import mpisppy.MPI as MPI
 import mpisppy.tests.examples.farmer as farmer
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
@@ -64,6 +66,32 @@ def _recording_checkpoint_state(real_state):
             for sname, s in self.opt.local_scenarios.items()}
         return result
     return state
+
+
+def _waiting_enditer(real_enditer, iteration, timeout=600.):
+    """At ``iteration``, keep the hub talking to the cut spoke until every
+    hub rank holds a cut this run received (on a resume, one keyed past the
+    restored cuts). How soon cuts arrive depends on the machine; on CI the
+    first one can come after the stopped leg's last checkpoint, or after a
+    resumed leg's last iteration."""
+    def enditer(self):
+        real_enditer(self)
+        if self.opt._PHIter != iteration:
+            return
+        start = time.time()
+        while True:
+            self.opt.spcomm.sync_nonants()
+            self.sync_with_spokes()
+            have = int(all(
+                any(key[0] >= self._cut_key_offset
+                    for key in s._mpisppy_model.benders_cuts)
+                for s in self.opt.local_scenarios.values()))
+            if self.opt.mpicomm.allreduce(have, op=MPI.MIN):
+                return
+            if time.time() - start > timeout:
+                raise RuntimeError(f"no cut arrived in {timeout} seconds")
+            time.sleep(0.01)
+    return enditer
 
 
 def _recording_first_read(real_read):
@@ -106,7 +134,13 @@ def main():
     if sys.argv[1] != "--out":
         raise RuntimeError("usage: cross_scen_ab_driver.py --out PATH [args]")
     out_path = sys.argv[2]
-    sys.argv = [sys.argv[0]] + sys.argv[3:]
+    args = sys.argv[3:]
+    wait_at = None
+    if "--wait-for-cuts-at" in args:
+        i = args.index("--wait-for-cuts-at")
+        wait_at = int(args[i + 1])
+        del args[i:i + 2]
+    sys.argv = [sys.argv[0]] + args
 
     cfg = config.Config()
     cfg.num_scens_required()
@@ -123,6 +157,9 @@ def main():
         CrossScenarioExtension.get_from_cross_cuts)
     CrossScenarioExtension.checkpoint_state = _recording_checkpoint_state(
         CrossScenarioExtension.checkpoint_state)
+    if wait_at is not None:
+        CrossScenarioExtension.enditer = _waiting_enditer(
+            CrossScenarioExtension.enditer, wait_at)
 
     names = farmer.scenario_names_creator(cfg.num_scens)
     kwargs = {"use_integer": False, "crops_multiplier": 1,
