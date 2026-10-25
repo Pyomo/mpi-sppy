@@ -313,5 +313,12 @@ Scope, MPI, and limitations
   two-stage problems and single-rank-per-node multistage; a node split across
   ranks would need an extra reduction to agree on the action, which is not done
   (the same limitation the slammer documents).
+- **Checkpointing.** A run resumed with ``--resume-from`` (see
+  :ref:`checkpointing`) carries on with the detection history and the slam
+  cooldown of the run it resumes, and appends to its report CSVs. Rows the
+  stopped run wrote after its last checkpoint are removed, because the resumed
+  run writes those iterations again. A report file that is not the one the
+  checkpoint recorded -- a different path, or a file changed since -- is
+  started over instead, with a warning.
 
 See ``doc/designs/w_oscillation_design.md`` for the full design and rationale.
