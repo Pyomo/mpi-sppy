@@ -244,7 +244,7 @@ class CrossScenarioCutSpoke(Spoke):
         else:
             farthest_xhat = np.zeros(len(root_nonants), dtype='d')
 
-        self.cylinder_comm.Bcast(farthest_xhat, root=global_rank)
+        self.cylinder_comm.Bcast(farthest_xhat, root=int(global_rank[0]))
 
         # set the first stage in the lshape object to correspond to farthest_xhat
         for ci, k in enumerate(root_nonants):
