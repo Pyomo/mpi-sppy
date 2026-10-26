@@ -54,7 +54,6 @@ public:
         // Set up the global timer
         timer_ = std::make_unique<GlobalTimer>(rank);
         install_global_timer(timer_.get());
-        global_toc("aphfw_cpp init start");
 
         controller_ = std::make_unique<FWAPH>();
         controller_->setupComm(comm_);
@@ -115,14 +114,16 @@ public:
             throw std::runtime_error("CLI parse error: " + std::string(e.what()));
         }
 
-        // Print config on rank 0
-        if (controller_->getRank() == 0) {
+        // mpi-sppy reports its own options, so the C++ ones are echoed only
+        // when asked for
+        verbose_ = config_->getOptionValue<int>("verbosity") >= 1;
+        if (verbose_ && controller_->getRank() == 0) {
             config_->pprint(std::cout);
             std::cout << std::endl;
         }
 
         controller_->setup(*config_);
-        global_toc("aphfw_cpp init complete");
+        if (verbose_) global_toc("aphfw_cpp init complete");
         initialized_ = true;
     }
 
@@ -318,7 +319,7 @@ public:
     void finalize() {
         if (controller_) {
             controller_->saveWTrace();
-            global_toc("aphfw_cpp finalize");
+            if (verbose_) global_toc("aphfw_cpp finalize");
         }
         controller_.reset();
         config_.reset();
@@ -338,6 +339,7 @@ private:
     std::unique_ptr<GlobalTimer> timer_;
     std::vector<std::string> deferred_scenario_names_;
     bool initialized_ = false;
+    bool verbose_ = false;
 };
 
 

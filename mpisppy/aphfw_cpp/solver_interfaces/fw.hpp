@@ -170,8 +170,9 @@ public:
      // 2. Enforce tMax: if we've already done tMax MILP solves, stop now
      //    (tMax is a limit on MILP solves per goBody call)
      if (MILPSolvesSoFar >= tMax) {
-       global_toc("FW terminates on tMax=" + std::to_string(tMax) +
-                  " with MILPSolvesSoFar=" + std::to_string(MILPSolvesSoFar));
+       if (_vb(cfg, 1))
+         global_toc("FW terminates on tMax=" + std::to_string(tMax) +
+                    " with MILPSolvesSoFar=" + std::to_string(MILPSolvesSoFar));
        NL.extractNonantSolution(finalNonantSolution);
        setVertexExport(nullptr);
        break;
@@ -251,16 +252,18 @@ public:
                               gradient.begin(), gradient.end(), diff.begin(), 0.0
                                             );
 
-     global_toc("FWgap=" + std::to_string(FWgap) +
-                " MILPSolvesSoFar=" + std::to_string(MILPSolvesSoFar));
+     if (_vb(cfg, 1))
+       global_toc("FWgap=" + std::to_string(FWgap) +
+                  " MILPSolvesSoFar=" + std::to_string(MILPSolvesSoFar));
 
      debugMILP(nlSolution, milpSolution, gradient, diff, sname);
 
      // 5. Check tau stopping: if gap is small, we’re done
      if (FWgap <= tau) {
-       global_toc("FW terminates on tau=" + std::to_string(tau) +
-                  " FWGap=" + std::to_string(FWgap) +
-                  " MILPSolvesSoFar=" + std::to_string(MILPSolvesSoFar));
+       if (_vb(cfg, 1))
+         global_toc("FW terminates on tau=" + std::to_string(tau) +
+                    " FWGap=" + std::to_string(FWgap) +
+                    " MILPSolvesSoFar=" + std::to_string(MILPSolvesSoFar));
        // The algorithm gets the proximal minimizer whose gap was just shown
        // small, not the vertex that showed it: the pair (x_s, y_s) handed to
        // the projection has to lie in the graph of the subdifferential.  The

@@ -23,11 +23,11 @@ void GurobiGrad::updateReferenceVector(const std::vector<double>& referenceX)
 // Another side-effect: put the current solution in as the starting solution
 // TBD: Should we verify that we have been given W etc?
 {
-  // first, get the current solution as a starting point
-  if (!setStartAtCurrent()) {
-    // Having a starting solution can reduce solution time (sometimes a lot)
-    std::cout << "HEY! someday we need iter0 as a  starting solution in grad gurobi" << std::endl;
-  }
+  // first, get the current solution as a starting point.  Having a starting
+  // solution can reduce solution time (sometimes a lot).  There is none on
+  // the first solve, nor after anything has modified the model since the
+  // last one (a bounds update, for instance), and then the solve starts cold.
+  setStartAtCurrent();
   //printVectorInline("fullC", fullC);
   // Rebuild the objective rather than adjust the one built last time.  Adding
   // (new - current) coefficients to a kept expression gives the same numbers,
