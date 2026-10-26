@@ -242,8 +242,8 @@ inline void print_comm_info(const char* where, MPI_Comm comm) {
 }
 
 inline bool ensure_comm_ok(const char* where, MPI_Comm comm) {
-    print_comm_info(where, comm);
     if (comm == MPI_COMM_NULL) {
+        print_comm_info(where, comm);
         // Pause here for gdb instead of aborting the whole job:
         std::raise(SIGTRAP);   // or: return false;
         return false;

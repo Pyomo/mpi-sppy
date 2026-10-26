@@ -160,12 +160,24 @@ void GurobiInterface::fullObjectiveRebuild() {
 
 
 void GurobiInterface::applyBoundsToSolver() {
+  // Touch only the bounds that change.  Any modification, even to the value a
+  // bound already has, makes Gurobi discard the last solution, and that
+  // solution is the MIP start GurobiGrad::updateReferenceVector sets.  The
+  // mpi-sppy hub pushes every bound every cycle, usually unchanged, so writing
+  // them all left no LMO solve a start.
+  bool changed = false;
   for (int pos = 0; pos < totalNonantCount; ++pos) {
     int vidx = nonantDenseIndexes[pos];
-    vars[vidx].set(GRB_DoubleAttr_LB, nonantLowerBounds[pos]);
-    vars[vidx].set(GRB_DoubleAttr_UB, nonantUpperBounds[pos]);
+    if (vars[vidx].get(GRB_DoubleAttr_LB) != nonantLowerBounds[pos]) {
+      vars[vidx].set(GRB_DoubleAttr_LB, nonantLowerBounds[pos]);
+      changed = true;
+    }
+    if (vars[vidx].get(GRB_DoubleAttr_UB) != nonantUpperBounds[pos]) {
+      vars[vidx].set(GRB_DoubleAttr_UB, nonantUpperBounds[pos]);
+      changed = true;
+    }
   }
-  model->update();
+  if (changed) model->update();
 }
 
 double GurobiInterface::getVarLB(int varIdx) const {

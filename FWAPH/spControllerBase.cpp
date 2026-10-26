@@ -44,9 +44,11 @@ void spControllerBase::setup(Config& cfg) {
                                  "' not found in problem directory " + problemName);
       localScenarioIndexList[i] = it->second;
     }
-    std::cerr << "globalScenCount=" << globalScenCount
-              << " numSubdomains=" << numSubdomains
-              << " (explicit assignment)" << std::endl;
+    // verbosity is not set until groupController::setup below, so read it here
+    if (cfg.getOptionValue<int>("verbosity") >= 1)
+      std::cerr << "globalScenCount=" << globalScenCount
+                << " numSubdomains=" << numSubdomains
+                << " (explicit assignment)" << std::endl;
   } else {
     // Determine which scenarios are on this rank
     auto splitter = evenSplit();
@@ -147,7 +149,7 @@ void spControllerBase::setup(Config& cfg) {
   }
 
   // ---- DEBUG: dump local node metadata ----
-  {
+  if (verbosity >= 1) {
     std::ostringstream os;
     os << "\n[R" << myRank << "] localNodes.size()=" << localNodes.size()
        << " globalNodeCount=" << globalNodeCount

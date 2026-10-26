@@ -317,12 +317,13 @@ bool FWAPH::handleCompletedCommunication(void)
       return true;
     }
     cycleCount++;                       // Record one more completed cycle
-    global_toc("cycleCount increased to " \
-               + std::to_string(cycleCount) \
-               + " globalQueuedCount=" + std::to_string(globalQueuedCount) \
-               + " localQueuedCount=" + std::to_string(localQueuedCount) \
-               + " (immediately before a projectionStep call)"
-               );
+    if (verbosity >= 1)
+      global_toc("cycleCount increased to " \
+                 + std::to_string(cycleCount) \
+                 + " globalQueuedCount=" + std::to_string(globalQueuedCount) \
+                 + " localQueuedCount=" + std::to_string(localQueuedCount) \
+                 + " (immediately before a projectionStep call)"
+                 );
     
     if (projectionStep())               // Do the projection step, computing new z and w
       return true;
@@ -887,7 +888,7 @@ void FWAPH::_checkWOrthogonality(const std::vector<ScenarioTreeNode*>& nodes)
 
 //  Sequence to start things up
 void FWAPH::startupSequence() {
-  global_toc("Begin Iter0 Lagrangian");
+  if (verbosity >= 1) global_toc("Begin Iter0 Lagrangian");
   runTaskOnAllSubdomains(LagrangianSolveType);
 
   for (int s = 0; s < numSubdomains; ++s) {
@@ -1014,9 +1015,9 @@ void FWAPH::startupSequence() {
   // A linear objective needs none of this: x0 = xbase with y0 = 0 is already
   // a valid pair, so just start the FW solves and let the loop run.
   if (iter0FWStep) {
-    global_toc("Begin Iter0 FW step");
+    if (verbosity >= 1) global_toc("Begin Iter0 FW step");
     runTaskOnAllSubdomains(FWsolveType);
-    global_toc("Iter0 FW step complete");
+    if (verbosity >= 1) global_toc("Iter0 FW step complete");
   } else {
     startTaskOnAllSubdomains(FWsolveType);
   }
@@ -1031,7 +1032,7 @@ void FWAPH::terminationSequence(void)
     // In hub mode, spokes normally compute bounds, so don't pay for the final
     // Lagrangian here.  The driver asks for it explicitly (via
     // computeFinalLagrangianBound) when --aphfw-final-lagrangian is set.
-    global_toc("Hub mode: skipping termination Lagrangian");
+    if (verbosity >= 1) global_toc("Hub mode: skipping termination Lagrangian");
     return;
   }
 
@@ -1045,7 +1046,7 @@ double FWAPH::computeFinalLagrangianBound()
   // solves as soon as any currently running FWSolves finish or abort
   // themselves.
 
-  global_toc("Begin Termination Lagrangian");
+  if (verbosity >= 1) global_toc("Begin Termination Lagrangian");
 
   // This will be done using the current W;
   //   however, the final scenario solutions are probably better.
