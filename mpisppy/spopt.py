@@ -25,6 +25,7 @@ from pyomo.opt import SolverFactory
 import mpisppy.utils.sputils as sputils
 from mpisppy import MPI
 from mpisppy.extensions.extension import (
+    Extension,
     INFER_BOUND,
     SubproblemSolveOutcome,
 )
@@ -367,6 +368,21 @@ class SPOpt(SPBase):
 
         Ag = getattr(self, "Ag", None)  # agnostic
         if Ag is not None:
+            if self.extensions is not None:
+                if hasattr(self.extobject, "_solve_subproblem_extension"):
+                    solve_extension = (
+                        self.extobject._solve_subproblem_extension)
+                else:
+                    solve_extension = self.extobject
+                if (
+                    solve_extension is not None
+                    and type(solve_extension).solve_subproblem
+                    is not Extension.solve_subproblem
+                ):
+                    raise RuntimeError(
+                        "solve_subproblem overrides are not supported with "
+                        "Agnostic solves; choose one solve-replacement "
+                        "mechanism")
             assert not disable_pyomo_signal_handling, "Not thinking about agnostic APH yet"
             kws = {"s": s, "solve_keyword_args": solve_keyword_args, "gripe": gripe, "tee": tee, "need_solution": need_solution}
             Ag.callout_agnostic(kws)  # not going to use the return values
@@ -379,6 +395,7 @@ class SPOpt(SPBase):
             solver_call_exception = None
             deferred_exception = None
             classified_results = []
+            default_outcomes = []
 
             def default_solve():
                 nonlocal load_exception, load_exception_results
@@ -421,12 +438,14 @@ class SPOpt(SPBase):
                             raise
                     else:
                         solution_available = True
-                return SubproblemSolveOutcome(
+                outcome = SubproblemSolveOutcome(
                     candidate_results,
                     solution_available=solution_available,
                     outer_bound=INFER_BOUND,
                     inner_bound=INFER_BOUND,
                 )
+                default_outcomes.append(outcome)
+                return outcome
 
             try:
                 if self.extensions is None:
@@ -550,19 +569,42 @@ class SPOpt(SPBase):
                 # A failed solve computed no bound, so outer_bound stays at the
                 # None set before the solve.
                 s._mpisppy_data.solution_available = outcome.solution_available
-                if outcome.outer_bound is not INFER_BOUND:
+                is_default_outcome = any(
+                    candidate is outcome for candidate in default_outcomes)
+                if (
+                    outcome.outer_bound is INFER_BOUND
+                    and not is_default_outcome
+                ):
+                    outer_bound = None
+                    if not sputils.no_outer_bound_results(results):
+                        if self.is_minimizing:
+                            outer_bound = results.Problem[0].Lower_bound
+                        else:
+                            outer_bound = results.Problem[0].Upper_bound
+                    s._mpisppy_data.outer_bound = outer_bound
+                elif outcome.outer_bound is not INFER_BOUND:
                     s._mpisppy_data.outer_bound = outcome.outer_bound
-                if outcome.inner_bound is not INFER_BOUND:
+                if (
+                    outcome.inner_bound is INFER_BOUND
+                    and not is_default_outcome
+                ):
+                    if results is None:
+                        inner_bound = None
+                    elif self.is_minimizing:
+                        inner_bound = results.Problem[0].Upper_bound
+                    else:
+                        inner_bound = results.Problem[0].Lower_bound
+                    s._mpisppy_data.inner_bound = inner_bound
+                elif outcome.inner_bound is not INFER_BOUND:
                     s._mpisppy_data.inner_bound = outcome.inner_bound
 
                 reported_bound = (
                     (
-                        outcome.outer_bound is not INFER_BOUND
-                        and outcome.outer_bound is not None
+                        s._mpisppy_data.outer_bound is not None
                     )
                     or (
-                        outcome.inner_bound is not INFER_BOUND
-                        and outcome.inner_bound is not None
+                        not is_default_outcome
+                        and s._mpisppy_data.inner_bound is not None
                     )
                 )
                 if (

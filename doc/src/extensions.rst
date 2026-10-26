@@ -62,6 +62,32 @@ example of use.
    extension classes in ``["opt_kwargs"]["extension_kwargs"]["ext_classes"]``.
    Some examples do both, which can be little confusing.
 
+Replacing subproblem solves
+---------------------------
+
+An ``Extension`` may override ``solve_subproblem`` to wrap or replace the
+solver call made for each scenario or bundle. The hook receives a
+zero-argument ``default_solve`` callable and returns a
+``SubproblemSolveOutcome``. It may call ``default_solve`` zero, one, or
+multiple times. If it reports ``solution_available=True``, the final solution
+must already be loaded into the subproblem. Numeric bounds may be reported
+directly; ``INFER_BOUND`` asks ``SPOpt`` to read the corresponding bound from
+the returned Pyomo results, including a usable bound from a non-optimal solve.
+``None`` explicitly reports that no bound is available.
+
+Only one member of a ``MultiExtension`` may override ``solve_subproblem``.
+Other extensions still receive the observational solve hooks. In particular,
+``post_solve`` runs after final solution availability and bounds have been
+recorded, and its return value is ignored. Extensions that previously returned
+a replacement results object from ``post_solve`` must move that behavior into
+``solve_subproblem``.
+
+``solve_subproblem`` cannot be combined with the Agnostic interface. Agnostic
+dispatch is already a replacement for the native subproblem solve, so
+``SPOpt`` raises ``RuntimeError`` when both mechanisms are requested. Ordinary
+extensions that do not override ``solve_subproblem`` remain compatible with
+Agnostic solves.
+
 
 .. _checkpointing_your_extension:
 

@@ -33,7 +33,8 @@ class SubproblemSolveOutcome:
 
     ``solution_available=True`` promises that the corresponding solution is
     already loaded in the subproblem. Bounds set to ``INFER_BOUND`` are read
-    from the Pyomo results by SPOpt; ``None`` explicitly reports no bound.
+    from the Pyomo results by SPOpt, including non-optimal results that carry
+    a usable bound; ``None`` explicitly reports no bound.
     '''
 
     results: Any
@@ -105,6 +106,10 @@ class Extension:
         multiple times, and must return the final ``SubproblemSolveOutcome``.
         A replacement that does not call ``default_solve`` assumes the same
         loading contract. Bound-only solves do not load a candidate solution.
+
+        This hook is not supported when SPOpt delegates solves through its
+        Agnostic interface. Agnostic dispatch is itself a solve-replacement
+        mechanism, and combining the two raises ``RuntimeError``.
         '''
         return default_solve()
 

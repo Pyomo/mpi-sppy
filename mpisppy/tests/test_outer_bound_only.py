@@ -31,7 +31,11 @@ import mpisppy.opt.ph
 import mpisppy.phbase
 import mpisppy.spopt
 import mpisppy.tests.examples.farmer as farmer
-from mpisppy.extensions.extension import Extension, SubproblemSolveOutcome
+from mpisppy.extensions.extension import (
+    Extension,
+    INFER_BOUND,
+    SubproblemSolveOutcome,
+)
 from mpisppy.tests.utils import get_solver
 
 solver_available, solver_name, *_ = get_solver()
@@ -234,6 +238,36 @@ class _ExplicitBoundExtension(Extension):
         )
 
 
+class _InferNonoptimalBoundsExtension(Extension):
+    def solve_subproblem(
+            self, subproblem, default_solve, *, outer_bound_only=False):
+        results = SolverResults()
+        results.solver.status = SolverStatus.warning
+        results.solver.termination_condition = (
+            TerminationCondition.maxTimeLimit)
+        results.problem.lower_bound = -321.0
+        results.problem.upper_bound = 654.0
+        return SubproblemSolveOutcome(
+            results,
+            solution_available=False,
+            outer_bound=INFER_BOUND,
+            inner_bound=INFER_BOUND,
+        )
+
+
+class _DirectSolutionExtension(Extension):
+    def solve_subproblem(
+            self, subproblem, default_solve, *, outer_bound_only=False):
+        for variable in subproblem._mpisppy_data.nonant_indices.values():
+            variable.set_value(7.0)
+        return SubproblemSolveOutcome(
+            None,
+            solution_available=True,
+            outer_bound=-111.0,
+            inner_bound=222.0,
+        )
+
+
 class TestExplicitSolveOutcome(unittest.TestCase):
     def test_extension_can_report_a_bound_without_a_solution(self):
         ph = _make_ph(extensions=_ExplicitBoundExtension)
@@ -253,6 +287,43 @@ class TestExplicitSolveOutcome(unittest.TestCase):
         self.assertFalse(scenario._mpisppy_data.solution_available)
         self.assertEqual(scenario._mpisppy_data.outer_bound, -123.0)
         self.assertIsNone(scenario._mpisppy_data.inner_bound)
+
+    def test_extension_infers_bounds_from_nonoptimal_results(self):
+        ph = _make_ph(extensions=_InferNonoptimalBoundsExtension)
+        name = list(ph.local_scenarios)[0]
+        scenario = ph.local_scenarios[name]
+        scenario._solver_plugin = _NoBoundPlugin(
+            TerminationCondition.infeasible)
+
+        ph.solve_one(
+            None,
+            name,
+            scenario,
+            gripe=True,
+            need_solution=False,
+        )
+
+        self.assertFalse(scenario._mpisppy_data.solution_available)
+        self.assertEqual(scenario._mpisppy_data.outer_bound, -321.0)
+        self.assertEqual(scenario._mpisppy_data.inner_bound, 654.0)
+
+    def test_extension_can_load_solution_and_report_bounds_without_results(self):
+        ph = _make_ph(extensions=_DirectSolutionExtension)
+        name = list(ph.local_scenarios)[0]
+        scenario = ph.local_scenarios[name]
+        plugin = _CountingPlugin()
+        scenario._solver_plugin = plugin
+
+        ph.solve_one(None, name, scenario, gripe=True, need_solution=True)
+
+        self.assertEqual(plugin.solve_count, 0)
+        self.assertTrue(scenario._mpisppy_data.solution_available)
+        self.assertEqual(scenario._mpisppy_data.outer_bound, -111.0)
+        self.assertEqual(scenario._mpisppy_data.inner_bound, 222.0)
+        self.assertTrue(all(
+            variable.value == 7.0
+            for variable in scenario._mpisppy_data.nonant_indices.values()
+        ))
 
 
 class _NoDefaultSolveExtension(Extension):
@@ -564,10 +635,10 @@ class TestAgnosticFailedSolveClearsBound(unittest.TestCase):
     a solver plugin.
     """
 
-    def _agnostic_ph(self, guest, value=-100.0):
+    def _agnostic_ph(self, guest, value=-100.0, extensions=None):
         """A PH object carrying bounds from an earlier iteration, wired to
         solve through `guest`."""
-        ph = _make_ph()
+        ph = _make_ph(extensions=extensions)
         for s in ph.local_scenarios.values():
             s._mpisppy_data.outer_bound = value
             # solve_one asks whether the plugin is persistent before it looks
@@ -606,6 +677,27 @@ class TestAgnosticFailedSolveClearsBound(unittest.TestCase):
             ph.solve_one(None, name, s, gripe=False, need_solution=False)
             self.assertEqual(s._mpisppy_data.outer_bound, -42.0)
         self.assertAlmostEqual(ph.Ebound(), -42.0)
+
+    def test_solve_subproblem_override_is_rejected_with_agnostic(self):
+        guest = _StubGuest()
+        ph = self._agnostic_ph(
+            guest,
+            extensions=_NoDefaultSolveExtension,
+        )
+        name = list(ph.local_scenarios)[0]
+
+        with self.assertRaisesRegex(
+                RuntimeError,
+                "solve_subproblem overrides are not supported with Agnostic"):
+            ph.solve_one(
+                None,
+                name,
+                ph.local_scenarios[name],
+                gripe=False,
+                need_solution=False,
+            )
+
+        self.assertEqual(guest.calls, 0)
 
 
 if __name__ == "__main__":
