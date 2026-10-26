@@ -46,6 +46,7 @@ moving statistics.
 
 import csv
 import json
+import os
 
 import numpy as np
 
@@ -382,6 +383,15 @@ def validate_interrupt_config(cfg, where="<interrupt config>"):
     return out
 
 
+def _ends_a_line(path, size):
+    """Whether the first ``size`` bytes of ``path`` end at the end of a line."""
+    if size == 0:
+        return True
+    with open(path, "rb") as f:
+        f.seek(size - 1)
+        return f.read(1) == b"\n"
+
+
 def slam_due(phiter, last_slam_iter, iters_between_slams):
     """Whether a slam may occur at ``phiter`` given the cooldown: true when no
     slam has happened yet (``last_slam_iter`` is None) or at least
@@ -498,6 +508,7 @@ class WOscillationMonitor(Extension):
         self._agg_file = None
         self._scen_writer = None
         self._scen_file = None
+        self._reports_pending = False
         self._n_flag_events = 0
 
         # Interruption state (PR2), built in pre_iter0() / updated in miditer().
@@ -564,17 +575,72 @@ class WOscillationMonitor(Extension):
             })
             self._slammer.pre_iter0()
 
-        if self._is_writer and self._report_enabled:
-            self._agg_file = open(self.cfg["output_csv"], "w", newline="")
-            self._agg_writer = csv.writer(self._agg_file)
-            self._agg_writer.writerow(_AGG_COLUMNS)
-            self._agg_file.flush()
-            if self.cfg["per_scenario_csv"]:
-                self._scen_file = open(self.cfg["per_scenario_csv"], "w",
-                                       newline="")
-                self._scen_writer = csv.writer(self._scen_file)
-                self._scen_writer.writerow(_PER_SCEN_COLUMNS)
-                self._scen_file.flush()
+        # A resumed run opens its report files in restore_state, which knows
+        # what the checkpoint recorded about them. Nothing is reported before
+        # then; if the checkpoint has nothing for this extension, restore_state
+        # is never called and the files are opened at the first report.
+        self._reports_pending = getattr(self.opt, "_resumed_from_checkpoint",
+                                        False)
+        if not self._reports_pending:
+            self._open_reports()
+
+    def _open_reports(self, saved=None):
+        """Open the report CSVs on the writing rank. Returns messages about
+        what could not be continued from the checkpoint."""
+        self._reports_pending = False
+        if not (self._is_writer and self._report_enabled):
+            return []
+        saved = saved or {}
+        messages = []
+        self._agg_file, self._agg_writer = self._open_csv(
+            self.cfg["output_csv"], _AGG_COLUMNS, saved.get("output_csv"),
+            messages)
+        if self.cfg["per_scenario_csv"]:
+            self._scen_file, self._scen_writer = self._open_csv(
+                self.cfg["per_scenario_csv"], _PER_SCEN_COLUMNS,
+                saved.get("per_scenario_csv"), messages)
+        return messages
+
+    @staticmethod
+    def _open_csv(path, columns, saved, messages):
+        """Open a report CSV and write its header.
+
+        ``saved`` is what the checkpoint recorded about the file this run
+        resumes, or None. When it names this file, the file is continued:
+        cut back to its size at the checkpoint, dropping the rows the stopped
+        run wrote after it, which the resumed run writes again. Otherwise the
+        file is started over, as on a run that did not resume.
+        """
+        mode = "w"
+        if saved is not None:
+            if saved["path"] != os.path.abspath(path):
+                messages.append(
+                    f"{path} is not the report file the checkpoint was "
+                    f"written with ({saved['path']}), so it is started over")
+            elif not os.path.exists(path) \
+                    or os.path.getsize(path) < saved["size"]:
+                messages.append(
+                    f"{path} is shorter than it was at the checkpoint, so it "
+                    f"is started over")
+            elif not _ends_a_line(path, saved["size"]):
+                messages.append(
+                    f"{path} has changed since the checkpoint, so it is "
+                    f"started over")
+            else:
+                mode = "a"
+        f = open(path, mode, newline="")
+        if mode == "a":
+            # Writes in append mode go to the end, which this moves.
+            os.ftruncate(f.fileno(), saved["size"])
+        writer = csv.writer(f)
+        if mode == "w":
+            writer.writerow(columns)
+            f.flush()
+        return f, writer
+
+    def _open_pending_reports(self):
+        if self._reports_pending:
+            self._open_reports()
 
     # ------------------------------------------------------------------ #
     def _capture(self):
@@ -606,6 +672,7 @@ class WOscillationMonitor(Extension):
         return phiter >= self._interrupt_cfg["trigger"]["start_iter"]
 
     def miditer(self):
+        self._open_pending_reports()
         self._capture()
         phiter = self.opt._PHIter
         # The report is opt-in (self._report_enabled); a detection check only
@@ -850,7 +917,78 @@ class WOscillationMonitor(Extension):
             self._scen_file.flush()
 
     # ------------------------------------------------------------------ #
+    def checkpoint_state(self):
+        """The detection history, what has been reported and slammed, and
+        how far the report CSVs had got.
+
+        Both detectors judge a trailing window of W, so a resumed run that
+        started with empty histories would flag nothing until the windows
+        refilled, and would slam at different iterations than an
+        uninterrupted run. ``_last_slam_iter`` decides the slam cooldown and
+        ``_reported`` keeps on_detect mode from reporting a nonant twice.
+
+        Nonants are keyed by ``(ndn, i)``. The trajectories are per scenario
+        on this rank, which a resume has to reproduce (geometry check).
+        """
+        # A resumed run that ran no iteration may not have opened them yet.
+        self._open_pending_reports()
+
+        def csv_state(f, path):
+            if f is None:
+                return None
+            f.flush()
+            # Absolute, so a resume from another directory does not take a
+            # file of the same name there for this one.
+            return {"path": os.path.abspath(path),
+                    "size": os.fstat(f.fileno()).st_size}
+
+        return {
+            "nonants": list(self._ndn_i),
+            "traj": {sname: [vec.tolist() for vec in buf]
+                     for sname, buf in self._traj.items()},
+            "recur": {self._ndn_i[j]: list(tracker._buf)
+                      for j, tracker in self._recur.items()},
+            "reported": [(method, self._ndn_i[j])
+                         for method, j in self._reported],
+            "last_slam_iter": self._last_slam_iter,
+            "n_flag_events": self._n_flag_events,
+            "n_action_events": self._n_action_events,
+            "slammer": (self._slammer.checkpoint_state()
+                        if self._slammer is not None else None),
+            "output_csv": csv_state(self._agg_file, self.cfg["output_csv"]),
+            "per_scenario_csv": csv_state(self._scen_file,
+                                          self.cfg["per_scenario_csv"]),
+        }
+
+    def restore_state(self, state):
+        if state["nonants"] != self._ndn_i:
+            raise RuntimeError(
+                "WOscillationMonitor: the checkpoint monitors different "
+                "nonants than this run, so its W histories cannot be "
+                "restored")
+        position = {ndn_i: j for j, ndn_i in enumerate(self._ndn_i)}
+        for sname, buf in state["traj"].items():
+            self._traj[sname] = [np.array(vec, dtype="d")
+                                 for vec in buf[-self._history:]]
+        for ndn_i, buf in state["recur"].items():
+            tracker = self._recur.get(position[ndn_i])
+            # None when this run does not use w_hash_recurrence.
+            if tracker is not None:
+                tracker._buf = list(buf[-(tracker.window + 1):])
+        self._reported = {(method, position[ndn_i])
+                          for method, ndn_i in state["reported"]}
+        self._last_slam_iter = state["last_slam_iter"]
+        self._n_flag_events = state["n_flag_events"]
+        self._n_action_events = state["n_action_events"]
+        if self._slammer is not None and state["slammer"] is not None:
+            self._slammer.restore_state(state["slammer"])
+
+        messages = self._open_reports(state)
+        return "; ".join(messages) or None
+
+    # ------------------------------------------------------------------ #
     def post_everything(self):
+        self._open_pending_reports()
         if self._report_enabled and self.cfg["report_mode"] == "final":
             self._evaluate(self.opt._PHIter)
         if self._is_writer:
