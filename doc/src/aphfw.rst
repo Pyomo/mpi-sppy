@@ -8,7 +8,7 @@ scenario subproblems are solved by Frank-Wolfe steps. It runs as a hub,
 selected with ``--aphfw-hub``, and works with the usual spokes. Unlike the
 other hubs, the algorithm is C++: the hub writes each scenario as an MPS
 file and hands it to a compiled module, ``aphfw_cpp``, which solves the
-subproblems directly with Gurobi, CPLEX or Xpress.
+subproblems directly with Gurobi, CPLEX, Xpress or HiGHS.
 
 That module is optional, and a normal mpi-sppy install does not build it.
 Nothing else in mpi-sppy depends on it: without it, every other hub and
@@ -33,11 +33,16 @@ What you need
   For Gurobi, this is the platform directory of a full install (e.g.
   ``.../gurobi1302/linux64``): the ``gurobipy`` wheel does not contain the
   C++ library. The build looks for Gurobi 13.0 or 12.0.
+  Or **HiGHS**, which needs no license: its home is the prefix it was
+  installed into, e.g. a conda environment with conda-forge's ``highs``
+  package (the ``highspy`` wheel has no C++ headers). HiGHS cannot solve
+  mixed-integer QPs, so a HiGHS build refuses a model whose objective has
+  quadratic terms.
 * **CMake 3.16 or later.** If there is no suitable CMake, pip fetches one
   during the build.
 
 The build has been tested on Linux with GCC 14.3 (conda-forge), Open MPI
-5.0.8 with mpi4py 4.1.0, Gurobi 13.0.2 and CPLEX 22.1.1. Xpress support is
+5.0.8 with mpi4py 4.1.0, Gurobi 13.0.2, CPLEX 22.1.1 and HiGHS 1.15.1. Xpress support is
 in the code but has not been tested in this build, and neither has macOS
 or Windows.
 
@@ -53,8 +58,12 @@ For CPLEX, the home is the ``CPLEX_Studio...`` directory::
 
    python -m mpisppy.aphfw_cpp.build --solver cplex --solver-home /opt/ibm/ILOG/CPLEX_Studio2211
 
+For HiGHS, it is the installation prefix::
+
+   python -m mpisppy.aphfw_cpp.build --solver highs --solver-home /path/to/prefix
+
 Without ``--solver``, the command uses whichever of ``GUROBI_HOME``,
-``CPLEX_ROOT`` or ``XPRESS_HOME`` (or ``XPRESSDIR``) is set in the
+``CPLEX_ROOT``, ``XPRESS_HOME`` (or ``XPRESSDIR``) or ``HIGHS_HOME`` is set in the
 environment, and asks you to choose if more than one is set. The command:
 
 #. checks that the solver home holds what the build needs;

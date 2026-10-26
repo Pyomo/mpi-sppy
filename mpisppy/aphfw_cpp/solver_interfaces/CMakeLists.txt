@@ -45,6 +45,8 @@ elseif(USE_CPLEX)
     target_compile_definitions(solver_common PUBLIC USE_CPLEX)
 elseif(USE_XPRESS)
     target_compile_definitions(solver_common PUBLIC USE_XPRESS)
+elseif(USE_HIGHS)
+    target_compile_definitions(solver_common PUBLIC USE_HIGHS)
 endif()
 
 # ============================================================
@@ -292,8 +294,54 @@ if(USE_XPRESS)
 endif()
 
 # ============================================================
+# HiGHS variant: solver_highs
+# ============================================================
+if(USE_HIGHS)
+    if(NOT HIGHS_HOME)
+        message(FATAL_ERROR "USE_HIGHS=ON but HIGHS_HOME not set. "
+                "Point it at the prefix holding include/highs and lib/cmake/highs.")
+    endif()
+
+    find_package(highs CONFIG REQUIRED
+        PATHS "${HIGHS_HOME}" NO_DEFAULT_PATH)
+    message(STATUS "HiGHS        : ${highs_DIR} (version ${highs_VERSION})")
+
+    set(HIGHS_SRCS
+        ${CMAKE_CURRENT_SOURCE_DIR}/highs/highs_interface.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/highs/nl_highs.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/highs/grad_highs.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/highs/highs_params.cpp
+    )
+
+    add_library(solver_highs STATIC ${HIGHS_SRCS})
+
+    target_include_directories(solver_highs
+        PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/highs
+            ${CMAKE_CURRENT_SOURCE_DIR}/..
+            ${CMAKE_CURRENT_SOURCE_DIR}/../utils
+    )
+
+    target_link_libraries(solver_highs
+        PUBLIC
+            solver_common
+            highs::highs
+    )
+
+    if(TARGET MPI::MPI_CXX)
+        target_link_libraries(solver_highs PUBLIC MPI::MPI_CXX)
+    endif()
+
+    target_compile_definitions(solver_highs PUBLIC USE_HIGHS)
+    if(NODEBUGPRINT)
+        target_compile_definitions(solver_highs PUBLIC NODEBUGPRINT)
+    endif()
+endif()
+
+# ============================================================
 # Sanity check
 # ============================================================
-if(NOT USE_GUROBI AND NOT USE_CPLEX AND NOT USE_XPRESS)
+if(NOT USE_GUROBI AND NOT USE_CPLEX AND NOT USE_XPRESS AND NOT USE_HIGHS)
     message(STATUS "solver_interfaces: no solver backend is ON; only solver_common will be built.")
 endif()

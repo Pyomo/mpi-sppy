@@ -73,3 +73,19 @@ if(USE_XPRESS)
         target_compile_definitions(aph_core_xpress PUBLIC NODEBUGPRINT)
     endif()
 endif()
+
+# --------------------------
+# HiGHS variant
+# --------------------------
+if(USE_HIGHS)
+    add_library(aph_core_highs STATIC ${APH_SRCS})
+    target_include_directories(aph_core_highs PUBLIC ${APH_COMMON_INCLUDES})
+    target_link_libraries(aph_core_highs PUBLIC aph_utils solver_highs)
+    if(TARGET MPI::MPI_CXX)
+        target_link_libraries(aph_core_highs PUBLIC MPI::MPI_CXX)
+    endif()
+    target_compile_definitions(aph_core_highs PUBLIC USE_HIGHS)
+    if(NODEBUGPRINT)
+        target_compile_definitions(aph_core_highs PUBLIC NODEBUGPRINT)
+    endif()
+endif()

@@ -27,6 +27,7 @@ endif()
 option(USE_GUROBI    "Build GUROBI-enabled binaries" ON)
 option(USE_CPLEX     "Build CPLEX-enabled binaries"  OFF)
 option(USE_XPRESS    "Build XPRESS-enabled binaries" OFF)
+option(USE_HIGHS     "Build HiGHS-enabled binaries"  OFF)
 option(NODEBUGPRINT  "Disable debug prints"           OFF)
 
 # Don't allow multiple solvers at once
@@ -40,10 +41,13 @@ endif()
 if(USE_XPRESS)
     math(EXPR _SOLVER_COUNT "${_SOLVER_COUNT} + 1")
 endif()
+if(USE_HIGHS)
+    math(EXPR _SOLVER_COUNT "${_SOLVER_COUNT} + 1")
+endif()
 if(_SOLVER_COUNT GREATER 1)
     message(FATAL_ERROR
         "Multiple solver backends are ON.\n"
-        "Please enable at most one of USE_GUROBI, USE_CPLEX, USE_XPRESS.")
+        "Please enable at most one of USE_GUROBI, USE_CPLEX, USE_XPRESS, USE_HIGHS.")
 endif()
 
 # ---------------------------------
@@ -88,4 +92,21 @@ endif()
 
 if(USE_XPRESS)
     message(STATUS "XPRESS_HOME = '${XPRESS_HOME}'")
+endif()
+
+# ---------------------------------
+# HiGHS root
+# ---------------------------------
+# The prefix holding include/highs/Highs.h and lib/cmake/highs (a conda-forge
+# highs package installs both; the highspy wheel has no headers).
+set(HIGHS_HOME "" CACHE PATH
+    "Path to the HiGHS installation prefix (with include/highs and lib/cmake/highs)")
+
+if(HIGHS_HOME STREQUAL "" AND DEFINED ENV{HIGHS_HOME})
+    set(HIGHS_HOME "$ENV{HIGHS_HOME}" CACHE PATH
+        "Path to the HiGHS installation prefix (from HIGHS_HOME env)" FORCE)
+endif()
+
+if(USE_HIGHS)
+    message(STATUS "HIGHS_HOME = '${HIGHS_HOME}'")
 endif()

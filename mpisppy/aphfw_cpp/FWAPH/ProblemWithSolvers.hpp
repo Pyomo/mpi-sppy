@@ -21,12 +21,10 @@
 #include "WTrace.hpp"
 #include <optional>
 
-// Exactly one of USE_CPLEX, USE_GUROBI, USE_XPRESS must be defined
-#if !( defined(USE_CPLEX) ^ defined(USE_GUROBI) ^ defined(USE_XPRESS) ) \
-    || ( defined(USE_CPLEX) && defined(USE_GUROBI) ) \
-    || ( defined(USE_CPLEX) && defined(USE_XPRESS) ) \
-    || ( defined(USE_GUROBI) && defined(USE_XPRESS) )
-#error "Exactly one of USE_CPLEX, USE_GUROBI, or USE_XPRESS must be defined."
+// Exactly one of USE_CPLEX, USE_GUROBI, USE_XPRESS, USE_HIGHS must be defined
+#if ( defined(USE_CPLEX) + defined(USE_GUROBI) + defined(USE_XPRESS) \
+      + defined(USE_HIGHS) ) != 1
+#error "Exactly one of USE_CPLEX, USE_GUROBI, USE_XPRESS or USE_HIGHS must be defined."
 #endif
 
 
@@ -49,6 +47,13 @@
 #include "solver_interfaces/xpress/xpress_params.hpp"
 #include "solver_interfaces/xpress/nl_xpress.hpp"
 #include "solver_interfaces/xpress/grad_xpress.hpp"
+#endif
+
+#ifdef USE_HIGHS
+#include "solver_interfaces/highs/highs_interface.hpp"
+#include "solver_interfaces/highs/highs_params.hpp"
+#include "solver_interfaces/highs/nl_highs.hpp"
+#include "solver_interfaces/highs/grad_highs.hpp"
 #endif
 
 
@@ -204,6 +209,12 @@ protected:
   std::unique_ptr<XpressNL> nl;
   std::unique_ptr<XpressGrad> gradient;
   std::unique_ptr<FrankWolfe<XpressNL, XpressGrad>> FW;
+#endif
+#ifdef USE_HIGHS
+  std::unique_ptr<HiGHSInterface> Lagrangian;
+  std::unique_ptr<HiGHSNL> nl;
+  std::unique_ptr<HiGHSGrad> gradient;
+  std::unique_ptr<FrankWolfe<HiGHSNL, HiGHSGrad>> FW;
 #endif
   // solver params defined for base class and instantiated later based on compiler directive
   std::unique_ptr<SolverParams> iter0Params;

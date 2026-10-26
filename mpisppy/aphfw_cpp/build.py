@@ -33,9 +33,11 @@ SOLVERS = {
     "gurobi": (["GUROBI_HOME"], "USE_GUROBI"),
     "cplex": (["CPLEX_ROOT"], "USE_CPLEX"),
     "xpress": (["XPRESS_HOME", "XPRESSDIR"], "USE_XPRESS"),
+    "highs": (["HIGHS_HOME"], "USE_HIGHS"),
 }
 # CMake variable that takes each solver's home
-HOME_VAR = {"gurobi": "GUROBI_HOME", "cplex": "CPLEX_ROOT", "xpress": "XPRESS_HOME"}
+HOME_VAR = {"gurobi": "GUROBI_HOME", "cplex": "CPLEX_ROOT", "xpress": "XPRESS_HOME",
+            "highs": "HIGHS_HOME"}
 
 
 class BuildError(RuntimeError):
@@ -143,6 +145,20 @@ def check_solver_home(solver, home):
         libdirs = [os.path.join(home, d) for d in ("lib", "lib64")]
         if not _find_lib(libdirs, "xprs"):
             raise BuildError(f"No libxprs library in {home}/lib or {home}/lib64.")
+    elif solver == "highs":
+        # HIGHS_HOME is an installation prefix, e.g. a conda environment
+        # with conda-forge's highs package
+        missing = [p for p in ("include/highs/Highs.h",
+                               "lib/cmake/highs/highs-config.cmake")
+                   if not os.path.isfile(os.path.join(home, p))]
+        if missing:
+            raise BuildError(
+                f"Missing {' and '.join(missing)} under {home}.  HIGHS_HOME must "
+                "be the prefix HiGHS was installed into (e.g. a conda "
+                "environment with conda-forge's highs package); the highspy "
+                "wheel has no C++ headers.")
+        if not _find_lib([os.path.join(home, "lib")], "highs"):
+            raise BuildError(f"No libhighs library in {home}/lib.")
 
 
 def _mpi_compilers_near_python():
@@ -240,14 +256,16 @@ def main(argv=None):
         prog="python -m mpisppy.aphfw_cpp.build",
         description="Build and install aphfw_cpp, the compiled hub behind "
                     "--aphfw-hub.  Needs a C++23 compiler, MPI (the one "
-                    "mpi4py uses) and one of Gurobi, CPLEX or Xpress.",
+                    "mpi4py uses) and one of Gurobi, CPLEX, Xpress or "
+                    "HiGHS.",
         epilog="Arguments after -- go to pip, e.g. -- --force-reinstall.")
     parser.add_argument("--solver", choices=sorted(SOLVERS),
                         help="solver backend (default: the one whose "
                              "environment variable is set)")
     parser.add_argument("--solver-home",
                         help="solver installation directory (default: from "
-                             "GUROBI_HOME, CPLEX_ROOT or XPRESS_HOME)")
+                             "GUROBI_HOME, CPLEX_ROOT, XPRESS_HOME or "
+                             "HIGHS_HOME)")
     parser.add_argument("--cxx", help="MPI C++ compiler (default: mpi4py's, "
                                       "else the mpicxx beside this python)")
     parser.add_argument("--dry-run", action="store_true",

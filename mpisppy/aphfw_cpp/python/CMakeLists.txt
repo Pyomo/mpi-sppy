@@ -68,6 +68,24 @@ if(USE_XPRESS)
     endif()
 endif()
 
+if(USE_HIGHS)
+    pybind11_add_module(aphfw_cpp aphfw_bindings.cpp)
+    target_include_directories(aphfw_cpp PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../FWAPH
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_CURRENT_SOURCE_DIR}/../utils
+        ${CMAKE_CURRENT_SOURCE_DIR}/../config
+    )
+    target_link_libraries(aphfw_cpp PRIVATE aph_core_highs solver_highs)
+    if(TARGET MPI::MPI_CXX)
+        target_link_libraries(aphfw_cpp PRIVATE MPI::MPI_CXX)
+    endif()
+    target_compile_definitions(aphfw_cpp PRIVATE USE_HIGHS)
+    if(NODEBUGPRINT)
+        target_compile_definitions(aphfw_cpp PRIVATE NODEBUGPRINT)
+    endif()
+endif()
+
 # pip install (scikit-build-core; see ../pyproject.toml): put the module at the
 # top of site-packages, keeping the paths to the solver and MPI libraries it
 # was linked against so it loads without LD_LIBRARY_PATH.
