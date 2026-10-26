@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # aph_core_<backend>: the FW-APH controller library. Everything the
 # aphfw_cpp module needs lives under aphfw_cpp/; the standalone
 # executables built on this library are in aph-fw's src/FWAPH.

@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Settings shared by aph-fw's top-level CMakeLists.txt and the standalone
 # aphfw_cpp/CMakeLists.txt: language level, the solver backend switch,
 # MPI, and where each solver is installed. Include it after project().

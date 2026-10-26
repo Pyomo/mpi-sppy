@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # pip build of the aphfw_cpp module, the compiled FW-APH hub for mpi-sppy.
 #
 # In mpi-sppy this directory is mpisppy/aphfw_cpp, and the module is optional:
