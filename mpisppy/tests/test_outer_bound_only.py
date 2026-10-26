@@ -282,6 +282,25 @@ class _CountingPlugin:
         return results
 
 
+class _FailThenSucceedPlugin(_CountingPlugin):
+    def solve(self, scenario, **kwargs):
+        if self.solve_count == 0:
+            self.solve_count += 1
+            raise RuntimeError("first solve failed")
+        return super().solve(scenario, **kwargs)
+
+
+class _InvalidOutcomeExtension(Extension):
+    def __init__(self, ph):
+        super().__init__(ph)
+        self.solve_count = 0
+
+    def solve_subproblem(
+            self, subproblem, default_solve, *, outer_bound_only=False):
+        self.solve_count += 1
+        return None
+
+
 class TestSolveReplacementContract(unittest.TestCase):
     def test_gripe_does_not_bypass_replacement_extension(self):
         ph = _make_ph(extensions=_NoDefaultSolveExtension)
@@ -339,6 +358,95 @@ class TestSolveReplacementContract(unittest.TestCase):
                     scenario._mpisppy_data.termination_condition,
                     str(TerminationCondition.optimal),
                 )
+
+    def test_gripe_diagnostic_retry_does_not_load_solution(self):
+        for persistent in (False, True):
+            with self.subTest(persistent=persistent):
+                ph = _make_ph()
+                name = list(ph.local_scenarios)[0]
+                scenario = ph.local_scenarios[name]
+                plugin = _FailThenSucceedPlugin()
+                scenario._solver_plugin = plugin
+
+                if persistent:
+                    plugin.load_vars = mock.Mock()
+                    load_solution = plugin.load_vars
+                else:
+                    scenario.solutions.load_from = mock.Mock()
+                    load_solution = scenario.solutions.load_from
+
+                with mock.patch(
+                        "mpisppy.spopt.sputils.is_persistent",
+                        return_value=persistent):
+                    with self.assertRaisesRegex(
+                            RuntimeError, "first solve failed"):
+                        ph.solve_one(
+                            None,
+                            name,
+                            scenario,
+                            gripe=True,
+                            need_solution=True,
+                            update_objective=False,
+                        )
+
+                self.assertEqual(plugin.solve_count, 2)
+                load_solution.assert_not_called()
+
+    def test_result_classification_exception_is_not_retried(self):
+        ph = _make_ph()
+        name = list(ph.local_scenarios)[0]
+        scenario = ph.local_scenarios[name]
+        plugin = _CountingPlugin()
+        scenario._solver_plugin = plugin
+        classification_calls = 0
+
+        def classify_results(results):
+            nonlocal classification_calls
+            classification_calls += 1
+            if classification_calls == 1:
+                raise RuntimeError("classification failed")
+            return True
+
+        with mock.patch(
+                "mpisppy.spopt.sputils.not_good_enough_results",
+                side_effect=classify_results):
+            with self.assertRaisesRegex(
+                    RuntimeError, "classification failed"):
+                ph.solve_one(
+                    None,
+                    name,
+                    scenario,
+                    gripe=True,
+                    need_solution=True,
+                    update_objective=False,
+                )
+
+        self.assertEqual(plugin.solve_count, 1)
+        self.assertEqual(classification_calls, 1)
+        self.assertEqual(
+            scenario._mpisppy_data.termination_condition,
+            str(TerminationCondition.optimal),
+        )
+
+    def test_invalid_extension_outcome_is_not_retried(self):
+        ph = _make_ph(extensions=_InvalidOutcomeExtension)
+        name = list(ph.local_scenarios)[0]
+        scenario = ph.local_scenarios[name]
+        scenario._solver_plugin = _CountingPlugin()
+
+        with self.assertRaisesRegex(
+                TypeError,
+                "solve_subproblem must return SubproblemSolveOutcome"):
+            ph.solve_one(
+                None,
+                name,
+                scenario,
+                gripe=True,
+                need_solution=True,
+                update_objective=False,
+            )
+
+        self.assertEqual(ph.extobject.solve_count, 1)
 
 
 class TestStaleBoundNotRetained(unittest.TestCase):
