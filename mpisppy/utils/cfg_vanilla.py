@@ -656,6 +656,66 @@ def fwph_hub(cfg,
     add_ph_tracking(hub_dict, cfg)
     return hub_dict
 
+def _check_aphfw_compat(cfg):
+    """Reject cfg combinations the C++ FW-APH hub cannot honor.
+
+    The C++ hub solves from static MPS files and does not observe in-hub Pyomo
+    variable-*type* changes, so integer-relax-then-enforce cannot work. (Rho-
+    and bound-based drivers are fine: APHFWOpt pushes updated rho and nonant
+    bounds into C++ every cycle.) Other Pyomo-only extensions -- e.g. slamming,
+    W-oscillation interruption -- attach but are inert against the C++ hub;
+    they are left to run rather than hard-rejected.
+    """
+    if cfg.get("integer_relax_then_enforce", False):
+        raise RuntimeError(
+            "--integer-relax-then-enforce is not supported with --aphfw-hub. "
+            "The C++ hub solves from MPS files and does not see Pyomo variable "
+            "type changes. FW-APH's LP/MIP split already provides the benefit "
+            "this extension targets in standard PH."
+        )
+
+def aphfw_hub(cfg,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+    ph_extensions=None,
+    extension_kwargs=None,
+    rho_setter=None,
+    variable_probability=None,
+    all_nodenames=None,
+):
+    """Hub dict for the C++ FW-APH hub (needs the optional aphfw_cpp build)."""
+    from mpisppy.cylinders.hub import APHFWHub
+    from mpisppy.opt.aphfw import APHFWOpt, _import_aphfw_cpp
+    _check_aphfw_compat(cfg)
+    # Fail here, on every rank, rather than inside the wheel once the hub runs.
+    _import_aphfw_cpp()
+
+    options = copy.deepcopy(shared_options(cfg, is_hub=True))
+    options["cfg"] = cfg
+
+    hub_dict = {
+        "hub_class": APHFWHub,
+        "hub_kwargs": {"options": {"rel_gap": cfg.rel_gap,
+                                   "abs_gap": cfg.abs_gap,
+                                   "max_stalled_iters": cfg.max_stalled_iters}},
+        "opt_class": APHFWOpt,
+        "opt_kwargs": {
+            "options": options,
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": scenario_creator,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
+            "scenario_denouement": scenario_denouement,
+            "rho_setter": rho_setter,
+            "variable_probability": variable_probability,
+            "extensions": ph_extensions,
+            "extension_kwargs": extension_kwargs,
+            "all_nodenames": all_nodenames
+        }
+    }
+    return hub_dict
+
 def ef_extension_adder(ef_dict, ext_class):
     '''
     logic copied from extension_adder(), adapted for EFExtensions

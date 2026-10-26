@@ -72,7 +72,7 @@ class Config(pyofig.ConfigDict):
     # out_of_the_box.HUB_FLAGS has to agree with this list or OOTB will not
     # recognise a hub the user asked for and may substitute the EF; the OOTB
     # validator checks the two against each other.
-    HUBS = ["APH", "subgradient_hub", "fwph_hub", "ph_primal_hub",
+    HUBS = ["APH", "subgradient_hub", "fwph_hub", "aphfw_hub", "ph_primal_hub",
             "lshaped_hub", "cg_hub", "dualcg_hub", "fwph_objgap_hub"]
 
     # remember that the parent uses slots
@@ -1093,6 +1093,160 @@ class Config(pyofig.ConfigDict):
                            description="Inject columns calculated by xhat spokes into the FWPH algorithm",
                            domain=bool,
                            default=False)
+
+    def aphfw_args(self):
+        """Options for the C++ FW-APH hub (--aphfw-hub; see mpisppy.opt.aphfw).
+
+        Most are passed straight to the C++ side. The over-relaxation
+        parameter is aph_nu, shared with --APH and registered by aph_args.
+        """
+        self.add_to_config(name="aphfw_hub",
+                           description="Use the C++ FW-APH hub",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config(name="aphfw_fw_tmax",
+                           description="FW maximum inner iterations",
+                           domain=int,
+                           default=1)
+
+        self.add_to_config(name="aphfw_fw_tau",
+                           description="FW convergence tolerance",
+                           domain=float,
+                           default=0.01)
+
+        self.add_to_config(name="aphfw_max_cycles",
+                           description="Maximum APH cycles (0 = unlimited)",
+                           domain=int,
+                           default=0)
+
+        self.add_to_config(name="aphfw_primal_term_thresh",
+                           description="Primal termination tolerance (applied to u)",
+                           domain=float,
+                           default=0.01)
+
+        self.add_to_config(name="aphfw_dual_term_thresh",
+                           description="Dual termination tolerance (applied to v)",
+                           domain=float,
+                           default=0.01)
+
+        self.add_to_config(name="aphfw_gamma_inverse",
+                           description="Primal/dual scaling (applied to norm v)",
+                           domain=float,
+                           default=1.0)
+
+        self.add_to_config(name="aphfw_staleness_threshold",
+                           description="Max cycles between scenario dispatches",
+                           domain=int,
+                           default=20)
+
+        self.add_to_config(name="aphfw_solve_fraction",
+                           description="Fraction of solves needed before projection",
+                           domain=float,
+                           default=1.0)
+
+        self.add_to_config(name="aphfw_display_progress",
+                           description="Display convergence info at every cycle",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config(name="aphfw_obj_scale",
+                           description="Multiply all objective coefficients by this value",
+                           domain=float,
+                           default=1.0)
+
+        self.add_to_config(name="aphfw_obj_cutoff",
+                           description="FWAPH: add objective cutoff in FW inner MIP solves to force improving directions",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config(name="aphfw_solve_time_limit",
+                           description="Time limit in seconds for each subproblem solve"
+                                       " in the C++ hub (Lagrangian, proximal and"
+                                       " Frank-Wolfe linear solves)",
+                           domain=float,
+                           default=300.0)
+
+        self.add_to_config(name="aphfw_final_lagrangian",
+                           description="Run the termination Lagrangian solve after the aphfw hub's"
+                                       " main loop and let its bound compete with the bound spokes"
+                                       " (trace symbol W). Off by default in hub mode because a"
+                                       " --lagrangian spoke usually supplies the outer bound.",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config(name="aphfw_iter0_fw_step",
+                           description="End startup with a synchronous FW step on every scenario so"
+                                       " that (x0, y0) is a valid subgradient pair: 'auto' (only when"
+                                       " the original objective is quadratic), 'on', or 'off'.",
+                           domain=str,
+                           default="auto")
+
+        self.add_to_config(name="aphfw_iter0_w_multiplier",
+                           description="Start from W = m * rho * (xbase - z0) with this m, a PH-style"
+                                       " guess at the duals. The default 0.0 gives W = 0.",
+                           domain=float,
+                           default=0.0)
+
+        self.add_to_config(name="aphfw_verbosity",
+                           description="C++ debug output verbosity level",
+                           domain=int,
+                           default=0)
+
+        self.add_to_config(name="aphfw_workers_per_rank",
+                           description="C++ worker threads per MPI rank for parallel scenario solves",
+                           domain=int,
+                           default=1)
+
+        self.add_to_config(name="aphfw_block_sync",
+                           description="Allow only block asynchronism",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config(name="aphfw_leading_dispatch_only",
+                           description="Only dispatch during leading sync phase",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config(name="aphfw_W_trace_prefix",
+                           description="If given, write a W trace file with this prefix",
+                           domain=str,
+                           default="")
+
+        self.add_to_config(name="aphfw_solve_times_trace_prefix",
+                           description="If given, write per-rank FW solve timing CSV",
+                           domain=str,
+                           default="")
+
+        self.add_to_config(name="aphfw_omicron_rho_multiplier",
+                           description="k in omicron = k * rho at post-iter-0 freeze (default 1.0)",
+                           domain=float,
+                           default=1.0)
+
+        self.add_to_config(name="aphfw_omicron_all",
+                           description="If >= 0, freeze omicron uniformly at setup to this scalar (overrides multiplier)",
+                           domain=float,
+                           default=-1.0)
+
+        self.add_to_config(name="aphfw_omicron_csv",
+                           description="If non-empty, freeze omicron from this CSV at setup (overrides multiplier)",
+                           domain=str,
+                           default="")
+
+        self.add_to_config(name="aphfw_omicron_min",
+                           description="Lower bound check on omicron entries at freeze",
+                           domain=float,
+                           default=1e-6)
+
+        self.add_to_config(name="aphfw_omicron_max",
+                           description="Upper bound check on omicron entries at freeze",
+                           domain=float,
+                           default=1e6)
+
+        self.add_to_config(name="aphfw_check_omicron_invariant",
+                           description="Run S(N)-constancy check on omicron at freeze",
+                           domain=bool,
+                           default=True)
 
     def cg_args(self):
 

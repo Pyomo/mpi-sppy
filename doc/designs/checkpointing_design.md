@@ -1354,10 +1354,17 @@ as a branch stacked on the 1a PR.
     hub and to the Lagrangian-family, reduced-costs, xfeas and dual spokes,
     and none of those writes extension state (only the xhat spokes do).
 
-  `WOscillationMonitor` (W trajectories, recurrence trackers, an internal
-  slammer) and `CrossScenarioExtension` (whose `post_iter0` replaces model
-  components a resume restores) need more than this and stay refused; they
-  are tracked as issue #903.
+  - `WOscillationMonitor` carries its W trajectories, recurrence trackers,
+    what it has reported, the iteration of its last slam and its internal
+    slammer's state. Like `PHTracker`, a resumed run continues its report
+    CSVs: the checkpoint records each file's absolute path and size, and
+    `restore_state` opens the file and cuts it back to that size. A file that
+    is not the recorded one, or is shorter, or does not end a line at that
+    size, is started over with a warning.
+
+  `CrossScenarioExtension` (whose `post_iter0` replaces model components a
+  resume restores) needs more than this and stays refused; it is tracked as
+  issue #903.
 
   **Restore runs at the end of `Iter0`, not in the resume branch**, and the
   ordering is the whole trick: extensions rebuild their bookkeeping from the

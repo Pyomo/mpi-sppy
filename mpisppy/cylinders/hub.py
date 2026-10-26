@@ -11,6 +11,8 @@ import abc
 import logging
 import math
 
+import numpy as np
+
 import mpisppy.log
 from mpisppy import global_toc
 from mpisppy.cylinders.fwph_cylinder import FWPH_Cylinder
@@ -559,3 +561,117 @@ class FWPHHub(PHHub, FWPH_Cylinder):
 
     def main(self):
         self.opt.fwph_main(finalize=False)
+
+
+class APHFWHub(PHHub):
+    """Hub cylinder for the C++ FW-APH hub (mpisppy.opt.aphfw).
+
+    Sends NONANT and DUALS fields to spokes, read from the C++ side.
+    """
+
+    _hub_algo_best_bound_provider = True
+
+    # Symbol shown in the inter-cylinder trace's outer-bound column when this
+    # hub is the source of the best bound (otherwise the hub's own bounds show
+    # up as the anonymous '*').  "F" would be the obvious mnemonic for
+    # Frank-Wolfe, but mpi-sppy's FrankWolfeOuterBound (the fwph spoke) already
+    # uses it; "W" is unused upstream and names FW-APH's dual (W) iterate.
+    converger_spoke_char = "W"
+
+    def main(self):
+        self.opt.aphfw_main(finalize=False)
+
+    def current_iteration(self):
+        if self.opt._cpp is not None:
+            return self.opt._cpp.get_current_cycle()
+        return 0
+
+    def sync_bounds(self):
+        """Update BestOuterBound from C++ *before* sending to spokes.
+
+        The parent's sync() calls sync_bounds() → send_boundsout() which
+        sends self.BestOuterBound.  Without this override the bound only
+        gets propagated later in is_converged(), so spokes always see a
+        stale value.
+        """
+        if self.opt.best_bound_obj_val is not None:
+            self.BestOuterBound = self.OuterBoundUpdate(
+                self.opt.best_bound_obj_val, char=self.converger_spoke_char
+            )
+        super().sync_bounds()
+
+    def publish_outer_bound(self, bound):
+        """Offer a hub-computed outer bound after the main loop has ended.
+
+        Used for the final Lagrangian bound (--aphfw-final-lagrangian), which
+        is produced once the stepping loop is over and so misses the usual
+        sync_bounds() path.  OuterBoundUpdate does the comparison, so a bound
+        that is worse than what the bound spokes already found is discarded
+        rather than overwriting them.  Returns True if it won.
+
+        Called from APHFWOpt.aphfw_main while the RDMA windows are still open
+        (SpinTheWheel does send_terminate/finalize only after main() returns),
+        so an improvement can still be pushed out to the spokes.
+        """
+        if bound is None:
+            return False
+        previous = self.BestOuterBound
+        self.BestOuterBound = self.OuterBoundUpdate(
+            bound, char=self.converger_spoke_char
+        )
+        # Unconditional, even when the bound lost: send_boundsout bumps the
+        # buffer's write id, and readers only accept a read whose id agrees
+        # across all of this cylinder's ranks.  Skipping the send on some ranks
+        # would desynchronize those ids.
+        self.send_boundsout()
+        return self.BestOuterBound != previous
+
+    def send_nonants(self):
+        """Send C++ nonant values to spokes (replaces Pyomo-based version)."""
+        opt = self.opt
+        if opt._cpp is None:
+            return
+        n = opt._local_nonant_length
+        x_tmp = np.empty(n, dtype=np.float64)
+        opt._cpp.get_all_local_nonants(x_tmp)
+
+        nonant_buf = self.send_buffers[self.nonant_field]
+        nonant_buf[:n] = x_tmp
+        self.put_send_buffer(nonant_buf, self.nonant_field)
+
+    def send_ws(self):
+        """Send C++ W (dual) values to spokes (replaces Pyomo-based version).
+
+        If obj-scale was used, W values are in the scaled space and must
+        be unscaled before sending to spokes (which use the original objective).
+        """
+        opt = self.opt
+        if opt._cpp is None:
+            return
+        n = opt._local_nonant_length
+        w_tmp = np.empty(n, dtype=np.float64)
+        opt._cpp.get_all_local_w(w_tmp)
+
+        # Unscale W if obj-scale was applied
+        cfg = opt.options.get("cfg", None)
+        obj_scale = 1.0
+        if cfg is not None and hasattr(cfg, "aphfw_obj_scale"):
+            obj_scale = cfg.aphfw_obj_scale
+        elif "aphfw_obj_scale" in opt.options:
+            obj_scale = opt.options["aphfw_obj_scale"]
+        if obj_scale != 1.0 and obj_scale != 0.0:
+            w_tmp /= obj_scale
+
+        w_buf = self.send_buffers[Field.DUALS]
+        w_buf[:n] = w_tmp
+        self.put_send_buffer(w_buf, Field.DUALS)
+
+    def finalize(self):
+        """Skip Pyomo objective evaluation (C++ handled all solves).
+
+        The parent PHHub.finalize calls post_loops → Eobjective which needs
+        ALL Pyomo variables solved, but C++ only exports nonant values.
+        We skip this since objective values come from C++.
+        """
+        self.opt._write_back_to_pyomo()
+        return None
