@@ -180,10 +180,55 @@ if haveMPI and _enable_progress_thread:
     _progress_max_gil_probe_seconds = 0.0
     _progress_max_gil_wait_seconds = 0.0
 
+    _native_worker_enabled = (
+        _os.environ.get("MPISPPY_MPI_PROGRESS_NATIVE_WORKER") == "1"
+    )
+    if _native_worker_enabled:
+        _worker_module_path = _os.environ.get(
+            "MPISPPY_MPI_PROGRESS_WORKER_MODULE"
+        )
+        if _worker_module_path:
+            import importlib.util as _import_util
+            import sys as _sys
+
+            _worker_spec = _import_util.spec_from_file_location(
+                "mpisppy._mpi_progress_worker", _worker_module_path
+            )
+            if _worker_spec is None or _worker_spec.loader is None:
+                raise RuntimeError(
+                    "Could not load native MPI progress worker at "
+                    f"{_worker_module_path}"
+                )
+            _mpi_progress_worker = _import_util.module_from_spec(_worker_spec)
+            _sys.modules[_worker_spec.name] = _mpi_progress_worker
+            try:
+                _worker_spec.loader.exec_module(_mpi_progress_worker)
+            except Exception:
+                del _sys.modules[_worker_spec.name]
+                raise
+        else:
+            try:
+                from mpisppy import _mpi_progress_worker
+            except ImportError as _exc:
+                raise RuntimeError(
+                    "MPISPPY_MPI_PROGRESS_NATIVE_WORKER=1 requires the optional "
+                    "mpisppy._mpi_progress_worker extension; build it with "
+                    "MPISPPY_BUILD_MPI_PROGRESS_WORKER=1 and the MPI compiler "
+                    "used by mpi4py"
+                ) from _exc
+        _mpi_progress_worker.configure(
+            COMM_WORLD, _progress_max_interval, _progress_diagnostics
+        )
+
     _progress_native_diagnostics = (
         _progress_diagnostics
         and _os.environ.get("MPISPPY_MPI_PROGRESS_NATIVE_DIAGNOSTICS") == "1"
     )
+    if _native_worker_enabled and _progress_native_diagnostics:
+        raise RuntimeError(
+            "MPISPPY_MPI_PROGRESS_NATIVE_DIAGNOSTICS times the Python worker; "
+            "disable it when MPISPPY_MPI_PROGRESS_NATIVE_WORKER=1"
+        )
     if _progress_native_diagnostics:
         _native_module_path = _os.environ.get(
             "MPISPPY_MPI_PROGRESS_NATIVE_MODULE"
@@ -333,8 +378,22 @@ if haveMPI and _enable_progress_thread:
                 _time.thread_time() - worker_cpu_start
             )
 
+    def _native_progress_loop():
+        global _progress_worker_native_id
+        if _progress_diagnostics:
+            _progress_worker_native_id = _threading.get_native_id()
+            print(
+                "mpi-sppy MPI progress: "
+                f"rank={COMM_WORLD.Get_rank()}, "
+                f"worker_native_id={_progress_worker_native_id}, "
+                "native_diagnostics=0, native_worker=1",
+                flush=True,
+            )
+        _mpi_progress_worker.run()
+
     _progress_thread = _threading.Thread(
-        target=_mpi_progress_loop,
+        target=(_native_progress_loop if _native_worker_enabled
+                else _mpi_progress_loop),
         name="mpisppy-mpi-progress",
         daemon=True,
     )
@@ -347,8 +406,12 @@ if haveMPI and _enable_progress_thread:
             if _progress_diagnostics and _progress_active_count == 0:
                 _progress_compute_start = _time.monotonic()
                 _progress_compute_process_cpu_start = _time.process_time()
+            if _progress_active_count == 0:
+                if _native_worker_enabled:
+                    _mpi_progress_worker.set_active(True)
+                else:
+                    _progress_active.set()
             _progress_active_count += 1
-            _progress_active.set()
 
     def _deactivate_mpi_progress():
         global _progress_active_count, _progress_compute_regions
@@ -366,15 +429,43 @@ if haveMPI and _enable_progress_thread:
                     _progress_compute_process_cpu_seconds += (
                         _time.process_time() - _progress_compute_process_cpu_start
                     )
-                _progress_active.clear()
+                if _native_worker_enabled:
+                    _mpi_progress_worker.set_active(False)
+                else:
+                    _progress_active.clear()
 
     def _stop_mpi_progress_thread():
-        _progress_stop.set()
-        _progress_active.set()
-        if _progress_native_diagnostics:
-            _os.write(_progress_stop_write_fd, b"\0")
-        _progress_thread.join(timeout=5)
+        global _progress_probes, _progress_probe_seconds, _progress_max_probe_seconds
+        global _progress_wakeups, _progress_active_seconds
+        global _progress_worker_thread_cpu_seconds, _progress_worker_native_id
+        global _progress_wait_late_seconds, _progress_max_wait_late_seconds
+        global _progress_mpi_call_seconds, _progress_wait_syscall_late_seconds
+        if _native_worker_enabled:
+            _mpi_progress_worker.stop()
+        else:
+            _progress_stop.set()
+            _progress_active.set()
+            if _progress_native_diagnostics:
+                _os.write(_progress_stop_write_fd, b"\0")
+        _progress_thread.join(timeout=None if _native_worker_enabled else 5)
         worker_stopped = not _progress_thread.is_alive()
+        if _native_worker_enabled and worker_stopped:
+            _native_counts = _mpi_progress_worker.snapshot()
+            _progress_probes = _native_counts["probes"]
+            _progress_wakeups = _native_counts["wakeups"]
+            _progress_active_seconds = _native_counts["active_seconds"]
+            _progress_probe_seconds = _native_counts["mpi_call_seconds"]
+            _progress_mpi_call_seconds = _native_counts["mpi_call_seconds"]
+            _progress_max_probe_seconds = _native_counts["max_probe_seconds"]
+            _progress_wait_late_seconds = _native_counts["wait_return_late_seconds"]
+            _progress_wait_syscall_late_seconds = _progress_wait_late_seconds
+            _progress_max_wait_late_seconds = (
+                _native_counts["max_wait_return_late_seconds"]
+            )
+            _progress_worker_thread_cpu_seconds = (
+                _native_counts["worker_thread_cpu_seconds"]
+            )
+            _progress_worker_native_id = _progress_thread.native_id
         if _progress_native_diagnostics and not _progress_thread.is_alive():
             _os.close(_progress_stop_read_fd)
             _os.close(_progress_stop_write_fd)
@@ -431,6 +522,23 @@ if haveMPI and _enable_progress_thread:
                         f"{1000 * _progress_max_gil_wait_seconds:.3f}, "
                         f"wait_syscall_late_seconds="
                         f"{_progress_wait_syscall_late_seconds:.3f}",
+                        flush=True,
+                    )
+                if _native_worker_enabled and worker_stopped:
+                    print(
+                        "mpi-sppy MPI progress: "
+                        f"rank={COMM_WORLD.Get_rank()}, "
+                        f"{_format_progress_rank_context()}, "
+                        "native_worker=1, "
+                        f"mpi_call_seconds={_progress_mpi_call_seconds:.3f}, "
+                        f"wait_syscall_late_seconds="
+                        f"{_progress_wait_syscall_late_seconds:.3f}, "
+                        "gil_probe_reacquire_seconds=0, "
+                        "max_gil_probe_reacquire_ms=0, "
+                        "gil_wait_reacquire_seconds=0, "
+                        "max_gil_wait_reacquire_ms=0, "
+                        f"mpi_error={_native_counts['mpi_error']}, "
+                        f"wait_error={_native_counts['wait_error']}",
                         flush=True,
                     )
 
