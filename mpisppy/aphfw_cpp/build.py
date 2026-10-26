@@ -34,6 +34,20 @@ class BuildError(RuntimeError):
     pass
 
 
+def check_sources():
+    """The C++ sources are in a clone of mpi-sppy, not in its wheel.
+
+    The wheel carries this file (setuptools packs .py files) but none of the
+    sources beside it, so from a pip-installed mpi-sppy there is nothing to
+    build.
+    """
+    if not os.path.isfile(os.path.join(SRC_DIR, "pyproject.toml")):
+        raise BuildError(
+            f"No aphfw_cpp sources in {SRC_DIR}.  They come only with a clone "
+            "of the mpi-sppy repository from GitHub, not with the package from "
+            "PyPI: install mpi-sppy from a clone and run this command there.")
+
+
 def _env_home(solver):
     for var in SOLVERS[solver][0]:
         if os.environ.get(var):
@@ -126,36 +140,51 @@ def pip_command(solver, home, pip_args):
     return cmd + list(pip_args)
 
 
-def _libmpi(path):
-    """The libmpi that ``path`` (a shared object) resolves to, via ldd."""
-    if not shutil.which("ldd"):
-        return None
-    out = subprocess.run(["ldd", path], capture_output=True, text=True).stdout
-    for line in out.splitlines():
-        parts = line.split("=>")
-        if "libmpi" in parts[0] and len(parts) == 2 and parts[1].split():
-            return os.path.realpath(parts[1].split()[0])
-    return None
+def _loaded_libmpi(module):
+    """The libmpi files a fresh interpreter has mapped after importing module.
+
+    Read from /proc/self/maps, so it is what the dynamic loader actually
+    chose (ldd cannot see a libmpi that a wheel loads by itself, as MPICH's
+    mpi4py wheel does).  None where there is no /proc (not Linux).
+    """
+    code = ("import os, " + module + "\n"
+            "if not os.path.exists('/proc/self/maps'):\n"
+            "    print('?')\n"
+            "else:\n"
+            "    for line in open('/proc/self/maps'):\n"
+            "        path = line.split()[-1]\n"
+            "        if os.path.basename(path).startswith('libmpi.so'):\n"
+            "            print(os.path.realpath(path))\n")
+    res = subprocess.run([sys.executable, "-c", code], capture_output=True,
+                         text=True, cwd=os.path.expanduser("~"))
+    if res.returncode != 0:
+        raise BuildError(f"import {module} failed:\n" + res.stderr.strip())
+    found = set(res.stdout.split())
+    return None if "?" in found else found
 
 
 def check_install():
     """Import the new module in a fresh interpreter and compare its libmpi."""
-    code = ("import aphfw_cpp, mpi4py.MPI as m; "
-            "print(aphfw_cpp.__file__); print(m.__file__)")
-    res = subprocess.run([sys.executable, "-c", code], capture_output=True,
-                         text=True, cwd=os.path.expanduser("~"))
+    res = subprocess.run([sys.executable, "-c",
+                          "import aphfw_cpp; print(aphfw_cpp.__file__)"],
+                         capture_output=True, text=True,
+                         cwd=os.path.expanduser("~"))
     if res.returncode != 0:
         raise BuildError("The build finished but aphfw_cpp does not import:\n"
                          + res.stderr.strip())
-    module, mpi4py_ext = res.stdout.split()
-    print(f"aphfw_cpp installed at {module}")
-    ours, theirs = _libmpi(module), _libmpi(mpi4py_ext)
-    if ours and theirs and ours != theirs:
+    print(f"aphfw_cpp installed at {res.stdout.strip()}")
+    ours, theirs = _loaded_libmpi("aphfw_cpp"), _loaded_libmpi("mpi4py.MPI")
+    if ours is None or theirs is None:
+        print("(not Linux: did not check that aphfw_cpp and mpi4py share "
+              "one MPI library)")
+    elif ours != theirs:
         raise BuildError(
-            f"aphfw_cpp loads {ours} but mpi4py loads {theirs}.  The two must "
-            "share one MPI; rebuild with --cxx set to that MPI's mpicxx.")
-    if ours:
-        print(f"aphfw_cpp and mpi4py both load {ours}")
+            f"aphfw_cpp loads {', '.join(sorted(ours)) or 'no libmpi'} but "
+            f"mpi4py loads {', '.join(sorted(theirs)) or 'no libmpi'}.  The "
+            "two must share one MPI; rebuild with --cxx set to the mpicxx of "
+            "the MPI that mpi4py uses.")
+    else:
+        print(f"aphfw_cpp and mpi4py both load {', '.join(sorted(ours))}")
 
 
 def main(argv=None):
@@ -180,6 +209,7 @@ def main(argv=None):
         pip_args = pip_args[1:]
 
     try:
+        check_sources()
         solver, home = choose_solver(args.solver, args.solver_home)
         check_solver_home(solver, home)
         cxx = choose_cxx(args.cxx)
@@ -190,7 +220,10 @@ def main(argv=None):
         sys.stdout.flush()  # before pip's output, which goes straight out
         if args.dry_run:
             return 0
-        env = dict(os.environ, CXX=cxx)
+        # An MPI wrapper finds the compiler it wraps on PATH; conda's mpicxx
+        # fails when the environment's bin directory is not there.
+        path = os.pathsep.join([os.path.dirname(cxx), os.environ.get("PATH", "")])
+        env = dict(os.environ, CXX=cxx, PATH=path)
         if subprocess.run(cmd, env=env).returncode != 0:
             raise BuildError(
                 "pip install failed; the CMake or compiler error is above.  "
