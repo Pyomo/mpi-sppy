@@ -1,18 +1,20 @@
 # pip build of the aphfw_cpp module, the compiled FW-APH hub for mpi-sppy.
 #
 # In mpi-sppy this directory is mpisppy/aphfw_cpp, and the module is optional:
-# mpi-sppy's own install compiles nothing.  To build and install it, with
-# Gurobi:
-#
-#   GUROBI_HOME=/path/to/gurobi/linux64 CXX=mpicxx \
-#     pip install ./mpisppy/aphfw_cpp
-#
-# CXX must be the MPI C++ compiler of the MPI that mpi4py uses.  For CPLEX or
-# Xpress, turn Gurobi off and name the solver, e.g.
+# mpi-sppy's own install compiles nothing.  python -m mpisppy.aphfw_cpp.build
+# builds and installs it with checks; the raw form names the solver and its
+# home, e.g. for Gurobi:
 #
 #   CXX=mpicxx pip install ./mpisppy/aphfw_cpp \
-#     -C cmake.define.USE_GUROBI=OFF -C cmake.define.USE_CPLEX=ON \
-#     -C cmake.define.CPLEX_ROOT=/path/to/CPLEX_Studio2211
+#     -C cmake.define.USE_GUROBI=ON -C cmake.define.GUROBI_HOME=/path/to/gurobi/linux64
+#
+# or for CPLEX (USE_XPRESS and XPRESS_HOME likewise):
+#
+#   CXX=mpicxx pip install ./mpisppy/aphfw_cpp \
+#     -C cmake.define.USE_CPLEX=ON -C cmake.define.CPLEX_ROOT=/path/to/CPLEX_Studio2211
+#
+# CXX must be the MPI C++ compiler of the MPI that mpi4py uses.  There is no
+# default solver: naming none is an error.
 
 [build-system]
 requires = ["scikit-build-core>=0.10", "pybind11>=2.12"]

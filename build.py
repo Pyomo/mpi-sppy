@@ -79,8 +79,20 @@ def choose_solver(solver, home):
     return solver, os.path.abspath(os.path.expanduser(home))
 
 
+def _find_lib(dirs, name):
+    """True if lib<name>.a or lib<name>.so* is in one of dirs."""
+    for d in dirs:
+        if os.path.isdir(d) and any(
+                f.startswith(f"lib{name}.") for f in os.listdir(d)):
+            return True
+    return False
+
+
 def check_solver_home(solver, home):
-    """Fail now, with the path, rather than in the middle of CMake."""
+    """Fail now, with the path, rather than in the middle of CMake.
+
+    The paths are the ones solver_interfaces/CMakeLists.txt searches.
+    """
     if not os.path.isdir(home):
         raise BuildError(f"{solver} home {home} is not a directory.")
     if solver == "gurobi":
@@ -92,9 +104,37 @@ def check_solver_home(solver, home):
                 ".../gurobi1302/linux64); the gurobipy wheel does not carry "
                 "the C++ library.")
         libdir = os.path.join(home, "lib")
-        libs = os.listdir(libdir) if os.path.isdir(libdir) else []
-        if not any(f.startswith("libgurobi_c++") for f in libs):
+        if not _find_lib([libdir], "gurobi_c++"):
             raise BuildError(f"No libgurobi_c++ library in {libdir}.")
+    elif solver == "cplex":
+        # CPLEX_ROOT is the CPLEX_Studio directory, holding cplex/ and concert/
+        missing = [p for p in ("cplex/include/ilcplex/cplex.h",
+                               "concert/include/ilconcert")
+                   if not os.path.exists(os.path.join(home, p))]
+        if missing:
+            raise BuildError(
+                f"Missing {' and '.join(missing)} under {home}.  CPLEX_ROOT must be "
+                "the CPLEX_Studio directory (e.g. .../CPLEX_Studio2211), the "
+                "one holding cplex/ and concert/.")
+        libdirs = [os.path.join(home, top, "lib", sub)
+                   for top in ("cplex", "concert")
+                   for sub in ("x86-64_linux/static_pic", "x86-64_linux/static_mt",
+                               "x86-64_linux", "")]
+        absent = [lib for lib in ("cplex", "ilocplex", "concert")
+                  if not _find_lib(libdirs, lib)]
+        if absent:
+            raise BuildError(
+                f"No {', '.join('lib' + lib for lib in absent)} under "
+                f"{home}/cplex/lib or {home}/concert/lib.")
+    elif solver == "xpress":
+        if not os.path.isfile(os.path.join(home, "include", "xprs.h")):
+            raise BuildError(
+                f"No include/xprs.h under {home}.  XPRESS_HOME must be the "
+                "Xpress installation directory, the one holding include/ and "
+                "lib/.")
+        libdirs = [os.path.join(home, d) for d in ("lib", "lib64")]
+        if not _find_lib(libdirs, "xprs"):
+            raise BuildError(f"No libxprs library in {home}/lib or {home}/lib64.")
 
 
 def _mpi_compilers_near_python():
