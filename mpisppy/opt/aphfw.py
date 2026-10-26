@@ -289,24 +289,35 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         writer = Scenario_lp_mps_files(self)
         writer.pre_iter0()
 
-        # Generate solver parameter JSON files needed by C++
-        # (these control MIP gap, time limit, solver threads for each solve type)
+        # Solver parameter JSON files for the C++ solves.  The C++ side takes
+        # only mipGap, timeLimit and threads: iter0.json is for the Lagrangian
+        # solves (startup and termination), grad.json for the Frank-Wolfe
+        # linear subproblems, nl.json for the proximal QPs.
         if self.cylinder_rank == 0:
-            solver_threads = 1
-            if cfg is not None and hasattr(cfg, "max_solver_threads") and cfg.max_solver_threads is not None:
-                solver_threads = cfg.max_solver_threads
+            def _opt(name, default):
+                value = self._get_option(name, default)
+                return default if value is None else value
             solver_cfg = {
-                "timeLimit": 300.0,
-                "threads": solver_threads,
+                "timeLimit": float(_opt("aphfw_solve_time_limit", 300.0)),
+                "threads": int(_opt("max_solver_threads", 1)),
             }
-            for name in ("iter0.json", "nl.json"):
-                path = os.path.join(self._scenario_dir, name)
-                with open(path, "w") as f:
-                    json.dump(solver_cfg, f)
-            grad_cfg = dict(solver_cfg)
-            grad_cfg["mipGap"] = 0.0001
-            with open(os.path.join(self._scenario_dir, "grad.json"), "w") as f:
-                json.dump(grad_cfg, f)
+            iter0_cfg = dict(solver_cfg)
+            if _opt("iter0_mipgap", None) is not None:
+                iter0_cfg["mipGap"] = float(_opt("iter0_mipgap", None))
+            grad_cfg = dict(solver_cfg, mipGap=float(_opt("iterk_mipgap", 1e-4)))
+            for name, params in (("iter0.json", iter0_cfg),
+                                 ("nl.json", solver_cfg),
+                                 ("grad.json", grad_cfg)):
+                with open(os.path.join(self._scenario_dir, name), "w") as f:
+                    json.dump(params, f)
+            for name in ("solver_options", "solver_options_file"):
+                if _opt(name, None):
+                    logger.warning(
+                        f"--{name.replace('_', '-')} does not reach the C++ "
+                        "hub's solves, which take only --iter0-mipgap, "
+                        "--iterk-mipgap, --max-solver-threads and "
+                        "--aphfw-solve-time-limit; it still applies to the "
+                        "spokes.")
         self.mpicomm.Barrier()
 
     def _make_cpp_config(self):

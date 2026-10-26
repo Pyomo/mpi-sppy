@@ -102,6 +102,46 @@ class TestAphfwHubRun(unittest.TestCase):
         with patch.object(sys, "argv", argv):
             runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
 
+    def test_solver_options_reach_cpp(self):
+        # The C++ solves read mipGap, timeLimit and threads from JSON files the
+        # hub writes; capture what it writes for each.
+        import json
+
+        import mpisppy.opt.aphfw as aphfw_module
+        written = {}
+        real_dump = json.dump
+
+        def capture(obj, f, *args, **kwargs):
+            written[os.path.basename(f.name)] = dict(obj)
+            return real_dump(obj, f, *args, **kwargs)
+
+        # sizes, not farmer: the mipgap options exist only for a model whose
+        # inparser_adder calls cfg.mip_options().
+        argv = [
+            "generic_cylinders",
+            "--module-name", "mpisppy.tests.examples.sizes.sizes",
+            "--num-scens", "3",
+            "--solver-name", solver_name,
+            "--aphfw-hub",
+            "--default-rho", "1",
+            "--aphfw-max-cycles", "2",
+            "--iter0-mipgap", "0.02",
+            "--iterk-mipgap", "0.003",
+            "--max-solver-threads", "2",
+            "--aphfw-solve-time-limit", "77",
+            "--solver-options", "mipgap=0.5",
+        ]
+        with patch.object(sys, "argv", argv), \
+                patch.object(aphfw_module.json, "dump", capture), \
+                self.assertLogs(aphfw_module.logger, "WARNING") as logs:
+            runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
+        self.assertEqual(written["iter0.json"],
+                         {"timeLimit": 77.0, "threads": 2, "mipGap": 0.02})
+        self.assertEqual(written["grad.json"],
+                         {"timeLimit": 77.0, "threads": 2, "mipGap": 0.003})
+        self.assertEqual(written["nl.json"], {"timeLimit": 77.0, "threads": 2})
+        self.assertIn("--solver-options does not reach", "\n".join(logs.output))
+
 
 # The MPI integration tests, ported from aph-fw's tests/: each is a driver
 # script with a fixed rank count, run as its own mpiexec job.

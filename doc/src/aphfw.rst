@@ -87,15 +87,16 @@ Building without the wrapper
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The command is a convenience over a plain pip build, which you can run
-yourself; ``CXX`` must be the ``mpicxx`` of mpi4py's MPI::
-
-   GUROBI_HOME=/path/to/gurobi1302/linux64 CXX=mpicxx pip install ./mpisppy/aphfw_cpp
-
-For CPLEX or Xpress, turn Gurobi off and name the solver::
+yourself. ``CXX`` must be the ``mpicxx`` of mpi4py's MPI, and the solver
+and its home have to be named; there is no default solver::
 
    CXX=mpicxx pip install ./mpisppy/aphfw_cpp \
-       -C cmake.define.USE_GUROBI=OFF -C cmake.define.USE_CPLEX=ON \
-       -C cmake.define.CPLEX_ROOT=/opt/ibm/ILOG/CPLEX_Studio2211
+       -C cmake.define.USE_GUROBI=ON -C cmake.define.GUROBI_HOME=/path/to/gurobi1302/linux64
+
+For CPLEX (Xpress likewise, with ``USE_XPRESS`` and ``XPRESS_HOME``)::
+
+   CXX=mpicxx pip install ./mpisppy/aphfw_cpp \
+       -C cmake.define.USE_CPLEX=ON -C cmake.define.CPLEX_ROOT=/opt/ibm/ILOG/CPLEX_Studio2211
 
 This skips the checks, including the one for a mismatched MPI.
 
@@ -127,9 +128,35 @@ Select the hub with ``--aphfw-hub`` in ``generic_cylinders`` (see
 
 The hub's subproblems are solved in C++ by the solver the module was built
 for. ``--solver-name`` is still needed, for the spokes; it may name a
-different solver. Each C++ solve has a 300-second time limit and uses
-``--max-solver-threads`` threads (default 1); the Frank-Wolfe linear
-subproblems are solved to a MIP gap of :math:`10^{-4}`.
+different solver. The C++ solves take only a MIP gap, a time limit and a
+thread count, set by these options:
+
+.. list-table:: Settings for the hub's C++ solves
+   :widths: 30 20 50
+   :header-rows: 1
+
+   * - Option
+     - Default
+     - Applies to
+   * - ``--iter0-mipgap``
+     - the solver's
+     - The Lagrangian solves, at startup and (with
+       ``--aphfw-final-lagrangian``) at the end
+   * - ``--iterk-mipgap``
+     - :math:`10^{-4}`
+     - The Frank-Wolfe linear subproblems
+   * - ``--aphfw-solve-time-limit``
+     - 300
+     - Every C++ solve, in seconds
+   * - ``--max-solver-threads``
+     - 1
+     - Every C++ solve
+
+As for the other hubs, ``--iter0-mipgap`` and ``--iterk-mipgap`` exist only
+when the model's ``inparser_adder`` calls ``cfg.mip_options()``, and they
+also reach the spokes. ``--solver-options`` and ``--solver-options-file``
+do not reach the C++ solves; the hub says so in a warning, and they still
+apply to the spokes.
 
 The hub's own options all begin with ``--aphfw-``. It also takes
 ``--default-rho``, and the step size ``--aph-nu`` shared with
@@ -196,13 +223,21 @@ Troubleshooting
    Pass ``--solver`` and ``--solver-home``, or set exactly one of
    ``GUROBI_HOME``, ``CPLEX_ROOT``, ``XPRESS_HOME``.
 
-``No include/gurobi_c++.h under ...``
-   ``--solver-home`` (or ``GUROBI_HOME``) must be the platform directory of
-   a full Gurobi installation, the one holding ``include/`` and ``lib/``.
+``No include/gurobi_c++.h under ...`` (and the CPLEX and Xpress equivalents)
+   ``--solver-home`` must be the solver's installation directory: for Gurobi
+   the platform directory holding ``include/`` and ``lib/``, for CPLEX the
+   ``CPLEX_Studio...`` directory holding ``cplex/`` and ``concert/``, for
+   Xpress the directory holding ``include/xprs.h`` and ``lib/``. The message
+   names what is missing.
 
 ``aphfw_cpp loads ... but mpi4py loads ...``
    The module was compiled against a different MPI than mpi4py's. Rebuild
    with ``--cxx`` set to the ``mpicxx`` of mpi4py's MPI.
+
+``Name the solver to build for``
+   A plain pip build was run without ``-C cmake.define.USE_GUROBI=ON`` (or
+   ``USE_CPLEX`` / ``USE_XPRESS``). Name the solver and its home, or use the
+   build command.
 
 ``pip install failed``
    The CMake or compiler error is printed above this line. The usual causes

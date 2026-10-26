@@ -1160,6 +1160,13 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config(name="aphfw_solve_time_limit",
+                           description="Time limit in seconds for each subproblem solve"
+                                       " in the C++ hub (Lagrangian, proximal and"
+                                       " Frank-Wolfe linear solves)",
+                           domain=float,
+                           default=300.0)
+
         self.add_to_config(name="aphfw_final_lagrangian",
                            description="Run the termination Lagrangian solve after the aphfw hub's"
                                        " main loop and let its bound compete with the bound spokes"
