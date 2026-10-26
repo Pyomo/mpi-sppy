@@ -27,16 +27,27 @@ from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
 
 logger = logging.getLogger(__name__)
 
-_BUILD_HELP = (
-    "The aphfw hub (--aphfw-hub) needs the compiled aphfw_cpp module, which a "
-    "normal mpi-sppy install does not build. Build it from mpisppy/aphfw_cpp "
-    "with an MPI C++ compiler (the one mpi4py uses) and one solver backend, "
-    "e.g.\n"
-    "    cmake -S mpisppy/aphfw_cpp -B aphfw_build -DUSE_GUROBI=ON "
-    "-DGUROBI_HOME=... -DCMAKE_CXX_COMPILER=mpic++ -Dpybind11_DIR=...\n"
-    "    cmake --build aphfw_build --parallel\n"
-    "and put aphfw_build/python on PYTHONPATH."
-)
+# The C++ sources, present only in a clone of the repository: the wheel
+# carries no aphfw_cpp files.
+_APHFW_SRC = os.path.join(os.path.dirname(mpisppy.__file__), "aphfw_cpp")
+
+
+def _build_help(src_dir=_APHFW_SRC):
+    """How to build aphfw_cpp from here, which depends on how mpi-sppy got here."""
+    msg = ("The aphfw hub (--aphfw-hub) needs the compiled aphfw_cpp module, "
+           "which a normal mpi-sppy install does not build. ")
+    if not os.path.isfile(os.path.join(src_dir, "pyproject.toml")):
+        return msg + (
+            "Its C++ sources come only with a clone of the mpi-sppy repository "
+            "from GitHub, not with the package from PyPI: install mpi-sppy from "
+            "a clone, then run python -m mpisppy.aphfw_cpp.build there.")
+    return msg + (
+        "It needs MPI (the one mpi4py uses), a C++23 compiler, and Gurobi, "
+        "CPLEX or Xpress. Build and install it with, e.g.,\n"
+        "    python -m mpisppy.aphfw_cpp.build --solver gurobi "
+        "--solver-home /path/to/gurobi/linux64\n"
+        "(--help lists the options; the raw form is pip install " + src_dir +
+        ", see the pyproject.toml there).")
 
 
 def _import_aphfw_cpp():
@@ -44,7 +55,7 @@ def _import_aphfw_cpp():
     try:
         import aphfw_cpp
     except ImportError as e:
-        raise RuntimeError(f"{_BUILD_HELP}\n(import failed: {e})") from e
+        raise RuntimeError(f"{_build_help()}\n(import failed: {e})") from e
     return aphfw_cpp
 
 

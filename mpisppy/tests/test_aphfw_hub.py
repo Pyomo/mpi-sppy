@@ -58,8 +58,15 @@ class TestAphfwOptional(unittest.TestCase):
         from mpisppy.opt.aphfw import _import_aphfw_cpp
         # A None entry makes the import fail whether or not it is built.
         with patch.dict(sys.modules, {"aphfw_cpp": None}):
-            with self.assertRaisesRegex(RuntimeError, "cmake -S mpisppy/aphfw_cpp"):
+            with self.assertRaisesRegex(RuntimeError, "python -m mpisppy.aphfw_cpp.build"):
                 _import_aphfw_cpp()
+
+    def test_build_help_without_sources(self):
+        # A pip-installed mpi-sppy has no aphfw_cpp sources to build from.
+        from mpisppy.opt.aphfw import _build_help
+        msg = _build_help(src_dir=os.path.join(os.sep, "no", "such", "dir"))
+        self.assertIn("clone of the mpi-sppy repository", msg)
+        self.assertNotIn("--solver-home", msg)
 
     def test_one_hub_only(self):
         cfg = _cfg(aphfw_hub=True, fwph_hub=True)
