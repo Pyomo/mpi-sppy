@@ -180,87 +180,113 @@ if haveMPI and _enable_progress_thread:
     _progress_max_gil_probe_seconds = 0.0
     _progress_max_gil_wait_seconds = 0.0
 
-    _native_worker_enabled = (
-        _os.environ.get("MPISPPY_MPI_PROGRESS_NATIVE_WORKER") == "1"
-    )
-    if _native_worker_enabled:
-        _worker_module_path = _os.environ.get(
-            "MPISPPY_MPI_PROGRESS_WORKER_MODULE"
-        )
-        if _worker_module_path:
-            import importlib.util as _import_util
-            import sys as _sys
-
-            _worker_spec = _import_util.spec_from_file_location(
-                "mpisppy._mpi_progress_worker", _worker_module_path
-            )
-            if _worker_spec is None or _worker_spec.loader is None:
-                raise RuntimeError(
-                    "Could not load native MPI progress worker at "
-                    f"{_worker_module_path}"
-                )
-            _mpi_progress_worker = _import_util.module_from_spec(_worker_spec)
-            _sys.modules[_worker_spec.name] = _mpi_progress_worker
-            try:
-                _worker_spec.loader.exec_module(_mpi_progress_worker)
-            except Exception:
-                del _sys.modules[_worker_spec.name]
-                raise
-        else:
-            try:
-                from mpisppy import _mpi_progress_worker
-            except ImportError as _exc:
-                raise RuntimeError(
-                    "MPISPPY_MPI_PROGRESS_NATIVE_WORKER=1 requires the optional "
-                    "mpisppy._mpi_progress_worker extension; build it with "
-                    "MPISPPY_BUILD_MPI_PROGRESS_WORKER=1 and the MPI compiler "
-                    "used by mpi4py"
-                ) from _exc
-        _mpi_progress_worker.configure(
-            COMM_WORLD, _progress_max_interval, _progress_diagnostics
-        )
-
     _progress_native_diagnostics = (
         _progress_diagnostics
         and _os.environ.get("MPISPPY_MPI_PROGRESS_NATIVE_DIAGNOSTICS") == "1"
     )
-    if _native_worker_enabled and _progress_native_diagnostics:
-        raise RuntimeError(
-            "MPISPPY_MPI_PROGRESS_NATIVE_DIAGNOSTICS times the Python worker; "
-            "disable it when MPISPPY_MPI_PROGRESS_NATIVE_WORKER=1"
-        )
-    if _progress_native_diagnostics:
-        _native_module_path = _os.environ.get(
-            "MPISPPY_MPI_PROGRESS_NATIVE_MODULE"
-        )
-        if _native_module_path:
-            import importlib.util as _import_util
-            import sys as _sys
+    # The timing helper measures the Python loop, so requesting it selects that
+    # loop even if the installed package also has the native worker.
+    import importlib as _importlib
+    import importlib.metadata as _metadata
+    import importlib.util as _import_util
+    import json as _json
+    from pathlib import Path as _Path
+    import sys as _sys
 
-            _native_spec = _import_util.spec_from_file_location(
-                "mpisppy._mpi_progress_native", _native_module_path
+    def _is_editable_install():
+        try:
+            direct_url = _metadata.distribution("mpi-sppy").read_text(
+                "direct_url.json"
             )
-            if _native_spec is None or _native_spec.loader is None:
-                raise RuntimeError(
-                    "Could not load native MPI progress helper at "
-                    f"{_native_module_path}"
+        except _metadata.PackageNotFoundError:
+            return False
+        if not direct_url:
+            return False
+        try:
+            origin = _json.loads(direct_url)
+        except ValueError:
+            return False
+        if not isinstance(origin, dict):
+            return False
+        dir_info = origin.get("dir_info")
+        return isinstance(dir_info, dict) and dir_info.get("editable") is True
+
+    _package_file = _Path(__file__).resolve()
+    _source_root = _package_file.parent.parent
+    _running_from_checkout = (
+        (_source_root / "setup.py").is_file()
+        and (_source_root / "pyproject.toml").is_file()
+    )
+    _extension_package = None if (_is_editable_install()
+                                  or _running_from_checkout) else "mpisppy"
+    # Editable wheels install their binaries in the active environment. A
+    # matching source file identifies this checkout without assuming an
+    # environment directory name or setuptools' editable link-tree location.
+    try:
+        import mpisppy_editable_native as _editable_native
+    except ImportError:
+        pass
+    else:
+        _editable_source = getattr(_editable_native, "SOURCE_ROOT", None)
+        _same_source = False
+        if isinstance(_editable_source, str):
+            _expected_source_file = (
+                _Path(_editable_source) / "mpisppy" / "MPI.py"
+            )
+            try:
+                _same_source = _os.path.samefile(
+                    _package_file, _expected_source_file
                 )
-            _mpi_progress_native = _import_util.module_from_spec(_native_spec)
-            _sys.modules[_native_spec.name] = _mpi_progress_native
-            try:
-                _native_spec.loader.exec_module(_mpi_progress_native)
-            except Exception:
-                del _sys.modules[_native_spec.name]
-                raise
-        else:
-            try:
-                from mpisppy import _mpi_progress_native
-            except ImportError as _exc:
-                raise RuntimeError(
-                    "Native MPI progress diagnostics requested but the optional "
-                    "module is unavailable; set "
-                    "MPISPPY_MPI_PROGRESS_NATIVE_MODULE to its built path"
-                ) from _exc
+            except OSError:
+                pass
+        if (
+            _same_source
+            and getattr(_editable_native, "BUILD_PREFIX", None)
+            == str(_Path(_sys.prefix).resolve())
+        ):
+            _extension_package = "mpisppy_editable_native"
+
+    def _progress_extension_name(name):
+        if _extension_package is None:
+            return None
+        full_name = f"{_extension_package}.{name}"
+        return full_name if _import_util.find_spec(full_name) is not None else None
+
+    _worker_module_name = _progress_extension_name("_mpi_progress_worker")
+    _native_worker_enabled = (
+        not _progress_native_diagnostics
+        and _worker_module_name is not None
+    )
+    if _native_worker_enabled:
+        try:
+            _mpi_progress_worker = _importlib.import_module(_worker_module_name)
+        except ImportError as _exc:
+            raise RuntimeError(
+                "Could not load the installed MPI progress worker; rebuild "
+                "mpi-sppy with the MPI compiler used by mpi4py"
+            ) from _exc
+        _mpi_progress_worker.configure(
+            COMM_WORLD, _progress_max_interval, _progress_diagnostics
+        )
+    if COMM_WORLD.Get_rank() == 0:
+        print(
+            "mpi-sppy MPI progress: "
+            f"worker={'native' if _native_worker_enabled else 'python'}",
+            flush=True,
+        )
+
+    if _progress_native_diagnostics:
+        try:
+            _native_module_name = _progress_extension_name("_mpi_progress_native")
+            if _native_module_name is None:
+                raise ImportError("MPI progress profiler extension is unavailable")
+            _mpi_progress_native = _importlib.import_module(_native_module_name)
+        except ImportError as _exc:
+            raise RuntimeError(
+                "Native MPI progress diagnostics require the installed "
+                "MPI progress profiler extension; rebuild mpi-sppy "
+                "with MPISPPY_BUILD_MPI_PROGRESS_PROFILER=1"
+            ) from _exc
         _progress_stop_read_fd, _progress_stop_write_fd = _os.pipe()
 
     def _mpi_progress_loop():
@@ -380,16 +406,24 @@ if haveMPI and _enable_progress_thread:
 
     def _native_progress_loop():
         global _progress_worker_native_id
-        if _progress_diagnostics:
-            _progress_worker_native_id = _threading.get_native_id()
-            print(
-                "mpi-sppy MPI progress: "
-                f"rank={COMM_WORLD.Get_rank()}, "
-                f"worker_native_id={_progress_worker_native_id}, "
-                "native_diagnostics=0, native_worker=1",
-                flush=True,
-            )
-        _mpi_progress_worker.run()
+        try:
+            if _progress_diagnostics:
+                _progress_worker_native_id = _threading.get_native_id()
+                print(
+                    "mpi-sppy MPI progress: "
+                    f"rank={COMM_WORLD.Get_rank()}, "
+                    f"worker_native_id={_progress_worker_native_id}, "
+                    "native_diagnostics=0, native_worker=1",
+                    flush=True,
+                )
+            _mpi_progress_worker.run()
+        except BaseException:
+            # A dead worker cannot make progress for a rank inside a solver.
+            try:
+                import traceback as _traceback
+                _traceback.print_exc()
+            finally:
+                _os._exit(1)
 
     _progress_thread = _threading.Thread(
         target=(_native_progress_loop if _native_worker_enabled
@@ -447,8 +481,20 @@ if haveMPI and _enable_progress_thread:
             _progress_active.set()
             if _progress_native_diagnostics:
                 _os.write(_progress_stop_write_fd, b"\0")
-        _progress_thread.join(timeout=None if _native_worker_enabled else 5)
+        _progress_thread.join(
+            timeout=(getattr(_mpi_progress_worker, "STOP_TIMEOUT_SECONDS", 30)
+                     if _native_worker_enabled else 5)
+        )
         worker_stopped = not _progress_thread.is_alive()
+        if _native_worker_enabled and not worker_stopped:
+            try:
+                _os.write(
+                    2,
+                    b"mpi-sppy MPI progress: worker did not stop before timeout; "
+                    b"exiting rank before MPI finalization\n",
+                )
+            finally:
+                _os._exit(1)
         if _native_worker_enabled and worker_stopped:
             _native_counts = _mpi_progress_worker.snapshot()
             _progress_probes = _native_counts["probes"]

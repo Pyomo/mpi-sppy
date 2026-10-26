@@ -71,6 +71,11 @@ Here are two methods that seem to work well for installation, at least when cons
    instead to also get every optional feature package plus the test,
    documentation, and linting tools (the docs describe all of the extras).
 
+To build the native MPI progress worker in an editable install, install mpi4py
+first, then run `CC=mpicc pip install --no-build-isolation -e .`. The extension
+is installed in that virtualenv, even when several virtualenvs share the same
+checkout. See [MPI installation](doc/src/install_mpi.rst) for the full commands.
+
 To test your installation, give this command (once mpi-sppy is installed
 it works from any directory):
 
@@ -175,4 +180,3 @@ regardless of how you install. If you are an
 existing user, you should consider the disruption before updating to
 the latest mpi-sppy. The documentation on readthedocs
 probably refers to the newest version.
-

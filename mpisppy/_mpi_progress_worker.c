@@ -5,7 +5,11 @@
 #include <math.h>
 #include <mpi4py/mpi4py.h>
 #include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
+
+#define STOP_TIMEOUT_SECONDS 30
 
 static struct {
     pthread_mutex_t mutex;
@@ -58,6 +62,23 @@ static double deadline_seconds(struct timespec deadline)
     return (double)deadline.tv_sec + (double)deadline.tv_nsec * 1e-9;
 }
 
+static void abort_worker(const char *operation, int error)
+{
+    fprintf(stderr, "mpi-sppy MPI progress: %s failed with error %d; aborting MPI job\n",
+            operation, error);
+    fflush(stderr);
+    MPI_Abort(worker.comm, EXIT_FAILURE);
+    _Exit(EXIT_FAILURE); /* MPI_Abort must not return. */
+}
+
+static void exit_stalled_worker(const char *operation)
+{
+    fprintf(stderr, "mpi-sppy MPI progress: %s exceeded %d seconds; exiting rank\n",
+            operation, STOP_TIMEOUT_SECONDS);
+    fflush(stderr);
+    _Exit(EXIT_FAILURE); /* Never finalize MPI with a live progress worker. */
+}
+
 static PyObject *configure(PyObject *self, PyObject *args)
 {
     PyObject *comm_obj;
@@ -107,10 +128,12 @@ static PyObject *configure(PyObject *self, PyObject *args)
 static PyObject *run(PyObject *self, PyObject *unused)
 {
     double cpu_start;
-    int mpi_error = MPI_SUCCESS;
-    int wait_error = 0;
     pthread_mutex_lock(&worker.mutex);
-    if (!worker.configured || worker.running || worker.stopped) {
+    if (worker.configured && worker.stopped) {
+        pthread_mutex_unlock(&worker.mutex);
+        Py_RETURN_NONE; /* stop() can run before this thread starts. */
+    }
+    if (!worker.configured || worker.running) {
         pthread_mutex_unlock(&worker.mutex);
         PyErr_SetString(PyExc_RuntimeError, "MPI progress worker is unavailable");
         return NULL;
@@ -123,9 +146,18 @@ static PyObject *run(PyObject *self, PyObject *unused)
     cpu_start = worker.diagnostics ? seconds_on(CLOCK_THREAD_CPUTIME_ID) : 0;
     for (;;) {
         double active_start;
+        int wait_error;
         pthread_mutex_lock(&worker.mutex);
-        while (!worker.active && !worker.stopped)
-            pthread_cond_wait(&worker.changed, &worker.mutex);
+        while (!worker.active && !worker.stopped) {
+            wait_error = pthread_cond_wait(&worker.changed, &worker.mutex);
+            if (wait_error != 0) {
+                worker.wait_error = wait_error;
+                worker.stopped = 1;
+                pthread_cond_broadcast(&worker.changed);
+                pthread_mutex_unlock(&worker.mutex);
+                abort_worker("pthread_cond_wait", wait_error);
+            }
+        }
         if (worker.stopped) {
             pthread_mutex_unlock(&worker.mutex);
             break;
@@ -139,7 +171,7 @@ static PyObject *run(PyObject *self, PyObject *unused)
         for (;;) {
             double probe_start = 0.0, probe_end, elapsed, interval, lateness;
             struct timespec deadline;
-            int flag;
+            int flag, mpi_error, wait_error = 0;
             pthread_mutex_lock(&worker.mutex);
             if (!worker.active || worker.stopped) {
                 if (worker.diagnostics)
@@ -162,7 +194,7 @@ static PyObject *run(PyObject *self, PyObject *unused)
                 worker.stopped = 1;
                 pthread_cond_broadcast(&worker.changed);
                 pthread_mutex_unlock(&worker.mutex);
-                continue;
+                abort_worker("MPI_Iprobe", mpi_error);
             }
             if (worker.diagnostics) {
                 worker.probes++;
@@ -197,6 +229,8 @@ static PyObject *run(PyObject *self, PyObject *unused)
                 }
             }
             pthread_mutex_unlock(&worker.mutex);
+            if (wait_error != 0 && wait_error != ETIMEDOUT)
+                abort_worker("pthread_cond_timedwait", wait_error);
         }
     }
     pthread_mutex_lock(&worker.mutex);
@@ -206,37 +240,39 @@ static PyObject *run(PyObject *self, PyObject *unused)
     pthread_cond_broadcast(&worker.changed);
     pthread_mutex_unlock(&worker.mutex);
     PyEval_RestoreThread(thread_state);
-    if (mpi_error != MPI_SUCCESS) {
-        PyErr_Format(PyExc_RuntimeError, "MPI_Iprobe failed with MPI error %d", mpi_error);
-        return NULL;
-    }
-    if (wait_error != 0 && wait_error != ETIMEDOUT) {
-        PyErr_Format(PyExc_OSError, "MPI progress wait failed with error %d", wait_error);
-        return NULL;
-    }
     Py_RETURN_NONE;
 }
 
 static PyObject *set_active(PyObject *self, PyObject *args)
 {
     int active;
-    int unavailable, mpi_error, wait_error;
+    int unavailable, mpi_error, wait_error, condition_error = 0, stalled;
     PyThreadState *thread_state;
+    struct timespec deadline;
     if (!PyArg_ParseTuple(args, "p", &active))
         return NULL;
     /* A deactivation waits until no MPI call remains in the worker. */
     thread_state = PyEval_SaveThread();
     pthread_mutex_lock(&worker.mutex);
+    if (worker.configured && !worker.stopped) {
+        worker.active = active;
+        pthread_cond_signal(&worker.changed);
+        if (!active && worker.polling) {
+            deadline = deadline_after(STOP_TIMEOUT_SECONDS);
+            while (worker.polling && condition_error == 0)
+                condition_error = pthread_cond_timedwait(
+                    &worker.changed, &worker.mutex, &deadline);
+        }
+    }
+    stalled = condition_error == ETIMEDOUT && worker.polling;
     unavailable = !worker.configured || worker.stopped;
     mpi_error = worker.mpi_error;
     wait_error = worker.wait_error;
-    if (!unavailable) {
-        worker.active = active;
-        pthread_cond_signal(&worker.changed);
-        while (!active && worker.polling)
-            pthread_cond_wait(&worker.changed, &worker.mutex);
-    }
     pthread_mutex_unlock(&worker.mutex);
+    if (stalled)
+        exit_stalled_worker("progress deactivation");
+    if (condition_error != 0 && condition_error != ETIMEDOUT)
+        abort_worker("pthread_cond_timedwait during deactivation", condition_error);
     PyEval_RestoreThread(thread_state);
     if (unavailable) {
         PyErr_Format(PyExc_RuntimeError,
@@ -298,7 +334,15 @@ static struct PyModuleDef module = {
 
 PyMODINIT_FUNC PyInit__mpi_progress_worker(void)
 {
+    PyObject *result;
     if (import_mpi4py() < 0)
         return NULL;
-    return PyModule_Create(&module);
+    result = PyModule_Create(&module);
+    if (result == NULL)
+        return NULL;
+    if (PyModule_AddIntConstant(result, "STOP_TIMEOUT_SECONDS", STOP_TIMEOUT_SECONDS) < 0) {
+        Py_DECREF(result);
+        return NULL;
+    }
+    return result;
 }

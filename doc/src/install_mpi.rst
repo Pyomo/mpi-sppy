@@ -20,6 +20,44 @@ Here are two methods that seem to work well for installation, at least when cons
 
    * ``pip install -e .[mpi]`` (after cloning and moving to the repo root directory)
 
+Native MPI progress worker
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+An MPI-enabled source build of mpi-sppy compiles the native progress worker
+whenever ``mpi4py`` is available in the build environment. Make an sdist from
+the checkout, then install it in an MPI virtualenv after installing ``mpi4py``::
+
+   python -m pip install build
+   python -m build --sdist
+   python -m pip install "setuptools>=68" wheel mpi4py
+   CC=mpicc python -m pip install --no-build-isolation --no-cache-dir dist/mpi_sppy-*.tar.gz
+
+Select the ``mpicc`` that matches the MPI implementation used by ``mpi4py``.
+Install the sdist separately in each virtualenv when using multiple MPI
+implementations. Each pip build then has a fresh source directory and produces
+an extension linked to that virtualenv's MPI stack. An editable install also
+works from a shared checkout after ``mpi4py`` and the build tools are installed::
+
+   CC=mpicc python -m pip install --no-build-isolation -e .
+
+Editable extensions are installed into each virtualenv rather than copied into
+the checkout, so virtualenvs using different MPI implementations do not share
+the compiled worker. Reinstall the editable package after changing its C code
+or the virtualenv's MPI installation.
+
+The ``[mpi]`` extra alone does not enable the native build: pip builds
+mpi-sppy before installing its runtime extras, and an isolated build cannot
+see ``mpi4py`` from the target environment. A build without ``mpi4py`` remains
+pure Python. The C sources are included in the source distribution, so it can
+also be rebuilt in an MPI-enabled environment.
+
+``MPISPPY_MPI_PROGRESS_THREAD=1`` activates the progress thread and requests
+``MPI_THREAD_MULTIPLE``. If the installed package has the native worker, it is
+selected automatically; otherwise the Python worker runs. To profile the
+Python worker, build with ``MPISPPY_BUILD_MPI_PROGRESS_PROFILER=1`` and set
+``MPISPPY_MPI_PROGRESS_DIAGNOSTICS=1`` together with
+``MPISPPY_MPI_PROGRESS_NATIVE_DIAGNOSTICS=1`` at runtime.
+
 To test your installation, give this command (once mpi-sppy is
 installed it works from any directory):
 
