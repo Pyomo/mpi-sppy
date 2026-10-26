@@ -161,18 +161,34 @@ _DRIVERS = {
 @unittest.skipUnless(mpiexec_available, "mpiexec is not available")
 class TestAphfwDrivers(unittest.TestCase):
 
-    def _run_driver(self, name, np):
+    def _run_driver(self, name, np, args=()):
+        """Run one driver under mpiexec; return its stdout."""
         script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                               name + ".py")
         with tempfile.TemporaryDirectory() as tmpdir:  # for solver logs
             result = subprocess.run(
                 ["mpiexec", "-np", str(np), sys.executable, "-m", "mpi4py",
-                 script],
+                 script, *args],
                 capture_output=True, text=True, timeout=1800, check=False,
                 env=subprocess_env(), cwd=tmpdir)
         tail = (result.stdout + result.stderr)[-3000:]
         self.assertEqual(result.returncode, 0, f"{name} failed:\n{tail}")
         self.assertIn("PASS", result.stdout, f"{name} did not pass:\n{tail}")
+        return result.stdout
+
+    def test_final_lagrangian_flag(self):
+        # --aphfw-final-lagrangian runs the termination Lagrangian, and its
+        # bound only competes with the published one, so it cannot lower it.
+        def best_outer(out):
+            line = [ln for ln in out.splitlines()
+                    if ln.startswith("FINAL_LAGRANGIAN_RESULT")][-1]
+            return float(line.split("best_outer=")[1])
+        off = self._run_driver("aphfw_final_lagrangian_driver", 3)
+        on = self._run_driver("aphfw_final_lagrangian_driver", 3,
+                              ["--final-lagrangian"])
+        self.assertNotIn("Termination Lagrangian bound is", off)
+        self.assertIn("Termination Lagrangian bound is", on)
+        self.assertGreaterEqual(best_outer(on), best_outer(off) - 1e-6)
 
 
 for _name, _np in _DRIVERS.items():
