@@ -377,67 +377,66 @@ class SPOpt(SPBase):
             result_exception = None
             result_exception_results = None
             solver_call_exception = None
-            invocation_exception = None
             deferred_exception = None
-            try:
-                with sputils.solver_log_stream(log_stream_path,
-                                               solve_keyword_args):
-                    def default_solve():
-                        nonlocal load_exception, load_exception_results
-                        nonlocal result_exception, result_exception_results
-                        nonlocal solver_call_exception
-                        try:
-                            candidate_results = s._solver_plugin.solve(
-                                s,
-                                **solve_keyword_args,
-                                load_solutions=False,
-                            )
-                        except Exception as e:
-                            solver_call_exception = e
-                            raise
-                        solution_available = False
-                        if not outer_bound_only:
-                            try:
-                                results_not_good_enough = (
-                                    sputils.not_good_enough_results(
-                                        candidate_results)
-                                )
-                            except Exception as e:
-                                result_exception = e
-                                result_exception_results = candidate_results
-                                raise
-                        if not outer_bound_only and not results_not_good_enough:
-                            try:
-                                if sputils.is_persistent(s._solver_plugin):
-                                    s._solver_plugin.load_vars()
-                                else:
-                                    s.solutions.load_from(candidate_results)
-                            except Exception as e:
-                                if need_solution:
-                                    load_exception = e
-                                    load_exception_results = candidate_results
-                                    raise
-                            else:
-                                solution_available = True
-                        return SubproblemSolveOutcome(
-                            candidate_results,
-                            solution_available=solution_available,
-                            outer_bound=INFER_BOUND,
-                            inner_bound=INFER_BOUND,
-                        )
+            classified_results = []
 
+            def default_solve():
+                nonlocal load_exception, load_exception_results
+                nonlocal result_exception, result_exception_results
+                nonlocal solver_call_exception
+                try:
+                    with sputils.solver_log_stream(
+                            log_stream_path, solve_keyword_args):
+                        candidate_results = s._solver_plugin.solve(
+                            s,
+                            **solve_keyword_args,
+                            load_solutions=False,
+                        )
+                except Exception as e:
+                    solver_call_exception = e
+                    raise
+                solution_available = False
+                if not outer_bound_only:
                     try:
-                        if self.extensions is None:
-                            outcome = default_solve()
-                        else:
-                            outcome = self.extobject.solve_subproblem(
-                                s,
-                                default_solve,
-                                outer_bound_only=outer_bound_only,
-                            )
+                        results_not_good_enough = (
+                            sputils.not_good_enough_results(
+                                candidate_results)
+                        )
                     except Exception as e:
-                        invocation_exception = e
+                        result_exception = e
+                        result_exception_results = candidate_results
                         raise
+                    classified_results.append(
+                        (candidate_results, results_not_good_enough))
+                if not outer_bound_only and not results_not_good_enough:
+                    try:
+                        if sputils.is_persistent(s._solver_plugin):
+                            s._solver_plugin.load_vars()
+                        else:
+                            s.solutions.load_from(candidate_results)
+                    except Exception as e:
+                        if need_solution:
+                            load_exception = e
+                            load_exception_results = candidate_results
+                            raise
+                    else:
+                        solution_available = True
+                return SubproblemSolveOutcome(
+                    candidate_results,
+                    solution_available=solution_available,
+                    outer_bound=INFER_BOUND,
+                    inner_bound=INFER_BOUND,
+                )
+
+            try:
+                if self.extensions is None:
+                    outcome = default_solve()
+                else:
+                    outcome = self.extobject.solve_subproblem(
+                        s,
+                        default_solve,
+                        outer_bound_only=outer_bound_only,
+                    )
             except Exception as e:
                 if e is load_exception:
                     results = load_exception_results
@@ -450,15 +449,10 @@ class SPOpt(SPBase):
                 elif e is solver_call_exception:
                     results = None
                     solver_exception = e
-                elif e is invocation_exception:
+                else:
                     # Exceptions from extension logic or result processing
                     # are not solver failures and must not be retried.
                     raise
-                else:
-                    # Preserve the historical treatment of failures entering
-                    # or leaving the solver logging context.
-                    results = None
-                    solver_exception = e
                 outcome = SubproblemSolveOutcome(
                     results,
                     solution_available=False,
@@ -497,6 +491,17 @@ class SPOpt(SPBase):
             # termination metadata and do not retry or alter availability.
             if deferred_exception is not None:
                 raise deferred_exception
+
+            if not outer_bound_only:
+                for classified_result, classification in reversed(
+                        classified_results):
+                    if classified_result is results:
+                        results_not_good_enough = classification
+                        break
+                else:
+                    results_not_good_enough = (
+                        sputils.not_good_enough_results(results)
+                    )
 
             if outer_bound_only:
                 # No solution is loaded, so the Vars still hold whatever they
@@ -541,7 +546,7 @@ class SPOpt(SPBase):
                 else:
                     s._mpisppy_data.outer_bound = outer_bound
 
-            elif sputils.not_good_enough_results(results):
+            elif results_not_good_enough:
                 # A failed solve computed no bound, so outer_bound stays at the
                 # None set before the solve.
                 s._mpisppy_data.solution_available = outcome.solution_available
