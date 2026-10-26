@@ -1,14 +1,14 @@
 # Standalone build of the aphfw_cpp Python module (FW-APH hub for mpi-sppy).
 #
-# This directory is shared with mpi-sppy (as mpisppy/aphfw_cpp, via git
-# subtree), so it must build on its own: just the module and the static
-# libraries it links, with no standalone executables and no tests. In aph-fw
-# the top-level CMakeLists.txt builds these same subdirectories alongside
-# everything else.
+# By default it builds just the module and the static libraries it links,
+# which is what pip builds. With -DAPHFW_BUILD_TESTS=ON it also builds the
+# standalone driver main_aph_<solver> and the C++ tests in tests/, which ctest
+# then runs:
 #
-#   cmake -S aphfw_cpp -B build -DUSE_GUROBI=ON -DGUROBI_HOME=... \
-#         -DCMAKE_CXX_COMPILER=mpic++ -Dpybind11_DIR=...
+#   cmake -S mpisppy/aphfw_cpp -B build -DUSE_GUROBI=ON -DGUROBI_HOME=... \
+#         -DCMAKE_CXX_COMPILER=mpicxx -Dpybind11_DIR=... -DAPHFW_BUILD_TESTS=ON
 #   cmake --build build --parallel
+#   ctest --test-dir build --output-on-failure
 cmake_minimum_required(VERSION 3.16)
 project(aphfw_cpp LANGUAGES CXX)
 
@@ -40,3 +40,30 @@ add_subdirectory(utils)
 add_subdirectory(solver_interfaces)
 add_subdirectory(FWAPH)
 add_subdirectory(python)
+
+option(APHFW_BUILD_TESTS "Build the standalone driver and the C++ tests" OFF)
+if(APHFW_BUILD_TESTS)
+    foreach(_solver GUROBI CPLEX XPRESS)
+        if(USE_${_solver})
+            string(TOLOWER ${_solver} _lower)
+            set(APHFW_CORE_TARGET aph_core_${_lower})
+            set(APHFW_MAIN_TARGET main_aph_${_lower})
+            add_executable(${APHFW_MAIN_TARGET} FWAPH/FWAPH_main.cpp)
+            target_compile_definitions(${APHFW_MAIN_TARGET} PRIVATE USE_${_solver})
+            if(NODEBUGPRINT)
+                target_compile_definitions(${APHFW_MAIN_TARGET} PRIVATE NODEBUGPRINT)
+            endif()
+            target_link_libraries(${APHFW_MAIN_TARGET} PRIVATE
+                ${APHFW_CORE_TARGET} solver_${_lower})
+        endif()
+    endforeach()
+    if(TARGET GUROBI::cxx AND TARGET GUROBI::core)
+        target_link_options(${APHFW_MAIN_TARGET} PRIVATE -Wl,--no-as-needed)
+        target_link_libraries(${APHFW_MAIN_TARGET} PRIVATE GUROBI::cxx GUROBI::core)
+    endif()
+    if(TARGET MPI::MPI_CXX)
+        target_link_libraries(${APHFW_MAIN_TARGET} PRIVATE MPI::MPI_CXX)
+    endif()
+    enable_testing()
+    add_subdirectory(tests)
+endif()

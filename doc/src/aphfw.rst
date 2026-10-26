@@ -115,6 +115,24 @@ Without the module these tests are skipped, not failed. The MPI tests use
 Pyomo's ``gurobi`` interface on the Python side, so they need ``gurobipy``,
 and one of them needs 6 MPI slots.
 
+The C++ tests
+^^^^^^^^^^^^^
+
+For work on the C++ itself, ``mpisppy/aphfw_cpp/tests`` holds its own
+tests: GoogleTest cases on small bundled problems, runs of the standalone
+driver ``main_aph_<solver>``, and tests of the Python bindings against the
+module the same build produces. They are built only on request, with CMake
+directly rather than pip::
+
+   cmake -S mpisppy/aphfw_cpp -B aphfw_build -DUSE_GUROBI=ON \
+       -DGUROBI_HOME=/path/to/gurobi1302/linux64 -DCMAKE_CXX_COMPILER=mpicxx \
+       -Dpybind11_DIR=$(python -m pybind11 --cmakedir) -DAPHFW_BUILD_TESTS=ON
+   cmake --build aphfw_build --parallel
+   ctest --test-dir aphfw_build --output-on-failure
+
+The configure step downloads GoogleTest. The numeric-retry tests exist only
+in a Gurobi build.
+
 Running
 -------
 
