@@ -1367,10 +1367,13 @@ as a branch stacked on the 1a PR.
     that decide when it checks the outer bound, and whether eta has its
     bounds yet. It does not retrace an uninterrupted run exactly: the
     restarted spoke sends its cuts at different iterations.
-
-  `WOscillationMonitor` (W trajectories, recurrence trackers, an internal
-  slammer) needs more than this and stays refused; it is tracked as issue
-  #903.
+  - `WOscillationMonitor` carries its W trajectories, recurrence trackers,
+    what it has reported, the iteration of its last slam and its internal
+    slammer's state. Like `PHTracker`, a resumed run continues its report
+    CSVs: the checkpoint records each file's absolute path and size, and
+    `restore_state` opens the file and cuts it back to that size. A file that
+    is not the recorded one, or is shorter, or does not end a line at that
+    size, is started over with a warning.
 
   **Restore runs at the end of `Iter0`, not in the resume branch**, and the
   ordering is the whole trick: extensions rebuild their bookkeeping from the
