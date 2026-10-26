@@ -267,7 +267,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         self._scenario_dir = self.mpicomm.bcast(self._scenario_dir, root=0)
 
         if self.cylinder_rank == 0:
-            logger.info(f"Writing scenario files to {self._scenario_dir}")
+            logger.debug(f"Writing scenario files to {self._scenario_dir}")
 
         # Use mpi-sppy's Scenario_lp_mps_files extension to write files
         opts = {
