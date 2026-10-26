@@ -10,22 +10,27 @@
 
 The hub needs the compiled aphfw_cpp module, which a normal install does not
 build, so most of this file checks that mpi-sppy is unaffected when it is
-missing. The end-to-end run is skipped unless aphfw_cpp can be imported.
+missing. The end-to-end run, and the MPI integration tests (the
+aphfw_*_driver.py scripts, each run under mpiexec), are skipped unless
+aphfw_cpp can be imported.
 """
 import importlib.util
 import os
 import runpy
+import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
 import mpisppy.utils.config as config
 from mpisppy.generic.parsing import add_driver_args
-from mpisppy.tests.utils import get_solver
+from mpisppy.tests.utils import get_solver, subprocess_env
 
 solver_available, solver_name, _, _ = get_solver()
 aphfw_cpp_available = importlib.util.find_spec("aphfw_cpp") is not None
+mpiexec_available = shutil.which("mpiexec") is not None
 
 
 def _cfg(**values):
@@ -96,6 +101,44 @@ class TestAphfwHubRun(unittest.TestCase):
         ]
         with patch.object(sys, "argv", argv):
             runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
+
+
+# The MPI integration tests, ported from aph-fw's tests/: each is a driver
+# script with a fixed rank count, run as its own mpiexec job.
+_DRIVERS = {
+    "aphfw_hub_only_driver": 3,
+    "aphfw_wheelspinner_hub_only_driver": 3,
+    "aphfw_wheelspinner_with_spokes_driver": 6,
+    "aphfw_export_feed_rho_driver": 3,
+    "aphfw_rho_from_python_driver": 3,
+    "aphfw_omicron_in_opt_driver": 3,
+    "aphfw_dynamic_rho_driver": 3,
+    "aphfw_final_lagrangian_driver": 3,
+}
+
+
+@unittest.skipUnless(aphfw_cpp_available, "aphfw_cpp is not built")
+@unittest.skipUnless(mpiexec_available, "mpiexec is not available")
+class TestAphfwDrivers(unittest.TestCase):
+
+    def _run_driver(self, name, np):
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              name + ".py")
+        with tempfile.TemporaryDirectory() as tmpdir:  # for solver logs
+            result = subprocess.run(
+                ["mpiexec", "-np", str(np), sys.executable, "-m", "mpi4py",
+                 script],
+                capture_output=True, text=True, timeout=1800, check=False,
+                env=subprocess_env(), cwd=tmpdir)
+        tail = (result.stdout + result.stderr)[-3000:]
+        self.assertEqual(result.returncode, 0, f"{name} failed:\n{tail}")
+        self.assertIn("PASS", result.stdout, f"{name} did not pass:\n{tail}")
+
+
+for _name, _np in _DRIVERS.items():
+    def _test(self, name=_name, np=_np):
+        self._run_driver(name, np)
+    setattr(TestAphfwDrivers, "test_" + _name.removesuffix("_driver"), _test)
 
 
 if __name__ == "__main__":
