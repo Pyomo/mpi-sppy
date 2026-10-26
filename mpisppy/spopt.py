@@ -372,10 +372,13 @@ class SPOpt(SPBase):
             Ag.callout_agnostic(kws)  # not going to use the return values
         else:
             #  didcallout = False  (returned true by the callout, but not used)
+            load_exception = None
+            load_exception_results = None
             try:
                 with sputils.solver_log_stream(log_stream_path,
                                                solve_keyword_args):
                     def default_solve():
+                        nonlocal load_exception, load_exception_results
                         candidate_results = s._solver_plugin.solve(
                             s, **solve_keyword_args, load_solutions=False)
                         solution_available = False
@@ -389,8 +392,10 @@ class SPOpt(SPBase):
                                     s._solver_plugin.load_vars()
                                 else:
                                     s.solutions.load_from(candidate_results)
-                            except Exception:
+                            except Exception as e:
                                 if need_solution:
+                                    load_exception = e
+                                    load_exception_results = candidate_results
                                     raise
                             else:
                                 solution_available = True
@@ -414,16 +419,23 @@ class SPOpt(SPBase):
                             "solve_subproblem must return "
                             "SubproblemSolveOutcome")
                     results = outcome.results
+                    # An override may deliberately catch a failed default
+                    # load and provide its own final outcome.
+                    load_exception = None
+                    load_exception_results = None
                 solver_exception = None
             except Exception as e:
-                results = None
+                if e is load_exception:
+                    results = load_exception_results
+                else:
+                    results = None
                 outcome = SubproblemSolveOutcome(
-                    None,
+                    results,
                     solution_available=False,
                     outer_bound=INFER_BOUND,
                     inner_bound=INFER_BOUND,
                 )
-                solver_exception = e
+                solver_exception = None if e is load_exception else e
 
             # Record how this solve ended, so a caller that sees
             # solution_available == False can tell a genuine infeasibility
@@ -436,6 +448,12 @@ class SPOpt(SPBase):
                     else str(results.solver.termination_condition))
             except (AttributeError, KeyError, IndexError):
                 s._mpisppy_data.termination_condition = None
+
+            # Keep solution-loading failures outside the solver-failure path,
+            # matching solve_one's established behavior: retain the solve's
+            # termination metadata and do not retry or alter availability.
+            if load_exception is not None:
+                raise load_exception
 
             if outer_bound_only:
                 # No solution is loaded, so the Vars still hold whatever they
@@ -510,13 +528,21 @@ class SPOpt(SPBase):
                         print ("TerminationCondition=",
                                results.solver.termination_condition)
                     else:
-                        print("no results object, so solving agin with tee=True")
-                        solve_keyword_args["tee"] = True
-                        with sputils.solver_log_stream(log_stream_path,
-                                                       solve_keyword_args):
-                            results = s._solver_plugin.solve(s,
-                                                     **solve_keyword_args,
-                                                     load_solutions=False)
+                        if solver_exception is not None:
+                            print("no results object, so solving agin with tee=True")
+                            solve_keyword_args["tee"] = True
+                            with sputils.solver_log_stream(
+                                    log_stream_path, solve_keyword_args):
+                                if self.extensions is None:
+                                    default_solve()
+                                else:
+                                    self.extobject.solve_subproblem(
+                                        s,
+                                        default_solve,
+                                        outer_bound_only=outer_bound_only,
+                                    )
+                        else:
+                            print("no results object")
 
                 if solver_exception is not None:
                     raise solver_exception

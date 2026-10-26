@@ -17,9 +17,15 @@ W, create solvers, then call solve_loop directly.
 
 import inspect
 import unittest
+from unittest import mock
 
 import numpy as np
-from pyomo.opt import SolverResults, SolverStatus, TerminationCondition
+from pyomo.opt import (
+    SolutionStatus,
+    SolverResults,
+    SolverStatus,
+    TerminationCondition,
+)
 
 import mpisppy.opt.ph
 import mpisppy.phbase
@@ -247,6 +253,92 @@ class TestExplicitSolveOutcome(unittest.TestCase):
         self.assertFalse(scenario._mpisppy_data.solution_available)
         self.assertEqual(scenario._mpisppy_data.outer_bound, -123.0)
         self.assertIsNone(scenario._mpisppy_data.inner_bound)
+
+
+class _NoDefaultSolveExtension(Extension):
+    def solve_subproblem(
+            self, subproblem, default_solve, *, outer_bound_only=False):
+        return SubproblemSolveOutcome(
+            None,
+            solution_available=False,
+            outer_bound=None,
+            inner_bound=None,
+        )
+
+
+class _CountingPlugin:
+    def __init__(self):
+        self.options = {}
+        self.solve_count = 0
+
+    def solve(self, scenario, **kwargs):
+        self.solve_count += 1
+        results = SolverResults()
+        results.solver.status = SolverStatus.ok
+        results.solver.termination_condition = TerminationCondition.optimal
+        results.problem.lower_bound = -10.0
+        results.problem.upper_bound = 10.0
+        results.solution.add().status = SolutionStatus.feasible
+        return results
+
+
+class TestSolveReplacementContract(unittest.TestCase):
+    def test_gripe_does_not_bypass_replacement_extension(self):
+        ph = _make_ph(extensions=_NoDefaultSolveExtension)
+        name = list(ph.local_scenarios)[0]
+        scenario = ph.local_scenarios[name]
+        plugin = _CountingPlugin()
+        scenario._solver_plugin = plugin
+
+        ph.solve_one(
+            None,
+            name,
+            scenario,
+            gripe=True,
+            need_solution=False,
+        )
+
+        self.assertEqual(plugin.solve_count, 0)
+        self.assertFalse(scenario._mpisppy_data.solution_available)
+        self.assertIsNone(scenario._mpisppy_data.outer_bound)
+
+    def test_load_exception_preserves_original_solve_one_behavior(self):
+        for persistent in (False, True):
+            with self.subTest(persistent=persistent):
+                ph = _make_ph()
+                name = list(ph.local_scenarios)[0]
+                scenario = ph.local_scenarios[name]
+                plugin = _CountingPlugin()
+                scenario._solver_plugin = plugin
+                scenario._mpisppy_data.solution_available = True
+                scenario._mpisppy_data.termination_condition = "prior"
+                error = RuntimeError("solution load failed")
+
+                if persistent:
+                    plugin.load_vars = mock.Mock(side_effect=error)
+                else:
+                    scenario.solutions.load_from = mock.Mock(side_effect=error)
+
+                with mock.patch(
+                        "mpisppy.spopt.sputils.is_persistent",
+                        return_value=persistent):
+                    with self.assertRaisesRegex(
+                            RuntimeError, "solution load failed"):
+                        ph.solve_one(
+                            None,
+                            name,
+                            scenario,
+                            gripe=True,
+                            need_solution=True,
+                            update_objective=False,
+                        )
+
+                self.assertEqual(plugin.solve_count, 1)
+                self.assertTrue(scenario._mpisppy_data.solution_available)
+                self.assertEqual(
+                    scenario._mpisppy_data.termination_condition,
+                    str(TerminationCondition.optimal),
+                )
 
 
 class TestStaleBoundNotRetained(unittest.TestCase):
