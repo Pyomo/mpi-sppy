@@ -12,8 +12,35 @@
     Written:  DLW Jan 2019
     Modified: DTM Aug 2019
 
-    NOTE: The return values of all non-constructor methods are ignored
+    NOTE: Method return values are ignored except for ``solve_subproblem``.
 '''
+
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any
+
+
+class _BoundValue(Enum):
+    INFER = "infer"
+
+
+INFER_BOUND = _BoundValue.INFER
+
+
+@dataclass
+class SubproblemSolveOutcome:
+    '''The result and usable state produced by ``solve_subproblem``.
+
+    ``solution_available=True`` promises that the corresponding solution is
+    already loaded in the subproblem. Bounds set to ``INFER_BOUND`` are read
+    from the Pyomo results by SPOpt; ``None`` explicitly reports no bound.
+    '''
+
+    results: Any
+    solution_available: bool
+    outer_bound: Any = None
+    inner_bound: Any = None
+
 
 class Extension:
     """ Abstract base class for extensions to general SPOpt/SPCommunicator objects.
@@ -68,17 +95,18 @@ class Extension:
         None
         '''
 
-    def solve_subproblem(self, subproblem, solve, *, outer_bound_only=False):
+    def solve_subproblem(
+            self, subproblem, default_solve, *, outer_bound_only=False):
         '''Solve a subproblem, optionally wrapping or replacing the raw solve.
 
-        ``solve`` is a zero-argument callable that performs one fully
+        ``default_solve`` is a zero-argument callable that performs one fully
         configured solver call, loads an available solution, and returns its
-        results. Implementations may call ``solve`` zero, one, or multiple
-        times, and must return the final results object. A replacement that
-        does not call ``solve`` assumes the same loading contract. Bound-only
-        solves do not load a candidate solution.
+        outcome. Implementations may call ``default_solve`` zero, one, or
+        multiple times, and must return the final ``SubproblemSolveOutcome``.
+        A replacement that does not call ``default_solve`` assumes the same
+        loading contract. Bound-only solves do not load a candidate solution.
         '''
-        return solve()
+        return default_solve()
 
     def post_solve(self, subproblem, results):
         '''Observe a completed subproblem solve.
@@ -275,12 +303,13 @@ class MultiExtension(Extension):
         for lobject in self.extdict.values():
             lobject.pre_solve(subproblem)
 
-    def solve_subproblem(self, subproblem, solve, *, outer_bound_only=False):
+    def solve_subproblem(
+            self, subproblem, default_solve, *, outer_bound_only=False):
         if self._solve_subproblem_extension is None:
             return super().solve_subproblem(
-                subproblem, solve, outer_bound_only=outer_bound_only)
+                subproblem, default_solve, outer_bound_only=outer_bound_only)
         return self._solve_subproblem_extension.solve_subproblem(
-            subproblem, solve, outer_bound_only=outer_bound_only)
+            subproblem, default_solve, outer_bound_only=outer_bound_only)
 
     def post_solve(self, subproblem, results):
         for lobject in self.extdict.values():

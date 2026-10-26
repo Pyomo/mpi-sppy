@@ -25,6 +25,7 @@ import mpisppy.opt.ph
 import mpisppy.phbase
 import mpisppy.spopt
 import mpisppy.tests.examples.farmer as farmer
+from mpisppy.extensions.extension import Extension, SubproblemSolveOutcome
 from mpisppy.tests.utils import get_solver
 
 solver_available, solver_name, *_ = get_solver()
@@ -32,7 +33,7 @@ solver_available, solver_name, *_ = get_solver()
 SCENARIO_NAMES = ["Scenario1", "Scenario2", "Scenario3"]
 
 
-def _make_ph():
+def _make_ph(extensions=None):
     """Construct a farmer PH object. This does NOT solve (and does not need a
     working solver), so every subproblem still holds its 'not computed yet'
     None bounds from _set_initial_bounds."""
@@ -53,6 +54,7 @@ def _make_ph():
         farmer.scenario_creator,
         farmer.scenario_denouement,
         scenario_creator_kwargs={"crops_multiplier": 1},
+        extensions=extensions,
     )
 
 
@@ -210,6 +212,41 @@ class _NoBoundPlugin:
         results.solver.status = SolverStatus.warning
         results.solver.termination_condition = self._tc
         return results
+
+
+class _ExplicitBoundExtension(Extension):
+    def solve_subproblem(
+            self, subproblem, default_solve, *, outer_bound_only=False):
+        results = SolverResults()
+        results.solver.status = SolverStatus.ok
+        results.solver.termination_condition = TerminationCondition.optimal
+        return SubproblemSolveOutcome(
+            results,
+            solution_available=False,
+            outer_bound=-123.0,
+            inner_bound=None,
+        )
+
+
+class TestExplicitSolveOutcome(unittest.TestCase):
+    def test_extension_can_report_a_bound_without_a_solution(self):
+        ph = _make_ph(extensions=_ExplicitBoundExtension)
+        name = list(ph.local_scenarios)[0]
+        scenario = ph.local_scenarios[name]
+        scenario._solver_plugin = _NoBoundPlugin(
+            TerminationCondition.infeasible)
+
+        ph.solve_one(
+            None,
+            name,
+            scenario,
+            gripe=True,
+            need_solution=False,
+        )
+
+        self.assertFalse(scenario._mpisppy_data.solution_available)
+        self.assertEqual(scenario._mpisppy_data.outer_bound, -123.0)
+        self.assertIsNone(scenario._mpisppy_data.inner_bound)
 
 
 class TestStaleBoundNotRetained(unittest.TestCase):

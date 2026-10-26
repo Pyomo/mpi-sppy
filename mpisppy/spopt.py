@@ -24,6 +24,10 @@ from pyomo.opt import SolverFactory
 
 import mpisppy.utils.sputils as sputils
 from mpisppy import MPI
+from mpisppy.extensions.extension import (
+    INFER_BOUND,
+    SubproblemSolveOutcome,
+)
 from mpisppy.opt.presolve import SPPresolve
 from mpisppy.spbase import SPBase
 
@@ -368,15 +372,13 @@ class SPOpt(SPBase):
             Ag.callout_agnostic(kws)  # not going to use the return values
         else:
             #  didcallout = False  (returned true by the callout, but not used)
-            solution_load_exception = None
             try:
                 with sputils.solver_log_stream(log_stream_path,
                                                solve_keyword_args):
-                    def solve():
-                        nonlocal solution_load_exception
-                        solution_load_exception = None
+                    def default_solve():
                         candidate_results = s._solver_plugin.solve(
                             s, **solve_keyword_args, load_solutions=False)
+                        solution_available = False
                         if (
                             not outer_bound_only
                             and not sputils.not_good_enough_results(
@@ -387,23 +389,40 @@ class SPOpt(SPBase):
                                     s._solver_plugin.load_vars()
                                 else:
                                     s.solutions.load_from(candidate_results)
-                            except Exception as error:
-                                solution_load_exception = error
+                            except Exception:
                                 if need_solution:
                                     raise
-                        return candidate_results
+                            else:
+                                solution_available = True
+                        return SubproblemSolveOutcome(
+                            candidate_results,
+                            solution_available=solution_available,
+                            outer_bound=INFER_BOUND,
+                            inner_bound=INFER_BOUND,
+                        )
 
                     if self.extensions is None:
-                        results = solve()
+                        outcome = default_solve()
                     else:
-                        results = self.extobject.solve_subproblem(
+                        outcome = self.extobject.solve_subproblem(
                             s,
-                            solve,
+                            default_solve,
                             outer_bound_only=outer_bound_only,
                         )
+                    if not isinstance(outcome, SubproblemSolveOutcome):
+                        raise TypeError(
+                            "solve_subproblem must return "
+                            "SubproblemSolveOutcome")
+                    results = outcome.results
                 solver_exception = None
             except Exception as e:
                 results = None
+                outcome = SubproblemSolveOutcome(
+                    None,
+                    solution_available=False,
+                    outer_bound=INFER_BOUND,
+                    inner_bound=INFER_BOUND,
+                )
                 solver_exception = e
 
             # Record how this solve ended, so a caller that sees
@@ -428,21 +447,23 @@ class SPOpt(SPBase):
                 # not_good_enough_results: a subproblem stopped by a time
                 # limit or a gap can have no solution and still report the
                 # bound we are here for.
-                outer_bound = None
-                if not sputils.no_outer_bound_results(results):
-                    try:
-                        if self.is_minimizing:
-                            outer_bound = results.Problem[0].Lower_bound
-                        else:
-                            outer_bound = results.Problem[0].Upper_bound
-                    except Exception:
-                        # Not a solve we already know to be bound-less, so
-                        # this is a surprise and not a routine outcome.
-                        print (f"[{self._get_cylinder_name()}] Outer bound not found for scenario {s.name}")
-                        print ("status=", results.solver.status)
-                        print ("TerminationCondition=",
-                               results.solver.termination_condition)
-                        raise
+                outer_bound = outcome.outer_bound
+                if outer_bound is INFER_BOUND:
+                    outer_bound = None
+                    if not sputils.no_outer_bound_results(results):
+                        try:
+                            if self.is_minimizing:
+                                outer_bound = results.Problem[0].Lower_bound
+                            else:
+                                outer_bound = results.Problem[0].Upper_bound
+                        except Exception:
+                            # Not a solve we already know to be bound-less, so
+                            # this is a surprise and not a routine outcome.
+                            print (f"[{self._get_cylinder_name()}] Outer bound not found for scenario {s.name}")
+                            print ("status=", results.solver.status)
+                            print ("TerminationCondition=",
+                                   results.solver.termination_condition)
+                            raise
 
                 if outer_bound is None:
                     # This solve produced no bound; the clear above already
@@ -462,9 +483,27 @@ class SPOpt(SPBase):
             elif sputils.not_good_enough_results(results):
                 # A failed solve computed no bound, so outer_bound stays at the
                 # None set before the solve.
-                s._mpisppy_data.solution_available = False
+                s._mpisppy_data.solution_available = outcome.solution_available
+                if outcome.outer_bound is not INFER_BOUND:
+                    s._mpisppy_data.outer_bound = outcome.outer_bound
+                if outcome.inner_bound is not INFER_BOUND:
+                    s._mpisppy_data.inner_bound = outcome.inner_bound
 
-                if gripe:
+                reported_bound = (
+                    (
+                        outcome.outer_bound is not INFER_BOUND
+                        and outcome.outer_bound is not None
+                    )
+                    or (
+                        outcome.inner_bound is not INFER_BOUND
+                        and outcome.inner_bound is not None
+                    )
+                )
+                if (
+                    gripe
+                    and not outcome.solution_available
+                    and not reported_bound
+                ):
                     print (f"[{self._get_cylinder_name()}] Solve failed for scenario {s.name}")
                     if results is not None:
                         print ("status=", results.solver.status)
@@ -483,16 +522,21 @@ class SPOpt(SPBase):
                     raise solver_exception
 
             else:
-                if solution_load_exception is None:
-                    s._mpisppy_data.solution_available = True
+                s._mpisppy_data.solution_available = outcome.solution_available
+                if outcome.outer_bound is INFER_BOUND:
+                    if self.is_minimizing:
+                        s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
+                    else:
+                        s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
                 else:
-                    s._mpisppy_data.solution_available = False
-                if self.is_minimizing:
-                    s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
-                    s._mpisppy_data.inner_bound = results.Problem[0].Upper_bound
+                    s._mpisppy_data.outer_bound = outcome.outer_bound
+                if outcome.inner_bound is INFER_BOUND:
+                    if self.is_minimizing:
+                        s._mpisppy_data.inner_bound = results.Problem[0].Upper_bound
+                    else:
+                        s._mpisppy_data.inner_bound = results.Problem[0].Lower_bound
                 else:
-                    s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
-                    s._mpisppy_data.inner_bound = results.Problem[0].Lower_bound
+                    s._mpisppy_data.inner_bound = outcome.inner_bound
             # TBD: get this ready for IPopt (e.g., check incumbent_prob every time)
             if s._mpisppy_data.solution_available:
                 self._check_staleness(s)

@@ -24,7 +24,9 @@ from mpisppy.extensions.extension import (
     EFExtension,
     EFMultiExtension,
     Extension,
+    INFER_BOUND,
     MultiExtension,
+    SubproblemSolveOutcome,
 )
 
 
@@ -71,10 +73,15 @@ class TestExtensionMethodReturnValues(unittest.TestCase):
         self.assertIsNone(self.ext.pre_solve(subproblem=None))
 
     def test_solve_subproblem_calls_raw_solve(self):
-        sentinel = object()
+        sentinel = SubproblemSolveOutcome(
+            results=object(),
+            solution_available=True,
+            outer_bound=INFER_BOUND,
+            inner_bound=INFER_BOUND,
+        )
         result = self.ext.solve_subproblem(
             subproblem=None,
-            solve=lambda: sentinel,
+            default_solve=lambda: sentinel,
         )
         self.assertIs(result, sentinel)
 
@@ -250,7 +257,7 @@ class TestMultiExtensionDelegation(unittest.TestCase):
     def test_solve_subproblem_uses_default_with_no_override(self):
         multi, _ = self._make_multi(2)
         multi._solve_subproblem_extension = None
-        sentinel = object()
+        sentinel = SubproblemSolveOutcome(object(), True)
         solve = mock.Mock(return_value=sentinel)
 
         result = multi.solve_subproblem(None, solve)
@@ -263,12 +270,12 @@ class TestMultiExtensionDelegation(unittest.TestCase):
 
         class SolverExtension(Extension):
             def solve_subproblem(
-                    self, subproblem, solve, *, outer_bound_only=False):
+                    self, subproblem, default_solve, *, outer_bound_only=False):
                 calls.append("override")
-                return solve()
+                return default_solve()
 
         multi = MultiExtension(_MockOpt(), [_TrackingExtension, SolverExtension])
-        sentinel = object()
+        sentinel = SubproblemSolveOutcome(object(), True)
 
         result = multi.solve_subproblem(None, lambda: sentinel)
 
@@ -278,13 +285,13 @@ class TestMultiExtensionDelegation(unittest.TestCase):
     def test_multiple_solve_subproblem_overrides_are_rejected(self):
         class FirstSolverExtension(Extension):
             def solve_subproblem(
-                    self, subproblem, solve, *, outer_bound_only=False):
-                return solve()
+                    self, subproblem, default_solve, *, outer_bound_only=False):
+                return default_solve()
 
         class SecondSolverExtension(Extension):
             def solve_subproblem(
-                    self, subproblem, solve, *, outer_bound_only=False):
-                return solve()
+                    self, subproblem, default_solve, *, outer_bound_only=False):
+                return default_solve()
 
         with self.assertRaisesRegex(
                 RuntimeError,
