@@ -59,3 +59,11 @@ if(USE_XPRESS)
         target_compile_definitions(aphfw_cpp PRIVATE NODEBUGPRINT)
     endif()
 endif()
+
+# pip install (scikit-build-core; see ../pyproject.toml): put the module at the
+# top of site-packages, keeping the paths to the solver and MPI libraries it
+# was linked against so it loads without LD_LIBRARY_PATH.
+if(SKBUILD)
+    set_target_properties(aphfw_cpp PROPERTIES INSTALL_RPATH_USE_LINK_PATH ON)
+    install(TARGETS aphfw_cpp LIBRARY DESTINATION .)
+endif()
