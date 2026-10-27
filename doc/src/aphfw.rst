@@ -120,9 +120,13 @@ job (3 or 6 ranks)::
    cd mpisppy/tests
    python -m pytest test_aphfw_hub.py
 
-Without the module these tests are skipped, not failed. The MPI tests use
-Pyomo's ``gurobi`` interface on the Python side, so they need ``gurobipy``,
-and one of them needs 6 MPI slots.
+Without the module these tests are skipped, not failed. One of the MPI
+tests needs 6 MPI slots. The Pyomo solver they use on the Python side is
+set by the environment variable ``MPISPPY_APHFW_TEST_SOLVER`` (for example
+``gurobi_persistent`` or ``appsi_highs``); without it, the MPI tests use
+Pyomo's ``gurobi`` and the others the first of CPLEX, Gurobi and Xpress
+that Pyomo can use. A solver named in the variable that Pyomo cannot use
+is an error, not a skip.
 
 The C++ tests
 ^^^^^^^^^^^^^
@@ -140,7 +144,39 @@ directly rather than pip::
    ctest --test-dir aphfw_build --output-on-failure
 
 The configure step downloads GoogleTest. The numeric-retry tests exist only
-in a Gurobi build.
+in a Gurobi build, and the tests of a quadratic objective only in a Gurobi,
+CPLEX or Xpress build.
+
+Testing with other solvers
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+mpi-sppy's CI (the ``aphfw-highs`` job in
+``.github/workflows/test_pr_and_main.yml``) tests only a HiGHS build, since
+HiGHS is the one solver whose C++ library needs no license. Changes to the
+C++, and in particular to a solver's backend in
+``mpisppy/aphfw_cpp/solver_interfaces/<solver>``, should also be tested
+with every licensed solver you have, by running the same steps locally.
+For each solver:
+
+#. Build and install the module for it (see `Building`_), e.g.
+   ``python -m mpisppy.aphfw_cpp.build --solver cplex --solver-home
+   /opt/ibm/ILOG/CPLEX_Studio2211``. This replaces the module built for
+   any other solver.
+#. Run the C++ tests from a build directory of its own, configured with
+   that solver's option and home in place of the Gurobi ones above:
+   ``-DUSE_CPLEX=ON -DCPLEX_ROOT=...``, ``-DUSE_XPRESS=ON
+   -DXPRESS_HOME=...`` or ``-DUSE_HIGHS=ON -DHIGHS_HOME=...``. These do not
+   use the installed module.
+#. Run the hub tests with the matching Pyomo solver::
+
+      cd mpisppy/tests
+      MPISPPY_APHFW_TEST_SOLVER=cplex_persistent python -m pytest test_aphfw_hub.py
+
+The hub tests use the installed module, so test one solver's build at a
+time. To check a change to CI itself, the job's steps can be run as they
+are in a fresh conda-forge environment holding the packages its "Install
+dependencies" step names; that environment has no licensed solver, so it
+is also a check that nothing in the tests depends on one.
 
 Running
 -------

@@ -54,9 +54,13 @@ include(GoogleTest)
 # Register tests with CTest
 # -------------------------------
 include(GoogleTest)
+# Discovery runs the test binary at build time, and its main() starts MPI,
+# which on a cold machine (a fresh CI runner) took 5.1 s against CMake's
+# default limit of 5.
 gtest_discover_tests(
     aphfw_main_test
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+    DISCOVERY_TIMEOUT 60
 )
 
 # The startup W orthogonality check aborts via MPI_Abort rather than throwing
