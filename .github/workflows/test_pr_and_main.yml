@@ -26,6 +26,11 @@ env:
   # here is on one node, so restrict UCX to the transports that node
   # actually uses; nothing in mpi-sppy's tests wants a network fabric.
   UCX_TLS: "self,sm,tcp"
+  # OpenMPI also reaches that device through libfabric: on a MANA runner
+  # its pml cm / mtl ofi path initializes, outranks ob1, and the first
+  # collective over it fails with MPI_ERR_OTHER (issue #938). ob1 is what
+  # every other runner selects. MPICH ignores OMPI_MCA_* settings.
+  OMPI_MCA_pml: "ob1"
   COV_ARGS: "--parallel-mode --rcfile=${{ github.workspace }}/.coveragerc --data-file=${{ github.workspace }}/.coverage --source=${{ github.workspace }}/mpisppy"
   EX_COV_ARGS: "--parallel-mode --rcfile=${{ github.workspace }}/.coveragerc --data-file=${{ github.workspace }}/.coverage --source=${{ github.workspace }}/mpisppy,${{ github.workspace }}/examples"
 
@@ -1365,45 +1370,6 @@ jobs:
           else
             echo "OVERSUBSCRIBE=" >> $GITHUB_ENV
           fi
-
-      # Issue #938: on some runners every MPI step of the openmpi cell fails
-      # (MPI_ERR_OTHER at the first Comm.Split, MPI_Isend errors at np=6),
-      # with the same packages as passing runs. These two steps record what
-      # differs: the runner's hardware and transports, and which components
-      # OpenMPI selects. Remove them once #938 is fixed.
-      - name: Record the runner's hardware and transports (issue 938)
-        if: matrix.mpi == 'openmpi'
-        run: |
-          lscpu | grep -E "Model name|^CPU\(s\)" || true
-          # An RDMA device here (e.g. Azure MANA, mana_0) is what UCX_TLS
-          # above works around.
-          ls /sys/class/infiniband 2>/dev/null || echo "no devices in /sys/class/infiniband"
-          ucx_info -v || true
-          ucx_info -d | grep -E "Transport|Device" || true
-          fi_info -l 2>/dev/null || echo "fi_info not available"
-
-      - name: MPI start-up smoke test (issue 938)
-        if: matrix.mpi == 'openmpi'
-        timeout-minutes: 2
-        env:
-          OMPI_MCA_pml_base_verbose: 10
-          OMPI_MCA_mtl_base_verbose: 10
-          OMPI_MCA_btl_base_verbose: 10
-          OMPI_MCA_osc_base_verbose: 10
-        run: |
-          # The calls that fail first on a bad runner: a communicator split,
-          # and a passive-target RMA window like the flexible-rank tests use.
-          cat > $RUNNER_TEMP/mpi_smoke.py <<'EOF'
-          from mpi4py import MPI
-          comm = MPI.COMM_WORLD
-          comm.Split(key=comm.Get_rank(), color=0)
-          win = MPI.Win.Allocate(8, comm=comm)
-          win.Lock(0)
-          win.Unlock(0)
-          win.Free()
-          print(f"rank {comm.Get_rank()}: Split and RMA ok", flush=True)
-          EOF
-          mpiexec -np 2 $OVERSUBSCRIBE python $RUNNER_TEMP/mpi_smoke.py
 
       - name: run tests
         timeout-minutes: 10

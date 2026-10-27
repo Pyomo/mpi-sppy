@@ -302,6 +302,189 @@ class TestMultRhoUpdaterResume(_ABMixin, unittest.TestCase):
 
 
 @unittest.skipIf(not solver_available, "no solver is available")
+class TestWOscillationMonitorResume(_ABMixin, unittest.TestCase):
+    """Detection judges a trailing window of W, and the slam cooldown counts
+    from the last slam.
+
+    Thresholds of 1 make farmer flag from its first iterations, and the slam
+    directives cover all three crops, so the uninterrupted run slams at
+    iterations 2, 5 and 8: one before the stop and two after. A resumed run
+    that started with empty histories slams different crops, and one that
+    forgot its last slam slams at iteration 4.
+    """
+
+    N = 9
+    STOP = 3
+
+    def setUp(self):
+        super().setUp()
+        #: Report CSV names for the next leg, relative to the temp directory;
+        #: None turns the report off.
+        self.output_csv = None
+        self.per_scenario_csv = None
+        self.report_mode = "on_detect"
+        #: Pass output_csv as given, relative to the working directory.
+        self.relative_csv = False
+
+    def ext_classes(self):
+        from mpisppy.extensions.w_oscillation import WOscillationMonitor
+        return [WOscillationMonitor]
+
+    def _path(self, name):
+        return os.path.join(self._tmp.name, name)
+
+    def _ph(self, max_iters, **ckpt_kwargs):
+        slam_path = self._path("slam.csv")
+        with open(slam_path, "w") as f:
+            f.write("name,can_slam,directions,priority\n"
+                    "DevotedAcreage[*],1,lb,1\n")
+        interrupt = {
+            "action": "slam",
+            "trigger": {"min_scenarios_flagged": 1, "start_iter": 2},
+            "slam": {"directives_file": slam_path, "iters_between_slams": 3},
+        }
+        methods = {
+            "zero_crossings": {"thresh_w_crossings": 1,
+                               "thresh_diff_crossings": 1,
+                               "thresh_diffs_ratio": 0.0},
+            "w_hash_recurrence": {"window": 6},
+        }
+        # Without a "detect" block the engine runs on its defaults and nothing
+        # is reported.
+        if self.output_csv is not None:
+            interrupt["detect"] = {
+                "output_csv": (self.output_csv if self.relative_csv
+                               else self._path(self.output_csv)),
+                "per_scenario_csv": (self._path(self.per_scenario_csv)
+                                     if self.per_scenario_csv else None),
+                "warmup_iters": 1,
+                "report_mode": self.report_mode,
+                "methods": methods,
+            }
+        self.EXTRA_OPTIONS = {
+            "w_oscillation_options": {"interrupt_config": interrupt}}
+        return super()._ph(max_iters, **ckpt_kwargs)
+
+    def _monitor(self, ph):
+        from mpisppy.extensions.w_oscillation import WOscillationMonitor
+        return _extension(ph, WOscillationMonitor)
+
+    def _read(self, name):
+        with open(self._path(name)) as f:
+            return f.read()
+
+    def _run_legs(self, before_resume=None):
+        """The stopped and resumed legs; ``before_resume`` runs in between."""
+        stopped = self._ph(self.STOP, ckpt_dir=self.ckpt_dir)
+        stopped.ph_main()
+        if before_resume is not None:
+            before_resume()
+        resumed = self._ph(self.N - self.STOP, resume_from=self.ckpt_dir)
+        resumed.ph_main()
+        return stopped, resumed
+
+    def test_resume_is_bit_identical(self):
+        reference, _, resumed = self.run_ab()
+        self.assert_bit_identical(reference, resumed)
+        self.assertEqual(self._monitor(resumed)._slammer._slammed,
+                         self._monitor(reference)._slammer._slammed)
+
+    def test_slams_land_on_both_sides_of_the_stop(self):
+        """Otherwise the comparison above cannot see the restore."""
+        _, stopped, resumed = self.run_ab()
+        before = self._monitor(stopped)._slammer._slammed
+        after = self._monitor(resumed)._slammer._slammed
+        self.assertTrue(before, msg="nothing was slammed before the stop")
+        self.assertGreater(len(after), len(before),
+                           msg="nothing was slammed after the resume")
+
+    def test_detection_state_matches_the_uninterrupted_run(self):
+        """Named directly: some of it does not change the solution on this
+        instance (w_hash_recurrence never flags on farmer here)."""
+        self.output_csv = "reference.csv"
+        reference = self._ph(self.N)
+        reference.ph_main()
+        self.output_csv = "legs.csv"
+        _, resumed = self._run_legs()
+        want, got = self._monitor(reference), self._monitor(resumed)
+        self.assertEqual(want._last_slam_iter, 8)
+        self.assertEqual(got._last_slam_iter, want._last_slam_iter)
+        self.assertEqual(set(got._traj), set(want._traj))
+        for sname, buf in want._traj.items():
+            self.assertEqual([v.tolist() for v in got._traj[sname]],
+                             [v.tolist() for v in buf])
+        self.assertEqual({j: t._buf for j, t in got._recur.items()},
+                         {j: t._buf for j, t in want._recur.items()})
+        self.assertTrue(want._reported)
+        self.assertEqual(got._reported, want._reported)
+        self.assertEqual(got._n_flag_events, want._n_flag_events)
+        self.assertEqual(got._n_action_events, want._n_action_events)
+
+    def test_report_csvs_match_the_uninterrupted_ones(self):
+        """The resumed leg continues the stopped leg's reports, and drops the
+        rows written after the checkpoint, which it writes again."""
+        self.report_mode = "every_check"
+        self.output_csv, self.per_scenario_csv = "ref.csv", "ref_scen.csv"
+        reference = self._ph(self.N)
+        reference.ph_main()
+        self.output_csv, self.per_scenario_csv = "legs.csv", "legs_scen.csv"
+
+        def rows_after_the_checkpoint():
+            for name in ("legs.csv", "legs_scen.csv"):
+                with open(self._path(name), "a") as f:
+                    f.write("not,from,before,the,checkpoint\n")
+        self._run_legs(rows_after_the_checkpoint)
+
+        for want, got in (("ref.csv", "legs.csv"),
+                          ("ref_scen.csv", "legs_scen.csv")):
+            rows = self._read(want).splitlines()
+            self.assertTrue(any(row.startswith(f"{self.N},") for row in rows),
+                            msg=f"{want} has no row from after the stop")
+            self.assertEqual(self._read(got), self._read(want))
+
+    def _assert_started_over(self, name):
+        from mpisppy.extensions.w_oscillation import _AGG_COLUMNS
+        lines = self._read(name).splitlines()
+        self.assertEqual(lines[0], ",".join(_AGG_COLUMNS))
+        self.assertNotIn("STALE", self._read(name))
+
+    def test_a_report_the_checkpoint_did_not_record_is_started_over(self):
+        """Turned on at the resume, over a file from some earlier study."""
+        def stale_file():
+            with open(self._path("w.csv"), "w") as f:
+                f.write("STALE,ROW\n")
+            self.output_csv = "w.csv"
+        self._run_legs(stale_file)
+        self._assert_started_over("w.csv")
+
+    def test_a_renamed_report_is_started_over(self):
+        self.output_csv = "first.csv"
+
+        def stale_file():
+            with open(self._path("other.csv"), "w") as f:
+                f.write("STALE,ROW\n")
+            self.output_csv = "other.csv"
+        self._run_legs(stale_file)
+        self._assert_started_over("other.csv")
+
+    def test_a_resume_from_another_directory_starts_its_report_over(self):
+        """The same relative name there is a different file."""
+        study, elsewhere = self._path("study"), self._path("elsewhere")
+        os.mkdir(study)
+        os.mkdir(elsewhere)
+        with open(os.path.join(elsewhere, "w.csv"), "w") as f:
+            f.write("STALE,ROW\n" * 100)
+        self.output_csv, self.relative_csv = "w.csv", True
+        cwd = os.getcwd()
+        try:
+            os.chdir(study)
+            self._run_legs(lambda: os.chdir(elsewhere))
+        finally:
+            os.chdir(cwd)
+        self._assert_started_over(os.path.join("elsewhere", "w.csv"))
+
+
+@unittest.skipIf(not solver_available, "no solver is available")
 class TestSepRhoResume(_ABMixin, unittest.TestCase):
     """A regression: this configuration used to *crash* on resume.
 
@@ -1737,7 +1920,7 @@ class TestShippedExtensionsAnswerTheQuestion(unittest.TestCase):
     #: Extensions that keep state across iterations and do not yet carry it.
     #: A checkpointed run refuses each of them at startup, since a resume
     #: with one would not retrace an uninterrupted run.
-    UNANSWERED = {"CrossScenarioExtension", "WOscillationMonitor"}
+    UNANSWERED = {"CrossScenarioExtension"}
 
     #: Where shipped extensions and convergers live. Not only
     #: mpisppy.extensions: the W and xbar file extensions are in utils, and
