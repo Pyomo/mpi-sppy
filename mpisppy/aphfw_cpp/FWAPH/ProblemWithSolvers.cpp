@@ -103,6 +103,9 @@ void ProblemWithSolvers::setup(Config& cfg,
 #ifdef USE_XPRESS
   FW = std::make_unique<FrankWolfe<XpressNL, XpressGrad>>(*nl, *gradient, cfg);
 #endif
+#ifdef USE_HIGHS
+  FW = std::make_unique<FrankWolfe<HiGHSNL, HiGHSGrad>>(*nl, *gradient, cfg);
+#endif
 
   setupWasCalled = true;
 }
@@ -269,6 +272,18 @@ void ProblemWithSolvers::_createInterfaceObjects(Config& cfg) {
   Lagrangian = std::make_unique<XpressInterface>(problemName, logFileName);
   nl         = std::make_unique<XpressNL>(problemName, logFileName);
   gradient   = std::make_unique<XpressGrad>(problemName, logFileName);
+#endif
+
+#ifdef USE_HIGHS
+  DEBUGPR(1, "Using HiGHS.");
+
+  iter0Params    = std::make_unique<HiGHSParams>(iter0Json);
+  nlParams       = std::make_unique<HiGHSParams>(nlJson);
+  gradientParams = std::make_unique<HiGHSParams>(gradJson);
+
+  Lagrangian = std::make_unique<HiGHSInterface>(problemName, logFileName);
+  nl         = std::make_unique<HiGHSNL>(problemName, logFileName);
+  gradient   = std::make_unique<HiGHSGrad>(problemName, logFileName);
 #endif
 
   if (!iter0Params || !nlParams || !gradientParams) {

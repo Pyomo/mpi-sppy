@@ -310,6 +310,26 @@ TEST(FWAPH_Main, Iter0FWStepForcedOnForLinearObjective)
     std::remove("SolveTimesTrace_fwstep_on_test_rank0.csv");
 }
 
+#ifdef USE_HIGHS
+// HiGHS cannot solve the MIQPs that a quadratic objective leads to, so the
+// HiGHS build refuses smallQuadFWAPH when it reads the model, and the two
+// quadratic-objective tests below are for the commercial backends only.
+TEST(FWAPH_Main, HiGHSRefusesQuadraticObjective)
+{
+    auto args = buildQuadArgStrings({}, "SolveTimesTrace_quad_highs_test");
+    std::string message;
+    try {
+        auto r = runWithArgs(args);
+        EXPECT_NE(r.rc, 0) << "stdout:\n" << r.out << "\nstderr:\n" << r.err;
+        message = r.out + "\n" + r.err;
+    } catch (const std::exception& e) {
+        message = e.what();
+    }
+    EXPECT_NE(message.find("quadratic terms"), std::string::npos) << message;
+
+    std::remove("SolveTimesTrace_quad_highs_test_rank0.csv");
+}
+#else
 // smallQuadFWAPH carries a diagonal quadratic objective, so 'auto' must detect
 // it and take the step.
 TEST(FWAPH_Main, Iter0FWStepAutoTakenForQuadraticObjective)
@@ -348,6 +368,7 @@ TEST(FWAPH_Main, Iter0FWStepOffForQuadraticObjective)
 
     std::remove("SolveTimesTrace_quad_off_test_rank0.csv");
 }
+#endif  // USE_HIGHS
 
 TEST(FWAPH_Main, Iter0FWStepBadValueThrows)
 {

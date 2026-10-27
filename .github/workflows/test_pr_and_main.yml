@@ -1778,6 +1778,72 @@ jobs:
           if-no-files-found: ignore
           include-hidden-files: true
 
+  aphfw-highs:
+    # The compiled FW-APH hub (--aphfw-hub), built for HiGHS: the one solver
+    # whose C++ library needs no license (the pip cplex/gurobipy/xpress
+    # wheels carry no C/C++ headers, and gurobipy's license refuses other
+    # callers).  HiGHS cannot solve MIQPs, so the tests of models with a
+    # quadratic objective run only in a commercial build; see "Testing with
+    # other solvers" in doc/src/aphfw.rst for running those locally.
+    name: FW-APH hub (HiGHS build)
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    timeout-minutes: 45
+    env:
+      # The Pyomo solver for test_aphfw_hub.py and its driver scripts; named,
+      # so a missing one is an error rather than a skip.
+      MPISPPY_APHFW_TEST_SOLVER: appsi_highs
+      # The C++ tests start 2 ranks and one hub driver 6, on a smaller runner.
+      OMPI_MCA_rmaps_base_oversubscribe: "1"
+      PRTE_MCA_rmaps_default_mapping_policy: ":oversubscribe"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+          # conda-forge only: its highs package has the C++ headers and CMake
+          # config (the highspy wheel has neither), and its compilers, MPI and
+          # HiGHS are built to go together.
+          channels: conda-forge
+          conda-remove-defaults: "true"
+      - name: Install dependencies
+        run: |
+          # cxx-compiler: the C++ needs C++23 (GCC 13 or later)
+          conda install openmpi mpi4py "highs=1.15" cxx-compiler cmake pybind11 setuptools
+          # highspy is for appsi_highs, the solver on the Python side
+          pip install pyomo highspy
+
+      - name: setup the program
+        run: |
+          pip install -e ".[test]"
+
+      - name: Build aphfw_cpp for HiGHS
+        run: |
+          python -m mpisppy.aphfw_cpp.build --solver highs --solver-home "$CONDA_PREFIX"
+
+      - name: Test aphfw_cpp (C++ tests)
+        run: |
+          cmake -S mpisppy/aphfw_cpp -B aphfw_build -DUSE_HIGHS=ON \
+              -DHIGHS_HOME="$CONDA_PREFIX" -DCMAKE_CXX_COMPILER="$CONDA_PREFIX/bin/mpicxx" \
+              -DPython3_EXECUTABLE="$(which python)" \
+              -Dpybind11_DIR="$(python -m pybind11 --cmakedir)" -DAPHFW_BUILD_TESTS=ON
+          cmake --build aphfw_build --parallel
+          ctest --test-dir aphfw_build --output-on-failure
+
+      - name: Test the FW-APH hub
+        run: |
+          coverage run $COV_ARGS -m pytest -v -rs mpisppy/tests/test_aphfw_hub.py
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-aphfw-highs
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
   coverage-report:
     name: Coverage Report
     runs-on: ubuntu-latest
@@ -1812,6 +1878,7 @@ jobs:
       - test-agnostic
       - unit-tests
       - ipopt-tests
+      - aphfw-highs
     if: always()
     steps:
       - uses: actions/checkout@v3

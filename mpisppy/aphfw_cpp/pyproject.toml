@@ -21,6 +21,9 @@
 #   CXX=mpicxx pip install ./mpisppy/aphfw_cpp \
 #     -C cmake.define.USE_CPLEX=ON -C cmake.define.CPLEX_ROOT=/path/to/CPLEX_Studio2211
 #
+# (HiGHS likewise, with USE_HIGHS and HIGHS_HOME, the prefix holding
+# include/highs and lib/cmake/highs.)
+#
 # CXX must be the MPI C++ compiler of the MPI that mpi4py uses.  There is no
 # default solver: naming none is an error.
 

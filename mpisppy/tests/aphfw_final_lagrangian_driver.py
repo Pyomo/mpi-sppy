@@ -39,6 +39,8 @@ import sys
 
 from mpi4py import MPI
 
+from mpisppy.tests.utils import aphfw_test_solver
+
 
 def check_publish_outer_bound():
     """APHFWHub.publish_outer_bound competes rather than clobbers."""
@@ -110,7 +112,7 @@ def run_wheel(final_lagrangian):
     cfg.add_to_config("max_stalled_iters", description="max stalled iters", domain=int, default=100)
     cfg.add_to_config("num_scens", description="number of scenarios", domain=int, default=3)
 
-    cfg.solver_name = "gurobi"
+    cfg.solver_name = aphfw_test_solver()
     cfg.default_rho = 1.0
     cfg.max_iterations = 0
     cfg.time_limit = 600

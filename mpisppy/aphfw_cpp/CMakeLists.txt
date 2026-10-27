@@ -25,7 +25,7 @@ project(aphfw_cpp LANGUAGES CXX)
 # Here the solver has to be named: at least one USE_* given, and any not given
 # is turned off, so -DUSE_CPLEX=ON alone is enough.
 set(_named_solvers "")
-foreach(_solver GUROBI CPLEX XPRESS)
+foreach(_solver GUROBI CPLEX XPRESS HIGHS)
     if(DEFINED CACHE{USE_${_solver}})
         if(USE_${_solver})
             list(APPEND _named_solvers ${_solver})
@@ -36,9 +36,10 @@ foreach(_solver GUROBI CPLEX XPRESS)
 endforeach()
 if(NOT _named_solvers)
     message(FATAL_ERROR
-        "Name the solver to build for: one of -DUSE_GUROBI=ON, -DUSE_CPLEX=ON "
-        "or -DUSE_XPRESS=ON (with pip: -C cmake.define.USE_GUROBI=ON, etc.), "
-        "together with its home (GUROBI_HOME, CPLEX_ROOT or XPRESS_HOME).  "
+        "Name the solver to build for: one of -DUSE_GUROBI=ON, -DUSE_CPLEX=ON, "
+        "-DUSE_XPRESS=ON or -DUSE_HIGHS=ON (with pip: -C cmake.define.USE_GUROBI=ON, "
+        "etc.), together with its home (GUROBI_HOME, CPLEX_ROOT, XPRESS_HOME or "
+        "HIGHS_HOME).  "
         "Or let python -m mpisppy.aphfw_cpp.build choose and check it.")
 endif()
 
@@ -51,7 +52,7 @@ add_subdirectory(python)
 
 option(APHFW_BUILD_TESTS "Build the standalone driver and the C++ tests" OFF)
 if(APHFW_BUILD_TESTS)
-    foreach(_solver GUROBI CPLEX XPRESS)
+    foreach(_solver GUROBI CPLEX XPRESS HIGHS)
         if(USE_${_solver})
             string(TOLOWER ${_solver} _lower)
             set(APHFW_CORE_TARGET aph_core_${_lower})

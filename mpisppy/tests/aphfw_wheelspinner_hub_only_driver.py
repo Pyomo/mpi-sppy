@@ -20,6 +20,8 @@ import sys
 
 from mpi4py import MPI
 
+from mpisppy.tests.utils import aphfw_test_solver
+
 
 def test_wheelspinner_hub_only():
     comm = MPI.COMM_WORLD
@@ -51,7 +53,7 @@ def test_wheelspinner_hub_only():
     cfg.add_to_config("num_scens", description="number of scenarios", domain=int, default=3)
 
     # Set values
-    cfg.solver_name = "gurobi"
+    cfg.solver_name = aphfw_test_solver()
     cfg.default_rho = 1.0
     cfg.max_iterations = 0
     cfg.time_limit = 600

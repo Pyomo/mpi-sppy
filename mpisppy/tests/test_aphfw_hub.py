@@ -13,6 +13,11 @@ build, so most of this file checks that mpi-sppy is unaffected when it is
 missing. The end-to-end run, and the MPI integration tests (the
 aphfw_*_driver.py scripts, each run under mpiexec), are skipped unless
 aphfw_cpp can be imported.
+
+The Pyomo solver (for whatever is solved on the Python side) is the one
+get_solver() finds, unless $MPISPPY_APHFW_TEST_SOLVER names one; the driver
+scripts use that variable too, else Pyomo's gurobi.  A solver named there that
+is not available is an error, not a skip.
 """
 import importlib.util
 import os
@@ -24,11 +29,25 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import pyomo.environ as pyo
+
 import mpisppy.utils.config as config
 from mpisppy.generic.parsing import add_driver_args
-from mpisppy.tests.utils import get_solver, subprocess_env
+from mpisppy.tests.utils import (
+    APHFW_TEST_SOLVER_VAR,
+    aphfw_test_solver,
+    get_solver,
+    subprocess_env,
+)
 
-solver_available, solver_name, _, _ = get_solver()
+if os.environ.get(APHFW_TEST_SOLVER_VAR):
+    solver_name = aphfw_test_solver()
+    solver_available = pyo.SolverFactory(solver_name).available(exception_flag=False)
+    if not solver_available:
+        raise RuntimeError(f"{APHFW_TEST_SOLVER_VAR}={solver_name}, but Pyomo "
+                           "cannot use that solver here")
+else:
+    solver_available, solver_name, _, _ = get_solver()
 aphfw_cpp_available = importlib.util.find_spec("aphfw_cpp") is not None
 mpiexec_available = shutil.which("mpiexec") is not None
 

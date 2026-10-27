@@ -30,6 +30,7 @@ from mpisppy.tests.examples.farmer import (
     scenario_creator,
     scenario_denouement,
 )
+from mpisppy.tests.utils import aphfw_test_solver
 
 
 def _make_options(extensions=None, extension_kwargs=None):
@@ -39,7 +40,7 @@ def _make_options(extensions=None, extension_kwargs=None):
     scenario_creator_kwargs = {"num_scens": num_scens}
 
     options = {
-        "solver_name": "gurobi",
+        "solver_name": aphfw_test_solver(),
         "defaultPHrho": 1.0,
         "convthresh": 0,
         "PHIterLimit": 0,
