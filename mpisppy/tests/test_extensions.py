@@ -21,10 +21,10 @@ import unittest
 from unittest import mock
 
 from mpisppy.extensions.extension import (
+    INFER_BOUND,
     EFExtension,
     EFMultiExtension,
     Extension,
-    INFER_BOUND,
     MultiExtension,
     SubproblemSolveOutcome,
 )

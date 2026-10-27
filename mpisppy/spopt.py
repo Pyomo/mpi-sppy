@@ -28,8 +28,8 @@ from pyomo.opt import SolverFactory
 import mpisppy.utils.sputils as sputils
 from mpisppy import MPI
 from mpisppy.extensions.extension import (
-    Extension,
     INFER_BOUND,
+    Extension,
     SubproblemSolveOutcome,
 )
 from mpisppy.opt.presolve import SPPresolve

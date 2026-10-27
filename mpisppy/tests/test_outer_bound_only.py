@@ -32,8 +32,8 @@ import mpisppy.phbase
 import mpisppy.spopt
 import mpisppy.tests.examples.farmer as farmer
 from mpisppy.extensions.extension import (
-    Extension,
     INFER_BOUND,
+    Extension,
     SubproblemSolveOutcome,
 )
 from mpisppy.tests.utils import get_solver
