@@ -63,8 +63,6 @@ def _import_aphfw_cpp():
 # Float options whose C++ default is 0, which the C++ parser (positive values
 # only) cannot be given explicitly; leaving them out gives the same value.
 _ZERO_IS_CPP_DEFAULT = {"aphfw_fw_tau", "aphfw_iter0_w_multiplier"}
-# Float options the C++ accepts as 0.
-_NONNEGATIVE_OPTIONS = {"aphfw_iter0_w_multiplier"}
 
 
 def _check_dir_shared(comm, path):
@@ -102,6 +100,12 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             raise RuntimeError(
                 "--aphfw-hub supports only minimization: the C++ solves "
                 "minimize the objective as written in the scenario files.")
+        # The C++ does the solves, so there are no Pyomo solver plugins.
+        # Extensions that update a persistent solver after fixing a variable
+        # check for one; this tells them there is none (fixings reach the C++
+        # through _push_bounds_to_cpp).
+        for s in self.local_scenarios.values():
+            s._solver_plugin = None
 
         # 2. Write MPS + JSON + rho files to a temporary directory
         self._write_scenario_files()
@@ -116,6 +120,10 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         cfg_dict = self._make_cpp_config()
         self._cpp.init(self.mpicomm, self._scenario_dir, cfg_dict)
         self._cpp.set_hub_mode(True)
+        # The C++ read rho from the scenario files, in the original
+        # objective's units; under --aphfw-obj-scale it needs scaled rho.
+        self._local_nonant_length = self._cpp.get_local_nonant_length()
+        self._push_rho_to_cpp()
 
         # Omicron multiplier: used at the post-iter-0 freeze call. C++ also
         # holds this value (registered option), but Python needs it to pass
@@ -128,9 +136,6 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             ctypes.addressof(self._terminate_flag)
         )
 
-        # Cache the local nonant length
-        self._local_nonant_length = self._cpp.get_local_nonant_length()
-
         # The iter-0 Lagrangian bound is computed by the C++ startup sequence,
         # which the stepping API defers to the first run_cycles call, so it
         # cannot be read here -- only once the loop below has turned once.
@@ -140,12 +145,13 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         has_extensions = getattr(self, "extobject", None) is not None
 
         if has_extensions:
-            # Sync C++ iter-0 state into Pyomo so extensions (e.g. wtracker)
-            # can grab initial W values at iteration 0.
+            # Nothing has been solved yet (the C++ startup runs in the first
+            # run_cycles call), so the Pyomo side is as PH_Prep left it, as it
+            # is for PH's pre_iter0.  There are no Pyomo solvers to create;
+            # iter0_post_solver_creation marks the point the C++ is ready.
             self._PHIter = 0
-            self._sync_cpp_to_pyomo()
-            self._PHIter = 0  # _sync sets it from C++ cycle; force 0
             self.extobject.pre_iter0()
+            self.extobject.iter0_post_solver_creation()
             # Push any rho changes from pre_iter0 (e.g., CoeffRho) to C++
             self._push_rho_to_cpp()
 
@@ -156,7 +162,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             if self.trivial_bound is None:
                 self.trivial_bound = self._unscale_obj(
                     self._cpp.get_current_lagrangian_bound())
-                if self._can_update_best_bound():
+                if self._bound_is_valid():
                     self.best_bound_obj_val = self.trivial_bound
 
             if self._terminate_flag.value:
@@ -180,7 +186,10 @@ class APHFWOpt(mpisppy.phbase.PHBase):
                     self.extobject.post_iter0()
                     self._PHIter = saved_iter
 
+                # The cycle's solves are done, so both of PH's per-iteration
+                # hooks run here.
                 self.extobject.miditer()
+                self.extobject.enditer()
                 self._push_rho_to_cpp()
 
             # Freeze omicron exactly once, after iter 0 completes.
@@ -197,6 +206,11 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             #    in APHFWHub to use C++ values)
             if self.spcomm is not None:
                 self.spcomm.sync()
+                if has_extensions:
+                    if self._cpp.get_current_cycle() == 1:
+                        self.extobject.post_iter0_after_sync()
+                    self.extobject.enditer_after_sync()
+                    self._push_rho_to_cpp()
                 # Push any bound changes from receive_nonant_bounds() or
                 # ReducedCostsFixer to C++ (Lagrangian and Gradient solvers).
                 self._push_bounds_to_cpp()
@@ -257,11 +271,22 @@ class APHFWOpt(mpisppy.phbase.PHBase):
 
         bound = self._unscale_obj(self._cpp.compute_final_lagrangian_bound())
 
-        if self._can_update_best_bound():
-            self.best_bound_obj_val = bound
+        # With nonants fixed by an extension the Lagrangian is over a
+        # restricted set and is not an outer bound.
+        if not self._bound_is_valid():
+            return None
+        self.best_bound_obj_val = bound
         if self.spcomm is not None:
             self.spcomm.publish_outer_bound(bound)
         return bound
+
+    def _bound_is_valid(self):
+        """_can_update_best_bound, agreed over the hub's ranks.
+
+        Collective: a bound is published from every hub rank or from none.
+        """
+        return self.mpicomm.allreduce(int(self._can_update_best_bound()),
+                                      op=MPI.MIN) == 1
 
     def aphfw_finalize(self):
         """Clean up C++ resources and temp directory."""
@@ -271,12 +296,13 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             self._cpp = None
         if self._scenario_dir is not None and self._cleanup_scenario_dir:
             import shutil
-            # Clean the parent directory (mkdtemp parent / "scen")
-            parent = os.path.dirname(self._scenario_dir)
-            try:
-                shutil.rmtree(parent)
-            except OSError:
-                pass
+            # Every hub rank has finished with the files; one rank removes the
+            # parent directory (mkdtemp parent / "scen"), which they share.
+            self.mpicomm.Barrier()
+            if self.cylinder_rank == 0:
+                shutil.rmtree(os.path.dirname(self._scenario_dir),
+                              ignore_errors=True)
+            self._scenario_dir = None
 
     def _write_scenario_files(self):
         """Write MPS/LP + JSON + rho files for C++ consumption."""
@@ -390,10 +416,9 @@ class APHFWOpt(mpisppy.phbase.PHBase):
                 if isinstance(val, float) and val <= 0.0:
                     if val == 0.0 and py_name in _ZERO_IS_CPP_DEFAULT:
                         continue
-                    if not (val == 0.0 and py_name in _NONNEGATIVE_OPTIONS):
-                        raise ValueError(
-                            f"--{py_name.replace('_', '-')} must be positive "
-                            f"(got {val})")
+                    raise ValueError(
+                        f"--{py_name.replace('_', '-')} must be positive "
+                        f"(got {val})")
                 d[cpp_name] = val
 
         # --max-iterations (PHIterLimit) caps the cycles, as it caps every
@@ -449,13 +474,16 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         self._cpp.get_all_local_w(w_buf)
         self._cpp.get_all_local_xbar(xbar_buf)
         self._cpp.get_all_local_rho(rho_buf)
-        # W in the original objective's units, as send_ws gives the spokes
+        # W and rho in the original objective's units, as send_ws gives the
+        # spokes W
         w_buf = self._unscale_obj(w_buf)
+        rho_buf = self._unscale_obj(rho_buf)
 
         idx = 0
         for sname, scenario in self.local_scenarios.items():
             for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items():
-                xvar._value = float(x_buf[idx])
+                if not xvar.fixed:  # a fixed one keeps the value it is fixed at
+                    xvar._value = float(x_buf[idx])
                 scenario._mpisppy_model.W[ndn_i]._value = float(w_buf[idx])
                 scenario._mpisppy_model.xbars[ndn_i]._value = float(xbar_buf[idx])
                 scenario._mpisppy_model.rho[ndn_i]._value = float(rho_buf[idx])
@@ -477,7 +505,9 @@ class APHFWOpt(mpisppy.phbase.PHBase):
                 rho_buf[idx] = float(scenario._mpisppy_model.rho[ndn_i]._value)
                 idx += 1
 
-        self._cpp.set_all_local_rho(rho_buf)
+        # rho in the original objective's units -> the C++'s scaled objective
+        obj_scale = self._get_option("aphfw_obj_scale", 1.0) or 1.0
+        self._cpp.set_all_local_rho(rho_buf * obj_scale)
 
     def _push_bounds_to_cpp(self):
         """Read nonant variable bounds from Pyomo scenarios and push to C++.

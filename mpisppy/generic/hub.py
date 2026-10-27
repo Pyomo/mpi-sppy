@@ -57,6 +57,10 @@ def build_hub_dict(cfg, beans, scenario_creator_kwargs,
                        all_nodenames=all_nodenames,
                    )
     elif cfg.get("aphfw_hub", False):
+        if ph_converger is not None:
+            raise RuntimeError("--aphfw-hub does not take a converger; it "
+                               "stops on its own convergence test, the "
+                               "spokes' gap, or --max-iterations.")
         hub_dict = vanilla.aphfw_hub(*beans,
                                      scenario_creator_kwargs=scenario_creator_kwargs,
                                      ph_extensions=None,

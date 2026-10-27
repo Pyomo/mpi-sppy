@@ -280,7 +280,9 @@ shared with :ref:`sec-aph`. The ones most often set:
 ``--help`` (with a ``--module-name``) lists the rest. ``--aphfw-hub``
 cannot be combined with ``--integer-relax-then-enforce``: the C++ hub solves
 from the MPS files and does not see changes to Pyomo variable types. The hub
-also refuses maximization models and models with ``variable_probability``.
+also refuses maximization models, models with ``variable_probability``,
+and a converger (it stops on its own convergence test, the spokes' gap,
+or ``--max-iterations``).
 
 Troubleshooting
 ---------------

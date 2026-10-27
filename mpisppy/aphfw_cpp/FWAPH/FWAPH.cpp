@@ -353,6 +353,7 @@ bool FWAPH::handleCompletedCommunication(void)
     // Check stepping target (for runNCycles)
     if (cycleTarget_ > 0 && cycleCount >= cycleTarget_)
     {
+      pausedAtCycleTarget_ = true;
       // Must drain inProjection to eligible before returning,
       // otherwise the next runNCycles call finds no eligible scenarios
       while(!inProjection.empty())
@@ -1127,14 +1128,10 @@ void FWAPH::saveWTrace()
 void FWAPH::onMainLoopTerminate()
 {
   // In stepping mode, if we exited only because the cycle target was reached
-  // (not due to convergence, max cycles, or external flag), preserve state
-  // so the caller can resume with another runNCycles call.
-  bool hitCycleTarget = (cycleTarget_ > 0 && cycleCount >= cycleTarget_);
-  bool realTermination = converged_
-      || maxCyclesReached()
-      || (externalTerminateFlag_ && externalTerminateFlag_->load(std::memory_order_relaxed) != 0);
-
-  if (hitCycleTarget && !realTermination) {
+  // preserve state so the caller can resume with another runNCycles call.
+  // Every other exit (convergence, max cycles, the external flag, tau below
+  // its tolerance, a numerical bailout) ends the run.
+  if (pausedAtCycleTarget_) {
     clearCommActive();
   } else {
     signalTermination();
@@ -1155,8 +1152,9 @@ int FWAPH::runNCycles(int n)
   // If already at terminal state, don't re-enter the event loop
   int startCycle = cycleCount;
   cycleTarget_ = cycleCount + n;
-  if (converged_ || maxCyclesReached())
+  if (finished_ || converged_ || maxCyclesReached())
     return 0;
+  pausedAtCycleTarget_ = false;
 
   if (!startupDone_) {
     startupSequence();
@@ -1167,6 +1165,11 @@ int FWAPH::runNCycles(int n)
   terminateFlag = false;
 
   mainEventLoop();
+  // Any exit but the pause at the cycle target, including the wall-clock limit
+  // that returns from mainEventLoop directly, ends the run: the scenarios are
+  // no longer eligible, so another event loop would wait forever.
+  if (!pausedAtCycleTarget_)
+    finished_ = true;
 
   // Don't call terminationSequence here — the caller decides when to finalize.
   // For hub mode, terminationSequence is a no-op anyway.
@@ -1308,6 +1311,12 @@ void FWAPH::setAllLocalRho(const double* buf, int len)
     if (offset + n > len)
       throw std::runtime_error("setAllLocalRho: buffer too small");
     std::vector<double> newRho(buf + offset, buf + offset + n);
+    // The hub pushes rho every cycle, mostly unchanged; an unchanged one must
+    // not touch the solver objects (it would rebuild their objectives).
+    if (newRho == effectiveRho(s)) {
+      offset += n;
+      continue;
+    }
     if (isInSet(s, active)) {
       pendingRho_.resize(numSubdomains);
       pendingRho_[s] = std::move(newRho);
@@ -1447,6 +1456,17 @@ void FWAPH::setAllLocalNonantBounds(const double* lbBuf, const double* ubBuf, in
       throw std::runtime_error("setAllLocalNonantBounds: buffer too small");
     std::vector<double> lb(lbBuf + offset, lbBuf + offset + n);
     std::vector<double> ub(ubBuf + offset, ubBuf + offset + n);
+    // As for rho: the hub pushes every bound every cycle, and rewriting an
+    // unchanged bound can discard a backend's MIP start.
+    const bool pending = s < (int)pendingBounds_.size() && pendingBounds_[s];
+    const auto& curLb = pending ? pendingBounds_[s]->first
+                                : localScenarios()[s].getNonantLowerBounds();
+    const auto& curUb = pending ? pendingBounds_[s]->second
+                                : localScenarios()[s].getNonantUpperBounds();
+    if (lb == curLb && ub == curUb) {
+      offset += n;
+      continue;
+    }
     if (isInSet(s, active)) {
       pendingBounds_.resize(numSubdomains);
       pendingBounds_[s] = std::make_pair(std::move(lb), std::move(ub));

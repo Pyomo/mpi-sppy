@@ -1146,7 +1146,9 @@ class Config(pyofig.ConfigDict):
                            default=False)
 
         self.add_to_config(name="aphfw_obj_scale",
-                           description="Multiply all objective coefficients by this value",
+                           description="Multiply all objective coefficients in the "
+                           "C++ solves by this value; rho and W stay in the "
+                           "original objective's units",
                            domain=float,
                            default=1.0)
 
@@ -1228,7 +1230,7 @@ class Config(pyofig.ConfigDict):
                            default=1.0)
 
         self.add_to_config(name="aphfw_omicron_all",
-                           description="If >= 0, freeze omicron uniformly at setup to this scalar (overrides multiplier)",
+                           description="If > 0, freeze omicron uniformly at setup to this scalar (overrides multiplier)",
                            domain=float,
                            default=-1.0)
 

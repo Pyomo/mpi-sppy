@@ -110,10 +110,16 @@ class _FakeCpp:
     """Stands in for aphfw_cpp.APHFWLibrary in the Python-side tests."""
 
     def __init__(self, n, w=0.0):
-        self.n, self.w, self.bounds = n, w, None
+        self.n, self.w, self.bounds, self.rho = n, w, None, None
 
     def set_all_local_nonant_bounds(self, lb, ub):
         self.bounds = (lb.copy(), ub.copy())
+
+    def set_all_local_rho(self, rho):
+        self.rho = rho.copy()
+
+    def compute_final_lagrangian_bound(self):
+        return -100.0
 
     def get_all_local_w(self, buf):
         buf[:] = self.w
@@ -149,7 +155,9 @@ def _fake_opt(cfg=None, nonants=()):
                           _local_nonant_length=len(nonants),
                           _scenario_dir="scen")
     opt._cpp = _FakeCpp(len(nonants))
-    for name in ("_get_option", "_unscale_obj"):
+    from mpisppy import MPI
+    opt.mpicomm = MPI.COMM_WORLD
+    for name in ("_get_option", "_unscale_obj", "_bound_is_valid"):
         setattr(opt, name, getattr(APHFWOpt, name).__get__(opt))
     return opt, m
 
@@ -190,6 +198,46 @@ class TestAphfwPythonSide(unittest.TestCase):
         lb, ub = opt._cpp.bounds
         np.testing.assert_array_equal(lb, [0, -np.inf, 4.0])
         np.testing.assert_array_equal(ub, [10, np.inf, 4.0])
+
+    def test_sync_keeps_fixed_values(self):
+        # The C++ prox x of a fixed nonant must not overwrite the value it is
+        # fixed at, which _push_bounds_to_cpp then sends as both bounds.
+        opt, m = _fake_opt(nonants=[(0, 10), (0, 10)])
+        m.x[1].fix(4.0)
+        APHFWOpt._sync_cpp_to_pyomo(opt)
+        self.assertEqual((m.x[0].value, m.x[1].value), (1.0, 4.0))
+
+    def test_final_lagrangian_not_published_with_fixed_nonants(self):
+        from types import SimpleNamespace
+        published = []
+        opt, _ = _fake_opt(nonants=[(0, 1)])
+        opt.spcomm = SimpleNamespace(publish_outer_bound=published.append)
+        opt.best_bound_obj_val = None
+        opt._can_update_best_bound = lambda: False
+        self.assertIsNone(APHFWOpt._do_final_lagrangian(opt))
+        self.assertEqual((published, opt.best_bound_obj_val), ([], None))
+        opt._can_update_best_bound = lambda: True
+        self.assertEqual(APHFWOpt._do_final_lagrangian(opt), -100.0)
+        self.assertEqual(published, [-100.0])
+
+    def test_obj_scale_rho_units(self):
+        # rho on the Python side is in the original objective's units; the
+        # C++ solves a scaled objective, so it gets scaled rho.
+        opt, m = _fake_opt(_cfg(aphfw_hub=True, aphfw_obj_scale=4.0),
+                           nonants=[(0, 1), (0, 1)])
+        for p in m._mpisppy_model.rho.values():
+            p.value = 2.0
+        APHFWOpt._push_rho_to_cpp(opt)
+        np.testing.assert_array_equal(opt._cpp.rho, [8.0, 8.0])
+        APHFWOpt._sync_cpp_to_pyomo(opt)  # the fake C++ reports rho 1.0
+        self.assertEqual([pyo.value(r) for r in m._mpisppy_model.rho.values()],
+                         [0.25, 0.25])
+
+    def test_rejects_converger(self):
+        from mpisppy.generic.hub import build_hub_dict
+        with self.assertRaisesRegex(RuntimeError, "converger"):
+            build_hub_dict(_cfg(aphfw_hub=True), None, None, None, None,
+                           ph_converger=object)
 
     def test_extensions_see_unscaled_W(self):
         opt, m = _fake_opt(_cfg(aphfw_hub=True, aphfw_obj_scale=4.0),
@@ -239,6 +287,38 @@ class TestAphfwHubRun(unittest.TestCase):
             self.assertTrue(written[0].startswith(tmpdir), written)
             # the hub finalizes the C++ side, which removes the files
             self.assertEqual(os.listdir(tmpdir), [])
+
+    def test_extension_hooks(self):
+        # The hub calls every PH extension hook, so that, e.g., the reduced
+        # costs fixer gets its per-iteration target and WTracker its Ws.
+        from mpisppy.extensions.extension import Extension
+        from mpisppy.spin_the_wheel import WheelSpinner
+        from mpisppy.tests.examples.farmer import (
+            scenario_creator,
+            scenario_denouement,
+        )
+        from mpisppy.utils.cfg_vanilla import aphfw_hub
+
+        called = set()
+        hooks = ("pre_iter0", "iter0_post_solver_creation", "post_iter0",
+                 "post_iter0_after_sync", "miditer", "enditer",
+                 "enditer_after_sync", "post_everything")
+
+        class Recorder(Extension):
+            pass
+
+        for hook in hooks:
+            setattr(Recorder, hook,
+                    lambda self, hook=hook: called.add(hook))
+
+        cfg = _cfg(aphfw_hub=True, solver_name=solver_name, default_rho=1.0,
+                   max_iterations=3)
+        hub_dict = aphfw_hub(cfg, scenario_creator, scenario_denouement,
+                             [f"scen{i}" for i in range(3)],
+                             scenario_creator_kwargs={"num_scens": 3},
+                             ph_extensions=Recorder)
+        WheelSpinner(hub_dict, []).spin()
+        self.assertEqual(called, set(hooks))
 
     def test_refuses_maximization(self):
         from mpisppy.tests.examples.farmer import (
@@ -398,6 +478,25 @@ class TestAphfwDrivers(unittest.TestCase):
         self.assertNotIn("Termination Lagrangian bound is", off)
         self.assertIn("Termination Lagrangian bound is", on)
         self.assertGreaterEqual(best_outer(on), best_outer(off) - 1e-6)
+
+
+    def test_reduced_costs_fixer(self):
+        # The fixer needs the hub's iteration hooks for its targets and found
+        # no _solver_plugin on the scenarios (AttributeError) once it fixed.
+        args = ["--module-name", "mpisppy.tests.examples.sizes.sizes",
+                "--num-scens", "3", "--solver-name", solver_name,
+                "--aphfw-hub", "--default-rho", "1", "--max-iterations", "3",
+                "--lagrangian", "--reduced-costs", "--rc-fixer",
+                "--rc-fix-fraction-pre-iter0", "0.5", "--rc-verbose"]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = subprocess.run(
+                ["mpiexec", "-np", "3", sys.executable, "-m", "mpi4py",
+                 "-m", "mpisppy.generic_cylinders", *args],
+                capture_output=True, text=True, timeout=600, check=False,
+                env=subprocess_env(), cwd=tmpdir)
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out[-3000:])
+        self.assertIn("Total unique vars fixed by heuristic", out)
 
 
 for _name, _np in _DRIVERS.items():

@@ -332,6 +332,8 @@ protected:
   bool hubMode_ = false;
   bool converged_ = false;
   bool startupDone_ = false;      // whether startupSequence has been called
+  bool pausedAtCycleTarget_ = false;  // the last event loop stopped at cycleTarget_
+  bool finished_ = false;         // the run has terminated; runNCycles does nothing
   int cycleTarget_ = 0;           // target cycle count for runNCycles
   bool maxCyclesReached() const;
 

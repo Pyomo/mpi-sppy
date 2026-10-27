@@ -163,6 +163,23 @@ def test_stepping():
         sys.exit(1)
     comm.Barrier()
 
+    # --- Test 4: a termination other than the cycle target ends the run ---
+    # A huge APH-tau-tolerance makes the first projection stop on tau.  The
+    # next run_cycles call used to re-enter the event loop with no eligible
+    # scenarios and wait forever (the ctest TIMEOUT turns that into a failure).
+    lib4 = aphfw_cpp.APHFWLibrary()
+    lib4.init(comm, problem_dir, dict(config, **{"APH-tau-tolerance": 1e30}))
+    first = lib4.run_cycles(1)
+    second = lib4.run_cycles(1)
+    lib4.finalize()
+    if rank == 0:
+        print(f"\n=== Test 4: tau termination, run_cycles(1) x2: {first}, {second} ===")
+    if second != 0:
+        if rank == 0:
+            print(f"FAILED: expected no cycles after termination, got {second}")
+        sys.exit(1)
+    comm.Barrier()
+
 
 if __name__ == "__main__":
     test_stepping()
