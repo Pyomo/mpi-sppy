@@ -642,19 +642,13 @@ class APHFWHub(PHHub):
         self.put_send_buffer(nonant_buf, self.nonant_field)
 
     def send_ws(self):
-        """Send C++ W (dual) values to spokes (replaces Pyomo-based version).
-
-        If obj-scale was used, W values are in the scaled space and must
-        be unscaled before sending to spokes (which use the original objective).
-        """
+        """Send C++ W (dual) values to spokes (replaces Pyomo-based version)."""
         opt = self.opt
         if opt._cpp is None:
             return
         n = opt._local_nonant_length
         w_tmp = np.empty(n, dtype=np.float64)
         opt._cpp.get_all_local_w(w_tmp)
-
-        w_tmp = opt._unscale_obj(w_tmp)
 
         w_buf = self.send_buffers[Field.DUALS]
         w_buf[:n] = w_tmp

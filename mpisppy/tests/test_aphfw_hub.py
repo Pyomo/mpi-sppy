@@ -157,7 +157,7 @@ def _fake_opt(cfg=None, nonants=()):
     opt._cpp = _FakeCpp(len(nonants))
     from mpisppy import MPI
     opt.mpicomm = MPI.COMM_WORLD
-    for name in ("_get_option", "_unscale_obj", "_bound_is_valid"):
+    for name in ("_get_option", "_bound_is_valid"):
         setattr(opt, name, getattr(APHFWOpt, name).__get__(opt))
     return opt, m
 
@@ -220,32 +220,11 @@ class TestAphfwPythonSide(unittest.TestCase):
         self.assertEqual(APHFWOpt._do_final_lagrangian(opt), -100.0)
         self.assertEqual(published, [-100.0])
 
-    def test_obj_scale_rho_units(self):
-        # Under --aphfw-obj-scale rho is given in the scaled units, so it
-        # passes to and from the C++ unchanged; W comes back unscaled.
-        opt, m = _fake_opt(_cfg(aphfw_hub=True, aphfw_obj_scale=4.0),
-                           nonants=[(0, 1), (0, 1)])
-        for p in m._mpisppy_model.rho.values():
-            p.value = 2.0
-        APHFWOpt._push_rho_to_cpp(opt)
-        np.testing.assert_array_equal(opt._cpp.rho, [2.0, 2.0])
-        APHFWOpt._sync_cpp_to_pyomo(opt)  # the fake C++ reports rho 1.0
-        self.assertEqual([pyo.value(r) for r in m._mpisppy_model.rho.values()],
-                         [1.0, 1.0])
-
     def test_rejects_converger(self):
         from mpisppy.generic.hub import build_hub_dict
         with self.assertRaisesRegex(RuntimeError, "converger"):
             build_hub_dict(_cfg(aphfw_hub=True), None, None, None, None,
                            ph_converger=object)
-
-    def test_extensions_see_unscaled_W(self):
-        opt, m = _fake_opt(_cfg(aphfw_hub=True, aphfw_obj_scale=4.0),
-                           nonants=[(0, 1), (0, 1)])
-        opt._cpp.w = 8.0
-        APHFWOpt._sync_cpp_to_pyomo(opt)
-        self.assertEqual([pyo.value(w) for w in m._mpisppy_model.W.values()],
-                         [2.0, 2.0])
 
     def test_scenario_dir_must_be_shared(self):
         from mpisppy import MPI

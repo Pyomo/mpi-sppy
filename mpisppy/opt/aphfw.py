@@ -157,8 +157,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
 
             # startupSequence() has now run, so the iter-0 bound exists.
             if self.trivial_bound is None:
-                self.trivial_bound = self._unscale_obj(
-                    self._cpp.get_current_lagrangian_bound())
+                self.trivial_bound = self._cpp.get_current_lagrangian_bound()
                 if self._bound_is_valid():
                     self.best_bound_obj_val = self.trivial_bound
 
@@ -240,20 +239,6 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             return getattr(cfg, name)
         return self.options.get(name, default)
 
-    def _unscale_obj(self, value):
-        """Convert a C++ objective-space value back to the original objective.
-
-        --aphfw-obj-scale multiplies every scenario objective coefficient in C++, so
-        bounds come back scaled; the spokes and the inter-cylinder gap use the
-        unscaled objective.
-        """
-        if value is None:
-            return None
-        obj_scale = self._get_option("aphfw_obj_scale", 1.0) or 1.0
-        if obj_scale == 1.0:
-            return value
-        return value / obj_scale
-
     def _do_final_lagrangian(self):
         """Run the termination Lagrangian and let its bound compete.
 
@@ -266,7 +251,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         if self._cpp is None:
             return None
 
-        bound = self._unscale_obj(self._cpp.compute_final_lagrangian_bound())
+        bound = self._cpp.compute_final_lagrangian_bound()
 
         # With nonants fixed by an extension the Lagrangian is over a
         # restricted set and is not an outer bound.
@@ -385,7 +370,6 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             "aphfw_workers_per_rank": "workersPerRank",
             "aphfw_block_sync": "block-sync",
             "aphfw_leading_dispatch_only": "leading-dispatch-only",
-            "aphfw_obj_scale": "obj-scale",
             "aphfw_obj_cutoff": "FW-obj-cutoff",
             "aphfw_W_trace_prefix": "W-trace-prefix",
             "aphfw_solve_times_trace_prefix": "solve-times-trace-prefix",
@@ -471,9 +455,6 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         self._cpp.get_all_local_w(w_buf)
         self._cpp.get_all_local_xbar(xbar_buf)
         self._cpp.get_all_local_rho(rho_buf)
-        # W in the original objective's units, as send_ws gives the spokes.
-        # rho stays as given: under --aphfw-obj-scale it is in scaled units.
-        w_buf = self._unscale_obj(w_buf)
 
         idx = 0
         for sname, scenario in self.local_scenarios.items():
