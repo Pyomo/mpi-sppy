@@ -492,11 +492,18 @@ class TestSolveReplacementContract(unittest.TestCase):
                 plugin = _CountingPlugin()
                 scenario._solver_plugin = plugin
                 error = RuntimeError("solution load failed")
+                termination_conditions_seen_by_load = []
+
+                def fail_load(*args):
+                    termination_conditions_seen_by_load.append(
+                        scenario._mpisppy_data.termination_condition)
+                    raise error
 
                 if persistent:
-                    plugin.load_vars = mock.Mock(side_effect=error)
+                    plugin.load_vars = mock.Mock(side_effect=fail_load)
                 else:
-                    scenario.solutions.load_from = mock.Mock(side_effect=error)
+                    scenario.solutions.load_from = mock.Mock(
+                        side_effect=fail_load)
 
                 with mock.patch(
                         "mpisppy.spopt.sputils.is_persistent",
@@ -514,6 +521,10 @@ class TestSolveReplacementContract(unittest.TestCase):
                 self.assertFalse(scenario._mpisppy_data.solution_available)
                 self.assertEqual(scenario._mpisppy_data.outer_bound, -10.0)
                 self.assertEqual(scenario._mpisppy_data.inner_bound, 10.0)
+                self.assertEqual(
+                    termination_conditions_seen_by_load,
+                    [str(TerminationCondition.optimal)],
+                )
 
     def test_solver_exception_is_not_gated_by_need_solution(self):
         ph = _make_ph()
@@ -630,6 +641,10 @@ class TestSolveReplacementContract(unittest.TestCase):
         def classify_results(results):
             nonlocal classification_calls
             classification_calls += 1
+            self.assertEqual(
+                scenario._mpisppy_data.termination_condition,
+                str(TerminationCondition.optimal),
+            )
             if classification_calls == 1:
                 raise RuntimeError("classification failed")
             return True

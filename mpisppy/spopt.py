@@ -39,6 +39,16 @@ logger = logging.getLogger("SPOpt")
 logger.setLevel(logging.WARN)
 
 
+def _record_termination_condition(subproblem, results):
+    """Record termination metadata without requiring complete results."""
+    try:
+        subproblem._mpisppy_data.termination_condition = (
+            None if results is None
+            else str(results.solver.termination_condition))
+    except (AttributeError, KeyError, IndexError):
+        subproblem._mpisppy_data.termination_condition = None
+
+
 class _SolveFailureStage(Enum):
     SOLVER_CALL = auto()
     RESULT_CLASSIFICATION = auto()
@@ -84,9 +94,16 @@ class _DefaultSolveInvocation:
                     load_solutions=False,
                 )
         except Exception as error:
+            # The raw solve did not complete as a usable attempt. Clear prior
+            # metadata before exposing the exception to an extension wrapper.
+            _record_termination_condition(self.subproblem, None)
             attempt.exception = error
             attempt.failure_stage = _SolveFailureStage.SOLVER_CALL
             raise
+
+        # Match solve_one's historical ordering: callbacks that classify or
+        # load this attempt must see the termination condition it just produced.
+        _record_termination_condition(self.subproblem, attempt.results)
 
         solution_available = False
         if not self.outer_bound_only:
@@ -384,16 +401,6 @@ class SPOpt(SPBase):
             solver_exception=solver_exception,
             deferred_exception=deferred_exception,
         )
-
-
-    def _record_termination_condition(self, s, results):
-        """Record termination metadata without requiring complete results."""
-        try:
-            s._mpisppy_data.termination_condition = (
-                None if results is None
-                else str(results.solver.termination_condition))
-        except (AttributeError, KeyError, IndexError):
-            s._mpisppy_data.termination_condition = None
 
 
     def _apply_outer_bound_only_outcome(
@@ -749,7 +756,7 @@ class SPOpt(SPBase):
 
             # Record this before raising a deferred classification or loading
             # exception so callers retain the solver's termination metadata.
-            self._record_termination_condition(s, results)
+            _record_termination_condition(s, results)
 
             # Keep solution-loading failures outside the solver-failure path,
             # matching solve_one's established behavior: retain the solve's
