@@ -151,7 +151,7 @@ def _make_options():
         "solver_name": aphfw_test_solver(),
         "defaultPHrho": 1.0,
         "convthresh": 0,
-        "PHIterLimit": 0,
+        "PHIterLimit": MAX_CYCLES,
         "time_limit": 600,
         "verbose": False,
         "display_progress": False,
@@ -169,7 +169,6 @@ def _make_options():
         # aphfw-specific
         "aphfw_fw_tmax": 2,
         "aphfw_fw_tau": 0.01,
-        "aphfw_max_cycles": MAX_CYCLES,
         # Loose enough that APH does not stop before the residuals get small.
         "aphfw_primal_term_thresh": 1e-8,
         "aphfw_dual_term_thresh": 1e-8,

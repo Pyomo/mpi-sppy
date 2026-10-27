@@ -144,7 +144,8 @@ def _fake_opt(cfg=None, nonants=()):
            for name in ("W", "xbars", "rho")})
     for name in ("W", "xbars", "rho"):
         m.add_component("_" + name, getattr(m._mpisppy_model, name))
-    opt = SimpleNamespace(options={"cfg": cfg}, local_scenarios={"s": m},
+    opt = SimpleNamespace(options={"cfg": cfg, "PHIterLimit": 5},
+                          local_scenarios={"s": m},
                           _local_nonant_length=len(nonants),
                           _scenario_dir="scen")
     opt._cpp = _FakeCpp(len(nonants))
@@ -173,6 +174,13 @@ class TestAphfwPythonSide(unittest.TestCase):
         self.assertNotIn("iter0-w-multiplier", d)
         cfg.aphfw_primal_term_thresh = 0.0
         with self.assertRaisesRegex(ValueError, "--aphfw-primal-term-thresh"):
+            APHFWOpt._make_cpp_config(opt)
+
+    def test_max_iterations_sets_cycle_limit(self):
+        opt, _ = _fake_opt(_cfg(aphfw_hub=True))
+        self.assertEqual(APHFWOpt._make_cpp_config(opt)["aph-max-cycles"], 5)
+        opt.options["PHIterLimit"] = 0
+        with self.assertRaisesRegex(ValueError, "--max-iterations"):
             APHFWOpt._make_cpp_config(opt)
 
     def test_fixed_nonants_pushed_as_bounds(self):
@@ -216,7 +224,7 @@ class TestAphfwHubRun(unittest.TestCase):
 
     def test_scenario_dir_used_and_removed(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            argv = self._farmer_argv("--aphfw-max-cycles", "2",
+            argv = self._farmer_argv("--max-iterations", "2",
                                      "--aphfw-scenario-dir", tmpdir)
             written = []
             real_init = APHFWOpt._make_cpp_config
@@ -259,7 +267,7 @@ class TestAphfwHubRun(unittest.TestCase):
         # check-omicron-invariant defaults to true in C++; the bindings used to
         # drop a false bool, which left it on.  verbosity 1 echoes the options.
         argv = [sys.executable, "-m", "mpisppy.generic_cylinders",
-                *self._farmer_argv("--aphfw-max-cycles", "1",
+                *self._farmer_argv("--max-iterations", "1",
                                    "--aphfw-verbosity", "1",
                                    "--disable-aphfw-check-omicron-invariant")[1:]]
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -278,36 +286,30 @@ class TestAphfwHubRun(unittest.TestCase):
             "--solver-name", solver_name,
             "--aphfw-hub",
             "--default-rho", "1",
-            "--aphfw-max-cycles", "5",
+            "--max-iterations", "5",
         ]
         with patch.object(sys, "argv", argv):
             runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
 
-    def test_farmer_default_max_cycles(self):
-        # --aphfw-max-cycles defaults to 0 (no limit); the hub used to stop
-        # the C++ after cycle 1 and then wait forever.  Run it as a
-        # subprocess so a hang fails the test instead of stalling it.
-        argv = [
-            sys.executable, "-m", "mpisppy.generic_cylinders",
-            "--module-name", "mpisppy.tests.examples.farmer",
-            "--num-scens", "3",
-            "--solver-name", solver_name,
-            "--aphfw-hub",
-            "--default-rho", "1",
-        ]
+    def test_max_iterations_caps_cycles(self):
+        # The hub stops at --max-iterations cycles, as other hubs stop at
+        # that many iterations.  Farmer needs about 70 to converge.  Run it as
+        # a subprocess so that a hang fails the test instead of stalling it.
+        argv = [sys.executable, "-m", "mpisppy.generic_cylinders",
+                *self._farmer_argv("--max-iterations", "7")[1:]]
         with tempfile.TemporaryDirectory() as tmpdir:  # for solver logs
             try:
                 result = subprocess.run(
                     argv, capture_output=True, text=True, timeout=300,
                     check=False, env=subprocess_env(), cwd=tmpdir)
             except subprocess.TimeoutExpired:
-                self.fail("the hub did not finish without --aphfw-max-cycles")
+                self.fail("the hub did not finish")
         out = result.stdout + result.stderr
         self.assertEqual(result.returncode, 0, out[-3000:])
         # the iteration count on the last line of the termination table
         lines = out.split("Statistics at termination")[-1].splitlines()
         last_iter = int(lines[2].split("]")[1].split()[0])
-        self.assertGreater(last_iter, 1, out[-3000:])
+        self.assertEqual(last_iter, 7, out[-3000:])
 
     def test_solver_options_reach_cpp(self):
         # The C++ solves read mipGap, timeLimit and threads from JSON files the
@@ -331,7 +333,7 @@ class TestAphfwHubRun(unittest.TestCase):
             "--solver-name", solver_name,
             "--aphfw-hub",
             "--default-rho", "1",
-            "--aphfw-max-cycles", "2",
+            "--max-iterations", "2",
             "--iter0-mipgap", "0.02",
             "--iterk-mipgap", "0.003",
             "--max-solver-threads", "2",

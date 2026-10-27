@@ -1115,11 +1115,6 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=0.01)
 
-        self.add_to_config(name="aphfw_max_cycles",
-                           description="Maximum APH cycles (0 = unlimited)",
-                           domain=int,
-                           default=0)
-
         self.add_to_config(name="aphfw_primal_term_thresh",
                            description="Primal termination tolerance (applied to u)",
                            domain=float,

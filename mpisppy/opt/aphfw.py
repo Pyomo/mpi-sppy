@@ -351,7 +351,6 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         mappings = {
             "aphfw_fw_tmax": "FW-tmax",
             "aphfw_fw_tau": "FW-tau",
-            "aphfw_max_cycles": "aph-max-cycles",
             "aphfw_primal_term_thresh": "primal-term-thresh",
             "aphfw_dual_term_thresh": "dual-term-thresh",
             "aphfw_gamma_inverse": "gamma-inverse",
@@ -396,6 +395,15 @@ class APHFWOpt(mpisppy.phbase.PHBase):
                             f"--{py_name.replace('_', '-')} must be positive "
                             f"(got {val})")
                 d[cpp_name] = val
+
+        # --max-iterations (PHIterLimit) caps the cycles, as it caps every
+        # hub's iterations.  The C++ runs at least one cycle per step, so 0,
+        # which means iteration 0 only for PH, has no equivalent here.
+        max_cycles = int(self.options["PHIterLimit"])
+        if max_cycles < 1:
+            raise ValueError("--max-iterations must be at least 1 with "
+                             f"--aphfw-hub (got {max_cycles})")
+        d["aph-max-cycles"] = max_cycles
 
         # Rho: let C++ read per-scenario {scenarioName}_rho.csv files
         # written by Scenario_lp_mps_files.  These contain per-variable rho

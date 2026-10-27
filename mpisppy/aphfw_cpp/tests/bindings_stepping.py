@@ -143,6 +143,26 @@ def test_stepping():
 
     comm.Barrier()
 
+    # --- Test 3: aph-max-cycles 0 is no limit when stepping ---
+    # It once ended the run after cycle 1, and the next run_cycles call then
+    # waited forever (the ctest TIMEOUT turns that into a failure).
+    lib3 = aphfw_cpp.APHFWLibrary()
+    lib3.init(comm, problem_dir, dict(config, **{"aph-max-cycles": 0}))
+    steps = []
+    for step in range(3):
+        steps.append(lib3.run_cycles(1))
+        if lib3.is_converged():
+            break
+    converged3 = lib3.is_converged()
+    lib3.finalize()
+    if rank == 0:
+        print(f"\n=== Test 3: aph-max-cycles 0, run_cycles(1) x3: {steps} ===")
+    if not (steps == [1, 1, 1] or (converged3 and all(c == 1 for c in steps[:-1]))):
+        if rank == 0:
+            print(f"FAILED: expected a cycle per call, got {steps}")
+        sys.exit(1)
+    comm.Barrier()
+
 
 if __name__ == "__main__":
     test_stepping()

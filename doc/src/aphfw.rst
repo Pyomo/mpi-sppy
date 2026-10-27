@@ -187,7 +187,7 @@ Select the hub with ``--aphfw-hub`` in ``generic_cylinders`` (see
    mpiexec -np 3 python -m mpi4py -m mpisppy.generic_cylinders \
        --module-name mpisppy.tests.examples.farmer --num-scens 3 \
        --solver-name gurobi_persistent --aphfw-hub --default-rho 1 \
-       --aphfw-max-cycles 50 --lagrangian --xhatshuffle --rel-gap 0.001
+       --max-iterations 50 --lagrangian --xhatshuffle --rel-gap 0.001
 
 The hub's subproblems are solved in C++ by the solver the module was built
 for. ``--solver-name`` is still needed, for the spokes; it may name a
@@ -222,8 +222,8 @@ do not reach the C++ solves; the hub says so in a warning, and they still
 apply to the spokes.
 
 The hub's own options all begin with ``--aphfw-``. It also takes
-``--default-rho``, and the step size ``--aph-nu`` shared with
-:ref:`sec-aph`. The ones most often set:
+``--max-iterations`` and ``--default-rho``, and the step size ``--aph-nu``
+shared with :ref:`sec-aph`. The ones most often set:
 
 .. list-table:: FW-APH hub options
    :widths: 30 10 60
@@ -238,9 +238,10 @@ The hub's own options all begin with ``--aphfw-``. It also takes
    * - ``--aph-nu``
      - 1.0
      - Step size multiplier (shared with APH)
-   * - ``--aphfw-max-cycles``
-     - 0
-     - Maximum number of cycles (0 = no limit)
+   * - ``--max-iterations``
+     - 1
+     - Maximum number of cycles, as for the other hubs' iterations; at
+       least 1
    * - ``--aphfw-fw-tmax``
      - 1
      - Maximum Frank-Wolfe iterations (linear subproblem solves) per

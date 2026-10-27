@@ -70,7 +70,7 @@ def _make_options(extensions=None, extension_kwargs=None):
         "solver_name": aphfw_test_solver(),
         "defaultPHrho": 1.0,
         "convthresh": 0,
-        "PHIterLimit": 0,
+        "PHIterLimit": 3,
         "time_limit": 600,
         "verbose": False,
         "display_progress": False,
@@ -86,7 +86,6 @@ def _make_options(extensions=None, extension_kwargs=None):
         # aphfw-specific
         "aphfw_fw_tmax": 2,
         "aphfw_fw_tau": 0.01,
-        "aphfw_max_cycles": 3,
         "aphfw_primal_term_thresh": 0.0001,
         "aphfw_dual_term_thresh": 0.0001,
         "aphfw_display_progress": False,

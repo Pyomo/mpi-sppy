@@ -55,7 +55,7 @@ def test_wheelspinner_hub_only():
     # Set values
     cfg.solver_name = aphfw_test_solver()
     cfg.default_rho = 1.0
-    cfg.max_iterations = 0
+    cfg.max_iterations = 5
     cfg.time_limit = 600
     cfg.verbose = False
     cfg.display_progress = False
@@ -71,7 +71,6 @@ def test_wheelspinner_hub_only():
     # aphfw options
     cfg.aphfw_fw_tmax = 10
     cfg.aphfw_fw_tau = 0.01
-    cfg.aphfw_max_cycles = 5
     cfg.aphfw_primal_term_thresh = 0.001
     cfg.aphfw_dual_term_thresh = 0.001
     cfg.aphfw_display_progress = True
