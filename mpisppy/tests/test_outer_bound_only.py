@@ -255,6 +255,19 @@ class _InferNonoptimalBoundsExtension(Extension):
         )
 
 
+class _InferDefaultNonoptimalBoundsExtension(Extension):
+    def solve_subproblem(
+            self, subproblem, default_solve, *, outer_bound_only=False):
+        default_outcome = default_solve()
+        self.default_outcome = default_outcome
+        return SubproblemSolveOutcome(
+            default_outcome.results,
+            solution_available=default_outcome.solution_available,
+            outer_bound=INFER_BOUND,
+            inner_bound=INFER_BOUND,
+        )
+
+
 class _DirectSolutionExtension(Extension):
     def solve_subproblem(
             self, subproblem, default_solve, *, outer_bound_only=False):
@@ -306,6 +319,36 @@ class TestExplicitSolveOutcome(unittest.TestCase):
         self.assertFalse(scenario._mpisppy_data.solution_available)
         self.assertEqual(scenario._mpisppy_data.outer_bound, -321.0)
         self.assertEqual(scenario._mpisppy_data.inner_bound, 654.0)
+
+    def test_extension_can_infer_bounds_from_failed_default_solve(self):
+        ph = _make_ph(extensions=_InferDefaultNonoptimalBoundsExtension)
+        name = list(ph.local_scenarios)[0]
+        scenario = ph.local_scenarios[name]
+        plugin = _NoBoundPlugin(TerminationCondition.maxTimeLimit)
+        scenario._solver_plugin = plugin
+
+        original_solve = plugin.solve
+
+        def solve_with_bounds(subproblem, **kwargs):
+            results = original_solve(subproblem, **kwargs)
+            results.problem.lower_bound = -321.0
+            results.problem.upper_bound = 654.0
+            return results
+
+        plugin.solve = solve_with_bounds
+        ph.solve_one(
+            None,
+            name,
+            scenario,
+            gripe=True,
+            need_solution=False,
+        )
+
+        self.assertFalse(scenario._mpisppy_data.solution_available)
+        self.assertEqual(scenario._mpisppy_data.outer_bound, -321.0)
+        self.assertEqual(scenario._mpisppy_data.inner_bound, 654.0)
+        self.assertIsNone(ph.extobject.default_outcome.outer_bound)
+        self.assertIsNone(ph.extobject.default_outcome.inner_bound)
 
     def test_extension_can_load_solution_and_report_bounds_without_results(self):
         ph = _make_ph(extensions=_DirectSolutionExtension)

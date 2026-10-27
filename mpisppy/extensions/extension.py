@@ -106,6 +106,9 @@ class Extension:
         multiple times, and must return the final ``SubproblemSolveOutcome``.
         A replacement that does not call ``default_solve`` assumes the same
         loading contract. Bound-only solves do not load a candidate solution.
+        A classified failed default solve reports ``None`` bounds, preserving
+        native solve behavior; a wrapper may return a new outcome with
+        ``INFER_BOUND`` to recover usable bounds from its non-optimal results.
 
         This hook is not supported when SPOpt delegates solves through its
         Agnostic interface. Agnostic dispatch is itself a solve-replacement

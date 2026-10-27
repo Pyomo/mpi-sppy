@@ -75,6 +75,11 @@ directly; ``INFER_BOUND`` asks ``SPOpt`` to read the corresponding bound from
 the returned Pyomo results, including a usable bound from a non-optimal solve.
 ``None`` explicitly reports that no bound is available.
 
+A default solve whose results are classified as failed reports ``None``
+bounds, preserving the native solve behavior. A wrapping extension may return
+a new outcome with ``INFER_BOUND`` to recover usable bounds from those
+non-optimal results.
+
 Only one member of a ``MultiExtension`` may override ``solve_subproblem``.
 Other extensions still receive the observational solve hooks. In particular,
 ``post_solve`` runs after final solution availability and bounds have been

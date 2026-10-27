@@ -114,11 +114,19 @@ class _DefaultSolveInvocation:
             else:
                 solution_available = True
 
+        # Preserve the established default behavior for classified failures:
+        # their bounds are unavailable unless an extension explicitly asks
+        # SPOpt to infer them from the non-optimal results object.
+        bound_value = (
+            INFER_BOUND
+            if self.outer_bound_only or not attempt.classification
+            else None
+        )
         attempt.outcome = SubproblemSolveOutcome(
             attempt.results,
             solution_available=solution_available,
-            outer_bound=INFER_BOUND,
-            inner_bound=INFER_BOUND,
+            outer_bound=bound_value,
+            inner_bound=bound_value,
         )
         return attempt.outcome
 
@@ -136,10 +144,6 @@ class _DefaultSolveInvocation:
             ):
                 return attempt.classification
         return None
-
-    def produced_outcome(self, outcome):
-        return any(attempt.outcome is outcome for attempt in self.attempts)
-
 
 @dataclass(frozen=True)
 class _SolveExecution:
@@ -443,8 +447,7 @@ class SPOpt(SPBase):
         outcome = execution.outcome
         results = execution.results
         s._mpisppy_data.solution_available = outcome.solution_available
-        is_default_outcome = execution.default_solve.produced_outcome(outcome)
-        if outcome.outer_bound is INFER_BOUND and not is_default_outcome:
+        if outcome.outer_bound is INFER_BOUND:
             outer_bound = None
             if not sputils.no_outer_bound_results(results):
                 if self.is_minimizing:
@@ -455,7 +458,7 @@ class SPOpt(SPBase):
         elif outcome.outer_bound is not INFER_BOUND:
             s._mpisppy_data.outer_bound = outcome.outer_bound
 
-        if outcome.inner_bound is INFER_BOUND and not is_default_outcome:
+        if outcome.inner_bound is INFER_BOUND:
             if results is None:
                 inner_bound = None
             elif self.is_minimizing:
@@ -468,10 +471,7 @@ class SPOpt(SPBase):
 
         reported_bound = (
             s._mpisppy_data.outer_bound is not None
-            or (
-                not is_default_outcome
-                and s._mpisppy_data.inner_bound is not None
-            )
+            or s._mpisppy_data.inner_bound is not None
         )
         if gripe and not outcome.solution_available and not reported_bound:
             print (f"[{self._get_cylinder_name()}] Solve failed for scenario {s.name}")
