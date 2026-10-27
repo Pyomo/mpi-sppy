@@ -300,6 +300,170 @@ class SPOpt(SPBase):
         return folded
 
 
+    def _record_termination_condition(self, s, results):
+        """Record termination metadata without requiring complete results."""
+        try:
+            s._mpisppy_data.termination_condition = (
+                None if results is None
+                else str(results.solver.termination_condition))
+        except (AttributeError, KeyError, IndexError):
+            s._mpisppy_data.termination_condition = None
+
+
+    def _apply_outer_bound_only_outcome(
+            self, s, outcome, results, gripe, solver_exception):
+        # No solution is loaded, so the Vars still hold whatever they held
+        # before this solve. Record that explicitly for staleness checks and
+        # PRIOR_SOLUTION warmstarts.
+        s._mpisppy_data.solution_available = False
+
+        # A subproblem stopped by a time limit or gap can still report the
+        # bound requested here, so use no_outer_bound_results rather than
+        # not_good_enough_results.
+        outer_bound = outcome.outer_bound
+        if outer_bound is INFER_BOUND:
+            outer_bound = None
+            if not sputils.no_outer_bound_results(results):
+                try:
+                    if self.is_minimizing:
+                        outer_bound = results.Problem[0].Lower_bound
+                    else:
+                        outer_bound = results.Problem[0].Upper_bound
+                except Exception:
+                    # Not a solve already known to be bound-less, so this is
+                    # a surprise and not a routine outcome.
+                    print (f"[{self._get_cylinder_name()}] Outer bound not found for scenario {s.name}")
+                    print ("status=", results.solver.status)
+                    print ("TerminationCondition=",
+                           results.solver.termination_condition)
+                    raise
+
+        if outer_bound is None:
+            # The outer bound was cleared before the solve. Leaving it as None
+            # lets Ebound's missing-bound check fire.
+            if gripe:
+                print (f"[{self._get_cylinder_name()}] No outer bound for scenario {s.name}")
+                if results is not None:
+                    print ("status=", results.solver.status)
+                    print ("TerminationCondition=",
+                           results.solver.termination_condition)
+            if solver_exception is not None:
+                raise solver_exception
+        else:
+            s._mpisppy_data.outer_bound = outer_bound
+
+
+    def _apply_failed_solve_outcome(
+            self, s, outcome, results, default_solve, *, gripe,
+            solver_exception, solve_keyword_args, log_stream_path):
+        # A failed default solve computed no bound, so outer_bound stays at
+        # the None assigned before the solve. A replacement extension may
+        # report usable state explicitly or ask for bounds to be inferred.
+        s._mpisppy_data.solution_available = outcome.solution_available
+        is_default_outcome = default_solve.produced_outcome(outcome)
+        if outcome.outer_bound is INFER_BOUND and not is_default_outcome:
+            outer_bound = None
+            if not sputils.no_outer_bound_results(results):
+                if self.is_minimizing:
+                    outer_bound = results.Problem[0].Lower_bound
+                else:
+                    outer_bound = results.Problem[0].Upper_bound
+            s._mpisppy_data.outer_bound = outer_bound
+        elif outcome.outer_bound is not INFER_BOUND:
+            s._mpisppy_data.outer_bound = outcome.outer_bound
+
+        if outcome.inner_bound is INFER_BOUND and not is_default_outcome:
+            if results is None:
+                inner_bound = None
+            elif self.is_minimizing:
+                inner_bound = results.Problem[0].Upper_bound
+            else:
+                inner_bound = results.Problem[0].Lower_bound
+            s._mpisppy_data.inner_bound = inner_bound
+        elif outcome.inner_bound is not INFER_BOUND:
+            s._mpisppy_data.inner_bound = outcome.inner_bound
+
+        reported_bound = (
+            s._mpisppy_data.outer_bound is not None
+            or (
+                not is_default_outcome
+                and s._mpisppy_data.inner_bound is not None
+            )
+        )
+        if gripe and not outcome.solution_available and not reported_bound:
+            print (f"[{self._get_cylinder_name()}] Solve failed for scenario {s.name}")
+            if results is not None:
+                print ("status=", results.solver.status)
+                print ("TerminationCondition=",
+                       results.solver.termination_condition)
+            elif solver_exception is not None:
+                print("no results object, so solving agin with tee=True")
+                solve_keyword_args["tee"] = True
+                with sputils.solver_log_stream(
+                        log_stream_path, solve_keyword_args):
+                    s._solver_plugin.solve(
+                        s,
+                        **solve_keyword_args,
+                        load_solutions=False,
+                    )
+            else:
+                print("no results object")
+
+        if solver_exception is not None:
+            raise solver_exception
+
+
+    def _apply_successful_solve_outcome(self, s, outcome, results):
+        s._mpisppy_data.solution_available = outcome.solution_available
+        if outcome.outer_bound is INFER_BOUND:
+            if self.is_minimizing:
+                s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
+            else:
+                s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
+        else:
+            s._mpisppy_data.outer_bound = outcome.outer_bound
+
+        if outcome.inner_bound is INFER_BOUND:
+            if self.is_minimizing:
+                s._mpisppy_data.inner_bound = results.Problem[0].Upper_bound
+            else:
+                s._mpisppy_data.inner_bound = results.Problem[0].Lower_bound
+        else:
+            s._mpisppy_data.inner_bound = outcome.inner_bound
+
+
+    def _apply_subproblem_solve_outcome(
+            self, s, outcome, results, default_solve, *, outer_bound_only,
+            gripe, solver_exception, solve_keyword_args, log_stream_path):
+        if outer_bound_only:
+            self._apply_outer_bound_only_outcome(
+                s, outcome, results, gripe, solver_exception)
+        else:
+            results_not_good_enough = (
+                default_solve.classification_for_results(results))
+            if results_not_good_enough is None:
+                results_not_good_enough = (
+                    sputils.not_good_enough_results(results))
+
+            if results_not_good_enough:
+                self._apply_failed_solve_outcome(
+                    s,
+                    outcome,
+                    results,
+                    default_solve,
+                    gripe=gripe,
+                    solver_exception=solver_exception,
+                    solve_keyword_args=solve_keyword_args,
+                    log_stream_path=log_stream_path,
+                )
+            else:
+                self._apply_successful_solve_outcome(s, outcome, results)
+
+        # TBD: get this ready for IPopt (e.g., check incumbent_prob every time)
+        if s._mpisppy_data.solution_available:
+            self._check_staleness(s)
+
+
     def solve_one(self, solver_options, k, s,
                   dtiming=False,
                   gripe=False,
@@ -547,17 +711,9 @@ class SPOpt(SPBase):
                 # classification, or load and provide its own final outcome.
                 solver_exception = None
 
-            # Record how this solve ended, so a caller that sees
-            # solution_available == False can tell a genuine infeasibility
-            # from a solve that merely did not finish (time limit, solver
-            # error). Stored as a string rather than the enum so it costs
-            # nothing to carry around and survives pickling.
-            try:
-                s._mpisppy_data.termination_condition = (
-                    None if results is None
-                    else str(results.solver.termination_condition))
-            except (AttributeError, KeyError, IndexError):
-                s._mpisppy_data.termination_condition = None
+            # Record this before raising a deferred classification or loading
+            # exception so callers retain the solver's termination metadata.
+            self._record_termination_condition(s, results)
 
             # Keep solution-loading failures outside the solver-failure path,
             # matching solve_one's established behavior: retain the solve's
@@ -565,144 +721,17 @@ class SPOpt(SPBase):
             if deferred_exception is not None:
                 raise deferred_exception
 
-            if not outer_bound_only:
-                results_not_good_enough = (
-                    default_solve.classification_for_results(results))
-                if results_not_good_enough is None:
-                    results_not_good_enough = (
-                        sputils.not_good_enough_results(results)
-                    )
-
-            if outer_bound_only:
-                # No solution is loaded, so the Vars still hold whatever they
-                # held before this solve; say so, or the staleness check and a
-                # PRIOR_SOLUTION warmstart would read them as a solution.
-                s._mpisppy_data.solution_available = False
-
-                # Note the gate is no_outer_bound_results and not
-                # not_good_enough_results: a subproblem stopped by a time
-                # limit or a gap can have no solution and still report the
-                # bound we are here for.
-                outer_bound = outcome.outer_bound
-                if outer_bound is INFER_BOUND:
-                    outer_bound = None
-                    if not sputils.no_outer_bound_results(results):
-                        try:
-                            if self.is_minimizing:
-                                outer_bound = results.Problem[0].Lower_bound
-                            else:
-                                outer_bound = results.Problem[0].Upper_bound
-                        except Exception:
-                            # Not a solve we already know to be bound-less, so
-                            # this is a surprise and not a routine outcome.
-                            print (f"[{self._get_cylinder_name()}] Outer bound not found for scenario {s.name}")
-                            print ("status=", results.solver.status)
-                            print ("TerminationCondition=",
-                                   results.solver.termination_condition)
-                            raise
-
-                if outer_bound is None:
-                    # This solve produced no bound; the clear above already
-                    # recorded that, and leaving it None is what lets Ebound's
-                    # missing-bound check fire.
-                    if gripe:
-                        print (f"[{self._get_cylinder_name()}] No outer bound for scenario {s.name}")
-                        if results is not None:
-                            print ("status=", results.solver.status)
-                            print ("TerminationCondition=",
-                                   results.solver.termination_condition)
-                    if solver_exception is not None:
-                        raise solver_exception
-                else:
-                    s._mpisppy_data.outer_bound = outer_bound
-
-            elif results_not_good_enough:
-                # A failed solve computed no bound, so outer_bound stays at the
-                # None set before the solve.
-                s._mpisppy_data.solution_available = outcome.solution_available
-                is_default_outcome = default_solve.produced_outcome(outcome)
-                if (
-                    outcome.outer_bound is INFER_BOUND
-                    and not is_default_outcome
-                ):
-                    outer_bound = None
-                    if not sputils.no_outer_bound_results(results):
-                        if self.is_minimizing:
-                            outer_bound = results.Problem[0].Lower_bound
-                        else:
-                            outer_bound = results.Problem[0].Upper_bound
-                    s._mpisppy_data.outer_bound = outer_bound
-                elif outcome.outer_bound is not INFER_BOUND:
-                    s._mpisppy_data.outer_bound = outcome.outer_bound
-                if (
-                    outcome.inner_bound is INFER_BOUND
-                    and not is_default_outcome
-                ):
-                    if results is None:
-                        inner_bound = None
-                    elif self.is_minimizing:
-                        inner_bound = results.Problem[0].Upper_bound
-                    else:
-                        inner_bound = results.Problem[0].Lower_bound
-                    s._mpisppy_data.inner_bound = inner_bound
-                elif outcome.inner_bound is not INFER_BOUND:
-                    s._mpisppy_data.inner_bound = outcome.inner_bound
-
-                reported_bound = (
-                    (
-                        s._mpisppy_data.outer_bound is not None
-                    )
-                    or (
-                        not is_default_outcome
-                        and s._mpisppy_data.inner_bound is not None
-                    )
-                )
-                if (
-                    gripe
-                    and not outcome.solution_available
-                    and not reported_bound
-                ):
-                    print (f"[{self._get_cylinder_name()}] Solve failed for scenario {s.name}")
-                    if results is not None:
-                        print ("status=", results.solver.status)
-                        print ("TerminationCondition=",
-                               results.solver.termination_condition)
-                    else:
-                        if solver_exception is not None:
-                            print("no results object, so solving agin with tee=True")
-                            solve_keyword_args["tee"] = True
-                            with sputils.solver_log_stream(
-                                    log_stream_path, solve_keyword_args):
-                                s._solver_plugin.solve(
-                                    s,
-                                    **solve_keyword_args,
-                                    load_solutions=False,
-                                )
-                        else:
-                            print("no results object")
-
-                if solver_exception is not None:
-                    raise solver_exception
-
-            else:
-                s._mpisppy_data.solution_available = outcome.solution_available
-                if outcome.outer_bound is INFER_BOUND:
-                    if self.is_minimizing:
-                        s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
-                    else:
-                        s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
-                else:
-                    s._mpisppy_data.outer_bound = outcome.outer_bound
-                if outcome.inner_bound is INFER_BOUND:
-                    if self.is_minimizing:
-                        s._mpisppy_data.inner_bound = results.Problem[0].Upper_bound
-                    else:
-                        s._mpisppy_data.inner_bound = results.Problem[0].Lower_bound
-                else:
-                    s._mpisppy_data.inner_bound = outcome.inner_bound
-            # TBD: get this ready for IPopt (e.g., check incumbent_prob every time)
-            if s._mpisppy_data.solution_available:
-                self._check_staleness(s)
+            self._apply_subproblem_solve_outcome(
+                s,
+                outcome,
+                results,
+                default_solve,
+                outer_bound_only=outer_bound_only,
+                gripe=gripe,
+                solver_exception=solver_exception,
+                solve_keyword_args=solve_keyword_args,
+                log_stream_path=log_stream_path,
+            )
 
         # end of Agnostic bypass
 
