@@ -98,17 +98,26 @@ class Extension:
 
     def solve_subproblem(
             self, subproblem, subproblem_solve, *, outer_bound_only=False):
-        '''Solve a subproblem, optionally wrapping or replacing the raw solve.
+        '''Wrap or replace one logical subproblem solve.
 
-        ``subproblem_solve`` is a zero-argument callable that performs one fully
-        configured solver call, loads an available solution, and returns its
-        outcome. Implementations may call ``subproblem_solve`` zero, one, or
-        multiple times, and must return the final ``SubproblemSolveOutcome``.
-        A replacement that does not call ``subproblem_solve`` assumes the same
-        loading contract. Bound-only solves do not load a candidate solution.
-        A classified failed subproblem solve reports ``None`` bounds, preserving
-        native solve behavior; a wrapper may return a new outcome with
-        ``INFER_BOUND`` to recover usable bounds from its non-optimal results.
+        ``subproblem_solve`` is a zero-argument callable supplied by mpi-sppy.
+        Each call performs one configured solver attempt, classifies its
+        results, loads an available solution through the correct solver path,
+        and returns a ``SubproblemSolveOutcome``. It does not start another PH
+        iteration or invoke the surrounding ``pre_solve`` / ``post_solve``
+        hooks.
+
+        Implementations may call ``subproblem_solve`` zero, one, or multiple
+        times and must return the final outcome. If the returned outcome has
+        ``solution_available=True``, its solution must already be loaded into
+        ``subproblem``. A numeric bound is used directly, ``INFER_BOUND`` asks
+        SPOpt to read the bound from the returned results, and ``None`` reports
+        that no bound is available.
+
+        When ``outer_bound_only`` is true, the callback deliberately does not
+        load a candidate solution, so wrappers must not inspect variable
+        values. A replacement that does not call ``subproblem_solve`` assumes
+        all of the same loading and outcome-reporting responsibilities.
 
         This hook is not supported when SPOpt delegates solves through its
         Agnostic interface. Agnostic dispatch is itself a solve-replacement

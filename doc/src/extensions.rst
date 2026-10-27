@@ -65,20 +65,126 @@ example of use.
 Replacing subproblem solves
 ---------------------------
 
-An ``Extension`` may override ``solve_subproblem`` to wrap or replace the
-solver call made for each scenario or bundle. The hook receives a
-zero-argument ``default_solve`` callable and returns a
-``SubproblemSolveOutcome``. It may call ``default_solve`` zero, one, or
-multiple times. If it reports ``solution_available=True``, the final solution
-must already be loaded into the subproblem. Numeric bounds may be reported
-directly; ``INFER_BOUND`` asks ``SPOpt`` to read the corresponding bound from
-the returned Pyomo results, including a usable bound from a non-optimal solve.
-``None`` explicitly reports that no bound is available.
+An ``Extension`` may override ``solve_subproblem`` when one logical subproblem
+solve requires more than one solver call. Constraint generation is the typical
+case: solve, inspect the loaded candidate, add violated rows, and solve again.
+This all remains one subproblem solve from the perspective of PH and the other
+mpi-sppy algorithms.
 
-A default solve whose results are classified as failed reports ``None``
-bounds, preserving the native solve behavior. A wrapping extension may return
-a new outcome with ``INFER_BOUND`` to recover usable bounds from those
-non-optimal results.
+The hook has this signature::
+
+   def solve_subproblem(
+           self, subproblem, subproblem_solve, *, outer_bound_only=False):
+       ...
+
+``subproblem_solve`` is a zero-argument callable supplied by mpi-sppy. Each
+call performs one complete, configured solve attempt: it invokes the solver
+with the current options and logging setup, classifies the results, loads an
+available solution using the appropriate persistent or nonpersistent solver
+path, and returns a ``SubproblemSolveOutcome``. Calling it does *not* advance
+PH, start another MPI operation, or invoke ``pre_solve`` and ``post_solve``.
+Those hooks surround the entire logical subproblem solve.
+
+An extension may call ``subproblem_solve`` zero, one, or multiple times, but it
+must return exactly one final ``SubproblemSolveOutcome``. The ordinary wrapper
+pattern is::
+
+   from mpisppy.extensions.extension import Extension
+
+   class ConstraintGeneration(Extension):
+       def solve_subproblem(
+               self, subproblem, subproblem_solve, *, outer_bound_only=False):
+           outcome = subproblem_solve()
+
+           # A bound-only solve deliberately does not load variable values.
+           if outer_bound_only or not outcome.solution_available:
+               return outcome
+
+           while add_violated_rows(subproblem):
+               # Persistent solvers must also receive the new rows; that step
+               # belongs in add_violated_rows.
+               outcome = subproblem_solve()
+               if not outcome.solution_available:
+                   break
+
+           return outcome
+
+The callback exists so an extension does not have to duplicate mpi-sppy's
+solver invocation, result classification, solution loading, logging, and
+failure bookkeeping. Only the outcome returned by the extension is committed
+to the subproblem's final availability and bound state.
+
+``SubproblemSolveOutcome`` contains:
+
+``results``
+   The Pyomo solver results associated with the outcome, or ``None`` for a
+   complete replacement that did not use the Pyomo solver.
+
+``solution_available``
+   A promise that the corresponding variable values are already loaded into
+   ``subproblem``. Setting this to ``True`` without loading the values violates
+   the hook contract.
+
+``outer_bound`` and ``inner_bound``
+   A numeric value reports that value directly. ``INFER_BOUND`` asks ``SPOpt``
+   to read it from ``results``; this can recover a usable bound from a
+   non-optimal solve. ``None`` explicitly reports that no bound is available.
+
+A normal ``subproblem_solve`` attempt whose results mpi-sppy classifies as
+failed reports ``None`` bounds, preserving native solve behavior. A wrapping
+extension may instead return a new outcome with ``INFER_BOUND`` when those
+non-optimal results contain a bound it intentionally wants to retain.
+
+When ``outer_bound_only=True``, ``subproblem_solve`` obtains a bound without
+loading a candidate solution. An extension must not inspect variable values on
+that path. It may replace the solve completely, but then it assumes the same
+solution-loading and outcome-reporting responsibilities as the callback.
+
+Replacing the callback completely
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+An extension does not have to call ``subproblem_solve``. This is useful when an
+external service, a specialized decomposition method, or a cached calculation
+replaces the Pyomo solver entirely. In that case the extension owns the full
+contract: it must solve the *current* subproblem objective and constraints,
+load any reported solution into the Pyomo variables, and report trustworthy
+bounds and availability.
+
+For example::
+
+   from mpisppy.extensions.extension import (
+       Extension,
+       SubproblemSolveOutcome,
+   )
+   from pyomo.environ import Var
+
+   class ExternalSubproblemSolver(Extension):
+       def solve_subproblem(
+               self, subproblem, subproblem_solve, *, outer_bound_only=False):
+           answer = external_service.solve(
+               subproblem,
+               need_solution=not outer_bound_only,
+           )
+
+           solution_available = False
+           if not outer_bound_only and answer.has_solution:
+               for variable in subproblem.component_data_objects(Var):
+                   variable.set_value(answer.primal_values[variable.name])
+               solution_available = True
+
+           return SubproblemSolveOutcome(
+               results=None,
+               solution_available=solution_available,
+               outer_bound=answer.outer_bound,
+               inner_bound=answer.inner_bound,
+           )
+
+Here the bounds are supplied numerically because there is no Pyomo results
+object from which ``INFER_BOUND`` could read them. A replacement may instead
+return a suitable Pyomo results object and use ``INFER_BOUND``. It must not
+claim ``solution_available=True`` unless it has loaded every value required by
+the calling algorithm. It must also avoid reusing a result computed for stale
+PH weights, fixed variables, objective coefficients, or generated constraints.
 
 Only one member of a ``MultiExtension`` may override ``solve_subproblem``.
 Other extensions still receive the observational solve hooks. In particular,
