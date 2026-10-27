@@ -226,7 +226,7 @@ class _NoBoundPlugin:
 
 class _ExplicitBoundExtension(Extension):
     def solve_subproblem(
-            self, subproblem, default_solve, *, outer_bound_only=False):
+            self, subproblem, subproblem_solve, *, outer_bound_only=False):
         results = SolverResults()
         results.solver.status = SolverStatus.ok
         results.solver.termination_condition = TerminationCondition.optimal
@@ -240,7 +240,7 @@ class _ExplicitBoundExtension(Extension):
 
 class _InferNonoptimalBoundsExtension(Extension):
     def solve_subproblem(
-            self, subproblem, default_solve, *, outer_bound_only=False):
+            self, subproblem, subproblem_solve, *, outer_bound_only=False):
         results = SolverResults()
         results.solver.status = SolverStatus.warning
         results.solver.termination_condition = (
@@ -257,8 +257,8 @@ class _InferNonoptimalBoundsExtension(Extension):
 
 class _InferDefaultNonoptimalBoundsExtension(Extension):
     def solve_subproblem(
-            self, subproblem, default_solve, *, outer_bound_only=False):
-        default_outcome = default_solve()
+            self, subproblem, subproblem_solve, *, outer_bound_only=False):
+        default_outcome = subproblem_solve()
         self.default_outcome = default_outcome
         return SubproblemSolveOutcome(
             default_outcome.results,
@@ -270,7 +270,7 @@ class _InferDefaultNonoptimalBoundsExtension(Extension):
 
 class _DirectSolutionExtension(Extension):
     def solve_subproblem(
-            self, subproblem, default_solve, *, outer_bound_only=False):
+            self, subproblem, subproblem_solve, *, outer_bound_only=False):
         for variable in subproblem._mpisppy_data.nonant_indices.values():
             variable.set_value(7.0)
         return SubproblemSolveOutcome(
@@ -320,7 +320,7 @@ class TestExplicitSolveOutcome(unittest.TestCase):
         self.assertEqual(scenario._mpisppy_data.outer_bound, -321.0)
         self.assertEqual(scenario._mpisppy_data.inner_bound, 654.0)
 
-    def test_extension_can_infer_bounds_from_failed_default_solve(self):
+    def test_extension_can_infer_bounds_from_failed_subproblem_solve(self):
         ph = _make_ph(extensions=_InferDefaultNonoptimalBoundsExtension)
         name = list(ph.local_scenarios)[0]
         scenario = ph.local_scenarios[name]
@@ -369,9 +369,9 @@ class TestExplicitSolveOutcome(unittest.TestCase):
         ))
 
 
-class _NoDefaultSolveExtension(Extension):
+class _NoSubproblemSolveExtension(Extension):
     def solve_subproblem(
-            self, subproblem, default_solve, *, outer_bound_only=False):
+            self, subproblem, subproblem_solve, *, outer_bound_only=False):
         return SubproblemSolveOutcome(
             None,
             solution_available=False,
@@ -410,24 +410,24 @@ class _InvalidOutcomeExtension(Extension):
         self.solve_count = 0
 
     def solve_subproblem(
-            self, subproblem, default_solve, *, outer_bound_only=False):
+            self, subproblem, subproblem_solve, *, outer_bound_only=False):
         self.solve_count += 1
         return None
 
 
-class _RetryDefaultSolveExtension(Extension):
+class _RetrySubproblemSolveExtension(Extension):
     def solve_subproblem(
-            self, subproblem, default_solve, *, outer_bound_only=False):
+            self, subproblem, subproblem_solve, *, outer_bound_only=False):
         try:
-            default_solve()
+            subproblem_solve()
         except RuntimeError:
             pass
-        return default_solve()
+        return subproblem_solve()
 
 
 class TestSolveReplacementContract(unittest.TestCase):
     def test_gripe_does_not_bypass_replacement_extension(self):
-        ph = _make_ph(extensions=_NoDefaultSolveExtension)
+        ph = _make_ph(extensions=_NoSubproblemSolveExtension)
         name = list(ph.local_scenarios)[0]
         scenario = ph.local_scenarios[name]
         plugin = _CountingPlugin()
@@ -578,8 +578,8 @@ class TestSolveReplacementContract(unittest.TestCase):
                 self.assertEqual(plugin.solve_count, 2)
                 load_solution.assert_not_called()
 
-    def test_extension_can_retry_default_solve_after_solver_failure(self):
-        ph = _make_ph(extensions=_RetryDefaultSolveExtension)
+    def test_extension_can_retry_subproblem_solve_after_solver_failure(self):
+        ph = _make_ph(extensions=_RetrySubproblemSolveExtension)
         name = list(ph.local_scenarios)[0]
         scenario = ph.local_scenarios[name]
         plugin = _FailThenSucceedPlugin()
@@ -853,7 +853,7 @@ class TestAgnosticFailedSolveClearsBound(unittest.TestCase):
         guest = _StubGuest()
         ph = self._agnostic_ph(
             guest,
-            extensions=_NoDefaultSolveExtension,
+            extensions=_NoSubproblemSolveExtension,
         )
         name = list(ph.local_scenarios)[0]
 

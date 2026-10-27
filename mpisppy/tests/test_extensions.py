@@ -81,7 +81,7 @@ class TestExtensionMethodReturnValues(unittest.TestCase):
         )
         result = self.ext.solve_subproblem(
             subproblem=None,
-            default_solve=lambda: sentinel,
+            subproblem_solve=lambda: sentinel,
         )
         self.assertIs(result, sentinel)
 
@@ -270,9 +270,9 @@ class TestMultiExtensionDelegation(unittest.TestCase):
 
         class SolverExtension(Extension):
             def solve_subproblem(
-                    self, subproblem, default_solve, *, outer_bound_only=False):
+                    self, subproblem, subproblem_solve, *, outer_bound_only=False):
                 calls.append("override")
-                return default_solve()
+                return subproblem_solve()
 
         multi = MultiExtension(_MockOpt(), [_TrackingExtension, SolverExtension])
         sentinel = SubproblemSolveOutcome(object(), True)
@@ -285,13 +285,13 @@ class TestMultiExtensionDelegation(unittest.TestCase):
     def test_multiple_solve_subproblem_overrides_are_rejected(self):
         class FirstSolverExtension(Extension):
             def solve_subproblem(
-                    self, subproblem, default_solve, *, outer_bound_only=False):
-                return default_solve()
+                    self, subproblem, subproblem_solve, *, outer_bound_only=False):
+                return subproblem_solve()
 
         class SecondSolverExtension(Extension):
             def solve_subproblem(
-                    self, subproblem, default_solve, *, outer_bound_only=False):
-                return default_solve()
+                    self, subproblem, subproblem_solve, *, outer_bound_only=False):
+                return subproblem_solve()
 
         with self.assertRaisesRegex(
                 RuntimeError,

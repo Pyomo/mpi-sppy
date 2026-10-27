@@ -56,8 +56,8 @@ class _SolveFailureStage(Enum):
 
 
 @dataclass
-class _DefaultSolveAttempt:
-    """State recorded by one call to an extension's ``default_solve``."""
+class _SubproblemSolveAttempt:
+    """State recorded by one call to an extension's ``subproblem_solve``."""
 
     results: Any = None
     classification: Optional[bool] = None
@@ -67,19 +67,19 @@ class _DefaultSolveAttempt:
 
 
 @dataclass
-class _DefaultSolveInvocation:
-    """Callable implementing SPOpt's unchanged default-solve sequence."""
+class _SubproblemSolveInvocation:
+    """Callable implementing one fully configured subproblem solve."""
 
     subproblem: Any
     solve_keyword_args: dict
     log_stream_path: Optional[str]
     outer_bound_only: bool
     need_solution: bool
-    attempts: List[_DefaultSolveAttempt] = field(
+    attempts: List[_SubproblemSolveAttempt] = field(
         default_factory=list, init=False)
 
     def __call__(self):
-        attempt = _DefaultSolveAttempt()
+        attempt = _SubproblemSolveAttempt()
         self.attempts.append(attempt)
 
         try:
@@ -166,7 +166,7 @@ class _DefaultSolveInvocation:
 class _SolveExecution:
     """Normalized result of invoking the configured subproblem solve."""
 
-    default_solve: _DefaultSolveInvocation
+    subproblem_solve: _SubproblemSolveInvocation
     outcome: SubproblemSolveOutcome
     solver_exception: Optional[BaseException] = None
     deferred_exception: Optional[BaseException] = None
@@ -340,7 +340,7 @@ class SPOpt(SPBase):
             self, s, solve_keyword_args, log_stream_path, *,
             outer_bound_only, need_solution):
         """Invoke the configured solve and normalize its escaped state."""
-        default_solve = _DefaultSolveInvocation(
+        subproblem_solve = _SubproblemSolveInvocation(
             subproblem=s,
             solve_keyword_args=solve_keyword_args,
             log_stream_path=log_stream_path,
@@ -350,15 +350,15 @@ class SPOpt(SPBase):
 
         try:
             if self.extensions is None:
-                outcome = default_solve()
+                outcome = subproblem_solve()
             else:
                 outcome = self.extobject.solve_subproblem(
                     s,
-                    default_solve,
+                    subproblem_solve,
                     outer_bound_only=outer_bound_only,
                 )
         except Exception as error:
-            failed_attempt = default_solve.attempt_for_exception(error)
+            failed_attempt = subproblem_solve.attempt_for_exception(error)
             if failed_attempt is None:
                 # Exceptions from extension logic or result processing are not
                 # solver failures and must not be retried.
@@ -390,13 +390,13 @@ class SPOpt(SPBase):
                 raise TypeError(
                     "solve_subproblem must return SubproblemSolveOutcome")
             results = outcome.results
-            # An override may deliberately catch a failed default solve,
+            # An override may deliberately catch a failed subproblem solve,
             # classification, or load and provide its own final outcome.
             solver_exception = None
             deferred_exception = None
 
         return _SolveExecution(
-            default_solve=default_solve,
+            subproblem_solve=subproblem_solve,
             outcome=outcome,
             solver_exception=solver_exception,
             deferred_exception=deferred_exception,
@@ -448,7 +448,7 @@ class SPOpt(SPBase):
 
     def _apply_failed_solve_outcome(
             self, s, execution, *, gripe):
-        # A failed default solve computed no bound, so outer_bound stays at
+        # A failed subproblem solve computed no bound, so outer_bound stays at
         # the None assigned before the solve. A replacement extension may
         # report usable state explicitly or ask for bounds to be inferred.
         outcome = execution.outcome
@@ -489,10 +489,10 @@ class SPOpt(SPBase):
             elif execution.solver_exception is not None:
                 print("no results object, so solving agin with tee=True")
                 solve_keyword_args = (
-                    execution.default_solve.solve_keyword_args)
+                    execution.subproblem_solve.solve_keyword_args)
                 solve_keyword_args["tee"] = True
                 with sputils.solver_log_stream(
-                        execution.default_solve.log_stream_path,
+                        execution.subproblem_solve.log_stream_path,
                         solve_keyword_args):
                     s._solver_plugin.solve(
                         s,
@@ -529,11 +529,11 @@ class SPOpt(SPBase):
 
     def _apply_subproblem_solve_outcome(
             self, s, execution, *, gripe):
-        if execution.default_solve.outer_bound_only:
+        if execution.subproblem_solve.outer_bound_only:
             self._apply_outer_bound_only_outcome(s, execution, gripe)
         else:
             results_not_good_enough = (
-                execution.default_solve.classification_for_results(
+                execution.subproblem_solve.classification_for_results(
                     execution.results))
             if results_not_good_enough is None:
                 results_not_good_enough = (

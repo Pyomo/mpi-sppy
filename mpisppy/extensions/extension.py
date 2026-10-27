@@ -97,16 +97,16 @@ class Extension:
         '''
 
     def solve_subproblem(
-            self, subproblem, default_solve, *, outer_bound_only=False):
+            self, subproblem, subproblem_solve, *, outer_bound_only=False):
         '''Solve a subproblem, optionally wrapping or replacing the raw solve.
 
-        ``default_solve`` is a zero-argument callable that performs one fully
+        ``subproblem_solve`` is a zero-argument callable that performs one fully
         configured solver call, loads an available solution, and returns its
-        outcome. Implementations may call ``default_solve`` zero, one, or
+        outcome. Implementations may call ``subproblem_solve`` zero, one, or
         multiple times, and must return the final ``SubproblemSolveOutcome``.
-        A replacement that does not call ``default_solve`` assumes the same
+        A replacement that does not call ``subproblem_solve`` assumes the same
         loading contract. Bound-only solves do not load a candidate solution.
-        A classified failed default solve reports ``None`` bounds, preserving
+        A classified failed subproblem solve reports ``None`` bounds, preserving
         native solve behavior; a wrapper may return a new outcome with
         ``INFER_BOUND`` to recover usable bounds from its non-optimal results.
 
@@ -114,7 +114,7 @@ class Extension:
         Agnostic interface. Agnostic dispatch is itself a solve-replacement
         mechanism, and combining the two raises ``RuntimeError``.
         '''
-        return default_solve()
+        return subproblem_solve()
 
     def post_solve(self, subproblem, results):
         '''Observe a completed subproblem solve.
@@ -312,12 +312,12 @@ class MultiExtension(Extension):
             lobject.pre_solve(subproblem)
 
     def solve_subproblem(
-            self, subproblem, default_solve, *, outer_bound_only=False):
+            self, subproblem, subproblem_solve, *, outer_bound_only=False):
         if self._solve_subproblem_extension is None:
             return super().solve_subproblem(
-                subproblem, default_solve, outer_bound_only=outer_bound_only)
+                subproblem, subproblem_solve, outer_bound_only=outer_bound_only)
         return self._solve_subproblem_extension.solve_subproblem(
-            subproblem, default_solve, outer_bound_only=outer_bound_only)
+            subproblem, subproblem_solve, outer_bound_only=outer_bound_only)
 
     def post_solve(self, subproblem, results):
         for lobject in self.extdict.values():
