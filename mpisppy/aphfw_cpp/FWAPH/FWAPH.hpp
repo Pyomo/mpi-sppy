@@ -331,6 +331,7 @@ protected:
   bool converged_ = false;
   bool startupDone_ = false;      // whether startupSequence has been called
   int cycleTarget_ = 0;           // target cycle count for runNCycles
+  bool maxCyclesReached() const;
   std::atomic<int>* externalTerminateFlag_ = nullptr;
 
   // local functions

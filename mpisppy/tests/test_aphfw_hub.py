@@ -121,6 +121,32 @@ class TestAphfwHubRun(unittest.TestCase):
         with patch.object(sys, "argv", argv):
             runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
 
+    def test_farmer_default_max_cycles(self):
+        # --aphfw-max-cycles defaults to 0 (no limit); the hub used to stop
+        # the C++ after cycle 1 and then wait forever.  Run it as a
+        # subprocess so a hang fails the test instead of stalling it.
+        argv = [
+            sys.executable, "-m", "mpisppy.generic_cylinders",
+            "--module-name", "mpisppy.tests.examples.farmer",
+            "--num-scens", "3",
+            "--solver-name", solver_name,
+            "--aphfw-hub",
+            "--default-rho", "1",
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:  # for solver logs
+            try:
+                result = subprocess.run(
+                    argv, capture_output=True, text=True, timeout=300,
+                    check=False, env=subprocess_env(), cwd=tmpdir)
+            except subprocess.TimeoutExpired:
+                self.fail("the hub did not finish without --aphfw-max-cycles")
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out[-3000:])
+        # the iteration count on the last line of the termination table
+        lines = out.split("Statistics at termination")[-1].splitlines()
+        last_iter = int(lines[2].split("]")[1].split()[0])
+        self.assertGreater(last_iter, 1, out[-3000:])
+
     def test_solver_options_reach_cpp(self):
         # The C++ solves read mipGap, timeLimit and threads from JSON files the
         # hub writes; capture what it writes for each.

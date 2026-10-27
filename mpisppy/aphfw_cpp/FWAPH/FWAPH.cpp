@@ -343,7 +343,7 @@ bool FWAPH::handleCompletedCommunication(void)
     }
 
     // we will have done the projection step even if zero cycles are requested
-    if (cycleCount >= aphMaxCycles)
+    if (maxCyclesReached())
       return true;
 
     // Check external terminate flag (safe point: between comm phases)
@@ -1130,7 +1130,7 @@ void FWAPH::onMainLoopTerminate()
   // so the caller can resume with another runNCycles call.
   bool hitCycleTarget = (cycleTarget_ > 0 && cycleCount >= cycleTarget_);
   bool realTermination = converged_
-      || (cycleCount >= aphMaxCycles)
+      || maxCyclesReached()
       || (externalTerminateFlag_ && externalTerminateFlag_->load(std::memory_order_relaxed) != 0);
 
   if (hitCycleTarget && !realTermination) {
@@ -1140,14 +1140,22 @@ void FWAPH::onMainLoopTerminate()
   }
 }
 
+// aph-max-cycles 0 means no limit when stepping with runNCycles (the Python
+// hub); a standalone run stops after the first projection step.
+bool FWAPH::maxCyclesReached() const
+{
+  if (aphMaxCycles <= 0 && cycleTarget_ > 0)
+    return false;
+  return cycleCount >= aphMaxCycles;
+}
+
 int FWAPH::runNCycles(int n)
 {
   // If already at terminal state, don't re-enter the event loop
-  if (converged_ || (aphMaxCycles > 0 && cycleCount >= aphMaxCycles))
-    return 0;
-
   int startCycle = cycleCount;
   cycleTarget_ = cycleCount + n;
+  if (converged_ || maxCyclesReached())
+    return 0;
 
   if (!startupDone_) {
     startupSequence();
