@@ -1326,6 +1326,13 @@ void FWAPH::setAllLocalRho(const double* buf, int len)
       offset += n;
       continue;
     }
+    // Back to what the solvers already have: drop a held update, write nothing.
+    if (newRho == localScenarios()[s].getRho()) {
+      if (s < (int)pendingRho_.size())
+        pendingRho_[s].reset();
+      offset += n;
+      continue;
+    }
     if (isInSet(s, active)) {
       pendingRho_.resize(numSubdomains);
       pendingRho_[s] = std::move(newRho);
@@ -1468,6 +1475,14 @@ void FWAPH::setAllLocalNonantBounds(const double* lbBuf, const double* ubBuf, in
     // unchanged bound can discard a backend's MIP start.
     const auto [curLb, curUb] = effectiveNonantBounds(s);
     if (lb == curLb && ub == curUb) {
+      offset += n;
+      continue;
+    }
+    // Back to what the solvers already have: drop a held update, write nothing.
+    if (lb == localScenarios()[s].getNonantLowerBounds() &&
+        ub == localScenarios()[s].getNonantUpperBounds()) {
+      if (s < (int)pendingBounds_.size())
+        pendingBounds_[s].reset();
       offset += n;
       continue;
     }

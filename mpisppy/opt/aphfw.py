@@ -92,7 +92,8 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             finalize: If True, clean up the C++ library on exit.
 
         Returns:
-            trivial_bound: The initial Lagrangian bound from iter0.
+            trivial_bound: The initial Lagrangian bound from iter0, or None
+            if nonants fixed by an extension make it not a bound.
         """
         # 1. Create Pyomo scenarios via PHBase (no prox — C++ handles that)
         self.PH_Prep(attach_duals=True, attach_prox=False)
@@ -137,6 +138,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         # which the stepping API defers to the first run_cycles call, so it
         # cannot be read here -- only once the loop below has turned once.
         self.trivial_bound = None
+        first_cycle = True
 
         # 5. Stepping loop
         has_extensions = getattr(self, "extobject", None) is not None
@@ -159,9 +161,12 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             completed = self._cpp.run_cycles(1)
 
             # startupSequence() has now run, so the iter-0 bound exists.
-            if self.trivial_bound is None:
-                self.trivial_bound = self._cpp.get_current_lagrangian_bound()
+            if first_cycle:
+                first_cycle = False
+                # With fixed nonants (pushed before the startup solves) it is
+                # a Lagrangian over a restricted set, not a bound.
                 if self._bound_is_valid():
+                    self.trivial_bound = self._cpp.get_current_lagrangian_bound()
                     self.best_bound_obj_val = self.trivial_bound
 
             if self._terminate_flag.value:
@@ -180,10 +185,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
                 if self._cpp.get_current_cycle() == 1:
                     # post_iter0 expects _PHIter == 0 so that wtracker
                     # can bootstrap its W history (local_Ws[0]).
-                    saved_iter = self._PHIter
-                    self._PHIter = 0
-                    self.extobject.post_iter0()
-                    self._PHIter = saved_iter
+                    self._at_iteration_0(self.extobject.post_iter0)
 
                 # The cycle's solves are done, so both of PH's per-iteration
                 # hooks run here.
@@ -192,27 +194,22 @@ class APHFWOpt(mpisppy.phbase.PHBase):
 
             # 7. Sync with spokes (send_nonants/send_ws are overridden
             #    in APHFWHub to use C++ values)
-            spokes_converged = False
             if self.spcomm is not None:
                 self.spcomm.sync()
                 if has_extensions:
                     if self._cpp.get_current_cycle() == 1:
-                        saved_iter = self._PHIter
-                        self._PHIter = 0  # as for post_iter0
-                        self.extobject.post_iter0_after_sync()
-                        self._PHIter = saved_iter
+                        self._at_iteration_0(self.extobject.post_iter0_after_sync)
                     self.extobject.enditer_after_sync()
-                # Push any bound changes from receive_nonant_bounds() or
-                # ReducedCostsFixer to C++ (Lagrangian and Gradient solvers).
-                self._push_bounds_to_cpp()
-                spokes_converged = self.spcomm.is_converged()
-            if spokes_converged:
-                self._terminate_flag.value = 1
-                break
 
-            # Push the rho the extensions set this cycle, once.
+            # Push this cycle's rho (extensions) and bound changes
+            # (receive_nonant_bounds(), fixers) to C++ once, before any exit,
+            # so the state after the loop is the one Pyomo has.
             if has_extensions:
                 self._push_rho_to_cpp()
+            self._push_bounds_to_cpp()
+            if self.spcomm is not None and self.spcomm.is_converged():
+                self._terminate_flag.value = 1
+                break
 
             # Freeze omicron exactly once, after iter 0 completes.
             # Fires whether or not extensions are enabled — post-iter-0
@@ -241,6 +238,15 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             self.aphfw_finalize()
 
         return self.trivial_bound
+
+    def _at_iteration_0(self, hook):
+        """Run an iteration-0 extension hook with _PHIter 0, as PH does."""
+        saved_iter = self._PHIter
+        self._PHIter = 0
+        try:
+            hook()
+        finally:
+            self._PHIter = saved_iter
 
     def _get_option(self, name, default=None):
         """Read an option from cfg if present, else from the options dict."""

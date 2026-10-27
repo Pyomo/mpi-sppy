@@ -111,11 +111,13 @@ class _FakeCpp:
 
     def __init__(self, n, w=0.0):
         self.n, self.w, self.bounds = n, w, None
+        self.final_lagrangian_solves = 0
 
     def set_all_local_nonant_bounds(self, lb, ub):
         self.bounds = (lb.copy(), ub.copy())
 
     def compute_final_lagrangian_bound(self):
+        self.final_lagrangian_solves += 1
         return -100.0
 
     def get_all_local_w(self, buf):
@@ -220,6 +222,7 @@ class TestAphfwPythonSide(unittest.TestCase):
         opt._can_update_best_bound = lambda: False
         self.assertIsNone(APHFWOpt._do_final_lagrangian(opt))
         self.assertEqual((published, opt.best_bound_obj_val), ([], None))
+        self.assertEqual(opt._cpp.final_lagrangian_solves, 0)  # not solved
         opt._can_update_best_bound = lambda: True
         self.assertEqual(APHFWOpt._do_final_lagrangian(opt), -100.0)
         self.assertEqual(published, [-100.0])
@@ -306,7 +309,9 @@ class TestAphfwHubRun(unittest.TestCase):
             n = self.opt._local_nonant_length
             lb, ub = np.empty(n), np.empty(n)
             self.opt._cpp.get_all_local_nonant_bounds(lb, ub)
-            called["first_bounds"] = (lb[0], ub[0])
+            x = np.empty(n)
+            self.opt._cpp.get_all_local_nonants(x)  # what the solves gave
+            called["first_bounds"] = (lb[0], ub[0], x[0])
 
         Recorder.iter0_post_solver_creation = fix_first
         Recorder.post_iter0 = bounds_after_cycle_1
@@ -318,12 +323,46 @@ class TestAphfwHubRun(unittest.TestCase):
                              scenario_creator_kwargs={"num_scens": 3},
                              ph_extensions=Recorder)
         WheelSpinner(hub_dict, []).spin()
-        self.assertEqual(called.pop("first_bounds"), (123.0, 123.0))
+        self.assertEqual(called.pop("first_bounds"), (123.0, 123.0, 123.0))
         self.assertEqual(set(called), set(hooks))
         # the iteration-0 hooks see iteration 0, as under PH
         for hook in ("pre_iter0", "iter0_post_solver_creation", "post_iter0",
                      "post_iter0_after_sync"):
             self.assertEqual(called[hook], 0, hook)
+
+    def test_rho_survives_spoke_convergence(self):
+        # rho an extension sets in the last cycle reaches the C++ before the
+        # loop ends on the spokes' convergence, so the final sync keeps it.
+        from mpisppy.cylinders.hub import APHFWHub
+        from mpisppy.extensions.extension import Extension
+        from mpisppy.spin_the_wheel import WheelSpinner
+        from mpisppy.tests.examples.farmer import (
+            scenario_creator,
+            scenario_denouement,
+        )
+        from mpisppy.utils.cfg_vanilla import aphfw_hub
+        seen = []
+
+        class SetRho(Extension):
+            def enditer_after_sync(self):
+                for s in self.opt.local_scenarios.values():
+                    for p in s._mpisppy_model.rho.values():
+                        p.value = 7.5
+
+            def post_everything(self):
+                seen.extend(pyo.value(p) for s in self.opt.local_scenarios.values()
+                            for p in s._mpisppy_model.rho.values())
+
+        cfg = _cfg(aphfw_hub=True, solver_name=solver_name, default_rho=1.0,
+                   max_iterations=5)
+        hub_dict = aphfw_hub(cfg, scenario_creator, scenario_denouement,
+                             [f"scen{i}" for i in range(3)],
+                             scenario_creator_kwargs={"num_scens": 3},
+                             ph_extensions=SetRho)
+        with patch.object(APHFWHub, "is_converged", lambda self: True):
+            WheelSpinner(hub_dict, []).spin()
+        self.assertTrue(seen)
+        self.assertEqual(set(seen), {7.5})
 
     def test_refuses_maximization(self):
         from mpisppy.tests.examples.farmer import (
