@@ -16,6 +16,19 @@ import pyomo.environ as pyo
 
 from mpisppy.utils import sputils
 
+#: Environment variable naming the Pyomo solver for the FW-APH hub tests
+#: (test_aphfw_hub.py and its aphfw_*_driver.py scripts).  The hub's own
+#: solves are in C++, by the solver aphfw_cpp was built for; this one solves
+#: whatever runs on the Python side.  CI sets it to appsi_highs, to go with a
+#: HiGHS build of aphfw_cpp.
+APHFW_TEST_SOLVER_VAR = "MPISPPY_APHFW_TEST_SOLVER"
+
+
+def aphfw_test_solver(default="gurobi"):
+    """The Pyomo solver for the FW-APH hub tests: $MPISPPY_APHFW_TEST_SOLVER,
+    else ``default``."""
+    return os.environ.get(APHFW_TEST_SOLVER_VAR) or default
+
 #: The directory holding the ``mpisppy`` package these tests belong to.
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))

@@ -450,6 +450,20 @@ else
     echo "=== SKIPPED: schur-complement tests (parapint not installed) ==="
 fi
 
+# ---------- FW-APH hub (--aphfw-hub) ----------
+# CI's aphfw-highs job builds aphfw_cpp for HiGHS and runs this with
+# MPISPPY_APHFW_TEST_SOLVER=appsi_highs.  Here it runs against whatever
+# aphfw_cpp is installed (built for any solver), with $SOLVER on the Python
+# side unless MPISPPY_APHFW_TEST_SOLVER is already set.
+if has_module aphfw_cpp; then
+    run_phase "test_aphfw_hub (spawns mpiexec)" \
+        env MPISPPY_APHFW_TEST_SOLVER="${MPISPPY_APHFW_TEST_SOLVER:-$SOLVER}" \
+        coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_aphfw_hub.py -v
+else
+    echo ""
+    echo "=== SKIPPED: FW-APH hub tests (aphfw_cpp not built) ==="
+fi
+
 # ---------- Combine and report ----------
 
 echo ""

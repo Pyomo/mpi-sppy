@@ -38,6 +38,7 @@ from mpisppy.tests.examples.farmer import (
     scenario_creator,
     scenario_denouement,
 )
+from mpisppy.tests.utils import aphfw_test_solver
 
 NUM_SCENS = 3
 MAX_CYCLES = 40
@@ -147,7 +148,7 @@ class ExportFeedOpt(APHFWOpt):
 def _make_options():
     all_scenario_names = [f"Scenario{i}" for i in range(NUM_SCENS)]
     options = {
-        "solver_name": "gurobi",
+        "solver_name": aphfw_test_solver(),
         "defaultPHrho": 1.0,
         "convthresh": 0,
         "PHIterLimit": 0,

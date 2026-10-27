@@ -28,6 +28,8 @@ import numpy as np
 # Add aphfw Python package and build directory to path
 from mpi4py import MPI
 
+from mpisppy.tests.utils import aphfw_test_solver
+
 
 def test_hub_only():
     comm = MPI.COMM_WORLD
@@ -55,7 +57,7 @@ def test_hub_only():
 
     # Options matching what vanilla.shared_options would create
     options = {
-        "solver_name": "gurobi",
+        "solver_name": aphfw_test_solver(),
         "defaultPHrho": 1.0,
         "convthresh": 0,
         "PHIterLimit": 0,
