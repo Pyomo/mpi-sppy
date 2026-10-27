@@ -7,6 +7,7 @@
 // full copyright and license information.
 ///////////////////////////////////////////////////////////////////////////////
 #include "gurobi_interface.hpp"
+#include <algorithm>
 #include <string>
 #include <iostream>
 #include <sstream>
@@ -172,16 +173,20 @@ void GurobiInterface::applyBoundsToSolver() {
   // bound already has, makes Gurobi discard the last solution, and that
   // solution is the MIP start GurobiGrad::updateReferenceVector sets.  The
   // mpi-sppy hub pushes every bound every cycle, usually unchanged, so writing
-  // them all left no LMO solve a start.
+  // them all left no LMO solve a start.  Gurobi stores an infinite bound as
+  // +-GRB_INFINITY (1e100), so the hub's +-inf is clamped to that before
+  // comparing, or an unbounded nonant would count as changed every cycle.
   bool changed = false;
   for (int pos = 0; pos < totalNonantCount; ++pos) {
     int vidx = nonantDenseIndexes[pos];
-    if (vars[vidx].get(GRB_DoubleAttr_LB) != nonantLowerBounds[pos]) {
-      vars[vidx].set(GRB_DoubleAttr_LB, nonantLowerBounds[pos]);
+    const double lb = std::max(nonantLowerBounds[pos], -GRB_INFINITY);
+    const double ub = std::min(nonantUpperBounds[pos], GRB_INFINITY);
+    if (vars[vidx].get(GRB_DoubleAttr_LB) != lb) {
+      vars[vidx].set(GRB_DoubleAttr_LB, lb);
       changed = true;
     }
-    if (vars[vidx].get(GRB_DoubleAttr_UB) != nonantUpperBounds[pos]) {
-      vars[vidx].set(GRB_DoubleAttr_UB, nonantUpperBounds[pos]);
+    if (vars[vidx].get(GRB_DoubleAttr_UB) != ub) {
+      vars[vidx].set(GRB_DoubleAttr_UB, ub);
       changed = true;
     }
   }

@@ -1218,6 +1218,15 @@ class Config(pyofig.ConfigDict):
                            domain=str,
                            default="")
 
+        self.add_to_config(name="aphfw_scenario_dir",
+                           description="Directory in which the hub writes its "
+                           "scenario files for the C++ (in a temporary "
+                           "subdirectory, removed at the end); every hub rank "
+                           "must see it (default: the system's temporary "
+                           "directory)",
+                           domain=str,
+                           default="")
+
         self.add_to_config(name="aphfw_omicron_rho_multiplier",
                            description="k in omicron = k * rho at post-iter-0 freeze (default 1.0)",
                            domain=float,

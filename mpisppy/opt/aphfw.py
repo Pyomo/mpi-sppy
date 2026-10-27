@@ -23,6 +23,7 @@ import tempfile
 import numpy as np
 
 import mpisppy.phbase
+from mpisppy import MPI
 from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ def _build_help(src_dir=_APHFW_SRC):
             "a clone, then run python -m mpisppy.aphfw_cpp.build there.")
     return msg + (
         "It needs MPI (the one mpi4py uses), a C++23 compiler, and Gurobi, "
-        "CPLEX or Xpress. Build and install it with, e.g.,\n"
+        "CPLEX, Xpress or HiGHS. Build and install it with, e.g.,\n"
         "    python -m mpisppy.aphfw_cpp.build --solver gurobi "
         "--solver-home /path/to/gurobi/linux64\n"
         "(--help lists the options; the raw form is pip install " + src_dir +
@@ -59,6 +60,22 @@ def _import_aphfw_cpp():
     return aphfw_cpp
 
 
+# Float options whose C++ default is 0, which the C++ parser (positive values
+# only) cannot be given explicitly; leaving them out gives the same value.
+_ZERO_IS_CPP_DEFAULT = {"aphfw_fw_tau", "aphfw_iter0_w_multiplier"}
+# Float options the C++ accepts as 0.
+_NONNEGATIVE_OPTIONS = {"aphfw_iter0_w_multiplier"}
+
+
+def _check_dir_shared(comm, path):
+    """Raise on every rank unless every rank of comm can see directory path."""
+    if comm.allreduce(int(os.path.isdir(path)), op=MPI.MIN) == 0:
+        raise RuntimeError(
+            f"Not every hub rank can see the FW-APH scenario directory {path}. "
+            "When the hub runs on more than one node, give a directory on a "
+            "filesystem they share with --aphfw-scenario-dir.")
+
+
 class APHFWOpt(mpisppy.phbase.PHBase):
     """Wraps C++ FWAPH for use as an mpi-sppy hub optimizer (hub only)."""
 
@@ -68,6 +85,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         self._terminate_flag = None
         self._scenario_dir = None
         self._local_nonant_length = None
+        self._final_cycle = 0
 
     def aphfw_main(self, finalize=True):
         """Run the C++ FW-APH algorithm, syncing with spokes every cycle.
@@ -80,6 +98,10 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         """
         # 1. Create Pyomo scenarios via PHBase (no prox — C++ handles that)
         self.PH_Prep(attach_duals=True, attach_prox=False)
+        if not self.is_minimizing:
+            raise RuntimeError(
+                "--aphfw-hub supports only minimization: the C++ solves "
+                "minimize the objective as written in the scenario files.")
 
         # 2. Write MPS + JSON + rho files to a temporary directory
         self._write_scenario_files()
@@ -144,6 +166,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             # (converged, max cycles reached, or external termination)
             if completed == 0:
                 break
+            self._PHIter = self._cpp.get_current_cycle()
 
             # 6. Run mpi-sppy extensions (e.g., dynamic rho)
             if has_extensions:
@@ -169,12 +192,6 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             if (self._cpp.get_current_cycle() == 1
                     and not self._cpp.omicron_is_frozen()):
                 self._cpp.freeze_omicron(self._omicron_rho_multiplier)
-
-            # 6b. Update the Lagrangian bound from C++
-            lag_bound = self._unscale_obj(
-                self._cpp.get_current_lagrangian_bound())
-            if self._can_update_best_bound():
-                self.best_bound_obj_val = lag_bound
 
             # 7. Sync with spokes (send_nonants/send_ws are overridden
             #    in APHFWHub to use C++ values)
@@ -249,6 +266,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
     def aphfw_finalize(self):
         """Clean up C++ resources and temp directory."""
         if self._cpp is not None:
+            self._final_cycle = self._cpp.get_current_cycle()
             self._cpp.finalize()
             self._cpp = None
         if self._scenario_dir is not None and self._cleanup_scenario_dir:
@@ -269,13 +287,17 @@ class APHFWOpt(mpisppy.phbase.PHBase):
 
         # Generate a unique directory path WITHOUT creating it yet,
         # because Scenario_lp_mps_files.__init__ does makedirs(exist_ok=False).
-        # Rank 0 picks the name, broadcasts to all ranks.
+        # Rank 0 picks the name, broadcasts to all ranks.  Every hub rank
+        # writes its scenarios there and the C++ on every rank reads them all,
+        # so all hub ranks must see the same directory.
+        base = self._get_option("aphfw_scenario_dir", "") or None
         if self.cylinder_rank == 0:
-            parent = tempfile.mkdtemp(prefix="aphfw_")
+            parent = tempfile.mkdtemp(prefix="aphfw_", dir=base)
             self._scenario_dir = os.path.join(parent, "scen")
         else:
             self._scenario_dir = None
         self._scenario_dir = self.mpicomm.bcast(self._scenario_dir, root=0)
+        _check_dir_shared(self.mpicomm, os.path.dirname(self._scenario_dir))
 
         if self.cylinder_rank == 0:
             logger.debug(f"Writing scenario files to {self._scenario_dir}")
@@ -362,14 +384,17 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             elif py_name in self.options:
                 val = self.options[py_name]
             if val is not None:
-                # C++ rejects 0.0 for positive-range options like thresholds;
-                # omit them so C++ uses its own defaults.
-                if isinstance(val, float) and val == 0.0:
-                    continue
                 # aphfw_omicron_all uses -1.0 as the "unset" sentinel; C++ enforces
                 # a positive range on the option, so don't push the sentinel.
                 if py_name == "aphfw_omicron_all" and isinstance(val, float) and val < 0.0:
                     continue
+                if isinstance(val, float) and val <= 0.0:
+                    if val == 0.0 and py_name in _ZERO_IS_CPP_DEFAULT:
+                        continue
+                    if not (val == 0.0 and py_name in _NONNEGATIVE_OPTIONS):
+                        raise ValueError(
+                            f"--{py_name.replace('_', '-')} must be positive "
+                            f"(got {val})")
                 d[cpp_name] = val
 
         # Rho: let C++ read per-scenario {scenarioName}_rho.csv files
@@ -416,6 +441,8 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         self._cpp.get_all_local_w(w_buf)
         self._cpp.get_all_local_xbar(xbar_buf)
         self._cpp.get_all_local_rho(rho_buf)
+        # W in the original objective's units, as send_ws gives the spokes
+        w_buf = self._unscale_obj(w_buf)
 
         idx = 0
         for sname, scenario in self.local_scenarios.items():
@@ -445,7 +472,12 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         self._cpp.set_all_local_rho(rho_buf)
 
     def _push_bounds_to_cpp(self):
-        """Read nonant variable bounds from Pyomo scenarios and push to C++."""
+        """Read nonant variable bounds from Pyomo scenarios and push to C++.
+
+        A fixed variable is pushed with both bounds at its value: fixers
+        (e.g. ReducedCostsFixer) act through xvar.fix(), which leaves lb and
+        ub as they were.
+        """
         if self._cpp is None:
             return
 
@@ -456,8 +488,11 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         idx = 0
         for sname, scenario in self.local_scenarios.items():
             for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items():
-                lb_buf[idx] = float(xvar.lb) if xvar.lb is not None else -np.inf
-                ub_buf[idx] = float(xvar.ub) if xvar.ub is not None else np.inf
+                if xvar.fixed:
+                    lb_buf[idx] = ub_buf[idx] = float(xvar.value)
+                else:
+                    lb_buf[idx] = float(xvar.lb) if xvar.lb is not None else -np.inf
+                    ub_buf[idx] = float(xvar.ub) if xvar.ub is not None else np.inf
                 idx += 1
 
         self._cpp.set_all_local_nonant_bounds(lb_buf, ub_buf)

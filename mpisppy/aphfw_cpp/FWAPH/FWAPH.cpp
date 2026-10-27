@@ -478,6 +478,7 @@ std::pair<std::set<int>::iterator,int> FWAPH::bestTaskToDispatch(void)
 // Enhance startTask so it keeps track of last dispatch time for FW solves
 void FWAPH::startTask(int s, int taskType)
 {
+  applyPendingUpdates(s);
   if (taskType == FWsolveType)
     lastDispatchCycle[s] = cycleCount;
   groupController::startTask(s, taskType);
@@ -1267,7 +1268,7 @@ void FWAPH::getAllLocalRho(double* buf, int len) const
 {
   int offset = 0;
   for (int s = 0; s < numSubdomains; ++s) {
-    const auto& rho = localScenarios()[s].getRho();
+    const auto& rho = effectiveRho(s);
     int n = static_cast<int>(rho.size());
     if (offset + n > len)
       throw std::runtime_error("getAllLocalRho: buffer too small");
@@ -1279,6 +1280,26 @@ void FWAPH::getAllLocalRho(double* buf, int len) const
                              std::to_string(offset) + ", got " + std::to_string(len) + ")");
 }
 
+const std::vector<double>& FWAPH::effectiveRho(int s) const
+{
+  if (s < (int)pendingRho_.size() && pendingRho_[s])
+    return *pendingRho_[s];
+  return localScenarios()[s].getRho();
+}
+
+void FWAPH::applyPendingUpdates(int s)
+{
+  if (s < (int)pendingRho_.size() && pendingRho_[s]) {
+    localScenarios()[s].setRho(*pendingRho_[s]);
+    pendingRho_[s].reset();
+  }
+  if (s < (int)pendingBounds_.size() && pendingBounds_[s]) {
+    localScenarios()[s].setNonantBounds(pendingBounds_[s]->first,
+                                        pendingBounds_[s]->second);
+    pendingBounds_[s].reset();
+  }
+}
+
 void FWAPH::setAllLocalRho(const double* buf, int len)
 {
   int offset = 0;
@@ -1287,7 +1308,12 @@ void FWAPH::setAllLocalRho(const double* buf, int len)
     if (offset + n > len)
       throw std::runtime_error("setAllLocalRho: buffer too small");
     std::vector<double> newRho(buf + offset, buf + offset + n);
-    localScenarios()[s].setRho(newRho);
+    if (isInSet(s, active)) {
+      pendingRho_.resize(numSubdomains);
+      pendingRho_[s] = std::move(newRho);
+    } else {
+      localScenarios()[s].setRho(newRho);
+    }
     offset += n;
   }
   if (offset != len)
@@ -1336,7 +1362,7 @@ void FWAPH::freezeOmicron(double multiplier)
   double localSum = 0.0;
   int    localCnt = 0;
   for (int s = 0; s < numSubdomains; ++s) {
-    const auto& rhoS = localScenarios()[s].getRho();
+    const auto& rhoS = effectiveRho(s);
     std::vector<double> o(rhoS.size());
     for (size_t i = 0; i < rhoS.size(); ++i) {
       o[i] = multiplier * rhoS[i];
@@ -1393,8 +1419,11 @@ void FWAPH::getAllLocalNonantBounds(double* lbBuf, double* ubBuf, int len) const
 {
   int offset = 0;
   for (int s = 0; s < numSubdomains; ++s) {
-    const auto& lb = localScenarios()[s].getNonantLowerBounds();
-    const auto& ub = localScenarios()[s].getNonantUpperBounds();
+    const bool pending = s < (int)pendingBounds_.size() && pendingBounds_[s];
+    const auto& lb = pending ? pendingBounds_[s]->first
+                             : localScenarios()[s].getNonantLowerBounds();
+    const auto& ub = pending ? pendingBounds_[s]->second
+                             : localScenarios()[s].getNonantUpperBounds();
     int n = static_cast<int>(lb.size());
     if (offset + n > len)
       throw std::runtime_error("getAllLocalNonantBounds: buffer too small");
@@ -1418,7 +1447,12 @@ void FWAPH::setAllLocalNonantBounds(const double* lbBuf, const double* ubBuf, in
       throw std::runtime_error("setAllLocalNonantBounds: buffer too small");
     std::vector<double> lb(lbBuf + offset, lbBuf + offset + n);
     std::vector<double> ub(ubBuf + offset, ubBuf + offset + n);
-    localScenarios()[s].setNonantBounds(lb, ub);
+    if (isInSet(s, active)) {
+      pendingBounds_.resize(numSubdomains);
+      pendingBounds_[s] = std::make_pair(std::move(lb), std::move(ub));
+    } else {
+      localScenarios()[s].setNonantBounds(lb, ub);
+    }
     offset += n;
   }
   if (offset != len)

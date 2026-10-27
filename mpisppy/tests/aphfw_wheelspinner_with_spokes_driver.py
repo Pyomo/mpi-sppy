@@ -124,8 +124,7 @@ def test_wheelspinner_with_spokes():
 
     # Check results on the hub rank 0
     if wheel.strata_rank == 0 and wheel.cylinder_rank == 0:
-        opt = wheel.spcomm.opt
-        cycle_count = opt._cpp.get_current_cycle() if opt._cpp is not None else -1
+        cycle_count = wheel.spcomm.current_iteration()
         print(f"\n  Cycles completed: {cycle_count}")
         assert cycle_count > 0, f"Expected cycles > 0, got {cycle_count}"
 

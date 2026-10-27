@@ -17,6 +17,8 @@
 #include <atomic>
 #include <fstream>
 #include <limits>
+#include <optional>
+#include <utility>
 
 // Controller class for FW-APH
 
@@ -332,6 +334,17 @@ protected:
   bool startupDone_ = false;      // whether startupSequence has been called
   int cycleTarget_ = 0;           // target cycle count for runNCycles
   bool maxCyclesReached() const;
+
+  // Rho and nonant-bound updates from Python (setAllLocalRho,
+  // setAllLocalNonantBounds) for a scenario whose solve is still running.
+  // Its solver objects belong to the worker thread until the solve ends, so
+  // startTask applies these before the scenario's next solve; until then the
+  // getters report them.
+  std::vector<std::optional<std::vector<double>>> pendingRho_;
+  std::vector<std::optional<std::pair<std::vector<double>, std::vector<double>>>>
+      pendingBounds_;
+  const std::vector<double>& effectiveRho(int s) const;
+  void applyPendingUpdates(int s);
   std::atomic<int>* externalTerminateFlag_ = nullptr;
 
   // local functions

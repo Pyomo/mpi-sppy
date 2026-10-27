@@ -27,7 +27,7 @@ add_executable(aphfw_main_test
     test_fw_export.cpp
 )
 if (USE_GUROBI)
-    target_sources(aphfw_main_test PRIVATE test_numeric_retry.cpp)
+    target_sources(aphfw_main_test PRIVATE test_numeric_retry.cpp test_gurobi_bounds.cpp)
 endif()
 
 target_include_directories(aphfw_main_test

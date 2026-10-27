@@ -270,10 +270,16 @@ The hub's own options all begin with ``--aphfw-``. It also takes
    * - ``--aphfw-verbosity``
      - 0
      - C++ output; 1 adds a line per subproblem solve and per cycle
+   * - ``--aphfw-scenario-dir``
+     - the system's temporary directory
+     - Where the hub writes the scenario files the C++ reads, in a
+       subdirectory that is removed at the end. Every hub rank must see it,
+       so a hub on more than one node needs a shared filesystem here.
 
 ``--help`` (with a ``--module-name``) lists the rest. ``--aphfw-hub``
 cannot be combined with ``--integer-relax-then-enforce``: the C++ hub solves
-from the MPS files and does not see changes to Pyomo variable types.
+from the MPS files and does not see changes to Pyomo variable types. The hub
+also refuses maximization models and models with ``variable_probability``.
 
 Troubleshooting
 ---------------
@@ -292,6 +298,11 @@ Troubleshooting
    ``CPLEX_Studio...`` directory holding ``cplex/`` and ``concert/``, for
    Xpress the directory holding ``include/xprs.h`` and ``lib/``. The message
    names what is missing.
+
+``Not every hub rank can see the FW-APH scenario directory``
+   The hub's ranks are on more than one node and the scenario files went
+   to a node-local temporary directory. Give a directory on a filesystem
+   they share with ``--aphfw-scenario-dir``.
 
 ``aphfw_cpp loads ... but mpi4py loads ...``
    The module was compiled against a different MPI than mpi4py's. Rebuild

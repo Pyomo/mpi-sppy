@@ -22,6 +22,8 @@
 
 #include <mpi.h>
 #include <atomic>
+#include <cstdint>
+#include <type_traits>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -29,14 +31,24 @@
 namespace py = pybind11;
 
 // Convert a Python mpi4py communicator handle to MPI_Comm.
-// mpi4py._handleof(comm) returns an integer (the address of the
-// ompi_communicator_t for OpenMPI, or the integer handle for MPICH).
+// mpi4py._handleof(comm) returns an integer: the address of the
+// ompi_communicator_t for Open MPI, where MPI_Comm is a pointer, or the
+// integer handle itself for MPICH and its derivatives, where MPI_Comm is an
+// int.  The cast has to match.
+template <typename Comm>
+static Comm handle_to_comm(std::uintptr_t handle)
+{
+    if constexpr (std::is_pointer_v<Comm>)
+        return reinterpret_cast<Comm>(handle);
+    else
+        return static_cast<Comm>(handle);
+}
+
 static MPI_Comm py_comm_to_mpi(py::handle py_comm)
 {
     py::module_ mpi4py = py::module_::import("mpi4py.MPI");
     py::object handle = mpi4py.attr("_handleof")(py_comm);
-    std::uintptr_t addr = handle.cast<std::uintptr_t>();
-    return reinterpret_cast<MPI_Comm>(addr);
+    return handle_to_comm<MPI_Comm>(handle.cast<std::uintptr_t>());
 }
 
 
@@ -92,12 +104,10 @@ public:
                 if (c == '_') c = '-';
             }
 
-            // Handle boolean values specially
+            // Bools are CLI11 flags; pass false explicitly, since omitting the
+            // flag would leave a default-true option on.
             if (py::isinstance<py::bool_>(val)) {
-                if (val.cast<bool>()) {
-                    arg_strings.push_back(flag);
-                }
-                // false bools: just omit the flag
+                arg_strings.push_back(flag + (val.cast<bool>() ? "" : "=false"));
             } else {
                 arg_strings.push_back(flag);
                 arg_strings.push_back(py::str(val).cast<std::string>());

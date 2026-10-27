@@ -569,7 +569,9 @@ class APHFWHub(PHHub):
     Sends NONANT and DUALS fields to spokes, read from the C++ side.
     """
 
-    _hub_algo_best_bound_provider = True
+    # In hub mode the C++ computes a Lagrangian bound only at iteration 0 (and
+    # at the end with --aphfw-final-lagrangian), so the bound needs spokes.
+    _hub_algo_best_bound_provider = False
 
     # Symbol shown in the inter-cylinder trace's outer-bound column when this
     # hub is the source of the best bound (otherwise the hub's own bounds show
@@ -584,7 +586,7 @@ class APHFWHub(PHHub):
     def current_iteration(self):
         if self.opt._cpp is not None:
             return self.opt._cpp.get_current_cycle()
-        return 0
+        return self.opt._final_cycle  # after finalize
 
     def sync_bounds(self):
         """Update BestOuterBound from C++ *before* sending to spokes.
@@ -652,15 +654,7 @@ class APHFWHub(PHHub):
         w_tmp = np.empty(n, dtype=np.float64)
         opt._cpp.get_all_local_w(w_tmp)
 
-        # Unscale W if obj-scale was applied
-        cfg = opt.options.get("cfg", None)
-        obj_scale = 1.0
-        if cfg is not None and hasattr(cfg, "aphfw_obj_scale"):
-            obj_scale = cfg.aphfw_obj_scale
-        elif "aphfw_obj_scale" in opt.options:
-            obj_scale = opt.options["aphfw_obj_scale"]
-        if obj_scale != 1.0 and obj_scale != 0.0:
-            w_tmp /= obj_scale
+        w_tmp = opt._unscale_obj(w_tmp)
 
         w_buf = self.send_buffers[Field.DUALS]
         w_buf[:n] = w_tmp
@@ -671,7 +665,10 @@ class APHFWHub(PHHub):
 
         The parent PHHub.finalize calls post_loops → Eobjective which needs
         ALL Pyomo variables solved, but C++ only exports nonant values.
-        We skip this since objective values come from C++.
+        We skip this since objective values come from C++.  The C++ side is
+        finalized here, which writes its trace files and removes the scenario
+        files.
         """
         self.opt._write_back_to_pyomo()
+        self.opt.aphfw_finalize()
         return None

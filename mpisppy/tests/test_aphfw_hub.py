@@ -29,10 +29,12 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import numpy as np
 import pyomo.environ as pyo
 
 import mpisppy.utils.config as config
 from mpisppy.generic.parsing import add_driver_args
+from mpisppy.opt.aphfw import APHFWOpt
 from mpisppy.tests.utils import (
     APHFW_TEST_SOLVER_VAR,
     aphfw_test_solver,
@@ -104,9 +106,169 @@ class TestAphfwOptional(unittest.TestCase):
                                      integer_relax_then_enforce=True))
 
 
+class _FakeCpp:
+    """Stands in for aphfw_cpp.APHFWLibrary in the Python-side tests."""
+
+    def __init__(self, n, w=0.0):
+        self.n, self.w, self.bounds = n, w, None
+
+    def set_all_local_nonant_bounds(self, lb, ub):
+        self.bounds = (lb.copy(), ub.copy())
+
+    def get_all_local_w(self, buf):
+        buf[:] = self.w
+
+    def _fill(self, buf):
+        buf[:] = 1.0
+
+    get_all_local_prox_x = get_all_local_xbar = get_all_local_rho = _fill
+
+    def get_current_cycle(self):
+        return 1
+
+
+def _fake_opt(cfg=None, nonants=()):
+    """An object with what the APHFWOpt methods under test read."""
+    from types import SimpleNamespace
+
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(range(len(nonants)))
+    for i, (lb, ub) in enumerate(nonants):
+        m.x[i].setlb(lb)
+        m.x[i].setub(ub)
+    idx = [("ROOT", i) for i in range(len(nonants))]
+    m._mpisppy_data = SimpleNamespace(
+        nonant_indices={ndn_i: m.x[ndn_i[1]] for ndn_i in idx})
+    m._mpisppy_model = SimpleNamespace(
+        **{name: pyo.Param(idx, mutable=True, initialize=0.0)
+           for name in ("W", "xbars", "rho")})
+    for name in ("W", "xbars", "rho"):
+        m.add_component("_" + name, getattr(m._mpisppy_model, name))
+    opt = SimpleNamespace(options={"cfg": cfg}, local_scenarios={"s": m},
+                          _local_nonant_length=len(nonants),
+                          _scenario_dir="scen")
+    opt._cpp = _FakeCpp(len(nonants))
+    for name in ("_get_option", "_unscale_obj"):
+        setattr(opt, name, getattr(APHFWOpt, name).__get__(opt))
+    return opt, m
+
+
+class TestAphfwPythonSide(unittest.TestCase):
+    """The hub's Python side, with the C++ library stubbed out."""
+
+    def test_rejects_variable_probability(self):
+        from mpisppy.utils.cfg_vanilla import aphfw_hub
+        with self.assertRaisesRegex(RuntimeError, "variable_probability"):
+            aphfw_hub(_cfg(aphfw_hub=True), None, None, ["s"],
+                      variable_probability=lambda s: None)
+
+    def test_zero_float_options(self):
+        # 0 for an option whose C++ default is 0 is left to that default; for
+        # one the C++ requires positive it is an error, not the default.
+        cfg = _cfg(aphfw_hub=True, aphfw_fw_tau=0.0,
+                   aphfw_iter0_w_multiplier=0.0)
+        opt, _ = _fake_opt(cfg)
+        d = APHFWOpt._make_cpp_config(opt)
+        self.assertNotIn("FW-tau", d)
+        self.assertNotIn("iter0-w-multiplier", d)
+        cfg.aphfw_primal_term_thresh = 0.0
+        with self.assertRaisesRegex(ValueError, "--aphfw-primal-term-thresh"):
+            APHFWOpt._make_cpp_config(opt)
+
+    def test_fixed_nonants_pushed_as_bounds(self):
+        opt, m = _fake_opt(nonants=[(0, 10), (None, None), (0, 10)])
+        m.x[2].fix(4.0)
+        APHFWOpt._push_bounds_to_cpp(opt)
+        lb, ub = opt._cpp.bounds
+        np.testing.assert_array_equal(lb, [0, -np.inf, 4.0])
+        np.testing.assert_array_equal(ub, [10, np.inf, 4.0])
+
+    def test_extensions_see_unscaled_W(self):
+        opt, m = _fake_opt(_cfg(aphfw_hub=True, aphfw_obj_scale=4.0),
+                           nonants=[(0, 1), (0, 1)])
+        opt._cpp.w = 8.0
+        APHFWOpt._sync_cpp_to_pyomo(opt)
+        self.assertEqual([pyo.value(w) for w in m._mpisppy_model.W.values()],
+                         [2.0, 2.0])
+
+    def test_scenario_dir_must_be_shared(self):
+        from mpisppy import MPI
+        from mpisppy.opt.aphfw import _check_dir_shared
+        with tempfile.TemporaryDirectory() as tmpdir:
+            _check_dir_shared(MPI.COMM_WORLD, tmpdir)
+            with patch("os.path.isdir", return_value=False), \
+                    self.assertRaisesRegex(RuntimeError, "--aphfw-scenario-dir"):
+                _check_dir_shared(MPI.COMM_WORLD, tmpdir)
+
+
 @unittest.skipIf(not aphfw_cpp_available, "aphfw_cpp is not built")
 @unittest.skipIf(not solver_available, "no MIP solver available")
 class TestAphfwHubRun(unittest.TestCase):
+
+    def _farmer_argv(self, *extra):
+        return ["generic_cylinders",
+                "--module-name", "mpisppy.tests.examples.farmer",
+                "--num-scens", "3",
+                "--solver-name", solver_name,
+                "--aphfw-hub",
+                "--default-rho", "1",
+                *extra]
+
+    def test_scenario_dir_used_and_removed(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            argv = self._farmer_argv("--aphfw-max-cycles", "2",
+                                     "--aphfw-scenario-dir", tmpdir)
+            written = []
+            real_init = APHFWOpt._make_cpp_config
+
+            def record(self):
+                written.append(self._scenario_dir)
+                return real_init(self)
+
+            with patch.object(sys, "argv", argv), \
+                    patch.object(APHFWOpt, "_make_cpp_config", record):
+                runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
+            self.assertTrue(written[0].startswith(tmpdir), written)
+            # the hub finalizes the C++ side, which removes the files
+            self.assertEqual(os.listdir(tmpdir), [])
+
+    def test_refuses_maximization(self):
+        from mpisppy.tests.examples.farmer import (
+            scenario_creator,
+            scenario_denouement,
+        )
+        from mpisppy.utils.cfg_vanilla import aphfw_hub
+        cfg = _cfg(aphfw_hub=True, solver_name=solver_name, default_rho=1.0)
+        hub_dict = aphfw_hub(cfg, scenario_creator, scenario_denouement,
+                             [f"scen{i}" for i in range(3)],
+                             scenario_creator_kwargs={"num_scens": 3,
+                                                      "sense": pyo.maximize})
+        opt = APHFWOpt(**hub_dict["opt_kwargs"])
+        with self.assertRaisesRegex(RuntimeError, "only minimization"):
+            opt.aphfw_main()
+
+    def test_initial_outer_bound_reaches_hub(self):
+        from mpisppy.utils.cfg_vanilla import aphfw_hub
+        cfg = _cfg(aphfw_hub=True)
+        cfg.quick_assign("initial_outer_bound", float, -1234.5)
+        hub_dict = aphfw_hub(cfg, None, None, ["s"])
+        self.assertEqual(
+            hub_dict["hub_kwargs"]["options"]["initial_outer_bound"], -1234.5)
+
+    def test_false_flag_reaches_cpp(self):
+        # check-omicron-invariant defaults to true in C++; the bindings used to
+        # drop a false bool, which left it on.  verbosity 1 echoes the options.
+        argv = [sys.executable, "-m", "mpisppy.generic_cylinders",
+                *self._farmer_argv("--aphfw-max-cycles", "1",
+                                   "--aphfw-verbosity", "1",
+                                   "--disable-aphfw-check-omicron-invariant")[1:]]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = subprocess.run(argv, capture_output=True, text=True,
+                                    timeout=300, check=False,
+                                    env=subprocess_env(), cwd=tmpdir)
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out[-3000:])
+        self.assertIn("check-omicron-invariant: false", out)
 
     def test_farmer_hub_only(self):
         argv = [

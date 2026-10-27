@@ -94,7 +94,10 @@ def check_publish_outer_bound():
 
 def run_wheel(final_lagrangian):
     """Hub-only farmer run; returns (trivial_bound, best_outer, cpp_bound)."""
+    from unittest.mock import patch
+
     import mpisppy.utils.config as config
+    from mpisppy.opt.aphfw import APHFWOpt
     from mpisppy.spin_the_wheel import WheelSpinner
     from mpisppy.tests.examples.farmer import (
         scenario_creator,
@@ -154,13 +157,24 @@ def run_wheel(final_lagrangian):
         scenario_creator_kwargs=scenario_creator_kwargs,
     )
 
+    # The hub finalizes the C++ side inside spin(), so read its bound just
+    # before that happens.
+    cpp_bound = []
+    real_finalize = APHFWOpt.aphfw_finalize
+
+    def finalize_and_capture(self):
+        if self._cpp is not None:
+            cpp_bound.append(self._cpp.get_current_lagrangian_bound())
+        real_finalize(self)
+
     wheel = WheelSpinner(hub_dict, [])
-    wheel.spin()
+    with patch.object(APHFWOpt, "aphfw_finalize", finalize_and_capture):
+        wheel.spin()
 
     opt = wheel.spcomm.opt
     return (opt.trivial_bound,
             wheel.spcomm.BestOuterBound,
-            opt._cpp.get_current_lagrangian_bound())
+            cpp_bound[0])
 
 
 def test_final_lagrangian(final_lagrangian):

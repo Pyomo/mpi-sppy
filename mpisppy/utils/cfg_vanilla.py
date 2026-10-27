@@ -689,6 +689,10 @@ def aphfw_hub(cfg,
     from mpisppy.cylinders.hub import APHFWHub
     from mpisppy.opt.aphfw import APHFWOpt, _import_aphfw_cpp
     _check_aphfw_compat(cfg)
+    if variable_probability is not None:
+        raise RuntimeError(
+            "variable_probability is not supported with --aphfw-hub: the C++ "
+            "hub uses one probability per scenario.")
     # Fail here, on every rank, rather than inside the wheel once the hub runs.
     _import_aphfw_cpp()
 
@@ -697,7 +701,8 @@ def aphfw_hub(cfg,
 
     hub_dict = {
         "hub_class": APHFWHub,
-        "hub_kwargs": {"options": {"rel_gap": cfg.rel_gap,
+        "hub_kwargs": {"options": {"initial_outer_bound": cfg.get("initial_outer_bound"),
+                                   "rel_gap": cfg.rel_gap,
                                    "abs_gap": cfg.abs_gap,
                                    "max_stalled_iters": cfg.max_stalled_iters}},
         "opt_class": APHFWOpt,

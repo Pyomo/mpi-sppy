@@ -103,8 +103,7 @@ def test_wheelspinner_hub_only():
 
     # Query results from the hub
     if wheel.strata_rank == 0:
-        opt = wheel.spcomm.opt
-        cycle_count = opt._cpp.get_current_cycle() if opt._cpp is not None else -1
+        cycle_count = wheel.spcomm.current_iteration()
 
         print(f"\n  [rank {rank}] Cycles completed: {cycle_count}")
         print(f"  [rank {rank}] WheelSpinner completed successfully")
