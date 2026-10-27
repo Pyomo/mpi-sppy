@@ -92,8 +92,8 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             finalize: If True, clean up the C++ library on exit.
 
         Returns:
-            trivial_bound: The initial Lagrangian bound from iter0, or None
-            if nonants fixed by an extension make it not a bound.
+            trivial_bound: The initial Lagrangian bound from iter0 (as for
+            PH, a bound only if no extension has fixed nonants).
         """
         # 1. Create Pyomo scenarios via PHBase (no prox — C++ handles that)
         self.PH_Prep(attach_duals=True, attach_prox=False)
@@ -163,10 +163,11 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             # startupSequence() has now run, so the iter-0 bound exists.
             if first_cycle:
                 first_cycle = False
+                self.trivial_bound = self._cpp.get_current_lagrangian_bound()
                 # With fixed nonants (pushed before the startup solves) it is
-                # a Lagrangian over a restricted set, not a bound.
+                # a Lagrangian over a restricted set, not a bound; PH guards
+                # the best bound the same way.
                 if self._bound_is_valid():
-                    self.trivial_bound = self._cpp.get_current_lagrangian_bound()
                     self.best_bound_obj_val = self.trivial_bound
 
             if self._terminate_flag.value:
@@ -206,7 +207,8 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             # so the state after the loop is the one Pyomo has.
             if has_extensions:
                 self._push_rho_to_cpp()
-            self._push_bounds_to_cpp()
+            if has_extensions or self.spcomm is not None:
+                self._push_bounds_to_cpp()
             if self.spcomm is not None and self.spcomm.is_converged():
                 self._terminate_flag.value = 1
                 break
@@ -516,7 +518,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         idx = 0
         for sname, scenario in self.local_scenarios.items():
             for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items():
-                if xvar.fixed:
+                if xvar.fixed and xvar.value is not None:
                     lb_buf[idx] = ub_buf[idx] = float(xvar.value)
                 else:
                     lb_buf[idx] = float(xvar.lb) if xvar.lb is not None else -np.inf

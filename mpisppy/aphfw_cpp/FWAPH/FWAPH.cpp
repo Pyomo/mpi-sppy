@@ -1322,14 +1322,14 @@ void FWAPH::setAllLocalRho(const double* buf, int len)
     std::vector<double> newRho(buf + offset, buf + offset + n);
     // The hub pushes rho every cycle, mostly unchanged; an unchanged one must
     // not touch the solver objects (it would rebuild their objectives).
-    if (newRho == effectiveRho(s)) {
-      offset += n;
-      continue;
-    }
-    // Back to what the solvers already have: drop a held update, write nothing.
+    // What the solvers already have: drop any held update, write nothing.
     if (newRho == localScenarios()[s].getRho()) {
       if (s < (int)pendingRho_.size())
         pendingRho_[s].reset();
+      offset += n;
+      continue;
+    }
+    if (newRho == effectiveRho(s)) {  // the update already held
       offset += n;
       continue;
     }
@@ -1473,16 +1473,16 @@ void FWAPH::setAllLocalNonantBounds(const double* lbBuf, const double* ubBuf, in
     std::vector<double> ub(ubBuf + offset, ubBuf + offset + n);
     // As for rho: the hub pushes every bound every cycle, and rewriting an
     // unchanged bound can discard a backend's MIP start.
-    const auto [curLb, curUb] = effectiveNonantBounds(s);
-    if (lb == curLb && ub == curUb) {
-      offset += n;
-      continue;
-    }
-    // Back to what the solvers already have: drop a held update, write nothing.
+    // What the solvers already have: drop any held update, write nothing.
     if (lb == localScenarios()[s].getNonantLowerBounds() &&
         ub == localScenarios()[s].getNonantUpperBounds()) {
       if (s < (int)pendingBounds_.size())
         pendingBounds_[s].reset();
+      offset += n;
+      continue;
+    }
+    const auto [heldLb, heldUb] = effectiveNonantBounds(s);
+    if (lb == heldLb && ub == heldUb) {  // the update already held
       offset += n;
       continue;
     }

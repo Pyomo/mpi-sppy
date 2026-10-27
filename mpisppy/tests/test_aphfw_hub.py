@@ -360,7 +360,10 @@ class TestAphfwHubRun(unittest.TestCase):
                              scenario_creator_kwargs={"num_scens": 3},
                              ph_extensions=SetRho)
         with patch.object(APHFWHub, "is_converged", lambda self: True):
-            WheelSpinner(hub_dict, []).spin()
+            wheel = WheelSpinner(hub_dict, [])
+            wheel.spin()
+        # it ended on the spokes' convergence, after one cycle of five
+        self.assertEqual(wheel.spcomm.current_iteration(), 1)
         self.assertTrue(seen)
         self.assertEqual(set(seen), {7.5})
 
