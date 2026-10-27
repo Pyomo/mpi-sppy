@@ -65,11 +65,13 @@ example of use.
 Replacing subproblem solves
 ---------------------------
 
-An ``Extension`` may override ``solve_subproblem`` when one logical subproblem
-solve requires more than one solver call. Constraint generation is the typical
-case: solve, inspect the loaded candidate, add violated rows, and solve again.
-This all remains one subproblem solve from the perspective of PH and the other
-mpi-sppy algorithms.
+An ``Extension`` may override ``solve_subproblem`` to customize how a scenario
+or bundle subproblem is solved. A common reason is to provide a custom solution
+algorithm for the subproblem. The override may replace mpi-sppy's configured
+solve entirely or wrap it with additional work. For example, constraint
+generation can solve, inspect the loaded candidate, add violated rows, and
+solve again. This all remains one logical subproblem solve from the perspective
+of PH and the other mpi-sppy algorithms.
 
 The hook has this signature::
 
