@@ -58,6 +58,8 @@ addheader -c addheader.yml
 
 Header text is in `file_header.txt`. The `test_headers.py` pytest test enforces this.
 
+C++ files (`*.cpp`, `*.hpp`) carry the same header as `//` comments; add it with `addheader -c addheader-cpp.yml`. The vendored `json.hpp` and `CLI11.hpp` are excluded.
+
 ### Building Docs
 
 ```bash

@@ -1,5 +1,6 @@
 # Usage: 
 # addheader -c addheader.yml
+# (C++ files: addheader -c addheader-cpp.yml)
 ---
 root: .
 text: file_header.txt

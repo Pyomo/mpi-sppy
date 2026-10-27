@@ -1,0 +1,17 @@
+# Usage:
+# addheader -c addheader-cpp.yml
+# The C++ counterpart of addheader.yml: same text, as // comments.
+# json.hpp and CLI11.hpp are vendored and keep their own notices.
+---
+root: .
+text: file_header.txt
+patterns:
+   - "*.cpp"
+   - "*.hpp"
+   - "~json.hpp"
+   - "~CLI11.hpp"
+comment: "//"
+sep: "/"
+sep-len: 77
+verbose: 1
+...
