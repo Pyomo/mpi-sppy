@@ -440,6 +440,57 @@ class TestSolveReplacementContract(unittest.TestCase):
                     str(TerminationCondition.optimal),
                 )
 
+    def test_load_exception_is_tolerated_when_solution_is_not_needed(self):
+        for persistent in (False, True):
+            with self.subTest(persistent=persistent):
+                ph = _make_ph()
+                name = list(ph.local_scenarios)[0]
+                scenario = ph.local_scenarios[name]
+                plugin = _CountingPlugin()
+                scenario._solver_plugin = plugin
+                error = RuntimeError("solution load failed")
+
+                if persistent:
+                    plugin.load_vars = mock.Mock(side_effect=error)
+                else:
+                    scenario.solutions.load_from = mock.Mock(side_effect=error)
+
+                with mock.patch(
+                        "mpisppy.spopt.sputils.is_persistent",
+                        return_value=persistent):
+                    ph.solve_one(
+                        None,
+                        name,
+                        scenario,
+                        gripe=True,
+                        need_solution=False,
+                        update_objective=False,
+                    )
+
+                self.assertEqual(plugin.solve_count, 1)
+                self.assertFalse(scenario._mpisppy_data.solution_available)
+                self.assertEqual(scenario._mpisppy_data.outer_bound, -10.0)
+                self.assertEqual(scenario._mpisppy_data.inner_bound, 10.0)
+
+    def test_solver_exception_is_not_gated_by_need_solution(self):
+        ph = _make_ph()
+        name = list(ph.local_scenarios)[0]
+        scenario = ph.local_scenarios[name]
+        plugin = _FailThenSucceedPlugin()
+        scenario._solver_plugin = plugin
+
+        with self.assertRaisesRegex(RuntimeError, "first solve failed"):
+            ph.solve_one(
+                None,
+                name,
+                scenario,
+                gripe=False,
+                need_solution=False,
+                update_objective=False,
+            )
+
+        self.assertEqual(plugin.solve_count, 1)
+
     def test_gripe_diagnostic_retry_does_not_load_solution(self):
         for persistent in (False, True):
             with self.subTest(persistent=persistent):

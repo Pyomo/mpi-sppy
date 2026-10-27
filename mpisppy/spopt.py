@@ -65,7 +65,8 @@ class _DefaultSolveInvocation:
     log_stream_path: Optional[str]
     outer_bound_only: bool
     need_solution: bool
-    attempts: List[_DefaultSolveAttempt] = field(default_factory=list)
+    attempts: List[_DefaultSolveAttempt] = field(
+        default_factory=list, init=False)
 
     def __call__(self):
         attempt = _DefaultSolveAttempt()
@@ -140,15 +141,18 @@ class _DefaultSolveInvocation:
         return any(attempt.outcome is outcome for attempt in self.attempts)
 
 
-@dataclass
+@dataclass(frozen=True)
 class _SolveExecution:
     """Normalized result of invoking the configured subproblem solve."""
 
     default_solve: _DefaultSolveInvocation
     outcome: SubproblemSolveOutcome
-    results: Any
     solver_exception: Optional[BaseException] = None
     deferred_exception: Optional[BaseException] = None
+
+    @property
+    def results(self):
+        return self.outcome.results
 
 
 class SPOpt(SPBase):
@@ -373,7 +377,6 @@ class SPOpt(SPBase):
         return _SolveExecution(
             default_solve=default_solve,
             outcome=outcome,
-            results=results,
             solver_exception=solver_exception,
             deferred_exception=deferred_exception,
         )
@@ -433,8 +436,7 @@ class SPOpt(SPBase):
 
 
     def _apply_failed_solve_outcome(
-            self, s, execution, *, gripe, solve_keyword_args,
-            log_stream_path):
+            self, s, execution, *, gripe):
         # A failed default solve computed no bound, so outer_bound stays at
         # the None assigned before the solve. A replacement extension may
         # report usable state explicitly or ask for bounds to be inferred.
@@ -479,9 +481,12 @@ class SPOpt(SPBase):
                        results.solver.termination_condition)
             elif execution.solver_exception is not None:
                 print("no results object, so solving agin with tee=True")
+                solve_keyword_args = (
+                    execution.default_solve.solve_keyword_args)
                 solve_keyword_args["tee"] = True
                 with sputils.solver_log_stream(
-                        log_stream_path, solve_keyword_args):
+                        execution.default_solve.log_stream_path,
+                        solve_keyword_args):
                     s._solver_plugin.solve(
                         s,
                         **solve_keyword_args,
@@ -516,9 +521,8 @@ class SPOpt(SPBase):
 
 
     def _apply_subproblem_solve_outcome(
-            self, s, execution, *, outer_bound_only, gripe,
-            solve_keyword_args, log_stream_path):
-        if outer_bound_only:
+            self, s, execution, *, gripe):
+        if execution.default_solve.outer_bound_only:
             self._apply_outer_bound_only_outcome(s, execution, gripe)
         else:
             results_not_good_enough = (
@@ -533,8 +537,6 @@ class SPOpt(SPBase):
                     s,
                     execution,
                     gripe=gripe,
-                    solve_keyword_args=solve_keyword_args,
-                    log_stream_path=log_stream_path,
                 )
             else:
                 self._apply_successful_solve_outcome(s, execution)
@@ -758,10 +760,7 @@ class SPOpt(SPBase):
             self._apply_subproblem_solve_outcome(
                 s,
                 execution,
-                outer_bound_only=outer_bound_only,
                 gripe=gripe,
-                solve_keyword_args=solve_keyword_args,
-                log_stream_path=log_stream_path,
             )
 
         # end of Agnostic bypass
