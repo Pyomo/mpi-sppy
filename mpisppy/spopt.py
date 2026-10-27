@@ -16,6 +16,9 @@ import pathlib
 import random
 import time
 import warnings
+from dataclasses import dataclass, field
+from enum import Enum, auto
+from typing import Any, List, Optional
 
 import numpy as np
 import pyomo.environ as pyo
@@ -34,6 +37,107 @@ from mpisppy.spbase import SPBase
 
 logger = logging.getLogger("SPOpt")
 logger.setLevel(logging.WARN)
+
+
+class _SolveFailureStage(Enum):
+    SOLVER_CALL = auto()
+    RESULT_CLASSIFICATION = auto()
+    SOLUTION_LOAD = auto()
+
+
+@dataclass
+class _DefaultSolveAttempt:
+    """State recorded by one call to an extension's ``default_solve``."""
+
+    results: Any = None
+    classification: Optional[bool] = None
+    outcome: Optional[SubproblemSolveOutcome] = None
+    exception: Optional[BaseException] = None
+    failure_stage: Optional[_SolveFailureStage] = None
+
+
+@dataclass
+class _DefaultSolveInvocation:
+    """Callable implementing SPOpt's unchanged default-solve sequence."""
+
+    subproblem: Any
+    solve_keyword_args: dict
+    log_stream_path: Optional[str]
+    outer_bound_only: bool
+    need_solution: bool
+    attempts: List[_DefaultSolveAttempt] = field(default_factory=list)
+
+    def __call__(self):
+        attempt = _DefaultSolveAttempt()
+        self.attempts.append(attempt)
+
+        try:
+            # Keep the logging context and solver call under the same handler:
+            # failures entering or leaving the context have historically been
+            # treated as solver-call failures.
+            with sputils.solver_log_stream(
+                    self.log_stream_path, self.solve_keyword_args):
+                attempt.results = self.subproblem._solver_plugin.solve(
+                    self.subproblem,
+                    **self.solve_keyword_args,
+                    load_solutions=False,
+                )
+        except Exception as error:
+            attempt.exception = error
+            attempt.failure_stage = _SolveFailureStage.SOLVER_CALL
+            raise
+
+        solution_available = False
+        if not self.outer_bound_only:
+            try:
+                attempt.classification = sputils.not_good_enough_results(
+                    attempt.results)
+            except Exception as error:
+                attempt.exception = error
+                attempt.failure_stage = (
+                    _SolveFailureStage.RESULT_CLASSIFICATION)
+                raise
+
+        if not self.outer_bound_only and not attempt.classification:
+            try:
+                if sputils.is_persistent(
+                        self.subproblem._solver_plugin):
+                    self.subproblem._solver_plugin.load_vars()
+                else:
+                    self.subproblem.solutions.load_from(attempt.results)
+            except Exception as error:
+                if self.need_solution:
+                    attempt.exception = error
+                    attempt.failure_stage = _SolveFailureStage.SOLUTION_LOAD
+                    raise
+            else:
+                solution_available = True
+
+        attempt.outcome = SubproblemSolveOutcome(
+            attempt.results,
+            solution_available=solution_available,
+            outer_bound=INFER_BOUND,
+            inner_bound=INFER_BOUND,
+        )
+        return attempt.outcome
+
+    def attempt_for_exception(self, error):
+        for attempt in reversed(self.attempts):
+            if attempt.exception is error:
+                return attempt
+        return None
+
+    def classification_for_results(self, results):
+        for attempt in reversed(self.attempts):
+            if (
+                attempt.results is results
+                and attempt.classification is not None
+            ):
+                return attempt.classification
+        return None
+
+    def produced_outcome(self, outcome):
+        return any(attempt.outcome is outcome for attempt in self.attempts)
 
 
 class SPOpt(SPBase):
@@ -388,64 +492,14 @@ class SPOpt(SPBase):
             Ag.callout_agnostic(kws)  # not going to use the return values
         else:
             #  didcallout = False  (returned true by the callout, but not used)
-            load_exception = None
-            load_exception_results = None
-            result_exception = None
-            result_exception_results = None
-            solver_call_exception = None
             deferred_exception = None
-            classified_results = []
-            default_outcomes = []
-
-            def default_solve():
-                nonlocal load_exception, load_exception_results
-                nonlocal result_exception, result_exception_results
-                nonlocal solver_call_exception
-                try:
-                    with sputils.solver_log_stream(
-                            log_stream_path, solve_keyword_args):
-                        candidate_results = s._solver_plugin.solve(
-                            s,
-                            **solve_keyword_args,
-                            load_solutions=False,
-                        )
-                except Exception as e:
-                    solver_call_exception = e
-                    raise
-                solution_available = False
-                if not outer_bound_only:
-                    try:
-                        results_not_good_enough = (
-                            sputils.not_good_enough_results(
-                                candidate_results)
-                        )
-                    except Exception as e:
-                        result_exception = e
-                        result_exception_results = candidate_results
-                        raise
-                    classified_results.append(
-                        (candidate_results, results_not_good_enough))
-                if not outer_bound_only and not results_not_good_enough:
-                    try:
-                        if sputils.is_persistent(s._solver_plugin):
-                            s._solver_plugin.load_vars()
-                        else:
-                            s.solutions.load_from(candidate_results)
-                    except Exception as e:
-                        if need_solution:
-                            load_exception = e
-                            load_exception_results = candidate_results
-                            raise
-                    else:
-                        solution_available = True
-                outcome = SubproblemSolveOutcome(
-                    candidate_results,
-                    solution_available=solution_available,
-                    outer_bound=INFER_BOUND,
-                    inner_bound=INFER_BOUND,
-                )
-                default_outcomes.append(outcome)
-                return outcome
+            default_solve = _DefaultSolveInvocation(
+                subproblem=s,
+                solve_keyword_args=solve_keyword_args,
+                log_stream_path=log_stream_path,
+                outer_bound_only=outer_bound_only,
+                need_solution=need_solution,
+            )
 
             try:
                 if self.extensions is None:
@@ -457,20 +511,25 @@ class SPOpt(SPBase):
                         outer_bound_only=outer_bound_only,
                     )
             except Exception as e:
-                if e is load_exception:
-                    results = load_exception_results
-                    deferred_exception = e
-                    solver_exception = None
-                elif e is result_exception:
-                    results = result_exception_results
-                    deferred_exception = e
-                    solver_exception = None
-                elif e is solver_call_exception:
-                    results = None
-                    solver_exception = e
-                else:
+                failed_attempt = default_solve.attempt_for_exception(e)
+                if failed_attempt is None:
                     # Exceptions from extension logic or result processing
                     # are not solver failures and must not be retried.
+                    raise
+                if (
+                    failed_attempt.failure_stage
+                    is _SolveFailureStage.SOLVER_CALL
+                ):
+                    results = None
+                    solver_exception = e
+                elif failed_attempt.failure_stage in (
+                        _SolveFailureStage.RESULT_CLASSIFICATION,
+                        _SolveFailureStage.SOLUTION_LOAD,
+                ):
+                    results = failed_attempt.results
+                    deferred_exception = e
+                    solver_exception = None
+                else:
                     raise
                 outcome = SubproblemSolveOutcome(
                     results,
@@ -486,11 +545,6 @@ class SPOpt(SPBase):
                 results = outcome.results
                 # An override may deliberately catch a failed default solve,
                 # classification, or load and provide its own final outcome.
-                load_exception = None
-                load_exception_results = None
-                result_exception = None
-                result_exception_results = None
-                solver_call_exception = None
                 solver_exception = None
 
             # Record how this solve ended, so a caller that sees
@@ -512,12 +566,9 @@ class SPOpt(SPBase):
                 raise deferred_exception
 
             if not outer_bound_only:
-                for classified_result, classification in reversed(
-                        classified_results):
-                    if classified_result is results:
-                        results_not_good_enough = classification
-                        break
-                else:
+                results_not_good_enough = (
+                    default_solve.classification_for_results(results))
+                if results_not_good_enough is None:
                     results_not_good_enough = (
                         sputils.not_good_enough_results(results)
                     )
@@ -569,8 +620,7 @@ class SPOpt(SPBase):
                 # A failed solve computed no bound, so outer_bound stays at the
                 # None set before the solve.
                 s._mpisppy_data.solution_available = outcome.solution_available
-                is_default_outcome = any(
-                    candidate is outcome for candidate in default_outcomes)
+                is_default_outcome = default_solve.produced_outcome(outcome)
                 if (
                     outcome.outer_bound is INFER_BOUND
                     and not is_default_outcome

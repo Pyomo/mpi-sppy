@@ -372,6 +372,16 @@ class _InvalidOutcomeExtension(Extension):
         return None
 
 
+class _RetryDefaultSolveExtension(Extension):
+    def solve_subproblem(
+            self, subproblem, default_solve, *, outer_bound_only=False):
+        try:
+            default_solve()
+        except RuntimeError:
+            pass
+        return default_solve()
+
+
 class TestSolveReplacementContract(unittest.TestCase):
     def test_gripe_does_not_bypass_replacement_extension(self):
         ph = _make_ph(extensions=_NoDefaultSolveExtension)
@@ -462,6 +472,58 @@ class TestSolveReplacementContract(unittest.TestCase):
 
                 self.assertEqual(plugin.solve_count, 2)
                 load_solution.assert_not_called()
+
+    def test_extension_can_retry_default_solve_after_solver_failure(self):
+        ph = _make_ph(extensions=_RetryDefaultSolveExtension)
+        name = list(ph.local_scenarios)[0]
+        scenario = ph.local_scenarios[name]
+        plugin = _FailThenSucceedPlugin()
+        scenario._solver_plugin = plugin
+
+        scenario.solutions.load_from = mock.Mock()
+        with mock.patch.object(ph, "_check_staleness") as check_staleness:
+            ph.solve_one(
+                None,
+                name,
+                scenario,
+                gripe=True,
+                need_solution=True,
+                update_objective=False,
+            )
+
+        self.assertEqual(plugin.solve_count, 2)
+        scenario.solutions.load_from.assert_called_once()
+        check_staleness.assert_called_once_with(scenario)
+        self.assertTrue(scenario._mpisppy_data.solution_available)
+        self.assertEqual(scenario._mpisppy_data.outer_bound, -10.0)
+        self.assertEqual(scenario._mpisppy_data.inner_bound, 10.0)
+
+    def test_solver_log_context_failure_remains_a_solver_failure(self):
+        ph = _make_ph()
+        name = list(ph.local_scenarios)[0]
+        scenario = ph.local_scenarios[name]
+        plugin = _CountingPlugin()
+        scenario._solver_plugin = plugin
+        scenario._mpisppy_data.termination_condition = "prior"
+
+        log_context = mock.MagicMock()
+        log_context.__enter__.side_effect = RuntimeError(
+            "log context failed")
+        with mock.patch(
+                "mpisppy.spopt.sputils.solver_log_stream",
+                return_value=log_context):
+            with self.assertRaisesRegex(RuntimeError, "log context failed"):
+                ph.solve_one(
+                    None,
+                    name,
+                    scenario,
+                    gripe=False,
+                    need_solution=True,
+                    update_objective=False,
+                )
+
+        self.assertEqual(plugin.solve_count, 0)
+        self.assertIsNone(scenario._mpisppy_data.termination_condition)
 
     def test_result_classification_exception_is_not_retried(self):
         ph = _make_ph()
