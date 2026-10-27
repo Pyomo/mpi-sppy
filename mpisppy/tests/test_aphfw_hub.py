@@ -41,6 +41,7 @@ from mpisppy.tests.utils import (
     get_solver,
     subprocess_env,
 )
+from mpisppy.utils import sputils
 
 if os.environ.get(APHFW_TEST_SOLVER_VAR):
     solver_name = aphfw_test_solver()
@@ -313,8 +314,17 @@ class TestAphfwHubRun(unittest.TestCase):
             self.opt._cpp.get_all_local_nonants(x)  # what the solves gave
             called["first_bounds"] = (lb[0], ub[0], x[0])
 
+        # Fixers (reduced costs, Fixer, relaxed PH) read each scenario's
+        # _solver_plugin to decide whether to update a persistent solver; the
+        # hub has none, and the attribute used to be missing (AttributeError).
+        def persistent_plugins(self):
+            called.setdefault("enditer_after_sync", self.opt._PHIter)
+            called["persistent"] = {sputils.is_persistent(s._solver_plugin)
+                                    for s in self.opt.local_scenarios.values()}
+
         Recorder.iter0_post_solver_creation = fix_first
         Recorder.post_iter0 = bounds_after_cycle_1
+        Recorder.enditer_after_sync = persistent_plugins
 
         cfg = _cfg(aphfw_hub=True, solver_name=solver_name, default_rho=1.0,
                    max_iterations=3)
@@ -324,6 +334,7 @@ class TestAphfwHubRun(unittest.TestCase):
                              ph_extensions=Recorder)
         WheelSpinner(hub_dict, []).spin()
         self.assertEqual(called.pop("first_bounds"), (123.0, 123.0, 123.0))
+        self.assertEqual(called.pop("persistent"), {False})
         self.assertEqual(set(called), set(hooks))
         # the iteration-0 hooks see iteration 0, as under PH
         for hook in ("pre_iter0", "iter0_post_solver_creation", "post_iter0",
@@ -526,24 +537,6 @@ class TestAphfwDrivers(unittest.TestCase):
         self.assertIn("Termination Lagrangian bound is", on)
         self.assertGreaterEqual(best_outer(on), best_outer(off) - 1e-6)
 
-
-    def test_reduced_costs_fixer(self):
-        # The fixer needs the hub's iteration hooks for its targets and found
-        # no _solver_plugin on the scenarios (AttributeError) once it fixed.
-        args = ["--module-name", "mpisppy.tests.examples.sizes.sizes",
-                "--num-scens", "3", "--solver-name", solver_name,
-                "--aphfw-hub", "--default-rho", "1", "--max-iterations", "3",
-                "--lagrangian", "--reduced-costs", "--rc-fixer",
-                "--rc-fix-fraction-pre-iter0", "0.5", "--rc-verbose"]
-        with tempfile.TemporaryDirectory() as tmpdir:
-            result = subprocess.run(
-                ["mpiexec", "-np", "3", sys.executable, "-m", "mpi4py",
-                 "-m", "mpisppy.generic_cylinders", *args],
-                capture_output=True, text=True, timeout=600, check=False,
-                env=subprocess_env(), cwd=tmpdir)
-        out = result.stdout + result.stderr
-        self.assertEqual(result.returncode, 0, out[-3000:])
-        self.assertIn("Total unique vars fixed by heuristic", out)
 
 
 for _name, _np in _DRIVERS.items():
