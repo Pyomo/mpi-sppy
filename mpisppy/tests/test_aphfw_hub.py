@@ -110,13 +110,10 @@ class _FakeCpp:
     """Stands in for aphfw_cpp.APHFWLibrary in the Python-side tests."""
 
     def __init__(self, n, w=0.0):
-        self.n, self.w, self.bounds, self.rho = n, w, None, None
+        self.n, self.w, self.bounds = n, w, None
 
     def set_all_local_nonant_bounds(self, lb, ub):
         self.bounds = (lb.copy(), ub.copy())
-
-    def set_all_local_rho(self, rho):
-        self.rho = rho.copy()
 
     def compute_final_lagrangian_bound(self):
         return -100.0
@@ -128,6 +125,7 @@ class _FakeCpp:
         buf[:] = 1.0
 
     get_all_local_prox_x = get_all_local_xbar = get_all_local_rho = _fill
+    get_all_local_nonants = _fill
 
     def get_current_cycle(self):
         return 1
@@ -207,6 +205,12 @@ class TestAphfwPythonSide(unittest.TestCase):
         APHFWOpt._sync_cpp_to_pyomo(opt)
         self.assertEqual((m.x[0].value, m.x[1].value), (1.0, 4.0))
 
+    def test_write_back_keeps_fixed_values(self):
+        opt, m = _fake_opt(nonants=[(0, 10), (0, 10)])
+        m.x[1].fix(4.0)
+        APHFWOpt._write_back_to_pyomo(opt)
+        self.assertEqual((m.x[0].value, m.x[1].value), (1.0, 4.0))
+
     def test_final_lagrangian_not_published_with_fixed_nonants(self):
         from types import SimpleNamespace
         published = []
@@ -278,7 +282,7 @@ class TestAphfwHubRun(unittest.TestCase):
         )
         from mpisppy.utils.cfg_vanilla import aphfw_hub
 
-        called = set()
+        called = {}
         hooks = ("pre_iter0", "iter0_post_solver_creation", "post_iter0",
                  "post_iter0_after_sync", "miditer", "enditer",
                  "enditer_after_sync", "post_everything")
@@ -287,8 +291,25 @@ class TestAphfwHubRun(unittest.TestCase):
             pass
 
         for hook in hooks:
-            setattr(Recorder, hook,
-                    lambda self, hook=hook: called.add(hook))
+            setattr(Recorder, hook, lambda self, hook=hook:
+                    called.setdefault(hook, self.opt._PHIter))
+
+        # A fixing made before iteration 0 must be in the C++ for its
+        # startup solves: read the C++ bounds after the first cycle.
+        def fix_first(self):
+            called.setdefault("iter0_post_solver_creation", self.opt._PHIter)
+            s = next(iter(self.opt.local_scenarios.values()))
+            next(iter(s._mpisppy_data.nonant_indices.values())).fix(123.0)
+
+        def bounds_after_cycle_1(self):
+            called.setdefault("post_iter0", self.opt._PHIter)
+            n = self.opt._local_nonant_length
+            lb, ub = np.empty(n), np.empty(n)
+            self.opt._cpp.get_all_local_nonant_bounds(lb, ub)
+            called["first_bounds"] = (lb[0], ub[0])
+
+        Recorder.iter0_post_solver_creation = fix_first
+        Recorder.post_iter0 = bounds_after_cycle_1
 
         cfg = _cfg(aphfw_hub=True, solver_name=solver_name, default_rho=1.0,
                    max_iterations=3)
@@ -297,7 +318,12 @@ class TestAphfwHubRun(unittest.TestCase):
                              scenario_creator_kwargs={"num_scens": 3},
                              ph_extensions=Recorder)
         WheelSpinner(hub_dict, []).spin()
-        self.assertEqual(called, set(hooks))
+        self.assertEqual(called.pop("first_bounds"), (123.0, 123.0))
+        self.assertEqual(set(called), set(hooks))
+        # the iteration-0 hooks see iteration 0, as under PH
+        for hook in ("pre_iter0", "iter0_post_solver_creation", "post_iter0",
+                     "post_iter0_after_sync"):
+            self.assertEqual(called[hook], 0, hook)
 
     def test_refuses_maximization(self):
         from mpisppy.tests.examples.farmer import (

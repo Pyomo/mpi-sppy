@@ -149,8 +149,11 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             self._PHIter = 0
             self.extobject.pre_iter0()
             self.extobject.iter0_post_solver_creation()
-            # Push any rho changes from pre_iter0 (e.g., CoeffRho) to C++
+            # Push any rho changes from pre_iter0 (e.g., CoeffRho) and any
+            # fixings (e.g., the reduced-costs fixer's pre-iteration-0 pass)
+            # before the C++ startup solves.
             self._push_rho_to_cpp()
+            self._push_bounds_to_cpp()
 
         while True:
             completed = self._cpp.run_cycles(1)
@@ -186,6 +189,29 @@ class APHFWOpt(mpisppy.phbase.PHBase):
                 # hooks run here.
                 self.extobject.miditer()
                 self.extobject.enditer()
+
+            # 7. Sync with spokes (send_nonants/send_ws are overridden
+            #    in APHFWHub to use C++ values)
+            spokes_converged = False
+            if self.spcomm is not None:
+                self.spcomm.sync()
+                if has_extensions:
+                    if self._cpp.get_current_cycle() == 1:
+                        saved_iter = self._PHIter
+                        self._PHIter = 0  # as for post_iter0
+                        self.extobject.post_iter0_after_sync()
+                        self._PHIter = saved_iter
+                    self.extobject.enditer_after_sync()
+                # Push any bound changes from receive_nonant_bounds() or
+                # ReducedCostsFixer to C++ (Lagrangian and Gradient solvers).
+                self._push_bounds_to_cpp()
+                spokes_converged = self.spcomm.is_converged()
+            if spokes_converged:
+                self._terminate_flag.value = 1
+                break
+
+            # Push the rho the extensions set this cycle, once.
+            if has_extensions:
                 self._push_rho_to_cpp()
 
             # Freeze omicron exactly once, after iter 0 completes.
@@ -197,22 +223,6 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             if (self._cpp.get_current_cycle() == 1
                     and not self._cpp.omicron_is_frozen()):
                 self._cpp.freeze_omicron(self._omicron_rho_multiplier)
-
-            # 7. Sync with spokes (send_nonants/send_ws are overridden
-            #    in APHFWHub to use C++ values)
-            if self.spcomm is not None:
-                self.spcomm.sync()
-                if has_extensions:
-                    if self._cpp.get_current_cycle() == 1:
-                        self.extobject.post_iter0_after_sync()
-                    self.extobject.enditer_after_sync()
-                    self._push_rho_to_cpp()
-                # Push any bound changes from receive_nonant_bounds() or
-                # ReducedCostsFixer to C++ (Lagrangian and Gradient solvers).
-                self._push_bounds_to_cpp()
-                if self.spcomm.is_converged():
-                    self._terminate_flag.value = 1
-                    break
 
             if self._cpp.is_converged():
                 break
@@ -251,12 +261,11 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         if self._cpp is None:
             return None
 
-        bound = self._cpp.compute_final_lagrangian_bound()
-
         # With nonants fixed by an extension the Lagrangian is over a
-        # restricted set and is not an outer bound.
+        # restricted set and is not an outer bound, so don't solve it.
         if not self._bound_is_valid():
             return None
+        bound = self._cpp.compute_final_lagrangian_bound()
         self.best_bound_obj_val = bound
         if self.spcomm is not None:
             self.spcomm.publish_outer_bound(bound)
@@ -526,6 +535,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         idx = 0
         for sname, scenario in self.local_scenarios.items():
             for xvar in scenario._mpisppy_data.nonant_indices.values():
-                xvar._value = float(x_vals[idx])
+                if not xvar.fixed:  # as in _sync_cpp_to_pyomo
+                    xvar._value = float(x_vals[idx])
                 idx += 1
 

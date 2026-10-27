@@ -346,6 +346,8 @@ protected:
   std::vector<std::optional<std::pair<std::vector<double>, std::vector<double>>>>
       pendingBounds_;
   const std::vector<double>& effectiveRho(int s) const;
+  std::pair<const std::vector<double>&, const std::vector<double>&>
+      effectiveNonantBounds(int s) const;
   void applyPendingUpdates(int s);
   std::atomic<int>* externalTerminateFlag_ = nullptr;
 

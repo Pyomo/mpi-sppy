@@ -1290,6 +1290,15 @@ const std::vector<double>& FWAPH::effectiveRho(int s) const
   return localScenarios()[s].getRho();
 }
 
+std::pair<const std::vector<double>&, const std::vector<double>&>
+FWAPH::effectiveNonantBounds(int s) const
+{
+  if (s < (int)pendingBounds_.size() && pendingBounds_[s])
+    return {pendingBounds_[s]->first, pendingBounds_[s]->second};
+  return {localScenarios()[s].getNonantLowerBounds(),
+          localScenarios()[s].getNonantUpperBounds()};
+}
+
 void FWAPH::applyPendingUpdates(int s)
 {
   if (s < (int)pendingRho_.size() && pendingRho_[s]) {
@@ -1322,6 +1331,9 @@ void FWAPH::setAllLocalRho(const double* buf, int len)
       pendingRho_[s] = std::move(newRho);
     } else {
       localScenarios()[s].setRho(newRho);
+      // a held older update must not be applied over this one
+      if (s < (int)pendingRho_.size())
+        pendingRho_[s].reset();
     }
     offset += n;
   }
@@ -1428,11 +1440,7 @@ void FWAPH::getAllLocalNonantBounds(double* lbBuf, double* ubBuf, int len) const
 {
   int offset = 0;
   for (int s = 0; s < numSubdomains; ++s) {
-    const bool pending = s < (int)pendingBounds_.size() && pendingBounds_[s];
-    const auto& lb = pending ? pendingBounds_[s]->first
-                             : localScenarios()[s].getNonantLowerBounds();
-    const auto& ub = pending ? pendingBounds_[s]->second
-                             : localScenarios()[s].getNonantUpperBounds();
+    const auto [lb, ub] = effectiveNonantBounds(s);
     int n = static_cast<int>(lb.size());
     if (offset + n > len)
       throw std::runtime_error("getAllLocalNonantBounds: buffer too small");
@@ -1458,11 +1466,7 @@ void FWAPH::setAllLocalNonantBounds(const double* lbBuf, const double* ubBuf, in
     std::vector<double> ub(ubBuf + offset, ubBuf + offset + n);
     // As for rho: the hub pushes every bound every cycle, and rewriting an
     // unchanged bound can discard a backend's MIP start.
-    const bool pending = s < (int)pendingBounds_.size() && pendingBounds_[s];
-    const auto& curLb = pending ? pendingBounds_[s]->first
-                                : localScenarios()[s].getNonantLowerBounds();
-    const auto& curUb = pending ? pendingBounds_[s]->second
-                                : localScenarios()[s].getNonantUpperBounds();
+    const auto [curLb, curUb] = effectiveNonantBounds(s);
     if (lb == curLb && ub == curUb) {
       offset += n;
       continue;
@@ -1472,6 +1476,9 @@ void FWAPH::setAllLocalNonantBounds(const double* lbBuf, const double* ubBuf, in
       pendingBounds_[s] = std::make_pair(std::move(lb), std::move(ub));
     } else {
       localScenarios()[s].setNonantBounds(lb, ub);
+      // a held older update must not be applied over this one
+      if (s < (int)pendingBounds_.size())
+        pendingBounds_[s].reset();
     }
     offset += n;
   }
