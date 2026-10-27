@@ -221,17 +221,17 @@ class TestAphfwPythonSide(unittest.TestCase):
         self.assertEqual(published, [-100.0])
 
     def test_obj_scale_rho_units(self):
-        # rho on the Python side is in the original objective's units; the
-        # C++ solves a scaled objective, so it gets scaled rho.
+        # Under --aphfw-obj-scale rho is given in the scaled units, so it
+        # passes to and from the C++ unchanged; W comes back unscaled.
         opt, m = _fake_opt(_cfg(aphfw_hub=True, aphfw_obj_scale=4.0),
                            nonants=[(0, 1), (0, 1)])
         for p in m._mpisppy_model.rho.values():
             p.value = 2.0
         APHFWOpt._push_rho_to_cpp(opt)
-        np.testing.assert_array_equal(opt._cpp.rho, [8.0, 8.0])
+        np.testing.assert_array_equal(opt._cpp.rho, [2.0, 2.0])
         APHFWOpt._sync_cpp_to_pyomo(opt)  # the fake C++ reports rho 1.0
         self.assertEqual([pyo.value(r) for r in m._mpisppy_model.rho.values()],
-                         [0.25, 0.25])
+                         [1.0, 1.0])
 
     def test_rejects_converger(self):
         from mpisppy.generic.hub import build_hub_dict

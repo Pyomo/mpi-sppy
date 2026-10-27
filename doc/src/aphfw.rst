@@ -277,6 +277,12 @@ shared with :ref:`sec-aph`. The ones most often set:
        subdirectory that is removed at the end. Every hub rank must see it,
        so a hub on more than one node needs a shared filesystem here.
 
+``--aphfw-obj-scale`` multiplies every objective coefficient in the C++
+solves by a constant. Scaling the objective is not normally done. If you do
+scale it, give ``--default-rho`` (and any rho setter) in the scaled units;
+the bounds and the W values the hub sends to the spokes are in the original
+units.
+
 ``--help`` (with a ``--module-name``) lists the rest. ``--aphfw-hub``
 cannot be combined with ``--integer-relax-then-enforce``: the C++ hub solves
 from the MPS files and does not see changes to Pyomo variable types. The hub

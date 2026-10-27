@@ -1147,8 +1147,8 @@ class Config(pyofig.ConfigDict):
 
         self.add_to_config(name="aphfw_obj_scale",
                            description="Multiply all objective coefficients in the "
-                           "C++ solves by this value; rho and W stay in the "
-                           "original objective's units",
+                           "C++ solves by this value (not normally needed); "
+                           "rho is then in the scaled units",
                            domain=float,
                            default=1.0)
 

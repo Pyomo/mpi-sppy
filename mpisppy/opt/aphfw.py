@@ -120,10 +120,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         cfg_dict = self._make_cpp_config()
         self._cpp.init(self.mpicomm, self._scenario_dir, cfg_dict)
         self._cpp.set_hub_mode(True)
-        # The C++ read rho from the scenario files, in the original
-        # objective's units; under --aphfw-obj-scale it needs scaled rho.
         self._local_nonant_length = self._cpp.get_local_nonant_length()
-        self._push_rho_to_cpp()
 
         # Omicron multiplier: used at the post-iter-0 freeze call. C++ also
         # holds this value (registered option), but Python needs it to pass
@@ -474,10 +471,9 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         self._cpp.get_all_local_w(w_buf)
         self._cpp.get_all_local_xbar(xbar_buf)
         self._cpp.get_all_local_rho(rho_buf)
-        # W and rho in the original objective's units, as send_ws gives the
-        # spokes W
+        # W in the original objective's units, as send_ws gives the spokes.
+        # rho stays as given: under --aphfw-obj-scale it is in scaled units.
         w_buf = self._unscale_obj(w_buf)
-        rho_buf = self._unscale_obj(rho_buf)
 
         idx = 0
         for sname, scenario in self.local_scenarios.items():
@@ -505,9 +501,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
                 rho_buf[idx] = float(scenario._mpisppy_model.rho[ndn_i]._value)
                 idx += 1
 
-        # rho in the original objective's units -> the C++'s scaled objective
-        obj_scale = self._get_option("aphfw_obj_scale", 1.0) or 1.0
-        self._cpp.set_all_local_rho(rho_buf * obj_scale)
+        self._cpp.set_all_local_rho(rho_buf)
 
     def _push_bounds_to_cpp(self):
         """Read nonant variable bounds from Pyomo scenarios and push to C++.
