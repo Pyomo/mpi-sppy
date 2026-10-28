@@ -1349,6 +1349,36 @@ class TestMultiRankDualWeightAgreement(unittest.TestCase):
                       result.stdout,
                       msg="the run declined to restore without saying so")
 
+    def test_equal_iterations_from_different_runs_stop_the_whole_restore(self):
+        paths = self._dual_files()
+        with open(paths[-1], "rb") as f:
+            state = pickle.load(f)
+        self.assertTrue(state["write_epoch"])
+        # A resume starts this cylinder's iteration count again, so two
+        # process invocations can both leave a file labeled iteration 2.
+        state["write_epoch"] = "another-process-invocation"
+        with open(paths[-1], "wb") as f:
+            pickle.dump(state, f)
+
+        result, markers = self._resume()
+        self.assertTrue(all(m["restored_dual_generation"] is None
+                            for m in markers))
+        self.assertIn("dual weights from different iterations or runs",
+                      result.stdout)
+
+    def test_files_without_a_write_identity_start_from_fresh_weights(self):
+        for path in self._dual_files():
+            with open(path, "rb") as f:
+                state = pickle.load(f)
+            del state["write_epoch"]
+            with open(path, "wb") as f:
+                pickle.dump(state, f)
+
+        result, markers = self._resume()
+        self.assertTrue(all(m["restored_dual_generation"] is None
+                            for m in markers))
+        self.assertIn("no write identity", result.stdout)
+
     def test_a_rank_without_a_file_stops_the_whole_restore(self):
         paths = self._dual_files()
         os.remove(paths[-1])

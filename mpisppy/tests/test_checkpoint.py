@@ -2812,6 +2812,37 @@ class _TwoRankComm:
         pass
 
 
+class TestDualSpokeWriteAgreement(unittest.TestCase):
+    """A dual file must agree on both its iteration and process invocation."""
+
+    def test_equal_iterations_from_different_processes_are_rejected(self):
+        class OtherRank:
+            def Get_size(self):
+                return 2
+
+            def allreduce(self, value, op=None):
+                return 2
+
+            def allgather(self, value):
+                return [value, ("other-process", value[1])]
+
+        state = {"generation": 2, "write_epoch": "this-process"}
+        with mock.patch.object(checkpointing, "_cylinder_comm",
+                               return_value=OtherRank()):
+            restored, warning = checkpointing.agree_dual_spoke_restore(
+                types.SimpleNamespace(), state)
+        self.assertIsNone(restored)
+        self.assertIn("different iterations or runs", warning)
+
+    def test_old_files_without_a_write_identity_are_rejected(self):
+        with mock.patch.object(checkpointing, "_cylinder_comm",
+                               return_value=None):
+            restored, warning = checkpointing.agree_dual_spoke_restore(
+                types.SimpleNamespace(), {"generation": 2})
+        self.assertIsNone(restored)
+        self.assertIn("no write identity", warning)
+
+
 class TestSpokeIncumbentFile(unittest.TestCase):
     """The spoke's own checkpoint: the best xhat, by variable name.
 
@@ -3474,6 +3505,27 @@ class TestAnEarlierStudysSpokeFilesAreCleared(unittest.TestCase):
     def test_a_fresh_run_clears_them(self):
         _make_ph(_options(1, ckpt_dir=self.ckpt_dir))
         self.assertFalse(os.path.exists(self.stale))
+
+    def test_a_fresh_run_refuses_an_existing_manifest(self):
+        manifest = os.path.join(self.ckpt_dir, "manifest.json")
+        with open(manifest, "w") as f:
+            f.write('{"generation": 7}')
+        for resume_from in (None, os.path.join(self._tmp.name, "other")):
+            with self.subTest(resume_from=resume_from):
+                with self.assertRaisesRegex(RuntimeError,
+                                            "already holds a manifest"):
+                    _make_ph(_options(1, ckpt_dir=self.ckpt_dir,
+                                      resume_from=resume_from))
+                with open(manifest) as f:
+                    self.assertEqual(f.read(), '{"generation": 7}')
+                self.assertTrue(os.path.exists(self.stale))
+
+    def test_resuming_in_place_allows_an_existing_manifest(self):
+        with open(os.path.join(self.ckpt_dir, "manifest.json"), "w") as f:
+            f.write('{"generation": 7}')
+        _make_ph(_options(1, ckpt_dir=self.ckpt_dir,
+                          resume_from=self.ckpt_dir))
+        self.assertTrue(os.path.exists(self.stale))
 
     def test_resuming_from_another_directory_clears_them(self):
         other = os.path.join(self._tmp.name, "other")

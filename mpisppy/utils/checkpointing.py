@@ -442,9 +442,9 @@ def agree_one_write(opt, state, key):
     * ``"agreed"``  -- every rank has one, all from the same write; detail is
       the agreed value.
 
-    ``key`` identifies the write: a field name (the iteration, for a dual
-    cylinder) or a function of the state (``spoke_write_id``, for an xhat
-    spoke).
+    ``key`` identifies the write: a field name or a function of the state
+    (the write epoch and iteration for a dual cylinder, or
+    ``spoke_write_id`` for an xhat spoke).
 
     Collective. Every rank of the cylinder must call it, including the ranks
     whose ``state`` is None.
@@ -632,18 +632,21 @@ def agree_spoke_restore(opt, state):
 
 
 def agree_dual_spoke_restore(opt, state):
-    """The same agreement for a dual cylinder's W, keyed on the iteration.
+    """The same agreement for a dual cylinder's W, keyed on its write run.
 
     Nothing here is broadcast: W is per scenario and so per rank. What must
-    hold is that every rank restores the W of the *same* iteration. Ranks
-    that restore W from different iterations hand ``Compute_Xbar`` an
-    allreduce over values belonging to two different points of the run --
+    hold is that every rank restores the W of the *same* iteration of the
+    same process invocation. Ranks that restore W from different writes hand
+    ``Compute_Xbar`` an allreduce over values belonging to different
+    points of the run --
     and under ``--ph-primal-hub`` that blended W is what the hub's W is
     built from. No error and no warning, like the xhat case.
 
     Returns ``(state, warning)``. Collective; see :func:`agree_one_write`.
     """
-    verdict, detail = agree_one_write(opt, state, "generation")
+    verdict, detail = agree_one_write(
+        opt, state, lambda saved: (saved.get("write_epoch"),
+                                   saved["generation"]))
     if verdict == "none":
         return None, None
     if verdict == "partial":
@@ -653,11 +656,20 @@ def agree_dual_spoke_restore(opt, state):
             f"dual weights, so none of them restores any: a W taken from "
             f"some ranks and not others is not the W this study had")
     if verdict == "differ":
+        if any(not epoch for epoch, _ in detail):
+            return None, (
+                f"some ranks of this cylinder have checkpointed dual weights "
+                f"without a write identity, so none of them restores any: "
+                f"their files cannot be proven to belong to one write")
         return None, (
             f"the ranks of this cylinder checkpointed dual weights from "
-            f"different iterations ({detail}), so none of them restores any: "
-            f"a W half from one iteration and half from another is not the W "
-            f"this study had")
+            f"different iterations or runs ({detail}), so none of them "
+            f"restores any: their W cannot be combined safely")
+    if not state.get("write_epoch"):
+        return None, (
+            f"this cylinder's checkpointed dual weights have no write "
+            f"identity, so none of them restores any: their files cannot "
+            f"be proven to belong to one write")
     return state, None
 
 
@@ -1807,8 +1819,8 @@ def restore_spoke_incumbent(opt, state):
 # which is what a cylinder nobody synchronizes with needs.
 # ---------------------------------------------------------------------------
 
-def dual_spoke_state(opt, cylinder, ordinal, generation, class_count=None,
-                     wbar=None):
+def dual_spoke_state(opt, cylinder, ordinal, generation, write_epoch,
+                     class_count=None, wbar=None):
     """The dict written by ``write_dual_spoke_state``.
 
     W is keyed by ``(ndn, i)`` and the values by variable name -- the two
@@ -1816,6 +1828,8 @@ def dual_spoke_state(opt, cylinder, ordinal, generation, class_count=None,
     ``wbar`` is E[W] per node at the time of the write (``Wbar_by_node``),
     which the restore checks the restored weights reproduce.
     """
+    if not isinstance(write_epoch, str) or not write_epoch:
+        raise ValueError("A dual-spoke write requires a nonempty write identity")
     require_checkpoint_structural_cfg(opt.options)
     duals = {}
     for sname, s in opt.local_scenarios.items():
@@ -1838,9 +1852,10 @@ def dual_spoke_state(opt, cylinder, ordinal, generation, class_count=None,
         "rank": int(opt.cylinder_rank),
         # This cylinder's own iteration count, which is not the hub's: the
         # wheel does not march the cylinders in step and this is not an
-        # attempt to. It is recorded so a log can say how far the cylinder
-        # had got, and it is not compared against anything on the way back in.
+        # attempt to. It is paired with write_epoch to ensure all ranks
+        # restore weights from the same write run and iteration.
         "generation": int(generation),
+        "write_epoch": write_epoch,
         "geometry": geometry(opt),
         "structural_fingerprint": structural_fingerprint(opt.options),
         "Wbar": None if wbar is None else {
@@ -1850,13 +1865,13 @@ def dual_spoke_state(opt, cylinder, ordinal, generation, class_count=None,
 
 
 def write_dual_spoke_state(opt, ckpt_dir, cylinder, ordinal, generation,
-                           class_count=None, wbar=None):
+                           write_epoch, class_count=None, wbar=None):
     """Write this cylinder's PH state, latest-wins. Returns the path.
 
     Temp-then-rename like every other file here, so a kill mid-write leaves
     the previous iteration's state intact rather than a truncated file.
     """
-    state = dual_spoke_state(opt, cylinder, ordinal, generation,
+    state = dual_spoke_state(opt, cylinder, ordinal, generation, write_epoch,
                              class_count=class_count, wbar=wbar)
     spokes_dir = os.path.join(ckpt_dir, SPOKES_SUBDIR)
     os.makedirs(spokes_dir, exist_ok=True)
@@ -1913,6 +1928,11 @@ def load_dual_spoke_state(opt, ckpt_dir, cylinder, ordinal):
             f"The cylinder state file '{path}' has no "
             f"{' or '.join(missing)}, so it was not written by this mpi-sppy "
             f"or has been damaged."
+        )
+    if "write_epoch" in state and (not isinstance(state["write_epoch"], str)
+                                    or not state["write_epoch"]):
+        raise CheckpointMismatch(
+            f"The cylinder state file '{path}' has an invalid write identity."
         )
     if (state.get("cylinder"), state.get("ordinal"), state.get("rank")) != (
             str(cylinder), int(ordinal), int(opt.cylinder_rank)):
