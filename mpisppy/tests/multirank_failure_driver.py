@@ -37,11 +37,12 @@ def _sabotage(fail_on_rank, fail_at_generation):
     """Make one rank's model write raise, once, at one generation."""
     real_write_models = ckpt._write_models
 
-    def failing_write_models(opt, staging_dir, rank, backend):
+    def failing_write_models(opt, staging_dir, rank, backend, timing=None):
         if (rank == fail_on_rank
                 and int(getattr(opt, "_PHIter", 0)) == fail_at_generation):
             raise OSError(28, "No space left on device (injected by the test)")
-        return real_write_models(opt, staging_dir, rank, backend)
+        return real_write_models(opt, staging_dir, rank, backend,
+                                 timing=timing)
 
     ckpt._write_models = failing_write_models
 

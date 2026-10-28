@@ -46,6 +46,11 @@ class SubproblemSolveOutcome:
 class Extension:
     """ Abstract base class for extensions to general SPOpt/SPCommunicator objects.
     """
+    # pyfory-rebuild recreates scenario models and overlays named state. An
+    # extension must opt in only when it can recreate its model changes from
+    # pre_iter0 plus the model-state hooks below.
+    checkpoint_rebuild_safe = False
+
     def __init__(self, spopt_object):
         self.opt = spopt_object
 
@@ -271,6 +276,23 @@ class Extension:
         '''
         raise NotImplementedError(
             f"{type(self).__name__} does not implement restore_state")
+
+    def checkpoint_model_state(self):
+        """Return plain data needed to reconstruct model changes on a rebuild.
+
+        Used only by the experimental ``pyfory-rebuild`` checkpoint backend.
+        The default implementation cannot attest that arbitrary changes made
+        by an extension can be reproduced.
+        """
+        return None
+
+    def restore_checkpoint_model_state(self, state):
+        """Recreate model structure saved by :meth:`checkpoint_model_state`.
+
+        Called after ``pre_iter0`` and before solver creation on resume. It
+        must restore extension-added components needed by the saved state.
+        """
+        return None
 
 
 def _refuse_duplicate_names(ext_classes):

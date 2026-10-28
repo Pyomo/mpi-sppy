@@ -101,8 +101,47 @@ There are six, and they are the whole interface:
    count the study rather than this run.
 
 ``--checkpoint-backend``
-   How model state is stored. ``dill-reload`` is the default and currently the
-   only implemented value, so there is no reason to set it.
+   How hub scenario state is stored. ``dill-reload`` is the default and stores
+   each complete Pyomo model. ``pyfory-rebuild`` is an experimental state-only
+   backend that recreates models through the scenario creator and restores
+   named PH state plus proximal cuts. It requires an exact pyfory version match
+   between checkpoint and resume, and every attached extension must explicitly
+   implement the model-state rebuild hooks. See `pyfory-rebuild`_.
+
+pyfory-rebuild
+~~~~~~~~~~~~~~
+
+Install the pinned optional dependency with ``pip install mpi-sppy[pyfory]``.
+Setup requires pyfory 1.7.7. The checkpoint records pyfory's exact version and
+refuses to load with a different version. The codec stores only plain state
+data; it does not encode Pyomo objects. In particular, this avoids pyfory's
+current inability to reconstruct the full ``ConcreteModel`` object graph with
+a fresh reader.
+
+The backend recreates each scenario with the current ``scenario_creator``,
+then restores variable values, fixedness, bounds and domains, mutable
+parameters, per-scenario solve bounds and solution availability, and proximal
+approximation cuts before the first resumed solve.
+It skips the fresh iteration-0 solve and keeps the checkpoint's absolute PH
+iteration number. It retains the rank leaf and spoke files in their existing
+pickle formats. As with other checkpoint files, only load checkpoints from
+trusted sources.
+
+Extensions are refused unless they set ``checkpoint_rebuild_safe = True`` and
+implement ``checkpoint_model_state()`` and
+``restore_checkpoint_model_state(state)``. The save hook returns plain data;
+the restore hook rebuilds extension-added model structure after ``pre_iter0``
+and before solver creation. The regular ``checkpoint_state()`` and
+``restore_state()`` hooks continue to carry extension-object state. This
+contract is needed because rebuilding a model cannot recover arbitrary cuts,
+constraints, or objective edits made during a previous run.
+
+The codec uses bounded pyfory graph limits (depth 10,000 and a 1 GiB graph
+budget). The state-only payload is designed to reduce model-file size and
+encoding work, but no UC workload performance claim is made yet; benchmark
+with representative models before choosing it for a production run. A MIP
+warm start includes all model variable values, so it can increase file size
+and write time on models with many recourse variables.
 
 .. warning::
    **Nothing is published until the first iteration completes.** A run killed
@@ -570,11 +609,15 @@ some iterations after a stop; see `Choosing K`_.
 Requirements and limitations
 ----------------------------
 
-**dill is required.** ``--checkpoint-backend dill-reload`` is the default and
-currently the only implemented backend, and it needs the optional ``dill``
-package::
+**dill is required for ``dill-reload``.** It is the default backend and
+needs the optional ``dill`` package::
 
   pip install mpi-sppy[extras]
+
+The experimental ``pyfory-rebuild`` backend requires its pinned optional
+dependency, installed with ``pip install mpi-sppy[pyfory]``. It does not
+serialize Pyomo models and follows the state-only limitations described in
+`pyfory-rebuild`_.
 
 **Your scenario models must be serializable.** A model can be made
 unserializable by what its ``scenario_creator`` closes over -- most commonly a

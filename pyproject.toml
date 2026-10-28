@@ -68,6 +68,9 @@ extras = [
     "dill",         # pickled scenario bundles
     "mip",          # MPS/LP/SMPS file input (problem_io)
 ]
+pyfory = [
+    "pyfory==1.7.7", # state-only PH snapshots; full Pyomo graphs are unsupported
+]
 # Everything the test suite and the examples need beyond a solver.
 test = [
     "mpi-sppy[extras]",

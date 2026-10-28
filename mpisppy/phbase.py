@@ -1602,24 +1602,29 @@ class PHBase(mpisppy.spopt.SPOpt):
         """
         leaf, models = checkpointing.load_checkpoint(self, ckpt_dir)
 
-        for sname, model in models.items():
-            self.local_scenarios[sname] = model
-            # Eobjective/Ebound read these objective handles; left alone they
-            # would dangle to the fresh model we just replaced.
-            self.saved_objectives[sname] = sputils.find_active_objective(model)
-            # The recourse values came back with the model, so the first
-            # resumed solve can warm-start from them -- but only if the run
-            # asked for warm starts at all: solve_one consults this flag only
-            # when options["warmstart_subproblems"] is set, and that defaults
-            # to False. Setting it here is what makes --warmstart-subproblems
-            # work across a resume; on its own it changes nothing.
-            model._mpisppy_data.solution_available = True
-        # The generic file-based path keeps this alias and CGBase.solve_loop
-        # iterates it; a plain PH has no such attribute.
-        if getattr(self, "local_subproblems", None) is not None:
-            self.local_subproblems = self.local_scenarios
-
-        self._release_scenario_creator_held_models(models)
+        rebuild = leaf["backend"] == checkpointing.PYFORY_REBUILD_BACKEND
+        if rebuild:
+            # These are plain per-scenario snapshots. The fresh models remain
+            # in place. Restore solve results before pre_iter0 callbacks; the
+            # variable and component overlay follows extension setup.
+            self._checkpoint_rebuild_states = models
+            self._checkpoint_rebuild_pending = {}
+            checkpointing.restore_rebuild_solve_state(self, models)
+        else:
+            for sname, model in models.items():
+                self.local_scenarios[sname] = model
+                # Eobjective/Ebound read these objective handles; left alone
+                # they would dangle to the fresh model we just replaced.
+                self.saved_objectives[sname] = \
+                    sputils.find_active_objective(model)
+                # The recourse values came back with the model, so the first
+                # resumed solve can warm-start from them if requested.
+                model._mpisppy_data.solution_available = True
+            # The generic file-based path keeps this alias and CGBase.solve_loop
+            # iterates it; a plain PH has no such attribute.
+            if getattr(self, "local_subproblems", None) is not None:
+                self.local_subproblems = self.local_scenarios
+            self._release_scenario_creator_held_models(models)
 
         # varid_to_nonant_index maps id(vardata) -> (ndn, i). dill faithfully
         # brings the dict back, and every key in it is dead: the integers are
@@ -1644,11 +1649,11 @@ class PHBase(mpisppy.spopt.SPOpt):
         # uninterrupted run would have refused.
         self._restore_fixed_nonant_baseline(leaf["initially_fixed_nonants"])
 
-        # The deferred attach runs at the end of Iter0, downstream of here. The
-        # reloaded model already carries the spliced objective and the prox
-        # cuts, so letting it run would double the W terms and duplicate the
-        # prox components.
-        self._deferred_ph_attach = False
+        # A reloaded dill model already carries the spliced objective. A
+        # rebuilt pyfory model needs the normal deferred attach, followed by
+        # replaying its saved proximal cuts.
+        if not rebuild:
+            self._deferred_ph_attach = False
         # But that call also sets state on *this object*, not just on the
         # models, and skipping it would leave the run without it: _prox_approx
         # gates whether new proximal-approximation cuts get added at all, so a
@@ -1717,6 +1722,19 @@ class PHBase(mpisppy.spopt.SPOpt):
         # pointed at dead models.
         if have_extensions:
             self.extobject.pre_iter0()
+
+        if (self._resumed_from_checkpoint
+                and self._checkpoint_leaf_state["backend"]
+                == checkpointing.PYFORY_REBUILD_BACKEND):
+            self._checkpoint_rebuild_pending = checkpointing.run_agreed(
+                self,
+                lambda: checkpointing.prepare_rebuild_model_state(
+                    self,
+                    self._checkpoint_rebuild_states,
+                    self._checkpoint_leaf_state.get(
+                        "extension_model_state")),
+                "rebuild their pyfory scenario state before solver creation, "
+                "so none of them resumes")
 
         # After pre_iter0 rather than inside the hook that asked for it:
         # SepRho and CoeffRho read cost coefficients from the objective in
@@ -1926,6 +1944,16 @@ class PHBase(mpisppy.spopt.SPOpt):
         # cannot handle the quadratic prox term until iteration 1.
         if getattr(self, "_deferred_ph_attach", False):
             self._attach_PH_to_objective_after_iter0()
+
+        if (self._resumed_from_checkpoint
+                and self._checkpoint_leaf_state["backend"]
+                == checkpointing.PYFORY_REBUILD_BACKEND):
+            checkpointing.run_agreed(
+                self,
+                lambda: checkpointing.restore_rebuild_model_state(
+                    self, self._checkpoint_rebuild_states,
+                    self._checkpoint_rebuild_pending),
+                "replay their pyfory proximal state, so none of them resumes")
 
         self.reenable_W_and_prox()
 

@@ -184,6 +184,7 @@ class _MultiRankABMixin:
     MODULE = None
     MODEL_ARGS = ()
     SPOKE_ARGS = ()
+    CHECKPOINT_ARGS = ()
     #: False for MIP instances, where the section 7 contract promises a valid
     #: continuation rather than a reproducible trajectory under default solver
     #: settings.
@@ -206,11 +207,13 @@ class _MultiRankABMixin:
 
         cls.reference = leg("A", "--max-iterations", str(cls.N))
         cls.stopped = leg("B1", "--max-iterations", str(cls.STOP),
-                          "--checkpoint-dir", cls.ckpt_dir)
+                          "--checkpoint-dir", cls.ckpt_dir,
+                          *cls.CHECKPOINT_ARGS)
         # --max-iterations bounds this run, so leg B2 asks for the iterations
         # B1 did not do rather than for the study total.
         cls.resumed = leg("B2", "--max-iterations", str(cls.N - cls.STOP),
-                          "--resume-from", cls.ckpt_dir)
+                          "--resume-from", cls.ckpt_dir,
+                          *cls.CHECKPOINT_ARGS)
 
     @classmethod
     def tearDownClass(cls):
@@ -350,6 +353,32 @@ class TestFarmerMultiRankHub(_MultiRankABMixin, unittest.TestCase):
 
     MODULE = _FARMER
     MODEL_ARGS = ("--num-scens", "6", "--default-rho", "1")
+
+
+@unittest.skipIf(not solver_available, "no solver is available")
+@unittest.skipIf(not mpiexec_available, "mpiexec is not available")
+@unittest.skipUnless(checkpointing.pyfory_available,
+                     "pyfory is an optional checkpoint dependency")
+class TestPyforyRebuildMultiRankHub(_MultiRankABMixin, unittest.TestCase):
+    """Fresh-process multi-rank resume through the state-only codec."""
+
+    MODULE = _FARMER
+    MODEL_ARGS = ("--num-scens", "6", "--default-rho", "1")
+    CHECKPOINT_ARGS = ("--checkpoint-backend", "pyfory-rebuild")
+
+    def test_every_rank_leaf_matches_the_manifest_write(self):
+        manifest = _published_generation(self.ckpt_dir)
+        self.assertEqual(manifest["backend"], "pyfory-rebuild")
+        self.assertTrue(manifest["write_id"])
+        generation_dir = os.path.join(
+            self.ckpt_dir, "hub", f"gen_{self.STOP:04d}")
+        for rank in range(self.HUB_RANKS):
+            with open(os.path.join(
+                    generation_dir, f"hub_rank_{rank:04d}.pkl"), "rb") as f:
+                leaf = pickle.load(f)
+            self.assertEqual(leaf["write_id"], manifest["write_id"])
+            self.assertTrue(all(name.endswith(".fory")
+                                for name in leaf["model_files"].values()))
 
 
 @unittest.skipIf(not solver_available, "no solver is available")
@@ -832,6 +861,7 @@ class TestOneRankFailingDoesNotHangTheOthers(unittest.TestCase):
     N = 3
     FAIL_AT = 3
     FAIL_RANK = 1
+    CHECKPOINT_ARGS = ()
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -847,6 +877,7 @@ class TestOneRankFailingDoesNotHangTheOthers(unittest.TestCase):
             "--intra-hub-conv-thresh", "-1",
             "--rel-gap", "0.0", "--abs-gap", "0.0",
             "--checkpoint-dir", self.ckpt_dir,
+            *self.CHECKPOINT_ARGS,
         ]
         # Generous, but it is a timeout on a farmer LP that finishes in under a
         # second when it finishes at all: what this is really measuring is
@@ -906,10 +937,33 @@ class TestOneRankFailingDoesNotHangTheOthers(unittest.TestCase):
             self._tmp.name, "resume", 2, _FARMER,
             ("--num-scens", "6", "--default-rho", "1"), (),
             ("--max-iterations", str(self.N + 1),
-             "--resume-from", self.ckpt_dir))
+             "--resume-from", self.ckpt_dir,
+             *self.CHECKPOINT_ARGS))
         for snap in _hub_ranks(out_path):
             self.assertTrue(snap["resumed"])
             self.assertEqual(snap["resume_iteration"], self.FAIL_AT - 1)
+
+
+@unittest.skipIf(not solver_available, "no solver is available")
+@unittest.skipIf(not mpiexec_available, "mpiexec is not available")
+@unittest.skipUnless(checkpointing.pyfory_available,
+                     "pyfory is an optional checkpoint dependency")
+class TestPyforyOneRankFailingDoesNotHangTheOthers(
+        TestOneRankFailingDoesNotHangTheOthers):
+    """A pyfory write failure on one rank preserves the old generation."""
+
+    CHECKPOINT_ARGS = ("--checkpoint-backend", "pyfory-rebuild")
+
+    def test_the_previous_generation_has_a_matching_write_identity(self):
+        manifest = _published_generation(self.ckpt_dir)
+        self.assertEqual(manifest["backend"], "pyfory-rebuild")
+        generation_dir = os.path.join(
+            self.ckpt_dir, "hub", f"gen_{self.FAIL_AT - 1:04d}")
+        for rank in range(2):
+            with open(os.path.join(
+                    generation_dir, f"hub_rank_{rank:04d}.pkl"), "rb") as f:
+                leaf = pickle.load(f)
+            self.assertEqual(leaf["write_id"], manifest["write_id"])
 
 
 @unittest.skipIf(not solver_available, "no solver is available")
