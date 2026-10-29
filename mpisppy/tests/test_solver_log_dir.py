@@ -41,6 +41,28 @@ class _LoggingSolveExtension(Extension):
         return outcome
 
 
+class _LogBeforeFailedAttempt(Extension):
+    def solve_subproblem(
+            self, subproblem, subproblem_solve, *, outer_bound_only=False):
+        _extension_logger.info("before failed attempt")
+        return subproblem_solve()
+
+
+class _TruncatingFailureThenDiagnosticSolver:
+    def __init__(self):
+        self.options = {}
+        self.solve_count = 0
+
+    def solve(self, subproblem, **kwargs):
+        self.solve_count += 1
+        with open(kwargs["logfile"], "w", encoding="utf-8") as stream:
+            stream.write(f"native attempt {self.solve_count}\n")
+        if self.solve_count == 1:
+            raise RuntimeError("initial solver failure")
+        _extension_logger.info("inside diagnostic retry")
+        return object()
+
+
 def _ph_options(solver_name, log_dir):
     return {
         "asynchronousPH": False,
@@ -229,6 +251,33 @@ class Test_solver_log_dir(unittest.TestCase):
             with open(os.path.join(log_dir, log), encoding="utf-8") as stream:
                 self.assertIn(
                     "extension completed logical solve", stream.read(), log)
+
+    def test_python_logging_survives_failure_path_diagnostic_retry(self):
+        log_dir = self._log_dir("diagnostic-retry")
+        ph = mpisppy.opt.ph.PH(
+            _ph_options("cplex", log_dir),
+            self.snames,
+            farmer.scenario_creator,
+            scenario_creator_kwargs=self.sck,
+            extensions=_LogBeforeFailedAttempt,
+        )
+        name, scenario = next(iter(ph.local_scenarios.items()))
+        solver = _TruncatingFailureThenDiagnosticSolver()
+        scenario._solver_plugin = solver
+
+        with self.assertRaisesRegex(RuntimeError, "initial solver failure"):
+            ph.solve_one(None, name, scenario, gripe=True)
+
+        log_path = os.path.join(
+            log_dir, f"{ph._subproblem_file_stem(name)}_0.log")
+        with open(log_path, encoding="utf-8") as stream:
+            self.assertEqual(
+                stream.read(),
+                "native attempt 2\n"
+                "before failed attempt\n"
+                "inside diagnostic retry\n",
+            )
+        self.assertEqual(solver.solve_count, 2)
 
 
 if __name__ == '__main__':
