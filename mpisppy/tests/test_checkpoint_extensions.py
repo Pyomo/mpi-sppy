@@ -92,15 +92,22 @@ def _make_ph(options, ext_classes, model=farmer, scenario_names=None,
              creator_kwargs=None, **ph_kwargs):
     """A PH hub with the checkpointer and the extensions under test attached."""
     classes = list(ext_classes)
+    effective_kwargs = (
+        creator_kwargs if creator_kwargs is not None else FARMER_KWARGS
+    )
     if "checkpoint_dir" in options or "resume_from" in options:
         classes.insert(0, Checkpointer)
+        # Direct PH callers must identify the model and its structural inputs.
+        options.setdefault("checkpoint_structural_cfg", {
+            "model": model.__name__,
+            "creator_kwargs": dict(effective_kwargs),
+        })
     return PH(
         options,
         scenario_names if scenario_names is not None else FARMER_SCENARIOS,
         model.scenario_creator,
         model.scenario_denouement,
-        scenario_creator_kwargs=(creator_kwargs if creator_kwargs is not None
-                                 else FARMER_KWARGS),
+        scenario_creator_kwargs=effective_kwargs,
         extensions=MultiExtension,
         extension_kwargs={"ext_classes": classes},
         **ph_kwargs,
