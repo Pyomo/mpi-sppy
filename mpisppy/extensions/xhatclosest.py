@@ -133,5 +133,7 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
         self.opt.disable_W_and_prox()
         obj, srcsname = self.xhat_closest_to_xbar(verbose=self.verbose, restore_nonants=restore_nonants)
         self.opt.reenable_W_and_prox()
-        self.xhat_common_post_everything("closest to xbar", obj, srcsname, restore_nonants)
-        self._final_xhat_closest_obj = obj
+        incumbent_obj = self.reconcile_final_candidate(obj, self.keep_solution)
+        self.xhat_common_post_everything(
+            "closest to xbar", incumbent_obj, srcsname, restore_nonants)
+        self._final_xhat_closest_obj = incumbent_obj

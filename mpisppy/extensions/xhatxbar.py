@@ -160,8 +160,9 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
         obj = self.xhat_tryit(verbose=self.verbose,
                               restore_nonants=restore_nonants)
         self.opt.reenable_W_and_prox()
+        incumbent_obj = self.reconcile_final_candidate(obj, self.keep_solution)
         # to make available to tester
-        self._xhat_xbar_obj_final = obj
+        self._xhat_xbar_obj_final = incumbent_obj
         # XhatXbar has no source scenario: every scenario was fixed to the
         # rounded xbar. Choose one representative per node for the optional
         # diagnostic CSV writers used by xhat_common_post_everything.
@@ -170,4 +171,4 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
             for node in self.opt._scenario_tree.nonleaves
         }
         self.xhat_common_post_everything(
-            "xbar", obj, source_scenarios, restore_nonants)
+            "xbar", incumbent_obj, source_scenarios, restore_nonants)

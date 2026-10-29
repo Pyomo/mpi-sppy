@@ -44,6 +44,18 @@ def _hub(opt_class=PH, extension=None, extension_kwargs=None):
     }
 
 
+class _FakeSpcomm:
+    def __init__(self, incumbent=float("inf")):
+        self.BestInnerBound = incumbent
+        self.last_ib_idx = 0 if incumbent < float("inf") else None
+
+    def InnerBoundUpdate(self, candidate, char="*"):
+        if candidate < self.BestInnerBound:
+            self.BestInnerBound = candidate
+            self.last_ib_idx = 0
+        return self.BestInnerBound
+
+
 class TestFinalXhat(unittest.TestCase):
 
     def test_option_defaults_off_and_accepts_final_heuristics(self):
@@ -109,6 +121,39 @@ class TestFinalXhat(unittest.TestCase):
         self.assertIs(
             extension._solver_options_for_evaluation(), effective_options)
         opt._effective_solver_options.assert_called_once_with(9)
+
+    def test_closest_reloads_better_preexisting_hub_incumbent(self):
+        spcomm = _FakeSpcomm(incumbent=100.0)
+        opt = SimpleNamespace(
+            cylinder_rank=0,
+            n_proc=1,
+            best_solution_obj_val=100.0,
+            options={
+                "verbose": False,
+                "xhat_closest_options": {"xhat_solver_options": {}},
+            },
+            scenario_names_to_rank={"ROOT": {"Scenario0": 0}},
+            first_stage_solution_available=False,
+            tree_solution_available=False,
+            spcomm=spcomm,
+            disable_W_and_prox=Mock(),
+            reenable_W_and_prox=Mock(),
+            update_best_solution_if_improving=Mock(return_value=False),
+            load_best_solution=Mock(return_value=True),
+        )
+        extension = XhatClosest(opt)
+        extension.xhat_closest_to_xbar = Mock(
+            return_value=(123.0, {"ROOT": "Scenario0"}))
+
+        extension.post_everything()
+
+        self.assertEqual(extension._final_xhat_closest_obj, 100.0)
+        self.assertEqual(spcomm.BestInnerBound, 100.0)
+        self.assertEqual(spcomm.last_ib_idx, 0)
+        opt.update_best_solution_if_improving.assert_called_once_with(123.0)
+        opt.load_best_solution.assert_called_once_with()
+        self.assertTrue(opt.first_stage_solution_available)
+        self.assertTrue(opt.tree_solution_available)
 
     def test_xbar_composes_with_existing_extensions(self):
         class ExistingExtension:
