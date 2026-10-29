@@ -29,7 +29,6 @@ from mpisppy.opt.ph import PH
 from mpisppy.tests.utils import get_solver, subprocess_env
 from mpisppy.utils.config import Config
 
-
 solver_available, solver_name, _, _ = get_solver()
 mpiexec_available = shutil.which("mpiexec") is not None
 _MPIEXEC_ARGS = os.environ.get("OVERSUBSCRIBE", "").split()
