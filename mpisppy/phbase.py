@@ -926,7 +926,10 @@ class PHBase(mpisppy.spopt.SPOpt):
         """
         for (sname, scenario) in self.local_scenarios.items():
             # these are bound by index to the vardata list at the node
-            scenario._mpisppy_model.W = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
+            # PH's nonant topology is fixed after setup. Materialize its keys
+            # so Pyomo's retained initializers do not carry dictionary views.
+            nonant_keys = tuple(scenario._mpisppy_data.nonant_indices)
+            scenario._mpisppy_model.W = pyo.Param(nonant_keys,
                                         initialize=0.0,
                                         mutable=True)
 
@@ -945,7 +948,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                     f"defaultPHrho must be a strictly positive number, got "
                     f"{default_rho}. Progressive Hedging requires rho > 0."
                 )
-            scenario._mpisppy_model.rho = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
+            scenario._mpisppy_model.rho = pyo.Param(nonant_keys,
                                         mutable=True,
                                         default=default_rho)
 
@@ -957,15 +960,16 @@ class PHBase(mpisppy.spopt.SPOpt):
         """ Attach the smoothing terms to the models in `local_scenarios`.
         """
         for (sname, scenario) in self.local_scenarios.items():
-            scenario._mpisppy_model.z = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
+            nonant_keys = tuple(scenario._mpisppy_data.nonant_indices)
+            scenario._mpisppy_model.z = pyo.Param(nonant_keys,
                                         initialize=0.0,
                                         mutable=True)
 
-            scenario._mpisppy_model.p = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
+            scenario._mpisppy_model.p = pyo.Param(nonant_keys,
                                         mutable=True,
                                         default=self.options["defaultPHp"])
 
-            scenario._mpisppy_model.beta = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
+            scenario._mpisppy_model.beta = pyo.Param(nonant_keys,
                                         mutable=True,
                                         default=self.options["defaultPHbeta"])
 
@@ -2252,11 +2256,12 @@ class PHBase(mpisppy.spopt.SPOpt):
         `local_scenarios`.
         """
         for scenario in self.local_scenarios.values():
+            nonant_keys = tuple(scenario._mpisppy_data.nonant_indices)
             scenario._mpisppy_model.xbars = pyo.Param(
-                scenario._mpisppy_data.nonant_indices.keys(), initialize=0.0, mutable=True
+                nonant_keys, initialize=0.0, mutable=True
             )
             scenario._mpisppy_model.xsqbars = pyo.Param(
-                scenario._mpisppy_data.nonant_indices.keys(), initialize=0.0, mutable=True
+                nonant_keys, initialize=0.0, mutable=True
             )
 
 if __name__ == "__main__":

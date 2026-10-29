@@ -69,7 +69,7 @@ extras = [
     "mip",          # MPS/LP/SMPS file input (problem_io)
 ]
 pyfory = [
-    "pyfory==1.7.7", # state-only PH snapshots; full Pyomo graphs are unsupported
+    "pyfory==1.7.7", # PH state snapshots and full-model reloads
 ]
 # Everything the test suite and the examples need beyond a solver.
 test = [

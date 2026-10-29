@@ -102,11 +102,32 @@ There are six, and they are the whole interface:
 
 ``--checkpoint-backend``
    How hub scenario state is stored. ``dill-reload`` is the default and stores
-   each complete Pyomo model. ``pyfory-rebuild`` is an experimental state-only
+   each complete Pyomo model. ``pyfory-reload`` also stores complete Pyomo
+   models and requires pyfory 1.7.7; see `pyfory-reload`_.
+   ``pyfory-rebuild`` is an experimental state-only
    backend that recreates models through the scenario creator and restores
    named PH state plus proximal cuts. It requires an exact pyfory version match
    between checkpoint and resume, and every attached extension must explicitly
    implement the model-state rebuild hooks. See `pyfory-rebuild`_.
+
+pyfory-reload
+~~~~~~~~~~~~~
+
+Install ``mpi-sppy[pyfory]`` to enable this opt-in full-model backend. Each
+model file contains a versioned type table so a fresh reader can restore the
+saved graph without running the saved iterations. The manifest records the
+backend and pyfory version; a different installed pyfory version is refused.
+Like dill checkpoints, these model files must come from a trusted source.
+The backend preserves extension changes carried on scenario models and uses
+the same PH model-splicing repairs as ``dill-reload``. It retains the rank
+leaf and spoke files in their existing pickle formats.
+
+The codec uses a 10,000-level depth limit and a 1 GiB graph-memory budget.
+Checkpoint setup round-trips every local scenario with an independent codec;
+unsupported or unimportable model classes and local rules that inspect their
+module globals dynamically are refused. Benchmark with the
+actual model and solver before choosing this backend for a large run: the
+additional type table and reference tracking can affect memory and time.
 
 pyfory-rebuild
 ~~~~~~~~~~~~~~
@@ -114,9 +135,7 @@ pyfory-rebuild
 Install the pinned optional dependency with ``pip install mpi-sppy[pyfory]``.
 Setup requires pyfory 1.7.7. The checkpoint records pyfory's exact version and
 refuses to load with a different version. The codec stores only plain state
-data; it does not encode Pyomo objects. In particular, this avoids pyfory's
-current inability to reconstruct the full ``ConcreteModel`` object graph with
-a fresh reader.
+data; it does not encode Pyomo objects.
 
 The backend recreates each scenario with the current ``scenario_creator``,
 then restores variable values, fixedness, bounds and domains, mutable

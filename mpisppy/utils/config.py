@@ -838,7 +838,9 @@ class Config(pyofig.ConfigDict):
 
         self.add_to_config("checkpoint_backend",
                            description="how scenario-model state is saved and "
-                           "restored; choose 'dill-reload' (default) or "
+                           "restored; choose 'dill-reload' (default), "
+                           "'pyfory-reload' (full models; requires "
+                           "pyfory==1.7.7), or "
                            "'pyfory-rebuild' (experimental state snapshots; "
                            "requires pyfory==1.7.7 and extension opt-in)",
                            domain=str,

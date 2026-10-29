@@ -456,7 +456,8 @@ def _flat_snapshot(ph):
 
 
 def _resume_and_dump(ckpt_dir, iters_this_run, out_path,
-                     backend=checkpointing.DILL_RELOAD_BACKEND):
+                     backend=checkpointing.DILL_RELOAD_BACKEND,
+                     overrides=None, extension_name=None):
     """Resume in this process and write the final state to out_path.
 
     The entry point test_resume_survives_a_fresh_process runs in a subprocess;
@@ -464,13 +465,13 @@ def _resume_and_dump(ckpt_dir, iters_this_run, out_path,
     name to reach it.
     """
     options = _options(iters_this_run, resume_from=ckpt_dir,
-                       checkpoint_backend=backend)
+                       checkpoint_backend=backend, **(overrides or {}))
     if backend == checkpointing.PYFORY_REBUILD_BACKEND:
         # Generic CLI setup attaches Checkpointer on a resume when a
         # checkpoint directory is also configured. Keep that production
         # path in this helper so its rebuild hooks are present in the child.
         options["checkpoint_dir"] = ckpt_dir
-    ph = _make_ph(options)
+    ph = _make_ph(options, extension_name=extension_name)
     ph.ph_main()
     with open(out_path, "w") as f:
         json.dump({
@@ -1166,6 +1167,195 @@ class TestPyforyRebuildBackend(unittest.TestCase):
             "RebuildSafeStateExtension"]
         self.assertEqual(extension.restored_model_state,
                          {"scenario_count": len(SCENARIO_NAMES)})
+
+
+@unittest.skipUnless(checkpointing.pyfory_available,
+                     "pyfory is an optional checkpoint dependency")
+@unittest.skipUnless(solver_available,
+                     "no solver is available for checkpoint resume tests")
+class TestPyforyReloadBackend(unittest.TestCase):
+    """Full-model pyfory checkpoints continue like the dill backend."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _options(self, max_iters, **overrides):
+        return _options(
+            max_iters, ckpt_dir=self.ckpt_dir,
+            checkpoint_backend=checkpointing.PYFORY_RELOAD_BACKEND,
+            **overrides)
+
+    def test_fresh_process_resume_matches_uninterrupted_farmer(self):
+        reference = _make_ph(_options(4))
+        reference.ph_main()
+        _make_ph(self._options(2)).ph_main()
+
+        manifest = checkpointing._read_manifest(self.ckpt_dir)
+        self.assertEqual(manifest["backend"],
+                         checkpointing.PYFORY_RELOAD_BACKEND)
+        self.assertEqual(manifest["codec_version"],
+                         checkpointing._pyfory_version())
+        self.assertTrue(manifest["write_id"])
+        generation_dir = os.path.join(
+            self.ckpt_dir, "hub", "gen_0002")
+        with open(os.path.join(generation_dir, "hub_rank_0000.pkl"), "rb") as f:
+            leaf = pickle.load(f)
+        self.assertEqual(leaf["write_id"], manifest["write_id"])
+        self.assertTrue(all(name.endswith(".fory")
+                            for name in leaf["model_files"].values()))
+
+        out_path = os.path.join(self._tmp.name, "resumed.json")
+        call_args = json.dumps([
+            self.ckpt_dir, 2, out_path,
+            checkpointing.PYFORY_RELOAD_BACKEND,
+        ])
+        result = subprocess.run(
+            [sys.executable, "-c",
+             "import json, mpisppy.tests.test_checkpoint as t; "
+             f"t._resume_and_dump(*json.loads({call_args!r}))"],
+            capture_output=True, text=True, timeout=900, check=False,
+            env=subprocess_env(),
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with open(out_path) as f:
+            resumed = json.load(f)
+        self.assertTrue(resumed["resumed"])
+        self.assertEqual(resumed["resume_iteration"], 2)
+        self.assertEqual(resumed["state"], _flat_snapshot(reference))
+
+    def test_post_iteration_weights_and_proximal_cuts_survive(self):
+        writer = _make_ph(self._options(2, linearize_proximal_terms=True))
+        writer.ph_main()
+        resumed = _make_ph(_options(
+            0, resume_from=self.ckpt_dir,
+            checkpoint_backend=checkpointing.PYFORY_RELOAD_BACKEND,
+            linearize_proximal_terms=True))
+        resumed.PH_Prep()
+        resumed.Iter0()
+        self.assertEqual(resumed._resume_iteration, 2)
+        for sname, saved in writer.local_scenarios.items():
+            loaded = resumed.local_scenarios[sname]
+            self.assertTrue(checkpointing._checkpoint_state_equal(
+                checkpointing._snapshot_rebuild_model(saved),
+                checkpointing._snapshot_rebuild_model(loaded)))
+            for key, manager in loaded._mpisppy_data.xsqvar_prox_approx.items():
+                self.assertIs(manager.xvar.model(), loaded)
+                self.assertIs(manager.W, loaded._mpisppy_model.W[key])
+                self.assertIs(manager.rho, loaded._mpisppy_model.rho[key])
+                self.assertIs(manager.cuts, loaded._mpisppy_model.xsqvar_cuts)
+
+    def test_fresh_process_smoothing_fixing_and_proximal_continuation(self):
+        settings = {"smoothed": 2, "defaultPHp": 0.1,
+                    "defaultPHbeta": 0.1, "defaultPHrho": 2.0,
+                    "linearize_proximal_terms": True}
+        writer = _make_ph(self._options(2, **settings),
+                          extension_name="miditer_mutator")
+        writer.ph_main()
+        dill_dir = os.path.join(self._tmp.name, "dill")
+        dill_writer = _make_ph(_options(2, ckpt_dir=dill_dir, **settings),
+                               extension_name="miditer_mutator")
+        dill_writer.ph_main()
+        self.assertEqual(_flat_snapshot(writer), _flat_snapshot(dill_writer))
+        self.assertTrue(any(value == 1.0 for (sname, kind, name), value
+                            in _primal_snapshot(writer).items()
+                            if kind == "fixed"))
+
+        def resume_in_child(directory, backend, iterations, label):
+            out_path = os.path.join(self._tmp.name, label + ".json")
+            call_args = json.dumps([
+                directory, iterations, out_path, backend,
+                settings, "miditer_mutator",
+            ])
+            result = subprocess.run(
+                [sys.executable, "-c",
+                 "import json, mpisppy.tests.test_checkpoint as t; "
+                 f"t._resume_and_dump(*json.loads({call_args!r}))"],
+                capture_output=True, text=True, timeout=900, check=False,
+                env=subprocess_env(),
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            with open(out_path) as f:
+                state = json.load(f)
+            self.assertTrue(state["resumed"])
+            self.assertEqual(state["resume_iteration"], 2)
+            return state["state"]
+
+        self.assertEqual(resume_in_child(
+            self.ckpt_dir, checkpointing.PYFORY_RELOAD_BACKEND,
+            0, "roundtrip"), _flat_snapshot(writer))
+        self.assertEqual(resume_in_child(
+            self.ckpt_dir, checkpointing.PYFORY_RELOAD_BACKEND,
+            1, "pyfory"), resume_in_child(
+                dill_dir, checkpointing.DILL_RELOAD_BACKEND, 1, "dill"))
+
+    def test_nested_bunch_and_component_aliases_round_trip(self):
+        import io
+        import pyomo.environ as pyo
+        from pyomo.common.collections import Bunch
+        from mpisppy.utils import pyfory_model_codec
+
+        model = pyo.ConcreteModel()
+        model.x = pyo.Var(initialize=2.0)
+        model.extra = Bunch()
+        model.extra.weights = {("ROOT", 0): 1.0}
+        model.extra.aliases = [model.x, model.x]
+        stream = io.BytesIO()
+        pyfory_model_codec.dump(model, stream)
+        restored = pyfory_model_codec.load(io.BytesIO(stream.getvalue()))
+        self.assertIsInstance(restored.extra.weights, dict)
+        self.assertEqual(restored.extra.weights[("ROOT", 0)], 1.0)
+        self.assertIs(restored.extra.aliases[0], restored.x)
+        self.assertIs(restored.extra.aliases[1], restored.x)
+
+    def test_dynamic_global_rule_is_refused(self):
+        import io
+        import pyomo.environ as pyo
+        from mpisppy.utils import pyfory_model_codec
+
+        def init_value(_):
+            return globals().get("_pyfory_test_scale", 1.0)
+
+        model = pyo.ConcreteModel()
+        model.x = pyo.Var(initialize=init_value)
+        stream = io.BytesIO()
+        pyfory_model_codec.dump(model, stream)
+        with self.assertRaisesRegex(TypeError, "dynamic global lookup"):
+            pyfory_model_codec.load(io.BytesIO(stream.getvalue()))
+
+    def test_migration_and_manifest_directed_reads(self):
+        _make_ph(_options(2, ckpt_dir=self.ckpt_dir)).ph_main()
+        reload_run = _make_ph(_options(
+            1, ckpt_dir=self.ckpt_dir, resume_from=self.ckpt_dir,
+            checkpoint_backend=checkpointing.PYFORY_RELOAD_BACKEND))
+        reload_run.ph_main()
+        self.assertEqual(checkpointing._read_manifest(self.ckpt_dir)["backend"],
+                         checkpointing.PYFORY_RELOAD_BACKEND)
+        dill_run = _make_ph(_options(
+            1, ckpt_dir=self.ckpt_dir, resume_from=self.ckpt_dir,
+            checkpoint_backend=checkpointing.DILL_RELOAD_BACKEND))
+        dill_run.ph_main()
+        self.assertEqual(checkpointing._read_manifest(self.ckpt_dir)["backend"],
+                         checkpointing.DILL_RELOAD_BACKEND)
+        self.assertEqual(dill_run._PHIter, 4)
+
+    def test_bad_model_header_is_refused(self):
+        _make_ph(self._options(1)).ph_main()
+        generation_dir = os.path.join(self.ckpt_dir, "hub", "gen_0001")
+        with open(os.path.join(generation_dir, "hub_rank_0000.pkl"), "rb") as f:
+            leaf = pickle.load(f)
+        fname = leaf["model_files"][SCENARIO_NAMES[0]]
+        with open(os.path.join(generation_dir, fname), "wb") as f:
+            f.write(b"damaged")
+        reader = _make_ph(_options(
+            1, resume_from=self.ckpt_dir,
+            checkpoint_backend=checkpointing.PYFORY_RELOAD_BACKEND))
+        with self.assertRaisesRegex(ValueError,
+                                    "Invalid pyfory model checkpoint header"):
+            reader.ph_main()
 
 
 class TestIterationBounds(unittest.TestCase):
