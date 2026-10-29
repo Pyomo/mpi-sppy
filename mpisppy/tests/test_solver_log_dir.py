@@ -94,6 +94,26 @@ class Test_solver_log_dir(unittest.TestCase):
         with sputils.solver_log_stream(None, kwargs):
             self.assertIs(kwargs["tee"], True)
 
+    def test_python_logging_survives_log_recreated_between_attempts(self):
+        log_path = os.path.join(self.tmpdir, "recreated.log")
+        with sputils.solver_log_python_logging(log_path):
+            _extension_logger.info("before first attempt")
+            with open(log_path, "w", encoding="utf-8") as stream:
+                stream.write("native first attempt\n")
+            _extension_logger.info("between attempts")
+            with open(log_path, "w", encoding="utf-8") as stream:
+                stream.write("native second attempt\n")
+            _extension_logger.info("after second attempt")
+
+        with open(log_path, encoding="utf-8") as stream:
+            self.assertEqual(
+                stream.read(),
+                "native second attempt\n"
+                "before first attempt\n"
+                "between attempts\n"
+                "after second attempt\n",
+            )
+
     def test_set_solver_log_file_dispatch(self):
         log_path = os.path.join(self.tmpdir, "x.log")
         cases = {
