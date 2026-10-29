@@ -155,6 +155,37 @@ class TestFinalXhat(unittest.TestCase):
         self.assertTrue(opt.first_stage_solution_available)
         self.assertTrue(opt.tree_solution_available)
 
+    def test_closest_without_kept_solution_reports_evaluated_candidate(self):
+        spcomm = _FakeSpcomm()
+        opt = SimpleNamespace(
+            cylinder_rank=0,
+            n_proc=1,
+            best_solution_obj_val=100.0,
+            options={
+                "verbose": False,
+                "xhat_closest_options": {
+                    "xhat_solver_options": {},
+                    "keep_solution": False,
+                },
+            },
+            scenario_names_to_rank={"ROOT": {"Scenario0": 0}},
+            spcomm=spcomm,
+            disable_W_and_prox=Mock(),
+            reenable_W_and_prox=Mock(),
+            update_best_solution_if_improving=Mock(),
+            load_best_solution=Mock(),
+        )
+        extension = XhatClosest(opt)
+        extension.xhat_closest_to_xbar = Mock(
+            return_value=(123.0, {"ROOT": "Scenario0"}))
+
+        extension.post_everything()
+
+        self.assertEqual(extension._final_xhat_closest_obj, 123.0)
+        self.assertEqual(spcomm.BestInnerBound, 123.0)
+        opt.update_best_solution_if_improving.assert_not_called()
+        opt.load_best_solution.assert_not_called()
+
     def test_xbar_composes_with_existing_extensions(self):
         class ExistingExtension:
             pass

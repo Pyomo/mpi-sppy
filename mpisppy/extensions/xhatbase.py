@@ -423,6 +423,9 @@ class XhatBase(mpisppy.extensions.extension.Extension):
         them.  Return the objective belonging to that loaded incumbent so the
         hub advertises the same solution it can write.
         """
+        if not keep_solution:
+            return candidate_obj
+
         if candidate_obj is not None:
             self.opt.update_best_solution_if_improving(candidate_obj)
 
