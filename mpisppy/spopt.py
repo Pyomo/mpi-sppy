@@ -652,6 +652,7 @@ class SPOpt(SPBase):
         # parameters to the wrong iteration and breaks log-driven
         # debugging of per-iteration options.
         solve_keyword_args = dict()
+        log_path = None
         log_stream_path = None
         if self.options.get("solver_log_dir", None):
             if k not in self._subproblem_solve_index:
@@ -724,51 +725,55 @@ class SPOpt(SPBase):
         s._mpisppy_data.outer_bound = None
 
         Ag = getattr(self, "Ag", None)  # agnostic
-        if Ag is not None:
-            if self.extensions is not None:
-                if hasattr(self.extobject, "_solve_subproblem_extension"):
-                    solve_extension = (
-                        self.extobject._solve_subproblem_extension)
-                else:
-                    solve_extension = self.extobject
-                if (
-                    solve_extension is not None
-                    and type(solve_extension).solve_subproblem
-                    is not Extension.solve_subproblem
-                ):
-                    raise RuntimeError(
-                        "solve_subproblem overrides are not supported with "
-                        "Agnostic solves; choose one solve-replacement "
-                        "mechanism")
-            assert not disable_pyomo_signal_handling, "Not thinking about agnostic APH yet"
-            kws = {"s": s, "solve_keyword_args": solve_keyword_args, "gripe": gripe, "tee": tee, "need_solution": need_solution}
-            Ag.callout_agnostic(kws)  # not going to use the return values
-        else:
-            #  didcallout = False  (returned true by the callout, but not used)
-            execution = self._run_subproblem_solve(
-                s,
-                solve_keyword_args=solve_keyword_args,
-                log_stream_path=log_stream_path,
-                outer_bound_only=outer_bound_only,
-                need_solution=need_solution,
-            )
-            results = execution.results
+        # Keep Python records buffered until all outcome handling completes.
+        # In particular, a legacy solver may recreate its logfile during the
+        # gripe=True diagnostic retry in _apply_failed_solve_outcome.
+        with sputils.solver_log_python_logging(log_path):
+            if Ag is not None:
+                if self.extensions is not None:
+                    if hasattr(self.extobject, "_solve_subproblem_extension"):
+                        solve_extension = (
+                            self.extobject._solve_subproblem_extension)
+                    else:
+                        solve_extension = self.extobject
+                    if (
+                        solve_extension is not None
+                        and type(solve_extension).solve_subproblem
+                        is not Extension.solve_subproblem
+                    ):
+                        raise RuntimeError(
+                            "solve_subproblem overrides are not supported with "
+                            "Agnostic solves; choose one solve-replacement "
+                            "mechanism")
+                assert not disable_pyomo_signal_handling, "Not thinking about agnostic APH yet"
+                kws = {"s": s, "solve_keyword_args": solve_keyword_args, "gripe": gripe, "tee": tee, "need_solution": need_solution}
+                Ag.callout_agnostic(kws)  # not going to use the return values
+            else:
+                #  didcallout = False  (returned true by the callout, but not used)
+                execution = self._run_subproblem_solve(
+                    s,
+                    solve_keyword_args=solve_keyword_args,
+                    log_stream_path=log_stream_path,
+                    outer_bound_only=outer_bound_only,
+                    need_solution=need_solution,
+                )
+                results = execution.results
 
-            # Record this before raising a deferred classification or loading
-            # exception so callers retain the solver's termination metadata.
-            _record_termination_condition(s, results)
+                # Record this before raising a deferred classification or loading
+                # exception so callers retain the solver's termination metadata.
+                _record_termination_condition(s, results)
 
-            # Keep solution-loading failures outside the solver-failure path,
-            # matching solve_one's established behavior: retain the solve's
-            # termination metadata and do not retry or alter availability.
-            if execution.deferred_exception is not None:
-                raise execution.deferred_exception
+                # Keep solution-loading failures outside the solver-failure path,
+                # matching solve_one's established behavior: retain the solve's
+                # termination metadata and do not retry or alter availability.
+                if execution.deferred_exception is not None:
+                    raise execution.deferred_exception
 
-            self._apply_subproblem_solve_outcome(
-                s,
-                execution,
-                gripe=gripe,
-            )
+                self._apply_subproblem_solve_outcome(
+                    s,
+                    execution,
+                    gripe=gripe,
+                )
 
         # end of Agnostic bypass
 

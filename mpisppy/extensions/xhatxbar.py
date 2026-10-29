@@ -149,3 +149,12 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
         self.opt.reenable_W_and_prox()
         # to make available to tester
         self._xhat_xbar_obj_final = obj
+        # XhatXbar has no source scenario: every scenario was fixed to the
+        # rounded xbar. Choose one representative per node for the optional
+        # diagnostic CSV writers used by xhat_common_post_everything.
+        source_scenarios = {
+            node.name: self.opt.all_scenario_names[node.scenfirst]
+            for node in self.opt._scenario_tree.nonleaves
+        }
+        self.xhat_common_post_everything(
+            "xbar", obj, source_scenarios, restore_nonants)
