@@ -8,10 +8,17 @@
 ###############################################################################
 """Configuration and hub wiring tests for --final-xhat."""
 
+import csv
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from mpisppy import MPI
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.xhatclosest import XhatClosest
 from mpisppy.extensions.xhatxbar import XhatXbar
@@ -19,7 +26,13 @@ from mpisppy.generic.extensions import configure_extensions
 from mpisppy.generic.parsing import add_decomp_args
 from mpisppy.opt.aph import APH
 from mpisppy.opt.ph import PH
+from mpisppy.tests.utils import get_solver, subprocess_env
 from mpisppy.utils.config import Config
+
+
+solver_available, solver_name, _, _ = get_solver()
+mpiexec_available = shutil.which("mpiexec") is not None
+_MPIEXEC_ARGS = os.environ.get("OVERSUBSCRIBE", "").split()
 
 
 def _cfg(final_xhat="none"):
@@ -208,6 +221,75 @@ class TestFinalXhat(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "only PH and APH hubs"):
             configure_extensions(
                 _hub(opt_class=OtherAlgorithm), module=None, cfg=_cfg("xbar"))
+
+
+@unittest.skipUnless(mpiexec_available, "mpiexec is not available")
+@unittest.skipUnless(solver_available, "no supported solver is available")
+@unittest.skipIf(MPI.COMM_WORLD.Get_size() > 1,
+                 "subprocess MPI test must start from a serial test process")
+class TestFinalXhatEndToEnd(unittest.TestCase):
+
+    def test_ph_and_aph_final_xbar_write_consistent_solutions(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for hub_name, hub_args in (("ph", ()), ("aph", ("--APH",))):
+                with self.subTest(hub=hub_name):
+                    solution_base = os.path.join(tmpdir, hub_name)
+                    command = [
+                        "mpiexec", *_MPIEXEC_ARGS, "-np", "2",
+                        sys.executable, "-m", "mpi4py", "-m",
+                        "mpisppy.generic_cylinders",
+                        "--module-name", "mpisppy.tests.examples.farmer",
+                        "--num-scens", "3",
+                        "--solver-name", solver_name,
+                        "--max-solver-threads", "1",
+                        "--default-rho", "1",
+                        "--max-iterations", "2",
+                        "--intra-hub-conv-thresh", "-1",
+                        "--rel-gap", "0",
+                        "--abs-gap", "0",
+                        *hub_args,
+                        "--final-xhat", "xbar",
+                        "--solution-base-name", solution_base,
+                    ]
+                    result = subprocess.run(
+                        command,
+                        capture_output=True,
+                        text=True,
+                        timeout=180,
+                        check=False,
+                        env=subprocess_env(),
+                    )
+                    self.assertEqual(
+                        result.returncode,
+                        0,
+                        msg=f"final-xhat run failed:\n"
+                            f"{result.stdout[-4000:]}\n"
+                            f"{result.stderr[-4000:]}",
+                    )
+
+                    first_stage_path = f"{solution_base}.csv"
+                    scenario_dir = f"{solution_base}_soldir"
+                    self.assertTrue(os.path.exists(first_stage_path))
+                    self.assertEqual(
+                        sorted(os.listdir(scenario_dir)),
+                        ["scen0.csv", "scen1.csv", "scen2.csv"],
+                    )
+
+                    with open(first_stage_path, newline="") as stream:
+                        first_stage = {name: float(value)
+                                       for name, value in csv.reader(stream)}
+                    self.assertTrue(first_stage)
+                    for scenario_name in ("scen0", "scen1", "scen2"):
+                        path = os.path.join(
+                            scenario_dir, f"{scenario_name}.csv")
+                        with open(path, newline="") as stream:
+                            scenario_solution = {
+                                name: float(value)
+                                for name, value in csv.reader(stream)
+                            }
+                        for name, value in first_stage.items():
+                            self.assertAlmostEqual(
+                                scenario_solution[name], value, delta=1e-6)
 
 
 if __name__ == "__main__":
