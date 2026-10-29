@@ -26,6 +26,26 @@ def configure_extensions(hub_dict, module, cfg):
     ext_classes = list()
     # TBD: add cross_scenario_cuts, which also needs a cylinder
 
+    final_xhat = cfg.get("final_xhat", "none")
+    if final_xhat == "xbar":
+        # This is deliberately a hub extension, not the XhatXbarInnerBound
+        # spoke selected by --xhatxbar. PHHub.finalize calls post_everything,
+        # where XhatXbar evaluates the final xbar and registers the hub as an
+        # incumbent source for WheelSpinner's solution writers.
+        from mpisppy.opt.ph import PH
+        if hub_dict.get("opt_class") is not PH:
+            raise RuntimeError(
+                "--final-xhat xbar currently supports only the synchronous "
+                "PH hub; remove --final-xhat or select the default PH hub."
+            )
+        from mpisppy.extensions.xhatxbar import XhatXbar
+        ext_classes.append(XhatXbar)
+        hub_options = hub_dict["opt_kwargs"]["options"]
+        hub_options["xhat_xbar_options"] = {
+            "xhat_solver_options": hub_options["iterk_solver_options"],
+            "keep_solution": True,
+        }
+
     if cfg.mipgaps_json is not None or cfg.starting_mipgap is not None:
         vanilla.add_gapper(hub_dict, cfg)
 

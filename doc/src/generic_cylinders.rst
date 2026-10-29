@@ -154,6 +154,27 @@ Spokes provide bounds and heuristic solutions. Enable them with flags:
 
 See :ref:`Spokes` for details on each spoke type.
 
+Final xhat on the hub
+---------------------
+
+For a synchronous PH run, ``--final-xhat xbar`` evaluates the rounded final
+``xbar`` after PH stops.  It runs as an extension on the hub, so it does not
+allocate another cylinder and does not provide incumbent bounds during the PH
+iterations.  This is distinct from ``--xhatxbar``, which creates an inner-bound
+spoke that searches while PH is running.
+
+Combine it with ``--solution-base-name`` to write the resulting first-stage
+and scenario solutions through the normal solution writers.  For example::
+
+    mpiexec -np 3 python -m mpi4py -m mpisppy.generic_cylinders \
+        --module-name farmer --num-scens 3 --solver-name gurobi \
+        --default-rho 1 --max-iterations 20 \
+        --final-xhat xbar --solution-base-name farmer_final
+
+The final evaluation uses the PH hub's iteration solver options.  Currently
+``xbar`` is the only final-xhat heuristic exposed, and the option is limited to
+the synchronous PH hub.
+
 Running L-Shaped with Spokes
 -----------------------------
 
