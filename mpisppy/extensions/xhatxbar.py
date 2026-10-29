@@ -153,9 +153,8 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
         # rounded xbar. Choose one representative per node for the optional
         # diagnostic CSV writers used by xhat_common_post_everything.
         source_scenarios = {
-            node_name: next(iter(scenario_ranks))
-            for node_name, scenario_ranks in self.scenario_name_to_rank.items()
-            if scenario_ranks
+            node.name: self.opt.all_scenario_names[node.scenfirst]
+            for node in self.opt._scenario_tree.nonleaves
         }
         self.xhat_common_post_everything(
             "xbar", obj, source_scenarios, restore_nonants)
