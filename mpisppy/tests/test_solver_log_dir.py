@@ -14,6 +14,7 @@ These tests require highspy and fail rather than skip without it; CI
 installs it for every job that runs this file.
 """
 
+import logging
 import os
 import shutil
 import sys
@@ -25,7 +26,19 @@ import pyomo.environ as pyo
 import mpisppy.opt.ph
 import mpisppy.tests.examples.farmer as farmer
 import mpisppy.utils.sputils as sputils
+from mpisppy.extensions.extension import Extension
 from mpisppy.opt.ef import ExtensiveForm
+
+_extension_logger = logging.getLogger(__name__)
+_extension_logger.setLevel(logging.INFO)
+
+
+class _LoggingSolveExtension(Extension):
+    def solve_subproblem(
+            self, subproblem, subproblem_solve, *, outer_bound_only=False):
+        outcome = subproblem_solve()
+        _extension_logger.info("extension completed logical solve")
+        return outcome
 
 
 def _ph_options(solver_name, log_dir):
@@ -177,6 +190,25 @@ class Test_solver_log_dir(unittest.TestCase):
         for log in logs:
             self.assertGreater(
                 os.path.getsize(os.path.join(log_dir, log)), 0, log)
+
+    def test_extension_python_logging_is_in_subproblem_solver_log(self):
+        self._require_highs()
+        log_dir = self._log_dir("extension")
+        ph = mpisppy.opt.ph.PH(
+            _ph_options("highs", log_dir),
+            self.snames,
+            farmer.scenario_creator,
+            scenario_creator_kwargs=self.sck,
+            extensions=_LoggingSolveExtension,
+        )
+        ph.ph_main()
+
+        logs = sorted(os.listdir(log_dir))
+        self.assertEqual(len(logs), 2 * len(self.snames), logs)
+        for log in logs:
+            with open(os.path.join(log_dir, log), encoding="utf-8") as stream:
+                self.assertIn(
+                    "extension completed logical solve", stream.read(), log)
 
 
 if __name__ == '__main__':

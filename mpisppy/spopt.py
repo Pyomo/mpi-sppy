@@ -337,7 +337,7 @@ class SPOpt(SPBase):
 
 
     def _run_subproblem_solve(
-            self, s, solve_keyword_args, log_stream_path, *,
+            self, s, solve_keyword_args, log_path, log_stream_path, *,
             outer_bound_only, need_solution):
         """Invoke the configured solve and normalize its escaped state."""
         subproblem_solve = _SubproblemSolveInvocation(
@@ -349,14 +349,15 @@ class SPOpt(SPBase):
         )
 
         try:
-            if self.extensions is None:
-                outcome = subproblem_solve()
-            else:
-                outcome = self.extobject.solve_subproblem(
-                    s,
-                    subproblem_solve,
-                    outer_bound_only=outer_bound_only,
-                )
+            with sputils.solver_log_python_logging(log_path):
+                if self.extensions is None:
+                    outcome = subproblem_solve()
+                else:
+                    outcome = self.extobject.solve_subproblem(
+                        s,
+                        subproblem_solve,
+                        outer_bound_only=outer_bound_only,
+                    )
         except Exception as error:
             failed_attempt = subproblem_solve.attempt_for_exception(error)
             if failed_attempt is None:
@@ -652,6 +653,7 @@ class SPOpt(SPBase):
         # parameters to the wrong iteration and breaks log-driven
         # debugging of per-iteration options.
         solve_keyword_args = dict()
+        log_path = None
         log_stream_path = None
         if self.options.get("solver_log_dir", None):
             if k not in self._subproblem_solve_index:
@@ -748,6 +750,7 @@ class SPOpt(SPBase):
             execution = self._run_subproblem_solve(
                 s,
                 solve_keyword_args=solve_keyword_args,
+                log_path=log_path,
                 log_stream_path=log_stream_path,
                 outer_bound_only=outer_bound_only,
                 need_solution=need_solution,

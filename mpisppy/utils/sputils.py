@@ -12,6 +12,7 @@
 import contextlib
 import importlib
 import inspect
+import logging
 import os
 import re
 import sys
@@ -744,6 +745,47 @@ def solver_log_stream(log_path, solve_keyword_args):
                 solve_keyword_args["tee"] = tee
             else:
                 del solve_keyword_args["tee"]
+
+
+class _AppendSolverLogHandler(logging.Handler):
+    """Append each Python log record without holding the solver log open."""
+
+    def __init__(self, log_path):
+        super().__init__()
+        self.log_path = log_path
+
+    def emit(self, record):
+        try:
+            message = self.format(record)
+            with open(self.log_path, "a", encoding="utf-8") as stream:
+                stream.write(message + "\n")
+        except Exception:
+            self.handleError(record)
+
+
+@contextlib.contextmanager
+def solver_log_python_logging(log_path):
+    """Capture Python logging during one logical solve in its solver log.
+
+    The handler opens the file for each record rather than retaining an open
+    descriptor while a native solver also owns the same path. This context is
+    intentionally wider than :func:`solver_log_stream`: extension work such as
+    constraint generation happens between or after native solver attempts but
+    is still part of the same logical subproblem solve.
+    """
+
+    if log_path is None:
+        yield
+        return
+    handler = _AppendSolverLogHandler(log_path)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    root_logger = logging.getLogger()
+    root_logger.addHandler(handler)
+    try:
+        yield
+    finally:
+        root_logger.removeHandler(handler)
+        handler.close()
 
 
 def solver_quadratic_objective_capability(solver_plugin):
