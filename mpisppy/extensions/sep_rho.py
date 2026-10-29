@@ -243,13 +243,16 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             # WTracker, and miditer reads both on the very next pass -- so
             # skipping it here does not leave rho alone, it takes the run down
             # at the first resumed iteration.
-            self.update_caches()
+            if self._dynamic_updates_enabled():
+                self.update_caches()
             return
         global_toc("Using sep-rho rho setter")
         self.update_caches()
         self.compute_and_update_rho()
 
     def miditer(self):
+        if not self._dynamic_updates_enabled():
+            return
         self.update_caches()
         if self._update_recommended():
             self.compute_and_update_rho()

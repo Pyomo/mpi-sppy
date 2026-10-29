@@ -1054,7 +1054,7 @@ class APH(ph_base.PHBase):
         self.synchronizer.run(args, kwargs)
 
         if finalize:
-            Eobj = self.post_loops()
+            Eobj = self.post_loops(self.extensions)
         else:
             Eobj = None
 

@@ -1595,6 +1595,8 @@ jobs:
             mpisppy/tests/test_solver_spec.py \
             mpisppy/tests/test_extensions.py \
             mpisppy/tests/test_xhatxbar.py \
+            mpisppy/tests/test_final_xhat.py \
+            mpisppy/tests/test_aph_hub.py \
             mpisppy/tests/test_extension_hooks.py \
             mpisppy/tests/test_jensens.py \
             mpisppy/tests/test_vss.py \
