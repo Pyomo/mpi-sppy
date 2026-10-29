@@ -9,9 +9,11 @@
 """Configuration and hub wiring tests for --final-xhat."""
 
 import unittest
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from mpisppy.extensions.extension import MultiExtension
+from mpisppy.extensions.xhatclosest import XhatClosest
 from mpisppy.extensions.xhatxbar import XhatXbar
 from mpisppy.generic.extensions import configure_extensions
 from mpisppy.generic.parsing import add_decomp_args
@@ -44,20 +46,23 @@ def _hub(opt_class=PH, extension=None, extension_kwargs=None):
 
 class TestFinalXhat(unittest.TestCase):
 
-    def test_option_defaults_off_and_accepts_xbar(self):
+    def test_option_defaults_off_and_accepts_final_heuristics(self):
         cfg = _cfg()
         self.assertEqual(cfg.final_xhat, "none")
-        cfg.final_xhat = "xbar"
-        self.assertEqual(cfg.final_xhat, "xbar")
+        for heuristic in ("xbar", "closest"):
+            cfg.final_xhat = heuristic
+            self.assertEqual(cfg.final_xhat, heuristic)
         with self.assertRaises(ValueError):
             cfg.final_xhat = "not-a-heuristic"
 
-    def test_xbar_parses_from_command_line(self):
-        cfg = Config()
-        cfg.final_xhat_args()
-        with patch("sys.argv", ["prog", "--final-xhat", "xbar"]):
-            cfg.parse_command_line("prog")
-        self.assertEqual(cfg.final_xhat, "xbar")
+    def test_final_heuristics_parse_from_command_line(self):
+        for heuristic in ("xbar", "closest"):
+            with self.subTest(heuristic=heuristic):
+                cfg = Config()
+                cfg.final_xhat_args()
+                with patch("sys.argv", ["prog", "--final-xhat", heuristic]):
+                    cfg.parse_command_line("prog")
+                self.assertEqual(cfg.final_xhat, heuristic)
 
     def test_none_does_not_attach_extension(self):
         hub = _hub()
@@ -73,6 +78,37 @@ class TestFinalXhat(unittest.TestCase):
         self.assertIsNone(xhat_options["xhat_solver_options"])
         self.assertTrue(xhat_options["use_ph_solver_options"])
         self.assertTrue(xhat_options["keep_solution"])
+
+    def test_closest_attaches_to_ph_hub_and_resolves_options_lazily(self):
+        hub = _hub()
+        configure_extensions(hub, module=None, cfg=_cfg("closest"))
+        self.assertIs(hub["opt_kwargs"]["extensions"], XhatClosest)
+        xhat_options = hub["opt_kwargs"]["options"]["xhat_closest_options"]
+        self.assertIsNone(xhat_options["xhat_solver_options"])
+        self.assertTrue(xhat_options["use_ph_solver_options"])
+        self.assertTrue(xhat_options["keep_solution"])
+
+    def test_closest_reads_final_effective_solver_options(self):
+        effective_options = {"mipgap": 0.002, "timelimit": 17}
+        opt = SimpleNamespace(
+            cylinder_rank=0,
+            n_proc=1,
+            _PHIter=9,
+            _effective_solver_options=Mock(return_value=effective_options),
+            options={
+                "verbose": False,
+                "xhat_closest_options": {
+                    "xhat_solver_options": None,
+                    "use_ph_solver_options": True,
+                },
+            },
+            scenario_names_to_rank={"ROOT": {"Scenario0": 0}},
+        )
+        extension = XhatClosest(opt)
+
+        self.assertIs(
+            extension._solver_options_for_evaluation(), effective_options)
+        opt._effective_solver_options.assert_called_once_with(9)
 
     def test_xbar_composes_with_existing_extensions(self):
         class ExistingExtension:

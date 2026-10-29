@@ -38,6 +38,12 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
         if ('keep_solution' in self.options) and (not self.options['keep_solution']):
             self.keep_solution = False
 
+    def _solver_options_for_evaluation(self):
+        """Return the hub's final effective options for final-xhat use."""
+        if self.options.get("use_ph_solver_options", False):
+            return self.opt._effective_solver_options(self.opt._PHIter)
+        return self.solver_options
+
     def xhat_closest_to_xbar(self, verbose=False, restore_nonants=True):
         """ Get a truncated z score and look for the closest overall.
 
@@ -92,11 +98,12 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
 
         sname = self.comms["ROOT"].bcast(globalwinnername, root=sroot)
         _vb("Trying scenario "+sname)
-        _vb("   Solver options="+str(self.solver_options))
+        solver_options = self._solver_options_for_evaluation()
+        _vb("   Solver options="+str(solver_options))
         # xxx TBD mult-stage
         snamedict = {"ROOT": sname}
         obj = self._try_one(snamedict,
-                            solver_options=self.solver_options,
+                            solver_options=solver_options,
                             verbose=False,
                             restore_nonants=restore_nonants)
         if obj is None:

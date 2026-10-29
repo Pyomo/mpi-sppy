@@ -1577,9 +1577,11 @@ class Config(pyofig.ConfigDict):
             description=(
                 "xhat heuristic to run on the PH or APH hub after its "
                 "iterations finish; 'none' disables final xhat evaluation "
-                "and 'xbar' evaluates the rounded final xbar (default none)"
+                "while 'xbar' evaluates the rounded final xbar and 'closest' "
+                "evaluates the final scenario solution closest to xbar "
+                "(default none)"
             ),
-            domain=pyofig.In(["none", "xbar"]),
+            domain=pyofig.In(["none", "xbar", "closest"]),
             default="none",
         )
 

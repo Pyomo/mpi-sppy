@@ -158,10 +158,12 @@ Final xhat on the hub
 ---------------------
 
 For a PH or APH run, ``--final-xhat xbar`` evaluates the rounded final ``xbar``
-after the hub algorithm stops.  It runs as an extension on the hub, so it does
-not allocate another cylinder and does not provide incumbent bounds during the
-iterations.  This is distinct from ``--xhatxbar``, which creates an inner-bound
-spoke that searches while the hub is running.
+after the hub algorithm stops.  ``--final-xhat closest`` instead evaluates the
+final scenario solution closest to ``xbar``; it is currently limited to
+two-stage problems.  Both run as extensions on the hub, so they do not allocate
+another cylinder and do not provide incumbent bounds during the iterations.
+This is distinct from ``--xhatxbar``, which creates an inner-bound spoke that
+searches while the hub is running.
 
 Combine it with ``--solution-base-name`` to write the resulting first-stage
 and scenario solutions through the normal solution writers.  For example::
@@ -172,9 +174,8 @@ and scenario solutions through the normal solution writers.  For example::
         --final-xhat xbar --solution-base-name farmer_final
 
 The final evaluation resolves the PH hub's effective solver options when it
-runs, including scheduled and runtime-dynamic option layers.  Currently
-``xbar`` is the only final-xhat heuristic exposed, and the option is limited
-to PH and APH hubs.
+runs, including scheduled and runtime-dynamic option layers.  The option is
+limited to PH and APH hubs.
 
 Running L-Shaped with Spokes
 -----------------------------
