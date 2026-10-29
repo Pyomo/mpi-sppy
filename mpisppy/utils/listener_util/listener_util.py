@@ -106,6 +106,10 @@ class Synchronizer:
             wthread.start()
 
             listener.join()
+            # A listener can observe another rank's quit request while this
+            # rank's worker is still finishing an iteration or solve.  Do not
+            # let the caller begin finalization concurrently with that work.
+            wthread.join()
         else:
             self.work_fct(*args, **kwargs)
 
@@ -329,5 +333,4 @@ class Synchronizer:
 
 #synchronizer = Synchronizer(CropsLen, comm, sync=True)
 #synchronizer.run()
-
 
