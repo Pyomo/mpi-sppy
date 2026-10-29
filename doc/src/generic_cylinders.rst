@@ -157,11 +157,11 @@ See :ref:`Spokes` for details on each spoke type.
 Final xhat on the hub
 ---------------------
 
-For a synchronous PH run, ``--final-xhat xbar`` evaluates the rounded final
-``xbar`` after PH stops.  It runs as an extension on the hub, so it does not
-allocate another cylinder and does not provide incumbent bounds during the PH
+For a PH or APH run, ``--final-xhat xbar`` evaluates the rounded final ``xbar``
+after the hub algorithm stops.  It runs as an extension on the hub, so it does
+not allocate another cylinder and does not provide incumbent bounds during the
 iterations.  This is distinct from ``--xhatxbar``, which creates an inner-bound
-spoke that searches while PH is running.
+spoke that searches while the hub is running.
 
 Combine it with ``--solution-base-name`` to write the resulting first-stage
 and scenario solutions through the normal solution writers.  For example::
@@ -171,9 +171,10 @@ and scenario solutions through the normal solution writers.  For example::
         --default-rho 1 --max-iterations 20 \
         --final-xhat xbar --solution-base-name farmer_final
 
-The final evaluation uses the PH hub's iteration solver options.  Currently
-``xbar`` is the only final-xhat heuristic exposed, and the option is limited to
-the synchronous PH hub.
+The final evaluation resolves the PH hub's effective solver options when it
+runs, including scheduled and runtime-dynamic option layers.  Currently
+``xbar`` is the only final-xhat heuristic exposed, and the option is limited
+to PH and APH hubs.
 
 Running L-Shaped with Spokes
 -----------------------------

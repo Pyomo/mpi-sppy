@@ -1575,7 +1575,7 @@ class Config(pyofig.ConfigDict):
         self.add_to_config(
             "final_xhat",
             description=(
-                "xhat heuristic to run on the synchronous PH hub after its "
+                "xhat heuristic to run on the PH or APH hub after its "
                 "iterations finish; 'none' disables final xhat evaluation "
                 "and 'xbar' evaluates the rounded final xbar (default none)"
             ),

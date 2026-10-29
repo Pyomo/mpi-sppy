@@ -545,9 +545,7 @@ class APHHub(PHHub):
 
     def finalize(self):
         """ does PH.post_loops, returns Eobj """
-        # NOTE: APH_main does NOT pass in extensions
-        #       to APH.post_loops
-        Eobj = self.opt.post_loops()
+        Eobj = self.opt.post_loops(self.opt.extensions)
         return Eobj
 
 class FWPHHub(PHHub, FWPH_Cylinder):

@@ -32,17 +32,22 @@ def configure_extensions(hub_dict, module, cfg):
         # spoke selected by --xhatxbar. PHHub.finalize calls post_everything,
         # where XhatXbar evaluates the final xbar and registers the hub as an
         # incumbent source for WheelSpinner's solution writers.
+        from mpisppy.opt.aph import APH
         from mpisppy.opt.ph import PH
-        if hub_dict.get("opt_class") is not PH:
+        if hub_dict.get("opt_class") not in (PH, APH):
             raise RuntimeError(
-                "--final-xhat xbar currently supports only the synchronous "
-                "PH hub; remove --final-xhat or select the default PH hub."
+                "--final-xhat xbar currently supports only PH and APH hubs; "
+                "remove --final-xhat or select a PH-based hub."
             )
         from mpisppy.extensions.xhatxbar import XhatXbar
         ext_classes.append(XhatXbar)
         hub_options = hub_dict["opt_kwargs"]["options"]
         hub_options["xhat_xbar_options"] = {
-            "xhat_solver_options": hub_options["iterk_solver_options"],
+            # Resolve through SPOpt._effective_solver_options only when the
+            # final evaluation runs, after scheduled and dynamic layers have
+            # reached their final state.
+            "xhat_solver_options": None,
+            "use_ph_solver_options": True,
             "keep_solution": True,
         }
 

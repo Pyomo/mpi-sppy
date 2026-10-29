@@ -15,6 +15,7 @@ from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.xhatxbar import XhatXbar
 from mpisppy.generic.extensions import configure_extensions
 from mpisppy.generic.parsing import add_decomp_args
+from mpisppy.opt.aph import APH
 from mpisppy.opt.ph import PH
 from mpisppy.utils.config import Config
 
@@ -64,15 +65,13 @@ class TestFinalXhat(unittest.TestCase):
         self.assertIsNone(hub["opt_kwargs"]["extensions"])
         self.assertNotIn("xhat_xbar_options", hub["opt_kwargs"]["options"])
 
-    def test_xbar_attaches_to_ph_hub_and_reuses_iterk_options(self):
+    def test_xbar_attaches_to_ph_hub_and_resolves_options_lazily(self):
         hub = _hub()
         configure_extensions(hub, module=None, cfg=_cfg("xbar"))
         self.assertIs(hub["opt_kwargs"]["extensions"], XhatXbar)
         xhat_options = hub["opt_kwargs"]["options"]["xhat_xbar_options"]
-        self.assertIs(
-            xhat_options["xhat_solver_options"],
-            hub["opt_kwargs"]["options"]["iterk_solver_options"],
-        )
+        self.assertIsNone(xhat_options["xhat_solver_options"])
+        self.assertTrue(xhat_options["use_ph_solver_options"])
         self.assertTrue(xhat_options["keep_solution"])
 
     def test_xbar_composes_with_existing_extensions(self):
@@ -85,11 +84,16 @@ class TestFinalXhat(unittest.TestCase):
         classes = hub["opt_kwargs"]["extension_kwargs"]["ext_classes"]
         self.assertEqual(classes, [ExistingExtension, XhatXbar])
 
+    def test_xbar_attaches_to_aph_hub(self):
+        hub = _hub(opt_class=APH)
+        configure_extensions(hub, module=None, cfg=_cfg("xbar"))
+        self.assertIs(hub["opt_kwargs"]["extensions"], XhatXbar)
+
     def test_xbar_rejects_non_ph_hub(self):
         class OtherAlgorithm:
             pass
 
-        with self.assertRaisesRegex(RuntimeError, "synchronous PH hub"):
+        with self.assertRaisesRegex(RuntimeError, "only PH and APH hubs"):
             configure_extensions(
                 _hub(opt_class=OtherAlgorithm), module=None, cfg=_cfg("xbar"))
 

@@ -63,6 +63,28 @@ def test_final_xbar_registers_incumbent_for_solution_writers():
     assert spcomm.latest_ib_char == "E"
 
 
+def test_final_xbar_resolves_scheduled_and_dynamic_solver_options_lazily():
+    effective_options = {"mipgap": 0.002, "timelimit": 17}
+    opt = SimpleNamespace(
+        cylinder_rank=0,
+        n_proc=1,
+        _PHIter=9,
+        _effective_solver_options=mock.Mock(return_value=effective_options),
+        options={
+            "verbose": False,
+            "xhat_xbar_options": {
+                "xhat_solver_options": None,
+                "use_ph_solver_options": True,
+            },
+        },
+        scenario_names_to_rank={"ROOT": {"Scenario0": 0}},
+    )
+    extension = XhatXbar(opt)
+
+    assert extension._solver_options_for_evaluation() == effective_options
+    opt._effective_solver_options.assert_called_once_with(9)
+
+
 def test_multistage_diagnostic_writer_uses_scenario_in_each_node(tmp_path):
     def scenario(name, *node_names):
         nodes = [SimpleNamespace(
