@@ -30,7 +30,8 @@ jobs:
       - name: Install dependencies
         run: |
           # pip's mpi4py wheel for Windows is built against MS-MPI
-          pip install mpi4py cplex xpress highspy
+          # Pyomo is not yet compatible with Xpress 10.0.0.
+          pip install mpi4py cplex "xpress<10" highspy
 
       - name: setup the program
         run: |
@@ -81,7 +82,7 @@ jobs:
           python-version: 3.11
       - name: Install dependencies
         run: |
-          pip install mpi4py cplex xpress
+          pip install mpi4py cplex "xpress<10"
 
       - name: setup the program
         run: |
@@ -121,7 +122,7 @@ jobs:
         run: |
           # pyomo + pybind11 explicit: the build-extensions step below runs
           # before the editable install
-          pip install mpi4py pandas pyomo pybind11 cplex xpress
+          pip install mpi4py pandas pyomo pybind11 cplex "xpress<10"
 
       # APPSI's extensions are only needed by the first part (netdes --presolve)
       - name: Set up the MSVC environment

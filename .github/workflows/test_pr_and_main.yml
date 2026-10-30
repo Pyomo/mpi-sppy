@@ -97,7 +97,8 @@ jobs:
           python-version: 3.11
       - name: Install dependencies
         run: |
-          pip install cplex xpress
+          # Pyomo is not yet compatible with Xpress 10.0.0.
+          pip install cplex "xpress<10"
 
       - name: setup the program
         run: |
@@ -133,7 +134,7 @@ jobs:
 
           # pyomo + pybind11 explicit: the build-extensions step below runs
           # before the editable install; solvers are in no extra (licensing)
-          pip install pyomo pybind11 cplex gurobipy xpress highspy
+          pip install pyomo pybind11 cplex gurobipy "xpress<10" highspy
 
       - name: Build pyomo extensions
         run: |
@@ -309,7 +310,7 @@ jobs:
 
           # pyomo + pybind11 explicit: the build-extensions step below runs
           # before the editable install; solvers are in no extra (licensing)
-          pip install pyomo pybind11 cplex gurobipy xpress highspy
+          pip install pyomo pybind11 cplex gurobipy "xpress<10" highspy
 
       - name: Build pyomo extensions
         run: |
@@ -395,7 +396,7 @@ jobs:
           conda install mpi4py pandas setuptools
           # pyomo + pybind11 explicit: the build-extensions step below runs
           # before the editable install; solvers are in no extra (licensing)
-          pip install pyomo pybind11 cplex xpress
+          pip install pyomo pybind11 cplex "xpress<10"
 
       - name: Build pyomo extensions
         run: |
@@ -438,7 +439,7 @@ jobs:
           conda install mpi4py pandas setuptools
           # pyomo + pybind11 explicit: the build-extensions step below runs
           # before the editable install; solvers are in no extra (licensing)
-          pip install pyomo pybind11 cplex xpress
+          pip install pyomo pybind11 cplex "xpress<10"
 
       - name: Build pyomo extensions
         run: |
@@ -479,7 +480,7 @@ jobs:
           conda install mpi4py pandas setuptools
           # pyomo + pybind11 explicit: the build-extensions step below runs
           # before the editable install; solvers are in no extra (licensing)
-          pip install pyomo pybind11 cplex xpress
+          pip install pyomo pybind11 cplex "xpress<10"
 
       - name: Build pyomo extensions
         run: |
@@ -521,7 +522,7 @@ jobs:
           conda install mpi4py pandas setuptools
           # pyomo + pybind11 explicit: the build-extensions step below runs
           # before the editable install; solvers are in no extra (licensing)
-          pip install pyomo pybind11 cplex xpress
+          pip install pyomo pybind11 cplex "xpress<10"
 
       - name: Build pyomo extensions
         run: |
@@ -652,7 +653,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install cplex xpress
+          pip install cplex "xpress<10"
 
       - name: setup the program
         run: |
@@ -728,7 +729,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install cplex xpress
+          pip install cplex "xpress<10"
 
       - name: setup the program
         run: |
@@ -765,7 +766,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install cplex xpress
+          pip install cplex "xpress<10"
 
       - name: setup the program
         run: |
@@ -799,7 +800,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install cplex xpress
+          pip install cplex "xpress<10"
 
       - name: setup the program
         run: |
@@ -834,7 +835,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install cplex xpress
+          pip install cplex "xpress<10"
 
       - name: setup the program
         run: |
@@ -872,7 +873,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy" setuptools
-          pip install cplex xpress
+          pip install cplex "xpress<10"
 
       - name: setup the program
         run: |
@@ -908,7 +909,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy" setuptools
-          pip install cplex xpress
+          pip install cplex "xpress<10"
 
       - name: setup the program
         run: |
@@ -947,7 +948,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install cplex xpress
+          pip install cplex "xpress<10"
 
       - name: setup the program
         run: |
@@ -985,7 +986,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install cplex xpress
+          pip install cplex "xpress<10"
 
       - name: setup the program
         run: |
@@ -1023,7 +1024,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy" setuptools
-          pip install cplex xpress
+          pip install cplex "xpress<10"
 
       - name: setup the program
         run: |
@@ -1077,7 +1078,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy" setuptools
-          pip install cplex xpress
+          pip install cplex "xpress<10"
 
       # the bootstrap epi-spline distributions fit with a nonlinear solver, so
       # without ipopt those tests skip; this is how Pyomo's own CI gets ipopt
@@ -1214,7 +1215,7 @@ jobs:
         run: |
           conda install -y conda-forge::libstdcxx-ng
           conda install -y -c conda-forge openmpi mpi4py "numpy" setuptools cmake pip
-          conda run -n test_env --no-capture-output pip install cplex xpress
+          conda run -n test_env --no-capture-output pip install cplex "xpress<10"
 
       - name: setup the program
         run: |
@@ -1273,7 +1274,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools pytest pyyaml networkx
-          pip install cplex xpress
+          pip install cplex "xpress<10"
 
       - name: setup the program
         run: |
@@ -1346,7 +1347,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install ${{ matrix.mpi }} "${{ matrix.mpi4py }}" "numpy" setuptools
-          pip install cplex xpress
+          pip install cplex "xpress<10"
 
       - name: setup the program
         run: |
@@ -1459,7 +1460,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install cplex xpress
+          pip install cplex "xpress<10"
 
       - name: setup the program
         run: |
@@ -1523,7 +1524,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install cplex xpress
+          pip install cplex "xpress<10"
           python -m pip install amplpy --upgrade
           python -m amplpy.modules install highs cbc gurobi
           conda install -c conda-forge openssl
@@ -1589,10 +1590,14 @@ jobs:
             mpisppy/tests/test_sputils.py \
             mpisppy/tests/test_config.py \
             mpisppy/tests/test_log.py \
+            mpisppy/tests/test_listener_util.py \
             mpisppy/tests/test_scenario_tree.py \
             mpisppy/tests/test_nice_join.py \
             mpisppy/tests/test_solver_spec.py \
             mpisppy/tests/test_extensions.py \
+            mpisppy/tests/test_xhatxbar.py \
+            mpisppy/tests/test_final_xhat.py \
+            mpisppy/tests/test_aph_hub.py \
             mpisppy/tests/test_extension_hooks.py \
             mpisppy/tests/test_jensens.py \
             mpisppy/tests/test_vss.py \

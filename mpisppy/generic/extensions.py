@@ -26,6 +26,37 @@ def configure_extensions(hub_dict, module, cfg):
     ext_classes = list()
     # TBD: add cross_scenario_cuts, which also needs a cylinder
 
+    final_xhat = cfg.get("final_xhat", "none")
+    if final_xhat in ("xbar", "closest"):
+        # These are deliberately hub extensions, not the inner-bound spokes.
+        # PHHub.finalize calls post_everything, where the selected extension
+        # evaluates one final candidate and registers the hub as an incumbent
+        # source for WheelSpinner's solution writers.
+        from mpisppy.opt.aph import APH
+        from mpisppy.opt.ph import PH
+        if hub_dict.get("opt_class") not in (PH, APH):
+            raise RuntimeError(
+                f"--final-xhat {final_xhat} currently supports only PH and APH hubs; "
+                "remove --final-xhat or select a PH-based hub."
+            )
+        hub_options = hub_dict["opt_kwargs"]["options"]
+        final_options = {
+            # Resolve through SPOpt._effective_solver_options only when the
+            # final evaluation runs, after scheduled and dynamic layers have
+            # reached their final state.
+            "xhat_solver_options": None,
+            "use_ph_solver_options": True,
+            "keep_solution": True,
+        }
+        if final_xhat == "xbar":
+            from mpisppy.extensions.xhatxbar import XhatXbar
+            ext_classes.append(XhatXbar)
+            hub_options["xhat_xbar_options"] = final_options
+        else:
+            from mpisppy.extensions.xhatclosest import XhatClosest
+            ext_classes.append(XhatClosest)
+            hub_options["xhat_closest_options"] = final_options
+
     if cfg.mipgaps_json is not None or cfg.starting_mipgap is not None:
         vanilla.add_gapper(hub_dict, cfg)
 

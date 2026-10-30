@@ -22,6 +22,7 @@ so the per-variable arithmetic can be checked exactly, with no solver.
 import types
 import unittest
 import warnings
+from unittest import mock
 
 import pyomo.environ as pyo
 
@@ -195,6 +196,17 @@ class Test_sep_rho_formula(unittest.TestCase):
         del ph.options["sep_rho_options"]["multiplier"]
         ext = _make_ext(ph)
         self.assertEqual(ext.multiplier, 1.0)
+
+    def test_miditer_skips_tracking_without_dynamic_criteria(self):
+        ph = _make_ph()
+        ext = _make_ext(ph)
+        ext.update_caches = mock.Mock(
+            side_effect=AssertionError("miditer should not track convergence")
+        )
+
+        ext.miditer()
+
+        ext.update_caches.assert_not_called()
 
     def test_pre_iter0_cache_survives_heuristic_fixing(self):
         ph = _make_ph()

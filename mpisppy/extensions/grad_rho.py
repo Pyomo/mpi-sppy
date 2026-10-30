@@ -394,7 +394,8 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             # WTracker, and miditer reads both on the very next pass -- so
             # skipping it here does not leave rho alone, it takes the run down
             # at the first resumed iteration.
-            self.update_caches()
+            if self._dynamic_updates_enabled():
+                self.update_caches()
             # _get_grad_exprs is called from here and nowhere else, and
             # _eval_grad_exprs reads what it builds on every rho update. The
             # expressions are differentiated from the models, not from an
@@ -413,6 +414,8 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         self.compute_and_update_rho()
 
     def miditer(self):
+        if not self._dynamic_updates_enabled():
+            return
         self.update_caches()
         self.opt.spcomm.get_receive_buffer(
             self.best_xhat_buf,

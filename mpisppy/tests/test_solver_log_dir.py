@@ -14,18 +14,55 @@ These tests require highspy and fail rather than skip without it; CI
 installs it for every job that runs this file.
 """
 
+import io
+import logging
 import os
 import shutil
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 import pyomo.environ as pyo
 
 import mpisppy.opt.ph
 import mpisppy.tests.examples.farmer as farmer
 import mpisppy.utils.sputils as sputils
+from mpisppy.extensions.extension import Extension
 from mpisppy.opt.ef import ExtensiveForm
+
+_extension_logger = logging.getLogger(__name__)
+_extension_logger.setLevel(logging.INFO)
+
+
+class _LoggingSolveExtension(Extension):
+    def solve_subproblem(
+            self, subproblem, subproblem_solve, *, outer_bound_only=False):
+        outcome = subproblem_solve()
+        _extension_logger.info("extension completed logical solve")
+        return outcome
+
+
+class _LogBeforeFailedAttempt(Extension):
+    def solve_subproblem(
+            self, subproblem, subproblem_solve, *, outer_bound_only=False):
+        _extension_logger.info("before failed attempt")
+        return subproblem_solve()
+
+
+class _TruncatingFailureThenDiagnosticSolver:
+    def __init__(self):
+        self.options = {}
+        self.solve_count = 0
+
+    def solve(self, subproblem, **kwargs):
+        self.solve_count += 1
+        with open(kwargs["logfile"], "w", encoding="utf-8") as stream:
+            stream.write(f"native attempt {self.solve_count}\n")
+        if self.solve_count == 1:
+            raise RuntimeError("initial solver failure")
+        _extension_logger.info("inside diagnostic retry")
+        return object()
 
 
 def _ph_options(solver_name, log_dir):
@@ -80,6 +117,52 @@ class Test_solver_log_dir(unittest.TestCase):
         kwargs = {"tee": True}
         with sputils.solver_log_stream(None, kwargs):
             self.assertIs(kwargs["tee"], True)
+
+    def test_python_logging_survives_log_recreated_between_attempts(self):
+        log_path = os.path.join(self.tmpdir, "recreated.log")
+        with sputils.solver_log_python_logging(log_path):
+            _extension_logger.info("before first attempt")
+            with open(log_path, "w", encoding="utf-8") as stream:
+                stream.write("native first attempt\n")
+            _extension_logger.info("between attempts")
+            with open(log_path, "w", encoding="utf-8") as stream:
+                stream.write("native second attempt\n")
+            _extension_logger.info("after second attempt")
+
+        with open(log_path, encoding="utf-8") as stream:
+            self.assertEqual(
+                stream.read(),
+                "native second attempt\n"
+                "before first attempt\n"
+                "between attempts\n"
+                "after second attempt\n",
+            )
+
+    def test_python_logging_is_redirected_from_console(self):
+        log_path = os.path.join(self.tmpdir, "redirected.log")
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        logger = logging.getLogger("solver_log_console_test")
+        logger.setLevel(logging.INFO)
+        stdout_handler = logging.StreamHandler(stdout)
+        stderr_handler = logging.StreamHandler(stderr)
+        logger.addHandler(stdout_handler)
+        logging.getLogger().addHandler(stderr_handler)
+        try:
+            with unittest.mock.patch.object(sys, "stdout", stdout), \
+                    unittest.mock.patch.object(sys, "stderr", stderr):
+                with sputils.solver_log_python_logging(log_path):
+                    logger.info("redirect this record")
+        finally:
+            logger.removeHandler(stdout_handler)
+            logging.getLogger().removeHandler(stderr_handler)
+            stdout_handler.close()
+            stderr_handler.close()
+
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(stderr.getvalue(), "")
+        with open(log_path, encoding="utf-8") as stream:
+            self.assertEqual(stream.read(), "redirect this record\n")
 
     def test_set_solver_log_file_dispatch(self):
         log_path = os.path.join(self.tmpdir, "x.log")
@@ -177,6 +260,52 @@ class Test_solver_log_dir(unittest.TestCase):
         for log in logs:
             self.assertGreater(
                 os.path.getsize(os.path.join(log_dir, log)), 0, log)
+
+    def test_extension_python_logging_is_in_subproblem_solver_log(self):
+        self._require_highs()
+        log_dir = self._log_dir("extension")
+        ph = mpisppy.opt.ph.PH(
+            _ph_options("highs", log_dir),
+            self.snames,
+            farmer.scenario_creator,
+            scenario_creator_kwargs=self.sck,
+            extensions=_LoggingSolveExtension,
+        )
+        ph.ph_main()
+
+        logs = sorted(os.listdir(log_dir))
+        self.assertEqual(len(logs), 2 * len(self.snames), logs)
+        for log in logs:
+            with open(os.path.join(log_dir, log), encoding="utf-8") as stream:
+                self.assertIn(
+                    "extension completed logical solve", stream.read(), log)
+
+    def test_python_logging_survives_failure_path_diagnostic_retry(self):
+        log_dir = self._log_dir("diagnostic-retry")
+        ph = mpisppy.opt.ph.PH(
+            _ph_options("cplex", log_dir),
+            self.snames,
+            farmer.scenario_creator,
+            scenario_creator_kwargs=self.sck,
+            extensions=_LogBeforeFailedAttempt,
+        )
+        name, scenario = next(iter(ph.local_scenarios.items()))
+        solver = _TruncatingFailureThenDiagnosticSolver()
+        scenario._solver_plugin = solver
+
+        with self.assertRaisesRegex(RuntimeError, "initial solver failure"):
+            ph.solve_one(None, name, scenario, gripe=True)
+
+        log_path = os.path.join(
+            log_dir, f"{ph._subproblem_file_stem(name)}_0.log")
+        with open(log_path, encoding="utf-8") as stream:
+            self.assertEqual(
+                stream.read(),
+                "native attempt 2\n"
+                "before failed attempt\n"
+                "inside diagnostic retry\n",
+            )
+        self.assertEqual(solver.solve_count, 2)
 
 
 if __name__ == '__main__':

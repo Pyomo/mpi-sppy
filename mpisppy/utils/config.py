@@ -1564,6 +1564,27 @@ class Config(pyofig.ConfigDict):
 
         self.add_solver_specs("xhatxbar")
 
+    def final_xhat_args(self):
+        """Options for constructing one solution after the hub stops.
+
+        Keep this separate from the xhat spoke options: ``--xhatxbar``
+        allocates a cylinder and searches throughout the run, whereas this
+        option attaches an extension to the hub and evaluates one candidate
+        during finalization.
+        """
+        self.add_to_config(
+            "final_xhat",
+            description=(
+                "xhat heuristic to run on the PH or APH hub after its "
+                "iterations finish; 'none' disables final xhat evaluation "
+                "while 'xbar' evaluates the rounded final xbar and 'closest' "
+                "evaluates the final scenario solution closest to xbar "
+                "(default none)"
+            ),
+            domain=pyofig.In(["none", "xbar", "closest"]),
+            default="none",
+        )
+
 
     def xhatlshaped_args(self):
         # we will not try to get the specification from the command line
