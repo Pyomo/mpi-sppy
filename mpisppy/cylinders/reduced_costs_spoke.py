@@ -472,26 +472,32 @@ class ReducedCostsSpoke(LagrangianOuterBound):
 
     def update_nonant_bounds(self):
         bounds_modified = 0
-        send_buf = self.send_buffers[Field.NONANT_LOWER_BOUNDS]
+        lower_buf = self.send_buffers[Field.NONANT_LOWER_BOUNDS]
+        upper_buf = self.send_buffers[Field.NONANT_UPPER_BOUNDS]
         for s in self.opt.local_scenarios.values():
+            persistent_solver = (
+                s._solver_plugin if is_persistent(s._solver_plugin) else None
+            )
             for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
+                update_var = False
                 xvarlb = xvar.lb
                 if xvarlb is None:
                     xvarlb = -np.inf
-                if send_buf[ci] > xvarlb:
-                    # global_toc(f"{self.__class__.__name__}: tightened {xvar.name} lower bound from {xvar.lb} to {send_buf[ci]}", self.cylinder_rank == 0)
-                    xvar.lb = send_buf[ci]
+                if lower_buf[ci] > xvarlb:
+                    # global_toc(f"{self.__class__.__name__}: tightened {xvar.name} lower bound from {xvar.lb} to {lower_buf[ci]}", self.cylinder_rank == 0)
+                    xvar.lb = lower_buf[ci]
                     bounds_modified += 1
-        send_buf = self.send_buffers[Field.NONANT_UPPER_BOUNDS]
-        for s in self.opt.local_scenarios.values():
-            for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
+                    update_var = True
                 xvarub = xvar.ub
                 if xvarub is None:
                     xvarub = np.inf
-                if send_buf[ci] < xvarub:
-                    # global_toc(f"{self.__class__.__name__}: tightened {xvar.name} upper bound from {xvar.ub} to {send_buf[ci]}", self.cylinder_rank == 0)
-                    xvar.ub = send_buf[ci]
+                if upper_buf[ci] < xvarub:
+                    # global_toc(f"{self.__class__.__name__}: tightened {xvar.name} upper bound from {xvar.ub} to {upper_buf[ci]}", self.cylinder_rank == 0)
+                    xvar.ub = upper_buf[ci]
                     bounds_modified += 1
+                    update_var = True
+                if update_var and persistent_solver is not None:
+                    persistent_solver.update_var(xvar)
 
         bounds_modified /= len(self.opt.local_scenarios)
 
