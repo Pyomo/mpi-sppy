@@ -14,12 +14,14 @@ These tests require highspy and fail rather than skip without it; CI
 installs it for every job that runs this file.
 """
 
+import io
 import logging
 import os
 import shutil
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 import pyomo.environ as pyo
 
@@ -135,6 +137,32 @@ class Test_solver_log_dir(unittest.TestCase):
                 "between attempts\n"
                 "after second attempt\n",
             )
+
+    def test_python_logging_is_redirected_from_console(self):
+        log_path = os.path.join(self.tmpdir, "redirected.log")
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        logger = logging.getLogger("solver_log_console_test")
+        logger.setLevel(logging.INFO)
+        stdout_handler = logging.StreamHandler(stdout)
+        stderr_handler = logging.StreamHandler(stderr)
+        logger.addHandler(stdout_handler)
+        logging.getLogger().addHandler(stderr_handler)
+        try:
+            with unittest.mock.patch.object(sys, "stdout", stdout), \
+                    unittest.mock.patch.object(sys, "stderr", stderr):
+                with sputils.solver_log_python_logging(log_path):
+                    logger.info("redirect this record")
+        finally:
+            logger.removeHandler(stdout_handler)
+            logging.getLogger().removeHandler(stderr_handler)
+            stdout_handler.close()
+            stderr_handler.close()
+
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(stderr.getvalue(), "")
+        with open(log_path, encoding="utf-8") as stream:
+            self.assertEqual(stream.read(), "redirect this record\n")
 
     def test_set_solver_log_file_dispatch(self):
         log_path = os.path.join(self.tmpdir, "x.log")

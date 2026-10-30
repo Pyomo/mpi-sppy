@@ -10,6 +10,7 @@
 
 import logging
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -152,6 +153,20 @@ class TestRootLogger(unittest.TestCase):
         stream_handlers = [h for h in root_log.handlers
                            if isinstance(h, logging.StreamHandler)]
         self.assertGreater(len(stream_handlers), 0)
+
+    def test_importing_aph_does_not_configure_root_logger(self):
+        script = (
+            "import logging\n"
+            "assert not logging.getLogger().handlers\n"
+            "import mpisppy.opt.aph\n"
+            "assert not logging.getLogger().handlers\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == "__main__":
