@@ -7,7 +7,8 @@ In this section we describe some of the hub classes that are part of
 the ``mpi-sppy`` release. When using ``generic_cylinders.py``
 (see :ref:`generic_cylinders`), the hub algorithm is selected with a
 command-line flag. The default hub is PH; alternatives include
-``--APH``, ``--subgradient-hub``, ``--fwph-hub``, and ``--ph-primal-hub``.
+``--APH``, ``--subgradient-hub``, ``--fwph-hub``, ``--ph-primal-hub``, and
+``--aphfw-hub``.
 
 Many of these hubs have hooks for extension
 and modification provided in the form of :ref:`Extensions`.  Many of
@@ -75,6 +76,13 @@ APH
 
 An implementation of Asynchronous Projective Hedging as described in an OR
 paper by Eckstein, Watson, and Woodruff.
+
+FW-APH
+------
+
+Asynchronous projective hedging with Frank-Wolfe subproblem solves, selected
+with ``--aphfw-hub``. The algorithm is C++ and needs an optional compiled
+module, built from a clone of the repository; see :ref:`sec-aphfw`.
 
 Subgradient
 -----------
