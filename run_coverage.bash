@@ -253,6 +253,7 @@ run_phase "serial unit tests (serial)" \
         mpisppy/tests/test_sputils.py \
         mpisppy/tests/test_config.py \
         mpisppy/tests/test_log.py \
+        mpisppy/tests/test_listener_util.py \
         mpisppy/tests/test_scenario_tree.py \
         mpisppy/tests/test_nice_join.py \
         mpisppy/tests/test_solver_spec.py \
