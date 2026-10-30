@@ -731,24 +731,33 @@ class TestResumeABFarmer(unittest.TestCase):
         self.assertTrue(resumed.opt._resumed_from_checkpoint)
         self.assertEqual(resumed.BestOuterBound, spoke_bound)
 
-    def test_cylinder_convergence_writes_its_final_iteration(self):
-        """The post-sync convergence break must not skip the final write.
-
-        The initial check sees iteration 0 and continues; the check after the
-        first completed solve stops the wheel. The manifest must nevertheless
-        name iteration 1, not an older generation or nothing at all.
-        """
-        def converge_after_first_iteration(hub, *args, **kwargs):
-            return hub.opt._PHIter >= 1
+    def test_cylinder_convergence_between_checkpoint_points_keeps_last_write(self):
+        """Convergence at iteration 6 must not override a five-iteration cadence."""
+        def converge_after_six_iterations(hub, *args, **kwargs):
+            return hub.opt._PHIter >= 6
 
         with mock.patch.object(PHHub, "is_converged",
-                               new=converge_after_first_iteration):
+                               new=converge_after_six_iterations):
             hub = self._spin_hub(_options(
-                5, ckpt_dir=self.ckpt_dir,
-                checkpoint_every_iterations=10))
+                10, ckpt_dir=self.ckpt_dir,
+                checkpoint_every_iterations=5))
 
-        self.assertEqual(hub.opt._PHIter, 1)
-        self.assertEqual(_published_generation(self.ckpt_dir), 1)
+        self.assertEqual(hub.opt._PHIter, 6)
+        self.assertEqual(_published_generation(self.ckpt_dir), 5)
+
+    def test_cylinder_convergence_on_checkpoint_point_writes_that_iteration(self):
+        """The post-sync hook still writes when convergence lands on cadence."""
+        def converge_after_five_iterations(hub, *args, **kwargs):
+            return hub.opt._PHIter >= 5
+
+        with mock.patch.object(PHHub, "is_converged",
+                               new=converge_after_five_iterations):
+            hub = self._spin_hub(_options(
+                10, ckpt_dir=self.ckpt_dir,
+                checkpoint_every_iterations=5))
+
+        self.assertEqual(hub.opt._PHIter, 5)
+        self.assertEqual(_published_generation(self.ckpt_dir), 5)
 
     def test_writes_one_generation_and_a_manifest(self):
         """Retention is exactly one published generation."""

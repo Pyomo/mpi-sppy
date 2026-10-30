@@ -2004,21 +2004,11 @@ class PHBase(mpisppy.spopt.SPOpt):
                 self.extobject.enditer_after_sync()
 
             # The dedicated hook keeps this independent of extension attach
-            # order. It deliberately runs on both paths: an iteration that
-            # causes cylinder convergence still needs a final, post-sync
-            # checkpoint rather than the one from its preceding iteration.
+            # order. It runs before either path leaves the iteration;
+            # Checkpointer applies its normal cadence and deadline rules even
+            # when this iteration causes cylinder convergence.
             if have_extensions:
-                # Keep maybe_checkpoint's existing extension API: user
-                # extensions may override it without accepting arguments.
-                # Checkpointer reads this short-lived private flag to bypass
-                # its normal cadence for the completed iteration that ends
-                # the cylinder. The try/finally prevents the signal leaking
-                # into a later checkpoint point if another extension raises.
-                self._force_checkpoint = cylinder_converged
-                try:
-                    self.extobject.maybe_checkpoint()
-                finally:
-                    self._force_checkpoint = False
+                self.extobject.maybe_checkpoint()
 
             if cylinder_converged:
                 global_toc("Cylinder convergence", self.cylinder_rank == 0)

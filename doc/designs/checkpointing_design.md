@@ -1037,9 +1037,10 @@ Touch-points an implementation needs beyond the PoC's extension/subclass hacks:
    any state that hook changed; a bound a spoke sent during `sync_bounds` is in
    the same snapshot. This keeps the write independent of extension attachment
    order, including a model change a *user* extension makes in either end hook.
-   Cylinder convergence is tested after synchronization, but the checkpoint is
-   still written before its break, so the final converged iteration is not lost;
-   as before, `enditer_after_sync` itself remains skipped on that break.
+   Cylinder convergence is tested after synchronization. The checkpoint hook
+   still runs before its break, but a write follows the configured cadence,
+   deadline, or exhausted iteration limit; convergence alone does not force a
+   write. As before, `enditer_after_sync` remains skipped on that break.
 
    The xhatter `main()` loops have no `enditer` to borrow, so they call the same
    hook (via `InnerBoundNonantSpoke.maybe_checkpoint`) once per pass, at the
