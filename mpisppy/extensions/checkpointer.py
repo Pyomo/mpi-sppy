@@ -724,10 +724,8 @@ class Checkpointer(Extension):
         rule hold on a resumed run, where the limit counts this run's
         iterations and ``_PHIter`` counts the study's.
 
-        Only the iteration bounds are knowable here: convergence, the user
-        converger and ``--time-limit`` are all decided in the *next*
-        iteration's top half, and the cylinder-convergence test fires after
-        this hook.
+        Convergence and time limits may stop a run earlier, but do not make
+        this iteration the last one under these loop bounds.
         """
         stop = getattr(self.opt, "_stop_iteration", None)
         if stop is None:

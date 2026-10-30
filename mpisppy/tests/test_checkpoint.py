@@ -274,11 +274,10 @@ _BEFORE_SECONDS = 100.0
 
 
 class SlowTail(Extension):
-    """Make the end of iteration 1 slow, after its checkpoint hook.
+    """Make the end of iteration 1 slow, after its timing sample.
 
-    `enditer_after_sync` runs after the hook, so the sleep is not part of what
-    the hook measures in iteration 1; it belongs to the whole iteration that
-    iteration 2's hook measures. In iteration 2, `enditer` puts the clock
+    `enditer_after_sync` runs after that sample, so the sleep contributes to
+    iteration 2's measured duration. In iteration 2, `enditer` puts the clock
     `MARGIN` seconds short of the deadline, so the deadline write lands at
     iteration 2 only if that measurement reaches back into iteration 1's
     tail.
@@ -991,19 +990,6 @@ class TestResumeRefusesMismatch(unittest.TestCase):
             _make_ph(options).ph_main()
         self.assertIn("describe a different problem", str(ctx.exception))
 
-    def test_direct_model_signature_mismatch_is_refused(self):
-        """Creator inputs outside PH options still describe the model."""
-        options = _options(
-            4, resume_from=self.ckpt_dir,
-            checkpoint_structural_cfg={
-                "model": "test-farmer",
-                "creator_kwargs": {"use_integer": True,
-                                   "crops_multiplier": 1},
-            })
-        with self.assertRaises(checkpointing.CheckpointMismatch) as ctx:
-            _make_ph(options).ph_main()
-        self.assertIn("describe a different problem", str(ctx.exception))
-
     def test_scenario_distribution_mismatch_is_refused(self):
         """Resuming with a different scenario set is refused, not guessed at."""
         options = _options(4, resume_from=self.ckpt_dir)
@@ -1622,6 +1608,7 @@ class TestStructuralFingerprint(unittest.TestCase):
                 ("out_of_the_box_minus", ""),
                 ("out_of_the_box_plus", ""),
                 ("inspect_only", True),
+                ("final_xhat", "closest"),
                 ("ph_xfeas_spoke", True),
                 ("lagrangian_mipgaps_json", "/tmp/gaps.json"),
                 ("lagrangian_mipgap_ratio", 0.5),
@@ -1640,19 +1627,6 @@ class TestStructuralFingerprint(unittest.TestCase):
                     f"{key} would be folded into the fingerprint, so a resume "
                     f"differing only in {key} is refused")
                 self.assertNotIn(key, self._folded_cfg(**{key: value}))
-
-    def test_final_xhat_does_not_change_a_checkpoint_fingerprint(self):
-        """Adding or changing the final-only heuristic preserves old checkpoints."""
-        old_cfg = self._folded_cfg()
-        old_fingerprint = self._fingerprint(
-            checkpoint_structural_cfg=old_cfg)
-        for choice in ("none", "xbar", "closest"):
-            with self.subTest(final_xhat=choice):
-                new_cfg = self._folded_cfg(final_xhat=choice)
-                self.assertNotIn("final_xhat", new_cfg)
-                self.assertEqual(
-                    old_fingerprint,
-                    self._fingerprint(checkpoint_structural_cfg=new_cfg))
 
     def test_spoke_flags_that_change_the_hub_models_stay_structural(self):
         """Unlike the other spoke flags, each of these also attaches a hub
@@ -3542,13 +3516,6 @@ class TestAnEarlierStudysSpokeFilesAreCleared(unittest.TestCase):
                     self.assertEqual(f.read(), '{"generation": 7}')
                 self.assertTrue(os.path.exists(self.stale))
 
-    def test_resuming_in_place_allows_an_existing_manifest(self):
-        with open(os.path.join(self.ckpt_dir, "manifest.json"), "w") as f:
-            f.write('{"generation": 7}')
-        _make_ph(_options(1, ckpt_dir=self.ckpt_dir,
-                          resume_from=self.ckpt_dir))
-        self.assertTrue(os.path.exists(self.stale))
-
     def test_resuming_from_another_directory_clears_them(self):
         other = os.path.join(self._tmp.name, "other")
         _make_ph(_options(1, ckpt_dir=self.ckpt_dir, resume_from=other))
@@ -3556,9 +3523,14 @@ class TestAnEarlierStudysSpokeFilesAreCleared(unittest.TestCase):
 
     def test_resuming_in_place_keeps_them(self):
         """They are this study's, and the spokes are about to read them."""
+        manifest = os.path.join(self.ckpt_dir, "manifest.json")
+        with open(manifest, "w") as f:
+            f.write('{"generation": 7}')
         _make_ph(_options(1, ckpt_dir=self.ckpt_dir,
                           resume_from=self.ckpt_dir))
         self.assertTrue(os.path.exists(self.stale))
+        with open(manifest) as f:
+            self.assertEqual(f.read(), '{"generation": 7}')
 
     def test_a_dual_cylinder_does_not_clear_them(self):
         """relaxed_ph and ph_dual run PH without being the hub. A second

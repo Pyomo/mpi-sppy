@@ -1968,12 +1968,8 @@ class PHBase(mpisppy.spopt.SPOpt):
             # (see issue #762).
             self._check_prox_solve_succeeded()
 
-            # The duration --checkpoint-before-seconds predicts from, taken
-            # between passes through this point, so it is one whole iteration
-            # ending with this solve: the previous iteration's enditer, sync,
-            # enditer_after_sync and checkpoint write, then this one's
-            # start and solve. In the first iteration of a run, which has no
-            # previous pass, it starts where the loop starts instead.
+            # Predict --checkpoint-before-seconds from the time between
+            # completed solves; the first interval starts at loop entry.
             now = time.perf_counter()
             self._last_iteration_seconds = now - cycle_mark
             cycle_mark = now
@@ -1988,25 +1984,15 @@ class PHBase(mpisppy.spopt.SPOpt):
             elif hasattr(self.spcomm, "sync"):
                 self.spcomm.sync()
 
-            # A checkpoint is an end-of-iteration snapshot, so it has to see
-            # the state the iteration actually leaves behind. In particular,
-            # sync_bounds can receive a spoke's new best outer/inner bound,
-            # and sync_extensions can change extension-owned state. Writing
-            # before either silently loses them on a resume.
+            # Include synchronized bounds and extension state in the snapshot.
             cylinder_converged = bool(
                 self.spcomm and self.spcomm.is_converged())
 
-            # Keep the existing convergence semantics: this hook has always
-            # been skipped when the cylinder converges. On the ordinary path
-            # it is part of the completed iteration and belongs in the
-            # snapshot just like enditer above.
+            # Preserve this hook's existing skip on convergence.
             if have_extensions and not cylinder_converged:
                 self.extobject.enditer_after_sync()
 
-            # The dedicated hook keeps this independent of extension attach
-            # order. It runs before either path leaves the iteration;
-            # Checkpointer applies its normal cadence and deadline rules even
-            # when this iteration causes cylinder convergence.
+            # Apply the usual checkpoint schedule before either exit path.
             if have_extensions:
                 self.extobject.maybe_checkpoint()
 
