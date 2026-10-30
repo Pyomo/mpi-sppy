@@ -1968,31 +1968,14 @@ class PHBase(mpisppy.spopt.SPOpt):
             # (see issue #762).
             self._check_prox_solve_succeeded()
 
-            # The duration --checkpoint-before-seconds predicts from, taken
-            # between passes through this point, so it is one whole iteration
-            # ending with this solve: the previous iteration's enditer,
-            # checkpoint write, sync and enditer_after_sync, then this one's
-            # start and solve. In the first iteration of a run, which has no
-            # previous pass, it starts where the loop starts instead.
+            # Predict --checkpoint-before-seconds from the time between
+            # completed solves; the first interval starts at loop entry.
             now = time.perf_counter()
             self._last_iteration_seconds = now - cycle_mark
             cycle_mark = now
 
             if have_extensions:
                 self.extobject.enditer()
-                # The checkpoint write has its own hook, fired here rather
-                # than from some extension's enditer, so a checkpoint holds
-                # the whole end-of-iteration state no matter what order
-                # extensions were attached in -- including any model change
-                # an extension made in the enditer just above, which a
-                # resume would otherwise drop for good.
-                #
-                # This is the last point in the iteration where the state is
-                # still coherent and reachable: enditer_after_sync is not a
-                # substitute, because it is skipped on the cylinder
-                # convergence break below, so a run that ends that way would
-                # write nothing.
-                self.extobject.maybe_checkpoint()
 
             if hasattr(self.spcomm, "sync_nonants"):
                 self.spcomm.sync_nonants()
@@ -2001,12 +1984,21 @@ class PHBase(mpisppy.spopt.SPOpt):
             elif hasattr(self.spcomm, "sync"):
                 self.spcomm.sync()
 
-            if self.spcomm and self.spcomm.is_converged():
+            # Include synchronized bounds and extension state in the snapshot.
+            cylinder_converged = bool(
+                self.spcomm and self.spcomm.is_converged())
+
+            # Preserve this hook's existing skip on convergence.
+            if have_extensions and not cylinder_converged:
+                self.extobject.enditer_after_sync()
+
+            # Apply the usual checkpoint schedule before either exit path.
+            if have_extensions:
+                self.extobject.maybe_checkpoint()
+
+            if cylinder_converged:
                 global_toc("Cylinder convergence", self.cylinder_rank == 0)
                 break
-
-            if have_extensions:
-                self.extobject.enditer_after_sync()
 
             if dprogress and self.cylinder_rank == 0:
                 print("")

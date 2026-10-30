@@ -23,6 +23,7 @@ producing nonsense, and that the initially-fixed-nonant baseline survives the
 model swap -- without it a resumed run silently stops updating its best bound.
 """
 
+import copy
 import errno
 import json
 import math
@@ -71,6 +72,12 @@ def _options(max_iters, ckpt_dir=None, resume_from=None, **overrides):
         "tee-rank0-solves": False,
         "smoothed": 0,
         "time_limit": None,
+        # Direct construction has no Config object for checkpointing to
+        # inspect, so state the creator inputs that distinguish this model.
+        "checkpoint_structural_cfg": {
+            "model": "test-farmer",
+            "creator_kwargs": dict(CREATOR_KWARGS),
+        },
     }
     if ckpt_dir is not None:
         options["checkpoint_dir"] = ckpt_dir
@@ -175,6 +182,27 @@ class EndIterMutator(Extension):
     def restore_state(self, state):
         pass
 
+
+class EndIterAfterSyncMutator(Extension):
+    """Make a visible model change in the last normal hub hook.
+
+    ``enditer_after_sync`` is allowed to change models just like ``enditer``.
+    The checkpoint must therefore run after it on the ordinary iteration
+    path, or a zero-iteration resumed leg loses the change permanently.
+    """
+
+    def enditer_after_sync(self):
+        for s in self.opt.local_scenarios.values():
+            for ndn_i in s._mpisppy_data.nonant_indices:
+                s._mpisppy_model.rho[ndn_i]._value *= 1.05
+
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
+
+
 class ClockRewinder(Extension):
     """Trip the --time-limit break at a chosen iteration, without a clock race.
 
@@ -246,11 +274,10 @@ _BEFORE_SECONDS = 100.0
 
 
 class SlowTail(Extension):
-    """Make the end of iteration 1 slow, after its checkpoint hook.
+    """Make the end of iteration 1 slow, after its timing sample.
 
-    `enditer_after_sync` runs after the hook, so the sleep is not part of what
-    the hook measures in iteration 1; it belongs to the whole iteration that
-    iteration 2's hook measures. In iteration 2, `enditer` puts the clock
+    `enditer_after_sync` runs after that sample, so the sleep contributes to
+    iteration 2's measured duration. In iteration 2, `enditer` puts the clock
     `MARGIN` seconds short of the deadline, so the deadline write lands at
     iteration 2 only if that measurement reaches back into iteration 1's
     tail.
@@ -340,6 +367,8 @@ def _extension_class(name):
         return MidIterMutator
     if name == "enditer_mutator":
         return EndIterMutator
+    if name == "enditer_after_sync_mutator":
+        return EndIterAfterSyncMutator
     if name == "recorder":
         return StateRecorder
     if name == "coeff_rho":
@@ -701,6 +730,34 @@ class TestResumeABFarmer(unittest.TestCase):
         self.assertTrue(resumed.opt._resumed_from_checkpoint)
         self.assertEqual(resumed.BestOuterBound, spoke_bound)
 
+    def test_cylinder_convergence_between_checkpoint_points_keeps_last_write(self):
+        """Convergence at iteration 6 must not override a five-iteration cadence."""
+        def converge_after_six_iterations(hub, *args, **kwargs):
+            return hub.opt._PHIter >= 6
+
+        with mock.patch.object(PHHub, "is_converged",
+                               new=converge_after_six_iterations):
+            hub = self._spin_hub(_options(
+                10, ckpt_dir=self.ckpt_dir,
+                checkpoint_every_iterations=5))
+
+        self.assertEqual(hub.opt._PHIter, 6)
+        self.assertEqual(_published_generation(self.ckpt_dir), 5)
+
+    def test_cylinder_convergence_on_checkpoint_point_writes_that_iteration(self):
+        """The post-sync hook still writes when convergence lands on cadence."""
+        def converge_after_five_iterations(hub, *args, **kwargs):
+            return hub.opt._PHIter >= 5
+
+        with mock.patch.object(PHHub, "is_converged",
+                               new=converge_after_five_iterations):
+            hub = self._spin_hub(_options(
+                10, ckpt_dir=self.ckpt_dir,
+                checkpoint_every_iterations=5))
+
+        self.assertEqual(hub.opt._PHIter, 5)
+        self.assertEqual(_published_generation(self.ckpt_dir), 5)
+
     def test_writes_one_generation_and_a_manifest(self):
         """Retention is exactly one published generation."""
         _make_ph(_options(self.STOP, ckpt_dir=self.ckpt_dir)).ph_main()
@@ -967,6 +1024,72 @@ class TestResumeRefusesMismatch(unittest.TestCase):
             with open(leaf_path, "wb") as f:
                 f.write(original)
 
+    def test_leaf_metadata_must_match_the_manifest(self):
+        manifest = checkpointing._read_manifest(self.ckpt_dir)
+        leaf_path = os.path.join(
+            self.ckpt_dir, checkpointing.HUB_SUBDIR,
+            checkpointing._generation_dirname(manifest["generation"]),
+            checkpointing._leaf_filename(0))
+        with open(leaf_path, "rb") as f:
+            original = f.read()
+        mutations = {
+            "format_version": lambda leaf: leaf.update(format_version=-1),
+            "backend": lambda leaf: leaf.update(backend="wrong"),
+            "generation": lambda leaf: leaf.update(
+                generation=leaf["generation"] + 1),
+            "structural_fingerprint": lambda leaf: leaf.update(
+                structural_fingerprint="wrong"),
+            "geometry": lambda leaf: leaf.update(geometry={
+                **leaf["geometry"], "rank": 99}),
+        }
+        try:
+            for key, mutate in mutations.items():
+                with self.subTest(key=key):
+                    leaf = pickle.loads(original)
+                    mutate(leaf)
+                    with open(leaf_path, "wb") as f:
+                        pickle.dump(leaf, f)
+                    resumed = _make_ph(_options(4, resume_from=self.ckpt_dir))
+                    with self.assertRaises(checkpointing.CheckpointMismatch) \
+                            as ctx:
+                        checkpointing.load_checkpoint(resumed, self.ckpt_dir)
+                    self.assertIn(key, str(ctx.exception))
+        finally:
+            with open(leaf_path, "wb") as f:
+                f.write(original)
+
+    def test_leaf_model_files_must_exactly_cover_local_scenarios(self):
+        manifest = checkpointing._read_manifest(self.ckpt_dir)
+        leaf_path = os.path.join(
+            self.ckpt_dir, checkpointing.HUB_SUBDIR,
+            checkpointing._generation_dirname(manifest["generation"]),
+            checkpointing._leaf_filename(0))
+        with open(leaf_path, "rb") as f:
+            original = f.read()
+
+        def missing(leaf):
+            leaf["model_files"].pop("scen0")
+
+        def redirected(leaf):
+            leaf["model_files"]["scen0"] = leaf["model_files"]["scen1"]
+
+        try:
+            for label, mutate in (("missing", missing),
+                                  ("redirected", redirected)):
+                with self.subTest(mapping=label):
+                    leaf = pickle.loads(original)
+                    mutate(leaf)
+                    with open(leaf_path, "wb") as f:
+                        pickle.dump(leaf, f)
+                    resumed = _make_ph(_options(4, resume_from=self.ckpt_dir))
+                    with self.assertRaises(checkpointing.CheckpointMismatch) \
+                            as ctx:
+                        checkpointing.load_checkpoint(resumed, self.ckpt_dir)
+                    self.assertIn("model files", str(ctx.exception))
+        finally:
+            with open(leaf_path, "wb") as f:
+                f.write(original)
+
     def test_missing_manifest_is_refused_clearly(self):
         options = _options(4, resume_from=os.path.join(self._tmp.name, "nope"))
         with self.assertRaises(checkpointing.CheckpointMismatch) as ctx:
@@ -1174,6 +1297,7 @@ class TestSetupRefusals(unittest.TestCase):
                 self.options = {
                     "checkpoint_dir": tempfile.mkdtemp(),
                     "checkpoint_backend": checkpointing.DILL_RELOAD_BACKEND,
+                    "checkpoint_structural_cfg": {},
                 }
                 self.n_proc = 1
                 self.cylinder_rank = 0
@@ -1203,6 +1327,24 @@ class TestSetupRefusals(unittest.TestCase):
         with self.assertRaises(RuntimeError) as ctx:
             NotPH()._restore_from_checkpoint_if_resuming()
         self.assertIn("synchronous PH hub", str(ctx.exception))
+
+    def test_direct_api_requires_a_model_signature(self):
+        """A direct PH caller has no Config object to fingerprint for it."""
+        opt = _make_ph(_options(1))
+        opt.options.pop("checkpoint_structural_cfg")
+        opt.options["checkpoint_dir"] = tempfile.mkdtemp()
+        opt.options["checkpoint_backend"] = checkpointing.DILL_RELOAD_BACKEND
+        with self.assertRaises(RuntimeError) as ctx:
+            Checkpointer(opt)
+        self.assertIn("checkpoint_structural_cfg", str(ctx.exception))
+
+    def test_direct_api_resume_requires_a_model_signature_too(self):
+        """Hub resume does not construct a Checkpointer of its own."""
+        opt = _make_ph(_options(1, resume_from="/does/not/matter"))
+        opt.options.pop("checkpoint_structural_cfg")
+        with self.assertRaises(RuntimeError) as ctx:
+            checkpointing.load_checkpoint(opt, "/does/not/matter")
+        self.assertIn("checkpoint_structural_cfg", str(ctx.exception))
 
     def test_colliding_scenario_filenames_are_refused_at_setup(self):
         stub = self._stub()
@@ -1466,6 +1608,7 @@ class TestStructuralFingerprint(unittest.TestCase):
                 ("out_of_the_box_minus", ""),
                 ("out_of_the_box_plus", ""),
                 ("inspect_only", True),
+                ("final_xhat", "closest"),
                 ("ph_xfeas_spoke", True),
                 ("lagrangian_mipgaps_json", "/tmp/gaps.json"),
                 ("lagrangian_mipgap_ratio", 0.5),
@@ -2522,6 +2665,22 @@ class TestCheckpointHookPlacement(unittest.TestCase):
             msg="the checkpoint was written before the last enditer, so the "
                 "model change that hook made is missing from it")
 
+    def test_enditer_after_sync_model_changes_are_in_the_checkpoint(self):
+        stopped = _make_ph(
+            _options(self.STOP, ckpt_dir=self.ckpt_dir),
+            extension_name="enditer_after_sync_mutator")
+        stopped.ph_main()
+
+        resumed = _make_ph(
+            _options(0, resume_from=self.ckpt_dir),
+            extension_name="enditer_after_sync_mutator")
+        resumed.ph_main()
+
+        self.assertEqual(
+            _primal_snapshot(resumed), _primal_snapshot(stopped),
+            msg="the checkpoint was written before enditer_after_sync, so "
+                "the final synchronized model change was lost")
+
 
 class _SpokeStub:
     """Stands in for the spoke communicator the Checkpointer reads."""
@@ -2647,6 +2806,37 @@ class _TwoRankComm:
 
     def Barrier(self):
         pass
+
+
+class TestDualSpokeWriteAgreement(unittest.TestCase):
+    """A dual file must agree on both its iteration and process invocation."""
+
+    def test_equal_iterations_from_different_processes_are_rejected(self):
+        class OtherRank:
+            def Get_size(self):
+                return 2
+
+            def allreduce(self, value, op=None):
+                return 2
+
+            def allgather(self, value):
+                return [value, ("other-process", value[1])]
+
+        state = {"generation": 2, "write_epoch": "this-process"}
+        with mock.patch.object(checkpointing, "_cylinder_comm",
+                               return_value=OtherRank()):
+            restored, warning = checkpointing.agree_dual_spoke_restore(
+                types.SimpleNamespace(), state)
+        self.assertIsNone(restored)
+        self.assertIn("different iterations or runs", warning)
+
+    def test_old_files_without_a_write_identity_are_rejected(self):
+        with mock.patch.object(checkpointing, "_cylinder_comm",
+                               return_value=None):
+            restored, warning = checkpointing.agree_dual_spoke_restore(
+                types.SimpleNamespace(), {"generation": 2})
+        self.assertIsNone(restored)
+        self.assertIn("no write identity", warning)
 
 
 class TestSpokeIncumbentFile(unittest.TestCase):
@@ -3029,6 +3219,40 @@ class TestSpokeIncumbentFile(unittest.TestCase):
                         opt, self.ckpt_dir, cylinder, ordinal)
                 self.assertIn(key, str(ctx.exception))
 
+    def test_dual_file_geometry_and_identity_must_match(self):
+        opt = _make_ph(_options(1))
+        cylinder, ordinal = "PHDualSpoke", 0
+        spokes_dir = os.path.join(self.ckpt_dir, checkpointing.SPOKES_SUBDIR)
+        os.makedirs(spokes_dir)
+        path = os.path.join(spokes_dir, checkpointing._spoke_filename(
+            cylinder, ordinal, opt.cylinder_rank))
+        state = {
+            "format_version": checkpointing.FORMAT_VERSION,
+            "kind": "dual-spoke-ph-state",
+            "cylinder": cylinder,
+            "ordinal": ordinal,
+            "rank": opt.cylinder_rank,
+            "structural_fingerprint":
+                checkpointing.structural_fingerprint(opt.options),
+            "geometry": checkpointing.geometry(opt),
+            "generation": 3,
+            "Wbar": {},
+        }
+        for label, mutate in (
+                ("geometry", lambda s: s["geometry"].update(n_proc=99)),
+                ("identity", lambda s: s.update(ordinal=99))):
+            with self.subTest(label=label):
+                altered = copy.deepcopy(state)
+                mutate(altered)
+                with open(path, "wb") as f:
+                    pickle.dump(altered, f)
+                with self.assertRaises(checkpointing.CheckpointMismatch) \
+                        as ctx:
+                    checkpointing.load_dual_spoke_state(
+                        opt, self.ckpt_dir, cylinder, ordinal)
+                self.assertIn("geometry" if label == "geometry" else
+                              "does not belong", str(ctx.exception))
+
     def test_a_variable_the_model_no_longer_has_is_refused(self):
         """A partially restored incumbent is a solution that was never
         feasible for anything."""
@@ -3039,6 +3263,44 @@ class TestSpokeIncumbentFile(unittest.TestCase):
         resumed = _xhat_eval(resume_from=self.ckpt_dir)
         with self.assertRaises(checkpointing.CheckpointMismatch):
             checkpointing.restore_spoke_incumbent(resumed, state)
+
+    def test_a_checkpoint_missing_a_model_variable_is_refused(self):
+        """A partial cache would otherwise apply fresh-model values on load."""
+        _, path = self._write_one()
+        with open(path, "rb") as f:
+            state = pickle.load(f)
+        values = state["solutions"]["scen0"]["values"]
+        del values[next(iter(values))]
+        resumed = _xhat_eval(resume_from=self.ckpt_dir)
+        with self.assertRaises(checkpointing.CheckpointMismatch) as ctx:
+            checkpointing.restore_spoke_incumbent(resumed, state)
+        self.assertIn("missing", str(ctx.exception))
+
+    def test_spoke_file_geometry_and_identity_must_match(self):
+        _, path = self._write_one()
+        with open(path, "rb") as f:
+            original = f.read()
+        try:
+            mutations = {
+                "geometry": lambda state: state["geometry"].update(rank=99),
+                "identity": lambda state: state.update(ordinal=99),
+            }
+            for label, mutate in mutations.items():
+                with self.subTest(label=label):
+                    state = pickle.loads(original)
+                    mutate(state)
+                    with open(path, "wb") as f:
+                        pickle.dump(state, f)
+                    resumed = _xhat_eval(resume_from=self.ckpt_dir)
+                    with self.assertRaises(checkpointing.CheckpointMismatch) \
+                            as ctx:
+                        checkpointing.load_spoke_incumbent(
+                            resumed, self.ckpt_dir, self.CYLINDER, 2)
+                    self.assertIn("does not belong" if label == "identity"
+                                  else "geometry", str(ctx.exception))
+        finally:
+            with open(path, "wb") as f:
+                f.write(original)
 
 
 class TestCheckpointerSpokeMode(unittest.TestCase):
@@ -3240,6 +3502,20 @@ class TestAnEarlierStudysSpokeFilesAreCleared(unittest.TestCase):
         _make_ph(_options(1, ckpt_dir=self.ckpt_dir))
         self.assertFalse(os.path.exists(self.stale))
 
+    def test_a_fresh_run_refuses_an_existing_manifest(self):
+        manifest = os.path.join(self.ckpt_dir, "manifest.json")
+        with open(manifest, "w") as f:
+            f.write('{"generation": 7}')
+        for resume_from in (None, os.path.join(self._tmp.name, "other")):
+            with self.subTest(resume_from=resume_from):
+                with self.assertRaisesRegex(RuntimeError,
+                                            "already holds a manifest"):
+                    _make_ph(_options(1, ckpt_dir=self.ckpt_dir,
+                                      resume_from=resume_from))
+                with open(manifest) as f:
+                    self.assertEqual(f.read(), '{"generation": 7}')
+                self.assertTrue(os.path.exists(self.stale))
+
     def test_resuming_from_another_directory_clears_them(self):
         other = os.path.join(self._tmp.name, "other")
         _make_ph(_options(1, ckpt_dir=self.ckpt_dir, resume_from=other))
@@ -3247,9 +3523,14 @@ class TestAnEarlierStudysSpokeFilesAreCleared(unittest.TestCase):
 
     def test_resuming_in_place_keeps_them(self):
         """They are this study's, and the spokes are about to read them."""
+        manifest = os.path.join(self.ckpt_dir, "manifest.json")
+        with open(manifest, "w") as f:
+            f.write('{"generation": 7}')
         _make_ph(_options(1, ckpt_dir=self.ckpt_dir,
                           resume_from=self.ckpt_dir))
         self.assertTrue(os.path.exists(self.stale))
+        with open(manifest) as f:
+            self.assertEqual(f.read(), '{"generation": 7}')
 
     def test_a_dual_cylinder_does_not_clear_them(self):
         """relaxed_ph and ph_dual run PH without being the hub. A second

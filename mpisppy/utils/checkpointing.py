@@ -131,6 +131,8 @@ NON_STRUCTURAL_CFG_KEYS = frozenset({
     "subgradient", "ph_primal_hub", "ph_dual", "relaxed_ph",
     "ph_xfeas_spoke", "lagranger", "xhatlooper", "xhatspecific",
     "slammax", "slammin", "certified_outer_bound",
+    # This hub heuristic runs only after the checkpointed PH iterations.
+    "final_xhat",
     # The certified spoke's cushion only loosens the bound that spoke
     # reports; the hub keeps its best outer bound across a resume either way.
     "certified_outer_bound_cushion",
@@ -182,6 +184,28 @@ def structural_fingerprint(options):
         payload[f"cfg:{k}"] = _canonical(v)
     blob = json.dumps(payload, sort_keys=True).encode("utf-8")
     return hashlib.sha256(blob).hexdigest()
+
+
+def require_checkpoint_structural_cfg(options):
+    """Require direct callers to state the model configuration they own.
+
+    The generic-cylinder path builds this from every structural Config entry,
+    but direct PH/Xhat callers hand us only ``opt.options``. Their scenario
+    creator and its arguments otherwise never reach the fingerprint, so a
+    checkpoint for one model can be resumed as another with the same geometry.
+    An empty dict is valid for a creator with no structural inputs; omitting
+    the key is not.
+    """
+    if "checkpoint_structural_cfg" not in options:
+        raise RuntimeError(
+            "Checkpointing through the direct API requires "
+            "options['checkpoint_structural_cfg'] to describe the model "
+            "creator and its structural inputs. The generic-cylinder path "
+            "sets it automatically.")
+    if not isinstance(options["checkpoint_structural_cfg"], dict):
+        raise RuntimeError(
+            "options['checkpoint_structural_cfg'] must be a dict of stable "
+            "model configuration values.")
 
 
 def sanitize_for_filename(name):
@@ -420,9 +444,9 @@ def agree_one_write(opt, state, key):
     * ``"agreed"``  -- every rank has one, all from the same write; detail is
       the agreed value.
 
-    ``key`` identifies the write: a field name (the iteration, for a dual
-    cylinder) or a function of the state (``spoke_write_id``, for an xhat
-    spoke).
+    ``key`` identifies the write: a field name or a function of the state
+    (the write epoch and iteration for a dual cylinder, or
+    ``spoke_write_id`` for an xhat spoke).
 
     Collective. Every rank of the cylinder must call it, including the ranks
     whose ``state`` is None.
@@ -610,18 +634,21 @@ def agree_spoke_restore(opt, state):
 
 
 def agree_dual_spoke_restore(opt, state):
-    """The same agreement for a dual cylinder's W, keyed on the iteration.
+    """The same agreement for a dual cylinder's W, keyed on its write run.
 
     Nothing here is broadcast: W is per scenario and so per rank. What must
-    hold is that every rank restores the W of the *same* iteration. Ranks
-    that restore W from different iterations hand ``Compute_Xbar`` an
-    allreduce over values belonging to two different points of the run --
+    hold is that every rank restores the W of the *same* iteration of the
+    same process invocation. Ranks that restore W from different writes hand
+    ``Compute_Xbar`` an allreduce over values belonging to different
+    points of the run --
     and under ``--ph-primal-hub`` that blended W is what the hub's W is
     built from. No error and no warning, like the xhat case.
 
     Returns ``(state, warning)``. Collective; see :func:`agree_one_write`.
     """
-    verdict, detail = agree_one_write(opt, state, "generation")
+    verdict, detail = agree_one_write(
+        opt, state, lambda saved: (saved.get("write_epoch"),
+                                   saved["generation"]))
     if verdict == "none":
         return None, None
     if verdict == "partial":
@@ -631,11 +658,20 @@ def agree_dual_spoke_restore(opt, state):
             f"dual weights, so none of them restores any: a W taken from "
             f"some ranks and not others is not the W this study had")
     if verdict == "differ":
+        if any(not epoch for epoch, _ in detail):
+            return None, (
+                "some ranks of this cylinder have checkpointed dual weights "
+                "without a write identity, so none of them restores any: "
+                "their files cannot be proven to belong to one write")
         return None, (
             f"the ranks of this cylinder checkpointed dual weights from "
-            f"different iterations ({detail}), so none of them restores any: "
-            f"a W half from one iteration and half from another is not the W "
-            f"this study had")
+            f"different iterations or runs ({detail}), so none of them "
+            f"restores any: their W cannot be combined safely")
+    if not state.get("write_epoch"):
+        return None, (
+            "this cylinder's checkpointed dual weights have no write "
+            "identity, so none of them restores any: their files cannot "
+            "be proven to belong to one write")
     return state, None
 
 
@@ -995,6 +1031,11 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
     (``Checkpointer.maybe_checkpoint``) warns and carries on with the previous
     generation still published and still resumable.
     """
+    run_agreed(
+        opt, lambda: require_checkpoint_structural_cfg(opt.options),
+        "describe their checkpoint's structural model configuration, so none "
+        "of them writes one")
+
     # Checked before anything rank-local: it depends only on the backend name
     # and whether dill is importable, so every rank reaches the same verdict
     # and there is nothing to agree on.
@@ -1290,8 +1331,10 @@ def _read_manifest(ckpt_dir, missing_ok=False):
 #: The hub leaf keys a resume reads by name. The load refuses a leaf missing
 #: any of them, so the refusal is agreed across the hub's ranks.
 LEAF_KEYS_READ_ON_RESUME = (
-    "generation", "initially_fixed_nonants", "trivial_bound",
-    "best_bound_obj_val", "best_outer_bound", "best_solution_obj_val",
+    "format_version", "backend", "generation", "geometry",
+    "structural_fingerprint", "model_files", "initially_fixed_nonants",
+    "trivial_bound", "best_bound_obj_val", "best_outer_bound",
+    "best_solution_obj_val", "extension_state",
 )
 
 
@@ -1302,6 +1345,7 @@ def load_checkpoint(opt, ckpt_dir):
     responsible for splicing the models into the run (see
     ``PHBase._resume_from_checkpoint``).
     """
+    require_checkpoint_structural_cfg(opt.options)
     manifest = _read_manifest(ckpt_dir)
 
     if manifest.get("format_version") != FORMAT_VERSION:
@@ -1358,6 +1402,10 @@ def load_checkpoint(opt, ckpt_dir):
     # reads the bounds outside one, before the hub's next collective: a leaf
     # without one would raise KeyError on that rank alone and leave the
     # others waiting in it.
+    if not isinstance(leaf, dict):
+        raise CheckpointMismatch(
+            f"The checkpoint state '{leaf_path}' is not a dictionary, so it "
+            "was not written by this mpi-sppy or has been damaged.")
     missing = [key for key in LEAF_KEYS_READ_ON_RESUME if key not in leaf]
     if missing:
         raise CheckpointMismatch(
@@ -1366,14 +1414,36 @@ def load_checkpoint(opt, ckpt_dir):
             f"or has been damaged."
         )
 
-    have = sorted(opt.local_scenarios.keys())
-    want = leaf["geometry"]["scenario_names"]
-    if have != want:
+    expected_leaf = {
+        "format_version": manifest["format_version"],
+        "backend": backend,
+        "generation": generation,
+        "structural_fingerprint": manifest["structural_fingerprint"],
+    }
+    mismatched = [key for key, value in expected_leaf.items()
+                  if leaf[key] != value]
+    if mismatched:
         raise CheckpointMismatch(
-            f"Rank {rank} now owns scenarios {have}, but the checkpoint in "
-            f"'{ckpt_dir}' was written with {want} on that rank. Resuming "
-            f"requires an identical scenario-to-rank distribution."
+            f"The checkpoint state '{leaf_path}' does not match its manifest "
+            f"for {', '.join(mismatched)}, so it is stale or has been "
+            "damaged.")
+
+    expected_geometry = geometry(opt)
+    if leaf["geometry"] != expected_geometry:
+        raise CheckpointMismatch(
+            f"Rank {rank}'s checkpoint geometry does not match this run. "
+            "Resuming requires an identical scenario-to-rank distribution."
         )
+
+    expected_model_files = {
+        sname: _model_filename(rank, sname)
+        for sname in opt.local_scenarios
+    }
+    if leaf["model_files"] != expected_model_files:
+        raise CheckpointMismatch(
+            f"The checkpoint state '{leaf_path}' does not have exactly the "
+            "model files this rank's scenarios require, so it is stale or "
+            "has been damaged.")
 
     models = {}
     for sname, fname in leaf["model_files"].items():
@@ -1452,6 +1522,7 @@ def spoke_incumbent_state(opt, cylinder, ordinal, best_inner_bound=None,
     """The dict written by ``write_spoke_incumbent``, or None if there is
     nothing to write yet. ``_cache_best_solution`` caches every scenario at
     once, so one scenario without a cache means none has one."""
+    require_checkpoint_structural_cfg(opt.options)
     solutions = {}
     for sname, s in opt.local_scenarios.items():
         cache = s._mpisppy_data.best_solution_cache
@@ -1565,6 +1636,7 @@ def load_spoke_incumbent(opt, ckpt_dir, cylinder, ordinal):
     this run is an error, for the same reason the hub refuses one -- values
     from a different model are wrong answers, not stale ones.
     """
+    require_checkpoint_structural_cfg(opt.options)
     path = os.path.join(
         ckpt_dir, SPOKES_SUBDIR,
         _spoke_filename(cylinder, ordinal, opt.cylinder_rank),
@@ -1596,12 +1668,18 @@ def load_spoke_incumbent(opt, ckpt_dir, cylinder, ordinal):
             f"differently from this one, so its variable values do not "
             f"describe this model."
         )
-    have = sorted(opt.local_scenarios.keys())
-    want = state["geometry"]["scenario_names"]
-    if have != want:
+    if state.get("kind") != "spoke-incumbent":
         raise CheckpointMismatch(
-            f"Rank {opt.cylinder_rank} of this spoke owns scenarios {have}, "
-            f"but '{path}' was written with {want} on that rank."
+            f"The incumbent file '{path}' holds {state.get('kind')!r}, not "
+            "a spoke incumbent.")
+    if (state.get("cylinder"), state.get("ordinal"), state.get("rank")) != (
+            str(cylinder), int(ordinal), int(opt.cylinder_rank)):
+        raise CheckpointMismatch(
+            f"The incumbent file '{path}' does not belong to this spoke.")
+    if state.get("geometry") != geometry(opt):
+        raise CheckpointMismatch(
+            f"The incumbent file '{path}' has checkpoint geometry that does "
+            "not match this spoke's rank layout."
         )
     return state
 
@@ -1684,22 +1762,22 @@ def restore_spoke_incumbent(opt, state):
     for sname, s in opt.local_scenarios.items():
         entry = state["solutions"][sname]
         by_name = entry["values"]
-        cache = pyo.ComponentMap()
-        found = 0
-        for var in s.component_data_objects(pyo.Var):
-            if var.name not in by_name:
-                continue
-            cache[var] = by_name[var.name]
-            found += 1
-        if found != len(by_name):
-            missing = set(by_name) - {
-                var.name for var in s.component_data_objects(pyo.Var)
-            }
+        model_vars = {
+            var.name: var for var in s.component_data_objects(pyo.Var)
+        }
+        missing = set(model_vars) - set(by_name)
+        unknown = set(by_name) - set(model_vars)
+        if missing or unknown:
             raise CheckpointMismatch(
-                f"The checkpointed incumbent for scenario '{sname}' names "
-                f"{len(missing)} variable(s) this model does not have "
-                f"(e.g. {sorted(missing)[:3]}), so it cannot be restored."
+                f"The checkpointed incumbent for scenario '{sname}' is not "
+                f"a complete model snapshot: it is missing {len(missing)} "
+                f"model variable(s) and names {len(unknown)} unknown one(s) "
+                f"(e.g. missing {sorted(missing)[:3]}, unknown "
+                f"{sorted(unknown)[:3]}), so it cannot be restored."
             )
+        cache = pyo.ComponentMap()
+        for name, value in by_name.items():
+            cache[model_vars[name]] = value
         if entry["inner_bound"] is None or \
                 not math.isfinite(entry["inner_bound"]):
             # Written before the write path refused this, or hand-edited.
@@ -1743,8 +1821,8 @@ def restore_spoke_incumbent(opt, state):
 # which is what a cylinder nobody synchronizes with needs.
 # ---------------------------------------------------------------------------
 
-def dual_spoke_state(opt, cylinder, ordinal, generation, class_count=None,
-                     wbar=None):
+def dual_spoke_state(opt, cylinder, ordinal, generation, write_epoch,
+                     class_count=None, wbar=None):
     """The dict written by ``write_dual_spoke_state``.
 
     W is keyed by ``(ndn, i)`` and the values by variable name -- the two
@@ -1752,6 +1830,9 @@ def dual_spoke_state(opt, cylinder, ordinal, generation, class_count=None,
     ``wbar`` is E[W] per node at the time of the write (``Wbar_by_node``),
     which the restore checks the restored weights reproduce.
     """
+    if not isinstance(write_epoch, str) or not write_epoch:
+        raise ValueError("A dual-spoke write requires a nonempty write identity")
+    require_checkpoint_structural_cfg(opt.options)
     duals = {}
     for sname, s in opt.local_scenarios.items():
         model = s._mpisppy_model
@@ -1773,9 +1854,10 @@ def dual_spoke_state(opt, cylinder, ordinal, generation, class_count=None,
         "rank": int(opt.cylinder_rank),
         # This cylinder's own iteration count, which is not the hub's: the
         # wheel does not march the cylinders in step and this is not an
-        # attempt to. It is recorded so a log can say how far the cylinder
-        # had got, and it is not compared against anything on the way back in.
+        # attempt to. It is paired with write_epoch to ensure all ranks
+        # restore weights from the same write run and iteration.
         "generation": int(generation),
+        "write_epoch": write_epoch,
         "geometry": geometry(opt),
         "structural_fingerprint": structural_fingerprint(opt.options),
         "Wbar": None if wbar is None else {
@@ -1785,13 +1867,13 @@ def dual_spoke_state(opt, cylinder, ordinal, generation, class_count=None,
 
 
 def write_dual_spoke_state(opt, ckpt_dir, cylinder, ordinal, generation,
-                           class_count=None, wbar=None):
+                           write_epoch, class_count=None, wbar=None):
     """Write this cylinder's PH state, latest-wins. Returns the path.
 
     Temp-then-rename like every other file here, so a kill mid-write leaves
     the previous iteration's state intact rather than a truncated file.
     """
-    state = dual_spoke_state(opt, cylinder, ordinal, generation,
+    state = dual_spoke_state(opt, cylinder, ordinal, generation, write_epoch,
                              class_count=class_count, wbar=wbar)
     spokes_dir = os.path.join(ckpt_dir, SPOKES_SUBDIR)
     os.makedirs(spokes_dir, exist_ok=True)
@@ -1811,6 +1893,7 @@ def load_dual_spoke_state(opt, ckpt_dir, cylinder, ordinal):
     cylinder's first completed iteration -- and present but wrong is an
     error, as everywhere else here.
     """
+    require_checkpoint_structural_cfg(opt.options)
     path = os.path.join(
         ckpt_dir, SPOKES_SUBDIR,
         _spoke_filename(cylinder, ordinal, opt.cylinder_rank),
@@ -1848,12 +1931,20 @@ def load_dual_spoke_state(opt, ckpt_dir, cylinder, ordinal):
             f"{' or '.join(missing)}, so it was not written by this mpi-sppy "
             f"or has been damaged."
         )
-    have = sorted(opt.local_scenarios.keys())
-    want = state["geometry"]["scenario_names"]
-    if have != want:
+    if "write_epoch" in state and (not isinstance(state["write_epoch"], str)
+                                    or not state["write_epoch"]):
         raise CheckpointMismatch(
-            f"Rank {opt.cylinder_rank} of this cylinder owns scenarios "
-            f"{have}, but '{path}' was written with {want} on that rank."
+            f"The cylinder state file '{path}' has an invalid write identity."
+        )
+    if (state.get("cylinder"), state.get("ordinal"), state.get("rank")) != (
+            str(cylinder), int(ordinal), int(opt.cylinder_rank)):
+        raise CheckpointMismatch(
+            f"The cylinder state file '{path}' does not belong to this "
+            "cylinder.")
+    if state.get("geometry") != geometry(opt):
+        raise CheckpointMismatch(
+            f"The cylinder state file '{path}' has checkpoint geometry that "
+            "does not match this cylinder's rank layout."
         )
     return state
 

@@ -140,6 +140,7 @@ import math
 import os
 import shutil
 import time
+import uuid
 
 import mpisppy.utils.checkpointing as ckpt
 from mpisppy import global_toc
@@ -255,6 +256,10 @@ class Checkpointer(Extension):
         #: if it started from W=0. Read by tests, which otherwise cannot tell
         #: a restored W from one the cylinder converged to on its own.
         self.restored_dual_generation = None
+        # One identity per process invocation of this dual cylinder. Paired
+        # with its local iteration, it distinguishes writes after a resume
+        # (which starts the dual cylinder's iteration counter at zero again).
+        self._dual_write_epoch = None
         #: The incumbent objective this spoke restored from disk, or None if
         #: it started without one. Read by tests, which otherwise cannot tell
         #: a restored incumbent from one the spoke happened to re-find.
@@ -301,6 +306,7 @@ class Checkpointer(Extension):
         ``checkpointing.run_agreed``.
         """
         opt = self.opt
+        ckpt.require_checkpoint_structural_cfg(opt.options)
         if not self.spoke_mode and not self.dual_spoke_mode:
             ckpt.require_dill(self.backend)
 
@@ -321,7 +327,7 @@ class Checkpointer(Extension):
             self._clear_other_studies_spoke_files()
 
     def _clear_other_studies_spoke_files(self):
-        """Delete ``spokes/`` unless this run is resuming from this directory.
+        """Prepare a fresh directory without hiding an earlier checkpoint.
 
         A spoke overwrites only its own file, and only once it has an
         incumbent or dual weights to write, so a run started in a directory
@@ -344,6 +350,15 @@ class Checkpointer(Extension):
         """
         if self._same_directory(self.opt.options.get("resume_from", None)):
             return
+        manifest = os.path.join(self.ckpt_dir, ckpt.MANIFEST_NAME)
+        if os.path.lexists(manifest):
+            raise RuntimeError(
+                f"The checkpoint directory '{self.ckpt_dir}' already holds "
+                f"a manifest. A fresh run would leave that earlier hub "
+                f"checkpoint available until its first successful write. "
+                f"Choose a new --checkpoint-dir, or set --resume-from to "
+                f"this directory to continue its study."
+            )
         spokes_dir = os.path.join(self.ckpt_dir, ckpt.SPOKES_SUBDIR)
         if not os.path.isdir(spokes_dir):
             return
@@ -507,15 +522,27 @@ class Checkpointer(Extension):
         from mpisppy.phbase import Wbar_by_node
         wbar = Wbar_by_node(self.opt)
         try:
+            if getattr(self, "_dual_write_epoch", None) is None:
+                # This collective is reached by every rank after Wbar_by_node.
+                # Agree on UUID-generation errors before the broadcast, so
+                # one failed rank cannot strand the rest of the cylinder.
+                comm = ckpt._cylinder_comm(self.opt)
+                proposed = ckpt.run_agreed(
+                    self.opt,
+                    lambda: uuid.uuid4().hex
+                    if comm is None or self.opt.cylinder_rank == 0 else None,
+                    "create a shared dual-spoke write identity, so none of "
+                    "them writes one")
+                self._dual_write_epoch = (proposed if comm is None else
+                                          comm.bcast(proposed, root=0))
             cylinder, ordinal = self._spoke_identity()
             ckpt.write_dual_spoke_state(
                 self.opt, self.ckpt_dir, cylinder, ordinal,
                 generation=int(getattr(self.opt, "_PHIter", 0)),
                 class_count=self._class_ordinal_and_count()[1],
-                wbar=wbar)
+                wbar=wbar, write_epoch=self._dual_write_epoch)
         except Exception as exc:
-            # By the rank that failed, as for the xhat spokes: each rank
-            # writes its own file, so the failure is this rank's alone.
+            # Each rank reports its failure, as for the xhat spokes.
             global_toc(
                 f"WARNING: rank {self.opt.cylinder_rank} of this cylinder "
                 f"could not write its dual weights ({type(exc).__name__}); "
@@ -697,10 +724,8 @@ class Checkpointer(Extension):
         rule hold on a resumed run, where the limit counts this run's
         iterations and ``_PHIter`` counts the study's.
 
-        Only the iteration bounds are knowable here: convergence, the user
-        converger and ``--time-limit`` are all decided in the *next*
-        iteration's top half, and the cylinder-convergence test fires after
-        this hook.
+        Convergence and time limits may stop a run earlier, but do not make
+        this iteration the last one under these loop bounds.
         """
         stop = getattr(self.opt, "_stop_iteration", None)
         if stop is None:

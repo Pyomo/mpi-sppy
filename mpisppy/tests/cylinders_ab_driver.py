@@ -41,10 +41,11 @@ from mpisppy.cylinders.hub import PHHub
 #: on it later in the leg, and by then its cache no longer shows what was
 #: read from disk.
 _restored_values = {}
-#: The hub's inner bound at its first convergence check: on a resume, the
-#: bound its first resumed iteration runs against, before it has heard
-#: anything from a spoke.
+#: The hub's bounds at its first convergence check: on a resume, the bounds
+#: its first resumed iteration runs against, before it has heard anything
+#: new from a spoke.
 _first_inner_bound = {}
+_first_outer_bound = {}
 
 
 def _num(value):
@@ -163,6 +164,7 @@ def _hub_snapshot(wheel):
         # writes the solution.
         "last_ib_idx": wheel.spcomm.last_ib_idx,
         "first_BestInnerBound": _num(_first_inner_bound.get("value")),
+        "first_BestOuterBound": _num(_first_outer_bound.get("value")),
         "state": state,
         # Which Objective each scenario's Eobjective actually reads. A resume
         # rebuilds saved_objectives from the reloaded models, and on a model
@@ -243,10 +245,14 @@ def _recording_restore(real_restore):
 
 
 def _recording_is_converged(real_is_converged):
-    """Wrap the hub's convergence check so its first inner bound is kept."""
+    """Wrap the hub's convergence check so its first bounds are kept."""
     def is_converged(self, *args, **kwargs):
+        result = real_is_converged(self, *args, **kwargs)
+        # PHHub.is_converged may fold its own opt-level bounds into these
+        # fields, so record the state it actually leaves for the checkpoint.
         _first_inner_bound.setdefault("value", self.BestInnerBound)
-        return real_is_converged(self, *args, **kwargs)
+        _first_outer_bound.setdefault("value", self.BestOuterBound)
+        return result
     return is_converged
 
 
