@@ -658,18 +658,18 @@ def agree_dual_spoke_restore(opt, state):
     if verdict == "differ":
         if any(not epoch for epoch, _ in detail):
             return None, (
-                f"some ranks of this cylinder have checkpointed dual weights "
-                f"without a write identity, so none of them restores any: "
-                f"their files cannot be proven to belong to one write")
+                "some ranks of this cylinder have checkpointed dual weights "
+                "without a write identity, so none of them restores any: "
+                "their files cannot be proven to belong to one write")
         return None, (
             f"the ranks of this cylinder checkpointed dual weights from "
             f"different iterations or runs ({detail}), so none of them "
             f"restores any: their W cannot be combined safely")
     if not state.get("write_epoch"):
         return None, (
-            f"this cylinder's checkpointed dual weights have no write "
-            f"identity, so none of them restores any: their files cannot "
-            f"be proven to belong to one write")
+            "this cylinder's checkpointed dual weights have no write "
+            "identity, so none of them restores any: their files cannot "
+            "be proven to belong to one write")
     return state, None
 
 
