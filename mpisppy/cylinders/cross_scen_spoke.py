@@ -19,7 +19,8 @@ from mpisppy.utils.lshaped_cuts import LShapedCutGenerator  # pylint: disable=E0
 
 class CrossScenarioCutSpoke(Spoke):
 
-    send_fields = (*Spoke.send_fields, Field.CROSS_SCENARIO_CUT)
+    send_fields = (*Spoke.send_fields, Field.CROSS_SCENARIO_CUT,
+                   Field.CROSS_SCENARIO_ETA_BOUNDS)
     receive_fields = (*Spoke.receive_fields, Field.NONANTS_VALS, Field.CROSS_SCENARIO_COST)
 
     def register_send_fields(self) -> None:
@@ -57,6 +58,7 @@ class CrossScenarioCutSpoke(Spoke):
         assert len(cs_cost_ranks) == 1
         assert nonant_ranks[0] == cs_cost_ranks[0]
         source_rank = nonant_ranks[0]
+        self._hub_rank = source_rank
 
         self.all_nonants = self.register_recv_field(Field.NONANTS_VALS, source_rank)
         self.all_etas = self.register_recv_field(Field.CROSS_SCENARIO_COST, source_rank)
@@ -127,13 +129,32 @@ class CrossScenarioCutSpoke(Spoke):
         if self.got_kill_signal():
             return
 
+        # set_eta_bounds combines the ranks' bounds with a MAX, and a rank
+        # that did not solve a scenario's bound problem holds a huge finite
+        # default for it, so a bound that came back non-finite would come
+        # out of it as that default. Note which ones did, first.
+        local_finite = np.fromiter(
+                (1 if self.opt.valid_eta_lb[s] is not None
+                 and np.isfinite(self.opt.valid_eta_lb[s]) else 0
+                 for s in self.opt.all_scenario_names),
+                dtype='i', count=len(self.opt.all_scenario_names))
+        all_finite = np.empty_like(local_finite)
+        self.cylinder_comm.Allreduce(local_finite, all_finite, op=MPI.MIN)
+
         ## This call is blocking, depending on the
         ## configuration. This necessitates the barrier
         ## above.
         self.opt.set_eta_bounds()
         self._eta_lb_array = np.fromiter(
-                (self.opt.valid_eta_lb[s] for s in self.opt.all_scenario_names),
+                (self.opt.valid_eta_lb[s] if all_finite[idx] else -np.inf
+                 for idx, s in enumerate(self.opt.all_scenario_names)),
                 dtype='d', count=len(self.opt.all_scenario_names))
+        # Written once, to a field nothing else writes, so the hub reads the
+        # bounds whenever it gets to them. The cut buffer is overwritten by
+        # the next cut.
+        eta_bounds = self.send_buffers[Field.CROSS_SCENARIO_ETA_BOUNDS]
+        eta_bounds.value_array()[:] = self._eta_lb_array
+        self.put_send_buffer(eta_bounds, Field.CROSS_SCENARIO_ETA_BOUNDS)
         self.make_eta_lb_cut()
 
     def make_eta_lb_cut(self):
@@ -143,6 +164,10 @@ class CrossScenarioCutSpoke(Spoke):
         all_coefs = self.all_coefs
         all_coefs.value_array().fill(0.0)
         for idx, k in enumerate(self.opt.all_scenario_names):
+            # No bound for this scenario: leave its row zero, which the hub
+            # skips.
+            if not np.isfinite(self._eta_lb_array[idx]):
+                continue
             ## cut_array -- [ constant, eta_coef, *nonant_coefs ]
             ## this cut  -- [ LB, -1, *0s ], i.e., -1*\eta + LB <= 0
             all_coefs[row_len*idx] = self._eta_lb_array[idx]
@@ -236,7 +261,7 @@ class CrossScenarioCutSpoke(Spoke):
         else:
             farthest_xhat = np.zeros(len(root_nonants), dtype='d')
 
-        self.cylinder_comm.Bcast(farthest_xhat, root=global_rank)
+        self.cylinder_comm.Bcast(farthest_xhat, root=int(global_rank[0]))
 
         # set the first stage in the lshape object to correspond to farthest_xhat
         for ci, k in enumerate(root_nonants):
@@ -300,6 +325,9 @@ class CrossScenarioCutSpoke(Spoke):
         row_len = 1+1+len(root_nonants)
         # all_coefs = np.zeros( self.nscen*row_len +1, dtype='d')
         all_coefs = self.all_coefs
+        # A scenario with no new cut gets a zero row, which the hub skips.
+        # Left as it was, its last cut would be sent, and added, again.
+        all_coefs.value_array().fill(0.0)
         for idx, k in enumerate(opt.all_scenario_names):
             if k in coef_dict:
                 all_coefs[row_len*idx:row_len*(idx+1)] = coef_dict[k]
@@ -313,11 +341,18 @@ class CrossScenarioCutSpoke(Spoke):
         # prep cut generation
         self.prep_cs_cuts()
 
-        # main loop
+        # The hub writes the nonants and the etas at different moments, so a
+        # pass seldom finds both new. Cut once each has been new since the
+        # last cut. get_receive_buffer agrees its answer across this
+        # cylinder's ranks, and make_cut is collective over them.
+        new_nonants = new_etas = False
         while not (self.got_kill_signal()):
-            if self.all_nonants.is_new() and self.all_etas.is_new():
+            new_nonants |= self.get_receive_buffer(
+                self.all_nonants, Field.NONANTS_VALS, self._hub_rank)
+            new_etas |= self.get_receive_buffer(
+                self.all_etas, Field.CROSS_SCENARIO_COST, self._hub_rank)
+            if new_nonants and new_etas:
                 self.make_cut()
-            ## End if
-        ## End while
+                new_nonants = new_etas = False
 
         return
