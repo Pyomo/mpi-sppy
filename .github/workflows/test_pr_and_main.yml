@@ -1609,6 +1609,7 @@ jobs:
             mpisppy/tests/test_grad_rho_bundles.py \
             mpisppy/tests/test_sensi_rho_bundles.py \
             mpisppy/tests/test_reduced_costs_rho_bundles.py \
+            mpisppy/tests/test_bound_generators.py \
             mpisppy/tests/test_rho_deprecations.py \
             mpisppy/tests/test_buffer_inspect.py \
             mpisppy/tests/test_comm_lor_check.py \

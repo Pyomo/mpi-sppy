@@ -476,7 +476,8 @@ def _lb_generator(var_iterable):
         lb = v.lb
         if lb is None:
             yield -_INF
-        yield lb
+        else:
+            yield lb
 
 
 def _ub_generator(var_iterable):
@@ -484,7 +485,8 @@ def _ub_generator(var_iterable):
         ub = v.ub
         if ub is None:
             yield _INF
-        yield ub
+        else:
+            yield ub
 
 
 class SPPresolve(_SPPresolver):
