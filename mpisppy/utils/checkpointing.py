@@ -131,6 +131,8 @@ NON_STRUCTURAL_CFG_KEYS = frozenset({
     "subgradient", "ph_primal_hub", "ph_dual", "relaxed_ph",
     "ph_xfeas_spoke", "lagranger", "xhatlooper", "xhatspecific",
     "slammax", "slammin", "certified_outer_bound",
+    # This hub heuristic runs only after the checkpointed PH iterations.
+    "final_xhat",
     # The certified spoke's cushion only loosens the bound that spoke
     # reports; the hub keeps its best outer bound across a resume either way.
     "certified_outer_bound_cushion",

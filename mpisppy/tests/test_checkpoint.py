@@ -1632,6 +1632,19 @@ class TestStructuralFingerprint(unittest.TestCase):
                     f"differing only in {key} is refused")
                 self.assertNotIn(key, self._folded_cfg(**{key: value}))
 
+    def test_final_xhat_does_not_change_a_checkpoint_fingerprint(self):
+        """Adding or changing the final-only heuristic preserves old checkpoints."""
+        old_cfg = self._folded_cfg()
+        old_fingerprint = self._fingerprint(
+            checkpoint_structural_cfg=old_cfg)
+        for choice in ("none", "xbar", "closest"):
+            with self.subTest(final_xhat=choice):
+                new_cfg = self._folded_cfg(final_xhat=choice)
+                self.assertNotIn("final_xhat", new_cfg)
+                self.assertEqual(
+                    old_fingerprint,
+                    self._fingerprint(checkpoint_structural_cfg=new_cfg))
+
     def test_spoke_flags_that_change_the_hub_models_stay_structural(self):
         """Unlike the other spoke flags, each of these also attaches a hub
         extension that changes the hub's own models -- reduced_costs fixes
