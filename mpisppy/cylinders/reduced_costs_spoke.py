@@ -148,20 +148,78 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         self._nonant_lower_bounds[:] = -np.inf
         self._nonant_upper_bounds[:] = np.inf
 
+        local_position_keys = None
         for s in self.opt.local_scenarios.values():
+            nonant_indices = s._mpisppy_data.nonant_indices
+            scenario_position_keys = list(nonant_indices)
+            if local_position_keys is None:
+                local_position_keys = scenario_position_keys
+            else:
+                local_position_keys = [
+                    key if key == scenario_key else None
+                    for key, scenario_key in zip(
+                        local_position_keys, scenario_position_keys
+                    )
+                ]
+
+            consensus_groups = _bundle_consensus_groups(s)
             scenario_lower_bounds = np.fromiter(
-                    _lb_generator(s._mpisppy_data.nonant_indices.values()),
+                    (
+                        max(_lb_generator(consensus_groups[ndn_i]))
+                        for ndn_i in nonant_indices
+                    ),
                     dtype=float,
-                    count=len(s._mpisppy_data.nonant_indices),
+                    count=len(nonant_indices),
                 )
             np.maximum(self._nonant_lower_bounds, scenario_lower_bounds, out=self._nonant_lower_bounds)
 
             scenario_upper_bounds = np.fromiter(
-                    _ub_generator(s._mpisppy_data.nonant_indices.values()),
+                    (
+                        min(_ub_generator(consensus_groups[ndn_i]))
+                        for ndn_i in nonant_indices
+                    ),
                     dtype=float,
-                    count=len(s._mpisppy_data.nonant_indices),
+                    count=len(nonant_indices),
                 )
             np.minimum(self._nonant_upper_bounds, scenario_upper_bounds, out=self._nonant_upper_bounds)
+
+        # The reduced-cost field aggregates each nonant position across the
+        # cylinder. A position can represent different nodes on different
+        # multistage scenario paths, however, and those decisions must not share
+        # bounds. Only positions with one identical (node, index) key throughout
+        # the cylinder can safely use the global reduced cost and tightening
+        # formulas. Disable bound tightening at every other position by keeping
+        # its base interval unbounded.
+        all_position_keys = self.cylinder_comm.allgather(local_position_keys)
+        first_position_keys = all_position_keys[0]
+        shared_position = np.fromiter(
+            (
+                key is not None
+                and all(other[ci] == key for other in all_position_keys[1:])
+                for ci, key in enumerate(first_position_keys)
+            ),
+            dtype=bool,
+            count=self.nonant_length,
+        )
+        self._nonant_lower_bounds[~shared_position] = -np.inf
+        self._nonant_upper_bounds[~shared_position] = np.inf
+
+        # For shared positions, intersect the scenario intervals on every rank,
+        # not merely those held locally. The neutral infinities above ensure the
+        # collective leaves non-shared positions disabled on every rank.
+        global_lower_bounds = np.empty_like(self._nonant_lower_bounds)
+        self.cylinder_comm.Allreduce(
+            self._nonant_lower_bounds, global_lower_bounds, op=MPI.MAX,
+        )
+        global_lower_bounds[~shared_position] = -np.inf
+        self._nonant_lower_bounds[:] = global_lower_bounds
+
+        global_upper_bounds = np.empty_like(self._nonant_upper_bounds)
+        self.cylinder_comm.Allreduce(
+            self._nonant_upper_bounds, global_upper_bounds, op=MPI.MIN,
+        )
+        global_upper_bounds[~shared_position] = np.inf
+        self._nonant_upper_bounds[:] = global_upper_bounds
 
         self._best_ub_update_function_slope = np.full(len(self._nonant_upper_bounds), 0.0)
         self._best_ub_update_function_intercept = np.full(len(self._nonant_upper_bounds), np.inf)
@@ -414,26 +472,32 @@ class ReducedCostsSpoke(LagrangianOuterBound):
 
     def update_nonant_bounds(self):
         bounds_modified = 0
-        send_buf = self.send_buffers[Field.NONANT_LOWER_BOUNDS]
+        lower_buf = self.send_buffers[Field.NONANT_LOWER_BOUNDS]
+        upper_buf = self.send_buffers[Field.NONANT_UPPER_BOUNDS]
         for s in self.opt.local_scenarios.values():
+            persistent_solver = (
+                s._solver_plugin if is_persistent(s._solver_plugin) else None
+            )
             for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
+                update_var = False
                 xvarlb = xvar.lb
                 if xvarlb is None:
                     xvarlb = -np.inf
-                if send_buf[ci] > xvarlb:
-                    # global_toc(f"{self.__class__.__name__}: tightened {xvar.name} lower bound from {xvar.lb} to {send_buf[ci]}", self.cylinder_rank == 0)
-                    xvar.lb = send_buf[ci]
+                if lower_buf[ci] > xvarlb:
+                    # global_toc(f"{self.__class__.__name__}: tightened {xvar.name} lower bound from {xvar.lb} to {lower_buf[ci]}", self.cylinder_rank == 0)
+                    xvar.lb = lower_buf[ci]
                     bounds_modified += 1
-        send_buf = self.send_buffers[Field.NONANT_UPPER_BOUNDS]
-        for s in self.opt.local_scenarios.values():
-            for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
+                    update_var = True
                 xvarub = xvar.ub
                 if xvarub is None:
                     xvarub = np.inf
-                if send_buf[ci] < xvarub:
-                    # global_toc(f"{self.__class__.__name__}: tightened {xvar.name} upper bound from {xvar.ub} to {send_buf[ci]}", self.cylinder_rank == 0)
-                    xvar.ub = send_buf[ci]
+                if upper_buf[ci] < xvarub:
+                    # global_toc(f"{self.__class__.__name__}: tightened {xvar.name} upper bound from {xvar.ub} to {upper_buf[ci]}", self.cylinder_rank == 0)
+                    xvar.ub = upper_buf[ci]
                     bounds_modified += 1
+                    update_var = True
+                if update_var and persistent_solver is not None:
+                    persistent_solver.update_var(xvar)
 
         bounds_modified /= len(self.opt.local_scenarios)
 
@@ -452,7 +516,8 @@ def _lb_generator(var_iterable):
         lb = v.lb
         if lb is None:
             yield -np.inf
-        yield lb
+        else:
+            yield lb
 
 
 def _ub_generator(var_iterable):
@@ -460,4 +525,5 @@ def _ub_generator(var_iterable):
         ub = v.ub
         if ub is None:
             yield np.inf
-        yield ub
+        else:
+            yield ub
