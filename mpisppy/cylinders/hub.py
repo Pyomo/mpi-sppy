@@ -15,6 +15,7 @@ import mpisppy.log
 from mpisppy import global_toc
 from mpisppy.cylinders.fwph_cylinder import FWPH_Cylinder
 from mpisppy.cylinders.spcommunicator import (
+    ReadConsistency,
     RecvArray,
     RecvCircularBuffer,
     SPCommunicator,
@@ -528,6 +529,11 @@ class SubgradientHub(PHHub):
 class APHHub(PHHub):
 
     # send / receive fields are same as PHHub
+    #
+    # APH ranks publish their local pieces of W independently. Consumers that
+    # require one cylinder-wide generation must therefore assemble the latest
+    # pieces asynchronously and repair dual feasibility before using them.
+    publishes_asynchronous_duals = True
 
     def main(self):
         """ SPComm gets attached by self.__init___; holding APH harmless """
@@ -539,9 +545,16 @@ class APHHub(PHHub):
                            buf: RecvArray,
                            field: Field,
                            origin: int,
-                           synchronize: bool = False,
+                           synchronize: bool | None = None,
+                           consistency: ReadConsistency | None = None,
                           ):
-        return super().get_receive_buffer(buf, field, origin, synchronize)
+        if consistency is None and synchronize is None:
+            consistency = ReadConsistency.INDEPENDENT
+        return super().get_receive_buffer(
+            buf, field, origin,
+            synchronize=synchronize,
+            consistency=consistency,
+        )
 
     def finalize(self):
         """ does PH.post_loops, returns Eobj """

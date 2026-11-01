@@ -25,3 +25,7 @@ def test_aph_hub_finalize_passes_extensions_to_post_loops():
 
     assert hub.finalize() == 123.0
     post_loops.assert_called_once_with(extensions)
+
+
+def test_aph_hub_marks_dual_publication_as_asynchronous():
+    assert APHHub.publishes_asynchronous_duals is True
