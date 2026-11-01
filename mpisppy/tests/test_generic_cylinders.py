@@ -262,15 +262,29 @@ class TestUserDefinedExtensions(unittest.TestCase):
         for sub in ("a", "b"):
             self._write_module(f"{sub}.{self.modname}", _USER_EXT_SOURCE)
         self._load(os.path.join(self.tmp, "a", self.modname))
-        with self.assertRaisesRegex(RuntimeError, "not a file in"):
+        with self.assertRaisesRegex(RuntimeError, "which is not in"):
             self._load(os.path.join(self.tmp, "b", self.modname))
 
-    def test_path_shadowed_by_installed_module_refused(self):
-        # a file named like a stdlib module: the path must not load the
-        # stdlib one and then report that it defines no extension
+    def test_path_shadowed_by_imported_module_refused(self):
+        # a file named like a module already imported (json): the path must
+        # not reuse that module and then report that it defines no extension
         self._write_module("shadow.json", _USER_EXT_SOURCE)
-        with self.assertRaisesRegex(RuntimeError, "not a file in"):
+        with self.assertRaisesRegex(RuntimeError, "which is not in"):
             self._load(os.path.join(self.tmp, "shadow", "json"))
+
+    def test_symlinked_file_in_given_directory(self):
+        real = os.path.join(self.tmp, "real")
+        os.makedirs(real)
+        target = os.path.join(self.tmp, self.modname + ".py")
+        os.symlink(target, os.path.join(real, self.modname + ".py"))
+        mod_name, classes, _ = self._load(os.path.join(real, self.modname))
+        self.assertEqual(mod_name, self.modname)
+        self.assertEqual(len(classes), 2)
+
+    def test_trailing_slash(self):
+        mod_name, _, _ = self._load(
+            os.path.join(self.tmp, self.modname) + os.sep)
+        self.assertEqual(mod_name, self.modname)
 
     def test_dotted_name_in_package(self):
         sys.path.insert(0, self.tmp)
@@ -325,6 +339,13 @@ class TestUserDefinedExtensions(unittest.TestCase):
                 record = json.load(f)
             self.assertEqual(record["options"], {"answer": 42})
             self.assertEqual(record["iterations"], 2)
+
+    def test_refusal_names_ootb_choice(self):
+        from mpisppy.generic.extensions import refuse_user_extensions_without_a_hub
+        cfg = SimpleNamespace(get=lambda k: [self.modname])
+        with self.assertRaisesRegex(RuntimeError, "--out-of-the-box chose --EF"):
+            refuse_user_extensions_without_a_hub(cfg, "--EF",
+                                                 chosen_by_ootb=True)
 
     def test_refused_without_a_hub(self):
         from mpisppy.generic.extensions import refuse_user_extensions_without_a_hub

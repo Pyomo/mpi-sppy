@@ -38,22 +38,30 @@ def load_user_extension_module(ext_name):
         it imports), in source order; and the contents of ``<module>.json``
         from the module's directory, or None when there is no such file.
     """
-    dpath, mname = os.path.split(ext_name)
+    dpath, mname = os.path.split(ext_name.rstrip(os.sep + (os.altsep or "")))
     if mname.endswith(".py"):
         mname = mname[:-len(".py")]
     if dpath not in sys.path:
         sys.path.append(dpath)
     ext_module = importlib.import_module(mname)
     module_file = getattr(ext_module, "__file__", None)
-    if dpath and (module_file is None or not os.path.realpath(module_file)
-                  .startswith(os.path.realpath(dpath) + os.sep)):
+    if dpath and module_file is not None:
         # The directory goes at the end of sys.path, and a module already
         # imported is reused, so another module of the same name can win.
-        raise RuntimeError(
-            f"--user-defined-extensions {ext_name}: importing {mname} gave "
-            f"{module_file}, not a file in {dpath}. Another module named "
-            f"{mname} is installed or already loaded; rename yours."
-        )
+        # Compare directories, not the file, so a symlinked file still counts.
+        want = os.path.realpath(dpath)
+        got = os.path.realpath(os.path.dirname(module_file))
+        try:
+            inside = os.path.commonpath([want, got]) == want
+        except ValueError:  # different drives on Windows
+            inside = False
+        if not inside:
+            raise RuntimeError(
+                f"--user-defined-extensions {ext_name}: importing {mname} "
+                f"gave {module_file}, which is not in {dpath}. Another module "
+                f"named {mname} was already imported or comes earlier on "
+                f"sys.path; rename yours."
+            )
     found = [
         attr for attr in vars(ext_module).values()
         if inspect.isclass(attr)
@@ -75,15 +83,23 @@ def load_user_extension_module(ext_name):
     return ext_module.__name__, found, ext_options
 
 
-def refuse_user_extensions_without_a_hub(cfg, mode):
+def refuse_user_extensions_without_a_hub(cfg, mode, chosen_by_ootb=False):
     """Refuse --user-defined-extensions on a path that never builds a hub.
 
     configure_extensions, which attaches them, runs only for a hub, so the
     modes that branch off ahead of do_decomp would otherwise ignore the flag
-    and exit 0.
+    and exit 0. ``chosen_by_ootb`` says --out-of-the-box picked ``mode``, so
+    the message does not tell the user to drop a flag they never gave.
     """
     if cfg.get("user_defined_extensions") is None:
         return
+    if chosen_by_ootb:
+        raise RuntimeError(
+            f"--out-of-the-box chose {mode}, which does not build a hub, so "
+            f"--user-defined-extensions would never be attached. Ask for a "
+            f"decomposition (a hub or spoke flag) on enough ranks, or drop "
+            f"--user-defined-extensions."
+        )
     raise RuntimeError(
         f"--user-defined-extensions was given together with {mode}, which "
         f"does not build a hub, so the extensions would never be attached. "
