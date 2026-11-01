@@ -16,7 +16,7 @@ The repository is at https://github.com/Pyomo/mpi-sppy.
 Prerequisites (all platforms)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* Python 3.9 or newer
+* Python 3.10 or newer
 * ``git``
 * A Pyomo-compatible solver (e.g., cplex, gurobi, or xpress) for most
   algorithms.
@@ -240,7 +240,7 @@ Native Windows with MS-MPI
 This path uses Microsoft MPI (MS-MPI), the standard MPI implementation on
 Windows.
 
-1. Install Python 3.9 or newer from https://www.python.org/downloads/ or
+1. Install Python 3.10 or newer from https://www.python.org/downloads/ or
    via Miniconda. If using the python.org installer, check
    "Add python.exe to PATH" during install.
 
