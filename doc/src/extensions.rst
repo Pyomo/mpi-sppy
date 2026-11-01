@@ -60,11 +60,14 @@ included; the run stops with an error if they do.
 
 The module is found the way ``--module-name`` finds a model: give a module
 name (``myext`` or ``mypkg.myext``), which is looked for in the current
-directory as well as on ``sys.path``, or a path without the ``.py``
-(``some/dir/myext``). For a class in a package, name the module that
-defines it, not a package that re-exports it.
+directory as well as on ``sys.path``, or a path (``some/dir/myext``).
+An installed or already imported module of the same name takes precedence
+over one in the current directory; with a path, that case is an error, so
+rename your module. For a class in a package, name the module that defines
+it, not a package that re-exports it.
 
-If ``myext.json`` is in the same directory as ``myext.py``, its contents are
+If ``myext.json`` is in the same directory as ``myext.py`` (for classes
+defined in a package's ``__init__.py``, ``__init__.json``), its contents are
 put in the hub options under the module's name, without any directory part
 (``myext`` or ``mypkg.myext``). The file is optional, so read it with
 ``self.opt.options.get("myext")``.

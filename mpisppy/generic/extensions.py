@@ -24,7 +24,10 @@ def load_user_extension_module(ext_name):
     The name is resolved the way ``--module-name`` is: a directory part,
     if any, is put on ``sys.path`` (no directory part means the current
     directory), and the rest is imported as a module name, so ``myext``,
-    ``mypkg.myext`` and ``some/dir/myext`` all work.
+    ``mypkg.myext`` and ``some/dir/myext`` all work. A trailing ``.py`` is
+    dropped. When a directory is given, the module imported must come from
+    it; another module of the same name (installed, already imported, or
+    from another directory given earlier) raises instead of being used.
 
     Args:
         ext_name (str): the module name or path, as given on the command line
@@ -36,9 +39,21 @@ def load_user_extension_module(ext_name):
         from the module's directory, or None when there is no such file.
     """
     dpath, mname = os.path.split(ext_name)
+    if mname.endswith(".py"):
+        mname = mname[:-len(".py")]
     if dpath not in sys.path:
         sys.path.append(dpath)
     ext_module = importlib.import_module(mname)
+    module_file = getattr(ext_module, "__file__", None)
+    if dpath and (module_file is None or not os.path.realpath(module_file)
+                  .startswith(os.path.realpath(dpath) + os.sep)):
+        # The directory goes at the end of sys.path, and a module already
+        # imported is reused, so another module of the same name can win.
+        raise RuntimeError(
+            f"--user-defined-extensions {ext_name}: importing {mname} gave "
+            f"{module_file}, not a file in {dpath}. Another module named "
+            f"{mname} is installed or already loaded; rename yours."
+        )
     found = [
         attr for attr in vars(ext_module).values()
         if inspect.isclass(attr)
@@ -52,13 +67,28 @@ def load_user_extension_module(ext_name):
             f"defined in module {ext_name}"
         )
     ext_options = None
-    module_file = getattr(ext_module, "__file__", None)
     if module_file is not None:
         json_filename = os.path.splitext(module_file)[0] + ".json"
         if os.path.exists(json_filename):
             with open(json_filename) as f:
                 ext_options = json.load(f)
     return ext_module.__name__, found, ext_options
+
+
+def refuse_user_extensions_without_a_hub(cfg, mode):
+    """Refuse --user-defined-extensions on a path that never builds a hub.
+
+    configure_extensions, which attaches them, runs only for a hub, so the
+    modes that branch off ahead of do_decomp would otherwise ignore the flag
+    and exit 0.
+    """
+    if cfg.get("user_defined_extensions") is None:
+        return
+    raise RuntimeError(
+        f"--user-defined-extensions was given together with {mode}, which "
+        f"does not build a hub, so the extensions would never be attached. "
+        f"Drop --user-defined-extensions, or drop {mode}."
+    )
 
 
 def configure_extensions(hub_dict, module, cfg):

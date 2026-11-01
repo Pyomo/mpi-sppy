@@ -250,6 +250,28 @@ class TestUserDefinedExtensions(unittest.TestCase):
         self.assertEqual(len(classes), 2)
         self.assertEqual(options, {"answer": 7})
 
+    def test_path_with_py_suffix(self):
+        mod_name, classes, _ = self._load(
+            os.path.join(self.tmp, self.modname + ".py"))
+        self.assertEqual(mod_name, self.modname)
+        self.assertEqual(len(classes), 2)
+
+    def test_two_paths_same_module_name_refused(self):
+        # a/<name> and b/<name> both import as <name>; the second used to
+        # be the cached first module, silently
+        for sub in ("a", "b"):
+            self._write_module(f"{sub}.{self.modname}", _USER_EXT_SOURCE)
+        self._load(os.path.join(self.tmp, "a", self.modname))
+        with self.assertRaisesRegex(RuntimeError, "not a file in"):
+            self._load(os.path.join(self.tmp, "b", self.modname))
+
+    def test_path_shadowed_by_installed_module_refused(self):
+        # a file named like a stdlib module: the path must not load the
+        # stdlib one and then report that it defines no extension
+        self._write_module("shadow.json", _USER_EXT_SOURCE)
+        with self.assertRaisesRegex(RuntimeError, "not a file in"):
+            self._load(os.path.join(self.tmp, "shadow", "json"))
+
     def test_dotted_name_in_package(self):
         sys.path.insert(0, self.tmp)
         pkg = self.modname + "_pkg"
@@ -303,6 +325,33 @@ class TestUserDefinedExtensions(unittest.TestCase):
                 record = json.load(f)
             self.assertEqual(record["options"], {"answer": 42})
             self.assertEqual(record["iterations"], 2)
+
+    def test_refused_without_a_hub(self):
+        from mpisppy.generic.extensions import refuse_user_extensions_without_a_hub
+        # the flag absent: nothing to refuse
+        refuse_user_extensions_without_a_hub(
+            SimpleNamespace(get=lambda k: None), "--EF")
+        cfg = SimpleNamespace(get=lambda k: [self.modname])
+        with self.assertRaisesRegex(RuntimeError,
+                                    "--user-defined-extensions was given "
+                                    "together with --EF"):
+            refuse_user_extensions_without_a_hub(cfg, "--EF")
+
+    def test_generic_cylinders_EF_refuses_user_extensions(self):
+        # issue #952: --EF used to ignore the flag and exit 0
+        sys.path.insert(0, self.tmp)
+        argv = [
+            "generic_cylinders",
+            "--module-name", "mpisppy.tests.examples.farmer",
+            "--num-scens", "3",
+            "--EF",
+            "--EF-solver-name", solver_name or "gurobi",
+            "--user-defined-extensions", self.modname,
+        ]
+        with patch.object(sys, "argv", argv), \
+             self.assertRaisesRegex(RuntimeError, "does not build a hub"):
+            runpy.run_module("mpisppy.generic_cylinders",
+                             run_name="__main__")
 
     @unittest.skipIf(not solver_available,
                      "no MIP solver available")
