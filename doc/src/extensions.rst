@@ -33,13 +33,8 @@ command-line flags:
   ``0.1``) -- activates the mipgapper's auto-gap mode for cylinders
 - ``--timed-mipgap <curve>`` -- activates the timed MIP gap extension and sets
   the timed MIP gap curve as ``gap:time`` pairs (e.g., ``"0.02:100 0.05:200"``)
-- ``--user-defined-extensions <module>`` -- attaches every subclass of
-  ``Extension`` defined in the module (classes the module only imports are
-  not attached); for several modules, quote a space-separated list, e.g.
-  ``--user-defined-extensions "myext1 myext2"``. If ``<module>.json`` is
-  next to the module's source file, its contents become the hub option
-  ``<module>``, which the extension reads as
-  ``self.opt.options["<module>"]``; the file is optional.
+- ``--user-defined-extensions <module>`` -- attaches the extension classes
+  defined in a module (see :ref:`user_defined_extensions`)
 - ``--grad-rho`` -- activates gradient-based rho (see :ref:`rho_setting`)
 - ``--use-norm-rho-updater`` -- activates the norm rho updater
 - ``--use-primal-dual-rho-updater`` -- activates the primal-dual rho updater
@@ -49,6 +44,30 @@ command-line flags:
 
 The rest of this help file describes extensions released with mpisppy along
 with some hints for including them in your own cylinders driver program.
+
+.. _user_defined_extensions:
+
+User-defined extensions
+-----------------------
+
+``--user-defined-extensions myext`` imports the module ``myext`` and attaches
+to the hub every non-abstract subclass of ``Extension`` that the module
+defines. Classes the module imports are not attached, so a concrete helper
+base class you do not want attached belongs in another module. For several
+modules, quote a space-separated list: ``--user-defined-extensions "myext1
+myext2"``. No two extensions in a run may share a class name, shipped ones
+included; the run stops with an error if they do.
+
+The module is found the way ``--module-name`` finds a model: give a module
+name (``myext`` or ``mypkg.myext``), which is looked for in the current
+directory as well as on ``sys.path``, or a path without the ``.py``
+(``some/dir/myext``). For a class in a package, name the module that
+defines it, not a package that re-exports it.
+
+If ``myext.json`` is in the same directory as ``myext.py``, its contents are
+put in the hub options under the module's name, without any directory part
+(``myext`` or ``mypkg.myext``). The file is optional, so read it with
+``self.opt.options.get("myext")``.
 
 Multiple Extensions
 -------------------

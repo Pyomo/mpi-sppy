@@ -272,8 +272,7 @@ Some extensions can be activated directly from the command line:
 - ``--timed-mipgap <curve>`` -- Time-dependent MIP gap termination
   curve as ``gap:time`` pairs
 - ``--user-defined-extensions <module>`` -- Attach the extension classes
-  defined in a module, or in each module of a quoted, space-separated list
-  (see :ref:`Extensions`)
+  defined in a module (see :ref:`user_defined_extensions`)
 - ``--wtracker`` -- Track W (Lagrange-multiplier) values per iteration
   and write a convergence report at the end of the run
   (see :ref:`wtracker_extension`)

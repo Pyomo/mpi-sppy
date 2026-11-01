@@ -8,32 +8,42 @@
 ###############################################################################
 """Extension wiring for the hub dict."""
 
+import importlib
 import inspect
 import json
 import os
+import sys
 
 import mpisppy.utils.cfg_vanilla as vanilla
-import mpisppy.utils.sputils as sputils
 from mpisppy.extensions.extension import Extension
 
 
 def load_user_extension_module(ext_name):
     """Import a module named by --user-defined-extensions.
 
+    The name is resolved the way ``--module-name`` is: a directory part,
+    if any, is put on ``sys.path`` (no directory part means the current
+    directory), and the rest is imported as a module name, so ``myext``,
+    ``mypkg.myext`` and ``some/dir/myext`` all work.
+
     Args:
-        ext_name (str): the module name, as given on the command line
+        ext_name (str): the module name or path, as given on the command line
 
     Returns:
-        (list, dict or None): every subclass of ``Extension`` defined in the
-        module (not ones it imports), in the order they appear in the source,
-        and the contents of ``<module>.json`` from the module's directory, or
-        None when there is no such file.
+        (str, list, dict or None): the imported module's name; every
+        non-abstract subclass of ``Extension`` defined in the module (not ones
+        it imports), in source order; and the contents of ``<module>.json``
+        from the module's directory, or None when there is no such file.
     """
-    ext_module = sputils.module_name_to_module(ext_name)
+    dpath, mname = os.path.split(ext_name)
+    if dpath not in sys.path:
+        sys.path.append(dpath)
+    ext_module = importlib.import_module(mname)
     found = [
         attr for attr in vars(ext_module).values()
         if inspect.isclass(attr)
         and issubclass(attr, Extension)
+        and not inspect.isabstract(attr)
         and attr.__module__ == ext_module.__name__
     ]
     if not found:
@@ -48,7 +58,7 @@ def load_user_extension_module(ext_name):
         if os.path.exists(json_filename):
             with open(json_filename) as f:
                 ext_options = json.load(f)
-    return found, ext_options
+    return ext_module.__name__, found, ext_options
 
 
 def configure_extensions(hub_dict, module, cfg):
@@ -147,11 +157,12 @@ def configure_extensions(hub_dict, module, cfg):
 
     if cfg.user_defined_extensions is not None:
         for ext_name in cfg.user_defined_extensions:
-            user_ext_classes, ext_options = load_user_extension_module(ext_name)
+            mod_name, user_ext_classes, ext_options = \
+                load_user_extension_module(ext_name)
             for ext_class in user_ext_classes:
                 vanilla.extension_adder(hub_dict, ext_class)
             if ext_options is not None:
-                hub_dict['opt_kwargs']['options'][ext_name] = ext_options
+                hub_dict['opt_kwargs']['options'][mod_name] = ext_options
 
     if cfg.sep_rho:
         vanilla.add_sep_rho(hub_dict, cfg)
