@@ -202,6 +202,19 @@ class TestMultiExtensionInit(unittest.TestCase):
         self.assertIn("Ext1", multi.extdict)
         self.assertIn("Ext2", multi.extdict)
 
+    def test_same_name_different_classes_refused(self):
+        ph = _MockOpt()
+        first = type("Same", (Extension,), {})
+        second = type("Same", (Extension,), {})
+        with self.assertRaisesRegex(RuntimeError,
+                                    "Two extension classes are named Same"):
+            MultiExtension(ph, [first, second])
+
+    def test_same_class_twice_allowed(self):
+        ph = _MockOpt()
+        multi = MultiExtension(ph, [_TrackingExtension, _TrackingExtension])
+        self.assertEqual(list(multi.extdict), ["_TrackingExtension"])
+
     def test_stores_opt_via_parent(self):
         ph = _MockOpt()
         multi = MultiExtension(ph, [])
@@ -430,6 +443,14 @@ class TestEFMultiExtensionInit(unittest.TestCase):
         ef = _MockEF()
         multi = EFMultiExtension(ef, [_TrackingEFExtension])
         self.assertIn("_TrackingEFExtension", multi.extdict)
+
+    def test_same_name_different_classes_refused(self):
+        ef = _MockEF()
+        first = type("Same", (EFExtension,), {})
+        second = type("Same", (EFExtension,), {})
+        with self.assertRaisesRegex(RuntimeError,
+                                    "Two extension classes are named Same"):
+            EFMultiExtension(ef, [first, second])
 
     def test_empty_ext_list(self):
         ef = _MockEF()

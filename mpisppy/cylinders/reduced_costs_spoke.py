@@ -201,6 +201,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
             dtype=bool,
             count=self.nonant_length,
         )
+        self._shared_position = shared_position
         self._nonant_lower_bounds[~shared_position] = -np.inf
         self._nonant_upper_bounds[~shared_position] = np.inf
 
@@ -357,6 +358,11 @@ class ReducedCostsSpoke(LagrangianOuterBound):
 
         rcg = np.zeros(self.nonant_length)
         self.cylinder_comm.Allreduce(rc, rcg, op=MPI.SUM)
+        # A positional reduction is meaningful only when that position names
+        # the same decision throughout the cylinder.  Keep the published field
+        # conservative for multistage positions that represent unrelated nodes;
+        # consumers such as ReducedCostsFixer treat NaN as unavailable.
+        rcg[~self._shared_position] = np.nan
         self.rc_global = rcg
 
         self.put_send_buffer(
@@ -391,7 +397,11 @@ class ReducedCostsSpoke(LagrangianOuterBound):
                 test_inner_bound = min(lr_outer_bound*0.99, lr_outer_bound-1)
         else:
             test_inner_bound = self.BestInnerBound
-        nonzero_rc = np.where(self.rc_global==0, np.nan, self.rc_global)
+        nonzero_rc = np.where(
+            self._shared_position & (self.rc_global != 0),
+            self.rc_global,
+            np.nan,
+        )
         # the slope is (IB - OB) / reduced_costs -- if the reduced costs are non-zero (e.g., the bound is active)
         bound_tightening = np.divide(test_inner_bound - lr_outer_bound, nonzero_rc)
 
@@ -440,13 +450,25 @@ class ReducedCostsSpoke(LagrangianOuterBound):
             # no better inner bound than last time; and no dual update either
             return
 
-        tighten_upper = self._best_ub_update_function_slope * self._best_inner_bound + self._best_ub_update_function_intercept
-        tighten_lower = self._best_lb_update_function_slope * self._best_inner_bound + self._best_lb_update_function_intercept
+        upper_update = self._best_ub_update_function_slope * self._best_inner_bound + self._best_ub_update_function_intercept
+        lower_update = self._best_lb_update_function_slope * self._best_inner_bound + self._best_lb_update_function_intercept
 
         # UB <- LB + (IB - OB) / reduced_cost --> tightening upper bound
-        tighten_upper += self._nonant_lower_bounds
+        tighten_upper = np.full_like(upper_update, np.inf)
+        np.add(
+            upper_update,
+            self._nonant_lower_bounds,
+            out=tighten_upper,
+            where=self._shared_position,
+        )
         # LB <- UB + (IB - OB) / reduced_cost --> tightening lower bound
-        tighten_lower += self._nonant_upper_bounds
+        tighten_lower = np.full_like(lower_update, -np.inf)
+        np.add(
+            lower_update,
+            self._nonant_upper_bounds,
+            out=tighten_lower,
+            where=self._shared_position,
+        )
 
         # max of existing lower and new lower, ignoring nan's
         np.fmax(tighten_lower, self._nonant_lower_bounds, out=self._nonant_lower_bounds)

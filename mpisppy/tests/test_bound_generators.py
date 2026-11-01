@@ -74,6 +74,9 @@ class _ArrayBuffer:
     def value_array(self):
         return self.values
 
+    def data_len(self):
+        return len(self.values)
+
     def __getitem__(self, key):
         return self.values[key]
 
@@ -110,10 +113,12 @@ class _PersistentPlugin(PersistentSolver):
 
 class _IntersectionComm:
 
-    def __init__(self, remote_lbs, remote_ubs, remote_position_keys=None):
+    def __init__(self, remote_lbs, remote_ubs, remote_position_keys=None,
+                 remote_rc=None):
         self.remote_lbs = np.asarray(remote_lbs)
         self.remote_ubs = np.asarray(remote_ubs)
         self.remote_position_keys = remote_position_keys
+        self.remote_rc = None if remote_rc is None else np.asarray(remote_rc)
         self.calls = []
 
     def allgather(self, local_position_keys):
@@ -128,6 +133,8 @@ class _IntersectionComm:
             np.maximum(send, self.remote_lbs, out=recv)
         elif op == MPI.MIN:
             np.minimum(send, self.remote_ubs, out=recv)
+        elif op == MPI.SUM and self.remote_rc is not None:
+            np.add(send, self.remote_rc, out=recv)
         else:
             raise AssertionError(f"unexpected reduction operation {op}")
 
@@ -203,6 +210,105 @@ class TestReducedCostInitialBounds(unittest.TestCase):
         np.testing.assert_array_equal(
             spoke._nonant_upper_bounds, [10.0, np.inf]
         )
+
+    def test_unrelated_multistage_nodes_are_not_tightened(self):
+        spoke = object.__new__(ReducedCostsSpoke)
+        spoke.opt = types.SimpleNamespace(
+            local_scenarios={
+                "branch_a": types.SimpleNamespace(
+                    _mpisppy_data=types.SimpleNamespace(nonant_indices={
+                        ("ROOT", 0): types.SimpleNamespace(lb=0.0, ub=10.0),
+                        ("ROOT_0", 0): types.SimpleNamespace(lb=0.0, ub=1.0),
+                    })
+                )
+            },
+            is_minimizing=True,
+        )
+        spoke.send_buffers = {
+            Field.EXPECTED_REDUCED_COST: _ArrayBuffer(2),
+            Field.NONANT_LOWER_BOUNDS: _ArrayBuffer(2),
+            Field.NONANT_UPPER_BOUNDS: _ArrayBuffer(2),
+        }
+        spoke.nonant_length = 2
+        spoke.cylinder_comm = _IntersectionComm(
+            remote_lbs=[0.0, 10.0],
+            remote_ubs=[10.0, 20.0],
+            remote_position_keys=[("ROOT", 0), ("ROOT_1", 0)],
+        )
+        spoke.initialize_bound_fields()
+
+        spoke.rc_global = [10.0, 10.0]
+        spoke.BestInnerBound = 100.0
+        spoke._best_inner_bound = np.inf
+        spoke._integer_variable_where = np.zeros(2, dtype=bool)
+        spoke._inner_bound_update = lambda new, old: new < old
+        spoke.got_kill_signal = lambda: False
+        spoke.receive_innerbounds = lambda: None
+        spoke.put_send_buffer = lambda *args: None
+        spoke.update_nonant_bounds = lambda: None
+
+        spoke.update_bounding_functions(lr_outer_bound=50.0)
+        spoke.extract_and_store_updated_nonant_bounds(new_dual=True)
+
+        # The ROOT position is safely tightened, while the branch-specific
+        # position retains neutral bounds instead of acquiring an invalid
+        # upper bound of -inf.
+        np.testing.assert_array_equal(
+            spoke._nonant_lower_bounds, [0.0, -np.inf]
+        )
+        np.testing.assert_array_equal(
+            spoke._nonant_upper_bounds, [5.0, np.inf]
+        )
+
+    def test_unrelated_multistage_reduced_costs_are_not_published(self):
+        class _Var:
+            def __init__(self, name):
+                self.name = name
+                self.lb = 0.0
+                self.ub = 10.0
+
+        class _Scenario:
+            pass
+
+        root_var = _Var("root")
+        branch_var = _Var("branch_a")
+        indices = {("ROOT", 0): root_var, ("ROOT_0", 0): branch_var}
+        scenario = _Scenario()
+        scenario._solver_plugin = None
+        scenario._mpisppy_probability = 0.5
+        scenario._mpisppy_data = types.SimpleNamespace(nonant_indices=indices)
+        scenario._mpisppy_model = types.SimpleNamespace(
+            xbars={key: types.SimpleNamespace(value=0.0) for key in indices},
+            xsqbars=dict.fromkeys(indices, 0.0),
+        )
+        scenario.rc = {root_var: 2.0, branch_var: 4.0}
+        spoke = object.__new__(ReducedCostsSpoke)
+        spoke.opt = types.SimpleNamespace(
+            local_scenarios={"branch_a": scenario},
+            Compute_Xbar=lambda: None,
+        )
+        spoke.send_buffers = {
+            Field.EXPECTED_REDUCED_COST: _ArrayBuffer(2),
+            Field.SCENARIO_REDUCED_COST: _ArrayBuffer(2),
+        }
+        spoke.nonant_length = 2
+        spoke._scenario_rc_buffer = np.zeros(2)
+        spoke._modeler_fixed_nonants = {scenario: set()}
+        spoke._shared_position = np.array([True, False])
+        spoke.consensus_threshold = 1e-4
+        spoke.bound_tol = 1e-6
+        spoke.cylinder_comm = _IntersectionComm(
+            remote_lbs=[0.0, 0.0],
+            remote_ubs=[10.0, 10.0],
+            remote_rc=[3.0, 5.0],
+        )
+        spoke.got_kill_signal = lambda: False
+        spoke.put_send_buffer = lambda *args: None
+
+        spoke.extract_and_store_reduced_costs()
+
+        np.testing.assert_array_equal(spoke.rc_global[:1], [4.0])
+        self.assertTrue(np.isnan(spoke.rc_global[1]))
 
     def test_bundle_bounds_include_every_consensus_variable(self):
         indices = [("ROOT", 0), ("ROOT", 1)]
