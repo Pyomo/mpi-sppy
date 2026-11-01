@@ -273,6 +273,24 @@ class Extension:
             f"{type(self).__name__} does not implement restore_state")
 
 
+def _refuse_duplicate_names(ext_classes):
+    """Raise if two different classes in ext_classes share a ``__name__``.
+
+    The containers below store each extension under its class name, so the
+    second of two such classes would silently replace the first.
+    """
+    seen = {}
+    for constr in ext_classes:
+        other = seen.setdefault(constr.__name__, constr)
+        if other is not constr:
+            raise RuntimeError(
+                f"Two extension classes are named {constr.__name__}: "
+                f"{other.__module__}.{other.__qualname__} and "
+                f"{constr.__module__}.{constr.__qualname__}. "
+                "Rename one of them."
+            )
+
+
 class MultiExtension(Extension):
     """ Container for all the extension classes we are using.
         Also grabs ph and rank, so ad hoc calls (e.g., lagrangian) can use them.
@@ -280,6 +298,7 @@ class MultiExtension(Extension):
     def __init__(self, ph, ext_classes):
         super().__init__(ph)
         self.extdict = dict()
+        _refuse_duplicate_names(ext_classes)
 
         # Construct multiple extension objects
         for constr in ext_classes:
@@ -410,6 +429,7 @@ class EFMultiExtension(EFExtension):
     def __init__(self, ef_object, ext_classes):
         super().__init__(ef_object)
         self.extdict = dict()
+        _refuse_duplicate_names(ext_classes)
 
         # Construct multiple extension objects
         for constr in ext_classes:

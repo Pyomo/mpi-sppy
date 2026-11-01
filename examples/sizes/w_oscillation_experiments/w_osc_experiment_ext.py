@@ -411,6 +411,4 @@ class WOscExperimentMonitor(Extension):
                 json.dump(q, f)
 
 
-# A module-level instance is not created; the driver passes the class to
-# vanilla.extension_adder. (The generic --user-defined-extensions loader, which
-# scans for instances, is not used here.)
+# The driver passes the class to vanilla.extension_adder directly.
