@@ -170,19 +170,24 @@ def project_W_to_zero_sum(opt):
     """Project scenario weights onto the dual-feasible nonanticipativity space.
 
     For every scenario-tree node and nonanticipative position, subtract the
-    probability-weighted node mean from every local scenario copy. This is a
-    collective operation over the node communicators. It is useful when an
-    asynchronous publisher supplies pieces of W from different generations:
-    the mixed snapshot is not necessarily dual feasible, but its projection is
-    and can therefore be used for a valid Lagrangian bound.
+    probability-weighted node mean from every active local scenario copy.
+    Variable-probability copies with zero probability remain masked to zero.
+    This is a collective operation over the node communicators. It is useful
+    when an asynchronous publisher supplies pieces of W from different
+    generations: the mixed snapshot is not necessarily dual feasible, but its
+    projection is and can therefore be used for a valid Lagrangian bound.
 
     Returns the node-wise means that were removed.
     """
     Wbars_by_node = Wbar_by_node(opt)
     for scenario in opt.local_scenarios.values():
+        data = scenario._mpisppy_data
         for (ndn, i) in scenario._mpisppy_data.nonant_indices:
+            node_mask = getattr(data, "prob0_mask", {}).get(ndn, 1.0)
+            mask = node_mask[i] if isinstance(node_mask, np.ndarray) \
+                else node_mask
             scenario._mpisppy_model.W[(ndn, i)]._value -= \
-                Wbars_by_node[ndn][i]
+                mask * Wbars_by_node[ndn][i]
     return Wbars_by_node
 
 

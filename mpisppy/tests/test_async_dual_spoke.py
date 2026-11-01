@@ -127,7 +127,7 @@ def test_lagrangian_projects_async_weights_before_solving():
 class _Scenario:
     """Hashable scenario holder for the projection test."""
 
-    def __init__(self, probability, weights):
+    def __init__(self, probability, weights, prob0_mask=1.0):
         model = pyo.ConcreteModel()
         model.I = pyo.Set(initialize=[("ROOT", 0), ("ROOT", 1)], dimen=2)
         model.W = pyo.Param(
@@ -141,6 +141,7 @@ class _Scenario:
             nlens={"ROOT": 2},
             nonant_indices={("ROOT", 0): object(), ("ROOT", 1): object()},
             prob_coeff={"ROOT": probability},
+            prob0_mask={"ROOT": prob0_mask},
         )
         self._mpisppy_model = SimpleNamespace(W=model.W)
 
@@ -160,5 +161,31 @@ def test_projection_removes_nodewise_probability_weighted_mean():
     removed = project_W_to_zero_sum(opt)
 
     np.testing.assert_allclose(removed["ROOT"], [4.0, -0.5])
+    np.testing.assert_allclose(Wbar_by_node(opt)["ROOT"], [0.0, 0.0],
+                               atol=1e-15)
+
+
+@pytest.mark.skipif(MPI.COMM_WORLD.Get_size() > 1,
+                    reason="serial projection test")
+def test_projection_preserves_zero_variable_probability_weights():
+    scenarios = {
+        "s0": _Scenario(
+            np.array([1.0, 0.25]), [6.0, 4.0],
+            prob0_mask=np.array([1.0, 1.0]),
+        ),
+        "s1": _Scenario(
+            np.array([0.0, 0.75]), [0.0, -2.0],
+            prob0_mask=np.array([0.0, 1.0]),
+        ),
+    }
+    opt = SimpleNamespace(
+        local_scenarios=scenarios,
+        comms={"ROOT": MPI.COMM_WORLD},
+    )
+
+    removed = project_W_to_zero_sum(opt)
+
+    np.testing.assert_allclose(removed["ROOT"], [6.0, -0.5])
+    assert pyo.value(scenarios["s1"]._mpisppy_model.W[("ROOT", 0)]) == 0.0
     np.testing.assert_allclose(Wbar_by_node(opt)["ROOT"], [0.0, 0.0],
                                atol=1e-15)
