@@ -358,6 +358,11 @@ class ReducedCostsSpoke(LagrangianOuterBound):
 
         rcg = np.zeros(self.nonant_length)
         self.cylinder_comm.Allreduce(rc, rcg, op=MPI.SUM)
+        # A positional reduction is meaningful only when that position names
+        # the same decision throughout the cylinder.  Keep the published field
+        # conservative for multistage positions that represent unrelated nodes;
+        # consumers such as ReducedCostsFixer treat NaN as unavailable.
+        rcg[~self._shared_position] = np.nan
         self.rc_global = rcg
 
         self.put_send_buffer(
