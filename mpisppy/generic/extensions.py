@@ -8,11 +8,111 @@
 ###############################################################################
 """Extension wiring for the hub dict."""
 
+import importlib
+import inspect
+import json
 import os
+import sys
 
 import mpisppy.utils.cfg_vanilla as vanilla
-import mpisppy.utils.sputils as sputils
 from mpisppy.extensions.extension import Extension
+
+
+def _is_module_in(module_file, dpath, mname):
+    """True if module_file is dpath/<mname>.py or dpath/<mname>/__init__.py,
+    with the dots of mname as directories; symlinks are followed."""
+    if module_file is None:
+        return False
+    base = os.path.join(dpath, *mname.split("."))
+    for candidate in (base + ".py", os.path.join(base, "__init__.py")):
+        try:
+            if os.path.samefile(module_file, candidate):
+                return True
+        except OSError:  # candidate does not exist
+            pass
+    return False
+
+
+def load_user_extension_module(ext_name):
+    """Import a module named by --user-defined-extensions.
+
+    The name is resolved the way ``--module-name`` is: a directory part,
+    if any, is put on ``sys.path`` (no directory part means the current
+    directory), and the rest is imported as a module name, so ``myext``,
+    ``mypkg.myext`` and ``some/dir/myext`` all work. A trailing ``.py`` is
+    dropped. When a directory is given, the module imported must come from
+    it; another module of the same name (installed, already imported, or
+    from another directory given earlier) raises instead of being used.
+
+    Args:
+        ext_name (str): the module name or path, as given on the command line
+
+    Returns:
+        (str, list, dict or None): the imported module's name; every
+        non-abstract subclass of ``Extension`` defined in the module (not ones
+        it imports), in source order; and the contents of ``<module>.json``
+        from the module's directory, or None when there is no such file.
+    """
+    dpath, mname = os.path.split(ext_name.rstrip(os.sep + (os.altsep or "")))
+    if mname.endswith(".py"):
+        mname = mname[:-len(".py")]
+    if mname in ("", ".", ".."):
+        raise RuntimeError(
+            f"--user-defined-extensions {ext_name!r} does not name a module")
+    if dpath not in sys.path:
+        sys.path.append(dpath)
+    ext_module = importlib.import_module(mname)
+    module_file = getattr(ext_module, "__file__", None)
+    if dpath and not _is_module_in(module_file, dpath, mname):
+        # The directory goes at the end of sys.path, and a module already
+        # imported is reused, so another module of the same name can win.
+        base = os.path.join(dpath, *mname.split("."))
+        raise RuntimeError(
+            f"--user-defined-extensions {ext_name}: importing {mname} gave "
+            f"{module_file or 'a module with no file'}, not {base}.py or "
+            f"{os.path.join(base, '__init__.py')}; with a path, only a Python "
+            f"source file is accepted. If another module named {mname} was "
+            f"already imported or comes earlier on sys.path, rename yours."
+        )
+    found = [
+        attr for attr in vars(ext_module).values()
+        if inspect.isclass(attr)
+        and issubclass(attr, Extension)
+        and not inspect.isabstract(attr)
+        and attr.__module__ == ext_module.__name__
+    ]
+    if not found:
+        raise RuntimeError(
+            f"Could not find a subclass of mpisppy.extensions.extension.Extension "
+            f"defined in module {ext_name}"
+        )
+    ext_options = None
+    if module_file is not None:
+        json_filename = os.path.splitext(module_file)[0] + ".json"
+        if os.path.exists(json_filename):
+            with open(json_filename) as f:
+                ext_options = json.load(f)
+    return ext_module.__name__, found, ext_options
+
+
+def refuse_user_extensions_without_a_hub(cfg, mode, remedy=None):
+    """Refuse --user-defined-extensions on a path that never builds a hub.
+
+    configure_extensions, which attaches them, runs only for a hub, so the
+    modes that branch off ahead of do_decomp would otherwise ignore the flag
+    and exit 0. ``remedy`` says how to get a hub when the user did not pick
+    ``mode`` themselves (a default, or --out-of-the-box chose it); without
+    it the message suggests dropping ``mode``.
+    """
+    if cfg.get("user_defined_extensions") is None:
+        return
+    if remedy is None:
+        remedy = f"Drop {mode}"
+    raise RuntimeError(
+        f"--user-defined-extensions cannot be used with {mode}, which does "
+        f"not build a hub, so the extensions would never be attached. "
+        f"{remedy}, or drop --user-defined-extensions."
+    )
 
 
 def configure_extensions(hub_dict, module, cfg):
@@ -110,26 +210,13 @@ def configure_extensions(hub_dict, module, cfg):
         }
 
     if cfg.user_defined_extensions is not None:
-        import json
         for ext_name in cfg.user_defined_extensions:
-            ext_module = sputils.module_name_to_module(ext_name)
-            user_ext_classes = []
-            # Collect all valid Extension instances in the module to ensure no valid extensions are missed.
-            for name in dir(ext_module):
-                if isinstance(getattr(ext_module, name), Extension):
-                    user_ext_classes.append(getattr(ext_module, name))
-            if not user_ext_classes:
-                raise RuntimeError(f"Could not find an mpisppy extension in module {ext_name}")
-            # Add all found extensions to the hub_dict
+            mod_name, user_ext_classes, ext_options = \
+                load_user_extension_module(ext_name)
             for ext_class in user_ext_classes:
                 vanilla.extension_adder(hub_dict, ext_class)
-            # grab JSON for this module's option dictionary
-            json_filename = ext_name+".json"
-            if os.path.exists(json_filename):
-                ext_options = json.load(json_filename)
-                hub_dict['opt_kwargs']['options'][ext_name] = ext_options
-            else:
-                raise RuntimeError(f"JSON options file {json_filename} for user defined extension not found")
+            if ext_options is not None:
+                hub_dict['opt_kwargs']['options'][mod_name] = ext_options
 
     if cfg.sep_rho:
         vanilla.add_sep_rho(hub_dict, cfg)
