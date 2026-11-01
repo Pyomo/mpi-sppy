@@ -279,7 +279,7 @@ class TestReducedCostInitialBounds(unittest.TestCase):
         scenario._mpisppy_data = types.SimpleNamespace(nonant_indices=indices)
         scenario._mpisppy_model = types.SimpleNamespace(
             xbars={key: types.SimpleNamespace(value=0.0) for key in indices},
-            xsqbars={key: 0.0 for key in indices},
+            xsqbars=dict.fromkeys(indices, 0.0),
         )
         scenario.rc = {root_var: 2.0, branch_var: 4.0}
         spoke = object.__new__(ReducedCostsSpoke)
