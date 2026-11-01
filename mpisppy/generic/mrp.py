@@ -181,8 +181,8 @@ def do_mrp(module_fname, module, cfg):
     if cfg.get("xhat_method", "EF") == "EF":
         # Only --xhat-method cylinders builds a hub (through do_decomp).
         refuse_user_extensions_without_a_hub(
-            cfg, "--xhat-method EF (the default)",
-            remedy="Use --xhat-method cylinders")
+            cfg, "--xhat-method EF",
+            remedy="Use --xhat-method cylinders (EF is the default)")
 
     global_comm = MPI.COMM_WORLD
     global_rank = global_comm.Get_rank()

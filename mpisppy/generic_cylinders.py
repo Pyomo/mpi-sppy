@@ -204,7 +204,7 @@ def main():
             if (_mode == "--EF" and ootb_state is not None
                     and ootb_state.decision.ef_reason != "user"):
                 refuse_user_extensions_without_a_hub(
-                    cfg, "the EF, which --out-of-the-box chose",
+                    cfg, "the EF (chosen by --out-of-the-box)",
                     remedy="Ask for a decomposition (a hub or spoke flag) "
                            "on enough ranks")
             else:

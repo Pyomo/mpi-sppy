@@ -262,14 +262,14 @@ class TestUserDefinedExtensions(unittest.TestCase):
         for sub in ("a", "b"):
             self._write_module(f"{sub}.{self.modname}", _USER_EXT_SOURCE)
         self._load(os.path.join(self.tmp, "a", self.modname))
-        with self.assertRaisesRegex(RuntimeError, "not the file in"):
+        with self.assertRaisesRegex(RuntimeError, "only a Python source file is accepted"):
             self._load(os.path.join(self.tmp, "b", self.modname))
 
     def test_path_shadowed_by_imported_module_refused(self):
         # a file named like a module already imported (json): the path must
         # not reuse that module and then report that it defines no extension
         self._write_module("shadow.json", _USER_EXT_SOURCE)
-        with self.assertRaisesRegex(RuntimeError, "not the file in"):
+        with self.assertRaisesRegex(RuntimeError, "only a Python source file is accepted"):
             self._load(os.path.join(self.tmp, "shadow", "json"))
 
     def test_symlinked_file_in_given_directory(self):
@@ -289,7 +289,7 @@ class TestUserDefinedExtensions(unittest.TestCase):
     def test_path_naming_builtin_module_refused(self):
         # sys is built in (no __file__): a path must not quietly load it
         self._write_module("d.sys", _USER_EXT_SOURCE)
-        with self.assertRaisesRegex(RuntimeError, "a built-in module"):
+        with self.assertRaisesRegex(RuntimeError, "a module with no file"):
             self._load(os.path.join(self.tmp, "d", "sys"))
 
     def test_path_above_the_shadowing_module_refused(self):
@@ -297,7 +297,7 @@ class TestUserDefinedExtensions(unittest.TestCase):
         # dpath/json.py and dpath/json/__init__.py are not json's file
         lib_parent = os.path.dirname(os.path.dirname(
             os.path.dirname(json.__file__)))
-        with self.assertRaisesRegex(RuntimeError, "not the file in"):
+        with self.assertRaisesRegex(RuntimeError, "only a Python source file is accepted"):
             self._load(os.path.join(lib_parent, "json"))
 
     def test_symlinked_package_directory(self):
@@ -382,7 +382,7 @@ class TestUserDefinedExtensions(unittest.TestCase):
         ]
         with patch.object(sys, "argv", argv), \
              self.assertRaisesRegex(RuntimeError,
-                                    "which --out-of-the-box chose") as cm:
+                                    r"the EF \(chosen by --out-of-the-box\)") as cm:
             runpy.run_module("mpisppy.generic_cylinders",
                              run_name="__main__")
         self.assertNotIn("Drop --EF", str(cm.exception))

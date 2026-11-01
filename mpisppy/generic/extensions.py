@@ -66,11 +66,13 @@ def load_user_extension_module(ext_name):
     if dpath and not _is_module_in(module_file, dpath, mname):
         # The directory goes at the end of sys.path, and a module already
         # imported is reused, so another module of the same name can win.
+        base = os.path.join(dpath, *mname.split("."))
         raise RuntimeError(
             f"--user-defined-extensions {ext_name}: importing {mname} gave "
-            f"{module_file or 'a built-in module'}, not the file in {dpath}. "
-            f"Another module named {mname} was already imported or comes "
-            f"earlier on sys.path; rename yours."
+            f"{module_file or 'a module with no file'}, not {base}.py or "
+            f"{os.path.join(base, '__init__.py')}; with a path, only a Python "
+            f"source file is accepted. If another module named {mname} was "
+            f"already imported or comes earlier on sys.path, rename yours."
         )
     found = [
         attr for attr in vars(ext_module).values()
