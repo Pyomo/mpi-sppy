@@ -8,11 +8,47 @@
 ###############################################################################
 """Extension wiring for the hub dict."""
 
+import inspect
+import json
 import os
 
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.sputils as sputils
 from mpisppy.extensions.extension import Extension
+
+
+def load_user_extension_module(ext_name):
+    """Import a module named by --user-defined-extensions.
+
+    Args:
+        ext_name (str): the module name, as given on the command line
+
+    Returns:
+        (list, dict or None): every subclass of ``Extension`` defined in the
+        module (not ones it imports), in the order they appear in the source,
+        and the contents of ``<module>.json`` from the module's directory, or
+        None when there is no such file.
+    """
+    ext_module = sputils.module_name_to_module(ext_name)
+    found = [
+        attr for attr in vars(ext_module).values()
+        if inspect.isclass(attr)
+        and issubclass(attr, Extension)
+        and attr.__module__ == ext_module.__name__
+    ]
+    if not found:
+        raise RuntimeError(
+            f"Could not find a subclass of mpisppy.extensions.extension.Extension "
+            f"defined in module {ext_name}"
+        )
+    ext_options = None
+    module_file = getattr(ext_module, "__file__", None)
+    if module_file is not None:
+        json_filename = os.path.splitext(module_file)[0] + ".json"
+        if os.path.exists(json_filename):
+            with open(json_filename) as f:
+                ext_options = json.load(f)
+    return found, ext_options
 
 
 def configure_extensions(hub_dict, module, cfg):
@@ -110,26 +146,12 @@ def configure_extensions(hub_dict, module, cfg):
         }
 
     if cfg.user_defined_extensions is not None:
-        import json
         for ext_name in cfg.user_defined_extensions:
-            ext_module = sputils.module_name_to_module(ext_name)
-            user_ext_classes = []
-            # Collect all valid Extension instances in the module to ensure no valid extensions are missed.
-            for name in dir(ext_module):
-                if isinstance(getattr(ext_module, name), Extension):
-                    user_ext_classes.append(getattr(ext_module, name))
-            if not user_ext_classes:
-                raise RuntimeError(f"Could not find an mpisppy extension in module {ext_name}")
-            # Add all found extensions to the hub_dict
+            user_ext_classes, ext_options = load_user_extension_module(ext_name)
             for ext_class in user_ext_classes:
                 vanilla.extension_adder(hub_dict, ext_class)
-            # grab JSON for this module's option dictionary
-            json_filename = ext_name+".json"
-            if os.path.exists(json_filename):
-                ext_options = json.load(json_filename)
+            if ext_options is not None:
                 hub_dict['opt_kwargs']['options'][ext_name] = ext_options
-            else:
-                raise RuntimeError(f"JSON options file {json_filename} for user defined extension not found")
 
     if cfg.sep_rho:
         vanilla.add_sep_rho(hub_dict, cfg)

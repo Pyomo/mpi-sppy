@@ -33,7 +33,13 @@ command-line flags:
   ``0.1``) -- activates the mipgapper's auto-gap mode for cylinders
 - ``--timed-mipgap <curve>`` -- activates the timed MIP gap extension and sets
   the timed MIP gap curve as ``gap:time`` pairs (e.g., ``"0.02:100 0.05:200"``)
-- ``--user-defined-extensions <module>`` -- loads a custom extension
+- ``--user-defined-extensions <module>`` -- attaches every subclass of
+  ``Extension`` defined in the module (classes the module only imports are
+  not attached); for several modules, quote a space-separated list, e.g.
+  ``--user-defined-extensions "myext1 myext2"``. If ``<module>.json`` is
+  next to the module's source file, its contents become the hub option
+  ``<module>``, which the extension reads as
+  ``self.opt.options["<module>"]``; the file is optional.
 - ``--grad-rho`` -- activates gradient-based rho (see :ref:`rho_setting`)
 - ``--use-norm-rho-updater`` -- activates the norm rho updater
 - ``--use-primal-dual-rho-updater`` -- activates the primal-dual rho updater

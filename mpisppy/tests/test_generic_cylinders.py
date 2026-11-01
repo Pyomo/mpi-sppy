@@ -10,6 +10,7 @@
 import csv
 import glob
 import io
+import json
 import os
 import runpy
 import sys
@@ -144,6 +145,111 @@ class TestGetRhoSetter(unittest.TestCase):
         cfg = _make_rho_cfg(sep_rho=True)
         _get_rho_setter(_NoRhoSetterModule(), cfg)
         self.assertEqual(cfg.default_rho, 1)
+
+
+_USER_EXT_SOURCE = """
+import json
+import os
+from mpisppy.extensions.extension import Extension
+from mpisppy.extensions.xhatclosest import XhatClosest  # imported: not loaded
+
+
+class _Helper:
+    pass
+
+
+class RecordingExt(Extension):
+    def post_everything(self):
+        opts = self.opt.options.get(__name__)
+        out = os.path.join(os.path.dirname(__file__), __name__ + ".out")
+        with open(out, "w") as f:
+            json.dump({"options": opts,
+                       "iterations": self.opt._PHIter}, f)
+
+
+class SecondExt(Extension):
+    pass
+"""
+
+
+class TestUserDefinedExtensions(unittest.TestCase):
+    """--user-defined-extensions loads the Extension classes a module defines
+    (issue #895)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = self._tmp.name
+        # a fresh module name per test, so an import from an earlier test
+        # is never reused
+        self.modname = f"user_ext_{self.id().rsplit('.', 1)[-1]}"
+        with open(os.path.join(self.tmp, self.modname + ".py"), "w") as f:
+            f.write(_USER_EXT_SOURCE)
+        sys.path.insert(0, self.tmp)
+
+    def tearDown(self):
+        sys.path.remove(self.tmp)
+        sys.modules.pop(self.modname, None)
+        self._tmp.cleanup()
+
+    def _write_json(self, options):
+        with open(os.path.join(self.tmp, self.modname + ".json"), "w") as f:
+            json.dump(options, f)
+
+    def test_loads_defined_classes_only(self):
+        from mpisppy.generic.extensions import load_user_extension_module
+        classes, options = load_user_extension_module(self.modname)
+        self.assertEqual([c.__name__ for c in classes],
+                         ["RecordingExt", "SecondExt"])
+        self.assertIsNone(options)
+
+    def test_json_next_to_module(self):
+        from mpisppy.generic.extensions import load_user_extension_module
+        self._write_json({"answer": 42})
+        cwd = os.getcwd()
+        # the json is found by the module's location, not the cwd
+        with tempfile.TemporaryDirectory() as other:
+            os.chdir(other)
+            try:
+                _, options = load_user_extension_module(self.modname)
+            finally:
+                os.chdir(cwd)
+        self.assertEqual(options, {"answer": 42})
+
+    def test_no_extension_class_raises(self):
+        from mpisppy.generic.extensions import load_user_extension_module
+        name = self.modname + "_empty"
+        with open(os.path.join(self.tmp, name + ".py"), "w") as f:
+            f.write("from mpisppy.extensions.extension import Extension\n")
+        try:
+            with self.assertRaisesRegex(RuntimeError, "Could not find"):
+                load_user_extension_module(name)
+        finally:
+            sys.modules.pop(name, None)
+
+    @unittest.skipIf(not solver_available,
+                     "no MIP solver available")
+    def test_generic_cylinders_runs_user_extension(self):
+        self._write_json({"answer": 42})
+        argv = [
+            "generic_cylinders",
+            "--module-name", "mpisppy.tests.examples.farmer",
+            "--num-scens", "3",
+            "--solver-name", solver_name,
+            "--max-solver-threads", "1",
+            "--max-iterations", "2",
+            "--default-rho", "1",
+            "--user-defined-extensions", self.modname,
+        ]
+        with patch.object(sys, "argv", argv):
+            runpy.run_module("mpisppy.generic_cylinders",
+                             run_name="__main__")
+        out = os.path.join(self.tmp, self.modname + ".out")
+        self.assertTrue(os.path.exists(out),
+                        "the user extension's post_everything did not run")
+        with open(out) as f:
+            record = json.load(f)
+        self.assertEqual(record["options"], {"answer": 42})
+        self.assertGreaterEqual(record["iterations"], 1)
 
 
 class TestGenericCylindersCVaR(unittest.TestCase):
