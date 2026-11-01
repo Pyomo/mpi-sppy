@@ -18,6 +18,21 @@ import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.extensions.extension import Extension
 
 
+def _is_module_in(module_file, dpath, mname):
+    """True if module_file is dpath/<mname>.py or dpath/<mname>/__init__.py,
+    with the dots of mname as directories; symlinks are followed."""
+    if module_file is None:
+        return False
+    base = os.path.join(dpath, *mname.split("."))
+    for candidate in (base + ".py", os.path.join(base, "__init__.py")):
+        try:
+            if os.path.samefile(module_file, candidate):
+                return True
+        except OSError:  # candidate does not exist
+            pass
+    return False
+
+
 def load_user_extension_module(ext_name):
     """Import a module named by --user-defined-extensions.
 
@@ -41,27 +56,22 @@ def load_user_extension_module(ext_name):
     dpath, mname = os.path.split(ext_name.rstrip(os.sep + (os.altsep or "")))
     if mname.endswith(".py"):
         mname = mname[:-len(".py")]
+    if mname in ("", ".", ".."):
+        raise RuntimeError(
+            f"--user-defined-extensions {ext_name!r} does not name a module")
     if dpath not in sys.path:
         sys.path.append(dpath)
     ext_module = importlib.import_module(mname)
     module_file = getattr(ext_module, "__file__", None)
-    if dpath and module_file is not None:
+    if dpath and not _is_module_in(module_file, dpath, mname):
         # The directory goes at the end of sys.path, and a module already
         # imported is reused, so another module of the same name can win.
-        # Compare directories, not the file, so a symlinked file still counts.
-        want = os.path.realpath(dpath)
-        got = os.path.realpath(os.path.dirname(module_file))
-        try:
-            inside = os.path.commonpath([want, got]) == want
-        except ValueError:  # different drives on Windows
-            inside = False
-        if not inside:
-            raise RuntimeError(
-                f"--user-defined-extensions {ext_name}: importing {mname} "
-                f"gave {module_file}, which is not in {dpath}. Another module "
-                f"named {mname} was already imported or comes earlier on "
-                f"sys.path; rename yours."
-            )
+        raise RuntimeError(
+            f"--user-defined-extensions {ext_name}: importing {mname} gave "
+            f"{module_file or 'a built-in module'}, not the file in {dpath}. "
+            f"Another module named {mname} was already imported or comes "
+            f"earlier on sys.path; rename yours."
+        )
     found = [
         attr for attr in vars(ext_module).values()
         if inspect.isclass(attr)
@@ -83,27 +93,23 @@ def load_user_extension_module(ext_name):
     return ext_module.__name__, found, ext_options
 
 
-def refuse_user_extensions_without_a_hub(cfg, mode, chosen_by_ootb=False):
+def refuse_user_extensions_without_a_hub(cfg, mode, remedy=None):
     """Refuse --user-defined-extensions on a path that never builds a hub.
 
     configure_extensions, which attaches them, runs only for a hub, so the
     modes that branch off ahead of do_decomp would otherwise ignore the flag
-    and exit 0. ``chosen_by_ootb`` says --out-of-the-box picked ``mode``, so
-    the message does not tell the user to drop a flag they never gave.
+    and exit 0. ``remedy`` says how to get a hub when the user did not pick
+    ``mode`` themselves (a default, or --out-of-the-box chose it); without
+    it the message suggests dropping ``mode``.
     """
     if cfg.get("user_defined_extensions") is None:
         return
-    if chosen_by_ootb:
-        raise RuntimeError(
-            f"--out-of-the-box chose {mode}, which does not build a hub, so "
-            f"--user-defined-extensions would never be attached. Ask for a "
-            f"decomposition (a hub or spoke flag) on enough ranks, or drop "
-            f"--user-defined-extensions."
-        )
+    if remedy is None:
+        remedy = f"Drop {mode}"
     raise RuntimeError(
-        f"--user-defined-extensions was given together with {mode}, which "
-        f"does not build a hub, so the extensions would never be attached. "
-        f"Drop --user-defined-extensions, or drop {mode}."
+        f"--user-defined-extensions cannot be used with {mode}, which does "
+        f"not build a hub, so the extensions would never be attached. "
+        f"{remedy}, or drop --user-defined-extensions."
     )
 
 

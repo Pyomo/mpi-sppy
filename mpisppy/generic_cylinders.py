@@ -201,10 +201,14 @@ def main():
             ("--EF", bool(cfg.EF))):
         if _selected:
             refuse_checkpointing_without_a_hub(cfg, _mode)
-            refuse_user_extensions_without_a_hub(
-                cfg, _mode,
-                chosen_by_ootb=(_mode == "--EF" and ootb_state is not None
-                                and ootb_state.decision.ef_reason != "user"))
+            if (_mode == "--EF" and ootb_state is not None
+                    and ootb_state.decision.ef_reason != "user"):
+                refuse_user_extensions_without_a_hub(
+                    cfg, "the EF, which --out-of-the-box chose",
+                    remedy="Ask for a decomposition (a hub or spoke flag) "
+                           "on enough ranks")
+            else:
+                refuse_user_extensions_without_a_hub(cfg, _mode)
             break
 
     if cfg.pickle_bundles_dir is not None:

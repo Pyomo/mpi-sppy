@@ -262,14 +262,14 @@ class TestUserDefinedExtensions(unittest.TestCase):
         for sub in ("a", "b"):
             self._write_module(f"{sub}.{self.modname}", _USER_EXT_SOURCE)
         self._load(os.path.join(self.tmp, "a", self.modname))
-        with self.assertRaisesRegex(RuntimeError, "which is not in"):
+        with self.assertRaisesRegex(RuntimeError, "not the file in"):
             self._load(os.path.join(self.tmp, "b", self.modname))
 
     def test_path_shadowed_by_imported_module_refused(self):
         # a file named like a module already imported (json): the path must
         # not reuse that module and then report that it defines no extension
         self._write_module("shadow.json", _USER_EXT_SOURCE)
-        with self.assertRaisesRegex(RuntimeError, "which is not in"):
+        with self.assertRaisesRegex(RuntimeError, "not the file in"):
             self._load(os.path.join(self.tmp, "shadow", "json"))
 
     def test_symlinked_file_in_given_directory(self):
@@ -285,6 +285,35 @@ class TestUserDefinedExtensions(unittest.TestCase):
         mod_name, _, _ = self._load(
             os.path.join(self.tmp, self.modname) + os.sep)
         self.assertEqual(mod_name, self.modname)
+
+    def test_path_naming_builtin_module_refused(self):
+        # sys is built in (no __file__): a path must not quietly load it
+        self._write_module("d.sys", _USER_EXT_SOURCE)
+        with self.assertRaisesRegex(RuntimeError, "a built-in module"):
+            self._load(os.path.join(self.tmp, "d", "sys"))
+
+    def test_path_above_the_shadowing_module_refused(self):
+        # json's own package directory is below this dpath, but
+        # dpath/json.py and dpath/json/__init__.py are not json's file
+        lib_parent = os.path.dirname(os.path.dirname(
+            os.path.dirname(json.__file__)))
+        with self.assertRaisesRegex(RuntimeError, "not the file in"):
+            self._load(os.path.join(lib_parent, "json"))
+
+    def test_symlinked_package_directory(self):
+        pkg = self.modname + "_spkg"
+        self._write_module(f"elsewhere.{pkg}.__init__", _USER_EXT_SOURCE)
+        os.makedirs(os.path.join(self.tmp, "d2"))
+        os.symlink(os.path.join(self.tmp, "elsewhere", pkg),
+                   os.path.join(self.tmp, "d2", pkg))
+        mod_name, classes, _ = self._load(os.path.join(self.tmp, "d2", pkg))
+        self.assertEqual(mod_name, pkg)
+        self.assertEqual(len(classes), 2)
+
+    def test_degenerate_names_refused(self):
+        for bad in ("/", "." + os.sep, ""):
+            with self.assertRaisesRegex(RuntimeError, "does not name a module"):
+                self._load(bad)
 
     def test_dotted_name_in_package(self):
         sys.path.insert(0, self.tmp)
@@ -340,12 +369,23 @@ class TestUserDefinedExtensions(unittest.TestCase):
             self.assertEqual(record["options"], {"answer": 42})
             self.assertEqual(record["iterations"], 2)
 
-    def test_refusal_names_ootb_choice(self):
-        from mpisppy.generic.extensions import refuse_user_extensions_without_a_hub
-        cfg = SimpleNamespace(get=lambda k: [self.modname])
-        with self.assertRaisesRegex(RuntimeError, "--out-of-the-box chose --EF"):
-            refuse_user_extensions_without_a_hub(cfg, "--EF",
-                                                 chosen_by_ootb=True)
+    def test_generic_cylinders_ootb_EF_refusal_names_ootb(self):
+        # --out-of-the-box picks the EF on one rank; the user gave no --EF,
+        # so the message must not tell them to drop it
+        sys.path.insert(0, self.tmp)
+        argv = [
+            "generic_cylinders",
+            "--module-name", "mpisppy.tests.examples.farmer",
+            "--num-scens", "3",
+            "--out-of-the-box",
+            "--user-defined-extensions", self.modname,
+        ]
+        with patch.object(sys, "argv", argv), \
+             self.assertRaisesRegex(RuntimeError,
+                                    "which --out-of-the-box chose") as cm:
+            runpy.run_module("mpisppy.generic_cylinders",
+                             run_name="__main__")
+        self.assertNotIn("Drop --EF", str(cm.exception))
 
     def test_refused_without_a_hub(self):
         from mpisppy.generic.extensions import refuse_user_extensions_without_a_hub
@@ -354,8 +394,7 @@ class TestUserDefinedExtensions(unittest.TestCase):
             SimpleNamespace(get=lambda k: None), "--EF")
         cfg = SimpleNamespace(get=lambda k: [self.modname])
         with self.assertRaisesRegex(RuntimeError,
-                                    "--user-defined-extensions was given "
-                                    "together with --EF"):
+                                    "cannot be used with --EF.*Drop --EF"):
             refuse_user_extensions_without_a_hub(cfg, "--EF")
 
     def test_generic_cylinders_EF_refuses_user_extensions(self):
