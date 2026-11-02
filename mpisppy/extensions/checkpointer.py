@@ -318,25 +318,21 @@ class Checkpointer(Extension):
 
         ckpt.probe_directory_is_writable(opt, self.ckpt_dir)
 
-        # Not a refusal, but deleting can fail on one rank like the checks
-        # above, so it is agreed with them.
-        # The hub only: a dual cylinder is not a spoke_mode one either, and
-        # two cylinders deleting the one directory at once race each other.
+        # Deletion can fail on rank 0, so keep it in the setup agreement.
+        # Only the hub clears: another cylinder deleting the same directory
+        # at the same time would race it.
         if (not self.spoke_mode and not self.dual_spoke_mode
                 and opt.cylinder_rank == 0):
-            self._clear_other_studies_spoke_files()
+            self._clear_previous_checkpoint_for_fresh_run()
 
-    def _clear_other_studies_spoke_files(self):
-        """Prepare a fresh directory without hiding an earlier checkpoint.
+    def _clear_previous_checkpoint_for_fresh_run(self):
+        """Discard an earlier study's checkpoint before this run can write.
 
-        A spoke overwrites only its own file, and only once it has an
-        incumbent or dual weights to write, so a run started in a directory
-        an earlier study used
-        leaves that study's spoke files beside its own. A later resume of
-        this run then restores them into whichever spoke has the same name:
-        silently when the configuration matches, and with a refusal that
-        kills the spoke when it does not. When this run resumes from the
-        directory it writes to, those files are this study's and are kept.
+        The old manifest must go first: until this run publishes its first
+        checkpoint, it would otherwise let a later resume load the old hub
+        state. Spokes overwrite only their own files, so their old files must
+        go too. A resume into the same directory keeps all of this study's
+        files.
 
         The hub does this, once: every cylinder shares the cfg that decides
         whether a Checkpointer is attached, and generic_cylinders refuses a
@@ -351,21 +347,26 @@ class Checkpointer(Extension):
         if self._same_directory(self.opt.options.get("resume_from", None)):
             return
         manifest = os.path.join(self.ckpt_dir, ckpt.MANIFEST_NAME)
-        if os.path.lexists(manifest):
-            raise RuntimeError(
-                f"The checkpoint directory '{self.ckpt_dir}' already holds "
-                f"a manifest. A fresh run would leave that earlier hub "
-                f"checkpoint available until its first successful write. "
-                f"Choose a new --checkpoint-dir, or set --resume-from to "
-                f"this directory to continue its study."
-            )
+        manifest_tmp = f"{manifest}.tmp"
+        hub_dir = os.path.join(self.ckpt_dir, ckpt.HUB_SUBDIR)
         spokes_dir = os.path.join(self.ckpt_dir, ckpt.SPOKES_SUBDIR)
-        if not os.path.isdir(spokes_dir):
+        if not any(os.path.lexists(path) for path in
+                   (manifest, manifest_tmp, hub_dir, spokes_dir)):
             return
-        global_toc(f"Removing spoke files left in {spokes_dir} by "
-                   f"an earlier run; this run is not resuming from that "
-                   f"directory", True)
-        shutil.rmtree(spokes_dir)
+        global_toc(f"Removing the earlier checkpoint from {self.ckpt_dir}; "
+                   f"this run is not resuming from that directory", True)
+        if os.path.lexists(manifest):
+            os.unlink(manifest)
+            ckpt._fsync_dir(self.ckpt_dir)
+        if os.path.lexists(manifest_tmp):
+            os.unlink(manifest_tmp)
+        for path in (hub_dir, spokes_dir):
+            if not os.path.lexists(path):
+                continue
+            if os.path.isdir(path) and not os.path.islink(path):
+                shutil.rmtree(path)
+            else:
+                os.unlink(path)
 
     def pre_iter0(self):
         if self.dual_spoke_mode:

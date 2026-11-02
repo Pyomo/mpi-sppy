@@ -3479,11 +3479,8 @@ class TestAnInnerBoundSpokeCheckpointsAtFinalize(unittest.TestCase):
         self.assertEqual(calls, ["checkpoint", "load"])
 
 
-class TestAnEarlierStudysSpokeFilesAreCleared(unittest.TestCase):
-    """A spoke overwrites only its own file, so a run started in a directory
-    an earlier study used would otherwise leave that study's spoke files
-    there, and a later resume would restore one into a spoke of the same name
-    -- or die on it when the configuration differs."""
+class TestAnEarlierStudysCheckpointIsCleared(unittest.TestCase):
+    """A fresh run must make an earlier study's hub and spokes unavailable."""
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -3502,19 +3499,33 @@ class TestAnEarlierStudysSpokeFilesAreCleared(unittest.TestCase):
         _make_ph(_options(1, ckpt_dir=self.ckpt_dir))
         self.assertFalse(os.path.exists(self.stale))
 
-    def test_a_fresh_run_refuses_an_existing_manifest(self):
+    def test_a_fresh_run_clears_an_existing_checkpoint(self):
         manifest = os.path.join(self.ckpt_dir, "manifest.json")
-        with open(manifest, "w") as f:
-            f.write('{"generation": 7}')
+        manifest_tmp = f"{manifest}.tmp"
+        hub_dir = os.path.join(self.ckpt_dir, "hub")
         for resume_from in (None, os.path.join(self._tmp.name, "other")):
             with self.subTest(resume_from=resume_from):
-                with self.assertRaisesRegex(RuntimeError,
-                                            "already holds a manifest"):
-                    _make_ph(_options(1, ckpt_dir=self.ckpt_dir,
-                                      resume_from=resume_from))
-                with open(manifest) as f:
-                    self.assertEqual(f.read(), '{"generation": 7}')
-                self.assertTrue(os.path.exists(self.stale))
+                os.makedirs(os.path.dirname(self.stale), exist_ok=True)
+                with open(self.stale, "wb"):
+                    pass
+                for generation in ("gen_0007", "gen_0008.tmp"):
+                    os.makedirs(os.path.join(hub_dir, generation))
+                with open(manifest, "w") as f:
+                    f.write('{"generation": 7}')
+                with open(manifest_tmp, "w") as f:
+                    f.write('{"generation": 8}')
+
+                # B is interrupted before its first checkpoint write.
+                _make_ph(_options(1, ckpt_dir=self.ckpt_dir,
+                                  resume_from=resume_from))
+                self.assertTrue(os.path.isdir(self.ckpt_dir))
+                self.assertFalse(os.path.lexists(manifest))
+                self.assertFalse(os.path.lexists(manifest_tmp))
+                self.assertFalse(os.path.lexists(hub_dir))
+                self.assertFalse(os.path.lexists(os.path.dirname(self.stale)))
+                with self.assertRaisesRegex(checkpointing.CheckpointMismatch,
+                                            "No checkpoint manifest"):
+                    checkpointing._read_manifest(self.ckpt_dir)
 
     def test_resuming_from_another_directory_clears_them(self):
         other = os.path.join(self._tmp.name, "other")
@@ -3524,11 +3535,14 @@ class TestAnEarlierStudysSpokeFilesAreCleared(unittest.TestCase):
     def test_resuming_in_place_keeps_them(self):
         """They are this study's, and the spokes are about to read them."""
         manifest = os.path.join(self.ckpt_dir, "manifest.json")
+        hub_dir = os.path.join(self.ckpt_dir, "hub")
+        os.makedirs(os.path.join(hub_dir, "gen_0007"))
         with open(manifest, "w") as f:
             f.write('{"generation": 7}')
         _make_ph(_options(1, ckpt_dir=self.ckpt_dir,
                           resume_from=self.ckpt_dir))
         self.assertTrue(os.path.exists(self.stale))
+        self.assertTrue(os.path.isdir(os.path.join(hub_dir, "gen_0007")))
         with open(manifest) as f:
             self.assertEqual(f.read(), '{"generation": 7}')
 

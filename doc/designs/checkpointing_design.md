@@ -1557,10 +1557,12 @@ as a branch stacked on the 1a PR.
     before the spoke's first solve, and the resumed hub reads the same files
     for its inner bound, so its gap reflects the answer the run already had
     from the first resumed iteration on (§5.4). A hub that is not resuming from its own
-    `--checkpoint-dir` removes `spokes/` at setup, so a later resume cannot
-    restore an earlier study's incumbent or dual weights. `--resume-from` without `--checkpoint-dir`
-    attaches the extension with writing switched off, since on a spoke the
-    restore *is* the extension's job.
+    `--checkpoint-dir` removes the old manifest first, then clears `hub/` and
+    `spokes/` at setup. If this run stops before publishing its first checkpoint,
+    a later resume reports that no checkpoint exists instead of loading the
+    earlier study. Resuming in place preserves those files. `--resume-from`
+    without `--checkpoint-dir` attaches the extension with writing switched
+    off, since on a spoke the restore *is* the extension's job.
   - *The A/B tests — implemented.* `test_checkpoint_cylinders.py` runs each
     leg as its own `mpiexec` job (§11.1 asks for a fresh process, and a
     stopped study really does resume as a new job), driven through
