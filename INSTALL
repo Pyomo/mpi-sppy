@@ -7,7 +7,7 @@ https://mpi-sppy.readthedocs.io/en/latest/quick_start.html
 
 Requirements
 ------------
-* Python 3.9 or newer
+* Python 3.10 or newer
 * Pyomo >= 6.4 and numpy (installed automatically)
 * A Pyomo-compatible solver. Open-source choices include HiGHS
   (pip install highspy), Cbc, Ipopt, and SCIP; commercial choices are
