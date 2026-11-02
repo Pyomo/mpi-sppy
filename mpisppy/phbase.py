@@ -136,10 +136,11 @@ def Wbar_by_node(opt):
 
     It is not guaranteed. The rho setter is called once per scenario and may
     return a different rho for each, and then E[W] moves away from zero.
-    _Compute_Wbar is the only code that tries to put it back, and the only
-    caller is APH when the option display_convergence_detail is set. It
-    subtracts only on cylinder rank 0's scenarios, so on more than one rank
-    it does not bring E[W] to zero.
+    ``project_W_to_zero_sum`` repairs every local scenario copy and is used by
+    W-receiving outer-bound spokes for mixed-generation APH snapshots. The
+    older diagnostic ``_Compute_Wbar`` is called by APH when
+    display_convergence_detail is set; it subtracts only on cylinder rank 0's
+    scenarios, so on more than one rank it does not bring E[W] to zero.
 
     Collective: the scenarios of a node are spread over the ranks, so the sum
     is an Allreduce over that node's comm and every rank gets the same
@@ -163,6 +164,31 @@ def W_magnitude_by_node(opt):
         opt (phbase or xhat_eval object): object with the local scenarios
     """
     return _prob_weighted_W_by_node(opt, magnitude=True)
+
+
+def project_W_to_zero_sum(opt):
+    """Project scenario weights onto the dual-feasible nonanticipativity space.
+
+    For every scenario-tree node and nonanticipative position, subtract the
+    probability-weighted node mean from every active local scenario copy.
+    Variable-probability copies with zero probability remain masked to zero.
+    This is a collective operation over the node communicators. It is useful
+    when an asynchronous publisher supplies pieces of W from different
+    generations: the mixed snapshot is not necessarily dual feasible, but its
+    projection is and can therefore be used for a valid Lagrangian bound.
+
+    Returns the node-wise means that were removed.
+    """
+    Wbars_by_node = Wbar_by_node(opt)
+    for scenario in opt.local_scenarios.values():
+        data = scenario._mpisppy_data
+        for (ndn, i) in scenario._mpisppy_data.nonant_indices:
+            node_mask = getattr(data, "prob0_mask", {}).get(ndn, 1.0)
+            mask = node_mask[i] if isinstance(node_mask, np.ndarray) \
+                else node_mask
+            scenario._mpisppy_model.W[(ndn, i)]._value -= \
+                mask * Wbars_by_node[ndn][i]
+    return Wbars_by_node
 
 
 def _prob_weighted_W_by_node(opt, magnitude):

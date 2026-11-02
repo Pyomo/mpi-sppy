@@ -20,7 +20,7 @@ authors = [
 description = "mpi-sppy"
 readme = "README.md"
 license = { file = "LICENSE.md" }
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "numpy",
     "pyomo>=6.8.2",

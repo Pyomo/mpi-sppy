@@ -264,6 +264,7 @@ run_phase "serial unit tests (serial)" \
         mpisppy/tests/test_xhatxbar.py \
         mpisppy/tests/test_final_xhat.py \
         mpisppy/tests/test_aph_hub.py \
+        mpisppy/tests/test_async_dual_spoke.py \
         mpisppy/tests/test_extension_hooks.py \
         mpisppy/tests/test_buffer_inspect.py \
         mpisppy/tests/test_comm_lor_check.py \
@@ -384,6 +385,9 @@ run_phase "test_flexible_rank_cylinders (mpiexec -np 6)" \
 
 run_phase "test_flexible_rank_duals (mpiexec -np 6)" \
     mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_duals.py
+
+run_phase "test_flexible_rank_async_duals (mpiexec -np 6)" \
+    mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_async_duals.py
 
 run_phase "test_flexible_rank_xhat (mpiexec -np 6)" \
     mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_xhat.py
