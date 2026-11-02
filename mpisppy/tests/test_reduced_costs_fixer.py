@@ -125,6 +125,14 @@ def _build(specs, minimizing=True, fix_fraction=1.0, zero_rc_tol=1e-9, bound_tol
 
 
 class Test_fix_decisions_minimize(unittest.TestCase):
+    def test_pre_iter0_does_not_require_an_existing_xbar_at_the_bound(self):
+        ext, v = _build(
+            [{"lb": 0, "ub": 10, "value": 5.0, "xbar": 5.0}]
+        )
+        ext.reduced_costs_fixing(np.array([5.0]), pre_iter0=True)
+        self.assertTrue(v[0].fixed)
+        self.assertEqual(v[0].value, 0.0)
+
     def test_fix_to_lb_when_positive_rc_at_lower_bound(self):
         ext, v = _build([{"lb": 0, "ub": 10, "value": 0.0, "xbar": 0.0}])
         ext.reduced_costs_fixing(np.array([5.0]))
@@ -253,13 +261,38 @@ class Test_skips_and_guards(unittest.TestCase):
 
 
 class Test_spoke_generation_pairing(unittest.TestCase):
+    def test_ungated_fixer_accepts_fresh_rc_with_mismatched_bound_id(self):
+        ext, _ = _build(
+            [{"lb": 0, "ub": 10, "value": 0.0, "xbar": 0.0}],
+            fix_fraction=0.0,
+        )
+        ext._rc_fixer_require_improving_lagrangian = False
+        ext.reduced_costs_spoke_index = 0
+        ext.opt.spcomm = types.SimpleNamespace(
+            get_receive_buffer=lambda buf, *args, **kwargs:
+                buf is ext.reduced_cost_buf,
+        )
+        ext.reduced_cost_buf = types.SimpleNamespace(
+            id=lambda: 1,
+            value_array=lambda: np.array([5.0]),
+        )
+        # An extra outer-bound publication (for example Jensen's) means these
+        # per-field IDs need not ever be equal.
+        ext.outer_bound_buf = types.SimpleNamespace(
+            id=lambda: 2,
+            value_array=lambda: np.array([10.0]),
+        )
+
+        ext.sync_with_spokes()
+        np.testing.assert_array_equal(ext._current_reduced_costs, [5.0])
+
     def test_bound_can_catch_up_after_reduced_cost_freshness_was_consumed(self):
         """APH may poll between the spoke's RC and bound publications."""
         ext, _ = _build(
             [{"lb": 0, "ub": 10, "value": 0.0, "xbar": 0.0}],
             fix_fraction=0.0,
         )
-        ext._rc_fixer_require_improving_lagrangian = False
+        ext._rc_fixer_require_improving_lagrangian = True
         ext.reduced_costs_spoke_index = 0
         ext.opt.spcomm = types.SimpleNamespace(
             get_receive_buffer=lambda *args, **kwargs: True,
