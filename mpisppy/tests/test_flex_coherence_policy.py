@@ -29,6 +29,7 @@ from mpisppy import MPI
 from mpisppy.cylinders.overlap_map import OverlapSegment
 from mpisppy.cylinders.spcommunicator import (
     _STRICT_COHERENCE_FIELDS,
+    ReadConsistency,
     RecvArray,
     SPCommunicator,
     coherence_miss_rate,
@@ -158,6 +159,27 @@ class _StubWindow:
         out_arr[:] = self.sources[rank]
 
 
+class _PublishBetweenGetsWindow(_StubWindow):
+    """Publish a new generation after source 0 has been snapshotted."""
+
+    def __init__(self):
+        super().__init__()
+        self.set_write_ids(1, 1)
+        self.published = False
+
+    def get(self, out_arr, rank, field):
+        super().get(out_arr, rank, field)
+        if rank == 0 and not self.published:
+            # The current read retains rank 0's generation 1 snapshot, while
+            # rank 1 will be read at generation 2. Rank 0's generation 2 must
+            # remain discoverable on the next poll rather than being hidden by
+            # a scalar summary of this mixed read.
+            self.sources[0][:_DATA_LEN] = [10.0, 20.0]
+            self.sources[1][:_DATA_LEN] = [30.0, 40.0]
+            self.set_write_ids(2, 2)
+            self.published = True
+
+
 class _StubCylinderComm:
     """Stands in for cylinder_comm inside _write_ids_agree: emulates a
     two-rank cylinder whose *other* reader rank computed ``peer_id``. Leaving
@@ -242,7 +264,8 @@ def _make_reader():
 class TestMultiSourceReaderRetry(unittest.TestCase):
 
     def _read(self, sp, buf, field, peer):
-        return sp._flex_get_multi_source(buf, field, peer, synchronize=False)
+        return sp._flex_get_multi_source(
+            buf, field, peer, ReadConsistency.INDEPENDENT)
 
     def test_strict_rejects_mixed_without_disturbing_buffer(self):
         # A strict (DUALS) read whose sources disagree must be rejected, leave
@@ -299,6 +322,78 @@ class TestMultiSourceReaderRetry(unittest.TestCase):
         self.assertEqual(buf.id(), 5)
         np.testing.assert_allclose(buf.value_array(), _ASSEMBLED)
 
+    def test_async_latest_duals_accept_mixed_with_local_generation(self):
+        # An APH W receiver is allowed to assemble mixed-generation duals
+        # because it projects the result back onto E[W] == 0 before using it.
+        # DUALS remains strict for every caller that does not opt in.
+        sp, peer = _make_reader()
+        buf = RecvArray(_DATA_LEN * 2)
+        sp.window.set_write_ids(7, 5)
+
+        accepted = sp._flex_get_multi_source(
+            buf, Field.DUALS, peer, ReadConsistency.ASYNC_LATEST)
+
+        self.assertTrue(accepted)
+        self.assertEqual(buf.id(), 1)
+        np.testing.assert_allclose(buf.value_array(), _ASSEMBLED)
+
+    def test_async_latest_preserves_initialized_value_for_unpublished_source(self):
+        sp, peer = _make_reader()
+        buf = RecvArray(_DATA_LEN * 2)
+        buf.value_array().fill(0.0)
+        sp.window.set_write_ids(1, 0)
+
+        self.assertTrue(sp._flex_get_multi_source(
+            buf, Field.DUALS, peer, ReadConsistency.ASYNC_LATEST))
+        np.testing.assert_allclose(buf.value_array(), [1.0, 2.0, 0.0, 0.0])
+        self.assertEqual(buf._source_write_ids, {0: 1, 1: 0})
+
+    def test_async_latest_detects_each_source_independently(self):
+        # Neither max nor floor changes across both updates below. Tracking the
+        # source-id vector still reports each newly available W piece.
+        sp, peer = _make_reader()
+        buf = RecvArray(_DATA_LEN * 2)
+
+        sp.window.set_write_ids(10, 1)
+        self.assertTrue(sp._flex_get_multi_source(
+            buf, Field.DUALS, peer, ReadConsistency.ASYNC_LATEST))
+        self.assertEqual(buf.id(), 1)
+
+        sp.window.set_write_ids(10, 2)  # max unchanged
+        self.assertTrue(sp._flex_get_multi_source(
+            buf, Field.DUALS, peer, ReadConsistency.ASYNC_LATEST))
+        self.assertEqual(buf.id(), 2)
+
+        sp.window.set_write_ids(11, 2)  # floor unchanged
+        self.assertTrue(sp._flex_get_multi_source(
+            buf, Field.DUALS, peer, ReadConsistency.ASYNC_LATEST))
+        self.assertEqual(buf.id(), 3)
+
+        self.assertFalse(sp._flex_get_multi_source(
+            buf, Field.DUALS, peer, ReadConsistency.ASYNC_LATEST))
+
+    def test_async_latest_does_not_lose_publish_between_source_gets(self):
+        sp, peer = _make_reader()
+        sp.window = _PublishBetweenGetsWindow()
+        buf = RecvArray(_DATA_LEN * 2)
+
+        # The publish occurs between the two source Gets. The first accepted
+        # snapshot is intentionally mixed: old rank 0 and new rank 1.
+        self.assertTrue(sp._flex_get_multi_source(
+            buf, Field.DUALS, peer, ReadConsistency.ASYNC_LATEST))
+        np.testing.assert_allclose(buf.value_array(), [1.0, 2.0, 30.0, 40.0])
+        self.assertEqual(buf._source_write_ids, {0: 1, 1: 2})
+
+        # Rank 0's update was not observed in the first Get. Its source ID
+        # advances independently on the next poll, producing another solve.
+        self.assertTrue(sp._flex_get_multi_source(
+            buf, Field.DUALS, peer, ReadConsistency.ASYNC_LATEST))
+        np.testing.assert_allclose(buf.value_array(), [10.0, 20.0, 30.0, 40.0])
+        self.assertEqual(buf._source_write_ids, {0: 2, 1: 2})
+
+        self.assertFalse(sp._flex_get_multi_source(
+            buf, Field.DUALS, peer, ReadConsistency.ASYNC_LATEST))
+
 
 class TestCoherenceCounters(unittest.TestCase):
     """The read-outcome diagnostic, driven deterministically through the same
@@ -308,7 +403,8 @@ class TestCoherenceCounters(unittest.TestCase):
     bucket needs the collective check the MPI integration test exercises.)"""
 
     def _read(self, sp, buf, field, peer):
-        return sp._flex_get_multi_source(buf, field, peer, synchronize=False)
+        return sp._flex_get_multi_source(
+            buf, field, peer, ReadConsistency.INDEPENDENT)
 
     def _counters(self, sp, field):
         return sp.coherence_counters[field]
@@ -358,7 +454,8 @@ class TestRejectionAttribution(unittest.TestCase):
     is a coherence miss on this rank, not a peer's."""
 
     def _read(self, sp, buf, field, peer):
-        return sp._flex_get_multi_source(buf, field, peer, synchronize=True)
+        return sp._flex_get_multi_source(
+            buf, field, peer, ReadConsistency.COLLECTIVE)
 
     def test_local_mismatch_is_incoherent_on_a_relaxed_field(self):
         sp, peer = _make_reader()

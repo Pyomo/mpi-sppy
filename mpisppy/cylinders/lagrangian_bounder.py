@@ -7,6 +7,7 @@
 # full copyright and license information.
 ###############################################################################
 import mpisppy.cylinders.spoke
+import mpisppy.phbase as ph_base
 import mpisppy.utils.sputils as sputils
 from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
 from mpisppy.utils.linear_surrogate import set_derived_surrogate_rhos
@@ -74,6 +75,8 @@ class LagrangianOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinder
 
     def _set_weights_and_solve(self, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
         self.opt.W_from_flat_list(self.localWs) # Sets the weights
+        if self._dual_source_is_asynchronous:
+            ph_base.project_W_to_zero_sum(self.opt)
         return self.lagrangian(warmstart=warmstart)
 
     def do_while_waiting_for_new_Ws(self, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):

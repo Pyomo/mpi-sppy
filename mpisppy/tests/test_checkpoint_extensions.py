@@ -1746,7 +1746,9 @@ class TestReducedCostsFixerResume(unittest.TestCase):
         fixer._best_outer_bound = -float("inf")
         fixer._outer_bound_update = lambda new, old: new > old
         fixer._current_reduced_costs = None
+        fixer._last_accepted_rc_id = 0
         fixer._heuristic_fixed_vars = 0
+        fixer.debug = False
         return fixer
 
     def test_a_resumed_run_skips_the_pre_iter0_pass(self):
