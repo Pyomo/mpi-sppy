@@ -420,18 +420,6 @@ TEST(FWAPH_Main, Iter0WMultiplierRunsSuccessfully)
     }
 }
 
-// -----------------------------------------------------------------------
-// Custom main that does one-shot MPI init/finalize for all tests.
-// -----------------------------------------------------------------------
-int main(int argc, char** argv) {
-    int provided = 0;
-    MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
-    ::testing::InitGoogleTest(&argc, argv);
-    int rc = RUN_ALL_TESTS();
-    MPI_Finalize();
-    return rc;
-}
-
 // A whole run under --no-fw on the continuous fixture (so the HiGHS build
 // runs it too): startup Lagrangian, then one prox solve per subproblem.  The
 // run must reach the optimum: with x shared by both scenarios the expected
@@ -456,3 +444,17 @@ TEST(FWAPH_Main, NoFWReachesOptimum)
         << "no termination bound in the output\n" << combined;
     EXPECT_NEAR(termBound, 4.0, 1e-6);
 }
+
+
+// -----------------------------------------------------------------------
+// Custom main that does one-shot MPI init/finalize for all tests.
+// -----------------------------------------------------------------------
+int main(int argc, char** argv) {
+    int provided = 0;
+    MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
+    ::testing::InitGoogleTest(&argc, argv);
+    int rc = RUN_ALL_TESTS();
+    MPI_Finalize();
+    return rc;
+}
+

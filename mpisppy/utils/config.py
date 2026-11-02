@@ -50,6 +50,7 @@ If you want a positional arg, you have to DIY:
 import argparse
 import functools
 import math
+import types
 
 import pyomo.common.config as pyofig
 
@@ -2275,16 +2276,25 @@ class Config(pyofig.ConfigDict):
 #=================
 # The two APH hubs share the aph_* options aph_args registers.  aphfw_args
 # registers more aph_* options, which only the compiled hub (--aphfw-hub)
-# reads; each hub refuses non-default values of the options it ignores.
+# reads; --APH refuses non-default values of those (aphfw_hub_only_options),
+# and --aphfw-hub refuses the aph_args options it does not read (see
+# mpisppy/opt/aphfw.py).  The aphfw_* options are not checked under --APH
+# (issue #955).
 
 @functools.cache
 def _aph_registrations():
-    """(names aph_args registers, {name: default} for all of aphfw_args)."""
+    """(names aph_args registers, read-only {name: default} for aphfw_args)."""
     aph = Config()
     aph.aph_args()
     both = Config()
     both.aphfw_args()   # registers aph_args too
-    return frozenset(aph), {name: both[name] for name in both}
+    return (frozenset(aph),
+            types.MappingProxyType({name: both[name] for name in both}))
+
+
+def aph_args_option_names():
+    """The names aph_args registers (APH and the options both hubs see)."""
+    return _aph_registrations()[0]
 
 
 def aphfw_hub_only_options():
@@ -2300,18 +2310,22 @@ _UNSET_SENTINELS = {
 }
 
 
-def refuse_non_defaults(get_option, names, why):
-    """Raise if any option in names is set to other than its default.
+def aph_value_means_unset(name, value):
+    """True if value is one of name's "not set" sentinels (not its default)."""
+    return name in _UNSET_SENTINELS and _UNSET_SENTINELS[name](value)
 
-    get_option(name, default) reads the run's value; why ends the message.
+
+def refuse_set_aph_options(get_option, names, why):
+    """Raise if any APH option in names is set to other than its default.
+
+    names are options aph_args or aphfw_args registers; get_option(name,
+    default) reads the run's value; why ends the message.
     """
     _, defaults = _aph_registrations()
     for name in names:
         default = defaults[name]
         value = get_option(name, default)
-        if value is None or value == default:
-            continue
-        if name in _UNSET_SENTINELS and _UNSET_SENTINELS[name](value):
+        if value is None or value == default or aph_value_means_unset(name, value):
             continue
         raise ValueError(f"--{name.replace('_', '-')} {why} "
                          f"(got {value}, default {default})")

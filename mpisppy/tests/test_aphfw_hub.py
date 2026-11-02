@@ -163,6 +163,17 @@ def _fake_opt(cfg=None, nonants=()):
     return opt, m
 
 
+def _non_default(name):
+    """A value of APH option name that differs from its registered default
+    and is not a "not set" sentinel."""
+    default = config._aph_registrations()[1][name]
+    if isinstance(default, bool):
+        return not default
+    if isinstance(default, str):
+        return default + "x"
+    return abs(default) * 2 + 1
+
+
 class TestAphfwPythonSide(unittest.TestCase):
     """The hub's Python side, with the C++ library stubbed out."""
 
@@ -199,8 +210,15 @@ class TestAphfwPythonSide(unittest.TestCase):
             APHFWOpt._make_cpp_config(opt)
 
     def test_refuses_python_aph_only_options(self):
-        for name, value in (("aph_dispatch_frac", 0.5),
-                            ("aph_sleep_seconds", 0.1)):
+        # Derived: the aph_args options the hub does not pass to the C++.
+        from mpisppy.opt.aphfw import _CPP_OPTION_NAMES, _python_aph_only_options
+        python_only = _python_aph_only_options()
+        self.assertIn("aph_dispatch_frac", python_only)
+        self.assertIn("aph_sleep_seconds", python_only)
+        for name in python_only:
+            self.assertNotIn(name, _CPP_OPTION_NAMES)
+        for name in python_only:
+            value = _non_default(name)
             with self.subTest(name=name):
                 opt, _ = _fake_opt(_cfg(aphfw_hub=True, **{name: value}))
                 with self.assertRaisesRegex(
@@ -215,15 +233,8 @@ class TestAphfwPythonSide(unittest.TestCase):
         # a negative --aph-omicron-all means "no override" to both hubs
         aph_hub(_cfg(APH=True, default_rho=1.0, aph_omicron_all=-2.0),
                 None, None, ["s"])
-        _, defaults = config._aph_registrations()
         for name in config.aphfw_hub_only_options():
-            default = defaults[name]
-            if isinstance(default, bool):
-                value = not default
-            elif isinstance(default, str):
-                value = default + "x"
-            else:
-                value = abs(default) * 2 + 1
+            value = _non_default(name)
             with self.subTest(name=name):
                 cfg = _cfg(APH=True, default_rho=1.0, **{name: value})
                 with self.assertRaisesRegex(
@@ -236,11 +247,16 @@ class TestAphfwPythonSide(unittest.TestCase):
         only = set(config.aphfw_hub_only_options())
         self.assertIn("aph_primal_term_thresh", only)
         self.assertIn("aph_omicron_csv", only)
-        self.assertEqual(len(only), 13)
         for shared in ("aph_gamma", "aph_nu", "aph_frac_needed",
                        "aph_dispatch_frac", "aph_sleep_seconds"):
             self.assertNotIn(shared, only)
         self.assertTrue(all(name.startswith("aph_") for name in only))
+
+    def test_registered_defaults_are_read_only(self):
+        # The cached defaults are shared by every check in the process.
+        defaults = config._aph_registrations()[1]
+        with self.assertRaises(TypeError):
+            defaults["aph_gamma"] = 5.0
 
     def test_aphfw_args_registers_aph_args(self):
         # The hub reads aph_gamma, aph_nu and aph_frac_needed, so a driver

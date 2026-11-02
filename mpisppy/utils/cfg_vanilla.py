@@ -531,11 +531,11 @@ def aph_hub(cfg,
 ):
     from mpisppy.cylinders.hub import APHHub
     from mpisppy.opt.aph import APH
-    from mpisppy.utils.config import aphfw_hub_only_options, refuse_non_defaults
+    from mpisppy.utils.config import aphfw_hub_only_options, refuse_set_aph_options
     # Options only the compiled hub (--aphfw-hub) reads would do nothing here.
-    refuse_non_defaults(lambda name, default: cfg.get(name, default),
-                        aphfw_hub_only_options(),
-                        "is used only by --aphfw-hub, not by --APH")
+    refuse_set_aph_options(lambda name, default: cfg.get(name, default),
+                           aphfw_hub_only_options(),
+                           "is used only by --aphfw-hub, not by --APH")
     # TBD: March 2023: multiple extensions needs work
     hub_dict = ph_hub(cfg,
                       scenario_creator,

@@ -64,6 +64,21 @@ gtest_discover_tests(
     DISCOVERY_TIMEOUT 60
 )
 
+# The whole --no-fw run, as the shipped executable in its own process (the
+# bound is checked in FWAPH_Main.NoFWReachesOptimum; this checks the exit
+# code, so a crash at startup or teardown fails here).
+add_test(
+  NAME main_aph_no_fw
+  COMMAND ${APHFW_MAIN_TARGET}
+          --problem-name smallLPFWAPH/mps_dir
+          --no-fw --prox-json smallFWAPH/prox.json
+          --iter0-json smallFWAPH/iter0.json
+          --aph-max-cycles 20
+          --solver-log-file /dev/null
+  WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+)
+set_tests_properties(main_aph_no_fw PROPERTIES TIMEOUT 120)
+
 # The startup W orthogonality check aborts via MPI_Abort rather than throwing
 # (a node communicator need not span all ranks), so it cannot be a gtest case.
 # Run the real executable on a problem whose two scenarios carry different rho

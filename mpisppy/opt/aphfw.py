@@ -66,8 +66,42 @@ def _import_aphfw_cpp():
 # there.
 _FW_ONLY_OPTIONS = ("aphfw_fw_tmax", "aphfw_fw_tau", "aphfw_obj_cutoff")
 
-# Options of the Python APH hub (--APH) that this hub has no use for.
-_PYTHON_APH_ONLY_OPTIONS = ("aph_dispatch_frac", "aph_sleep_seconds")
+# mpi-sppy option names and the C++ CLI names they are passed to as they
+# are.  aph_gamma is passed too, as its reciprocal (see _make_cpp_config).
+_CPP_OPTION_NAMES = {
+    "aphfw_fw_tmax": "FW-tmax",
+    "aphfw_fw_tau": "FW-tau",
+    "aph_primal_term_thresh": "primal-term-thresh",
+    "aph_dual_term_thresh": "dual-term-thresh",
+    "aph_nu": "nu",
+    "aph_staleness_threshold": "staleness-threshhold",
+    # Python APH counts ranks that have reported; the C++ counts
+    # scenario solves.  The same with one scenario per rank.
+    "aph_frac_needed": "solve-fraction",
+    "aph_display_progress": "display-progress",
+    "aphfw_verbosity": "verbosity",
+    "aphfw_workers_per_rank": "workersPerRank",
+    "aph_block_sync": "block-sync",
+    "aph_leading_dispatch_only": "leading-dispatch-only",
+    "aphfw_obj_cutoff": "FW-obj-cutoff",
+    "aphfw_W_trace_prefix": "W-trace-prefix",
+    "aphfw_solve_times_trace_prefix": "solve-times-trace-prefix",
+    "aph_omicron_rho_multiplier": "omicron-rho-multiplier",
+    "aph_omicron_all": "omicron-all",
+    "aph_omicron_csv": "omicron-csv",
+    "aph_omicron_min": "omicron-min",
+    "aph_omicron_max": "omicron-max",
+    "aph_check_omicron_invariant": "check-omicron-invariant",
+    "aphfw_iter0_fw_step": "iter0-fw-step",
+    "aph_iter0_w_multiplier": "iter0-w-multiplier",
+}
+
+
+def _python_aph_only_options():
+    """The aph_args options this hub does not read, so refuses when set."""
+    read = set(_CPP_OPTION_NAMES) | {"APH", "aph_gamma"}
+    return tuple(sorted(mpisppy.utils.config.aph_args_option_names() - read))
+
 
 # Float options whose C++ default is 0, which the C++ parser (positive values
 # only) cannot be given explicitly; leaving them out gives the same value.
@@ -391,37 +425,9 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         cfg = self.options.get("cfg", None)
         d = {}
 
-        # Map mpi-sppy config names to C++ CLI option names
-        mappings = {
-            "aphfw_fw_tmax": "FW-tmax",
-            "aphfw_fw_tau": "FW-tau",
-            "aph_primal_term_thresh": "primal-term-thresh",
-            "aph_dual_term_thresh": "dual-term-thresh",
-            "aph_nu": "nu",
-            "aph_staleness_threshold": "staleness-threshhold",
-            # Python APH counts ranks that have reported; the C++ counts
-            # scenario solves.  The same with one scenario per rank.
-            "aph_frac_needed": "solve-fraction",
-            "aph_display_progress": "display-progress",
-            "aphfw_verbosity": "verbosity",
-            "aphfw_workers_per_rank": "workersPerRank",
-            "aph_block_sync": "block-sync",
-            "aph_leading_dispatch_only": "leading-dispatch-only",
-            "aphfw_obj_cutoff": "FW-obj-cutoff",
-            "aphfw_W_trace_prefix": "W-trace-prefix",
-            "aphfw_solve_times_trace_prefix": "solve-times-trace-prefix",
-            "aph_omicron_rho_multiplier": "omicron-rho-multiplier",
-            "aph_omicron_all": "omicron-all",
-            "aph_omicron_csv": "omicron-csv",
-            "aph_omicron_min": "omicron-min",
-            "aph_omicron_max": "omicron-max",
-            "aph_check_omicron_invariant": "check-omicron-invariant",
-            "aphfw_iter0_fw_step": "iter0-fw-step",
-            "aph_iter0_w_multiplier": "iter0-w-multiplier",
-        }
 
-        refuse = mpisppy.utils.config.refuse_non_defaults
-        refuse(self._get_option, _PYTHON_APH_ONLY_OPTIONS,
+        refuse = mpisppy.utils.config.refuse_set_aph_options
+        refuse(self._get_option, _python_aph_only_options(),
                "is used only by --APH, not by --aphfw-hub")
         no_fw = self._no_fw()
         if no_fw:
@@ -438,7 +444,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
                 raise ValueError(f"--aph-gamma must be positive (got {gamma})")
             d["gamma-inverse"] = 1.0 / gamma
 
-        for py_name, cpp_name in mappings.items():
+        for py_name, cpp_name in _CPP_OPTION_NAMES.items():
             if no_fw and py_name in _FW_ONLY_OPTIONS:
                 continue  # checked above; the C++ refuses them under no-fw
             val = None
@@ -447,9 +453,9 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             elif py_name in self.options:
                 val = self.options[py_name]
             if val is not None:
-                # aph_omicron_all uses -1.0 as the "unset" sentinel; C++ enforces
-                # a positive range on the option, so don't push the sentinel.
-                if py_name == "aph_omicron_all" and isinstance(val, float) and val < 0.0:
+                # e.g. a negative aph_omicron_all means "no override"; the
+                # C++ enforces a positive range, so don't push the sentinel.
+                if mpisppy.utils.config.aph_value_means_unset(py_name, val):
                     continue
                 if isinstance(val, float) and val <= 0.0:
                     if val == 0.0 and py_name in _ZERO_IS_CPP_DEFAULT:
