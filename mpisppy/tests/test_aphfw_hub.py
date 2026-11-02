@@ -211,12 +211,10 @@ class TestAphfwPythonSide(unittest.TestCase):
 
     def test_refuses_python_aph_only_options(self):
         # Derived: the aph_args options the hub does not pass to the C++.
-        from mpisppy.opt.aphfw import _CPP_OPTION_NAMES, _python_aph_only_options
+        from mpisppy.opt.aphfw import _python_aph_only_options
         python_only = _python_aph_only_options()
         self.assertIn("aph_dispatch_frac", python_only)
         self.assertIn("aph_sleep_seconds", python_only)
-        for name in python_only:
-            self.assertNotIn(name, _CPP_OPTION_NAMES)
         for name in python_only:
             value = _non_default(name)
             with self.subTest(name=name):
@@ -251,6 +249,22 @@ class TestAphfwPythonSide(unittest.TestCase):
                        "aph_dispatch_frac", "aph_sleep_seconds"):
             self.assertNotIn(shared, only)
         self.assertTrue(all(name.startswith("aph_") for name in only))
+
+    def test_options_reach_the_cpp(self):
+        # The other direction: every option the hub claims (so --APH refuses
+        # it) must actually be passed to the C++, or it would work in neither
+        # hub.  (The shared options the hub does not refuse are passed by
+        # construction of _python_aph_only_options.)
+        from mpisppy.opt.aphfw import _APH_ARGS_READ_ELSEWHERE, _CPP_OPTION_NAMES
+        passed = set(_CPP_OPTION_NAMES) | _APH_ARGS_READ_ELSEWHERE
+        self.assertLessEqual(set(config.aphfw_hub_only_options()), passed)
+
+    def test_unset_sentinel_is_numeric_only(self):
+        # A text value (e.g. from a hand-built options dict) is not taken as
+        # the "no override" sentinel, and does not raise a TypeError.
+        self.assertTrue(config.aph_value_means_unset("aph_omicron_all", -2.0))
+        self.assertFalse(config.aph_value_means_unset("aph_omicron_all", "-1"))
+        self.assertFalse(config.aph_value_means_unset("aph_omicron_all", 0.5))
 
     def test_registered_defaults_are_read_only(self):
         # The cached defaults are shared by every check in the process.

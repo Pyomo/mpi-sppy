@@ -286,9 +286,9 @@ Frank-Wolfe or the compiled hub itself. The hub also takes
        subdirectory that is removed at the end. Every hub rank must see it,
        so a hub on more than one node needs a shared filesystem here.
 
-``--help`` (with a ``--module-name``) lists the rest. The hub refuses
-``--aph-dispatch-frac`` and ``--aph-sleep-seconds``, which only
-:ref:`sec-aph` uses. Its :math:`\|u\|^2` is weighted by omicron, which by
+``--help`` (with a ``--module-name``) lists the rest. The hub refuses the
+:ref:`sec-aph` options it does not use, such as ``--aph-dispatch-frac`` and
+``--aph-sleep-seconds``. Its :math:`\|u\|^2` is weighted by omicron, which by
 default is :math:`\rho` from iteration 1 on, so a given ``--aph-gamma`` does
 not balance :math:`u` and :math:`v` exactly as it does for APH;
 ``--aph-omicron-all 1`` removes the weights. ``--aphfw-hub``
@@ -312,8 +312,7 @@ they must keep their defaults. ``--aphfw-iter0-fw-step`` still applies; the
 step it adds is a proximal solve.
 
 ``--aphfw-no-fw`` needs ``--aphfw-hub`` too. With both, a command line
-written for ``--APH`` runs if it does not set ``--aph-dispatch-frac`` or
-``--aph-sleep-seconds`` and avoids what the hub refuses (above).
+written for ``--APH`` runs if it avoids what the hub refuses (above).
 
 Troubleshooting
 ---------------

@@ -2306,7 +2306,8 @@ def aphfw_hub_only_options():
 
 # Values other than the default that still mean "not set".
 _UNSET_SENTINELS = {
-    "aph_omicron_all": lambda value: value < 0,   # any negative: no override
+    # any negative number: no override
+    "aph_omicron_all": lambda value: isinstance(value, (int, float)) and value < 0,
 }
 
 
@@ -2315,11 +2316,12 @@ def aph_value_means_unset(name, value):
     return name in _UNSET_SENTINELS and _UNSET_SENTINELS[name](value)
 
 
-def refuse_set_aph_options(get_option, names, why):
-    """Raise if any APH option in names is set to other than its default.
+def refuse_set_options(get_option, names, why):
+    """Raise if any option in names is set to other than its default.
 
-    names are options aph_args or aphfw_args registers; get_option(name,
-    default) reads the run's value; why ends the message.
+    names must be options aphfw_args registers (which include aph_args's,
+    the aph_* and the aphfw_* options); get_option(name, default) reads the
+    run's value; why ends the message.
     """
     _, defaults = _aph_registrations()
     for name in names:

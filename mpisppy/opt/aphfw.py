@@ -97,9 +97,15 @@ _CPP_OPTION_NAMES = {
 }
 
 
+# aph_args options this hub reads other than through _CPP_OPTION_NAMES: the
+# hub flag itself, and aph_gamma, passed as its reciprocal in
+# _make_cpp_config.  Keep this next to that code.
+_APH_ARGS_READ_ELSEWHERE = frozenset({"APH", "aph_gamma"})
+
+
 def _python_aph_only_options():
     """The aph_args options this hub does not read, so refuses when set."""
-    read = set(_CPP_OPTION_NAMES) | {"APH", "aph_gamma"}
+    read = set(_CPP_OPTION_NAMES) | _APH_ARGS_READ_ELSEWHERE
     return tuple(sorted(mpisppy.utils.config.aph_args_option_names() - read))
 
 
@@ -425,8 +431,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         cfg = self.options.get("cfg", None)
         d = {}
 
-
-        refuse = mpisppy.utils.config.refuse_set_aph_options
+        refuse = mpisppy.utils.config.refuse_set_options
         refuse(self._get_option, _python_aph_only_options(),
                "is used only by --APH, not by --aphfw-hub")
         no_fw = self._no_fw()
@@ -437,7 +442,8 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             d["no-fw"] = True
 
         # gamma weights v against u in tau = ||u||^2 + ||v||^2 / gamma, as for
-        # --APH; the C++ takes its reciprocal.
+        # --APH; the C++ takes its reciprocal.  (Listed in
+        # _APH_ARGS_READ_ELSEWHERE.)
         gamma = self._get_option("aph_gamma", None)
         if gamma is not None:
             if gamma <= 0:

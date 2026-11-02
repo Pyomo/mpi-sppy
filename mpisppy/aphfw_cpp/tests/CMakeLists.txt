@@ -64,16 +64,16 @@ gtest_discover_tests(
     DISCOVERY_TIMEOUT 60
 )
 
-# The whole --no-fw run, as the shipped executable in its own process (the
-# bound is checked in FWAPH_Main.NoFWReachesOptimum; this checks the exit
-# code, so a crash at startup or teardown fails here).
+# A --no-fw run of the shipped executable in its own process, so a crash at
+# startup or teardown fails on the exit code.  One cycle is enough for that;
+# FWAPH_Main.NoFWReachesOptimum runs to the optimum and checks the bound.
 add_test(
   NAME main_aph_no_fw
   COMMAND ${APHFW_MAIN_TARGET}
           --problem-name smallLPFWAPH/mps_dir
           --no-fw --prox-json smallFWAPH/prox.json
           --iter0-json smallFWAPH/iter0.json
-          --aph-max-cycles 20
+          --aph-max-cycles 1
           --solver-log-file /dev/null
   WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
 )

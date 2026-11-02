@@ -433,7 +433,7 @@ TEST(FWAPH_Main, NoFWReachesOptimum)
         "--no-fw", "--prox-json", "smallFWAPH/prox.json",
         "--iter0-json", "smallFWAPH/iter0.json",
         "--aph-max-cycles", "20",
-        "--solver-log-file", "solver.log",
+        "--solver-log-file", "/dev/null",
     };
     auto r = runWithArgs(args);
     ASSERT_EQ(r.rc, 0) << "runFWAPHWithArgs --no-fw failed\n" << r.out << r.err;
