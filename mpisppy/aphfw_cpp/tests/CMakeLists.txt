@@ -25,6 +25,7 @@ FetchContent_MakeAvailable(googletest)
 add_executable(aphfw_main_test
     test_main_aph.cpp
     test_fw_export.cpp
+    test_no_fw.cpp
 )
 if (USE_GUROBI)
     target_sources(aphfw_main_test PRIVATE test_numeric_retry.cpp test_gurobi_bounds.cpp)
@@ -62,6 +63,20 @@ gtest_discover_tests(
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
     DISCOVERY_TIMEOUT 60
 )
+
+# A whole run under --no-fw: startup Lagrangian, then one prox solve per
+# subproblem.  The continuous fixture, so the HiGHS build runs it too.  Before --no-fw existed this failed on the unknown option.
+add_test(
+  NAME main_aph_no_fw
+  COMMAND ${APHFW_MAIN_TARGET}
+          --problem-name smallLPFWAPH/mps_dir
+          --no-fw --prox-json smallFWAPH/prox.json
+          --iter0-json smallFWAPH/iter0.json
+          --aph-max-cycles 20
+          --solver-log-file /dev/null
+  WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+)
+set_tests_properties(main_aph_no_fw PROPERTIES TIMEOUT 120)
 
 # The startup W orthogonality check aborts via MPI_Abort rather than throwing
 # (a node communicator need not span all ranks), so it cannot be a gtest case.

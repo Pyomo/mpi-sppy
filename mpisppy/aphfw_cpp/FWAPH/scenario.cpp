@@ -76,8 +76,13 @@ objAndBnd Scenario::LagrangianSolve() {
 }
 
 void Scenario::FWsolve() {
+  // FWsolveType is "the subproblem solve"; under --no-fw it is one
+  // proximal solve and the FW accessors report NaN / 0.
   TicToc fwTimer; fwTimer.tic();
-  problemSolver.doFWsolve(x, xExport);
+  if (problemSolver.noFW())
+    problemSolver.doProxSolve(x, xExport);
+  else
+    problemSolver.doFWsolve(x, xExport);
   lastFWSolveTime_   = fwTimer.toc();
   lastFWNLTime_      = problemSolver.getLastFWNLTime();
   lastFWMILPTime_    = problemSolver.getLastFWMILPTime();

@@ -207,7 +207,8 @@ thread count, set by these options:
        ``--aphfw-final-lagrangian``) at the end
    * - ``--iterk-mipgap``
      - :math:`10^{-4}`
-     - The Frank-Wolfe linear subproblems
+     - The Frank-Wolfe linear subproblems, or with ``--aphfw-no-fw`` the
+       proximal subproblems
    * - ``--aphfw-solve-time-limit``
      - 300
      - Every C++ solve, in seconds
@@ -242,6 +243,10 @@ shared with :ref:`sec-aph`. The ones most often set:
      - 1
      - Maximum number of cycles, as for the other hubs' iterations; at
        least 1
+   * - ``--aphfw-no-fw``
+     - off
+     - Solve each subproblem in one solver call instead of by Frank-Wolfe
+       (see below)
    * - ``--aphfw-fw-tmax``
      - 1
      - Maximum Frank-Wolfe iterations (linear subproblem solves) per
@@ -283,6 +288,23 @@ from the MPS files and does not see changes to Pyomo variable types. The hub
 also refuses maximization models, models with ``variable_probability``,
 and a converger (it stops on its own convergence test, the spokes' gap,
 or ``--max-iterations``).
+
+Without Frank-Wolfe
+-------------------
+
+With ``--aphfw-no-fw`` the hub solves each scenario's proximal subproblem,
+minimize :math:`f_s(x) + W_s^\top x + \frac{\rho}{2}\|x - z_s\|^2` over
+the scenario's feasible set, in one solver call, as the Python APH hub does.
+For a mixed-integer model that is a mixed-integer QP, so a HiGHS build
+refuses ``--aphfw-no-fw`` on a model with integer variables. Everything else
+about the hub is the same. ``--aphfw-fw-tmax``, ``--aphfw-fw-tau`` and
+``--aphfw-obj-cutoff`` steer only Frank-Wolfe, so with ``--aphfw-no-fw``
+they must keep their defaults. ``--aphfw-iter0-fw-step`` still applies; the
+step it adds is a proximal solve.
+
+``--aphfw-no-fw`` is not a drop-in replacement for ``--APH``: it needs
+``--aphfw-hub`` too, and the hub does not use ``--aph-gamma``,
+``--aph-frac-needed``, ``--aph-dispatch-frac`` or ``--aph-sleep-seconds``.
 
 Troubleshooting
 ---------------

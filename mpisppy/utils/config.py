@@ -1105,6 +1105,14 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config(name="aphfw_no_fw",
+                           description="With --aphfw-hub, solve each proximal"
+                                       " subproblem in one solver call instead of"
+                                       " by Frank-Wolfe (the --aphfw-fw-* options and"
+                                       " --aphfw-obj-cutoff are then refused)",
+                           domain=bool,
+                           default=False)
+
         self.add_to_config(name="aphfw_fw_tmax",
                            description="FW maximum inner iterations",
                            domain=int,

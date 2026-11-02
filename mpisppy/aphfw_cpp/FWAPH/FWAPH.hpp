@@ -251,6 +251,7 @@ protected:
   int    cycleTrigger;         // Number of solved scenarios that trigger a projection
   int    localTrigger;         // Local number of scenarios needed for a projection
                                //   (applies only in blockSync mode)
+  bool   noFW = false;         // --no-fw: one prox solve per subproblem, no Frank-Wolfe
   bool   iter0FWStep;          // Finish startup with a synchronous FW step on every
                                //   scenario (needed when the objective is nonlinear)
   double iter0WMultiplier;     // Startup W = m * rho * (xbase - z0); 0 gives W = 0

@@ -141,6 +141,7 @@ void FWAPH::setup(Config& cfg) {
   displayProgress  = cfg.getOptionValue<bool>("display-progress");
   aphMaxCycles  = cfg.getOptionValue<int>("aph-max-cycles");
   iter0WMultiplier = cfg.getOptionValue<double>("iter0-w-multiplier");
+  noFW = cfg.getOptionValue<bool>("no-fw");
 
   // Decide now whether startup ends with a synchronous FW step (see
   // startupSequence).  "auto" asks the scenarios whether the original
@@ -1024,10 +1025,14 @@ void FWAPH::startupSequence() {
   //
   // A linear objective needs none of this: x0 = xbase with y0 = 0 is already
   // a valid pair, so just start the FW solves and let the loop run.
+  //
+  // Under --no-fw the step is one prox solve instead of an FW step; the
+  // reasoning is the same.
   if (iter0FWStep) {
-    if (verbosity >= 1) global_toc("Begin Iter0 FW step");
+    const std::string stepName = noFW ? "prox" : "FW";
+    if (verbosity >= 1) global_toc("Begin Iter0 " + stepName + " step");
     runTaskOnAllSubdomains(FWsolveType);
-    if (verbosity >= 1) global_toc("Iter0 FW step complete");
+    if (verbosity >= 1) global_toc("Iter0 " + stepName + " step complete");
   } else {
     startTaskOnAllSubdomains(FWsolveType);
   }

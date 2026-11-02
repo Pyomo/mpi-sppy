@@ -158,7 +158,7 @@ def _fake_opt(cfg=None, nonants=()):
     opt._cpp = _FakeCpp(len(nonants))
     from mpisppy import MPI
     opt.mpicomm = MPI.COMM_WORLD
-    for name in ("_get_option", "_bound_is_valid"):
+    for name in ("_get_option", "_bound_is_valid", "_no_fw"):
         setattr(opt, name, getattr(APHFWOpt, name).__get__(opt))
     return opt, m
 
@@ -184,6 +184,40 @@ class TestAphfwPythonSide(unittest.TestCase):
         cfg.aphfw_primal_term_thresh = 0.0
         with self.assertRaisesRegex(ValueError, "--aphfw-primal-term-thresh"):
             APHFWOpt._make_cpp_config(opt)
+
+    def test_no_fw_config(self):
+        # --aphfw-no-fw: the C++ gets no-fw and prox.json, and none of the
+        # Frank-Wolfe settings or parameter files.
+        opt, _ = _fake_opt(_cfg(aphfw_hub=True, aphfw_no_fw=True))
+        d = APHFWOpt._make_cpp_config(opt)
+        self.assertIs(d["no-fw"], True)
+        self.assertEqual(d["prox-json"], os.path.join("scen", "prox.json"))
+        for key in ("nl-json", "grad-json", "FW-tmax", "FW-tau", "FW-obj-cutoff"):
+            self.assertNotIn(key, d)
+        # and without it, nothing changes
+        opt, _ = _fake_opt(_cfg(aphfw_hub=True))
+        d = APHFWOpt._make_cpp_config(opt)
+        self.assertNotIn("no-fw", d)
+        self.assertNotIn("prox-json", d)
+        self.assertIn("nl-json", d)
+
+    def test_no_fw_refuses_fw_only_options(self):
+        for name, value in (("aphfw_fw_tmax", 3), ("aphfw_fw_tau", 0.5),
+                            ("aphfw_obj_cutoff", True)):
+            with self.subTest(name=name):
+                opt, _ = _fake_opt(_cfg(aphfw_hub=True, aphfw_no_fw=True,
+                                        **{name: value}))
+                with self.assertRaisesRegex(ValueError,
+                                            "--" + name.replace("_", "-")):
+                    APHFWOpt._make_cpp_config(opt)
+                # the same value is fine with Frank-Wolfe
+                opt, _ = _fake_opt(_cfg(aphfw_hub=True, **{name: value}))
+                APHFWOpt._make_cpp_config(opt)
+
+    def test_no_fw_needs_hub(self):
+        from mpisppy.generic.hub import build_hub_dict
+        with self.assertRaisesRegex(RuntimeError, "--aphfw-no-fw needs --aphfw-hub"):
+            build_hub_dict(_cfg(aphfw_no_fw=True), None, None, None, None, None)
 
     def test_max_iterations_sets_cycle_limit(self):
         opt, _ = _fake_opt(_cfg(aphfw_hub=True))
@@ -428,6 +462,59 @@ class TestAphfwHubRun(unittest.TestCase):
         ]
         with patch.object(sys, "argv", argv):
             runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
+
+    def test_no_fw_writes_prox_json(self):
+        # Under --aphfw-no-fw the hub writes prox.json (the --iterk-mipgap
+        # settings) in place of nl.json and grad.json.
+        import json
+
+        import mpisppy.opt.aphfw as aphfw_module
+        written = {}
+        real_dump = json.dump
+
+        def capture(obj, f, *args, **kwargs):
+            written[os.path.basename(f.name)] = dict(obj)
+            return real_dump(obj, f, *args, **kwargs)
+
+        argv = self._farmer_argv("--aphfw-no-fw", "--max-iterations", "2",
+                                 "--max-solver-threads", "2",
+                                 "--aphfw-solve-time-limit", "77")
+        with patch.object(sys, "argv", argv), \
+                patch.object(aphfw_module.json, "dump", capture):
+            runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
+        param_files = {name for name in written
+                       if name in ("iter0.json", "prox.json", "nl.json", "grad.json")}
+        self.assertEqual(param_files, {"iter0.json", "prox.json"})
+        self.assertEqual(written["prox.json"],
+                         {"timeLimit": 77.0, "threads": 2, "mipGap": 1e-4})
+
+    def test_no_fw_closes_gap(self):
+        # With a Lagrangian and an xhatshuffle spoke, --aphfw-no-fw closes
+        # farmer's gap to 0.1% near its optimum (-108390).  (Comparing with the
+        # Python APH hub, --APH, would fit here, but Pyomo's appsi_highs cannot
+        # solve APH's subproblems, and CI runs this file with it.  The FW hub
+        # is no reference either: on this run its incumbent stays 0.65% off.)
+        def incumbent(hub_args):
+            argv = ["mpiexec", "-np", "3", sys.executable, "-m", "mpi4py",
+                    "-m", "mpisppy.generic_cylinders",
+                    "--module-name", "mpisppy.tests.examples.farmer",
+                    "--num-scens", "3", "--solver-name", solver_name,
+                    "--default-rho", "1", "--max-iterations", "100",
+                    "--lagrangian", "--xhatshuffle", "--rel-gap", "0.001",
+                    "--aphfw-hub", *hub_args]
+            with tempfile.TemporaryDirectory() as tmpdir:  # for solver logs
+                result = subprocess.run(
+                    argv, capture_output=True, text=True, timeout=600,
+                    check=False, env=subprocess_env(), cwd=tmpdir)
+            out = result.stdout + result.stderr
+            self.assertEqual(result.returncode, 0, out[-3000:])
+            self.assertIn("Terminating based on inter-cylinder relative gap",
+                          out, out[-3000:])
+            last = out.split("Statistics at termination")[-1].splitlines()[2]
+            return float(last.split()[-4])
+
+        no_fw = incumbent(["--aphfw-no-fw"])
+        self.assertAlmostEqual(no_fw, -108390.0, delta=0.002 * 108390)
 
     def test_max_iterations_caps_cycles(self):
         # The hub stops at --max-iterations cycles, as other hubs stop at

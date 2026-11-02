@@ -90,6 +90,9 @@ public:
   // warning.
   static void requestThreads(int threads);
 
+  // True if the model has integer (or binary) columns.
+  bool hasIntegerCols() const;
+
   // from here down are functions the caller should rarely, if ever, need.
   void printSolution() override;
   void nonantSolutionVectorToCsv(std::string fileName) const override;
@@ -115,7 +118,6 @@ protected:
   static std::atomic<bool> threadPoolStarted_;
 
   void highsCheck(HighsStatus status, const std::string& what) const;
-  bool hasIntegerCols() const;
   void _buildNonantsMaps();
   void clearModel() override;
 

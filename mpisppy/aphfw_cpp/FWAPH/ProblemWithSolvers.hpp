@@ -19,6 +19,7 @@
 #include "utils/timer.hpp"
 #include "utils/utilities.hpp"
 #include "WTrace.hpp"
+#include <limits>
 #include <optional>
 
 // Exactly one of USE_CPLEX, USE_GUROBI, USE_XPRESS, USE_HIGHS must be defined
@@ -82,15 +83,23 @@ public:
   bool hasNumericalBailout() const {
     return (Lagrangian && Lagrangian->hasNumericalBailout())
         || (nl && nl->hasNumericalBailout())
-        || (gradient && gradient->hasNumericalBailout());
+        || (gradient && gradient->hasNumericalBailout())
+        || (proxSolver && proxSolver->hasNumericalBailout());
   }
 
-  // Two solve functions that put values into x
+  // True under --no-fw: subproblems are solved by proxSolver in one call,
+  // and nl, gradient and FW are not built.
+  bool noFW() const { return noFW_; }
+
+  // Solve functions that put values into x
   objAndBnd doLagrangianSolve(std::vector<double>& x);
   // x receives the proximal minimizer (what the algorithm iterates on);
   // xExport receives a point of K_s (what the candidate-solution
   // consumers get).  They coincide only when FW-export-policy is prox.
   void doFWsolve(std::vector<double>& x, std::vector<double>& xExport);
+  // --no-fw: minimize f + W.x + (rho/2)||x - z||^2 over K_s in one solver
+  // call.  The minimizer is a point of K_s, so xExport = x.
+  void doProxSolve(std::vector<double>& x, std::vector<double>& xExport);
 
   // Cooperative abort: attach the controller's abort flag to every solver
   // object (call after setup), and let the control thread interrupt solves
@@ -99,14 +108,16 @@ public:
   void attachAbortFlag(const std::atomic<bool>* flag);
   void interruptInFlightSolves();
 
-  // Timing accessors for the most recent FW solve
-  double getLastFWNLTime()     const { return FW->getAccumulatedNLTime();   }
-  double getLastFWMILPTime()   const { return FW->getAccumulatedMILPTime(); }
-  int    getLastFWMILPSolves() const { return FW->getMILPSolvesSoFar();    }
+  // Timing accessors for the most recent FW solve (NaN / 0 under --no-fw,
+  // where there is no FW object)
+  double getLastFWNLTime()     const { return FW ? FW->getAccumulatedNLTime()   : kNaN_; }
+  double getLastFWMILPTime()   const { return FW ? FW->getAccumulatedMILPTime() : kNaN_; }
+  int    getLastFWMILPSolves() const { return FW ? FW->getMILPSolvesSoFar()     : 0;     }
 
   // Subproblem objective of the point the most recent FW solve exported, as
-  // measured when the export was chosen.  NaN under --FW-export-policy prox.
-  double getLastExportObjVal()  const { return FW->getLastExportObjVal();  }
+  // measured when the export was chosen.  NaN under --FW-export-policy prox
+  // and under --no-fw.
+  double getLastExportObjVal()  const { return FW ? FW->getLastExportObjVal()   : kNaN_; }
 
   // True if this scenario's original objective has quadratic terms.  The
   // Lagrangian object holds the model as it was read from the file, so it is
@@ -194,24 +205,28 @@ public:
 protected:
 #ifdef USE_CPLEX
   std::unique_ptr<CPLEXInterface> Lagrangian;
+  std::unique_ptr<CPLEXInterface> proxSolver;  // --no-fw only
   std::unique_ptr<CPLEXNL> nl;
   std::unique_ptr<CPLEXGrad> gradient;
   std::unique_ptr<FrankWolfe<CPLEXNL, CPLEXGrad>> FW;
 #endif
 #ifdef USE_GUROBI
   std::unique_ptr<GurobiInterface> Lagrangian;
+  std::unique_ptr<GurobiInterface> proxSolver;  // --no-fw only
   std::unique_ptr<GurobiNL> nl;
   std::unique_ptr<GurobiGrad> gradient;
   std::unique_ptr<FrankWolfe<GurobiNL, GurobiGrad>> FW;
 #endif
 #ifdef USE_XPRESS
   std::unique_ptr<XpressInterface> Lagrangian;
+  std::unique_ptr<XpressInterface> proxSolver;  // --no-fw only
   std::unique_ptr<XpressNL> nl;
   std::unique_ptr<XpressGrad> gradient;
   std::unique_ptr<FrankWolfe<XpressNL, XpressGrad>> FW;
 #endif
 #ifdef USE_HIGHS
   std::unique_ptr<HiGHSInterface> Lagrangian;
+  std::unique_ptr<HiGHSInterface> proxSolver;  // --no-fw only
   std::unique_ptr<HiGHSNL> nl;
   std::unique_ptr<HiGHSGrad> gradient;
   std::unique_ptr<FrankWolfe<HiGHSNL, HiGHSGrad>> FW;
@@ -221,6 +236,7 @@ protected:
   std::unique_ptr<SolverParams> nlParams;
   std::unique_ptr<SolverParams> gradientParams;
   std::unique_ptr<SolverParams> FWParams;
+  std::unique_ptr<SolverParams> proxParams;
 
   // these strings are all paths
   std::string problemName;
@@ -228,6 +244,10 @@ protected:
   std::string iter0Json;
   std::string nlJson;
   std::string gradJson;
+  std::string proxJson;
+
+  bool noFW_ = false;
+  static constexpr double kNaN_ = std::numeric_limits<double>::quiet_NaN();
   std::string logFileName;
 
   std::vector<double> rhoAsRead; // from an input file
@@ -253,6 +273,7 @@ protected:
   void _readRho();
   void _readOmicron(std::vector<double>& out);
   void _createInterfaceObjects(Config& cfg);
+  void _refuseFWOptionsUnderNoFW(Config& cfg) const;
   void _initRho();
   
 

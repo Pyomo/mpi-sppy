@@ -28,6 +28,8 @@ def build_hub_dict(cfg, beans, scenario_creator_kwargs,
     Returns:
         dict: hub_dict for WheelSpinner
     """
+    if cfg.get("aphfw_no_fw", False) and not cfg.get("aphfw_hub", False):
+        raise RuntimeError("--aphfw-no-fw needs --aphfw-hub")
     if cfg.APH:
         hub_dict = vanilla.aph_hub(*beans,
                                    scenario_creator_kwargs=scenario_creator_kwargs,
