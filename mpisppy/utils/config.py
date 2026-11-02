@@ -48,6 +48,7 @@ If you want a positional arg, you have to DIY:
 """
 
 import argparse
+import functools
 import math
 
 import pyomo.common.config as pyofig
@@ -2272,6 +2273,50 @@ class Config(pyofig.ConfigDict):
 
 
 #=================
+# The two APH hubs share the aph_* options aph_args registers.  aphfw_args
+# registers more aph_* options, which only the compiled hub (--aphfw-hub)
+# reads; each hub refuses non-default values of the options it ignores.
+
+@functools.cache
+def _aph_registrations():
+    """(names aph_args registers, {name: default} for all of aphfw_args)."""
+    aph = Config()
+    aph.aph_args()
+    both = Config()
+    both.aphfw_args()   # registers aph_args too
+    return frozenset(aph), {name: both[name] for name in both}
+
+
+def aphfw_hub_only_options():
+    """The aph_* options only --aphfw-hub reads: aphfw_args minus aph_args."""
+    aph_names, defaults = _aph_registrations()
+    return tuple(name for name in defaults
+                 if name.startswith("aph_") and name not in aph_names)
+
+
+# Values other than the default that still mean "not set".
+_UNSET_SENTINELS = {
+    "aph_omicron_all": lambda value: value < 0,   # any negative: no override
+}
+
+
+def refuse_non_defaults(get_option, names, why):
+    """Raise if any option in names is set to other than its default.
+
+    get_option(name, default) reads the run's value; why ends the message.
+    """
+    _, defaults = _aph_registrations()
+    for name in names:
+        default = defaults[name]
+        value = get_option(name, default)
+        if value is None or value == default:
+            continue
+        if name in _UNSET_SENTINELS and _UNSET_SENTINELS[name](value):
+            continue
+        raise ValueError(f"--{name.replace('_', '-')} {why} "
+                         f"(got {value}, default {default})")
+
+
 if __name__ == "__main__":
     # a place for ad hoc testing by developers
     config = Config()

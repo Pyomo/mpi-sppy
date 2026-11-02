@@ -431,3 +431,28 @@ int main(int argc, char** argv) {
     MPI_Finalize();
     return rc;
 }
+
+// A whole run under --no-fw on the continuous fixture (so the HiGHS build
+// runs it too): startup Lagrangian, then one prox solve per subproblem.  The
+// run must reach the optimum: with x shared by both scenarios the expected
+// cost is 5 x1 + 4 x2 + 5 x3, minimized at x2 = 1 for a bound of 4.  A run
+// stopped early by the cycle cap reports less (2 after two cycles).
+TEST(FWAPH_Main, NoFWReachesOptimum)
+{
+    std::vector<std::string> args = {
+        "aphfw_main_test",
+        "--problem-name", "smallLPFWAPH/mps_dir",
+        "--no-fw", "--prox-json", "smallFWAPH/prox.json",
+        "--iter0-json", "smallFWAPH/iter0.json",
+        "--aph-max-cycles", "20",
+        "--solver-log-file", "solver.log",
+    };
+    auto r = runWithArgs(args);
+    ASSERT_EQ(r.rc, 0) << "runFWAPHWithArgs --no-fw failed\n" << r.out << r.err;
+
+    const std::string combined = r.out + "\n" + r.err;
+    double termBound = 0.0;
+    ASSERT_TRUE(extractBound(combined, "Termination Lagrangian bound is", termBound))
+        << "no termination bound in the output\n" << combined;
+    EXPECT_NEAR(termBound, 4.0, 1e-6);
+}

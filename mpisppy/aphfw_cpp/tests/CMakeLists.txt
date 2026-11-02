@@ -64,25 +64,6 @@ gtest_discover_tests(
     DISCOVERY_TIMEOUT 60
 )
 
-# A whole run under --no-fw: startup Lagrangian, then one prox solve per
-# subproblem, on the continuous fixture so the HiGHS build runs it too.  The
-# run must reach the optimum: with x shared by both scenarios the expected
-# cost is 5 x1 + 4 x2 + 5 x3, minimized at x2 = 1 for a bound of 4.  A run
-# stopped early by the cycle cap reports less (2 after two cycles).
-add_test(
-  NAME main_aph_no_fw
-  COMMAND ${APHFW_MAIN_TARGET}
-          --problem-name smallLPFWAPH/mps_dir
-          --no-fw --prox-json smallFWAPH/prox.json
-          --iter0-json smallFWAPH/iter0.json
-          --aph-max-cycles 20
-          --solver-log-file /dev/null
-  WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
-)
-set_tests_properties(main_aph_no_fw PROPERTIES
-  TIMEOUT 120
-  PASS_REGULAR_EXPRESSION "Termination Lagrangian bound is 4\\.000000")
-
 # The startup W orthogonality check aborts via MPI_Abort rather than throwing
 # (a node communicator need not span all ranks), so it cannot be a gtest case.
 # Run the real executable on a problem whose two scenarios carry different rho

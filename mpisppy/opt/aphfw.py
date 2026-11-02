@@ -15,7 +15,6 @@ this file never needs it.
 """
 
 import ctypes
-import functools
 import json
 import logging
 import os
@@ -69,38 +68,6 @@ _FW_ONLY_OPTIONS = ("aphfw_fw_tmax", "aphfw_fw_tau", "aphfw_obj_cutoff")
 
 # Options of the Python APH hub (--APH) that this hub has no use for.
 _PYTHON_APH_ONLY_OPTIONS = ("aph_dispatch_frac", "aph_sleep_seconds")
-
-# APH options only this hub reads; the Python APH hub (--APH) refuses them.
-APHFW_HUB_ONLY_OPTIONS = (
-    "aph_primal_term_thresh", "aph_dual_term_thresh", "aph_staleness_threshold",
-    "aph_display_progress", "aph_block_sync", "aph_leading_dispatch_only",
-    "aph_iter0_w_multiplier", "aph_omicron_rho_multiplier", "aph_omicron_all",
-    "aph_omicron_csv", "aph_omicron_min", "aph_omicron_max",
-    "aph_check_omicron_invariant")
-
-
-@functools.cache
-def _registered_defaults():
-    """The defaults aphfw_args (and the aph_args it calls) register."""
-    defaults = mpisppy.utils.config.Config()
-    defaults.aphfw_args()
-    return {name: defaults[name] for name in defaults}
-
-
-def refuse_non_defaults(get_option, names, why):
-    """Raise if any of the options names differs from its registered default.
-
-    get_option(name, default) reads the run's value; why ends the message.
-    """
-    defaults = _registered_defaults()
-    for name in names:
-        default = defaults[name]
-        value = get_option(name, default)
-        if value is not None and value != default:
-            raise ValueError(
-                f"--{name.replace('_', '-')} {why} "
-                f"(got {value}, default {default})")
-
 
 # Float options whose C++ default is 0, which the C++ parser (positive values
 # only) cannot be given explicitly; leaving them out gives the same value.
@@ -453,13 +420,14 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             "aph_iter0_w_multiplier": "iter0-w-multiplier",
         }
 
-        refuse_non_defaults(self._get_option, _PYTHON_APH_ONLY_OPTIONS,
-                             "is used only by --APH, not by --aphfw-hub")
+        refuse = mpisppy.utils.config.refuse_non_defaults
+        refuse(self._get_option, _PYTHON_APH_ONLY_OPTIONS,
+               "is used only by --APH, not by --aphfw-hub")
         no_fw = self._no_fw()
         if no_fw:
-            refuse_non_defaults(self._get_option, _FW_ONLY_OPTIONS,
-                                 "applies only to the Frank-Wolfe solves, so "
-                                 "it cannot be used with --aphfw-no-fw")
+            refuse(self._get_option, _FW_ONLY_OPTIONS,
+                   "applies only to the Frank-Wolfe solves, so it cannot be "
+                   "used with --aphfw-no-fw")
             d["no-fw"] = True
 
         # gamma weights v against u in tau = ||u||^2 + ||v||^2 / gamma, as for

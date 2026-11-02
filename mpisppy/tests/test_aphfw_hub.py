@@ -210,11 +210,13 @@ class TestAphfwPythonSide(unittest.TestCase):
     def test_python_aph_refuses_aphfw_hub_only_options(self):
         # The APH options only the compiled hub reads would do nothing under
         # --APH, so it refuses them (and takes them at their defaults).
-        from mpisppy.opt.aphfw import APHFW_HUB_ONLY_OPTIONS, _registered_defaults
         from mpisppy.utils.cfg_vanilla import aph_hub
         aph_hub(_cfg(APH=True, default_rho=1.0), None, None, ["s"])
-        defaults = _registered_defaults()
-        for name in APHFW_HUB_ONLY_OPTIONS:
+        # a negative --aph-omicron-all means "no override" to both hubs
+        aph_hub(_cfg(APH=True, default_rho=1.0, aph_omicron_all=-2.0),
+                None, None, ["s"])
+        _, defaults = config._aph_registrations()
+        for name in config.aphfw_hub_only_options():
             default = defaults[name]
             if isinstance(default, bool):
                 value = not default
@@ -227,6 +229,18 @@ class TestAphfwPythonSide(unittest.TestCase):
                 with self.assertRaisesRegex(
                         ValueError, "--" + name.replace("_", "-") + " is used only by --aphfw-hub"):
                     aph_hub(cfg, None, None, ["s"])
+
+    def test_aphfw_hub_only_options_derived(self):
+        # The list comes from the registrations, so a new aph_* option in
+        # aphfw_args is covered without anyone editing a list.  Spot-check it.
+        only = set(config.aphfw_hub_only_options())
+        self.assertIn("aph_primal_term_thresh", only)
+        self.assertIn("aph_omicron_csv", only)
+        self.assertEqual(len(only), 13)
+        for shared in ("aph_gamma", "aph_nu", "aph_frac_needed",
+                       "aph_dispatch_frac", "aph_sleep_seconds"):
+            self.assertNotIn(shared, only)
+        self.assertTrue(all(name.startswith("aph_") for name in only))
 
     def test_aphfw_args_registers_aph_args(self):
         # The hub reads aph_gamma, aph_nu and aph_frac_needed, so a driver
