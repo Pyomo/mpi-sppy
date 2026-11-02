@@ -97,9 +97,10 @@ _CPP_OPTION_NAMES = {
 }
 
 
-# aph_args options this hub reads other than through _CPP_OPTION_NAMES: the
-# hub flag itself, and aph_gamma, passed as its reciprocal in
-# _make_cpp_config.  Keep this next to that code.
+# aph_args options this hub must not refuse although they are not in
+# _CPP_OPTION_NAMES: APH (the Python hub's flag, which only selects a hub) and
+# aph_gamma, passed as its reciprocal in _make_cpp_config.  A new aph_args option read there directly belongs here
+# too, or --aphfw-hub refuses it as an --APH-only option.
 _APH_ARGS_READ_ELSEWHERE = frozenset({"APH", "aph_gamma"})
 
 
