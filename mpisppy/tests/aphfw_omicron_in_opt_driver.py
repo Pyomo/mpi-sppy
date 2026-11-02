@@ -61,12 +61,12 @@ def _farmer_options(multiplier):
         # aphfw knobs
         "aphfw_fw_tmax": 2,
         "aphfw_fw_tau": 0.01,
-        "aphfw_primal_term_thresh": 0.001,
-        "aphfw_dual_term_thresh": 0.001,
-        "aphfw_display_progress": False,
-        "aphfw_block_sync": True,
+        "aph_primal_term_thresh": 0.001,
+        "aph_dual_term_thresh": 0.001,
+        "aph_display_progress": False,
+        "aph_block_sync": True,
         "aphfw_verbosity": 0,
-        "aphfw_omicron_rho_multiplier": multiplier,
+        "aph_omicron_rho_multiplier": multiplier,
     }
     kwargs = dict(
         all_scenario_names=all_scenario_names,
@@ -118,7 +118,7 @@ def test_omicron_in_opt():
 
     # --- Run 1: default multiplier = 1.0 ---
     if rank == 0:
-        print("\n=== Run 1: aphfw_omicron_rho_multiplier = 1.0 ===")
+        print("\n=== Run 1: aph_omicron_rho_multiplier = 1.0 ===")
     r1 = _run_check(multiplier=1.0, expected_scale=1.0)
 
     if not r1["frozen"]:
@@ -138,7 +138,7 @@ def test_omicron_in_opt():
 
     # --- Run 2: multiplier = 2.0, omicron should be 2x rho-at-freeze ---
     if rank == 0:
-        print("\n=== Run 2: aphfw_omicron_rho_multiplier = 2.0 ===")
+        print("\n=== Run 2: aph_omicron_rho_multiplier = 2.0 ===")
     r2 = _run_check(multiplier=2.0, expected_scale=2.0)
 
     if not r2["frozen"]:

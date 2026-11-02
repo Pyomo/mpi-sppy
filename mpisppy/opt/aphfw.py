@@ -62,31 +62,33 @@ def _import_aphfw_cpp():
 
 
 # Options that steer only the Frank-Wolfe solves.  Under --aphfw-no-fw they
-# must keep their defaults (read from aphfw_args) and are not passed to the
-# C++, which refuses them there.
+# must keep their defaults and are not passed to the C++, which refuses them
+# there.
 _FW_ONLY_OPTIONS = ("aphfw_fw_tmax", "aphfw_fw_tau", "aphfw_obj_cutoff")
 
+# Options of the Python APH hub (--APH) that this hub has no use for.
+_PYTHON_APH_ONLY_OPTIONS = ("aph_dispatch_frac", "aph_sleep_seconds")
 
-def _refuse_fw_only_options(get_option):
-    """Raise if an FW-only option differs from its default under --aphfw-no-fw.
 
-    get_option(name, default) reads the run's value.
+def _refuse_non_defaults(get_option, names, why):
+    """Raise if any of the options names differs from its registered default.
+
+    get_option(name, default) reads the run's value; why ends the message.
     """
     defaults = mpisppy.utils.config.Config()
-    defaults.aphfw_args()
-    for name in _FW_ONLY_OPTIONS:
+    defaults.aphfw_args()   # registers aph_args too
+    for name in names:
         default = getattr(defaults, name)
         value = get_option(name, default)
         if value is not None and value != default:
             raise ValueError(
-                f"--{name.replace('_', '-')} applies only to the Frank-Wolfe "
-                "solves, so it cannot be used with --aphfw-no-fw "
+                f"--{name.replace('_', '-')} {why} "
                 f"(got {value}, default {default})")
 
 
 # Float options whose C++ default is 0, which the C++ parser (positive values
 # only) cannot be given explicitly; leaving them out gives the same value.
-_ZERO_IS_CPP_DEFAULT = {"aphfw_fw_tau", "aphfw_iter0_w_multiplier"}
+_ZERO_IS_CPP_DEFAULT = {"aphfw_fw_tau", "aph_iter0_w_multiplier"}
 
 
 def _check_dir_shared(comm, path):
@@ -241,7 +243,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             # Fires whether or not extensions are enabled — post-iter-0
             # rho drivers have already run and rho has been pushed to C++
             # above, so the frozen value reflects any iter-0 rho adjustments.
-            # If --aphfw-omicron-all or --aphfw-omicron-csv was set, C++ already froze
+            # If --aph-omicron-all or --aph-omicron-csv was set, C++ already froze
             # at setup and this call is a no-op (guarded by omicron_is_frozen).
             if (self._cpp.get_current_cycle() == 1
                     and not self._cpp.omicron_is_frozen()):
@@ -410,34 +412,47 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         mappings = {
             "aphfw_fw_tmax": "FW-tmax",
             "aphfw_fw_tau": "FW-tau",
-            "aphfw_primal_term_thresh": "primal-term-thresh",
-            "aphfw_dual_term_thresh": "dual-term-thresh",
-            "aphfw_gamma_inverse": "gamma-inverse",
+            "aph_primal_term_thresh": "primal-term-thresh",
+            "aph_dual_term_thresh": "dual-term-thresh",
             "aph_nu": "nu",
-            "aphfw_staleness_threshold": "staleness-threshhold",
-            "aphfw_solve_fraction": "solve-fraction",
-            "aphfw_display_progress": "display-progress",
+            "aph_staleness_threshold": "staleness-threshhold",
+            # Python APH counts ranks that have reported; the C++ counts
+            # scenario solves.  The same with one scenario per rank.
+            "aph_frac_needed": "solve-fraction",
+            "aph_display_progress": "display-progress",
             "aphfw_verbosity": "verbosity",
             "aphfw_workers_per_rank": "workersPerRank",
-            "aphfw_block_sync": "block-sync",
-            "aphfw_leading_dispatch_only": "leading-dispatch-only",
+            "aph_block_sync": "block-sync",
+            "aph_leading_dispatch_only": "leading-dispatch-only",
             "aphfw_obj_cutoff": "FW-obj-cutoff",
             "aphfw_W_trace_prefix": "W-trace-prefix",
             "aphfw_solve_times_trace_prefix": "solve-times-trace-prefix",
-            "aphfw_omicron_rho_multiplier": "omicron-rho-multiplier",
-            "aphfw_omicron_all": "omicron-all",
-            "aphfw_omicron_csv": "omicron-csv",
-            "aphfw_omicron_min": "omicron-min",
-            "aphfw_omicron_max": "omicron-max",
-            "aphfw_check_omicron_invariant": "check-omicron-invariant",
+            "aph_omicron_rho_multiplier": "omicron-rho-multiplier",
+            "aph_omicron_all": "omicron-all",
+            "aph_omicron_csv": "omicron-csv",
+            "aph_omicron_min": "omicron-min",
+            "aph_omicron_max": "omicron-max",
+            "aph_check_omicron_invariant": "check-omicron-invariant",
             "aphfw_iter0_fw_step": "iter0-fw-step",
-            "aphfw_iter0_w_multiplier": "iter0-w-multiplier",
+            "aph_iter0_w_multiplier": "iter0-w-multiplier",
         }
 
+        _refuse_non_defaults(self._get_option, _PYTHON_APH_ONLY_OPTIONS,
+                             "is used only by --APH, not by --aphfw-hub")
         no_fw = self._no_fw()
         if no_fw:
-            _refuse_fw_only_options(self._get_option)
+            _refuse_non_defaults(self._get_option, _FW_ONLY_OPTIONS,
+                                 "applies only to the Frank-Wolfe solves, so "
+                                 "it cannot be used with --aphfw-no-fw")
             d["no-fw"] = True
+
+        # gamma weights v against u in tau = ||u||^2 + ||v||^2 / gamma, as for
+        # --APH; the C++ takes its reciprocal.
+        gamma = self._get_option("aph_gamma", None)
+        if gamma is not None:
+            if gamma <= 0:
+                raise ValueError(f"--aph-gamma must be positive (got {gamma})")
+            d["gamma-inverse"] = 1.0 / gamma
 
         for py_name, cpp_name in mappings.items():
             if no_fw and py_name in _FW_ONLY_OPTIONS:
@@ -448,9 +463,9 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             elif py_name in self.options:
                 val = self.options[py_name]
             if val is not None:
-                # aphfw_omicron_all uses -1.0 as the "unset" sentinel; C++ enforces
+                # aph_omicron_all uses -1.0 as the "unset" sentinel; C++ enforces
                 # a positive range on the option, so don't push the sentinel.
-                if py_name == "aphfw_omicron_all" and isinstance(val, float) and val < 0.0:
+                if py_name == "aph_omicron_all" and isinstance(val, float) and val < 0.0:
                     continue
                 if isinstance(val, float) and val <= 0.0:
                     if val == 0.0 and py_name in _ZERO_IS_CPP_DEFAULT:

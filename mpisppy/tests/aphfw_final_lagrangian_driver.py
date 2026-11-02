@@ -133,10 +133,10 @@ def run_wheel(final_lagrangian):
     # aphfw options
     cfg.aphfw_fw_tmax = 10
     cfg.aphfw_fw_tau = 0.01
-    cfg.aphfw_primal_term_thresh = 0.001
-    cfg.aphfw_dual_term_thresh = 0.001
-    cfg.aphfw_display_progress = True
-    cfg.aphfw_block_sync = True
+    cfg.aph_primal_term_thresh = 0.001
+    cfg.aph_dual_term_thresh = 0.001
+    cfg.aph_display_progress = True
+    cfg.aph_block_sync = True
     cfg.aphfw_verbosity = 0
     cfg.aphfw_final_lagrangian = final_lagrangian
 

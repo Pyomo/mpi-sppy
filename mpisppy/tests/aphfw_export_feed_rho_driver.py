@@ -170,10 +170,10 @@ def _make_options():
         "aphfw_fw_tmax": 2,
         "aphfw_fw_tau": 0.01,
         # Loose enough that APH does not stop before the residuals get small.
-        "aphfw_primal_term_thresh": 1e-8,
-        "aphfw_dual_term_thresh": 1e-8,
-        "aphfw_display_progress": False,
-        "aphfw_block_sync": True,
+        "aph_primal_term_thresh": 1e-8,
+        "aph_dual_term_thresh": 1e-8,
+        "aph_display_progress": False,
+        "aph_block_sync": True,
         "aphfw_verbosity": 0,
     }
     kwargs = dict(

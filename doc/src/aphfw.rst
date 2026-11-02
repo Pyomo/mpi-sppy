@@ -222,9 +222,10 @@ also reach the spokes. ``--solver-options`` and ``--solver-options-file``
 do not reach the C++ solves; the hub says so in a warning, and they still
 apply to the spokes.
 
-The hub's own options all begin with ``--aphfw-``. It also takes
-``--max-iterations`` and ``--default-rho``, and the step size ``--aph-nu``
-shared with :ref:`sec-aph`. The ones most often set:
+Options of the APH algorithm begin with ``--aph-``, and some of them are
+shared with :ref:`sec-aph`. Options that begin with ``--aphfw-`` are about
+Frank-Wolfe or the compiled hub itself. The hub also takes
+``--max-iterations`` and ``--default-rho``. The ones most often set:
 
 .. list-table:: FW-APH hub options
    :widths: 30 10 60
@@ -254,19 +255,21 @@ shared with :ref:`sec-aph`. The ones most often set:
    * - ``--aphfw-fw-tau``
      - 0.01
      - Frank-Wolfe gap at which a scenario solve stops early
-   * - ``--aphfw-primal-term-thresh``
+   * - ``--aph-primal-term-thresh``
      - 0.01
      - Primal termination tolerance (on :math:`u`)
-   * - ``--aphfw-dual-term-thresh``
+   * - ``--aph-dual-term-thresh``
      - 0.01
      - Dual termination tolerance (on :math:`v`)
-   * - ``--aphfw-gamma-inverse``
+   * - ``--aph-gamma``
      - 1.0
-     - Primal/dual scaling (applied to the norm of :math:`v`)
-   * - ``--aphfw-solve-fraction``
+     - Primal/dual scaling :math:`\gamma`, as in
+       :math:`\|u\|^2 + \|v\|^2/\gamma` (shared with APH)
+   * - ``--aph-frac-needed``
      - 1.0
-     - Fraction of the subproblem solves needed before a projection
-   * - ``--aphfw-block-sync``
+     - Fraction of the scenario solves needed before a projection (shared
+       with APH, which counts ranks instead)
+   * - ``--aph-block-sync``
      - off
      - Allow only block asynchronism
    * - ``--aphfw-final-lagrangian``
@@ -282,7 +285,12 @@ shared with :ref:`sec-aph`. The ones most often set:
        subdirectory that is removed at the end. Every hub rank must see it,
        so a hub on more than one node needs a shared filesystem here.
 
-``--help`` (with a ``--module-name``) lists the rest. ``--aphfw-hub``
+``--help`` (with a ``--module-name``) lists the rest. The hub refuses
+``--aph-dispatch-frac`` and ``--aph-sleep-seconds``, which only
+:ref:`sec-aph` uses. Its :math:`\|u\|^2` is weighted by omicron, which by
+default is :math:`\rho` from iteration 1 on, so a given ``--aph-gamma`` does
+not balance :math:`u` and :math:`v` exactly as it does for APH;
+``--aph-omicron-all 1`` removes the weights. ``--aphfw-hub``
 cannot be combined with ``--integer-relax-then-enforce``: the C++ hub solves
 from the MPS files and does not see changes to Pyomo variable types. The hub
 also refuses maximization models, models with ``variable_probability``,
@@ -302,9 +310,9 @@ about the hub is the same. ``--aphfw-fw-tmax``, ``--aphfw-fw-tau`` and
 they must keep their defaults. ``--aphfw-iter0-fw-step`` still applies; the
 step it adds is a proximal solve.
 
-``--aphfw-no-fw`` is not a drop-in replacement for ``--APH``: it needs
-``--aphfw-hub`` too, and the hub does not use ``--aph-gamma``,
-``--aph-frac-needed``, ``--aph-dispatch-frac`` or ``--aph-sleep-seconds``.
+``--aphfw-no-fw`` needs ``--aphfw-hub`` too. With both, a command line
+written for ``--APH`` runs if it does not set ``--aph-dispatch-frac`` or
+``--aph-sleep-seconds`` and avoids what the hub refuses (above).
 
 Troubleshooting
 ---------------

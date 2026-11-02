@@ -680,15 +680,17 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=1.0)
         self.add_to_config('aph_frac_needed',
-                            description='Fraction of sub-problems required before computing projective step (default 1.0)',
+                            description='Fraction of sub-problems required before computing projective step'
+                                        ' (with --aphfw-hub, a fraction of the scenario solves; default 1.0)',
                             domain=float,
                             default=1.0)
         self.add_to_config('aph_dispatch_frac',
-                            description='Fraction of sub-problems to dispatch at each step of asychronous projective hedging (default 1.0)',
+                            description='Fraction of sub-problems to dispatch at each step of asychronous projective hedging'
+                                        ' (not used by --aphfw-hub; default 1.0)',
                             domain=float,
                             default=1.0)
         self.add_to_config('aph_sleep_seconds',
-                            description='Spin-lock sleep time for APH (default 0.01)',
+                            description='Spin-lock sleep time for APH (not used by --aphfw-hub; default 0.01)',
                             domain=float,
                             default=0.01)
 
@@ -1097,9 +1099,13 @@ class Config(pyofig.ConfigDict):
     def aphfw_args(self):
         """Options for the C++ FW-APH hub (--aphfw-hub; see mpisppy.opt.aphfw).
 
-        Most are passed straight to the C++ side. The over-relaxation
-        parameter is aph_nu, shared with --APH and registered by aph_args.
+        Options of the APH algorithm are named aph_*; the ones named
+        aphfw_* are about Frank-Wolfe or the compiled hub itself.  The hub
+        also reads aph_gamma, aph_nu and aph_frac_needed, which aph_args
+        registers for --APH as well, so this registers aph_args too (a
+        second registration of an option is ignored).
         """
+        self.aph_args()
         self.add_to_config(name="aphfw_hub",
                            description="Use the C++ FW-APH hub",
                            domain=bool,
@@ -1123,32 +1129,22 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=0.01)
 
-        self.add_to_config(name="aphfw_primal_term_thresh",
+        self.add_to_config(name="aph_primal_term_thresh",
                            description="Primal termination tolerance (applied to u)",
                            domain=float,
                            default=0.01)
 
-        self.add_to_config(name="aphfw_dual_term_thresh",
+        self.add_to_config(name="aph_dual_term_thresh",
                            description="Dual termination tolerance (applied to v)",
                            domain=float,
                            default=0.01)
 
-        self.add_to_config(name="aphfw_gamma_inverse",
-                           description="Primal/dual scaling (applied to norm v)",
-                           domain=float,
-                           default=1.0)
-
-        self.add_to_config(name="aphfw_staleness_threshold",
+        self.add_to_config(name="aph_staleness_threshold",
                            description="Max cycles between scenario dispatches",
                            domain=int,
                            default=20)
 
-        self.add_to_config(name="aphfw_solve_fraction",
-                           description="Fraction of solves needed before projection",
-                           domain=float,
-                           default=1.0)
-
-        self.add_to_config(name="aphfw_display_progress",
+        self.add_to_config(name="aph_display_progress",
                            description="Display convergence info at every cycle",
                            domain=bool,
                            default=False)
@@ -1180,7 +1176,7 @@ class Config(pyofig.ConfigDict):
                            domain=str,
                            default="auto")
 
-        self.add_to_config(name="aphfw_iter0_w_multiplier",
+        self.add_to_config(name="aph_iter0_w_multiplier",
                            description="Start from W = m * rho * (xbase - z0) with this m, a PH-style"
                                        " guess at the duals. The default 0.0 gives W = 0.",
                            domain=float,
@@ -1196,12 +1192,12 @@ class Config(pyofig.ConfigDict):
                            domain=int,
                            default=1)
 
-        self.add_to_config(name="aphfw_block_sync",
+        self.add_to_config(name="aph_block_sync",
                            description="Allow only block asynchronism",
                            domain=bool,
                            default=False)
 
-        self.add_to_config(name="aphfw_leading_dispatch_only",
+        self.add_to_config(name="aph_leading_dispatch_only",
                            description="Only dispatch during leading sync phase",
                            domain=bool,
                            default=False)
@@ -1225,32 +1221,32 @@ class Config(pyofig.ConfigDict):
                            domain=str,
                            default="")
 
-        self.add_to_config(name="aphfw_omicron_rho_multiplier",
+        self.add_to_config(name="aph_omicron_rho_multiplier",
                            description="k in omicron = k * rho at post-iter-0 freeze (default 1.0)",
                            domain=float,
                            default=1.0)
 
-        self.add_to_config(name="aphfw_omicron_all",
+        self.add_to_config(name="aph_omicron_all",
                            description="If > 0, freeze omicron uniformly at setup to this scalar (overrides multiplier)",
                            domain=float,
                            default=-1.0)
 
-        self.add_to_config(name="aphfw_omicron_csv",
+        self.add_to_config(name="aph_omicron_csv",
                            description="If non-empty, freeze omicron from this CSV at setup (overrides multiplier)",
                            domain=str,
                            default="")
 
-        self.add_to_config(name="aphfw_omicron_min",
+        self.add_to_config(name="aph_omicron_min",
                            description="Lower bound check on omicron entries at freeze",
                            domain=float,
                            default=1e-6)
 
-        self.add_to_config(name="aphfw_omicron_max",
+        self.add_to_config(name="aph_omicron_max",
                            description="Upper bound check on omicron entries at freeze",
                            domain=float,
                            default=1e6)
 
-        self.add_to_config(name="aphfw_check_omicron_invariant",
+        self.add_to_config(name="aph_check_omicron_invariant",
                            description="Run S(N)-constancy check on omicron at freeze",
                            domain=bool,
                            default=True)

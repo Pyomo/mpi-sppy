@@ -86,10 +86,10 @@ def _make_options(extensions=None, extension_kwargs=None):
         # aphfw-specific
         "aphfw_fw_tmax": 2,
         "aphfw_fw_tau": 0.01,
-        "aphfw_primal_term_thresh": 0.0001,
-        "aphfw_dual_term_thresh": 0.0001,
-        "aphfw_display_progress": False,
-        "aphfw_block_sync": True,
+        "aph_primal_term_thresh": 0.0001,
+        "aph_dual_term_thresh": 0.0001,
+        "aph_display_progress": False,
+        "aph_block_sync": True,
         "aphfw_verbosity": 0,
     }
 

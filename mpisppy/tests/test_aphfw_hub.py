@@ -176,14 +176,44 @@ class TestAphfwPythonSide(unittest.TestCase):
         # 0 for an option whose C++ default is 0 is left to that default; for
         # one the C++ requires positive it is an error, not the default.
         cfg = _cfg(aphfw_hub=True, aphfw_fw_tau=0.0,
-                   aphfw_iter0_w_multiplier=0.0)
+                   aph_iter0_w_multiplier=0.0)
         opt, _ = _fake_opt(cfg)
         d = APHFWOpt._make_cpp_config(opt)
         self.assertNotIn("FW-tau", d)
         self.assertNotIn("iter0-w-multiplier", d)
-        cfg.aphfw_primal_term_thresh = 0.0
-        with self.assertRaisesRegex(ValueError, "--aphfw-primal-term-thresh"):
+        cfg.aph_primal_term_thresh = 0.0
+        with self.assertRaisesRegex(ValueError, "--aph-primal-term-thresh"):
             APHFWOpt._make_cpp_config(opt)
+
+    def test_aph_options_reach_cpp(self):
+        # The APH options shared with --APH: gamma goes over as its
+        # reciprocal, frac_needed as the solve fraction.
+        opt, _ = _fake_opt(_cfg(aphfw_hub=True, aph_gamma=4.0,
+                                aph_frac_needed=0.5, aph_nu=1.5))
+        d = APHFWOpt._make_cpp_config(opt)
+        self.assertEqual(d["gamma-inverse"], 0.25)
+        self.assertEqual(d["solve-fraction"], 0.5)
+        self.assertEqual(d["nu"], 1.5)
+        opt.options["cfg"].aph_gamma = 0.0
+        with self.assertRaisesRegex(ValueError, "--aph-gamma must be positive"):
+            APHFWOpt._make_cpp_config(opt)
+
+    def test_refuses_python_aph_only_options(self):
+        for name, value in (("aph_dispatch_frac", 0.5),
+                            ("aph_sleep_seconds", 0.1)):
+            with self.subTest(name=name):
+                opt, _ = _fake_opt(_cfg(aphfw_hub=True, **{name: value}))
+                with self.assertRaisesRegex(
+                        ValueError, "--" + name.replace("_", "-") + " is used only by --APH"):
+                    APHFWOpt._make_cpp_config(opt)
+
+    def test_aphfw_args_registers_aph_args(self):
+        # The hub reads aph_gamma, aph_nu and aph_frac_needed, so a driver
+        # that calls only aphfw_args still has them.
+        cfg = config.Config()
+        cfg.aphfw_args()
+        for name in ("aph_gamma", "aph_nu", "aph_frac_needed"):
+            self.assertIn(name, cfg)
 
     def test_no_fw_config(self):
         # --aphfw-no-fw: the C++ gets no-fw and prox.json, and none of the
@@ -441,7 +471,7 @@ class TestAphfwHubRun(unittest.TestCase):
         argv = [sys.executable, "-m", "mpisppy.generic_cylinders",
                 *self._farmer_argv("--max-iterations", "1",
                                    "--aphfw-verbosity", "1",
-                                   "--disable-aphfw-check-omicron-invariant")[1:]]
+                                   "--disable-aph-check-omicron-invariant")[1:]]
         with tempfile.TemporaryDirectory() as tmpdir:
             result = subprocess.run(argv, capture_output=True, text=True,
                                     timeout=300, check=False,

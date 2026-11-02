@@ -76,10 +76,10 @@ def test_hub_only():
         # aphfw-specific
         "aphfw_fw_tmax": 10,
         "aphfw_fw_tau": 0.01,
-        "aphfw_primal_term_thresh": 0.001,
-        "aphfw_dual_term_thresh": 0.001,
-        "aphfw_display_progress": True,
-        "aphfw_block_sync": True,
+        "aph_primal_term_thresh": 0.001,
+        "aph_dual_term_thresh": 0.001,
+        "aph_display_progress": True,
+        "aph_block_sync": True,
         "aphfw_verbosity": 0,
         "aphfw_keep_scenario_files": True,  # keep for Part 2
     }
