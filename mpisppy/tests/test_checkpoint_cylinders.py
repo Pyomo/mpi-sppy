@@ -77,7 +77,7 @@ class _ResumeABMixin:
     def tearDown(self):
         self._tmp.cleanup()
 
-    def _leg(self, name, *extra_args, spoke_writes_may_fail=False):
+    def _leg(self, name, *extra_args):
         """Run one mpiexec job and return the hub's snapshot."""
         out_path = os.path.join(self._tmp.name, f"{name}.json")
         cmd = [
@@ -109,10 +109,9 @@ class _ResumeABMixin:
         # write does not fail a leg -- it just prints. A resume-only leg
         # attempting a write it has nowhere to put got all the way through
         # the harness this way once.
-        if not spoke_writes_may_fail:
-            self.assertNotIn(
-                "could not write its incumbent", result.stdout,
-                msg=f"leg {name!r} failed to write a spoke incumbent")
+        self.assertNotIn(
+            "could not write its incumbent", result.stdout,
+            msg=f"leg {name!r} failed to write a spoke incumbent")
         self.assertNotIn(
             "WARNING: checkpoint write failed", result.stdout,
             msg=f"leg {name!r} failed to write a hub checkpoint")
@@ -344,24 +343,27 @@ class TestFarmerCylindersResumeAB(_ResumeABMixin, unittest.TestCase):
                     return pickle.load(f)["loop_state"]
         raise AssertionError(f"no {self.INCUMBENT_SPOKE} file in {spokes_dir}")
 
-    def test_a_bound_the_spoke_never_wrote_is_not_restored(self):
-        """The hub's last word can be newer than a spoke's file: a spoke
-        publishes an improvement before it writes it, and a failed write is
-        not retried. Here every spoke write fails, so the hub heard an
-        incumbent that no file holds, and the resumed spoke re-finds a worse
-        one within the iterations it gets. A hub that restored its own number
-        would credit that spoke with it, and the spoke would then write its
-        worse solution under the better objective."""
-        # A regular file where the spokes' directory goes makes every spoke
-        # write fail while the hub's own checkpoint is written normally.
-        os.makedirs(self.ckpt_dir)
-        with open(os.path.join(self.ckpt_dir, "spokes"), "w"):
-            pass
+    def test_a_bound_without_a_spoke_file_is_not_restored(self):
+        """The hub must not restore an inner bound without its spoke file.
+
+        The stopped run finds and checkpoints an incumbent. Removing the
+        spoke files before resuming simulates a lost spoke checkpoint while
+        leaving the hub checkpoint intact. The resumed spoke then re-finds an
+        incumbent during its iteration, but the hub starts without crediting
+        one it cannot restore with its solution.
+        """
         stopped = self._leg("B1", "--max-iterations", str(self.STOP),
-                            "--checkpoint-dir", self.ckpt_dir,
-                            spoke_writes_may_fail=True)
+                            "--checkpoint-dir", self.ckpt_dir)
         self.assertLess(stopped["BestInnerBound"], math.inf,
                         msg="the stopped leg found no incumbent to lose")
+        spokes_dir = os.path.join(self.ckpt_dir, "spokes")
+        self.assertTrue(
+            os.path.isdir(spokes_dir) and any(
+                fname.startswith(f"spoke_{self.INCUMBENT_SPOKE}")
+                for fname in os.listdir(spokes_dir)),
+            msg=f"the stopped leg wrote no {self.INCUMBENT_SPOKE} checkpoint")
+        shutil.rmtree(spokes_dir)
+
         resumed = self._leg("B2", "--max-iterations", "1",
                             "--resume-from", self.ckpt_dir)
         # No spoke file holds an incumbent, so the resumed hub starts with
