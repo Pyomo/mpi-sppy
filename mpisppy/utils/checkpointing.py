@@ -316,6 +316,9 @@ def require_backend_dependency(backend):
                 f"{installed_version}. Install the supported version with "
                 "'pip install mpi-sppy[pyfory]'."
             )
+        if backend == PYFORY_RELOAD_BACKEND:
+            from mpisppy.utils import pyfory_model_codec
+            pyfory_model_codec.require_supported_runtime()
     else:
         require_implemented_backend(backend)
 
@@ -1566,13 +1569,14 @@ def _probe_pyfory_reload_models(opt):
             stream = io.BytesIO()
             started = time.perf_counter() if timed else None
             cpu_started = time.thread_time() if timed else None
-            pyfory_model_codec.dump(scenario, stream)
+            pyfory_model_codec.dump(scenario, stream, scenario_name=sname)
             if timed:
                 encode_s += time.perf_counter() - started
                 encode_cpu_s += time.thread_time() - cpu_started
             started = time.perf_counter() if timed else None
             cpu_started = time.thread_time() if timed else None
-            restored = pyfory_model_codec.load(io.BytesIO(stream.getvalue()))
+            restored = pyfory_model_codec.load(io.BytesIO(stream.getvalue()),
+                                               scenario_name=sname)
             _validate_reloaded_model(restored, scenario, sname)
             if timed:
                 decode_s += time.perf_counter() - started
@@ -1911,7 +1915,8 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
         # change during a run -- but it is per-rank data, so it belongs inside
         # the guarded region rather than ahead of the barrier.
         check_filename_collisions(opt.local_scenarios)
-        model_files = _write_models(opt, staging_dir, rank, backend)
+        model_files = _write_models(opt, staging_dir, rank, backend,
+                                    write_id=write_id)
         leaf = {
             "format_version": FORMAT_VERSION,
             "backend": backend,
@@ -2064,6 +2069,12 @@ def _publish_generation(opt, ckpt_dir, hub_dir, final_dir, staging_dir,
             raise RuntimeError(f"{backend} publication requires write_id.")
         manifest["write_id"] = write_id
         manifest["codec_version"] = _pyfory_version()
+        if backend == PYFORY_RELOAD_BACKEND:
+            from mpisppy.utils import pyfory_model_codec
+            manifest["reload_schema_version"] = \
+                pyfory_model_codec.SCHEMA_VERSION
+            manifest["reload_adapter_version"] = \
+                pyfory_model_codec.ADAPTER_VERSION
     _publish_manifest(ckpt_dir, manifest)
 
     # Sweep everything the manifest does not name, rather than only the
@@ -2143,8 +2154,13 @@ def _write_models(opt, staging_dir, rank, backend, write_id=None):
             if solver_plugin is not None:
                 del s._solver_plugin
             try:
-                dump_model = (dill.dump if backend == DILL_RELOAD_BACKEND
-                              else pyfory_model_codec.dump)
+                if backend == DILL_RELOAD_BACKEND:
+                    dump_model = dill.dump
+                else:
+                    dump_model = lambda model, stream, name=sname: \
+                        pyfory_model_codec.dump(
+                            model, stream, scenario_name=name,
+                            write_id=write_id)
                 _atomic_write_bytes(
                     os.path.join(staging_dir, fname),
                     lambda f, model=s: dump_model(model, f),
@@ -2287,6 +2303,15 @@ def load_checkpoint(opt, ckpt_dir):
                 f"but this run has pyfory {current_version}. "
                 f"{backend} requires an exact codec version match."
             )
+        if backend == PYFORY_RELOAD_BACKEND:
+            from mpisppy.utils import pyfory_model_codec
+            if manifest.get("reload_schema_version") != \
+                    pyfory_model_codec.SCHEMA_VERSION or \
+                    manifest.get("reload_adapter_version") != \
+                    pyfory_model_codec.ADAPTER_VERSION:
+                raise CheckpointMismatch(
+                    "The pyfory-reload manifest has an unsupported model "
+                    "schema or adapter version.")
 
     expected_fp = structural_fingerprint(opt.options)
     if manifest.get("structural_fingerprint") != expected_fp:
@@ -2384,17 +2409,18 @@ def load_checkpoint(opt, ckpt_dir):
     if backend == PYFORY_RELOAD_BACKEND:
         from mpisppy.utils import pyfory_model_codec
     for sname, fname in leaf["model_files"].items():
-        path = os.path.join(gen_dir, fname)
-        if not os.path.exists(path):
+        if not os.path.isfile(os.path.join(gen_dir, fname)):
             raise CheckpointMismatch(
                 f"The checkpoint in '{ckpt_dir}' is missing the model file "
-                f"'{fname}' for scenario '{sname}'."
-            )
+                f"'{fname}' for scenario '{sname}'.")
+    for sname, fname in leaf["model_files"].items():
+        path = os.path.join(gen_dir, fname)
         with open(path, "rb") as f:
             if backend == DILL_RELOAD_BACKEND:
                 models[sname] = dill.load(f)
             elif backend == PYFORY_RELOAD_BACKEND:
-                models[sname] = pyfory_model_codec.load(f)
+                models[sname] = pyfory_model_codec.load(
+                    f, scenario_name=sname, write_id=manifest["write_id"])
                 _validate_reloaded_model(
                     models[sname], opt.local_scenarios[sname], sname)
             else:

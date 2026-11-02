@@ -113,14 +113,26 @@ There are six, and they are the whole interface:
 pyfory-reload
 ~~~~~~~~~~~~~
 
-Install ``mpi-sppy[pyfory]`` to enable this opt-in full-model backend. Each
-model file contains a versioned type table so a fresh reader can restore the
-saved graph without running the saved iterations. The manifest records the
-backend and pyfory version; a different installed pyfory version is refused.
+Install ``mpi-sppy[pyfory]`` to enable this opt-in full-model backend on
+CPython 3.13.2 with Pyomo 6.10.1 and pyfory 1.7.7. Each model file contains
+a versioned type table so a fresh reader can restore the saved graph without
+running the saved iterations. The manifest records the backend, reload schema, and pyfory
+version; incompatible versions are refused. Earlier experimental reload files
+are not readable by this schema.
 Like dill checkpoints, these model files must come from a trusted source.
 The backend preserves extension changes carried on scenario models and uses
 the same PH model-splicing repairs as ``dill-reload``. It retains the rank
 leaf and spoke files in their existing pickle formats.
+
+The codec preserves live keys, values, and items views of exact dictionaries,
+Pyomo ``Bunch`` objects, ``PyomoConfig`` objects, ``OrderedDict``, and
+``defaultdict``, including cycles and views whose backing dictionary is
+otherwise unreachable. ``OrderedDict`` entry order and ``defaultdict`` default
+factories are restored. Bunch, PyomoConfig, and OrderedDict instance-dictionary
+views also retain their owner. Other mapping subclasses and unsupported
+instance-dictionary views are refused with a graph path. Local callback code,
+closure cells, names, documentation, and the globals they use are saved;
+callbacks that inspect their globals dynamically are refused.
 
 The codec uses a 10,000-level depth limit and a 1 GiB graph-memory budget.
 Checkpoint setup round-trips every local scenario with an independent codec;

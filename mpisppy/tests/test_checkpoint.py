@@ -52,6 +52,17 @@ from mpisppy.utils.config import Config
 solver_available, solver_name, persistent_available, persistent_solver_name = \
     get_solver()
 
+
+def _pyfory_reload_runtime_available():
+    if not checkpointing.pyfory_available:
+        return False
+    from mpisppy.utils import pyfory_model_codec
+    try:
+        pyfory_model_codec.require_supported_runtime()
+    except RuntimeError:
+        return False
+    return True
+
 SCENARIO_NAMES = ["scen0", "scen1", "scen2"]
 CREATOR_KWARGS = {"use_integer": False, "crops_multiplier": 1}
 
@@ -1169,8 +1180,8 @@ class TestPyforyRebuildBackend(unittest.TestCase):
                          {"scenario_count": len(SCENARIO_NAMES)})
 
 
-@unittest.skipUnless(checkpointing.pyfory_available,
-                     "pyfory is an optional checkpoint dependency")
+@unittest.skipUnless(_pyfory_reload_runtime_available(),
+                     "pyfory-reload's tested runtime is unavailable")
 @unittest.skipUnless(solver_available,
                      "no solver is available for checkpoint resume tests")
 class TestPyforyReloadBackend(unittest.TestCase):
@@ -1311,6 +1322,42 @@ class TestPyforyReloadBackend(unittest.TestCase):
         self.assertIs(restored.extra.aliases[0], restored.x)
         self.assertIs(restored.extra.aliases[1], restored.x)
 
+    def test_legacy_ph_initializer_views_keep_the_nonant_dictionary(self):
+        import io
+        from mpisppy.utils import pyfory_model_codec
+
+        writer = _make_ph(self._options(
+            2, linearize_proximal_terms=True))
+        writer.ph_main()
+        model = writer.local_scenarios[SCENARIO_NAMES[0]]
+        names = ("W", "rho", "xbars", "xsqbars")
+        for name in names:
+            initializer = getattr(
+                model._mpisppy_model, name).index_set()._init_values._init
+            initializer.val._ref = model._mpisppy_data.nonant_indices.keys()
+        model.extension_view_owner = {"saved": 1}
+        model.extension_view = model.extension_view_owner.keys()
+        solver = model._solver_plugin
+        del model._solver_plugin
+        try:
+            stream = io.BytesIO()
+            pyfory_model_codec.dump(model, stream)
+        finally:
+            model._solver_plugin = solver
+        restored = pyfory_model_codec.load(io.BytesIO(stream.getvalue()))
+        owner = restored._mpisppy_data.nonant_indices
+        for name in names:
+            param = getattr(restored._mpisppy_model, name)
+            ref = param.index_set()._init_values._init.val._ref
+            self.assertIs(pyfory_model_codec.backing_mapping(ref), owner)
+            before = len(param.index_set())
+            owner[("new", name)] = next(iter(owner.values()))
+            self.assertIn(("new", name), ref)
+            self.assertEqual(len(param.index_set()), before)
+            del owner[("new", name)]
+        self.assertIs(pyfory_model_codec.backing_mapping(
+            restored.extension_view), restored.extension_view_owner)
+
     def test_dynamic_global_rule_is_refused(self):
         import io
         import pyomo.environ as pyo
@@ -1322,9 +1369,8 @@ class TestPyforyReloadBackend(unittest.TestCase):
         model = pyo.ConcreteModel()
         model.x = pyo.Var(initialize=init_value)
         stream = io.BytesIO()
-        pyfory_model_codec.dump(model, stream)
         with self.assertRaisesRegex(TypeError, "dynamic global lookup"):
-            pyfory_model_codec.load(io.BytesIO(stream.getvalue()))
+            pyfory_model_codec.dump(model, stream)
 
     def test_migration_and_manifest_directed_reads(self):
         _make_ph(_options(2, ckpt_dir=self.ckpt_dir)).ph_main()
@@ -1341,6 +1387,61 @@ class TestPyforyReloadBackend(unittest.TestCase):
         self.assertEqual(checkpointing._read_manifest(self.ckpt_dir)["backend"],
                          checkpointing.DILL_RELOAD_BACKEND)
         self.assertEqual(dill_run._PHIter, 4)
+
+    def test_rebuild_reload_migration_in_both_directions(self):
+        _make_ph(_options(
+            1, ckpt_dir=self.ckpt_dir,
+            checkpoint_backend=checkpointing.PYFORY_REBUILD_BACKEND)).ph_main()
+        reload_run = _make_ph(_options(
+            1, ckpt_dir=self.ckpt_dir, resume_from=self.ckpt_dir,
+            checkpoint_backend=checkpointing.PYFORY_RELOAD_BACKEND))
+        reload_run.ph_main()
+        manifest = checkpointing._read_manifest(self.ckpt_dir)
+        self.assertEqual(manifest["backend"],
+                         checkpointing.PYFORY_RELOAD_BACKEND)
+        self.assertEqual(manifest["reload_schema_version"], 2)
+        rebuild_run = _make_ph(_options(
+            1, ckpt_dir=self.ckpt_dir, resume_from=self.ckpt_dir,
+            checkpoint_backend=checkpointing.PYFORY_REBUILD_BACKEND))
+        rebuild_run.ph_main()
+        self.assertEqual(rebuild_run._PHIter, 3)
+        self.assertEqual(checkpointing._read_manifest(
+            self.ckpt_dir)["backend"],
+            checkpointing.PYFORY_REBUILD_BACKEND)
+
+    def test_reload_manifest_schema_mismatch_is_refused(self):
+        _make_ph(self._options(1)).ph_main()
+        manifest_path = os.path.join(self.ckpt_dir, "manifest.json")
+        with open(manifest_path) as stream:
+            manifest = json.load(stream)
+        manifest["reload_adapter_version"] += 1
+        with open(manifest_path, "w") as stream:
+            json.dump(manifest, stream)
+        reader = _make_ph(_options(0, resume_from=self.ckpt_dir))
+        with self.assertRaisesRegex(checkpointing.CheckpointMismatch,
+                                    "unsupported model schema"):
+            reader.ph_main()
+
+    def test_failed_model_write_preserves_live_solvers_and_checkpoint(self):
+        from mpisppy.utils import pyfory_model_codec
+
+        writer = _make_ph(self._options(1))
+        writer.ph_main()
+        before = checkpointing._read_manifest(self.ckpt_dir)
+        plugins = {name: model._solver_plugin
+                   for name, model in writer.local_scenarios.items()}
+        with mock.patch.object(pyfory_model_codec, "dump",
+                               side_effect=OSError("injected codec failure")):
+            with self.assertRaisesRegex((OSError, RuntimeError),
+                                        "injected codec failure"):
+                checkpointing.write_checkpoint(
+                    writer, self.ckpt_dir, 2,
+                    backend=checkpointing.PYFORY_RELOAD_BACKEND)
+        self.assertEqual(checkpointing._read_manifest(self.ckpt_dir), before)
+        for name, model in writer.local_scenarios.items():
+            self.assertIs(model._solver_plugin, plugins[name])
+        leaf, _ = checkpointing.load_checkpoint(writer, self.ckpt_dir)
+        self.assertEqual(leaf["generation"], 1)
 
     def test_bad_model_header_is_refused(self):
         _make_ph(self._options(1)).ph_main()
