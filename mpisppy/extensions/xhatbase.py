@@ -413,6 +413,31 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             self.csv_nonants(snamedict, prefpref + "_nonant_" + pref)
             self.csv_allvars(snamedict, prefpref + "_allvars_" + pref)
 
+    def reconcile_final_candidate(self, candidate_obj, keep_solution):
+        """Make a hub-side final xhat coherent with its incumbent cache.
+
+        A final heuristic is only the last candidate tried, not necessarily
+        the best solution already known to this cylinder (notably after a
+        checkpoint resume).  Cache it if it improves, then put the actual
+        best solution back into the live models before solution writers see
+        them.  Return the objective belonging to that loaded incumbent so the
+        hub advertises the same solution it can write.
+        """
+        if not keep_solution:
+            return candidate_obj
+
+        if candidate_obj is not None:
+            self.opt.update_best_solution_if_improving(candidate_obj)
+
+        incumbent_obj = self.opt.best_solution_obj_val
+        if keep_solution and incumbent_obj is not None:
+            if not self.opt.load_best_solution():
+                raise RuntimeError(
+                    "A final xhat objective is available, but its cached "
+                    "solution could not be loaded for the solution writers."
+                )
+        return incumbent_obj
+
     def post_iter0(self):
         # the base class needs this
         self.comms = self.opt.comms

@@ -10,6 +10,7 @@
 import csv
 import glob
 import io
+import json
 import os
 import runpy
 import sys
@@ -144,6 +145,283 @@ class TestGetRhoSetter(unittest.TestCase):
         cfg = _make_rho_cfg(sep_rho=True)
         _get_rho_setter(_NoRhoSetterModule(), cfg)
         self.assertEqual(cfg.default_rho, 1)
+
+
+_USER_EXT_SOURCE = """
+import abc
+import json
+import os
+from mpisppy.extensions.extension import Extension
+from mpisppy.extensions.xhatclosest import XhatClosest  # imported: not loaded
+
+
+class _Helper:
+    pass
+
+
+class _AbstractBase(Extension, abc.ABC):
+    @abc.abstractmethod
+    def which(self):
+        pass
+
+    def post_everything(self):
+        opts = self.opt.options.get(__name__)
+        out = os.path.join(os.path.dirname(__file__),
+                           f"{__name__}.{self.which()}.out")
+        with open(out, "w") as f:
+            json.dump({"options": opts,
+                       "iterations": self.opt._PHIter}, f)
+
+
+class RecordingExt(_AbstractBase):
+    def which(self):
+        return "first"
+
+
+class SecondExt(_AbstractBase):
+    def which(self):
+        return "second"
+"""
+
+
+class TestUserDefinedExtensions(unittest.TestCase):
+    """--user-defined-extensions loads the Extension classes a module defines
+    (issue #895)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = self._tmp.name
+        # a fresh module name per test, so an import from an earlier test
+        # is never reused
+        self.modname = f"user_ext_{self.id().rsplit('.', 1)[-1]}"
+        self._write_module(self.modname, _USER_EXT_SOURCE)
+        self._saved_path = list(sys.path)
+        self._saved_modules = set(sys.modules)
+
+    def tearDown(self):
+        sys.path[:] = self._saved_path
+        for name in set(sys.modules) - self._saved_modules:
+            if name.startswith(self.modname):
+                del sys.modules[name]
+        self._tmp.cleanup()
+
+    def _write_module(self, relname, source):
+        path = os.path.join(self.tmp, relname.replace(".", os.sep) + ".py")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(source)
+
+    def _write_json(self, relname, options):
+        path = os.path.join(self.tmp, relname.replace(".", os.sep) + ".json")
+        with open(path, "w") as f:
+            json.dump(options, f)
+
+    def _load(self, name):
+        from mpisppy.generic.extensions import load_user_extension_module
+        return load_user_extension_module(name)
+
+    def test_loads_defined_concrete_classes_only(self):
+        sys.path.insert(0, self.tmp)
+        mod_name, classes, options = self._load(self.modname)
+        self.assertEqual(mod_name, self.modname)
+        self.assertEqual([c.__name__ for c in classes],
+                         ["RecordingExt", "SecondExt"])
+        self.assertIsNone(options)
+
+    def test_json_next_to_module(self):
+        sys.path.insert(0, self.tmp)
+        self._write_json(self.modname, {"answer": 42})
+        cwd = os.getcwd()
+        # the json is found by the module's location, not the cwd
+        with tempfile.TemporaryDirectory() as other:
+            os.chdir(other)
+            try:
+                _, _, options = self._load(self.modname)
+            finally:
+                os.chdir(cwd)
+        self.assertEqual(options, {"answer": 42})
+
+    def test_path_to_module(self):
+        # tmp is not on sys.path; the directory part of the name puts it there
+        self._write_json(self.modname, {"answer": 7})
+        mod_name, classes, options = self._load(
+            os.path.join(self.tmp, self.modname))
+        self.assertEqual(mod_name, self.modname)
+        self.assertEqual(len(classes), 2)
+        self.assertEqual(options, {"answer": 7})
+
+    def test_path_with_py_suffix(self):
+        mod_name, classes, _ = self._load(
+            os.path.join(self.tmp, self.modname + ".py"))
+        self.assertEqual(mod_name, self.modname)
+        self.assertEqual(len(classes), 2)
+
+    def test_two_paths_same_module_name_refused(self):
+        # a/<name> and b/<name> both import as <name>; the second used to
+        # be the cached first module, silently
+        for sub in ("a", "b"):
+            self._write_module(f"{sub}.{self.modname}", _USER_EXT_SOURCE)
+        self._load(os.path.join(self.tmp, "a", self.modname))
+        with self.assertRaisesRegex(RuntimeError, "only a Python source file is accepted"):
+            self._load(os.path.join(self.tmp, "b", self.modname))
+
+    def test_path_shadowed_by_imported_module_refused(self):
+        # a file named like a module already imported (json): the path must
+        # not reuse that module and then report that it defines no extension
+        self._write_module("shadow.json", _USER_EXT_SOURCE)
+        with self.assertRaisesRegex(RuntimeError, "only a Python source file is accepted"):
+            self._load(os.path.join(self.tmp, "shadow", "json"))
+
+    def test_symlinked_file_in_given_directory(self):
+        real = os.path.join(self.tmp, "real")
+        os.makedirs(real)
+        target = os.path.join(self.tmp, self.modname + ".py")
+        os.symlink(target, os.path.join(real, self.modname + ".py"))
+        mod_name, classes, _ = self._load(os.path.join(real, self.modname))
+        self.assertEqual(mod_name, self.modname)
+        self.assertEqual(len(classes), 2)
+
+    def test_trailing_slash(self):
+        mod_name, _, _ = self._load(
+            os.path.join(self.tmp, self.modname) + os.sep)
+        self.assertEqual(mod_name, self.modname)
+
+    def test_path_naming_builtin_module_refused(self):
+        # sys is built in (no __file__): a path must not quietly load it
+        self._write_module("d.sys", _USER_EXT_SOURCE)
+        with self.assertRaisesRegex(RuntimeError, "a module with no file"):
+            self._load(os.path.join(self.tmp, "d", "sys"))
+
+    def test_path_above_the_shadowing_module_refused(self):
+        # json's own package directory is below this dpath, but
+        # dpath/json.py and dpath/json/__init__.py are not json's file
+        lib_parent = os.path.dirname(os.path.dirname(
+            os.path.dirname(json.__file__)))
+        with self.assertRaisesRegex(RuntimeError, "only a Python source file is accepted"):
+            self._load(os.path.join(lib_parent, "json"))
+
+    def test_symlinked_package_directory(self):
+        pkg = self.modname + "_spkg"
+        self._write_module(f"elsewhere.{pkg}.__init__", _USER_EXT_SOURCE)
+        os.makedirs(os.path.join(self.tmp, "d2"))
+        os.symlink(os.path.join(self.tmp, "elsewhere", pkg),
+                   os.path.join(self.tmp, "d2", pkg))
+        mod_name, classes, _ = self._load(os.path.join(self.tmp, "d2", pkg))
+        self.assertEqual(mod_name, pkg)
+        self.assertEqual(len(classes), 2)
+
+    def test_degenerate_names_refused(self):
+        for bad in ("/", "." + os.sep, ""):
+            with self.assertRaisesRegex(RuntimeError, "does not name a module"):
+                self._load(bad)
+
+    def test_dotted_name_in_package(self):
+        sys.path.insert(0, self.tmp)
+        pkg = self.modname + "_pkg"
+        self._write_module(pkg + ".impl", _USER_EXT_SOURCE)
+        self._write_module(pkg + ".__init__",
+                           "from .impl import RecordingExt  # noqa\n")
+        self._write_json(pkg + ".impl", {"answer": 3})
+        mod_name, classes, options = self._load(pkg + ".impl")
+        self.assertEqual(mod_name, pkg + ".impl")
+        self.assertEqual(len(classes), 2)
+        self.assertEqual(options, {"answer": 3})
+        # the package only re-exports the class, so it defines none
+        with self.assertRaisesRegex(RuntimeError, "Could not find"):
+            self._load(pkg)
+
+    def test_no_extension_class_raises(self):
+        sys.path.insert(0, self.tmp)
+        name = self.modname + "_empty"
+        self._write_module(
+            name, "from mpisppy.extensions.extension import Extension\n")
+        with self.assertRaisesRegex(RuntimeError, "Could not find"):
+            self._load(name)
+
+    def _run_farmer(self, user_exts):
+        argv = [
+            "generic_cylinders",
+            "--module-name", "mpisppy.tests.examples.farmer",
+            "--num-scens", "3",
+            "--solver-name", solver_name,
+            "--max-solver-threads", "1",
+            "--max-iterations", "2",
+            "--default-rho", "1",
+            "--user-defined-extensions", user_exts,
+        ]
+        with patch.object(sys, "argv", argv):
+            runpy.run_module("mpisppy.generic_cylinders",
+                             run_name="__main__")
+
+    @unittest.skipIf(not solver_available,
+                     "no MIP solver available")
+    def test_generic_cylinders_runs_user_extensions(self):
+        sys.path.insert(0, self.tmp)
+        self._write_json(self.modname, {"answer": 42})
+        self._run_farmer(self.modname)
+        for which in ("first", "second"):
+            out = os.path.join(self.tmp, f"{self.modname}.{which}.out")
+            self.assertTrue(os.path.exists(out),
+                            f"the {which} user extension's post_everything "
+                            "did not run")
+            with open(out) as f:
+                record = json.load(f)
+            self.assertEqual(record["options"], {"answer": 42})
+            self.assertEqual(record["iterations"], 2)
+
+    def test_generic_cylinders_ootb_EF_refusal_names_ootb(self):
+        # --out-of-the-box picks the EF on one rank; the user gave no --EF,
+        # so the message must not tell them to drop it
+        sys.path.insert(0, self.tmp)
+        argv = [
+            "generic_cylinders",
+            "--module-name", "mpisppy.tests.examples.farmer",
+            "--num-scens", "3",
+            "--out-of-the-box",
+            "--user-defined-extensions", self.modname,
+        ]
+        with patch.object(sys, "argv", argv), \
+             self.assertRaisesRegex(RuntimeError,
+                                    r"the EF \(chosen by --out-of-the-box\)") as cm:
+            runpy.run_module("mpisppy.generic_cylinders",
+                             run_name="__main__")
+        self.assertNotIn("Drop --EF", str(cm.exception))
+
+    def test_refused_without_a_hub(self):
+        from mpisppy.generic.extensions import refuse_user_extensions_without_a_hub
+        # the flag absent: nothing to refuse
+        refuse_user_extensions_without_a_hub(
+            SimpleNamespace(get=lambda k: None), "--EF")
+        cfg = SimpleNamespace(get=lambda k: [self.modname])
+        with self.assertRaisesRegex(RuntimeError,
+                                    "cannot be used with --EF.*Drop --EF"):
+            refuse_user_extensions_without_a_hub(cfg, "--EF")
+
+    def test_generic_cylinders_EF_refuses_user_extensions(self):
+        # issue #952: --EF used to ignore the flag and exit 0
+        sys.path.insert(0, self.tmp)
+        argv = [
+            "generic_cylinders",
+            "--module-name", "mpisppy.tests.examples.farmer",
+            "--num-scens", "3",
+            "--EF",
+            "--EF-solver-name", solver_name or "gurobi",
+            "--user-defined-extensions", self.modname,
+        ]
+        with patch.object(sys, "argv", argv), \
+             self.assertRaisesRegex(RuntimeError, "does not build a hub"):
+            runpy.run_module("mpisppy.generic_cylinders",
+                             run_name="__main__")
+
+    @unittest.skipIf(not solver_available,
+                     "no MIP solver available")
+    def test_same_class_name_in_two_modules_is_refused(self):
+        sys.path.insert(0, self.tmp)
+        other = self.modname + "_other"
+        self._write_module(other, _USER_EXT_SOURCE)
+        with self.assertRaisesRegex(RuntimeError,
+                                    "Two extension classes are named"):
+            self._run_farmer(f"{self.modname} {other}")
 
 
 class TestGenericCylindersCVaR(unittest.TestCase):

@@ -44,7 +44,6 @@ class TestExtension(mpisppy.extensions.extension.Extension):
 
     def post_solve(self, subproblem, results):
         self.who_is_called.add("post_solve")
-        return results
 
 
     def pre_iter0(self):
@@ -74,4 +73,3 @@ class TestExtension(mpisppy.extensions.extension.Extension):
 
     def post_everything(self):
         self.who_is_called.add("post_everything")
-

@@ -7,7 +7,6 @@
 # full copyright and license information.
 ###############################################################################
 import math
-import sys
 
 import numpy as np
 import pyomo.environ as pyo
@@ -16,6 +15,7 @@ from pyomo.repn.standard_repn import generate_standard_repn
 
 import mpisppy.MPI as mpi
 import mpisppy.utils.sputils as sputils
+from mpisppy import global_toc
 from mpisppy.cylinders.spwindow import Field
 from mpisppy.extensions.extension import Extension
 from mpisppy.utils.sputils import find_active_objective
@@ -45,6 +45,14 @@ class CrossScenarioExtension(Extension):
 
         self.any_cuts = False
         self.iter_since_last_check = 0
+
+        # Whether every eta has a valid lower bound, from valid_eta_bound or
+        # from the cut spoke. Until then an eta with no cut on it leaves the
+        # bound problem unbounded, so the outer bound is not checked, and the
+        # etas are not sent: the spoke has nothing to cut at.
+        self._eta_lbs_known = False
+        # Whether the spoke's bounds have been read. It writes them once.
+        self._eta_bounds_received = False
 
     def _disable_W_and_prox(self):
         assert self.reenable_W is None
@@ -136,15 +144,65 @@ class CrossScenarioExtension(Extension):
             cached_ph_obj[k].activate()
 
     def get_from_cross_cuts(self):
+        # synchronize=True on both reads, which an APH hub does not default
+        # to: what they return decides whether the collective _check_bound
+        # runs, so every hub rank has to see the same thing.
+        if not self._eta_bounds_received and self.opt.spcomm.get_receive_buffer(
+            self.eta_bounds,
+            Field.CROSS_SCENARIO_ETA_BOUNDS,
+            self.cross_scenario_index,
+            synchronize=True,
+        ):
+            self._apply_eta_bounds(self.eta_bounds.array())
         self.opt.spcomm.get_receive_buffer(
             self.cuts,
             Field.CROSS_SCENARIO_CUT,
             self.cross_scenario_index,
+            synchronize=True,
         )
         if self.cuts.is_new():
             self.make_cuts(self.cuts.array())
 
+    def _apply_eta_bounds(self, bounds):
+        """Raise each eta's lower bound to the one the cut spoke computed.
+
+        These replace a huge default bound, which made the bound problems
+        numerically unreliable (issue #933). A bound that is not finite (an
+        eta bound solve that reported none) is skipped; its eta then has no
+        lower bound, so the outer bound is never checked.
+        """
+        self._eta_bounds_received = True
+        missing = [sn for idx, sn in enumerate(self.opt.all_scenario_names)
+                   if not np.isfinite(bounds[idx])]
+        for s in self.opt.local_scenarios.values():
+            persistent_solver = sputils.is_persistent(s._solver_plugin)
+            for idx, sn in enumerate(self.opt.all_scenario_names):
+                eta = s._mpisppy_model.eta[sn]
+                lb = float(bounds[idx])
+                if np.isfinite(lb) and (eta.lb is None or lb > eta.lb):
+                    eta.setlb(lb)
+                if eta.lb is not None and (eta.value is None
+                                           or eta.value < eta.lb):
+                    eta.set_value(eta.lb)
+                if persistent_solver:
+                    s._solver_plugin.update_var(eta)
+        if all(s._mpisppy_model.eta[sn].lb is not None
+               for s in self.opt.local_scenarios.values()
+               for sn in self.opt.all_scenario_names):
+            self._eta_lbs_known = True
+        else:
+            global_toc(
+                f"CrossScenarioExtension: the cut spoke has no finite eta "
+                f"bound for {', '.join(missing)}, so no cross-scenario cuts "
+                f"will be made and the cross-scenario outer bound will not "
+                f"be checked",
+                self.opt.cylinder_rank == 0)
+
     def send_to_cross_cuts(self):
+        # Until the etas have their bounds, the spoke would cut at
+        # meaningless etas; send it nothing to cut at.
+        if not self._eta_lbs_known:
+            return
 
         if self.send_nonants:
 
@@ -277,6 +335,10 @@ class CrossScenarioExtension(Extension):
             Field.CROSS_SCENARIO_CUT,
             self.cross_scenario_index,
         )
+        self.eta_bounds = spcomm.register_recv_field(
+            Field.CROSS_SCENARIO_ETA_BOUNDS,
+            self.cross_scenario_index,
+        )
 
     def sync_with_spokes(self):
         self.send_to_cross_cuts()
@@ -302,12 +364,12 @@ class CrossScenarioExtension(Extension):
                 _eta_init = valid_eta_bound
             def _eta_bounds(m, k):
                 return _eta_init[k], None
+            self._eta_lbs_known = True
         else:
-            lb = (-sys.maxsize - 1) * 1. / len(opt.all_scenario_names)
-            def _eta_init(m, k):
-                return lb
+            # No bound until the cut spoke sends one; see _apply_eta_bounds.
+            _eta_init = None
             def _eta_bounds(m, k):
-                return lb, None
+                return None, None
 
         # eta is attached to each subproblem
         for k,s in opt.local_scenarios.items():
@@ -416,7 +478,8 @@ class CrossScenarioExtension(Extension):
 
         ## if its the second time or more with this IB, we'll only check
         ## if the last improved the OB, or if the OB is new itself (from somewhere else)
-        check = (self.check_bound_iterations is not None) and self.any_cuts and ( \
+        check = (self.check_bound_iterations is not None) and self.any_cuts \
+                and self._eta_lbs_known and ( \
                 (self.iter_at_cur_ib == self.check_bound_iterations) or \
                 (self.iter_at_cur_ib > self.check_bound_iterations and ob_new) or \
                 ((self.iter_since_last_check%self.check_bound_iterations == 0) and self.new_cuts))

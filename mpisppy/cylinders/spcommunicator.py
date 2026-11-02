@@ -41,6 +41,7 @@ from mpisppy.utils.rank_apportionment import (
     cylinder_bases,
     rank_to_cylinder,
 )
+from mpisppy.utils.sputils import is_persistent
 
 logger = logging.getLogger(__name__)
 
@@ -1148,6 +1149,7 @@ class SPCommunicator:
         updates the corresponding Pyomo nonant variables
         """
         bounds_modified = 0
+        persistent_updates = {}
         for idx, _, recv_buf in self.receive_field_spcomms[Field.NONANT_LOWER_BOUNDS]:
             is_new = self.get_receive_buffer(recv_buf, Field.NONANT_LOWER_BOUNDS, idx)
             if not is_new:
@@ -1161,6 +1163,8 @@ class SPCommunicator:
                         # global_toc(f"{self.__class__.__name__}: tightened {xvar.name} lower bound from {xvar.lb} to {recv_buf[ci]}, value: {xvar.value}", self.cylinder_rank == 0)
                         xvar.lb = recv_buf[ci]
                         bounds_modified += 1
+                        if is_persistent(s._solver_plugin):
+                            persistent_updates[id(xvar)] = (s._solver_plugin, xvar)
         for idx, _, recv_buf in self.receive_field_spcomms[Field.NONANT_UPPER_BOUNDS]:
             is_new = self.get_receive_buffer(recv_buf, Field.NONANT_UPPER_BOUNDS, idx)
             if not is_new:
@@ -1174,6 +1178,11 @@ class SPCommunicator:
                         # global_toc(f"{self.__class__.__name__}: tightened {xvar.name} upper bound from {xvar.ub} to {recv_buf[ci]}, value: {xvar.value}", self.cylinder_rank == 0)
                         xvar.ub = recv_buf[ci]
                         bounds_modified += 1
+                        if is_persistent(s._solver_plugin):
+                            persistent_updates[id(xvar)] = (s._solver_plugin, xvar)
+
+        for solver, xvar in persistent_updates.values():
+            solver.update_var(xvar)
 
         bounds_modified /= len(self.opt.local_scenarios)
 

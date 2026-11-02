@@ -35,7 +35,6 @@ class TestHelperExtension(mpisppy.extensions.extension.Extension):
 
     def post_solve(self, subproblem, results):
         self.checked[subproblem.name].append(results.Problem[0].Upper_bound)
-        return results
 
 
     def pre_iter0(self):
@@ -64,4 +63,3 @@ class TestHelperExtension(mpisppy.extensions.extension.Extension):
 
     def post_everything(self):
         pass
-

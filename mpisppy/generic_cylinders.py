@@ -17,6 +17,7 @@ from mpisppy import MPI, global_toc
 # Re-export public API for backwards compatibility
 from mpisppy.generic.decomp import do_decomp, refuse_checkpointing_without_a_hub
 from mpisppy.generic.ef import do_EF
+from mpisppy.generic.extensions import refuse_user_extensions_without_a_hub
 from mpisppy.generic.mmw import do_mmw, mmw_requested
 from mpisppy.generic.parsing import (
     load_module,
@@ -189,8 +190,9 @@ def main():
             if "Bundle" not in sname:
                 _original_denouement(rank, sname, s)
 
-    # Each branch below returns without ever building a hub, so the hub-side
-    # check in do_decomp does not see them.
+    # Each branch below returns without ever building a hub, so neither the
+    # hub-side checkpoint check in do_decomp nor configure_extensions, which
+    # attaches --user-defined-extensions, sees them.
     for _mode, _selected in (
             ("--pickle-bundles-dir", cfg.pickle_bundles_dir is not None),
             ("--pickle-scenarios-dir", cfg.pickle_scenarios_dir is not None),
@@ -199,6 +201,14 @@ def main():
             ("--EF", bool(cfg.EF))):
         if _selected:
             refuse_checkpointing_without_a_hub(cfg, _mode)
+            if (_mode == "--EF" and ootb_state is not None
+                    and ootb_state.decision.ef_reason != "user"):
+                refuse_user_extensions_without_a_hub(
+                    cfg, "the EF (chosen by --out-of-the-box)",
+                    remedy="Ask for a decomposition (a hub or spoke flag) "
+                           "on enough ranks")
+            else:
+                refuse_user_extensions_without_a_hub(cfg, _mode)
             break
 
     if cfg.pickle_bundles_dir is not None:

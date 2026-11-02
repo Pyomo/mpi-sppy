@@ -37,6 +37,18 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
         if ('keep_solution' in self.options) and (not self.options['keep_solution']):
             self.keep_solution = False
 
+    def _solver_options_for_evaluation(self):
+        """Return solver options for this xbar evaluation.
+
+        A final-xhat extension on a PH hub must resolve these lazily: solver
+        option schedules and runtime extensions may have changed the effective
+        options since the extension was constructed. Other XhatXbar users keep
+        the explicit, historically supported ``xhat_solver_options`` value.
+        """
+        if self.options.get("use_ph_solver_options", False):
+            return self.opt._effective_solver_options(self.opt._PHIter)
+        return self.solver_options
+
     def _fix_nonants_xhat(self):
         """ Fix the Vars subject to non-anticipativity at given values.
             Loop over the scenarios to restore, but loop over subproblems
@@ -94,14 +106,15 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
 
         _vb("Enter XhatXbar.xhat_tryit")
 
-        _vb("   Solver options="+str(self.solver_options))
+        solver_options = self._solver_options_for_evaluation()
+        _vb("   Solver options="+str(solver_options))
 
         # This might be an extension for a Xhat_Eval object or a PH object, so we will assume the worst
         phbase._Compute_Xbar(self.opt)
         self._fix_nonants_xhat() # (BTW: for all local scenarios)
 
         # NOTE: for APH we may need disable_pyomo_signal_handling
-        self.opt.solve_loop(solver_options=self.solver_options,
+        self.opt.solve_loop(solver_options=solver_options,
                             #dis_W=True, dis_prox=True,
                             verbose=verbose,
                             tee=False,
@@ -147,5 +160,15 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
         obj = self.xhat_tryit(verbose=self.verbose,
                               restore_nonants=restore_nonants)
         self.opt.reenable_W_and_prox()
+        incumbent_obj = self.reconcile_final_candidate(obj, self.keep_solution)
         # to make available to tester
-        self._xhat_xbar_obj_final = obj
+        self._xhat_xbar_obj_final = incumbent_obj
+        # XhatXbar has no source scenario: every scenario was fixed to the
+        # rounded xbar. Choose one representative per node for the optional
+        # diagnostic CSV writers used by xhat_common_post_everything.
+        source_scenarios = {
+            node.name: self.opt.all_scenario_names[node.scenfirst]
+            for node in self.opt._scenario_tree.nonleaves
+        }
+        self.xhat_common_post_everything(
+            "xbar", incumbent_obj, source_scenarios, restore_nonants)
