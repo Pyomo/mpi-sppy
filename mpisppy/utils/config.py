@@ -2307,10 +2307,10 @@ def aphfw_hub_only_options():
 
 # Values other than the default that still mean "not set".
 _UNSET_SENTINELS = {
-    # any negative number (numpy ones too, not bool): no override
+    # any number <= 0 (numpy ones too, not bool): no override
     "aph_omicron_all": lambda value: (isinstance(value, numbers.Real)
                                       and not isinstance(value, bool)
-                                      and value < 0),
+                                      and value <= 0),
 }
 
 

@@ -20,7 +20,7 @@ void ProblemWithSolvers::registerOptions(Config& config) { // static
 
   // omicron (dual-side metric weights). Default: freeze omicron = multiplier * rho after iteration 0.
   config.addOption<double>("omicron-rho-multiplier", 1.0, "At post-iter-0 freeze, set omicron = k * rho with this k (default 1.0)");
-  config.addOption<double>("omicron-all", -1.0, "If >= 0, freeze omicron to this scalar at setup (overrides --omicron-csv and --omicron-rho-multiplier)");
+  config.addOption<double>("omicron-all", -1.0, "If > 0, freeze omicron to this scalar at setup (overrides --omicron-csv and --omicron-rho-multiplier)");
   config.addOption<std::string>("omicron-csv", "", "If non-empty, freeze omicron from this CSV at setup (overrides --omicron-rho-multiplier)");
   config.addOption<double>("omicron-min", 1e-6, "Lower bound for omicron entries; throws if violated at freeze time");
   config.addOption<double>("omicron-max", 1e6, "Upper bound for omicron entries; throws if violated at freeze time");
@@ -178,7 +178,7 @@ void ProblemWithSolvers::_getFromCfg(Config& cfg) {
   getConfigOptionOrThrow<double>("omicron-rho-multiplier", omicronRhoMultiplier_, cfg);
   double omicronAllRaw = -1.0;
   getConfigOptionOrThrow<double>("omicron-all", omicronAllRaw, cfg);
-  if (omicronAllRaw >= 0.0) {
+  if (omicronAllRaw > 0.0) {
     omicronAll_ = omicronAllRaw;
   } else {
     omicronAll_.reset();

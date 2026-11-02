@@ -226,7 +226,7 @@ Options of the APH algorithm begin with ``--aph-``, and some of them are
 shared with :ref:`sec-aph`; the ones only this hub reads are refused by
 ``--APH``. Options that begin with ``--aphfw-`` are about
 Frank-Wolfe or the compiled hub itself. The hub also takes
-``--max-iterations`` and ``--default-rho``. The ones most often set:
+``--max-iterations``, ``--time-limit`` and ``--default-rho``. The ones most often set:
 
 .. list-table:: FW-APH hub options
    :widths: 30 10 60
@@ -296,7 +296,8 @@ cannot be combined with ``--integer-relax-then-enforce``: the C++ hub solves
 from the MPS files and does not see changes to Pyomo variable types. The hub
 also refuses maximization models, models with ``variable_probability``,
 and a converger (it stops on its own convergence test, the spokes' gap,
-or ``--max-iterations``).
+``--max-iterations`` or ``--time-limit``, which it checks after each
+cycle).
 
 Without Frank-Wolfe
 -------------------

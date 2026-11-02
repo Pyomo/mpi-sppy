@@ -19,12 +19,13 @@ import json
 import logging
 import os
 import tempfile
+import time
 
 import numpy as np
 
 import mpisppy.phbase
 import mpisppy.utils.config
-from mpisppy import MPI
+from mpisppy import MPI, global_toc
 from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
 
 logger = logging.getLogger(__name__)
@@ -274,6 +275,16 @@ class APHFWOpt(mpisppy.phbase.PHBase):
                 self._cpp.freeze_omicron(self._omicron_rho_multiplier)
 
             if self._cpp.is_converged():
+                break
+
+            # --time-limit, checked as PH checks it: every hub rank must
+            # leave the loop together (the final Lagrangian reduces over the
+            # cylinder comm), hence the reduction.
+            time_limit = self.options.get("time_limit")
+            if time_limit is not None and self.allreduce_or(
+                    time.perf_counter() - self.start_time >= time_limit):
+                global_toc(f"Time limit {time_limit} seconds reached.",
+                           self.cylinder_rank == 0)
                 break
 
         if has_extensions:

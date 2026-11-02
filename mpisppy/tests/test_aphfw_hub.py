@@ -228,9 +228,10 @@ class TestAphfwPythonSide(unittest.TestCase):
         # --APH, so it refuses them (and takes them at their defaults).
         from mpisppy.utils.cfg_vanilla import aph_hub
         aph_hub(_cfg(APH=True, default_rho=1.0), None, None, ["s"])
-        # a negative --aph-omicron-all means "no override" to both hubs
-        aph_hub(_cfg(APH=True, default_rho=1.0, aph_omicron_all=-2.0),
-                None, None, ["s"])
+        # --aph-omicron-all <= 0 means "no override" to both hubs
+        for value in (-2.0, 0.0):
+            aph_hub(_cfg(APH=True, default_rho=1.0, aph_omicron_all=value),
+                    None, None, ["s"])
         for name in config.aphfw_hub_only_options():
             value = _non_default(name)
             with self.subTest(name=name):
@@ -264,6 +265,7 @@ class TestAphfwPythonSide(unittest.TestCase):
         self.assertTrue(config.aph_value_means_unset("aph_omicron_all", -2.0))
         self.assertFalse(config.aph_value_means_unset("aph_omicron_all", "-1"))
         self.assertFalse(config.aph_value_means_unset("aph_omicron_all", 0.5))
+        self.assertTrue(config.aph_value_means_unset("aph_omicron_all", 0.0))
         self.assertTrue(config.aph_value_means_unset("aph_omicron_all",
                                                      np.int64(-1)))
 
@@ -631,6 +633,26 @@ class TestAphfwHubRun(unittest.TestCase):
         lines = out.split("Statistics at termination")[-1].splitlines()
         last_iter = int(lines[2].split("]")[1].split()[0])
         self.assertEqual(last_iter, 7, out[-3000:])
+
+    def test_time_limit_stops_the_hub(self):
+        # --time-limit is checked after each cycle, as PH checks it after
+        # each iteration, so a limit of 0 stops the hub after cycle 1.
+        argv = [sys.executable, "-m", "mpisppy.generic_cylinders",
+                *self._farmer_argv("--max-iterations", "50",
+                                   "--time-limit", "0")[1:]]
+        with tempfile.TemporaryDirectory() as tmpdir:  # for solver logs
+            try:
+                result = subprocess.run(
+                    argv, capture_output=True, text=True, timeout=300,
+                    check=False, env=subprocess_env(), cwd=tmpdir)
+            except subprocess.TimeoutExpired:
+                self.fail("the hub did not finish")
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out[-3000:])
+        self.assertIn("Time limit 0", out, out[-3000:])
+        lines = out.split("Statistics at termination")[-1].splitlines()
+        last_iter = int(lines[2].split("]")[1].split()[0])
+        self.assertEqual(last_iter, 1, out[-3000:])
 
     def test_solver_options_reach_cpp(self):
         # The C++ solves read mipGap, timeLimit and threads from JSON files the
