@@ -223,7 +223,8 @@ do not reach the C++ solves; the hub says so in a warning, and they still
 apply to the spokes.
 
 Options of the APH algorithm begin with ``--aph-``, and some of them are
-shared with :ref:`sec-aph`. Options that begin with ``--aphfw-`` are about
+shared with :ref:`sec-aph`; the ones only this hub reads are refused by
+``--APH``. Options that begin with ``--aphfw-`` are about
 Frank-Wolfe or the compiled hub itself. The hub also takes
 ``--max-iterations`` and ``--default-rho``. The ones most often set:
 

@@ -1130,22 +1130,22 @@ class Config(pyofig.ConfigDict):
                            default=0.01)
 
         self.add_to_config(name="aph_primal_term_thresh",
-                           description="Primal termination tolerance (applied to u)",
+                           description="Primal termination tolerance (applied to u) (--aphfw-hub only)",
                            domain=float,
                            default=0.01)
 
         self.add_to_config(name="aph_dual_term_thresh",
-                           description="Dual termination tolerance (applied to v)",
+                           description="Dual termination tolerance (applied to v) (--aphfw-hub only)",
                            domain=float,
                            default=0.01)
 
         self.add_to_config(name="aph_staleness_threshold",
-                           description="Max cycles between scenario dispatches",
+                           description="Max cycles between scenario dispatches (--aphfw-hub only)",
                            domain=int,
                            default=20)
 
         self.add_to_config(name="aph_display_progress",
-                           description="Display convergence info at every cycle",
+                           description="Display convergence info at every cycle (--aphfw-hub only)",
                            domain=bool,
                            default=False)
 
@@ -1178,7 +1178,7 @@ class Config(pyofig.ConfigDict):
 
         self.add_to_config(name="aph_iter0_w_multiplier",
                            description="Start from W = m * rho * (xbase - z0) with this m, a PH-style"
-                                       " guess at the duals. The default 0.0 gives W = 0.",
+                                       " guess at the duals. The default 0.0 gives W = 0. (--aphfw-hub only)",
                            domain=float,
                            default=0.0)
 
@@ -1193,12 +1193,12 @@ class Config(pyofig.ConfigDict):
                            default=1)
 
         self.add_to_config(name="aph_block_sync",
-                           description="Allow only block asynchronism",
+                           description="Allow only block asynchronism (--aphfw-hub only)",
                            domain=bool,
                            default=False)
 
         self.add_to_config(name="aph_leading_dispatch_only",
-                           description="Only dispatch during leading sync phase",
+                           description="Only dispatch during leading sync phase (--aphfw-hub only)",
                            domain=bool,
                            default=False)
 
@@ -1222,32 +1222,32 @@ class Config(pyofig.ConfigDict):
                            default="")
 
         self.add_to_config(name="aph_omicron_rho_multiplier",
-                           description="k in omicron = k * rho at post-iter-0 freeze (default 1.0)",
+                           description="k in omicron = k * rho at post-iter-0 freeze (default 1.0) (--aphfw-hub only)",
                            domain=float,
                            default=1.0)
 
         self.add_to_config(name="aph_omicron_all",
-                           description="If > 0, freeze omicron uniformly at setup to this scalar (overrides multiplier)",
+                           description="If > 0, freeze omicron uniformly at setup to this scalar (overrides multiplier) (--aphfw-hub only)",
                            domain=float,
                            default=-1.0)
 
         self.add_to_config(name="aph_omicron_csv",
-                           description="If non-empty, freeze omicron from this CSV at setup (overrides multiplier)",
+                           description="If non-empty, freeze omicron from this CSV at setup (overrides multiplier) (--aphfw-hub only)",
                            domain=str,
                            default="")
 
         self.add_to_config(name="aph_omicron_min",
-                           description="Lower bound check on omicron entries at freeze",
+                           description="Lower bound check on omicron entries at freeze (--aphfw-hub only)",
                            domain=float,
                            default=1e-6)
 
         self.add_to_config(name="aph_omicron_max",
-                           description="Upper bound check on omicron entries at freeze",
+                           description="Upper bound check on omicron entries at freeze (--aphfw-hub only)",
                            domain=float,
                            default=1e6)
 
         self.add_to_config(name="aph_check_omicron_invariant",
-                           description="Run S(N)-constancy check on omicron at freeze",
+                           description="Run S(N)-constancy check on omicron at freeze (--aphfw-hub only)",
                            domain=bool,
                            default=True)
 
