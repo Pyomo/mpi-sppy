@@ -252,6 +252,47 @@ class Test_skips_and_guards(unittest.TestCase):
         self.assertTrue(v[0].fixed)
 
 
+class Test_spoke_generation_pairing(unittest.TestCase):
+    def test_bound_can_catch_up_after_reduced_cost_freshness_was_consumed(self):
+        """APH may poll between the spoke's RC and bound publications."""
+        ext, _ = _build(
+            [{"lb": 0, "ub": 10, "value": 0.0, "xbar": 0.0}],
+            fix_fraction=0.0,
+        )
+        ext._rc_fixer_require_improving_lagrangian = False
+        ext.reduced_costs_spoke_index = 0
+        ext.opt.spcomm = types.SimpleNamespace(
+            get_receive_buffer=lambda *args, **kwargs: True,
+        )
+
+        ids = {"rc": 2, "bound": 1}
+        rc_values = np.array([5.0])
+        ext.reduced_cost_buf = types.SimpleNamespace(
+            # Reproduces the important part of the race: the RC read was new
+            # on the first poll, but is no longer new when the bound catches up.
+            is_new=lambda: False,
+            id=lambda: ids["rc"],
+            value_array=lambda: rc_values,
+        )
+        ext.outer_bound_buf = types.SimpleNamespace(
+            id=lambda: ids["bound"],
+            value_array=lambda: np.array([10.0]),
+        )
+
+        ext.sync_with_spokes()
+        self.assertIsNone(ext._current_reduced_costs)
+
+        ids["bound"] = 2
+        ext.sync_with_spokes()
+        np.testing.assert_array_equal(ext._current_reduced_costs, [5.0])
+        self.assertEqual(ext._last_accepted_rc_id, 2)
+
+        # A paired generation is accepted only once.
+        rc_values[0] = 99.0
+        ext.sync_with_spokes()
+        np.testing.assert_array_equal(ext._current_reduced_costs, [5.0])
+
+
 class Test_fixings_from_before_a_resume(unittest.TestCase):
     """A resumed run arrives with this extension's mid-run fixings applied.
 

@@ -54,6 +54,13 @@ class ReducedCostsFixer(Extension):
             self._outer_bound_update = lambda new, old : (new < old)
 
         self._current_reduced_costs = None
+        # The reduced-cost spoke publishes EXPECTED_REDUCED_COST before the
+        # matching OBJECTIVE_OUTER_BOUND.  APH reads fields independently, so
+        # it can observe the new reduced costs while the bound still has the
+        # previous generation.  Remember the last *paired* generation rather
+        # than relying on RecvArray.is_new(): by the time the bound catches up,
+        # the reduced-cost buffer has already consumed its freshness flag.
+        self._last_accepted_rc_id = 0
 
     def _update_best_outer_bound(self, new_outer_bound):
         if self._outer_bound_update(new_outer_bound, self._best_outer_bound):
@@ -170,9 +177,14 @@ class ReducedCostsFixer(Extension):
             Field.OBJECTIVE_OUTER_BOUND,
             self.reduced_costs_spoke_index,
         )
-        if self.reduced_cost_buf.is_new() and self.reduced_cost_buf.id() == self.outer_bound_buf.id():
+        reduced_cost_id = self.reduced_cost_buf.id()
+        outer_bound_id = self.outer_bound_buf.id()
+        last_accepted_id = getattr(self, "_last_accepted_rc_id", 0)
+        if (reduced_cost_id == outer_bound_id
+                and reduced_cost_id > last_accepted_id):
             reduced_costs = self.reduced_cost_buf.value_array()
             this_outer_bound = self.outer_bound_buf.value_array()[0]
+            self._last_accepted_rc_id = reduced_cost_id
             is_new_outer_bound = self._update_best_outer_bound(this_outer_bound)
             if pre_iter0:
                 # make sure we set the bound we compute prior to iteration 0
