@@ -404,6 +404,17 @@ if haveMPI and _enable_progress_thread:
                 _time.thread_time() - worker_cpu_start
             )
 
+    def _python_progress_loop():
+        try:
+            _mpi_progress_loop()
+        except BaseException:
+            # A dead worker cannot make progress for a rank inside a solver.
+            try:
+                import traceback as _traceback
+                _traceback.print_exc()
+            finally:
+                _os._exit(1)
+
     def _native_progress_loop():
         global _progress_worker_native_id
         try:
@@ -427,7 +438,7 @@ if haveMPI and _enable_progress_thread:
 
     _progress_thread = _threading.Thread(
         target=(_native_progress_loop if _native_worker_enabled
-                else _mpi_progress_loop),
+                else _python_progress_loop),
         name="mpisppy-mpi-progress",
         daemon=True,
     )
@@ -486,7 +497,7 @@ if haveMPI and _enable_progress_thread:
                      if _native_worker_enabled else 5)
         )
         worker_stopped = not _progress_thread.is_alive()
-        if _native_worker_enabled and not worker_stopped:
+        if not worker_stopped:
             try:
                 _os.write(
                     2,
