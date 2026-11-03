@@ -54,6 +54,8 @@ class TestSlurmTimeLimit(unittest.TestCase):
 
         self.assertEqual(ph._slurm_end_time, 5000.0)
         self.assertEqual(ph._slurm_buffer_seconds, 600.0)
+        self.assertEqual(ph._slurm_allocation_seconds_remaining, 4000.0)
+        self.assertEqual(ph._slurm_hub_time_limit, 3400.0)
         self.assertEqual(ph._slurm_deadline, 3500.0)
 
     def test_slurm_deadline_and_run_limit_are_both_honored(self):

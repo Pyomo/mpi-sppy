@@ -388,9 +388,11 @@ class PHBase(mpisppy.spopt.SPOpt):
                 "%Y-%m-%d %H:%M:%S %Z", time.localtime(self._slurm_end_time)
             )
             global_toc(
-                f"Slurm job ends at {end_text}; reserving "
-                f"{self._slurm_buffer_seconds:g} seconds for an in-progress "
-                "iteration and clean shutdown",
+                f"Slurm allocation: "
+                f"{self._slurm_allocation_seconds_remaining:.1f}s remaining "
+                f"(ends {end_text}); hub time limit: "
+                f"{self._slurm_hub_time_limit:.1f}s "
+                f"({self._slurm_buffer_seconds:g}s shutdown buffer)",
                 self.cylinder_rank == 0,
             )
 
@@ -435,6 +437,8 @@ class PHBase(mpisppy.spopt.SPOpt):
         self._slurm_deadline = None
         self._slurm_end_time = None
         self._slurm_buffer_seconds = None
+        self._slurm_allocation_seconds_remaining = None
+        self._slurm_hub_time_limit = None
 
         configured = options.get("slurm_buffer_seconds", None)
         if configured is None:
@@ -471,8 +475,11 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         self._slurm_buffer_seconds = buffer_seconds
         self._slurm_end_time = end_time
-        seconds_until_stop = end_time - time.time() - buffer_seconds
-        self._slurm_deadline = time.perf_counter() + seconds_until_stop
+        allocation_seconds_remaining = end_time - time.time()
+        hub_time_limit = allocation_seconds_remaining - buffer_seconds
+        self._slurm_allocation_seconds_remaining = allocation_seconds_remaining
+        self._slurm_hub_time_limit = hub_time_limit
+        self._slurm_deadline = time.perf_counter() + hub_time_limit
 
     def _local_time_limit_stop_reason(self):
         """Return the local soft-limit reason, or ``None`` before either limit."""
