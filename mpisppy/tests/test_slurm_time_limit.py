@@ -13,6 +13,7 @@ import unittest
 from unittest import mock
 
 from mpisppy.phbase import PHBase
+from mpisppy.opt.fwph import FWPH
 
 
 class TestSlurmTimeLimit(unittest.TestCase):
@@ -87,6 +88,52 @@ class TestSlurmTimeLimit(unittest.TestCase):
         with mock.patch(
                 "mpisppy.phbase.time.perf_counter", return_value=1100.0):
             self.assertIn("Time limit", ph._local_time_limit_stop_reason())
+
+    def test_fwph_skips_crossover_after_lp_loop_times_out(self):
+        fw = object.__new__(FWPH)
+        fw.options = {
+            "smoothed": 0,
+            "objgap_mode": False,
+            "FW_LP_start_iterations": 1,
+            "PHIterLimit": 5,
+            "display_timing": False,
+            "tee-rank0-solves": False,
+            "verbose": False,
+        }
+        fw.FW_options = fw.options
+        fw.start_time = 0.0
+        fw._PHIter = 0
+        fw.local_scenarios = {}
+        fw.ph_converger = None
+        fw.cylinder_rank = 0
+
+        for name in (
+                "PH_Prep", "_output_header", "_attach_MIP_vars",
+                "_cache_nonant_var_swap_mip", "_output", "_disable_W",
+                "_initialize_QP_subproblems", "_attach_indices",
+                "_attach_MIP_QP_maps", "_set_QP_objective",
+                "_initialize_QP_var_values", "_cache_nonant_var_swap_qp",
+                "_setup_shared_column_generation",
+                "_generate_initial_columns_if_needed", "_reenable_W",
+                "attach_PH_to_objective", "_reenable_prox", "_disable_prox",
+        ):
+            setattr(fw, name, mock.Mock())
+        fw.Iter0 = mock.Mock(return_value=0.0)
+        fw._is_timed_out = mock.Mock(return_value=True)
+        fw._local_time_limit_stop_reason = mock.Mock(
+            return_value="Slurm shutdown buffer reached."
+        )
+        fw.fwph_solve_loop = mock.Mock()
+
+        def finish_lp_loop():
+            fw._PHIter = 1
+
+        with mock.patch.object(PHBase, "iterk_loop", side_effect=finish_lp_loop):
+            result = fw.fwph_main(finalize=False)
+
+        self.assertEqual(result, 1)
+        fw.fwph_solve_loop.assert_not_called()
+        self.assertEqual(fw.options["PHIterLimit"], 5)
 
 
 if __name__ == "__main__":
