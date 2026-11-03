@@ -54,9 +54,22 @@ class TestSlurmTimeLimit(unittest.TestCase):
 
         self.assertEqual(ph._slurm_end_time, 5000.0)
         self.assertEqual(ph._slurm_buffer_seconds, 600.0)
-        self.assertEqual(ph._slurm_allocation_seconds_remaining, 4000.0)
-        self.assertEqual(ph._slurm_hub_time_limit, 3400.0)
         self.assertEqual(ph._slurm_deadline, 3500.0)
+
+    def test_log_message_uses_time_remaining_when_it_is_emitted(self):
+        ph = self._bare_ph()
+        ph._slurm_end_time = 5000.0
+        ph._slurm_deadline = 3500.0
+        ph._slurm_buffer_seconds = 600.0
+
+        with mock.patch("mpisppy.phbase.time.time", return_value=1200), \
+                mock.patch(
+                    "mpisppy.phbase.time.perf_counter", return_value=300
+                ):
+            message = ph._slurm_limit_message()
+
+        self.assertIn("3800.0s remaining", message)
+        self.assertIn("hub time limit: 3200.0s", message)
 
     def test_slurm_deadline_and_run_limit_are_both_honored(self):
         ph = self._bare_ph()
