@@ -12,6 +12,7 @@
 #include <sstream>
 #include <exception>
 #include <cmath>
+#include <limits>
 #include <numeric>
 #include <fstream>
 #include <cstdlib>
@@ -437,6 +438,42 @@ objAndBnd XpressInterface::solve() {
       xprsCheck(XPRSgetintattrib(prob_, XPRS_LPSTATUS, &lpstatus),
                 "XPRSgetintattrib(LPSTATUS)");
 
+      if (lpstatus == XPRS_LP_UNSOLVED) {
+        // Numerical trouble.  Retry with presolve off, then with primal
+        // simplex, as the Gurobi backend retries its NUMERIC status.
+        int origPresolve = 0;
+        xprsCheck(XPRSgetintcontrol(prob_, XPRS_PRESOLVE, &origPresolve),
+                  "XPRSgetintcontrol(PRESOLVE)");
+        struct Retry {
+          const char* name;
+          int presolve;       // -1 means don't change
+          const char* flags;  // XPRSlpoptimize algorithm flags
+        };
+        static const Retry retries[] = {
+          {"presolve off",   0,  ""},
+          {"primal simplex", -1, "p"},
+        };
+        for (const auto& retry : retries) {
+          std::cerr << "Warning: Xpress could not solve '" << scenarioName
+                    << "' (LPSTATUS=UNSOLVED); retrying with " << retry.name << "\n";
+          if (retry.presolve >= 0) setXpressIntControl(XPRS_PRESOLVE, retry.presolve);
+          int ret = XPRSlpoptimize(prob_, retry.flags);
+          setXpressIntControl(XPRS_PRESOLVE, origPresolve);
+          xprsCheck(ret, "XPRSlpoptimize (retry)");
+          if (userStopped()) {
+            interrupted.store(true, std::memory_order_relaxed);
+            return objAndBnd{0.0, 0.0};
+          }
+          xprsCheck(XPRSgetintattrib(prob_, XPRS_LPSTATUS, &lpstatus),
+                    "XPRSgetintattrib(LPSTATUS)");
+          if (lpstatus != XPRS_LP_UNSOLVED) {
+            std::cerr << "  Retry with " << retry.name << " ended with LPSTATUS="
+                      << lpstatus << " for '" << scenarioName << "'\n";
+            break;
+          }
+        }
+      }
+
       if (lpstatus == XPRS_LP_OPTIMAL) {
         xprsCheck(XPRSgetdblattrib(prob_, XPRS_LPOBJVAL, &obj),
                   "XPRSgetdblattrib(LPOBJVAL)");
@@ -452,6 +489,36 @@ objAndBnd XpressInterface::solve() {
         xprsCheck(XPRSgetdblattrib(prob_, XPRS_LPOBJVAL, &obj),
                   "XPRSgetdblattrib(LPOBJVAL)");
         bound = obj;
+      } else if (lpstatus == XPRS_LP_UNSOLVED) {
+        // The retries failed too.  Like the HiGHS backend, use a solution if
+        // there is one and say so; otherwise write the problem for a repro.
+        int ncols = 0;
+        xprsCheck(XPRSgetintattrib(prob_, XPRS_COLS, &ncols), "XPRSgetintattrib(COLS)");
+        std::vector<double> x(ncols);
+        int solstatus = XPRS_SOLSTATUS_NOTFOUND;
+        xprsCheck(XPRSgetsolution(prob_, &solstatus, x.data(), 0, ncols - 1),
+                  "XPRSgetsolution");
+        if (solstatus == XPRS_SOLSTATUS_OPTIMAL || solstatus == XPRS_SOLSTATUS_FEASIBLE) {
+          xprsCheck(XPRSgetdblattrib(prob_, XPRS_LPOBJVAL, &obj),
+                    "XPRSgetdblattrib(LPOBJVAL)");
+          // a continuous solve that did not finish has no bound to offer
+          bound = -std::numeric_limits<double>::infinity();
+          numericalBailout.store(true, std::memory_order_relaxed);
+          std::cerr << "Warning: all retries failed for '" << scenarioName
+                    << "'; using Xpress's best solution (obj=" << obj << ")\n";
+        } else {
+          std::string base = scenarioName.substr(scenarioName.find_last_of('/') + 1);
+          std::string dumpName = "xpress_unsolved_" + base + ".lp";
+          std::string wrote = "; wrote the problem to " + dumpName;
+          try {
+            exportModel(dumpName);
+          } catch (const std::runtime_error&) {
+            wrote = "; could not write the problem to " + dumpName;
+          }
+          throw std::runtime_error("Xpress could not solve " + scenarioName +
+                                   " (LPSTATUS=UNSOLVED, numerical trouble) and has"
+                                   " no solution" + wrote);
+        }
       } else {
         throw std::runtime_error("Unexpected LP status " + std::to_string(lpstatus)
                                  + " for " + scenarioName);
