@@ -8,6 +8,7 @@
 ###############################################################################
 import logging
 import math
+import os
 import time
 import warnings
 
@@ -367,6 +368,7 @@ class PHBase(mpisppy.spopt.SPOpt):
     ):
         self._PHIter = 0  # moved to _init June 2024 so extensions can see it
         """ PHBase constructor. """
+        self._configure_slurm_deadline(options)
         super().__init__(
             options,
             all_scenario_names,
@@ -380,6 +382,17 @@ class PHBase(mpisppy.spopt.SPOpt):
             variable_probability=variable_probability,
         )
         global_toc("Initializing PHBase")
+
+        if self._slurm_deadline is not None:
+            end_text = time.strftime(
+                "%Y-%m-%d %H:%M:%S %Z", time.localtime(self._slurm_end_time)
+            )
+            global_toc(
+                f"Slurm job ends at {end_text}; reserving "
+                f"{self._slurm_buffer_seconds:g} seconds for an in-progress "
+                "iteration and clean shutdown",
+                self.cylinder_rank == 0,
+            )
 
         # Note that options can be manipulated from outside on-the-fly.
         # self.options (from super) will archive the original options.
@@ -410,6 +423,81 @@ class PHBase(mpisppy.spopt.SPOpt):
         # Whether this process's iteration-0 solve had the prox term on (an
         # xbar was supplied and the terms were attached before that solve).
         self._iter0_solved_with_prox = False
+
+    def _configure_slurm_deadline(self, options):
+        """Set an opt-in monotonic deadline from Slurm's absolute end time.
+
+        Slurm counts from the allocation start, which can precede construction
+        of this object by hours. Converting its epoch timestamp to a local
+        ``perf_counter`` deadline keeps later checks monotonic while preserving
+        the scheduler's actual clock origin.
+        """
+        self._slurm_deadline = None
+        self._slurm_end_time = None
+        self._slurm_buffer_seconds = None
+
+        configured = options.get("slurm_buffer_seconds", None)
+        if configured is None:
+            return
+        try:
+            buffer_seconds = float(configured)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "slurm_buffer_seconds must be a nonnegative number"
+            ) from exc
+        if not math.isfinite(buffer_seconds) or buffer_seconds < 0:
+            raise ValueError(
+                "slurm_buffer_seconds must be a nonnegative finite number"
+            )
+
+        raw_end_time = os.environ.get("SLURM_JOB_END_TIME")
+        if raw_end_time is None:
+            raise RuntimeError(
+                "slurm_buffer_seconds was set, but SLURM_JOB_END_TIME is not "
+                "available. Use this option inside a Slurm allocation whose "
+                "environment exports the job end time."
+            )
+        try:
+            end_time = float(raw_end_time)
+        except ValueError as exc:
+            raise RuntimeError(
+                f"SLURM_JOB_END_TIME must be a Unix timestamp; got "
+                f"{raw_end_time!r}"
+            ) from exc
+        if not math.isfinite(end_time):
+            raise RuntimeError(
+                "SLURM_JOB_END_TIME must be a finite Unix timestamp"
+            )
+
+        self._slurm_buffer_seconds = buffer_seconds
+        self._slurm_end_time = end_time
+        seconds_until_stop = end_time - time.time() - buffer_seconds
+        self._slurm_deadline = time.perf_counter() + seconds_until_stop
+
+    def _local_time_limit_stop_reason(self):
+        """Return the local soft-limit reason, or ``None`` before either limit."""
+        now = time.perf_counter()
+        deadlines = []
+        slurm_deadline = getattr(self, "_slurm_deadline", None)
+        if slurm_deadline is not None:
+            buffer_seconds = self._slurm_buffer_seconds
+            deadlines.append(
+                (slurm_deadline,
+                 f"Slurm shutdown buffer of {buffer_seconds:g} seconds "
+                 "reached.")
+            )
+
+        time_limit = self.options.get("time_limit", None)
+        if time_limit is not None:
+            deadlines.append(
+                (self.start_time + time_limit,
+                 f"Time limit {time_limit} seconds reached.")
+            )
+        if deadlines:
+            deadline, reason = min(deadlines, key=lambda item: item[0])
+            if now >= deadline:
+                return reason
+        return None
 
     @property
     def iter0_solver_options(self):
@@ -1944,10 +2032,16 @@ class PHBase(mpisppy.spopt.SPOpt):
                 if self.conv < self.options["convthresh"]:
                     global_toc(f'Convergence metric={self.conv:f} dropped below user-supplied threshold={self.options["convthresh"]:f}', self.cylinder_rank == 0)
                     break
-            if self.options["time_limit"] is not None:
-                time_to_stop = self.allreduce_or( (time.perf_counter() - self.start_time) >= self.options["time_limit"] )
+            if (self.options.get("time_limit", None) is not None
+                    or self._slurm_deadline is not None):
+                local_stop_reason = self._local_time_limit_stop_reason()
+                time_to_stop = self.allreduce_or(local_stop_reason is not None)
                 if time_to_stop:
-                    global_toc(f"Time limit {self.options['time_limit']} seconds reached.", self.cylinder_rank == 0)
+                    global_toc(
+                        local_stop_reason
+                        or "Soft time limit reached on another rank.",
+                        self.cylinder_rank == 0,
+                    )
                     break
 
             # Enforce rho > 0 before every solve: any rho-updating extension may

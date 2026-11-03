@@ -22,6 +22,26 @@ upper and lower bounds as computed by the spokes (``rel_gap`` and
 based on an iteration limit (``max_iterations`` in a ``Config`` object),
 or a time limit in seconds (``time_limit`` in a ``Config`` object).
 
+Slurm-aware shutdown
+--------------------
+
+``--slurm-buffer-seconds S`` reserves the final ``S`` seconds of a Slurm
+allocation for completing an in-progress iteration and shutting down cleanly.
+It reads Slurm's absolute job end time from ``SLURM_JOB_END_TIME`` and stops the
+hub at the first ordinary time-limit check when ``S`` or fewer seconds remain.
+The option is inactive by default and is applied only to the hub.
+It can be used without ``--time-limit``; the Slurm allocation supplies the
+overall deadline in that case.
+
+The buffer must be large enough for the longest plausible solve or iteration,
+plus any checkpointing, synchronization, reporting, and other shutdown work.
+Like ``--time-limit``, this is a soft iteration-boundary check: it does not
+interrupt a solve, protect the iteration-0 solve, or guarantee that a buffer
+which is too small will beat Slurm's termination. If both options are given,
+the earlier of the mpi-sppy time limit and the Slurm-derived deadline ends the
+run. Setting ``--slurm-buffer-seconds`` when ``SLURM_JOB_END_TIME`` is absent is
+an error; when the option is omitted, mpi-sppy does not inspect Slurm at all.
+
 An additional gap-based termination option is supported by
 ``Config`` and ``cfg_vanilla.py``: ``max_stalled_iters``
 (``--max-stalled-iters`` on the command line) that specifies how many

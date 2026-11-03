@@ -280,7 +280,11 @@ class FWPH(mpisppy.phbase.PHBase):
                     break
 
             if (self._is_timed_out()):
-                global_toc(f"Time limit {self.options['time_limit']} seconds reached.", self.cylinder_rank == 0)
+                global_toc(
+                    self._local_time_limit_stop_reason()
+                    or "Soft time limit reached on another rank.",
+                    self.cylinder_rank == 0,
+                )
                 break
 
             self.fwph_solve_loop(
@@ -970,7 +974,9 @@ class FWPH(mpisppy.phbase.PHBase):
         return number_points
 
     def _is_timed_out(self):
-        return self.allreduce_or( (time.perf_counter() - self.start_time) >= self.options["time_limit"] )
+        return self.allreduce_or(
+            self._local_time_limit_stop_reason() is not None
+        )
 
     def _options_checks_fw(self):
         ''' Name                Boland notation (Algorithm 2)
