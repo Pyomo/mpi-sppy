@@ -470,11 +470,14 @@ class LShapedMethod(spbase.SPBase):
                 for k,v in self.options["sp_solver_options"].items():
                     opt.options[k] = v
 
-            if sputils.is_persistent(opt):
+            persistent = sputils.is_persistent(opt)
+            if persistent:
                 set_instance_retry(instance, opt, scenario_name)
-                res = opt.solve(tee=False)
-            else:
-                res = opt.solve(instance, tee=False)
+            with MPI.progress_active():
+                if persistent:
+                    res = opt.solve(tee=False)
+                else:
+                    res = opt.solve(instance, tee=False)
 
             eta_lb = res.Problem[0].Lower_bound
 
@@ -622,10 +625,11 @@ class LShapedMethod(spbase.SPBase):
             eta_vals = np.zeros(self.scenario_count)
             outer_bound = np.zeros(1)
             if self.cylinder_rank == 0:
-                if is_persistent:
-                    res = opt.solve(tee=False)
-                else:
-                    res = opt.solve(m, tee=False)
+                with MPI.progress_active():
+                    if is_persistent:
+                        res = opt.solve(tee=False)
+                    else:
+                        res = opt.solve(m, tee=False)
                 # LShaped is always minimizing
                 outer_bound[0] = res.Problem[0].Lower_bound
                 for i, var in enumerate(self.root_vars):
