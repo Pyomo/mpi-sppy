@@ -33,7 +33,7 @@ The option is inactive by default and is applied only to the hub.
 It can be used without ``--time-limit``; the Slurm allocation supplies the
 overall deadline in that case.
 
-The buffer must be large enough for the longest plausible solve or iteration,
+The buffer, ``S``, should be large enough for the longest plausible solve or iteration,
 plus any checkpointing, synchronization, reporting, and other shutdown work.
 Like ``--time-limit``, this is a soft iteration-boundary check: it does not
 interrupt a solve, protect the iteration-0 solve, or guarantee that a buffer
