@@ -7,9 +7,12 @@
 # full copyright and license information.
 ###############################################################################
 import os
+
 import gamspy_base
+
 import mpisppy.utils.sputils as sputils
 from mpisppy import MPI  # for debugging
+
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
@@ -39,7 +42,7 @@ def stoch_param_name_pairs_creator():
 
 def scenario_creator(scenario_name, mi, job, cfg=None):
     """ Create a scenario for the (scalable) farmer example.
-    
+
     Args:
         scenario_name (str):
             Name of the scenario to construct.
@@ -78,7 +81,7 @@ def inparser_adder(cfg):
                       domain=float,
                       default=0.2)
 
-    
+
 #=========
 def kw_creator(cfg):
     # creates keywords for scenario creator

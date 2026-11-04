@@ -41,18 +41,19 @@ See farmer_ample_agnostic.py for an example where indexes are retained.
 
 """
 
-import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
 
+import mpisppy.utils.sputils as sputils
 from mpisppy import MPI  # for debuggig
 from mpisppy.utils import nice_join
+
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-class AMPL_guest():
+class AMPL_guest:
     """
     Provide an interface to a model file for an AMPL guest.
-    
+
     Args:
         model_file_name (str): name of Python file that has functions like scenario_creator
         ampl_file_name (str): name of AMPL file that is passed to the model file
@@ -75,7 +76,7 @@ class AMPL_guest():
                 if "binary" in str(v) or "integer" in str(v):
                     return True
             return False
-        
+
         s, prob, nonant_vardata_list, obj_fct = self.model_module.scenario_creator(scenario_name,
                                                                      self.ampl_file_name,
                                                                      **kwargs)
@@ -309,7 +310,7 @@ class AMPL_guest():
         for ndn_i, gxvar in gd["nonants"].items():
             try:   # not sure this is needed
                 float(gxvar.value())
-            except:  # noqa
+            except:  # noqa: E722
                 raise RuntimeError(
                     f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
                     "had no value. This usually means this variable "
@@ -344,7 +345,7 @@ class AMPL_guest():
             gs.get_parameter("xbars").set_values(xbarsdict)
         else:
             pass  # presumably an xhatter; we should check, I suppose
-        
+
 
     # local helper
     def _copy_nonants_from_host(self, s):

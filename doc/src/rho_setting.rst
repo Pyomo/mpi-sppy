@@ -65,6 +65,11 @@ Enabled with:
 
    --sep-rho
 
+The separation is measured from xbar, the probability-weighted mean of the
+iteration-0 solutions. When xbar is read from a file with
+``--init-Xbar-fname`` (see WXBarReader in :doc:`extensions`), the file's
+xbar is used instead. ``--sensi-rho`` and ``--grad-rho`` use the same xbar.
+
 Coefficient-based Rho (``--coeff-rho``)
 ----------------------------------------
 

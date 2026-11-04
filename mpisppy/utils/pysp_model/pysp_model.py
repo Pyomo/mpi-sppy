@@ -11,6 +11,7 @@ import logging
 import pyomo.environ as pyo
 
 from mpisppy.scenario_tree import ScenarioNode as mpisppyScenarioNode
+
 from .instance_factory import ScenarioTreeInstanceFactory
 
 logger = logging.getLogger("mpisppy.utils.pysp_model")
@@ -125,7 +126,7 @@ class PySPModel:
 
         ## get the things out of the tree model we need
         self._all_scenario_names = [s.name for s in self._pysp_scenario_tree.scenarios]
-        
+
         ## check for more than two stages
         ## gripe if we see bundles
         if self._pysp_scenario_tree.bundles:

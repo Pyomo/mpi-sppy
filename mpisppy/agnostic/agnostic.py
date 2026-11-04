@@ -16,14 +16,16 @@ notes by dlw:
    - If a function in mpisppy has two callouts (a rarity), then the kwargs need to distinguish.
 """
 
-import sys
 import inspect
+import sys
+
 import pyomo.environ as pyo
+
 from mpisppy.utils import sputils
 
 
 #========================================
-class Agnostic():
+class Agnostic:
     """
     Args:
         module (python module): None or the module with the callout fcts, 
@@ -35,7 +37,7 @@ class Agnostic():
         self.module = module
         self.cfg = cfg
 
-        
+
     def callout_agnostic(self, kwargs):
         """ callout from mpi-sppy for AML-agnostic support
         Args:
@@ -48,7 +50,7 @@ class Agnostic():
         Note:
            Throws an error if the module exists, but the fct is missing
         """
-       
+
         if self.module is not None:
             fname = inspect.stack()[1][3] 
             fct = getattr(self.module, fname, None)
@@ -63,7 +65,7 @@ class Agnostic():
         else:
             return False
 
-       
+
     def scenario_creator(self, sname):
         """ create scenario sname by calling guest language, then attach stuff
         Args:
@@ -86,7 +88,7 @@ class Agnostic():
             (for two stage models, the only value of ndn is "ROOT";
              i in (ndn, i) is always just an index)
         """
-        
+
         crfct = getattr(self.module, "scenario_creator", None)
         if crfct is None:
             raise RuntimeError(f"AML-agnostic module {self.module.__name__} is missing the scenario_creator function")
@@ -104,7 +106,7 @@ class Agnostic():
         for idx,v  in s.nonantVars.items():
             v._value = gd["nonant_start"][idx]
             v.fixed = gd["nonant_fixedness"][idx]
-        
+
         # we don't really need an objective, but we do need a sense
         # note that other code may put W's and prox's on it
         s.Obj = pyo.Objective(expr=0, sense=gd["sense"])
@@ -116,13 +118,13 @@ class Agnostic():
         sputils.attach_root_node(s, s.Obj, [s.nonantVars])
 
         s._mpisppy_probability = gd["probability"]
-        
+
         return s
 
 
 ############################################################################################################
 
-        
+
 if __name__ == "__main__":
     # For use by developers doing ad hoc testing
     print("no main")

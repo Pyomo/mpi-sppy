@@ -8,17 +8,21 @@
 ###############################################################################
 
 import abc
-import time
-import os
 import math
+import os
+import time
 import warnings
 
-from mpisppy.cylinders.spcommunicator import SPCommunicator, SendCircularBuffer
+import mpisppy.utils.checkpointing as ckpt
+from mpisppy import global_toc
+from mpisppy.cylinders.spcommunicator import (
+    ReadConsistency,
+    SendCircularBuffer,
+    SPCommunicator,
+)
 from mpisppy.cylinders.spwindow import Field
 from mpisppy.debug_utils.buffer_inspect import InspectContext, inspect_buffer
 from mpisppy.utils import sputils
-import mpisppy.utils.checkpointing as ckpt
-from mpisppy import global_toc
 
 
 class Spoke(SPCommunicator):
@@ -92,7 +96,6 @@ class Spoke(SPCommunicator):
         regularly to ensure all ranks terminate
         with the Hub.
         """
-        pass
 
 
 class _BoundSpoke(Spoke):
@@ -343,6 +346,21 @@ class _BoundWSpoke(_BoundNonantLenSpoke):
     def nonant_len_type(self) -> Field:
         return Field.DUALS
 
+    def register_receive_fields(self) -> None:
+        super().register_receive_fields()
+        source_class = self.communicators[
+            self._nonant_len_receive_rank
+        ]["spcomm_class"]
+        self._dual_source_is_asynchronous = bool(getattr(
+            source_class, "publishes_asynchronous_duals", False))
+        if self._dual_source_is_asynchronous:
+            # The first APH publication can reach only some spoke ranks. The
+            # collective update decision then sends every spoke rank into the
+            # solve, so a rank that has not received its first piece needs the
+            # actual generation-zero dual value rather than RecvArray's NaN
+            # diagnostic fill. APH initializes W to zero.
+            self._nonant_len_receive_buffer.value_array().fill(0.0)
+
     @property
     def localWs(self):
         """Returns the local copy of the weights"""
@@ -353,7 +371,29 @@ class _BoundWSpoke(_BoundNonantLenSpoke):
         Returns True if the Ws are new. False otherwise.
         Puts the result in `localWs`.
         """
-        return self._update_nonant_len_buffer()
+        if not self._dual_source_is_asynchronous:
+            return self._update_nonant_len_buffer()
+
+        # APH ranks advance independently, so requiring one write ID across
+        # the publisher cylinder can starve this spoke forever. Take each
+        # receiver rank's latest available piece instead, then make one
+        # collective decision so every rank enters the Lagrangian solve. The
+        # assembled W is projected back onto E[W] == 0 by
+        # LagrangianOuterBound before it is used.
+        previous_W = self._nonant_len_receive_buffer.value_array().copy()
+        local_new = self.get_receive_buffer(
+            self._nonant_len_receive_buffer,
+            self.nonant_len_type(),
+            self._nonant_len_receive_rank,
+            consistency=ReadConsistency.ASYNC_LATEST,
+        )
+        if not local_new:
+            # The equal-rank reader Gets directly into the receive buffer
+            # before deciding whether its write ID advanced. Preserve the last
+            # accepted piece when that poll was stale (including an APH rank's
+            # unpublished, NaN-filled generation zero).
+            self._nonant_len_receive_buffer.value_array()[:] = previous_W
+        return self.allreduce_or(local_new)
 
 
 class OuterBoundWSpoke(_BoundWSpoke):

@@ -13,14 +13,14 @@ SeqSampling (two-stage) and IndepScens_SeqSampling (multi-stage)
 classes from mpisppy.confidence_intervals.
 """
 
+import functools
 import os
 import tempfile
-import functools
 
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.confidence_intervals.confidence_config as confidence_config
-from mpisppy import global_toc, MPI
+import mpisppy.utils.amalgamator as amalgamator
+import mpisppy.utils.sputils as sputils
+from mpisppy import MPI, global_toc
 
 
 def mrp_args(cfg):
@@ -175,8 +175,14 @@ def do_mrp(module_fname, module, cfg):
     Returns:
         dict: {"T": T, "Candidate_solution": xhat, "CI": [0, upper_bound]}
     """
-    from mpisppy.confidence_intervals import seqsampling
-    from mpisppy.confidence_intervals import multi_seqsampling
+    from mpisppy.confidence_intervals import multi_seqsampling, seqsampling
+    from mpisppy.generic.extensions import refuse_user_extensions_without_a_hub
+
+    if cfg.get("xhat_method", "EF") == "EF":
+        # Only --xhat-method cylinders builds a hub (through do_decomp).
+        refuse_user_extensions_without_a_hub(
+            cfg, "--xhat-method EF",
+            remedy="Use --xhat-method cylinders (EF is the default)")
 
     global_comm = MPI.COMM_WORLD
     global_rank = global_comm.Get_rank()

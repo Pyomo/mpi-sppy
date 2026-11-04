@@ -14,11 +14,11 @@
 # an EFExtension that enforces a minimum *expected* wheat production in the EF.
 ###############################################################################
 
-import pyomo.environ as pyo
-import mpisppy.utils.cfg_vanilla as vanilla
-
 # Import the base farmer module we are wrapping
 import farmer as _farmer
+import pyomo.environ as pyo
+
+import mpisppy.utils.cfg_vanilla as vanilla
 
 # Import EFExtension base class
 from mpisppy.extensions.extension import EFExtension

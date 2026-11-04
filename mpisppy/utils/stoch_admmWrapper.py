@@ -7,16 +7,16 @@
 # full copyright and license information.
 ###############################################################################
 #creating the class stoch_admmWrapper
-import mpisppy.utils.sputils as sputils
-import pyomo.environ as pyo
-import mpisppy.scenario_tree as scenario_tree
 import numpy as np
+import pyomo.environ as pyo
+
+import mpisppy.scenario_tree as scenario_tree
+import mpisppy.utils.sputils as sputils
 from mpisppy.utils.admmWrapper import (
     _admm_normalize_consensus_vars,
     _first_stage_var_names,
     _merge_first_stage_into_consensus_vars,
 )
-
 
 # Default delimiter for the naming inverse-pair below.  Verbose enough
 # to be unambiguous in shells, filenames, and CSV columns; printable
@@ -121,7 +121,7 @@ def _consensus_vars_number_creator(consensus_vars):
             consensus_vars_number[var] += 1
     return consensus_vars_number
 
-class Stoch_AdmmWrapper(): #add scenario_tree
+class Stoch_AdmmWrapper: #add scenario_tree
     """ Defines an interface to all strata (hubs and spokes)
 
         Args:
@@ -156,6 +156,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
             first_stage_cost=None,
             first_stage_varlist=None,
             first_stage_surrogate_nonant_list=None,
+            first_stage_linear_surrogate_definitions=None,
             first_stage_nonant_ef_suppl_list=None,
     ):
         assert len(options) == 0, "no options supported by stoch_admmWrapper"
@@ -184,6 +185,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
         # them onto otherwise).
         advanced_hooks = {
             "first_stage_surrogate_nonant_list": first_stage_surrogate_nonant_list,
+            "first_stage_linear_surrogate_definitions": first_stage_linear_surrogate_definitions,
             "first_stage_nonant_ef_suppl_list": first_stage_nonant_ef_suppl_list,
         }
         present_advanced = [n for n, h in advanced_hooks.items() if h is not None]
@@ -232,6 +234,9 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                 if first_stage_surrogate_nonant_list is not None:
                     attach_kwargs["surrogate_nonant_list"] = \
                         first_stage_surrogate_nonant_list(s)
+                if first_stage_linear_surrogate_definitions is not None:
+                    attach_kwargs["linear_surrogate_definitions"] = \
+                        first_stage_linear_surrogate_definitions(s)
                 if first_stage_nonant_ef_suppl_list is not None:
                     attach_kwargs["nonant_ef_suppl_list"] = \
                         first_stage_nonant_ef_suppl_list(s)
@@ -291,7 +296,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
         self.number_admm_subproblems = len(self.admm_subproblem_names)
         self.all_nodenames = self.create_node_names(num_admm_subproblems=len(admm_subproblem_names), num_stoch_scens=len(stoch_scenario_names))
         self.assign_variable_probs(verbose=self.verbose)
-    
+
 
     def create_node_names(self, num_admm_subproblems, num_stoch_scens):
         # Normalize self.BFs to the original problem's branching factors.
@@ -413,7 +418,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                         # Going to replace the brackets
                         v2str = vstr.replace("[","__").replace("]","__") # To distinguish the consensus_vars fixed at 0
                         v = pyo.Var()
-                        
+
                         ### Lines equivalent to setattr(s, v2str, v) without warning
                         #s.del_component(v2str) UNUSEFUL
                         s.add_component(v2str, v) 
@@ -461,6 +466,10 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                 # originally passed in.
                 user_surrogates = old_node.surrogate_nonant_list
                 user_ef_suppl = old_node.nonant_ef_suppl_list
+                generated_surrogates = [
+                    data.target for data in old_node.linear_surrogate_data]
+                if generated_surrogates:
+                    user_surrogates = list(user_surrogates or ()) + generated_surrogates
                 new_node = scenario_tree.ScenarioNode(
                     old_node.name,
                     old_node.cond_prob,
@@ -470,6 +479,9 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                     s,
                     nonant_ef_suppl_list=user_ef_suppl,
                     surrogate_nonant_list=user_surrogates)
+                new_node.linear_surrogate_definitions = \
+                    old_node.linear_surrogate_definitions
+                new_node.linear_surrogate_data = old_node.linear_surrogate_data
                 _tag_dummies_as_surrogate(new_node, dummy_varlist[stage-1])
                 s._mpisppy_node_list[stage-1] = new_node
 

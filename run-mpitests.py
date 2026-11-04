@@ -6,9 +6,10 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import sys
-from runtests.mpi import Tester
 import os.path
+import sys
+
+from runtests.mpi import Tester
 
 if __name__ == '__main__':
     tester = Tester(os.path.join(os.path.abspath(__file__)), ".")

@@ -9,16 +9,18 @@
 """
 This abstract base class is the parent class of all distribution classes.
 """
-from abc import ABCMeta, abstractmethod
 import os
+from abc import ABCMeta, abstractmethod
 
 import numpy as np
+
 # scipy is an optional dependency; import it lazily so the empirical
 # bootstrap path stays scipy-free. matplotlib (also optional) is imported
 # locally in the plotting methods below.
 from pyomo.common.dependencies import scipy
 
 from mpisppy.confidence_intervals.bootsp.statdist.utilities import memoize_method
+
 
 class Parameter:
     """
@@ -65,12 +67,12 @@ class Parameter:
         self.instantiated = value is not None
 
     def __repr__(self):
-        return "Parameter({},{})".format(self.name, self.value)
+        return f"Parameter({self.name},{self.value})"
 
     __str__ = __repr__
 
 
-class BaseDistribution(object):
+class BaseDistribution:
     # NOTE: this is the Python 2 spelling and has no effect in Python 3, where
     # the metaclass belongs in the class bases (metaclass=ABCMeta). It is left
     # as-is deliberately: switching it on would make UnivariateDiscrete
@@ -109,7 +111,6 @@ class BaseDistribution(object):
         Returns:
             float: the value of the pdf
         """
-        pass
 
     @classmethod
     @abstractmethod
@@ -151,11 +152,11 @@ class BaseDistribution(object):
     def __str__(self):
         string = self.name + ': '
         for parameter in self.parameters:
-            string += '\n{}: {}'.format(parameter.name, parameter.value)
+            string += f'\n{parameter.name}: {parameter.value}'
         return string
 
     def __repr__(self):
-        return "Distribution({})".format(self.name)
+        return f"Distribution({self.name})"
 
 
 class UnivariateDistribution(BaseDistribution):

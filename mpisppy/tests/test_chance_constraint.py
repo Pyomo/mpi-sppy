@@ -17,10 +17,11 @@
 
 import math
 import unittest
+
 import pyomo.environ as pyo
 
-import mpisppy.utils.sputils as sputils
 import mpisppy.utils.chance_constraint as cc
+import mpisppy.utils.sputils as sputils
 from mpisppy.tests.utils import get_solver, limit_solver_threads
 
 solver_available, solver_name, persistent_available, persistent_solver_name = \

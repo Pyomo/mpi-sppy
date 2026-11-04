@@ -8,19 +8,20 @@
 ###############################################################################
 #Code for sampling for multistage problem
 
-import numpy as np
-import mpisppy.MPI as mpi
 import importlib
 
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgamator as amalgamator
+import numpy as np
+
 import mpisppy.confidence_intervals.ciutils as ciutils
+import mpisppy.MPI as mpi
+import mpisppy.utils.amalgamator as amalgamator
+import mpisppy.utils.sputils as sputils
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
 
-class SampleSubtree():
+class SampleSubtree:
     '''
     The Sample Subtree class is generating a scenario tree such that every
     scenario shares the same common nodes up to a starting stage t. These nodes
@@ -28,7 +29,7 @@ class SampleSubtree():
     The aim of this class is to compute a feasible policy at stage t for 'root_scen'
     We take as an argument xhats, feasible policies for stages 1 to t-1, and 
     fix the nonants up to stage t-1 to the values given by 'xhats' for every scenario.
-    
+
     The run() method is solving directly the Extensive Form. 
     After callling the method, one can fetch the feasible policy for stage t 
     by taking the attribute xhat_at_stage.
@@ -76,19 +77,19 @@ class SampleSubtree():
         self.cfg = cfg
         self.solver_name = solver_name
         self.solver_options = solver_options
-        
+
         #Create an amalgamator object to solve the subtree problem
         self._create_amalgamator()
 
-                
+
     def _sample_creator(self, sname, **scenario_creator_kwargs):
         '''
         This method is similar to scenario_creator function, but for subtrees.
         Given a scenario names and kwargs, it creates a scenario from our subtree
-        
+
         WARNING: The multistage model (aka refmodel) must contain a 
         sample_tree_scen_creator function
-        
+
         '''
         # gymnastics because options get passed around through a variety of paths
         s_c_k = scenario_creator_kwargs.copy()
@@ -103,7 +104,7 @@ class SampleSubtree():
                                                    **s_c_k)
         nlens = {node.name: len(node.nonant_vardata_list) 
                  for node in s._mpisppy_node_list}
-        
+
         #Fixing the xhats
         for k,ndn in enumerate(self.fixed_nodes):
             node = s._mpisppy_node_list[k]
@@ -117,12 +118,12 @@ class SampleSubtree():
                 node.nonant_vardata_list[i].value = self.xhats[k][i]
                 node.nonant_vardata_list[i].fixed = True
         return s
-        
+
     def _create_amalgamator(self):
         '''
         This method attaches an Amalgamator object to a sample subtree.
         Changes to self.cfg will be ephemeral.
-        
+
         WARNING: sample_creator must be called before using for stages beyond 1
         '''
         self.fixed_nodes = ["ROOT"+"_0"*i for i in range(self.stage-1)]
@@ -157,7 +158,7 @@ class SampleSubtree():
         scen_names = self.refmodel.scenario_names_creator(self.numscens,
                                                           start=self.seed)
         denouement = self.refmodel.scenario_denouement if hasattr(self.refmodel, 'scenario_denouement') else None
-        
+
         self.ama = amalgamator.Amalgamator(cfg, scen_names,
                                            self.scenario_creator,
                                            self.refmodel.kw_creator,
@@ -188,14 +189,14 @@ def _feasible_solution(mname,scenario,xhat_one,branching_factors,seed,cfg,
     num_stages = len(branching_factors)+1
     xhats = [xhat_one]
     for t in range(2,num_stages): #We do not compute xhat for the final stage
-    
+
         subtree = SampleSubtree(mname, xhats, scenario, 
                                 t, branching_factors, seed, cfg,
                                 solver_name, solver_options)
         subtree.run()
         xhats.append(subtree.xhat_at_stage)
         seed+=sputils.number_of_nodes(branching_factors[(t-1):])
-    xhat_dict = {ndn:xhat for (ndn,xhat) in zip(nodenames,xhats)}
+    xhat_dict = dict(zip(nodenames,xhats))
     return xhat_dict,seed
 
 def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed, cfg,
@@ -229,14 +230,14 @@ def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed,
     xhats : dict
         Dict of values for the nonanticipative variable for every node.
         keys are node names and values are lists of nonant variables.
-        
+
     NOTE: The local_scenarios do not need to form a regular tree (unbalanced trees are authorized)
 
     """
     assert xhat_one is not None, "Xhat_one can't be None for now"
-        
+
     xhats = {'ROOT':xhat_one}
-    
+
     #Special case if we only have one scenario
     if len(local_scenarios)==1:
         scen = list(local_scenarios.values())[0]
@@ -244,8 +245,8 @@ def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed,
                                 solver_name=solver_name,
                                 solver_options=solver_options)
         return res
-        
-    
+
+
     for k,s in local_scenarios.items():
         scen_xhats = []
         ciutils.is_sorted(s._mpisppy_node_list)
@@ -261,7 +262,7 @@ def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed,
 
                # TBD: is this needed
                seed += sputils.number_of_nodes(branching_factors[(node.stage-1):])
-               
+
                xhats[node.name] = xhat
                scen_xhats.append(xhat)
 
@@ -271,8 +272,9 @@ def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed,
 if __name__ == "__main__":
     # This main program is provided to developers can run quick tests.
     import pyomo.common.config as pyofig
+
     from mpisppy.utils import config
-    
+
     branching_factors = [3,2,4,4]
     num_scens = np.prod(branching_factors)
     solver_name = "cplex"
@@ -284,7 +286,7 @@ if __name__ == "__main__":
                     "branching_factors":branching_factors,
                     }
 
-    
+
     cfg = config.Config()
     cfg.add_and_assign("EF_mstage", description="EF mstage (vs 2stage)", domain=bool, default=None, value=True)
     cfg.add_and_assign("num_scens", description="total scenarios", domain=int, default=None, value=num_scens)
@@ -294,19 +296,19 @@ if __name__ == "__main__":
     #We use from_module to build easily an Amalgamator object
     ama = amalgamator.from_module(mname, cfg, use_command_line=False)
     ama.run()
-    
+
     # get the xhat
     xhat_one = sputils.nonant_cache_from_ef(ama.ef)['ROOT']
-    
+
     #----------Find a feasible solution for a single scenario-------------
     scenario = ama.ef.scen0
     seed = sputils.number_of_nodes(branching_factors)
-    
+
     xhats,seed = _feasible_solution(mname, scenario, xhat_one, branching_factors, seed, cfg, solver_name=solver_name)
     print(xhats)
-    
+
     #----------Find feasible solutions for every scenario ------------
-    
+
     #Fetching scenarios from EF
     scenarios = dict()
     for k in ama.ef._ef_scenario_names:
@@ -316,13 +318,13 @@ if __name__ == "__main__":
         demands = [s.stage_models[t].Demand for t in s.T]
         #print(f"{demands =}")
     seed = sputils.number_of_nodes(branching_factors)
-    
+
     xhats,seed = walking_tree_xhats(mname,scenarios,xhat_one,branching_factors,seed,cfg,solver_name=solver_name)
     print(xhats)
-    
 
-    
-    
-    
-        
-    
+
+
+
+
+
+

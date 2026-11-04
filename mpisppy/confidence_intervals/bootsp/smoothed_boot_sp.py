@@ -12,15 +12,15 @@
 # counterpart to the empirical methods in boot_sp.py.
 
 from contextlib import contextmanager
+from statistics import NormalDist
 
 import numpy as np
-from statistics import NormalDist
 import pyomo.environ as pyo
 
-from mpisppy import global_toc
-import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
 import mpisppy.confidence_intervals.bootsp.boot_sp as boot_sp
+import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
 import mpisppy.confidence_intervals.bootsp.statdist as statdist
+from mpisppy import global_toc
 
 # The communicators live in boot_utils so there is a single source of truth.
 comm = boot_utils.comm

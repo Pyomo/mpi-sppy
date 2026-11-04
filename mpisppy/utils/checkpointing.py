@@ -26,13 +26,13 @@ iteration counter, bounds, and the initially-fixed-nonant baseline -- is written
 alongside as a small pickle of plain data.
 """
 
+import hashlib
 import json
 import math
 import os
 import pickle
 import re
 import shutil
-import hashlib
 
 import numpy as np
 from pyomo.common.dependencies import attempt_import
@@ -84,8 +84,10 @@ STRUCTURAL_OPTION_KEYS = (
 NON_STRUCTURAL_CFG_KEYS = frozenset({
     # How long to run. Resuming with a different budget is the point, and
     # that goes for both bounds: --max-iterations sizes the run being started
-    # and --stop-at-iteration-number sizes the study it belongs to.
+    # and --stop-at-iteration-number sizes the study it belongs to. The Slurm
+    # buffer is likewise a budget for the current job, not saved model state.
     "max_iterations", "stop_at_iteration_number", "time_limit",
+    "slurm_buffer_seconds",
     "intra_hub_conv_thresh", "rel_gap", "abs_gap", "max_stalled_iters",
     # Checkpoint plumbing itself. How often a checkpoint is written is a
     # cadence knob like the iteration limit: it changes what a stop costs, not
@@ -642,10 +644,10 @@ def agree_dual_spoke_restore(opt, state):
 def require_dill(backend):
     if backend == DILL_RELOAD_BACKEND and not dill_available:
         raise RuntimeError(
-            "The '{}' checkpoint backend requires dill, which is not "
+            f"The '{backend}' checkpoint backend requires dill, which is not "
             "installed. Install the optional dependencies with "
             "'pip install mpi-sppy[extras]' (or 'pip install dill'), or "
-            "choose a different --checkpoint-backend.".format(backend)
+            "choose a different --checkpoint-backend."
         )
 
 

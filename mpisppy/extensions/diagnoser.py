@@ -15,8 +15,11 @@
 
 import datetime as dt
 import os
+
 import pyomo.environ as pyo
+
 import mpisppy.extensions.xhatbase
+
 
 class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
     """
@@ -63,7 +66,7 @@ class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
                 f.write(str(dt.datetime.now())+", diagnoser\n")
 
         self.write_loop()
-        
+
     def miditer(self):
         return
 

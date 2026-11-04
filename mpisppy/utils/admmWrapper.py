@@ -68,9 +68,11 @@ root-node Vars
     node-list data structure.
 """
 
-import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
+
+import mpisppy.utils.sputils as sputils
 from mpisppy import MPI
+
 global_rank = MPI.COMM_WORLD.Get_rank()
 
 def _admm_normalize_consensus_vars(consensus_vars, *, tuple_form):
@@ -223,7 +225,7 @@ def _consensus_vars_number_creator(consensus_vars):
             print(f"The consensus variable {var} appears in a single subproblem")
     return consensus_vars_number
 
-class AdmmWrapper():
+class AdmmWrapper:
     """ This class assigns variable probabilities and creates wrapper for the scenario creator
 
         Args:
@@ -259,7 +261,7 @@ class AdmmWrapper():
         assert mpicomm.Get_size() % n_cylinders == 0, \
             f"{mpicomm.Get_size()=} and {n_cylinders=}, but {mpicomm.Get_size() % n_cylinders=} should be 0"
         ranks_per_cylinder = mpicomm.Get_size() // n_cylinders 
-        
+
         scenario_names_to_rank, _rank_slices, _scenario_slices =\
                 scenario_tree.scen_names_to_ranks(ranks_per_cylinder)
 
@@ -348,7 +350,7 @@ class AdmmWrapper():
                         # Going to replace the brackets
                         v2str = vstr.replace("[","__").replace("]","__") # To distinguish the consensus_vars fixed at 0
                         v = pyo.Var()
-                        
+
                         ### Lines equivalent to setattr(s, v2str, v) without warning
                         s.del_component(v2str)
                         s.add_component(v2str, v)
@@ -392,4 +394,4 @@ class AdmmWrapper():
         obj.expr = obj.expr * self.number_of_scenario
 
         return scenario
-    
+

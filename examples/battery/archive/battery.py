@@ -20,7 +20,9 @@
 
 import numpy as np
 import pyomo.environ as pyo
+
 import mpisppy.scenario_tree as stree
+
 
 def scenario_creator(
     scenario_name, solar_filename=None, use_LP=False, lam=None,
@@ -66,7 +68,7 @@ def scenario_creator(
         return model.x[t+1]==model.x[t] + \
             data['eff'] * model.p[t] - (1/data['eff']) * model.q[t]
     model.flow_constr = pyo.Constraint(Tm1, rule=flow_balance_constraint_rule)
-    
+
     ''' Big-M constraints '''
     def big_M_constraint_rule(model, t):
         return model.y[t] - model.q[t] + model.p[t] \
@@ -121,7 +123,7 @@ def getData(solar_filename):
 
 def getBigM(data):
     ''' Compute big-M values as given in Corollary 1 
-    
+
         This method assumes that all scenarios are equally likely
     '''
     base = np.min([data['dMax'], data['eff'] * (data['eMax'] - data['eMin'])])

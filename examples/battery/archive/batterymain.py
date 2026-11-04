@@ -7,8 +7,9 @@
 # full copyright and license information.
 ###############################################################################
 # updated April 2020 so it executes, but this needs a three driver
-from mpisppy.opt.ph import PH
 from battery import scenario_creator, scenario_denouement
+
+from mpisppy.opt.ph import PH
 
 ###from batteryext import BatteryExtension
 

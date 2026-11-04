@@ -13,8 +13,10 @@
 # NOTE: mpisppy needs non-leaf, non-ROOT nodes to have names ending in a serial #
 # CHANGE: Jan 2020: fail prob is per line
 
-import numpy as np
 import copy
+
+import numpy as np
+
 
 def FixFast(minutes):
     return True
@@ -28,7 +30,7 @@ At each scenario tree node:
 
 """
 
-class ACTree():
+class ACTree:
     """
     Data for a scenario tree for ACOPF.
 
@@ -56,7 +58,7 @@ class ACTree():
         self.numscens = 1
         for s in range(self.NumStages-1):
             self.numscens *= self.BFs[s]
-        
+
         # now make the tree by making the root
         self.rootnode = TreeNode(None, self,
                                  [i+1 for i in range(self.numscens)],
@@ -87,12 +89,12 @@ class ACTree():
                 for kid in node.kids:
                     retval += _progenynames(kid)
             return retval
-            
+
         allnames = _progenynames(self.rootnode)
         return allnames
-        
-            
-class TreeNode():
+
+
+class TreeNode:
     """
     Data for a tree node, but the node creates its own children
 
@@ -163,23 +165,23 @@ class TreeNode():
                     prevbf = TreeInfo.BFs[self.stage-2]
                     self.kids.append(TreeNode(self, TreeInfo, scenlist,
                                               newname, 1/prevbf, acstream))
-                    
+
     def pprint(self):
-        print("Node Name={}, Stage={}".format(self.Name, self.stage))
+        print(f"Node Name={self.Name}, Stage={self.stage}")
         if self.Parent is not None:
-            print("   Parent Name={}".format(self.Parent.Name))
+            print(f"   Parent Name={self.Parent.Name}")
         else:
             print("   (no parent)")
-        print("   FailedLines={}".format(self.FailedLines))
+        print(f"   FailedLines={self.FailedLines}")
 
 if __name__ == "__main__":
 
     acstream = np.random.RandomState()
-    
+
     testtree = ACTree(3, [2, 2], 1134, acstream,
                       0.2, [5,15,30], FixFast, [0,1,2,3,4,5])
     for sn in range(1,testtree.numscens+1):
-        print ("nodes in scenario {}".format(sn))
+        print (f"nodes in scenario {sn}")
         for node in testtree.Nodes_for_Scenario(sn):
             # print ("  ",node.Name)
             # print("      ", node.FailedLines)

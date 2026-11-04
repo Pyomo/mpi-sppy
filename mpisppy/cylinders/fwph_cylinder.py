@@ -6,8 +6,9 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+from mpisppy.cylinders.spcommunicator import RecvCircularBuffer, SPCommunicator
 from mpisppy.cylinders.spwindow import Field
-from mpisppy.cylinders.spcommunicator import SPCommunicator, RecvCircularBuffer
+
 
 class FWPH_Cylinder(SPCommunicator):
 

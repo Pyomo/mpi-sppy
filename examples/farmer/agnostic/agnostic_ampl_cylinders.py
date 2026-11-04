@@ -9,11 +9,13 @@
 # Started by dlw Aug 2023
 
 import farmer_ampl_agnostic
-from mpisppy.spin_the_wheel import WheelSpinner
+
+import mpisppy.agnostic.agnostic as agnostic
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
-import mpisppy.agnostic.agnostic as agnostic
 import mpisppy.utils.sputils as sputils
+from mpisppy.spin_the_wheel import WheelSpinner
+
 
 def _farmer_parse_args():
     # create a config object and parse JUST FOR TESTING
@@ -43,7 +45,7 @@ if __name__ == "__main__":
 
     scenario_creator = Ag.scenario_creator
     scenario_denouement = farmer_ampl_agnostic.scenario_denouement   # should we go though Ag?
-    all_scenario_names = ['scen{}'.format(sn) for sn in range(cfg.num_scens)]
+    all_scenario_names = [f'scen{sn}' for sn in range(cfg.num_scens)]
 
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
@@ -70,7 +72,7 @@ if __name__ == "__main__":
         list_of_spoke_dict.append(xhatshuffle_spoke)
     if cfg.lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
-        
+
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
 
@@ -80,4 +82,4 @@ if __name__ == "__main__":
         wheel.write_first_stage_solution('farmer_cyl_nonants.npy',
                 first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer)
         wheel.write_tree_solution('farmer_full_solution')
-    
+

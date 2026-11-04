@@ -16,15 +16,15 @@
 # as it allows to consider a three stage example
 
 # Driver file for stochastic admm
-import mpisppy.utils.stoch_admmWrapper as stoch_admmWrapper
 # import stoch_distr ## It is necessary for the test to have the full direction
 import mpisppy.tests.examples.stoch_distr.stoch_distr as stoch_distr
-
-from mpisppy.spin_the_wheel import WheelSpinner
-import mpisppy.utils.sputils as sputils
-from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
+import mpisppy.utils.sputils as sputils
+import mpisppy.utils.stoch_admmWrapper as stoch_admmWrapper
 from mpisppy import MPI
+from mpisppy.spin_the_wheel import WheelSpinner
+from mpisppy.utils import config
+
 global_rank = MPI.COMM_WORLD.Get_rank()
 
 write_solution = False
@@ -61,14 +61,14 @@ def _count_cylinders(cfg):
 
 def _make_admm(cfg, n_cylinders,verbose=None):
     options = {}
-    
+
     BFs = stoch_distr.branching_factors_creator(cfg.num_stoch_scens, cfg.num_stages)
 
     admm_subproblem_names = stoch_distr.admm_subproblem_names_creator(cfg)
     stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(cfg)
     all_admm_stoch_subproblem_scenario_names = stoch_distr.admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names,stoch_scenario_names)
     split_admm_stoch_subproblem_scenario_name = stoch_distr.split_admm_stoch_subproblem_scenario_name
-    
+
     scenario_creator = stoch_distr.scenario_creator
     scenario_creator_kwargs = stoch_distr.kw_creator(cfg)
     stoch_scenario_name = stoch_scenario_names[0] # choice of any scenario to create consensus_vars
@@ -87,7 +87,7 @@ def _make_admm(cfg, n_cylinders,verbose=None):
                            BFs=BFs,
                            )
     return admm, all_admm_stoch_subproblem_scenario_names
-    
+
 
 def _wheel_creator(cfg, n_cylinders, scenario_creator, variable_probability, all_nodenames, all_admm_stoch_subproblem_scenario_names, scenario_creator_kwargs=None): #the wrapper doesn't need any kwarg
     ph_converger = None
@@ -161,7 +161,7 @@ def main(cfg):
 
     n_cylinders = _count_cylinders(cfg)
     admm, all_admm_stoch_subproblem_scenario_names = _make_admm(cfg, n_cylinders)
-    
+
     scenario_creator = admm.admmWrapper_scenario_creator # scenario_creator on a local scale
     #note that the stoch_admmWrapper scenario_creator wrapper doesn't take any arguments
     variable_probability = admm.var_prob_list

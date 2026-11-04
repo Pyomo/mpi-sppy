@@ -6,25 +6,24 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
-import numpy as np
 import itertools
-import time
 import sys
-import mpisppy.spbase as spbase
+import time
 
-from mpisppy import MPI
-from pyomo.core.plugins.transform.discrete_vars import RelaxIntegerVars
-from mpisppy.utils.sputils import find_active_objective
-from mpisppy.utils.lshaped_cuts import LShapedCutGenerator, StandardL1CutGenerator
-from mpisppy.spopt import set_instance_retry
-from pyomo.core import (
-    SOSConstraint, Constraint, Var
-)
-from pyomo.core.expr.visitor import identify_variables
-from pyomo.repn.standard_repn import generate_standard_repn
+import numpy as np
+import pyomo.environ as pyo
+from pyomo.core import Constraint, SOSConstraint, Var
 from pyomo.core.expr.numeric_expr import LinearExpression
+from pyomo.core.expr.visitor import identify_variables
+from pyomo.core.plugins.transform.discrete_vars import RelaxIntegerVars
+from pyomo.repn.standard_repn import generate_standard_repn
+
+import mpisppy.spbase as spbase
+import mpisppy.utils.sputils as sputils
+from mpisppy import MPI
+from mpisppy.spopt import set_instance_retry
+from mpisppy.utils.lshaped_cuts import LShapedCutGenerator, StandardL1CutGenerator
+from mpisppy.utils.sputils import find_active_objective
 
 
 class LShapedMethod(spbase.SPBase):
@@ -335,7 +334,7 @@ class LShapedMethod(spbase.SPBase):
             nonant_shadow = pyo.Var(name=v.name)
             root.add_component(v.name, nonant_shadow)
             root_vars.append(nonant_shadow)
-        
+
         if self.has_root_scens:
             eta_indx = [scenario_name for scenario_name in self.all_scenario_names
                             if scenario_name not in self.root_scenarios]
@@ -359,7 +358,7 @@ class LShapedMethod(spbase.SPBase):
 
             for idx, s in enumerate(self.all_scenario_names):
                 self.valid_eta_lb[s] = all_etas_lb[idx]
-            
+
             # root may not have etas for every scenarios
             for s, v in self.root.eta.items():
                 v.setlb(self.valid_eta_lb[s])
@@ -378,7 +377,7 @@ class LShapedMethod(spbase.SPBase):
             ## hold the nonants and etas; rank0 will do 
             ## the optimizing
             self._create_shadow_root()
-        
+
     def attach_nonant_var_map(self, scenario_name):
         instance = self.local_scenarios[scenario_name]
 
@@ -616,10 +615,10 @@ class LShapedMethod(spbase.SPBase):
         for self.iter in range(max_iter):
             if verbose and self.cylinder_rank == 0:
                 if self.iter > 0:
-                    print("Current Iteration:", self.iter + 1, "Time Elapsed:", "%7.2f" % (time.time() - t), "Time Spent on Last Master:", "%7.2f" % t1,
-                          "Time Spent Generating Last Cut Set:", "%7.2f" % t2, "Current Objective:", "%7.2f" % m.obj.expr())
+                    print("Current Iteration:", self.iter + 1, "Time Elapsed:", f"{time.time() - t:7.2f}", "Time Spent on Last Master:", f"{t1:7.2f}",
+                          "Time Spent Generating Last Cut Set:", f"{t2:7.2f}", "Current Objective:", f"{m.obj.expr():7.2f}")
                 else:
-                    print("Current Iteration:", self.iter + 1, "Time Elapsed:", "%7.2f" % (time.time() - t), "Current Objective: -Inf")
+                    print("Current Iteration:", self.iter + 1, "Time Elapsed:", f"{time.time() - t:7.2f}", "Current Objective: -Inf")
             t1 = time.time()
             x_vals = np.zeros(len(self.root_vars))
             eta_vals = np.zeros(self.scenario_count)
@@ -710,7 +709,7 @@ class LShapedMethod(spbase.SPBase):
                             f"Final Objective: {m.obj.expr():7.2f}"
                         )
                     break
-        
+
         return res
 
 def _del_con(c):
@@ -743,7 +742,7 @@ def _get_nonant_ids_EF(instance):
 
     ## this is for the cut variables, so we just need (and want)
     ## exactly one set of them
-    nonant_list = list(instance.ref_vars[ndn,i] for i in range(nlen))
+    nonant_list = [instance.ref_vars[ndn,i] for i in range(nlen)]
 
     ## this is for adjusting the objective, so needs all the nonants
     ## in the EF
@@ -751,8 +750,8 @@ def _get_nonant_ids_EF(instance):
 
     nonant_ids = set()
     for s in snames:
-        nonant_ids.update( (id(v) for v in \
-                getattr(instance, s)._mpisppy_node_list[0].nonant_vardata_list)
+        nonant_ids.update( id(v) for v in \
+                getattr(instance, s)._mpisppy_node_list[0].nonant_vardata_list
                 )
     return nonant_list, nonant_ids 
 
@@ -786,13 +785,14 @@ def _init_vars(varlist):
 
 
 def main():
-    import mpisppy.tests.examples.farmer as ref
     import os
+
+    import mpisppy.tests.examples.farmer as ref
     # Turn off output from all ranks except rank 1
     if MPI.COMM_WORLD.Get_rank() != 0:
         sys.stdout = open(os.devnull, 'w')
     scenario_names = ['scen' + str(i) for i in range(3)]
-    bounds = {i:-432000 for i in scenario_names}
+    bounds = dict.fromkeys(scenario_names, -432000)
     options = {
         "root_solver": "gurobi_persistent",
         "sp_solver": "gurobi_persistent",

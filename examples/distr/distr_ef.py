@@ -10,13 +10,14 @@
 
 # This file can be executed thanks to python distr_ef.py --num-scens 2 --solver-name cplex_direct
 
-import mpisppy.utils.admmWrapper as admmWrapper
 import distr
 import pyomo.environ as pyo
 
+import mpisppy.utils.admmWrapper as admmWrapper
 import mpisppy.utils.sputils as sputils
-from mpisppy.utils import config
 from mpisppy import MPI
+from mpisppy.utils import config
+
 global_rank = MPI.COMM_WORLD.Get_rank()
 
 

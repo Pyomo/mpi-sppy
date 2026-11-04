@@ -107,6 +107,9 @@ class TestCrossScenarioBufferSizing(unittest.TestCase):
         # guard: the pre-fix sizing was local * row_len.
         self.assertNotEqual(NSCEN * row_len, LOCAL * row_len)
 
+    def test_cross_scenario_eta_bounds_is_one_per_scenario(self):
+        self.assertEqual(self.fl[Field.CROSS_SCENARIO_ETA_BOUNDS], NSCEN)
+
     def test_sender_cost_registration_matches_receiver_default(self):
         opt = _fake_opt_for_extension(NSCEN, LOCAL, NONANTS_PER_SCEN)
         ext = CrossScenarioExtension(opt)

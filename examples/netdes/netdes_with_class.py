@@ -15,10 +15,13 @@
 '''
 
 import os
-import mpisppy.utils.sputils as sputils
-import pyomo.environ as pyo
+
 import numpy as np
+import pyomo.environ as pyo
 from parse import parse
+
+import mpisppy.utils.sputils as sputils
+
 
 #=========
 def inparser_adder(cfg):
@@ -43,7 +46,7 @@ class NetDes:
     def __init__(self, cfg):
         self.cfg = cfg
 
-        
+
     def scenario_creator(self, scenario_name, path=None):
         if path is None:
             raise RuntimeError('Must provide the name of the .dat file '

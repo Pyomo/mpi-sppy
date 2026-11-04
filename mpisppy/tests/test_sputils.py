@@ -20,9 +20,9 @@ import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils.sputils import (
     WarmstartStatus,
-    _ScenTree,
     _extract_node_idx,
     _nodenum_before_stage,
+    _ScenTree,
     build_vardatalist,
     create_nodenames_from_branching_factors,
     extract_num,
@@ -778,8 +778,8 @@ class TestCreateEF(unittest.TestCase):
         self.assertTrue(hasattr(ef, "_C_EF_"))
 
     def test_single_scenario_warns_but_returns(self):
-        import io
         import contextlib
+        import io
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             ef = sputils.create_EF(

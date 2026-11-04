@@ -3,15 +3,16 @@
 # mpi-sppy: MPI-based Stochastic Programming in PYthon
 ###############################################################################
 
-import os
-import sys
 import json
+import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 from shutil import which
 
 from mpisppy.utils import config
+
 
 # ---------------- Helpers ----------------
 def check_empty_dir(dirname: str) -> bool:

@@ -16,29 +16,29 @@
     Current implementation supports parallelism.
 '''
 
-import mpisppy.phbase
-import mpisppy.utils.sputils as sputils
+import math
+import random
+import time
+
 import numpy as np
 import pyomo.environ as pyo
-import time
-import random
-import math
-
-from mpisppy import MPI
-from mpisppy import global_toc
-from pyomo.repn.standard_repn import generate_standard_repn
-from mpisppy.utils import nice_join
-from mpisppy.utils.sputils import find_active_objective
-from mpisppy.utils.linear_surrogate import set_derived_surrogate_rhos
-from pyomo.core.expr.visitor import replace_expressions
 from pyomo.core.expr.numeric_expr import LinearExpression
+from pyomo.core.expr.visitor import replace_expressions
+from pyomo.repn.standard_repn import generate_standard_repn
 
-from mpisppy.cylinders.xhatshufflelooper_bounder import ScenarioCycler
+import mpisppy.phbase
+import mpisppy.utils.sputils as sputils
+from mpisppy import MPI, global_toc
 from mpisppy.cylinders.spwindow import Field
+from mpisppy.cylinders.xhatshufflelooper_bounder import ScenarioCycler
 from mpisppy.extensions.xhatbase import XhatBase
+from mpisppy.utils import nice_join
+from mpisppy.utils.linear_surrogate import set_derived_surrogate_rhos
+from mpisppy.utils.sputils import find_active_objective
+
 
 class FWPH(mpisppy.phbase.PHBase):
-    
+
     def __init__(
         self,
         options,
@@ -178,6 +178,23 @@ class FWPH(mpisppy.phbase.PHBase):
                         # s._solver_plugin.update_var(v)
                 s.del_component("_relaxed_integer_vars")
             self.options["PHIterLimit"] = total_iterations
+
+            # PHBase's LP loop can return because either the ordinary time
+            # limit or the Slurm-derived deadline was reached. Restoring the
+            # integer domains above is required cleanup, but the crossover is
+            # another potentially long solve and must not start afterwards.
+            if self._is_timed_out():
+                global_toc(
+                    self._local_time_limit_stop_reason()
+                    or "Soft time limit reached on another rank.",
+                    self.cylinder_rank == 0,
+                )
+                if finalize:
+                    weight_dict = self._gather_weight_dict()
+                    xbars_dict = self._get_xbars()
+                    return self._PHIter, weight_dict, xbars_dict
+                return self._PHIter
+
             self._PHIter -= 1
 
             global_toc("Finished LP PH; Starting FW PH crossover")
@@ -274,13 +291,17 @@ class FWPH(mpisppy.phbase.PHBase):
                     secs = time.perf_counter() - self.start_time
                     self._output(self._local_bound, self._fwph_best_bound, self.conv, secs)
                     global_toc(
-                        "FWPH convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.options["convthresh"]),
+                        f'FWPH convergence metric={self.conv:f} dropped below user-supplied threshold={self.options["convthresh"]:f}',
                         self.cylinder_rank == 0,
                     )
                     break
 
             if (self._is_timed_out()):
-                global_toc(f"Time limit {self.options['time_limit']} seconds reached.", self.cylinder_rank == 0)
+                global_toc(
+                    self._local_time_limit_stop_reason()
+                    or "Soft time limit reached on another rank.",
+                    self.cylinder_rank == 0,
+                )
                 break
 
             self.fwph_solve_loop(
@@ -325,7 +346,7 @@ class FWPH(mpisppy.phbase.PHBase):
             #       times on different threads. This can especially mess up finalization.
             #       As a guard, we'll put a barrier here.
             self.mpicomm.Barrier()
-            global_toc("Reached user-specified limit=%d on number of FWPH iterations" % max_iterations, self.cylinder_rank == 0)
+            global_toc(f"Reached user-specified limit={max_iterations} on number of FWPH iterations", self.cylinder_rank == 0)
 
     def fwph_solve_loop(
             self,
@@ -405,7 +426,7 @@ class FWPH(mpisppy.phbase.PHBase):
         '''
         mip = self.local_scenarios[model_name]
         qp  = self.local_QP_subproblems[model_name]
-    
+
         # Set the QP dual weights to the correct values.
         scen_mip = self.local_scenarios[model_name]
 
@@ -605,11 +626,11 @@ class FWPH(mpisppy.phbase.PHBase):
         stop_check_tol = self.FW_options.get("stop_check_tol", 1e-4)
         if (self.is_minimizing and stop_check < -stop_check_tol):
             print('Warning (fwph): convergence quantity Gamma^t = '
-                 '{sc:.2e} (should be non-negative)'.format(sc=stop_check))
+                 f'{stop_check:.2e} (should be non-negative)')
             print('Try decreasing the MIP gap tolerance and re-solving')
         elif (not self.is_minimizing and stop_check > stop_check_tol):
             print('Warning (fwph): convergence quantity Gamma^t = '
-                 '{sc:.2e} (should be non-positive)'.format(sc=stop_check))
+                 f'{stop_check:.2e} (should be non-positive)')
             print('Try decreasing the MIP gap tolerance and re-solving')
         if self.is_minimizing:
             return float(stop_check)
@@ -625,7 +646,7 @@ class FWPH(mpisppy.phbase.PHBase):
         stop_check_tol = self.FW_options.get("stop_check_tol", 1e-4)
         if (self.is_minimizing and stop_check < -stop_check_tol):
             print('Warning (fwph): convergence quantity Gamma^t = '
-                 '{sc:.2e} (should be non-negative)'.format(sc=stop_check))
+                 f'{stop_check:.2e} (should be non-negative)')
             print('Something is wrong with the automatic gap settings in fwph_objgap')
         return float(stop_check)
 
@@ -679,7 +700,7 @@ class FWPH(mpisppy.phbase.PHBase):
 
             x_indices is a list of tuples of the form...
                 (node name, variable index)
-            
+
             Must be called after the subproblems (MIPs AND QPs) are created.
         '''
         for mip in self.local_scenarios.values():
@@ -884,7 +905,7 @@ class FWPH(mpisppy.phbase.PHBase):
             QP._mpisppy_data.nonant_indices = pyo.Reference(QP.x)
 
             self.local_QP_subproblems[name] = QP
-                
+
     def _initialize_QP_var_values(self):
         ''' Set the value of the QP variables to be equal to the values of the
             corresponding MIP variables.
@@ -970,7 +991,9 @@ class FWPH(mpisppy.phbase.PHBase):
         return number_points
 
     def _is_timed_out(self):
-        return self.allreduce_or( (time.perf_counter() - self.start_time) >= self.options["time_limit"] )
+        return self.allreduce_or(
+            self._local_time_limit_stop_reason() is not None
+        )
 
     def _options_checks_fw(self):
         ''' Name                Boland notation (Algorithm 2)
@@ -1014,15 +1037,11 @@ class FWPH(mpisppy.phbase.PHBase):
 
     def _output(self, bound, best_bound, diff, secs):
         if (self.cylinder_rank == 0 and self.vb):
-            print('{itr:3d} {bound:12.4f} {best_bound:12.4f} {diff:12.4e} {secs:11.1f}s'.format(
-                    itr=self._PHIter, bound=bound, best_bound=best_bound, 
-                    diff=diff, secs=secs))
+            print(f'{self._PHIter:3d} {bound:12.4f} {best_bound:12.4f} {diff:12.4e} {secs:11.1f}s')
         if (self.cylinder_rank == 0 and 'save_file' in self.FW_options.keys()):
             fname = self.FW_options['save_file']
             with open(fname, 'a') as f:
-                f.write('{itr:d},{bound:.16f},{best_bound:.16f},{diff:.16f},{secs:.16f}\n'.format(
-                    itr=self._PHIter, bound=bound, best_bound=best_bound,
-                    diff=diff, secs=secs))
+                f.write(f'{self._PHIter:d},{bound:.16f},{best_bound:.16f},{diff:.16f},{secs:.16f}\n')
 
     def _output_header(self):
         if (self.cylinder_rank == 0 and self.vb):
@@ -1051,8 +1070,7 @@ class FWPH(mpisppy.phbase.PHBase):
             for block in weights:
                 for (scenario_name, wts) in block.items():
                     for (var_name, weight_val) in wts.items():
-                        row = '{sn},{vn},{wv:.16f}\n'.format(
-                            sn=scenario_name, vn=var_name, wv=weight_val)
+                        row = f'{scenario_name},{var_name},{weight_val:.16f}\n'
                         f.write(row)
 
     def save_xbars(self, fname):
@@ -1069,12 +1087,12 @@ class FWPH(mpisppy.phbase.PHBase):
         xbars = self._get_xbars() # None if rank != 0
         with open(fname, 'w') as f:
             for (var_name, xbs) in xbars.items():
-                row = '{vn},{vv:.16f}\n'.format(vn=var_name, vv=xbs)
+                row = f'{var_name},{xbs:.16f}\n'
                 f.write(row)
 
     def _set_QP_objective(self):
         ''' Attach dual weights, objective function and solver to each QP.
-        
+
             QP dual weights are initialized to the MIP dual weights.
         '''
 
@@ -1088,11 +1106,11 @@ class FWPH(mpisppy.phbase.PHBase):
             QP._mpisppy_model.W = pyo.Param(
                 mip._mpisppy_data.nonant_indices.keys(), mutable=True, initialize=mip._mpisppy_model.W
             )
-            ph_term = pyo.quicksum((
+            ph_term = pyo.quicksum(
                 QP._mpisppy_model.W[nni] * QP.x[nni] +
                 (mip._mpisppy_model.rho[nni] / 2.) * (QP.x[nni] - mip._mpisppy_model.xbars[nni]) * (QP.x[nni] - mip._mpisppy_model.xbars[nni])
                 for nni in mip._mpisppy_data.nonant_indices
-            ))
+            )
 
             if self.is_minimizing:
                 QP.obj = pyo.Objective(expr=new+ph_term, sense=pyo.minimize)
@@ -1172,7 +1190,7 @@ class FWPH(mpisppy.phbase.PHBase):
 
                 Reruns SPBase._attach_nonant_indices so that the scenario 
                 _nonant_indices dictionary has the correct variable pointers
-                
+
                 Updates nonant_vardata_list but NOT nonant_list.
         '''
         for s, nonant_data in self._QP_nonants.items():

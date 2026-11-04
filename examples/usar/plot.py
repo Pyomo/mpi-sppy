@@ -6,7 +6,7 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-"""Functions for obtaining and plotting team schedules.
+r"""Functions for obtaining and plotting team schedules.
 
 The problem of assigning departures to teams and obtaining team-specific
 rescue schedules is reduced to strongly connecting subgraphs of
@@ -39,11 +39,11 @@ from typing import (
     Union,
 )
 
-from matplotlib.colors import ListedColormap
 import matplotlib.pyplot as plt
 import numpy as np
-from pyomo.core.base.var import IndexedVar
 import pyomo.environ as pyo
+from matplotlib.colors import ListedColormap
+from pyomo.core.base.var import IndexedVar
 
 
 def default_colors(n: int, seed=0) -> Callable[[int], Any]:

@@ -7,11 +7,13 @@
 # full copyright and license information.
 ###############################################################################
 import os
-import gamspy_base
-import mpisppy.utils.sputils as sputils
-import mpisppy.agnostic.farmer4agnostic as farmer
 
-from mpisppy import MPI # for debugging
+import gamspy_base
+
+import mpisppy.agnostic.farmer4agnostic as farmer
+import mpisppy.utils.sputils as sputils
+from mpisppy import MPI  # for debugging
+
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
@@ -41,7 +43,7 @@ def stoch_param_name_pairs_creator():
 
 def scenario_creator(scenario_name, mi, job, cfg=None):
     """ Create a scenario for the (scalable) farmer example.
-    
+
     Args:
         scenario_name (str):
             Name of the scenario to construct.
@@ -69,7 +71,7 @@ def scenario_creator(scenario_name, mi, job, cfg=None):
 
     return mi
 
-        
+
 #=========
 def scenario_names_creator(num_scens,start=None):
     return farmer.scenario_names_creator(num_scens,start)
@@ -79,7 +81,7 @@ def scenario_names_creator(num_scens,start=None):
 def inparser_adder(cfg):
     farmer.inparser_adder(cfg)
 
-    
+
 #=========
 def kw_creator(cfg):
     # creates keywords for scenario creator
@@ -98,6 +100,5 @@ def scenario_denouement(rank, scenario_name, scenario):
         for x_record in scenario._agnostic_dict["scenario"].sync_db.get_variable('x'):
             x_dict[x_record.get_keys()[0]] = x_record.get_level()
         print(f"In {scenario_name}: {x_dict}")
-    pass
     # (the fct in farmer won't work because the Var names don't match)
     #farmer.scenario_denouement(rank, scenario_name, scenario)

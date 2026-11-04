@@ -7,10 +7,11 @@
 # full copyright and license information.
 ###############################################################################
 
-from mpisppy.cylinders.spwindow import Field
-from mpisppy.cylinders.ph_dual_spoke import _PHDualSpokeBase
-
 import pyomo.environ as pyo
+
+from mpisppy.cylinders.ph_dual_spoke import _PHDualSpokeBase
+from mpisppy.cylinders.spwindow import Field
+
 
 class RelaxedPHSpoke(_PHDualSpokeBase):
 

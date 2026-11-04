@@ -8,12 +8,11 @@
 ###############################################################################
 import numpy as np
 
-
-from mpisppy.extensions.extension import Extension
 from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
+from mpisppy.cylinders.spwindow import Field
+from mpisppy.extensions.extension import Extension
 from mpisppy.utils.sputils import is_persistent
 
-from mpisppy.cylinders.spwindow import Field
 
 class ReducedCostsFixer(Extension):
 
@@ -55,6 +54,13 @@ class ReducedCostsFixer(Extension):
             self._outer_bound_update = lambda new, old : (new < old)
 
         self._current_reduced_costs = None
+        # The reduced-cost spoke publishes EXPECTED_REDUCED_COST before the
+        # matching OBJECTIVE_OUTER_BOUND.  APH reads fields independently, so
+        # it can observe the new reduced costs while the bound still has the
+        # previous generation.  Remember the last *paired* generation rather
+        # than relying on RecvArray.is_new(): by the time the bound catches up,
+        # the reduced-cost buffer has already consumed its freshness flag.
+        self._last_accepted_rc_id = 0
 
     def _update_best_outer_bound(self, new_outer_bound):
         if self._outer_bound_update(new_outer_bound, self._best_outer_bound):
@@ -161,20 +167,44 @@ class ReducedCostsFixer(Extension):
         # NOTE: If we do this, then the heuristic reduced cost fixing might fix
         #       different variables in different subproblems. But this might be
         #       fine.
-        self.opt.spcomm.get_receive_buffer(
+        reduced_costs_are_new = self.opt.spcomm.get_receive_buffer(
             self.reduced_cost_buf,
             Field.EXPECTED_REDUCED_COST,
             self.reduced_costs_spoke_index,
         )
-        self.opt.spcomm.get_receive_buffer(
+        outer_bound_is_new = self.opt.spcomm.get_receive_buffer(
             self.outer_bound_buf,
             Field.OBJECTIVE_OUTER_BOUND,
             self.reduced_costs_spoke_index,
         )
-        if self.reduced_cost_buf.is_new() and self.reduced_cost_buf.id() == self.outer_bound_buf.id():
+        reduced_cost_id = self.reduced_cost_buf.id()
+        outer_bound_id = self.outer_bound_buf.id()
+        last_accepted_id = getattr(self, "_last_accepted_rc_id", 0)
+
+        # Without the improving-bound gate, the reduced costs stand on their
+        # own.  In particular, do not make APH wait for the separately
+        # published outer-bound field: independent reads can observe those two
+        # writes at different times, and optional extra bound publications can
+        # give the fields permanently different write IDs.
+        accept_reduced_costs = (
+            reduced_costs_are_new
+            if not self._rc_fixer_require_improving_lagrangian
+            else (reduced_cost_id == outer_bound_id
+                  and reduced_cost_id > last_accepted_id)
+        )
+        if accept_reduced_costs:
             reduced_costs = self.reduced_cost_buf.value_array()
-            this_outer_bound = self.outer_bound_buf.value_array()[0]
-            is_new_outer_bound = self._update_best_outer_bound(this_outer_bound)
+            self._last_accepted_rc_id = reduced_cost_id
+            if self.debug and self.opt.cylinder_rank == 0:
+                print("Accepted reduced-cost generation "
+                      f"{reduced_cost_id} (outer-bound generation "
+                      f"{outer_bound_id})")
+            is_new_outer_bound = False
+            if (self._rc_fixer_require_improving_lagrangian
+                    or outer_bound_is_new or pre_iter0):
+                this_outer_bound = self.outer_bound_buf.value_array()[0]
+                is_new_outer_bound = self._update_best_outer_bound(
+                    this_outer_bound)
             if pre_iter0:
                 # make sure we set the bound we compute prior to iteration 0
                 self.opt.spcomm.BestOuterBound = self.opt.spcomm.OuterBoundUpdate(
@@ -182,16 +212,24 @@ class ReducedCostsFixer(Extension):
                     cls=ReducedCostsSpoke,
                     idx=self.reduced_costs_spoke_index,
                 )
-            if is_new_outer_bound or not self._rc_fixer_require_improving_lagrangian:
+            if (is_new_outer_bound
+                    or not self._rc_fixer_require_improving_lagrangian):
                 self._current_reduced_costs = np.array(reduced_costs[:])
         else:
             if self.opt.cylinder_rank == 0 and self.verbose:
                 print("No new reduced costs!")
+            if (self.debug and self.opt.cylinder_rank == 0
+                    and reduced_costs_are_new
+                    and self._rc_fixer_require_improving_lagrangian):
+                print("Deferred reduced-cost generation "
+                      f"{reduced_cost_id}; outer-bound generation is "
+                      f"{outer_bound_id}")
             ## End if
         ## End if
         if self.fix_fraction_target > 0.0 and self._current_reduced_costs is not None:
             # makes sense to run this every iteration because xbar can change!!
-            self.reduced_costs_fixing(self._current_reduced_costs)
+            self.reduced_costs_fixing(
+                self._current_reduced_costs, pre_iter0=pre_iter0)
         ## End if
 
         return
@@ -213,6 +251,11 @@ class ReducedCostsFixer(Extension):
 
         # excludes nan
         nonzero_rc = abs_reduced_costs[abs_reduced_costs > self.zero_rc_tol]
+        if self.debug and self.opt.cylinder_rank == 0:
+            finite_count = int(np.count_nonzero(~np.isnan(reduced_costs)))
+            print("Reduced-cost eligibility: "
+                  f"{finite_count}/{len(reduced_costs)} finite, "
+                  f"{len(nonzero_rc)} above zero tolerance")
         if len(nonzero_rc) == 0:
             # still need to continue, for unfixing
             target = self.zero_rc_tol
@@ -255,7 +298,7 @@ class ReducedCostsFixer(Extension):
                             if self.debug and self.opt.cylinder_rank == 0:
                                 print(f"unfixing var {xvar.name}; reduced cost is zero/below target in LP-LR")
                         # in case somebody else unfixs a variable in another rank...
-                        if abs(xb - xvar.value) > self.bound_tol:
+                        elif abs(xb - xvar.value) > self.bound_tol:
                             xvar.unfix()
                             update_var = True
                             raw_fixed_this_iter -= 1

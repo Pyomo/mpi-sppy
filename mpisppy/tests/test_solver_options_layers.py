@@ -15,14 +15,14 @@
 import copy
 import unittest
 
+from mpisppy.generic.parsing import add_decomp_args
 from mpisppy.utils import config
 from mpisppy.utils.cfg_vanilla import (
-    shared_options,
     apply_solver_specs,
+    shared_options,
     xhatlshaped_spoke,
     xhatshuffle_spoke,
 )
-from mpisppy.generic.parsing import add_decomp_args
 from mpisppy.utils.sputils import (
     fold_solver_options_layers,
     solver_options_layer,
@@ -360,6 +360,7 @@ class TestAddGapperMipgapsJsonLayers(unittest.TestCase):
     def test_mipgaps_json_appends_starting_at_iter_layers(self):
         import os
         import warnings
+
         from mpisppy.utils.cfg_vanilla import add_gapper
         cfg = _bare_cfg()
         cfg.add_to_config(
@@ -790,6 +791,7 @@ class TestDynamicGapperLayer(unittest.TestCase):
         # same per-iteration mipgap). The Gapper extension itself
         # becomes a runtime no-op in this mode.
         import warnings
+
         from mpisppy.extensions.mipgapper import Gapper
         fake = self._fake_ph()
         fake.cylinder_rank = 0
@@ -855,6 +857,7 @@ class TestPerSpokeMipgapsJsonLayers(unittest.TestCase):
     def test_per_spoke_mipgaps_json_appends_layers(self):
         import os
         import warnings
+
         from mpisppy.utils.cfg_vanilla import add_gapper
         cfg = _bare_cfg()
         cfg.gapper_args(name="lagrangian")
@@ -888,6 +891,7 @@ class TestPerSpokeMipgapsJsonLayers(unittest.TestCase):
 
     def test_per_spoke_static_and_auto_modes_exclusive(self):
         import os
+
         from mpisppy.utils.cfg_vanilla import add_gapper
         cfg = _bare_cfg()
         cfg.gapper_args(name="lagrangian")
@@ -918,6 +922,7 @@ class TestLoadSolverOptionsFile(unittest.TestCase):
 
     def test_happy_path_full_schema(self):
         import os
+
         from mpisppy.utils.sputils import load_solver_options_file
         path = self._write({
             "default": {"threads": 4},
@@ -945,6 +950,7 @@ class TestLoadSolverOptionsFile(unittest.TestCase):
 
     def test_missing_sub_blocks_default_to_empty(self):
         import os
+
         from mpisppy.utils.sputils import load_solver_options_file
         path = self._write({"iter0": {"mipgap": 0.01}})
         try:
@@ -959,6 +965,7 @@ class TestLoadSolverOptionsFile(unittest.TestCase):
 
     def test_unknown_top_level_key_rejected(self):
         import os
+
         from mpisppy.utils.sputils import load_solver_options_file
         path = self._write({"defualt": {"mipgap": 0.01}})  # typo
         try:
@@ -969,6 +976,7 @@ class TestLoadSolverOptionsFile(unittest.TestCase):
 
     def test_starting_at_iter_non_integer_key_rejected(self):
         import os
+
         from mpisppy.utils.sputils import load_solver_options_file
         path = self._write({"starting_at_iter": {"five": {"mipgap": 1e-5}}})
         try:
@@ -979,6 +987,7 @@ class TestLoadSolverOptionsFile(unittest.TestCase):
 
     def test_starting_at_iter_negative_key_rejected(self):
         import os
+
         from mpisppy.utils.sputils import load_solver_options_file
         path = self._write({"starting_at_iter": {"-3": {"mipgap": 1e-5}}})
         try:
@@ -992,6 +1001,7 @@ class TestLoadSolverOptionsFile(unittest.TestCase):
         # caller at the `default` sub-block (since "starting at iter 0"
         # really means "applies always", which is what `default` is for).
         import os
+
         from mpisppy.utils.sputils import load_solver_options_file
         path = self._write({"starting_at_iter": {"0": {"mipgap": 1e-5}}})
         try:
@@ -1002,6 +1012,7 @@ class TestLoadSolverOptionsFile(unittest.TestCase):
 
     def test_unknown_key_in_spoke_subblock_rejected(self):
         import os
+
         from mpisppy.utils.sputils import load_solver_options_file
         path = self._write({
             "spokes": {"lagrangian": {"spokes": {"x": {}}}}
@@ -1017,6 +1028,7 @@ class TestLoadSolverOptionsFile(unittest.TestCase):
     def test_malformed_json_raises_valueerror(self):
         import os
         import tempfile
+
         from mpisppy.utils.sputils import load_solver_options_file
         path = tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False).name
@@ -1291,6 +1303,7 @@ class TestLagrangerDeprecation(unittest.TestCase):
     def test_lagranger_spoke_emits_deprecation_warning(self):
         import warnings
         from unittest.mock import patch
+
         from mpisppy.utils import cfg_vanilla
         # The warning fires before _PHBase_spoke_foundation is
         # called, so a side_effect on the foundation lets us exit

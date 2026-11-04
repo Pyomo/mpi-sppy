@@ -13,20 +13,18 @@
 # warnings.filterwarnings("ignore")
 
 import farmer
+import pyomo.environ as pyo
+
+import mpisppy.utils.cfg_vanilla as vanilla
+import mpisppy.utils.sputils as sputils
+from mpisppy.convergers.norm_rho_converger import NormRhoConverger
+from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
+from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 
 # Make it all go
 from mpisppy.spin_the_wheel import WheelSpinner
-import mpisppy.utils.sputils as sputils
-
 from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
-
-from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
-from mpisppy.convergers.norm_rho_converger import NormRhoConverger
-from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 from mpisppy.utils.cfg_vanilla import extension_adder
-
-import pyomo.environ as pyo
 
 write_solution = True
 
@@ -91,7 +89,7 @@ def main():
 
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
-    all_scenario_names = ['scen{}'.format(sn) for sn in range(num_scen)]
+    all_scenario_names = [f'scen{sn}' for sn in range(num_scen)]
     scenario_creator_kwargs = {
         'use_integer': False,
         "crops_multiplier": crops_multiplier,
@@ -162,7 +160,7 @@ def main():
     # xhat shuffle bound spoke
     if cfg.xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
-    
+
     if cfg.reduced_costs:
         reduced_costs_spoke = vanilla.reduced_costs_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,

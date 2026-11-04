@@ -880,7 +880,7 @@ def _rank_layout(total: int, ratios: list, spoke_names: list) -> tuple:
         divisible = True
     else:
         per = max(1, total // len(ratios))
-        split = {nm: per for nm in names}
+        split = dict.fromkeys(names, per)
         divisible = total % len(ratios) == 0
     return max(split.values()), split, divisible
 
@@ -1137,6 +1137,7 @@ def _detect_available_solvers(candidates) -> set:
     duration of the probe only.
     """
     import logging
+
     import pyomo.environ as pyo
 
     quieted = [logging.getLogger(n)
@@ -1180,7 +1181,7 @@ def _detect_num_scens(module, cfg) -> int:
         module.kw_creator(cfg)
         if cfg.get("num_scens") is not None:
             return int(cfg.num_scens)
-    except Exception as e:                  # noqa: BLE001 - reported below
+    except Exception as e:
         # Keep it: this is usually the only message that says what is actually
         # missing. netdes without --instance-name raises AttributeError here,
         # and the generic advice below ("many models define --num-scens") is
@@ -1193,7 +1194,7 @@ def _detect_num_scens(module, cfg) -> int:
     # tell how big your problem is".
     try:
         return len(module.scenario_names_creator(None))
-    except Exception as e:                  # noqa: BLE001
+    except Exception as e:
         name = cfg.get("module_name", "this model")
         if kw_error is not None:
             raise RuntimeError(

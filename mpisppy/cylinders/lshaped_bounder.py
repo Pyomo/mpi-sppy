@@ -6,11 +6,12 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+from math import inf
+
 import mpisppy.cylinders.spoke as spoke
 import mpisppy.utils.sputils as sputils
-
-from math import inf
 from mpisppy.utils.xhat_eval import Xhat_Eval
+
 
 class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
 

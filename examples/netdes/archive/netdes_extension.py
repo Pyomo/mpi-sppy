@@ -7,8 +7,10 @@
 # full copyright and license information.
 ###############################################################################
 import pyomo.environ as pyo
+
 import mpisppy.utils.sputils as sputils
 from mpisppy.extensions.extension import Extension
+
 
 class NetworkDesignTracker(Extension):
 
@@ -47,7 +49,6 @@ class NetworkDesignTracker(Extension):
             total = sum(sol_values.values())
             if (total < 0.1) or (total > num_scenarios - 0.1):
                 ''' All scenarios agree '''
-                pass
 
             if (total > (num_scenarios//2) + 1.9):
                 print(f'Fixing edge {edge} to 1')
@@ -65,7 +66,6 @@ class NetworkDesignTracker(Extension):
             place after the variables are fixed (otherwise, we could end up with
             and infeasible solution).
         '''
-        pass
 
     def post_everything(self):
         pass

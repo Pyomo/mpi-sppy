@@ -227,6 +227,28 @@ class TestConfigPopularArgs(unittest.TestCase):
     def test_verbose_default_false(self):
         self.assertFalse(self.cfg.verbose)
 
+    def test_slurm_buffer_default_is_disabled(self):
+        self.assertIsNone(self.cfg.slurm_buffer_seconds)
+
+    def test_slurm_buffer_parses_from_cli(self):
+        with patch("sys.argv", ["prog", "--slurm-buffer-seconds", "7200"]):
+            self.cfg.parse_command_line("prog")
+        self.assertEqual(self.cfg.slurm_buffer_seconds, 7200.0)
+
+
+class TestConfigTwoSidedArgsInitialOuterBound(unittest.TestCase):
+    def test_initial_outer_bound_default(self):
+        cfg = Config()
+        cfg.two_sided_args()
+        self.assertIsNone(cfg.initial_outer_bound)
+
+    def test_initial_outer_bound_parses_from_cli(self):
+        cfg = Config()
+        cfg.two_sided_args()
+        with patch("sys.argv", ["prog", "--initial-outer-bound", "12.5"]):
+            cfg.parse_command_line("prog")
+        self.assertEqual(cfg.initial_outer_bound, 12.5)
+
 
 class TestConfigLShapedArgs(unittest.TestCase):
     """Tests for L-shaped CLI options."""
@@ -571,6 +593,18 @@ class TestSharedOptionsLogDir(unittest.TestCase):
         self.assertNotIn("solver_log_dir",
                          vanilla.shared_options(cfg, is_hub=False))
 
+    def test_slurm_buffer_propagates_only_to_hub(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg()
+        cfg.slurm_buffer_seconds = 7200.0
+        self.assertEqual(
+            vanilla.shared_options(cfg, is_hub=True)["slurm_buffer_seconds"],
+            7200.0,
+        )
+        self.assertNotIn(
+            "slurm_buffer_seconds", vanilla.shared_options(cfg, is_hub=False)
+        )
+
 
 class TestConfigFixerArgs(unittest.TestCase):
     """Tests for Config.fixer_args() and related extension args."""
@@ -690,8 +724,9 @@ class TestFWPHOptionsChecksWarnings(unittest.TestCase):
         return stub
 
     def _run(self, stub):
-        import io
         import contextlib
+        import io
+
         from mpisppy.opt.fwph import FWPH
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):

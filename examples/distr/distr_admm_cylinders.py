@@ -8,14 +8,14 @@
 ###############################################################################
 # general example driver for distr with cylinders
 # Consider using generic_cylinders.py with --admm instead.
-import mpisppy.utils.admmWrapper as admmWrapper
 import distr
 
-from mpisppy.spin_the_wheel import WheelSpinner
-import mpisppy.utils.sputils as sputils
-from mpisppy.utils import config
+import mpisppy.utils.admmWrapper as admmWrapper
 import mpisppy.utils.cfg_vanilla as vanilla
+import mpisppy.utils.sputils as sputils
 from mpisppy import MPI
+from mpisppy.spin_the_wheel import WheelSpinner
+from mpisppy.utils import config
 
 global_rank = MPI.COMM_WORLD.Get_rank()
 
@@ -137,7 +137,7 @@ def main():
         wheel.write_first_stage_solution('distr_cyl_nonants.npy',
                 first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer)
         wheel.write_tree_solution('distr_full_solution')
-    
+
     if global_rank == 0:
         best_objective = wheel.spcomm.BestInnerBound
         print(f"{best_objective=}")

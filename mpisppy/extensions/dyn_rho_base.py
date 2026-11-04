@@ -10,23 +10,24 @@
 # A dynamic rho base class that assumes a member function compute_and_update_rho
 # As of Nov 2024, it mainly provides services
 
-import numpy as np
-import mpisppy.MPI as MPI
-
-import mpisppy.extensions.extension
-from mpisppy.utils.w_utils.wtracker import WTracker
-
 # for trapping numpy warnings
 import warnings
+
+import numpy as np
+
+import mpisppy.extensions.extension
+import mpisppy.MPI as MPI
+from mpisppy.utils.w_utils.wtracker import WTracker
+
 
 class Dyn_Rho_extension_base(mpisppy.extensions.extension.Extension):
     """
     This extension enables dynamic rho, e.g. gradient or sensitivity based.
-    
+
     Args:
        opt (PHBase object): gives the problem
        cfg (Config object): config object
-    
+
     """
     def __init__(self, opt, cfg):
         super().__init__(opt)
@@ -55,7 +56,7 @@ class Dyn_Rho_extension_base(mpisppy.extensions.extension.Extension):
         with warnings.catch_warnings():
             warnings.filterwarnings('error')
             # dlw Nov 2024: Is this lagged one iteration (that is not horrible)
-            
+
             curr_conv, last_conv = self.primal_conv_cache[-1], self.primal_conv_cache[-2]
             try:
                 primal_diff =  np.abs((last_conv - curr_conv) / last_conv)
@@ -77,6 +78,18 @@ class Dyn_Rho_extension_base(mpisppy.extensions.extension.Extension):
     def _update_recommended(self):
         return (hasattr(self.cfg, "dynamic_rho_primal_crit") and self.cfg.dynamic_rho_primal_crit and self._update_rho_primal_based()) or \
                (hasattr(self.cfg, "dynamic_rho_dual_crit") and self.cfg.dynamic_rho_dual_crit and self._update_rho_dual_based())
+
+    def _dynamic_updates_enabled(self):
+        """Whether this rho setter can update rho after iteration zero.
+
+        Tracking convergence calls a blocking ``Allreduce``.  Avoid that work
+        when both dynamic criteria are disabled; in particular, this preserves
+        APH's ability to make progress without waiting for every rank.
+        """
+        return bool(
+            getattr(self.cfg, "dynamic_rho_primal_crit", False)
+            or getattr(self.cfg, "dynamic_rho_dual_crit", False)
+        )
 
     @staticmethod
     def _compute_rho_min_max(ph, npop, mpiop, start):

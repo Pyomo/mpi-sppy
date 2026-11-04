@@ -9,12 +9,13 @@
 # udpated April 20
 # xbar from xhat (copied from xhat specific, DLW Feb 2023)
 
-import pyomo.environ as pyo
-from mpisppy.extensions.xhatxbar import XhatXbar
-from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
-from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
-
 import logging
+
+import pyomo.environ as pyo
+
+from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
+from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
+from mpisppy.extensions.xhatxbar import XhatXbar
 
 
 def _attach_xbars(opt):
@@ -54,7 +55,7 @@ class XhatXbarInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
         """
         rank = self.cylinder_rank
         dtm = logging.getLogger(f'dtm{rank}')
-        logging.debug("Enter xhatxbar main on rank {}".format(rank))
+        logging.debug(f"Enter xhatxbar main on rank {rank}")
 
         xhatter = self.xhat_prep()
 
@@ -65,16 +66,13 @@ class XhatXbarInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
 
         ib_iter = 1  # ib is for inner bound
         while (not self.got_kill_signal()):
-            logging.debug('   IB loop iter={} on rank {}'.\
-                          format(ib_iter, rank))
+            logging.debug(f'   IB loop iter={ib_iter} on rank {rank}')
             # _log_values(ib_iter, self._locals, dtm)
 
-            logging.debug('   IB got from opt on rank {}'.\
-                          format(rank))
+            logging.debug(f'   IB got from opt on rank {rank}')
             if self.update_nonants():
-                logging.debug('  and its new! on rank {}'.\
-                              format(rank))
-                logging.debug('  localnonants={}'.format(str(self.localnonants)))
+                logging.debug(f'  and its new! on rank {rank}')
+                logging.debug(f'  localnonants={str(self.localnonants)}')
                 self.opt._put_nonant_cache(self.localnonants)  # don't really need all caches
                 # just for sending the values to other scenarios
                 # so we don't need to tell persistent solvers
@@ -88,7 +86,7 @@ class XhatXbarInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
             ib_iter += 1
 
         dtm.debug(f'IB xbar thread ran {ib_iter} iterations\n')
-    
+
         # for debugging
         #print("output .txt files for debugging in xhatxbar_bounder.py")
         #for k,s in self.opt.local_scenarios.items():

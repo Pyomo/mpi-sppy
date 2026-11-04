@@ -39,7 +39,6 @@ from mpisppy.utils.cfg_vanilla import (
     shared_options,
 )
 
-
 SOLVER_NAME = "gurobi_persistent"
 
 

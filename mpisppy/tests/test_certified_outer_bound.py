@@ -21,15 +21,14 @@ import unittest
 import warnings
 
 import pyomo.environ as pyo
+from mpi4py import MPI
 
 import mpisppy.tests.examples.farmer as farmer
 import mpisppy.utils.cfg_vanilla as vanilla
-from mpisppy.utils import config
 from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.utils.dual_certificate import CertificateError
 from mpisppy.tests.utils import announce_hsl_if_used, get_solver
-
-from mpi4py import MPI
+from mpisppy.utils import config
+from mpisppy.utils.dual_certificate import CertificateError
 
 comm = MPI.COMM_WORLD
 
@@ -203,7 +202,7 @@ class TestFactoryWiring(unittest.TestCase):
         self.assertEqual(
             _spoke_options(cfg)["certified_outer_bound_cushion"], 1e-7)
 
-    def test_global_solver_options_do_not_leak(self):  # noqa: D401
+    def test_global_solver_options_do_not_leak(self):
         # The point of this test: Ipopt hard-fails on an unrecognized keyword
         # rather than ignoring it, so inheriting the global --solver-options
         # (meant for the hub's MIP solver) would kill this spoke on its first
@@ -362,9 +361,9 @@ class TestInheritsTheLagrangianDriver(unittest.TestCase):
     was inert. Assert the wiring, since none of that failed loudly."""
 
     def test_it_is_a_lagrangian_outer_bound(self):
+        from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
         from mpisppy.cylinders.certified_outer_bound import CertifiedOuterBound
         from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
-        from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
         self.assertTrue(issubclass(CertifiedOuterBound, LagrangianOuterBound))
         self.assertTrue(issubclass(CertifiedOuterBound, _PreLoopXhatMixin))
 
@@ -799,8 +798,8 @@ class TestCollectiveWarning(unittest.TestCase):
         saw the condition. The comm performs the REAL reduction over all of
         them rather than returning a canned answer, so an inverted ternary or
         the wrong operator fails here instead of passing."""
-        from mpisppy.cylinders.certified_outer_bound import CertifiedOuterBound
         from mpisppy import MPI
+        from mpisppy.cylinders.certified_outer_bound import CertifiedOuterBound
 
         class _Comm:
             size = len(flags)
@@ -1134,8 +1133,7 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
         The missing-duals warning names Scen0's row, so a failed load reported
         only as a clause of it was never printed for Scen1.
         """
-        from pyomo.solvers.plugins.solvers.persistent_solver import (
-            PersistentSolver)
+        from pyomo.solvers.plugins.solvers.persistent_solver import PersistentSolver
 
         class _RaisingPersistent(PersistentSolver):
             def __init__(self):
@@ -1166,8 +1164,7 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
         The no-bound warning says there is none; the load warning must not
         contradict it with "their bound is looser but still valid".
         """
-        from pyomo.solvers.plugins.solvers.persistent_solver import (
-            PersistentSolver)
+        from pyomo.solvers.plugins.solvers.persistent_solver import PersistentSolver
 
         class _RaisingPersistent(PersistentSolver):
             def __init__(self):
@@ -1288,13 +1285,9 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
         bound should not do that. spopt instead sets solution_available=False,
         which this loop already reports as a cause.
 
-        The flag governs ONLY the load step: a solve that fails outright still
-        re-raises its solver_exception from the not_good_enough_results branch,
-        which need_solution does not gate. This test pins the reach, so the
-        comment in the spoke cannot drift from it.
+        The flag governs ONLY the load step; the corresponding solve behavior
+        is covered directly by TestSolveReplacementContract.
         """
-        import inspect
-        from mpisppy import spopt
         recorded = {}
         scenario = self._scenario_with_a_bound_and_a_missing_dual()
         spoke = self._spoke_over(scenario)
@@ -1302,13 +1295,6 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
         spoke.lagrangian()
         self.assertIs(recorded.get("need_solution"), False,
                       f"solve_loop was called with {recorded}")
-
-        # and the reach: need_solution guards the load, not the solve
-        source = inspect.getsource(spopt.SPOpt.solve_one)
-        self.assertIn("if need_solution:", source)
-        self.assertIn("raise solver_exception", source,
-                      "spopt no longer re-raises there; the spoke comment "
-                      "about the reach of need_solution needs revisiting")
 
     def test_a_scenario_with_no_solution_is_not_silent(self):
         """solve_loop reports the failed solve; only this cylinder can report

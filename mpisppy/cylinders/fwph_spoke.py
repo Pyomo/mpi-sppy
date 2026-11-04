@@ -6,8 +6,9 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-from mpisppy.cylinders.spoke import OuterBoundSpoke
 from mpisppy.cylinders.fwph_cylinder import FWPH_Cylinder
+from mpisppy.cylinders.spoke import OuterBoundSpoke
+
 
 class FrankWolfeOuterBound(OuterBoundSpoke, FWPH_Cylinder):
 

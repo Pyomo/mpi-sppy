@@ -324,7 +324,7 @@ class _FakePHwithComms:
         for s in local_scenarios.values():
             for node in s._mpisppy_node_list:
                 local_nodenames.add(node.name)
-        self.comms = {ndn: MPI.COMM_SELF for ndn in local_nodenames}
+        self.comms = dict.fromkeys(local_nodenames, MPI.COMM_SELF)
         # _compute_and_update_rho reports any zero-rho fallback to the default
         self.cylinder_rank = 0
         self.options = {"defaultPHrho": 1.0}

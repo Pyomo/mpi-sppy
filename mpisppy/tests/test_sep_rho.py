@@ -20,8 +20,9 @@ so the per-variable arithmetic can be checked exactly, with no solver.
 """
 
 import types
-import warnings
 import unittest
+import warnings
+from unittest import mock
 
 import pyomo.environ as pyo
 
@@ -195,6 +196,43 @@ class Test_sep_rho_formula(unittest.TestCase):
         del ph.options["sep_rho_options"]["multiplier"]
         ext = _make_ext(ph)
         self.assertEqual(ext.multiplier, 1.0)
+
+    def test_miditer_skips_tracking_without_dynamic_criteria(self):
+        ph = _make_ph()
+        ext = _make_ext(ph)
+        ext.update_caches = mock.Mock(
+            side_effect=AssertionError("miditer should not track convergence")
+        )
+
+        ext.miditer()
+
+        ext.update_caches.assert_not_called()
+
+    def test_pre_iter0_cache_survives_heuristic_fixing(self):
+        ph = _make_ph()
+        wrapper = ph.local_scenarios["Scen1"]
+        scenario = wrapper._pyomo_model
+        scenario._mpisppy_node_list = wrapper._mpisppy_node_list
+        scenario._mpisppy_data = wrapper._mpisppy_data
+        scenario._mpisppy_model = wrapper._mpisppy_model
+        scenario._mpisppy_probability = wrapper._mpisppy_probability
+        ph.local_scenarios["Scen1"] = scenario
+        # Force extraction from a real objective rather than the test helper's
+        # pre-populated coefficients.
+        scenario.obj = pyo.Objective(expr=10.0 * scenario.v[0])
+        scenario._mpisppy_data.varid_to_nonant_index = {
+            id(scenario.v[i]): (NDN, i) for i in range(NLEN)
+        }
+        del scenario._mpisppy_data.nonant_cost_coeffs
+
+        ext = _make_ext(ph)
+        ext.pre_iter0()
+        scenario.v[0].fix(10.0)
+        ext.compute_and_update_rho()
+
+        self.assertEqual(ext._nonant_cost_coeffs[scenario][(NDN, 0)], 10.0)
+        self.assertAlmostEqual(
+            scenario._mpisppy_model.rho[(NDN, 0)]._value, 2.0)
 
 
 if __name__ == "__main__":

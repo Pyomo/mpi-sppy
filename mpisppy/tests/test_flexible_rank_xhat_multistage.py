@@ -54,12 +54,12 @@ import unittest
 import numpy as np
 from mpi4py import MPI
 
-from mpisppy.utils import config
+import mpisppy.tests.examples.aircond as aircond
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.sputils as sputils
-import mpisppy.tests.examples.aircond as aircond
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.tests.utils import get_solver
+from mpisppy.utils import config
 
 comm = MPI.COMM_WORLD
 

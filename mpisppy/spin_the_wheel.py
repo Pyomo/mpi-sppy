@@ -10,12 +10,15 @@
 from collections import Counter
 
 from pyomo.environ import value
-from mpisppy import haveMPI, global_toc, MPI
 
+from mpisppy import MPI, global_toc, haveMPI
 from mpisppy.utils import nice_join
 from mpisppy.utils.mpi_abort import abort_on_uncaught_exception
-from mpisppy.utils.sputils import first_stage_nonant_writer, scenario_tree_solution_writer
 from mpisppy.utils.rank_apportionment import apportion_ranks, rank_to_cylinder
+from mpisppy.utils.sputils import (
+    first_stage_nonant_writer,
+    scenario_tree_solution_writer,
+)
 
 
 def _format_equal_window_distribution(records, n_cylinders):

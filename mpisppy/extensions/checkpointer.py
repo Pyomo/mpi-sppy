@@ -136,14 +136,14 @@ rank rank 0's cursor.
 See ``doc/designs/checkpointing_design.md``.
 """
 
+import math
 import os
 import shutil
-import math
 import time
 
+import mpisppy.utils.checkpointing as ckpt
 from mpisppy import global_toc
 from mpisppy.extensions.extension import Extension
-import mpisppy.utils.checkpointing as ckpt
 
 
 def _same_objective(a, b):
@@ -436,7 +436,7 @@ class Checkpointer(Extension):
         # Lagrangian bound, which the hub keeps as best-so-far. The sums are
         # allreduces, so every rank computes them before the agreement; the
         # comparison is with this rank's own file, so it is agreed.
-        from mpisppy.phbase import Wbar_by_node, W_magnitude_by_node
+        from mpisppy.phbase import W_magnitude_by_node, Wbar_by_node
         bars = Wbar_by_node(self.opt)
         sizes = W_magnitude_by_node(self.opt)
         ckpt.run_agreed(

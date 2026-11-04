@@ -52,9 +52,8 @@ import time
 from dataclasses import dataclass
 
 import mpisppy.utils.config as config
-from mpisppy.generic import parsing
 from mpisppy.generic import out_of_the_box as ootb
-
+from mpisppy.generic import parsing
 
 # Validator settings (NOT policy): the two layer-3 auto-flag thresholds.
 EF_GAP_TARGET = 0.01          # flag an EF that misses this MIP gap ...
@@ -613,7 +612,7 @@ def validate_decisions_examples(policy: dict) -> list:
         try:
             module = _load_example_module(spec)
             cfg = _example_cfg(spec, module)
-        except Exception as e:                       # noqa: BLE001
+        except Exception as e:
             checks.append(Check("decision", f"example {name}: set up", False,
                                 f"{type(e).__name__}: {e}"))
             continue
@@ -622,7 +621,7 @@ def validate_decisions_examples(policy: dict) -> list:
                 cfg.inspect_only = str(nranks)       # plan as if nranks (no MPI)
                 facts = ootb.gather_facts(module, cfg, "base", policy)
                 d = ootb.recommend(facts, policy)
-            except Exception as e:                   # noqa: BLE001
+            except Exception as e:
                 checks.append(Check("decision",
                                     f"example {name} @ {nranks} ranks: recommend",
                                     False, f"{type(e).__name__}: {e}"))
@@ -776,7 +775,7 @@ def run_validation(policy_path: str, *, examples=False, run=False) -> dict:
               "checks": [], "runs": [], "ok": True}
     try:
         policy = ootb.load_policy(policy_path or None)
-    except Exception as e:                            # noqa: BLE001
+    except Exception as e:
         report["checks"].append(
             Check("static", "policy file parses", False,
                   f"{type(e).__name__}: {e}").as_dict())

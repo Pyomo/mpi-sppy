@@ -17,6 +17,7 @@ This currently exports a decorator for memoizing methods.
 
 from functools import partial
 
+
 class memoize_method:
     """
     This class will be used as a class method decorator to internally cache

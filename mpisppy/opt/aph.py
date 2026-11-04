@@ -8,24 +8,24 @@
 ###############################################################################
 # APH
 
-import numpy as np
-import math
 import collections
-import time
 import logging
-import mpisppy.MPI as mpi
+import math
+import time
+
+import numpy as np
 import pyomo.environ as pyo
-import mpisppy.utils.listener_util.listener_util as listener_util
+
+import mpisppy.MPI as mpi
 import mpisppy.phbase as ph_base
+import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils.linear_surrogate import set_derived_surrogate_rhos
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-logging.basicConfig(level=logging.CRITICAL, # level=logging.CRITICAL, DEBUG
-            format='(%(threadName)-10s) %(message)s',
-            )
+logger = logging.getLogger(__name__)
 
 EPSILON = 1e-5  # for, e.g., fractions of ranks
 
@@ -82,7 +82,7 @@ class APH(ph_base.PHBase):
         self.Lens["FirstReduce"]["ROOT"] += self.n_proc  # for time of update
         # tau, phi, pusqnorm, pvsqnorm, pwsqnorm, pzsqnorm, secs
         self.Lens["SecondReduce"]["ROOT"] += 6 + self.n_proc
-        
+
 
     #============================
     def __init__(
@@ -238,10 +238,10 @@ class APH(ph_base.PHBase):
         using it when they are zero
 
         """
-        
+
         uk = self.global_pusqnorm
         vk = self.global_pvsqnorm
-        
+
         # Note June, 2023: We are waiting until we get values greater
         # than 0 for the norms. Iteration 3 is arbitrary
         if self._PHIter <= 3:
@@ -268,7 +268,7 @@ class APH(ph_base.PHBase):
                     )
                     self.uk1 = uk
                     self.vk1 = vk
-                    
+
         self.APHgamma = gamma
 
         return self.APHgamma
@@ -304,8 +304,7 @@ class APH(ph_base.PHBase):
         # The six is because the reduced data (e.g. phi) are in the first 6.
         lptut =  np.max(self.node_concats["SecondReduce"]["ROOT"][6:])
 
-        logging.debug('   +++ debug enter listener_side_gig on cylinder_rank {} last phi update {}'\
-              .format(self.cylinder_rank, lptut))
+        logger.debug(f'   +++ debug enter listener_side_gig on cylinder_rank {self.cylinder_rank} last phi update {lptut}')
 
         xbarin = 0 # count ranks (close enough to be a proxy for scenarios)
         for cr in range(self.n_proc):
@@ -320,16 +319,14 @@ class APH(ph_base.PHBase):
         fracin = xbarin/self.n_proc + EPSILON
         if  fracin < self.options["async_frac_needed"]:
             # We have not really "done" the side gig.
-            logging.debug('  ^ debug not good to go listener_side_gig on cylinder_rank {}; xbarin={}; fracin={}'\
-                  .format(self.cylinder_rank, xbarin, fracin))
+            logger.debug(f'  ^ debug not good to go listener_side_gig on cylinder_rank {self.cylinder_rank}; xbarin={xbarin}; fracin={fracin}')
             return
 
         # If we are still here, we have enough to do the calculations
-        logging.debug('^^^ debug good to go  listener_side_gig on cylinder_rank {}; xbarin={}'\
-              .format(self.cylinder_rank, xbarin))
+        logger.debug(f'^^^ debug good to go  listener_side_gig on cylinder_rank {self.cylinder_rank}; xbarin={xbarin}')
         if verbose and self.cylinder_rank == 0:
-            print ("(%d)" % xbarin)
-            
+            print (f"({xbarin})")
+
         # set the xbar, xsqbar, and ybar in all the scenarios
         for k,s in self.local_scenarios.items():
             nlens = s._mpisppy_data.nlens
@@ -386,7 +383,7 @@ class APH(ph_base.PHBase):
                                      * self.uk[sname][(ndn,i)])
                     scen_vsqnorm += (pyo.value(s._mpisppy_model.ybars[(ndn,i)]) \
                                      * pyo.value(s._mpisppy_model.ybars[(ndn,i)]))
-                   
+
             # Note by DLW April 2023: You need to move the probs up for multi-stage
             if not s._mpisppy_data.has_variable_probability:
                 # NOTE: The p is not true but we avoid changing the
@@ -401,25 +398,24 @@ class APH(ph_base.PHBase):
             if self.use_dynamic_gamma:
                 gamma = self._calculate_APHgamma(synchro) # update APHgamma
                 print('dynamic gamma=', gamma, 'i=', i, 'sname=', sname)
-            
+
             # I don't think s._mpisppy_dat.has_variable_probability is needed here
             new_tau_summand += (
                 pyo.value(s._mpisppy_probability) \
                 * (scen_usqnorm + scen_vsqnorm/self.APHgamma)
             )
-            
+
         # tauk is the expectation of the sum sum of squares; update for this calc
-        logging.debug('  in side-gig, old global_tau={}'.format(self.global_tau))
-        logging.debug('  in side-gig, old summand={}'.format(self.tau_summand))
-        logging.debug('  in side-gig, new summand={}'.format(new_tau_summand))
+        logger.debug(f'  in side-gig, old global_tau={self.global_tau}')
+        logger.debug(f'  in side-gig, old summand={self.tau_summand}')
+        logger.debug(f'  in side-gig, new summand={new_tau_summand}')
         self.global_tau = self.global_tau - self.tau_summand + new_tau_summand
         self.tau_summand = new_tau_summand # make available for the next reduce
-        logging.debug('  in side-gig, new global_tau={}'.format(self.global_tau))
+        logger.debug(f'  in side-gig, new global_tau={self.global_tau}')
 
         # now we can get the local contribution to the phi_sum 
         if self.global_tau <= 0:
-            logging.debug('  *** Negative tau={} on rank {}'\
-                          .format(self.global_tau, self.cylinder_rank))
+            logger.debug(f'  *** Negative tau={self.global_tau} on rank {self.cylinder_rank}')
         self.phi_summand = self.compute_phis_summand()
 
         # prepare for the reduction that will take place after this side-gig
@@ -439,8 +435,8 @@ class APH(ph_base.PHBase):
         self.synchronizer._unsafe_put_local_data("SecondReduce",
                                                  self.local_concats)
         self.synchronizer.enable_side_gig = False  # we did it
-        logging.debug(' exit side_gid on rank {}'.format(self.cylinder_rank))
-        
+        logger.debug(f' exit side_gid on rank {self.cylinder_rank}')
+
     #============================
     def Compute_Averages(self, verbose=False):
         """Gather ybar, xbar and x squared bar for each node 
@@ -512,8 +508,7 @@ class APH(ph_base.PHBase):
                     v_value = node.nonant_vardata_list[i]._value
                     self.local_concats["FirstReduce"][node.name][i] += \
                         (s._mpisppy_probability / node.uncond_prob) * v_value
-                    logging.debug("  rank= {} scen={}, i={}, v_value={}".\
-                                  format(global_rank, k, i, v_value))
+                    logger.debug(f"  rank= {global_rank} scen={k}, i={i}, v_value={v_value}")
                     self.local_concats["FirstReduce"][node.name][nlens[ndn]+i]\
                         += (s._mpisppy_probability / node.uncond_prob) * v_value * v_value
                     self.local_concats["FirstReduce"][node.name][2*nlens[ndn]+i]\
@@ -538,9 +533,8 @@ class APH(ph_base.PHBase):
         # only this rank puts a time for this rank, so the sum is a report
         self.local_concats["FirstReduce"]["ROOT"][3*nlens["ROOT"]+self.cylinder_rank] \
             = secs_sofar
-        logging.debug('Compute_Averages at secs_sofar {} on rank {}'\
-                      .format(secs_sofar, self.cylinder_rank))
-                    
+        logger.debug(f'Compute_Averages at secs_sofar {secs_sofar} on rank {self.cylinder_rank}')
+
         self.synchronizer.compute_global_data(self.local_concats,
                                               self.node_concats,
                                               enable_side_gig = True,
@@ -553,10 +547,10 @@ class APH(ph_base.PHBase):
             self.synchronizer.compute_global_data(self.local_concats,
                                                   self.node_concats)
             if not self.synchronizer.enable_side_gig:
-                logging.debug(' did side gig break on rank {}'.format(self.cylinder_rank))
+                logger.debug(f' did side gig break on rank {self.cylinder_rank}')
                 break
             else:
-                logging.debug('   gig wait sleep on rank {}'.format(self.cylinder_rank))
+                logger.debug(f'   gig wait sleep on rank {self.cylinder_rank}')
                 if verbose and self.cylinder_rank == 0:
                     print ('s'),
                 time.sleep(self.options["async_sleep_secs"])
@@ -572,9 +566,8 @@ class APH(ph_base.PHBase):
         self.global_pwsqnorm = self.node_concats["SecondReduce"]["ROOT"][4]
         self.global_pzsqnorm = self.node_concats["SecondReduce"]["ROOT"][5]
 
-        logging.debug('Assigned global tau {} and phi {} on rank {}'\
-                      .format(self.global_tau, self.global_phi, self.cylinder_rank))
- 
+        logger.debug(f'Assigned global tau {self.global_tau} and phi {self.global_phi} on rank {self.cylinder_rank}')
+
     #============================
     def Update_theta_zw(self, verbose):
         """
@@ -582,10 +575,10 @@ class APH(ph_base.PHBase):
         the probability weighted norms.
         """
         if self.global_tau <= 0:
-            logging.debug('|tau {}, rank {}'.format(self.global_tau, self.cylinder_rank))
+            logger.debug(f'|tau {self.global_tau}, rank {self.cylinder_rank}')
             self.theta = 0 # Step 17
         elif self.global_phi <= 0:
-            logging.debug('|phi {}, rank {}'.format(self.global_phi, self.cylinder_rank))
+            logger.debug(f'|phi {self.global_phi}, rank {self.cylinder_rank}')
             self.theta = 0
         else:
             punorm = math.sqrt(self.global_pusqnorm)
@@ -611,9 +604,8 @@ class APH(ph_base.PHBase):
                         factor = 1 + rho_val
                     s._mpisppy_model.rho[(ndn,i)] = pyo.value(s._mpisppy_model.rho[(ndn,i)]) * factor
                     # print(f'rho={pyo.value(s._mpisppy_model.rho[(ndn,i)])}')
-                    
-        logging.debug('Iter {} assigned theta {} on rank {}'\
-                      .format(self._PHIter, self.theta, self.cylinder_rank))
+
+        logger.debug(f'Iter {self._PHIter} assigned theta {self.theta} on rank {self.cylinder_rank}')
 
         oldpw = self.local_pwsqnorm
         oldpz = self.local_pzsqnorm
@@ -645,22 +637,21 @@ class APH(ph_base.PHBase):
 
                 s._mpisppy_model.z[(ndn,i)] = zs 
                 self.local_pzsqnorm += probs * zs * zs
-                logging.debug("rank={}, scen={}, i={}, Ws={}, zs={}".\
-                              format(global_rank, k, i, Ws, zs))
+                logger.debug(f"rank={global_rank}, scen={k}, i={i}, Ws={Ws}, zs={zs}")
         # ? so they will be there next time? (we really need a third reduction)
         self.local_concats["SecondReduce"]["ROOT"][4] = self.local_pwsqnorm
         self.local_concats["SecondReduce"]["ROOT"][5] = self.local_pzsqnorm
         # The values we just computed can't be in the global yet, so update here
         self.global_pwsqnorm += (self.local_pwsqnorm - oldpw)
         self.global_pzsqnorm += (self.local_pzsqnorm - oldpz)
-                
+
     #============================
     def Compute_Convergence(self, verbose=False):
         """
         The convergence metric is the sqrt of the sum of
         probability weighted unorm scaled by the probability weighted w norm
         probability weighted vnorm scaled by the probability weighted z norm
- 
+
         Returns:
             update self.conv if appropriate
         """
@@ -676,12 +667,11 @@ class APH(ph_base.PHBase):
         if pwnorm > 0 and pznorm > 0:
             self.conv = punorm / pwnorm + pvnorm / pznorm
 
-        logging.debug('self.conv={} self.global_pusqnorm={} self.global_pwsqnorm={} self.global_pvsqnorm={} self.global_pzsqnorm={})'\
-                      .format(self.conv, self.global_pusqnorm, self.global_pwsqnorm, self.global_pvsqnorm, self.global_pzsqnorm))
+        logger.debug(f'self.conv={self.conv} self.global_pusqnorm={self.global_pusqnorm} self.global_pwsqnorm={self.global_pwsqnorm} self.global_pvsqnorm={self.global_pvsqnorm} self.global_pzsqnorm={self.global_pzsqnorm})')
         # allow a PH converger, mainly for mpisspy to get xhat from a wheel conv
         if hasattr(self, "ph_convobject") and self.ph_convobject is not None:
             phc = self.ph_convobject(self, self.cylinder_rank, self.n_proc)
-            logging.debug("PH converger called (returned {})".format(phc))
+            logger.debug(f"PH converger called (returned {phc})")
 
         if self.conv_trace_filename is not None:
             with open(self.conv_trace_filename, "a") as fil:
@@ -728,7 +718,7 @@ class APH(ph_base.PHBase):
         #==========
         def _vb(msg):
             if verbose and self.cylinder_rank == 0:
-                print ("(cylinder rank {}) {}".format(self.cylinder_rank, msg))
+                print (f"(cylinder rank {self.cylinder_rank}) {msg}")
         _vb("Entering solve_loop function.")
 
         s_source = self.local_scenarios
@@ -746,8 +736,8 @@ class APH(ph_base.PHBase):
             # reminder: dispatchrecord is sname:[(iter,phi)...]
             if self.round_robin_dispatch:
                 # TBD: check this sort
-                sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
-                                                     key=lambda item: item[1][-1])}
+                sortedbyI = dict(sorted(self.dispatchrecord.items(),
+                                        key=lambda item: item[1][-1]))
                 _vb("  sortedbyI={}.format(sortedbyI)")
                 # There is presumably a pythonic way to do this...
                 retval = list()
@@ -772,20 +762,19 @@ class APH(ph_base.PHBase):
 
 
         # body of APH_solve_loop fct starts hare
-        logging.debug("  early APH solve_loop for rank={}".format(self.cylinder_rank))
+        logger.debug(f"  early APH solve_loop for rank={self.cylinder_rank}")
 
         scnt = max(1, round(len(self.dispatchrecord) * dispatch_frac))
         dispatch_list = _dispatch_list(scnt)
-        _vb("dispatch list before dispath: {}".format(dispatch_list))
+        _vb(f"dispatch list before dispath: {dispatch_list}")
         pyomo_solve_times = list()
         for dguy in dispatch_list:
             k = dguy[0]   # name of who to dispatch
             p = dguy[1]   # phi
             s = s_source[k]
             self.dispatchrecord[k].append((self._PHIter, p))
-            _vb("dispatch k={}; phi={}".format(k, p))
-            logging.debug("  in APH solve_loop rank={}, k={}, phi={}".\
-                          format(self.cylinder_rank, k, p))
+            _vb(f"dispatch k={k}; phi={p}")
+            logger.debug(f"  in APH solve_loop rank={self.cylinder_rank}, k={k}, phi={p}")
             # the lower lever dtiming does a gather
             pyomo_solve_times.append(self.solve_one(solver_options, k, s,
                                               dtiming=False,
@@ -797,12 +786,10 @@ class APH(ph_base.PHBase):
 
         if dtiming:
             print("Pyomo solve times (seconds):")
-            print("\trank=,%d, n=,%d, min=,%4.2f, mean=,%4.2f, max=,%4.2f" %
-                  (self.global_rank,
-                   len(pyomo_solve_times),
-                   np.min(pyomo_solve_times),
-                   np.mean(pyomo_solve_times),
-                   np.max(pyomo_solve_times)))
+            print(f"\trank=,{self.global_rank}, n=,{len(pyomo_solve_times)}, "
+                  f"min=,{np.min(pyomo_solve_times):4.2f}, "
+                  f"mean=,{np.mean(pyomo_solve_times):4.2f}, "
+                  f"max=,{np.max(pyomo_solve_times):4.2f}")
 
         return dispatch_list
 
@@ -860,14 +847,14 @@ class APH(ph_base.PHBase):
             self.conv (): APH convergence
 
         """
-        logging.debug('==== enter iterk on rank {}'.format(self.cylinder_rank))
+        logger.debug(f'==== enter iterk on rank {self.cylinder_rank}')
         verbose = self.options["verbose"]
         have_extensions = self.extensions is not None
 
         # We have the "bottom of the loop at the top"
         # so we need a dlist to get the ball rolling (it might not be used)
         dlist = [(sn, 0.0) for sn in self.local_scenario_names]
-        
+
         # put dispatch_frac on the object so extensions can modify it
         self.dispatch_frac = self.options["dispatch_frac"]\
                              if "dispatch_frac" in self.options else 1
@@ -883,6 +870,15 @@ class APH(ph_base.PHBase):
         for self._PHIter in range(1, self.options["PHIterLimit"]+1):
             if self.synchronizer.global_quitting:
                 break
+            local_stop_reason = self._local_time_limit_stop_reason()
+            if local_stop_reason is not None:
+                if self.cylinder_rank == 0:
+                    print(local_stop_reason)
+                # The listener's regular quitting reduction propagates this
+                # to the other APH workers without adding a synchronous
+                # collective to the asynchronous worker loop.
+                self.synchronizer.quitting = 1
+                break
             iteration_start_time = time.time()
 
             if dprogress and self.cylinder_rank == 0:
@@ -892,23 +888,23 @@ class APH(ph_base.PHBase):
 
             self.Update_y(dlist, verbose)
             # Compute xbar, etc
-            logging.debug('pre Compute_Averages on rank {}'.format(self.cylinder_rank))
+            logger.debug(f'pre Compute_Averages on rank {self.cylinder_rank}')
             self.Compute_Averages(verbose)
-            logging.debug('post Compute_Averages on rank {}'.format(self.cylinder_rank))
+            logger.debug(f'post Compute_Averages on rank {self.cylinder_rank}')
             if self.global_tau <= 0:
-                logging.critical('***tau is 0 on rank {}'.format(self.cylinder_rank))
+                logger.critical(f'***tau is 0 on rank {self.cylinder_rank}')
 
             # Apr 2019 dlw: If you want the convergence crit. to be up to date,
             # do this as a listener side-gig and add another reduction.
             self.Update_theta_zw(verbose)
             self.Compute_Convergence()  # updates conv
             phisum = self.compute_phis_summand() # post-step phis for dispatch
-            logging.debug('phisum={} after step on {}'.format(phisum, self.cylinder_rank))
+            logger.debug(f'phisum={phisum} after step on {self.cylinder_rank}')
 
             # ORed checks for convergence
             if spcomm is not None and type(spcomm) is not mpi.Intracomm:
                 spcomm.sync_with_spokes()
-                logging.debug('post sync_with_spokes on rank {}'.format(self.cylinder_rank))
+                logger.debug(f'post sync_with_spokes on rank {self.cylinder_rank}')
                 if spcomm.is_converged():
                     break    
             if have_converger:
@@ -922,7 +918,7 @@ class APH(ph_base.PHBase):
             if have_extensions:
                 self.extobject.miditer()
                 set_derived_surrogate_rhos(self)
-            
+
             teeme = ("tee-rank0-solves" in self.options) \
                  and (self.options["tee-rank0-solves"]
                       and self.cylinder_rank == 0)
@@ -934,7 +930,7 @@ class APH(ph_base.PHBase):
             if self._PHIter == 1:
                 savefrac = self.dispatch_frac
                 self.dispatch_frac = 1   # to get a decent w for everyone
-            logging.debug('pre APH_solve_loop on rank {}'.format(self.cylinder_rank))
+            logger.debug(f'pre APH_solve_loop on rank {self.cylinder_rank}')
             dlist = self.APH_solve_loop(solver_options = \
                                         self._effective_solver_options(self._PHIter),
                                         dtiming=dtiming,
@@ -944,7 +940,7 @@ class APH(ph_base.PHBase):
                                         verbose=verbose,
                                         dispatch_frac=self.dispatch_frac)
 
-            logging.debug('post APH_solve_loop on rank {}'.format(self.cylinder_rank))
+            logger.debug(f'post APH_solve_loop on rank {self.cylinder_rank}')
             if self._PHIter == 1:
                  self.dispatch_frac = savefrac
             if have_extensions:
@@ -962,7 +958,7 @@ class APH(ph_base.PHBase):
             if self.use_lag:
                 self._update_foropt(dlist)
 
-        logging.debug('Setting synchronizer.quitting on rank %d' % self.cylinder_rank)
+        logger.debug(f'Setting synchronizer.quitting on rank {self.cylinder_rank}')
         self.synchronizer.quitting = 1
 
     #====================================================================
@@ -986,7 +982,7 @@ class APH(ph_base.PHBase):
         """
         # Prep needs to be before iter 0 for bundling
         # (It could be split up)
-        logging.debug('enter aph main on cylinder_rank {}'.format(self.cylinder_rank))
+        logger.debug(f'enter aph main on cylinder_rank {self.cylinder_rank}')
         self.PH_Prep(attach_duals=False, attach_prox=False)
 
         # Begin APH-specific Prep
@@ -1004,7 +1000,7 @@ class APH(ph_base.PHBase):
             # lag: we will support lagging back only to the last solve
             # IMPORTANT: pyomo does not support a second reference so no:
             # scenario._mpisppy_model.z_foropt = scenario._mpisppy_model.z
-            
+
             if self.use_lag:
                 scenario._mpisppy_model.z_foropt = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                          initialize = 0.0,
@@ -1012,12 +1008,12 @@ class APH(ph_base.PHBase):
                 scenario._mpisppy_model.W_foropt = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                          initialize = 0.0,
                                          mutable = True)
-                
+
             objfct = self.saved_objectives[sname]
-                
+
             if self.use_lag:
                 assert not scenario._mpisppy_data.has_variable_probability
-                   
+
                 for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
                     # proximal term
                     objfct.expr +=  scenario._mpisppy_model.prox_on * \
@@ -1065,7 +1061,7 @@ class APH(ph_base.PHBase):
         self.synchronizer.run(args, kwargs)
 
         if finalize:
-            Eobj = self.post_loops()
+            Eobj = self.post_loops(self.extensions)
         else:
             Eobj = None
 

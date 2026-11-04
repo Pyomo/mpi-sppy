@@ -7,8 +7,10 @@
 # full copyright and license information.
 ###############################################################################
 import os
+
 import mpisppy.tests.examples.sizes.ReferenceModel as ref
 import mpisppy.utils.sputils as sputils
+
 
 def scenario_creator(scenario_name, scenario_count=None):
     """ The callback needs to create an instance and then attach

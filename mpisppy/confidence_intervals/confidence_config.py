@@ -51,17 +51,17 @@ def BM_config(cfg):
                   description="Controls tradeoff between width and sample size (default 0.5)",
                   domain=float,
                   default=0.5)
-    
+
     cfg.add_to_config("BM_eps",
                   description="Controls termination (default 0.2)",
                   domain=float,
                   default=0.2)
-    
+
     cfg.add_to_config("BM_eps_prime",
                   description="Controls termination (default 0.1)",
                   domain=float,
                   default=0.1)
-    
+
     cfg.add_to_config("BM_p",
                   description="Controls sample size (default 0.1)",
                   domain=float,

@@ -15,14 +15,15 @@ problem size limits.  The 3-scenario subset has probabilities that
 don't sum to 1.0, but the EF weights by given probabilities so the
 solve is still valid for testing the read-solve pipeline.
 """
-import unittest
 import os
+import unittest
+
 import pyomo.environ as pyo
 from pyomo.common.config import ConfigDict, ConfigValue
 
-import mpisppy.problem_io.smps_reader as smps_reader
-import mpisppy.problem_io.smps_module as smps_module
 import mpisppy.opt.ef
+import mpisppy.problem_io.smps_module as smps_module
+import mpisppy.problem_io.smps_reader as smps_reader
 from mpisppy.tests.utils import get_solver, round_pos_sig
 
 solver_available, solver_name, persistent_available, persistent_solver_name = get_solver()

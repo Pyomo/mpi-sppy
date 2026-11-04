@@ -19,7 +19,6 @@ import mpisppy.tests.examples.farmer as farmer
 import mpisppy.utils.sputils as sputils
 from mpisppy.tests.utils import get_solver, limit_solver_threads
 
-
 solver_available, solver_name, persistent_available, persistent_solver_name = get_solver(persistent_OK=False)
 
 fullcomm = mpi.COMM_WORLD
@@ -71,7 +70,7 @@ class TestDCGMainFarmer(unittest.TestCase):
         return conv, obj, dcg.best_bound_obj_val
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_farmer_minimize_bound(self):
         """DCG on a minimization farmer should approach the EF optimal bound."""
         creator_kwargs = {"crops_multiplier": 1}
@@ -84,7 +83,7 @@ class TestDCGMainFarmer(unittest.TestCase):
             self.assertAlmostEqual(bound, ef_obj, delta=abs(ef_obj*0.01))
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_farmer_maximize_bound(self):
         """DCG on a maximization farmer should approach the EF optimal bound."""
         creator_kwargs = {"crops_multiplier": 1, "sense": pyo.maximize}

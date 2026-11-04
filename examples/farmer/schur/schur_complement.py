@@ -6,13 +6,14 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import farmer
-from mpisppy.opt import ef, sc
 import logging
-from mpisppy import MPI
 import sys
+
+import farmer
 import pyomo.environ as pyo
 
+from mpisppy import MPI
+from mpisppy.opt import ef, sc
 
 if MPI.COMM_WORLD.Get_rank() == 0:
     logging.basicConfig(level=logging.INFO)
@@ -31,7 +32,7 @@ def solve_with_extensive_form(scen_count):
     options['solver'] = 'cplex_direct'
     scenario_kwargs = dict()
     scenario_kwargs['use_integer'] = False
-    
+
     opt = ef.ExtensiveForm(options=options,
                            all_scenario_names=scenario_names,
                            scenario_creator=farmer.scenario_creator,

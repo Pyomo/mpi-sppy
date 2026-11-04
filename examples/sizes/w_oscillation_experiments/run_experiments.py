@@ -148,6 +148,7 @@ def _solve_ef(cfg):
     (the yardstick for both x-quality and W-quality). Returns z* or None."""
     sys.path.insert(0, os.path.dirname(_HERE))   # the examples/sizes dir (sizes)
     import sizes
+
     from mpisppy.opt.ef import ExtensiveForm
     names = [f"Scenario{i + 1}" for i in range(cfg["num_scens"])]
     ef = ExtensiveForm({"solver": cfg["solver"]}, names, sizes.scenario_creator,
@@ -315,7 +316,7 @@ def main():
     z_star = None
     try:
         z_star = _solve_ef(cfg)
-    except Exception as e:                          # noqa: BLE001
+    except Exception as e:
         print(f"EF solve failed, skipping quality section: {e}")
     if z_star is not None:
         q_labels = ([lab for lab, _ in _INTERVENTIONS]

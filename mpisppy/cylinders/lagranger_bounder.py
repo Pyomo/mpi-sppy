@@ -9,14 +9,17 @@
 # Indepedent Lagrangian that takes x values as input and
 # updates its own W.
 
-import json
 import csv
+import json
+
 import numpy as np
+
 import mpisppy.cylinders.spoke
 import mpisppy.utils.w_utils.wxbarutils
-from mpisppy.cylinders.lagrangian_bounder import _LagrangianMixin
 from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
+from mpisppy.cylinders.lagrangian_bounder import _LagrangianMixin
 from mpisppy.utils.linear_surrogate import set_derived_surrogate_rhos
+
 
 class LagrangerOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
     """Indepedent Lagrangian that takes x values as input and updates its own W.
@@ -28,7 +31,7 @@ class LagrangerOuterBound(_PreLoopXhatMixin, _LagrangianMixin, mpisppy.cylinders
         super().lagrangian_prep()
         if "lagranger_rho_rescale_factors_json" in self.opt.options and\
             self.opt.options["lagranger_rho_rescale_factors_json"] is not None:
-            with open(self.opt.options["lagranger_rho_rescale_factors_json"], "r") as fin:
+            with open(self.opt.options["lagranger_rho_rescale_factors_json"]) as fin:
                 din = json.load(fin)
             self.rho_rescale_factors = {int(i): float(din[i]) for i in din}
         else:

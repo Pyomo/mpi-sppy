@@ -9,13 +9,12 @@
 import hashlib
 import logging
 import random
+
 import mpisppy.log
-
 from mpisppy import global_toc
-from mpisppy.extensions.xhatbase import XhatBase
-from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
 from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
-
+from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
+from mpisppy.extensions.xhatbase import XhatBase
 
 # Could also pass, e.g., sys.stdout instead of a filename
 mpisppy.log.setup_logger("mpisppy.cylinders.xhatshufflelooper_bounder",

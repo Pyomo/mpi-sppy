@@ -59,9 +59,8 @@ def egret_avail():
 
 def do_one(dirname, progname, np, argstring):
     os.chdir(dirname)
-    runstring = "mpiexec {} -np {} python -u {} -m mpi4py {} {}".format(
-        mpiexec_arg, np, python_args, progname, argstring)
-    code = os.system("echo {} && {}".format(runstring, runstring))
+    runstring = f"mpiexec {mpiexec_arg} -np {np} python -u {python_args} -m mpi4py {progname} {argstring}"
+    code = os.system(f"echo {runstring} && {runstring}")
     if code != 0:
         badguys.setdefault(dirname, []).append(runstring)
     if '/' not in dirname:
@@ -73,8 +72,8 @@ def do_one(dirname, progname, np, argstring):
 
 def do_one_serial(dirname, progname, argstring):
     os.chdir(dirname)
-    runstring = "python -u {} {} {}".format(python_args, progname, argstring)
-    code = os.system("echo {} && {}".format(runstring, runstring))
+    runstring = f"python -u {python_args} {progname} {argstring}"
+    code = os.system(f"echo {runstring} && {runstring}")
     if code != 0:
         badguys.setdefault(dirname, []).append(runstring)
     os.chdir("..")
@@ -97,7 +96,7 @@ do_one("uc", "cs_uc.py", 3,
        "--max-iterations=1 --default-rho=1 --num-scens=3 "
        "--solver-options=\"mip_rel_gap=0.5 threads=1\" "
        "--linearize-proximal-terms "
-       "--solver-name={}".format(solver_name))
+       f"--solver-name={solver_name}")
 
 # Generic driver on uc_funcs: PH hub + xhatshuffle + lagrangian
 do_one("uc", "../../mpisppy/generic_cylinders.py", 3,
@@ -106,12 +105,12 @@ do_one("uc", "../../mpisppy/generic_cylinders.py", 3,
        "--solver-options=\"mip_rel_gap=0.5 threads=1\" "
        "--linearize-proximal-terms "
        "--rel-gap=0.01 --intra-hub-conv-thresh=-1 "
-       "--solver-name={}".format(solver_name))
+       f"--solver-name={solver_name}")
 
 if badguys:
     print("\nrun_uc.py failed commands:")
     for dirname, cmds in badguys.items():
-        print("Directory={}".format(dirname))
+        print(f"Directory={dirname}")
         for c in cmds:
             print("  " + c)
     raise RuntimeError("run_uc.py had failed commands")

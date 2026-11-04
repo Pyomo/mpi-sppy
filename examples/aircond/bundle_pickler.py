@@ -12,10 +12,10 @@
 # parallel version
 
 import numpy as np
-import mpisppy.tests.examples.aircondB as aircondB
-from mpisppy.utils import config
 
+import mpisppy.tests.examples.aircondB as aircondB
 from mpisppy import MPI
+from mpisppy.utils import config
 
 n_proc = MPI.COMM_WORLD.Get_size()
 my_rank = MPI.COMM_WORLD.Get_rank()
@@ -53,8 +53,7 @@ def main():
 
     if numbuns < n_proc:
         raise RuntimeError(
-            "More MPI ranks (%d) supplied than needed given the number of bundles (%d) "
-            % (n_proc, numbuns)
+            f"More MPI ranks ({n_proc}) supplied than needed given the number of bundles ({numbuns}) "
         )
 
     avg = numbuns / n_proc
@@ -65,11 +64,11 @@ def main():
 
     #print(f"{slices=}")
     #print(f"{local_bundle_names=}")
-    
+
     for bname in local_bundle_names:
         aircondB.scenario_creator(bname, **kwargs)
-    
+
 
 if __name__ == "__main__":
     main()
-    
+

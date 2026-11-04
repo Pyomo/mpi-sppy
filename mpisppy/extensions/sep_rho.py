@@ -9,12 +9,13 @@
 
 import warnings
 
-import mpisppy.extensions.dyn_rho_base
 import numpy as np
+
+import mpisppy.extensions.dyn_rho_base
 import mpisppy.MPI as MPI
 from mpisppy import global_toc
-from mpisppy.utils.sputils import nonant_cost_coeffs
 from mpisppy.utils.rho_utils import assign_rho_with_fallback
+from mpisppy.utils.sputils import nonant_cost_coeffs
 
 
 class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
@@ -196,7 +197,7 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                 num_rhos += 1
         rho_avg = sum_rho / num_rhos
         global_toc(f"Rho values recomputed - average rank 0 rho={rho_avg}")
-        
+
     def checkpoint_state(self):
         """Adds the cost coefficients to what the dynamic-rho base carries.
 
@@ -222,7 +223,12 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             if sname in by_name}
 
     def pre_iter0(self):
-        pass
+        # Capture coefficients before iter0_post_solver_creation hooks (notably
+        # RelaxedPHFixer) can fix nonants. Pyomo folds fixed-variable terms
+        # into the standard representation's constant.
+        if not getattr(self.opt, "_resumed_from_checkpoint", False):
+            for s in self.opt.local_scenarios.values():
+                self.nonant_cost_coeffs(s)
 
     def post_iter0(self):
         if getattr(self.opt, "_resumed_from_checkpoint", False):
@@ -237,13 +243,16 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             # WTracker, and miditer reads both on the very next pass -- so
             # skipping it here does not leave rho alone, it takes the run down
             # at the first resumed iteration.
-            self.update_caches()
+            if self._dynamic_updates_enabled():
+                self.update_caches()
             return
         global_toc("Using sep-rho rho setter")
         self.update_caches()
         self.compute_and_update_rho()
 
     def miditer(self):
+        if not self._dynamic_updates_enabled():
+            return
         self.update_caches()
         if self._update_recommended():
             self.compute_and_update_rho()

@@ -8,12 +8,13 @@
 ###############################################################################
 
 import abc
-import os
 import math
+import os
 
 import mpisppy.cylinders.spoke as spoke
 from mpisppy.cylinders.spwindow import Field
 from mpisppy.utils.xhat_eval import Xhat_Eval
+
 
 class XhatInnerBoundBase(spoke.InnerBoundNonantSpoke):
 

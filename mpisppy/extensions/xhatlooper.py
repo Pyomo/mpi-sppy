@@ -12,6 +12,7 @@
 
 import mpisppy.extensions.xhatbase
 
+
 class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
     """
     Args:
@@ -65,8 +66,7 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
         """
         def _vb(msg):
             if verbose and self.cylinder_rank == 0:
-                print ("    rank {} xhat_looper: {}".\
-                       format(self.cylinder_rank,msg))
+                print (f"    rank {self.cylinder_rank} xhat_looper: {msg}")
         obj = None
         sname = None
         snumlists = dict()
@@ -84,7 +84,7 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
                     raise RuntimeError("XhatLooper does not support a seed: "
                                        "a random permutation in snumlist "
                                        "is not implemented")
-        
+
         self.opt._save_nonants() # to cache for use in fixing
         # for the moment (dec 2019) treat two-stage as special
         if len(snumlists) == 1:
@@ -119,7 +119,7 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
     def post_iter0(self):
         # a little bit silly
         self.comms = self.opt.comms
-        
+
     def miditer(self):
         pass
 

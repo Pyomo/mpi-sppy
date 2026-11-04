@@ -56,8 +56,10 @@ import unittest
 import mpisppy.tests.multirank_agreement_driver as agreement_driver
 import mpisppy.utils.checkpointing as checkpointing
 from mpisppy.cylinders.spoke import InnerBoundNonantSpoke
-from mpisppy.cylinders.xhatshufflelooper_bounder import (ScenarioCycler,
-                                                         XhatShuffleInnerBound)
+from mpisppy.cylinders.xhatshufflelooper_bounder import (
+    ScenarioCycler,
+    XhatShuffleInnerBound,
+)
 from mpisppy.extensions.checkpointer import Checkpointer
 from mpisppy.phbase import PHBase
 from mpisppy.tests.utils import get_solver, subprocess_env
@@ -1838,6 +1840,7 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
         being added here.
         """
         import ast
+
         import mpisppy
         checkpointer_tree = ast.parse(inspect.getsource(
             inspect.getmodule(Checkpointer)))

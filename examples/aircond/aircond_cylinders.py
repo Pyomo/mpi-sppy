@@ -10,17 +10,20 @@
 # Use bundle_pickler.py to create bundle pickles
 # NOTE: As of 3 March 2022, you can't compare pickle bundle problems with non-pickled. See _demands_creator in aircondB.py for more discusion.
 
-import numpy as np
 import itertools
-from mpisppy import global_toc
-from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.utils.sputils import first_stage_nonant_npy_serializer, option_string_to_dict
-from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
+
+import numpy as np
+
 import mpisppy.tests.examples.aircond as aircond
 import mpisppy.tests.examples.aircondB as aircondB  # pickle bundle version
-from mpisppy.utils import pickle_bundle
-from mpisppy.utils import amalgamator
+import mpisppy.utils.cfg_vanilla as vanilla
+from mpisppy import global_toc
+from mpisppy.spin_the_wheel import WheelSpinner
+from mpisppy.utils import amalgamator, config, pickle_bundle
+from mpisppy.utils.sputils import (
+    first_stage_nonant_npy_serializer,
+    option_string_to_dict,
+)
 
 # construct a node-scenario dictionary a priori for xhatspecific_spoke,
 # according to naming convention for this problem
@@ -39,10 +42,10 @@ def make_node_scenario_dict_balanced(BFs,leaf_nodes=True,start=1):
     nodenames = make_nodenames_balanced(BFs, leaf_nodes)
     num_scens = np.prod(BFs)
     scenario_names = aircond.scenario_names_creator(num_scens, start)
-    
+
     num_stages = len(BFs)+1
     node_scenario_dict ={"ROOT": scenario_names[0]}
-    
+
     for i in range(BFs[0]):
         node_scenario_dict[nodenames[i]] = scenario_names[i]
         if num_stages >= 3:
@@ -72,17 +75,17 @@ def _recursive_node_dict(current_dict, nodenames, scenario_names, BFs, stage):
     node_offset = int(np.sum([np.prod(BFs[:i]) for i in range(1,stage-1)]))
     #
     scen_offset = 1
-    
+
     # Check if we're handling leaf nodes:
     if stage == len(BFs)+1:
         scen_offset = 0
-        
+
     for i in range(np.prod(BFs[:(stage-1)])):
         node_idx = i + node_offset
         scen_idx = 0 if i == 0 else int(np.prod(BFs[(stage-1):]))*i - scen_offset
 
         current_dict[nodenames[node_idx]] = scenario_names[scen_idx]
-        
+
     return current_dict.copy()
 
 
@@ -92,7 +95,7 @@ def make_nodenames_balanced(BFs, leaf_nodes=False, root = True):
         BFs (list): branching factor for each stage
         leaf_nodes (bool): if False, exclude leaf node names
         root (bool): if False, no "ROOT_" string on non-root nodes
-    
+
     Returns: 
         nodenames (list): list of all nodenames, "ROOT" is last, ordered as:
         0, 1, 2, ..., BFs[0], 0_0, 0_1, ..., 0_BFs[1], 1_0, 1_1, ... ,
@@ -125,13 +128,13 @@ def make_nodenames_balanced(BFs, leaf_nodes=False, root = True):
         nodenames = strings
     # add root node (it is nicer to keep it at the end)
     nodenames.append("ROOT")
-        
+
     return nodenames
-    
+
 def _parse_args():
     # create and return a Config object with values from the command line
     cfg = config.Config()
-    
+
     cfg.multistage()
     cfg.ph_args()
     cfg.two_sided_args()
@@ -209,7 +212,7 @@ def main():
         refmodule = aircondB
         primal_rho_setter = None
         global_toc("WARNING: not using rho setters with proper bundles")
-        
+
     else:
         ScenCount = np.prod(BFs)
         all_scenario_names = [f"scen{i}" for i in range(ScenCount)] #Scens are 0-based
@@ -223,7 +226,7 @@ def main():
     scenario_creator = refmodule.scenario_creator
     # TBD: consider using aircond instead of refmodule and pare down aircondB.py
     scenario_denouement = refmodule.scenario_denouement
-    
+
     if cfg.EF_directly:
         """
         ama_options = {"EF-mstage": not proper_bundles,
@@ -245,7 +248,7 @@ def main():
     # if we are still here, we are running cylinders
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
-    
+
     if cfg.run_async:
         # Vanilla APH hub
         hub_dict = vanilla.aph_hub(*beans,
@@ -286,9 +289,9 @@ def main():
                                                         xhat_scenario_dict,
                                                         all_nodenames=all_nodenames,
                                                         scenario_creator_kwargs=scenario_creator_kwargs)
-    
+
     #xhat shuffle looper bound spoke
-    
+
     if with_xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, 
                                                       all_nodenames=all_nodenames,
@@ -327,8 +330,7 @@ def main():
 
     fname = 'aircond_cyl_nonants.npy'
     if wheel.global_rank == 0:
-        print("BestInnerBound={} and BestOuterBound={}".\
-              format(wheel.BestInnerBound, wheel.BestOuterBound))
+        print(f"BestInnerBound={wheel.BestInnerBound} and BestOuterBound={wheel.BestOuterBound}")
         if cfg.write_solution:
             print(f"Writing first stage solution to {fname}")
     # all ranks need to participate because only the winner will write
@@ -341,4 +343,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
+

@@ -25,13 +25,14 @@
 # because it requires mpiexec.
 
 import unittest
+
 import pyomo.environ as pyo
 
-import mpisppy.utils.sputils as sputils
 import mpisppy.opt.ph
-from mpisppy.opt.subgradient import Subgradient
-from mpisppy.opt.lshaped import LShapedMethod
+import mpisppy.utils.sputils as sputils
 from mpisppy.opt.fwph import FWPH
+from mpisppy.opt.lshaped import LShapedMethod
+from mpisppy.opt.subgradient import Subgradient
 from mpisppy.tests.examples import farmer
 from mpisppy.tests.utils import get_solver, limit_solver_threads
 
@@ -143,7 +144,7 @@ class Test_maximization(unittest.TestCase):
                 "sp_solver": solver_name,
                 "sp_solver_options": {},
                 # supply valid (loose) outer bounds to skip the eta-bound solve
-                "valid_eta_lb": {n: -1e6 for n in self.names},
+                "valid_eta_lb": dict.fromkeys(self.names, -1e6),
             }
             ls = LShapedMethod(
                 options,

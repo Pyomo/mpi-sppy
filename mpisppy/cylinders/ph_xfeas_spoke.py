@@ -7,8 +7,10 @@
 # full copyright and license information.
 ###############################################################################
 
-from mpisppy.cylinders.spoke import Spoke, Field
 import pyomo.environ as pyo
+
+from mpisppy.cylinders.spoke import Field, Spoke
+
 
 class PHXFeasSpoke(Spoke):
     send_fields = (*Spoke.send_fields, Field.XFEAS)
@@ -36,8 +38,8 @@ class PHXFeasSpoke(Spoke):
         self.opt.iterk_loop()
 
         return self.opt.conv, None, trivial_bound
-    
-    
+
+
     def send_xfeas(self):
         xfeas_buf = self.send_buffers[Field.XFEAS]
         ci = 0
@@ -54,7 +56,7 @@ class PHXFeasSpoke(Spoke):
 
 
     def sync(self):
-       
+
         self.send_xfeas()
         # Update the nonant bounds, if possible
         self.receive_nonant_bounds()

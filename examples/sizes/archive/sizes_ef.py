@@ -7,10 +7,11 @@
 # full copyright and license information.
 ###############################################################################
 import sys
-import mpisppy.phbase
+
 import pyomo.environ as pyo
 from sizes import scenario_creator
 
+import mpisppy.phbase
 
 ScenCount = 3
 

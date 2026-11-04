@@ -9,8 +9,10 @@
 import sys
 
 from pyomo.environ import SolverFactory
-from mpisppy.utils.pysp_model import PySPModel
+
 from mpisppy.opt.ef import ExtensiveForm
+from mpisppy.utils.pysp_model import PySPModel
+
 
 def _print_usage():
     print('Usage: "sizes_pysp.py num_scen solver" where num_scen is 3 or 10 and solver is a pyomo solver name')

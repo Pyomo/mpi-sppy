@@ -16,9 +16,9 @@
 
 import warnings
 
-from mpisppy import global_toc
 import mpisppy.extensions.extension
 import mpisppy.utils.sputils as sputils
+from mpisppy import global_toc
 
 
 class Gapper(mpisppy.extensions.extension.Extension):

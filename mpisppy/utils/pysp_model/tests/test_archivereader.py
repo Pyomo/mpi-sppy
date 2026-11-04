@@ -14,17 +14,25 @@
 # This file was originally part of PyUtilib, available: https://github.com/PyUtilib/pyutilib
 # Copied with modification from pyutilib/misc/tests/test_archivereader.py
 
-import os
 import fnmatch
+import os
 import posixpath
 
 import pyomo.common.unittest as unittest
 
-from mpisppy.utils.pysp_model.archivereader import \
-    ArchiveReaderFactory, DirArchiveReader, FileArchiveReader, \
-    TarArchiveReader, ZipArchiveReader, BZ2FileArchiveReader, \
-    GzipFileArchiveReader, tarfile_available, zipfile_available, \
-    gzip_available, bz2_available
+from mpisppy.utils.pysp_model.archivereader import (
+    ArchiveReaderFactory,
+    BZ2FileArchiveReader,
+    DirArchiveReader,
+    FileArchiveReader,
+    GzipFileArchiveReader,
+    TarArchiveReader,
+    ZipArchiveReader,
+    bz2_available,
+    gzip_available,
+    tarfile_available,
+    zipfile_available,
+)
 
 currdir = os.path.dirname(os.path.abspath(__file__))
 testdatadir = os.path.join(currdir, 'archivereader')
@@ -81,14 +89,14 @@ class TestArchiveReaderFactory(unittest.TestCase):
         try:
             ArchiveReaderFactory(
                 os.path.join(testdatadir, '_does_not_exist_'))
-        except IOError:
+        except OSError:
             pass
         else:
             self.fail(
                 "ArchiveReaderFactory should raise exception with nonexistent archive")
 
 
-class _TestArchiveReaderBaseNested(object):
+class _TestArchiveReaderBaseNested:
 
     archive_class = None
     archive_name = None
@@ -360,7 +368,7 @@ class TestZipArchiveReaderWin(_TestArchiveReaderBaseNested, unittest.TestCase):
     archive_name = 'win_archive_directory.zip'
 
 
-class _TestFileArchiveReaderBase(object):
+class _TestFileArchiveReaderBase:
 
     archive_class = None
     archive_name = None

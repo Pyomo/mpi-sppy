@@ -15,8 +15,9 @@ that need a first-stage point feasible for every real scenario's
 per-scenario subproblem.
 """
 
-from mpisppy.utils.xhat_helpers import average_xhat_nonants
 from farmer import average_scenario_creator
+
+from mpisppy.utils.xhat_helpers import average_xhat_nonants
 
 
 def feasible_xhat_creator(

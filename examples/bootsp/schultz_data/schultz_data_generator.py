@@ -15,8 +15,9 @@
 # fixed seed, so the committed CSV is reproducible; the point of the example is
 # that the bootstrap code treats this file as "the data".
 
-import os
 import csv
+import os
+
 import numpy as np
 
 N = 200            # number of observations in the dataset

@@ -16,8 +16,8 @@ import sys
 import unittest
 from unittest import mock
 
-import mpisppy.MPI as MPI
 import mpisppy.entry_points as entry_points
+import mpisppy.MPI as MPI
 import mpisppy.utils.mpi_abort as mpi_abort
 
 try:

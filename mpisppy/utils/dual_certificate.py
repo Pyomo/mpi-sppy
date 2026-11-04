@@ -101,9 +101,9 @@
 import math
 
 import pyomo.environ as pyo
-from pyomo.core.expr.calculus.derivatives import differentiate, Modes
-from pyomo.core.expr.visitor import identify_variables
 from pyomo.contrib.fbbt.fbbt import fbbt
+from pyomo.core.expr.calculus.derivatives import Modes, differentiate
+from pyomo.core.expr.visitor import identify_variables
 
 from mpisppy.utils.sputils import find_active_objective as _find_active_objective
 
@@ -161,6 +161,8 @@ _SIGN_CONVENTIONS = {
 try:
     from pyomo.core.expr.calculus.diff_with_pyomo import (
         _diff_map as _PYOMO_DIFF_MAP,
+    )
+    from pyomo.core.expr.calculus.diff_with_pyomo import (
         _unary_map as _PYOMO_UNARY_MAP,
     )
     _DIFFERENTIABLE_NODES = frozenset(_PYOMO_DIFF_MAP)
@@ -181,7 +183,8 @@ def _undifferentiable_parts(expr, where):
     if _DIFFERENTIABLE_NODES is None:
         return []
     from pyomo.core.expr.numeric_expr import (
-        UnaryFunctionExpression, NPV_UnaryFunctionExpression,
+        NPV_UnaryFunctionExpression,
+        UnaryFunctionExpression,
     )
     unary_types = (UnaryFunctionExpression, NPV_UnaryFunctionExpression)
 

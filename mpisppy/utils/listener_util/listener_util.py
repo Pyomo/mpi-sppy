@@ -16,15 +16,17 @@
 Prior to October 2024, to avoid errors from Pyomo we used:
                 solve_keyword_args["use_signal_handling"] = False
 """
-import numpy as np
 import collections
-import mpisppy.MPI as mpi
-import time
-import threading
 import logging
+import threading
+import time
+
+import numpy as np
+
+import mpisppy.MPI as mpi
 
 
-class Synchronizer(object):
+class Synchronizer:
     """
     Manage both Async and Sync communcation.
     Args:
@@ -67,7 +69,7 @@ class Synchronizer(object):
         # The side gigs are very dangerous.
         self.listener_gigs = listener_gigs
         self.enable_side_gig = False # TBD should be gigs & indexed by reduction
-        
+
         self.global_quitting = 0
         self.quitting = 0
         self.work_fct = work_fct
@@ -104,6 +106,10 @@ class Synchronizer(object):
             wthread.start()
 
             listener.join()
+            # A listener can observe another rank's quit request while this
+            # rank's worker is still finishing an iteration or solve.  Do not
+            # let the caller begin finalization concurrently with that work.
+            wthread.join()
         else:
             self.work_fct(*args, **kwargs)
 
@@ -114,17 +120,13 @@ class Synchronizer(object):
         if len(local_data_in[redname][cname]) \
            != self.Lens[redname][cname]:
             self.global_quitting = 1
-            print ("\nERROR listener_util:cname={} len in={} Lens={}".\
-                   format(cname, len(local_data_in[redname][cname]),
-                          self.Lens[redname][cname]))
+            print (f"\nERROR listener_util:cname={cname} len in={len(local_data_in[redname][cname])} Lens={self.Lens[redname][cname]}")
         if len(global_data_out[redname][cname]) \
            != self.Lens[redname][cname]:
             self.global_quitting = 1
-            print ("\nERROR listener_util:cname={} len out={} Lens={}".\
-                   format(cname, len(global_data_out[redname][cname]),
-                          self.Lens[redname][cname]))
+            print (f"\nERROR listener_util:cname={cname} len out={len(global_data_out[redname][cname])} Lens={self.Lens[redname][cname]}")
 
-            
+
     #########################################################################
     def compute_global_data(self, local_data_in,
                             global_data_out,
@@ -153,9 +155,9 @@ class Synchronizer(object):
         Note np.copy is dst, src
         """
         if self.asynch:
-            logging.debug('Starting comp_glob update on Rank %d' % self._rank)
+            logging.debug(f'Starting comp_glob update on Rank {self._rank}')
             self.data_lock.acquire() 
-            logging.debug('Lock aquired by comp_glob on Rank %d' % self._rank)
+            logging.debug(f'Lock aquired by comp_glob on Rank {self._rank}')
             if rednames is None:
                 reds = self.Lens.keys()
             else:
@@ -186,8 +188,8 @@ class Synchronizer(object):
                     np.copyto(self.local_data[redname][cname],
                               local_data_in[redname][cname]) 
             self.data_lock.release()
-            logging.debug('Lock released on Rank %d' % self._rank)
-            logging.debug('Ending update on Rank %d' % self._rank)
+            logging.debug(f'Lock released on Rank {self._rank}')
+            logging.debug(f'Ending update on Rank {self._rank}')
             if enable_side_gig:
                 if self.enable_side_gig:
                     raise RuntimeError("side gig already enabled.")
@@ -214,9 +216,9 @@ class Synchronizer(object):
         """
         if self.asynch:
             logging.debug('Enter get_global_data')
-            logging.debug(' get_glob wants lock on Rank %d' % self._rank)
+            logging.debug(f' get_glob wants lock on Rank {self._rank}')
             self.data_lock.acquire() 
-            logging.debug('Lock acquired by get_glob on Rank %d' % self._rank)
+            logging.debug(f'Lock acquired by get_glob on Rank {self._rank}')
             for redname in self.Lens.keys():
                 for cname in self.Lens[redname].keys():
                     if self.Lens[redname][cname] == 0:
@@ -225,7 +227,7 @@ class Synchronizer(object):
                     np.copyto(global_data_out[redname][cname],
                               self.global_data[redname][cname])
             self.data_lock.release()
-            logging.debug('Lock released on Rank %d' % self._rank)
+            logging.debug(f'Lock released on Rank {self._rank}')
             logging.debug('Leave get_global_data')
         else:
             raise RuntimeError("get_global_data called for sycnhronous")
@@ -243,8 +245,7 @@ class Synchronizer(object):
             As of March 2019, not used internally (duplicates code in compute)
         """
         if self.asynch:
-            logging.debug('Enter _usafe_get_global_data, redname={}'\
-                          .format(redname))
+            logging.debug(f'Enter _usafe_get_global_data, redname={redname}')
             for cname in self.Lens[redname].keys():
                 if self.Lens[redname][cname] == 0:
                     continue
@@ -267,8 +268,7 @@ class Synchronizer(object):
             As of March 2019, not used internally (duplicates code in compute)
         """
         if self.asynch:
-            logging.debug('Enter _usafe_put_local_data, redname={}'\
-                          .format(redname))
+            logging.debug(f'Enter _usafe_put_local_data, redname={redname}')
             for cname in self.Lens[redname].keys():
                 if self.Lens[redname][cname] == 0:
                     continue
@@ -283,24 +283,23 @@ class Synchronizer(object):
     def listener_daemon(rank, synchronizer):
         # both args added by DLW March 2019
         # listener side_gigs added by DLW March 2019.
-        logging.debug('Starting Listener on Rank %d' % rank)
+        logging.debug(f'Starting Listener on Rank {rank}')
         while synchronizer.global_quitting == 0:
             # IDEA (Bill):  Add a Barrier here???
             synchronizer.data_lock.acquire()
-            logging.debug('Locked; starting AllReduce on Rank %d' % rank)
+            logging.debug(f'Locked; starting AllReduce on Rank {rank}')
             for redname in synchronizer.Lens.keys():
                 for cname in synchronizer.Lens[redname].keys():
                     if synchronizer.Lens[redname][cname] == 0:
                         continue
                     comm = synchronizer.comms[cname]
-                    logging.debug('  redname %s cname %s pre-reduce on rank %d' \
-                                  % (redname, cname, rank))
+                    logging.debug(f'  redname {redname} cname {cname} pre-reduce on rank {rank}')
                     comm.Allreduce([synchronizer.local_data[redname][cname],
                                     mpi.DOUBLE],
                                    [synchronizer.global_data[redname][cname],
                                     mpi.DOUBLE],
                                    op=mpi.SUM)
-                    logging.debug(' post-reduce %s on rank %d' % (redname,rank))
+                    logging.debug(f' post-reduce {redname} on rank {rank}')
                     if synchronizer.enable_side_gig \
                        and synchronizer.listener_gigs is not None \
                        and synchronizer.listener_gigs[redname] is not None:
@@ -310,7 +309,7 @@ class Synchronizer(object):
                             fct(*args, **kwargs)
                         else:
                             fct(*args)
-            logging.debug('Still Locked; ending AllReduces on Rank %d' % rank)
+            logging.debug(f'Still Locked; ending AllReduces on Rank {rank}')
             synchronizer.global_quitting = synchronizer.comms["ROOT"].allreduce(
                 synchronizer.quitting, op=mpi.SUM)
             sleep_touse = np.zeros(1, dtype='d')
@@ -321,18 +320,17 @@ class Synchronizer(object):
                                                  [sleep_touse, mpi.DOUBLE],
                                                  op=mpi.MIN)
 
-            logging.debug('  releasing lock on Rank %d' % rank)
+            logging.debug(f'  releasing lock on Rank {rank}')
             synchronizer.data_lock.release()
-            logging.debug('  sleep for %f on Rank %d' % (sleep_touse[0], rank))
+            logging.debug(f'  sleep for {sleep_touse[0]:f} on Rank {rank}')
             try:
                 time.sleep(sleep_touse[0])
             except:
-                print("sleep_touse={}".format(sleep_touse))
+                print(f"sleep_touse={sleep_touse}")
                 raise
-        logging.debug('Exiting listener on Rank %d' % rank)
+        logging.debug(f'Exiting listener on Rank {rank}')
 
 
 #synchronizer = Synchronizer(CropsLen, comm, sync=True)
 #synchronizer.run()
-
 

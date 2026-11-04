@@ -8,16 +8,17 @@
 ###############################################################################
 # script to estimate zhat from a given xhat for a given model
 
-import sys
 import importlib
+import sys
+
 import numpy as np
 from pyomo.common.dependencies import scipy
-from mpisppy.confidence_intervals import sample_tree
-from mpisppy.utils import sputils
-from mpisppy.confidence_intervals import ciutils
-from mpisppy.utils.xhat_eval import Xhat_Eval
+
+from mpisppy.confidence_intervals import ciutils, sample_tree
+from mpisppy.utils import config, sputils
 from mpisppy.utils.sputils import option_string_to_dict
-from mpisppy.utils import config
+from mpisppy.utils.xhat_eval import Xhat_Eval
+
 
 def evaluate_sample_trees(xhat_one, 
                           num_samples,
@@ -145,12 +146,12 @@ def _parser_setup():
                          description="space separated string of solver options, e.g. 'option1=value1 option2 = value2'",
                          domain=str,
                          default='')
-    
+
     cfg.add_to_config("xhatpath",
                          description="path to npy file with xhat",
                          domain=str,
                          default='')
-    
+
     cfg.add_to_config("confidence_level",
                          description="one minus alpha (default 0.95)",
                          domain=float,
@@ -164,7 +165,7 @@ def _main_body(model_module, cfg):
     lcfg = cfg()  # make a copy because of EF-mstage
     solver_options_dict = option_string_to_dict(cfg.solver_options)
     lcfg.add_and_assign("EF_solver_options", "solver options dict", dict, None, solver_options_dict)
-    
+
     lcfg.quick_assign("EF_mstage", domain=bool, value=True)
 
     return run_samples(lcfg, model_module)
@@ -188,7 +189,7 @@ if __name__ == "__main__":
         del cfg.num_scens
     except Exception:
         pass
-    
+
     parser = cfg.create_parser("zhat4zhat")
     # the module name is very special because it has to be plucked from argv
     parser.add_argument(
@@ -200,7 +201,7 @@ if __name__ == "__main__":
                          default='',
                          argparse=False)
     cfg.model_module_name = mname
-    
+
     args = parser.parse_args()  # from the command line
     args = cfg.import_argparse(args)
 

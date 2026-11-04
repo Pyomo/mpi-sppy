@@ -8,10 +8,13 @@
 ###############################################################################
 
 import time
+
 import pyomo.environ as pyo
+
 import mpisppy.extensions.extension
-from mpisppy.utils.sputils import is_persistent
 from mpisppy import global_toc
+from mpisppy.utils.sputils import is_persistent
+
 
 class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
     """ Class for relaxing integer variables, running PH, and then
@@ -91,7 +94,7 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
             subproblem_solver = sub._solver_plugin
             vlist = None
             if is_persistent(subproblem_solver):
-                vlist = list(v for v,d in sub._relaxed_integer_vars[None].values())
+                vlist = [v for v,d in sub._relaxed_integer_vars[None].values()]
             self.integer_relaxer.apply_to(sub, options={"undo":True})
             if is_persistent(subproblem_solver):
                 for v in vlist:

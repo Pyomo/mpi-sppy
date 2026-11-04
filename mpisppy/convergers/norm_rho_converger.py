@@ -10,10 +10,12 @@
 # Adapted from the PySP extension adaptive_rho_converger, authored by Gabriel Hackebeil
 
 import math
-import mpisppy.convergers.converger
 
-import mpisppy.MPI as MPI
 import numpy as np
+
+import mpisppy.convergers.converger
+import mpisppy.MPI as MPI
+
 
 class NormRhoConverger(mpisppy.convergers.converger.Converger):
     # Everything it compares is recomputed from the current iterate.
@@ -52,7 +54,7 @@ class NormRhoConverger(mpisppy.convergers.converger.Converger):
         if not hasattr(self.ph, "_mpisppy_norm_rho_update_inuse")\
                        or not self.ph._mpisppy_norm_rho_update_inuse:
             raise RuntimeError("NormRhoConverger can only be used if NormRhoUpdater is")
-        
+
         log_rho_norm = math.log(self._compute_rho_norm(self.ph))
 
         ret_val = log_rho_norm < self.ph.options['convthresh']

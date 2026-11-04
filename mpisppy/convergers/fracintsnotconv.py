@@ -13,8 +13,11 @@
 """
 
 import math
+
 import pyomo.environ as pyo
+
 import mpisppy.convergers.converger
+
 
 class FractionalConverger(mpisppy.convergers.converger.Converger):
     """ Illustrate a class to contain data used by the converger 
@@ -46,7 +49,7 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
         self._rank = phb.cylinder_rank
         if self.verbose:
             print ("Created converger=",self.name)
-        
+
     def _convergence_value(self):
         """ compute the fraction of *not* converged ints
         Args:

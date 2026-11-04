@@ -8,16 +8,19 @@
 ###############################################################################
 
 import abc
-import math
 import logging
+import math
+
 import mpisppy.log
-
-from mpisppy.cylinders.spcommunicator import RecvArray, SPCommunicator,RecvCircularBuffer
-
 from mpisppy import global_toc
-
-from mpisppy.cylinders.spwindow import Field
 from mpisppy.cylinders.fwph_cylinder import FWPH_Cylinder
+from mpisppy.cylinders.spcommunicator import (
+    ReadConsistency,
+    RecvArray,
+    RecvCircularBuffer,
+    SPCommunicator,
+)
+from mpisppy.cylinders.spwindow import Field
 
 # Could also pass, e.g., sys.stdout instead of a filename
 mpisppy.log.setup_logger(__name__,
@@ -54,20 +57,17 @@ class Hub(SPCommunicator):
         """ To be called within the whichever optimization algorithm
             is being run on the hub (e.g. PH)
         """
-        pass
 
     @abc.abstractmethod
     def is_converged(self):
         """ The hub has the ability to halt the optimization algorithm on the
             hub before any local convergers.
         """
-        pass
 
     @abc.abstractmethod
     def current_iteration(self):
         """ Returns the current iteration count - however the hub defines it.
         """
-        pass
 
     @abc.abstractmethod
     def main(self):
@@ -179,7 +179,7 @@ class Hub(SPCommunicator):
         """
         my_bounds = self.send_buffers[Field.BEST_OBJECTIVE_BOUNDS]
         self._populate_boundsout_cache(my_bounds.array())
-        logging.debug("hub is sending bounds={}".format(my_bounds))
+        logging.debug(f"hub is sending bounds={my_bounds}")
         self.put_send_buffer(my_bounds, Field.BEST_OBJECTIVE_BOUNDS)
         return
 
@@ -331,7 +331,7 @@ class PHPrimalHub(Hub):
             for xvar in s._mpisppy_data.nonant_indices.values():
                 nonant_send_buffer[ci] = xvar._value
                 ci += 1
-        logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
+        logging.debug(f"hub is sending X nonants={nonant_send_buffer}")
 
         self.put_send_buffer(nonant_send_buffer, self.nonant_field)
 
@@ -340,7 +340,6 @@ class PHPrimalHub(Hub):
     def send_ws(self):
         """ Nonant hub; do not send Ws
         """
-        pass
 
 
 class PHHub(PHPrimalHub):
@@ -353,7 +352,7 @@ class PHHub(PHPrimalHub):
         # NOTE: my_ws.array() and self.w_send_buffer should be the same array.
         my_ws = self.send_buffers[Field.DUALS]
         self.opt._populate_W_cache(my_ws.array(), padding=1)
-        logging.debug("hub is sending Ws={}".format(my_ws.array()))
+        logging.debug(f"hub is sending Ws={my_ws.array()}")
 
         self.put_send_buffer(my_ws, Field.DUALS)
 
@@ -419,12 +418,12 @@ class LShapedHub(Hub):
                 ## Grab the value from the associated root variable
                 nonant_send_buffer[ci] = nonant_to_root_var_map[xvar]._value
                 ci += 1
-        logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
+        logging.debug(f"hub is sending X nonants={nonant_send_buffer}")
 
         self.put_send_buffer(nonant_send_buffer, Field.NONANTS_VALS)
 
         return
-    
+
 
 
 class CGHub(Hub):
@@ -498,16 +497,16 @@ class CGHub(Hub):
             for xvar in s._mpisppy_data.nonant_indices.values():
                 nonant_send_buffer[ci] = xvar._value
                 ci += 1
-        logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
+        logging.debug(f"hub is sending X nonants={nonant_send_buffer}")
 
         self.put_send_buffer(nonant_send_buffer, self.nonant_field)
 
         return
-     
+
     @property
     def nonant_field(self):
         return Field.NONANTS_VALS 
-    
+
 
 class DCGHub(CGHub):
     def main(self):
@@ -530,6 +529,11 @@ class SubgradientHub(PHHub):
 class APHHub(PHHub):
 
     # send / receive fields are same as PHHub
+    #
+    # APH ranks publish their local pieces of W independently. Consumers that
+    # require one cylinder-wide generation must therefore assemble the latest
+    # pieces asynchronously and repair dual feasibility before using them.
+    publishes_asynchronous_duals = True
 
     def main(self):
         """ SPComm gets attached by self.__init___; holding APH harmless """
@@ -541,15 +545,20 @@ class APHHub(PHHub):
                            buf: RecvArray,
                            field: Field,
                            origin: int,
-                           synchronize: bool = False,
+                           synchronize: bool | None = None,
+                           consistency: ReadConsistency | None = None,
                           ):
-        return super().get_receive_buffer(buf, field, origin, synchronize)
+        if consistency is None and synchronize is None:
+            consistency = ReadConsistency.INDEPENDENT
+        return super().get_receive_buffer(
+            buf, field, origin,
+            synchronize=synchronize,
+            consistency=consistency,
+        )
 
     def finalize(self):
         """ does PH.post_loops, returns Eobj """
-        # NOTE: APH_main does NOT pass in extensions
-        #       to APH.post_loops
-        Eobj = self.opt.post_loops()
+        Eobj = self.opt.post_loops(self.opt.extensions)
         return Eobj
 
 class FWPHHub(PHHub, FWPH_Cylinder):

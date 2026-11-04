@@ -6,16 +6,17 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-from mpisppy.spbase import SPBase
-import pyomo.environ as pyo
 import logging
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
 import parapint
-from typing import List, Callable, Dict, Optional, Tuple, Any, Union
+import pyomo.environ as pyo
 from pyomo.core.base.block import _BlockData
 from pyomo.core.base.var import _GeneralVarData
-from mpisppy import MPI
-from mpisppy.utils.sputils import find_active_objective
 
+from mpisppy import MPI
+from mpisppy.spbase import SPBase
+from mpisppy.utils.sputils import find_active_objective
 
 logger = logging.getLogger('mpisppy.sc')
 
@@ -42,7 +43,7 @@ class _SCInterface(parapint.interfaces.MPIStochasticSchurComplementInteriorPoint
         models = models[1:]
         self.nonant_vars = list(ref_model._mpisppy_data.nonant_indices.keys())
 
-        super(_SCInterface, self).__init__(scenarios=all_scenario_names,
+        super().__init__(scenarios=all_scenario_names,
                                            nonanticipative_var_identifiers=self.nonant_vars,
                                            comm=comm,
                                            ownership_map=ownership_map)
@@ -74,7 +75,7 @@ class SchurComplement(SPBase):
                  mpicomm=None,
                  model_name=None,
                  suppress_warnings=False):
-        super(SchurComplement, self).__init__(options=options,
+        super().__init__(options=options,
                                               all_scenario_names=all_scenario_names,
                                               scenario_creator=scenario_creator,
                                               scenario_creator_kwargs=scenario_creator_kwargs,

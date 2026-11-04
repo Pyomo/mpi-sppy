@@ -23,13 +23,13 @@ import sys
 
 import uc_funcs as uc
 
-from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.utils import config, proper_bundler
 import mpisppy.utils.cfg_vanilla as vanilla
+from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
-from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
+from mpisppy.spin_the_wheel import WheelSpinner
+from mpisppy.utils import config, proper_bundler
 
 
 def _parse_args():

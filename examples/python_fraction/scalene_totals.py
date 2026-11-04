@@ -123,7 +123,7 @@ def totals_from_json_obj(j: Dict[str, Any]) -> Totals:
 
 
 def totals_from_json(path: str) -> Totals:
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return totals_from_json_obj(json.load(f))
 
 
@@ -135,7 +135,7 @@ def consistency_error(path: str, tol_pct_points: float = 1.0) -> Optional[str]:
     loose: a real layout change misses by tens of points, while normal profiles
     agree exactly or to within a few tenths (see the module docstring).
     """
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         j = json.load(f)
     t = totals_from_json_obj(j)
     per_file = sum(

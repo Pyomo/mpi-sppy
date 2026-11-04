@@ -14,13 +14,14 @@
 
 from pyomo.opt.results import SolutionStatus, SolverStatus, TerminationCondition
 
+
 def check_user_termination_callback_signature(user_termination_callback):
 
     import inspect
     return len(inspect.signature(user_termination_callback).parameters) == 3
 
 def set_cplex_callback(solver, user_termination_callback):
-    
+
     cplex = solver._cplex
     cplex_model = solver._solver_model
 
@@ -66,7 +67,7 @@ def set_cplex_callback(solver, user_termination_callback):
 
 
 def set_gurobi_callback(solver, user_termination_callback):
-    
+
     # TBD - best placement? For speeed...
     from gurobipy import GRB
 

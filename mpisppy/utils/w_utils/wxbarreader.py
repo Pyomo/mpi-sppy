@@ -31,11 +31,12 @@
     Modified: DTM, Aug 2019
 '''
 
-import mpisppy.utils.w_utils.wxbarutils
-import os # For checking if files exist
-from mpisppy import global_toc
+import os  # For checking if files exist
+
 import mpisppy.extensions.extension
 import mpisppy.MPI as MPI
+import mpisppy.utils.w_utils.wxbarutils
+from mpisppy import global_toc
 
 n_proc = MPI.COMM_WORLD.Get_size()
 rank = MPI.COMM_WORLD.Get_rank()
@@ -98,6 +99,24 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
         if x_fname is not None and not resuming:
             if (not os.path.exists(x_fname)):
                 raise RuntimeError(f'Cannot find file {x_fname}')
+            # The smoothing term rides on the prox flag, so it would be on in
+            # the iteration-0 solve too, centered on z = 0 and with p not yet
+            # scaled by rho.
+            if ph.options.get("smoothed", 0):
+                raise RuntimeError(
+                    f"--init-Xbar-fname ({x_fname}) cannot be combined with "
+                    "smoothing: the xbar read turns the prox term on in "
+                    "iteration 0, and the smoothing term would come on with "
+                    "it, centered on 0.")
+            # APH's prox term is centered on its own z, which nothing sets
+            # from the file, so the iteration-0 solve would be pulled toward
+            # z = 0 and its value reported as the trivial bound (issue #929).
+            import mpisppy.opt.aph
+            if isinstance(ph, mpisppy.opt.aph.APH):
+                raise RuntimeError(
+                    f"--init-Xbar-fname ({x_fname}) cannot be used with APH: "
+                    "APH's prox term is centered on its own z, not on the "
+                    "xbar read. --init-W-fname alone can be used with APH.")
 
         if (x_fname is None and w_fname is None and rank==0):
             print('Warning: no input files provided to WXBarReader. '
@@ -130,21 +149,25 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
             mpisppy.utils.w_utils.wxbarutils.set_W_from_file(
                     self.w_fname, self.PHB, self.cylinder_rank,
                     sep_files=self.sep_files)
-            self.PHB._reenable_W() # This makes a big difference.
+            self.PHB._reenable_W()
         if self.x_fname:
             mpisppy.utils.w_utils.wxbarutils.set_xbar_from_file(self.x_fname, self.PHB)
             self.PHB._reenable_prox()
+            self.PHB.keep_supplied_xbar_through_iter0()
+        if names:
+            # PH attaches the W and prox terms after the iteration-0 solve by
+            # default, which would leave that solve ignoring what was just
+            # read.
+            self.PHB.request_PH_attach_before_iter0_solve()
 
     def post_iter0(self):
         pass
-        
+
     def miditer(self):
         ''' Called before the solveloop is called '''
-        pass
 
     def enditer(self):
         ''' Called after the solve loop '''
-        pass
 
     def post_everything(self):
         pass

@@ -22,9 +22,11 @@
 '''
 from contextlib import nullcontext
 import os
-import numpy as np
-import time
 import sys
+import time
+
+import numpy as np
+
 
 # Use mpi-sppy's MPI wrapper only when testing its progress thread.
 if os.environ.get("MPISPPY_MPI_PROGRESS_THREAD") == "1":
@@ -39,7 +41,7 @@ def main():
         print("ERROR: This script must be run with multiple MPI processes using mpirun or mpiexec, e.g.:", file=sys.stderr)
         print("       mpirun -n 2 mpi-sppy-one-sided-test", file=sys.stderr)
         sys.exit(2) # Exit status 2: command line usage error
-    
+
     rank = mpi.COMM_WORLD.Get_rank()
 
     array_size = 10

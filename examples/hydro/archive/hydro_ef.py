@@ -7,10 +7,12 @@
 # full copyright and license information.
 ###############################################################################
 import sys
+
 import hydro
 import pyomo.environ as pyo
-from mpisppy.opt.ef import ExtensiveForm
+
 import mpisppy.utils.sputils as sputils
+from mpisppy.opt.ef import ExtensiveForm
 
 options = {"solver": sys.argv[1]}
 num_scenarios = 9

@@ -17,15 +17,20 @@ import math
 from collections import OrderedDict
 
 import numpy as np
+
 # scipy is an optional dependency; import it lazily so the empirical
 # bootstrap path stays scipy-free (mmw_ci.py uses the same pattern).
 from pyomo.common.dependencies import scipy
 
-from mpisppy.confidence_intervals.bootsp.statdist.distribution_factory import register_distribution
-from mpisppy.confidence_intervals.bootsp.statdist.base_distribution import Parameter
-from mpisppy.confidence_intervals.bootsp.statdist.base_distribution import UnivariateDistribution
-from mpisppy.confidence_intervals.bootsp.statdist.utilities import memoize_method
 from mpisppy.confidence_intervals.bootsp.statdist import splines
+from mpisppy.confidence_intervals.bootsp.statdist.base_distribution import (
+    Parameter,
+    UnivariateDistribution,
+)
+from mpisppy.confidence_intervals.bootsp.statdist.distribution_factory import (
+    register_distribution,
+)
+from mpisppy.confidence_intervals.bootsp.statdist.utilities import memoize_method
 
 epsilon = 1e-12
 
@@ -194,9 +199,9 @@ class UnivariateStudentDistribution(UnivariateDistribution):
             var (float): The variance parameter
         """
         if df <= 2:
-            raise ValueError("A student's t distribution with df={} has no "
+            raise ValueError(f"A student's t distribution with df={df} has no "
                              "finite variance, so it cannot be given the "
-                             "variance {}.".format(df, var))
+                             f"variance {var}.")
         self.df = df
         self.mean = mean
         self.var = var
@@ -380,7 +385,7 @@ class UnivariateGaussianKernelDistribution(UnivariateDistribution):
         # separate arguments
         return self.kernel.resample(n, seed)
 
-   
+
 
 
 @register_distribution(name="univariate-epispline", ndim=1)
@@ -439,8 +444,8 @@ class UnivariateEpiSplineDistribution(UnivariateDistribution):
 
         # Construction of Parameter objects
         params = []
-        params.extend([Parameter('tau_{}'.format(i), self.tau[i]) for i in self.tau])
-        params.extend([Parameter('a_{}'.format(i), self.a[i]) for i in self.a])
+        params.extend([Parameter(f'tau_{i}', self.tau[i]) for i in self.tau])
+        params.extend([Parameter(f'a_{i}', self.a[i]) for i in self.a])
         params.append(Parameter('delta', self.delta))
         params.append(Parameter('w0', self.w0))
         params.append(Parameter('u0', self.u0))
@@ -833,7 +838,7 @@ class UnivariateDiscrete(UnivariateDistribution):
         """
         if not isinstance(breakpoints, OrderedDict):
             raise RuntimeError("DiscreteDistribution expecting breakpoints to be a dict")
-            
+
         self.breakpoints = breakpoints
         # check the breakpoints
         tol = 1e-6
@@ -854,17 +859,17 @@ class UnivariateDiscrete(UnivariateDistribution):
         if abs(sumprob - 1) > tol: # could use gosm_options.cdf_tolerance
             raise ValueError("Discrete distribution with total prob="
                              +str(sumprob)+" tolerance="+str(tol))
-        super(UnivariateDiscrete, self).__init__()
+        super().__init__()
 
     def pdf(self, x):
         raise RuntimeError("pdf called for a discrete distribution.")
-        
+
     def cdf(self, x):
         """
             Cummulative Distribution Function: prob(X < x), which is weird
             Args:
                 x (float): The value where you want to compute the cdf
-    
+
             Returns:
                 (float) The value of the cumulative density function of this distribution on x.
         """
@@ -906,10 +911,10 @@ class UnivariateDiscrete(UnivariateDistribution):
         # if the probs dont' quite sum to one...
         val, prob = list(self.breakpoints.items())[-1]
         return val
-    
+
     def rect_prob(self,down,up):
         """
-        
+
         Args:
             up (float): the upper values where you want to compute the probability
             down (float): the upper values where you want to compute the probability

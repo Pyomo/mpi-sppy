@@ -20,6 +20,7 @@ from mpisppy.utils.callbacks.termination import (
     supports_termination_callback,
 )
 
+
 class TimedMIPGapCB(mpisppy.extensions.extension.Extension):
     '''
     This extension adds a solver termination callback that implements a time-dependent target MIP gap.

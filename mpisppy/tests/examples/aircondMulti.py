@@ -13,11 +13,12 @@
 #
 # New CLI args: --num-products (int, default 2), --cost-spread (float, default 0.1)
 ###############################################################################
-import pyomo.environ as pyo
 import numpy as np
+import pyomo.common.config as pyofig
+import pyomo.environ as pyo
+
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
-import pyomo.common.config as pyofig
 
 # Module-level random stream (re-seeded per node per product)
 aircondstream = np.random.RandomState()  # pylint: disable=no-member
@@ -289,8 +290,7 @@ def aircondMulti_model_creator(demands_by_product, **kwargs):
     begin_inv_total = kwargs.get("BeginInventory", parms["BeginInventory"][1])
     # Plain Python dict — not a Pyomo Param — so material_balance_rule can
     # use m.BeginInventory[p] as a numeric value in a Pyomo expression.
-    model.BeginInventory = {p: begin_inv_total / num_products
-                            for p in range(num_products)}
+    model.BeginInventory = dict.fromkeys(range(num_products), begin_inv_total / num_products)
 
     # Create stage sub-models
     model.stage_models = {}

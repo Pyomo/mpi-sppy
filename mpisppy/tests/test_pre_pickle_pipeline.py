@@ -21,17 +21,14 @@ import unittest
 
 import pyomo.environ as pyo
 
+import mpisppy.MPI as mpi
 import mpisppy.tests.examples.farmer as farmer
 import mpisppy.tests.examples.sizes.sizes as sizes
-from mpisppy.tests.utils import get_solver
-from mpisppy.spbase import SPBase
-from mpisppy.utils import config
-from mpisppy.utils import sputils
-from mpisppy.generic.scenario_io import _run_pre_pickle_pipeline
 from mpisppy.generic.parsing import model_fname
-
-import mpisppy.MPI as mpi
-
+from mpisppy.generic.scenario_io import _run_pre_pickle_pipeline
+from mpisppy.spbase import SPBase
+from mpisppy.tests.utils import get_solver
+from mpisppy.utils import config, sputils
 
 # Parse --python-args (extra args inserted after "python" in subcommands so
 # the dedicated coverage CI job can capture coverage from the subprocesses

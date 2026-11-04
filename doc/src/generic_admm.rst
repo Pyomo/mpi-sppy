@@ -490,6 +490,10 @@ hook:
        """Optional. Forwarded to attach_root_node's surrogate_nonant_list."""
        return scenario._surrogate_nonants   # stashed in scenario_creator
 
+   def first_stage_linear_surrogate_definitions(scenario):
+       """Optional. Definitions for mpi-sppy-owned linear surrogates."""
+       return scenario._linear_surrogate_definitions
+
    def first_stage_nonant_ef_suppl_list(scenario):
        """Optional. Forwarded to attach_root_node's nonant_ef_suppl_list."""
        return scenario._ef_suppl_nonants

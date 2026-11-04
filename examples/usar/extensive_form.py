@@ -16,12 +16,13 @@ functions here can be imported and used as documented.
 import itertools
 import os
 
-from config import add_extensive_form_args, add_common_args
+from config import add_common_args, add_extensive_form_args
 from generate_data import generate_coords, generate_data
+from scenario_creator import scenario_creator
+from write_solutions import gantt_writer, walks_writer
+
 import mpisppy.opt.ef
 import mpisppy.utils.config
-from scenario_creator import scenario_creator
-from write_solutions import walks_writer, gantt_writer
 
 
 def extensive_form(

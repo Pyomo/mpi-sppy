@@ -15,13 +15,16 @@
 
 import os
 import sys
+
 # stoch_distr.py lives one directory up (examples/stoch_distr/).
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pyomo.environ as pyo
 import stoch_distr
+
 import mpisppy.tests.examples.distr.distr_data as distr_data
 from mpisppy.utils import config
+
 
 def _parse_args():
     # create a config object and parse
@@ -82,7 +85,7 @@ def global_dict_creator(num_admm_subproblems, start=0):
         node_source = source[1]
         node_target = target[1]
         return (node_source, node_target)
-    
+
     for a in inter_region_dict["arcs"]:
         global_dict["arcs"].append(_extract_arc(a))
     for a in inter_region_dict["costs"]:

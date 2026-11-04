@@ -7,9 +7,12 @@
 # 2026 (to appear).
 ###############################################################################
 
-import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
 import json
+
+import pyomo.environ as pyo
+
+import mpisppy.utils.sputils as sputils
+
 
 def scenario_creator(scenario_name,
                      network_data=dict(),
@@ -18,7 +21,7 @@ def scenario_creator(scenario_name,
                      ):
     m = pyo.ConcreteModel(scenario_name)
 
-    with open(f"{scenario_name}.json",'r') as f:
+    with open(f"{scenario_name}.json") as f:
         scenario_data = json.load(f)
 
     # -----------------
@@ -46,7 +49,7 @@ def scenario_creator(scenario_name,
     # -----------------
     # Scenario demand aggregated by node
     # -----------------
-    d_by_node = {n: 0.0 for n in nodes}
+    d_by_node = dict.fromkeys(nodes, 0.0)
     for did, rec in scenario_data.get("demands", {}).items():
         d_by_node[str(rec["node"])] += float(rec["demand"])
 
@@ -200,9 +203,9 @@ def inparser_adder(cfg):
     pass
 
 def kw_creator(cfg):
-    with open('network_data.json','r') as f:
+    with open('network_data.json') as f:
         network_data = json.load(f)
-    with open('candidates_data.json','r') as f:
+    with open('candidates_data.json') as f:
         candidates_data = json.load(f)
 
     # For this small example, we have a fixed number of scenarios: 3

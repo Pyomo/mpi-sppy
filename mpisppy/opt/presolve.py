@@ -20,11 +20,10 @@ import abc
 import weakref
 
 import numpy as np
-
-from pyomo.common.errors import InfeasibleConstraintException, DeferredImportError
-from pyomo.contrib.appsi.fbbt import IntervalTightener
-from pyomo.contrib.alternative_solutions.obbt import obbt_analysis
 import pyomo.environ as pyo
+from pyomo.common.errors import DeferredImportError, InfeasibleConstraintException
+from pyomo.contrib.alternative_solutions.obbt import obbt_analysis
+from pyomo.contrib.appsi.fbbt import IntervalTightener
 
 from mpisppy import MPI, global_toc
 
@@ -142,7 +141,7 @@ class _SPIntervalTightenerBase(_SPPresolver):
 
             if stop:
                 break
-           
+
             same_nonant_bounds, global_lower_bounds, global_upper_bounds = (
                 self._compare_nonant_bounds()
             )
@@ -477,7 +476,8 @@ def _lb_generator(var_iterable):
         lb = v.lb
         if lb is None:
             yield -_INF
-        yield lb
+        else:
+            yield lb
 
 
 def _ub_generator(var_iterable):
@@ -485,7 +485,8 @@ def _ub_generator(var_iterable):
         ub = v.ub
         if ub is None:
             yield _INF
-        yield ub
+        else:
+            yield ub
 
 
 class SPPresolve(_SPPresolver):

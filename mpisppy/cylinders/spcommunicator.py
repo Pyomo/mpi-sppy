@@ -24,17 +24,25 @@ import logging
 import os
 import time
 import warnings
+from enum import Enum, auto
+from math import inf, isfinite
+
 import numpy as np
-from math import inf
 
 from mpisppy import MPI, global_toc
-from mpisppy.cylinders.spwindow import Field, FieldLengths, SPWindow, padded_len_n_doubles
 from mpisppy.cylinders.overlap_map import OverlapSegment, compute_overlap_segments
+from mpisppy.cylinders.spwindow import (
+    Field,
+    FieldLengths,
+    SPWindow,
+    padded_len_n_doubles,
+)
 from mpisppy.utils.rank_apportionment import (
     apportion_ranks,
     cylinder_bases,
     rank_to_cylinder,
 )
+from mpisppy.utils.sputils import is_persistent
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +68,9 @@ _GLOBAL_OR_SCALAR_FIELDS = frozenset((
 #
 #   - DUALS carries the PH multipliers W_s, whose normalization
 #     sum_s p_s W_s = 0 holds only within a single iteration -- stitching W from
-#     mixed iterations yields an invalid Lagrangian bound.
+#     mixed iterations yields an invalid Lagrangian bound. It therefore stays
+#     strict by default. An OuterBoundWSpoke reading APH explicitly opts into a
+#     mixed snapshot and projects it back onto sum_s p_s W_s = 0 before use.
 #
 #   - BEST_XHAT / RECENT_XHATS carry per-scenario [first-stage nonants, obj_val]
 #     blocks. The first-stage portion is NAC-redundant: at a single iteration it
@@ -92,6 +102,22 @@ _STRICT_COHERENCE_FIELDS = frozenset((
 _UNSAFE_MVAPICH_RMA_VERSION = (2, 3, 7)
 _ALLOW_UNSAFE_MVAPICH_RMA_ENV = "MPISPPY_ALLOW_UNSAFE_MVAPICH_RMA"
 _MVAPICH_VENDOR_NAMES = frozenset(("MVAPICH", "MVAPICH2"))
+
+
+class ReadConsistency(Enum):
+    """Consistency contract for a receive-buffer read.
+
+    ``COLLECTIVE`` accepts a read only when every rank in the receiving
+    cylinder observes the same generation. ``INDEPENDENT`` lets each receiver
+    rank advance separately but retains the field's normal source-coherence
+    rule. ``ASYNC_LATEST`` additionally accepts a multi-source snapshot when
+    any source advances; consumers selecting it must repair or re-evaluate the
+    mixed-generation value before using it.
+    """
+
+    COLLECTIVE = auto()
+    INDEPENDENT = auto()
+    ASYNC_LATEST = auto()
 
 
 def _guard_mvapich_cross_node_rma(window_comm, fullcomm, global_rank,
@@ -313,6 +339,11 @@ class RecvArray(FieldArray):
     def __init__(self, length: int):
         super().__init__(length)
         self._is_new = False
+        # ASYNC_LATEST multi-source reads cannot summarize freshness with one
+        # remote write_id: max/min/median can all hide a source advancing.
+        # Retain the accepted vector and use the ordinary scalar id only as a
+        # local synthetic generation for downstream buffer machinery.
+        self._source_write_ids = None
         return
 
     def is_new(self) -> bool:
@@ -605,7 +636,7 @@ class SPCommunicator:
         return my_fa
 
     def register_send_field(self, field: Field, length: int = -1) -> SendArray:
-        assert field not in self.send_buffers, "Field {} is already registered".format(field)
+        assert field not in self.send_buffers, f"Field {field} is already registered"
         if length == -1:
             length = self._field_lengths[field]
         my_fa = SendArray(length)
@@ -616,12 +647,10 @@ class SPCommunicator:
     def main(self):
         """ Every hub/spoke must have a main function
         """
-        pass
 
     def sync(self):
         """ Every hub/spoke may have a sync function
         """
-        pass
 
     def is_converged(self):
         """ Every hub/spoke may have a is_converged function
@@ -633,13 +662,11 @@ class SPCommunicator:
             which does some final calculations/flushing to
             disk after convergence
         """
-        pass
 
     def hub_finalize(self):
         """ Every hub may have another finalize function,
             which collects any results from finalize
         """
-        pass
 
     def allreduce_or(self, val):
         return self.opt.allreduce_or(val)
@@ -772,7 +799,8 @@ class SPCommunicator:
                            buf: RecvArray,
                            field: Field,
                            origin: int,
-                           synchronize: bool = True,
+                           synchronize: bool | None = None,
+                           consistency: ReadConsistency | None = None,
                           ):
         """ Gets the specified values from another cylinder and copies them into
         the specified locally-owned buffer. Updates the write_id in the locally-
@@ -782,21 +810,37 @@ class SPCommunicator:
             buf (RecvArray) : Buffer to put the data in
             field (Field) : The source field
             origin (int) : The rank on strata_comm to get the data.
-            synchronize (:obj:`bool`, optional) : If True, will only report
-                updated data if the write_ids are the same across the cylinder_comm
-                are identical. Default: True.
+            synchronize (:obj:`bool`, optional): Backward-compatible spelling
+                for ``COLLECTIVE`` (True) or ``INDEPENDENT`` (False). New code
+                should use ``consistency``.
+            consistency (:class:`ReadConsistency`, optional): The read's
+                consistency contract. Defaults to ``COLLECTIVE``. Use
+                ``ASYNC_LATEST`` only when the consumer repairs or re-evaluates
+                a mixed-generation value before using it.
 
         Returns:
             is_new (bool): Indicates whether the "gotten" values are new,
                 based on the write_id.
         """
+        if consistency is not None and synchronize is not None:
+            raise ValueError("Specify consistency or synchronize, not both")
+        if consistency is None:
+            consistency = (ReadConsistency.COLLECTIVE
+                           if synchronize is None or synchronize
+                           else ReadConsistency.INDEPENDENT)
+        if not isinstance(consistency, ReadConsistency):
+            raise TypeError("consistency must be a ReadConsistency")
+        synchronize = consistency is ReadConsistency.COLLECTIVE
+
         if self._flex_ranks:
             # Unequal-rank path: `origin` is a peer cylinder index. A
             # per-scenario field is assembled from several of that cylinder's
             # global ranks via its overlap map; a global/scalar field is read
             # single-source from the cylinder's base rank.
             if (field, origin) in self.overlap_maps:
-                return self._flex_get_multi_source(buf, field, origin, synchronize)
+                return self._flex_get_multi_source(
+                    buf, field, origin, consistency,
+                )
             return self._flex_get_single_source(buf, field, origin, synchronize)
 
         if synchronize:
@@ -970,7 +1014,7 @@ class SPCommunicator:
         buf._is_new = False
         return False
 
-    def _flex_get_multi_source(self, buf, field, peer_cylinder, synchronize):
+    def _flex_get_multi_source(self, buf, field, peer_cylinder, consistency):
         """Assemble a per-scenario field from several of a peer cylinder's
         global ranks using the precomputed overlap map.
 
@@ -983,6 +1027,12 @@ class SPCommunicator:
           * strict (`_STRICT_COHERENCE_FIELDS`, e.g. DUALS): all sources must
             share one id, else `new_id` is a sentinel (-1) that rejects the
             read -- a mixed-iteration assembly would be invalid.
+
+        ``ASYNC_LATEST`` is the explicit exception: it retains the accepted
+        vector of source IDs and reports a receiver-local generation whenever
+        any component advances. This neither waits for the slowest source nor
+        loses an update hidden by a min/max/median summary. Its consumer is
+        responsible for making the assembled mixed-generation value valid.
 
         `new_id` then feeds the shared _write_ids_agree check, so the strict
         rejection is collective-safe: the sentinel (below any real id) simply
@@ -997,6 +1047,8 @@ class SPCommunicator:
         multistage) and each obj_val stays paired with its own nonants -- no
         post-assembly fix-up, at any number of stages.
         """
+        synchronize = consistency is ReadConsistency.COLLECTIVE
+        async_latest = consistency is ReadConsistency.ASYNC_LATEST
         if synchronize:
             self.cylinder_comm.Barrier()
         last_id = buf.id()
@@ -1019,7 +1071,20 @@ class SPCommunicator:
             source_ids.append(int(snapshot[logical_len - 1]))
 
         strict = field in _STRICT_COHERENCE_FIELDS
-        new_id = reduce_source_write_ids(source_ids, strict=strict)
+        if async_latest:
+            current_source_ids = dict(zip(
+                self._overlap_source_ranks[(field, peer_cylinder)], source_ids))
+            previous_source_ids = (buf._source_write_ids
+                                   or dict.fromkeys(current_source_ids, 0))
+            source_advanced = any(
+                write_id > previous_source_ids.get(rank, 0)
+                for rank, write_id in current_source_ids.items()
+            )
+            # This is a receiver-local generation. The source generation
+            # vector, not a min/max/median reduction, determines freshness.
+            new_id = last_id + 1 if source_advanced else last_id
+        else:
+            new_id = reduce_source_write_ids(source_ids, strict=strict)
 
         # Read-outcome diagnostic: count genuinely multi-source reads (>= 2
         # sources; a single source cannot straddle a publish). The outcome
@@ -1049,9 +1114,18 @@ class SPCommunicator:
             # _mark_new (which stamps the id slot the assembly does not touch)
             data_view = buf.value_array()
             for seg in self.overlap_maps[(field, peer_cylinder)]:
+                if (async_latest
+                        and current_source_ids[seg.remote_rank] == 0):
+                    # Generation zero means this asynchronous source has not
+                    # published yet. Preserve the consumer's initialized
+                    # value (APH W receivers initialize it to zero) instead of
+                    # copying the send buffer's diagnostic NaNs.
+                    continue
                 snapshot = source_snapshots[seg.remote_rank]
                 data_view[seg.local_offset : seg.local_offset + seg.count] = \
                     snapshot[seg.remote_offset : seg.remote_offset + seg.count]
+            if async_latest:
+                buf._source_write_ids = current_source_ids
             return self._mark_new(buf, new_id)
         if counters is not None:
             # strict + mixed lands here when every reader rank computed the
@@ -1059,7 +1133,7 @@ class SPCommunicator:
             # advance -- still a coherence rejection, not a slow sender. A
             # *relaxed* mixed read that gets here is the slow-sender case
             # proper: the floor did not move because one source is behind.
-            counters["rejected_incoherent" if strict and mixed
+            counters["rejected_incoherent" if strict and mixed and not async_latest
                      else "not_new"] += 1
         buf._is_new = False
         return False
@@ -1146,6 +1220,7 @@ class SPCommunicator:
         updates the corresponding Pyomo nonant variables
         """
         bounds_modified = 0
+        persistent_updates = {}
         for idx, _, recv_buf in self.receive_field_spcomms[Field.NONANT_LOWER_BOUNDS]:
             is_new = self.get_receive_buffer(recv_buf, Field.NONANT_LOWER_BOUNDS, idx)
             if not is_new:
@@ -1159,6 +1234,8 @@ class SPCommunicator:
                         # global_toc(f"{self.__class__.__name__}: tightened {xvar.name} lower bound from {xvar.lb} to {recv_buf[ci]}, value: {xvar.value}", self.cylinder_rank == 0)
                         xvar.lb = recv_buf[ci]
                         bounds_modified += 1
+                        if is_persistent(s._solver_plugin):
+                            persistent_updates[id(xvar)] = (s._solver_plugin, xvar)
         for idx, _, recv_buf in self.receive_field_spcomms[Field.NONANT_UPPER_BOUNDS]:
             is_new = self.get_receive_buffer(recv_buf, Field.NONANT_UPPER_BOUNDS, idx)
             if not is_new:
@@ -1172,6 +1249,11 @@ class SPCommunicator:
                         # global_toc(f"{self.__class__.__name__}: tightened {xvar.name} upper bound from {xvar.ub} to {recv_buf[ci]}, value: {xvar.value}", self.cylinder_rank == 0)
                         xvar.ub = recv_buf[ci]
                         bounds_modified += 1
+                        if is_persistent(s._solver_plugin):
+                            persistent_updates[id(xvar)] = (s._solver_plugin, xvar)
+
+        for solver, xvar in persistent_updates.values():
+            solver.update_var(xvar)
 
         bounds_modified /= len(self.opt.local_scenarios)
 
@@ -1221,8 +1303,8 @@ class SPCommunicator:
 
             for value_array in recv_buf_circular.most_recent_value_arrays():
                 all_received_xhats.append(value_array.copy())
-        
-        
+
+
         if not is_new_any or not all_received_xhats:
             self.recent_xhats_list = []
             return False
@@ -1294,6 +1376,14 @@ class SPCommunicator:
             self.BestOuterBound = inf
             self._inner_bound_update = lambda new, old : (new > old)
             self._outer_bound_update = lambda new, old : (new < old)
+
+        initial_outer_bound = (self.options or {}).get(
+            "initial_outer_bound", None)
+        if initial_outer_bound is not None:
+            if not isfinite(initial_outer_bound):
+                raise ValueError("initial_outer_bound must be finite")
+            self.BestOuterBound = self.OuterBoundUpdate(
+                initial_outer_bound, char="I")
 
     def compute_gaps(self):
         """ Compute the current absolute and relative gaps,

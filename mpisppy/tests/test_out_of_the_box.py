@@ -27,8 +27,8 @@ from unittest import mock
 import pyomo.environ as pyo
 
 import mpisppy.utils.config as config
-from mpisppy.generic import parsing
 from mpisppy.generic import out_of_the_box as ootb
+from mpisppy.generic import parsing
 
 
 def _repo_root():
@@ -837,6 +837,7 @@ class TestSpokeBuildOrderIsShared(unittest.TestCase):
         # until someone switched it on.
         import inspect
         import re
+
         from mpisppy.generic import spokes
         src = inspect.getsource(spokes.build_spoke_list)
         self.assertIn("SPOKE_BUILD_ORDER", src)

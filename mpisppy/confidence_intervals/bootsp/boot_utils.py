@@ -8,16 +8,16 @@
 ###############################################################################
 # Utilities shared by the bootstrap confidence-interval code.
 
-import json
 import enum
-import inspect
 import importlib
-import mpisppy.utils.config as config
+import inspect
+import json
 
 # The mpi-sppy MPI shim lets Windows users run this code without MPI.
 # These communicators are defined once here and imported by the estimator
 # and driver modules so there is a single source of truth.
 import mpisppy.MPI as MPI
+import mpisppy.utils.config as config
 
 comm = MPI.COMM_WORLD
 n_proc = comm.Get_size()
@@ -174,7 +174,7 @@ def cfg_from_json(json_fname):
         Used by the simulation code
     """
     try:
-        with open(json_fname, "r") as read_file:
+        with open(json_fname) as read_file:
             options = json.load(read_file)
     except Exception:
         print(f"Could not read the json file: {json_fname}")

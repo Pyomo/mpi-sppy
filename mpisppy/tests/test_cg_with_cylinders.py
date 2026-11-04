@@ -12,16 +12,17 @@ mpiexec -np 2 python -m mpi4py test_cg_with_cylinders.py
 """
 
 import unittest
-from mpisppy.utils import config
 
-import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.tests.examples.farmer as farmer
+import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.tests.utils import get_solver
+from mpisppy.utils import config
 
 __version__ = 0.1
 
 from mpi4py import MPI
+
 comm = MPI.COMM_WORLD
 assert comm.size == 2, "These tests need two ranks"
 

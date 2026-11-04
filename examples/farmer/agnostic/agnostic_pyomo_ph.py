@@ -10,9 +10,11 @@
 # Started by dlw Aug 2023
 
 import farmer_pyomo_agnostic
+
+import mpisppy.agnostic.agnostic as agnostic
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
-import mpisppy.agnostic.agnostic as agnostic
+
 
 def _farmer_parse_args():
     # create a config object and parse JUST FOR TESTING
@@ -42,7 +44,7 @@ if __name__ == "__main__":
 
     scenario_creator = Ag.scenario_creator
     scenario_denouement = farmer_pyomo_agnostic.scenario_denouement   # should we go though Ag?
-    all_scenario_names = ['scen{}'.format(sn) for sn in range(cfg.num_scens)]
+    all_scenario_names = [f'scen{sn}' for sn in range(cfg.num_scens)]
 
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
@@ -65,5 +67,5 @@ if __name__ == "__main__":
     else:
         print('Did not find a non-anticipative solution '
              f'(conv = {conv:.1e})')
-    
+
     ph.post_solve_bound(verbose=False)

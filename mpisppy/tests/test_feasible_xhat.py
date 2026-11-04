@@ -24,14 +24,14 @@ import numpy as np
 import pyomo.environ as pyo
 from pyomo.opt import TerminationCondition
 
+import mpisppy.tests.examples.aircond as aircond
+import mpisppy.tests.examples.aircond_auxiliary as aircond_auxiliary
 import mpisppy.utils.sputils as sputils
+from mpisppy.tests.utils import get_solver, limit_solver_threads
 from mpisppy.utils.xhat_helpers import (
     average_xhat_nonants,
     lp_xbar_nonants,
 )
-from mpisppy.tests.utils import get_solver, limit_solver_threads
-import mpisppy.tests.examples.aircond as aircond
-import mpisppy.tests.examples.aircond_auxiliary as aircond_auxiliary
 
 _EXAMPLES_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -417,6 +417,7 @@ class TestFindFeasibleXhatCreator(unittest.TestCase):
         # Synthesize a fake module that exposes feasible_xhat_creator
         # directly, to confirm the main-module lookup wins.
         import types
+
         from mpisppy.utils.cfg_vanilla import _find_feasible_xhat_creator
         marker = lambda **k: {"ROOT": np.array([0.0])}  # noqa: E731
         fake = types.ModuleType("fake_module_with_feas")
@@ -430,6 +431,7 @@ class TestFindFeasibleXhatCreator(unittest.TestCase):
         # but farmer_auxiliary does -- so swap to a module without an
         # auxiliary file at all.
         import types
+
         from mpisppy.utils.cfg_vanilla import _find_feasible_xhat_creator
         bare = types.ModuleType("bare_module_for_feas_test")
         cfg = self._cfg(xhatlooper_try_feasible_xhat_first=True)
@@ -443,6 +445,7 @@ class TestFindFeasibleXhatCreator(unittest.TestCase):
         # bubble up unchanged -- not be reframed as "could not be imported."
         import importlib
         import types
+
         from mpisppy.utils import cfg_vanilla
 
         main_name = "feas_aux_main_test_mod"

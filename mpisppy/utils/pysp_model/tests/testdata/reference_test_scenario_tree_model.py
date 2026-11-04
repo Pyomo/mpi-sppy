@@ -22,8 +22,9 @@
 import os
 import tempfile
 
-from mpisppy.utils.pysp_model.tree_structure_model import \
-    CreateAbstractScenarioTreeModel
+from mpisppy.utils.pysp_model.tree_structure_model import (
+    CreateAbstractScenarioTreeModel,
+)
 
 with tempfile.NamedTemporaryFile(mode="w", suffix=".dat", delete=False) as f:
     f.write("""

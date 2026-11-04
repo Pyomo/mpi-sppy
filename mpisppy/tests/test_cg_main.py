@@ -13,14 +13,15 @@
 import unittest
 
 import pyomo.environ as pyo
+
+import mpisppy.MPI as mpi
 import mpisppy.opt.cg
 import mpisppy.tests.examples.farmer as farmer
 import mpisppy.utils.sputils as sputils
-from mpisppy.tests.examples.sizes.sizes import scenario_creator as sizes_creator, \
-                                               scenario_denouement as sizes_denouement
-from mpisppy.tests.utils import get_solver, limit_solver_threads
 from mpisppy.cgbase import CGBase
-import mpisppy.MPI as mpi
+from mpisppy.tests.examples.sizes.sizes import scenario_creator as sizes_creator
+from mpisppy.tests.examples.sizes.sizes import scenario_denouement as sizes_denouement
+from mpisppy.tests.utils import get_solver, limit_solver_threads
 
 solver_available, solver_name, persistent_available, persistent_solver_name = get_solver(persistent_OK=False)
 
@@ -66,7 +67,7 @@ class TestCGMainFarmer(unittest.TestCase):
         return dict(self.options)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_farmer_iter0_creates_initial_columns(self):
         """After Iter0, farmer should have at least one column per scenario."""
         cg = mpisppy.opt.cg.CG(
@@ -83,7 +84,7 @@ class TestCGMainFarmer(unittest.TestCase):
             self.assertGreater(cg.next_col[sname], 0)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_farmer_master_problem_exists(self):
         """CG on farmer should build the master problem."""
         cg = mpisppy.opt.cg.CG(
@@ -101,7 +102,7 @@ class TestCGMainFarmer(unittest.TestCase):
             self.assertTrue(hasattr(cg.mp, "Convexity"))
             self.assertTrue(hasattr(cg.mp, "NonAnt"))
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_farmer_duplicate_column_rejected(self):
         """CG should reject duplicate columns for the same scenario."""
         cg = mpisppy.opt.cg.CG(
@@ -116,13 +117,13 @@ class TestCGMainFarmer(unittest.TestCase):
 
         if cg.cylinder_rank == 0:
             sname = cg.all_scenario_names[0]
-            x_vec = {i: 0.0 for i in cg.nonant_indices}
+            x_vec = dict.fromkeys(cg.nonant_indices, 0.0)
             cg.add_column_for_scenario(sname, 1.0, x_vec)
             added_again = cg.add_column_for_scenario(sname, 1.0, x_vec)
             self.assertFalse(added_again)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_farmer_obj(self):
         """CG on farmer should approach the EF optimal."""
         cg = mpisppy.opt.cg.CG(
@@ -139,7 +140,7 @@ class TestCGMainFarmer(unittest.TestCase):
             self.assertAlmostEqual(obj, FARMER_EF_OBJ, delta=abs(FARMER_EF_OBJ*0.01))
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_farmer_maximize_obj(self):
         """CG on a maximization farmer should approach the EF optimal."""
         creator_kwargs = {"crops_multiplier": 1, "sense": pyo.maximize}
@@ -158,7 +159,7 @@ class TestCGMainFarmer(unittest.TestCase):
             self.assertAlmostEqual(obj, ef_obj, delta=abs(ef_obj*0.01))
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_farmer_no_finalize(self):
         """CG.cg_main() with finalize=False returns None for Eobj."""
         cg = mpisppy.opt.cg.CG(
@@ -195,7 +196,7 @@ class TestCGMainSizes(unittest.TestCase):
         return dict(self.options)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_sizes_obj_range(self):
         """CG on sizes should produce an objective in a reasonable range."""
         cg = mpisppy.opt.cg.CG(
@@ -213,7 +214,7 @@ class TestCGMainSizes(unittest.TestCase):
             self.assertLess(obj, 400000)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_sizes_no_finalize(self):
         """CG.cg_main() with finalize=False returns None for Eobj."""
         cg = mpisppy.opt.cg.CG(
@@ -228,7 +229,7 @@ class TestCGMainSizes(unittest.TestCase):
         self.assertIsNotNone(conv)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_sizes_iter0_creates_initial_columns(self):
         """After Iter0, sizes should have at least one column per scenario."""
         cg = mpisppy.opt.cg.CG(

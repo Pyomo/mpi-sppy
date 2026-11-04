@@ -10,29 +10,31 @@
 # four stage test
 # mpiexec -np 8 python -m mpi4py forustage.py 2 2 2 1 0
 # (see the first lines of main() to change instances)
+import datetime as dt
 import os
+import socket
+import sys
+
+# the problem
+import ACtree as etree
 import numpy as np
-# Hub and spoke SPBase classes
-from mpisppy.opt.ph import PH
+import pyomo.environ as pyo
+import rho_setter
+from ccopf_multistage import FixFast, _md_dict, pysp2_callback, scenario_denouement
+
+import mpisppy.MPI as mpi
+from mpisppy.cylinders.hub import PHHub
+
 # Hub and spoke SPCommunicator classes
 from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
-from mpisppy.cylinders.hub import PHHub
+
+# Hub and spoke SPBase classes
+from mpisppy.opt.ph import PH
+
 # Make it all go
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils.xhat_eval import Xhat_Eval
 
-# the problem
-import ACtree as etree
-from ccopf_multistage import pysp2_callback,\
-    scenario_denouement, _md_dict, FixFast
-import rho_setter
-
-import pyomo.environ as pyo
-import socket
-import sys
-import datetime as dt
-
-import mpisppy.MPI as mpi
 comm_global = mpi.COMM_WORLD
 global_rank = comm_global.Get_rank()
 n_proc = comm_global.Get_size()
@@ -110,7 +112,7 @@ def main():
         lines.append(this_branch[0])
 
     acstream = np.random.RandomState()
-        
+
     scenario_creator_kwargs["etree"] = etree.ACTree(number_of_stages,
                                     branching_factors,
                                     seed,
@@ -217,7 +219,7 @@ def main():
             'all_nodenames': all_nodenames
         },
     }
-    
+
     list_of_spoke_dict = [ub2]
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
@@ -226,12 +228,11 @@ def main():
             ph_end_time = dt.datetime.now()
             IB = wheel.spcomm.BestInnerBound
             OB = wheel.spcomm.BestOuterBound
-            print("BestInnerBound={} and BestOuterBound={}".\
-                  format(IB, OB))
+            print(f"BestInnerBound={IB} and BestOuterBound={OB}")
             with open(appfile, "a") as f:
                 f.write(", "+str(IB)+", "+str(OB)+", "+str(wheel.spcomm.opt._PHIter))
                 f.write(", "+str((ph_end_time - start_time).total_seconds()))
 
-                
+
 if __name__=='__main__':
     main()

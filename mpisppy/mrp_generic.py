@@ -10,13 +10,13 @@
 # Analogous to generic_cylinders.py but for the multiple replication procedure.
 
 import sys
+
 import numpy as np
 
-from mpisppy import MPI
-from mpisppy.generic.parsing import model_fname, load_module, add_decomp_args
-from mpisppy.generic.mrp import mrp_args, do_mrp
-
 import mpisppy.utils.config as config
+from mpisppy import MPI
+from mpisppy.generic.mrp import do_mrp, mrp_args
+from mpisppy.generic.parsing import add_decomp_args, load_module, model_fname
 
 
 def parse_mrp_args(m):

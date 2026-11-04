@@ -14,12 +14,13 @@
 
 import math
 import unittest
+
 import pyomo.environ as pyo
 
 import mpisppy.opt.ph
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.cvar as cvar
 import mpisppy.tests.examples.farmer as farmer
+import mpisppy.utils.cvar as cvar
+import mpisppy.utils.sputils as sputils
 from mpisppy import MPI
 from mpisppy.tests.utils import get_solver, limit_solver_threads
 

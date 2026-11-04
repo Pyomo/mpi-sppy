@@ -18,9 +18,10 @@ Only SCENARIOS DISCRETE format is supported.
 import os
 import shutil
 import tempfile
-import mpisppy.scenario_tree as scenario_tree
-import mpisppy.problem_io.smps_reader as smps_reader
+
 import mpisppy.problem_io.mps_reader as mps_reader
+import mpisppy.problem_io.smps_reader as smps_reader
+import mpisppy.scenario_tree as scenario_tree
 
 # Module-level state set by kw_creator
 _smps_dir = None

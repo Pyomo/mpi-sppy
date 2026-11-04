@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 ###############################################################################
 # mpi-sppy: MPI-based Stochastic Programming in PYthon
 #
@@ -73,9 +72,9 @@ source_suffix = {".rst": "restructuredtext"}
 root_doc = 'index'
 
 # General information about the project.
-project = u'mpi-sppy'
-copyright = u'2020-2024'
-author = u'mpi-sppy Developers'
+project = 'mpi-sppy'
+copyright = '2020-2024'
+author = 'mpi-sppy Developers'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the

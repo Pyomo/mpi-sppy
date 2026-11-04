@@ -13,15 +13,13 @@
 
 import os
 
-from pyomo.dataportal import DataPortal
-
-
-import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
-
-import egret.parsers.prescient_dat_parser as pdp
 import egret.data.model_data as md
 import egret.models.unit_commitment as uc
+import egret.parsers.prescient_dat_parser as pdp
+import pyomo.environ as pyo
+from pyomo.dataportal import DataPortal
+
+import mpisppy.utils.sputils as sputils
 
 
 def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=None):
@@ -128,7 +126,7 @@ def scenario_rhos(scenario_instance, rho_scale_factor=0.1):
 
             computed_rho = rho_scale_factor * avg_cost
             computed_rhos.append((id(scenario_instance.UnitOn[g,t]), computed_rho))
-                             
+
     return computed_rhos
 
 def scenario_rhos_trial_from_file(scenario_instance, rho_scale_factor=0.01,
@@ -154,7 +152,7 @@ def scenario_rhos_trial_from_file(scenario_instance, rho_scale_factor=0.01,
                            '. Format should be (variable_name,rho_value) for '
                            'each row, with no blank lines, and no '
                            'extra/commented lines')
-    
+
     index = 0
     for b in sorted(scenario_instance.Buses):
         for t in sorted(scenario_instance.TimePeriods):
@@ -169,14 +167,14 @@ def scenario_rhos_trial_from_file(scenario_instance, rho_scale_factor=0.01,
                     print('Using a trial rho')
                     computed_rhos[index] = (id(var), trial_rho)
                 index += 1
-                             
+
     return computed_rhos
 
 def _get_saved_rhos(fname):
     ''' Return a dict of trial rho values, indexed by variable name.
     '''
     rhos = dict()
-    with open(fname, 'r') as f:
+    with open(fname) as f:
         for line in f:
             line = line.split(',')
             vname = ','.join(line[:-1])
@@ -208,7 +206,7 @@ def id_fix_list_fct(scenario_instance):
 
                 iter0tuples.append(fixer.Fixer_tuple(scenario_instance.UnitOn[g,t],
                                                      th=0.01, nb=None, lb=0, ub=None))
-                
+
                 iterktuples.append(fixer.Fixer_tuple(scenario_instance.UnitOn[g,t],
                                                      th=0.01, nb=None, lb=6, ub=6))
 

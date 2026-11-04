@@ -12,13 +12,13 @@
 
 import re
 import sys
-from mpisppy.utils import config
-from pyomo.common.fileutils import import_file
-from mpisppy.utils.sputils import option_string_to_dict
-from mpisppy.confidence_intervals import ciutils
-from mpisppy.confidence_intervals import mmw_ci
-from mpisppy import global_toc
 
+from pyomo.common.fileutils import import_file
+
+from mpisppy import global_toc
+from mpisppy.confidence_intervals import ciutils, mmw_ci
+from mpisppy.utils import config
+from mpisppy.utils.sputils import option_string_to_dict
 
 if __name__ == "__main__":
     global_toc("Start mmw_conf")
@@ -84,10 +84,10 @@ if __name__ == "__main__":
                          argparse=False)
 
     cfg.model_module_name = mname
-    
+
     args = parser.parse_args()  # from the command line
     args = cfg.import_argparse(args)
-    
+
     #parses solver options string
     solver_options = option_string_to_dict(cfg.solver_options)
 
@@ -117,4 +117,4 @@ if __name__ == "__main__":
     r = mmw.run(confidence_level=cl)
 
     global_toc(r)
-    
+

@@ -10,16 +10,20 @@
     Must use the PH object for this to work
 '''
 import ast
-import numpy as np
 import os
-from mpisppy.extensions.extension import Extension
-from mpisppy.cylinders.spwindow import Field
-from mpisppy.cylinders.spoke import Spoke
+
+import numpy as np
+from pyomo.common.dependencies import attempt_import
+from pyomo.common.dependencies import pandas as pd
+
 from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
-from pyomo.common.dependencies import attempt_import, pandas as pd
+from mpisppy.cylinders.spoke import Spoke
+from mpisppy.cylinders.spwindow import Field
+from mpisppy.extensions.extension import Extension
+
 plt, plt_available = attempt_import('matplotlib.pyplot')
 
-class TrackedData():
+class TrackedData:
     ''' A class to manage the data for a single variable (e.g. gaps, bounds, etc.)
     '''
     def __init__(self, name, folder, plot=False, verbose=False):
@@ -344,7 +348,7 @@ class PHTracker(Extension):
             hub_inner_bound = self.spcomm.BestInnerBound
             hub_outer_bound = self.spcomm.BestOuterBound
         return hub_outer_bound, hub_inner_bound, spoke_bound
-    
+
     def _get_rc(self):
         if not isinstance(self.spcomm, ReducedCostsSpoke):
             return None

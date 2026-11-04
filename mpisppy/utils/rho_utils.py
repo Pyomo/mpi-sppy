@@ -175,7 +175,7 @@ def rhos_to_csv(s, filename):
             fullname = vdata.name
             f.write(f'"{fullname}",{rho._value}\n')
 
-            
+
 def rho_list_from_csv(s, filename):
     """ read rho values from a file and return a list suitable for rho_setter
 

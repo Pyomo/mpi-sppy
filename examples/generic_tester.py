@@ -24,8 +24,9 @@
 # For coverage: python generic_tester.py gurobi_persistent "" "" --python-args="-m coverage run --parallel-mode --source=mpisppy"
 
 import os
-import sys
 import shutil
+import sys
+
 import numpy as np
 from numpy.linalg import norm
 
@@ -106,7 +107,7 @@ def rebaseline_xhat(dirname, modname, np, argstring, baseline_dir):
 def _check_baseline_xhat(modname, argstring, baseline_dir, tol=1e-6):
     # return true if OK, False otherwise
     # compare the baseline_dir to XHAT_TEMP
-    
+
     xhat = np.load(os.path.join(XHAT_TEMP, f"{modname}.npy"))
     base_xhat = np.load(os.path.join(baseline_dir, f"{modname}.npy"))
     d2 = norm(xhat - base_xhat, 2)
@@ -141,14 +142,12 @@ def do_one(dirname, modname, np, argstring, xhat_baseline_dir=None, tol=1e-6):
 
     # One rank runs without mpiexec, which can bind it to a single core.
     if np == 1:
-        runstring = "python -u {} -m mpisppy.generic_cylinders --module-name {} {}".\
-                    format(python_args, modname, fullarg)
+        runstring = f"python -u {python_args} -m mpisppy.generic_cylinders --module-name {modname} {fullarg}"
     else:
-        runstring = "mpiexec {} -np {} python -u {} -m mpi4py -m mpisppy.generic_cylinders --module-name {} {}".\
-                    format(mpiexec_arg, np, python_args, modname, fullarg)
+        runstring = f"mpiexec {mpiexec_arg} -np {np} python -u {python_args} -m mpi4py -m mpisppy.generic_cylinders --module-name {modname} {fullarg}"
     # The top process output seems to be cached by github actions
     # so we need oputput in the system call to help debug
-    code = os.system("echo {} && {}".format(runstring, runstring))
+    code = os.system(f"echo {runstring} && {runstring}")
     if code != 0:
         if dirname not in badguys:
             badguys[dirname] = [runstring]
@@ -292,16 +291,16 @@ if not nouc:
 if len(badguys) > 0:
     print("\nBad Guys:")
     for i,v in badguys.items():
-        print("Directory={}".format(i))
+        print(f"Directory={i}")
         for c in v:
-            print("    {}".format(c))
+            print(f"    {c}")
     sys.exit(1)
 elif len(xhat_losers) > 0:
     print("\nXhat Losers:")
     for i,v in xhat_losers.items():
-        print("Directory={}".format(i))
+        print(f"Directory={i}")
         for c in v:
-            print("    {}".format(c))
+            print(f"    {c}")
     sys.exit(1)
 else:
     print("\nAll OK.")

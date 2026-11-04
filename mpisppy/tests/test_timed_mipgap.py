@@ -14,7 +14,9 @@ from pyomo.environ import SolverFactory
 
 import mpisppy.extensions.timed_mipgap as timed_mipgap_module
 from mpisppy.extensions.timed_mipgap import TimedMIPGapCB
-from mpisppy.utils.callbacks.termination.tests.markshare2 import model as markshare2_model
+from mpisppy.utils.callbacks.termination.tests.markshare2 import (
+    model as markshare2_model,
+)
 
 
 class _MockSolver:

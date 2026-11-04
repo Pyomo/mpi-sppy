@@ -18,9 +18,11 @@ from collections import OrderedDict
 
 import numpy as np
 from pyomo.environ import *
+
 # named explicitly rather than relying on the star import above: the per-file
 # F405 suppression for this directory would hide it if pyomo ever moved it
 from pyomo.opt import TerminationCondition
+
 
 def error_domain(e, dom=None):
     """

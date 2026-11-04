@@ -11,20 +11,22 @@
 import os
 import tempfile
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
-
-import mpisppy.tests.examples.farmer as farmer
-import mpisppy.tests.examples.aircond as aircond
 import pyomo.common.config as pyofig
-from mpisppy.confidence_intervals import ciutils
 
+import mpisppy.tests.examples.aircond as aircond
+import mpisppy.tests.examples.farmer as farmer
+from mpisppy.confidence_intervals import ciutils
+from mpisppy.generic.mrp import (
+    _cylinder_xhat_generator,
+    _ef_xhat_generator,
+    do_mrp,
+    mrp_args,
+)
 from mpisppy.tests.utils import get_solver
 from mpisppy.utils import config
-from mpisppy.generic.mrp import mrp_args, _ef_xhat_generator, \
-    _cylinder_xhat_generator, do_mrp
-
 
 solver_available, solver_name, persistent_available, persistent_solver_name \
     = get_solver()
@@ -275,6 +277,15 @@ class Test_mrp_do_mrp(unittest.TestCase):
         cfg = _get_BM_cfg()
         cfg.stopping_criterion = "INVALID"
         with self.assertRaises(ValueError):
+            do_mrp(_refmodelname, farmer, cfg)
+
+    def test_do_mrp_EF_refuses_user_extensions(self):
+        """--xhat-method EF builds no hub, so it refuses
+        --user-defined-extensions instead of ignoring it (issue #952)."""
+        cfg = _get_BM_cfg()
+        cfg.quick_assign("user_defined_extensions", list, ["myext"])
+        with self.assertRaisesRegex(RuntimeError,
+                                    "Use --xhat-method cylinders"):
             do_mrp(_refmodelname, farmer, cfg)
 
     def test_do_mrp_invalid_xhat_method(self):

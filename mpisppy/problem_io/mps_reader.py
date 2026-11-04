@@ -7,9 +7,10 @@
 # full copyright and license information.
 ###############################################################################
 # IMPORTANT: parens in variable names will become underscore (_)
-import mip   # from coin-or (pip install mip)
-from mip.exceptions import ParameterNotAvailable
+import mip  # from coin-or (pip install mip)
 import pyomo.environ as pyo
+from mip.exceptions import ParameterNotAvailable
+
 
 # the following giant function is provided because CBC seems to have
 #  trouble parsing free format MPS files.
@@ -19,7 +20,7 @@ def _read_obj_terms_from_mps(mps_path: str):
     obj_terms = []
     section = None
 
-    with open(mps_path, "r") as f:
+    with open(mps_path) as f:
         for raw in f:
             line = raw.strip()
             if not line or line.startswith("*"):
@@ -195,5 +196,5 @@ if __name__ == "__main__":
         print(f"Variable: {v.name}")
         for index in v:
             print(f"  Index: {index}, Value: {v[index].value}")
-        
-    
+
+

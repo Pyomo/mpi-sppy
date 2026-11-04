@@ -10,10 +10,12 @@
 the nonant structure for each scenario (yes, for two stage problems this
 json file will be the same for all scenarios.)
 """
-import os
 import json
-import mpisppy.extensions.extension
+import os
+
 import pyomo.core.base.label as pyomo_label
+
+import mpisppy.extensions.extension
 
 
 def lpize(varname):
@@ -93,7 +95,7 @@ class Scenario_lp_mps_files(mpisppy.extensions.extension.Extension):
                 rfile.write("varname,rho\n")
                 for name, rho in rhoList:
                     rfile.write(f"{name},{rho}\n")
-                                        
+
     def post_iter0(self):
         return
 

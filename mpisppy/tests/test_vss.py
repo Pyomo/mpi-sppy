@@ -23,11 +23,11 @@ import unittest.mock
 import numpy as np
 import pyomo.environ as pyo
 
+import mpisppy.generic.parsing as parsing
 import mpisppy.opt.ef
 import mpisppy.utils.sputils as sputils
-import mpisppy.generic.parsing as parsing
-from mpisppy.generic import vss
 from mpisppy import MPI
+from mpisppy.generic import vss
 from mpisppy.tests.utils import get_solver
 
 # make the farmer example importable (it defines average_scenario_creator)

@@ -6,24 +6,24 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import time
 import logging
 import math
+import os
+import time
 import warnings
 
 import numpy as np
-import mpisppy.MPI as MPI
-
 import pyomo.environ as pyo
 
-import mpisppy.utils.sputils as sputils
+import mpisppy.MPI as MPI
 import mpisppy.spopt
 import mpisppy.utils.checkpointing as checkpointing
-
+import mpisppy.utils.sputils as sputils
+from mpisppy import global_toc
+from mpisppy.utils.linear_surrogate import set_derived_surrogate_rhos
 from mpisppy.utils.prox_approx import ProxApproxManager
 from mpisppy.utils.rho_utils import check_rhos_positive
-from mpisppy.utils.linear_surrogate import set_derived_surrogate_rhos
-from mpisppy import global_toc
+
 
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
 def profile(filename=None, comm=MPI.COMM_WORLD):
@@ -106,8 +106,7 @@ def _Compute_Xbar(opt, verbose=False):
 
     # set the xbar and xsqbar in all the scenarios
     for k,s in opt.local_scenarios.items():
-        logger.debug('  top of assign xbar loop for {} on rank {}'.\
-                     format(k, opt.cylinder_rank))
+        logger.debug(f'  top of assign xbar loop for {k} on rank {opt.cylinder_rank}')
         nlens = s._mpisppy_data.nlens
         for node in s._mpisppy_node_list:
             ndn = node.name
@@ -138,10 +137,11 @@ def Wbar_by_node(opt):
 
     It is not guaranteed. The rho setter is called once per scenario and may
     return a different rho for each, and then E[W] moves away from zero.
-    _Compute_Wbar is the only code that tries to put it back, and the only
-    caller is APH when the option display_convergence_detail is set. It
-    subtracts only on cylinder rank 0's scenarios, so on more than one rank
-    it does not bring E[W] to zero.
+    ``project_W_to_zero_sum`` repairs every local scenario copy and is used by
+    W-receiving outer-bound spokes for mixed-generation APH snapshots. The
+    older diagnostic ``_Compute_Wbar`` is called by APH when
+    display_convergence_detail is set; it subtracts only on cylinder rank 0's
+    scenarios, so on more than one rank it does not bring E[W] to zero.
 
     Collective: the scenarios of a node are spread over the ranks, so the sum
     is an Allreduce over that node's comm and every rank gets the same
@@ -165,6 +165,31 @@ def W_magnitude_by_node(opt):
         opt (phbase or xhat_eval object): object with the local scenarios
     """
     return _prob_weighted_W_by_node(opt, magnitude=True)
+
+
+def project_W_to_zero_sum(opt):
+    """Project scenario weights onto the dual-feasible nonanticipativity space.
+
+    For every scenario-tree node and nonanticipative position, subtract the
+    probability-weighted node mean from every active local scenario copy.
+    Variable-probability copies with zero probability remain masked to zero.
+    This is a collective operation over the node communicators. It is useful
+    when an asynchronous publisher supplies pieces of W from different
+    generations: the mixed snapshot is not necessarily dual feasible, but its
+    projection is and can therefore be used for a valid Lagrangian bound.
+
+    Returns the node-wise means that were removed.
+    """
+    Wbars_by_node = Wbar_by_node(opt)
+    for scenario in opt.local_scenarios.values():
+        data = scenario._mpisppy_data
+        for (ndn, i) in scenario._mpisppy_data.nonant_indices:
+            node_mask = getattr(data, "prob0_mask", {}).get(ndn, 1.0)
+            mask = node_mask[i] if isinstance(node_mask, np.ndarray) \
+                else node_mask
+            scenario._mpisppy_model.W[(ndn, i)]._value -= \
+                mask * Wbars_by_node[ndn][i]
+    return Wbars_by_node
 
 
 def _prob_weighted_W_by_node(opt, magnitude):
@@ -227,8 +252,7 @@ def _Compute_Wbar(opt, verbose=False, repair=True):
 
     # check the Wbar
     for k,s in opt.local_scenarios.items():
-        logger.debug('  top of Wbar loop for {} on rank {}'.\
-                     format(k, opt.cylinder_rank))
+        logger.debug(f'  top of Wbar loop for {k} on rank {opt.cylinder_rank}')
         nlens = s._mpisppy_data.nlens
         for node in s._mpisppy_node_list:
             ndn = node.name
@@ -344,6 +368,7 @@ class PHBase(mpisppy.spopt.SPOpt):
     ):
         self._PHIter = 0  # moved to _init June 2024 so extensions can see it
         """ PHBase constructor. """
+        self._configure_slurm_deadline(options)
         super().__init__(
             options,
             all_scenario_names,
@@ -358,11 +383,17 @@ class PHBase(mpisppy.spopt.SPOpt):
         )
         global_toc("Initializing PHBase")
 
+        if self._slurm_deadline is not None:
+            global_toc(
+                self._slurm_limit_message(),
+                self.cylinder_rank == 0,
+            )
+
         # Note that options can be manipulated from outside on-the-fly.
         # self.options (from super) will archive the original options.
         self.options = options
         self.Ag = options.get("Ag", None)  # The Agnostic Object
-        
+
         self.options_check()
         self.ph_converger = ph_converger
         self.rho_setter = rho_setter
@@ -380,6 +411,102 @@ class PHBase(mpisppy.spopt.SPOpt):
         # Whether PH_Prep has run. It refuses a second time: this object's W,
         # rho and objective terms belong to one run. See PH_Prep.
         self._PH_prep_done = False
+        # Set by keep_supplied_xbar_through_iter0.
+        self._xbar_supplied = False
+        # Set by request_PH_attach_before_iter0_solve.
+        self._attach_before_iter0_solve = False
+        # Whether this process's iteration-0 solve had the prox term on (an
+        # xbar was supplied and the terms were attached before that solve).
+        self._iter0_solved_with_prox = False
+
+    def _configure_slurm_deadline(self, options):
+        """Set an opt-in monotonic deadline from Slurm's absolute end time.
+
+        Slurm counts from the allocation start, which can precede construction
+        of this object by hours. Converting its epoch timestamp to a local
+        ``perf_counter`` deadline keeps later checks monotonic while preserving
+        the scheduler's actual clock origin.
+        """
+        self._slurm_deadline = None
+        self._slurm_end_time = None
+        self._slurm_buffer_seconds = None
+
+        configured = options.get("slurm_buffer_seconds", None)
+        if configured is None:
+            return
+        try:
+            buffer_seconds = float(configured)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "slurm_buffer_seconds must be a nonnegative number"
+            ) from exc
+        if not math.isfinite(buffer_seconds) or buffer_seconds < 0:
+            raise ValueError(
+                "slurm_buffer_seconds must be a nonnegative finite number"
+            )
+
+        raw_end_time = os.environ.get("SLURM_JOB_END_TIME")
+        if raw_end_time is None:
+            raise RuntimeError(
+                "slurm_buffer_seconds was set, but SLURM_JOB_END_TIME is not "
+                "available. Use this option inside a Slurm allocation whose "
+                "environment exports the job end time."
+            )
+        try:
+            end_time = float(raw_end_time)
+        except ValueError as exc:
+            raise RuntimeError(
+                f"SLURM_JOB_END_TIME must be a Unix timestamp; got "
+                f"{raw_end_time!r}"
+            ) from exc
+        if not math.isfinite(end_time):
+            raise RuntimeError(
+                "SLURM_JOB_END_TIME must be a finite Unix timestamp"
+            )
+
+        self._slurm_buffer_seconds = buffer_seconds
+        self._slurm_end_time = end_time
+        allocation_seconds_remaining = end_time - time.time()
+        hub_time_limit = allocation_seconds_remaining - buffer_seconds
+        self._slurm_deadline = time.perf_counter() + hub_time_limit
+
+    def _slurm_limit_message(self):
+        """Describe the Slurm deadline using values current at log time."""
+        allocation_seconds_remaining = self._slurm_end_time - time.time()
+        hub_time_remaining = self._slurm_deadline - time.perf_counter()
+        end_text = time.strftime(
+            "%Y-%m-%d %H:%M:%S %Z", time.localtime(self._slurm_end_time)
+        )
+        return (
+            f"Slurm allocation: {allocation_seconds_remaining:.1f}s remaining "
+            f"(ends {end_text}); hub time limit: {hub_time_remaining:.1f}s "
+            f"({self._slurm_buffer_seconds:g}s shutdown buffer)"
+        )
+
+    def _local_time_limit_stop_reason(self):
+        """Return the local soft-limit reason, or ``None`` before either limit."""
+        now = time.perf_counter()
+        deadlines = []
+        slurm_deadline = getattr(self, "_slurm_deadline", None)
+        if slurm_deadline is not None:
+            buffer_seconds = self._slurm_buffer_seconds
+            deadlines.append(
+                (slurm_deadline,
+                 f"Slurm shutdown buffer of {buffer_seconds:g} seconds "
+                 "reached.")
+            )
+
+        time_limit = self.options.get("time_limit", None)
+        if time_limit is not None:
+            deadlines.append(
+                (self.start_time + time_limit,
+                 f"Time limit {time_limit} seconds reached.")
+            )
+        if deadlines:
+            deadline, reason = min(deadlines, key=lambda item: item[0])
+            if now >= deadline:
+                return reason
+        return None
 
     @property
     def iter0_solver_options(self):
@@ -777,6 +904,19 @@ class PHBase(mpisppy.spopt.SPOpt):
             persistent_solver = (s._solver_plugin if sputils.is_persistent(s._solver_plugin) else None)
             #print(f"total number of proximal cuts: {len(s._mpisppy_model.xsqvar_cuts)}")
             for prox_approx_manager in s._mpisppy_data.xsqvar_prox_approx.values():
+                if prox_approx_manager.xvar.value is None \
+                        and not prox_approx_manager.xvar.fixed:
+                    if self._PHIter != 0:
+                        raise RuntimeError(
+                            f"{prox_approx_manager.xvar.name} has no value at "
+                            f"PH iteration {self._PHIter}, so the proximal "
+                            "approximation has no point to cut at.")
+                    # No solve has given this nonant a value yet: the prox
+                    # term is on in iteration 0 because WXBarReader supplied
+                    # xbar. Cut around xbar, where the prox term is centered.
+                    prox_approx_manager.add_cuts(prox_approx_manager.xbar.value,
+                                                 tol, persistent_solver)
+                    continue
                 prox_approx_manager.check_tol_add_cut(tol, persistent_solver)
                 prox_approx_manager.xvarsqrd._value = prox_approx_manager.xvar.value**2
 
@@ -851,6 +991,18 @@ class PHBase(mpisppy.spopt.SPOpt):
         return (not self._prox_approx) and (not self.prox_disabled)
 
 
+    def _first_prox_solve(self):
+        """True during this process's first solve with the prox term on: the
+        iteration-0 solve when an xbar was supplied (see
+        request_PH_attach_before_iter0_solve), otherwise the first iteration
+        of this leg -- iteration 1, or the first one after a resume, which may
+        legitimately have switched solvers.
+        """
+        if self._PHIter == 0:
+            return self._iter0_solved_with_prox
+        return (self._PHIter == self._resume_iteration + 1
+                and not self._iter0_solved_with_prox)
+
     def _check_prox_solver_capability(self):
         """Proactive half of the quadratic-prox/solver compatibility check.
 
@@ -886,19 +1038,20 @@ class PHBase(mpisppy.spopt.SPOpt):
         actionable message instead of leaving the user with the cryptic
         ``TerminationCondition=unknown`` from the failed solve.
 
-        Restricted to the first iterk solve of this process -- iteration 1,
-        or the first iteration after a resume, which may legitimately be
-        running a different solver (``solver_name`` is deliberately exempt
-        from the resume fingerprint). If that solve succeeds, the solver
-        supports quadratic objectives, so any later failure is a genuine
-        optimization issue rather than a capability problem. The "no solution
-        anywhere" test is reduced across ranks with ``allreduce_or`` so the
-        raise decision is identical on every rank (no MPI desynchronization);
+        Restricted to the first solve of this process with the prox term on
+        (see ``_first_prox_solve``): iteration 0 when an xbar was supplied,
+        otherwise iteration 1 or the first iteration after a resume, which may
+        legitimately be running a different solver (``solver_name`` is
+        deliberately exempt from the resume fingerprint). If that solve
+        succeeds, the solver supports quadratic objectives, so any later
+        failure is a genuine optimization issue rather than a capability
+        problem. The "no solution anywhere" test is reduced across ranks with
+        ``allreduce_or`` so the raise decision is identical on every rank (no
+        MPI desynchronization);
         a partial failure (some subproblems still solve) falls through to the
         existing behavior.
         """
-        if (self._PHIter != self._resume_iteration + 1
-                or not self._prox_is_quadratic()):
+        if not (self._first_prox_solve() and self._prox_is_quadratic()):
             return
         local_any_solution = any(
             s._mpisppy_data.solution_available
@@ -926,17 +1079,15 @@ class PHBase(mpisppy.spopt.SPOpt):
         ``has_capability`` probe does not always catch them (the capability is
         reported inconsistently across Pyomo versions / solver interfaces).
 
-        Only the first quadratic solve of this process is treated this way --
-        iteration 1, or the first iteration after a resume, where a solver
-        switch is expressly permitted; a raise at a later iteration is a
+        Only the first quadratic solve of this process is treated this way
+        (see ``_first_prox_solve``); a raise at a later iteration is a
         genuine solve error and is left to propagate unchanged. When
         applicable this raises a new ``RuntimeError`` chained from ``exc``
         (so the original traceback is preserved); otherwise it returns and the
         caller re-raises ``exc`` as-is. The guard matches the reactive check, so
         MPI synchronization is unchanged beyond the raise that already occurred.
         """
-        if (self._PHIter != self._resume_iteration + 1
-                or not self._prox_is_quadratic()):
+        if not (self._first_prox_solve() and self._prox_is_quadratic()):
             return
         raise RuntimeError(
             f"Solver '{self.options.get('solver_name')}' raised an error on the "
@@ -1046,11 +1197,36 @@ class PHBase(mpisppy.spopt.SPOpt):
                 objfct.expr += ph_term
             else:
                 objfct.expr -= ph_term
-            
+
             if self.Ag is not None:
                 self.Ag.callout_agnostic({"sname":sname, "scenario":scenario,
                                           "add_duals": add_duals, "add_prox": add_prox})
 
+
+    def keep_supplied_xbar_through_iter0(self):
+        """ Tell Iter0 that an extension set xbar in pre_iter0 (WXBarReader
+        reading --init-Xbar-fname, for example), so Iter0 must not replace it
+        with the mean of the iteration-0 solutions. The rho setters that run
+        in post_iter0 (SepRho, SensiRho, GradRho) then measure the iteration-0
+        solutions against the supplied xbar. Iteration 1 computes xbar from
+        the solutions as usual.
+        """
+        self._xbar_supplied = True
+
+
+    def request_PH_attach_before_iter0_solve(self):
+        """ Ask Iter0 to splice the W and prox terms into the objectives
+        before the iteration-0 solve rather than after it, so that solve uses
+        whatever W (and xbar) an extension set in pre_iter0 -- WXBarReader,
+        for example. Iter0 does the splice once every pre_iter0 hook has run
+        and before it creates the solvers.
+
+        With the terms attached, the iteration-0 objective values give a
+        Lagrangian bound for the supplied W rather than the trivial bound.
+        Has no effect when the terms were attached in PH_Prep
+        (defer_attach=False) or the run resumed from a checkpoint.
+        """
+        self._attach_before_iter0_solve = True
 
     def _attach_PH_to_objective_after_iter0(self):
         """ Splice the W/prox terms into the objective after the iteration-0
@@ -1494,7 +1670,8 @@ class PHBase(mpisppy.spopt.SPOpt):
 
     def Iter0(self):
         """ Create solvers and perform the initial PH solve (with no dual
-        weights or prox terms).
+        weights or prox terms, unless an extension called
+        request_PH_attach_before_iter0_solve).
 
         This function quits() if the scenario probabilities do not sum to one,
         or if any of the scenario subproblems are infeasible. It also calls the
@@ -1541,6 +1718,18 @@ class PHBase(mpisppy.spopt.SPOpt):
         if have_extensions:
             self.extobject.pre_iter0()
 
+        # After pre_iter0 rather than inside the hook that asked for it:
+        # SepRho and CoeffRho read cost coefficients from the objective in
+        # their pre_iter0, and a W term already there would add to them.
+        # Before _create_solvers, so a persistent solver sees the terms
+        # without a second set_instance.
+        if getattr(self, "_deferred_ph_attach", False) \
+                and self._attach_before_iter0_solve:
+            self.attach_PH_to_objective(self._attach_duals,
+                                        self._attach_prox,
+                                        self._attach_smooth)
+            self._deferred_ph_attach = False
+
         global_toc("Creating solvers")
         self._create_solvers()
 
@@ -1562,19 +1751,35 @@ class PHBase(mpisppy.spopt.SPOpt):
             self._iter0_use_pickled_solution()
         else:
             if self.options["verbose"]:
-                print ("About to call PH Iter0 solve loop on rank={}".format(self.cylinder_rank))
+                print (f"About to call PH Iter0 solve loop on rank={self.cylinder_rank}")
             global_toc("Entering solve loop in PHBase.Iter0")
 
-            self.solve_loop(solver_options=self._effective_solver_options(self._PHIter),
-                            dtiming=dtiming,
-                            gripe=True,
-                            tee=teeme,
-                            verbose=verbose,
-                            warmstart=sputils.WarmstartStatus.USER_SOLUTION,
-                            )
+            # PH's prox term is in the objective here only if it was attached
+            # before this solve, and on only if an extension supplied xbar.
+            # The same on every rank: it follows from the files read. (APH
+            # adds its own prox term instead, which this does not see.)
+            prox_attached = (getattr(self, "_attach_prox", False)
+                             and not getattr(self, "_deferred_ph_attach", False))
+            self._iter0_solved_with_prox = prox_attached and not self.prox_disabled
+            if self._iter0_solved_with_prox:
+                self._check_prox_solver_capability()
+
+            try:
+                self.solve_loop(solver_options=self._effective_solver_options(self._PHIter),
+                                dtiming=dtiming,
+                                gripe=True,
+                                tee=teeme,
+                                verbose=verbose,
+                                warmstart=sputils.WarmstartStatus.USER_SOLUTION,
+                                )
+            except Exception as e:
+                self._reraise_as_prox_capability_error(e)
+                raise
+            if self._iter0_solved_with_prox:
+                self._check_prox_solve_succeeded()
 
             if self.options["verbose"]:
-                print ("PH Iter0 solve loop complete on rank={}".format(self.cylinder_rank))
+                print (f"PH Iter0 solve loop complete on rank={self.cylinder_rank}")
 
         self._update_E1()  # Apologies for doing this after the solves...
         if (abs(1 - self.E1) > self.E1_tolerance):
@@ -1591,6 +1796,14 @@ class PHBase(mpisppy.spopt.SPOpt):
         #global_toc('Rank: {} - Building and solving models 0th iteration'.format(rank), True)
 
         #global_toc('Rank: {} - assigning rho'.format(rank), True)
+
+        # PH itself first computes xbar at the top of iteration 1, but the
+        # post_iter0 hooks need it now: SepRho, SensiRho and GradRho set rho
+        # from |x - xbar|, and the dynamic-rho caches start from it. Without
+        # this they see the xbars Param's initial 0. A resumed run's xbar came
+        # with the checkpoint, and a supplied one is kept on purpose.
+        if not self._resumed_from_checkpoint and not self._xbar_supplied:
+            self.Compute_Xbar(verbose)
 
         if have_extensions:
             self.extobject.post_iter0()
@@ -1643,6 +1856,12 @@ class PHBase(mpisppy.spopt.SPOpt):
                 self._checkpoint_leaf_state["best_solution_obj_val"]
             if restored_incumbent is not None:
                 self.best_solution_obj_val = restored_incumbent
+        elif self._iter0_solved_with_prox:
+            # The prox term makes these objective values no bound at all.
+            self.trivial_bound = None
+            global_toc("Iteration 0 was solved with the prox term on (xbar "
+                       "was supplied), so it gives no trivial bound",
+                       self.cylinder_rank == 0)
         else:
             self.trivial_bound = self.Ebound(verbose)
             if self.trivial_bound is not None and self._can_update_best_bound():
@@ -1698,8 +1917,9 @@ class PHBase(mpisppy.spopt.SPOpt):
         if dconvergence_detail:
             self.report_var_values_at_rank0(header="Convergence detail:", fixed_vars=False)
 
-        # Iteration 0 solved the user's original objective. Now (unless a
-        # caller already attached them in PH_Prep) splice the dual (W) and
+        # Unless the terms were attached already (in PH_Prep, or before the
+        # iteration-0 solve at an extension's request), iteration 0 solved
+        # the user's original objective. Now splice the dual (W) and
         # proximal terms into the subproblem objectives. Deferring to here
         # keeps the iteration-0 model structurally identical to what the user
         # passed in -- helpful for debugging and for LP-only solvers that
@@ -1819,12 +2039,18 @@ class PHBase(mpisppy.spopt.SPOpt):
                     break
             if self.conv is not None:
                 if self.conv < self.options["convthresh"]:
-                    global_toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.options["convthresh"]), self.cylinder_rank == 0)
+                    global_toc(f'Convergence metric={self.conv:f} dropped below user-supplied threshold={self.options["convthresh"]:f}', self.cylinder_rank == 0)
                     break
-            if self.options["time_limit"] is not None:
-                time_to_stop = self.allreduce_or( (time.perf_counter() - self.start_time) >= self.options["time_limit"] )
+            if (self.options.get("time_limit", None) is not None
+                    or self._slurm_deadline is not None):
+                local_stop_reason = self._local_time_limit_stop_reason()
+                time_to_stop = self.allreduce_or(local_stop_reason is not None)
                 if time_to_stop:
-                    global_toc(f"Time limit {self.options['time_limit']} seconds reached.", self.cylinder_rank == 0)
+                    global_toc(
+                        local_stop_reason
+                        or "Soft time limit reached on another rank.",
+                        self.cylinder_rank == 0,
+                    )
                     break
 
             # Enforce rho > 0 before every solve: any rho-updating extension may
@@ -1844,7 +2070,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             # a quadratic objective; see issue #762. The gate is the first
             # iteration of this leg rather than iteration 1: a resumed run
             # starts past 1 and may legitimately have switched solvers.
-            if self._PHIter == self._resume_iteration + 1:
+            if self._first_prox_solve():
                 self._check_prox_solver_capability()
 
             try:
@@ -1937,10 +2163,10 @@ class PHBase(mpisppy.spopt.SPOpt):
                 # contradictory account of the same non-event.
                 pass
             elif stop_at is not None and self._stop_iteration == stop_at:
-                global_toc("Reached user-specified stop_at_iteration_number=%d, "
-                           "ending the study" % stop_at, self.cylinder_rank == 0)
+                global_toc(f"Reached user-specified stop_at_iteration_number={stop_at}, "
+                           "ending the study", self.cylinder_rank == 0)
             else:
-                global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.cylinder_rank == 0)
+                global_toc(f"Reached user-specified limit={max_iterations} on number of PH iterations", self.cylinder_rank == 0)
 
 
     def post_loops(self, extensions=None):

@@ -9,13 +9,12 @@
 """Decomposition orchestrator for generic_cylinders."""
 
 import mpisppy.utils.sputils as sputils
-from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy import global_toc
-
-from mpisppy.generic.parsing import name_lists
-from mpisppy.generic.hub import build_hub_dict
 from mpisppy.generic.extensions import configure_extensions
+from mpisppy.generic.hub import build_hub_dict
+from mpisppy.generic.parsing import name_lists
 from mpisppy.generic.spokes import build_spoke_list
+from mpisppy.spin_the_wheel import WheelSpinner
 
 
 def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs,

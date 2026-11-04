@@ -42,15 +42,17 @@ note to dlw from dlw:
   You should also offer other types of nonants in the json
 
 """
-import os
-import re
 import glob
 import json
 import math
-import mpisppy.scenario_tree as scenario_tree
-import mpisppy.utils.sputils as sputils
+import os
+import re
+
 import mpisppy.problem_io.mps_reader as mps_reader
+import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.rho_utils as rho_utils
+import mpisppy.utils.sputils as sputils
+
 # assume you can get the path from config, set in kw_creator as a side-effect
 mps_files_directory = None
 
@@ -114,7 +116,7 @@ def scenario_creator(sname, cfg=None):
                          )
         parent_ndn = ndn
         stage += 1
-        
+
     model._mpisppy_probability = scenProb
     model._mpisppy_node_list = treeNodes
 
@@ -279,7 +281,7 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
     # assert two stage, then do the usual for two stages?
     pass
 
-    
+
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
     pass

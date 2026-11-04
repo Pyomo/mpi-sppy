@@ -10,14 +10,14 @@
 # Feb 2026: the layout tuple is (offset, logical_len, padded_len) with offset += padded_len
 #   (we are padding to 512 bit boundaries to avoid collisions with solvers who do that)
 
-from mpisppy import MPI
+import enum
 
 import numpy as np
 import numpy.typing as nptyping
-
-import enum
-
 import pyomo.environ as pyo
+
+from mpisppy import MPI
+
 
 class Field(enum.IntEnum):
     SHUTDOWN=-1000
@@ -30,6 +30,7 @@ class Field(enum.IntEnum):
     EXPECTED_REDUCED_COST=200
     SCENARIO_REDUCED_COST=201
     CROSS_SCENARIO_CUT=300
+    CROSS_SCENARIO_ETA_BOUNDS=301 # a valid lower bound on each scenario's eta
     CROSS_SCENARIO_COST=400
     NONANT_LOWER_BOUNDS=500
     NONANT_UPPER_BOUNDS=501
@@ -69,6 +70,7 @@ _field_lengths = {
         # the global scenario count (_total_number_scenarios), not the local one.
         Field.CROSS_SCENARIO_CUT : field_length_components._total_number_scenarios * (field_length_components._total_number_nonants + 1 + 1),
         Field.CROSS_SCENARIO_COST : field_length_components._total_number_scenarios * field_length_components._local_scenario_length,
+        Field.CROSS_SCENARIO_ETA_BOUNDS : field_length_components._total_number_scenarios,
         Field.NONANT_LOWER_BOUNDS : field_length_components._total_number_nonants,
         Field.NONANT_UPPER_BOUNDS : field_length_components._total_number_nonants,
         Field.BEST_XHAT : field_length_components._local_nonant_length + field_length_components._local_scenario_length,

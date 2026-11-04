@@ -21,13 +21,12 @@ about seven times looser than the same solver's non-persistent interface gives.
 import unittest
 
 import pyomo.environ as pyo
+from mpi4py import MPI
 
 import mpisppy.tests.examples.farmer as farmer
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils import config
-
-from mpi4py import MPI
 
 comm = MPI.COMM_WORLD
 

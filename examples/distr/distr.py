@@ -7,9 +7,10 @@
 # full copyright and license information.
 ###############################################################################
 # Network Flow - various formulations
-import pyomo.environ as pyo
-import distr_data
 import time
+
+import distr_data
+import pyomo.environ as pyo
 
 # In this file, we create a (linear) inter-region minimal cost distribution problem.
 # Our data, gives the constraints inside each in region in region_dict_creator
@@ -89,7 +90,7 @@ def min_cost_distr_problem(local_dict, cfg, sense=pyo.minimize, max_revenue=None
                 return (0,0)
         else:
             raise ValueError(f"unknown node type for node {n}")
-        
+
     model.y = pyo.Var(local_dict["nodes"], bounds=slackBounds_rule)
 
     if cfg.ensure_xhat_feas:
@@ -100,14 +101,14 @@ def min_cost_distr_problem(local_dict, cfg, sense=pyo.minimize, max_revenue=None
                     + sum(local_dict["revenues"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["buyer nodes"]) \
                     + sum(2*max_revenue*(-model.y[n]) for n in local_dict["distribution center nodes"]) ,
                       sense=sense)
-    
+
     else:
         model.MinCost = pyo.Objective(expr=\
                         sum(local_dict["flow costs"][a]*model.flow[a] for a in local_dict["arcs"]) \
                         + sum(local_dict["production costs"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["factory nodes"]) \
                         + sum(local_dict["revenues"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["buyer nodes"]) ,
                         sense=sense)
-    
+
     def FlowBalance_rule(m, n):
         return sum(m.flow[a] for a in arcsout[n])\
         - sum(m.flow[a] for a in arcsin[n])\
@@ -232,7 +233,7 @@ def _get_inter_region_dict(cfg, num_scens=None):
     if cfg.scalable:
         import json
         json_file_path = "data_params.json"
-        with open(json_file_path, 'r') as file:
+        with open(json_file_path) as file:
             data_params = json.load(file)
         all_nodes_dict = distr_data.all_nodes_dict_creator(cfg, data_params)
         all_DC_nodes = [DC_node for region in all_nodes_dict
@@ -253,7 +254,7 @@ def kw_creator(cfg):
     if cfg.scalable:
         import json
         json_file_path = "data_params.json"
-        with open(json_file_path, 'r') as file:
+        with open(json_file_path) as file:
             data_params = json.load(file)
         all_nodes_dict = distr_data.all_nodes_dict_creator(cfg, data_params)
         all_DC_nodes = [DC_node for region in all_nodes_dict
@@ -286,7 +287,7 @@ def inparser_adder(cfg):
                       description="max number of nodes per region and per type",
                       domain=int,
                       default=4)
-    
+
     cfg.add_to_config("ensure_xhat_feas",
                       description="adds slacks with high costs to ensure the feasibility of xhat yet maintaining the optimal",
                       domain=bool,

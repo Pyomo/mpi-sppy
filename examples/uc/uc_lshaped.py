@@ -10,12 +10,13 @@
 
 import uc_funcs as uc
 
-# Make it all go
-from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.cylinders.hub import LShapedHub
 from mpisppy.opt.lshaped import LShapedMethod
+
+# Make it all go
+from mpisppy.spin_the_wheel import WheelSpinner
+from mpisppy.utils import config
 
 
 def _parse_args():
@@ -68,7 +69,7 @@ def main():
         "verbose": False,
         "root_scenarios":[all_scenario_names[len(all_scenario_names)//2]],
    }
-    
+
     # L-shaped hub
     hub_dict = {
         "hub_class": LShapedHub,

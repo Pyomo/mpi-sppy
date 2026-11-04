@@ -52,7 +52,7 @@ def solver_specification(cfg, prefix="", name_required=True):
         solver_name (str): the solver name (or None)
         solver_options (dict): the options dictionary created from the string
     """
-    
+
     if isinstance(prefix, (list,tuple)):
         root_list = prefix
     else:

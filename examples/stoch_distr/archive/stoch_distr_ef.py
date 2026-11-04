@@ -14,19 +14,21 @@
 
 import os
 import sys
+
 # stoch_distr.py lives one directory up (examples/stoch_distr/);
 # stoch_distr_admm_cylinders.py lives next to us under archive/.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Solves the stochastic distribution problem
+import pyomo.environ as pyo
 import stoch_distr
 import stoch_distr_admm_cylinders
-import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils
-from mpisppy.utils import config
 from mpisppy import MPI
+from mpisppy.utils import config
+
 global_rank = MPI.COMM_WORLD.Get_rank()
 
 

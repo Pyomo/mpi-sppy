@@ -11,11 +11,12 @@
 # dlw February 2019: PySP 2 for the sslp example
 
 import os
-import mpisppy.scenario_tree as scenario_tree
-import mpisppy.extensions.fixer as fixer
-from mpisppy.utils.linear_surrogate import LinearSurrogateDefinition
 
 import model.ReferenceModel as ref
+
+import mpisppy.extensions.fixer as fixer
+import mpisppy.scenario_tree as scenario_tree
+from mpisppy.utils.linear_surrogate import LinearSurrogateDefinition
 
 
 def scenario_creator(scenario_name, data_dir=None, surrogate=False, cfg=None):

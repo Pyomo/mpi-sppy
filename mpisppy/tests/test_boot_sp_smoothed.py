@@ -19,33 +19,32 @@
 # need a nonlinear solver (ipopt), so those tests are skipped when ipopt is
 # absent.
 
-import os
-import sys
-import math
-import inspect
 import glob
-import json
 import importlib.util
+import inspect
+import json
+import math
+import os
 import subprocess
+import sys
 import tempfile
 import types
 import unittest
-from unittest import mock
 from collections import OrderedDict
+from unittest import mock
 
 import numpy as np
-from pyomo.common.dependencies import scipy
 import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
-from mpisppy.tests.utils import get_solver, round_pos_sig
+from pyomo.common.dependencies import scipy
 
-import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
 import mpisppy.confidence_intervals.bootsp.boot_sp as boot_sp
-import mpisppy.confidence_intervals.bootsp.smoothed_boot_sp as smoothed_boot_sp
-import mpisppy.confidence_intervals.bootsp.user_boot as user_boot
+import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
 import mpisppy.confidence_intervals.bootsp.simulate_boot as simulate_boot
+import mpisppy.confidence_intervals.bootsp.smoothed_boot_sp as smoothed_boot_sp
 import mpisppy.confidence_intervals.bootsp.statdist.distributions as statdist_distributions
 import mpisppy.confidence_intervals.bootsp.statdist.utilities as statdist_utilities
+import mpisppy.confidence_intervals.bootsp.user_boot as user_boot
+import mpisppy.utils.sputils as sputils
 from mpisppy.confidence_intervals.bootsp.statdist.base_distribution import (
     Parameter,
     UnivariateDistribution,
@@ -53,6 +52,7 @@ from mpisppy.confidence_intervals.bootsp.statdist.base_distribution import (
 from mpisppy.confidence_intervals.bootsp.statdist.distribution_factory import (
     distribution_factory,
 )
+from mpisppy.tests.utils import get_solver, round_pos_sig
 
 sputils.disable_tictoc_output()
 
@@ -1086,7 +1086,7 @@ class Test_review_regressions(unittest.TestCase):
             pool = boot_sp.draw_scenario_pool(cfg)
             self.assertEqual(len(pool), cfg.sample_size)
             self.assertEqual(len(set(pool)), cfg.sample_size)  # no replacement
-            self.assertEqual(reserved & set(int(p) for p in pool), set(),
+            self.assertEqual(reserved & {int(p) for p in pool}, set(),
                              msg=f"seed {seed} drew a reserved scenario")
 
     def test_pool_draw_uses_the_pool_stream(self):
@@ -1331,8 +1331,8 @@ class Test_review_regressions(unittest.TestCase):
                         if k in cfg:
                             cfg[k] = None if v == "None" else v
                     cfg.seed_offset = seed_offset
-                    data_records = set(int(x) for x in
-                                       boot_sp.eligible_scenarios(cfg))
+                    data_records = {int(x) for x in
+                                    boot_sp.eligible_scenarios(cfg)}
                     origin = smoothed_boot_sp.draw_space_origin(cfg)
                     m, nB = cfg.subsample_size, cfg.nB
                     draws = set()
@@ -1386,7 +1386,7 @@ class Test_review_regressions(unittest.TestCase):
 
         def data_of(offset):
             # the model seeds a data record as record_num + seed_offset
-            return set(r + offset for r in range(cfg.max_count))
+            return {r + offset for r in range(cfg.max_count)}
 
         reps = [base + i * stride for i in range(4)]
         for i, oi in enumerate(reps):
@@ -1492,8 +1492,9 @@ class Test_review_regressions(unittest.TestCase):
         # the caller reads model.a/w0/u0 straight off the instance, so a solve
         # that stopped early used to yield a density built from a partial
         # iterate, and one that loaded nothing surfaced far away as a TypeError
-        from mpisppy.confidence_intervals.bootsp.statdist import splines
         from pyomo.opt import TerminationCondition
+
+        from mpisppy.confidence_intervals.bootsp.statdist import splines
 
         class _Results:
             class solver:

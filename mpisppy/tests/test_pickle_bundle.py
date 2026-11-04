@@ -19,12 +19,10 @@ import unittest
 import pyomo.environ as pyo
 from pyomo.common.dependencies import DeferredImportError
 
-import mpisppy.utils.pickle_bundle as pickle_bundle
-from mpisppy.utils.config import Config
-
 import mpisppy.MPI as mpi
-
+import mpisppy.utils.pickle_bundle as pickle_bundle
 from mpisppy.tests.utils import get_solver
+from mpisppy.utils.config import Config
 
 # Parse --python-args (extra args inserted after "python" in subcommands, e.g. for coverage)
 python_args = ""
@@ -81,7 +79,7 @@ class Test_pickle_bundles(unittest.TestCase):
         self.tempdir = tempfile.TemporaryDirectory()
         self.tempdir_name = self.tempdir.name
         os.chdir(self.aircond_dir)
-        
+
     def tearDown(self):
         os.chdir(self.cwd)
 
@@ -449,4 +447,4 @@ class Test_dill_diagnostics_without_dill(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-    
+

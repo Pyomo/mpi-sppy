@@ -14,16 +14,16 @@ import numpy as np
 import pyomo.environ as pyo
 import pytest
 
-from mpisppy.scenario_tree import ScenarioNode
 from mpisppy.opt.ph import PH
+from mpisppy.scenario_tree import ScenarioNode
 from mpisppy.spopt import SPOpt
-from mpisppy.utils.rho_utils import assign_rho_with_fallback
 from mpisppy.utils.linear_surrogate import (
     LinearSurrogateDefinition,
     finalize_linear_surrogates,
     prepare_linear_surrogate_data,
     set_derived_surrogate_rhos,
 )
+from mpisppy.utils.rho_utils import assign_rho_with_fallback
 
 
 def test_lagrangian_prep_allows_unset_source_rhos(monkeypatch):

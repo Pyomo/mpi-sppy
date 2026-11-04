@@ -188,6 +188,9 @@ run_phase "test_sensi_rho_bundles (serial)" \
 run_phase "test_reduced_costs_rho_bundles (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_reduced_costs_rho_bundles.py -v
 
+run_phase "test_bound_generators (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_bound_generators.py -v
+
 run_phase "test_rho_deprecations (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_rho_deprecations.py -v
 
@@ -252,11 +255,17 @@ run_phase "serial unit tests (serial)" \
     coverage run --rcfile=.coveragerc -m pytest -v \
         mpisppy/tests/test_sputils.py \
         mpisppy/tests/test_config.py \
+        mpisppy/tests/test_slurm_time_limit.py \
         mpisppy/tests/test_log.py \
+        mpisppy/tests/test_listener_util.py \
         mpisppy/tests/test_scenario_tree.py \
         mpisppy/tests/test_nice_join.py \
         mpisppy/tests/test_solver_spec.py \
         mpisppy/tests/test_extensions.py \
+        mpisppy/tests/test_xhatxbar.py \
+        mpisppy/tests/test_final_xhat.py \
+        mpisppy/tests/test_aph_hub.py \
+        mpisppy/tests/test_async_dual_spoke.py \
         mpisppy/tests/test_extension_hooks.py \
         mpisppy/tests/test_buffer_inspect.py \
         mpisppy/tests/test_comm_lor_check.py \
@@ -377,6 +386,9 @@ run_phase "test_flexible_rank_cylinders (mpiexec -np 6)" \
 
 run_phase "test_flexible_rank_duals (mpiexec -np 6)" \
     mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_duals.py
+
+run_phase "test_flexible_rank_async_duals (mpiexec -np 6)" \
+    mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_async_duals.py
 
 run_phase "test_flexible_rank_xhat (mpiexec -np 6)" \
     mpiexec -np 6 $OVERSUBSCRIBE coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_flexible_rank_xhat.py

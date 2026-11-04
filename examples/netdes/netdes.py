@@ -14,12 +14,12 @@
 '''
 
 import os
-import mpisppy.utils.sputils as sputils
-import pyomo.environ as pyo
-import numpy as np
 
+import numpy as np
+import pyomo.environ as pyo
 from parse import parse
 
+import mpisppy.utils.sputils as sputils
 
 # ===========================================================================
 # Underscore helpers (best-practice pattern -- see doc/src/jensens.rst):

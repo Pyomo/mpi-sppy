@@ -7,8 +7,9 @@
 # full copyright and license information.
 ###############################################################################
 import sys
-import uc_funcs as uc
+
 import pyomo.environ as pyo
+import uc_funcs as uc
 
 from mpisppy.opt.ef import ExtensiveForm
 

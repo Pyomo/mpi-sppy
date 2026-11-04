@@ -8,11 +8,12 @@
 ###############################################################################
 import sslp
 
-from mpisppy.spin_the_wheel import WheelSpinner
+import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.primal_dual_rho import PrimalDualRho
+from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
+
 
 def _parse_args():
     cfg = config.Config()
@@ -92,7 +93,7 @@ def main():
             "boundtol": fixer_tol,
             "id_fix_list_fct": sslp.id_fix_list_fct,
         }
-    
+
     if reduced_costs:
         vanilla.add_reduced_costs_fixer(hub_dict, cfg)
 
@@ -130,7 +131,7 @@ def main():
                                               rho_setter = None)
         if cfg.coeff_rho:
             vanilla.add_coeff_rho(subgradient_spoke, cfg)
-        
+
     # xhat looper bound spoke
     if xhatlooper:
         xhatlooper_spoke = vanilla.xhatlooper_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
@@ -138,13 +139,13 @@ def main():
     # xhat shuffle bound spoke
     if xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
-    
+
     # reduced costs spoke
     if reduced_costs:
         reduced_costs_spoke = vanilla.reduced_costs_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = None)
-       
+
     list_of_spoke_dict = list()
     if fwph:
         list_of_spoke_dict.append(fw_spoke)

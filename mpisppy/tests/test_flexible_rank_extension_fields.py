@@ -31,11 +31,11 @@ import unittest
 
 from mpi4py import MPI
 
-from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.tests.examples.farmer as farmer
+import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.tests.utils import get_solver
+from mpisppy.utils import config
 
 comm = MPI.COMM_WORLD
 

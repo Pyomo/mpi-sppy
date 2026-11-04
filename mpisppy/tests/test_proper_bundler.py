@@ -25,10 +25,10 @@ import pyomo.environ as pyo
 import mpisppy.opt.ph
 import mpisppy.utils.sputils as sputils
 from mpisppy.scenario_tree import ScenarioNode
+from mpisppy.tests.utils import get_solver, limit_solver_threads
 from mpisppy.utils import config
 from mpisppy.utils.linear_surrogate import LinearSurrogateDefinition
 from mpisppy.utils.proper_bundler import ProperBundler
-from mpisppy.tests.utils import get_solver, limit_solver_threads
 
 solver_available, solver_name, _, _ = get_solver()
 

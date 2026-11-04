@@ -12,9 +12,9 @@ which WheelSpinner reads. Serial; no MPI."""
 
 import unittest
 
-from mpisppy.utils import config
 import mpisppy.tests.examples.farmer as farmer
 from mpisppy.generic.spokes import build_spoke_list
+from mpisppy.utils import config
 
 
 def _full_cfg():

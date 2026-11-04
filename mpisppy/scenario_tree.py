@@ -10,9 +10,10 @@
 # ALL INDEXES ARE ZERO-BASED
 import logging
 
+from pyomo.common.collections import ComponentSet
+
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils.linear_surrogate import build_linear_surrogates
-from pyomo.common.collections import ComponentSet
 
 logger = logging.getLogger("mpisppy.scenario_tree")
 

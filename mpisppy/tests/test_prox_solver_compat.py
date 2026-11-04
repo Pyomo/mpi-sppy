@@ -54,7 +54,7 @@ def _scenario(plugin=None, solution_available=True):
 
 
 def _opt(prox_quadratic, scenarios, phiter=1, solver_name="testsolver",
-         resume_iteration=0):
+         resume_iteration=0, iter0_with_prox=False):
     """A minimal duck-typed stand-in for a PHBase instance.
 
     Only the attributes the checks under test actually touch are provided;
@@ -63,6 +63,8 @@ def _opt(prox_quadratic, scenarios, phiter=1, solver_name="testsolver",
     ``PHBase._resume_iteration``: 0 for a run that started from scratch, so
     the checks fire at iteration 1, and the checkpointed iteration for a
     resumed run, whose first solve is at ``resume_iteration + 1``.
+    ``iter0_with_prox`` mirrors ``PHBase._iter0_solved_with_prox``: True when
+    an xbar was supplied, which makes iteration 0 the first prox solve.
     """
     opt = types.SimpleNamespace()
     opt._prox_is_quadratic = lambda: prox_quadratic
@@ -70,6 +72,8 @@ def _opt(prox_quadratic, scenarios, phiter=1, solver_name="testsolver",
     opt.options = {"solver_name": solver_name}
     opt._PHIter = phiter
     opt._resume_iteration = resume_iteration
+    opt._iter0_solved_with_prox = iter0_with_prox
+    opt._first_prox_solve = lambda: PHBase._first_prox_solve(opt)
     opt.allreduce_or = lambda local: local
     return opt
 
@@ -180,6 +184,34 @@ class TestCheckProxSolveSucceeded(unittest.TestCase):
     def test_no_raise_after_the_first_resumed_iteration(self):
         opt = _opt(True, {"s1": _scenario(solution_available=False)},
                    phiter=5, resume_iteration=3)
+        PHBase._check_prox_solve_succeeded(opt)
+
+
+class TestIter0WithSuppliedXbar(unittest.TestCase):
+    """With an xbar supplied, iteration 0 is solved with the prox term on,
+    so it -- not iteration 1 -- is the first quadratic solve."""
+
+    def test_reactive_check_fires_at_iter0(self):
+        opt = _opt(True, {"s1": _scenario(solution_available=False)},
+                   phiter=0, iter0_with_prox=True)
+        with self.assertRaisesRegex(RuntimeError, "linearize-proximal-terms"):
+            PHBase._check_prox_solve_succeeded(opt)
+
+    def test_reraise_fires_at_iter0(self):
+        opt = _opt(True, {"s1": _scenario()}, phiter=0, iter0_with_prox=True)
+        with self.assertRaisesRegex(RuntimeError, "linearize-proximal-terms"):
+            PHBase._reraise_as_prox_capability_error(opt, ValueError("boom"))
+
+    def test_iter1_is_not_first_after_a_prox_iter0(self):
+        opt = _opt(True, {"s1": _scenario(solution_available=False)},
+                   phiter=1, iter0_with_prox=True)
+        PHBase._check_prox_solve_succeeded(opt)
+        self.assertIsNone(
+            PHBase._reraise_as_prox_capability_error(opt, ValueError("boom")))
+
+    def test_iter0_without_prox_is_not_a_prox_solve(self):
+        opt = _opt(True, {"s1": _scenario(solution_available=False)},
+                   phiter=0, iter0_with_prox=False)
         PHBase._check_prox_solve_succeeded(opt)
 
 

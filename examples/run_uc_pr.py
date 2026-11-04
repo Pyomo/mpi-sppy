@@ -57,9 +57,8 @@ def egret_avail():
 
 def do_one(dirname, progname, np, argstring):
     os.chdir(dirname)
-    runstring = "mpiexec {} -np {} python -u {} -m mpi4py {} {}".format(
-        mpiexec_arg, np, python_args, progname, argstring)
-    code = os.system("echo {} && {}".format(runstring, runstring))
+    runstring = f"mpiexec {mpiexec_arg} -np {np} python -u {python_args} -m mpi4py {progname} {argstring}"
+    code = os.system(f"echo {runstring} && {runstring}")
     if code != 0:
         badguys.setdefault(dirname, []).append(runstring)
     if '/' not in dirname:
@@ -71,8 +70,8 @@ def do_one(dirname, progname, np, argstring):
 
 def do_one_serial(dirname, progname, argstring):
     os.chdir(dirname)
-    runstring = "python -u {} {} {}".format(python_args, progname, argstring)
-    code = os.system("echo {} && {}".format(runstring, runstring))
+    runstring = f"python -u {python_args} {progname} {argstring}"
+    code = os.system(f"echo {runstring} && {runstring}")
     if code != 0:
         badguys.setdefault(dirname, []).append(runstring)
     os.chdir("..")
@@ -96,12 +95,12 @@ do_one("uc", "../../mpisppy/generic_cylinders.py", 3,
        "--num-scens=3 "
        "--integer-relax-then-enforce --integer-relax-then-enforce-ratio=10 "
        "--linearize-proximal-terms "
-       "--solver-name={}".format(solver_name))
+       f"--solver-name={solver_name}")
 
 if badguys:
     print("\nrun_uc_pr.py failed commands:")
     for dirname, cmds in badguys.items():
-        print("Directory={}".format(dirname))
+        print(f"Directory={dirname}")
         for c in cmds:
             print("  " + c)
     raise RuntimeError("run_uc_pr.py had failed commands")

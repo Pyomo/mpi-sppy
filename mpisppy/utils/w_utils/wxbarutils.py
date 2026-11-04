@@ -15,9 +15,9 @@
     Could stand to be re-factored a bit.
 
     When reading/writing the weight files, there are two options.
-        
+
      1. All weights are stored in a single main file. 
-        
+
             Reading: Set "init_W_fname" to the location of the main file
             containing all of the weights.
 
@@ -25,7 +25,7 @@
             contain all the weights.
 
      2. Each scenario's weights are stored in separate, individual files.
-        
+
             Reading: Set "init_W_fname" to the directory containing the weight
             files. This directory must contain one file per scenario, each
             named <scenario_name>_weights.csv. Set "init_separate_W_files" to
@@ -39,10 +39,13 @@
 '''
 
 import os
+
 import numpy as np
 import pyomo.environ as pyo
-from mpisppy.utils import nice_join
 from pyomo.common.collections import ComponentSet
+
+import mpisppy.phbase
+from mpisppy.utils import nice_join
 
 ''' W utilities '''
 
@@ -103,26 +106,35 @@ def set_W_from_file(fname, PHB, rank, sep_files=False, disable_check=False):
             individual files, one per scenario. The files must be contained in
             the same directory, and must be named <sname>_weights.csv for each
             scenario name <sname>.
-    
+
     Notes:
-        Calls _check_W, which ensures that all required values were specified,
-        and that the specified weights satisfy the dual feasibility condition 
-        sum_{s\in S} p_s * w_s = 0.
+        Unless disable_check, calls _check_W_names, which ensures that all
+        required values were specified, and _check_W_by_node, which ensures
+        that the weights satisfy the dual feasibility condition
+        sum_{s} p_s * w_s = 0 at every tree node. A Lagrangian bound computed
+        from the weights is valid only if they do.
+
+        Collective: every rank of the cylinder must call it. A rank that finds
+        a problem raises with its own message and the others raise too, so
+        none of them is left waiting at a later collective.
     '''
     scenario_names_local  = list(PHB.local_scenarios.keys())
     scenario_names_global = PHB.all_scenario_names
 
-    if (sep_files):
-        w_val_dict = dict()
-        for sname in scenario_names_local:
-            scenario_fname = os.path.join(fname, sname + '_weights.csv')
-            w_val_dict[sname] = _parse_W_csv_single(scenario_fname)
-    else:
-        w_val_dict = _parse_W_csv(fname, scenario_names_local,
-                                    scenario_names_global, rank)
+    def _read():
+        if (sep_files):
+            w_val_dict = dict()
+            for sname in scenario_names_local:
+                scenario_fname = os.path.join(fname, sname + '_weights.csv')
+                w_val_dict[sname] = _parse_W_csv_single(scenario_fname)
+        else:
+            w_val_dict = _parse_W_csv(fname, scenario_names_local,
+                                        scenario_names_global, rank)
+        if not disable_check:
+            _check_W_names(w_val_dict, PHB)
+        return w_val_dict
 
-    if not disable_check:
-        _check_W(w_val_dict, PHB, rank)
+    w_val_dict = _agreed(PHB, _read, f"read the weights in {fname}")
 
     mp = {(sname, var.name): (node.name, ix)
             for (sname, scenario) in PHB.local_scenarios.items()
@@ -135,6 +147,25 @@ def set_W_from_file(fname, PHB, rank, sep_files=False, disable_check=False):
             node_name, ix = mp[sname, vname]
             scenario._mpisppy_model.W[node_name, ix] = w_val_dict[sname][vname]
 
+    if not disable_check:
+        _check_W_by_node(PHB, fname)
+
+def _agreed(PHB, work, what):
+    ''' Run work() on every rank and raise on every rank if it raised on any.
+        work raises on one rank alone when that rank's scenarios are the ones
+        with the problem, and the others would then wait forever at the next
+        collective. ``what`` completes "Another rank could not ...".
+    '''
+    try:
+        result, failure = work(), None
+    except Exception as exc:
+        result, failure = None, exc
+    if PHB.allreduce_or(failure is not None):
+        if failure is not None:
+            raise failure
+        raise RuntimeError(f"Another rank could not {what}; its error says why.")
+    return result
+
 def _parse_W_csv_single(fname):
     ''' Read a file containing the weights for a single scenario. The file must
         be formatted as 
@@ -145,9 +176,9 @@ def _parse_W_csv_single(fname):
         and ignored.
     '''
     if (not os.path.exists(fname)):
-        raise RuntimeError('Could not find file {fn}'.format(fn=fname))
+        raise RuntimeError(f'Could not find file {fname}')
     results = dict()
-    with open(fname, 'r') as f:
+    with open(fname) as f:
         for line in f:
             if (line.startswith('#')):
                 continue
@@ -159,7 +190,7 @@ def _parse_W_csv_single(fname):
 
 def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
     ''' Read a csv file containing weight information. 
-        
+
         Args:
             fname (str) -- Filename of csv file to read
             scenario_names_local (list of str) -- List of local scenario names
@@ -170,7 +201,7 @@ def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
         Return:
             results (dict) -- Doubly-nested dict mapping 
                 results[scenario_name][var_name] --> weight value (float)
-    
+
         Notes:
             This function is only called if sep_files=False, i.e., if all of
             the weights are stored in a single root file. The file must be
@@ -195,8 +226,8 @@ def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
             this way.
     '''
     results = dict()
-    seen = {name: False for name in scenario_names_local}
-    with open(fname, 'r') as f:
+    seen = dict.fromkeys(scenario_names_local, False)
+    with open(fname) as f:
         for line in f:
             if (line.startswith('#')):
                 continue
@@ -204,7 +235,7 @@ def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
             sname = line[0]
             vname = ','.join(line[1:-1])
             wval  = float(line[-1])
-            
+
             if (sname not in scenario_names_global):
                 if (rank == 0):
                     print('WARNING: Ignoring unknown scenario name', sname)
@@ -222,29 +253,26 @@ def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
             f"rank {rank} could not find the following scenarios in the provided weight file: "
             f"{nice_join(missing, conjunction=None)}."
         )
-        
+
     return results
-            
-def _check_W(w_val_dict, PHB, rank):
+
+def _check_W_names(w_val_dict, PHB):
     '''
     Args:
-        w_val_dict (dict) -- doubly-nested dict mapping 
+        w_val_dict (dict) -- doubly-nested dict mapping
             w_val_dict[scenario_name][variable_name] = weight value.
         PHB (PHBase object) -- PHBase object
-        rank (int) -- local rank
 
     Notes:
-        Checks for three conditions:
-         
-         1. Missing variables --> raises a RuntimeError
-         2. Extra variables --> prints a warning
-         3. Dual feasibility --> raises a RuntimeError
+        Raises a RuntimeError if a scenario misses one of its nonants, and
+        removes (with a message) weights for variables a scenario does not
+        have. Local to this rank.
     '''
     # By this point, we are certain that
     # w_val_dict.keys() == PHB.local_scenarios.keys()
     for (sname, scenario) in PHB.local_scenarios.items():
-        vn_model = set([var.name for node in scenario._mpisppy_node_list
-                                 for var  in node.nonant_vardata_list])
+        vn_model = {var.name for node in scenario._mpisppy_node_list
+                             for var  in node.nonant_vardata_list}
         vn_provided = set(w_val_dict[sname].keys())
         diff = vn_model.difference(vn_provided)
         if diff:
@@ -256,25 +284,37 @@ def _check_W(w_val_dict, PHB, rank):
             print(f'Removing unknown variables: {nice_join(diff, conjunction=None)}.')
             for vname in diff:
                 w_val_dict[sname].pop(vname, None)
-        
-    # At this point, we are sure that every local 
-    # scenario has the same set of variables
-    probs = {name: model._mpisppy_probability for (name, model) in
-                    PHB.local_scenarios.items()}
 
-    checks = dict()
-    for vname in vn_model: # Ensured vn_model = vn_provided
-        checks[vname] = sum(probs[name] * w_val_dict[name][vname]
-                            for name in PHB.local_scenarios.keys())
+#: How far from zero E[W] at a node may be, as a fraction of E[|W|] there, on
+#: top of an absolute 1e-7. PH keeps E[W] at zero only up to the drift of
+#: accumulating W in floating point, which grows with the size of the weights:
+#: W written by PH on hydro at rho 1e7 has E[W] of 3.5e-7.
+W_FILE_WBAR_RTOL = 1e-6
 
-    checks = PHB.comms['ROOT'].gather(checks, root=0)
-    if (rank == 0):
-        for vname in vn_model:
-            dual = sum(c[vname] for c in checks)
-            if (abs(dual) > 1e-7):
-                raise RuntimeError('Provided weights do not satisfy '
-                    r'dual feasibility: \sum_{scenarios} prob(s) * w(s) != 0. '
-                    'Error on variable ' + vname)
+def _check_W_by_node(PHB, fname):
+    '''
+    Raises a RuntimeError on every rank if, at some tree node, the
+    probability-weighted sum of the weights over that node's scenarios is not
+    zero for some nonant: more than 1e-7 + W_FILE_WBAR_RTOL * E[|W|] away from
+    it. Collective.
+    '''
+    bars = mpisppy.phbase.Wbar_by_node(PHB)
+    sizes = mpisppy.phbase.W_magnitude_by_node(PHB)
+
+    def _check():
+        names = {node.name: node.nonant_vardata_list
+                 for s in PHB.local_scenarios.values()
+                 for node in s._mpisppy_node_list}
+        for ndn, Wbars in bars.items():
+            for i, Wbar in enumerate(Wbars):
+                if abs(Wbar) > 1e-7 + W_FILE_WBAR_RTOL * sizes[ndn][i]:
+                    raise RuntimeError(
+                        f"The weights in {fname} do not satisfy dual "
+                        "feasibility: at tree node "
+                        f"{ndn}, sum over its scenarios of prob(s) * w(s) "
+                        f"= {Wbar} for {names[ndn][i].name}, not 0.")
+
+    _agreed(PHB, _check, f"accept the weights in {fname}")
 
 ''' X-bar utilities '''
 
@@ -326,12 +366,12 @@ def set_xbar_from_file(fname, PHB):
 
 def _parse_xbar_csv(fname):
     ''' Read a csv file containing weight information. 
-        
+
         Args:
             fname (str) -- Filename of csv file to read
         Return:
             results (dict) -- Dict mapping var_name --> variable value (float)
-    
+
         Notes:
             The file must be formatted as:
 
@@ -348,14 +388,14 @@ def _parse_xbar_csv(fname):
             this way.
     '''
     results = dict()
-    with open(fname, 'r') as f:
+    with open(fname) as f:
         for line in f:
             if (line.startswith('#')):
                 continue
             line  = line.split(',')
             vname = ','.join(line[:-1])
             val  = float(line[-1])
-            
+
             results[vname] = val
 
     return results
@@ -367,8 +407,8 @@ def _check_xbar(xbar_val_dict, PHB):
     '''
     sname = list(PHB.local_scenarios.keys())[0]
     scenario = PHB.local_scenarios[sname]
-    var_names = set([var.name for node in scenario._mpisppy_node_list
-                          for var  in node.nonant_vardata_list])
+    var_names = {var.name for node in scenario._mpisppy_node_list
+                              for var  in node.nonant_vardata_list}
     provided_vars = set(xbar_val_dict.keys())
     set1 = var_names.difference(provided_vars)
     if set1:

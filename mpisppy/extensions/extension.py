@@ -12,8 +12,36 @@
     Written:  DLW Jan 2019
     Modified: DTM Aug 2019
 
-    NOTE: The return values of all non-constructor methods are ignored
+    NOTE: Method return values are ignored except for ``solve_subproblem``.
 '''
+
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any
+
+
+class _BoundValue(Enum):
+    INFER = "infer"
+
+
+INFER_BOUND = _BoundValue.INFER
+
+
+@dataclass
+class SubproblemSolveOutcome:
+    '''The result and usable state produced by ``solve_subproblem``.
+
+    ``solution_available=True`` promises that the corresponding solution is
+    already loaded in the subproblem. Bounds set to ``INFER_BOUND`` are read
+    from the Pyomo results by SPOpt, including non-optimal results that carry
+    a usable bound; ``None`` explicitly reports no bound.
+    '''
+
+    results: Any
+    solution_available: bool
+    outer_bound: Any = None
+    inner_bound: Any = None
+
 
 class Extension:
     """ Abstract base class for extensions to general SPOpt/SPCommunicator objects.
@@ -29,7 +57,6 @@ class Extension:
         -------
         None
         '''
-        pass
 
     def register_send_fields(self):
         '''
@@ -46,7 +73,6 @@ class Extension:
         -------
         None
         '''
-        pass
 
     def sync_with_spokes(self):
         '''
@@ -56,7 +82,6 @@ class Extension:
         -------
         None
         '''
-        pass
 
     def pre_solve(self, subproblem):
         '''
@@ -70,47 +95,64 @@ class Extension:
         -------
         None
         '''
-        pass
+
+    def solve_subproblem(
+            self, subproblem, subproblem_solve, *, outer_bound_only=False):
+        '''Wrap or replace one logical subproblem solve.
+
+        ``subproblem_solve`` is a zero-argument callable supplied by mpi-sppy.
+        Each call performs one configured solver attempt, classifies its
+        results, loads an available solution through the correct solver path,
+        and returns a ``SubproblemSolveOutcome``. It does not start another PH
+        iteration or invoke the surrounding ``pre_solve`` / ``post_solve``
+        hooks.
+
+        Implementations may call ``subproblem_solve`` zero, one, or multiple
+        times and must return the final outcome. If the returned outcome has
+        ``solution_available=True``, its solution must already be loaded into
+        ``subproblem``. A numeric bound is used directly, ``INFER_BOUND`` asks
+        SPOpt to read the bound from the returned results, and ``None`` reports
+        that no bound is available.
+
+        When ``outer_bound_only`` is true, the callback deliberately does not
+        load a candidate solution, so wrappers must not inspect variable
+        values. A replacement that does not call ``subproblem_solve`` assumes
+        all of the same loading and outcome-reporting responsibilities.
+
+        This hook is not supported when SPOpt delegates solves through its
+        Agnostic interface. Agnostic dispatch is itself a solve-replacement
+        mechanism, and combining the two raises ``RuntimeError``.
+        '''
+        return subproblem_solve()
 
     def post_solve(self, subproblem, results):
-        '''
-        Method called after every subproblem solve
+        '''Observe a completed subproblem solve.
 
-        Inputs
-        ------
-        subproblem : Pyomo subproblem (could be a scenario or bundle)
-        results : Pyomo results object from initial solve or None if solve failed
-
-        Returns
-        -------
-        results : Pyomo results objects from most recent solve
+        The final solution status, bounds, and variable values have already
+        been recorded. Return values are ignored; use ``solve_subproblem`` to
+        replace or repeat the solve itself.
         '''
-        return results
 
     def pre_solve_loop(self):
         ''' Method called before every solve loop within
             mpisppy.spot.SPOpt.solve_loop()
         '''
-        pass
 
     def post_solve_loop(self):
         ''' Method called after every solve loop within
             mpisppy.spot.SPOpt.solve_loop()
         '''
-        pass
 
     def pre_iter0(self):
         ''' When this method is called, all scenarios have been created, and
             the dual/prox terms have been attached to the objective, but the
             solvers have not yet been created.
         '''
-        pass
 
     def iter0_post_solver_creation(self):
         ''' When this method is called, PH iteration 0 has been initiated and
             all solver objects have been created.
         '''
-        pass
 
     def post_iter0(self):
         ''' Method called after the first PH iteration.
@@ -118,14 +160,12 @@ class Extension:
             completed, and we have ensured that none of the models are
             infeasible. The rho_setter, if present, has not yet been applied.
         '''
-        pass
 
     def post_iter0_after_sync(self):
         ''' Method called after the first PH iteration, after the
             synchronization of sending messages between cylinders
             has completed.
         '''
-        pass
 
     def miditer(self):
         ''' Method called after x-bar has been computed and the dual weights
@@ -133,20 +173,17 @@ class Extension:
             If a converger is present, this method is called between the
             convergence_value() method and the is_converged() method.
         '''
-        pass
 
     def enditer(self):
         ''' Method called after the solve_loop(), but before the next x-bar and
             weight update.
         '''
-        pass
 
     def enditer_after_sync(self):
         ''' Method called after the solve_loop(), after the
             synchronization of sending messages between cylinders
             has completed.
         '''
-        pass
 
     def maybe_checkpoint(self):
         ''' Method called at each point where the algorithm's state is
@@ -163,7 +200,6 @@ class Extension:
             checkpoint writer; see mpisppy/extensions/checkpointer.py and
             doc/designs/checkpointing_design.md.
         '''
-        pass
 
     def post_everything(self):
         ''' Method called after the termination of the algorithm.
@@ -172,7 +208,6 @@ class Extension:
             within self.opt.mpicomm until the scenario_denouement has completed
             on all other ranks.
         '''
-        pass
 
     def checkpoint_state(self):
         ''' Return this extension's own state as picklable plain data, or
@@ -238,6 +273,24 @@ class Extension:
             f"{type(self).__name__} does not implement restore_state")
 
 
+def _refuse_duplicate_names(ext_classes):
+    """Raise if two different classes in ext_classes share a ``__name__``.
+
+    The containers below store each extension under its class name, so the
+    second of two such classes would silently replace the first.
+    """
+    seen = {}
+    for constr in ext_classes:
+        other = seen.setdefault(constr.__name__, constr)
+        if other is not constr:
+            raise RuntimeError(
+                f"Two extension classes are named {constr.__name__}: "
+                f"{other.__module__}.{other.__qualname__} and "
+                f"{constr.__module__}.{constr.__qualname__}. "
+                "Rename one of them."
+            )
+
+
 class MultiExtension(Extension):
     """ Container for all the extension classes we are using.
         Also grabs ph and rank, so ad hoc calls (e.g., lagrangian) can use them.
@@ -245,11 +298,26 @@ class MultiExtension(Extension):
     def __init__(self, ph, ext_classes):
         super().__init__(ph)
         self.extdict = dict()
+        _refuse_duplicate_names(ext_classes)
 
         # Construct multiple extension objects
         for constr in ext_classes:
             name = constr.__name__
             self.extdict[name] = constr(ph)
+
+        solve_overrides = [
+            extension
+            for extension in self.extdict.values()
+            if type(extension).solve_subproblem is not Extension.solve_subproblem
+        ]
+        if len(solve_overrides) > 1:
+            names = ", ".join(type(extension).__name__
+                              for extension in solve_overrides)
+            raise RuntimeError(
+                "Only one extension may override solve_subproblem; "
+                f"found: {names}")
+        self._solve_subproblem_extension = (
+            solve_overrides[0] if solve_overrides else None)
 
     def setup_hub(self):
         for lobject in self.extdict.values():
@@ -271,10 +339,17 @@ class MultiExtension(Extension):
         for lobject in self.extdict.values():
             lobject.pre_solve(subproblem)
 
+    def solve_subproblem(
+            self, subproblem, subproblem_solve, *, outer_bound_only=False):
+        if self._solve_subproblem_extension is None:
+            return super().solve_subproblem(
+                subproblem, subproblem_solve, outer_bound_only=outer_bound_only)
+        return self._solve_subproblem_extension.solve_subproblem(
+            subproblem, subproblem_solve, outer_bound_only=outer_bound_only)
+
     def post_solve(self, subproblem, results):
         for lobject in self.extdict.values():
-            results = lobject.post_solve(subproblem, results)
-        return results
+            lobject.post_solve(subproblem, results)
 
     def pre_solve_loop(self):
         for lobject in self.extdict.values():
@@ -325,7 +400,7 @@ class EFExtension:
     """ Abstract base class for extensions to general EF objects when used with generic_cylinders
     """
 
-    
+
     def __init__(self, ef_object):
         self.ef = ef_object
 
@@ -334,7 +409,6 @@ class EFExtension:
         """
         called after EF creation, before passing the model to the solver
         """
-        pass
 
     def post_solve(self, results):
         """
@@ -355,12 +429,13 @@ class EFMultiExtension(EFExtension):
     def __init__(self, ef_object, ext_classes):
         super().__init__(ef_object)
         self.extdict = dict()
+        _refuse_duplicate_names(ext_classes)
 
         # Construct multiple extension objects
         for constr in ext_classes:
             name = constr.__name__
             self.extdict[name] = constr(ef_object)
-   
+
     def pre_solve(self):
         """
         called after EF creation, before passing the model to the solver

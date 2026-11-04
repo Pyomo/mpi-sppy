@@ -35,9 +35,9 @@ import os
 import pickle
 import shutil
 import subprocess
-import types
 import sys
 import tempfile
+import types
 import unittest
 from unittest import mock
 
@@ -687,6 +687,7 @@ class TestEverySpokeGivenTheCheckpointerDrivesIt(unittest.TestCase):
         Checkpointer, so it has to appear above and drive the hooks."""
         import ast
         import inspect
+
         from mpisppy.utils import cfg_vanilla
         tree = ast.parse(inspect.getsource(cfg_vanilla))
         builders = sum(
@@ -783,6 +784,7 @@ class TestEverySpokeGivenTheCheckpointerDrivesIt(unittest.TestCase):
         to hand it back on a resume. The L-shaped xhatter and the slammers
         used to write it and drop it: only xhat_prep restored it."""
         import inspect
+
         import mpisppy.cylinders.xhatbase as xhatbase
         for name, cls, mod in self._classes():
             with self.subTest(spoke=name):
@@ -833,8 +835,8 @@ class TestEveryWriterProbesItsOwnFile(unittest.TestCase):
 
     def _probe_names(self, global_ranks):
         """The probe file each of these ranks leaves behind, in order."""
-        from mpisppy.extensions.checkpointer import Checkpointer
         import mpisppy.utils.checkpointing as ckpt
+        from mpisppy.extensions.checkpointer import Checkpointer
 
         # The probe moved out to checkpointing.probe_directory_is_writable
         # once several ranks per cylinder had to agree on it. Drive whichever

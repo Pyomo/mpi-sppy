@@ -16,19 +16,19 @@ Examples
 To use the logger in your code, add the following 
 after your import
 .. code-block:: python
-   
+
    import logging
    logger = logging.getLogger('mpisppy.path.to.module')
 
 Then, you can use the standard logging functions
 .. code-block:: python
-   
+
    logger.debug('message')
    logger.info('message')
    logger.warning('message')
    logger.error('message')
    logger.critical('message')
-   
+
 Note that by default, any message that has a logging level
 of warning or higher (warning, error, critical) will be
 logged.
@@ -42,8 +42,9 @@ To log an exception and capture the stack trace
       logging.error("Exception occurred", exc_info=True)
 
 """
-import sys
 import logging
+import sys
+
 log_format = '%(message)s'
 
 # configure the root logger for mpisppy

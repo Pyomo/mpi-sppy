@@ -81,7 +81,7 @@ def indexToString(index):
         return "["+str(index)+"]"
 
     result = "["
-    for i in range(0,len(index)):
+    for i in range(len(index)):
         result += str(index[i])
         if i != len(index) - 1:
             result += ","
@@ -181,13 +181,12 @@ def extractComponentIndices(component, index_template):
     if component_index_dimension == 0:
        if (index_template != '') and (index_template != "*"):
           raise RuntimeError(
-              "Index template=%r specified for scalar object=%s"
-              % (index_template, component.name))
+              f"Index template={index_template!r} specified for scalar object={component.name}")
        return [None]
 
     # from this point on, we're dealing with an indexed component.
     if index_template == "":
-        return [ndx for ndx in component]
+        return list(component)
 
     # if the input index template is not a tuple, make it one.
     # one-dimensional indices in pyomo are not tuples, but
@@ -197,12 +196,8 @@ def extractComponentIndices(component, index_template):
 
     if component_index_dimension != len(index_template):
         raise RuntimeError(
-            "The dimension of index template=%s (%s) does match "
-            "the dimension of component=%s (%s)"
-            % (index_template,
-               len(index_template),
-               component.name,
-               component_index_dimension))
+            f"The dimension of index template={index_template} ({len(index_template)}) does match "
+            f"the dimension of component={component.name} ({component_index_dimension})")
 
     # cache for efficiency
     iterator_range = [i for i,match_str in enumerate(index_template)
@@ -218,8 +213,7 @@ def extractComponentIndices(component, index_template):
             return [index_template]
         else:
             raise ValueError(
-                "The index %s is not valid for component named: %s"
-                % (str(tuple(index_template)), component.name))
+                f"The index {str(tuple(index_template))} is not valid for component named: {component.name}")
 
     result = []
 

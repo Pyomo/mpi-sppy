@@ -8,14 +8,14 @@
 ###############################################################################
 
 import re
+
 import pyomo.environ as pyo
 from mpisppy import MPI
 
 # NOTE: a caller attaches the comms (e.g. pre_iter0)
-
 import mpisppy.extensions.extension
-import mpisppy.utils.w_utils.wxbarutils as wxbarutils
 import mpisppy.utils.sputils as sputils
+import mpisppy.utils.w_utils.wxbarutils as wxbarutils
 
 
 def pack_no_good_feasibility_cut(opt):
@@ -84,7 +84,7 @@ def pack_no_good_feasibility_cut(opt):
 class XhatBase(mpisppy.extensions.extension.Extension):
     """
         Any inherited class must implement the preiter0, postiter etc. methods
-        
+
         Args:
             opt (SPOpt object): gives the problem that we bound
 
@@ -110,7 +110,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
 
         self.scenario_name_to_rank = opt.scenario_names_to_rank
         # dict: scenario names --> LOCAL rank number (needed mainly for xhat)
-        
+
      #**********
     def _try_one(self, snamedict, solver_options=None, verbose=False,
                  restore_nonants=True, stage2_ef_solver_name=None, branching_factors=None):
@@ -145,7 +145,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             sopt = dict(solver_options)
             Tee = sopt["Tee"]
             del sopt["Tee"]
-        
+
         # For now, we are going to treat two-stage as a special case
         if len(snamedict) == 1:
             sname = snamedict["ROOT"]  # also serves as an assert
@@ -157,8 +157,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             try:
                 xhats["ROOT"] = self.comms["ROOT"].bcast(xhat, root=src_rank)
             except:
-                print("rank=",self.cylinder_rank, "xhats bcast failed on src_rank={}"\
-                      .format(src_rank))
+                print("rank=",self.cylinder_rank, f"xhats bcast failed on src_rank={src_rank}")
                 print("root comm size={}".format(self.comms["ROOT"].size))
                 raise
         elif stage2_ef_solver_name is None:  # regular multi-stage
@@ -195,8 +194,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                 try:
                     xhats[ndn] = self.comms[ndn].bcast(xhats[ndn], root=src_rank)
                 except:
-                    print("rank=",self.cylinder_rank, "xhats bcast failed on ndn={}, src_rank={}"\
-                          .format(ndn,src_rank))
+                    print("rank=",self.cylinder_rank, f"xhats bcast failed on ndn={ndn}, src_rank={src_rank}")
                     raise
         else:  # we are multi-stage with stage2ef
             # Form an ef for all local scenarios and then fix the first stage
@@ -212,8 +210,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             try:
                 xhats["ROOT"] = self.comms["ROOT"].bcast(xhat, root=src_rank)
             except:
-                print("rank=",self.cylinder_rank, "xhats bcast failed on src_rank={}"\
-                      .format(src_rank))
+                print("rank=",self.cylinder_rank, f"xhats bcast failed on src_rank={src_rank}")
                 print("root comm size={}".format(self.comms["ROOT"].size))
                 raise
             # now form the EF for the appropriate number of second-stage scenario tree nodes
@@ -272,7 +269,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                     if restore_nonants:
                         self.opt._restore_nonants()
                     return None
-               
+
             # feasible xhat found, so finish up 2EF part and return
             if verbose and src_rank == self.cylinder_rank:
                 print("   Feasible xhat found:")
@@ -418,10 +415,35 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             self.csv_nonants(snamedict, prefpref + "_nonant_" + pref)
             self.csv_allvars(snamedict, prefpref + "_allvars_" + pref)
 
+    def reconcile_final_candidate(self, candidate_obj, keep_solution):
+        """Make a hub-side final xhat coherent with its incumbent cache.
+
+        A final heuristic is only the last candidate tried, not necessarily
+        the best solution already known to this cylinder (notably after a
+        checkpoint resume).  Cache it if it improves, then put the actual
+        best solution back into the live models before solution writers see
+        them.  Return the objective belonging to that loaded incumbent so the
+        hub advertises the same solution it can write.
+        """
+        if not keep_solution:
+            return candidate_obj
+
+        if candidate_obj is not None:
+            self.opt.update_best_solution_if_improving(candidate_obj)
+
+        incumbent_obj = self.opt.best_solution_obj_val
+        if keep_solution and incumbent_obj is not None:
+            if not self.opt.load_best_solution():
+                raise RuntimeError(
+                    "A final xhat objective is available, but its cached "
+                    "solution could not be loaded for the solution writers."
+                )
+        return incumbent_obj
+
     def post_iter0(self):
         # the base class needs this
         self.comms = self.opt.comms
-        
+
 """
 May 2020, DLW
 Simple tree with branching factors (arbitrary trees later)

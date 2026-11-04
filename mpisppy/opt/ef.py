@@ -6,14 +6,16 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import mpisppy.spbase
-import pyomo.environ as pyo
 import logging
 import math
 import numbers
-import mpisppy.utils.sputils as sputils
-import pathlib
 import os
+import pathlib
+
+import pyomo.environ as pyo
+
+import mpisppy.spbase
+import mpisppy.utils.sputils as sputils
 from mpisppy import MPI
 
 logger = logging.getLogger("mpisppy.ef")
@@ -125,7 +127,7 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
 
         self.extensions = extensions
         self.extension_kwargs = extension_kwargs
-        
+
         if (self.extensions is not None):
             if self.extension_kwargs is None:
                 self.extobject = self.extensions(self)
@@ -142,7 +144,7 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
                     pathlib.Path(directory).mkdir(parents=True, exist_ok=False)
                 except FileExistsError:
                     raise FileExistsError(f"solver-log-dir={directory} already exists!")
-        
+
         self.ef = sputils._create_EF_from_scen_dict(self.local_scenarios,
                 EF_name=model_name,
                 mutable_probability=self.mutable_probability)
@@ -216,7 +218,7 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         if sputils.not_good_enough_results(results):
             # this should catch infeasible and unbounded cases
             return results
-        
+
         # How to read the solution back is a different question, and the
         # answer is unchanged: load_vars() loads variable values only, while
         # solutions.load_from(results) also imports Suffix(IMPORT) data such
@@ -326,7 +328,7 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
 
     def get_objective_value(self):
         """ Retrieve the objective value.
-        
+
         Returns:
             float:
                 Objective value.
@@ -345,7 +347,7 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
 
         if (self.extensions is not None):
             obj_val = self.extobject.get_objective_value(obj_val)
-        
+
         return obj_val
 
     def get_root_solution(self):

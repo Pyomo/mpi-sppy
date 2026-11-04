@@ -158,7 +158,7 @@ def load_unprofiled_walls(case_dir: str) -> List[float]:
     walls = []
     for wf in sorted(glob.glob(os.path.join(case_dir, "rep*", "wall.txt"))):
         try:
-            with open(wf, "r", encoding="utf-8") as f:
+            with open(wf, encoding="utf-8") as f:
                 walls.append(float(f.read().strip()))
         except (OSError, ValueError):
             continue

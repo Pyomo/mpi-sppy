@@ -15,15 +15,18 @@ IMPORTANT:
 version matter a lot, so we often just do smoke tests for sizes.
 """
 
+import time
 import unittest
-from math import log10, floor
+from math import floor, log10
+from types import SimpleNamespace
+from unittest import mock
+
+import mpisppy.MPI as mpi
 import mpisppy.opt.aph
 import mpisppy.phbase
-from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
-                                               scenario_denouement
 import mpisppy.tests.examples.farmer as farmer
+from mpisppy.tests.examples.sizes.sizes import scenario_creator, scenario_denouement
 from mpisppy.tests.utils import get_solver
-import mpisppy.MPI as mpi
 
 __version__ = 0.6
 solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
@@ -63,7 +66,7 @@ class Test_aph_sizes(unittest.TestCase):
         for k,v in self.Baseoptions.items():
             retval[k] = v
         return retval
-        
+
     def test_make_aph(self):
         """ Just smoke to verify construction"""
         options = self._copy_of_base_options()
@@ -79,8 +82,56 @@ class Test_aph_sizes(unittest.TestCase):
         )
         assert aph is not None
 
+    def test_time_limit_stops_before_next_iteration(self):
+        """APH checks its soft time limit at the iteration boundary."""
+        aph = object.__new__(mpisppy.opt.aph.APH)
+        aph.options = {
+            "PHIterLimit": 3,
+            "time_limit": 0,
+            "verbose": False,
+            "display_progress": False,
+            "display_timing": False,
+        }
+        aph.local_scenario_names = []
+        aph.synchronizer = SimpleNamespace(global_quitting=0, quitting=0)
+        aph.extensions = None
+        aph.ph_converger = None
+        aph.start_time = time.perf_counter()
+        aph.cylinder_rank = 0
+        aph.APH_solve_loop = mock.Mock()
+
+        aph.APH_iterk(spcomm=None)
+
+        self.assertEqual(aph.synchronizer.quitting, 1)
+        aph.APH_solve_loop.assert_not_called()
+
+    def test_slurm_buffer_stops_before_next_iteration(self):
+        """APH gives the Slurm-derived deadline the same soft boundary."""
+        aph = object.__new__(mpisppy.opt.aph.APH)
+        aph.options = {
+            "PHIterLimit": 3,
+            "time_limit": None,
+            "verbose": False,
+            "display_progress": False,
+            "display_timing": False,
+        }
+        aph.local_scenario_names = []
+        aph.synchronizer = SimpleNamespace(global_quitting=0, quitting=0)
+        aph.extensions = None
+        aph.ph_converger = None
+        aph.start_time = time.perf_counter()
+        aph._slurm_deadline = time.perf_counter() - 1
+        aph._slurm_buffer_seconds = 7200.0
+        aph.cylinder_rank = 0
+        aph.APH_solve_loop = mock.Mock()
+
+        aph.APH_iterk(spcomm=None)
+
+        self.assertEqual(aph.synchronizer.quitting, 1)
+        aph.APH_solve_loop.assert_not_called()
+
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_aph_basic(self):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
@@ -95,11 +146,11 @@ class Test_aph_sizes(unittest.TestCase):
         )
 
         conv, obj, tbound = aph.APH_main(spcomm=None)
-        print ("objthing={}, (was=-2435908)".format(obj))
-        print ("tbound ={} (was=224106)".format(tbound))
+        print (f"objthing={obj}, (was=-2435908)")
+        print (f"tbound ={tbound} (was=224106)")
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_APHgamma(self):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
@@ -117,11 +168,11 @@ class Test_aph_sizes(unittest.TestCase):
 
         conv, obj, tbound = aph.APH_main(spcomm=None)
         print (f"APHgamma={a}; objthing={obj}")
-        print ("tbound ={}".format(tbound))
+        print (f"tbound ={tbound}")
 
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_use_lag(self):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
@@ -138,11 +189,11 @@ class Test_aph_sizes(unittest.TestCase):
 
         conv, obj, tbound = aph.APH_main(spcomm=None)
         print (f"use lag objthing={obj}")
-        print ("tbound ={}".format(tbound))
+        print (f"tbound ={tbound}")
 
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_running_dump(self):
         # just see if "display_convergence_detail" causes a crash
         options = self._copy_of_base_options()
@@ -190,9 +241,9 @@ class Test_aph_farmer(unittest.TestCase):
 
     def _make_scenario_names(self, cnt):
         return [f"Scenario{i+1}" for i in range(cnt)]
-        
+
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_aph_farmer_basic30(self):
         Aoptions = self._copy_of_base_options()
         Aoptions["PHIterLimit"] = 2
@@ -219,7 +270,7 @@ class Test_aph_farmer(unittest.TestCase):
         self.assertEqual(objgot, objtarget)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+                     f"{solver_name} solver is not available")
     def test_aph_farmer_dispatch(self):
         Aoptions = self._copy_of_base_options()
         Aoptions["PHIterLimit"] = 2

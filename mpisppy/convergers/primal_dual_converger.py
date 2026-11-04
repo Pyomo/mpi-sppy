@@ -6,12 +6,16 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import numpy as np
 import os
+
+import numpy as np
+from pyomo.common.dependencies import attempt_import
+from pyomo.common.dependencies import pandas as pd
+
 import mpisppy.convergers.converger
 from mpisppy import MPI
 from mpisppy.extensions.phtracker import TrackedData
-from pyomo.common.dependencies import attempt_import, pandas as pd
+
 plt, plt_available = attempt_import('matplotlib.pyplot')
 
 class PrimalDualConverger(mpisppy.convergers.converger.Converger):

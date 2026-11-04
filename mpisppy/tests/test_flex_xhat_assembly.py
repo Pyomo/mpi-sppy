@@ -37,10 +37,9 @@ import unittest
 
 import numpy as np
 
-from mpisppy.cylinders.spwindow import Field
-from mpisppy.cylinders.spcommunicator import SPCommunicator
 from mpisppy.cylinders.overlap_map import compute_overlap_segments
-
+from mpisppy.cylinders.spcommunicator import SPCommunicator
+from mpisppy.cylinders.spwindow import Field
 
 # --- fixed straddle layout shared by the tests ---------------------------
 #

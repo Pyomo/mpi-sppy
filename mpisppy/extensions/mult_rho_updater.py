@@ -13,7 +13,6 @@
 
 import mpisppy.extensions.extension
 
-
 # for ph.options['mult_rho_options']:
 _mult_rho_defaults = { 'convergence_tolerance' : 1e-4,
                            'rho_update_stop_iteration' : None,
@@ -41,7 +40,7 @@ class MultRhoUpdater(mpisppy.extensions.extension.Extension):
         self._first_rho = None
         self.best_conv = float("inf")
 
-        
+
     def _conv(self):
         if self.ph.convobject is not None:
             return self.ph.convobject.conv
@@ -54,7 +53,7 @@ class MultRhoUpdater(mpisppy.extensions.extension.Extension):
         for attr_name, opt_name in _attr_to_option_name_map.items():
             setattr(self, attr_name, options[opt_name] if opt_name in options else _mult_rho_defaults[opt_name])
 
-            
+
     def _attach_rho_ratio_data(self, ph, conv):
         if conv is None or conv == self._tol:
             return

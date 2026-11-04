@@ -9,26 +9,25 @@
 # Base and utility functions for mpisppy
 # Note to developers: things called spcomm are way more than just a comm; SPCommunicator
 
-import pyomo.environ as pyo
 import contextlib
-import sys
+import importlib
+import inspect
+import logging
 import os
 import re
-import numpy as np
-import inspect
-import importlib
-import mpisppy.scenario_tree as scenario_tree
-
+import sys
 from enum import IntEnum
-from pyomo.core import Objective
-from pyomo.repn import generate_standard_repn
 
-from mpisppy import MPI, haveMPI
+import numpy as np
+import pyomo.environ as pyo
+from pyomo.core import Objective
+from pyomo.core.base.indexed_component_slice import IndexedComponent_slice
 from pyomo.core.expr.numeric_expr import LinearExpression
 from pyomo.opt import SolutionStatus, TerminationCondition
-from pyomo.core.base.indexed_component_slice import IndexedComponent_slice
+from pyomo.repn import generate_standard_repn
 
-from mpisppy import tt_timer
+import mpisppy.scenario_tree as scenario_tree
+from mpisppy import MPI, haveMPI, tt_timer
 
 global_rank = MPI.COMM_WORLD.Get_rank()
 
@@ -55,7 +54,7 @@ def build_vardatalist(model, varlist=None):
     # if the varlist is None, then assume we want all the active variables
     if varlist is None:
         raise RuntimeError("varlist is None in scenario_tree.build_vardatalist")
-        vardatalist = [v for v in model.component_data_objects(pyo.Var, active=True, sort=True)]
+        vardatalist = list(model.component_data_objects(pyo.Var, active=True, sort=True))
     elif isinstance(varlist, (pyo.Var, IndexedComponent_slice)):
         # user provided a variable, not a list of variables. Let's work with it anyway
         varlist = [varlist]
@@ -68,11 +67,11 @@ def build_vardatalist(model, varlist=None):
             if isinstance(v, IndexedComponent_slice):
                 vardatalist.extend(v.__iter__())
             elif v.is_indexed():
-                vardatalist.extend((v[i] for i in sorted(v.keys())))
+                vardatalist.extend(v[i] for i in sorted(v.keys()))
             else:
                 vardatalist.append(v)
     return vardatalist
-    
+
 
 def not_good_enough_results(results):
     return (results is None) or (len(results.solution) == 0) or \
@@ -160,7 +159,7 @@ def scenario_tree_solution_writer( directory_name, scenario_name, scenario, bund
                 assert dot_index >= 0
                 var_name = var_name[(dot_index+1):]
             f.write(f"{var_name},{pyo.value(var)}\n")
-        
+
 def write_spin_the_wheel_first_stage_solution(spcomm, opt_dict, solution_file_name,
         first_stage_solution_writer=first_stage_nonant_writer):
     raise RuntimeError(_spin_the_wheel_move_msg)
@@ -218,7 +217,7 @@ def reactivate_objs(scenario_instance):
     for obj in scenario_instance._mpisppy_data.obj_list:
         obj.activate()
 
-    
+
 def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
               EF_name=None, suppress_warnings=False,
               nonant_for_fixed_vars=True, total_number_of_scenarios=None):
@@ -354,7 +353,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
             that node are equal to the reference variables.
 
             This function is called directly when creating bundles for PH.
- 
+
             Does NOT assume that each scenario is equally likely. Raises an
             AttributeError if a scenario object is encountered which does not
             have a ._mpisppy_probability attribute.
@@ -748,6 +747,118 @@ def solver_log_stream(log_path, solve_keyword_args):
                 del solve_keyword_args["tee"]
 
 
+class _BufferedSolverLogHandler(logging.Handler):
+    """Buffer Python records until the native solver releases its log."""
+
+    def __init__(self, log_path):
+        super().__init__()
+        self.log_path = log_path
+        self.messages = []
+        self.last_record = None
+
+    def emit(self, record):
+        try:
+            self.last_record = record
+            self.messages.append(self.format(record))
+        except Exception:
+            self.handleError(record)
+
+    def append_to_log(self):
+        """Append buffered records after all native solver writes finish."""
+        if not self.messages:
+            return
+        try:
+            with open(self.log_path, "a", encoding="utf-8") as stream:
+                stream.write("\n".join(self.messages) + "\n")
+        except Exception:
+            # Match logging.Handler.emit's contract: logging failures should
+            # be reported through logging's normal error path, not turn a
+            # successful optimization into a failed solve.
+            self.handleError(self.last_record)
+
+
+class _SuppressCapturedConsoleLogs(logging.Filter):
+    """Suppress console copies of records captured by the root logger."""
+
+    def filter(self, record):
+        logger = logging.getLogger(record.name)
+        root_logger = logging.getLogger()
+        while logger is not root_logger:
+            if not logger.propagate:
+                return True
+            logger = logger.parent
+        return False
+
+
+def _console_handlers():
+    """Yield configured handlers writing to the process console streams."""
+
+    streams = {
+        stream
+        for stream in (
+            sys.stdout,
+            sys.stderr,
+            sys.__stdout__,
+            sys.__stderr__,
+        )
+        if stream is not None
+    }
+    loggers = [logging.getLogger()]
+    loggers.extend(
+        logger
+        for logger in logging.root.manager.loggerDict.values()
+        if isinstance(logger, logging.Logger)
+    )
+    seen = set()
+    for logger in loggers:
+        for handler in logger.handlers:
+            if id(handler) in seen:
+                continue
+            if (
+                isinstance(handler, logging.StreamHandler)
+                and not isinstance(handler, logging.FileHandler)
+                and getattr(handler, "stream", None) in streams
+            ):
+                seen.add(id(handler))
+                yield handler
+
+
+@contextlib.contextmanager
+def solver_log_python_logging(log_path):
+    """Capture Python logging during one logical solve in its solver log.
+
+    Records are buffered and appended when the context exits. Legacy solver
+    interfaces can recreate their configured logfile on every native attempt;
+    deferring the append preserves Python records emitted before or between
+    those attempts. Console copies of records that propagate to the capture
+    handler are suppressed while the context is active; file handlers and
+    non-propagating loggers are unchanged. This context is intentionally wider
+    than :func:`solver_log_stream`: extension work such as constraint
+    generation happens between or after native solver attempts but is still
+    part of the same logical subproblem solve.
+    """
+
+    if log_path is None:
+        yield
+        return
+    handler = _BufferedSolverLogHandler(log_path)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    root_logger = logging.getLogger()
+    console_filter = _SuppressCapturedConsoleLogs()
+    console_handlers = list(_console_handlers())
+    for console_handler in console_handlers:
+        console_handler.addFilter(console_filter)
+    root_logger.addHandler(handler)
+    try:
+        yield
+    finally:
+        root_logger.removeHandler(handler)
+        for console_handler in console_handlers:
+            console_handler.removeFilter(console_filter)
+        handler.append_to_log()
+        handler.close()
+
+
 def solver_quadratic_objective_capability(solver_plugin):
     """Tri-state probe of whether a solver can handle a quadratic objective.
 
@@ -800,7 +911,7 @@ def ef_nonants(ef):
     for (ndn,i), var in ef.ref_vars.items():
         yield (ndn, var, pyo.value(var))
 
-        
+
 def _node_local_name(var_name, strip_prefix):
     """Return a variable name local to a single scenario model.
 
@@ -952,7 +1063,7 @@ def ef_nonants_csv(ef, filename):
             (_node_local_name(var.name, strip_prefix=True), varval))
     write_nonant_tree_csv(filename, node_to_rows)
 
-            
+
 def nonant_cache_from_ef(ef,verbose=False):
     """ Populate a nonant_cache from an ef. Also works with multi-stage
     Args:
@@ -961,7 +1072,7 @@ def nonant_cache_from_ef(ef,verbose=False):
         nonant_cache (dict of numpy arrays): a special structure for nonant values
     """     
     nonant_cache = dict()
-    nodenames = set([ndn for (ndn,i) in ef.ref_vars])
+    nodenames = {ndn for (ndn,i) in ef.ref_vars}
     for ndn in sorted(nodenames):
         nonant_cache[ndn]=[]
         i = 0
@@ -993,7 +1104,7 @@ def write_ef_first_stage_solution(ef,
              We assume it has already been solved.
         solution_file_name : filename to write the solution to
         first_stage_solution_writer (optional) : custom first stage solution writer function
-    
+
     NOTE:
         This utility is replicating WheelSpinner.write_first_stage_solution for EF
     """
@@ -1011,7 +1122,7 @@ def write_ef_tree_solution(ef, solution_directory_name,
              We assume it has already been solved.
         solution_file_name : filename to write the solution to
         scenario_tree_solution_writer (optional) : custom scenario solution writer function
-        
+
     NOTE:
         This utility is replicating WheelSpinner.write_tree_solution for EF
     """
@@ -1022,7 +1133,7 @@ def write_ef_tree_solution(ef, solution_directory_name,
                                           scenario_name, 
                                           scenario,
                                           bundling=True)
-    
+
 
 def extract_num(string):
     ''' Given a string, extract the longest contiguous
@@ -1051,7 +1162,7 @@ def node_idx(node_path,branching_factors):
     -------
     node_idx
         Node unique id.
-        
+
     NOTE: Does not work with unbalanced trees.
 
     '''
@@ -1066,7 +1177,7 @@ def node_idx(node_path,branching_factors):
 
 def _extract_node_idx(nodename,branching_factors):
     """
-    
+
 
     Parameters
     ----------
@@ -1093,7 +1204,7 @@ def parent_ndn(nodename):
     else:
         return re.search(r'(.+)_(\d+)',nodename).group(1)
 
-    
+
 def option_string_to_dict(ostr):
     """ Convert a string to the standard dict for solver options.
     Intended for use in the calling program; not internal use here.
@@ -1132,7 +1243,7 @@ def option_string_to_dict(ostr):
             solver_options[option_key] = None
         else:
             raise RuntimeError("Illegally formed subsolve directive"\
-                               + " option=%s detected" % this_option_string)
+                               + f" option={this_option_string} detected")
     return solver_options
 
 
@@ -1574,8 +1685,7 @@ def scens_to_ranks(scen_count, n_proc, rank, branching_factors = None):
         raise RuntimeError("scens_to_ranks called, but cannot import mpi4py")
     if scen_count < n_proc:
         raise RuntimeError(
-            "More MPI ranks (%d) supplied than needed given the number of scenarios (%d) "
-            % (n_proc, scen_count)
+            f"More MPI ranks ({n_proc}) supplied than needed given the number of scenarios ({scen_count}) "
         )
 
     # for now, we are treating two-stage as a special case
@@ -1601,7 +1711,7 @@ def _nodenum_before_stage(t,branching_factors):
 def find_leaves(all_nodenames):
     #Take a list of all nodenames from a tree, and find the leaves of it.
     #WARNING: We do NOT check that the tree is well constructed
-    
+
     if all_nodenames is None or all_nodenames == ['ROOT']:
         return {'ROOT':False} # 2 stage problem: no leaf nodes in all_nodenames
     #A leaf is simply a root with no child n°0
@@ -1612,9 +1722,9 @@ def find_leaves(all_nodenames):
         else:
             is_leaf[ndn] = True
     return is_leaf
-            
-    
-class _TreeNode():
+
+
+class _TreeNode:
     #Create the subtree generated by a node, with associated scenarios
     # stages are 1-based, everything else is 0-based
     # scenario lists are stored as (first, last) indices in all_scenarios
@@ -1680,11 +1790,11 @@ class _TreeNode():
                 raise RuntimeError("The all_nodenames argument is giving an inconsistent tree. "
                                    f"The node {self.name} has descendant leaves with stages going from {minstage} to {maxstage}")
             return 1+leaves[0]
-            
-                    
 
-                
-class _ScenTree():
+
+
+
+class _ScenTree:
     def __init__(self, all_nodenames, ScenNames):
         if all_nodenames is None:
             all_nodenames = ['ROOT'] #2 stage problem: no leaf nodes
@@ -1703,12 +1813,12 @@ class _ScenTree():
                     retval+=_nonleaves(child)
                 return retval
         self.nonleaves = _nonleaves(self.rootnode)
-        
+
         self.NumStages = \
             2 if all_nodenames == ['ROOT'] else self.rootnode.stage_max() 
         self.NonLeafTerminals = \
             [nd for nd in self.nonleaves if nd.stage == self.NumStages-1]
-        
+
         self.NumLeaves = len(desc_leaf_dict) - len(self.nonleaves)
         if self.NumStages>2 and self.NumLeaves != self.NumScens:
             raise RuntimeError("The all_nodenames argument is giving an inconsistent tree."
@@ -1739,7 +1849,7 @@ class _ScenTree():
         # one processor for the cylinder is a special case
         if n_proc == 1:
             for nd in self.nonleaves:
-                scenario_names_to_rank[nd.name] = {s: 0 for s in self.ScenNames}
+                scenario_names_to_rank[nd.name] = dict.fromkeys(self.ScenNames, 0)
             return scenario_names_to_rank, [list(range(self.NumScens))], [0]*self.NumScens
 
         scen_count = len(self.ScenNames)
@@ -1751,8 +1861,8 @@ class _ScenTree():
         # scenario index -> rank
         list_of_ranks_per_scenario_idx = [ rank for rank, scen_idxs in enumerate(slices) for _ in scen_idxs ]
 
-        scenario_names_to_rank["ROOT"] = { s: rank for s,rank in zip(self.ScenNames, list_of_ranks_per_scenario_idx) }
-         
+        scenario_names_to_rank["ROOT"] = dict(zip(self.ScenNames, list_of_ranks_per_scenario_idx))
+
         def _recurse_do_node(node):
             for child in node.kids:
 
@@ -1772,7 +1882,7 @@ class _ScenTree():
 
                 scenarios_in_nodes = self.ScenNames[first_scen_idx:last_scen_idx+1]
 
-                scenario_names_to_rank[child.name] = { s : rank for s,rank in zip(scenarios_in_nodes, within_comm_ranks_in_node) }
+                scenario_names_to_rank[child.name] = dict(zip(scenarios_in_nodes, within_comm_ranks_in_node))
 
                 if child not in self.NonLeafTerminals:
                     _recurse_do_node(child)
@@ -1780,8 +1890,8 @@ class _ScenTree():
         _recurse_do_node(self.rootnode)
 
         return scenario_names_to_rank, slices, list_of_ranks_per_scenario_idx
-    
-    
+
+
 ######## Utility to attach the one and only node to a two-stage scenario #######
 def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None,
                      surrogate_nonant_list=None, do_uniform=True,
@@ -1826,7 +1936,7 @@ def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None,
         # Avoid a warning per scenario
         if not hasattr(model, "_mpisppy_probability"):
             model._mpisppy_probability = "uniform"
-    
+
 
 ### utilities to check the slices and the map ###
 def check4losses(numscens, branching_factors,
@@ -1879,7 +1989,7 @@ def check4losses(numscens, branching_factors,
         raise RuntimeError("Internal error: scenario_name_to_rank")
     print("check4losses: OK")
 
-    
+
 def disable_tictoc_output():
     f = open(os.devnull,"w")
     tt_timer._ostream = f
@@ -1902,8 +2012,7 @@ def find_objective(pyomomodel, active=False):
         return obj[0]
     if active or len(obj) > 1:
         raise RuntimeError("Could not identify exactly one active "
-                           "Objective for model '%s' (found %d objectives)"
-                           % (pyomomodel.name, len(obj)))
+                           f"Objective for model '{pyomomodel.name}' (found {len(obj)} objectives)")
     # search again for a single inactive objective
     obj = list(pyomomodel.component_data_objects(
         Objective, descend_into=True))
@@ -1957,7 +2066,7 @@ def nonant_cost_coeffs(s):
         nonant_varids = s._mpisppy_data.varid_to_nonant_index
 
     # initialize to 0
-    cost_coefs = {ndn_i: 0 for ndn_i in s._mpisppy_data.nonant_indices}
+    cost_coefs = dict.fromkeys(s._mpisppy_data.nonant_indices, 0)
     repn = generate_standard_repn(objective.expr, quadratic=False)
     for coef, var in zip(repn.linear_coefs, repn.linear_vars):
         if id(var) in nonant_varids:
@@ -1997,7 +2106,7 @@ def create_nodenames_from_branching_factors(BFS):
         old_stage_nodes = stage_nodes
         stage_nodes = []
         for k in range(len(old_stage_nodes)):
-            stage_nodes += ['%s_%i'%(old_stage_nodes[k],b) for b in range(bf)]
+            stage_nodes += [f'{old_stage_nodes[k]}_{b}' for b in range(bf)]
         nodenames += stage_nodes
     return nodenames
 
@@ -2008,7 +2117,7 @@ def get_branching_factors_from_nodenames(all_nodenames):
     while staget_node+"_0" in all_nodenames:
         child_regex = re.compile(staget_node+r'_\d*\Z')
         child_list = [x for x in all_nodenames if child_regex.match(x) ]
-        
+
         branching_factors.append(len(child_list))
         staget_node += "_0"
     if len(branching_factors)==1:
@@ -2016,12 +2125,12 @@ def get_branching_factors_from_nodenames(all_nodenames):
         return None
     else:
         return branching_factors
-    
+
 def number_of_nodes(branching_factors):
     #How many nodes does a tree with a given branching_factors have ?
     last_node_stage_num = [i-1 for i in branching_factors]
     return node_idx(last_node_stage_num, branching_factors)
-   
+
 
 def module_name_to_module(module_name):
     if inspect.ismodule(module_name):

@@ -12,11 +12,13 @@
 # This shows two ways to get parameters to the EF for solution; both are fairly short.
 
 import sys
+
 import farmer
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.solver_spec as solver_spec
-from mpisppy.utils import config
 import pyomo.environ as pyo
+
+import mpisppy.utils.solver_spec as solver_spec
+import mpisppy.utils.sputils as sputils
+from mpisppy.utils import config
 
 
 def main_no_cfg():
@@ -32,7 +34,7 @@ def main_no_cfg():
     scen_count = int(sys.argv[2])
     use_integer = int(sys.argv[3])
     solver_name = sys.argv[4]
-    
+
     scenario_creator_kwargs = {
         "use_integer": use_integer,
         "crops_multiplier": crops_multiplier,
@@ -72,7 +74,7 @@ def main_with_cfg():
     )
 
     sroot, solver_name, solver_options = solver_spec.solver_specification(cfg, "EF")
-   
+
     solver = pyo.SolverFactory(solver_name)
     if solver_options is not None:
         # We probably could just assign the dictionary in one line...
@@ -85,7 +87,7 @@ def main_with_cfg():
         results = solver.solve(ef, tee=True, symbolic_solver_labels=True,)
     if not pyo.check_optimal_termination(results):
         print("Warning: solver reported non-optimal termination status")
-        
+
     return ef
 
 

@@ -16,4 +16,5 @@ It is activated by setting the environment variable:
 and adding this file's directory to PYTHONPATH (or sys.path).
 """
 import coverage
+
 coverage.process_startup()

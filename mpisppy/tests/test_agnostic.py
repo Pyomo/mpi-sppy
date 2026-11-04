@@ -8,21 +8,23 @@
 ###############################################################################
 # ruff: noqa: F841, E402
 
+import math
 import os
 import sys
 import unittest
-import math
-import mpisppy.opt.ph
-from mpisppy.tests.utils import get_solver
-import mpisppy.utils.config as config
+
 import mpisppy.agnostic.agnostic as agnostic
 import mpisppy.agnostic.agnostic_cylinders as agnostic_cylinders
+import mpisppy.opt.ph
+import mpisppy.utils.config as config
 import mpisppy.utils.sputils as sputils
+from mpisppy.tests.utils import get_solver
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.normpath(os.path.join(_THIS_DIR, "..", ".."))
 sys.path.insert(0, os.path.join(_PROJECT_ROOT, "examples", "farmer", "agnostic"))
 import farmer_pyomo_agnostic
+
 try:
     import mpisppy.agnostic.gams_guest
     have_GAMS = True
@@ -89,7 +91,7 @@ class Test_Agnostic_pyomo(unittest.TestCase):
     def test_agnostic_pyomo_constructor(self):
         cfg = _farmer_cfg()
         agnostic.Agnostic(farmer_pyomo_agnostic, cfg)
-        
+
 
     def test_agnostic_pyomo_scenario_creator(self):
         cfg = _farmer_cfg()
@@ -213,7 +215,7 @@ class Test_Agnostic_AMPL(unittest.TestCase):
         cfg.max_iterations = 5
         cfg.ampl_model_file = "../agnostic/examples/farmer.mod"
         agnostic_cylinders.main(model_fname, module, cfg)
-        
+
 
 @unittest.skipIf(not have_GAMS, "skipping GAMS")
 class Test_Agnostic_GAMS(unittest.TestCase):

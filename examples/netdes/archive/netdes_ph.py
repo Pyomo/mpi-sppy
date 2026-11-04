@@ -8,12 +8,14 @@
 ###############################################################################
 ''' Solve the EF of the network problems
 '''
-from netdes import scenario_creator, scenario_denouement
-from mpisppy.opt.ph import PH
-from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
-from mpisppy.extensions.xhatclosest import XhatClosest
 import os
 import sys
+
+from netdes import scenario_creator, scenario_denouement
+
+from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
+from mpisppy.extensions.xhatclosest import XhatClosest
+from mpisppy.opt.ph import PH
 
 
 def main():
@@ -49,7 +51,7 @@ def main():
         "defaultPHbeta": float(sys.argv[6]),
         "primal_dual_converger_options" : {"tol" : 1e-5}
     }
-    
+
     ph = PH(
         PH_options, 
         scenario_names,
@@ -62,7 +64,7 @@ def main():
     )
     conv, obj, triv = ph.ph_main()
     # Obj includes prox (only ok if we find a non-ant soln)
-    
+
     ph.post_solve_bound(verbose=False)
 
     variables = ph.gather_var_values_to_rank0()

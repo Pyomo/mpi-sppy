@@ -8,23 +8,22 @@
 ###############################################################################
 # JPW and DLW; July 2019; ccopf create scenario instances for line outages
 # extended Fall 2019 by DLW
-import egret
-import egret.models.acopf as eac
-import egret.models.ac_relaxations as eac_relax
-from egret.parsers.matpower_parser import create_ModelData
-import mpisppy.scenario_tree as scenario_tree
-import mpisppy.utils.sputils as sputils
-
-import ACtree as ET
-
+import copy
 import os
 import sys
-import copy
-import scipy
-import numpy as np
-import mpisppy.MPI as mpi
 
+import ACtree as ET
+import egret
+import egret.models.ac_relaxations as eac_relax
+import egret.models.acopf as eac
+import numpy as np
 import pyomo.environ as pyo
+import scipy
+from egret.parsers.matpower_parser import create_ModelData
+
+import mpisppy.MPI as mpi
+import mpisppy.scenario_tree as scenario_tree
+import mpisppy.utils.sputils as sputils
 
 comm = mpi.COMM_WORLD
 rank = comm.Get_rank()
@@ -52,7 +51,7 @@ def FixGaussian(minutes, acstream, mu, sigma):
     return retval
 
 #======= end repair functions =====
-    
+
 def _md_dict(epath):
     path = str(egret.__path__)
     left = path.find("'")
@@ -65,7 +64,7 @@ def _md_dict(epath):
 
     # look at egret/data/model_data.py for the format specification of md_dict
     return create_ModelData(test_case)
-    
+
 
 ####################################
 def pysp2_callback(
@@ -137,8 +136,7 @@ def pysp2_callback(
             else:
                 print("enode.LinesUp=", enode.LinesUp)
                 print("enode.FailedLines=", enode.FailedLines)
-                raise RuntimeError("Branch (line) {} neither up nor down in scenario {}".\
-                               format(this_branch[0], scenario_name))
+                raise RuntimeError(f"Branch (line) {this_branch[0]} neither up nor down in scenario {scenario_name}")
     def _egret_model(md_dict):
         # the exact acopf model is hard-wired here:
         md_dict.data['system']['load_mismatch_cost'] = load_mismatch_cost
@@ -174,14 +172,14 @@ def pysp2_callback(
     setattr(full_scenario_model,
             "stage_models_"+str(1),
             full_scenario_model.stage_models[1]) 
-    
+
     for stage in range(2, numstages+1):
         #print ("stage={}".format(stage))
 
         stage_md_dict = copy.deepcopy(first_stage_md_dict)
         #print ("debug: processing node {}".format(enodes[stage-1].Name))
         lines_up_and_down(stage_md_dict, enodes[stage-1])
-        
+
         full_scenario_model.stage_models[stage], model_dict = \
             _egret_model(stage_md_dict)
         full_scenario_model.stage_models[stage].obj.deactivate()
@@ -206,10 +204,10 @@ def pysp2_callback(
                            ramp_coeff * full_scenario_model.ramping+\
                             sum(full_scenario_model.stage_models[stage].obj.expr\
                                     for stage in range(1,numstages+1)))
-    
+
     inst = full_scenario_model
     # end code from PySP1
-    
+
     node_list = list()
 
     parent_name = None
@@ -229,7 +227,7 @@ def pysp2_callback(
     if verbose:
         print(f"\nScenario creation for {scenario_name} on rank {rank}"
               f"    FailedLines (line,minutes)={enode.FailedLines}")
-            
+
     inst._mpisppy_node_list = node_list
     inst._mpisppy_probability = 1 / etree.numscens
     # solve it so subsequent code will have a good start
@@ -246,36 +244,36 @@ def pysp2_callback(
 #=============================================================================
 def scenario_denouement(rank, scenario_name, scenario):
 
-    print("Solution for scenario=%s - rank=%d" % (scenario_name, rank))
+    print(f"Solution for scenario={scenario_name} - rank={rank}")
 
     print("LINE OUTAGE INFORMATION")
     for enode in scenario._enodes:
         enode.pprint()
 
     stages = list(scenario.stage_models.keys())
-    gens = sorted((g for g in getattr(scenario, "stage_models_"+str(1)).pg.keys()))
+    gens = sorted(g for g in getattr(scenario, "stage_models_"+str(1)).pg.keys())
 
     for gen in gens:
 
-        print("GEN: %4s PG:" % gen, end="")
+        print(f"GEN: {gen:>4} PG:", end="")
 
         previous_val = None
         for stage in stages:
             current_val = pyo.value(getattr(scenario, "stage_models_"+str(stage)).pg[gen])
             if previous_val is None:
-                print("%6.2f -->> " % current_val, end=" ")
+                print(f"{current_val:6.2f} -->> ", end=" ")
             else:
                 print("%6.2f" % (current_val-previous_val), end=" ")
             previous_val = current_val
         print("")
 
-        print("GEN: %4s QG:" % gen, end="")
+        print(f"GEN: {gen:>4} QG:", end="")
 
         previous_val = None
         for stage in stages:
             current_val = pyo.value(getattr(scenario, "stage_models_"+str(stage)).qg[gen])
             if previous_val is None:
-                print("%6.2f -->> " % current_val, end=" ")
+                print(f"{current_val:6.2f} -->> ", end=" ")
             else:
                 print("%6.2f" % (current_val-previous_val), end=" ")
             previous_val = current_val
@@ -328,12 +326,10 @@ if __name__ == "__main__":
     repair_fct = FixFast
     verbose = False
     if allbutlast % n_proc != 0 and n_proc % allbutlast != 0:
-        raise RuntimeError("allbutlast={} must divide n_proc={}, or vice-versa".\
-                           format(allbutlast, n_proc))
+        raise RuntimeError(f"allbutlast={allbutlast} must divide n_proc={n_proc}, or vice-versa")
     # TBD: comment this out and try -np 4 with bfs of 2 3 0 (strange sense error)
     if nscen % n_proc != 0:
-        raise RuntimeError("nscen={} must be a multiple of n_proc={}".\
-                           format(nscen, n_proc))
+        raise RuntimeError(f"nscen={nscen} must be a multiple of n_proc={n_proc}")
 
     convex_relaxation = True
     print(f"Convex relaxation = {convex_relaxation}")
@@ -372,7 +368,7 @@ if __name__ == "__main__":
     scenario_names=["Scenario_"+str(i)\
                     for i in range(1,len(scenario_creator_kwargs["etree"].rootnode.ScenarioList)+1)]
 
-    
+
     # end options
     ef = sputils.create_EF(scenario_names,
                              pysp2_callback,
@@ -389,12 +385,8 @@ if __name__ == "__main__":
     for (sname, smodel) in sputils.ef_scenarios(ef):
         print (sname)
         for stage in smodel.stage_models:
-            print ("   Stage {}".format(stage))
+            print (f"   Stage {stage}")
             for gen in smodel.stage_models[stage].pg:
-                 print ("      gen={} pg={}, qg={}"\
-                        .format(gen,
-                                pyo.value(smodel.stage_models[stage].pg[gen]),
-                                pyo.value(smodel.stage_models[stage].qg[gen])))
-            print ("   obj={}".format(pyo.value(smodel.objective)))
-    print("EF objective value for case {}={}".\
-          format(pyo.value(casename), pyo.value(ef.EF_Obj)))
+                 print (f"      gen={gen} pg={pyo.value(smodel.stage_models[stage].pg[gen])}, qg={pyo.value(smodel.stage_models[stage].qg[gen])}")
+            print (f"   obj={pyo.value(smodel.objective)}")
+    print(f"EF objective value for case {pyo.value(casename)}={pyo.value(ef.EF_Obj)}")

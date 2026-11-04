@@ -16,9 +16,9 @@ per-scenario subproblem.
 """
 
 import numpy as np
+from netdes import scenario_creator, scenario_names_creator
 
 from mpisppy.utils.xhat_helpers import lp_xbar_nonants
-from netdes import scenario_creator, scenario_names_creator
 
 
 def feasible_xhat_creator(

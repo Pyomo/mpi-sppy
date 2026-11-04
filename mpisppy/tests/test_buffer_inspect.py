@@ -16,7 +16,9 @@ from types import SimpleNamespace
 import numpy as np
 
 from mpisppy.cylinders.spcommunicator import (
-    RecvArray, SendArray, SendCircularBuffer,
+    RecvArray,
+    SendArray,
+    SendCircularBuffer,
 )
 from mpisppy.cylinders.spoke import Spoke
 from mpisppy.cylinders.spwindow import Field
@@ -433,8 +435,8 @@ class TestConfigFlagWiring(unittest.TestCase):
         self.assertFalse(cfg.inspect_buffers_on_shutdown)
 
     def test_propagated_to_shared_options(self):
-        from mpisppy.utils.config import Config
         import mpisppy.utils.cfg_vanilla as vanilla
+        from mpisppy.utils.config import Config
         cfg = Config()
         cfg.popular_args()
         cfg.solver_name = "gurobi"
@@ -443,8 +445,8 @@ class TestConfigFlagWiring(unittest.TestCase):
         self.assertTrue(opts.get("inspect_buffers_on_shutdown"))
 
     def test_default_propagates_as_false(self):
-        from mpisppy.utils.config import Config
         import mpisppy.utils.cfg_vanilla as vanilla
+        from mpisppy.utils.config import Config
         cfg = Config()
         cfg.popular_args()
         cfg.solver_name = "gurobi"

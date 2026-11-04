@@ -7,9 +7,10 @@
 # full copyright and license information.
 ###############################################################################
 
-from mpisppy.cylinders.spoke import OuterBoundSpoke, Field
-from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
 import pyomo.environ as pyo
+
+from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
+from mpisppy.cylinders.spoke import Field, OuterBoundSpoke
 
 
 class SubgradientOuterBound(_PreLoopXhatMixin, OuterBoundSpoke):

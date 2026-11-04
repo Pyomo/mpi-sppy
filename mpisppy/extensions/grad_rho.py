@@ -7,17 +7,18 @@
 # full copyright and license information.
 ###############################################################################
 
-import mpisppy.extensions.dyn_rho_base
 import numpy as np
-from pyomo.core.expr.calculus.derivatives import differentiate
-from pyomo.core.expr.calculus.derivatives import Modes
 import pyomo.environ as pyo
+from pyomo.core.expr.calculus.derivatives import Modes, differentiate
+
+import mpisppy.extensions.dyn_rho_base
 import mpisppy.MPI as MPI
-from mpisppy import global_toc
 import mpisppy.utils.sputils as sputils
+from mpisppy import global_toc
+from mpisppy.cylinders.spwindow import Field
 from mpisppy.utils.nonant_sensitivities import _bundle_consensus_groups
 from mpisppy.utils.rho_utils import assign_rho_with_fallback
-from mpisppy.cylinders.spwindow import Field
+
 
 class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
     """
@@ -62,7 +63,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
         for ndn_i, v in s._mpisppy_data.nonant_indices.items():
             scen_dep_denom[ndn_i] = abs(v._value - xbars[ndn_i]._value)
-            
+
         denom_max = max(scen_dep_denom.values())
 
         for ndn_i, v in s._mpisppy_data.nonant_indices.items():
@@ -172,7 +173,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                                      mode=Modes.reverse_symbolic,
                                      )
 
-            grad_dict = {ndn_i: 0 for ndn_i in s._mpisppy_data.nonant_indices}
+            grad_dict = dict.fromkeys(s._mpisppy_data.nonant_indices, 0)
             for bundle_key, partial in zip(wrt_keys, partials):
                 grad_dict[bundle_key] = grad_dict[bundle_key] + partial
             self.grad_exprs[s] = grad_dict
@@ -250,7 +251,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
         if self.indep_denom:
             grad_denom = self._scen_indep_denom()
-            loc_denom = {s: grad_denom for s in local_scens}
+            loc_denom = dict.fromkeys(local_scens, grad_denom)
         else:
             loc_denom = {s: self._scen_dep_denom(s)
                            for s in opt.local_scenarios.values()}
@@ -274,7 +275,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                     ndn = node.name
                     local_nodenames.append(ndn)
                     nlen = nlens[ndn]
-                    
+
                     local_rhos[ndn] = np.zeros(nlen, dtype="d")
                     local_rho_mins[ndn] = np.zeros(nlen, dtype="d")
                     local_rho_maxes[ndn] = np.zeros(nlen, dtype="d")
@@ -393,7 +394,8 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             # WTracker, and miditer reads both on the very next pass -- so
             # skipping it here does not leave rho alone, it takes the run down
             # at the first resumed iteration.
-            self.update_caches()
+            if self._dynamic_updates_enabled():
+                self.update_caches()
             # _get_grad_exprs is called from here and nowhere else, and
             # _eval_grad_exprs reads what it builds on every rho update. The
             # expressions are differentiated from the models, not from an
@@ -404,20 +406,16 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             self._get_grad_exprs()
             return
         global_toc("Using grad-rho rho setter")
-        # PHBase.Iter0 runs the iter0 solve loop before this hook but does not
-        # compute xbar (Compute_Xbar is first called in iterk_loop, i.e. at
-        # iteration 1). Until then the xbars Param sits at its attach_xbars
-        # init value of 0.0, which would make the rho denominator abs(x - xbar)
-        # collapse to abs(x) -- distance from zero rather than from the iter0
-        # consensus mean. Compute xbar from the iter0 solutions here so both
-        # the convergence caches (update_caches) and the rho denominator use
-        # the real mean.
-        self.opt.Compute_Xbar()
+        # PHBase.Iter0 has set xbar before this hook: the mean of the
+        # iteration-0 solutions, or the xbar WXBarReader supplied. Computing
+        # it again here would replace a supplied one.
         self.update_caches()
         self._get_grad_exprs()
         self.compute_and_update_rho()
 
     def miditer(self):
+        if not self._dynamic_updates_enabled():
+            return
         self.update_caches()
         self.opt.spcomm.get_receive_buffer(
             self.best_xhat_buf,
@@ -432,7 +430,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
     def post_everything(self):
         pass
-    
+
     def register_receive_fields(self):
         spcomm = self.opt.spcomm
         best_xhat_ranks = spcomm.fields_to_ranks[Field.BEST_XHAT]

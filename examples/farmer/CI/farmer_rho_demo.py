@@ -15,25 +15,23 @@
 
 import farmer
 
+import mpisppy.utils.cfg_vanilla as vanilla
+import mpisppy.utils.sputils as sputils
+from mpisppy.convergers.norm_rho_converger import NormRhoConverger
+from mpisppy.extensions.extension import MultiExtension
+from mpisppy.extensions.grad_rho import GradRho
+from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
+
 # Make it all go
 from mpisppy.spin_the_wheel import WheelSpinner
-import mpisppy.utils.sputils as sputils
-
 from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
-
-from mpisppy.extensions.extension import MultiExtension
-
-from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
-from mpisppy.convergers.norm_rho_converger import NormRhoConverger
-from mpisppy.extensions.grad_rho import GradRho
 
 write_solution = False
 
 def _parse_args():
     # create a config object and parse
     cfg = config.Config()
-    
+
     cfg.num_scens_required()
     cfg.popular_args()
     cfg.two_sided_args()
@@ -69,9 +67,9 @@ def _parse_args():
     cfg.parse_command_line("farmer_demo")
     return cfg
 
-    
+
 def main():
-    
+
     cfg = _parse_args()
 
     crops_multiplier = cfg.crops_mult
@@ -89,7 +87,7 @@ def main():
             ph_converger = NormRhoConverger
     else:
         ph_converger = None
-    
+
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
     all_scenario_names = farmer.scenario_names_creator(cfg.num_scens)
@@ -119,7 +117,7 @@ def main():
     if cfg.grad_rho:
         ext_classes.append(GradRho)
         hub_dict['opt_kwargs']['options']['grad_rho_options'] = {'cfg': cfg}
-    
+
     ## Gabe's (way pre-pandemic) adaptive rho
     if cfg.use_norm_rho_updater:
         ext_classes.append(NormRhoUpdater)                
@@ -150,7 +148,7 @@ def main():
     # xhat shuffle bound spoke
     if cfg.xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
-        
+
     list_of_spoke_dict = list()
     if cfg.fwph:
         list_of_spoke_dict.append(fw_spoke)

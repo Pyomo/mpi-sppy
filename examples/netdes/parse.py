@@ -12,16 +12,17 @@
 '''
 import numpy as np
 
+
 def main():
     fname = 'data/network-10-10-L-01.dat'
     data = parse(fname)
     print(data['d'][9])
-    
+
     scen = parse(fname, scenario_ix=9)
     print(scen['d'])
 
 def parse(fname, scenario_ix=None):
-    with open(fname, 'r') as f:
+    with open(fname) as f:
         ''' Skip file header '''
         while (not f.readline().startswith('+')):
             continue
@@ -38,9 +39,8 @@ def parse(fname, scenario_ix=None):
         if (scenario_ix is not None):
             ''' Read the provided scenario '''
             if (scenario_ix < 0 or scenario_ix >= K):
-                raise ValueError('Provided scenario index ({}) could '
-                                 'not be found ({} total scenarios)'.format(
-                                        scenario_ix, K))
+                raise ValueError(f'Provided scenario index ({scenario_ix}) could '
+                                 f'not be found ({K} total scenarios)')
             for k in range(scenario_ix):
                 for _ in range(4):
                     f.readline()
@@ -78,7 +78,7 @@ def parse(fname, scenario_ix=None):
         'el': el,
     }
     return data
-        
+
 def _toVector(line, dtype=np.float64):
     return np.array(line.split(','), dtype=dtype)
 

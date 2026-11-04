@@ -78,7 +78,7 @@ def _doone(cmdstr: str) -> bool:
     if p.returncode != 0:
         # include tail of log for convenience
         try:
-            with open(log, "r", encoding="utf-8", errors="replace") as f:
+            with open(log, encoding="utf-8", errors="replace") as f:
                 lines = f.readlines()
             tail = "".join(lines[-200:])
         except Exception as e:

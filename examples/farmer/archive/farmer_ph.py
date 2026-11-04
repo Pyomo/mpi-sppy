@@ -9,11 +9,13 @@
 # This shows using progressive hedging (PH) algorithm and using its smoothed 
 # version (SPH) to solve the farmer problem. 
 
-from mpisppy.opt.ph import PH
-from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
-import farmer
-from mpisppy.extensions.xhatclosest import XhatClosest
 import sys
+
+import farmer
+
+from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
+from mpisppy.extensions.xhatclosest import XhatClosest
+from mpisppy.opt.ph import PH
 
 
 def main():
@@ -59,7 +61,7 @@ def main():
     }
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
-    all_scenario_names = ['scen{}'.format(sn) for sn in range(num_scen)]
+    all_scenario_names = [f'scen{sn}' for sn in range(num_scen)]
     scenario_creator_kwargs = {
         'use_integer': use_int,
         "crops_multiplier": crops_multiplier,

@@ -8,8 +8,9 @@
 ###############################################################################
 # multistage (4-stage) example using aircond model. Can be any number of stages, does not support unbalanced trees
 import numpy as np
-import mpisppy.utils.sputils as sputils
+
 import mpisppy.utils.amalgamator as amalgamator
+import mpisppy.utils.sputils as sputils
 
 # Use this random stream:
 aircondstream = np.random.RandomState()
@@ -48,11 +49,11 @@ if __name__ == "__main__":
     options = ama.options
     options['solver_options'] = options['EF_solver_options']
     xhat = sputils.nonant_cache_from_ef(ama.ef)
-   
-    
+
+
     num_batches = 10
     batch_size = 100
-    
+
     mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size, start = num_scens,
                         verbose=False)
     r=mmw.run(objective_gap=True)

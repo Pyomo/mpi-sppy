@@ -8,11 +8,14 @@
 ###############################################################################
 ''' Solve the EF of the sslp problems
 '''
-from mpisppy.opt.ef import ExtensiveForm
-from sslp import scenario_creator
-import pyomo.environ as pyo
-import sys
 import os
+import sys
+
+import pyomo.environ as pyo
+from sslp import scenario_creator
+
+from mpisppy.opt.ef import ExtensiveForm
+
 
 def main():
     # inst = "sslp_15_45_5"

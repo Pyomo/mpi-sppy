@@ -9,6 +9,7 @@
 # This is a program for testing and development
 import os
 import sys
+
 import gams
 import gamspy_base
 

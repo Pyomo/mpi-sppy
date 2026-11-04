@@ -10,9 +10,11 @@
 # TBD: we should consider restructuring this and moving the capability to spbase
 
 import os
+
 import numpy as np
-import mpisppy.utils.sputils as sputils
+
 import mpisppy.utils.pickle_bundle as pickle_bundle
+import mpisppy.utils.sputils as sputils
 
 # Development notes:
 # 2 stage Cases:
@@ -30,7 +32,7 @@ import mpisppy.utils.pickle_bundle as pickle_bundle
 #        the caller needs to worry about what is in what rank
 #        (local_scenarios might have bundle names, e.g.)
 
-class ProperBundler():
+class ProperBundler:
     """ Wrap model file functions so as to create proper bundles 
     it might pickle them or read them from a pickle file
 
@@ -67,7 +69,7 @@ class ProperBundler():
                 raise RuntimeError(f"Bundles must consume the same number of entire second stage nodes: {beyond2size=} {bunsize=}")
             # we need bunBFs for EF formulation
             self.bunBFs = [bunsize // beyond2size] + BFs[1:]
-    
+
 
     def bundle_names_creator(self, num_buns, start=None, cfg=None):
         # Sets self.bunBFs, which is needed by scenario_creator, as a side effect.
@@ -92,7 +94,7 @@ class ProperBundler():
         # Add cfg in case it is not already there
         sc_kwargs["cfg"] = cfg
         return sc_kwargs
-    
+
     def scenario_creator(self, sname, **kwargs):
         """
         Wraps the module scenario_creator to return a bundle if the name

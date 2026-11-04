@@ -23,12 +23,11 @@ import os
 import sys
 import unittest
 
+import mpisppy.confidence_intervals.bootsp.boot_sp as boot_sp
+import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
+import mpisppy.confidence_intervals.bootsp.simulate_boot as simulate_boot
 import mpisppy.utils.sputils as sputils
 from mpisppy.tests.utils import get_solver, round_pos_sig
-
-import mpisppy.confidence_intervals.bootsp.boot_utils as boot_utils
-import mpisppy.confidence_intervals.bootsp.boot_sp as boot_sp
-import mpisppy.confidence_intervals.bootsp.simulate_boot as simulate_boot
 
 sputils.disable_tictoc_output()
 

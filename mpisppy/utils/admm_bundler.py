@@ -21,8 +21,8 @@ so PH can distribute bundles across ranks independently.
 import numpy as np
 import pyomo.environ as pyo
 
-import mpisppy.utils.sputils as sputils
 import mpisppy.scenario_tree as scenario_tree
+import mpisppy.utils.sputils as sputils
 from mpisppy.utils.admmWrapper import (
     _admm_normalize_consensus_vars,
     _first_stage_var_names,
@@ -62,6 +62,7 @@ class AdmmBundler:
                  scenario_creator_kwargs=None,
                  first_stage_cost=None, first_stage_varlist=None,
                  first_stage_surrogate_nonant_list=None,
+                 first_stage_linear_surrogate_definitions=None,
                  first_stage_nonant_ef_suppl_list=None):
         # Same both-or-neither contract as Stoch_AdmmWrapper.
         if (first_stage_cost is None) != (first_stage_varlist is None):
@@ -77,6 +78,7 @@ class AdmmBundler:
         # are also defined.
         advanced_hooks = {
             "first_stage_surrogate_nonant_list": first_stage_surrogate_nonant_list,
+            "first_stage_linear_surrogate_definitions": first_stage_linear_surrogate_definitions,
             "first_stage_nonant_ef_suppl_list": first_stage_nonant_ef_suppl_list,
         }
         present_advanced = [n for n, h in advanced_hooks.items() if h is not None]
@@ -100,6 +102,7 @@ class AdmmBundler:
         self.first_stage_cost = first_stage_cost
         self.first_stage_varlist = first_stage_varlist
         self.first_stage_surrogate_nonant_list = first_stage_surrogate_nonant_list
+        self.first_stage_linear_surrogate_definitions = first_stage_linear_surrogate_definitions
         self.first_stage_nonant_ef_suppl_list = first_stage_nonant_ef_suppl_list
         self.number_admm_subproblems = len(admm_subproblem_names)
 
@@ -286,6 +289,9 @@ class AdmmBundler:
                 if self.first_stage_surrogate_nonant_list is not None:
                     attach_kwargs["surrogate_nonant_list"] = \
                         self.first_stage_surrogate_nonant_list(s)
+                if self.first_stage_linear_surrogate_definitions is not None:
+                    attach_kwargs["linear_surrogate_definitions"] = \
+                        self.first_stage_linear_surrogate_definitions(s)
                 if self.first_stage_nonant_ef_suppl_list is not None:
                     attach_kwargs["nonant_ef_suppl_list"] = \
                         self.first_stage_nonant_ef_suppl_list(s)

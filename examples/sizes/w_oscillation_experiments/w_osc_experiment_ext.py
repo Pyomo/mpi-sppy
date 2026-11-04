@@ -387,12 +387,12 @@ class WOscExperimentMonitor(Extension):
             opt._fix_nonants(cache)
             opt.solve_loop(dis_W=True, dis_prox=True, gripe=True, warmstart=True)
             inner = float(opt.Eobjective())
-        except Exception as e:                      # noqa: BLE001 (research code)
+        except Exception as e:
             print(f"inner-bound solve failed: {e}")
         outer = None
         try:                                        # unfixes internally
             outer = float(opt.post_solve_bound())
-        except Exception as e:                      # noqa: BLE001
+        except Exception as e:
             print(f"outer-bound solve failed: {e}")
         return {"inner": inner, "outer": outer}
 
@@ -411,6 +411,4 @@ class WOscExperimentMonitor(Extension):
                 json.dump(q, f)
 
 
-# A module-level instance is not created; the driver passes the class to
-# vanilla.extension_adder. (The generic --user-defined-extensions loader, which
-# scans for instances, is not used here.)
+# The driver passes the class to vanilla.extension_adder directly.

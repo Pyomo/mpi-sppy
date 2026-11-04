@@ -33,7 +33,8 @@ command-line flags:
   ``0.1``) -- activates the mipgapper's auto-gap mode for cylinders
 - ``--timed-mipgap <curve>`` -- activates the timed MIP gap extension and sets
   the timed MIP gap curve as ``gap:time`` pairs (e.g., ``"0.02:100 0.05:200"``)
-- ``--user-defined-extensions <module>`` -- loads a custom extension
+- ``--user-defined-extensions <module>`` -- attaches the extension classes
+  defined in a module (see :ref:`user_defined_extensions`)
 - ``--grad-rho`` -- activates gradient-based rho (see :ref:`rho_setting`)
 - ``--use-norm-rho-updater`` -- activates the norm rho updater
 - ``--use-primal-dual-rho-updater`` -- activates the primal-dual rho updater
@@ -43,6 +44,35 @@ command-line flags:
 
 The rest of this help file describes extensions released with mpisppy along
 with some hints for including them in your own cylinders driver program.
+
+.. _user_defined_extensions:
+
+User-defined extensions
+-----------------------
+
+``--user-defined-extensions myext`` imports the module ``myext`` and attaches
+to the hub every non-abstract subclass of ``Extension`` that the module
+defines. Classes the module imports are not attached, so a concrete helper
+base class you do not want attached belongs in another module. For several
+modules, quote a space-separated list: ``--user-defined-extensions "myext1
+myext2"``. No two extensions in a run may share a class name, shipped ones
+included; the run stops with an error if they do.
+
+The module is found the way ``--module-name`` finds a model: give a module
+name (``myext`` or ``mypkg.myext``), which is looked for in the current
+directory as well as on ``sys.path``, or a path (``some/dir/myext``) to a
+``.py`` file or a package directory. A module of the same name that is
+already imported, or that comes earlier on ``sys.path``, is used instead
+of yours; which comes first depends on how the run is launched. With a
+path, that case is an error, so rename your module. For a class in a
+package, name the module that defines it, not a package that re-exports
+it.
+
+If ``myext.json`` is in the same directory as ``myext.py`` (for classes
+defined in a package's ``__init__.py``, ``__init__.json``), its contents are
+put in the hub options under the module's name, without any directory part
+(``myext`` or ``mypkg.myext``). The file is optional, so read it with
+``self.opt.options.get("myext")``.
 
 Multiple Extensions
 -------------------
@@ -61,6 +91,145 @@ example of use.
    for ``["opt_kwargs"]["extensions"]`` and then wants to see a list of
    extension classes in ``["opt_kwargs"]["extension_kwargs"]["ext_classes"]``.
    Some examples do both, which can be little confusing.
+
+Replacing subproblem solves
+---------------------------
+
+An ``Extension`` may override ``solve_subproblem`` to customize how a scenario
+or bundle subproblem is solved. A common reason is to provide a custom solution
+algorithm for the subproblem. The override may replace mpi-sppy's configured
+solve entirely or wrap it with additional work. For example, constraint
+generation can solve, inspect the loaded candidate, add violated rows, and
+solve again. This all remains one logical subproblem solve from the perspective
+of PH and the other mpi-sppy algorithms.
+
+The hook has this signature::
+
+   def solve_subproblem(
+           self, subproblem, subproblem_solve, *, outer_bound_only=False):
+       ...
+
+``subproblem_solve`` is a zero-argument callable supplied by mpi-sppy. Each
+call performs one complete, configured solve attempt: it invokes the solver
+with the current options and logging setup, classifies the results, loads an
+available solution using the appropriate persistent or nonpersistent solver
+path, and returns a ``SubproblemSolveOutcome``. Calling it does *not* advance
+PH, start another MPI operation, or invoke ``pre_solve`` and ``post_solve``.
+Those hooks surround the entire logical subproblem solve.
+
+An extension may call ``subproblem_solve`` zero, one, or multiple times, but it
+must return exactly one final ``SubproblemSolveOutcome``. The ordinary wrapper
+pattern is::
+
+   from mpisppy.extensions.extension import Extension
+
+   class ConstraintGeneration(Extension):
+       def solve_subproblem(
+               self, subproblem, subproblem_solve, *, outer_bound_only=False):
+           outcome = subproblem_solve()
+
+           # A bound-only solve deliberately does not load variable values.
+           if outer_bound_only or not outcome.solution_available:
+               return outcome
+
+           while add_violated_rows(subproblem):
+               # Persistent solvers must also receive the new rows; that step
+               # belongs in add_violated_rows.
+               outcome = subproblem_solve()
+               if not outcome.solution_available:
+                   break
+
+           return outcome
+
+The callback exists so an extension does not have to duplicate mpi-sppy's
+solver invocation, result classification, solution loading, logging, and
+failure bookkeeping. Only the outcome returned by the extension is committed
+to the subproblem's final availability and bound state.
+
+``SubproblemSolveOutcome`` contains:
+
+``results``
+   The Pyomo solver results associated with the outcome, or ``None`` for a
+   complete replacement that did not use the Pyomo solver.
+
+``solution_available``
+   A promise that the corresponding variable values are already loaded into
+   ``subproblem``. Setting this to ``True`` without loading the values violates
+   the hook contract.
+
+``outer_bound`` and ``inner_bound``
+   A numeric value reports that value directly. ``INFER_BOUND`` asks ``SPOpt``
+   to read it from ``results``; this can recover a usable bound from a
+   non-optimal solve. ``None`` explicitly reports that no bound is available.
+
+A normal ``subproblem_solve`` attempt whose results mpi-sppy classifies as
+failed reports ``None`` bounds, preserving native solve behavior. A wrapping
+extension may instead return a new outcome with ``INFER_BOUND`` when those
+non-optimal results contain a bound it intentionally wants to retain.
+
+When ``outer_bound_only=True``, ``subproblem_solve`` obtains a bound without
+loading a candidate solution. An extension must not inspect variable values on
+that path. It may replace the solve completely, but then it assumes the same
+solution-loading and outcome-reporting responsibilities as the callback.
+
+Replacing the callback completely
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+An extension does not have to call ``subproblem_solve``. This is useful when an
+external service, a specialized decomposition method, or a cached calculation
+replaces the Pyomo solver entirely. In that case the extension owns the full
+contract: it must solve the *current* subproblem objective and constraints,
+load any reported solution into the Pyomo variables, and report trustworthy
+bounds and availability.
+
+For example::
+
+   from mpisppy.extensions.extension import (
+       Extension,
+       SubproblemSolveOutcome,
+   )
+   from pyomo.environ import Var
+
+   class ExternalSubproblemSolver(Extension):
+       def solve_subproblem(
+               self, subproblem, subproblem_solve, *, outer_bound_only=False):
+           answer = external_service.solve(
+               subproblem,
+               need_solution=not outer_bound_only,
+           )
+
+           solution_available = False
+           if not outer_bound_only and answer.has_solution:
+               for variable in subproblem.component_data_objects(Var):
+                   variable.set_value(answer.primal_values[variable.name])
+               solution_available = True
+
+           return SubproblemSolveOutcome(
+               results=None,
+               solution_available=solution_available,
+               outer_bound=answer.outer_bound,
+               inner_bound=answer.inner_bound,
+           )
+
+Here the bounds are supplied numerically because there is no Pyomo results
+object from which ``INFER_BOUND`` could read them. A replacement may instead
+return a suitable Pyomo results object and use ``INFER_BOUND``. It must not
+claim ``solution_available=True`` unless it has loaded every value required by
+the calling algorithm. It must also avoid reusing a result computed for stale
+PH weights, fixed variables, objective coefficients, or generated constraints.
+
+Only one member of a ``MultiExtension`` may override ``solve_subproblem``.
+Other extensions still receive the observational solve hooks. In particular,
+``post_solve`` runs after final solution availability and bounds have been
+recorded, and its return value is ignored. Extensions that previously returned
+a replacement results object from ``post_solve`` must move that behavior into
+``solve_subproblem``.
+
+``solve_subproblem`` cannot be combined with the Agnostic interface. Agnostic
+dispatch is already a replacement for the native subproblem solve, so
+``SPOpt`` raises ``RuntimeError`` when both mechanisms are requested. Ordinary
+extensions that do not override ``solve_subproblem`` remain compatible with
+Agnostic solves.
 
 
 .. _checkpointing_your_extension:
@@ -382,6 +551,25 @@ WXBarWriter and WXBarReader
 
 There is an extension to write xbar and W values and another to read them.
 An example of their use is shown in ``examples.sizes.sizes_demo.py``
+
+When the reader loads W (``--init-W-fname``) or xbar
+(``--init-Xbar-fname``), the W and prox terms are put in the objective
+before the iteration-0 solve, so iteration 0 uses the values read.
+Without the reader, PH adds those terms after iteration 0.
+
+- When only W is read, the iteration-0 bound is a Lagrangian bound for
+  that W, not the trivial bound. The reader refuses W whose
+  probability-weighted sum over the scenarios of any tree node is not
+  zero, because the bound would not be valid.
+- When xbar is read, the prox term is on in iteration 0, so that solve
+  gives no bound and PH reports no trivial bound. That prox term uses
+  ``--default-rho``: a rho setter, SepRho, GradRho and the other rho
+  extensions set rho after the iteration-0 solve. Reading xbar cannot be
+  combined with smoothing, and cannot be used with APH, whose prox term is
+  centered on its own z rather than on xbar. W alone can be read with APH.
+- With ``--iter0-from-pickle`` there is no iteration-0 solve: iteration 0
+  comes from the pickle, which was solved without W or xbar. The values
+  read take effect from iteration 1.
 
 norm_rho_updater
 ^^^^^^^^^^^^^^^^

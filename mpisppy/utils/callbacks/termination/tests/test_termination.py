@@ -6,7 +6,10 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+import time
+
 import pytest
+from pyomo.environ import SolverFactory
 
 import mpisppy.utils.callbacks.termination.termination_callbacks as termination_callbacks_module
 from mpisppy.utils.callbacks.termination.termination_callbacks import (
@@ -14,9 +17,7 @@ from mpisppy.utils.callbacks.termination.termination_callbacks import (
     supports_termination_callback,
 )
 from mpisppy.utils.callbacks.termination.tests.markshare2 import model
-from pyomo.environ import SolverFactory
 
-import time
 
 class _TestTermination:
     def __init__(self):
@@ -46,14 +47,14 @@ class _TestTermination:
 
 
 class CPLEXTermination(_TestTermination):
-    
+
     _solver_name = "cplex_persistent"
 
     def _set_time_limit(self):
         self._solver.options["timelimit"] = 20
 
 class GurobiTermination(_TestTermination):
-    
+
     _solver_name = "gurobi_persistent"
 
     def _set_time_limit(self):
@@ -61,7 +62,7 @@ class GurobiTermination(_TestTermination):
 
 
 class XpressTermination(_TestTermination):
-    
+
     _solver_name = "xpress_persistent"
 
     def _set_time_limit(self):
@@ -73,20 +74,20 @@ class XpressTermination(_TestTermination):
     reason="cplex_persistent not available",
 )
 def test_cplex_termination_callback():
-    
+
     st = time.time()
     cplextest = CPLEXTermination()
     cplextest.solve()
     end = time.time()
     assert end - st < 5
 
-    
+
 @pytest.mark.skipif(
     not SolverFactory("gurobi_persistent").available(exception_flag=False),
     reason="gurobi_persistent not available",
 )
 def test_gurobi_termination_callback():
-    
+
     st = time.time()
     gurobitest = GurobiTermination()
     gurobitest.solve()
@@ -106,13 +107,13 @@ def test_gurobi_termination_callback_status():
     assert str(results.solver.termination_condition) == "userInterrupt"
     assert str(results.solution[0].status) == "stoppedByLimit"
 
-    
+
 @pytest.mark.skipif(
     not SolverFactory("xpress_persistent").available(exception_flag=False),
     reason="xpress_persistent not available",
 )
 def test_xpress_termination_callback():
-    
+
     st = time.time()
     xpresstest = XpressTermination()
     xpresstest.solve()
@@ -132,9 +133,9 @@ def test_xpress_termination_callback_status():
     assert str(results.solver.termination_condition) == "other"
     assert str(results.solution[0].status) == "feasible"
 
-    
+
 def test_unsupported():
-    
+
     cbc = SolverFactory("cbc")
 
     assert not supports_termination_callback("xpress_persistent")

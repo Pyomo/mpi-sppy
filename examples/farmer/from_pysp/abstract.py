@@ -11,11 +11,13 @@
 import os
 import sys
 
-from pyomo.environ import SolverFactory
-from mpisppy.utils.pysp_model import PySPModel
-from mpisppy.opt.ph import PH
-import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
+from pyomo.environ import SolverFactory
+
+import mpisppy.utils.sputils as sputils
+from mpisppy.opt.ph import PH
+from mpisppy.utils.pysp_model import PySPModel
+
 
 def _print_usage():
     print('Usage: "abstract.py solver" where solver is a pyomo solver name')

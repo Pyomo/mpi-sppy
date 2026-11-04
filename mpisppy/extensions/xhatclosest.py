@@ -9,9 +9,11 @@
 # dlw, Feb 2018. Code for closes scenario to xbar
 # TODO Apr. 2020 Eliminate old references to companiondriver
 import numpy as np
-import mpisppy.MPI as mpi
-import mpisppy.extensions.xhatbase
 import pyomo.environ as pyo
+
+import mpisppy.extensions.xhatbase
+import mpisppy.MPI as mpi
+
 
 class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
     """
@@ -35,6 +37,12 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
         self.keep_solution = True
         if ('keep_solution' in self.options) and (not self.options['keep_solution']):
             self.keep_solution = False
+
+    def _solver_options_for_evaluation(self):
+        """Return the hub's final effective options for final-xhat use."""
+        if self.options.get("use_ph_solver_options", False):
+            return self.opt._effective_solver_options(self.opt._PHIter)
+        return self.solver_options
 
     def xhat_closest_to_xbar(self, verbose=False, restore_nonants=True):
         """ Get a truncated z score and look for the closest overall.
@@ -90,20 +98,21 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
 
         sname = self.comms["ROOT"].bcast(globalwinnername, root=sroot)
         _vb("Trying scenario "+sname)
-        _vb("   Solver options="+str(self.solver_options))
+        solver_options = self._solver_options_for_evaluation()
+        _vb("   Solver options="+str(solver_options))
         # xxx TBD mult-stage
         snamedict = {"ROOT": sname}
         obj = self._try_one(snamedict,
-                            solver_options=self.solver_options,
+                            solver_options=solver_options,
                             verbose=False,
                             restore_nonants=restore_nonants)
         if obj is None:
             _vb("    Infeasible")
         else:
             _vb("    Feasible, returning " + str(obj))
-            
+
         return obj, snamedict
-        
+
     def pre_iter0(self):
         if self.opt.multistage:
             raise RuntimeError("xhatclosest not done for multi-stage")
@@ -111,7 +120,7 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
     def post_iter0(self):
         # a little bit silly
         self.comms = self.opt.comms
-        
+
     def miditer(self):
         pass
 
@@ -124,5 +133,7 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
         self.opt.disable_W_and_prox()
         obj, srcsname = self.xhat_closest_to_xbar(verbose=self.verbose, restore_nonants=restore_nonants)
         self.opt.reenable_W_and_prox()
-        self.xhat_common_post_everything("closest to xbar", obj, srcsname, restore_nonants)
-        self._final_xhat_closest_obj = obj
+        incumbent_obj = self.reconcile_final_candidate(obj, self.keep_solution)
+        self.xhat_common_post_everything(
+            "closest to xbar", incumbent_obj, srcsname, restore_nonants)
+        self._final_xhat_closest_obj = incumbent_obj

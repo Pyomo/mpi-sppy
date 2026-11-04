@@ -45,9 +45,8 @@ import sys
 import time
 
 import mpisppy.utils.sputils as sputils
-from mpisppy.generic import out_of_the_box as ootb
 from mpisppy.generic import ootb_validate as val
-
+from mpisppy.generic import out_of_the_box as ootb
 
 # Integer-exponent grid searched during the fit (int_exponent in the effort
 # model). 1.0 = integers scale like LP; > 1 captures branch-and-bound blow-up.
@@ -187,7 +186,7 @@ def measure_example(spec: dict, solver_name: str, spb_grid, reps) -> list:  # pr
         try:
             seconds = _time_ef_solve(names, module.scenario_creator, kwargs,
                                      solver_name, reps)
-        except Exception as e:                            # noqa: BLE001
+        except Exception as e:
             print(f"  [{spec['name']} spb={spb}] solve failed: "
                   f"{type(e).__name__}: {e}", file=sys.stderr)
             continue

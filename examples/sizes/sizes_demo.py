@@ -11,18 +11,17 @@
 # Serial (not cylinders)
 
 import sys
+
 import pyomo.environ as pyo
-import mpisppy.phbase
+from sizes import _rho_setter, id_fix_list_fct, scenario_creator, scenario_denouement
+
 import mpisppy.opt.ph
+import mpisppy.phbase
+from mpisppy.extensions.avgminmaxer import MinMaxAvg
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
-from mpisppy.extensions.avgminmaxer import MinMaxAvg
 from mpisppy.extensions.wtracker_extension import Wtracker_extension
-from sizes import scenario_creator, \
-                  scenario_denouement, \
-                  _rho_setter, \
-                  id_fix_list_fct
 
 ScenCount = 10  # 3 or 10
 
@@ -73,7 +72,7 @@ if __name__ == "__main__":
     options["wtracker_options"] ={"wlen": 4,
                                   "reportlen": 6,
                                   "stdevthresh": 0.1}
-    
+
 
     all_scenario_names = list()
     for sn in range(ScenCount):
@@ -108,7 +107,7 @@ if __name__ == "__main__":
         extensions=MultiExtension,
         extension_kwargs=multi_ext,
     )
-    
+
     conv, obj, tbound = ph.ph_main()
     if ph.cylinder_rank == 0:
          print ("Trival bound =",tbound)
@@ -117,7 +116,7 @@ if __name__ == "__main__":
     #quit()
 
     ############ test W and xbar writers and special joint reader  ############
-    
+
     newph = mpisppy.opt.ph.PH(
         options,
         all_scenario_names,
@@ -131,7 +130,7 @@ if __name__ == "__main__":
 
     conv, obj, tbound = newph.ph_main()
     #####
-    
+
     newph = mpisppy.opt.ph.PH(
         options,
         all_scenario_names,
@@ -177,7 +176,7 @@ if __name__ == "__main__":
         scenario_denouement,
         scenario_creator_kwargs={"scenario_count": ScenCount},
     )
-    
+
     conv = ph.ph_main(rho_setter=_rho_setter)
 
     ### avg, min, max extension #####
@@ -196,5 +195,5 @@ if __name__ == "__main__":
     options["avgminmax_name"] =  "FirstStageCost"
     conv, obj, bnd = ph.ph_main()
 
-    
+
 

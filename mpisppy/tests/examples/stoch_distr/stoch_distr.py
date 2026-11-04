@@ -10,11 +10,13 @@
 
 # Network Flow - various formulations
 # DLW, May 2025: I am suspicious about the three-stage consensus variables. 
-import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
-import numpy as np
 import re
+
+import numpy as np
+import pyomo.environ as pyo
+
 import mpisppy.scenario_tree as scenario_tree
+import mpisppy.utils.sputils as sputils
 
 # This version present in the test slightly differs from the original 
 # as it allows a three-stage problem
@@ -58,7 +60,7 @@ def inter_region_dict_creator(num_admm_subproblems): #doesn't depend on the scen
                                     (("Region1","DC1"),("Region3","DC3_1")): 50, (("Region3","DC3_1"),("Region1","DC1")): 50,\
                                     (("Region2","DC2"),("Region3","DC3_2")): 50, (("Region3","DC3_2"),("Region2","DC2")): 50,\
                                         }
-    
+
     elif num_admm_subproblems == 4:
         inter_region_dict["arcs"] = [(("Region1","DC1"),("Region2","DC2")),(("Region2","DC2"),("Region1","DC1")),\
                                  (("Region1","DC1"),("Region3","DC3_1")),(("Region3","DC3_1"),("Region1","DC1")),\
@@ -78,7 +80,7 @@ def inter_region_dict_creator(num_admm_subproblems): #doesn't depend on the scen
                                   (("Region1","DC1"),("Region4","DC4")): 100, (("Region4","DC4"),("Region1","DC1")): 60,\
                                   (("Region4","DC4"),("Region2","DC2")): 20, (("Region2","DC2"),("Region4","DC4")): 40,\
                                     }
-    
+
     return inter_region_dict
 
 
@@ -185,12 +187,12 @@ def region_dict_creator(admm_subproblem_name): #in this precise example region_d
         region_dict["production costs"] = {"F1_1": 50, "F1_2": 80}
         region_dict["revenues"] = {"B1_1": 800, "B1_2": 900}
         # most capacities are 50, so start there and then override
-        region_dict["flow capacities"] = {a: 50 for a in region_dict["arcs"]}
+        region_dict["flow capacities"] = dict.fromkeys(region_dict["arcs"], 50)
         region_dict["flow capacities"][("F1_1","B1_1")] = None
         region_dict["flow capacities"][("F1_2","B1_2")] = None
         region_dict["flow costs"] = {("F1_1","DC1"): 300, ("F1_2","DC1"): 500, ("DC1","B1_1"): 200,
             ("DC1","B1_2"): 400, ("F1_1","B1_1"): 700,  ("F1_2","B1_2"): 1000}
-        
+
     elif admm_subproblem_name == "Region2":
         # Creates data for Region2
         region_dict={"name": "Region2"}
@@ -223,7 +225,7 @@ def region_dict_creator(admm_subproblem_name): #in this precise example region_d
             ("DC3_2","B3_2"): 100, ("DC3_1","DC3_2"): 70, ("DC3_2","DC3_1"): 50}
         region_dict["flow costs"] = {("F3_1","DC3_1"): 100, ("F3_2","DC3_2"): 100, ("DC3_1","B3_1"): 201,
             ("DC3_2","B3_2"): 200, ("DC3_1","DC3_2"): 100, ("DC3_2","DC3_1"): 100}
-    
+
     elif admm_subproblem_name == "Region4":
         # Creates data for Region4
         region_dict={"name": "Region4"}
@@ -238,7 +240,7 @@ def region_dict_creator(admm_subproblem_name): #in this precise example region_d
         region_dict["revenues"] = {"B4_1": 900, "B4_2": 700}
         region_dict["flow capacities"] = {("F4_1","DC4"): 80, ("F4_2","DC4"): 60, ("DC4","B4_1"): 100, ("DC4","B4_2"): 100}
         region_dict["flow costs"] = {("F4_1","DC4"): 100, ("F4_2","DC4"): 80, ("DC4","B4_1"): 90, ("DC4","B4_2"): 70}
-        
+
     else:
         raise RuntimeError (f"unknown Region name {admm_subproblem_name}")
 
@@ -324,7 +326,7 @@ def min_cost_distr_problem(local_dict, stoch_scenario_name, cfg, demand=None, se
             return (0,0)
         else:
             raise ValueError(f"unknown node type for node {n}")
-    
+
     model.y = pyo.Var(local_dict["nodes"], bounds=slackBounds_rule)
 
     if demand is not None: # 3-stage example, defining exportation
@@ -334,11 +336,11 @@ def min_cost_distr_problem(local_dict, stoch_scenario_name, cfg, demand=None, se
 
     model.FirstStageCost = pyo.Expression(expr=\
                     sum(local_dict["production costs"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["factory nodes"]))
-    
+
     if demand is not None: # 3-stage example
         model.SecondStageCost = pyo.Expression(expr=\
                         sum(-810*model.export[n] for n in local_dict["buyer nodes"]))
-    
+
     model.LastStageCost = pyo.Expression(expr=\
                     sum(local_dict["flow costs"][a]*model.flow[a] for a in local_dict["arcs"]) \
                     + sum(local_dict["revenues"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["buyer nodes"]))
@@ -347,7 +349,7 @@ def min_cost_distr_problem(local_dict, stoch_scenario_name, cfg, demand=None, se
         model.MinCost = pyo.Objective(expr=model.FirstStageCost + model.SecondStageCost +model.LastStageCost, sense=sense)
     else: # 2-stage example
         model.MinCost = pyo.Objective(expr=model.FirstStageCost +model.LastStageCost, sense=sense)
-    
+
     def FlowBalance_rule(m, n):
         #we change the definition of the slack for target dummy nodes so that we have the slack from the source and from the target equal
         if n in local_dict["dummy nodes target"]:
@@ -451,7 +453,7 @@ def scenario_creator(admm_stoch_subproblem_scenario_name, **kwargs):
         Pyomo ConcreteModel: the instantiated model
     """
     cfg = kwargs.get("cfg")
-    
+
     # assert(cfg.num_admm_subproblems is not None)
     # assert (cfg.num_stoch_scens is not None)
     admm_subproblem_name, stoch_scenario_name = split_admm_stoch_subproblem_scenario_name(admm_stoch_subproblem_scenario_name)
@@ -479,7 +481,7 @@ def scenario_creator(admm_stoch_subproblem_scenario_name, **kwargs):
         scennum = _scenario_number(stoch_scenario_name, demand=demand)
         model._mpisppy_node_list = MakeNodesforScen(model, BFs, scennum, local_dict)
         model._mpisppy_probability = 1/cfg.num_stoch_scens
-    
+
     return model
 
 
@@ -656,19 +658,19 @@ def inparser_adder(cfg):
                       description="mean percentage of scrap loss at the production",
                       domain=float,
                       default=5)
-    
+
     cfg.add_to_config("cv",
                       description="coefficient of variation of the loss at the production",
                       domain=float,
                       default=20)
-    
+
     cfg.add_to_config("initial_seed",
                       description="initial seed for generating the loss",
                       domain=int,
                       default=0)
-    
+
     cfg.add_to_config("num_stages",
                       description="choice of the number of stages for the example, by default two-stage",
                       domain=int,
                       default=2)
-    
+

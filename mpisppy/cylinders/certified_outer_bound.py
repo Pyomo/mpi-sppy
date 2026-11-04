@@ -26,12 +26,10 @@
 import warnings
 
 import pyomo.environ as pyo
-
 from pyomo.contrib.fbbt.fbbt import InfeasibleConstraintException
 
-from mpisppy import MPI
-
 import mpisppy.utils.sputils as sputils
+from mpisppy import MPI
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.utils.dual_certificate import (
     CertificateError,
@@ -438,7 +436,7 @@ class CertifiedOuterBound(LagrangianOuterBound):
                 warmstart=warmstart,
             )
             solve_raised = None
-        except Exception as e:                       # noqa: BLE001
+        except Exception as e:
             # Nothing a subproblem solve raises is worth the run; see the
             # module docstring on why this is deliberately not enumerated.
             solve_raised = e
@@ -516,7 +514,7 @@ class CertifiedOuterBound(LagrangianOuterBound):
                 s.dual.clear()
                 try:
                     plugin.load_duals()
-                except Exception as e:               # noqa: BLE001
+                except Exception as e:
                     dual_load_failed.setdefault(
                         sname, f"{type(e).__name__}: {e}")
             # Into a per-scenario list, merged into no_dual only if the call

@@ -7,8 +7,9 @@
 # full copyright and license information.
 ###############################################################################
 
-import mpisppy.MPI as mpi
 import mpisppy.cgbase
+import mpisppy.MPI as mpi
+
 
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
 def profile(filename=None, comm=mpi.COMM_WORLD):
@@ -57,7 +58,7 @@ class CG(mpisppy.cgbase.CGBase):
         self.Iter0()
         if (verbose):
             print(f'Completed {self.__class__.__name__} Iter0 on global rank {global_rank}')
-        
+
         self.iterk_loop()
 
         if finalize:
@@ -105,4 +106,4 @@ if __name__ == "__main__":
                obj)
 
     dopts = sputils.option_string_to_dict("mipgap=0.001")
-   
+

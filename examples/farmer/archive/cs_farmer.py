@@ -7,39 +7,36 @@
 # full copyright and license information.
 ###############################################################################
 # NOTE: This example used loose bundles, which are no longer supported. See doc/src/properbundles.rst for proper bundles.
+import copy
 import datetime
 import logging
 import sys
-import mpisppy.MPI as mpi
-import copy
-
-# Hub and spoke SPBase classes
-from mpisppy.phbase import PHBase
-from mpisppy.opt.ph import PH
-
-# Hub and spoke SPCommunicator classes
-from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
-
-# extensions for the hub
-from mpisppy.extensions.extension import MultiExtension
-from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
-from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
-from mpisppy.cylinders.hub import PHHub 
-from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
-from mpisppy.opt.lshaped import LShapedMethod
-
-from mpisppy.utils.xhat_eval import Xhat_Eval
-
-
-
-# Make it all go
-from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.log import setup_logger
 
 # the problem
 import farmer
-
 import pyomo.environ as pyo
+
+import mpisppy.MPI as mpi
+from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
+from mpisppy.cylinders.hub import PHHub
+from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
+
+# Hub and spoke SPCommunicator classes
+from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
+from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
+
+# extensions for the hub
+from mpisppy.extensions.extension import MultiExtension
+from mpisppy.log import setup_logger
+from mpisppy.opt.lshaped import LShapedMethod
+from mpisppy.opt.ph import PH
+
+# Hub and spoke SPBase classes
+from mpisppy.phbase import PHBase
+
+# Make it all go
+from mpisppy.spin_the_wheel import WheelSpinner
+from mpisppy.utils.xhat_eval import Xhat_Eval
 
 # mpi setup
 fullcomm = mpi.COMM_WORLD
@@ -69,7 +66,7 @@ if __name__ == "__main__":
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
 
-    all_scenario_names = ['scen{}'.format(sn) for sn in range(scen_count)]
+    all_scenario_names = [f'scen{sn}' for sn in range(scen_count)]
     rho_setter = farmer._rho_setter if hasattr(farmer, '_rho_setter') else None
     scenario_creator_kwargs = {
         'use_integer': True,
@@ -177,5 +174,4 @@ if __name__ == "__main__":
     if wheel.global_rank == 0:  # we are the reporting hub rank
         print(f"BestInnerBound={wheel.BestInnerBound} and BestOuterBound={wheel.BestOuterBound}")
 
-    print("End time={} for global rank={}". \
-          format(datetime.datetime.now(), global_rank))
+    print(f"End time={datetime.datetime.now()} for global rank={global_rank}")

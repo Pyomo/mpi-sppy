@@ -6,10 +6,10 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+from mpisppy.cylinders.spwindow import Field
 from mpisppy.extensions.extension import Extension
 from mpisppy.utils.sputils import is_persistent
 
-from mpisppy.cylinders.spwindow import Field
 
 class RelaxedPHFixer(Extension):
 

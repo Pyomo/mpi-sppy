@@ -8,17 +8,16 @@
 ###############################################################################
 """CLI arg parsing and module loading for generic_cylinders."""
 
-import sys
-import os
 import importlib
 import inspect
+import os
+import sys
 
 import numpy as np
 import pyomo.common.config as pyofig
 
 import mpisppy.utils.config as config
 import mpisppy.utils.sputils as sputils
-
 
 _IMPLICIT_MODULES = {
     "--smps-dir": "mpisppy.problem_io.smps_module",
@@ -131,6 +130,7 @@ def add_decomp_args(cfg):
     cfg.subgradient_bounder_args()
     cfg.xhatshuffle_args()
     cfg.xhatxbar_args()
+    cfg.final_xhat_args()
     cfg.xhat_from_file_args()
     cfg.write_xhat_file_args()
     cfg.xhat_feasibility_cut_args()
