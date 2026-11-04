@@ -1,3 +1,12 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
+
 """Build the MPI progress worker when its MPI/POSIX toolchain is available."""
 
 import importlib.util
@@ -18,11 +27,14 @@ from setuptools.command.editable_wheel import editable_wheel as _editable_wheel
 
 def _write_mpi_signature_header(directory, version, comm_size, any_source, any_tag):
     """Embed the compiler probe's MPI values in a C header."""
-    chunks = [version[index:index + 32] for index in range(0, len(version), 32)]
-    quoted = "\n".join(
-        '    "' + "".join(f"\\x{byte:02x}" for byte in chunk) + '"'
-        for chunk in chunks
-    ) or '    ""'
+    chunks = [version[index : index + 32] for index in range(0, len(version), 32)]
+    quoted = (
+        "\n".join(
+            '    "' + "".join(f"\\x{byte:02x}" for byte in chunk) + '"'
+            for chunk in chunks
+        )
+        or '    ""'
+    )
     (directory / "mpi_progress_build.h").write_text(
         "/* Generated from the MPI compiler selected for this build. */\n"
         f"#define MPISPPY_BUILD_MPI_COMM_SIZE {comm_size}\n"
@@ -99,25 +111,30 @@ const char *mpisppy_mpi_build_signature(size_t *comm_size,
                 # A fresh signature must never accompany an older extension.
                 self.force = self.compiler.force = True
                 objects = self.compiler.compile(
-                    [str(source)], output_dir=name,
+                    [str(source)],
+                    output_dir=name,
                     macros=extension.define_macros,
                     include_dirs=extension.include_dirs,
                     debug=self.debug,
                     extra_postargs=extension.extra_compile_args,
                 )
                 self.compiler.link_shared_object(
-                    objects + extension.extra_objects, str(probe),
+                    objects + extension.extra_objects,
+                    str(probe),
                     libraries=self.get_libraries(extension),
                     library_dirs=extension.library_dirs,
                     runtime_library_dirs=extension.runtime_library_dirs,
                     extra_postargs=extension.extra_link_args,
                     export_symbols=["mpisppy_mpi_build_signature"],
-                    debug=self.debug, build_temp=self.build_temp,
+                    debug=self.debug,
+                    build_temp=self.build_temp,
                     target_lang=extension.language or "c",
                 )
                 output = subprocess.run(
                     [sys.executable, "-c", _MPI_SIGNATURE_RUNNER, str(probe)],
-                    check=True, capture_output=True, timeout=30,
+                    check=True,
+                    capture_output=True,
+                    timeout=30,
                 ).stdout
                 header, separator, version = output.partition(b"\n")
                 if not separator:
@@ -127,7 +144,11 @@ const char *mpisppy_mpi_build_signature(size_t *comm_size,
                     raise ValueError("invalid MPI compiler signature")
                 version.decode("utf-8")
                 _write_mpi_signature_header(
-                    directory, version, comm_size, any_source, any_tag,
+                    directory,
+                    version,
+                    comm_size,
+                    any_source,
+                    any_tag,
                 )
             except Exception:
                 warnings.warn(
@@ -168,10 +189,12 @@ class _EnvironmentEditableWheel(_editable_wheel):
 
         # In strict editable mode setuptools also creates a shared link tree.
         # It must not contain a second copy of the MPI extension.
-        files = [path for path in files
-                 if Path(path).resolve() not in extension_outputs]
+        files = [
+            path for path in files if Path(path).resolve() not in extension_outputs
+        ]
         mapping = {
-            path: source for path, source in mapping.items()
+            path: source
+            for path, source in mapping.items()
             if Path(path).resolve() not in extension_outputs
         }
         return files, mapping
@@ -188,13 +211,15 @@ compiler_uses_launcher = bool(compiler_executables) and os.path.basename(
 ) in {"ccache", "sccache"}
 if compiler_uses_launcher:
     compiler_executables = compiler_command[:2]
-compiler_available = bool(compiler_executables) and (
-    not compiler_uses_launcher or len(compiler_executables) == 2
-) and all(
-    shutil.which(executable) is not None for executable in compiler_executables
+compiler_available = (
+    bool(compiler_executables)
+    and (not compiler_uses_launcher or len(compiler_executables) == 2)
+    and all(shutil.which(executable) is not None for executable in compiler_executables)
 )
 if mpi4py_available and not native_platform:
-    warnings.warn("The MPI progress extension requires Linux or macOS; using the Python worker")
+    warnings.warn(
+        "The MPI progress extension requires Linux or macOS; using the Python worker"
+    )
 elif mpi4py_available and not compiler_available:
     if "CC" in os.environ:
         raise RuntimeError(f"MPI compiler command {os.environ['CC']!r} was not found")

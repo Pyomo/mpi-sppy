@@ -1,11 +1,20 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
+
 """Checks for progress worker selection and its Python-facing guardrails."""
 
 import importlib.util
 import os
-from pathlib import Path
 import time
-from types import SimpleNamespace
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 
 from mpisppy.utils.mpi_progress_compat import check_native_mpi_compatibility
 
@@ -54,13 +63,18 @@ class TestMPIProgressCompatibility(unittest.TestCase):
             check_native_mpi_compatibility(self.extension, self.mpi)
 
 
-@unittest.skipUnless(os.environ.get("MPISPPY_EXPECT_PROGRESS_WORKER"),
-                     "requires a progress worker installation")
+@unittest.skipUnless(
+    os.environ.get("MPISPPY_EXPECT_PROGRESS_WORKER"),
+    "requires a progress worker installation",
+)
 class TestInstalledMPIProgress(unittest.TestCase):
     def test_installed_worker_and_thread_level(self):
+        # mpi-sppy must configure MPI_THREAD_MULTIPLE before mpi4py initializes MPI.
+        # isort: off
         import mpisppy
         from mpisppy import MPI
         from mpi4py import MPI as mpi4py_mpi
+        # isort: on
 
         expected = os.environ["MPISPPY_EXPECT_PROGRESS_WORKER"]
         self.assertIn(expected, ("python", "native"))
