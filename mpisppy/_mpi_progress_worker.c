@@ -30,18 +30,9 @@ static struct {
     int stopped;
     int mpi_error;
     int wait_error;
-    int diagnostics;
     MPI_Comm comm;
     PyObject *comm_owner;
     double max_interval;
-    unsigned long long probes;
-    unsigned long long wakeups;
-    double active_seconds;
-    double mpi_seconds;
-    double max_probe_seconds;
-    double wait_late_seconds;
-    double max_wait_late_seconds;
-    double worker_cpu_seconds;
 } worker = {.mutex = PTHREAD_MUTEX_INITIALIZER};
 
 static double seconds_on(clockid_t clock_id)
@@ -66,11 +57,6 @@ static struct timespec deadline_after(double seconds)
     return deadline;
 }
 
-static double deadline_seconds(struct timespec deadline)
-{
-    return (double)deadline.tv_sec + (double)deadline.tv_nsec * 1e-9;
-}
-
 static void abort_worker(const char *operation, int error)
 {
     fprintf(stderr, "mpi-sppy MPI progress: %s failed with error %d; aborting MPI job\n",
@@ -93,13 +79,12 @@ static PyObject *configure(PyObject *self, PyObject *args)
     PyObject *comm_obj;
     MPI_Comm *comm_ptr;
     double interval;
-    int diagnostics;
     int error;
 #ifdef __linux__
     pthread_condattr_t attributes;
 #endif
 
-    if (!PyArg_ParseTuple(args, "Odp", &comm_obj, &interval, &diagnostics))
+    if (!PyArg_ParseTuple(args, "Od", &comm_obj, &interval))
         return NULL;
     if (!isfinite(interval) || interval <= 0) {
         PyErr_SetString(PyExc_ValueError, "progress interval must be positive and finite");
@@ -134,7 +119,6 @@ static PyObject *configure(PyObject *self, PyObject *args)
     worker.comm_owner = comm_obj;
     worker.comm = *comm_ptr;
     worker.max_interval = interval;
-    worker.diagnostics = diagnostics;
     worker.configured = 1;
     pthread_mutex_unlock(&worker.mutex);
     Py_RETURN_NONE;
@@ -142,7 +126,6 @@ static PyObject *configure(PyObject *self, PyObject *args)
 
 static PyObject *run(PyObject *self, PyObject *unused)
 {
-    double cpu_start;
     pthread_mutex_lock(&worker.mutex);
     if (worker.configured && worker.stopped) {
         pthread_mutex_unlock(&worker.mutex);
@@ -158,7 +141,6 @@ static PyObject *run(PyObject *self, PyObject *unused)
 
     /* No Python operation or GIL transition occurs inside the polling loop. */
     PyThreadState *thread_state = PyEval_SaveThread();
-    cpu_start = worker.diagnostics ? seconds_on(CLOCK_THREAD_CPUTIME_ID) : 0;
     for (;;) {
         double active_start;
         int wait_error;
@@ -179,18 +161,14 @@ static PyObject *run(PyObject *self, PyObject *unused)
         }
         active_start = seconds_on(CLOCK_MONOTONIC);
         worker.polling = 1;
-        if (worker.diagnostics)
-            worker.wakeups++;
         pthread_mutex_unlock(&worker.mutex);
 
         for (;;) {
-            double probe_start = 0.0, probe_end, elapsed, interval, lateness;
+            double probe_end, elapsed, interval;
             struct timespec deadline;
             int flag, mpi_error, wait_error = 0;
             pthread_mutex_lock(&worker.mutex);
             if (!worker.active || worker.stopped) {
-                if (worker.diagnostics)
-                    worker.active_seconds += seconds_on(CLOCK_MONOTONIC) - active_start;
                 worker.polling = 0;
                 pthread_cond_broadcast(&worker.changed);
                 pthread_mutex_unlock(&worker.mutex);
@@ -198,8 +176,6 @@ static PyObject *run(PyObject *self, PyObject *unused)
             }
             pthread_mutex_unlock(&worker.mutex);
 
-            if (worker.diagnostics)
-                probe_start = seconds_on(CLOCK_MONOTONIC);
             mpi_error = MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, worker.comm,
                                    &flag, MPI_STATUS_IGNORE);
             probe_end = seconds_on(CLOCK_MONOTONIC);
@@ -211,13 +187,6 @@ static PyObject *run(PyObject *self, PyObject *unused)
                 pthread_mutex_unlock(&worker.mutex);
                 abort_worker("MPI_Iprobe", mpi_error);
             }
-            if (worker.diagnostics) {
-                worker.probes++;
-                worker.mpi_seconds += probe_end - probe_start;
-                if (probe_end - probe_start > worker.max_probe_seconds)
-                    worker.max_probe_seconds = probe_end - probe_start;
-            }
-
             elapsed = probe_end - active_start;
             interval = worker.max_interval;
             if (elapsed < 0.010 && interval > 50e-6)
@@ -235,22 +204,12 @@ static PyObject *run(PyObject *self, PyObject *unused)
                     pthread_cond_broadcast(&worker.changed);
                 }
             }
-            if (worker.diagnostics && worker.active && !worker.stopped) {
-                lateness = seconds_on(PROGRESS_COND_CLOCK) - deadline_seconds(deadline);
-                if (lateness > 0) {
-                    worker.wait_late_seconds += lateness;
-                    if (lateness > worker.max_wait_late_seconds)
-                        worker.max_wait_late_seconds = lateness;
-                }
-            }
             pthread_mutex_unlock(&worker.mutex);
             if (wait_error != 0 && wait_error != ETIMEDOUT)
                 abort_worker("pthread_cond_timedwait", wait_error);
         }
     }
     pthread_mutex_lock(&worker.mutex);
-    if (worker.diagnostics)
-        worker.worker_cpu_seconds = seconds_on(CLOCK_THREAD_CPUTIME_ID) - cpu_start;
     worker.running = 0;
     pthread_cond_broadcast(&worker.changed);
     pthread_mutex_unlock(&worker.mutex);
@@ -310,36 +269,11 @@ static PyObject *stop(PyObject *self, PyObject *unused)
     Py_RETURN_NONE;
 }
 
-static PyObject *snapshot(PyObject *self, PyObject *unused)
-{
-    PyObject *result;
-    pthread_mutex_lock(&worker.mutex);
-    if (worker.running) {
-        pthread_mutex_unlock(&worker.mutex);
-        PyErr_SetString(PyExc_RuntimeError, "join MPI progress worker before reading counters");
-        return NULL;
-    }
-    result = Py_BuildValue("{s:K,s:K,s:d,s:d,s:d,s:d,s:d,s:d,s:i,s:i}",
-        "probes", worker.probes,
-        "wakeups", worker.wakeups,
-        "active_seconds", worker.active_seconds,
-        "mpi_call_seconds", worker.mpi_seconds,
-        "max_probe_seconds", worker.max_probe_seconds,
-        "wait_return_late_seconds", worker.wait_late_seconds,
-        "max_wait_return_late_seconds", worker.max_wait_late_seconds,
-        "worker_thread_cpu_seconds", worker.worker_cpu_seconds,
-        "mpi_error", worker.mpi_error,
-        "wait_error", worker.wait_error);
-    pthread_mutex_unlock(&worker.mutex);
-    return result;
-}
-
 static PyMethodDef methods[] = {
     {"configure", configure, METH_VARARGS, "Configure the native progress worker."},
     {"run", run, METH_NOARGS, "Run MPI progress without per-probe GIL acquisition."},
     {"set_active", set_active, METH_VARARGS, "Start or pause progress polling."},
     {"stop", stop, METH_NOARGS, "Stop and wake the progress worker."},
-    {"snapshot", snapshot, METH_NOARGS, "Read counters after the worker has stopped."},
     {NULL, NULL, 0, NULL}
 };
 

@@ -60,14 +60,10 @@ also be rebuilt in an MPI-enabled environment.
 ``MPISPPY_MPI_PROGRESS_THREAD=1`` activates the progress thread and requests
 ``MPI_THREAD_MULTIPLE``. If the installed package has the native worker, it is
 selected after comparing its build signature with values reported by mpi4py.
-The optional native profiler is checked the same way. A mismatch raises an
-error before either extension uses mpi4py's communicator. This check detects
-common mismatches but cannot prove that two separately loaded copies of an MPI
-library share runtime state. If no native worker is installed, the Python worker
-runs. To profile the Python worker, build with
-``MPISPPY_BUILD_MPI_PROGRESS_PROFILER=1`` and set
-``MPISPPY_MPI_PROGRESS_DIAGNOSTICS=1`` together with
-``MPISPPY_MPI_PROGRESS_NATIVE_DIAGNOSTICS=1`` at runtime.
+A mismatch raises an error before the extension uses mpi4py's communicator.
+This check detects common mismatches but cannot prove that two separately
+loaded copies of an MPI library share runtime state. If no native worker is
+installed, the Python worker runs.
 
 To check the MPI runtime without importing mpi-sppy by default, give this
 command (once mpi-sppy is installed it works from any directory):

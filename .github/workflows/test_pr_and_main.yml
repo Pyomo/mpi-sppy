@@ -1426,7 +1426,6 @@ jobs:
           python -m build --sdist --no-isolation --outdir "$RUNNER_TEMP/sdist"
           tar -tzf "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz > "$RUNNER_TEMP/sdist-files.txt"
           rg -q '/mpisppy/_mpi_progress_worker.c$' "$RUNNER_TEMP/sdist-files.txt"
-          rg -q '/mpisppy/_mpi_progress_native.c$' "$RUNNER_TEMP/sdist-files.txt"
 
       - name: Check MPI compiler fallback and missing CC
         # These setup.py behaviors are independent of the MPI implementation.
@@ -1464,7 +1463,6 @@ jobs:
         timeout-minutes: 8
         env:
           MPISPPY_MPI_PROGRESS_THREAD: "1"
-          MPISPPY_MPI_PROGRESS_DIAGNOSTICS: "1"
           MPISPPY_CHECKOUT: ${{ github.workspace }}
         run: bash "$GITHUB_WORKSPACE/ci/run_mpi_progress_checks.sh" python
 
@@ -1481,7 +1479,6 @@ jobs:
         timeout-minutes: 8
         env:
           MPISPPY_MPI_PROGRESS_THREAD: "1"
-          MPISPPY_MPI_PROGRESS_DIAGNOSTICS: "1"
           MPISPPY_CHECKOUT: ${{ github.workspace }}
         run: bash "$GITHUB_WORKSPACE/ci/run_mpi_progress_checks.sh" native
 

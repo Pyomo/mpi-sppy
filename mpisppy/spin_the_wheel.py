@@ -255,14 +255,6 @@ class WheelSpinner:
         spcomm = sp_class(opt, fullcomm, strata_comm, cylinder_comm,
                           communicator_list, **sp_kwargs)
 
-        MPI._set_progress_rank_context(
-            role="hub" if strata_rank == 0 else "spoke",
-            spcomm_type=sp_class.__name__,
-            optimizer_type=opt_class.__name__,
-            strata_rank=strata_rank,
-            cylinder_rank=cylinder_rank,
-        )
-
         spcomm.make_windows()
 
         # Run main()

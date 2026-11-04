@@ -129,11 +129,7 @@ const char *mpisppy_mpi_build_signature(size_t *comm_size,
                 _write_mpi_signature_header(
                     directory, version, comm_size, any_source, any_tag,
                 )
-            except Exception as exc:
-                if build_profiler:
-                    raise RuntimeError(
-                        "MPI progress profiling requires a working MPI compiler probe"
-                    ) from exc
+            except Exception:
                 warnings.warn(
                     "MPI compiler probe failed; using the Python MPI progress worker"
                 )
@@ -171,7 +167,7 @@ class _EnvironmentEditableWheel(_editable_wheel):
             extension_outputs.add(built.resolve())
 
         # In strict editable mode setuptools also creates a shared link tree.
-        # It must not contain a second copy of either MPI extension.
+        # It must not contain a second copy of the MPI extension.
         files = [path for path in files
                  if Path(path).resolve() not in extension_outputs]
         mapping = {
@@ -182,10 +178,7 @@ class _EnvironmentEditableWheel(_editable_wheel):
 
 
 extensions = []
-build_profiler = os.environ.get("MPISPPY_BUILD_MPI_PROGRESS_PROFILER") == "1"
 mpi4py_available = importlib.util.find_spec("mpi4py") is not None
-if build_profiler and not mpi4py_available:
-    raise RuntimeError("MPI progress profiling requires mpi4py in the build environment")
 
 native_platform = sys.platform.startswith("linux") or sys.platform == "darwin"
 compiler_command = shlex.split(os.environ.get("CC", "mpicc"), posix=os.name != "nt")
@@ -200,10 +193,8 @@ compiler_available = bool(compiler_executables) and (
 ) and all(
     shutil.which(executable) is not None for executable in compiler_executables
 )
-if build_profiler and (not native_platform or not compiler_available):
-    raise RuntimeError("MPI progress profiling requires Linux or macOS and an MPI compiler")
 if mpi4py_available and not native_platform:
-    warnings.warn("MPI progress extensions require Linux or macOS; using the Python worker")
+    warnings.warn("The MPI progress extension requires Linux or macOS; using the Python worker")
 elif mpi4py_available and not compiler_available:
     if "CC" in os.environ:
         raise RuntimeError(f"MPI compiler command {os.environ['CC']!r} was not found")
@@ -222,16 +213,6 @@ if mpi4py_available and native_platform and compiler_available:
             include_dirs=[mpi4py.get_include()],
             extra_compile_args=["-std=c11", "-pthread"],
             extra_link_args=["-pthread"],
-        )
-    )
-
-if build_profiler:
-    extensions.append(
-        Extension(
-            "mpisppy._mpi_progress_native",
-            ["mpisppy/_mpi_progress_native.c"],
-            include_dirs=[mpi4py.get_include()],
-            extra_compile_args=["-std=c11"],
         )
     )
 
