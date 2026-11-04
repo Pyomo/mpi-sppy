@@ -9,16 +9,48 @@
 """Unit tests for the opt-in Slurm-aware soft deadline."""
 
 import os
+import time
 import unittest
 from unittest import mock
 
-from mpisppy.phbase import PHBase
 from mpisppy.opt.fwph import FWPH
+from mpisppy.phbase import PHBase
 
 
 class TestSlurmTimeLimit(unittest.TestCase):
     def _bare_ph(self):
         return object.__new__(PHBase)
+
+    def _ph_at_iteration_boundary(self, slurm_deadline):
+        """Build the smallest PH object that can run the real iterk loop."""
+        ph = self._bare_ph()
+        ph.options = {
+            "time_limit": None,
+            "PHIterLimit": 1,
+            "convthresh": 0.0,
+            "verbose": False,
+            "display_timing": False,
+            "display_progress": False,
+            "display_convergence_detail": False,
+            "smoothed": 0,
+        }
+        ph.extensions = None
+        ph.ph_converger = None
+        ph._spcomm = None
+        ph.cylinder_rank = 0
+        ph.local_scenarios = {}
+        ph._resume_iteration = 0
+        ph._slurm_deadline = slurm_deadline
+        ph._slurm_buffer_seconds = 60.0
+        ph.Compute_Xbar = mock.Mock()
+        ph.Update_W = mock.Mock()
+        ph.convergence_diff = mock.Mock(return_value=None)
+        ph._first_prox_solve = mock.Mock(return_value=False)
+        ph._effective_solver_options = mock.Mock(return_value={})
+        ph._check_prox_solve_succeeded = mock.Mock()
+        ph.solve_loop = mock.Mock()
+        ph.mpicomm = mock.Mock()
+        return ph
 
     def test_unset_option_is_inactive_without_slurm(self):
         ph = self._bare_ph()
@@ -88,6 +120,24 @@ class TestSlurmTimeLimit(unittest.TestCase):
         with mock.patch(
                 "mpisppy.phbase.time.perf_counter", return_value=1100.0):
             self.assertIn("Time limit", ph._local_time_limit_stop_reason())
+
+    def test_ph_iteration_skips_solve_at_local_slurm_deadline(self):
+        ph = self._ph_at_iteration_boundary(time.perf_counter() - 1.0)
+        ph.allreduce_or = mock.Mock(side_effect=lambda local: local)
+
+        ph.iterk_loop()
+
+        ph.allreduce_or.assert_called_once_with(True)
+        ph.solve_loop.assert_not_called()
+
+    def test_ph_iteration_skips_solve_for_another_ranks_slurm_deadline(self):
+        ph = self._ph_at_iteration_boundary(time.perf_counter() + 3600.0)
+        ph.allreduce_or = mock.Mock(return_value=True)
+
+        ph.iterk_loop()
+
+        ph.allreduce_or.assert_called_once_with(False)
+        ph.solve_loop.assert_not_called()
 
     def test_fwph_skips_crossover_after_lp_loop_times_out(self):
         fw = object.__new__(FWPH)
