@@ -190,6 +190,9 @@ if haveMPI and _enable_progress_thread:
     import importlib.metadata as _metadata
     import importlib.util as _import_util
     import json as _json
+    from mpisppy.utils.mpi_progress_compat import (
+        check_native_mpi_compatibility as _check_native_mpi_compatibility,
+    )
     from pathlib import Path as _Path
     import sys as _sys
 
@@ -265,6 +268,7 @@ if haveMPI and _enable_progress_thread:
                 "Could not load the installed MPI progress worker; rebuild "
                 "mpi-sppy with the MPI compiler used by mpi4py"
             ) from _exc
+        _check_native_mpi_compatibility(_mpi_progress_worker, _mpi)
         _mpi_progress_worker.configure(
             COMM_WORLD, _progress_max_interval, _progress_diagnostics
         )
@@ -287,6 +291,7 @@ if haveMPI and _enable_progress_thread:
                 "MPI progress profiler extension; rebuild mpi-sppy "
                 "with MPISPPY_BUILD_MPI_PROGRESS_PROFILER=1"
             ) from _exc
+        _check_native_mpi_compatibility(_mpi_progress_native, _mpi)
         _progress_stop_read_fd, _progress_stop_write_fd = _os.pipe()
 
     def _mpi_progress_loop():

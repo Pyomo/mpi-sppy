@@ -4,12 +4,21 @@
 #include <errno.h>
 #include <math.h>
 #include <mpi4py/mpi4py.h>
+#include "mpi_progress_build.h"
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
 #define STOP_TIMEOUT_SECONDS 30
+
+/* macOS has no pthread_condattr_setclock. Its default condition clock is
+   CLOCK_REALTIME, so timed waits must use that clock too. */
+#ifdef __linux__
+#define PROGRESS_COND_CLOCK CLOCK_MONOTONIC
+#else
+#define PROGRESS_COND_CLOCK CLOCK_REALTIME
+#endif
 
 static struct {
     pthread_mutex_t mutex;
@@ -46,7 +55,7 @@ static struct timespec deadline_after(double seconds)
 {
     struct timespec deadline;
     long nanoseconds;
-    clock_gettime(CLOCK_MONOTONIC, &deadline);
+    clock_gettime(PROGRESS_COND_CLOCK, &deadline);
     deadline.tv_sec += (time_t)seconds;
     nanoseconds = (long)((seconds - (time_t)seconds) * 1e9);
     deadline.tv_nsec += nanoseconds;
@@ -85,8 +94,10 @@ static PyObject *configure(PyObject *self, PyObject *args)
     MPI_Comm *comm_ptr;
     double interval;
     int diagnostics;
-    pthread_condattr_t attributes;
     int error;
+#ifdef __linux__
+    pthread_condattr_t attributes;
+#endif
 
     if (!PyArg_ParseTuple(args, "Odp", &comm_obj, &interval, &diagnostics))
         return NULL;
@@ -103,13 +114,17 @@ static PyObject *configure(PyObject *self, PyObject *args)
         PyErr_SetString(PyExc_RuntimeError, "MPI progress worker is already configured");
         return NULL;
     }
+#ifdef __linux__
     error = pthread_condattr_init(&attributes);
     if (error == 0) {
-        error = pthread_condattr_setclock(&attributes, CLOCK_MONOTONIC);
+        error = pthread_condattr_setclock(&attributes, PROGRESS_COND_CLOCK);
         if (error == 0)
             error = pthread_cond_init(&worker.changed, &attributes);
         pthread_condattr_destroy(&attributes);
     }
+#else
+    error = pthread_cond_init(&worker.changed, NULL);
+#endif
     if (error != 0) {
         pthread_mutex_unlock(&worker.mutex);
         PyErr_Format(PyExc_OSError, "could not initialize progress condition: %d", error);
@@ -221,7 +236,7 @@ static PyObject *run(PyObject *self, PyObject *unused)
                 }
             }
             if (worker.diagnostics && worker.active && !worker.stopped) {
-                lateness = seconds_on(CLOCK_MONOTONIC) - deadline_seconds(deadline);
+                lateness = seconds_on(PROGRESS_COND_CLOCK) - deadline_seconds(deadline);
                 if (lateness > 0) {
                     worker.wait_late_seconds += lateness;
                     if (lateness > worker.max_wait_late_seconds)
@@ -341,6 +356,17 @@ PyMODINIT_FUNC PyInit__mpi_progress_worker(void)
     if (result == NULL)
         return NULL;
     if (PyModule_AddIntConstant(result, "STOP_TIMEOUT_SECONDS", STOP_TIMEOUT_SECONDS) < 0) {
+        Py_DECREF(result);
+        return NULL;
+    }
+    if (PyModule_AddStringConstant(result, "BUILD_MPI_LIBRARY_VERSION",
+                                   mpisppy_build_mpi_library_version) < 0 ||
+        PyModule_AddIntConstant(result, "BUILD_MPI_COMM_SIZE",
+                                MPISPPY_BUILD_MPI_COMM_SIZE) < 0 ||
+        PyModule_AddIntConstant(result, "BUILD_MPI_ANY_SOURCE",
+                                MPISPPY_BUILD_MPI_ANY_SOURCE) < 0 ||
+        PyModule_AddIntConstant(result, "BUILD_MPI_ANY_TAG",
+                                MPISPPY_BUILD_MPI_ANY_TAG) < 0) {
         Py_DECREF(result);
         return NULL;
     }

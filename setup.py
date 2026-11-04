@@ -1,14 +1,57 @@
-"""Build the MPI progress worker when mpi4py is in the build environment."""
+"""Build the MPI progress worker when its MPI/POSIX toolchain is available."""
 
 import importlib.util
 import os
+import shlex
 import shutil
+import subprocess
 import sys
+import sysconfig
+import tempfile
+import warnings
 from pathlib import Path
 
 from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext as _build_ext
 from setuptools.command.editable_wheel import editable_wheel as _editable_wheel
+
+
+def _write_mpi_signature_header(directory, version, comm_size, any_source, any_tag):
+    """Embed the compiler probe's MPI values in a C header."""
+    chunks = [version[index:index + 32] for index in range(0, len(version), 32)]
+    quoted = "\n".join(
+        '    "' + "".join(f"\\x{byte:02x}" for byte in chunk) + '"'
+        for chunk in chunks
+    ) or '    ""'
+    (directory / "mpi_progress_build.h").write_text(
+        "/* Generated from the MPI compiler selected for this build. */\n"
+        f"#define MPISPPY_BUILD_MPI_COMM_SIZE {comm_size}\n"
+        f"#define MPISPPY_BUILD_MPI_ANY_SOURCE {any_source}\n"
+        f"#define MPISPPY_BUILD_MPI_ANY_TAG {any_tag}\n"
+        "static const char mpisppy_build_mpi_library_version[] =\n"
+        f"{quoted};\n",
+        encoding="ascii",
+    )
+
+
+_MPI_SIGNATURE_RUNNER = """import ctypes
+import sys
+
+library = ctypes.CDLL(sys.argv[1])
+signature = library.mpisppy_mpi_build_signature
+signature.argtypes = [ctypes.POINTER(ctypes.c_size_t),
+                      ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
+signature.restype = ctypes.c_char_p
+comm_size = ctypes.c_size_t()
+any_source = ctypes.c_int()
+any_tag = ctypes.c_int()
+version = signature(ctypes.byref(comm_size),
+                    ctypes.byref(any_source), ctypes.byref(any_tag))
+if version is None or comm_size.value == 0:
+    sys.exit(1)
+header = f"{comm_size.value} {any_source.value} {any_tag.value} {len(version)}\\n"
+sys.stdout.buffer.write(header.encode("ascii") + version)
+"""
 
 
 class _EnvironmentBuildExt(_build_ext):
@@ -23,6 +66,84 @@ class _EnvironmentBuildExt(_build_ext):
         if self.editable_mode:
             self.inplace = False
         super().run()
+
+    def build_extensions(self):
+        # setuptools has now configured the actual compiler and linker, including
+        # CFLAGS, CPPFLAGS, LDFLAGS, LDSHARED, and build_ext command options.
+        extension = self.extensions[0]
+        with tempfile.TemporaryDirectory(prefix="mpisppy-mpi-build-") as name:
+            directory = Path(name)
+            source = directory / "signature.c"
+            probe = directory / ("signature" + sysconfig.get_config_var("EXT_SUFFIX"))
+            source.write_text(
+                """#include <mpi.h>
+#include <stddef.h>
+const char *mpisppy_mpi_build_signature(size_t *comm_size,
+                                        int *any_source, int *any_tag)
+{
+    static char version[MPI_MAX_LIBRARY_VERSION_STRING];
+    int length = 0;
+    if (MPI_Get_library_version(version, &length) != MPI_SUCCESS ||
+        length < 0 || length >= MPI_MAX_LIBRARY_VERSION_STRING)
+        return NULL;
+    version[length] = '\\0';
+    *comm_size = sizeof(MPI_Comm);
+    *any_source = MPI_ANY_SOURCE;
+    *any_tag = MPI_ANY_TAG;
+    return version;
+}
+""",
+                encoding="utf-8",
+            )
+            try:
+                # A fresh signature must never accompany an older extension.
+                self.force = self.compiler.force = True
+                objects = self.compiler.compile(
+                    [str(source)], output_dir=name,
+                    macros=extension.define_macros,
+                    include_dirs=extension.include_dirs,
+                    debug=self.debug,
+                    extra_postargs=extension.extra_compile_args,
+                )
+                self.compiler.link_shared_object(
+                    objects + extension.extra_objects, str(probe),
+                    libraries=self.get_libraries(extension),
+                    library_dirs=extension.library_dirs,
+                    runtime_library_dirs=extension.runtime_library_dirs,
+                    extra_postargs=extension.extra_link_args,
+                    export_symbols=["mpisppy_mpi_build_signature"],
+                    debug=self.debug, build_temp=self.build_temp,
+                    target_lang=extension.language or "c",
+                )
+                output = subprocess.run(
+                    [sys.executable, "-c", _MPI_SIGNATURE_RUNNER, str(probe)],
+                    check=True, capture_output=True, timeout=30,
+                ).stdout
+                header, separator, version = output.partition(b"\n")
+                if not separator:
+                    raise ValueError("missing MPI compiler signature")
+                comm_size, any_source, any_tag, length = map(int, header.split())
+                if comm_size <= 0 or len(version) != length:
+                    raise ValueError("invalid MPI compiler signature")
+                version.decode("utf-8")
+                _write_mpi_signature_header(
+                    directory, version, comm_size, any_source, any_tag,
+                )
+            except Exception as exc:
+                if build_profiler:
+                    raise RuntimeError(
+                        "MPI progress profiling requires a working MPI compiler probe"
+                    ) from exc
+                warnings.warn(
+                    "MPI compiler probe failed; using the Python MPI progress worker"
+                )
+                self.extensions.clear()
+                self.distribution.ext_modules.clear()
+                return
+
+            for extension in self.extensions:
+                extension.include_dirs.insert(0, name)
+            super().build_extensions()
 
 
 class _EnvironmentEditableWheel(_editable_wheel):
@@ -66,7 +187,29 @@ mpi4py_available = importlib.util.find_spec("mpi4py") is not None
 if build_profiler and not mpi4py_available:
     raise RuntimeError("MPI progress profiling requires mpi4py in the build environment")
 
-if mpi4py_available:
+native_platform = sys.platform.startswith("linux") or sys.platform == "darwin"
+compiler_command = shlex.split(os.environ.get("CC", "mpicc"), posix=os.name != "nt")
+compiler_executables = compiler_command[:1]
+compiler_uses_launcher = bool(compiler_executables) and os.path.basename(
+    compiler_executables[0]
+) in {"ccache", "sccache"}
+if compiler_uses_launcher:
+    compiler_executables = compiler_command[:2]
+compiler_available = bool(compiler_executables) and (
+    not compiler_uses_launcher or len(compiler_executables) == 2
+) and all(
+    shutil.which(executable) is not None for executable in compiler_executables
+)
+if build_profiler and (not native_platform or not compiler_available):
+    raise RuntimeError("MPI progress profiling requires Linux or macOS and an MPI compiler")
+if mpi4py_available and not native_platform:
+    warnings.warn("MPI progress extensions require Linux or macOS; using the Python worker")
+elif mpi4py_available and not compiler_available:
+    if "CC" in os.environ:
+        raise RuntimeError(f"MPI compiler command {os.environ['CC']!r} was not found")
+    warnings.warn("mpicc was not found; using the Python MPI progress worker")
+
+if mpi4py_available and native_platform and compiler_available:
     import mpi4py
 
     # Use the MPI compiler wrapper by default; an explicit CC may select the

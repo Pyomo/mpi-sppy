@@ -23,9 +23,15 @@ Here are two methods that seem to work well for installation, at least when cons
 Native MPI progress worker
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-An MPI-enabled source build of mpi-sppy compiles the native progress worker
-whenever ``mpi4py`` is available in the build environment. Make an sdist from
-the checkout, then install it in an MPI virtualenv after installing ``mpi4py``::
+On Linux and macOS, an MPI-enabled source build of mpi-sppy compiles the native
+progress worker when ``mpi4py`` and a working MPI compiler are available in the
+build environment. A single-process compiler probe records the MPI library
+version, communicator size, and source and tag constants. It uses the native
+extension's configured compile and link settings, and each native build
+recompiles the extension. If that probe fails, or on other platforms, the build
+uses the Python worker. An explicitly selected but missing ``CC`` is an error.
+Make an sdist from the checkout, then install it
+in an MPI virtualenv after installing ``mpi4py``::
 
    python -m pip install build
    python -m build --sdist
@@ -53,8 +59,13 @@ also be rebuilt in an MPI-enabled environment.
 
 ``MPISPPY_MPI_PROGRESS_THREAD=1`` activates the progress thread and requests
 ``MPI_THREAD_MULTIPLE``. If the installed package has the native worker, it is
-selected automatically; otherwise the Python worker runs. To profile the
-Python worker, build with ``MPISPPY_BUILD_MPI_PROGRESS_PROFILER=1`` and set
+selected after comparing its build signature with values reported by mpi4py.
+The optional native profiler is checked the same way. A mismatch raises an
+error before either extension uses mpi4py's communicator. This check detects
+common mismatches but cannot prove that two separately loaded copies of an MPI
+library share runtime state. If no native worker is installed, the Python worker
+runs. To profile the Python worker, build with
+``MPISPPY_BUILD_MPI_PROGRESS_PROFILER=1`` and set
 ``MPISPPY_MPI_PROGRESS_DIAGNOSTICS=1`` together with
 ``MPISPPY_MPI_PROGRESS_NATIVE_DIAGNOSTICS=1`` at runtime.
 

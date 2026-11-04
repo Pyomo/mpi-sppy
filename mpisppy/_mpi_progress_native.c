@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <math.h>
 #include <mpi4py/mpi4py.h>
+#include "mpi_progress_build.h"
 #include <sys/select.h>
 #include <time.h>
 
@@ -103,7 +104,22 @@ static struct PyModuleDef module = {
 
 PyMODINIT_FUNC PyInit__mpi_progress_native(void)
 {
+    PyObject *result;
     if (import_mpi4py() < 0)
         return NULL;
-    return PyModule_Create(&module);
+    result = PyModule_Create(&module);
+    if (result == NULL)
+        return NULL;
+    if (PyModule_AddStringConstant(result, "BUILD_MPI_LIBRARY_VERSION",
+                                   mpisppy_build_mpi_library_version) < 0 ||
+        PyModule_AddIntConstant(result, "BUILD_MPI_COMM_SIZE",
+                                MPISPPY_BUILD_MPI_COMM_SIZE) < 0 ||
+        PyModule_AddIntConstant(result, "BUILD_MPI_ANY_SOURCE",
+                                MPISPPY_BUILD_MPI_ANY_SOURCE) < 0 ||
+        PyModule_AddIntConstant(result, "BUILD_MPI_ANY_TAG",
+                                MPISPPY_BUILD_MPI_ANY_TAG) < 0) {
+        Py_DECREF(result);
+        return NULL;
+    }
+    return result;
 }
