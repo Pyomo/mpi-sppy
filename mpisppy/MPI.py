@@ -31,7 +31,22 @@ try:
             _provided_thread_level = _mpi.Query_thread()
         else:
             _provided_thread_level = _mpi.Init_thread(_mpi.THREAD_MULTIPLE)
-        if _provided_thread_level < _mpi.THREAD_MULTIPLE:
+        # check if the MPI runtime async progress option is enabled, prefer that instead    
+        if (
+            _os.environ.get("MVAPICH_ASYNC_PROGRESS") == "1"
+            and (
+                _mpi.get_vendor()[0].upper().startswith("MVAPICH")
+                or _mpi.Get_library_version().lstrip().upper().startswith("MVAPICH")
+            )
+        ):
+            _enable_progress_thread = False
+            if _mpi.COMM_WORLD.Get_rank() == 0:
+                print(
+                    "mpi-sppy MPI progress: MVAPICH native async progress is active; "
+                    "using the native runtime",
+                    flush=True,
+                )
+        elif _provided_thread_level < _mpi.THREAD_MULTIPLE:
             raise RuntimeError(
                 "MPISPPY_MPI_PROGRESS_THREAD=1 requires MPI_THREAD_MULTIPLE; "
                 f"MPI provided level {_provided_thread_level}"
