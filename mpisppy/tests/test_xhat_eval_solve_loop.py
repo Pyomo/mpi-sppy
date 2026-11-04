@@ -13,7 +13,10 @@ import unittest
 
 from mpisppy.cylinders._preloop_xhat_mixin import _PreLoopXhatMixin
 from mpisppy.extensions.extension import Extension, MultiExtension
-from mpisppy.extensions.xhatbase import XhatBase
+from mpisppy.extensions.xhatbase import (
+    XhatBase,
+    _validate_stage2ef_extension_hooks,
+)
 from mpisppy.utils.xhat_eval import Xhat_Eval
 
 
@@ -32,6 +35,29 @@ class _RecordingExtensionA(_RecordingExtension):
 
 class _RecordingExtensionB(_RecordingExtension):
     pass
+
+
+class _NoopExtension(Extension):
+    pass
+
+
+class _AllSolverCallbacksExtension(Extension):
+
+    def pre_solve(self, subproblem):
+        pass
+
+    def solve_subproblem(self, subproblem, subproblem_solve, *,
+                         outer_bound_only=False):
+        pass
+
+    def post_solve(self, subproblem, results):
+        pass
+
+    def pre_solve_loop(self):
+        pass
+
+    def post_solve_loop(self):
+        pass
 
 
 class _Scenario:
@@ -221,6 +247,52 @@ class TestXhatEvalSolveLoopLifecycle(unittest.TestCase):
 
         self.assertEqual(opt.events.count("pre_solve_loop"), 2)
         self.assertEqual(opt.events.count("post_solve_loop"), 2)
+
+    def test_stage2ef_rejects_solver_callbacks_before_candidate_mutation(self):
+        opt = _XhatEvalHarness(
+            extension_classes=(_AllSolverCallbacksExtension,))
+        xhatter = XhatBase(opt)
+        xhatter.comms = {"ROOT": _Comm()}
+
+        with self.assertRaisesRegex(
+                RuntimeError,
+                r"_AllSolverCallbacksExtension: pre_solve, solve_subproblem, "
+                r"post_solve, pre_solve_loop, post_solve_loop"):
+            xhatter._try_one(
+                {"ROOT": "scen0"},
+                stage2_ef_solver_name="unused",
+                branching_factors=[1, 1],
+            )
+
+        self.assertEqual(opt.events, [])
+
+    def test_stage2ef_rejects_solver_callbacks_during_xhatter_setup(self):
+        opt = _XhatEvalHarness(
+            extension_classes=(_AllSolverCallbacksExtension,))
+        opt.options["stage2_ef_solver_name"] = "unused"
+
+        with self.assertRaisesRegex(RuntimeError,
+                                    "direct stage-2 EF xhat route"):
+            XhatBase(opt)
+
+    def test_stage2ef_guard_inspects_multiextension_leaves(self):
+        opt = _XhatEvalHarness(
+            extension_classes=(_RecordingExtensionA,
+                               _AllSolverCallbacksExtension))
+
+        with self.assertRaises(RuntimeError) as exc:
+            _validate_stage2ef_extension_hooks(opt)
+
+        message = str(exc.exception)
+        self.assertIn("_RecordingExtensionA: pre_solve_loop, post_solve_loop",
+                      message)
+        self.assertIn("_AllSolverCallbacksExtension: pre_solve", message)
+        self.assertNotIn("MultiExtension:", message)
+
+    def test_stage2ef_guard_allows_extensions_without_solver_callbacks(self):
+        opt = _XhatEvalHarness(extension_classes=(_NoopExtension,))
+
+        _validate_stage2ef_extension_hooks(opt)
 
 
 if __name__ == "__main__":
