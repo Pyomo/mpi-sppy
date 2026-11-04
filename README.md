@@ -76,12 +76,17 @@ first, then run `CC=mpicc pip install --no-build-isolation -e .`. The extension
 is installed in that virtualenv, even when several virtualenvs share the same
 checkout. See [MPI installation](doc/src/install_mpi.rst) for the full commands.
 
-To test your installation, give this command (once mpi-sppy is installed
-it works from any directory):
+To check the MPI runtime without importing mpi-sppy by default, run this
+command (once mpi-sppy is installed it works from any directory):
 
 ```
-mpirun -n 2 mpi-sppy-one-sided-test
+mpirun -n 2 python -m mpi4py -m mpi_one_sided_test
 ```
+
+With `MPISPPY_MPI_PROGRESS_THREAD` unset or set to `0`, this checks the MPI
+runtime's passive-target RMA progress. Set it to `1` to run the same test with
+mpi-sppy's progress worker active while the target is idle. The worker can
+make the test pass even when the native runtime check fails.
 
 If you don't see any error messages, you might have an MPI
 installation that will work. Note that even if there is

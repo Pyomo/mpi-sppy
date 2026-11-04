@@ -14,7 +14,7 @@ import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 import mpisppy.spopt
 
-from mpisppy import global_toc
+from mpisppy import MPI, global_toc
 from pyomo.repn import generate_standard_repn
 class CGBase(mpisppy.spopt.SPOpt):
     """ Base class for all CG-based algorithms.
@@ -759,7 +759,8 @@ class CGBase(mpisppy.spopt.SPOpt):
         Returns:
             float: The optimal objective value of the master problem.
         """
-        self.master_solver.solve(self.mp, tee=False)
+        with MPI.progress_active():
+            self.master_solver.solve(self.mp, tee=False)
         obj_value = pyo.value(self.mp.obj)
         return obj_value
     
@@ -772,7 +773,8 @@ class CGBase(mpisppy.spopt.SPOpt):
         for var in self.mp.w.values():
             var.domain = pyo.Binary 
         
-        self.master_solver.solve(self.mp)
+        with MPI.progress_active():
+            self.master_solver.solve(self.mp)
         obj_value = pyo.value(self.mp.obj)
         return obj_value
 
@@ -796,4 +798,3 @@ class CGBase(mpisppy.spopt.SPOpt):
 
 if __name__ == "__main__":
     print ("No main for CGBase")
-

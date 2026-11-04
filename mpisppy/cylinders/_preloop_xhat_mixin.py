@@ -32,6 +32,7 @@ import numpy as np
 import pyomo.environ as pyo
 from pyomo.opt import TerminationCondition
 
+from mpisppy import MPI
 import mpisppy.utils.sputils as sputils
 
 
@@ -135,11 +136,12 @@ class _PreLoopXhatMixin:
         solver = pyo.SolverFactory(solver_name)
         for k, v in solver_options.items():
             solver.options[k] = v
-        if sputils.is_persistent(solver):
-            solver.set_instance(avg_scenario)
-            results = solver.solve(tee=False)
-        else:
-            results = solver.solve(avg_scenario, tee=False)
+        with MPI.progress_active():
+            if sputils.is_persistent(solver):
+                solver.set_instance(avg_scenario)
+                results = solver.solve(tee=False)
+            else:
+                results = solver.solve(avg_scenario, tee=False)
         tc = results.solver.termination_condition
         if tc not in (TerminationCondition.optimal,
                       TerminationCondition.feasible):

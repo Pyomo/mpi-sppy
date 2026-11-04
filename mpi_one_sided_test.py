@@ -7,22 +7,32 @@
 # full copyright and license information.
 ###############################################################################
 ''' Basic test script to make sure that the one-sided MPI calls work as
-    intended. Runs on two processes. Will raise an assertion error if the
-    Lock/Get/Unlock combination blocks. Otherwise, exits normally and produces
-    no output.
+    intended. Runs on two processes. If the Lock/Get/Unlock combination
+    cannot make progress, the script may block. Otherwise, it checks the
+    expected values and prints the pass message.
 
     Just because this test passes doesn't mean that MPI one-sided calls will
     work as expected.
 
     Takes about 4 seconds to execute, with all the sleep() calls.
+
+    Set MPISPPY_MPI_PROGRESS_THREAD=1 to initialize MPI_THREAD_MULTIPLE and
+    activate mpi-sppy's progress thread while the processes sleep. Without
+    that setting, this uses the ordinary mpi4py-backed MPI interface.
 '''
-# Import through mpi-sppy so MPISPPY_MPI_PROGRESS_THREAD=1 selects its
-# MPI_THREAD_MULTIPLE initialization and shared progress thread. Without that
-# variable this remains the ordinary mpi4py-backed MPI interface.
-from mpisppy import MPI as mpi
+from contextlib import nullcontext
+import os
 import numpy as np
 import time
 import sys
+
+# Use mpi-sppy's MPI wrapper only when testing its progress thread.
+if os.environ.get("MPISPPY_MPI_PROGRESS_THREAD") == "1":
+    from mpisppy import MPI as mpi
+    progress_during_idle = mpi.progress_active
+else:
+    from mpi4py import MPI as mpi
+    progress_during_idle = nullcontext
 
 def main():
     if mpi.COMM_WORLD.Get_size() == 1:
@@ -39,10 +49,9 @@ def main():
 
     if (rank == 0):
         buff[:] = 3. * np.ones(array_size, dtype='d')
-        print("rank 0 published 3.0", flush=True)
-        time.sleep(3)
+        with progress_during_idle():
+            time.sleep(3)
         buff[:] = np.arange(array_size)
-        print("rank 0 replaced buffer with arange", flush=True)
 
         win.Lock(1)
         win.Put((buff, array_size, mpi.DOUBLE), target_rank=1)
@@ -50,25 +59,17 @@ def main():
 
     elif (rank == 1):
         buff = np.ones(array_size, dtype='d')
-        time.sleep(1)
+        with progress_during_idle():
+            time.sleep(1)
 
-        start = time.monotonic()
         win.Lock(0)
         win.Get((buff, array_size, mpi.DOUBLE), target_rank=0)
         win.Unlock(0)
-        elapsed = time.monotonic() - start
-
-        model = win.Get_attr(mpi.WIN_MODEL)
-        model_name = "unified" if model == mpi.WIN_UNIFIED else "separate"
-        print(
-            f"first Get: tail={buff[-1]!r}, elapsed={elapsed:.3f}s, "
-            f"window_model={model_name}",
-            flush=True,
-        )
 
         assert(buff[-1] == 3.)
 
-        time.sleep(3)
+        with progress_during_idle():
+            time.sleep(3)
 
         win.Lock(1)
         win.Get((buff, array_size, mpi.DOUBLE), target_rank=1)

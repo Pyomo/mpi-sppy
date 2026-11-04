@@ -664,7 +664,13 @@ class LShapedMethod(spbase.SPBase):
                     break
 
             t2 = time.time()
-            cuts_added = m.bender.generate_cut()
+            if cut_generator == "pyomo_feasibility":
+                # Pyomo solves its subproblems inside generate_cut(), where
+                # mpi-sppy cannot wrap the individual solver calls.
+                with MPI.progress_active():
+                    cuts_added = m.bender.generate_cut()
+            else:
+                cuts_added = m.bender.generate_cut()
             t2 = time.time() - t2
             if self.cylinder_rank == 0:
                 for c in cuts_added:

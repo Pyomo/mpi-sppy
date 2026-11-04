@@ -58,10 +58,15 @@ Python worker, build with ``MPISPPY_BUILD_MPI_PROGRESS_PROFILER=1`` and set
 ``MPISPPY_MPI_PROGRESS_DIAGNOSTICS=1`` together with
 ``MPISPPY_MPI_PROGRESS_NATIVE_DIAGNOSTICS=1`` at runtime.
 
-To test your installation, give this command (once mpi-sppy is
-installed it works from any directory):
+To check the MPI runtime without importing mpi-sppy by default, give this
+command (once mpi-sppy is installed it works from any directory):
 
-``mpirun -n 2 mpi-sppy-one-sided-test``
+``mpirun -n 2 python -m mpi4py -m mpi_one_sided_test``
+
+With ``MPISPPY_MPI_PROGRESS_THREAD`` unset or set to ``0``, this checks the MPI
+runtime's passive-target RMA progress. Set it to ``1`` to check the same operation with
+mpi-sppy's progress worker active while the target is idle. The worker can
+make the test pass even if the native runtime check fails.
 
 If you don't see any error messages, you might have an MPI
 installation that will work well. Note that even if there is

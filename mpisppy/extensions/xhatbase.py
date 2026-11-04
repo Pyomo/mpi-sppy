@@ -9,6 +9,7 @@
 
 import re
 import pyomo.environ as pyo
+from mpisppy import MPI
 
 # NOTE: a caller attaches the comms (e.g. pre_iter0)
 
@@ -254,11 +255,12 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                 wxbarutils.fix_ef_ROOT_nonants(self._EFs[ndn2], xhats["ROOT"])
                 # solve EF
                 solver = pyo.SolverFactory(stage2_ef_solver_name)
-                if 'persistent' in stage2_ef_solver_name:
-                    solver.set_instance(self._EFs[ndn2], symbolic_solver_labels=True)
-                    results = solver.solve(tee=Tee)
-                else:
-                    results = solver.solve(self._EFs[ndn2], tee=Tee, symbolic_solver_labels=True,)
+                with MPI.progress_active():
+                    if 'persistent' in stage2_ef_solver_name:
+                        solver.set_instance(self._EFs[ndn2], symbolic_solver_labels=True)
+                        results = solver.solve(tee=Tee)
+                    else:
+                        results = solver.solve(self._EFs[ndn2], tee=Tee, symbolic_solver_labels=True,)
 
                 # restore objectives so Ebojective will work
                 for s in sdict.values():
