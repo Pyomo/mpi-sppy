@@ -27,7 +27,7 @@ def check_native_mpi_compatibility(extension, mpi):
         ("BUILD_MPI_COMM_SIZE", sizeof(mpi.Comm)),
         ("BUILD_MPI_ANY_SOURCE", mpi.ANY_SOURCE),
         ("BUILD_MPI_ANY_TAG", mpi.ANY_TAG),
-        ("BUILD_MPI_LIBRARY_VERSION", mpi.Get_library_version()),
+        ("BUILD_MPI_LIBRARY_VERSION", mpi.Get_library_version().rstrip("\x00")),
     )
     for attribute, runtime_value in expected:
         if getattr(extension, attribute, None) != runtime_value:
