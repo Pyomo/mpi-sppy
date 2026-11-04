@@ -275,6 +275,18 @@ class TestXhatEvalSolveLoopLifecycle(unittest.TestCase):
                                     "direct stage-2 EF xhat route"):
             XhatBase(opt)
 
+    def test_stage2ef_defers_guard_while_spopt_constructs_extension(self):
+        opt = _XhatEvalHarness(
+            extension_classes=(_AllSolverCallbacksExtension,))
+        opt.options["stage2_ef_solver_name"] = "unused"
+        del opt.extobject
+
+        # SPOpt assigns extobject only after the extension constructor
+        # returns. This construction window must not raise AttributeError.
+        extension = XhatBase(opt)
+
+        self.assertIs(extension.opt, opt)
+
     def test_stage2ef_guard_inspects_multiextension_leaves(self):
         opt = _XhatEvalHarness(
             extension_classes=(_RecordingExtensionA,

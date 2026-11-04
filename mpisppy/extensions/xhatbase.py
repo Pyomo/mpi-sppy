@@ -54,7 +54,15 @@ def _validate_stage2ef_extension_hooks(opt):
     """Fail before a direct stage-2 EF silently skips solver callbacks."""
     if opt.extensions is None:
         return
-    overrides = _stage2ef_extension_hook_overrides(opt.extobject)
+    # While SPOpt is constructing its extension, ``self.extensions(self)``
+    # runs before the resulting object is assigned to ``self.extobject``.
+    # XhatBase can itself be that extension (or a MultiExtension leaf), so
+    # defer validation during that construction window. The _try_one guard
+    # runs again before the direct stage-2 EF route mutates candidate state.
+    extobject = getattr(opt, "extobject", None)
+    if extobject is None:
+        return
+    overrides = _stage2ef_extension_hook_overrides(extobject)
     if not overrides:
         return
     details = "; ".join(
