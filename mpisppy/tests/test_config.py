@@ -227,6 +227,14 @@ class TestConfigPopularArgs(unittest.TestCase):
     def test_verbose_default_false(self):
         self.assertFalse(self.cfg.verbose)
 
+    def test_slurm_buffer_default_is_disabled(self):
+        self.assertIsNone(self.cfg.slurm_buffer_seconds)
+
+    def test_slurm_buffer_parses_from_cli(self):
+        with patch("sys.argv", ["prog", "--slurm-buffer-seconds", "7200"]):
+            self.cfg.parse_command_line("prog")
+        self.assertEqual(self.cfg.slurm_buffer_seconds, 7200.0)
+
 
 class TestConfigTwoSidedArgsInitialOuterBound(unittest.TestCase):
     def test_initial_outer_bound_default(self):
@@ -584,6 +592,18 @@ class TestSharedOptionsLogDir(unittest.TestCase):
                          vanilla.shared_options(cfg, is_hub=True))
         self.assertNotIn("solver_log_dir",
                          vanilla.shared_options(cfg, is_hub=False))
+
+    def test_slurm_buffer_propagates_only_to_hub(self):
+        import mpisppy.utils.cfg_vanilla as vanilla
+        cfg = self._make_cfg()
+        cfg.slurm_buffer_seconds = 7200.0
+        self.assertEqual(
+            vanilla.shared_options(cfg, is_hub=True)["slurm_buffer_seconds"],
+            7200.0,
+        )
+        self.assertNotIn(
+            "slurm_buffer_seconds", vanilla.shared_options(cfg, is_hub=False)
+        )
 
 
 class TestConfigFixerArgs(unittest.TestCase):

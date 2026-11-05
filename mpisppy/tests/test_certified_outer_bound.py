@@ -1285,14 +1285,9 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
         bound should not do that. spopt instead sets solution_available=False,
         which this loop already reports as a cause.
 
-        The flag governs ONLY the load step: a solve that fails outright still
-        re-raises its solver_exception from the not_good_enough_results branch,
-        which need_solution does not gate. This test pins the reach, so the
-        comment in the spoke cannot drift from it.
+        The flag governs ONLY the load step; the corresponding solve behavior
+        is covered directly by TestSolveReplacementContract.
         """
-        import inspect
-
-        from mpisppy import spopt
         recorded = {}
         scenario = self._scenario_with_a_bound_and_a_missing_dual()
         spoke = self._spoke_over(scenario)
@@ -1300,13 +1295,6 @@ class TestCertificateFailureStandsDown(unittest.TestCase):
         spoke.lagrangian()
         self.assertIs(recorded.get("need_solution"), False,
                       f"solve_loop was called with {recorded}")
-
-        # and the reach: need_solution guards the load, not the solve
-        source = inspect.getsource(spopt.SPOpt.solve_one)
-        self.assertIn("if need_solution:", source)
-        self.assertIn("raise solver_exception", source,
-                      "spopt no longer re-raises there; the spoke comment "
-                      "about the reach of need_solution needs revisiting")
 
     def test_a_scenario_with_no_solution_is_not_silent(self):
         """solve_loop reports the failed solve; only this cylinder can report

@@ -129,3 +129,15 @@ APH checks to see if there are enough ranks reporting.
 
 Lags are supported with if blocks that control how the objective
 function is constructed and how y is updated.
+
+W-receiving outer-bound spokes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+APH ranks publish their local dual weights independently, so their buffer
+generations need not match. Lagrangian outer-bound spokes, including the
+reduced-cost spoke, read the latest available weight from each APH rank and
+project the assembled weights node by node so that
+:math:`\mathbb{E}[W]=0` before solving. This preserves dual feasibility and
+allows the spokes to continue producing valid outer bounds without imposing a
+barrier on APH. Synchronous PH weight reads continue to require one matching
+buffer generation across all ranks.

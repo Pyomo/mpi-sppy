@@ -130,6 +130,7 @@ def add_decomp_args(cfg):
     cfg.subgradient_bounder_args()
     cfg.xhatshuffle_args()
     cfg.xhatxbar_args()
+    cfg.final_xhat_args()
     cfg.xhat_from_file_args()
     cfg.write_xhat_file_args()
     cfg.xhat_feasibility_cut_args()

@@ -8,6 +8,7 @@
 ###############################################################################
 import logging
 import math
+import os
 import time
 import warnings
 
@@ -136,10 +137,11 @@ def Wbar_by_node(opt):
 
     It is not guaranteed. The rho setter is called once per scenario and may
     return a different rho for each, and then E[W] moves away from zero.
-    _Compute_Wbar is the only code that tries to put it back, and the only
-    caller is APH when the option display_convergence_detail is set. It
-    subtracts only on cylinder rank 0's scenarios, so on more than one rank
-    it does not bring E[W] to zero.
+    ``project_W_to_zero_sum`` repairs every local scenario copy and is used by
+    W-receiving outer-bound spokes for mixed-generation APH snapshots. The
+    older diagnostic ``_Compute_Wbar`` is called by APH when
+    display_convergence_detail is set; it subtracts only on cylinder rank 0's
+    scenarios, so on more than one rank it does not bring E[W] to zero.
 
     Collective: the scenarios of a node are spread over the ranks, so the sum
     is an Allreduce over that node's comm and every rank gets the same
@@ -163,6 +165,31 @@ def W_magnitude_by_node(opt):
         opt (phbase or xhat_eval object): object with the local scenarios
     """
     return _prob_weighted_W_by_node(opt, magnitude=True)
+
+
+def project_W_to_zero_sum(opt):
+    """Project scenario weights onto the dual-feasible nonanticipativity space.
+
+    For every scenario-tree node and nonanticipative position, subtract the
+    probability-weighted node mean from every active local scenario copy.
+    Variable-probability copies with zero probability remain masked to zero.
+    This is a collective operation over the node communicators. It is useful
+    when an asynchronous publisher supplies pieces of W from different
+    generations: the mixed snapshot is not necessarily dual feasible, but its
+    projection is and can therefore be used for a valid Lagrangian bound.
+
+    Returns the node-wise means that were removed.
+    """
+    Wbars_by_node = Wbar_by_node(opt)
+    for scenario in opt.local_scenarios.values():
+        data = scenario._mpisppy_data
+        for (ndn, i) in scenario._mpisppy_data.nonant_indices:
+            node_mask = getattr(data, "prob0_mask", {}).get(ndn, 1.0)
+            mask = node_mask[i] if isinstance(node_mask, np.ndarray) \
+                else node_mask
+            scenario._mpisppy_model.W[(ndn, i)]._value -= \
+                mask * Wbars_by_node[ndn][i]
+    return Wbars_by_node
 
 
 def _prob_weighted_W_by_node(opt, magnitude):
@@ -341,6 +368,7 @@ class PHBase(mpisppy.spopt.SPOpt):
     ):
         self._PHIter = 0  # moved to _init June 2024 so extensions can see it
         """ PHBase constructor. """
+        self._configure_slurm_deadline(options)
         super().__init__(
             options,
             all_scenario_names,
@@ -354,6 +382,12 @@ class PHBase(mpisppy.spopt.SPOpt):
             variable_probability=variable_probability,
         )
         global_toc("Initializing PHBase")
+
+        if self._slurm_deadline is not None:
+            global_toc(
+                self._slurm_limit_message(),
+                self.cylinder_rank == 0,
+            )
 
         # Note that options can be manipulated from outside on-the-fly.
         # self.options (from super) will archive the original options.
@@ -384,6 +418,95 @@ class PHBase(mpisppy.spopt.SPOpt):
         # Whether this process's iteration-0 solve had the prox term on (an
         # xbar was supplied and the terms were attached before that solve).
         self._iter0_solved_with_prox = False
+
+    def _configure_slurm_deadline(self, options):
+        """Set an opt-in monotonic deadline from Slurm's absolute end time.
+
+        Slurm counts from the allocation start, which can precede construction
+        of this object by hours. Converting its epoch timestamp to a local
+        ``perf_counter`` deadline keeps later checks monotonic while preserving
+        the scheduler's actual clock origin.
+        """
+        self._slurm_deadline = None
+        self._slurm_end_time = None
+        self._slurm_buffer_seconds = None
+
+        configured = options.get("slurm_buffer_seconds", None)
+        if configured is None:
+            return
+        try:
+            buffer_seconds = float(configured)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "slurm_buffer_seconds must be a nonnegative number"
+            ) from exc
+        if not math.isfinite(buffer_seconds) or buffer_seconds < 0:
+            raise ValueError(
+                "slurm_buffer_seconds must be a nonnegative finite number"
+            )
+
+        raw_end_time = os.environ.get("SLURM_JOB_END_TIME")
+        if raw_end_time is None:
+            raise RuntimeError(
+                "slurm_buffer_seconds was set, but SLURM_JOB_END_TIME is not "
+                "available. Use this option inside a Slurm allocation whose "
+                "environment exports the job end time."
+            )
+        try:
+            end_time = float(raw_end_time)
+        except ValueError as exc:
+            raise RuntimeError(
+                f"SLURM_JOB_END_TIME must be a Unix timestamp; got "
+                f"{raw_end_time!r}"
+            ) from exc
+        if not math.isfinite(end_time):
+            raise RuntimeError(
+                "SLURM_JOB_END_TIME must be a finite Unix timestamp"
+            )
+
+        self._slurm_buffer_seconds = buffer_seconds
+        self._slurm_end_time = end_time
+        allocation_seconds_remaining = end_time - time.time()
+        hub_time_limit = allocation_seconds_remaining - buffer_seconds
+        self._slurm_deadline = time.perf_counter() + hub_time_limit
+
+    def _slurm_limit_message(self):
+        """Describe the Slurm deadline using values current at log time."""
+        allocation_seconds_remaining = self._slurm_end_time - time.time()
+        hub_time_remaining = self._slurm_deadline - time.perf_counter()
+        end_text = time.strftime(
+            "%Y-%m-%d %H:%M:%S %Z", time.localtime(self._slurm_end_time)
+        )
+        return (
+            f"Slurm allocation: {allocation_seconds_remaining:.1f}s remaining "
+            f"(ends {end_text}); hub time limit: {hub_time_remaining:.1f}s "
+            f"({self._slurm_buffer_seconds:g}s shutdown buffer)"
+        )
+
+    def _local_time_limit_stop_reason(self):
+        """Return the local soft-limit reason, or ``None`` before either limit."""
+        now = time.perf_counter()
+        deadlines = []
+        slurm_deadline = getattr(self, "_slurm_deadline", None)
+        if slurm_deadline is not None:
+            buffer_seconds = self._slurm_buffer_seconds
+            deadlines.append(
+                (slurm_deadline,
+                 f"Slurm shutdown buffer of {buffer_seconds:g} seconds "
+                 "reached.")
+            )
+
+        time_limit = self.options.get("time_limit", None)
+        if time_limit is not None:
+            deadlines.append(
+                (self.start_time + time_limit,
+                 f"Time limit {time_limit} seconds reached.")
+            )
+        if deadlines:
+            deadline, reason = min(deadlines, key=lambda item: item[0])
+            if now >= deadline:
+                return reason
+        return None
 
     @property
     def iter0_solver_options(self):
@@ -1918,10 +2041,16 @@ class PHBase(mpisppy.spopt.SPOpt):
                 if self.conv < self.options["convthresh"]:
                     global_toc(f'Convergence metric={self.conv:f} dropped below user-supplied threshold={self.options["convthresh"]:f}', self.cylinder_rank == 0)
                     break
-            if self.options["time_limit"] is not None:
-                time_to_stop = self.allreduce_or( (time.perf_counter() - self.start_time) >= self.options["time_limit"] )
+            if (self.options.get("time_limit", None) is not None
+                    or self._slurm_deadline is not None):
+                local_stop_reason = self._local_time_limit_stop_reason()
+                time_to_stop = self.allreduce_or(local_stop_reason is not None)
                 if time_to_stop:
-                    global_toc(f"Time limit {self.options['time_limit']} seconds reached.", self.cylinder_rank == 0)
+                    global_toc(
+                        local_stop_reason
+                        or "Soft time limit reached on another rank.",
+                        self.cylinder_rank == 0,
+                    )
                     break
 
             # Enforce rho > 0 before every solve: any rho-updating extension may
@@ -1968,31 +2097,14 @@ class PHBase(mpisppy.spopt.SPOpt):
             # (see issue #762).
             self._check_prox_solve_succeeded()
 
-            # The duration --checkpoint-before-seconds predicts from, taken
-            # between passes through this point, so it is one whole iteration
-            # ending with this solve: the previous iteration's enditer,
-            # checkpoint write, sync and enditer_after_sync, then this one's
-            # start and solve. In the first iteration of a run, which has no
-            # previous pass, it starts where the loop starts instead.
+            # Predict --checkpoint-before-seconds from the time between
+            # completed solves; the first interval starts at loop entry.
             now = time.perf_counter()
             self._last_iteration_seconds = now - cycle_mark
             cycle_mark = now
 
             if have_extensions:
                 self.extobject.enditer()
-                # The checkpoint write has its own hook, fired here rather
-                # than from some extension's enditer, so a checkpoint holds
-                # the whole end-of-iteration state no matter what order
-                # extensions were attached in -- including any model change
-                # an extension made in the enditer just above, which a
-                # resume would otherwise drop for good.
-                #
-                # This is the last point in the iteration where the state is
-                # still coherent and reachable: enditer_after_sync is not a
-                # substitute, because it is skipped on the cylinder
-                # convergence break below, so a run that ends that way would
-                # write nothing.
-                self.extobject.maybe_checkpoint()
 
             if hasattr(self.spcomm, "sync_nonants"):
                 self.spcomm.sync_nonants()
@@ -2001,12 +2113,21 @@ class PHBase(mpisppy.spopt.SPOpt):
             elif hasattr(self.spcomm, "sync"):
                 self.spcomm.sync()
 
-            if self.spcomm and self.spcomm.is_converged():
+            # Include synchronized bounds and extension state in the snapshot.
+            cylinder_converged = bool(
+                self.spcomm and self.spcomm.is_converged())
+
+            # Preserve this hook's existing skip on convergence.
+            if have_extensions and not cylinder_converged:
+                self.extobject.enditer_after_sync()
+
+            # Apply the usual checkpoint schedule before either exit path.
+            if have_extensions:
+                self.extobject.maybe_checkpoint()
+
+            if cylinder_converged:
                 global_toc("Cylinder convergence", self.cylinder_rank == 0)
                 break
-
-            if have_extensions:
-                self.extobject.enditer_after_sync()
 
             if dprogress and self.cylinder_rank == 0:
                 print("")

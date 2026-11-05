@@ -499,14 +499,16 @@ Under the default ``dill-reload`` backend a checkpoint holds a serialized copy
 of every local scenario model, which for large MIPs is not small.
 
 Publication is atomic: the new generation is staged, moved into place, and only
-then does a manifest rewrite commit it. A run killed at any point leaves a
-complete, resumable checkpoint referenced -- never a half-written one -- and
-the next successful write reclaims anything the interrupted one left behind.
+then does a manifest rewrite commit it. An interrupted checkpoint write leaves
+the previous complete checkpoint referenced, never a half-written one, and the
+next successful write reclaims anything the interrupted one left behind.
 
-Use one checkpoint directory per run. Two runs sharing one share a manifest and
-will overwrite each other. A run that is not resuming from its own
-``--checkpoint-dir`` removes the ``spokes/`` files an earlier run left there,
-so a later resume cannot pick up another study's incumbent or dual weights.
+Use separate checkpoint directories for runs that overlap. A fresh run may
+reuse an earlier run's ``--checkpoint-dir``: at startup it removes the earlier
+manifest and the ``hub/`` and ``spokes/`` files. If it stops before its first
+checkpoint write, a later ``--resume-from`` reports that no checkpoint exists,
+rather than loading the earlier run. Resuming from the same directory preserves
+its checkpoint files.
 
 Cylinders that span several ranks
 ---------------------------------

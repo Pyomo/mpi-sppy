@@ -279,6 +279,15 @@ class Test_mrp_do_mrp(unittest.TestCase):
         with self.assertRaises(ValueError):
             do_mrp(_refmodelname, farmer, cfg)
 
+    def test_do_mrp_EF_refuses_user_extensions(self):
+        """--xhat-method EF builds no hub, so it refuses
+        --user-defined-extensions instead of ignoring it (issue #952)."""
+        cfg = _get_BM_cfg()
+        cfg.quick_assign("user_defined_extensions", list, ["myext"])
+        with self.assertRaisesRegex(RuntimeError,
+                                    "Use --xhat-method cylinders"):
+            do_mrp(_refmodelname, farmer, cfg)
+
     def test_do_mrp_invalid_xhat_method(self):
         """Verify do_mrp raises ValueError for unknown xhat_method."""
         cfg = _get_BM_cfg()

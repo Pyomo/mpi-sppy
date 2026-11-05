@@ -92,15 +92,22 @@ def _make_ph(options, ext_classes, model=farmer, scenario_names=None,
              creator_kwargs=None, **ph_kwargs):
     """A PH hub with the checkpointer and the extensions under test attached."""
     classes = list(ext_classes)
+    effective_kwargs = (
+        creator_kwargs if creator_kwargs is not None else FARMER_KWARGS
+    )
     if "checkpoint_dir" in options or "resume_from" in options:
         classes.insert(0, Checkpointer)
+        # Direct PH callers must identify the model and its structural inputs.
+        options.setdefault("checkpoint_structural_cfg", {
+            "model": model.__name__,
+            "creator_kwargs": dict(effective_kwargs),
+        })
     return PH(
         options,
         scenario_names if scenario_names is not None else FARMER_SCENARIOS,
         model.scenario_creator,
         model.scenario_denouement,
-        scenario_creator_kwargs=(creator_kwargs if creator_kwargs is not None
-                                 else FARMER_KWARGS),
+        scenario_creator_kwargs=effective_kwargs,
         extensions=MultiExtension,
         extension_kwargs={"ext_classes": classes},
         **ph_kwargs,
@@ -539,6 +546,13 @@ class TestSepRhoResume(_ABMixin, unittest.TestCase):
         _, stopped, resumed = self.run_ab()
         tracker = _extension(stopped, SepRho).wt
         carried = _extension(resumed, SepRho).wt
+        if not (self.PRIMAL_CRIT or self.DUAL_CRIT):
+            # A one-shot rho setter keeps only its iteration-zero seed for
+            # checkpoint compatibility. It must not grow the history (which
+            # would require a blocking convergence Allreduce each iteration).
+            self.assertEqual(set(tracker.local_Ws), {-1, 0})
+            self.assertEqual(set(carried.local_Ws), {-1, 0})
+            return
         # W_diff reads its own ph_iter and one before it; those are the two
         # the checkpoint has to carry, and are what used to be missing.
         for wanted in (tracker.ph_iter, tracker.ph_iter - 1):
@@ -1732,7 +1746,9 @@ class TestReducedCostsFixerResume(unittest.TestCase):
         fixer._best_outer_bound = -float("inf")
         fixer._outer_bound_update = lambda new, old: new > old
         fixer._current_reduced_costs = None
+        fixer._last_accepted_rc_id = 0
         fixer._heuristic_fixed_vars = 0
+        fixer.debug = False
         return fixer
 
     def test_a_resumed_run_skips_the_pre_iter0_pass(self):

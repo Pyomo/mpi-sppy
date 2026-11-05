@@ -12,6 +12,7 @@
 import contextlib
 import importlib
 import inspect
+import logging
 import os
 import re
 import sys
@@ -744,6 +745,118 @@ def solver_log_stream(log_path, solve_keyword_args):
                 solve_keyword_args["tee"] = tee
             else:
                 del solve_keyword_args["tee"]
+
+
+class _BufferedSolverLogHandler(logging.Handler):
+    """Buffer Python records until the native solver releases its log."""
+
+    def __init__(self, log_path):
+        super().__init__()
+        self.log_path = log_path
+        self.messages = []
+        self.last_record = None
+
+    def emit(self, record):
+        try:
+            self.last_record = record
+            self.messages.append(self.format(record))
+        except Exception:
+            self.handleError(record)
+
+    def append_to_log(self):
+        """Append buffered records after all native solver writes finish."""
+        if not self.messages:
+            return
+        try:
+            with open(self.log_path, "a", encoding="utf-8") as stream:
+                stream.write("\n".join(self.messages) + "\n")
+        except Exception:
+            # Match logging.Handler.emit's contract: logging failures should
+            # be reported through logging's normal error path, not turn a
+            # successful optimization into a failed solve.
+            self.handleError(self.last_record)
+
+
+class _SuppressCapturedConsoleLogs(logging.Filter):
+    """Suppress console copies of records captured by the root logger."""
+
+    def filter(self, record):
+        logger = logging.getLogger(record.name)
+        root_logger = logging.getLogger()
+        while logger is not root_logger:
+            if not logger.propagate:
+                return True
+            logger = logger.parent
+        return False
+
+
+def _console_handlers():
+    """Yield configured handlers writing to the process console streams."""
+
+    streams = {
+        stream
+        for stream in (
+            sys.stdout,
+            sys.stderr,
+            sys.__stdout__,
+            sys.__stderr__,
+        )
+        if stream is not None
+    }
+    loggers = [logging.getLogger()]
+    loggers.extend(
+        logger
+        for logger in logging.root.manager.loggerDict.values()
+        if isinstance(logger, logging.Logger)
+    )
+    seen = set()
+    for logger in loggers:
+        for handler in logger.handlers:
+            if id(handler) in seen:
+                continue
+            if (
+                isinstance(handler, logging.StreamHandler)
+                and not isinstance(handler, logging.FileHandler)
+                and getattr(handler, "stream", None) in streams
+            ):
+                seen.add(id(handler))
+                yield handler
+
+
+@contextlib.contextmanager
+def solver_log_python_logging(log_path):
+    """Capture Python logging during one logical solve in its solver log.
+
+    Records are buffered and appended when the context exits. Legacy solver
+    interfaces can recreate their configured logfile on every native attempt;
+    deferring the append preserves Python records emitted before or between
+    those attempts. Console copies of records that propagate to the capture
+    handler are suppressed while the context is active; file handlers and
+    non-propagating loggers are unchanged. This context is intentionally wider
+    than :func:`solver_log_stream`: extension work such as constraint
+    generation happens between or after native solver attempts but is still
+    part of the same logical subproblem solve.
+    """
+
+    if log_path is None:
+        yield
+        return
+    handler = _BufferedSolverLogHandler(log_path)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    root_logger = logging.getLogger()
+    console_filter = _SuppressCapturedConsoleLogs()
+    console_handlers = list(_console_handlers())
+    for console_handler in console_handlers:
+        console_handler.addFilter(console_filter)
+    root_logger.addHandler(handler)
+    try:
+        yield
+    finally:
+        root_logger.removeHandler(handler)
+        for console_handler in console_handlers:
+            console_handler.removeFilter(console_filter)
+        handler.append_to_log()
+        handler.close()
 
 
 def solver_quadratic_objective_capability(solver_plugin):

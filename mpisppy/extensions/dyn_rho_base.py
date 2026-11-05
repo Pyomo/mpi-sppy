@@ -79,6 +79,18 @@ class Dyn_Rho_extension_base(mpisppy.extensions.extension.Extension):
         return (hasattr(self.cfg, "dynamic_rho_primal_crit") and self.cfg.dynamic_rho_primal_crit and self._update_rho_primal_based()) or \
                (hasattr(self.cfg, "dynamic_rho_dual_crit") and self.cfg.dynamic_rho_dual_crit and self._update_rho_dual_based())
 
+    def _dynamic_updates_enabled(self):
+        """Whether this rho setter can update rho after iteration zero.
+
+        Tracking convergence calls a blocking ``Allreduce``.  Avoid that work
+        when both dynamic criteria are disabled; in particular, this preserves
+        APH's ability to make progress without waiting for every rank.
+        """
+        return bool(
+            getattr(self.cfg, "dynamic_rho_primal_crit", False)
+            or getattr(self.cfg, "dynamic_rho_dual_crit", False)
+        )
+
     @staticmethod
     def _compute_rho_min_max(ph, npop, mpiop, start):
         local_nodenames = []

@@ -33,7 +33,8 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools git
-          pip install cplex xpress highspy
+          # Pyomo is not yet compatible with Xpress 10.0.0.
+          pip install cplex "xpress<10" highspy
 
       - name: set up pyomo
         run: |
