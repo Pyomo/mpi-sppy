@@ -133,15 +133,6 @@ def _python_aph_only_options():
 _ZERO_IS_CPP_DEFAULT = {"aphfw_fw_tau", "aph_iter0_w_multiplier"}
 
 
-def _check_dir_shared(comm, path):
-    """Raise on every rank unless every rank of comm can see directory path."""
-    if comm.allreduce(int(os.path.isdir(path)), op=MPI.MIN) == 0:
-        raise RuntimeError(
-            f"Not every hub rank can see the FW-APH scenario directory {path}. "
-            "When the hub runs on more than one node, give a directory on a "
-            "filesystem they share with --aphfw-scenario-dir.")
-
-
 class APHFWOpt(mpisppy.phbase.PHBase):
     """Wraps C++ FWAPH for use as an mpi-sppy hub optimizer (hub only)."""
 
@@ -382,12 +373,9 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             self._cpp = None
         if self._scenario_dir is not None and self._cleanup_scenario_dir:
             import shutil
-            # Every hub rank has finished with the files; one rank removes the
-            # parent directory (mkdtemp parent / "scen"), which they share.
-            self.mpicomm.Barrier()
-            if self.cylinder_rank == 0:
-                shutil.rmtree(os.path.dirname(self._scenario_dir),
-                              ignore_errors=True)
+            # This rank's own parent directory (mkdtemp parent / "scen").
+            shutil.rmtree(os.path.dirname(self._scenario_dir),
+                          ignore_errors=True)
             self._scenario_dir = None
 
     def _write_scenario_files(self):
@@ -397,26 +385,20 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         keep_files = self.options.get("aphfw_keep_scenario_files", False)
         self._cleanup_scenario_dir = not keep_files
 
-        # Generate a unique directory path WITHOUT creating it yet,
-        # because Scenario_lp_mps_files.__init__ does makedirs(exist_ok=False).
-        # Rank 0 picks the name, broadcasts to all ranks.  Every hub rank
-        # writes its scenarios there and the C++ on every rank reads them all,
-        # so all hub ranks must see the same directory.
+        # Each hub rank has its own directory, since the C++ on a rank reads
+        # only that rank's scenarios, so it can be on a node-local filesystem.
+        # Generate a unique path WITHOUT creating it yet, because
+        # Scenario_lp_mps_files.__init__ does makedirs(exist_ok=False).
         base = self._get_option("aphfw_scenario_dir", "") or None
-        if self.cylinder_rank == 0:
-            parent = tempfile.mkdtemp(prefix="aphfw_", dir=base)
-            self._scenario_dir = os.path.join(parent, "scen")
-        else:
-            self._scenario_dir = None
-        self._scenario_dir = self.mpicomm.bcast(self._scenario_dir, root=0)
-        _check_dir_shared(self.mpicomm, os.path.dirname(self._scenario_dir))
+        parent = tempfile.mkdtemp(prefix=f"aphfw_r{self.cylinder_rank}_", dir=base)
+        self._scenario_dir = os.path.join(parent, "scen")
 
-        if self.cylinder_rank == 0:
-            logger.debug(f"Writing scenario files to {self._scenario_dir}")
+        logger.debug(f"Writing scenario files to {self._scenario_dir}")
 
         # Use mpi-sppy's Scenario_lp_mps_files extension to write files
         opts = {
             "write_scenario_lp_mps_files_dir": self._scenario_dir,
+            "dir_per_rank": True,
             "cfg": cfg,
         }
         self.options["write_lp_mps_extension_options"] = opts
@@ -429,28 +411,28 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         # linear subproblems, nl.json for the proximal QPs.  Under
         # --aphfw-no-fw, prox.json (for the one-call proximal solves) takes
         # the place of nl.json and grad.json.
+        def _opt(name, default):
+            value = self._get_option(name, default)
+            return default if value is None else value
+        solver_cfg = {
+            "timeLimit": float(_opt("aphfw_solve_time_limit", 300.0)),
+            "threads": int(_opt("max_solver_threads", 1)),
+        }
+        iter0_cfg = dict(solver_cfg)
+        if _opt("iter0_mipgap", None) is not None:
+            iter0_cfg["mipGap"] = float(_opt("iter0_mipgap", None))
+        iterk_cfg = dict(solver_cfg, mipGap=float(_opt("iterk_mipgap", 1e-4)))
+        if self._no_fw():
+            files = (("iter0.json", iter0_cfg),
+                     ("prox.json", iterk_cfg))
+        else:
+            files = (("iter0.json", iter0_cfg),
+                     ("nl.json", solver_cfg),
+                     ("grad.json", iterk_cfg))
+        for name, params in files:
+            with open(os.path.join(self._scenario_dir, name), "w") as f:
+                json.dump(params, f)
         if self.cylinder_rank == 0:
-            def _opt(name, default):
-                value = self._get_option(name, default)
-                return default if value is None else value
-            solver_cfg = {
-                "timeLimit": float(_opt("aphfw_solve_time_limit", 300.0)),
-                "threads": int(_opt("max_solver_threads", 1)),
-            }
-            iter0_cfg = dict(solver_cfg)
-            if _opt("iter0_mipgap", None) is not None:
-                iter0_cfg["mipGap"] = float(_opt("iter0_mipgap", None))
-            iterk_cfg = dict(solver_cfg, mipGap=float(_opt("iterk_mipgap", 1e-4)))
-            if self._no_fw():
-                files = (("iter0.json", iter0_cfg),
-                         ("prox.json", iterk_cfg))
-            else:
-                files = (("iter0.json", iter0_cfg),
-                         ("nl.json", solver_cfg),
-                         ("grad.json", iterk_cfg))
-            for name, params in files:
-                with open(os.path.join(self._scenario_dir, name), "w") as f:
-                    json.dump(params, f)
             for name in ("solver_options", "solver_options_file"):
                 if _opt(name, None):
                     logger.warning(
@@ -459,7 +441,6 @@ class APHFWOpt(mpisppy.phbase.PHBase):
                         "--iterk-mipgap, --max-solver-threads and "
                         "--aphfw-solve-time-limit; it still applies to the "
                         "spokes.")
-        self.mpicomm.Barrier()
 
     def _make_cpp_config(self):
         """Build a config dict from mpi-sppy options for C++ init."""

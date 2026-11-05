@@ -72,6 +72,7 @@ public:
 
   // Current cycle count
   int getCurrentCycle() const { return cycleCount; }
+  int getCycleTrigger() const { return cycleTrigger; }
 
   // Whether the algorithm has converged (internal convergence or external)
   bool isConverged() const { return converged_; }

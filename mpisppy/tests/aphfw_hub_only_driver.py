@@ -193,14 +193,13 @@ def test_hub_only():
         else:
             print("\nFAILED: Results differ between hub pipeline and direct aphfw_cpp")
 
-    # Clean up scenario files
-    if rank == 0:
-        import shutil
-        parent = os.path.dirname(scenario_dir)
-        try:
-            shutil.rmtree(parent)
-        except OSError:
-            pass
+    # Clean up this rank's scenario files
+    import shutil
+    parent = os.path.dirname(scenario_dir)
+    try:
+        shutil.rmtree(parent)
+    except OSError:
+        pass
 
     comm.Barrier()
     return all_match

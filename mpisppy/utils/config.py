@@ -1227,11 +1227,10 @@ class Config(pyofig.ConfigDict):
                            default="")
 
         self.add_to_config(name="aphfw_scenario_dir",
-                           description="Directory in which the hub writes its "
-                           "scenario files for the C++ (in a temporary "
-                           "subdirectory, removed at the end); every hub rank "
-                           "must see it (default: the system's temporary "
-                           "directory)",
+                           description="Directory in which each hub rank "
+                           "writes its scenario files for the C++ (in a "
+                           "temporary subdirectory of its own, removed at the "
+                           "end) (default: the system's temporary directory)",
                            domain=str,
                            default="")
 

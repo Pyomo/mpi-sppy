@@ -10,7 +10,6 @@
 #include "utils/evenSplit.hpp"
 #include "utils/utils.hpp"
 #include <algorithm>
-#include <unordered_map>
 
 /*
   Note that using the scheme with no constructor args followed by setup is very fragile and order matters.
@@ -20,37 +19,26 @@ void spControllerBase::setup(Config& cfg) {
   // It is a little uncool that we are requiring problem-name to be put in cfg elsewhere
   problemName = cfg.getRequiredString("problem-name");
 
-  auto globalScenarioNames = getLPFilesWithoutExtension(problemName);
-  globalScenCount = (int)globalScenarioNames.size();
-  if (globalScenCount == 0) {
-    throw std::runtime_error("No scenario lp files found for problemName=" + problemName);
-  }
+  // Full paths without extension (e.g., "/tmp/dir/Scenario0"), indexed by
+  // the entries of localScenarioIndexList.
+  std::vector<std::string> scenarioPaths;
 
   if (!explicitScenarioNames_.empty()) {
-    // Use explicit scenario assignment (e.g., from mpi-sppy hub wrapper)
+    // Use explicit scenario assignment (e.g., from mpi-sppy hub wrapper).  The
+    // directory need hold only this rank's scenarios, so each scenario is on
+    // one rank and the ranks' counts add up to the global count.
     numSubdomains = (int)explicitScenarioNames_.size();
-
-    // Build a stem→index map from the global list.
-    // globalScenarioNames contains full paths (e.g., "/tmp/dir/Scenario0")
-    // but explicit names from mpi-sppy are just stems ("Scenario0").
-    std::unordered_map<std::string, int> stemToIndex;
-    for (int i = 0; i < globalScenCount; ++i) {
-      fs::path p(globalScenarioNames[i]);
-      stemToIndex[p.filename().string()] = i;
-    }
+    MPI_Allreduce(&numSubdomains, &globalScenCount, 1, MPI_INT, MPI_SUM, comm);
 
     localScenarioIndexList.resize(numSubdomains);
-    for (int i = 0; i < numSubdomains; ++i) {
-      // Try the name as-is first (stem), then strip any path
-      auto it = stemToIndex.find(explicitScenarioNames_[i]);
-      if (it == stemToIndex.end()) {
-        fs::path ep(explicitScenarioNames_[i]);
-        it = stemToIndex.find(ep.filename().string());
-      }
-      if (it == stemToIndex.end())
-        throw std::runtime_error("Explicit scenario name '" + explicitScenarioNames_[i] +
+    std::iota(localScenarioIndexList.begin(), localScenarioIndexList.end(), 0);
+    for (const auto& name : explicitScenarioNames_) {
+      // Explicit names from mpi-sppy are just stems ("Scenario0"); strip any path.
+      const fs::path path = fs::path(problemName) / fs::path(name).filename();
+      if (!fs::exists(fs::path(path.string() + ".mps")))
+        throw std::runtime_error("Explicit scenario name '" + name +
                                  "' not found in problem directory " + problemName);
-      localScenarioIndexList[i] = it->second;
+      scenarioPaths.push_back(path.string());
     }
     // verbosity is not set until groupController::setup below, so read it here
     if (cfg.getOptionValue<int>("verbosity") >= 1)
@@ -58,6 +46,12 @@ void spControllerBase::setup(Config& cfg) {
                 << " numSubdomains=" << numSubdomains
                 << " (explicit assignment)" << std::endl;
   } else {
+    scenarioPaths = getLPFilesWithoutExtension(problemName);
+    globalScenCount = (int)scenarioPaths.size();
+    if (globalScenCount == 0) {
+      throw std::runtime_error("No scenario lp files found for problemName=" + problemName);
+    }
+
     // Determine which scenarios are on this rank
     auto splitter = evenSplit();
     splitter.setup(globalScenCount, comm);
@@ -84,7 +78,7 @@ void spControllerBase::setup(Config& cfg) {
     auto si = localScenarioIndexList[lsi];
     auto& scen = localScenarios()[lsi];
 
-    scen.setup(cfg, globalScenarioNames[si]);
+    scen.setup(cfg, scenarioPaths[si]);
     scenProb[lsi] = scen.getProbability();
 
     if (!haveGlobalNodeCount) {

@@ -289,6 +289,11 @@ public:
         return controller_->getCurrentCycle();
     }
 
+    int get_cycle_trigger() const {
+        check_initialized();
+        return controller_->getCycleTrigger();
+    }
+
     std::vector<std::string> get_local_scenario_names() const {
         check_initialized();
         return controller_->getLocalScenarioNames();
@@ -417,6 +422,8 @@ PYBIND11_MODULE(aphfw_cpp, m) {
              "Update nonant bounds for all local scenarios from numpy arrays")
         .def("is_converged", &APHFWLibrary::is_converged)
         .def("get_current_cycle", &APHFWLibrary::get_current_cycle)
+        .def("get_cycle_trigger", &APHFWLibrary::get_cycle_trigger,
+             "Number of solved scenarios, over all ranks, that trigger a projection")
         .def("get_local_scenario_names", &APHFWLibrary::get_local_scenario_names)
         .def("get_local_nonant_length", &APHFWLibrary::get_local_nonant_length)
         .def("get_current_lagrangian_bound", &APHFWLibrary::get_current_lagrangian_bound)

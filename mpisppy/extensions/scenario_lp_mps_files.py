@@ -47,8 +47,9 @@ class Scenario_lp_mps_files(mpisppy.extensions.extension.Extension):
         self.cfg = opts.get("cfg", None)
 
         # MPI-safe directory creation: only rank0 creates it, then barrier
-        # (dlw hopes that there is only one rank when this runs ...)
-        if getattr(self.ph, "cylinder_rank", 0) == 0:
+        # (dlw hopes that there is only one rank when this runs ...),
+        # unless each rank was given a directory of its own.
+        if opts.get("dir_per_rank", False) or getattr(self.ph, "cylinder_rank", 0) == 0:
             os.makedirs(self.dirname, exist_ok=False)
         if hasattr(self.ph, "mpicomm"):
             self.ph.mpicomm.Barrier()

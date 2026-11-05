@@ -42,7 +42,8 @@ public:
   void setup(Config& cfg) override;
 
   // Set an explicit scenario assignment for this rank (call before setup).
-  // When set, setup() uses these names instead of evenSplit.
+  // When set, setup() uses these names instead of evenSplit and the problem
+  // directory need hold only this rank's scenarios.
   void setExplicitScenarioNames(std::vector<std::string> names) {
     explicitScenarioNames_ = std::move(names);
   }

@@ -411,15 +411,6 @@ class TestAphfwPythonSide(unittest.TestCase):
             build_hub_dict(_cfg(aphfw_hub=True), None, None, None, None,
                            ph_converger=object)
 
-    def test_scenario_dir_must_be_shared(self):
-        from mpisppy import MPI
-        from mpisppy.opt.aphfw import _check_dir_shared
-        with tempfile.TemporaryDirectory() as tmpdir:
-            _check_dir_shared(MPI.COMM_WORLD, tmpdir)
-            with patch("os.path.isdir", return_value=False), \
-                    self.assertRaisesRegex(RuntimeError, "--aphfw-scenario-dir"):
-                _check_dir_shared(MPI.COMM_WORLD, tmpdir)
-
 
 @unittest.skipIf(not aphfw_cpp_available, "aphfw_cpp is not built")
 @unittest.skipIf(not solver_available, "no MIP solver available")
@@ -789,6 +780,7 @@ _DRIVERS = {
     "aphfw_omicron_in_opt_driver": 3,
     "aphfw_dynamic_rho_driver": 3,
     "aphfw_final_lagrangian_driver": 3,
+    "aphfw_rank_dirs_driver": 3,
 }
 
 
