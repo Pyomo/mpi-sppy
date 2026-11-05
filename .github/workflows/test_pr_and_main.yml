@@ -1425,7 +1425,7 @@ jobs:
           python -m pip install build wheel
           python -m build --sdist --no-isolation --outdir "$RUNNER_TEMP/sdist"
           tar -tzf "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz > "$RUNNER_TEMP/sdist-files.txt"
-          rg -q '/mpisppy/_mpi_progress_worker.c$' "$RUNNER_TEMP/sdist-files.txt"
+          grep -q '/mpisppy/_mpi_progress_worker.c$' "$RUNNER_TEMP/sdist-files.txt"
 
       - name: Check MPI compiler fallback and missing CC
         # These setup.py behaviors are independent of the MPI implementation.
@@ -1436,7 +1436,7 @@ jobs:
           CC=false python -m pip wheel --verbose --no-deps --no-build-isolation --no-cache-dir \
             -w "$RUNNER_TEMP/fallback-wheels" "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz \
             > "$RUNNER_TEMP/fallback-build.log" 2>&1
-          rg -q 'MPI compiler probe failed; using the Python MPI progress worker' \
+          grep -q 'MPI compiler probe failed; using the Python MPI progress worker' \
             "$RUNNER_TEMP/fallback-build.log"
           python -c "import glob,zipfile; p=glob.glob('$RUNNER_TEMP/fallback-wheels/*.whl'); assert len(p)==1; z=zipfile.ZipFile(p[0]); assert not any('_mpi_progress_worker' in n and n.endswith('.so') for n in z.namelist())"
           if CC="$RUNNER_TEMP/no-such-mpicc" python -m pip wheel --no-deps \
@@ -1446,7 +1446,7 @@ jobs:
             cat "$RUNNER_TEMP/missing-cc.log"
             exit 1
           fi
-          rg -q 'MPI compiler command .* was not found' "$RUNNER_TEMP/missing-cc.log"
+          grep -q 'MPI compiler command .* was not found' "$RUNNER_TEMP/missing-cc.log"
 
       - name: Install isolated Python progress wheel
         if: matrix.mpi4py == 'mpi4py'
