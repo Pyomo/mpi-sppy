@@ -105,6 +105,31 @@ class Test_aph_sizes(unittest.TestCase):
         self.assertEqual(aph.synchronizer.quitting, 1)
         aph.APH_solve_loop.assert_not_called()
 
+    def test_slurm_buffer_stops_before_next_iteration(self):
+        """APH gives the Slurm-derived deadline the same soft boundary."""
+        aph = object.__new__(mpisppy.opt.aph.APH)
+        aph.options = {
+            "PHIterLimit": 3,
+            "time_limit": None,
+            "verbose": False,
+            "display_progress": False,
+            "display_timing": False,
+        }
+        aph.local_scenario_names = []
+        aph.synchronizer = SimpleNamespace(global_quitting=0, quitting=0)
+        aph.extensions = None
+        aph.ph_converger = None
+        aph.start_time = time.perf_counter()
+        aph._slurm_deadline = time.perf_counter() - 1
+        aph._slurm_buffer_seconds = 7200.0
+        aph.cylinder_rank = 0
+        aph.APH_solve_loop = mock.Mock()
+
+        aph.APH_iterk(spcomm=None)
+
+        self.assertEqual(aph.synchronizer.quitting, 1)
+        aph.APH_solve_loop.assert_not_called()
+
     @unittest.skipIf(not solver_available,
                      f"{solver_name} solver is not available")
     def test_aph_basic(self):
