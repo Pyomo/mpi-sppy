@@ -126,7 +126,7 @@ def test_rho_from_python():
     # Test 1: per-scenario CSV path (no rho_setter, no extensions)
     #
     # With the fix, C++ reads {scenarioName}_rho.csv instead of using
-    # --rho-all.  The CSVs are written by Scenario_lp_mps_files with
+    # --rho-all.  The CSVs are written by write_scenario_files with
     # defaultPHrho=1.0.  Verify C++ gets 1.0 for all nonants.
     # =================================================================
     if rank == 0:

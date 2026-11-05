@@ -285,8 +285,13 @@ Frank-Wolfe or the compiled hub itself. The hub also takes
    * - ``--aphfw-scenario-dir``
      - the system's temporary directory
      - Where each hub rank writes the scenario files its C++ reads, in a
-       subdirectory of its own that is removed at the end. It need not be
-       on a shared filesystem.
+       subdirectory of its own, ``aphfw_r<rank>_*``, that is removed when
+       the run finishes normally. It must exist on every node the hub runs on
+       but need not be on a shared filesystem.
+   * - ``--aphfw-keep-scenario-files``
+     - off
+     - Keep those subdirectories, with each rank's ``solver.log``, after the
+       run.
 
 ``--help`` (with a ``--module-name``) lists the rest. The hub refuses the
 :ref:`sec-aph` options it does not use, such as ``--aph-dispatch-frac`` and
@@ -339,6 +344,11 @@ Troubleshooting
    ``CPLEX_Studio...`` directory holding ``cplex/`` and ``concert/``, for
    Xpress the directory holding ``include/xprs.h`` and ``lib/``. The message
    names what is missing.
+
+``Hub rank ... could not make a FW-APH scenario directory``
+   The directory given with ``--aphfw-scenario-dir``, or the system's
+   temporary directory if none was given, is missing or not writable on at
+   least one node the hub runs on.
 
 ``aphfw_cpp loads ... but mpi4py loads ...``
    The module was compiled against a different MPI than mpi4py's. Rebuild

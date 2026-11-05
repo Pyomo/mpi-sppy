@@ -1229,10 +1229,18 @@ class Config(pyofig.ConfigDict):
         self.add_to_config(name="aphfw_scenario_dir",
                            description="Directory in which each hub rank "
                            "writes its scenario files for the C++ (in a "
-                           "temporary subdirectory of its own, removed at the "
-                           "end) (default: the system's temporary directory)",
+                           "temporary subdirectory of its own, removed when the "
+                           "run finishes normally). It must exist on every node "
+                           "the hub runs on but need not be shared (default: "
+                           "the system's temporary directory)",
                            domain=str,
                            default="")
+
+        self.add_to_config(name="aphfw_keep_scenario_files",
+                           description="Do not remove each hub rank's scenario "
+                           "files and solver.log at the end of the run",
+                           domain=bool,
+                           default=False)
 
         self.add_to_config(name="aph_omicron_rho_multiplier",
                            description="k in omicron = k * rho at post-iter-0 freeze (default 1.0) (--aphfw-hub only)",

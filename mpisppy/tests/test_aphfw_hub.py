@@ -322,13 +322,16 @@ class TestAphfwPythonSide(unittest.TestCase):
         opt, _ = _fake_opt(_cfg(aphfw_hub=True, aphfw_no_fw=True))
         d = APHFWOpt._make_cpp_config(opt)
         self.assertIs(d["no-fw"], True)
-        self.assertEqual(d["prox-json"], os.path.join("scen", "prox.json"))
-        for key in ("nl-json", "grad-json", "FW-tmax", "FW-tau", "FW-obj-cutoff"):
+        files = APHFWOpt._scenario_file_config(opt)
+        self.assertEqual(files["prox-json"], os.path.join("scen", "prox.json"))
+        self.assertNotIn("nl-json", files)
+        self.assertNotIn("grad-json", files)
+        for key in ("FW-tmax", "FW-tau", "FW-obj-cutoff"):
             self.assertNotIn(key, d)
         # and without it, nothing changes
         opt, _ = _fake_opt(_cfg(aphfw_hub=True))
-        d = APHFWOpt._make_cpp_config(opt)
-        self.assertNotIn("no-fw", d)
+        self.assertNotIn("no-fw", APHFWOpt._make_cpp_config(opt))
+        d = APHFWOpt._scenario_file_config(opt)
         self.assertNotIn("prox-json", d)
         self.assertIn("nl-json", d)
 
@@ -411,6 +414,40 @@ class TestAphfwPythonSide(unittest.TestCase):
             build_hub_dict(_cfg(aphfw_hub=True), None, None, None, None,
                            ph_converger=object)
 
+    def test_write_scenario_files(self):
+        import json
+        from types import SimpleNamespace
+
+        from mpisppy.extensions.scenario_lp_mps_files import write_scenario_files
+        from mpisppy.tests.examples.farmer import scenario_creator
+        s = scenario_creator("scen0", num_scens=3)
+        ph = SimpleNamespace(local_scenarios={"scen0": s},
+                             all_nodenames=["ROOT"])
+        cfg = SimpleNamespace(default_rho=2.0)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            write_scenario_files(ph, tmpdir, cfg)
+            self.assertEqual(sorted(os.listdir(tmpdir)),
+                             ["scen0.lp", "scen0.mps", "scen0_nonants.json",
+                              "scen0_rho.csv"])
+            with open(os.path.join(tmpdir, "scen0_nonants.json")) as f:
+                nonants = json.load(f)["treeData"]["nodes"]["ROOT"]["nonAnts"]
+            with open(os.path.join(tmpdir, "scen0.lp")) as f:
+                self.assertIn(nonants[0], f.read())
+            with open(os.path.join(tmpdir, "scen0_rho.csv")) as f:
+                self.assertEqual(f.readlines()[1], f"{nonants[0]},2.0\n")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            write_scenario_files(ph, tmpdir, cfg, write_lp=False)
+            self.assertEqual(sorted(os.listdir(tmpdir)),
+                             ["scen0.mps", "scen0_nonants.json", "scen0_rho.csv"])
+
+    def test_scenario_dir_must_exist(self):
+        from mpisppy.opt.aphfw import _make_rank_scenario_dir
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = _make_rank_scenario_dir(0, tmpdir)
+            self.assertEqual(os.path.dirname(path), tmpdir)
+            with self.assertRaisesRegex(RuntimeError, "--aphfw-scenario-dir"):
+                _make_rank_scenario_dir(0, os.path.join(tmpdir, "no_such"))
+
 
 @unittest.skipIf(not aphfw_cpp_available, "aphfw_cpp is not built")
 @unittest.skipIf(not solver_available, "no MIP solver available")
@@ -430,17 +467,37 @@ class TestAphfwHubRun(unittest.TestCase):
             argv = self._farmer_argv("--max-iterations", "2",
                                      "--aphfw-scenario-dir", tmpdir)
             written = []
-            real_init = APHFWOpt._make_cpp_config
+            real_config = APHFWOpt._scenario_file_config
 
             def record(self):
                 written.append(self._scenario_dir)
-                return real_init(self)
+                return real_config(self)
 
             with patch.object(sys, "argv", argv), \
-                    patch.object(APHFWOpt, "_make_cpp_config", record):
+                    patch.object(APHFWOpt, "_scenario_file_config", record):
                 runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
             self.assertTrue(written[0].startswith(tmpdir), written)
             # the hub finalizes the C++ side, which removes the files
+            self.assertEqual(os.listdir(tmpdir), [])
+
+    def test_keep_scenario_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            argv = self._farmer_argv("--max-iterations", "2",
+                                     "--aphfw-scenario-dir", tmpdir,
+                                     "--aphfw-keep-scenario-files")
+            with patch.object(sys, "argv", argv):
+                runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
+            kept = os.listdir(tmpdir)
+            self.assertEqual(len(kept), 1, kept)
+            self.assertIn("solver.log", os.listdir(os.path.join(tmpdir, kept[0])))
+
+    def test_bad_option_found_before_scenario_files_are_written(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            argv = self._farmer_argv("--max-iterations", "0",
+                                     "--aphfw-scenario-dir", tmpdir)
+            with patch.object(sys, "argv", argv), \
+                    self.assertRaisesRegex(ValueError, "--max-iterations"):
+                runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
             self.assertEqual(os.listdir(tmpdir), [])
 
     def test_extension_hooks(self):

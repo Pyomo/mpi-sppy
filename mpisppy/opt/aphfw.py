@@ -25,7 +25,7 @@ import numpy as np
 import mpisppy.phbase
 import mpisppy.utils.config
 from mpisppy import MPI, global_toc
-from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
+from mpisppy.extensions.scenario_lp_mps_files import write_scenario_files
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +133,20 @@ def _python_aph_only_options():
 _ZERO_IS_CPP_DEFAULT = {"aphfw_fw_tau", "aph_iter0_w_multiplier"}
 
 
+def _make_rank_scenario_dir(rank, base):
+    """Make hub rank's scenario directory in base (None means the system's
+    temporary directory) and return its path.
+    """
+    try:
+        return tempfile.mkdtemp(prefix=f"aphfw_r{rank}_", dir=base)
+    except OSError as e:
+        where = base or "the system's temporary directory"
+        raise RuntimeError(
+            f"Hub rank {rank} could not make a FW-APH scenario directory in "
+            f"{where}: {e}. Use --aphfw-scenario-dir to name a writable "
+            "directory that exists on every node the hub runs on.") from e
+
+
 class APHFWOpt(mpisppy.phbase.PHBase):
     """Wraps C++ FWAPH for use as an mpi-sppy hub optimizer (hub only)."""
 
@@ -167,21 +181,25 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         for s in self.local_scenarios.values():
             s._solver_plugin = None
 
-        # 2. Write MPS + JSON + rho files to a temporary directory
-        self._write_scenario_files()
-
-        # 3. Initialize C++ with cylinder_comm + file paths
+        # 2. Check the module and the options first, since the scenario files
+        # can take a long time to write
         aphfw_cpp = _import_aphfw_cpp()
         if self.cylinder_rank == 0:
             _report_cpp_solver(aphfw_cpp.solver_name,
                                self._get_option("solver_name", None))
+        cfg_dict = self._make_cpp_config()
+
+        # 3. Write MPS + JSON + rho files to a temporary directory
+        self._write_scenario_files()
+        cfg_dict.update(self._scenario_file_config())
+
+        # 4. Initialize C++ with cylinder_comm + file paths
         self._cpp = aphfw_cpp.APHFWLibrary()
 
         # Set explicit scenario names so C++ matches our rank assignment
         local_names = list(self.local_scenarios.keys())
         self._cpp.set_explicit_scenario_names(local_names)
 
-        cfg_dict = self._make_cpp_config()
         self._cpp.init(self.mpicomm, self._scenario_dir, cfg_dict)
         self._cpp.set_hub_mode(True)
         self._local_nonant_length = self._cpp.get_local_nonant_length()
@@ -191,7 +209,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         # through freeze_omicron(). Default matches the C++ default.
         self._omicron_rho_multiplier = cfg_dict.get("omicron-rho-multiplier", 1.0)
 
-        # 4. Set up external terminate flag
+        # 5. Set up external terminate flag
         self._terminate_flag = ctypes.c_int(0)
         self._cpp.set_external_terminate_flag(
             ctypes.addressof(self._terminate_flag)
@@ -203,7 +221,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         self.trivial_bound = None
         first_cycle = True
 
-        # 5. Stepping loop
+        # 6. Stepping loop
         has_extensions = getattr(self, "extobject", None) is not None
 
         if has_extensions:
@@ -242,7 +260,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
                 break
             self._PHIter = self._cpp.get_current_cycle()
 
-            # 6. Run mpi-sppy extensions (e.g., dynamic rho)
+            # 7. Run mpi-sppy extensions (e.g., dynamic rho)
             if has_extensions:
                 self._sync_cpp_to_pyomo()
 
@@ -256,7 +274,7 @@ class APHFWOpt(mpisppy.phbase.PHBase):
                 self.extobject.miditer()
                 self.extobject.enditer()
 
-            # 7. Sync with spokes (send_nonants/send_ws are overridden
+            # 8. Sync with spokes (send_nonants/send_ws are overridden
             #    in APHFWHub to use C++ values)
             if self.spcomm is not None:
                 self.spcomm.sync()
@@ -373,37 +391,35 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             self._cpp = None
         if self._scenario_dir is not None and self._cleanup_scenario_dir:
             import shutil
-            # This rank's own parent directory (mkdtemp parent / "scen").
-            shutil.rmtree(os.path.dirname(self._scenario_dir),
-                          ignore_errors=True)
+            shutil.rmtree(self._scenario_dir, ignore_errors=True)
             self._scenario_dir = None
 
     def _write_scenario_files(self):
-        """Write MPS/LP + JSON + rho files for C++ consumption."""
+        """Write MPS + JSON + rho files for C++ consumption."""
         cfg = self.options.get("cfg", None)
 
-        keep_files = self.options.get("aphfw_keep_scenario_files", False)
+        keep_files = self._get_option("aphfw_keep_scenario_files", False)
         self._cleanup_scenario_dir = not keep_files
 
         # Each hub rank has its own directory, since the C++ on a rank reads
         # only that rank's scenarios, so it can be on a node-local filesystem.
-        # Generate a unique path WITHOUT creating it yet, because
-        # Scenario_lp_mps_files.__init__ does makedirs(exist_ok=False).
         base = self._get_option("aphfw_scenario_dir", "") or None
-        parent = tempfile.mkdtemp(prefix=f"aphfw_r{self.cylinder_rank}_", dir=base)
-        self._scenario_dir = os.path.join(parent, "scen")
-
+        self._scenario_dir = _make_rank_scenario_dir(self.cylinder_rank, base)
+        where = base or "the system's temporary directory on each node"
+        removal = ", removed when the run finishes normally" if not keep_files else ""
+        global_toc("FW-APH hub: each rank's scenario files and solver.log are "
+                   f"in aphfw_r<rank>_* in {where}{removal}")
         logger.debug(f"Writing scenario files to {self._scenario_dir}")
 
-        # Use mpi-sppy's Scenario_lp_mps_files extension to write files
-        opts = {
-            "write_scenario_lp_mps_files_dir": self._scenario_dir,
-            "dir_per_rank": True,
-            "cfg": cfg,
-        }
-        self.options["write_lp_mps_extension_options"] = opts
-        writer = Scenario_lp_mps_files(self)
-        writer.pre_iter0()
+        # Rho: let C++ read per-scenario {scenarioName}_rho.csv files
+        # written by write_scenario_files.  These contain per-variable rho
+        # values from rho_setter (if provided) or defaultPHrho.  We do NOT
+        # pass --rho-all (which would override per-variable values) or
+        # --rho-csv (which would use a single CSV for all scenarios).
+        # C++ derives each scenario's CSV path from its problemName.
+
+        # The C++ solvers read only the MPS files.
+        write_scenario_files(self, self._scenario_dir, cfg, write_lp=False)
 
         # Solver parameter JSON files for the C++ solves.  The C++ side takes
         # only mipGap, timeLimit and threads: iter0.json is for the Lagrangian
@@ -498,16 +514,14 @@ class APHFWOpt(mpisppy.phbase.PHBase):
                              f"--aphfw-hub (got {max_cycles})")
         d["aph-max-cycles"] = max_cycles
 
-        # Rho: let C++ read per-scenario {scenarioName}_rho.csv files
-        # written by Scenario_lp_mps_files.  These contain per-variable rho
-        # values from rho_setter (if provided) or defaultPHrho.  We do NOT
-        # pass --rho-all (which would override per-variable values) or
-        # --rho-csv (which would use a single CSV for all scenarios).
-        # C++ derives each scenario's CSV path from its problemName.
+        return d
 
+    def _scenario_file_config(self):
+        """The part of the C++ config that names files in the scenario directory."""
+        d = {}
         # Solver parameter JSON files (generated by _write_scenario_files)
         d["iter0-json"] = os.path.join(self._scenario_dir, "iter0.json")
-        if no_fw:
+        if self._no_fw():
             d["prox-json"] = os.path.join(self._scenario_dir, "prox.json")
         else:
             d["nl-json"] = os.path.join(self._scenario_dir, "nl.json")

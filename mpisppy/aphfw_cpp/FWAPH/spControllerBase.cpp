@@ -10,6 +10,7 @@
 #include "utils/evenSplit.hpp"
 #include "utils/utils.hpp"
 #include <algorithm>
+#include <unordered_map>
 
 /*
   Note that using the scheme with no constructor args followed by setup is very fragile and order matters.

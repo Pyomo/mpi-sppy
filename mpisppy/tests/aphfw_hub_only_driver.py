@@ -195,9 +195,8 @@ def test_hub_only():
 
     # Clean up this rank's scenario files
     import shutil
-    parent = os.path.dirname(scenario_dir)
     try:
-        shutil.rmtree(parent)
+        shutil.rmtree(scenario_dir)
     except OSError:
         pass
 

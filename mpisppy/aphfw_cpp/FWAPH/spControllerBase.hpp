@@ -21,7 +21,9 @@
   Notes:
   - Be careful about scenario numbers vs indexes (global and local):
     = the names themselves could be one-based (which doesn't matter much),
-    = we have a set of local scenario indexes with values that are global.
+    = we have a set of local scenario indexes with values that are global,
+      except under explicit scenario names (setExplicitScenarioNames), where
+      the values are 0, 1, ... on each rank.
     = we have a vector called localScenarios (so that index is local)
     = int s is always a local index !!!  (otherwise say int sGlobal)
  */

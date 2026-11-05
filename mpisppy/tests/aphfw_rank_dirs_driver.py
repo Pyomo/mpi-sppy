@@ -67,15 +67,16 @@ def main():
 
     # Each rank's directory holds its own scenarios and no one else's.
     scenario_dir = opt._scenario_dir
-    assert os.path.dirname(os.path.dirname(scenario_dir)) == base, scenario_dir
+    assert os.path.dirname(scenario_dir) == base, scenario_dir
     assert len(set(comm.allgather(scenario_dir))) == comm.Get_size()
     stems = {os.path.splitext(f)[0] for f in os.listdir(scenario_dir)
              if f.endswith(".mps")}
     assert stems == set(opt.local_scenarios), f"{stems} in {scenario_dir}"
+    assert not [f for f in os.listdir(scenario_dir) if f.endswith(".lp")]
 
     # finalize removes this rank's directory, whatever the others have done.
     opt.aphfw_finalize()
-    assert not os.path.exists(os.path.dirname(scenario_dir)), scenario_dir
+    assert not os.path.exists(scenario_dir), scenario_dir
 
     comm.Barrier()
     if comm.Get_rank() == 0:
