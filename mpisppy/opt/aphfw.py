@@ -475,6 +475,8 @@ class APHFWOpt(mpisppy.phbase.PHBase):
                    "applies only to the Frank-Wolfe solves, so it cannot be "
                    "used with --aphfw-no-fw")
             d["no-fw"] = True
+            if self._get_option("warmstart_subproblems", False):
+                d["prox-warm-start"] = True
 
         # gamma weights v against u in tau = ||u||^2 + ||v||^2 / gamma, as for
         # --APH; the C++ takes its reciprocal.  (Listed in

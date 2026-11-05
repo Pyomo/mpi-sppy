@@ -173,6 +173,63 @@ TEST(NoFW, ProxJsonNeedsNoFW) {
     EXPECT_THROW(pws.setup(*pc.cfg, kLPScen, W, z), std::runtime_error);
 }
 
+TEST(NoFW, ProxWarmStartNeedsNoFW) {
+    auto args = kFWArgs;
+    args.push_back("--prox-warm-start");
+    ParsedConfig pc(args);
+    std::vector<double> W, z;
+    ProblemWithSolvers pws;
+    EXPECT_THROW(pws.setup(*pc.cfg, kLPScen, W, z), std::runtime_error);
+}
+
+namespace {
+// Two solves with different rho: the start from the first is not the answer
+// to the second, which must come out right anyway.
+void checkProxWarmStartAnswers(const std::string& scen, const std::vector<double>& rho1Want,
+                               const std::vector<double>& rho20Want) {
+    auto args = kNoFWArgs;
+    args.push_back("--prox-warm-start");
+    Subproblem noFW(scen, args);
+    std::vector<double> x(3, -1.0), xExport(3, -1.0);
+    noFW.setRho(1.0);
+    noFW.pws.doProxSolve(x, xExport);
+    expectVec(x, rho1Want);
+    noFW.setRho(20.0);
+    noFW.pws.doProxSolve(x, xExport);
+    expectVec(x, rho20Want);
+}
+}  // namespace
+
+TEST(NoFW, ProxWarmStartKeepsAnswersContinuous) {
+    checkProxWarmStartAnswers(kLPScen, {1.0, 0.0, 0.0},
+                              {11.0 / 60.0, 2.0 / 60.0, 47.0 / 60.0});
+}
+
+#ifndef USE_HIGHS  // HiGHS cannot solve the binary fixture's MIQP
+TEST(NoFW, ProxWarmStartKeepsAnswersBinary) {
+    checkProxWarmStartAnswers(kBinScen, {1.0, 0.0, 0.0}, {0.0, 0.0, 1.0});
+}
+
+TEST(NoFW, ProxStartOnlyWithTheOption) {
+    std::vector<double> x(3, -1.0), xExport(3, -1.0);
+
+    auto args = kNoFWArgs;
+    args.push_back("--prox-warm-start");
+    Subproblem on(kBinScen, args);
+    on.setRho(1.0);
+    on.pws.doProxSolve(x, xExport);
+    EXPECT_FALSE(on.pws.lastProxHadStart());  // nothing to start from yet
+    on.pws.doProxSolve(x, xExport);
+    EXPECT_TRUE(on.pws.lastProxHadStart());
+
+    Subproblem off(kBinScen, kNoFWArgs);
+    off.setRho(1.0);
+    off.pws.doProxSolve(x, xExport);
+    off.pws.doProxSolve(x, xExport);
+    EXPECT_FALSE(off.pws.lastProxHadStart());
+}
+#endif
+
 TEST(NoFW, NeedsProxJson) {
     ParsedConfig pc({"--no-fw"});
     std::vector<double> W, z;

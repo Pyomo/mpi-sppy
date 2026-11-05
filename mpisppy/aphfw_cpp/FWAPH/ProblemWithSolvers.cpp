@@ -33,6 +33,9 @@ void ProblemWithSolvers::registerOptions(Config& config) { // static
                          "by Frank-Wolfe (needs --prox-json; the FW-* options, "
                          "--nl-json and --grad-json are refused)");
   config.addOption<std::string>("prox-json", "", "proximal-solve parameters JSON file (--no-fw only)");
+  config.addOption<bool>("prox-warm-start", false,
+                         "Give each proximal solve the solver's last solution as a "
+                         "start (--no-fw only)");
   config.addOption<std::string>("solver-log-file", "", "solver logfile (drops gurobi stdout as side-effect)");
   config.addOption<int>("FW-tmax", 1, "Max grad solves in FW");
   config.addOption<double>("FW-tau", 0, "FW convegence criterion");
@@ -161,9 +164,12 @@ void ProblemWithSolvers::_getFromCfg(Config& cfg) {
   if (noFW_) {
     _refuseFWOptionsUnderNoFW(cfg);
     proxJson = cfg.getRequiredString("prox-json");
+    getConfigOptionOrThrow<bool>("prox-warm-start", proxWarmStart_, cfg);
   } else {
-    if (cfg.explicitlyGiven("prox-json")) {
-      throw std::runtime_error("--prox-json is used only with --no-fw");
+    for (const char* name : {"prox-json", "prox-warm-start"}) {
+      if (cfg.explicitlyGiven(name)) {
+        throw std::runtime_error(std::string("--") + name + " is used only with --no-fw");
+      }
     }
     nlJson = cfg.getRequiredString("nl-json");
     gradJson = cfg.getRequiredString("grad-json");
@@ -491,6 +497,12 @@ void ProblemWithSolvers::doProxSolve(std::vector<double>& x,
   if (abortFlagPtr_ && abortFlagPtr_->load(std::memory_order_relaxed)) {
     return;  // shutdown in progress; both keep their old values and are discarded
   }
+
+  // Before the rebuild, which changes the model: the start is read from the
+  // solver's last solution, and there is none on the first solve, nor after
+  // anything has modified the model since the last one (a bounds update, for
+  // instance), and then the solve starts cold.
+  lastProxHadStart_ = proxWarmStart_ && proxSolver->setStartAtCurrent();
 
   // Picks up the current W, z and rho
   proxSolver->fullObjectiveRebuild();

@@ -332,6 +332,18 @@ class TestAphfwPythonSide(unittest.TestCase):
         self.assertNotIn("prox-json", d)
         self.assertIn("nl-json", d)
 
+    def test_warmstart_subproblems_reaches_prox_only(self):
+        # The flag reaches the C++ only with --aphfw-no-fw, whose C++ option
+        # is refused without --no-fw.
+        for no_fw, warmstart, expected in ((True, True, True),
+                                           (True, False, False),
+                                           (False, True, False)):
+            with self.subTest(no_fw=no_fw, warmstart=warmstart):
+                opt, _ = _fake_opt(_cfg(aphfw_hub=True, aphfw_no_fw=no_fw,
+                                        warmstart_subproblems=warmstart))
+                d = APHFWOpt._make_cpp_config(opt)
+                self.assertEqual("prox-warm-start" in d, expected)
+
     def test_no_fw_refuses_fw_only_options(self):
         for name, value in (("aphfw_fw_tmax", 3), ("aphfw_fw_tau", 0.5),
                             ("aphfw_obj_cutoff", True)):

@@ -91,6 +91,9 @@ public:
   // and nl, gradient and FW are not built.
   bool noFW() const { return noFW_; }
 
+  // True if the last doProxSolve gave the solver a start (--prox-warm-start).
+  bool lastProxHadStart() const { return lastProxHadStart_; }
+
   // Solve functions that put values into x
   objAndBnd doLagrangianSolve(std::vector<double>& x);
   // x receives the proximal minimizer (what the algorithm iterates on);
@@ -247,6 +250,8 @@ protected:
   std::string proxJson;
 
   bool noFW_ = false;
+  bool proxWarmStart_ = false;
+  bool lastProxHadStart_ = false;
   static constexpr double kNaN_ = std::numeric_limits<double>::quiet_NaN();
   std::string logFileName;
 

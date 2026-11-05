@@ -314,6 +314,11 @@ about the hub is the same. ``--aphfw-fw-tmax``, ``--aphfw-fw-tau`` and
 they must keep their defaults. ``--aphfw-iter0-fw-step`` still applies; the
 step it adds is a proximal solve.
 
+``--warmstart-subproblems`` gives each proximal solve the solver's last
+solution as a start. Without ``--aphfw-no-fw`` it does not reach the hub's
+solves, where the Frank-Wolfe linear subproblems always get such a start. In
+both cases it still applies to the spokes.
+
 ``--aphfw-no-fw`` needs ``--aphfw-hub`` too. With both, a command line
 written for ``--APH`` runs if it avoids what the hub refuses (above).
 
