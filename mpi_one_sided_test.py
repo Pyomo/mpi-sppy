@@ -20,21 +20,24 @@
     activate mpi-sppy's progress thread while the processes sleep. Without
     that setting, this uses the ordinary mpi4py-backed MPI interface.
 '''
-from contextlib import nullcontext
 import os
 import sys
 import time
 
-import numpy as np
-
-
 # Use mpi-sppy's MPI wrapper only when testing its progress thread.
 if os.environ.get("MPISPPY_MPI_PROGRESS_THREAD") == "1":
     from mpisppy import MPI as mpi
+
     progress_during_idle = mpi.progress_active
 else:
-    from mpi4py import MPI as mpi
+    from contextlib import nullcontext
+
+    import mpi4py.MPI as mpi
+
     progress_during_idle = nullcontext
+
+import numpy as np
+
 
 def main():
     if mpi.COMM_WORLD.Get_size() == 1:

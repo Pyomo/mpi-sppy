@@ -31,8 +31,8 @@ import numpy as np
 import pyomo.environ as pyo
 from pyomo.opt import TerminationCondition
 
-from mpisppy import MPI
 import mpisppy.utils.sputils as sputils
+from mpisppy import MPI
 
 
 def _solve_model(model, solver_name, solver_options):

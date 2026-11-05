@@ -1433,7 +1433,7 @@ jobs:
         timeout-minutes: 5
         run: |
           mkdir -p "$RUNNER_TEMP/fallback-wheels"
-          CC=false python -m pip wheel --no-deps --no-build-isolation --no-cache-dir \
+          CC=false python -m pip wheel --verbose --no-deps --no-build-isolation --no-cache-dir \
             -w "$RUNNER_TEMP/fallback-wheels" "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz \
             > "$RUNNER_TEMP/fallback-build.log" 2>&1
           rg -q 'MPI compiler probe failed; using the Python MPI progress worker' \

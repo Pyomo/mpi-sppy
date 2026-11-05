@@ -63,7 +63,11 @@ selected after comparing its build signature with values reported by mpi4py.
 A mismatch raises an error before the extension uses mpi4py's communicator.
 This check detects common mismatches but cannot prove that two separately
 loaded copies of an MPI library share runtime state. If no native worker is
-installed, the Python worker runs.
+installed, the Python worker runs. The Python worker calls mpi4py from a
+thread and cannot poll while solver code holds Python's GIL; the native worker
+polls without holding it. Set ``MPISPPY_MPI_PROGRESS_INTERVAL_US`` to a
+positive, finite number to change the maximum polling interval from its
+default of 500 microseconds.
 
 To check the MPI runtime without importing mpi-sppy by default, give this
 command (once mpi-sppy is installed it works from any directory):

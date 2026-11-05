@@ -32,8 +32,8 @@ import numpy as np
 import pyomo.environ as pyo
 from pyomo.opt import TerminationCondition
 
-from mpisppy import MPI
 import mpisppy.utils.sputils as sputils
+from mpisppy import MPI
 
 
 def assert_jensen_integer_safe(scenario):

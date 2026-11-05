@@ -150,9 +150,10 @@ const char *mpisppy_mpi_build_signature(size_t *comm_size,
                     any_source,
                     any_tag,
                 )
-            except Exception:
+            except Exception as exc:
                 warnings.warn(
-                    "MPI compiler probe failed; using the Python MPI progress worker"
+                    "MPI compiler probe failed; using the Python MPI progress "
+                    f"worker ({type(exc).__name__}: {exc})"
                 )
                 self.extensions.clear()
                 self.distribution.ext_modules.clear()

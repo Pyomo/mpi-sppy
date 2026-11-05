@@ -493,8 +493,8 @@ class SPOpt(SPBase):
                 solve_keyword_args["tee"] = True
                 with MPI.progress_active():
                     with sputils.solver_log_stream(
-                            execution.subproblem_solve.log_stream_path,
-                            solve_keyword_args):
+                        execution.subproblem_solve.log_stream_path, solve_keyword_args
+                    ):
                         s._solver_plugin.solve(
                             s,
                             **solve_keyword_args,
