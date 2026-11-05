@@ -19,7 +19,15 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define STOP_TIMEOUT_SECONDS 30
+/* Match the Python backend's 50 us maximum for the first 10 ms, 250 us
+   maximum until 100 ms, then the configured interval. Both backends use a
+   30 s deactivation limit; native shutdown allows 30 s and Python 5 s. */
+#define FAST_PHASE_END_SECONDS 0.010
+#define MID_PHASE_END_SECONDS 0.100
+#define FAST_POLL_INTERVAL_SECONDS 50e-6
+#define MID_POLL_INTERVAL_SECONDS 250e-6
+#define DEACTIVATION_TIMEOUT_SECONDS 30
+#define NATIVE_STOP_TIMEOUT_SECONDS 30
 
 /* macOS has no pthread_condattr_setclock. Its default condition clock is
    CLOCK_REALTIME, so timed waits must use that clock too. */
@@ -78,7 +86,7 @@ static void abort_worker(const char *operation, int error)
 static void exit_stalled_worker(const char *operation)
 {
     fprintf(stderr, "mpi-sppy MPI progress: %s exceeded %d seconds; exiting rank\n",
-            operation, STOP_TIMEOUT_SECONDS);
+            operation, DEACTIVATION_TIMEOUT_SECONDS);
     fflush(stderr);
     _Exit(EXIT_FAILURE); /* Never finalize MPI with a live progress worker. */
 }
@@ -198,10 +206,12 @@ static PyObject *run(PyObject *self, PyObject *unused)
             }
             elapsed = probe_end - active_start;
             interval = worker.max_interval;
-            if (elapsed < 0.010 && interval > 50e-6)
-                interval = 50e-6;
-            else if (elapsed < 0.100 && interval > 250e-6)
-                interval = 250e-6;
+            if (elapsed < FAST_PHASE_END_SECONDS &&
+                interval > FAST_POLL_INTERVAL_SECONDS)
+                interval = FAST_POLL_INTERVAL_SECONDS;
+            else if (elapsed < MID_PHASE_END_SECONDS &&
+                     interval > MID_POLL_INTERVAL_SECONDS)
+                interval = MID_POLL_INTERVAL_SECONDS;
             deadline = deadline_after(interval);
             pthread_mutex_lock(&worker.mutex);
             if (worker.active && !worker.stopped) {
@@ -241,7 +251,7 @@ static PyObject *set_active(PyObject *self, PyObject *args)
         worker.active = active;
         pthread_cond_signal(&worker.changed);
         if (!active && worker.polling) {
-            deadline = deadline_after(STOP_TIMEOUT_SECONDS);
+            deadline = deadline_after(DEACTIVATION_TIMEOUT_SECONDS);
             while (worker.polling && condition_error == 0)
                 condition_error = pthread_cond_timedwait(
                     &worker.changed, &worker.mutex, &deadline);
@@ -298,7 +308,8 @@ PyMODINIT_FUNC PyInit__mpi_progress_worker(void)
     result = PyModule_Create(&module);
     if (result == NULL)
         return NULL;
-    if (PyModule_AddIntConstant(result, "STOP_TIMEOUT_SECONDS", STOP_TIMEOUT_SECONDS) < 0) {
+    if (PyModule_AddIntConstant(result, "STOP_TIMEOUT_SECONDS",
+                                NATIVE_STOP_TIMEOUT_SECONDS) < 0) {
         Py_DECREF(result);
         return NULL;
     }
