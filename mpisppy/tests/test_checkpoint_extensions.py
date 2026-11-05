@@ -42,6 +42,7 @@ import pickle
 import tempfile
 import types
 import unittest
+from unittest import mock
 
 import mpisppy.tests.examples.farmer as farmer
 import mpisppy.tests.examples.sizes.sizes as sizes
@@ -1994,6 +1995,37 @@ class TestCrossScenarioEtaOnlyRows(unittest.TestCase):
             self.assertEqual(len(s._mpisppy_model.benders_cuts), 0)
             self.assertEqual(len(s._mpisppy_model.inner_bound_constr), 0)
             self.assertEqual(s._mpisppy_model.eta["scen1"].lb, 4.)
+
+    def _with_persistent_solvers(self):
+        """Give each scenario a persistent solver that records each eta bound
+        it is told about, as the bound was at that moment."""
+        told = []
+        for sname, s in self.opt.local_scenarios.items():
+            s._solver_plugin = mock.MagicMock()
+            s._solver_plugin.update_var.side_effect = (
+                lambda var, sname=sname: told.append((sname, var.name, var.lb)))
+        patcher = mock.patch(
+            "mpisppy.extensions.cross_scen_extension.sputils.is_persistent",
+            return_value=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return told
+
+    def test_an_eta_only_row_reaches_the_persistent_solver(self):
+        told = self._with_persistent_solvers()
+        self.ext.make_cuts(self._batch([[5., -1., 0.], [0., 0., 0.]], 1))
+        self.assertEqual(
+            sorted((sname, lb) for sname, _, lb in told),
+            [("scen0", 5.), ("scen1", 5.)])
+
+    def test_the_spokes_eta_bounds_reach_the_persistent_solver(self):
+        told = self._with_persistent_solvers()
+        self.ext._apply_eta_bounds([5., 4.])
+        for sname, s in self.opt.local_scenarios.items():
+            self.assertEqual(
+                {(var, lb) for who, var, lb in told if who == sname},
+                {(s._mpisppy_model.eta["scen0"].name, 5.),
+                 (s._mpisppy_model.eta["scen1"].name, 4.)})
 
 
 class TestCrossScenarioRestoreKeepsEtaBounds(TestCrossScenarioEtaOnlyRows):

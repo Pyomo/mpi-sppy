@@ -609,6 +609,14 @@ The shipped convergers need nothing carried: each either recomputes what it
 compares from the current iterate or, like the primal-dual converger, rebuilds
 it correctly from the resumed models.
 
+``--cross-scenario-cuts`` keeps its cuts and the bounds and counters that decide
+when it checks the outer bound. The cut spoke is not checkpointed and starts
+over on a resume, so new cuts arrive at other iterations than in the
+uninterrupted run, and the outer bound is valid but need not follow that run's.
+``generic_cylinders`` does not accept ``--cross-scenario-cuts``, and the shipped
+drivers that do (such as ``examples/netdes/netdes_cylinders.py``) do not register the
+checkpoint options, so using the two together takes a driver of your own.
+
 The two fixers driven by a spoke, ``--rc-fixer`` (with ``--reduced-costs``) and
 ``--relaxed-ph-fixer``, carry their own state too, and a resumed run using
 either continues correctly from the right models, but neither is promised to
