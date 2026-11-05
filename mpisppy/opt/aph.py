@@ -870,14 +870,10 @@ class APH(ph_base.PHBase):
         for self._PHIter in range(1, self.options["PHIterLimit"]+1):
             if self.synchronizer.global_quitting:
                 break
-            if self.options["time_limit"] is not None \
-                    and (time.perf_counter() - self.start_time) \
-                    >= self.options["time_limit"]:
+            local_stop_reason = self._local_time_limit_stop_reason()
+            if local_stop_reason is not None:
                 if self.cylinder_rank == 0:
-                    print(
-                        f"Time limit {self.options['time_limit']} seconds "
-                        "reached."
-                    )
+                    print(local_stop_reason)
                 # The listener's regular quitting reduction propagates this
                 # to the other APH workers without adding a synchronous
                 # collective to the asynchronous worker loop.

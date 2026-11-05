@@ -180,6 +180,8 @@ def shared_options(cfg, is_hub=False):
         "incumbent_on_improvement_filename_prefix" : cfg.get(
             "incumbent_on_improvement_filename_prefix", None),
     }
+    if is_hub and cfg.get("slurm_buffer_seconds", None) is not None:
+        shoptions["slurm_buffer_seconds"] = cfg.slurm_buffer_seconds
     # The options-file (--solver-options-file) sits at the bottom of
     # axis 2: any CLI flags below override file entries at the same
     # predicate. Load and apply it first so the rest of the axis-2
