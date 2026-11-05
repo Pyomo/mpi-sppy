@@ -29,6 +29,7 @@ Three properties, and they are different claims:
   (section 7) promises, rather than being reproduced exactly.
 """
 
+import ast
 import json
 import math
 import os
@@ -48,6 +49,7 @@ solver_available, solver_name, persistent_available, persistent_solver_name = \
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _DRIVER = os.path.join(_HERE, "cylinders_ab_driver.py")
+_CROSS_SCEN_DRIVER = os.path.join(_HERE, "cross_scen_ab_driver.py")
 #: generic_cylinders resolves --module-name with importlib, so this is the
 #: dotted name rather than a path -- and being importable makes the legs
 #: independent of the directory mpiexec starts in.
@@ -406,6 +408,213 @@ class TestStochAdmmCylindersResumeAB(_ResumeABMixin, unittest.TestCase):
                     if f.startswith(f"spoke_{self.INCUMBENT_SPOKE}")]
         with open(os.path.join(spokes_dir, fname), "rb") as f:
             self.assertIsNone(pickle.load(f)["loop_state"])
+
+
+@unittest.skipIf(not solver_available, "no solver is available")
+@unittest.skipIf(not mpiexec_available, "mpiexec is not available")
+class TestCrossScenarioCutsResume(unittest.TestCase):
+    """A PH hub with CrossScenarioExtension and the cut spoke, resumed.
+
+    The resumed models already carry the extension's eta variables, EF
+    objective and cuts. The resume has to keep them rather than build them
+    again, and the restarted spoke's cuts must not land on the restored
+    cuts' keys: its cut ids start over.
+
+    The cut spoke is not checkpointed, so the resumed run gets its cuts at
+    other iterations than the uninterrupted one, and the outer bound is
+    checked for validity rather than equality. A persistent solver when
+    there is one, since it is what has to be given eta and the cuts.
+    """
+
+    #: One hub rank and one spoke rank.
+    NP = 2
+    MAXIMIZE = False
+    N = 8
+    STOP = 3
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        ckpt_dir = os.path.join(cls._tmp.name, "ckpt")
+        cls.reference = cls._leg("A", "--max-iterations", str(cls.N))
+        # Both legs wait until the hub holds a cut of their own, so the
+        # checkpoint has cuts to restore and the resume adds some, however
+        # slow the spoke is. The resumed leg waits at its first iteration, so
+        # it has iterations left to check the bound with that cut.
+        cls.stopped = cls._leg("B1", "--max-iterations", str(cls.STOP),
+                               "--checkpoint-dir", ckpt_dir,
+                               "--wait-for-cuts-at", str(cls.STOP))
+        cls.resumed = cls._leg("B2", "--max-iterations",
+                               str(cls.N - cls.STOP), "--resume-from", ckpt_dir,
+                               "--wait-for-cuts-at", str(cls.STOP + 1))
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    @classmethod
+    def _leg(cls, name, *extra_args):
+        out_path = os.path.join(cls._tmp.name, f"{name}.json")
+        cmd = [
+            "mpiexec", "-np", str(cls.NP),
+            sys.executable, "-m", "mpi4py", _CROSS_SCEN_DRIVER,
+            "--out", out_path,
+            "--num-scens", "3", "--default-rho", "1",
+            "--solver-name",
+            persistent_solver_name if persistent_available else solver_name,
+            "--cross-scenario-cuts", "--cross-scenario-iter-cnt", "2",
+            "--intra-hub-conv-thresh", "-1",
+            "--rel-gap", "0.0", "--abs-gap", "0.0",
+            *(("--maximize",) if cls.MAXIMIZE else ()),
+            *extra_args,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True,
+                                timeout=1800, check=False,
+                                env=subprocess_env())
+        if result.returncode != 0:
+            raise AssertionError(
+                f"leg {name!r} failed:\n{result.stdout[-4000:]}\n"
+                f"{result.stderr[-4000:]}")
+        with open(out_path) as f:
+            return json.load(f)
+
+    def _cut_keys(self, snapshot, container="benders_cuts"):
+        return {sname: set(cuts[container])
+                for sname, cuts in snapshot["cuts"].items()}
+
+    def _checkpointed_cut_keys(self):
+        """The stopped run's cuts as of its last checkpoint. Cuts that
+        arrived after it are not in the checkpoint."""
+        return {sname: set(keys) for sname, keys
+                in self.stopped["at_last_checkpoint"]["cut_keys"].items()}
+
+    def test_the_hub_iterate_is_untouched_by_the_stop(self):
+        self.assertTrue(self.resumed["resumed"])
+        self.assertEqual(self.resumed["iteration"], self.N)
+        self.assertEqual(self.resumed["state"], self.reference["state"])
+
+    def test_the_restored_cuts_are_kept(self):
+        """Checked when the resumed run first reads the spoke, before any
+        new cut can arrive, as well as at the end."""
+        checkpointed = self._checkpointed_cut_keys()
+        self.assertTrue(all(checkpointed.values()),
+                        msg="the checkpoint holds no cuts, so this test "
+                            "proves nothing")
+        self.assertEqual(
+            {sname: set(keys) for sname, keys
+             in self.resumed["cut_keys_at_first_read"].items()},
+            checkpointed,
+            msg="the resumed run did not start from the restored cuts")
+        for sname, keys in checkpointed.items():
+            kept = self.resumed["cuts"][sname]["benders_cuts"]
+            stopped = self.stopped["cuts"][sname]["benders_cuts"]
+            for key in keys:
+                self.assertEqual(kept.get(key), stopped[key],
+                                 msg=f"{sname}: restored cut {key} was "
+                                     f"replaced or lost")
+
+    def test_the_cuts_use_the_models_eta(self):
+        self.assertTrue(self.resumed["cuts_use_current_eta"])
+
+    def test_new_cuts_get_keys_past_the_restored_ones(self):
+        """The restarted spoke's ids start over; without the offset its cuts
+        would replace the restored ones with the same key."""
+        before, after = self._checkpointed_cut_keys(), \
+            self._cut_keys(self.resumed)
+
+        def batch(key):
+            return ast.literal_eval(key)[0]
+
+        for sname in before:
+            new = after[sname] - before[sname]
+            self.assertTrue(new, msg=f"{sname}: no cut was added after the "
+                                     f"resume")
+            self.assertGreater(min(map(batch, new)),
+                               max(map(batch, before[sname])))
+        self.assertTrue(all(offset > 0 for offset
+                            in self.resumed["cut_key_offsets"]))
+
+    def test_the_extension_state_is_restored(self):
+        self.assertEqual(self.stopped["restored_extension_states"],
+                         [None] * (self.NP // 2))
+        self.assertEqual(self.resumed["restored_extension_states"],
+                         self.stopped["at_last_checkpoint"]["states"])
+
+    def test_the_outer_bound_stays_valid(self):
+        """On the valid side of the optimum, and no worse than the bound the
+        stopped run had reached. Written for minimizing; a maximizing farmer
+        is the same problem with the signs flipped."""
+        sign = -1. if self.MAXIMIZE else 1.
+        # The 3-scenario farmer optimum, from ExtensiveForm.
+        farmer3_opt = -108390.0
+        tol = 1e-9 * abs(farmer3_opt)
+        self.assertLessEqual(sign * self.resumed["BestOuterBound"],
+                             farmer3_opt + tol)
+        self.assertGreaterEqual(sign * self.resumed["BestOuterBound"],
+                                sign * self.stopped["BestOuterBound"])
+
+    def test_the_resumed_run_checks_the_bound(self):
+        """A restored bound passes the test above with no check at all, so
+        this looks at what the checks after the resume computed: each is valid,
+        and with the cuts the best of them beats the trivial bound."""
+        sign = -1. if self.MAXIMIZE else 1.
+        farmer3_opt = -108390.0
+        tol = 1e-9 * abs(farmer3_opt)
+        for checked in self.resumed["checked_bounds"]:
+            self.assertTrue(checked, msg="no bound check after the resume")
+            for bound in checked:
+                self.assertLessEqual(sign * bound, farmer3_opt + tol)
+            # A margin, since a check no cut moves can differ from the
+            # trivial bound by rounding.
+            trivial = sign * self.resumed["trivial_bound"]
+            self.assertGreater(max(sign * bound for bound in checked),
+                               trivial + 1e-6 * abs(trivial))
+
+    def test_what_decides_the_bound_check_agrees_across_hub_ranks(self):
+        """It decides whether a collective runs, so a difference hangs. Checks
+        what a leg that finished holds; a leg that hung fails on its timeout."""
+        for leg in (self.stopped, self.resumed):
+            self.assertEqual(len(leg["final_extension_states"]), self.NP // 2)
+            self.assertEqual(len(set(leg["cut_key_offsets"])), 1)
+            for checked in leg["checked_bounds"]:
+                self.assertEqual(checked, leg["checked_bounds"][0])
+            for state in leg["final_extension_states"]:
+                self.assertEqual(state, leg["final_extension_states"][0])
+
+    @unittest.skipUnless(persistent_available,
+                         "no persistent solver is available")
+    def test_the_persistent_solver_holds_what_the_model_holds(self):
+        """The cuts and eta bounds on the model say nothing about the
+        persistent solver, on a resume least of all: it never saw them added.
+        """
+        for name, leg in (("stopped", self.stopped), ("resumed", self.resumed)):
+            self.assertEqual(set(leg["solver_vs_model"]), set(leg["cuts"]))
+            self.assertEqual(set(leg["cuts_the_solver_lacks"]),
+                             set(leg["cuts"]))
+            for sname, lacking in leg["cuts_the_solver_lacks"].items():
+                self.assertEqual(lacking, [], msg=f"{name} {sname}")
+            for sname, problems in leg["solver_vs_model"].items():
+                for problem, (persistent, model) in problems.items():
+                    with self.subTest(leg=name, scenario=sname, problem=problem):
+                        self.assertIsInstance(persistent, float)
+                        self.assertIsInstance(model, float)
+                        self.assertAlmostEqual(
+                            persistent, model,
+                            delta=1e-6 * max(1., abs(model)))
+
+
+class TestCrossScenarioCutsResumeMaximizing(TestCrossScenarioCutsResume):
+    """The cuts, eta and its bounds are all kept in minimizing form, whatever
+    the model's sense, so a mistake there shows up only here."""
+
+    MAXIMIZE = True
+
+
+class TestCrossScenarioCutsResumeTwoRankHub(TestCrossScenarioCutsResume):
+    """Two hub ranks and two spoke ranks: the cuts and the extension state
+    are on every hub rank, and a resume has to keep them in step."""
+
+    NP = 4
 
 
 @unittest.skipIf(not solver_available, "no solver is available")
