@@ -54,6 +54,10 @@ solver_dual_sign_convention['cbc'] = -1
 solver_dual_sign_convention['xpress_direct'] = -1
 solver_dual_sign_convention['xpress_persistent'] = -1
 
+# LShapedCutGeneratorData uses Pyomo's generate_cut, whose own table has highs
+# but not appsi_highs.
+bc.solver_dual_sign_convention.setdefault('appsi_highs', -1)
+
 
 class StandardL1CutGenerator:
     """Dual-based Benders cuts with L1-normalized feasibility cuts.
@@ -661,7 +665,12 @@ class LShapedCutGeneratorData(bc.BendersCutGeneratorData):
             # self._subproblem_ndx_map[self.local_subproblem_count - 1] = self.global_subproblem_count - 1
 
             if isinstance(subproblem_solver, str):
-                subproblem_solver = pe.SolverFactory(subproblem_solver)
+                solver_name = subproblem_solver
+                subproblem_solver = pe.SolverFactory(solver_name)
+                # generate_cut reads solver.name, which the APPSI interfaces
+                # (e.g. appsi_highs) do not have.
+                if not hasattr(subproblem_solver, "name"):
+                    subproblem_solver.name = solver_name
             self.subproblem_solvers.append(subproblem_solver)
             if isinstance(subproblem_solver, PersistentSolver):
                 set_instance_retry(subproblem, subproblem_solver, subproblem_fn_kwargs['scenario_name'])
