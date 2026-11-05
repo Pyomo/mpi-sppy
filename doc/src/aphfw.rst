@@ -42,9 +42,9 @@ What you need
   during the build.
 
 The build has been tested on Linux with GCC 14.3 (conda-forge), Open MPI
-5.0.8 with mpi4py 4.1.0, Gurobi 13.0.2, CPLEX 22.1.1 and HiGHS 1.15.1. Xpress support is
-in the code but has not been tested in this build, and neither has macOS
-or Windows.
+5.0.8 with mpi4py 4.1.0, Gurobi 13.0.2, CPLEX 22.1.1 and HiGHS 1.15.1. Xpress
+9.8.1 has been built and run on one unit commitment model only. macOS and
+Windows have not been tested.
 
 Building
 --------
