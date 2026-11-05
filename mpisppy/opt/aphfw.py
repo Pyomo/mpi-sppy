@@ -19,7 +19,6 @@ import json
 import logging
 import os
 import tempfile
-import time
 
 import numpy as np
 
@@ -299,15 +298,17 @@ class APHFWOpt(mpisppy.phbase.PHBase):
             if self._cpp.is_converged():
                 break
 
-            # --time-limit, checked as PH checks it: every hub rank must
-            # leave the loop together (the final Lagrangian reduces over the
-            # cylinder comm), hence the reduction.
-            time_limit = self.options.get("time_limit")
-            if time_limit is not None and self.allreduce_or(
-                    time.perf_counter() - self.start_time >= time_limit):
-                global_toc(f"Time limit {time_limit} seconds reached.",
-                           self.cylinder_rank == 0)
-                break
+            # --time-limit and --slurm-buffer-seconds, checked as PH checks
+            # them: every hub rank must leave the loop together (the final
+            # Lagrangian reduces over the cylinder comm), hence the reduction.
+            if self.options.get("time_limit") is not None \
+                    or self._slurm_deadline is not None:
+                stop_reason = self._local_time_limit_stop_reason()
+                if self.allreduce_or(stop_reason is not None):
+                    global_toc(stop_reason
+                               or "Soft time limit reached on another rank.",
+                               self.cylinder_rank == 0)
+                    break
 
         if has_extensions:
             self._sync_cpp_to_pyomo()

@@ -28,6 +28,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -699,6 +700,27 @@ class TestAphfwHubRun(unittest.TestCase):
         out = result.stdout + result.stderr
         self.assertEqual(result.returncode, 0, out[-3000:])
         self.assertIn("Time limit 0", out, out[-3000:])
+        lines = out.split("Statistics at termination")[-1].splitlines()
+        last_iter = int(lines[2].split("]")[1].split()[0])
+        self.assertEqual(last_iter, 1, out[-3000:])
+
+    def test_slurm_buffer_stops_the_hub(self):
+        # A job already past its end time stops the hub after cycle 1, as
+        # --time-limit 0 does in the test above.
+        argv = [sys.executable, "-m", "mpisppy.generic_cylinders",
+                *self._farmer_argv("--max-iterations", "50",
+                                   "--slurm-buffer-seconds", "0")[1:]]
+        env = dict(subprocess_env(), SLURM_JOB_END_TIME=str(time.time() - 1))
+        with tempfile.TemporaryDirectory() as tmpdir:  # for solver logs
+            try:
+                result = subprocess.run(
+                    argv, capture_output=True, text=True, timeout=300,
+                    check=False, env=env, cwd=tmpdir)
+            except subprocess.TimeoutExpired:
+                self.fail("the hub did not finish")
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out[-3000:])
+        self.assertIn("Slurm shutdown buffer of 0 seconds reached", out, out[-3000:])
         lines = out.split("Statistics at termination")[-1].splitlines()
         last_iter = int(lines[2].split("]")[1].split()[0])
         self.assertEqual(last_iter, 1, out[-3000:])
