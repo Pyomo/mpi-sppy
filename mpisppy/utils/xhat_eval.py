@@ -147,6 +147,9 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         if compute_val_at_nonant:
             self.objs_dict={}
 
+        if self.extensions is not None:
+            self.extobject.pre_solve_loop()
+
         for k,s in self.local_scenarios.items():
             if tee:
                 print(f"Tee solve for {k} on global rank {self.global_rank}")
@@ -161,6 +164,9 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                 compute_val_at_nonant=compute_val_at_nonant,
                                               warmstart=warmstart,
                                               )
+
+        if self.extensions is not None:
+            self.extobject.post_solve_loop()
 
         if dtiming:
             all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_time, root=0)
