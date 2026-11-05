@@ -1470,7 +1470,7 @@ jobs:
         if: matrix.mpi4py == 'mpi4py'
         timeout-minutes: 5
         run: |
-          CC=mpicc python -m pip install --force-reinstall --no-deps \
+          CC=mpicc python -m pip install --verbose --force-reinstall --no-deps \
             --no-build-isolation --no-cache-dir \
             "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz
 
