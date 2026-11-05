@@ -19,7 +19,9 @@ get_solver() finds, unless $MPISPPY_APHFW_TEST_SOLVER names one; the driver
 scripts use that variable too, else Pyomo's gurobi.  A solver named there that
 is not available is an error, not a skip.
 """
+import contextlib
 import importlib.util
+import io
 import os
 import runpy
 import shutil
@@ -87,6 +89,36 @@ class TestAphfwOptional(unittest.TestCase):
         with patch.dict(sys.modules, {"aphfw_cpp": None}):
             with self.assertRaisesRegex(RuntimeError, "python -m mpisppy.aphfw_cpp.build"):
                 _import_aphfw_cpp()
+
+    def test_module_without_solver_name_is_refused(self):
+        # A module built before it reported its solver.
+        from types import SimpleNamespace
+
+        from mpisppy.opt.aphfw import _import_aphfw_cpp
+        old = SimpleNamespace(__file__="old_aphfw_cpp.so")
+        with patch.dict(sys.modules, {"aphfw_cpp": old}):
+            with self.assertRaisesRegex(RuntimeError, "old_aphfw_cpp.so.*Rebuild"):
+                _import_aphfw_cpp()
+
+    def test_report_cpp_solver(self):
+        import mpisppy.opt.aphfw as aphfw_module
+        for cpp_solver, name, warns in (
+                ("gurobi", "gurobi", False),
+                ("gurobi", "gurobi_persistent", False),
+                ("highs", "appsi_highs", False),
+                ("xpress", "xpress_persistent", False),
+                ("highs", "xpress_persistent", True),
+                ("cplex", "gurobi", True),
+                ("cplex", None, False)):
+            with self.subTest(cpp_solver=cpp_solver, name=name):
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out), \
+                        patch.object(aphfw_module.logger, "warning") as warning:
+                    aphfw_module._report_cpp_solver(cpp_solver, name)
+                self.assertIn(f"built for {cpp_solver}", out.getvalue())
+                self.assertEqual(warning.called, warns)
+                if warns:
+                    self.assertIn(name, warning.call_args[0][0])
 
     def test_build_help_without_sources(self):
         # A pip-installed mpi-sppy has no aphfw_cpp sources to build from.
@@ -560,6 +592,23 @@ class TestAphfwHubRun(unittest.TestCase):
         ]
         with patch.object(sys, "argv", argv):
             runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
+
+    def test_run_prints_the_built_solver(self):
+        import aphfw_cpp
+        argv = [
+            "generic_cylinders",
+            "--module-name", "mpisppy.tests.examples.farmer",
+            "--num-scens", "3",
+            "--solver-name", solver_name,
+            "--aphfw-hub",
+            "--default-rho", "1",
+            "--max-iterations", "1",
+        ]
+        out = io.StringIO()
+        with patch.object(sys, "argv", argv), contextlib.redirect_stdout(out):
+            runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
+        self.assertIn(f"aphfw_cpp was built for {aphfw_cpp.solver_name}",
+                      out.getvalue())
 
     def test_no_fw_writes_prox_json(self):
         # Under --aphfw-no-fw the hub writes prox.json (the --iterk-mipgap

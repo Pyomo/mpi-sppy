@@ -59,7 +59,25 @@ def _import_aphfw_cpp():
         import aphfw_cpp
     except ImportError as e:
         raise RuntimeError(f"{_build_help()}\n(import failed: {e})") from e
+    if not hasattr(aphfw_cpp, "solver_name"):
+        raise RuntimeError(
+            f"The aphfw_cpp module at {aphfw_cpp.__file__} is older than this "
+            "mpi-sppy. Rebuild it with python -m mpisppy.aphfw_cpp.build.")
     return aphfw_cpp
+
+
+def _report_cpp_solver(cpp_solver, solver_name):
+    """Say which solver the hub's solves use, and warn if --solver-name
+    names another one (allowed: it still applies to the spokes)."""
+    global_toc(f"FW-APH hub: aphfw_cpp was built for {cpp_solver}, "
+               "which does the hub's solves.")
+    # Substring, since cpp_solver is a family: appsi_highs, gurobi_persistent.
+    if solver_name and cpp_solver not in solver_name:
+        logger.warning(
+            f"--solver-name is {solver_name}, but aphfw_cpp was built for "
+            f"{cpp_solver}, so {solver_name} applies only to the spokes. To "
+            "use another solver in the hub, rebuild with "
+            "python -m mpisppy.aphfw_cpp.build --solver <solver>.")
 
 
 # Options that steer only the Frank-Wolfe solves.  Under --aphfw-no-fw they
@@ -163,7 +181,11 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         self._write_scenario_files()
 
         # 3. Initialize C++ with cylinder_comm + file paths
-        self._cpp = _import_aphfw_cpp().APHFWLibrary()
+        aphfw_cpp = _import_aphfw_cpp()
+        if self.cylinder_rank == 0:
+            _report_cpp_solver(aphfw_cpp.solver_name,
+                               self._get_option("solver_name", None))
+        self._cpp = aphfw_cpp.APHFWLibrary()
 
         # Set explicit scenario names so C++ matches our rank assignment
         local_names = list(self.local_scenarios.keys())

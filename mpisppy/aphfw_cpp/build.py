@@ -230,13 +230,15 @@ def _loaded_libmpi(module):
 def check_install():
     """Import the new module in a fresh interpreter and compare its libmpi."""
     res = subprocess.run([sys.executable, "-c",
-                          "import aphfw_cpp; print(aphfw_cpp.__file__)"],
+                          "import aphfw_cpp; print(aphfw_cpp.__file__); "
+                          "print(aphfw_cpp.solver_name)"],
                          capture_output=True, text=True,
                          cwd=os.path.expanduser("~"))
     if res.returncode != 0:
         raise BuildError("The build finished but aphfw_cpp does not import:\n"
                          + res.stderr.strip())
-    print(f"aphfw_cpp installed at {res.stdout.strip()}")
+    path, solver = res.stdout.splitlines()[-2:]
+    print(f"aphfw_cpp installed at {path}, built for {solver}")
     ours, theirs = _loaded_libmpi("aphfw_cpp"), _loaded_libmpi("mpi4py.MPI")
     if ours is None or theirs is None:
         print("(not Linux: did not check that aphfw_cpp and mpi4py share "

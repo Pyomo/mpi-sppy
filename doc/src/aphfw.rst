@@ -86,7 +86,7 @@ solver. ``python -m mpisppy.aphfw_cpp.build --help`` lists the options.
 
 A successful build ends with lines like::
 
-   aphfw_cpp installed at .../site-packages/aphfw_cpp.cpython-311-x86_64-linux-gnu.so
+   aphfw_cpp installed at .../site-packages/aphfw_cpp.cpython-311-x86_64-linux-gnu.so, built for gurobi
    aphfw_cpp and mpi4py both load .../lib/libmpi.so.40.40.7
 
 The installed module records where the solver and MPI libraries are, so it
@@ -190,9 +190,11 @@ Select the hub with ``--aphfw-hub`` in ``generic_cylinders`` (see
        --max-iterations 50 --lagrangian --xhatshuffle --rel-gap 0.001
 
 The hub's subproblems are solved in C++ by the solver the module was built
-for. ``--solver-name`` is still needed, for the spokes; it may name a
-different solver. The C++ solves take only a MIP gap, a time limit and a
-thread count, set by these options:
+for, and each run prints which one that is. ``--solver-name`` is still
+needed, for the spokes; it may name a different solver, in which case the
+run logs a warning. To change the hub's solver, build the module again (see
+`Building`_). The C++ solves take only a MIP gap, a time limit and a thread
+count, set by these options:
 
 .. list-table:: Settings for the hub's C++ solves
    :widths: 30 20 50

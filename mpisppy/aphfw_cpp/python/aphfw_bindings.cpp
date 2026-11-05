@@ -364,6 +364,20 @@ private:
 PYBIND11_MODULE(aphfw_cpp, m) {
     m.doc() = "C++ FW-APH algorithm for mpi-sppy integration";
 
+    // The solver this build does its solves with; the module is built for
+    // exactly one.  Same names as build.py's --solver.
+#if defined(USE_GUROBI)
+    m.attr("solver_name") = "gurobi";
+#elif defined(USE_CPLEX)
+    m.attr("solver_name") = "cplex";
+#elif defined(USE_XPRESS)
+    m.attr("solver_name") = "xpress";
+#elif defined(USE_HIGHS)
+    m.attr("solver_name") = "highs";
+#else
+#error "aphfw_cpp must be built for one of Gurobi, CPLEX, Xpress or HiGHS"
+#endif
+
     py::class_<APHFWLibrary>(m, "APHFWLibrary")
         .def(py::init<>())
         .def("init", &APHFWLibrary::init,
