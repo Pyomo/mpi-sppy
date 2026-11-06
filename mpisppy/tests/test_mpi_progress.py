@@ -64,6 +64,30 @@ class TestMPIProgressCompatibility(unittest.TestCase):
 
 
 @unittest.skipUnless(
+    os.environ.get("MPISPPY_MPI_PROGRESS_THREAD") == "1",
+    "requires an enabled progress worker",
+)
+class TestEnabledMPIProgress(unittest.TestCase):
+    def test_nested_context_and_exception_cleanup(self):
+        from mpisppy import MPI
+
+        controller = MPI._progress_controller
+        before = controller.active_count
+        try:
+            with MPI.progress_active():
+                self.assertEqual(controller.active_count, before + 1)
+                with MPI.progress_active():
+                    self.assertEqual(controller.active_count, before + 2)
+                    time.sleep(0.03)
+                self.assertEqual(controller.active_count, before + 1)
+                raise ValueError("compute failed")
+        except ValueError:
+            pass
+        self.assertEqual(controller.active_count, before)
+        self.assertTrue(controller.thread.is_alive())
+
+
+@unittest.skipUnless(
     os.environ.get("MPISPPY_EXPECT_PROGRESS_WORKER"),
     "requires a progress worker installation",
 )
@@ -87,24 +111,6 @@ class TestInstalledMPIProgress(unittest.TestCase):
         )
         checkout = Path(os.environ["MPISPPY_CHECKOUT"]).resolve()
         self.assertFalse(Path(mpisppy.__file__).resolve().is_relative_to(checkout))
-
-    def test_nested_context_and_exception_cleanup(self):
-        from mpisppy import MPI
-
-        controller = MPI._progress_controller
-        before = controller.active_count
-        try:
-            with MPI.progress_active():
-                self.assertEqual(controller.active_count, before + 1)
-                with MPI.progress_active():
-                    self.assertEqual(controller.active_count, before + 2)
-                    time.sleep(0.03)
-                self.assertEqual(controller.active_count, before + 1)
-                raise ValueError("compute failed")
-        except ValueError:
-            pass
-        self.assertEqual(controller.active_count, before)
-        self.assertTrue(controller.thread.is_alive())
 
 
 if __name__ == "__main__":

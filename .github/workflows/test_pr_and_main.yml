@@ -1655,6 +1655,7 @@ jobs:
 
       - name: run unit tests
         run: |
+          set -e
           coverage run $COV_ARGS -m pytest -v \
             mpisppy/tests/test_sputils.py \
             mpisppy/tests/test_config.py \
@@ -1701,6 +1702,9 @@ jobs:
             mpisppy/tests/test_slammer.py \
             mpisppy/tests/test_dual_certificate.py \
             mpisppy/tests/test_certified_outer_bound.py
+
+          env -u MVAPICH_ASYNC_PROGRESS MPISPPY_MPI_PROGRESS_THREAD=1 \
+            coverage run $COV_ARGS -m pytest -q mpisppy/tests/test_mpi_progress.py
 
       - name: Upload coverage data
         if: always()
