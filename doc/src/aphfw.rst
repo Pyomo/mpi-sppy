@@ -128,6 +128,8 @@ Pyomo's ``gurobi`` and the others the first of CPLEX, Gurobi and Xpress
 that Pyomo can use. A solver named in the variable that Pyomo cannot use
 is an error, not a skip.
 
+.. _aphfw_testing:
+
 The C++ tests
 ^^^^^^^^^^^^^
 

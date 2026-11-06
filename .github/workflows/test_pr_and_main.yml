@@ -1821,7 +1821,7 @@ jobs:
           # cxx-compiler: the C++ needs C++23 (GCC 13 or later)
           conda install openmpi mpi4py "highs=1.15" cxx-compiler cmake pybind11 setuptools
           # highspy is for appsi_highs, the solver on the Python side
-          pip install pyomo highspy
+          pip install pyomo highspy gcovr
 
       - name: setup the program
         run: |
@@ -1829,14 +1829,18 @@ jobs:
 
       - name: Build aphfw_cpp for HiGHS
         run: |
-          python -m mpisppy.aphfw_cpp.build --solver highs --solver-home "$CONDA_PREFIX"
+          # build-dir: gcov needs the .gcno files the compiler leaves there,
+          # and a pip build otherwise uses a temporary directory.
+          python -m mpisppy.aphfw_cpp.build --solver highs --solver-home "$CONDA_PREFIX" -- \
+              -C cmake.define.APHFW_COVERAGE=ON -C build-dir="$PWD/aphfw_pip_build"
 
       - name: Test aphfw_cpp (C++ tests)
         run: |
           cmake -S mpisppy/aphfw_cpp -B aphfw_build -DUSE_HIGHS=ON \
               -DHIGHS_HOME="$CONDA_PREFIX" -DCMAKE_CXX_COMPILER="$CONDA_PREFIX/bin/mpicxx" \
               -DPython3_EXECUTABLE="$(which python)" \
-              -Dpybind11_DIR="$(python -m pybind11 --cmakedir)" -DAPHFW_BUILD_TESTS=ON
+              -Dpybind11_DIR="$(python -m pybind11 --cmakedir)" -DAPHFW_BUILD_TESTS=ON \
+              -DAPHFW_COVERAGE=ON
           cmake --build aphfw_build --parallel
           ctest --test-dir aphfw_build --output-on-failure
 
@@ -1852,6 +1856,31 @@ jobs:
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
           include-hidden-files: true
+
+      - name: C++ coverage report
+        if: always()
+        run: |
+          mkdir -p cpp-coverage-html
+          gcovr --root . aphfw_build aphfw_pip_build \
+              --gcov-executable "$CONDA_PREFIX/bin/x86_64-conda-linux-gnu-gcov" \
+              --filter 'mpisppy/aphfw_cpp/' \
+              --exclude 'mpisppy/aphfw_cpp/tests/' \
+              --exclude '.*/CLI11\.hpp' --exclude '.*/json\.hpp' \
+              --cobertura coverage-cpp.xml \
+              --html-details cpp-coverage-html/index.html \
+              --txt -
+
+      # Not in the coverage-* artifacts: coverage-report merges those into its
+      # workspace, and the Python report has no use for this one.
+      - name: Upload C++ coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpp-coverage
+          path: |
+            coverage-cpp.xml
+            cpp-coverage-html/
+          if-no-files-found: ignore
 
   coverage-report:
     name: Coverage Report
@@ -1918,5 +1947,25 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           files: coverage.xml
+          disable_search: true
+          flags: python
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      # Absent if aphfw-highs could not build, which that job already reports.
+      - name: Download C++ coverage
+        id: cpp_coverage
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: cpp-coverage
+
+      - name: Upload C++ coverage to Codecov
+        if: steps.cpp_coverage.outcome == 'success' && hashFiles('coverage-cpp.xml') != ''
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage-cpp.xml
+          disable_search: true
+          flags: cpp
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}

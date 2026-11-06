@@ -29,6 +29,16 @@ option(USE_CPLEX     "Build CPLEX-enabled binaries"  OFF)
 option(USE_XPRESS    "Build XPRESS-enabled binaries" OFF)
 option(USE_HIGHS     "Build HiGHS-enabled binaries"  OFF)
 option(NODEBUGPRINT  "Disable debug prints"           OFF)
+option(APHFW_COVERAGE "Instrument the C++ for gcov"   OFF)
+
+# -O0 comes after CMAKE_CXX_FLAGS_RELEASE on the compile line, so it wins.
+# pybind11_add_module turns on link-time optimization unless this variable is
+# set; it would merge the module's code across source lines.
+if(APHFW_COVERAGE)
+    add_compile_options(--coverage -O0 -g)
+    add_link_options(--coverage)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
+endif()
 
 # Don't allow multiple solvers at once
 set(_SOLVER_COUNT 0)
