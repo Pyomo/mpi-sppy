@@ -1473,6 +1473,7 @@ jobs:
           CC=mpicc python -m pip install --verbose --force-reinstall --no-deps \
             --no-build-isolation --no-cache-dir \
             "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz
+          python -c 'from mpi4py import MPI; import mpisppy._mpi_progress_worker'
 
       - name: Check native MPI progress worker
         if: matrix.mpi4py == 'mpi4py'

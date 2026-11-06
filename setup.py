@@ -155,6 +155,8 @@ const char *mpisppy_mpi_build_signature(size_t *comm_size,
                     "MPI compiler probe failed; using the Python MPI progress "
                     f"worker ({type(exc).__name__}: {exc})"
                 )
+                # clear any previous build that was left behind
+                Path(self.get_ext_fullpath(extension.name)).unlink(missing_ok=True)
                 self.extensions.clear()
                 self.distribution.ext_modules.clear()
                 return
