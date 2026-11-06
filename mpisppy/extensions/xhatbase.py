@@ -11,11 +11,70 @@ import re
 
 import pyomo.environ as pyo
 
-# NOTE: a caller attaches the comms (e.g. pre_iter0)
 import mpisppy.extensions.extension
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.w_utils.wxbarutils as wxbarutils
 from mpisppy import MPI
+
+# NOTE: a caller attaches the comms (e.g. pre_iter0)
+
+_STAGE2EF_UNSUPPORTED_EXTENSION_HOOKS = (
+    "pre_solve",
+    "solve_subproblem",
+    "post_solve",
+    "pre_solve_loop",
+    "post_solve_loop",
+)
+
+
+def _stage2ef_extension_hook_overrides(extobject):
+    """Return unsupported solver-hook overrides on leaf extensions.
+
+    The direct stage-2 EF route creates and solves aggregate EFs itself; it
+    bypasses SPOpt.solve_loop and SPOpt.solve_one, so none of their extension
+    hooks can be honored. Containers such as MultiExtension override hooks
+    only to dispatch them, so inspect their leaves rather than rejecting the
+    container itself.
+    """
+    children = getattr(extobject, "extdict", None)
+    if children is not None:
+        overrides = []
+        for child in children.values():
+            overrides.extend(_stage2ef_extension_hook_overrides(child))
+        return overrides
+
+    base = mpisppy.extensions.extension.Extension
+    hooks = [
+        hook for hook in _STAGE2EF_UNSUPPORTED_EXTENSION_HOOKS
+        if getattr(type(extobject), hook) is not getattr(base, hook)
+    ]
+    return [(type(extobject).__name__, hooks)] if hooks else []
+
+
+def _validate_stage2ef_extension_hooks(opt):
+    """Fail before a direct stage-2 EF silently skips solver callbacks."""
+    if opt.extensions is None:
+        return
+    # While SPOpt is constructing its extension, ``self.extensions(self)``
+    # runs before the resulting object is assigned to ``self.extobject``.
+    # XhatBase can itself be that extension (or a MultiExtension leaf), so
+    # defer validation during that construction window. The _try_one guard
+    # runs again before the direct stage-2 EF route mutates candidate state.
+    extobject = getattr(opt, "extobject", None)
+    if extobject is None:
+        return
+    overrides = _stage2ef_extension_hook_overrides(extobject)
+    if not overrides:
+        return
+    details = "; ".join(
+        f"{class_name}: {', '.join(hooks)}"
+        for class_name, hooks in overrides
+    )
+    raise RuntimeError(
+        "The direct stage-2 EF xhat route does not support solver lifecycle "
+        f"extension hooks ({details}). Remove those callbacks or do not set "
+        "stage2_ef_solver_name."
+    )
 
 
 def pack_no_good_feasibility_cut(opt):
@@ -104,6 +163,8 @@ class XhatBase(mpisppy.extensions.extension.Extension):
 
     def __init__(self, opt):
         super().__init__(opt)
+        if opt.options.get("stage2_ef_solver_name") is not None:
+            _validate_stage2ef_extension_hooks(opt)
         self.cylinder_rank = self.opt.cylinder_rank
         self.n_proc = self.opt.n_proc
         self.verbose = self.opt.options["verbose"]
@@ -135,6 +196,9 @@ class XhatBase(mpisppy.extensions.extension.Extension):
         NOTE:
              the stage2ef stuff is a little bit hacked-in
         """
+        if stage2_ef_solver_name is not None:
+            _validate_stage2ef_extension_hooks(self.opt)
+
         xhats = dict()  # to pass to _fix_nonants
         self.opt._save_nonants()  # (BTW: for all local scenarios)
 
