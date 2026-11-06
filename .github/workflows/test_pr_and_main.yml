@@ -1346,7 +1346,7 @@ jobs:
           conda-remove-defaults: "true"
       - name: Install dependencies
         run: |
-          conda install ${{ matrix.mpi }} "${{ matrix.mpi4py }}" "numpy" setuptools
+          conda install ${{ matrix.mpi }} "${{ matrix.mpi4py }}" "numpy" setuptools c-compiler
           pip install cplex "xpress<10"
 
       - name: setup the program
@@ -1473,6 +1473,7 @@ jobs:
           CC=mpicc python -m pip install --verbose --force-reinstall --no-deps \
             --no-build-isolation --no-cache-dir \
             "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz
+          cd "$RUNNER_TEMP"
           python -c 'from mpi4py import MPI; import mpisppy._mpi_progress_worker'
 
       - name: Check native MPI progress worker
