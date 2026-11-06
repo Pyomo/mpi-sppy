@@ -521,14 +521,16 @@ class StandardL1CutGenerator:
         if isinstance(solver, PersistentSolver):
             for con in added_constraints:
                 solver.add_constraint(con)
-            res = solver.solve(tee=False, load_solutions=False, save_results=False)
+            with MPI.progress_active():
+                res = solver.solve(tee=False, load_solutions=False, save_results=False)
             if res.solver.termination_condition not in allowed:
                 return res
             if res.solver.termination_condition in self._optimal_tc:
                 solver.load_vars()
                 solver.load_duals()
         else:
-            res = solver.solve(model, tee=False, load_solutions=False)
+            with MPI.progress_active():
+                res = solver.solve(model, tee=False, load_solutions=False)
             if res.solver.termination_condition in self._optimal_tc:
                 model.solutions.load_from(res)
         return res
