@@ -1464,7 +1464,7 @@ jobs:
         env:
           MPISPPY_MPI_PROGRESS_THREAD: "1"
           MPISPPY_CHECKOUT: ${{ github.workspace }}
-        run: bash "$GITHUB_WORKSPACE/ci/run_mpi_progress_checks.sh" python
+        run: bash "$GITHUB_WORKSPACE/.github/workflows/run_mpi_progress_checks.sh" python
 
       - name: Install matching native progress worker
         if: matrix.mpi4py == 'mpi4py'
@@ -1482,7 +1482,7 @@ jobs:
         env:
           MPISPPY_MPI_PROGRESS_THREAD: "1"
           MPISPPY_CHECKOUT: ${{ github.workspace }}
-        run: bash "$GITHUB_WORKSPACE/ci/run_mpi_progress_checks.sh" native
+        run: bash "$GITHUB_WORKSPACE/.github/workflows/run_mpi_progress_checks.sh" native
 
       - name: Upload coverage data
         if: always()
