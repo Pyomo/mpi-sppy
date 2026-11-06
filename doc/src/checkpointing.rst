@@ -499,14 +499,16 @@ Under the default ``dill-reload`` backend a checkpoint holds a serialized copy
 of every local scenario model, which for large MIPs is not small.
 
 Publication is atomic: the new generation is staged, moved into place, and only
-then does a manifest rewrite commit it. A run killed at any point leaves a
-complete, resumable checkpoint referenced -- never a half-written one -- and
-the next successful write reclaims anything the interrupted one left behind.
+then does a manifest rewrite commit it. An interrupted checkpoint write leaves
+the previous complete checkpoint referenced, never a half-written one, and the
+next successful write reclaims anything the interrupted one left behind.
 
-Use one checkpoint directory per run. Two runs sharing one share a manifest and
-will overwrite each other. A run that is not resuming from its own
-``--checkpoint-dir`` removes the ``spokes/`` files an earlier run left there,
-so a later resume cannot pick up another study's incumbent or dual weights.
+Use separate checkpoint directories for runs that overlap. A fresh run may
+reuse an earlier run's ``--checkpoint-dir``: at startup it removes the earlier
+manifest and the ``hub/`` and ``spokes/`` files. If it stops before its first
+checkpoint write, a later ``--resume-from`` reports that no checkpoint exists,
+rather than loading the earlier run. Resuming from the same directory preserves
+its checkpoint files.
 
 Cylinders that span several ranks
 ---------------------------------
@@ -607,6 +609,14 @@ The shipped convergers need nothing carried: each either recomputes what it
 compares from the current iterate or, like the primal-dual converger, rebuilds
 it correctly from the resumed models.
 
+``--cross-scenario-cuts`` keeps its cuts and the bounds and counters that decide
+when it checks the outer bound. The cut spoke is not checkpointed and starts
+over on a resume, so new cuts arrive at other iterations than in the
+uninterrupted run, and the outer bound is valid but need not follow that run's.
+``generic_cylinders`` does not accept ``--cross-scenario-cuts``, and the shipped
+drivers that do (such as ``examples/netdes/netdes_cylinders.py``) do not register the
+checkpoint options, so using the two together takes a driver of your own.
+
 The two fixers driven by a spoke, ``--rc-fixer`` (with ``--reduced-costs``) and
 ``--relaxed-ph-fixer``, carry their own state too, and a resumed run using
 either continues correctly from the right models, but neither is promised to
@@ -649,8 +659,8 @@ Two things this does not cover:
   decided" look the same, and the second one is a run that quietly stops
   retracing an uninterrupted one.
 
-  One shipped extension keeps state and does not carry it yet, so a
-  checkpointed run refuses it: ``CrossScenarioExtension``.
+  Every shipped extension implements both methods, so a checkpointed run
+  refuses none of them.
 * **A converger is held to the same rule.** It implements
   ``checkpoint_state()``/``restore_state(state)``, as a no-op pair if it keeps
   no state, or a checkpointed run refuses it at startup. That matters more than
