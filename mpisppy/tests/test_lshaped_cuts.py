@@ -111,5 +111,41 @@ class TestSetLSIndexing(unittest.TestCase):
         self.assertEqual(bender._subproblem_ndx_map, {0: 0})
 
 
+@unittest.skipUnless(bc.mpi4py_available and bc.numpy_available,
+                     "LShapedCutGenerator requires mpi4py and numpy")
+class TestSolverWithoutName(unittest.TestCase):
+    """The APPSI solver interfaces have no name attribute (issue #954)."""
+
+    def _make_bender(self, solver_name):
+        ls = _FakeLShaped(["scen0"], ["scen0"])
+        ls.root.x = pyo.Var(initialize=1.0)
+        ls.root.eta["scen0"].set_value(0.0)
+        ls.root.bender = LShapedCutGenerator()
+        ls.root.bender.set_input(root_vars=[ls.root.x], tol=1e-8)
+        ls.root.bender.set_ls(ls)
+
+        def subproblem_fn(scenario_name):
+            m = pyo.ConcreteModel()
+            m.x = pyo.Var()
+            m.obj = pyo.Objective(expr=m.x)
+            return m, pyo.ComponentMap([(ls.root.x, m.x)])
+
+        ls.root.bender.add_subproblem(
+            subproblem_fn, {"scenario_name": "scen0"}, ls.root.eta["scen0"],
+            subproblem_solver=solver_name)
+        return ls.root.bender
+
+    def test_solver_is_given_the_name_it_was_requested_by(self):
+        bender = self._make_bender("appsi_highs")
+        self.assertEqual(bender.subproblem_solvers[0].name, "appsi_highs")
+
+    def test_solver_with_no_sign_convention_gets_a_clear_error(self):
+        # The sign check comes before the solve, so appsi_cbc need not be
+        # installed.
+        bender = self._make_bender("appsi_cbc")
+        with self.assertRaisesRegex(NotImplementedError, "appsi_cbc"):
+            bender.generate_cut()
+
+
 if __name__ == "__main__":
     unittest.main()

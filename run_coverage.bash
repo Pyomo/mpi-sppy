@@ -76,6 +76,8 @@ run_phase "test_lshaped_standard_l1 (serial)" \
     
 run_phase "test_solver_log_dir (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_solver_log_dir.py -v
+run_phase "test_lshaped_cuts_highs (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_lshaped_cuts_highs.py -v
 
 run_phase "test_cvar (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_cvar.py -v
