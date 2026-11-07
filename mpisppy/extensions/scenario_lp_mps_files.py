@@ -11,6 +11,7 @@ the nonant structure for each scenario (yes, for two stage problems this
 json file will be the same for all scenarios.) The FW-APH hub calls
 write_scenario_files directly, without the extension.
 """
+import contextlib
 import json
 import os
 
@@ -24,15 +25,58 @@ def lpize(varname):
     return pyomo_label.cpxlp_label_from_name(varname)
 
 
+@contextlib.contextmanager
+def _fixed_nonants_as_bounds(s):
+    """Pyomo's writers leave fixed variables out of the file, but the json
+    lists every nonant.  While the files are written, each fixed nonant is
+    unfixed with both bounds set to its value, so it is written as a column
+    with lb = ub; on exit it is fixed again with its own bounds."""
+    changed = []
+    try:
+        for nd in s._mpisppy_node_list:
+            for var in nd.nonant_vardata_list:
+                if not var.fixed:
+                    continue
+                if var.value is None:
+                    raise ValueError(f"Scenario_lp_mps_files: nonant {var.name}"
+                                     f" in {s.name} is fixed but has no value")
+                changed.append((var, var.lower, var.upper))
+                var.unfix()
+                var.setlb(var.value)
+                var.setub(var.value)
+        yield
+    finally:
+        for var, lower, upper in changed:
+            var.setlb(lower)
+            var.setub(upper)
+            var.fix()
+
+
+def _write_checked(s, fname):
+    """Write s to fname and raise if a nonant is not in the file (Pyomo
+    writes only variables that appear in an active constraint or the
+    objective)."""
+    _, smap_id = s.write(fname, io_options={'symbolic_solver_labels': True})
+    written = s.solutions.symbol_map[smap_id].byObject
+    s.solutions.delete_symbol_map(smap_id)
+    missing = [var.name for nd in s._mpisppy_node_list
+               for var in nd.nonant_vardata_list if id(var) not in written]
+    if missing:
+        raise RuntimeError(f"Scenario_lp_mps_files: nonants not written to"
+                           f" {fname} because they appear in no active"
+                           f" constraint or objective: {missing}")
+
+
 def write_scenario_files(ph, dirname, cfg=None, write_lp=True):
     """Write the files that describe ph's scenarios on this rank to the
     existing directory dirname. cfg supplies default_rho when the scenarios
     have no rhos.
     """
     for k, s in ph.local_scenarios.items():
-        if write_lp:
-            s.write(os.path.join(dirname, f"{k}.lp"), io_options={'symbolic_solver_labels': True})
-        s.write(os.path.join(dirname, f"{k}.mps"), io_options={'symbolic_solver_labels': True})
+        with _fixed_nonants_as_bounds(s):
+            if write_lp:
+                _write_checked(s, os.path.join(dirname, f"{k}.lp"))
+            _write_checked(s, os.path.join(dirname, f"{k}.mps"))
         scenData = {"name": s.name, "scenProb": s._mpisppy_probability} 
         scenDict = {"scenarioData": scenData}
         treeData = {"globalNodeCount": len(ph.all_nodenames)}
