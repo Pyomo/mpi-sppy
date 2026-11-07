@@ -1590,12 +1590,14 @@ jobs:
           coverage run $COV_ARGS -m pytest -v \
             mpisppy/tests/test_sputils.py \
             mpisppy/tests/test_config.py \
+            mpisppy/tests/test_slurm_time_limit.py \
             mpisppy/tests/test_log.py \
             mpisppy/tests/test_listener_util.py \
             mpisppy/tests/test_scenario_tree.py \
             mpisppy/tests/test_nice_join.py \
             mpisppy/tests/test_solver_spec.py \
             mpisppy/tests/test_extensions.py \
+            mpisppy/tests/test_xhat_eval_solve_loop.py \
             mpisppy/tests/test_xhatxbar.py \
             mpisppy/tests/test_final_xhat.py \
             mpisppy/tests/test_aph_hub.py \

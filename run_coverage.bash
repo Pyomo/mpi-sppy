@@ -255,6 +255,7 @@ run_phase "serial unit tests (serial)" \
     coverage run --rcfile=.coveragerc -m pytest -v \
         mpisppy/tests/test_sputils.py \
         mpisppy/tests/test_config.py \
+        mpisppy/tests/test_slurm_time_limit.py \
         mpisppy/tests/test_log.py \
         mpisppy/tests/test_listener_util.py \
         mpisppy/tests/test_scenario_tree.py \

@@ -178,6 +178,23 @@ class FWPH(mpisppy.phbase.PHBase):
                         # s._solver_plugin.update_var(v)
                 s.del_component("_relaxed_integer_vars")
             self.options["PHIterLimit"] = total_iterations
+
+            # PHBase's LP loop can return because either the ordinary time
+            # limit or the Slurm-derived deadline was reached. Restoring the
+            # integer domains above is required cleanup, but the crossover is
+            # another potentially long solve and must not start afterwards.
+            if self._is_timed_out():
+                global_toc(
+                    self._local_time_limit_stop_reason()
+                    or "Soft time limit reached on another rank.",
+                    self.cylinder_rank == 0,
+                )
+                if finalize:
+                    weight_dict = self._gather_weight_dict()
+                    xbars_dict = self._get_xbars()
+                    return self._PHIter, weight_dict, xbars_dict
+                return self._PHIter
+
             self._PHIter -= 1
 
             global_toc("Finished LP PH; Starting FW PH crossover")
@@ -280,7 +297,11 @@ class FWPH(mpisppy.phbase.PHBase):
                     break
 
             if (self._is_timed_out()):
-                global_toc(f"Time limit {self.options['time_limit']} seconds reached.", self.cylinder_rank == 0)
+                global_toc(
+                    self._local_time_limit_stop_reason()
+                    or "Soft time limit reached on another rank.",
+                    self.cylinder_rank == 0,
+                )
                 break
 
             self.fwph_solve_loop(
@@ -970,7 +991,9 @@ class FWPH(mpisppy.phbase.PHBase):
         return number_points
 
     def _is_timed_out(self):
-        return self.allreduce_or( (time.perf_counter() - self.start_time) >= self.options["time_limit"] )
+        return self.allreduce_or(
+            self._local_time_limit_stop_reason() is not None
+        )
 
     def _options_checks_fw(self):
         ''' Name                Boland notation (Algorithm 2)
