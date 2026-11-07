@@ -78,6 +78,26 @@ The ``--python-args`` flag can appear anywhere on the command line and is
 stripped before the script's own positional argument parsing runs, so it does
 not interfere with existing arguments like ``solver_name`` or ``mpiexec_arg``.
 
+C++ Coverage of ``aphfw_cpp``
+-----------------------------
+
+The compiled FW-APH hub is measured with ``gcov``, separately from the Python.
+CI's ``aphfw-highs`` job builds it for HiGHS with ``-DAPHFW_COVERAGE=ON``, runs
+its tests, and uploads the result to Codecov under the flag ``cpp`` (the Python
+is under the flag ``python``). The same job keeps an HTML report as the
+``cpp-coverage`` artifact. Only the code compiled for HiGHS is in the report: the
+CPLEX, Gurobi and Xpress interfaces are not built there.
+
+To do this locally, add ``-DAPHFW_COVERAGE=ON`` to the ``cmake`` command in
+:ref:`the FW-APH testing notes <aphfw_testing>`, run ``ctest``, and then, from
+the top of the repository, with the ``gcov`` that belongs to your compiler:
+
+.. code-block:: bash
+
+   gcovr --root . <builddir> --filter 'mpisppy/aphfw_cpp/' \
+       --exclude 'mpisppy/aphfw_cpp/tests/' \
+       --exclude '.*/CLI11\.hpp' --exclude '.*/json\.hpp' --txt -
+
 Tips
 ----
 

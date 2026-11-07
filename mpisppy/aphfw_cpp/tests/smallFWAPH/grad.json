@@ -1,0 +1,5 @@
+{
+    "mipGap": 0.0001,
+    "timeLimit": 120.0,
+    "threads": 4
+}

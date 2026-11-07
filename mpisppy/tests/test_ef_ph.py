@@ -467,7 +467,7 @@ class Test_sizes(unittest.TestCase):
         with open(os.path.join(tdir, "Scenario1_nonants.json")) as jfile:
             nonants_by_node = json.load(jfile)
         # vname is first name in the file            
-        vname = nonants_by_node["treeData"]["ROOT"]["nonAnts"][0]
+        vname = nonants_by_node["treeData"]["nodes"]["ROOT"]["nonAnts"][0]
         gotit = False
         with open(os.path.join(tdir, "Scenario1.lp")) as lpfile:
             for line in lpfile:

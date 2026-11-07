@@ -1,0 +1,48 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
+# pip build of the aphfw_cpp module, the compiled FW-APH hub for mpi-sppy.
+#
+# In mpi-sppy this directory is mpisppy/aphfw_cpp, and the module is optional:
+# mpi-sppy's own install compiles nothing.  python -m mpisppy.aphfw_cpp.build
+# builds and installs it with checks; the raw form names the solver and its
+# home, e.g. for Gurobi:
+#
+#   CXX=mpicxx pip install ./mpisppy/aphfw_cpp \
+#     -C cmake.define.USE_GUROBI=ON -C cmake.define.GUROBI_HOME=/path/to/gurobi/linux64
+#
+# or for CPLEX (USE_XPRESS and XPRESS_HOME likewise):
+#
+#   CXX=mpicxx pip install ./mpisppy/aphfw_cpp \
+#     -C cmake.define.USE_CPLEX=ON -C cmake.define.CPLEX_ROOT=/path/to/CPLEX_Studio2211
+#
+# (HiGHS likewise, with USE_HIGHS and HIGHS_HOME, the prefix holding
+# include/highs and lib/cmake/highs.)
+#
+# CXX must be the MPI C++ compiler of the MPI that mpi4py uses.  There is no
+# default solver: naming none is an error.
+
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.12"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "aphfw-cpp"
+version = "0.1.0"
+description = "Compiled FW-APH hub for mpi-sppy (optional)"
+requires-python = ">=3.9"
+# numpy and mpi4py are needed at run time, but mpi-sppy already requires both.
+# Listing them here could make pip build a second mpi4py against another MPI.
+dependencies = []
+
+[tool.scikit-build]
+minimum-version = "0.10"
+cmake.version = ">=3.16"
+cmake.build-type = "Release"
+# The wheel holds only the extension module; there is no Python package.
+wheel.packages = []
