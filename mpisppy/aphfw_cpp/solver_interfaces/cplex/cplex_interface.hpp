@@ -137,6 +137,9 @@ public:
   // Algorithmic data is all declared at the parent level
 
   bool setStartAtCurrent() override; 
+  void exportModel(const std::string fname) override {  // have an mps (or lp) file name suffix
+    cplex.exportModel(fname.c_str());
+  };
   void setLogFile(const std::string fileName) override;
    
 protected:

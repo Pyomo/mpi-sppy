@@ -94,6 +94,7 @@ public:
 
   // from here down are functions the caller should rarely, if ever, need.
   // Marks the last solution as the start for the next MIP solve.
+  void exportModel(const std::string fname) override;  // .mps or .lp suffix
   bool setStartAtCurrent() override;
 
 protected:

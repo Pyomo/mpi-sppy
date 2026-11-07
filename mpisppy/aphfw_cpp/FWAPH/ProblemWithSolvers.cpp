@@ -44,6 +44,7 @@ void ProblemWithSolvers::registerOptions(Config& config) { // static
   config.addOption<std::string>("FW-export-policy", "best-column",
                                 "Candidate solution to export: best-column, last-vertex or prox "
                                 "(the algorithm always gets the proximal minimizer)");
+  config.addOption<double>("obj-scale", 1.0, "Multiply all objective coefficients by this value (default 1.0, no scaling)");
   config.addOption<bool>("abort-inflight-solves", true, "Interrupt in-flight subproblem solves when termination is detected");
 }
 
@@ -64,6 +65,22 @@ void ProblemWithSolvers::setup(Config& cfg,
     throw std::logic_error("Programming error: Lagrangian nonant maps not initialized after construction");
   }
   
+  // Optional objective scaling (must happen before rho/addXSquared)
+  double objScale = 1.0;
+  getConfigOptionOrThrow<double>("obj-scale", objScale, cfg);
+  if (objScale != 1.0) {
+    Lagrangian->scaleObjective(objScale);
+    Lagrangian->fullObjectiveRebuild();
+    if (noFW_) {
+      proxSolver->scaleObjective(objScale);
+      // proxSolver rebuild happens in addXSquared below
+    } else {
+      nl->scaleObjective(objScale);
+      gradient->scaleObjective(objScale);
+      gradient->fullObjectiveRebuild();
+      // NL rebuild happens in addXSquared below
+    }
+  }
 
   _initRho();
   updateRho(rhoAsRead);
@@ -524,4 +541,11 @@ void ProblemWithSolvers::enableLagrangianProxAt(std::vector<double>& z) {
     Lagrangian->set_proxOn(true);
     Lagrangian->set_WOn(true);  // you might want W=0
     Lagrangian->addXSquared();  // this puts in the quad value    
+}
+
+void ProblemWithSolvers::writeLagrangianModel(const std::string& filename) const {
+    if (!Lagrangian) {
+        throw std::logic_error("writeLagrangianModel called before setup()");
+    }
+    Lagrangian->exportModel(filename);
 }

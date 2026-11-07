@@ -320,6 +320,8 @@ protected:
   std::array<double, 5> scalarReduceOutBuf{};  // zeros
 
   // optional per-cycle oscillation trace (rank 0 only)
+  std::string oscTracePrefix_;
+  std::ofstream oscTraceFile_;
 
   // raison d'etre.  -infinity until startupSequence() computes the iter-0
   // bound: getCurrentLagrangianBound() is reachable before then (the stepping

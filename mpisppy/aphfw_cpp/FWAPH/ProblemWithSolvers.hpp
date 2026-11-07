@@ -198,6 +198,7 @@ public:
   void enableLagrangianProxAt(std::vector<double>& z);
 
   // to output an mps (or lp) file
+  void writeLagrangianModel(const std::string& filename) const;
 
   // Install W directly and update the Lagrangian objective
   void setWFromTrace(const std::vector<double>& W);

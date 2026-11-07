@@ -179,6 +179,9 @@ public:
                       false /* default value */,
                       "Whether to report local CPU/wall time ratios");
 
+        cfg.addOption("eventLogFile",
+                      std::string(""),
+                      "File name for event log (leave empty for no log)");
 
         // Added January 2026: hard wall-clock termination (0 disables)
         cfg.addOptionNonNegative<double>("maxWallTimeSeconds",
@@ -222,6 +225,8 @@ public:
         sleepMsec             = cfgPtr->getOptionValue<int>("sleepMsec");
         reportLocalTimeRatios = cfgPtr->getOptionValue<bool>("localTimeRatios");
 
+        eventFileName         = cfgPtr->getOptionValue<std::string>("eventLogFile");
+        eventLogging          = (eventFileName != "");
 
         maxWallTimeSeconds    = cfgPtr->getOptionValue<double>("maxWallTimeSeconds");
         if (maxWallTimeSeconds < 0.0)
@@ -270,6 +275,8 @@ public:
 
         terminateFlag = false;
 
+        if (eventLogging)
+            eventList.clear();
 
         DEBUGPR(3, rankTag << "GroupController setup complete");
     };
@@ -300,6 +307,8 @@ public:
         endWallTime = MPI_Wtime();
         endCPUTime  = clock();
 
+        if (eventLogging)
+            outputEventLog();
     };
 
 
@@ -754,6 +763,8 @@ protected :
                     << ", commActive=" << commActive
                     << ", commPhase=" << commPhase);
 
+            if (eventLogging)
+              recordEvent(s, 0);            // State 0 means done
 
             justFinished.push_back(s);
             active.erase(it++);
@@ -787,20 +798,24 @@ protected :
     return completedCount > 0;
   }
 
-    // Make a task eligible to run
+    // Make a task eligible to run -- instrumented for visualization
 
     void makeEligible(int s)
     {
         eligible.insert(s);
+        if (eventLogging)
+            recordEvent(s,1);   // State 1 means eligible
     }
 
 
-    // Set the communication phase
+    // Set the communication phase -- instrumented for visualization
 
     void setCommPhase(int p)
     {
         commPhase  = p;
         commActive = true;
+        if (eventLogging)
+            recordCommEvent(p + 1);   // Comm state 0 reserved for idle
     }
 
 
@@ -809,6 +824,8 @@ protected :
     void clearCommActive(void)
     {
         commActive = false;
+        if (eventLogging)             // In the event log, state 0 indicates
+            recordCommEvent(0);       // idle communication
     }
 
 
@@ -845,6 +862,8 @@ protected :
     virtual void startTask(int s, int taskType)
     {
         subdomainObj[s].dispatchTask(taskType);
+        if (eventLogging)
+            recordEvent(s,taskType + 2);  // First 2 states reserved for idle, eligible
         dispatchCount[taskType]++;
         totalDispatchCount++;
     };
@@ -917,9 +936,93 @@ protected :
 
     // Record a logging event for subdomain 's' entering state 'state'
 
+    void recordEvent(int s, int state)
+    {
+        eventList.push_back({MPI_Wtime(), s, state});
+    };
+
+
     // Record a communication event for state 'state' (communication is subdomain -1)
 
+    void recordCommEvent(int state)
+    {
+        recordEvent(-1, state);
+    }
+
+
     // Output the event log
+
+    void outputEventLog(void)
+    {
+        // Flag all subdomains as idle
+
+        for (int s=0; s<numSubdomains; s++)
+            recordEvent(s,0);
+
+        // Write file, round-robin
+
+        const int logTag = 7651;             // Arbitrary unique tag for log tokens
+        auto fileMode = std::ios::out;       // Rank 0 opens in normal output mode
+        int  dummyBuffer;
+        MPI_Status logStatus;
+
+        if (myRank != 0)
+        {
+            fileMode = std::ios::app;   // Everybody else appends and waits for a token
+            MPI_Recv(&dummyBuffer,
+                     0,
+                     MPI_INT,
+                     myRank - 1,        // Should come from previous rank
+                     logTag,
+                     comm,
+                     &logStatus);
+        }
+
+        // Open the file
+
+        std::ofstream logStream(eventFileName,fileMode);
+        if (!logStream.is_open())
+            throw std::runtime_error("Could not open event log file " + eventFileName);
+        logStream << std::setprecision(14);
+
+        DEBUGPR(1, rankTag << "Writing event log file\n");
+
+        // The first line of the log contains the number of ranks, the number
+        // of subdomains per rank, the start time, and a dummy
+
+        if (myRank == 0)
+            logStream << commSize << ", "
+                      << numSubdomains << ", "
+                      << startWallTime << ", "
+                      << numWorkers << std::endl;
+
+        // Now output the whole log
+
+        while (eventList.size() > 0)
+        {
+            auto logEntry = eventList.front();
+            eventList.pop_front();
+            logStream << myRank << ", "
+                      << std::get<1>(logEntry) << ", "        // The subdomain is 2nd
+                      << std::get<0>(logEntry) << ", "        // The time is 1st
+                      << std::get<2>(logEntry) << std::endl;  // The state is last
+        }
+
+        // Close file.  If not the last rank, pass on the token
+
+        logStream.close();
+
+        int nextRank = myRank + 1;
+
+        if (nextRank < commSize)
+            MPI_Send(&dummyBuffer,
+                     0,
+                     MPI_INT,
+                     nextRank,
+                     logTag,
+                     comm);
+    };
+
 
     //// Data members
 
@@ -992,6 +1095,10 @@ protected :
     clock_t endCPUTime;
 
     // Event logging
+
+    bool eventLogging;
+    std::string eventFileName;
+    std::list<std::tuple<double,int,int>> eventList;
 
 };
 

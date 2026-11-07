@@ -417,6 +417,10 @@ std::vector<double> HiGHSInterface::copyEntireSolution() const {
   return std::vector<double>(solution_.begin(), solution_.begin() + numVars);
 }
 
+void HiGHSInterface::exportModel(const std::string fname) {
+  highsCheck(highs_->writeModel(fname), "writeModel(" + fname + ")");
+}
+
 bool HiGHSInterface::setStartAtCurrent() {
   if (solution_.empty()) return false;
   startPending_ = true;

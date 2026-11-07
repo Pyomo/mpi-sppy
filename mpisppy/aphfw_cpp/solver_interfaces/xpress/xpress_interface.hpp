@@ -70,7 +70,7 @@ public:
   void setXpressIntControl(int control, int value);
   void setXpressDblControl(int control, double value);
 
-  void exportModel(const std::string fname);
+  void exportModel(const std::string fname) override;
   bool setStartAtCurrent() override;
 
 protected:

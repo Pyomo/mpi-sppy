@@ -85,6 +85,8 @@ void FWAPH::registerOptions(Config& config) { // static
   config.addOption<std::string>("csv-output-directory", "", "If provided, final x and W value files will go to this directory");
   config.addOption<std::string>("W-trace-prefix", "", " If given, there will be a W trace file whose name has this prefix");
   config.addOption<std::string>("solve-times-trace-prefix", "", "If given, one CSV per rank with per-FW-solve timing");
+  config.addOption<std::string>("oscillation-trace-prefix", "", "If given, write per-cycle CSV with u,v,x,z,W,y for scenario 0 on rank 0");
+  config.addOption<bool>("check-tree", false, "Causes in an input data check that should not be used with bundles createdy mpisppy");
   config.addOption<std::string>("iter0-fw-step", "auto",
     "Take a synchronous FW step at the end of startup so (x0,y0) is a valid pair: "
     "'auto' (only when the original objective is quadratic), 'on', or 'off'");
@@ -213,6 +215,25 @@ void FWAPH::setup(Config& cfg) {
     solveTimesTrace_ = std::make_unique<SolveTimesTrace>(fname);
   }
 
+  // optional oscillation trace (rank 0 only)
+  oscTracePrefix_ = cfg.getOptionValue<std::string>("oscillation-trace-prefix");
+  if (!oscTracePrefix_.empty() && myRank == 0 && numSubdomains > 0) {
+    std::string fname = oscTracePrefix_ + ".csv";
+    oscTraceFile_.open(fname);
+    if (!oscTraceFile_.is_open()) {
+      std::cerr << "Warning: could not open oscillation trace file: " << fname << std::endl;
+    } else {
+      // Write header: cycle-level scalars + per-nonant columns for scenario 0
+      oscTraceFile_ << "cycle,theta,phi,tau,tauOmega,normU,normV";
+      int nNonants = static_cast<int>(x[0].size());
+      for (int i = 0; i < nNonants; ++i) {
+        oscTraceFile_ << ",x_" << i << ",z_" << i << ",u_" << i
+                       << ",W_" << i << ",y_" << i << ",v_" << i
+                       << ",o_" << i;
+      }
+      oscTraceFile_ << "\n";
+    }
+  }
 }
 
 
@@ -709,6 +730,21 @@ bool FWAPH::projectionStep()
   // Collective; see the note at the "before projection" call above.
   diagCheckWInNPerp("right after projection z/w update");
 
+  // ---- oscillation trace (rank 0, scenario 0) ----
+  if (oscTraceFile_.is_open() && numSubdomains > 0) {
+    oscTraceFile_ << cycleCount << "," << theta << "," << globalPhiSum
+                  << "," << tau << "," << globalSqNormU_Omega
+                  << "," << normU << "," << normV;
+    const auto& oTrace = scenario(0).getOmicron();
+    int nNonants = static_cast<int>(x[0].size());
+    for (int i = 0; i < nNonants; ++i) {
+      oscTraceFile_ << "," << x[0][i] << "," << z[0][i] << "," << u[0][i]
+                    << "," << W[0][i] << "," << y[0][i] << "," << v[0][i]
+                    << "," << oTrace[i];
+    }
+    oscTraceFile_ << "\n";
+    oscTraceFile_.flush();
+  }
 
   // ---- recompute phi[s] to use fresh data (used for dispatch) ----
   for (int s = 0; s < numSubdomains; ++s) {

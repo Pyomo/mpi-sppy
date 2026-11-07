@@ -108,6 +108,9 @@ public:
   // Algorithmic data is all declared at the parent level
 
   bool setStartAtCurrent() override; 
+  void exportModel(const std::string fname) override {  // have an mps file name suffix
+    model->write(fname.c_str());
+  }
    
 protected:
   // gurobi model objects

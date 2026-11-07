@@ -143,6 +143,11 @@ protected:
   virtual double getVarUB(int varIdx) const = 0;
 
 public:
+  // Scale all original objective coefficients by the given factor.
+  // Must be called before any solves; caller should call fullObjectiveRebuild() after.
+  void scaleObjective(double factor) {
+    for (auto& c : fullC) c *= factor;
+  }
 
   // Objective cutoff constraint for FW inner loop (only used by Grad subclasses).
   // Adds: current_objective <= cutoffValue.  Returns true if added.
@@ -218,6 +223,7 @@ public:
     return *zPtr;
   }  
   // from here down are functions the caller should rarely, if ever, need.
+  virtual void exportModel(const std::string fname) = 0;  // have an mps file name suffix
   virtual bool setStartAtCurrent() = 0;  // sets the starting soln using current soln, if possible
 
   // A utility to let the caller create vectors to match nonants (W, e.g.)
