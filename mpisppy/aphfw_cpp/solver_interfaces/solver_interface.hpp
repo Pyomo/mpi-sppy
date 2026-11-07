@@ -47,11 +47,7 @@ Note that nontant var values are supplied to the caller in a dense
 vector via a copy operation.
 The caller is expected to not know,
 or care, about where the nonant values are in the solver's version of the
-model. However, if for debugging or something, the caller wants to
-know the name of a nonant var, they need to use the position in the
-nonant vector (call it pos). They can then use the function
-nonantPositionToName(pos) to get the variable name used in the
-original mps file.
+model.
 
 The values for dense vectors W, rho, and z are supplied by the
 caller. A pointer to W and z vectors should be obtained from the
@@ -99,7 +95,6 @@ class SolverInterface {
 public:
   SolverInterface(const std::string& scenarioName);
   virtual ~SolverInterface() = default;
-  virtual void pprint(std::ostream& out) const;
   
   // this class and it's children are move-only
   SolverInterface(const SolverInterface&) = delete;
@@ -125,7 +120,6 @@ public:
     return scenarioName;
   }
   virtual std::string getVarName(const size_t i) const = 0; // all vars
-  virtual std::vector<double> copyNonantSolution() const = 0;
   virtual std::vector<double> copyEntireSolution() const = 0;
   virtual void extractNonantSolution(std::vector<double>& nonantSolution) const = 0;
   virtual void extractNodeSolution(const std::string nodeName,
@@ -149,11 +143,6 @@ protected:
   virtual double getVarUB(int varIdx) const = 0;
 
 public:
-  // Scale all original objective coefficients by the given factor.
-  // Must be called before any solves; caller should call fullObjectiveRebuild() after.
-  void scaleObjective(double factor) {
-    for (auto& c : fullC) c *= factor;
-  }
 
   // Objective cutoff constraint for FW inner loop (only used by Grad subclasses).
   // Adds: current_objective <= cutoffValue.  Returns true if added.
@@ -229,12 +218,6 @@ public:
     return *zPtr;
   }  
   // from here down are functions the caller should rarely, if ever, need.
-  virtual void printSolution() = 0;
-  void printNodeDataMaps();
-  void printNonantSolutionVector();
-  virtual void nonantSolutionVectorToCsv(std::string fileName) const = 0;
-  std::string nonantPositionToName(int pos) const;
-  virtual void exportModel(const std::string fname) = 0;  // have an mps file name suffix
   virtual bool setStartAtCurrent() = 0;  // sets the starting soln using current soln, if possible
 
   // A utility to let the caller create vectors to match nonants (W, e.g.)

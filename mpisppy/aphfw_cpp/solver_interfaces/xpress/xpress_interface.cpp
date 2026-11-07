@@ -546,17 +546,6 @@ void XpressInterface::interruptSolve() {
   }
 }
 
-// ---- solution extraction ----
-std::vector<double> XpressInterface::copyNonantSolution() const {
-  std::vector<double> returnVector;
-  for (const auto& [nd, indexList] : nonantIndexes) {
-    for (const auto& i : indexList) {
-      returnVector.push_back(solution_[i]);
-    }
-  }
-  return returnVector;
-}
-
 std::vector<double> XpressInterface::copyEntireSolution() const {
   return std::vector<double>(solution_.begin(), solution_.begin() + numVars);
 }
@@ -606,32 +595,7 @@ void XpressInterface::setXpressDblControl(int control, double value) {
   }
 }
 
-// ---- print / export ----
-void XpressInterface::printSolution() {
-  std::cout << "Subproblem name=" << scenarioName << std::endl;
-  double objVal = 0.0;
-  if (isMIP_) {
-    XPRSgetdblattrib(prob_, XPRS_MIPOBJVAL, &objVal);
-  } else {
-    XPRSgetdblattrib(prob_, XPRS_LPOBJVAL, &objVal);
-  }
-  std::cout << "Optimal objective: " << objVal << std::endl;
-  for (int i = 0; i < numVars; ++i) {
-    std::cout << varNames_[i] << " = " << solution_[i] << std::endl;
-  }
-}
-
-void XpressInterface::nonantSolutionVectorToCsv(std::string fileName) const {
-  std::ofstream outFile(fileName);
-  if (outFile.is_open()) {
-    for (const auto& [name, i] : nonantNameToIndex) {
-      outFile << name << "," << solution_[i] << "\n";
-    }
-    outFile.close();
-  } else {
-    throw std::runtime_error("Error trying to write file=" + fileName);
-  }
-}
+// ---- export ----
 
 void XpressInterface::exportModel(const std::string fname) {
   // Determine format from extension

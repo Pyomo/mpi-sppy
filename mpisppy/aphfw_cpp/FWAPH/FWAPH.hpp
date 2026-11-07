@@ -109,7 +109,6 @@ public:
   // getAllLocalNonants exports a candidate solution instead; see
   // design/fw-export-split.md.
   void getAllLocalProxX(double* buf, int len) const;
-  void getAllLocalXmean(double* buf, int len) const;
 
   // Fill buf with all local scenarios' W values, same layout as above.
   void getAllLocalW(double* buf, int len) const;
@@ -321,8 +320,6 @@ protected:
   std::array<double, 5> scalarReduceOutBuf{};  // zeros
 
   // optional per-cycle oscillation trace (rank 0 only)
-  std::string oscTracePrefix_;
-  std::ofstream oscTraceFile_;
 
   // raison d'etre.  -infinity until startupSequence() computes the iter-0
   // bound: getCurrentLagrangianBound() is reachable before then (the stepping

@@ -85,7 +85,6 @@ public:
 
   MPI_Comm& getComm() {return comm;}
   
-  void pprint(std::ostream& out) const;
 
   int getDenseNonantStart() const {
     return denseNonantStart;
@@ -137,33 +136,6 @@ protected:
   }
 
 };
-
-inline void ScenarioTreeNode::pprint(std::ostream& out) const {
-  int commSz = -1, commRk = -1;
-  char commName[MPI_MAX_OBJECT_NAME];
-  int nameLen = 0;
-
-  if (comm != MPI_COMM_NULL) {
-    MPI_Comm_size(comm, &commSz);
-    MPI_Comm_rank(comm, &commRk);
-    MPI_Comm_get_name(comm, commName, &nameLen);
-  } else {
-    std::snprintf(commName, sizeof(commName), "MPI_COMM_NULL");
-    nameLen = (int)std::strlen(commName);
-  }
-
-  out << "Node{name=" << nodeName
-      << " serial=" << serialNumber
-      << " uncondProb=" << uncondProb
-      << " naStart=" << denseNonantStart
-      << " xLen=" << denseNonantLen
-      << " localScens=" << nodeLocalScenarioIndexList.size()
-      << " commName=" << std::string(commName, nameLen)
-      << " commRank=" << commRk
-      << " commSize=" << commSz
-      << "}\n";
-}
-
 
 //==== local utility =====
 inline std::string strip_suffix(const std::string& input) {

@@ -44,19 +44,6 @@ void Scenario::computeYinto(std::vector<double>& y) {
 
   for (size_t nai = 0; nai < W.size(); ++nai) {
     y[nai] = W[nai] + rho[nai] * (x[nai] - z[nai]);
-
-    if (verbosity >= 6 && nai < 3) {
-      std::cout << std::setprecision(17)
-                << "[DBG-Y] scen=" << problemSolver.getProblemName()
-                << " nai=" << nai
-                << " y=" << y[nai]
-                << " W=" << W[nai]
-                << " rho=" << rho[nai]
-                << " x=" << x[nai]
-                << " z=" << z[nai]
-                << " residual=" << (y[nai] - (W[nai] + rho[nai]*(x[nai]-z[nai])))
-                << std::endl;
-    }
   }
 }
 

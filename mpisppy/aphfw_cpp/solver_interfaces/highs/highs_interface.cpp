@@ -380,30 +380,6 @@ void HiGHSInterface::requestThreads(int threads) {
   while (threads > current && !processThreads_.compare_exchange_weak(current, threads)) {}
 }
 
-void HiGHSInterface::exportModel(const std::string fname) {
-  highsCheck(highs_->writeModel(fname), "writeModel(" + fname + ")");
-}
-
-
-void HiGHSInterface::printSolution() {
-  std::cout << "Subproblem name=" << scenarioName << std::endl;
-  std::cout << "Objective: " << highs_->getInfo().objective_function_value << std::endl;
-  const auto& names = highs_->getLp().col_names_;
-  for (size_t i = 0; i < solution_.size() && i < names.size(); ++i) {
-    std::cout << names[i] << " = " << solution_[i] << std::endl;
-  }
-}
-
-std::vector<double> HiGHSInterface::copyNonantSolution() const {
-  std::vector<double> returnVector;
-  for (const auto& [nd, indexList] : nonantIndexes) {
-    for (const auto& i : indexList) {
-      returnVector.push_back(solution_.at(i));
-    }
-  }
-  return returnVector;
-}
-
 void HiGHSInterface::extractNonantSolution(std::vector<double>& nonantSolution) const {
   if ( nonantSolution.size() != totalNonantCount ) {
     std::cerr << "nonantSolution.size()=" << nonantSolution.size() <<
@@ -439,20 +415,6 @@ std::vector<double> HiGHSInterface::copyEntireSolution() const {
                              scenarioName + "'");
   }
   return std::vector<double>(solution_.begin(), solution_.begin() + numVars);
-}
-
-
-void HiGHSInterface::nonantSolutionVectorToCsv(std::string fileName) const {
-  std::ofstream outFile(fileName);
-  if (outFile.is_open()) {
-    // no header
-    for (const auto& [name, i] : nonantNameToIndex) {
-      outFile << name << "," << solution_.at(i) << "\n";
-    }
-    outFile.close();
-  } else {
-    throw std::runtime_error("Error trying to write file="+fileName);
-  }
 }
 
 bool HiGHSInterface::setStartAtCurrent() {

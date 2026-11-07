@@ -41,10 +41,8 @@ public:
   ~ParamsBase() { };
   std::string const getJsonFileName() { return jsonFileName; }
   virtual ParamMapType& getParamMap() { return paramMap; }
-  void checkFor(const std::set<std::string> mustHave, const std::string msg);
   void extrasWarn(const std::set<std::string> canHave,
                   const std::string msg);
-  void printParams();
 protected:
   std::string jsonFileName;
   ParamMapType paramMap;

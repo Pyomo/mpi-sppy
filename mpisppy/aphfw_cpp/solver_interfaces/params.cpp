@@ -33,15 +33,6 @@ VariantType jsonToVariant(const json& j) {
     throw std::runtime_error("Unsupported JSON type");
 }
 
-// Function to convert JSON to map (from chatgpt, but it makes sense)
-std::map<std::string, VariantType> jsonToMap(const json& j) {
-    std::map<std::string, VariantType> result;
-    for (auto& [key, value] : j.items()) {
-        result[key] = jsonToVariant(value);
-    }
-    return result;
-}
-
 ParamsBase::ParamsBase(const std::string jsonFileName):
   jsonFileName(jsonFileName)
 {
@@ -58,48 +49,6 @@ ParamsBase::ParamsBase(const std::string jsonFileName):
   }
 }
 
-void ParamsBase::printParams() {
-  // simple apart from the need to handle a list
-  for (const auto& [key, value] : paramMap) {
-    std::cout << key << ": ";
-    std::visit([](const auto& v) {
-      using T = std::decay_t<decltype(v)>;
-      if constexpr (std::is_same_v<T, std::vector<std::string>>) {
-        std::cout << "[ ";
-        for (const auto& item : v) {
-          std::cout << item << " ";
-        }
-        std::cout << "]";
-      } else {
-        std::cout << v;
-      }
-      std::cout << std::endl;
-    }, value);
-  }
-}
-
-void ParamsBase::checkFor(const std::set<std::string> mustHave,
-                          const std::string msg) {
-  // throw an error if something is missing
-  std::vector<std::string> missing;
-  std::set<std::string> mapKeys;
-  for (const auto& [key, _] : paramMap) {
-    mapKeys.insert(key);
-  }
-  for (const std::string& key : mustHave) {
-    if (mapKeys.find(key) == mapKeys.end()) {
-      missing.push_back(key);
-    }
-  }
-  if (missing.size() > 0) {
-    std::cerr << "Missing keys list: " << std::endl;
-    for (std::string m : missing) {
-      std::cerr << "   " << m << std::endl;
-    }
-    throw std::runtime_error(msg + " Parameters shown above are missing");
-  }
-}
-    
 void ParamsBase::extrasWarn(const std::set<std::string> canHave,
                           const std::string msg) {
   std::set<std::string> vectorSet(canHave.begin(), canHave.end());  

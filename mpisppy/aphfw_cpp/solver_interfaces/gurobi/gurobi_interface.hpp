@@ -43,11 +43,7 @@ Note that nontant var values are supplied to the caller in a dense
 vector via a copy operation.
 The caller is expected to not know,
 or care, about where the nonant values are in the solver's version of the
-model. However, if for debugging or something, the caller wants to
-know the name of a nonant var, they need to use the position in the
-nonant vector (call it pos). They can then use the function
-nonantPositionToName(pos) to get the variable name used in the
-original mps file.
+model.
 
 The values for dense vectors W, rho, and z are supplied by the caller. A
 reference to W and z vectors should be obtained from the caller and then
@@ -87,7 +83,6 @@ public:
   std::string getVarName(const size_t i) const override {
     return vars[i].get(GRB_StringAttr_VarName);
   }
-  virtual std::vector<double> copyNonantSolution() const;
   virtual std::vector<double> copyEntireSolution() const;
   virtual void extractNonantSolution(std::vector<double>& nonantSolution) const override;
   virtual void extractNodeSolution(const std::string nodeName,
@@ -111,13 +106,7 @@ public:
   void setGurobiParam(const GRB_DoubleParam param, const std::any &value);
 
   // Algorithmic data is all declared at the parent level
-  
-  // from here down are functions the caller should rarely, if ever, need.
-  void printSolution() override;
-  void nonantSolutionVectorToCsv(std::string fileName) const override;
-  void exportModel(const std::string fname) override {  // have an mps file name suffix
-    model->write(fname.c_str());
-  }
+
   bool setStartAtCurrent() override; 
    
 protected:

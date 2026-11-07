@@ -99,27 +99,6 @@ inline void _vb(const auto& cfg, const std::string& msg, int level=1) {
   }
 }
 
-template <typename T>
-void printListMap(const std::map<std::string, std::vector<T>>& myMap) {
-    for (const auto& [key, valueList] : myMap) {
-        std::cout << "Key: " << key << " => [";
-        for (const auto& item : valueList) {
-            std::cout << item << ", ";
-        }
-        if (!valueList.empty()) {
-            std::cout << "\b\b"; // Remove the trailing ", " for non-empty lists
-        }
-        std::cout << "]" << std::endl;
-    }
-}
-
-
-// Call to this function should be deleted after use.
-template <typename T>
-inline void debug(const std::string& msg, const T& it) {
-    std::cout << "DEBUG: " << msg << ": " << it << std::endl;
-}
-
 // Function to read a CSV file and validate headers
 inline std::map<std::string, double> readCsvToMapWithHeaders(
     const std::string& filename,
@@ -191,23 +170,6 @@ vectorFromMapWithOrder(const std::map<std::string, double> iMap,
     retval.push_back(iMap.at(i));
   }
   return retval;
-}
-
-inline void write_vector_to_csv(const std::vector<double>& vec, const std::string& filename) {
-    std::ofstream file(filename);
-    if (file.is_open()) {
-        for (size_t i = 0; i < vec.size(); ++i) {
-            file << vec[i];
-            if (i < vec.size() - 1) {
-                file << ",";
-            }
-        }
-        file << std::endl;
-        file.close();
-        std::cout << "Vector successfully written to " << filename << std::endl;
-    } else {
-        std::cerr << "Unable to open file: " << filename << std::endl;
-    }
 }
 
 template <typename T>

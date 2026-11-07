@@ -181,16 +181,6 @@ public:
             static_cast<int>(info.shape[0]));
     }
 
-    void get_all_local_xmean(py::array_t<double> buf) {
-        check_initialized();
-        auto info = buf.request();
-        if (info.ndim != 1)
-            throw std::runtime_error("get_all_local_xmean: expected 1-D array");
-        controller_->getAllLocalXmean(
-            static_cast<double*>(info.ptr),
-            static_cast<int>(info.shape[0]));
-    }
-
     void get_all_local_w(py::array_t<double> buf) {
         check_initialized();
         auto info = buf.request();
@@ -324,16 +314,6 @@ public:
         }
     }
 
-    void print_results() {
-        check_initialized();
-        controller_->printResults();
-    }
-
-    void print_run_statistics() {
-        check_initialized();
-        controller_->printRunStatistics();
-    }
-
     void save_w_trace() {
         check_initialized();
         controller_->saveWTrace();
@@ -399,9 +379,6 @@ PYBIND11_MODULE(aphfw_cpp, m) {
         .def("get_all_local_prox_x", &APHFWLibrary::get_all_local_prox_x,
              "Fill numpy array with the proximal minimizers the algorithm "
              "iterates on (what the dynamic rho extensions want)")
-        .def("get_all_local_xmean", &APHFWLibrary::get_all_local_xmean,
-             "Fill numpy array with the probability-weighted mean of the "
-             "scenario solutions (PH's xbar; APH's z is a different object)")
         .def("get_all_local_w", &APHFWLibrary::get_all_local_w,
              "Fill numpy array with all local W values")
         .def("get_all_local_xbar", &APHFWLibrary::get_all_local_xbar,
@@ -432,8 +409,6 @@ PYBIND11_MODULE(aphfw_cpp, m) {
              "and return the reduced expected bound. Collective over the "
              "communicator passed to init(): all ranks must call it.")
         .def("set_explicit_scenario_names", &APHFWLibrary::set_explicit_scenario_names)
-        .def("print_results", &APHFWLibrary::print_results)
-        .def("print_run_statistics", &APHFWLibrary::print_run_statistics)
         .def("save_w_trace", &APHFWLibrary::save_w_trace)
         .def("finalize", &APHFWLibrary::finalize);
 }

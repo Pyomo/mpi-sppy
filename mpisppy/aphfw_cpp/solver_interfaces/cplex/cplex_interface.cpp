@@ -412,35 +412,6 @@ void CPLEXInterface::interruptSolve() {
   }
 }
 
-void CPLEXInterface::printSolution() {
-  std::cout << "Subproblem name=" << scenarioName << std::endl;
-  try {
-    std::cout << "Objective value: " << cplex.getObjValue() << std::endl;
-    std::cout << "Variable values: " << std::endl;
-    IloNumArray vals(env);
-    cplex.getValues(vals, vars);
-    for (IloInt i = 0; i < vals.getSize(); ++i) {
-      std::cout << vars[i].getName() << ": " << vals[i] << std::endl;
-    }
-  } catch (IloException& e) {
-    std::cerr << "CPLEX Exception: " << e.getMessage() << std::endl;
-  } catch (...) {
-    std::cerr << "Unknown Exception occurred." << std::endl;
-  }
-}
-
-std::vector<double> CPLEXInterface::copyNonantSolution() const {
-  std::vector<double> returnVector;
-  IloNumArray vals(env);
-  cplex.getValues(vals, vars);
-  for (const auto& [nd, indexList] : nonantIndexes) {
-    for (const auto& i : indexList) {
-      returnVector.push_back(vals[i]);
-    }
-  }
-  return returnVector;
-}
-
 std::vector<double> CPLEXInterface::copyEntireSolution() const {
   IloNumArray vals(env);
   cplex.getValues(vals, vars);
@@ -481,21 +452,6 @@ void CPLEXInterface::extractNodeSolution(const std::string nodeName,
   int j = 0;
   for (const auto& i : nI) {
     nodeSolution[j++] = vals[i];
-  }
-}
-
-void CPLEXInterface::nonantSolutionVectorToCsv(std::string fileName) const {
-  IloNumArray vals(env);
-  cplex.getValues(vals, vars);
-
-  std::ofstream outFile(fileName);
-  if (outFile.is_open()) {
-    for (const auto& [name, i] : nonantNameToIndex) {
-      outFile << name << "," << vals[i] << "\n";
-    }
-    outFile.close();
-  } else {
-    throw std::runtime_error("Error try to write file="+fileName);
   }
 }
 

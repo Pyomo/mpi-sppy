@@ -488,36 +488,6 @@ void GurobiInterface::setGurobiParam(const GRB_DoubleParam param, const std::any
   }
 }
 
-
-void GurobiInterface::printSolution() {
-  // This is for debugging, so we get local copies from the model
-  std::cout << "Subproblem name=" << scenarioName << std::endl;
-  // Retrieve the objective value.
-  double objVal = model->get(GRB_DoubleAttr_ObjVal);
-  std::cout << "Optimal objective: " << objVal << std::endl;
-  // loop over variables to print their values.
-  int lnumVars = model->get(GRB_IntAttr_NumVars);
-  GRBVar* lvars = model->getVars();
-  for (int i = 0; i < lnumVars; i++) {
-    std::cout << lvars[i].get(GRB_StringAttr_VarName)
-              << " = " << lvars[i].get(GRB_DoubleAttr_X) << std::endl;
-  }
-  delete[] lvars; // Free the memory allocated by getVars()
-
-}
-
-std::vector<double> GurobiInterface::copyNonantSolution() const {
-  // copy the nonant values from the gurobi object to a dense vector
-  // This might never be used...
-  std::vector<double> returnVector;
-  for (const auto& [nd, indexList] : nonantIndexes) {
-    for (const auto& i : indexList) {
-      returnVector.push_back(vars[i].get(GRB_DoubleAttr_X));
-    }
-  }
-  return returnVector;
-}
-
 void GurobiInterface::extractNonantSolution(std::vector<double>& nonantSolution) const {
   if ( nonantSolution.size() != totalNonantCount ) {
     std::cerr << "nonantSolution.size()=" << nonantSolution.size() <<
@@ -555,21 +525,6 @@ std::vector<double> GurobiInterface::copyEntireSolution() const {
     returnVector[i] = vars[i].get(GRB_DoubleAttr_X);
   }
   return returnVector;
-}
-
-
-void GurobiInterface::nonantSolutionVectorToCsv(std::string fileName) const {
-
-  std::ofstream outFile(fileName);
-  if (outFile.is_open()) {
-    // no header
-    for (const auto& [name, i] : nonantNameToIndex) {
-      outFile << name << "," << vars[i].get(GRB_DoubleAttr_X) << "\n";
-    }
-    outFile.close();
-  } else {
-    throw std::runtime_error("Error trying to write file="+fileName);
-  }  
 }
 
 bool GurobiInterface::setStartAtCurrent() {

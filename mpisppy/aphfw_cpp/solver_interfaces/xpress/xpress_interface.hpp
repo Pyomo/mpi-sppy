@@ -52,7 +52,6 @@ public:
   std::string getVarName(const size_t i) const override {
     return varNames_[i];
   }
-  virtual std::vector<double> copyNonantSolution() const override;
   virtual std::vector<double> copyEntireSolution() const override;
   virtual void extractNonantSolution(std::vector<double>& nonantSolution) const override;
   virtual void extractNodeSolution(const std::string nodeName,
@@ -71,9 +70,7 @@ public:
   void setXpressIntControl(int control, int value);
   void setXpressDblControl(int control, double value);
 
-  void printSolution() override;
-  void nonantSolutionVectorToCsv(std::string fileName) const override;
-  void exportModel(const std::string fname) override;
+  void exportModel(const std::string fname);
   bool setStartAtCurrent() override;
 
 protected:

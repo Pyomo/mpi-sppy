@@ -67,7 +67,6 @@ public:
   std::string getVarName(const size_t i) const override {
     return highs_->getLp().col_names_.at(i);
   }
-  virtual std::vector<double> copyNonantSolution() const override;
   virtual std::vector<double> copyEntireSolution() const override;
   virtual void extractNonantSolution(std::vector<double>& nonantSolution) const override;
   virtual void extractNodeSolution(const std::string nodeName,
@@ -94,9 +93,6 @@ public:
   bool hasIntegerCols() const;
 
   // from here down are functions the caller should rarely, if ever, need.
-  void printSolution() override;
-  void nonantSolutionVectorToCsv(std::string fileName) const override;
-  void exportModel(const std::string fname) override;  // .mps or .lp suffix
   // Marks the last solution as the start for the next MIP solve.
   bool setStartAtCurrent() override;
 

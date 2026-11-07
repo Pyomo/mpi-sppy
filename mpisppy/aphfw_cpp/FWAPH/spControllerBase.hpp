@@ -70,7 +70,6 @@ public:
   Scenario& scenObject(const int i) { return subdomainObj[i]; };
 
   // check the data structures
-  void checkTreeConsistency();  
 
   // Destructor
 

@@ -102,50 +102,12 @@ public:
   
   void goAgain(const int tMax, const double tau) {
     // Presumably, data was updated since the last call.
-    if (_vb(cfg, 5)) {
-      std::cout << "in goAgain: NL.pprint()=" << std::endl;
-      NL.pprint(std::cout);
-    }
     goBody(tMax, tau);
   }
 
   
   void goBody(const int tMax, const double tau) {
 
-    // ---- Local helpers to hide the debug blocks ----
-    auto debugNL = [&](const std::vector<double>& nlSolution,
-                       const std::string& sname) {
-      if (!_vb(cfg, 8)) return;
-
-      std::string bname = "NL" + std::to_string(itersSoFar) + "_" +
-        sname.substr(sname.size() - 5);
-      std::cout << "debug NL output in fw.hpp for " << bname << std::endl;
-      NL.exportModel(bname + ".lp");
-      write_vector_to_csv(nlSolution, bname + ".soln");
-    };
-
-    auto debugMILP = [&](const std::vector<double>& nlSolution,
-                         const std::vector<double>& milpSolution,
-                         const std::vector<double>& gradient,
-                         const std::vector<double>& diff,
-                         const std::string& sname) {
-      if (!_vb(cfg, 8)) return;
-
-      auto bname = "MILP" + std::to_string(itersSoFar) + "_" +
-        sname.substr(sname.size() - 5);
-      MILP.exportModel(bname + ".lp");
-      write_vector_to_csv(milpSolution, bname + ".soln");
-      write_vector_to_csv(gradient,   bname + ".grad");
-      write_vector_to_csv(diff,       bname + ".diff");
-      auto objVal = MILP.computeObjFctVal(milpSolution);
-      auto refVal = MILP.computeObjFctVal(nlSolution);
-      if (_vb(cfg,5)) {
-        std::cout << "The reference solution obj= " << refVal
-                  << " while the latest MILP solution obj=" << objVal
-                  << std::endl;
-      }
-    };
-    
     // ----------------- start of the actual function -------------
    // Per-call MILP counter and timing accumulators
    MILPSolvesSoFar = 0;
@@ -171,9 +133,6 @@ public:
        break;
      }
      auto nlSolution = NL.copyEntireSolution();
-     auto sname      = NL.getScenarioName();
-
-     debugNL(nlSolution, sname);
 
      // 2. Enforce tMax: if we've already done tMax MILP solves, stop now
      //    (tMax is a limit on MILP solves per goBody call)
@@ -264,7 +223,6 @@ public:
        global_toc("FWgap=" + std::to_string(FWgap) +
                   " MILPSolvesSoFar=" + std::to_string(MILPSolvesSoFar));
 
-     debugMILP(nlSolution, milpSolution, gradient, diff, sname);
 
      // 5. Check tau stopping: if gap is small, we’re done
      if (FWgap <= tau) {
