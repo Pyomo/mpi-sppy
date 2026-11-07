@@ -22,6 +22,7 @@ is not available is an error, not a skip.
 import contextlib
 import importlib.util
 import io
+import json
 import os
 import runpy
 import shutil
@@ -64,6 +65,14 @@ def _cfg(**values):
     for name, value in values.items():
         cfg[name] = value
     return cfg
+
+
+def _final_bound_and_incumbent(output):
+    """From the last line of the table a run prints at termination."""
+    last = output.split("Statistics at termination")[-1].splitlines()[2]
+    # Iter. [tag] bound incumbent rel_gap abs_gap
+    fields = last.split()
+    return float(fields[-4]), float(fields[-3])
 
 
 class TestAphfwOptional(unittest.TestCase):
@@ -718,11 +727,70 @@ class TestAphfwHubRun(unittest.TestCase):
             self.assertEqual(result.returncode, 0, out[-3000:])
             self.assertIn("Terminating based on inter-cylinder relative gap",
                           out, out[-3000:])
-            last = out.split("Statistics at termination")[-1].splitlines()[2]
-            return float(last.split()[-4])
+            return _final_bound_and_incumbent(out)[1]
 
         no_fw = incumbent(["--aphfw-no-fw"])
         self.assertAlmostEqual(no_fw, -108390.0, delta=0.002 * 108390)
+
+    def _aircond_run(self, *args, np=3):
+        """Run four-scenario aircond, whose tree has three nodes; return output."""
+        argv = ["mpiexec", "-np", str(np), sys.executable, "-m", "mpi4py",
+                "-m", "mpisppy.generic_cylinders",
+                "--module-name", "mpisppy.tests.examples.aircond",
+                "--branching-factors", "2,2",
+                "--solver-name", solver_name, *args]
+        with tempfile.TemporaryDirectory() as tmpdir:  # for solver logs
+            result = subprocess.run(
+                argv, capture_output=True, text=True, timeout=600,
+                check=False, env=subprocess_env(), cwd=tmpdir)
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out[-3000:])
+        return out
+
+    def _assert_hub_finds_aircond_optimum(self, *hub_args):
+        ef = self._aircond_run("--EF", "--EF-solver-name", solver_name, np=1)
+        optimum = float(ef.split("EF objective:")[1].split()[0])
+        out = self._aircond_run("--aphfw-hub", "--default-rho", "1",
+                                "--max-iterations", "100", "--lagrangian",
+                                "--xhatshuffle", "--rel-gap", "0.001", *hub_args)
+        self.assertIn("Terminating based on inter-cylinder relative gap",
+                      out, out[-3000:])
+        bound, incumbent = _final_bound_and_incumbent(out)
+        tol = 0.002 * abs(optimum)
+        self.assertLessEqual(bound, optimum + tol)
+        self.assertGreaterEqual(incumbent, optimum - tol)
+        self.assertAlmostEqual(incumbent, optimum, delta=tol)
+
+    def test_multistage_finds_the_ef_optimum(self):
+        self._assert_hub_finds_aircond_optimum()
+
+    def test_obj_cutoff_finds_the_ef_optimum(self):
+        self._assert_hub_finds_aircond_optimum("--aphfw-obj-cutoff")
+
+    def test_W_trace_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            prefix = os.path.join(tmpdir, "wt")
+            argv = self._farmer_argv("--max-iterations", "3",
+                                     "--aphfw-W-trace-prefix", prefix)
+            with patch.object(sys, "argv", argv):
+                runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
+            with open(prefix + "_rank0.json") as f:
+                records = json.load(f)
+        by_scenario = {}
+        for record in records:
+            by_scenario.setdefault(record["scenario"], []).append(record)
+        self.assertEqual(len(by_scenario), 3, list(by_scenario))
+        times = [r["time"] for r in records]
+        self.assertEqual(times, sorted(times))
+        for trace in by_scenario.values():
+            self.assertGreater(len(trace), 1)
+            self.assertTrue(all(len(r["W"]) == 3 for r in trace))
+            # W starts at zero and the run moves it
+            self.assertEqual(trace[0]["W"], [0.0, 0.0, 0.0])
+            self.assertGreater(max(abs(w) for w in trace[-1]["W"]), 0.0)
+        # The scenarios are equally likely, so their latest Ws sum to zero.
+        latest = np.array([trace[-1]["W"] for trace in by_scenario.values()])
+        np.testing.assert_allclose(latest.sum(axis=0), 0.0, atol=1e-6)
 
     def test_max_iterations_caps_cycles(self):
         # The hub stops at --max-iterations cycles, as other hubs stop at

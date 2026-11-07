@@ -30,6 +30,9 @@ add_executable(aphfw_main_test
 if (USE_GUROBI)
     target_sources(aphfw_main_test PRIVATE test_numeric_retry.cpp test_gurobi_bounds.cpp)
 endif()
+if (USE_HIGHS)
+    target_sources(aphfw_main_test PRIVATE test_highs_status.cpp)
+endif()
 
 target_include_directories(aphfw_main_test
     PRIVATE

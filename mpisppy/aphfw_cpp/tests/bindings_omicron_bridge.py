@@ -18,6 +18,8 @@ Verifies:
   4. After freeze, changing rho does NOT change omicron (decoupling).
   5. --omicron-all at init freezes omicron at setup with a uniform scalar.
   6. --omicron-all above omicron-max raises during init (bounds check).
+  7. --omicron-csv at init freezes omicron at setup, by variable name.
+  8. --omicron-csv missing a nonant raises during init.
 
 Must be run under MPI with exactly 2 ranks:
     mpirun -np 2 python -m mpi4py bindings_omicron_bridge.py
@@ -193,6 +195,47 @@ def test_omicron_bridge():
         if rank == 0:
             print(f"  PASS: init raised: {e}")
     # lib3 may not be fully initialized; don't finalize
+    comm.Barrier()
+
+    # -------------------------------------------------------------------
+    # Part 7: --omicron-csv freezes omicron at init, by variable name
+    # -------------------------------------------------------------------
+    if rank == 0:
+        print("\n=== Part 7: --omicron-csv freezes at init ===")
+
+    lib4 = aphfw_cpp.APHFWLibrary()
+    lib4.init(comm, problem_dir, _base_config({"omicron-csv": "smallFWAPH/omicron.csv"}))
+    n4 = lib4.get_local_nonant_length()
+    o4 = np.zeros(n4)
+    lib4.get_all_local_omicron(o4)
+    # the file lists X3 first; the values follow the names, not the lines
+    expected = np.tile([2.0, 3.0, 4.0], n4 // 3)
+    if not lib4.omicron_is_frozen():
+        print(f"  [rank {rank}] FAIL: omicron not frozen after init with --omicron-csv")
+        passed = False
+    elif not np.allclose(o4, expected):
+        print(f"  [rank {rank}] FAIL: omicron-csv values wrong, expected {expected}, got {o4}")
+        passed = False
+    elif rank == 0:
+        print(f"  PASS: omicron frozen from the file: {o4}")
+    lib4.finalize()
+    comm.Barrier()
+
+    # -------------------------------------------------------------------
+    # Part 8: --omicron-csv missing a nonant raises at init
+    # -------------------------------------------------------------------
+    if rank == 0:
+        print("\n=== Part 8: --omicron-csv missing a nonant, raises ===")
+
+    lib5 = aphfw_cpp.APHFWLibrary()
+    try:
+        lib5.init(comm, problem_dir, _base_config({"omicron-csv": "smallFWAPH/omicron_short.csv"}))
+        print(f"  [rank {rank}] FAIL: init with a short omicron file did not raise")
+        passed = False
+    except ValueError as e:
+        if rank == 0:
+            print(f"  PASS: init raised: {e}")
+    # lib5 may not be fully initialized; don't finalize
     comm.Barrier()
 
     all_passed = comm.allreduce(int(passed), op=MPI.MIN)
