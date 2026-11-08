@@ -196,7 +196,7 @@ if __name__ == "__main__":
         data = inter_region_dict_creator(num_scens)
 
         # Write the data to the JSON file
-        with open(inter_region_dict_path, 'w') as json_file:
+        with open(inter_region_dict_path, 'w', encoding="utf-8") as json_file:
             json.dump(data, json_file, indent=4)
 
     for i in range(1,5):
@@ -204,7 +204,7 @@ if __name__ == "__main__":
         data = region_dict_creator(f"Region{i}")
 
         # Write the data to the JSON file
-        with open(region_dict_path, 'w') as json_file:
+        with open(region_dict_path, 'w', encoding="utf-8") as json_file:
             json.dump(data, json_file, indent=4)
 
 ########################################################################################################################
