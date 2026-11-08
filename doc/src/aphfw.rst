@@ -340,12 +340,14 @@ Troubleshooting
    Pass ``--solver`` and ``--solver-home``, or set exactly one of
    ``GUROBI_HOME``, ``CPLEX_ROOT``, ``XPRESS_HOME``.
 
-``No include/gurobi_c++.h under ...`` (and the CPLEX and Xpress equivalents)
+``No include/gurobi_c++.h under ...`` (and the CPLEX, Xpress and HiGHS equivalents)
    ``--solver-home`` must be the solver's installation directory: for Gurobi
    the platform directory holding ``include/`` and ``lib/``, for CPLEX the
    ``CPLEX_Studio...`` directory holding ``cplex/`` and ``concert/``, for
-   Xpress the directory holding ``include/xprs.h`` and ``lib/``. The message
-   names what is missing.
+   Xpress the directory holding ``include/xprs.h`` and ``lib/``, for HiGHS the
+   prefix holding ``include/highs/Highs.h`` and, under ``lib``, ``lib64`` or
+   ``lib/<arch>``, the library and ``cmake/highs/``. The message names what is
+   missing.
 
 ``Hub rank ... could not make a FW-APH scenario directory``
    The directory given with ``--aphfw-scenario-dir``, or the system's

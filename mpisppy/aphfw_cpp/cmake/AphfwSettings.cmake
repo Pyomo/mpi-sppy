@@ -107,10 +107,11 @@ endif()
 # ---------------------------------
 # HiGHS root
 # ---------------------------------
-# The prefix holding include/highs/Highs.h and lib/cmake/highs (a conda-forge
-# highs package installs both; the highspy wheel has no headers).
+# The prefix holding include/highs/Highs.h and cmake/highs under lib, lib64 or
+# lib/<arch> (a conda-forge highs package installs both; the highspy wheel has
+# no headers).
 set(HIGHS_HOME "" CACHE PATH
-    "Path to the HiGHS installation prefix (with include/highs and lib/cmake/highs)")
+    "Path to the HiGHS installation prefix (with include/highs and cmake/highs under lib, lib64 or lib/<arch>)")
 
 if(HIGHS_HOME STREQUAL "" AND DEFINED ENV{HIGHS_HOME})
     set(HIGHS_HOME "$ENV{HIGHS_HOME}" CACHE PATH

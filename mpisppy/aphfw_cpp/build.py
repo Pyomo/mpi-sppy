@@ -21,6 +21,7 @@ compiled module.
 """
 
 import argparse
+import glob
 import os
 import shutil
 import subprocess
@@ -147,18 +148,28 @@ def check_solver_home(solver, home):
             raise BuildError(f"No libxprs library in {home}/lib or {home}/lib64.")
     elif solver == "highs":
         # HIGHS_HOME is an installation prefix, e.g. a conda environment
-        # with conda-forge's highs package
-        missing = [p for p in ("include/highs/Highs.h",
-                               "lib/cmake/highs/highs-config.cmake")
-                   if not os.path.isfile(os.path.join(home, p))]
+        # with conda-forge's highs package.  HiGHS puts its library and CMake
+        # config in its CMAKE_INSTALL_LIBDIR, which varies by platform: lib,
+        # lib64 or lib/<arch>.  CMake searches lib/<arch> only with a compiler
+        # that reports an architecture (conda's does not), and says so itself.
+        libdirs = ([os.path.join(home, "lib"), os.path.join(home, "lib64")]
+                   + glob.glob(os.path.join(glob.escape(home), "lib", "*")))
+        config_dirs = [d for d in libdirs if os.path.isfile(
+            os.path.join(d, "cmake", "highs", "highs-config.cmake"))]
+        missing = []
+        if not os.path.isfile(os.path.join(home, "include", "highs", "Highs.h")):
+            missing.append("include/highs/Highs.h")
+        if not config_dirs:
+            missing.append("cmake/highs/highs-config.cmake in lib, lib64 or "
+                           "lib/<arch>")
         if missing:
             raise BuildError(
                 f"Missing {' and '.join(missing)} under {home}.  HIGHS_HOME must "
                 "be the prefix HiGHS was installed into (e.g. a conda "
                 "environment with conda-forge's highs package); the highspy "
                 "wheel has no C++ headers.")
-        if not _find_lib([os.path.join(home, "lib")], "highs"):
-            raise BuildError(f"No libhighs library in {home}/lib.")
+        if not _find_lib(config_dirs, "highs"):
+            raise BuildError(f"No libhighs library in {' or '.join(config_dirs)}.")
 
 
 def _mpi_compilers_near_python():

@@ -299,7 +299,8 @@ endif()
 if(USE_HIGHS)
     if(NOT HIGHS_HOME)
         message(FATAL_ERROR "USE_HIGHS=ON but HIGHS_HOME not set. "
-                "Point it at the prefix holding include/highs and lib/cmake/highs.")
+                "Point it at the prefix holding include/highs and cmake/highs "
+                "under lib, lib64 or lib/<arch>.")
     endif()
 
     find_package(highs CONFIG REQUIRED

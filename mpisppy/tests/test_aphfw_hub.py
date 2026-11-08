@@ -130,6 +130,36 @@ class TestAphfwOptional(unittest.TestCase):
                 if warns:
                     self.assertIn(name, warning.call_args[0][0])
 
+    def test_highs_home_library_directories(self):
+        # A HiGHS install's library directory depends on the platform.
+        from mpisppy.aphfw_cpp.build import BuildError, check_solver_home
+
+        def prefix(root, libdir, config=True, lib=True, header=True):
+            files = []
+            if header:
+                files.append(os.path.join("include", "highs", "Highs.h"))
+            if config:
+                files.append(os.path.join(libdir, "cmake", "highs",
+                                          "highs-config.cmake"))
+            if lib:
+                files.append(os.path.join(libdir, "libhighs.so"))
+            for f in files:
+                path = os.path.join(root, f)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                open(path, "w").close()
+            return root
+
+        arch = os.path.join("lib", "x86_64-linux-gnu")
+        for libdir in ("lib", "lib64", arch):
+            with self.subTest(libdir=libdir), tempfile.TemporaryDirectory() as d:
+                check_solver_home("highs", prefix(d, libdir))
+        for kwargs, message in (({"config": False}, "highs-config.cmake"),
+                                ({"lib": False}, "libhighs"),
+                                ({"header": False}, "Highs.h")):
+            with self.subTest(**kwargs), tempfile.TemporaryDirectory() as d:
+                with self.assertRaisesRegex(BuildError, message):
+                    check_solver_home("highs", prefix(d, "lib64", **kwargs))
+
     def test_build_help_without_sources(self):
         # A pip-installed mpi-sppy has no aphfw_cpp sources to build from.
         from mpisppy.opt.aphfw import _build_help
