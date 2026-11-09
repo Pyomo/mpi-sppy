@@ -418,6 +418,12 @@ class PHBase(mpisppy.spopt.SPOpt):
         # Whether this process's iteration-0 solve had the prox term on (an
         # xbar was supplied and the terms were attached before that solve).
         self._iter0_solved_with_prox = False
+        # Set after an opt-in reduced-cost initialization; iteration 1 blends
+        # these weights with the usual rho * (x - xbar) update.
+        self._reduced_costs_w_initialized = False
+        # Scenario names whose temporary rc suffix was created by this
+        # feature. User-provided suffixes are borrowed, not removed.
+        self._reduced_cost_suffixes_added = set()
 
     def _configure_slurm_deadline(self, options):
         """Set an opt-in monotonic deadline from Slurm's absolute end time.
@@ -559,12 +565,16 @@ class PHBase(mpisppy.spopt.SPOpt):
         _Compute_Xbar(self, verbose=verbose)
 
 
-    def Update_W(self, verbose):
+    def Update_W(self, verbose, step_scale=1.0):
         """ Update the dual weights during the PH algorithm.
 
         Args:
             verbose (bool):
                 If True, displays verbose output during update.
+            step_scale (float):
+                Multiplier on this update. Normally 1; the experimental
+                reduced-cost initialization uses ``1 - eta`` on iteration 1
+                to blend with the ordinary PH update.
         """
         # Assumes the scenarios are up to date
         for k,s in self.local_scenarios.items():
@@ -575,7 +585,8 @@ class PHBase(mpisppy.spopt.SPOpt):
 
                 xdiff = nonant._value \
                         - s._mpisppy_model.xbars[ndn_i]._value
-                s._mpisppy_model.W[ndn_i]._value += pyo.value(s._mpisppy_model.rho[ndn_i]) * xdiff
+                s._mpisppy_model.W[ndn_i]._value += step_scale \
+                    * pyo.value(s._mpisppy_model.rho[ndn_i]) * xdiff
                 if verbose and self.cylinder_rank == 0:
                     print ("rank, node, scen, var, W", ndn_i[0], k,
                            self.cylinder_rank, nonant.name,
@@ -585,6 +596,122 @@ class PHBase(mpisppy.spopt.SPOpt):
                 for ndn_i in s._mpisppy_data.nonant_indices:
                     (lndn, li) = ndn_i
                     s._mpisppy_model.W[ndn_i] *= s._mpisppy_data.prob0_mask[lndn][li]
+
+
+    def _attach_reduced_cost_suffixes(self):
+        """Attach the suffix needed by the experimental reduced-cost W init."""
+        if self.Ag is not None:
+            raise RuntimeError(
+                "reduced_costs_w_init is not supported for Agnostic models")
+        for sname, scenario in self.local_scenarios.items():
+            discrete = [v.name for v in scenario.component_data_objects(
+                pyo.Var, descend_into=True) if not v.fixed
+                and not v.is_continuous()]
+            if discrete:
+                raise RuntimeError(
+                    "reduced_costs_w_init reached iteration 0 with discrete "
+                    "variables still active; integer_relax_then_enforce did "
+                    "not relax: " + ", ".join(discrete[:3]))
+            if hasattr(scenario, "_ef_scenario_names"):
+                raise RuntimeError(
+                    "reduced_costs_w_init requires independently solved "
+                    f"scenarios; {sname!r} is a proper bundle")
+            if hasattr(scenario, "rc"):
+                if not scenario.rc.import_enabled():
+                    raise RuntimeError(
+                        f"Scenario {sname!r} already has an rc suffix, but it "
+                        "is not enabled for import")
+            else:
+                scenario.rc = pyo.Suffix(direction=pyo.Suffix.IMPORT)
+                self._reduced_cost_suffixes_added.add(sname)
+
+    def _initialize_W_from_reduced_costs(self):
+        """Set W_s = -eta (rc_s - E[rc | node]) after the Iter0 solves.
+
+        ``prob_coeff`` is the scenario probability conditional on the node
+        (and may be a vector under variable probability), so the same
+        node-communicator reduction used for xbar gives the desired
+        information-set centering.
+        """
+        eta = self.options.get("reduced_costs_w_init")
+        if eta is None or self._resumed_from_checkpoint:
+            return
+        if self._iter0_solved_with_prox:
+            raise RuntimeError(
+                "reduced_costs_w_init requires iteration 0 to use the "
+                "unweighted scenario objective, but its proximal term was "
+                "active")
+
+        local_sums = {}
+        global_sums = {}
+        scenario_rc = {}
+        for sname, scenario in self.local_scenarios.items():
+            plugin = getattr(scenario, "_solver_plugin", None)
+            if plugin is not None and sputils.is_persistent(plugin):
+                # Persistent interfaces load primal Vars in solve_one, but
+                # reduced costs require their own explicit pull.
+                plugin.load_rc(vars_to_load=list(
+                    scenario._mpisppy_data.nonant_indices.values()))
+            for node in scenario._mpisppy_node_list:
+                ndn = node.name
+                nlen = scenario._mpisppy_data.nlens[ndn]
+                local_sums.setdefault(ndn, np.zeros(nlen, dtype="d"))
+                global_sums.setdefault(ndn, np.zeros(nlen, dtype="d"))
+
+                rc = np.empty(nlen, dtype="d")
+                for i, var in enumerate(node.nonant_vardata_list):
+                    value = scenario.rc.get(var, None)
+                    if value is None:
+                        if var.fixed:
+                            value = 0.0
+                        else:
+                            raise RuntimeError(
+                                "reduced_costs_w_init requested, but the "
+                                f"iteration-0 solve returned no reduced cost "
+                                f"for {var.name!r}. Use an LP/QP solver that "
+                                "imports reduced costs.")
+                    rc[i] = float(value)
+                scenario_rc[(id(scenario), ndn)] = rc
+                probs = scenario._mpisppy_data.prob_coeff[ndn] \
+                    * np.ones(nlen)
+                local_sums[ndn] += probs * rc
+
+            # The reduced costs have been copied out. Keeping an IMPORT
+            # suffix would ask later PH QP/MIP solves to keep importing data
+            # that this feature never reads again.
+            if sname in self._reduced_cost_suffixes_added:
+                scenario.del_component("rc")
+                self._reduced_cost_suffixes_added.remove(sname)
+
+        for ndn in local_sums:
+            self.comms[ndn].Allreduce(
+                [local_sums[ndn], MPI.DOUBLE],
+                [global_sums[ndn], MPI.DOUBLE],
+                op=MPI.SUM)
+
+        for scenario in self.local_scenarios.values():
+            data = scenario._mpisppy_data
+            for node in scenario._mpisppy_node_list:
+                ndn = node.name
+                rc = scenario_rc[(id(scenario), ndn)]
+                mask = data.prob0_mask[ndn]
+                weights = -eta * (rc - global_sums[ndn]) * mask
+                for i, weight in enumerate(weights):
+                    scenario._mpisppy_model.W[(ndn, i)]._value = weight
+
+        self._reduced_costs_w_initialized = True
+        global_toc(
+            f"Initialized PH weights from centered reduced costs (eta={eta:g})",
+            self.cylinder_rank == 0)
+
+
+    def _update_W_for_iteration(self, verbose):
+        """On iteration 1 form eta*W_rc + (1-eta)*rho*(x-xbar)."""
+        if self._PHIter == 1 and self._reduced_costs_w_initialized:
+            eta = self.options["reduced_costs_w_init"]
+            self.Update_W(verbose, step_scale=1.0 - eta)
+            return
+        self.Update_W(verbose)
 
 
     def Update_z(self, verbose):
@@ -1307,6 +1434,11 @@ class PHBase(mpisppy.spopt.SPOpt):
                 "solves one problem: W, rho and the objective terms it "
                 "carries belong to that run, and a second prep would discard "
                 "the first and double the terms. Build a new object.")
+        if self.options.get("reduced_costs_w_init") is not None \
+                and not attach_duals:
+            raise RuntimeError(
+                "reduced_costs_w_init requires PH dual terms "
+                "(attach_duals=True)")
 
         self.attach_Ws_and_prox()
         if attach_smooth:
@@ -1371,6 +1503,42 @@ class PHBase(mpisppy.spopt.SPOpt):
         # time_limit is optional, not required
         if "time_limit" not in self.options:
             self.options["time_limit"] = None
+        eta = self.options.get("reduced_costs_w_init")
+        if eta is not None:
+            try:
+                eta = float(eta)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    "reduced_costs_w_init must be a number in [0, 1]") from exc
+            if not math.isfinite(eta) or not 0 <= eta <= 1:
+                raise ValueError(
+                    "reduced_costs_w_init must be a finite number in [0, 1]")
+            if eta == 0:
+                # Make zero identical to the option being absent: do not add
+                # an rc suffix or perturb the ordinary first PH update.
+                self.options["reduced_costs_w_init"] = None
+                return
+            if not self.is_minimizing:
+                raise RuntimeError(
+                    "reduced_costs_w_init currently supports minimization "
+                    "problems only")
+            if self.options.get("iter0_from_pickle", False):
+                raise RuntimeError(
+                    "reduced_costs_w_init is not yet supported with "
+                    "iter0_from_pickle")
+            relaxes_integers = (
+                "integer_relax_then_enforce_options" in self.options)
+            for scenario in self.local_scenarios.values():
+                discrete = [v.name for v in scenario.component_data_objects(
+                    pyo.Var, descend_into=True) if not v.fixed
+                    and not v.is_continuous()]
+                if discrete and not relaxes_integers:
+                    raise RuntimeError(
+                        "reduced_costs_w_init is only valid for convex "
+                        "continuous subproblems; found discrete variable(s): "
+                        + ", ".join(discrete[:3]) + ". Relax them for "
+                        "iteration 0 with integer_relax_then_enforce.")
+            self.options["reduced_costs_w_init"] = eta
 
     def _can_update_best_bound(self):
         if not self.prox_disabled:
@@ -1730,6 +1898,12 @@ class PHBase(mpisppy.spopt.SPOpt):
                                         self._attach_smooth)
             self._deferred_ph_attach = False
 
+        # This must precede solver creation: persistent interfaces discover
+        # import suffixes when set_instance() is called.
+        if self.options.get("reduced_costs_w_init") is not None \
+                and not self._resumed_from_checkpoint:
+            self._attach_reduced_cost_suffixes()
+
         global_toc("Creating solvers")
         self._create_solvers()
 
@@ -1804,6 +1978,8 @@ class PHBase(mpisppy.spopt.SPOpt):
         # with the checkpoint, and a supplied one is kept on purpose.
         if not self._resumed_from_checkpoint and not self._xbar_supplied:
             self.Compute_Xbar(verbose)
+
+        self._initialize_W_from_reduced_costs()
 
         if have_extensions:
             self.extobject.post_iter0()
@@ -2010,7 +2186,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             #global_toc('Rank: {} - After Compute_Xbar'.format(self.cylinder_rank), True)
 
             # update the weights
-            self.Update_W(verbose)
+            self._update_W_for_iteration(verbose)
             #global_toc('Rank: {} - After Update_W'.format(self.cylinder_rank), True)
 
             if hasattr(self.spcomm, "sync_Ws"):

@@ -138,6 +138,11 @@ def shared_options(cfg, is_hub=False):
     shoptions = {
         "solver_name": cfg.solver_name,
         "defaultPHrho": cfg.default_rho,
+        # The initialization belongs to the PH hub's iteration-0 solves.
+        # Spokes have independent models and do not inherit the hub's
+        # integer-relax-then-enforce extension.
+        "reduced_costs_w_init": (
+            cfg.reduced_costs_w_init if is_hub else None),
         "convthresh": 0,
         "PHIterLimit": cfg.max_iterations,  # not needed by all
         "time_limit": cfg.time_limit,  # not needed by all

@@ -373,6 +373,15 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=None)
 
+        self.add_to_config(
+            "reduced_costs_w_init",
+            description=(
+                "Experimental eta in [0,1] blending centered iteration-0 "
+                "reduced costs with PH's ordinary first W update "
+                "(0 disables; default None)"),
+            domain=float,
+            default=None)
+
         self.add_to_config("bundles_per_rank",
                             description="REMOVED: loose bundles no longer supported. Use --scenarios-per-bundle.",
                             domain=int,
