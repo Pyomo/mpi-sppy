@@ -124,6 +124,9 @@ run_phase "test_ph_main (serial)" \
 run_phase "test_ph_prep_once (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_prep_once.py
 
+run_phase "test_reduced_costs_w_init (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_reduced_costs_w_init.py -v
+
 run_phase "test_ph_extensions (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_extensions.py
 

@@ -816,6 +816,7 @@ jobs:
           cd mpisppy/tests
           coverage run $COV_ARGS test_ph_main.py
           coverage run $COV_ARGS test_ph_prep_once.py
+          coverage run $COV_ARGS -m pytest test_reduced_costs_w_init.py -v
 
       - name: Upload coverage data
         if: always()
