@@ -1,15 +1,21 @@
 """Graph invariants specific to the full-model pyfory reload codec."""
 
+import datetime
+import decimal
 import io
 import importlib.util
 import json
 import os
+import pathlib
 import struct
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
-from collections import OrderedDict, defaultdict
+import uuid
+from collections import OrderedDict, defaultdict, namedtuple
+from fractions import Fraction
 
 import pyomo.environ as pyo
 from pyomo.common.collections import Bunch
@@ -37,6 +43,28 @@ class _OwnDictionaryView:
 
 class _CustomDict(dict):
     pass
+
+
+class _SlottedPayload:
+    __slots__ = ("value",)
+
+    def __init__(self, value):
+        self.value = value
+
+
+class _ListPayload(list):
+    pass
+
+
+class _SetPayload(set):
+    pass
+
+
+class _FrozenPayload(frozenset):
+    pass
+
+
+_TuplePayload = namedtuple("_TuplePayload", "left right")
 
 
 @unittest.skipUnless(reload_runtime_available,
@@ -192,6 +220,133 @@ class TestPyforyModelCodec(unittest.TestCase):
             with open(path, "rb") as stream:
                 with self.assertRaisesRegex(ValueError, "write identity"):
                     codec.load(stream, write_id="wrong")
+
+    def test_common_metadata_and_container_subclasses_in_fresh_process(self):
+        model = pyo.ConcreteModel()
+        timezone = datetime.timezone(datetime.timedelta(hours=-7))
+        timestamp = datetime.datetime(2026, 11, 6, 12, 30)
+        wall_time = datetime.time(12, 30, 45, 123456, fold=1)
+        wrapped = _ListPayload([1, 2])
+        wrapped.note = "preserved"
+        wrapped.append(wrapped)
+        marked_set = _SetPayload(["one", "two"])
+        marked_set.note = "set state"
+        model.graph = {
+            "timestamp": timestamp,
+            "timestamp_alias": timestamp,
+            "aware_timestamp": datetime.datetime(
+                2026, 11, 1, 1, 30, tzinfo=timezone, fold=1),
+            "wall_time": wall_time,
+            "wall_time_alias": wall_time,
+            "aware_wall_time": datetime.time(
+                1, 30, 45, 123456, tzinfo=timezone, fold=1),
+            "timezone": timezone,
+            "decimal": decimal.Decimal("1.25"),
+            "path": pathlib.Path("/tmp/model.dat"),
+            "fraction": Fraction(2**100, 3),
+            "uuid": uuid.UUID("01234567-89ab-cdef-0123-456789abcdef"),
+            "slots": _SlottedPayload(17),
+            "list": wrapped,
+            "tuple": _TuplePayload(3, "four"),
+            "set": marked_set,
+            "frozenset": _FrozenPayload(["alpha", "beta"]),
+            "struct_time": time.struct_time((2026, 11, 6, 12, 30, 0, 4, 310, 0)),
+        }
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "model.fory")
+            with open(path, "wb") as stream:
+                codec.dump(model, stream)
+            script = (
+                "import datetime, decimal, pathlib, sys, time, uuid\n"
+                "from fractions import Fraction\n"
+                "from mpisppy.utils import pyfory_model_codec as c\n"
+                "with open(sys.argv[1], 'rb') as stream:\n"
+                "    graph = c.load(stream).graph\n"
+                "assert graph['timestamp'] == datetime.datetime(2026, 11, 6, 12, 30)\n"
+                "assert graph['timestamp_alias'] is graph['timestamp']\n"
+                "assert graph['timestamp'].tzinfo is None\n"
+                "assert graph['aware_timestamp'].fold == 1\n"
+                "assert graph['aware_timestamp'].tzinfo is graph['timezone']\n"
+                "assert graph['aware_timestamp'].utcoffset() == datetime.timedelta(hours=-7)\n"
+                "assert graph['wall_time'] == datetime.time(12, 30, 45, 123456)\n"
+                "assert graph['wall_time'].fold == 1\n"
+                "assert graph['wall_time_alias'] is graph['wall_time']\n"
+                "assert graph['aware_wall_time'].hour == 1\n"
+                "assert graph['aware_wall_time'].minute == 30\n"
+                "assert graph['aware_wall_time'].second == 45\n"
+                "assert graph['aware_wall_time'].microsecond == 123456\n"
+                "assert graph['aware_wall_time'].fold == 1\n"
+                "assert graph['aware_wall_time'].tzinfo is graph['timezone']\n"
+                "assert graph['decimal'] == decimal.Decimal('1.25')\n"
+                "assert graph['path'] == pathlib.Path('/tmp/model.dat')\n"
+                "assert graph['fraction'] == Fraction(2**100, 3)\n"
+                "assert graph['uuid'] == uuid.UUID('01234567-89ab-cdef-0123-456789abcdef')\n"
+                "assert graph['slots'].value == 17\n"
+                "assert type(graph['list']).__name__ == '_ListPayload'\n"
+                "assert graph['list'][:2] == [1, 2]\n"
+                "assert graph['list'][2] is graph['list']\n"
+                "assert graph['list'].note == 'preserved'\n"
+                "assert tuple(graph['tuple']) == (3, 'four')\n"
+                "assert graph['set'] == {'one', 'two'}\n"
+                "assert graph['set'].note == 'set state'\n"
+                "assert type(graph['frozenset']).__name__ == '_FrozenPayload'\n"
+                "assert graph['frozenset'] == {'alpha', 'beta'}\n"
+                "assert graph['struct_time'].tm_year == 2026\n"
+            )
+            result = subprocess.run([sys.executable, "-X", "faulthandler",
+                                     "-c", script, path],
+                                    capture_output=True, text=True,
+                                    timeout=30, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_main_module_callback_in_fresh_process(self):
+        writer = (
+            "import sys\n"
+            "import pyomo.environ as pyo\n"
+            "from mpisppy.utils import pyfory_model_codec as c\n"
+            "SCALE = 2\n"
+            "def callback(value):\n"
+            "    return value + SCALE\n"
+            "model = pyo.ConcreteModel()\n"
+            "model.callback = callback\n"
+            "with open(sys.argv[1], 'wb') as stream:\n"
+            "    c.dump(model, stream)\n"
+        )
+        reader = (
+            "import sys\n"
+            "from mpisppy.utils import pyfory_model_codec as c\n"
+            "with open(sys.argv[1], 'rb') as stream:\n"
+            "    model = c.load(stream)\n"
+            "assert model.callback(3) == 5\n"
+            "assert model.callback.__globals__['SCALE'] == 2\n"
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "model.fory")
+            for script in (writer, reader):
+                result = subprocess.run(
+                    [sys.executable, "-c", script, path],
+                    capture_output=True, text=True, timeout=30,
+                    check=False)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_main_module_class_is_refused_before_checkpoint_write(self):
+        cls = type("DriverPayload", (), {"__module__": "__main__"})
+        model = pyo.ConcreteModel()
+        model.graph = cls()
+        stream = io.BytesIO()
+        with self.assertRaisesRegex(TypeError, "stable import path"):
+            codec.dump(model, stream)
+        self.assertEqual(stream.getvalue(), b"")
+
+    def test_cyclic_immutable_container_subclass_is_refused(self):
+        child = []
+        wrapped = _TuplePayload(child, 1)
+        child.append(wrapped)
+        model = pyo.ConcreteModel()
+        model.graph = wrapped
+        with self.assertRaisesRegex(TypeError,
+                                    "cyclic immutable container subclass"):
+            codec.dump(model, io.BytesIO())
 
     def test_unsupported_instance_dictionary_view_is_refused(self):
         model = pyo.ConcreteModel()

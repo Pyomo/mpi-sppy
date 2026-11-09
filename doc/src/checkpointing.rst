@@ -116,9 +116,9 @@ pyfory-reload
 Install ``mpi-sppy[pyfory]`` to enable this opt-in full-model backend on
 CPython 3.13.2 with Pyomo 6.10.1 and pyfory 1.7.7. Each model file contains
 a versioned type table so a fresh reader can restore the saved graph without
-running the saved iterations. The manifest records the backend, reload schema, and pyfory
-version; incompatible versions are refused. Earlier experimental reload files
-are not readable by this schema.
+running the saved iterations. The manifest records the backend, reload schema,
+adapter, and pyfory versions; incompatible versions are refused. Earlier
+experimental reload files are not readable by this schema.
 Like dill checkpoints, these model files must come from a trusted source.
 The backend preserves extension changes carried on scenario models and uses
 the same PH model-splicing repairs as ``dill-reload``. It retains the rank
@@ -130,13 +130,19 @@ Pyomo ``Bunch`` objects, ``PyomoConfig`` objects, ``OrderedDict``, and
 otherwise unreachable. ``OrderedDict`` entry order and ``defaultdict`` default
 factories are restored. Bunch, PyomoConfig, and OrderedDict instance-dictionary
 views also retain their owner. Other mapping subclasses and unsupported
-instance-dictionary views are refused with a graph path. Local callback code,
-closure cells, names, documentation, and the globals they use are saved;
+instance-dictionary views are refused with a graph path. Standard
+``datetime.datetime`` and ``datetime.time`` wall times and timezone references,
+paths, fractions, UUIDs, slot attributes, and importable container subclasses
+with reconstructible constructors are preserved. Cyclic tuple and frozenset
+subclasses are refused at setup. Local callback code, closure cells, names,
+documentation, and the globals they use are saved;
+callbacks defined in ``__main__`` are saved by value for a fresh reader;
 callbacks that inspect their globals dynamically are refused.
 
 The codec uses a 10,000-level depth limit and a 1 GiB graph-memory budget.
 Checkpoint setup round-trips every local scenario with an independent codec;
-unsupported or unimportable model classes and local rules that inspect their
+unsupported or unimportable model classes, including classes defined in
+``__main__``, and local rules that inspect their
 module globals dynamically are refused. Benchmark with the
 actual model and solver before choosing this backend for a large run: the
 additional type table and reference tracking can affect memory and time.

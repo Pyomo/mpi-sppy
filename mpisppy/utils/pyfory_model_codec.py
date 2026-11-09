@@ -6,6 +6,7 @@ object's contents have been read.
 """
 
 import builtins
+import datetime
 import dis
 import functools
 import gc
@@ -13,11 +14,14 @@ import importlib
 import json
 import logging
 import marshal
+import pathlib
 import struct
 import sys
 import types
+import uuid
 from collections import OrderedDict, defaultdict
 from enum import Enum
+from fractions import Fraction
 
 import pyfory
 import pyomo
@@ -48,6 +52,9 @@ ORDERED_VIEW_KINDS = {type(getattr(OrderedDict(), kind)()): kind
                       for kind in ("keys", "values", "items")}
 VIEW_KINDS = {**DICT_VIEW_KINDS, **ORDERED_VIEW_KINDS}
 SUPPORTED_MAPPINGS = (dict, Bunch, PyomoConfig, OrderedDict, defaultdict)
+PATH_TYPES = (pathlib.PurePath, pathlib.PurePosixPath,
+              pathlib.PureWindowsPath, pathlib.Path, pathlib.PosixPath,
+              pathlib.WindowsPath)
 RESERVED_TYPE_IDS = {"function": 9040, "cell": 9050,
                      "keys": 9060, "values": 9061, "items": 9062,
                      "odict_keys": 9063, "odict_values": 9064,
@@ -99,6 +106,10 @@ def require_supported_runtime():
 
 
 def _importable(obj):
+    # A writer can find its own __main__ objects, but a fresh reader's
+    # __main__ is a different module. Save functions from there by value.
+    if obj.__module__ == "__main__":
+        return False
     try:
         target = importlib.import_module(obj.__module__)
         for part in obj.__qualname__.split("."):
@@ -106,6 +117,28 @@ def _importable(obj):
         return target is obj
     except (AttributeError, ImportError, TypeError):
         return False
+
+
+def _restore_state(obj, state):
+    """Apply the default pickle state protocol, including slot attributes."""
+    if hasattr(obj, "__setstate__"):
+        obj.__setstate__(state)
+        return
+    if state is None:
+        return
+    if isinstance(state, tuple) and len(state) == 2:
+        attributes, slots = state
+    else:
+        attributes, slots = state, None
+    if attributes is not None:
+        if not isinstance(attributes, dict) or not hasattr(obj, "__dict__"):
+            raise TypeError(f"Cannot restore dictionary state of {type(obj)!r}")
+        obj.__dict__.update(attributes)
+    if slots is not None:
+        if not isinstance(slots, dict):
+            raise TypeError(f"Cannot restore slot state of {type(obj)!r}")
+        for name, value in slots.items():
+            setattr(obj, name, value)
 
 
 def _resolve(module, name):
@@ -407,12 +440,144 @@ class _StateSerializer(pyfory.Serializer):
             raise TypeError(f"Cannot allocate checkpoint type {self.type_!r}") from exc
         context.reference(obj)
         state = context.read_ref()
-        if hasattr(obj, "__setstate__"):
-            obj.__setstate__(state)
-        elif isinstance(state, dict) and hasattr(obj, "__dict__"):
-            obj.__dict__.update(state)
+        _restore_state(obj, state)
+        return obj
+
+
+class _PathSerializer(pyfory.Serializer):
+    def write(self, context, obj):
+        context.write_string(str(obj))
+
+    def read(self, context):
+        obj = self.type_(context.read_string())
+        context.reference(obj)
+        return obj
+
+
+class _FractionSerializer(pyfory.Serializer):
+    def write(self, context, obj):
+        # Fractions can exceed the signed 64-bit integers supported by pyfory.
+        context.write_string(str(obj.numerator))
+        context.write_string(str(obj.denominator))
+
+    def read(self, context):
+        obj = self.type_(int(context.read_string()), int(context.read_string()))
+        context.reference(obj)
+        return obj
+
+
+class _UUIDSerializer(pyfory.Serializer):
+    def write(self, context, obj):
+        context.write_string(obj.hex)
+
+    def read(self, context):
+        obj = self.type_(hex=context.read_string())
+        context.reference(obj)
+        return obj
+
+
+class _DateTimeSerializer(pyfory.Serializer):
+    """Keep wall time and naive/aware status instead of UTC-normalizing it."""
+    def write(self, context, obj):
+        for value in (obj.year, obj.month, obj.day, obj.hour, obj.minute,
+                      obj.second, obj.microsecond):
+            context.write_var_uint32(value)
+        context.write_bool(bool(obj.fold))
+        context.write_ref(obj.tzinfo)
+
+    def read(self, context):
+        fields = [context.read_var_uint32() for _ in range(7)]
+        fold = int(context.read_bool())
+        tzinfo = context.read_ref()
+        obj = datetime.datetime(*fields, tzinfo=tzinfo, fold=fold)
+        return obj
+
+
+class _TimeSerializer(pyfory.Serializer):
+    """Preserve the full wall time, fold, and timezone reference."""
+    def write(self, context, obj):
+        for value in (obj.hour, obj.minute, obj.second, obj.microsecond):
+            context.write_var_uint32(value)
+        context.write_bool(bool(obj.fold))
+        context.write_ref(obj.tzinfo)
+
+    def read(self, context):
+        fields = [context.read_var_uint32() for _ in range(4)]
+        fold = int(context.read_bool())
+        tzinfo = context.read_ref()
+        return datetime.time(*fields, tzinfo=tzinfo, fold=fold)
+
+
+class _TimezoneSerializer(pyfory.Serializer):
+    def write(self, context, obj):
+        is_utc = obj is datetime.timezone.utc
+        context.write_bool(is_utc)
+        if not is_utc:
+            context.write_ref(obj.utcoffset(None))
+            context.write_ref(obj.tzname(None))
+
+    def read(self, context):
+        if context.read_bool():
+            return datetime.timezone.utc
+        return datetime.timezone(context.read_ref(), context.read_ref())
+
+
+class _ContainerSubclassSerializer(pyfory.Serializer):
+    """Preserve the contents and instance state of standard container heirs."""
+    def __init__(self, resolver, cls, tables):
+        super().__init__(resolver, cls)
+        self.tables = tables
+
+    def write(self, context, obj):
+        if isinstance(obj, list):
+            count, values = list.__len__(obj), list.__iter__(obj)
+        elif isinstance(obj, tuple):
+            count, values = tuple.__len__(obj), tuple.__iter__(obj)
+        elif isinstance(obj, set):
+            count, values = set.__len__(obj), set.__iter__(obj)
         else:
-            raise TypeError(f"Cannot restore state of {self.type_!r}")
+            count, values = frozenset.__len__(obj), frozenset.__iter__(obj)
+        if count > MAX_ENTRIES:
+            raise ValueError("Too many container entries in checkpoint")
+        context.write_var_uint32(count)
+        for value in values:
+            if isinstance(obj, list):
+                # A direct self-reference must not re-enter pyfory's native
+                # list fast path for a registered list subclass.
+                context.write_bool(value is obj)
+                if value is obj:
+                    continue
+            context.write_ref(value)
+        context.write_ref(self.tables.state(obj))
+
+    def read(self, context):
+        count = context.read_var_uint32()
+        if count > MAX_ENTRIES:
+            raise ValueError("Too many container entries in checkpoint")
+        cls = self.type_
+        if issubclass(cls, list):
+            obj = cls.__new__(cls)
+            context.reference(obj)
+            for _ in range(count):
+                list.append(obj, obj if context.read_bool()
+                            else context.read_ref())
+        elif issubclass(cls, set):
+            obj = cls.__new__(cls)
+            context.reference(obj)
+            for _ in range(count):
+                set.add(obj, context.read_ref())
+        else:
+            values = tuple(context.read_ref() for _ in range(count))
+            if issubclass(cls, tuple):
+                try:
+                    obj = cls.__new__(cls, *values)
+                except TypeError:
+                    obj = cls.__new__(cls, values)
+            else:
+                obj = cls.__new__(cls, values)
+            if type(obj) is not cls or len(obj) != count:
+                raise TypeError(f"Cannot reconstruct container {cls!r}")
+        _restore_state(obj, context.read_ref())
         return obj
 
 
@@ -471,10 +636,20 @@ def _descriptor(cls, example):
         kind = "logger"
     elif cls is functools._lru_cache_wrapper:
         kind = "importable_callable"
+    elif cls in PATH_TYPES:
+        kind = "path"
+    elif cls is Fraction:
+        kind = "fraction"
+    elif cls is uuid.UUID:
+        kind = "uuid"
+    elif cls is datetime.timezone:
+        kind = "timezone"
+    elif issubclass(cls, (tuple, list, set, frozenset)):
+        kind = "container"
     else:
         kind = "state"
-    if "<locals>" in cls.__qualname__:
-        raise TypeError(f"Checkpoint type {cls!r} is not importable")
+    if cls.__module__ == "__main__" or not _importable(cls):
+        raise TypeError(f"Checkpoint type {cls!r} has no stable import path")
     return {"kind": kind, "name": f"{cls.__module__}:{cls.__qualname__}"}
 
 
@@ -483,13 +658,23 @@ def _discover(root, tables):
     classes = {}
     view_owners = {}
     instance_dicts = {}
+    active_immutable_containers = set()
+    native_types = pyfory.Fory(**FORY_OPTIONS).type_resolver
 
     def visit(obj, path):
         key = id(obj)
         if key in seen:
+            if key in active_immutable_containers:
+                raise TypeError(
+                    f"{path}: cyclic immutable container subclass "
+                    f"{type(obj)!r} cannot be reconstructed")
             return
         seen[key] = obj
         cls = type(obj)
+        immutable_subclass = cls not in (tuple, frozenset) and \
+            isinstance(obj, (tuple, frozenset))
+        if immutable_subclass:
+            active_immutable_containers.add(key)
         try:
             if cls in VIEW_KINDS:
                 owner = backing_mapping(obj)
@@ -519,6 +704,8 @@ def _discover(root, tables):
             elif cls is types.MethodType:
                 visit(obj.__self__, path + ".self")
                 visit(obj.__func__, path + ".function")
+            elif cls in (datetime.datetime, datetime.time):
+                visit(obj.tzinfo, path + ".tzinfo")
             elif isinstance(obj, (type, types.ModuleType)):
                 return
             elif isinstance(obj, dict):
@@ -534,6 +721,11 @@ def _discover(root, tables):
                 if isinstance(obj, Bunch) or cls is OrderedDict:
                     visit(obj.__dict__, path + ".__dict__")
             elif isinstance(obj, (tuple, list, set, frozenset)):
+                if cls not in (tuple, list, set, frozenset):
+                    classes.setdefault(cls, obj)
+                    if hasattr(obj, "__dict__"):
+                        instance_dicts[id(obj.__dict__)] = path
+                    visit(tables.state(obj), path + ".state")
                 for index, value in enumerate(obj):
                     visit(value, path + f"[{index}]")
             elif isinstance(obj, (Enum, logging.Logger,
@@ -551,6 +743,8 @@ def _discover(root, tables):
                 classes.setdefault(cls, obj)
             elif cls.__module__ not in ("builtins", "array") and not \
                     cls.__module__.startswith("numpy"):
+                if native_types.get_type_info(cls, create=False) is not None:
+                    return
                 classes.setdefault(cls, obj)
                 if hasattr(obj, "__dict__"):
                     instance_dicts[id(obj.__dict__)] = path
@@ -559,6 +753,9 @@ def _discover(root, tables):
             if str(exc).startswith(getattr(root, "name", "model") + "."):
                 raise
             raise type(exc)(f"{path}: {exc}") from exc
+        finally:
+            if immutable_subclass:
+                active_immutable_containers.remove(key)
 
     visit(root, getattr(root, "name", "model"))
     for key, path in view_owners.items():
@@ -612,6 +809,12 @@ def _resolve_entries(descriptors):
 
 def _new_codec(entries, tables):
     codec = pyfory.Fory(**FORY_OPTIONS)
+    codec.register_serializer(
+        datetime.datetime,
+        _DateTimeSerializer(codec.type_resolver, datetime.datetime))
+    codec.register_serializer(
+        datetime.time,
+        _TimeSerializer(codec.type_resolver, datetime.time))
     codec.register_serializer(dict, _MappingSerializer(codec.type_resolver,
                                                        dict, tables))
     codec.register_type(types.FunctionType,
@@ -640,6 +843,17 @@ def _new_codec(entries, tables):
             serializer = _LoggerSerializer(codec.type_resolver, cls)
         elif kind == "importable_callable":
             serializer = _ImportableCallableSerializer(codec.type_resolver, cls)
+        elif kind == "path":
+            serializer = _PathSerializer(codec.type_resolver, cls)
+        elif kind == "fraction":
+            serializer = _FractionSerializer(codec.type_resolver, cls)
+        elif kind == "uuid":
+            serializer = _UUIDSerializer(codec.type_resolver, cls)
+        elif kind == "timezone":
+            serializer = _TimezoneSerializer(codec.type_resolver, cls)
+        elif kind == "container":
+            serializer = _ContainerSubclassSerializer(codec.type_resolver,
+                                                      cls, tables)
         elif kind == "enum":
             serializer = None
         else:
