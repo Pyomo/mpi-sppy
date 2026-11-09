@@ -478,6 +478,48 @@ class Test_sizes(unittest.TestCase):
         print(f"   deleting f{tdir}")
 
 
+    def test_scenario_lpwriter_fixed_nonant(self):
+        # Pyomo's writers drop fixed variables; the extension must still
+        # write a fixed nonant (as lb = ub) because the json lists it.
+        import tempfile
+
+        import mpisppy.spbase
+        from mpisppy.extensions.scenario_lp_mps_files import (
+            Scenario_lp_mps_files,
+            lpize,
+        )
+        from mpisppy.utils import config
+        cfg = config.Config()
+        cfg.quick_assign("default_rho", float, 1.0)
+        with tempfile.TemporaryDirectory() as parent:
+            tdir = os.path.join(parent, "scen")
+            options = {"write_lp_mps_extension_options":
+                       {"write_scenario_lp_mps_files_dir": tdir, "cfg": cfg}}
+            spb = mpisppy.spbase.SPBase(
+                options,
+                self.all3_scenario_names,
+                self._fix_creator,
+                scenario_creator_kwargs={"scenario_count": 3},
+            )
+            s = spb.local_scenarios["Scenario1"]
+            var = s.NumProducedFirstStage[5]
+            lb, ub = var.lb, var.ub
+            Scenario_lp_mps_files(spb).pre_iter0()
+
+            vname = lpize(var.name)
+            with open(os.path.join(tdir, "Scenario1_nonants.json")) as jfile:
+                self.assertIn(vname, jfile.read())
+            with open(os.path.join(tdir, "Scenario1.lp")) as lpfile:
+                self.assertIn(f"1134 <= {vname} <= 1134", lpfile.read())
+            with open(os.path.join(tdir, "Scenario1.mps")) as mpsfile:
+                self.assertIn(vname, mpsfile.read())
+
+        # the model is left as it was
+        self.assertTrue(var.fixed)
+        self.assertEqual(var.value, 1134)
+        self.assertEqual((var.lb, var.ub), (lb, ub))
+
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_wtracker_extension(self):

@@ -76,6 +76,8 @@ run_phase "test_lshaped_standard_l1 (serial)" \
     
 run_phase "test_solver_log_dir (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_solver_log_dir.py -v
+run_phase "test_lshaped_cuts_highs (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_lshaped_cuts_highs.py -v
 
 run_phase "test_cvar (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_cvar.py -v
@@ -248,7 +250,7 @@ run_phase "test_checkpoint_profile (spawns mpiexec)" \
 run_phase "test_iis_on_infeasible (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_iis_on_infeasible.py -v
 
-# Serial unit tests. The CI "run unit tests"
+# Pure-logic serial unit tests (no MPI, no solver). The CI "run unit tests"
 # job (.github/workflows/test_pr_and_main.yml) runs these under coverage; keep
 # this list in sync with that job so local and CI coverage numbers match.
 run_phase "serial unit tests (serial)" \

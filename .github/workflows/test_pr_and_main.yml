@@ -162,6 +162,10 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_solver_log_dir.py -v
 
+      - name: Test L-shaped cuts from HiGHS
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_lshaped_cuts_highs.py -v
+
       - name: Test CVaR
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_cvar.py -v
