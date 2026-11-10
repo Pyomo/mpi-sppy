@@ -30,7 +30,7 @@ try:
                 "import mpi-sppy before disabling mpi4py's auto-initialization"
             )
         _provided_thread_level = _mpi.Query_thread()
-        # Prefer the MPI runtime's own async progress when it is enabled.
+        # Let MVAPICH supply progress itself when its async worker is enabled.
         if _os.environ.get("MVAPICH_ASYNC_PROGRESS") == "1" and (
             _mpi.get_vendor()[0].upper().startswith("MVAPICH")
             or _mpi.Get_library_version().lstrip().upper().startswith("MVAPICH")
@@ -52,7 +52,13 @@ try:
 
     haveMPI = True
 
-except ImportError:
+except ImportError as _mpi_import_error:
+    if _enable_progress_thread:
+        raise RuntimeError(
+            "MPISPPY_MPI_PROGRESS_THREAD=1 requires mpi4py and the native MPI "
+            "progress extension"
+        ) from _mpi_import_error
+
     import copy as _cp
 
     import numpy as _np

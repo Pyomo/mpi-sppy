@@ -285,7 +285,7 @@ run_phase "serial unit tests (serial)" \
         mpisppy/tests/test_window_distribution.py
 
 # Exercise the opt-in worker in one MPI process so mpi_progress.py contributes
-# executed lines to the local report. CI also tests installed worker variants.
+# executed lines to the local report. CI also tests the installed C worker.
 run_phase "test_mpi_progress (single-process enabled worker)" \
     env -u MVAPICH_ASYNC_PROGRESS MPISPPY_MPI_PROGRESS_THREAD=1 \
         coverage run --rcfile="$PROJ_DIR/.coveragerc" -m pytest mpisppy/tests/test_mpi_progress.py -v

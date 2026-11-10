@@ -1420,8 +1420,8 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_mpi_abort.py -v
 
-      # Reuse this matrix's MPI, mpi4py, and solver setup. Test both installed
-      # worker paths in sequence, after the checkout-based cylinder tests.
+      # Reuse this matrix's MPI, mpi4py, and solver setup. Check an installation
+      # without the optional extension, then exercise the native worker.
       - name: Build and inspect MPI progress source distribution
         if: matrix.mpi4py == 'mpi4py'
         timeout-minutes: 5
@@ -1431,18 +1431,18 @@ jobs:
           tar -tzf "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz > "$RUNNER_TEMP/sdist-files.txt"
           grep -q '/mpisppy/_mpi_progress_worker.c$' "$RUNNER_TEMP/sdist-files.txt"
 
-      - name: Check MPI compiler fallback and missing CC
+      - name: Check missing native progress extension and missing CC
         # These setup.py behaviors are independent of the MPI implementation.
         if: matrix.mpi == 'mpich' && matrix.mpi4py == 'mpi4py'
         timeout-minutes: 5
         run: |
-          mkdir -p "$RUNNER_TEMP/fallback-wheels"
+          mkdir -p "$RUNNER_TEMP/no-progress-wheels"
           CC=false python -m pip wheel --verbose --no-deps --no-build-isolation --no-cache-dir \
-            -w "$RUNNER_TEMP/fallback-wheels" "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz \
-            > "$RUNNER_TEMP/fallback-build.log" 2>&1
-          grep -q 'MPI compiler probe failed; using the Python MPI progress worker' \
-            "$RUNNER_TEMP/fallback-build.log"
-          python -c "import glob,zipfile; p=glob.glob('$RUNNER_TEMP/fallback-wheels/*.whl'); assert len(p)==1; z=zipfile.ZipFile(p[0]); assert not any('_mpi_progress_worker' in n and n.endswith('.so') for n in z.namelist())"
+            -w "$RUNNER_TEMP/no-progress-wheels" "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz \
+            > "$RUNNER_TEMP/no-progress-build.log" 2>&1
+          grep -q 'native MPI progress worker will not be available' \
+            "$RUNNER_TEMP/no-progress-build.log"
+          python -c "import glob,zipfile; p=glob.glob('$RUNNER_TEMP/no-progress-wheels/*.whl'); assert len(p)==1; z=zipfile.ZipFile(p[0]); assert not any('_mpi_progress_worker' in n and n.endswith('.so') for n in z.namelist())"
           if CC="$RUNNER_TEMP/no-such-mpicc" python -m pip wheel --no-deps \
             --no-build-isolation --no-cache-dir -w "$RUNNER_TEMP" \
             "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz \
@@ -1452,23 +1452,27 @@ jobs:
           fi
           grep -q 'MPI compiler command .* was not found' "$RUNNER_TEMP/missing-cc.log"
 
-      - name: Install isolated Python progress wheel
-        if: matrix.mpi4py == 'mpi4py'
+      - name: Install wheel without native progress extension
+        if: matrix.mpi == 'mpich' && matrix.mpi4py == 'mpi4py'
         timeout-minutes: 5
         run: |
-          mkdir -p "$RUNNER_TEMP/python-wheels"
-          python -m pip wheel --no-deps --no-cache-dir -w "$RUNNER_TEMP/python-wheels" \
-            "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz
           python -m pip uninstall -y mpi-sppy
-          python -m pip install --no-deps "$RUNNER_TEMP"/python-wheels/*.whl
+          python -m pip install --no-deps "$RUNNER_TEMP"/no-progress-wheels/*.whl
 
-      - name: Check Python MPI progress worker
-        if: matrix.mpi4py == 'mpi4py'
-        timeout-minutes: 8
+      - name: Reject progress without native extension
+        if: matrix.mpi == 'mpich' && matrix.mpi4py == 'mpi4py'
+        timeout-minutes: 5
         env:
           MPISPPY_MPI_PROGRESS_THREAD: "1"
-          MPISPPY_CHECKOUT: ${{ github.workspace }}
-        run: bash "$GITHUB_WORKSPACE/.github/workflows/run_mpi_progress_checks.sh" python
+        run: |
+          cd "$RUNNER_TEMP"
+          env -u MPISPPY_MPI_PROGRESS_THREAD python -c 'from mpisppy import MPI; assert MPI.haveMPI'
+          if python -c 'from mpisppy import MPI' > "$RUNNER_TEMP/missing-progress.log" 2>&1; then
+            cat "$RUNNER_TEMP/missing-progress.log"
+            echo "progress startup unexpectedly succeeded without the native extension"
+            exit 1
+          fi
+          grep -q 'requires the native MPI progress extension' "$RUNNER_TEMP/missing-progress.log"
 
       - name: Install matching native progress worker
         if: matrix.mpi4py == 'mpi4py'
@@ -1486,7 +1490,7 @@ jobs:
         env:
           MPISPPY_MPI_PROGRESS_THREAD: "1"
           MPISPPY_CHECKOUT: ${{ github.workspace }}
-        run: bash "$GITHUB_WORKSPACE/.github/workflows/run_mpi_progress_checks.sh" native
+        run: bash "$GITHUB_WORKSPACE/.github/workflows/run_mpi_progress_checks.sh"
 
       - name: Upload coverage data
         if: always()
@@ -1651,11 +1655,12 @@ jobs:
           python-version: 3.11
       - name: Install dependencies
         run: |
-          conda install mpi4py pandas setuptools
+          conda install mpi4py mpich pandas "setuptools>=68" wheel
 
       - name: setup the program
         run: |
-          pip install -e ".[test]"
+          CC=mpicc python -m pip install --no-build-isolation -e ".[test]"
+          MPISPPY_MPI_PROGRESS_THREAD=1 python -c 'from mpisppy import MPI; assert MPI._progress_controller.thread.is_alive()'
 
       - name: run unit tests
         run: |

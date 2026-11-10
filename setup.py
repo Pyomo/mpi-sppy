@@ -7,7 +7,7 @@
 # full copyright and license information.
 ###############################################################################
 
-"""Build the MPI progress worker when its MPI/POSIX toolchain is available."""
+"""Build the native MPI progress worker when its toolchain is available."""
 
 import importlib.util
 import os
@@ -152,8 +152,9 @@ const char *mpisppy_mpi_build_signature(size_t *comm_size,
                 )
             except Exception as exc:
                 warnings.warn(
-                    "MPI compiler probe failed; using the Python MPI progress "
-                    f"worker ({type(exc).__name__}: {exc})"
+                    "MPI compiler probe failed; the native MPI progress worker "
+                    "will not be available in this build "
+                    f"({type(exc).__name__}: {exc})"
                 )
                 # clear any previous build that was left behind
                 Path(self.get_ext_fullpath(extension.name)).unlink(missing_ok=True)
@@ -221,12 +222,15 @@ compiler_available = (
 )
 if mpi4py_available and not native_platform:
     warnings.warn(
-        "The MPI progress extension requires Linux or macOS; using the Python worker"
+        "The MPI progress extension requires Linux or macOS; native MPI progress "
+        "will not be available in this build"
     )
 elif mpi4py_available and not compiler_available:
     if "CC" in os.environ:
         raise RuntimeError(f"MPI compiler command {os.environ['CC']!r} was not found")
-    warnings.warn("mpicc was not found; using the Python MPI progress worker")
+    warnings.warn(
+        "mpicc was not found; native MPI progress will not be available in this build"
+    )
 
 if mpi4py_available and native_platform and compiler_available:
     import mpi4py

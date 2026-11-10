@@ -26,7 +26,7 @@ from mpisppy import mpi_progress
 from mpisppy.utils.mpi_progress_compat import check_native_mpi_compatibility
 
 
-class TestMPIProgressBackendSelection(unittest.TestCase):
+class TestMPIProgressNativeWorker(unittest.TestCase):
     def test_editable_install_metadata_variants(self):
         cases = (
             (None, False),
@@ -103,8 +103,9 @@ class TestMPIProgressBackendSelection(unittest.TestCase):
         self.assertEqual(module_name, "mpisppy._mpi_progress_worker")
         find_spec.assert_called_once_with(module_name)
 
-    def test_native_backend_selection_and_operations(self):
+    def test_native_worker_load_and_configuration(self):
         worker = SimpleNamespace(
+            STOP_TIMEOUT_SECONDS=30,
             configure=mock.Mock(),
             run=mock.Mock(),
             set_active=mock.Mock(),
@@ -121,31 +122,44 @@ class TestMPIProgressBackendSelection(unittest.TestCase):
             ),
             mock.patch.object(mpi_progress, "check_native_mpi_compatibility") as check,
         ):
-            backend = mpi_progress._select_backend(mpi, comm, 0.001, "MPI.py")
-            backend.run()
-            backend.activate()
-            backend.deactivate()
-            backend.stop()
+            loaded_worker = mpi_progress._load_native_worker(
+                mpi, comm, 0.001, "MPI.py"
+            )
 
-        self.assertIsInstance(backend, mpi_progress._NativeBackend)
-        self.assertEqual(backend.stop_timeout, mpi_progress.NATIVE_STOP_TIMEOUT_SECONDS)
+        self.assertIs(loaded_worker, worker)
         worker.configure.assert_called_once_with(comm, 0.001)
+        check.assert_called_once_with(worker, mpi)
+
+    def test_controller_calls_native_worker_directly(self):
+        worker = SimpleNamespace(
+            STOP_TIMEOUT_SECONDS=1,
+            run=mock.Mock(),
+            set_active=mock.Mock(),
+            stop=mock.Mock(),
+        )
+        comm = SimpleNamespace(Abort=mock.Mock())
+        with mock.patch.object(mpi_progress.atexit, "register") as register:
+            controller = mpi_progress.ProgressController(worker, comm)
+            controller.activate()
+            controller.deactivate()
+            controller.stop()
+
+        self.assertIs(controller.worker, worker)
         worker.run.assert_called_once_with()
         worker.set_active.assert_has_calls([mock.call(True), mock.call(False)])
         worker.stop.assert_called_once_with()
-        check.assert_called_once_with(worker, mpi)
+        register.assert_called_once_with(controller.stop)
 
-    def test_python_backend_selected_without_native_module(self):
+    def test_native_extension_is_required(self):
         mpi = SimpleNamespace()
         comm = SimpleNamespace()
         with mock.patch.object(mpi_progress, "_native_module_name", return_value=None):
-            backend = mpi_progress._select_backend(mpi, comm, 0.001, "MPI.py")
+            with self.assertRaisesRegex(
+                RuntimeError, "requires the native MPI progress extension"
+            ):
+                mpi_progress._load_native_worker(mpi, comm, 0.001, "MPI.py")
 
-        self.assertIsInstance(backend, mpi_progress._PythonBackend)
-        self.assertIs(backend.mpi, mpi)
-        self.assertIs(backend.comm, comm)
-
-    def test_native_backend_import_failure_is_explained(self):
+    def test_native_worker_import_failure_is_explained(self):
         with (
             mock.patch.object(
                 mpi_progress, "_native_module_name", return_value="fake_worker"
@@ -157,30 +171,9 @@ class TestMPIProgressBackendSelection(unittest.TestCase):
             ),
             self.assertRaisesRegex(RuntimeError, "rebuild mpi-sppy"),
         ):
-            mpi_progress._select_backend(SimpleNamespace(), SimpleNamespace(), 0.001, "MPI.py")
-
-    def test_python_backend_uses_all_polling_intervals(self):
-        comm = SimpleNamespace(Iprobe=mock.Mock())
-        backend = mpi_progress._PythonBackend(
-            SimpleNamespace(ANY_SOURCE=-1, ANY_TAG=-2), comm, 0.001
-        )
-        backend.active = True
-        time_values = iter((0.0, 0.005, 0.05, 0.2))
-        waits = []
-
-        def wait(timeout=None):
-            waits.append(timeout)
-            if len(waits) == 3:
-                backend.stopping = True
-
-        with (
-            mock.patch.object(mpi_progress.time, "monotonic", side_effect=time_values),
-            mock.patch.object(backend.changed, "wait", side_effect=wait),
-        ):
-            backend.run()
-
-        self.assertEqual(waits, [50e-6, 250e-6, 0.001])
-        self.assertEqual(comm.Iprobe.call_count, 3)
+            mpi_progress._load_native_worker(
+                SimpleNamespace(), SimpleNamespace(), 0.001, "MPI.py"
+            )
 
     def test_create_controller_rejects_invalid_poll_intervals(self):
         comm = SimpleNamespace(Get_rank=lambda: 0)
@@ -270,6 +263,17 @@ class TestMPIProgressStartup(unittest.TestCase):
         self.assertFalse(module["_enable_progress_thread"])
         self.assertNotIn("_progress_controller", module)
 
+    def test_progress_setting_requires_mpi4py(self):
+        mpi_path = Path(__file__).resolve().parents[1] / "MPI.py"
+        with (
+            mock.patch.dict(
+                os.environ, {"MPISPPY_MPI_PROGRESS_THREAD": "1"}
+            ),
+            mock.patch.dict(sys.modules, {"mpi4py": None, "mpi4py.MPI": None}),
+            self.assertRaisesRegex(RuntimeError, "requires mpi4py"),
+        ):
+            runpy.run_path(str(mpi_path))
+
 
 class TestMPIProgressCompatibility(unittest.TestCase):
     def setUp(self):
@@ -340,8 +344,8 @@ class TestEnabledMPIProgress(unittest.TestCase):
 
 
 @unittest.skipUnless(
-    os.environ.get("MPISPPY_EXPECT_PROGRESS_WORKER"),
-    "requires a progress worker installation",
+    os.environ.get("MPISPPY_CHECKOUT"),
+    "requires an installed progress extension",
 )
 class TestInstalledMPIProgress(unittest.TestCase):
     def test_installed_worker_and_thread_level(self):
@@ -352,15 +356,12 @@ class TestInstalledMPIProgress(unittest.TestCase):
         from mpi4py import MPI as mpi4py_mpi
         # isort: on
 
-        expected = os.environ["MPISPPY_EXPECT_PROGRESS_WORKER"]
-        self.assertIn(expected, ("python", "native"))
         self.assertTrue(MPI.haveMPI)
         self.assertGreaterEqual(mpi4py_mpi.Query_thread(), mpi4py_mpi.THREAD_MULTIPLE)
-        self.assertEqual(MPI._progress_controller.backend.kind, expected)
         self.assertEqual(
-            importlib.util.find_spec("mpisppy._mpi_progress_worker") is not None,
-            expected == "native",
+            MPI._progress_controller.worker.__name__, "mpisppy._mpi_progress_worker"
         )
+        self.assertIsNotNone(importlib.util.find_spec("mpisppy._mpi_progress_worker"))
         checkout = Path(os.environ["MPISPPY_CHECKOUT"]).resolve()
         self.assertFalse(Path(mpisppy.__file__).resolve().is_relative_to(checkout))
 

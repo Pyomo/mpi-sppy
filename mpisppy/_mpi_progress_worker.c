@@ -19,13 +19,13 @@
 #include <stdlib.h>
 #include <time.h>
 
-/* Match the Python backend's 50 us maximum for the first 10 ms, 250 us
-   maximum until 100 ms, then the configured interval. Both backends use a
-   30 s deactivation limit; native shutdown allows 30 s and Python 5 s. */
+/* Poll at most every 50 us for the first 10 ms, every 250 us until 100 ms,
+   then use the configured interval. Deactivation and shutdown allow 30 s. */
 #define FAST_PHASE_END_SECONDS 0.010
 #define MID_PHASE_END_SECONDS 0.100
 #define FAST_POLL_INTERVAL_SECONDS 50e-6
 #define MID_POLL_INTERVAL_SECONDS 250e-6
+#define MAX_POLL_INTERVAL_SECONDS 600.0
 #define DEACTIVATION_TIMEOUT_SECONDS 30
 #define NATIVE_STOP_TIMEOUT_SECONDS 30
 
@@ -105,6 +105,10 @@ static PyObject *configure(PyObject *self, PyObject *args)
         return NULL;
     if (!isfinite(interval) || interval <= 0) {
         PyErr_SetString(PyExc_ValueError, "progress interval must be positive and finite");
+        return NULL;
+    }
+    if (interval > MAX_POLL_INTERVAL_SECONDS) {
+        PyErr_SetString(PyExc_ValueError, "progress interval must not exceed 600 seconds");
         return NULL;
     }
     comm_ptr = PyMPIComm_Get(comm_obj);
