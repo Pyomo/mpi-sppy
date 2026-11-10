@@ -688,7 +688,8 @@ class TestAphfwHubRun(unittest.TestCase):
         # time from import to the C++ init.  0.01 allows for the rounding
         # of the two printed times.
         argv = [sys.executable, "-m", "mpisppy.generic_cylinders",
-                *self._farmer_argv("--max-iterations", "2")[1:]]
+                *self._farmer_argv("--max-iterations", "2",
+                                   "--aphfw-verbosity", "1")[1:]]
         with tempfile.TemporaryDirectory() as tmpdir:
             result = subprocess.run(argv, capture_output=True, text=True,
                                     timeout=300, check=False,
@@ -980,6 +981,27 @@ class TestAphfwDrivers(unittest.TestCase):
         self.assertIn("PASS", result.stdout, f"{name} did not pass:\n{tail}")
         return result.stdout
 
+    def test_cpp_prints_once_at_verbosity_0(self):
+        # Lines that are the same on every hub rank are printed by rank 0
+        # only, or not at all at verbosity 0.  farmer converges on its own
+        # long before 2000 cycles.
+        argv = ["mpiexec", "-np", "3", sys.executable, "-m", "mpi4py",
+                "-m", "mpisppy.generic_cylinders",
+                "--module-name", "mpisppy.tests.examples.farmer",
+                "--num-scens", "3", "--solver-name", solver_name,
+                "--aphfw-hub", "--default-rho", "1",
+                "--max-iterations", "2000"]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = subprocess.run(argv, capture_output=True, text=True,
+                                    timeout=600, check=False,
+                                    env=subprocess_env(), cwd=tmpdir)
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out[-3000:])
+        self.assertEqual(re.findall(r"^\[r(\d+);.*Convergence Detected",
+                                    out, re.M), ["0"], out[-3000:])
+        self.assertNotIn("Iter0 Lagrangian bound is", out)
+        self.assertNotIn("omicron frozen", out)
+
     def test_final_lagrangian_flag(self):
         # --aphfw-final-lagrangian runs the termination Lagrangian, and its
         # bound only competes with the published one, so it cannot lower it.
@@ -990,8 +1012,11 @@ class TestAphfwDrivers(unittest.TestCase):
         off = self._run_driver("aphfw_final_lagrangian_driver", 3)
         on = self._run_driver("aphfw_final_lagrangian_driver", 3,
                               ["--final-lagrangian"])
-        self.assertNotIn("Termination Lagrangian bound is", off)
-        self.assertIn("Termination Lagrangian bound is", on)
+        # The driver checks that the final solve ran; at verbosity 0 the
+        # hub reports its bound without the C++ printing it on every rank.
+        for out in (off, on):
+            self.assertNotIn("Iter0 Lagrangian bound is", out)
+            self.assertNotIn("Termination Lagrangian bound is", out)
         self.assertGreaterEqual(best_outer(on), best_outer(off) - 1e-6)
 
 

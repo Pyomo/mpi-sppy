@@ -338,7 +338,9 @@ bool FWAPH::handleCompletedCommunication(void)
       return true;
 
     if (cycleCount > 1 && convergenceDetected()) {
-      global_toc("Convergence Detected.");
+      // Every rank reaches the same decision, so one line says why the
+      // run stopped.
+      if (myRank == 0) global_toc("Convergence Detected.");
       converged_ = true;
       return true;
     }
@@ -1005,7 +1007,9 @@ void FWAPH::startupSequence() {
 
   _computeCurrentLagrangianBound();
 
-  global_toc("Iter0 Lagrangian bound is " + std::to_string(currentLagrangianBound));
+  // The hub reports this bound itself, and it is the same on every rank.
+  if (!hubMode_ || verbosity >= 1)
+    global_toc("Iter0 Lagrangian bound is " + std::to_string(currentLagrangianBound));
 
   // ---- hand off to async mode ----
   //
@@ -1069,7 +1073,9 @@ double FWAPH::computeFinalLagrangianBound()
 
   _computeCurrentLagrangianBound();
 
-  global_toc("Termination Lagrangian bound is " + std::to_string(currentLagrangianBound));
+  // The hub reports this bound itself, and it is the same on every rank.
+  if (!hubMode_ || verbosity >= 1)
+    global_toc("Termination Lagrangian bound is " + std::to_string(currentLagrangianBound));
 
   return currentLagrangianBound;
 }
@@ -1420,11 +1426,12 @@ void FWAPH::freezeOmicron(double multiplier)
   }
 
   double localMean = (localCnt > 0) ? (localSum / localCnt) : 0.0;
-  global_toc("omicron frozen: multiplier=" + std::to_string(multiplier) +
-             " cycle=" + std::to_string(cycleCount) +
-             " localMin=" + std::to_string(localMin) +
-             " localMax=" + std::to_string(localMax) +
-             " localMean=" + std::to_string(localMean));
+  if (verbosity >= 1)
+    global_toc("omicron frozen: multiplier=" + std::to_string(multiplier) +
+               " cycle=" + std::to_string(cycleCount) +
+               " localMin=" + std::to_string(localMin) +
+               " localMax=" + std::to_string(localMax) +
+               " localMean=" + std::to_string(localMean));
 }
 
 void FWAPH::getAllLocalNonantBounds(double* lbBuf, double* ubBuf, int len) const
