@@ -71,12 +71,15 @@ Here are two methods that seem to work well for installation, at least when cons
    instead to also get every optional feature package plus the test,
    documentation, and linting tools (the docs describe all of the extras).
 
-To build the native MPI progress worker in an editable install, install mpi4py
-first, then run `CC=mpicc pip install --no-build-isolation -e .`. The extension
-is installed in that virtualenv, even when several virtualenvs share the same
-checkout. `MPISPPY_MPI_PROGRESS_THREAD=1` requires this native extension and
-fails at startup if it is missing, unless MVAPICH native async progress is
-enabled with `MVAPICH_ASYNC_PROGRESS=1`. See
+To build the native MPI progress worker in an editable install on Linux or
+macOS, install mpi4py first, then run
+`CC=mpicc python -m pip install --no-build-isolation -e .`. When mpi4py and a
+matching MPI compiler are available, the extension is installed in that
+virtualenv, even when several virtualenvs share the same checkout. MPI installs
+remain usable without the extension, including on Windows. Setting
+`MPISPPY_MPI_PROGRESS_THREAD=1` requires the worker and fails at startup if it
+is missing, unless MVAPICH native async progress is enabled with
+`MVAPICH_ASYNC_PROGRESS=1`. See
 [MPI installation](doc/src/install_mpi.rst) for the full commands.
 
 To check the MPI runtime without importing mpi-sppy by default, run this

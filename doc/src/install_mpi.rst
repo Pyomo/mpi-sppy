@@ -23,16 +23,16 @@ Here are two methods that seem to work well for installation, at least when cons
 Native MPI progress worker
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-On Linux and macOS, an MPI-enabled source build of mpi-sppy compiles the native
-progress worker when ``mpi4py`` and a working MPI compiler are available in the
-build environment. A single-process compiler probe records the MPI library
-version, communicator size, and source and tag constants. It uses the native
-extension's configured compile and link settings, and each native build
-recompiles the extension. If that probe fails, or on other platforms, the build
-does not include the progress extension. An explicitly selected but missing
-``CC`` is an error.
-Make an sdist from the checkout, then install it
-in an MPI virtualenv after installing ``mpi4py``::
+On Linux and macOS, the native progress worker is built when ``mpi4py`` and a
+matching MPI compiler are available. A single-process compiler probe records
+the MPI library version, communicator size, and source and tag constants. If
+the probe fails, or on other platforms, the build does not include the worker.
+An explicitly selected but missing ``CC`` is an error. Once the probe succeeds,
+a failure compiling or linking the worker also fails the build. MPI builds
+without the worker remain supported, including on Windows; the MPI progress
+thread is unavailable in those installs.
+
+Make an sdist from the checkout, then install it in an MPI virtualenv::
 
    python -m pip install build
    python -m build --sdist
@@ -53,10 +53,9 @@ the compiled worker. Reinstall the editable package after changing its C code
 or the virtualenv's MPI installation.
 
 The ``[mpi]`` extra alone does not enable the native build: pip builds
-mpi-sppy before installing its runtime extras, and an isolated build cannot
-see ``mpi4py`` from the target environment. A build without ``mpi4py`` remains
-pure Python. The C sources are included in the source distribution, so it can
-also be rebuilt in an MPI-enabled environment.
+mpi-sppy before installing runtime extras, and an isolated build cannot see
+``mpi4py`` from the target environment. The C source is included in the
+source distribution so it can be rebuilt in an MPI-enabled environment.
 
 ``MPISPPY_MPI_PROGRESS_THREAD=1`` requests ``MPI_THREAD_MULTIPLE`` and starts
 the native progress extension. When ``MVAPICH_ASYNC_PROGRESS=1`` is set on

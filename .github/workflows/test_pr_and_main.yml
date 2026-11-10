@@ -1431,33 +1431,39 @@ jobs:
           tar -tzf "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz > "$RUNNER_TEMP/sdist-files.txt"
           grep -q '/mpisppy/_mpi_progress_worker.c$' "$RUNNER_TEMP/sdist-files.txt"
 
-      - name: Check missing native progress extension and missing CC
-        # These setup.py behaviors are independent of the MPI implementation.
+      - name: Check MPI builds without the optional native worker
         if: matrix.mpi == 'mpich' && matrix.mpi4py == 'mpi4py'
         timeout-minutes: 5
         run: |
           mkdir -p "$RUNNER_TEMP/no-progress-wheels"
-          CC=false python -m pip wheel --verbose --no-deps --no-build-isolation --no-cache-dir \
+          python -m pip wheel --verbose --no-deps --no-cache-dir \
             -w "$RUNNER_TEMP/no-progress-wheels" "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz \
             > "$RUNNER_TEMP/no-progress-build.log" 2>&1
-          grep -q 'native MPI progress worker will not be available' \
-            "$RUNNER_TEMP/no-progress-build.log"
           python -c "import glob,zipfile; p=glob.glob('$RUNNER_TEMP/no-progress-wheels/*.whl'); assert len(p)==1; z=zipfile.ZipFile(p[0]); assert not any('_mpi_progress_worker' in n and n.endswith('.so') for n in z.namelist())"
-          if CC="$RUNNER_TEMP/no-such-mpicc" python -m pip wheel --no-deps \
-            --no-build-isolation --no-cache-dir -w "$RUNNER_TEMP" \
+
+          mkdir -p "$RUNNER_TEMP/no-native-mpi-wheels"
+          CC=false python -m pip wheel --verbose --no-deps --no-build-isolation \
+            --no-cache-dir -w "$RUNNER_TEMP/no-native-mpi-wheels" \
             "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz \
-            > "$RUNNER_TEMP/missing-cc.log" 2>&1; then
-            cat "$RUNNER_TEMP/missing-cc.log"
+            > "$RUNNER_TEMP/failed-probe-build.log" 2>&1
+          python -c "import glob,zipfile; p=glob.glob('$RUNNER_TEMP/no-native-mpi-wheels/*.whl'); assert len(p)==1; z=zipfile.ZipFile(p[0]); assert not any('_mpi_progress_worker' in n and n.endswith('.so') for n in z.namelist())"
+
+          mkdir -p "$RUNNER_TEMP/no-compiler-mpi-wheels"
+          if CC="$RUNNER_TEMP/no-such-mpicc" python -m pip wheel --no-deps \
+            --no-build-isolation --no-cache-dir -w "$RUNNER_TEMP/no-compiler-mpi-wheels" \
+            "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz \
+            > "$RUNNER_TEMP/missing-cc-build.log" 2>&1; then
+            cat "$RUNNER_TEMP/missing-cc-build.log"
             exit 1
           fi
-          grep -q 'MPI compiler command .* was not found' "$RUNNER_TEMP/missing-cc.log"
+          grep -q 'MPI compiler command .* was not found' "$RUNNER_TEMP/missing-cc-build.log"
 
       - name: Install wheel without native progress extension
         if: matrix.mpi == 'mpich' && matrix.mpi4py == 'mpi4py'
         timeout-minutes: 5
         run: |
           python -m pip uninstall -y mpi-sppy
-          python -m pip install --no-deps "$RUNNER_TEMP"/no-progress-wheels/*.whl
+          python -m pip install --no-deps "$RUNNER_TEMP"/no-native-mpi-wheels/*.whl
 
       - name: Reject progress without native extension
         if: matrix.mpi == 'mpich' && matrix.mpi4py == 'mpi4py'
@@ -1478,9 +1484,12 @@ jobs:
         if: matrix.mpi4py == 'mpi4py'
         timeout-minutes: 5
         run: |
-          CC=mpicc python -m pip install --verbose --force-reinstall --no-deps \
-            --no-build-isolation --no-cache-dir \
+          mkdir -p "$RUNNER_TEMP/native-wheels"
+          CC=mpicc python -m pip wheel --verbose --no-deps \
+            --no-build-isolation --no-cache-dir -w "$RUNNER_TEMP/native-wheels" \
             "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz
+          python -c "import glob,zipfile; p=glob.glob('$RUNNER_TEMP/native-wheels/*.whl'); assert len(p)==1; z=zipfile.ZipFile(p[0]); assert any('mpisppy/_mpi_progress_worker' in n and n.endswith('.so') for n in z.namelist())"
+          python -m pip install --force-reinstall --no-deps "$RUNNER_TEMP"/native-wheels/*.whl
           cd "$RUNNER_TEMP"
           python -c 'from mpi4py import MPI; import mpisppy._mpi_progress_worker'
 
