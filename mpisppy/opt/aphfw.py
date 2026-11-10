@@ -24,7 +24,7 @@ import numpy as np
 
 import mpisppy.phbase
 import mpisppy.utils.config
-from mpisppy import MPI, global_toc
+from mpisppy import MPI, global_toc, tt_timer
 from mpisppy.extensions.scenario_lp_mps_files import write_scenario_files
 
 logger = logging.getLogger(__name__)
@@ -200,7 +200,10 @@ class APHFWOpt(mpisppy.phbase.PHBase):
         local_names = list(self.local_scenarios.keys())
         self._cpp.set_explicit_scenario_names(local_names)
 
-        self._cpp.init(self.mpicomm, self._scenario_dir, cfg_dict)
+        # Start the C++ clock at mpi-sppy's elapsed time, so the times C++
+        # prints line up with the ones global_toc prints.
+        self._cpp.init(self.mpicomm, self._scenario_dir, cfg_dict,
+                       start_seconds=tt_timer.toc(None, delta=False))
         self._cpp.set_hub_mode(True)
         self._local_nonant_length = self._cpp.get_local_nonant_length()
 

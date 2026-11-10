@@ -47,10 +47,14 @@ private:
 // ---------------------------
 class GlobalTimer {
 public:
-  GlobalTimer(int rank = -1) : rank_(rank) { timer_.tic(); }
+  // startSeconds is the time the clock shows at construction. The mpi-sppy
+  // hub passes the elapsed time of mpi-sppy's own global_toc, so that both
+  // print times measured from the same moment.
+  GlobalTimer(int rank = -1, double startSeconds = 0.0)
+    : rank_(rank), startSeconds_(startSeconds) { timer_.tic(); }
 
   void global_toc(std::string_view msg) const {
-    double elapsed = timer_.toc();
+    double elapsed = seconds();
 
     // buffer to avoid a split across ranks
     std::stringstream ss;
@@ -65,14 +69,15 @@ public:
     std::cout << ss.str() << std::flush;
   }
 
-  // seconds since this timer was constructed (or last tic)
+  // startSeconds plus the seconds since this timer was constructed
   double seconds() const {
-    return timer_.toc();
+    return startSeconds_ + timer_.toc();
   }
 
 private:
   TicToc timer_;
   int rank_ = -1;
+  double startSeconds_ = 0.0;
 };
 
 // Global timer hooks (implemented in timer.cpp)

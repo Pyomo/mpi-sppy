@@ -62,9 +62,11 @@ public:
     // and a dict of config options.
     // If set_explicit_scenario_names was called before init, apply the names
     // after creating the controller but before setup.
+    // start_seconds is the time the C++ clock starts from (see GlobalTimer).
     void init(py::handle py_comm,
               const std::string& problem_dir,
-              py::dict config_dict)
+              py::dict config_dict,
+              double start_seconds)
     {
         comm_ = py_comm_to_mpi(py_comm);
 
@@ -72,7 +74,7 @@ public:
         MPI_Comm_rank(comm_, &rank);
 
         // Set up the global timer
-        timer_ = std::make_unique<GlobalTimer>(rank);
+        timer_ = std::make_unique<GlobalTimer>(rank, start_seconds);
         install_global_timer(timer_.get());
 
         controller_ = std::make_unique<FWAPH>();
@@ -367,7 +369,9 @@ PYBIND11_MODULE(aphfw_cpp, m) {
         .def(py::init<>())
         .def("init", &APHFWLibrary::init,
              py::arg("comm"), py::arg("problem_dir"), py::arg("config_dict"),
-             "Initialize FWAPH with MPI comm, problem directory, and config options")
+             py::arg("start_seconds") = 0.0,
+             "Initialize FWAPH with MPI comm, problem directory, and config "
+             "options; the C++ clock starts at start_seconds")
         .def("set_hub_mode", &APHFWLibrary::set_hub_mode)
         .def("set_external_terminate_flag", &APHFWLibrary::set_external_terminate_flag,
              "Set pointer to external atomic<int> terminate flag (pass ctypes.addressof)")

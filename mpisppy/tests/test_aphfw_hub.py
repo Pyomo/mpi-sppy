@@ -24,6 +24,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import runpy
 import shutil
 import subprocess
@@ -679,6 +680,27 @@ class TestAphfwHubRun(unittest.TestCase):
         out = result.stdout + result.stderr
         self.assertEqual(result.returncode, 0, out[-3000:])
         self.assertIn("check-omicron-invariant: false", out)
+
+    def test_cpp_and_python_times_share_a_start(self):
+        # The C++ freezes omicron after the iteration 1 row is printed, so
+        # the time it prints for that cannot be earlier.  Before the C++
+        # clock started at mpi-sppy's elapsed time, it was earlier by the
+        # time from import to the C++ init.  0.01 allows for the rounding
+        # of the two printed times.
+        argv = [sys.executable, "-m", "mpisppy.generic_cylinders",
+                *self._farmer_argv("--max-iterations", "2")[1:]]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = subprocess.run(argv, capture_output=True, text=True,
+                                    timeout=300, check=False,
+                                    env=subprocess_env(), cwd=tmpdir)
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out[-3000:])
+        cpp = re.search(r"^\[r0; ([0-9.]+)s\] omicron frozen", out, re.M)
+        row1 = re.search(r"^\[\s*([0-9.]+)\]\s+1\s", out, re.M)
+        self.assertIsNotNone(cpp, out[-3000:])
+        self.assertIsNotNone(row1, out[-3000:])
+        self.assertGreaterEqual(float(cpp.group(1)),
+                                float(row1.group(1)) - 0.01, out[-3000:])
 
     def test_farmer_hub_only(self):
         argv = [
