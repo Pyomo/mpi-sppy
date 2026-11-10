@@ -201,15 +201,17 @@ class TestMPIProgressNativeWorker(unittest.TestCase):
 
 class TestMPIProgressStartup(unittest.TestCase):
     def _load_with_fake_mpi(
-        self, *, initialized=True, thread_level=3, vendor="Open MPI", async_progress="0"
+        self, *, initialized=True, thread_level=3, vendor="Open MPI",
+        vendor_version=(4, 1, 0), library_version=None,
+        async_progress="0", progress_thread="1"
     ):
         fake_mpi = ModuleType("mpi4py.MPI")
         fake_mpi.COMM_WORLD = SimpleNamespace(Get_rank=lambda: 0)
         fake_mpi.Is_initialized = lambda: initialized
         fake_mpi.Query_thread = lambda: thread_level
         fake_mpi.THREAD_MULTIPLE = 3
-        fake_mpi.get_vendor = lambda: (vendor, (1, 0, 0))
-        fake_mpi.Get_library_version = lambda: vendor
+        fake_mpi.get_vendor = lambda: (vendor, vendor_version)
+        fake_mpi.Get_library_version = lambda: library_version or vendor
         fake_mpi.__all__ = ["COMM_WORLD"]
         fake_mpi4py = ModuleType("mpi4py")
         fake_mpi4py.__path__ = []
@@ -220,7 +222,7 @@ class TestMPIProgressStartup(unittest.TestCase):
             mock.patch.dict(
                 os.environ,
                 {
-                    "MPISPPY_MPI_PROGRESS_THREAD": "1",
+                    "MPISPPY_MPI_PROGRESS_THREAD": progress_thread,
                     "MVAPICH_ASYNC_PROGRESS": async_progress,
                 },
             ),
@@ -244,6 +246,7 @@ class TestMPIProgressStartup(unittest.TestCase):
         self.assertEqual(rc.thread_level, "multiple")
         self.assertIs(module["_progress_controller"], controller)
         self.assertIs(module["progress_active"], controller.progress_active)
+        self.assertTrue(module["progress_available"])
         create_controller.assert_called_once_with(
             module["_mpi"], module["COMM_WORLD"], module["__file__"]
         )
@@ -262,6 +265,56 @@ class TestMPIProgressStartup(unittest.TestCase):
         )
         self.assertFalse(module["_enable_progress_thread"])
         self.assertNotIn("_progress_controller", module)
+        self.assertTrue(module["progress_available"])
+
+    def test_mvapich_async_progress_without_mpisppy_worker(self):
+        module = self._load_with_fake_mpi(
+            vendor="MVAPICH2", async_progress="1", progress_thread="0"
+        )
+        self.assertTrue(module["progress_available"])
+        self.assertNotIn("_progress_controller", module)
+
+    def test_mvapich_async_progress_requires_version_newer_than_237(self):
+        for version in ((2, 3, 6), (2, 3, 7)):
+            with self.subTest(version=version):
+                module = self._load_with_fake_mpi(
+                    vendor="MVAPICH2", vendor_version=version,
+                    async_progress="1", progress_thread="0"
+                )
+                self.assertFalse(module["progress_available"])
+
+        module = self._load_with_fake_mpi(
+            vendor="MVAPICH2", vendor_version=(2, 3, 8),
+            async_progress="1", progress_thread="0"
+        )
+        self.assertTrue(module["progress_available"])
+
+    def test_old_mvapich_still_requires_its_own_progress_worker(self):
+        with self.assertRaisesRegex(RuntimeError, "requires MPI_THREAD_MULTIPLE"):
+            self._load_with_fake_mpi(
+                thread_level=1, vendor="MVAPICH2", vendor_version=(2, 3, 7),
+                async_progress="1"
+            )
+
+    def test_mvapich_library_version_fallback_checks_version(self):
+        for library_version, expected in (
+            ("MVAPICH2 Version: 2.3.7", False),
+            ("MVAPICH2 Version: 2.3.8", True),
+            ("MVAPICH2 Version: 4.1", True),
+            ("MVAPICH2 (version unknown)", False),
+        ):
+            with self.subTest(library_version=library_version):
+                module = self._load_with_fake_mpi(
+                    vendor="MPICH", library_version=library_version,
+                    async_progress="1", progress_thread="0"
+                )
+                self.assertEqual(module["progress_available"], expected)
+
+    def test_async_progress_flag_on_other_mpi_is_not_sufficient(self):
+        module = self._load_with_fake_mpi(
+            vendor="Open MPI", async_progress="1", progress_thread="0"
+        )
+        self.assertFalse(module["progress_available"])
 
     def test_progress_setting_requires_mpi4py(self):
         mpi_path = Path(__file__).resolve().parents[1] / "MPI.py"

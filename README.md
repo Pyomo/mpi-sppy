@@ -76,9 +76,11 @@ macOS, install mpi4py first, then run
 `CC=mpicc python -m pip install --no-build-isolation -e .`. When mpi4py and a
 matching MPI compiler are available, the extension is installed in that
 virtualenv, even when several virtualenvs share the same checkout. MPI installs
-remain usable without the extension, including on Windows. Setting
+remain usable without the extension for single-node wheels, including on Windows.
+Multi-node wheels require either the mpi-sppy progress worker or MVAPICH native
+async progress from a version newer than 2.3.7 on every rank. Setting
 `MPISPPY_MPI_PROGRESS_THREAD=1` requires the worker and fails at startup if it
-is missing, unless MVAPICH native async progress is enabled with
+is missing, unless native async progress from MVAPICH newer than 2.3.7 is enabled with
 `MVAPICH_ASYNC_PROGRESS=1`. See
 [MPI installation](doc/src/install_mpi.rst) for the full commands.
 

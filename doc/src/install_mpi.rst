@@ -59,8 +59,9 @@ source distribution so it can be rebuilt in an MPI-enabled environment.
 
 ``MPISPPY_MPI_PROGRESS_THREAD=1`` requests ``MPI_THREAD_MULTIPLE`` and starts
 the native progress extension. When ``MVAPICH_ASYNC_PROGRESS=1`` is set on
-MVAPICH, mpi-sppy uses the runtime's async progress instead. The extension is
-not required in that case, and a lower MPI thread level is accepted. Otherwise,
+MVAPICH newer than 2.3.7, mpi-sppy uses the runtime's async progress instead.
+The extension is not required in that case, and a lower MPI thread level is
+accepted. Otherwise,
 the worker is loaded after comparing its build signature with values reported
 by mpi4py. A missing extension or a signature mismatch raises an error before
 the worker uses mpi4py's communicator. The signature check detects common
@@ -68,6 +69,12 @@ mismatches but cannot prove that two separately loaded copies of an MPI library
 share runtime state. Set ``MPISPPY_MPI_PROGRESS_INTERVAL_US`` to a positive,
 finite number to change the maximum polling interval from its default of 500
 microseconds.
+
+Before a wheel starts, mpi-sppy checks whether its ranks span multiple nodes.
+If they do, every rank must use ``MPISPPY_MPI_PROGRESS_THREAD=1`` or, on
+MVAPICH newer than 2.3.7, ``MVAPICH_ASYNC_PROGRESS=1``. Otherwise rank zero
+prints an explanation and the MPI job exits. Single-node wheels do not require
+either option.
 
 To check the MPI runtime without importing mpi-sppy by default, give this
 command (once mpi-sppy is installed it works from any directory):

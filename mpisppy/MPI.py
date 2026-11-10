@@ -8,8 +8,30 @@
 ###############################################################################
 
 import os as _os
+import re as _re
 
 _enable_progress_thread = _os.environ.get("MPISPPY_MPI_PROGRESS_THREAD") == "1"
+_native_async_progress = False
+
+
+def _has_mvapich_async_progress(mpi):
+    if _os.environ.get("MVAPICH_ASYNC_PROGRESS") != "1":
+        return False
+
+    vendor, version = mpi.get_vendor()
+    if vendor.upper().startswith("MVAPICH"):
+        return tuple(version[:3]) > (2, 3, 7)
+
+    # Some mpi4py builds identify the vendor only in the library version.
+    library_version = mpi.Get_library_version().lstrip()
+    match = _re.match(
+        r"MVAPICH(?:2|-GDR)?\b[^\d\n]*(\d+)\.(\d+)(?:\.(\d+))?",
+        library_version,
+        flags=_re.IGNORECASE,
+    )
+    if match is None:
+        return False
+    return tuple(int(part or 0) for part in match.groups()) > (2, 3, 7)
 
 try:
     if _enable_progress_thread:
@@ -22,8 +44,10 @@ try:
         _mpi4py.rc.threads = True
         _mpi4py.rc.thread_level = "multiple"
 
-        from mpi4py import MPI as _mpi
+    from mpi4py import MPI as _mpi
 
+    _native_async_progress = _has_mvapich_async_progress(_mpi)
+    if _enable_progress_thread:
         if not _mpi.Is_initialized():
             raise RuntimeError(
                 "MPISPPY_MPI_PROGRESS_THREAD=1 requires initialized MPI; "
@@ -31,10 +55,7 @@ try:
             )
         _provided_thread_level = _mpi.Query_thread()
         # Let MVAPICH supply progress itself when its async worker is enabled.
-        if _os.environ.get("MVAPICH_ASYNC_PROGRESS") == "1" and (
-            _mpi.get_vendor()[0].upper().startswith("MVAPICH")
-            or _mpi.Get_library_version().lstrip().upper().startswith("MVAPICH")
-        ):
+        if _native_async_progress:
             _enable_progress_thread = False
             if _mpi.COMM_WORLD.Get_rank() == 0:
                 print(
@@ -146,3 +167,7 @@ if haveMPI and _enable_progress_thread:
     progress_active = _progress_controller.progress_active
 else:
     from contextlib import nullcontext as progress_active  # noqa: F401
+
+# A multi-node wheel needs progress on every rank. Keep the selected mode
+# available to its startup guard, including MVAPICH's own async worker.
+progress_available = haveMPI and (_enable_progress_thread or _native_async_progress)
