@@ -933,14 +933,41 @@ def _spoke_filename(cylinder, ordinal, rank):
             f"_ordinal_{int(ordinal):02d}_rank_{int(rank):04d}.pkl")
 
 
-def _atomic_write_bytes(path, write_callback):
+@dataclass
+class _FileWriteTiming:
+    """Time spent in the parts of a durable file write, summed over files."""
+
+    callback_s: float = 0.0
+    callback_cpu_s: float = 0.0
+    flush_s: float = 0.0
+    fsync_s: float = 0.0
+    replace_s: float = 0.0
+    bytes_written: int = 0
+
+
+def _atomic_write_bytes(path, write_callback, timing=None):
     """Write via a temp file in the same directory, then rename into place."""
     tmp = f"{path}.tmp"
     with open(tmp, "wb") as f:
+        started = time.perf_counter() if timing is not None else None
+        cpu_started = time.thread_time() if timing is not None else None
         write_callback(f)
+        if timing is not None:
+            timing.callback_s += time.perf_counter() - started
+            timing.callback_cpu_s += time.thread_time() - cpu_started
+            timing.bytes_written += f.tell()
+        started = time.perf_counter() if timing is not None else None
         f.flush()
+        if timing is not None:
+            timing.flush_s += time.perf_counter() - started
+        started = time.perf_counter() if timing is not None else None
         os.fsync(f.fileno())
+        if timing is not None:
+            timing.fsync_s += time.perf_counter() - started
+    started = time.perf_counter() if timing is not None else None
     os.replace(tmp, path)
+    if timing is not None:
+        timing.replace_s += time.perf_counter() - started
 
 
 def _fsync_dir(path):
@@ -1397,13 +1424,22 @@ def probe_model_is_dillable(opt):
     no message. Every rank therefore learns that some rank failed and raises,
     naming the one that has the real diagnosis.
     """
+    timed = bool(opt.options.get("display_timing", False))
+    probe_started = time.perf_counter() if timed else None
+    serialize_s = 0.0
+    serialize_cpu_s = 0.0
     failure = None
     for sname, s in opt.local_scenarios.items():
         solver_plugin = getattr(s, "_solver_plugin", None)
         if solver_plugin is not None:
             del s._solver_plugin
         try:
+            started = time.perf_counter() if timed else None
+            cpu_started = time.thread_time() if timed else None
             dill.dumps(s)
+            if timed:
+                serialize_s += time.perf_counter() - started
+                serialize_cpu_s += time.thread_time() - cpu_started
         except Exception as exc:
             failure = RuntimeError(
                 "Checkpointing is enabled, but no checkpoint could ever be "
@@ -1418,8 +1454,19 @@ def probe_model_is_dillable(opt):
                 s._solver_plugin = solver_plugin
 
     comm = _cylinder_comm(opt)
+    agreement_started = time.perf_counter() if timed else None
     failing_rank = _first_failing_rank(comm, int(opt.cylinder_rank),
                                        failure is not None)
+    if timed:
+        print(
+            f"checkpoint_timing event=probe backend={DILL_RELOAD_BACKEND} "
+            f"rank={int(opt.cylinder_rank)} "
+            f"scenarios={len(opt.local_scenarios)} "
+            f"serialize_s={serialize_s:.6f} "
+            f"serialize_cpu_s={serialize_cpu_s:.6f} "
+            f"agreement_s={time.perf_counter() - agreement_started:.6f} "
+            f"rank_elapsed_s={time.perf_counter() - probe_started:.6f}",
+            flush=True)
     if failing_rank is None:
         return
     if failure is not None:
@@ -1860,6 +1907,8 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
     (``Checkpointer.maybe_checkpoint``) warns and carries on with the previous
     generation still published and still resumable.
     """
+    timed = bool(opt.options.get("display_timing", False))
+    rank_started = time.perf_counter() if timed else None
     run_agreed(
         opt, lambda: require_checkpoint_structural_cfg(opt.options),
         "describe their checkpoint's structural model configuration, so none "
@@ -1869,6 +1918,10 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
     # reaches the same verdict before any rank-local filesystem work.
     require_backend_dependency(backend)
 
+    phase = ({"validation_s": time.perf_counter() - rank_started}
+             if timed else None)
+    model_io = _FileWriteTiming() if timed else None
+    leaf_io = _FileWriteTiming() if timed else None
     comm = _cylinder_comm(opt)
     rank = int(opt.cylinder_rank)
     is_publisher = rank == 0
@@ -1888,6 +1941,7 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
     # would never reach the barrier below and every other rank would wait at
     # it for the rest of the job.
     failure = None
+    started = time.perf_counter() if timed else None
     if is_publisher:
         try:
             # A failed publish can leave a published-but-uncommitted
@@ -1900,10 +1954,16 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
             os.makedirs(staging_dir, exist_ok=True)
         except Exception as exc:
             failure = exc
+    if timed:
+        phase["prepare_s"] = time.perf_counter() - started
     # No rank may write into the staging directory until rank 0 has cleared
     # and recreated it, or its files are deleted out from under it.
+    started = time.perf_counter() if timed else None
     _barrier(comm)
+    if timed:
+        phase["prepare_wait_s"] = time.perf_counter() - started
 
+    local_started = time.perf_counter() if timed else None
     try:
         if failure is not None:
             raise failure
@@ -1915,8 +1975,12 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
         # change during a run -- but it is per-rank data, so it belongs inside
         # the guarded region rather than ahead of the barrier.
         check_filename_collisions(opt.local_scenarios)
+        started = time.perf_counter() if timed else None
         model_files = _write_models(opt, staging_dir, rank, backend,
-                                    write_id=write_id)
+                                    write_id=write_id, timing=model_io)
+        if timed:
+            phase["model_s"] = time.perf_counter() - started
+        started = time.perf_counter() if timed else None
         leaf = {
             "format_version": FORMAT_VERSION,
             "backend": backend,
@@ -1941,14 +2005,25 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
         _atomic_write_bytes(
             os.path.join(staging_dir, _leaf_filename(rank)),
             lambda f: pickle.dump(leaf, f),
+            timing=leaf_io,
         )
+        if timed:
+            phase["leaf_s"] = time.perf_counter() - started
+        started = time.perf_counter() if timed else None
         _fsync_dir(staging_dir)
+        if timed:
+            phase["stage_dir_sync_s"] = time.perf_counter() - started
     except Exception as exc:
         failure = exc
+    if timed:
+        phase["local_s"] = time.perf_counter() - local_started
 
     # Collective, and therefore also the barrier that says every rank has
     # finished writing. Nothing below may run before it.
+    started = time.perf_counter() if timed else None
     failing_rank = _first_failing_rank(comm, rank, failure is not None)
+    if timed:
+        phase["write_wait_s"] = time.perf_counter() - started
     if failing_rank is not None:
         if is_publisher:
             # Leave no half-written generation behind; the previous checkpoint
@@ -1962,15 +2037,53 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
     # the next checkpoint point retries if the run gets that far.
     if is_publisher:
         try:
+            started = time.perf_counter() if timed else None
             _publish_generation(opt, ckpt_dir, hub_dir, final_dir,
                                 staging_dir, generation, backend,
-                                write_id=write_id)
+                                write_id=write_id, timing=phase)
+            if timed:
+                phase["publish_s"] = time.perf_counter() - started
         except Exception:
             # The manifest still names the previous generation (or nothing),
             # so everything else is garbage; give the disk back now rather
             # than at the next checkpoint point.
             _sweep_uncommitted_generations(ckpt_dir, hub_dir)
             raise
+
+    if timed:
+        # One parseable line per rank. Non-publishers report zero for the
+        # publication fields; their elapsed time ends at the write agreement.
+        print(
+            f"checkpoint_timing event=write backend={backend} "
+            f"generation={int(generation)} "
+            f"rank={rank} scenarios={len(opt.local_scenarios)} "
+            f"model_bytes={model_io.bytes_written} "
+            f"model_s={phase['model_s']:.6f} "
+            f"model_dump_s={model_io.callback_s:.6f} "
+            f"model_dump_cpu_s={model_io.callback_cpu_s:.6f} "
+            f"model_flush_s={model_io.flush_s:.6f} "
+            f"model_fsync_s={model_io.fsync_s:.6f} "
+            f"model_replace_s={model_io.replace_s:.6f} "
+            f"leaf_bytes={leaf_io.bytes_written} "
+            f"leaf_s={phase['leaf_s']:.6f} "
+            f"leaf_pickle_s={leaf_io.callback_s:.6f} "
+            f"leaf_pickle_cpu_s={leaf_io.callback_cpu_s:.6f} "
+            f"leaf_flush_s={leaf_io.flush_s:.6f} "
+            f"leaf_fsync_s={leaf_io.fsync_s:.6f} "
+            f"leaf_replace_s={leaf_io.replace_s:.6f} "
+            f"stage_dir_sync_s={phase['stage_dir_sync_s']:.6f} "
+            f"local_s={phase['local_s']:.6f} "
+            f"validation_s={phase['validation_s']:.6f} "
+            f"prepare_s={phase['prepare_s']:.6f} "
+            f"prepare_wait_s={phase['prepare_wait_s']:.6f} "
+            f"write_wait_s={phase['write_wait_s']:.6f} "
+            f"publish_s={phase.get('publish_s', 0.0):.6f} "
+            f"publish_swap_s={phase.get('publish_swap_s', 0.0):.6f} "
+            f"publish_hub_sync_s={phase.get('publish_hub_sync_s', 0.0):.6f} "
+            f"publish_manifest_s={phase.get('publish_manifest_s', 0.0):.6f} "
+            f"publish_cleanup_s={phase.get('publish_cleanup_s', 0.0):.6f} "
+            f"rank_elapsed_s={time.perf_counter() - rank_started:.6f}",
+            flush=True)
 
     return final_dir
 
@@ -2024,7 +2137,7 @@ def _pyfory_version():
 
 
 def _publish_generation(opt, ckpt_dir, hub_dir, final_dir, staging_dir,
-                        generation, backend, write_id=None):
+                        generation, backend, write_id=None, timing=None):
     """Commit the staged generation. Rank 0 only, once every rank has written.
 
     Publishing order matters. The manifest is the commit point, so the
@@ -2034,6 +2147,7 @@ def _publish_generation(opt, ckpt_dir, hub_dir, final_dir, staging_dir,
     Writing the same generation number twice therefore lands in a scratch
     directory first rather than deleting the live one.
     """
+    started = time.perf_counter() if timing is not None else None
     scratch_dir = f"{final_dir}.incoming"
     if os.path.isdir(scratch_dir):
         shutil.rmtree(scratch_dir)
@@ -2055,7 +2169,12 @@ def _publish_generation(opt, ckpt_dir, hub_dir, final_dir, staging_dir,
             shutil.rmtree(retiring_dir, ignore_errors=True)
         os.replace(final_dir, retiring_dir)
     os.replace(scratch_dir, final_dir)
+    if timing is not None:
+        timing["publish_swap_s"] = time.perf_counter() - started
+    started = time.perf_counter() if timing is not None else None
     _fsync_dir(hub_dir)
+    if timing is not None:
+        timing["publish_hub_sync_s"] = time.perf_counter() - started
 
     manifest = {
         "format_version": FORMAT_VERSION,
@@ -2075,13 +2194,19 @@ def _publish_generation(opt, ckpt_dir, hub_dir, final_dir, staging_dir,
                 pyfory_model_codec.SCHEMA_VERSION
             manifest["reload_adapter_version"] = \
                 pyfory_model_codec.ADAPTER_VERSION
+    started = time.perf_counter() if timing is not None else None
     _publish_manifest(ckpt_dir, manifest)
+    if timing is not None:
+        timing["publish_manifest_s"] = time.perf_counter() - started
 
     # Sweep everything the manifest does not name, rather than only the
     # generation the previous manifest did. A kill between any two steps above
     # can leave a directory behind, and deleting just the known predecessor
     # would let those accumulate for the life of the run.
+    started = time.perf_counter() if timing is not None else None
     _sweep_uncommitted_generations(ckpt_dir, hub_dir)
+    if timing is not None:
+        timing["publish_cleanup_s"] = time.perf_counter() - started
 
 
 def _sweep_uncommitted_generations(ckpt_dir, hub_dir):
@@ -2140,7 +2265,8 @@ def _sweep_stale_generations(hub_dir, keep, keep_copy=None):
             shutil.rmtree(path, ignore_errors=True)
 
 
-def _write_models(opt, staging_dir, rank, backend, write_id=None):
+def _write_models(opt, staging_dir, rank, backend, write_id=None,
+                  timing=None):
     """Write each local scenario using the selected model-state codec."""
     require_backend_dependency(backend)
     if backend == PYFORY_RELOAD_BACKEND:
@@ -2164,6 +2290,7 @@ def _write_models(opt, staging_dir, rank, backend, write_id=None):
                 _atomic_write_bytes(
                     os.path.join(staging_dir, fname),
                     lambda f, model=s: dump_model(model, f),
+                    timing=timing,
                 )
             finally:
                 if solver_plugin is not None:
@@ -2173,6 +2300,7 @@ def _write_models(opt, staging_dir, rank, backend, write_id=None):
                 os.path.join(staging_dir, fname),
                 lambda f, model=s: _new_fory().dump(
                     _snapshot_rebuild_model(model), f),
+                timing=timing,
             )
         model_files[sname] = fname
     return model_files

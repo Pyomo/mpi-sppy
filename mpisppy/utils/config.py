@@ -394,7 +394,7 @@ class Config(pyofig.ConfigDict):
                               default=False)
 
         self.add_to_config('display_timing',
-                              description="display subproblem solve timing (requires exactly one subproblem per rank)",
+                              description="display subproblem solve timing (requires exactly one subproblem per rank) and per-rank checkpoint write timings",
                               domain=bool,
                               default=False)
 

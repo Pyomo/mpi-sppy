@@ -643,6 +643,20 @@ model tells you the cost directly. If it is too high,
 ``--checkpoint-every-iterations`` buys most of it back in exchange for repeating
 some iterations after a stop; see `Choosing K`_.
 
+For a breakdown, add ``--display-timing``. Each hub rank prints a
+``checkpoint_timing event=probe`` line at startup and a
+``checkpoint_timing event=write`` line for each successful checkpoint. The
+write line reports its backend, scenario count and model bytes, model codec
+callback wall and thread CPU time, flush, file and directory ``fsync``, leaf
+write, preparation wait, and all-rank write wait times. Rank 0 also reports
+generation swap, manifest, and old-generation cleanup times. All times are
+wall-clock seconds measured with ``perf_counter`` unless marked ``_cpu_s``,
+which uses ``thread_time``. The model codec callback wall time includes any
+file writes made inside that call. The lines are keyed by generation and
+cylinder rank; their arrival order in a multi-rank log is not guaranteed. The
+per-rank elapsed time ends after publication on rank 0 and after write
+agreement on other ranks.
+
 Requirements and limitations
 ----------------------------
 
