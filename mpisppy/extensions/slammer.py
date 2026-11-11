@@ -44,7 +44,7 @@ import numpy as np
 import pyomo.environ as pyo
 
 import mpisppy.MPI as MPI
-from mpisppy.extensions.extension import Extension
+from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 from mpisppy.utils.sputils import is_persistent
 
 # Ordered set of legal direction tokens (see the design, §3).
@@ -205,7 +205,7 @@ def _finite(x):
     return x is not None and math.isfinite(x)
 
 
-class Slammer(Extension):
+class Slammer(RebuildSafeNoModelChanges):
     """Preference-driven in-hub slammer.
 
     Constructed from ``opt.options["slammer_options"]``, a dict with keys:

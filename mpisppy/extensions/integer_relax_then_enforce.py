@@ -11,20 +11,16 @@ import time
 
 import pyomo.environ as pyo
 
-import mpisppy.extensions.extension
+from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 from mpisppy import global_toc
 from mpisppy.utils.sputils import is_persistent
 
 
-class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
+class IntegerRelaxThenEnforce(RebuildSafeNoModelChanges):
     """ Class for relaxing integer variables, running PH, and then
         enforcing the integality constraints after some condition.
     """
 
-    # Whether the integers are relaxed is a model transformation, so it rides
-    # in the dilled models, and pre_iter0 reads it back from them on a resume.
-    # When to enforce is computed from the options and the iteration count,
-    # which a resumed run has too.
     def checkpoint_state(self):
         return None
 
@@ -54,6 +50,33 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
 
     def pre_iter0(self):
         if getattr(self.opt, "_resumed_from_checkpoint", False):
+            leaf = getattr(self.opt, "_checkpoint_leaf_state", {})
+            if leaf.get("backend") == "pyfory-rebuild":
+                model_state = getattr(
+                    self.opt, "_checkpoint_rebuild_extension_model_state", {})
+                state = model_state.get(type(self).__name__)
+                if not isinstance(state, dict) or not isinstance(
+                        state.get("integers_relaxed"), bool):
+                    raise RuntimeError(
+                        "IntegerRelaxThenEnforce requires a saved "
+                        "integers_relaxed flag for pyfory-rebuild.")
+                self._integers_relaxed = state["integers_relaxed"]
+                if self._integers_relaxed:
+                    # Recreate Pyomo's undo Suffix before the rest of the
+                    # rebuilt model is overlaid and before the solver is made.
+                    for scenario in self.opt.local_scenarios.values():
+                        if not hasattr(scenario, "_relaxed_integer_vars"):
+                            self.integer_relaxer.apply_to(scenario)
+                    global_toc(
+                        f"{self.__class__.__name__}: resuming with "
+                        "integrality still relaxed",
+                        self.opt.cylinder_rank == 0)
+                else:
+                    global_toc(
+                        f"{self.__class__.__name__}: resuming with "
+                        "integrality enforced",
+                        self.opt.cylinder_rank == 0)
+                return
             # The reloaded models carry whatever this extension had already
             # done to them, and Pyomo keeps the undo map in a
             # _relaxed_integer_vars Suffix on each one. Relaxing a second time
@@ -88,6 +111,33 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
         for s in self.opt.local_scenarios.values():
             self.integer_relaxer.apply_to(s) 
         self._integers_relaxed = True
+
+    def checkpoint_model_state(self):
+        """Save whether the model transformation still needs its undo map."""
+        relaxed = [hasattr(s, "_relaxed_integer_vars")
+                   for s in self.opt.local_scenarios.values()]
+        if relaxed and any(relaxed) != all(relaxed):
+            raise RuntimeError(
+                "IntegerRelaxThenEnforce has inconsistent relaxed state "
+                "across local scenarios.")
+        return {"integers_relaxed": bool(relaxed and all(relaxed))}
+
+    def restore_checkpoint_model_state(self, state):
+        if (not isinstance(state, dict)
+                or not isinstance(state.get("integers_relaxed"), bool)):
+            raise ValueError(
+                "IntegerRelaxThenEnforce has invalid pyfory-rebuild state.")
+        actual = [hasattr(s, "_relaxed_integer_vars")
+                  for s in self.opt.local_scenarios.values()]
+        if actual and any(actual) != all(actual):
+            raise ValueError(
+                "IntegerRelaxThenEnforce has inconsistent restored state "
+                "across local scenarios.")
+        if actual and all(actual) != state["integers_relaxed"]:
+            raise ValueError(
+                "IntegerRelaxThenEnforce did not restore the saved integer "
+                "relaxation state.")
+        self._integers_relaxed = state["integers_relaxed"]
 
     def _unrelax_integers(self):
         for sub in self.opt.local_scenarios.values():

@@ -7,13 +7,13 @@
 # full copyright and license information.
 ###############################################################################
 
-import mpisppy.extensions.extension
+from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 from mpisppy import global_toc
 from mpisppy.utils.rho_utils import assign_rho_with_fallback
 from mpisppy.utils.sputils import nonant_cost_coeffs
 
 
-class CoeffRho(mpisppy.extensions.extension.Extension):
+class CoeffRho(RebuildSafeNoModelChanges):
     """
     Determine rho as a linear function of the objective coefficient
     """

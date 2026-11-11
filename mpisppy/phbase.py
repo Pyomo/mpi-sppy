@@ -1612,6 +1612,8 @@ class PHBase(mpisppy.spopt.SPOpt):
             # in place. Restore solve results before pre_iter0 callbacks; the
             # variable and component overlay follows extension setup.
             self._checkpoint_rebuild_states = models
+            self._checkpoint_rebuild_extension_model_state = leaf.get(
+                "extension_model_state", {})
             self._checkpoint_rebuild_pending = {}
             checkpointing.restore_rebuild_solve_state(self, models)
         else:

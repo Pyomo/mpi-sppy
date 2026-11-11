@@ -15,12 +15,12 @@ import warnings
 
 import numpy as np
 
-import mpisppy.extensions.extension
+from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 import mpisppy.MPI as MPI
 from mpisppy.utils.w_utils.wtracker import WTracker
 
 
-class Dyn_Rho_extension_base(mpisppy.extensions.extension.Extension):
+class Dyn_Rho_extension_base(RebuildSafeNoModelChanges):
     """
     This extension enables dynamic rho, e.g. gradient or sensitivity based.
 

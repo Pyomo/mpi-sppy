@@ -11,7 +11,7 @@
 # but only update when convergence improves
 # Preference given to user-supplied converger
 
-import mpisppy.extensions.extension
+from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 
 # for ph.options['mult_rho_options']:
 _mult_rho_defaults = { 'convergence_tolerance' : 1e-4,
@@ -28,7 +28,7 @@ _attr_to_option_name_map = {
 }
 
 
-class MultRhoUpdater(mpisppy.extensions.extension.Extension):
+class MultRhoUpdater(RebuildSafeNoModelChanges):
 
     def __init__(self, ph):
 

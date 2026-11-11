@@ -146,7 +146,7 @@ class StateRecorder(Extension):
 
 
 class RebuildSafeStateExtension(Extension):
-    """A no-op model extension exercising the explicit rebuild contract."""
+    """Add late model structure that pyfory-rebuild must recreate."""
 
     checkpoint_rebuild_safe = True
 
@@ -156,11 +156,80 @@ class RebuildSafeStateExtension(Extension):
     def restore_state(self, state):
         pass
 
+    @staticmethod
+    def _install(scenario, state):
+        import pyomo.environ as pyo
+
+        var_name = state["variable_name"]
+        constraint_name = state["constraint_name"]
+        if scenario.find_component(var_name) is not None:
+            return
+        marker = pyo.Var(initialize=-5.0)
+        scenario.add_component(var_name, marker)
+        # A scalar Var is not constructed until it is attached to the
+        # concrete scenario model. Fix it after add_component has constructed
+        # it, so this extension accurately models a late-added Pyomo variable.
+        marker.fix(-5.0)
+        scenario.add_component(
+            constraint_name,
+            pyo.Constraint(expr=marker >= state["lower_bound"]))
+
+    def enditer(self):
+        state = self.checkpoint_model_state()
+        for index, scenario in enumerate(self.opt.local_scenarios.values()):
+            self._install(scenario, state)
+            scenario.find_component(state["variable_name"]).set_value(
+                73.0 + index)
+
     def checkpoint_model_state(self):
-        return {"scenario_count": len(self.opt.local_scenarios)}
+        return {
+            "scenario_names": sorted(self.opt.local_scenarios),
+            "variable_name": "rebuild_extension_marker",
+            "constraint_name": "rebuild_extension_marker_lb",
+            "lower_bound": -2.0,
+        }
 
     def restore_checkpoint_model_state(self, state):
+        if (not isinstance(state, dict)
+                or state.get("scenario_names")
+                != sorted(self.opt.local_scenarios)):
+            raise ValueError(
+                "RebuildSafeStateExtension state does not match its local "
+                "scenarios.")
+        for scenario in self.opt.local_scenarios.values():
+            self._install(scenario, state)
         self.restored_model_state = state
+
+
+class CheckpointPayloadExtension(Extension):
+    """A nested extension-object state payload used by backend tests."""
+
+    checkpoint_rebuild_safe = True
+
+    def __init__(self, opt):
+        super().__init__(opt)
+        self.payload = {
+            "iteration_marks": [1, 4, 9],
+            "scenario_metadata": {
+                "scen0": ("root", 0),
+                "scen1": ("root", 1),
+            },
+            "flags": {"enabled": True, "label": "payload"},
+        }
+        self.restored_payload = None
+
+    def checkpoint_state(self):
+        return copy.deepcopy(self.payload)
+
+    def restore_state(self, state):
+        self.restored_payload = copy.deepcopy(state)
+
+    def checkpoint_model_state(self):
+        return None
+
+    def restore_checkpoint_model_state(self, state):
+        if state is not None:
+            raise ValueError("CheckpointPayloadExtension has no model state")
 
 
 class MidIterMutator(Extension):
@@ -403,6 +472,8 @@ def _extension_class(name):
         return StateRecorder
     if name == "rebuild_safe":
         return RebuildSafeStateExtension
+    if name == "checkpoint_payload":
+        return CheckpointPayloadExtension
     if name == "coeff_rho":
         from mpisppy.extensions.coeff_rho import CoeffRho
         return CoeffRho
@@ -493,6 +564,32 @@ def _resume_and_dump(ckpt_dir, iters_this_run, out_path,
             "resume_iteration": int(getattr(ph, "_resume_iteration", 0)),
             "state": _flat_snapshot(ph),
         }, f)
+
+
+def _resume_rebuild_extension_and_dump(ckpt_dir, out_path):
+    """Resume extension-added structure in a clean interpreter and report it."""
+    options = _options(
+        0, ckpt_dir=ckpt_dir, resume_from=ckpt_dir,
+        checkpoint_backend=checkpointing.PYFORY_REBUILD_BACKEND)
+    ph = _make_ph(options, extension_name="rebuild_safe")
+    ph.PH_Prep()
+    ph.Iter0()
+    scenarios = {}
+    for sname, scenario in ph.local_scenarios.items():
+        marker = scenario.find_component("rebuild_extension_marker")
+        constraint = scenario.find_component(
+            "rebuild_extension_marker_lb")
+        scenarios[sname] = {
+            "marker_value": float(marker.value),
+            "constraint_present": constraint is not None,
+            "component_layout": checkpointing._component_layout(scenario),
+        }
+    with open(out_path, "w") as stream:
+        json.dump({
+            "resumed": bool(getattr(ph, "_resumed_from_checkpoint", False)),
+            "resume_iteration": int(getattr(ph, "_resume_iteration", 0)),
+            "scenarios": scenarios,
+        }, stream)
 
 
 def _find_recorder(ph):
@@ -1176,8 +1273,138 @@ class TestPyforyRebuildBackend(unittest.TestCase):
         resumed.Iter0()
         extension = dict(checkpointing._extension_objects(resumed))[
             "RebuildSafeStateExtension"]
-        self.assertEqual(extension.restored_model_state,
-                         {"scenario_count": len(SCENARIO_NAMES)})
+        self.assertEqual(
+            extension.restored_model_state["scenario_names"],
+            SCENARIO_NAMES)
+        self.assertEqual(
+            extension.restored_model_state["variable_name"],
+            "rebuild_extension_marker")
+
+    def test_late_extension_structure_and_values_restore_in_a_fresh_process(
+            self):
+        writer = _make_ph(self._options(1), extension_name="rebuild_safe")
+        writer.ph_main()
+        expected_values = {
+            sname: float(scenario.rebuild_extension_marker.value)
+            for sname, scenario in writer.local_scenarios.items()
+        }
+        expected_layouts = {
+            sname: json.loads(json.dumps(
+                checkpointing._component_layout(scenario)))
+            for sname, scenario in writer.local_scenarios.items()
+        }
+
+        out_path = os.path.join(self._tmp.name, "rebuild-extension.json")
+        call_args = json.dumps([self.ckpt_dir, out_path])
+        result = subprocess.run(
+            [sys.executable, "-c",
+             "import json, mpisppy.tests.test_checkpoint as t; "
+             f"t._resume_rebuild_extension_and_dump(*json.loads({call_args!r}))"],
+            capture_output=True, text=True, timeout=900, check=False,
+            env=subprocess_env(),
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with open(out_path) as stream:
+            resumed = json.load(stream)
+        self.assertTrue(resumed["resumed"])
+        self.assertEqual(resumed["resume_iteration"], 1)
+        for sname, saved_value in expected_values.items():
+            self.assertEqual(
+                resumed["scenarios"][sname]["marker_value"], saved_value)
+            self.assertTrue(
+                resumed["scenarios"][sname]["constraint_present"])
+            self.assertEqual(
+                resumed["scenarios"][sname]["component_layout"],
+                expected_layouts[sname])
+
+    def test_decimal_snapshot_values_keep_type_and_report_context(self):
+        from decimal import Decimal
+        import pyomo.environ as pyo
+
+        ph = _make_ph(_options(1))
+        ph.PH_Prep()
+        scenario = next(iter(ph.local_scenarios.values()))
+        scenario.checkpoint_decimal = pyo.Param(
+            mutable=True, initialize=Decimal("1.234500"))
+        snapshot = checkpointing._snapshot_rebuild_model(scenario)
+        encoded = checkpointing._new_fory().serialize(snapshot)
+        decoded = checkpointing._new_fory().deserialize(encoded)
+        restored = scenario.clone()
+        checkpointing._restore_rebuild_model_values(restored, decoded)
+        self.assertIsInstance(restored.checkpoint_decimal.value, Decimal)
+        self.assertEqual(restored.checkpoint_decimal.value,
+                         Decimal("1.234500"))
+        self.assertTrue(checkpointing._checkpoint_state_equal(
+            checkpointing._snapshot_rebuild_model(restored), decoded))
+
+        scenario.checkpoint_unsupported = pyo.Param(
+            mutable=True, within=pyo.Any, initialize=object())
+        with self.assertRaisesRegex(
+                TypeError,
+                f"scenario '{scenario.name}'.*mutable Param "
+                "'checkpoint_unsupported' index None.*builtins.object"):
+            checkpointing._snapshot_rebuild_model(scenario)
+
+    def test_extension_object_payload_is_restored(self):
+        writer = _make_ph(
+            self._options(1), extension_name="checkpoint_payload")
+        writer.ph_main()
+        expected = CheckpointPayloadExtension(writer).payload
+
+        resumed = _make_ph(_options(
+            0, ckpt_dir=self.ckpt_dir, resume_from=self.ckpt_dir,
+            checkpoint_backend=checkpointing.PYFORY_REBUILD_BACKEND),
+            extension_name="checkpoint_payload")
+        resumed.PH_Prep()
+        resumed.Iter0()
+        extension = dict(checkpointing._extension_objects(resumed))[
+            "CheckpointPayloadExtension"]
+        self.assertEqual(extension.restored_payload, expected)
+
+    def test_shipped_snapshot_safe_extensions_opt_in(self):
+        from mpisppy.extensions.coeff_rho import CoeffRho
+        from mpisppy.extensions.dyn_rho_base import Dyn_Rho_extension_base
+        from mpisppy.extensions.fixer import Fixer
+        from mpisppy.extensions.grad_rho import GradRho
+        from mpisppy.extensions.integer_relax_then_enforce import (
+            IntegerRelaxThenEnforce,
+        )
+        from mpisppy.extensions.mult_rho_updater import MultRhoUpdater
+        from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
+        from mpisppy.extensions.primal_dual_rho import PrimalDualRho
+        from mpisppy.extensions.reduced_costs_fixer import ReducedCostsFixer
+        from mpisppy.extensions.relaxed_ph_fixer import RelaxedPHFixer
+        from mpisppy.extensions.sensi_rho import SensiRho
+        from mpisppy.extensions.sep_rho import SepRho
+        from mpisppy.extensions.slammer import Slammer
+
+        for extension_cls in (
+                CoeffRho, Dyn_Rho_extension_base, Fixer, GradRho,
+                IntegerRelaxThenEnforce, MultRhoUpdater, NormRhoUpdater,
+                PrimalDualRho, ReducedCostsFixer, RelaxedPHFixer, SepRho,
+                SensiRho, Slammer):
+            with self.subTest(extension=extension_cls.__name__):
+                self.assertTrue(extension_cls.checkpoint_rebuild_safe)
+
+        scenario = types.SimpleNamespace(
+            _mpisppy_data=types.SimpleNamespace(
+                conv_iter_count={("ROOT", 0): 3, ("ROOT", 1): 1}))
+        fixer = Fixer.__new__(Fixer)
+        fixer.ph = types.SimpleNamespace(local_scenarios={"scen0": scenario})
+        saved_counts = fixer.checkpoint_model_state()
+        scenario._mpisppy_data.conv_iter_count = {}
+        fixer.restore_checkpoint_model_state(saved_counts)
+        self.assertEqual(
+            scenario._mpisppy_data.conv_iter_count,
+            {("ROOT", 0): 3, ("ROOT", 1): 1})
+
+        scenario = types.SimpleNamespace(_relaxed_integer_vars=object())
+        opt = types.SimpleNamespace(local_scenarios={"scen0": scenario})
+        relaxer = IntegerRelaxThenEnforce.__new__(IntegerRelaxThenEnforce)
+        relaxer.opt = opt
+        saved_relaxation = relaxer.checkpoint_model_state()
+        relaxer.restore_checkpoint_model_state(saved_relaxation)
+        self.assertTrue(relaxer._integers_relaxed)
 
 
 @unittest.skipUnless(_pyfory_reload_runtime_available(),
@@ -1237,6 +1464,23 @@ class TestPyforyReloadBackend(unittest.TestCase):
         self.assertTrue(resumed["resumed"])
         self.assertEqual(resumed["resume_iteration"], 2)
         self.assertEqual(resumed["state"], _flat_snapshot(reference))
+
+    def test_extension_object_payload_is_restored(self):
+        writer = _make_ph(
+            self._options(1), extension_name="checkpoint_payload")
+        writer.ph_main()
+        expected = dict(checkpointing._extension_objects(writer))[
+            "CheckpointPayloadExtension"].checkpoint_state()
+
+        resumed = _make_ph(_options(
+            0, ckpt_dir=self.ckpt_dir, resume_from=self.ckpt_dir,
+            checkpoint_backend=checkpointing.PYFORY_RELOAD_BACKEND),
+            extension_name="checkpoint_payload")
+        resumed.PH_Prep()
+        resumed.Iter0()
+        extension = dict(checkpointing._extension_objects(resumed))[
+            "CheckpointPayloadExtension"]
+        self.assertEqual(extension.restored_payload, expected)
 
     def test_post_iteration_weights_and_proximal_cuts_survive(self):
         writer = _make_ph(self._options(2, linearize_proximal_terms=True))

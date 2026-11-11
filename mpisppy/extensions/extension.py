@@ -295,6 +295,26 @@ class Extension:
         return None
 
 
+class RebuildSafeNoModelChanges(Extension):
+    """Opt in when the PH snapshot captures every persistent model change.
+
+    This is appropriate for extensions that only update existing PH Params,
+    variable values, fixedness, bounds, or domains. Extensions that add model
+    components or keep extra per-scenario model data must implement their own
+    model-state hooks instead.
+    """
+
+    checkpoint_rebuild_safe = True
+
+    def checkpoint_model_state(self):
+        return None
+
+    def restore_checkpoint_model_state(self, state):
+        if state is not None:
+            raise ValueError(
+                f"{type(self).__name__} does not expect saved model state")
+
+
 def _refuse_duplicate_names(ext_classes):
     """Raise if two different classes in ext_classes share a ``__name__``.
 

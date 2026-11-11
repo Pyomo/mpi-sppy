@@ -14,7 +14,7 @@ import math
 
 import numpy as np
 
-import mpisppy.extensions.extension
+from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 import mpisppy.MPI as MPI
 
 _norm_rho_defaults = {'convergence_tolerance' : 1e-4,
@@ -38,7 +38,7 @@ _attr_to_option_name_map = {
     '_verbose' : 'verbose',
 }
 
-class NormRhoUpdater(mpisppy.extensions.extension.Extension):
+class NormRhoUpdater(RebuildSafeNoModelChanges):
 
     def __init__(self, ph):
 

@@ -9,7 +9,7 @@
 
 import pyomo.environ as pyo
 
-import mpisppy.extensions.extension
+from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 
 """ Code for WW style fixing of integers. This can be used
     as the only extension, but it could be called from a "multi"
@@ -54,7 +54,7 @@ def Fixer_tuple(xvar, th=None, nb=None, lb=None, ub=None):
 
     return (id(xvar), th, nb, lb, ub)
 
-class Fixer(mpisppy.extensions.extension.Extension):
+class Fixer(RebuildSafeNoModelChanges):
 
     def __init__(self, ph):
         self.ph = ph
@@ -314,6 +314,28 @@ class Fixer(mpisppy.extensions.extension.Extension):
         self.fixed_so_far = state["fixed_so_far"]
         self.fixed_prior_iter0 = state["fixed_prior_iter0"]
 
+    def checkpoint_model_state(self):
+        """Carry the convergence counters stored outside Pyomo components."""
+        return {
+            sname: [
+                (tuple(ndn_i), int(count))
+                for ndn_i, count in getattr(
+                    scenario._mpisppy_data, "conv_iter_count", {}).items()
+            ]
+            for sname, scenario in self.ph.local_scenarios.items()
+        }
+
+    def restore_checkpoint_model_state(self, state):
+        if not isinstance(state, dict) or set(state) != set(
+                self.ph.local_scenarios):
+            raise ValueError(
+                "Fixer pyfory-rebuild state does not match its local "
+                "scenarios.")
+        for sname, scenario in self.ph.local_scenarios.items():
+            scenario._mpisppy_data.conv_iter_count = {
+                tuple(ndn_i): int(count)
+                for ndn_i, count in state[sname]
+            }
+
     def post_everything(self):
         self._dp(f"Final unique vars fixed by fixer= {self.fixed_so_far}")
-

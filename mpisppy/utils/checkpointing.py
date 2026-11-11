@@ -40,6 +40,7 @@ import uuid
 import numbers
 from array import array
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 
 import numpy as np
 from pyomo.common.dependencies import attempt_import
@@ -335,18 +336,56 @@ def _new_fory():
     )
 
 
-def _plain_checkpoint_value(value):
-    """Convert a Pyomo/NumPy scalar to a bounded pyfory-native value."""
+_CHECKPOINT_SCALAR_TAG = "__mpisppy_checkpoint_scalar__"
+
+
+def _plain_checkpoint_value(value, context=None):
+    """Convert a Pyomo/NumPy scalar to a bounded pyfory-native value.
+
+    ``context`` identifies the scenario/component/index at the call site so
+    unsupported model values can be fixed without tracing a generic type
+    error back through a large scenario creator.
+    """
     if hasattr(value, "item") and callable(value.item):
         value = value.item()
+    if isinstance(value, Decimal):
+        # Preserve exact decimal values without relying on codec-specific
+        # support for Decimal itself.
+        return {_CHECKPOINT_SCALAR_TAG: "decimal", "value": str(value)}
+    if (isinstance(value, dict)
+            and value.get(_CHECKPOINT_SCALAR_TAG) == "decimal"
+            and set(value) == {_CHECKPOINT_SCALAR_TAG, "value"}
+            and isinstance(value["value"], str)):
+        # _snapshot_rebuild_model prepares scalar metadata before the packed
+        # value arrays call this helper a second time.
+        return value
     if value is None or isinstance(value, (bool, int, float, str, bytes)):
         return value
     if isinstance(value, numbers.Real):
         return float(value)
+    location = f" at {context}" if context else ""
     raise TypeError(
-        f"Checkpoint state contains unsupported value type "
+        f"Checkpoint state{location} contains unsupported value type "
         f"'{type(value).__module__}.{type(value).__qualname__}'."
     )
+
+
+def _restore_plain_checkpoint_value(value):
+    """Decode the explicit scalar tags emitted by _plain_checkpoint_value."""
+    if (isinstance(value, dict)
+            and _CHECKPOINT_SCALAR_TAG in value):
+        if (value.get(_CHECKPOINT_SCALAR_TAG) != "decimal"
+                or set(value) != {_CHECKPOINT_SCALAR_TAG, "value"}
+                or not isinstance(value["value"], str)):
+            raise CheckpointMismatch(
+                "A pyfory checkpoint has an invalid tagged scalar value.")
+        try:
+            return Decimal(value["value"])
+        except (TypeError, ValueError, InvalidOperation) as exc:
+            raise CheckpointMismatch(
+                "A pyfory checkpoint has an invalid tagged Decimal value."
+            ) from exc
+    return value
 
 
 def _pack_checkpoint_values(values):
@@ -403,7 +442,7 @@ def _unpack_checkpoint_value(packed, index):
         if kind == 2:
             return float(packed["reals"][index])
         if kind == 3 and index in packed["others"]:
-            return packed["others"][index]
+            return _restore_plain_checkpoint_value(packed["others"][index])
     except (IndexError, KeyError, TypeError, ValueError) as exc:
         raise CheckpointMismatch(
             "A pyfory checkpoint has a malformed packed value array."
@@ -433,18 +472,20 @@ def _checkpoint_state_equal(left, right):
     return left == right
 
 
-def _safe_index(index):
+def _safe_index(index, context=None):
     """Convert a Pyomo index into plain data without losing tuple geometry."""
     if index is None:
         return None
     if isinstance(index, tuple):
-        return tuple(_safe_index(part) for part in index)
+        return tuple(_safe_index(part, context) for part in index)
     if isinstance(index, (bool, int, float, str, bytes)):
         return index
     if hasattr(index, "item") and callable(index.item):
-        return _safe_index(index.item())
+        return _safe_index(index.item(), context)
+    location = f" at {context}" if context else ""
     raise TypeError(
-        f"Checkpoint index has unsupported type '{type(index).__name__}'."
+        f"Checkpoint index {index!r}{location} has unsupported type "
+        f"'{type(index).__module__}.{type(index).__qualname__}'."
     )
 
 
@@ -521,10 +562,14 @@ def _prox_approx_snapshot(scenario):
                 cut_records.append((
                     index, float(coefs[0]), float(coefs[1]),
                     float(body.constant),
-                    _plain_checkpoint_value(pyo_value(
-                        cut.lower, exception=False)),
-                    _plain_checkpoint_value(pyo_value(
-                        cut.upper, exception=False)),
+                    _plain_checkpoint_value(
+                        pyo_value(cut.lower, exception=False),
+                        f"scenario '{scenario.name}', proximal cut "
+                        f"'{cut.name}' lower bound"),
+                    _plain_checkpoint_value(
+                        pyo_value(cut.upper, exception=False),
+                        f"scenario '{scenario.name}', proximal cut "
+                        f"'{cut.name}' upper bound"),
                     bool(cut.active),
                 ))
             result[var_name] = {
@@ -554,11 +599,17 @@ def _snapshot_rebuild_model(scenario):
     variable_values = []
     for var in scenario.component_data_objects(Var, descend_into=True,
                                                active=None):
-        value = _plain_checkpoint_value(var.value)
+        value = _plain_checkpoint_value(
+            var.value,
+            f"scenario '{scenario.name}', variable '{var.name}' value")
         lb_value = pyo_value(var.lb, exception=False)
         ub_value = pyo_value(var.ub, exception=False)
-        lb = None if lb_value is None else _plain_checkpoint_value(lb_value)
-        ub = None if ub_value is None else _plain_checkpoint_value(ub_value)
+        lb = (None if lb_value is None else _plain_checkpoint_value(
+            lb_value,
+            f"scenario '{scenario.name}', variable '{var.name}' lower bound"))
+        ub = (None if ub_value is None else _plain_checkpoint_value(
+            ub_value,
+            f"scenario '{scenario.name}', variable '{var.name}' upper bound"))
         domain_name = getattr(var.domain, "name", None)
         if domain_name is None:
             raise TypeError(
@@ -578,8 +629,15 @@ def _snapshot_rebuild_model(scenario):
         if not component.mutable:
             continue
         for index, param in component.items():
-            parameters.append((component.name, _safe_index(index)))
-            parameter_values.append(_plain_checkpoint_value(param.value))
+            safe_index = _safe_index(
+                index,
+                f"scenario '{scenario.name}', mutable Param "
+                f"'{component.name}' index")
+            parameters.append((component.name, safe_index))
+            parameter_values.append(_plain_checkpoint_value(
+                param.value,
+                f"scenario '{scenario.name}', mutable Param "
+                f"'{component.name}' index {safe_index!r}"))
 
     return {
         "state_version": PYFORY_STATE_VERSION,
@@ -595,9 +653,11 @@ def _snapshot_rebuild_model(scenario):
         "solution_available": bool(getattr(
             scenario._mpisppy_data, "solution_available", False)),
         "inner_bound": _plain_checkpoint_value(
-            scenario._mpisppy_data.inner_bound),
+            scenario._mpisppy_data.inner_bound,
+            f"scenario '{scenario.name}' inner bound"),
         "outer_bound": _plain_checkpoint_value(
-            scenario._mpisppy_data.outer_bound),
+            scenario._mpisppy_data.outer_bound,
+            f"scenario '{scenario.name}' outer bound"),
     }
 
 
@@ -623,17 +683,20 @@ def restore_rebuild_solve_state(opt, snapshots):
                 "solution_available flag."
             )
         for key in ("inner_bound", "outer_bound"):
-            bound = snapshot[key]
+            bound = _restore_plain_checkpoint_value(snapshot[key])
             if bound is not None and (isinstance(bound, bool)
-                                      or not isinstance(bound, numbers.Real)):
+                                      or not isinstance(
+                                          bound, (numbers.Real, Decimal))):
                 raise CheckpointMismatch(
                     f"The pyfory state for scenario '{sname}' has an "
                     f"invalid {key}."
                 )
         data = scenario._mpisppy_data
         data.solution_available = snapshot["solution_available"]
-        data.inner_bound = snapshot["inner_bound"]
-        data.outer_bound = snapshot["outer_bound"]
+        data.inner_bound = _restore_plain_checkpoint_value(
+            snapshot["inner_bound"])
+        data.outer_bound = _restore_plain_checkpoint_value(
+            snapshot["outer_bound"])
 
 
 def _restore_rebuild_model_values(scenario, snapshot):
@@ -704,6 +767,8 @@ def _restore_rebuild_model_values(scenario, snapshot):
     for index_in_snapshot, (name, fixed, stale, lb, ub, domain_name) in \
             enumerate(variable_records):
         value = _unpack_checkpoint_value(packed_variables, index_in_snapshot)
+        lb = _restore_plain_checkpoint_value(lb)
+        ub = _restore_plain_checkpoint_value(ub)
         var = scenario.find_component(name)
         if var is None:
             # PH's xsqvar is introduced when the deferred PH objective is
@@ -768,6 +833,8 @@ def _replay_prox_approx(opt, scenario, snapshot):
             # created. add_cut() would clamp it and change the saved model.
             for index, coef_square, coef_x, constant, lower, upper, active \
                     in state["cut_records"]:
+                lower = _restore_plain_checkpoint_value(lower)
+                upper = _restore_plain_checkpoint_value(upper)
                 expr = LinearExpression(
                     linear_coefs=[coef_square, coef_x],
                     linear_vars=[manager.xvarsqrd, manager.xvar],
@@ -1479,7 +1546,13 @@ def probe_model_is_dillable(opt):
 
 
 def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
-    """Probe every local scenario using the selected hub model codec."""
+    """Probe each local model codec before the run starts writing.
+
+    For pyfory-rebuild, the clone check proves that the core snapshot can be
+    decoded and overlaid on an equivalent Pyomo model. It does not prove that
+    future extension behavior is captured; rebuild hooks are checked for
+    encodable state here and their component layout is checked on resume.
+    """
     require_backend_dependency(backend)
     if backend == DILL_RELOAD_BACKEND:
         # Keep dill's serialize-only probe exactly as it has always worked.
@@ -1490,11 +1563,41 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
         raise ValueError(f"Unknown checkpoint backend '{backend}'.")
 
     require_extension_rebuild_contract(opt)
+    extension_state = gather_extension_model_state(opt)
     timed = bool(opt.options.get("display_timing", False))
     probe_started = time.perf_counter() if timed else None
     encode_s = decode_s = encode_cpu_s = decode_cpu_s = 0.0
     failure = None
+    for extension_name, model_state in extension_state.items():
+        try:
+            hook_payload = {extension_name: model_state}
+            started = time.perf_counter() if timed else None
+            cpu_started = time.thread_time() if timed else None
+            hook_bytes = _new_fory().serialize(hook_payload)
+            if timed:
+                encode_s += time.perf_counter() - started
+                encode_cpu_s += time.thread_time() - cpu_started
+            started = time.perf_counter() if timed else None
+            cpu_started = time.thread_time() if timed else None
+            hook_restored = _new_fory().deserialize(hook_bytes)
+            if timed:
+                decode_s += time.perf_counter() - started
+                decode_cpu_s += time.thread_time() - cpu_started
+            if not _checkpoint_state_equal(hook_restored, hook_payload):
+                raise RuntimeError(
+                    f"pyfory changed model state during a fresh-reader "
+                    "round trip")
+        except Exception as exc:
+            failure = RuntimeError(
+                "Checkpointing is enabled, but pyfory-rebuild cannot encode "
+                f"model state from extension '{extension_name}': "
+                f"{type(exc).__name__}: {exc}")
+            failure.__cause__ = exc
+            break
+
     for sname, scenario in opt.local_scenarios.items():
+        if failure is not None:
+            break
         try:
             state = _snapshot_rebuild_model(scenario)
             started = time.perf_counter() if timed else None
@@ -1513,6 +1616,17 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
                 raise RuntimeError(
                     "pyfory changed the plain scenario state during a "
                     "fresh-reader round trip")
+
+            # Pyomo's clone is the closest safe startup check for the overlay:
+            # extension hooks may add structure, so the clone begins with the
+            # same already-configured structure as the live scenario.
+            clone = scenario.clone()
+            _restore_rebuild_model_values(clone, restored)
+            clone_state = _snapshot_rebuild_model(clone)
+            if not _checkpoint_state_equal(clone_state, restored):
+                raise RuntimeError(
+                    "the decoded snapshot could not be overlaid on a clone "
+                    "of the configured scenario")
         except Exception as exc:
             failure = RuntimeError(
                 "Checkpointing is enabled, but pyfory-rebuild cannot encode "
