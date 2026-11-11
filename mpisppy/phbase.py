@@ -1968,6 +1968,16 @@ class PHBase(mpisppy.spopt.SPOpt):
         # otherwise overwrite what is restored here.
         self._restore_extension_state_if_resuming()
 
+        if (self._resumed_from_checkpoint
+                and self._checkpoint_leaf_state["backend"]
+                == checkpointing.PYFORY_REBUILD_BACKEND):
+            checkpointing.run_agreed(
+                self,
+                lambda: checkpointing.finalize_and_validate_rebuild_model_state(
+                    self, self._checkpoint_rebuild_states),
+                "validate their rebuilt pyfory models, so none of them "
+                "resumes with a changed model")
+
         # Clear the dynamic-overrides overlay at the iter0→iterk
         # transition: static iterk options come from the layer fold,
         # and dropping any Gapper auto-mode mipgap accumulated during

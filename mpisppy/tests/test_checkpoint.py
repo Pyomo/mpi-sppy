@@ -4626,6 +4626,87 @@ class TestVaridToNonantIndexRestored(unittest.TestCase):
                 self.resumed.is_zero_prob(s, var)  # must not raise
 
 
+class TestPyforyRebuildProbeClone(unittest.TestCase):
+    def test_dict_keys_set_initializers_survive_probe_clone(self):
+        import pyomo.core.base.component as pyomo_component
+        import pyomo.environ as pyo
+
+        model = pyo.ConcreteModel()
+        model.empty = pyo.Set(initialize={}.keys())
+        model.nested = pyo.Block()
+        model.nested.choices = pyo.Set(
+            initialize={"first": 1, "second": 2}.keys())
+        original = {
+            name: model.find_component(name)._init_values
+            for name in ("empty", "nested.choices")
+        }
+
+        with mock.patch.object(pyomo_component.logger, "error") as log_error:
+            clone = checkpointing._clone_rebuild_probe_model(model)
+        log_error.assert_not_called()
+
+        for name, initializer in original.items():
+            source = model.find_component(name)
+            copied = clone.find_component(name)
+            self.assertIs(source._init_values, initializer)
+            self.assertIsNotNone(copied._init_values)
+            self.assertEqual(tuple(source), tuple(copied))
+            self.assertIsInstance(copied._init_values._init.val, tuple)
+
+
+class TestPyforyRebuildFingerprint(unittest.TestCase):
+    def test_empty_set_with_unknown_dimension(self):
+        import pyomo.environ as pyo
+
+        model = pyo.ConcreteModel()
+        model.indices = pyo.Set(initialize=[])
+        fingerprint = checkpointing._rebuild_model_fingerprint(model)
+        self.assertEqual(
+            fingerprint,
+            checkpointing._rebuild_model_fingerprint(model.clone()))
+
+        model.del_component(model.indices)
+        model.indices = pyo.Set(dimen=1, initialize=[])
+        self.assertNotEqual(
+            fingerprint,
+            checkpointing._rebuild_model_fingerprint(model))
+
+    @unittest.skipUnless(os.path.isfile(os.path.join(
+        REPO_ROOT, "_egret-int", "egret", "__init__.py")),
+        "local Egret checkout is unavailable")
+    def test_constructed_uc_scenario_graph(self):
+        import importlib.util
+        import pyomo.environ as pyo
+
+        # Use the same scenario creator and data as the UC checkpoint job,
+        # but construct and fingerprint one model in this process.
+        sys.path.insert(0, os.path.join(REPO_ROOT, "_egret-int"))
+        try:
+            spec = importlib.util.spec_from_file_location(
+                "checkpoint_uc_fingerprint_creator",
+                os.path.join(REPO_ROOT, "examples", "uc", "uc_funcs.py"))
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            model = module.scenario_creator(
+                "Scenario1", num_scens=25,
+                path=os.path.join(REPO_ROOT, "examples", "uc",
+                                  "25scenarios_r1"))
+        finally:
+            sys.path.pop(0)
+
+        components = tuple(model.component_objects(active=None))
+        self.assertTrue(any(isinstance(c, pyo.BuildAction)
+                            for c in components))
+        self.assertTrue(any(isinstance(c, pyo.BuildCheck)
+                            for c in components))
+        fingerprint = checkpointing._rebuild_model_fingerprint(model)
+        clone = checkpointing._clone_rebuild_probe_model(model)
+        self.assertIsNotNone(clone.Contingencies._init_values)
+        self.assertEqual(
+            fingerprint,
+            checkpointing._rebuild_model_fingerprint(clone))
+
+
 class TestIntegerRelaxThenEnforceResume(unittest.TestCase):
     """The transformation records its undo map in a _relaxed_integer_vars
     Suffix. Applying it twice replaces that Suffix with an empty one, so the
@@ -4670,6 +4751,23 @@ class TestIntegerRelaxThenEnforceResume(unittest.TestCase):
         self.assertIs(m._relaxed_integer_vars, undo_map,
                       msg="the undo map was replaced, so unrelaxing would "
                           "restore nothing")
+
+    def test_relaxation_undo_map_has_a_stable_model_fingerprint(self):
+        import pyomo.environ as pyo
+
+        m = self._model()
+        self._extension({"s": m}, resumed=False).pre_iter0()
+        original = checkpointing._rebuild_model_fingerprint(m)
+
+        rebuilt = m.clone()
+        self.assertEqual(original,
+                         checkpointing._rebuild_model_fingerprint(rebuilt))
+
+        undo_map = rebuilt._relaxed_integer_vars[None]
+        key, (var, _) = next(iter(undo_map.items()))
+        undo_map[key] = (var, pyo.Binary)
+        self.assertNotEqual(original,
+                            checkpointing._rebuild_model_fingerprint(rebuilt))
 
     def test_the_integrality_actually_comes_back(self):
         m = self._model()

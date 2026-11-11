@@ -35,15 +35,21 @@ import os
 import pickle
 import re
 import shutil
+import struct
 import time
 import uuid
 import numbers
 from array import array
+from collections.abc import KeysView
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 import numpy as np
 from pyomo.common.dependencies import attempt_import
+from pyomo.core.base.set import UnknownSetDimen
+from pyomo.core.expr.numvalue import NumericConstant
+from pyomo.core.expr.numeric_expr import (
+    ExternalFunctionExpression, UnaryFunctionExpression)
 
 import mpisppy.MPI as MPI
 import mpisppy.utils.pickle_bundle as pickle_bundle
@@ -560,8 +566,10 @@ def _prox_approx_snapshot(scenario):
                     )
                 coefs = body.linear_coefs
                 cut_records.append((
-                    index, float(coefs[0]), float(coefs[1]),
-                    float(body.constant),
+                    index,
+                    _plain_checkpoint_value(coefs[0], cut.name),
+                    _plain_checkpoint_value(coefs[1], cut.name),
+                    _plain_checkpoint_value(body.constant, cut.name),
                     _plain_checkpoint_value(
                         pyo_value(cut.lower, exception=False),
                         f"scenario '{scenario.name}', proximal cut "
@@ -659,6 +667,297 @@ def _snapshot_rebuild_model(scenario):
             scenario._mpisppy_data.outer_bound,
             f"scenario '{scenario.name}' outer bound"),
     }
+
+
+def _fingerprint_field(digest, tag, payload=b""):
+    """Add one length-delimited field to a canonical state fingerprint."""
+    digest.update(tag)
+    digest.update(len(payload).to_bytes(8, "big"))
+    digest.update(payload)
+
+
+def _fingerprint_snapshot_value(digest, value):
+    """Hash the plain-data snapshot without relying on dict insertion order."""
+    if isinstance(value, np.ndarray):
+        if value.dtype.hasobject:
+            raise TypeError("Object arrays cannot be fingerprinted safely")
+        array_value = np.ascontiguousarray(value)
+        metadata = (value.dtype.str + ":" +
+                    ",".join(str(size) for size in value.shape)).encode(
+                        "ascii")
+        _fingerprint_field(digest, b"A", metadata)
+        _fingerprint_field(digest, b"a", array_value.tobytes(order="C"))
+    elif isinstance(value, np.generic):
+        _fingerprint_snapshot_value(digest, value.item())
+    elif value is None:
+        _fingerprint_field(digest, b"N")
+    elif isinstance(value, bool):
+        _fingerprint_field(digest, b"B", b"1" if value else b"0")
+    elif isinstance(value, int):
+        _fingerprint_field(digest, b"I", str(value).encode("ascii"))
+    elif isinstance(value, float):
+        _fingerprint_field(digest, b"F", struct.pack("!d", value))
+    elif isinstance(value, Decimal):
+        _fingerprint_field(digest, b"D", str(value).encode("ascii"))
+    elif isinstance(value, str):
+        _fingerprint_field(digest, b"S", value.encode("utf-8"))
+    elif isinstance(value, bytes):
+        _fingerprint_field(digest, b"Y", value)
+    elif isinstance(value, (tuple, list)):
+        _fingerprint_field(
+            digest, b"T" if isinstance(value, tuple) else b"L",
+            len(value).to_bytes(8, "big"))
+        for item in value:
+            _fingerprint_snapshot_value(digest, item)
+    elif isinstance(value, dict):
+        _fingerprint_field(digest, b"M", len(value).to_bytes(8, "big"))
+        # Snapshot mapping keys are strings, integers, or safe index tuples.
+        # Their repr is stable and avoids comparing unlike key types.
+        for key in sorted(
+                value,
+                key=lambda item: (type(item).__module__,
+                                  type(item).__qualname__, repr(item))):
+            _fingerprint_snapshot_value(digest, key)
+            _fingerprint_snapshot_value(digest, value[key])
+    else:
+        raise TypeError(
+            "Unsupported value in pyfory-rebuild model fingerprint: "
+            f"{type(value).__module__}.{type(value).__qualname__}")
+
+
+def _fingerprint_graph_value(digest, value):
+    """Hash an expression tree without evaluating mutable references."""
+    if isinstance(value, NumericConstant):
+        _fingerprint_field(digest, b"constant")
+        _fingerprint_snapshot_value(digest, value.value)
+    elif getattr(value, "is_component_type", lambda: False)():
+        _fingerprint_field(digest, b"reference", value.name.encode("utf-8"))
+    elif getattr(value, "is_expression_type", lambda: False)():
+        cls = type(value)
+        if isinstance(value, ExternalFunctionExpression):
+            raise TypeError(
+                "External functions cannot be fingerprinted by "
+                "pyfory-rebuild")
+        if (isinstance(value, UnaryFunctionExpression)
+                and getattr(value._fcn, "__module__", None)
+                not in ("math", "builtins")):
+            raise TypeError(
+                "Custom expression functions cannot be fingerprinted by "
+                "pyfory-rebuild")
+        if cls.__module__.startswith("pyomo.core.expr."):
+            _fingerprint_field(
+                digest, b"expression",
+                f"{cls.__module__}.{cls.__qualname__}".encode("utf-8"))
+            # UnaryFunctionExpression stores the operation outside its args.
+            if isinstance(value, UnaryFunctionExpression):
+                _fingerprint_field(
+                    digest, b"operation", value.getname().encode("utf-8"))
+            args = value.args
+            _fingerprint_field(digest, b"arity", len(args).to_bytes(8, "big"))
+            for arg in args:
+                _fingerprint_graph_value(digest, arg)
+        else:
+            raise TypeError(
+                "Unsupported expression in pyfory-rebuild fingerprint: "
+                f"{cls.__module__}.{cls.__qualname__}")
+    elif isinstance(value, (tuple, list)):
+        _fingerprint_field(digest, b"tuple" if isinstance(value, tuple)
+                           else b"list", len(value).to_bytes(8, "big"))
+        for item in value:
+            _fingerprint_graph_value(digest, item)
+    else:
+        _fingerprint_snapshot_value(digest, value)
+
+
+def _fingerprint_domain(digest, domain):
+    """Include custom finite domain members, not just the domain name."""
+    cls = type(domain)
+    _fingerprint_graph_value(digest, (
+        f"{cls.__module__}.{cls.__qualname__}", domain.name))
+    if domain.isfinite():
+        members = [_safe_index(item, domain.name) for item in domain]
+        if not domain.isordered():
+            members.sort(key=repr)
+        _fingerprint_graph_value(digest, tuple(members))
+
+
+def _add_pyomo_graph_fingerprint(scenario, digest):
+    """Hash supported Pyomo components, including inactive expressions."""
+    import pyomo.environ as pyo
+
+    components = sorted(
+        scenario.component_objects(descend_into=True, active=None),
+        key=lambda component: component.name)
+    for component in components:
+        name = component.name
+        _fingerprint_field(digest, b"component", name.encode("utf-8"))
+        cls = type(component)
+        _fingerprint_field(digest, b"type", f"{cls.__module__}."
+                           f"{cls.__qualname__}".encode("utf-8"))
+        _fingerprint_graph_value(digest, bool(component.active))
+        if isinstance(component, (pyo.BuildAction, pyo.BuildCheck)):
+            # These rules run during construction and store no model data.
+            # Fingerprint their effects through the components they created.
+            continue
+        if isinstance(component, pyo.Suffix):
+            _fingerprint_graph_value(
+                digest, (int(component.direction),
+                         None if component.datatype is None else
+                         int(component.datatype)))
+            if name == "_relaxed_integer_vars" or name.endswith(
+                    "._relaxed_integer_vars"):
+                # Pyomo stores the undo map at key None. Its inner keys are
+                # id(var), which change across a rebuild or model clone.
+                suffix_entries = list(component.items())
+                if (len(suffix_entries) != 1 or
+                        suffix_entries[0][0] is not None or
+                        not isinstance(suffix_entries[0][1], dict)):
+                    raise TypeError(
+                        f"Unexpected integer-relaxation suffix '{name}'")
+                undo_map = suffix_entries[0][1]
+                relaxed = []
+                for entry in undo_map.values():
+                    if not isinstance(entry, tuple) or len(entry) != 2:
+                        raise TypeError(
+                            f"Unexpected integer-relaxation entry in '{name}'")
+                    var, original_domain = entry
+                    if (not getattr(var, "is_variable_type", lambda: False)()
+                            or scenario.find_component(var.name) is not var):
+                        raise TypeError(
+                            f"Integer-relaxation suffix '{name}' refers to "
+                            "a variable outside its scenario")
+                    relaxed.append((var.name, original_domain))
+                relaxed.sort(key=lambda entry: entry[0])
+                _fingerprint_field(digest, b"entries",
+                                   len(relaxed).to_bytes(8, "big"))
+                for var_name, original_domain in relaxed:
+                    _fingerprint_graph_value(digest, var_name)
+                    _fingerprint_domain(digest, original_domain)
+            elif component.export_enabled():
+                entries = sorted(component.items(), key=lambda pair:
+                                 pair[0].name)
+                _fingerprint_field(digest, b"entries",
+                                   len(entries).to_bytes(8, "big"))
+                for key, value in entries:
+                    _fingerprint_graph_value(digest, key)
+                    _fingerprint_graph_value(digest, value)
+            else:
+                # IMPORT values are solver results, not part of the problem.
+                raise TypeError(
+                    f"Non-export Suffix '{name}' may acquire state "
+                    "that pyfory-rebuild does not restore")
+            continue
+        if isinstance(component, (pyo.Set, pyo.RangeSet)):
+            # RangeSet is a scalar SetData component, not a pyo.Set, and
+            # does not expose the indexed component items() interface.
+            entries = ([(None, component)] if isinstance(component, pyo.RangeSet)
+                       else sorted(component.items(), key=lambda pair:
+                                   repr(_safe_index(pair[0], name))))
+            for index, data in entries:
+                if not data.isfinite():
+                    raise TypeError(f"Cannot fingerprint infinite Set '{name}'")
+                _fingerprint_graph_value(digest, _safe_index(index, name))
+                dimen = data.dimen
+                if dimen is UnknownSetDimen:
+                    _fingerprint_field(digest, b"set-dimen-unknown")
+                else:
+                    _fingerprint_graph_value(digest, dimen)
+                ordered = data.isordered()
+                _fingerprint_graph_value(digest, ordered)
+                members = [_safe_index(item, name) for item in data]
+                if not ordered:
+                    members.sort(key=repr)
+                _fingerprint_graph_value(digest, tuple(members))
+            continue
+        if not isinstance(component, (pyo.Block, pyo.Var, pyo.Param,
+                                      pyo.Constraint, pyo.Objective,
+                                      pyo.Expression, pyo.SOSConstraint)):
+            raise TypeError(
+                f"Unsupported Pyomo component in pyfory-rebuild "
+                f"fingerprint: '{name}' ({type(component).__name__})")
+        if isinstance(component, pyo.Param):
+            _fingerprint_graph_value(digest, bool(component.mutable))
+            _fingerprint_domain(digest, component.domain)
+        entries = sorted(component.items(), key=lambda pair: repr(
+            _safe_index(pair[0], name)))
+        _fingerprint_field(digest, b"entries",
+                           len(entries).to_bytes(8, "big"))
+        for index, data in entries:
+            _fingerprint_graph_value(digest, _safe_index(index, name))
+            if isinstance(component, pyo.Param):
+                # Immutable indexed Params yield native scalars, not ParamData.
+                if component.mutable:
+                    _fingerprint_graph_value(digest, data.name)
+                else:
+                    _fingerprint_snapshot_value(digest, pyo.value(data))
+                continue
+            _fingerprint_graph_value(digest, data.name)
+            _fingerprint_graph_value(
+                digest, bool(getattr(data, "active", True)))
+            if isinstance(component, pyo.Var):
+                _fingerprint_domain(digest, data.domain)
+                _fingerprint_graph_value(digest, data.lower)
+                _fingerprint_graph_value(digest, data.upper)
+            elif isinstance(component, pyo.Constraint):
+                _fingerprint_graph_value(digest, data.expr)
+            elif isinstance(component, pyo.Objective):
+                _fingerprint_graph_value(digest, int(data.sense))
+                _fingerprint_graph_value(digest, data.expr)
+            elif isinstance(component, pyo.Expression):
+                _fingerprint_graph_value(digest, data.expr)
+            elif isinstance(component, pyo.SOSConstraint):
+                _fingerprint_graph_value(digest, int(data.level))
+                _fingerprint_graph_value(digest, tuple(data.get_items()))
+
+
+def _rebuild_model_fingerprint(scenario):
+    """Fingerprint the supported Pyomo graph."""
+    digest = hashlib.sha256()
+    digest.update(b"mpi-sppy pyfory-rebuild graph v1\0")
+    _add_pyomo_graph_fingerprint(scenario, digest)
+    return digest.hexdigest()
+
+
+def validate_rebuild_model_fingerprints(opt, snapshots):
+    """Refuse a rebuild whose Pyomo graph or restored state differs."""
+    for sname, scenario in opt.local_scenarios.items():
+        snapshot = snapshots[sname]
+        expected = snapshot.get("model_fingerprint")
+        if not isinstance(expected, str) or not re.fullmatch(
+                r"[0-9a-f]{64}", expected):
+            raise CheckpointMismatch(
+                f"The pyfory-rebuild checkpoint for scenario '{sname}' has "
+                "no valid model fingerprint.")
+        actual = _rebuild_model_fingerprint(scenario)
+        if actual != expected:
+            raise CheckpointMismatch(
+                f"The rebuilt pyomo model for scenario '{sname}' does not "
+                "match its checkpoint fingerprint "
+                f"(expected {expected}, got {actual}).")
+        saved_state = {key: value for key, value in snapshot.items()
+                       if key != "model_fingerprint"}
+        current_state = _snapshot_rebuild_model(scenario)
+        if not _checkpoint_state_equal(saved_state, current_state):
+            section = next((key for key in sorted(
+                saved_state.keys() | current_state.keys())
+                if key not in saved_state or key not in current_state or
+                not _checkpoint_state_equal(saved_state[key],
+                                            current_state[key])), "unknown")
+            raise CheckpointMismatch(
+                f"The rebuilt state for scenario '{sname}' does not match "
+                f"its pyfory-rebuild checkpoint snapshot ({section}).")
+
+
+def finalize_and_validate_rebuild_model_state(opt, snapshots):
+    """Restore Pyomo's stale flags after setup, then check the rebuilt model."""
+    for sname, scenario in opt.local_scenarios.items():
+        for name, _, stale, _, _, _ in snapshots[sname]["variables"]:
+            var = scenario.find_component(name)
+            if var is None:
+                raise CheckpointMismatch(
+                    f"The rebuilt scenario '{sname}' has no variable '{name}'.")
+            var.stale = stale
+    validate_rebuild_model_fingerprints(opt, snapshots)
 
 
 def restore_rebuild_solve_state(opt, snapshots):
@@ -833,8 +1132,16 @@ def _replay_prox_approx(opt, scenario, snapshot):
             # created. add_cut() would clamp it and change the saved model.
             for index, coef_square, coef_x, constant, lower, upper, active \
                     in state["cut_records"]:
+                coef_square = _restore_plain_checkpoint_value(coef_square)
+                coef_x = _restore_plain_checkpoint_value(coef_x)
+                constant = _restore_plain_checkpoint_value(constant)
                 lower = _restore_plain_checkpoint_value(lower)
                 upper = _restore_plain_checkpoint_value(upper)
+                # ProxApproxManagerContinuous creates these cuts with an
+                # integer zero. Pyomo's cut.lower presents it as 0.0; use
+                # the original expression constant when replaying the cut.
+                if lower == 0 and upper is None:
+                    lower = 0
                 expr = LinearExpression(
                     linear_coefs=[coef_square, coef_x],
                     linear_vars=[manager.xvarsqrd, manager.xvar],
@@ -1545,6 +1852,27 @@ def probe_model_is_dillable(opt):
     )
 
 
+def _clone_rebuild_probe_model(scenario):
+    """Clone a configured model for the rebuild probe without losing Sets.
+
+    Pyomo cannot deepcopy a Set initialized from a dict_keys view: clone()
+    logs an error and silently drops that Set's initializer. Supply a
+    snapshot of the view through the deepcopy memo for this probe clone only.
+    The live scenario and the checkpoint format remain unchanged.
+    """
+    from pyomo.environ import Set
+
+    memo = {}
+    for component in scenario.component_objects(Set, active=None,
+                                                descend_into=True):
+        initializer = getattr(getattr(component, "_init_values", None),
+                              "_init", None)
+        values = getattr(initializer, "val", None)
+        if isinstance(values, KeysView):
+            memo[id(values)] = tuple(values)
+    return scenario.clone(memo=memo)
+
+
 def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
     """Probe each local model codec before the run starts writing.
 
@@ -1620,13 +1948,19 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
             # Pyomo's clone is the closest safe startup check for the overlay:
             # extension hooks may add structure, so the clone begins with the
             # same already-configured structure as the live scenario.
-            clone = scenario.clone()
+            clone = _clone_rebuild_probe_model(scenario)
             _restore_rebuild_model_values(clone, restored)
             clone_state = _snapshot_rebuild_model(clone)
             if not _checkpoint_state_equal(clone_state, restored):
                 raise RuntimeError(
                     "the decoded snapshot could not be overlaid on a clone "
                     "of the configured scenario")
+            original_fingerprint = _rebuild_model_fingerprint(scenario)
+            clone_fingerprint = _rebuild_model_fingerprint(clone)
+            if clone_fingerprint != original_fingerprint:
+                raise RuntimeError(
+                    "the decoded snapshot changed the pyomo model "
+                    "fingerprint when overlaid on a clone")
         except Exception as exc:
             failure = RuntimeError(
                 "Checkpointing is enabled, but pyfory-rebuild cannot encode "
@@ -2410,10 +2744,11 @@ def _write_models(opt, staging_dir, rank, backend, write_id=None,
                 if solver_plugin is not None:
                     s._solver_plugin = solver_plugin
         else:
+            snapshot = _snapshot_rebuild_model(s)
+            snapshot["model_fingerprint"] = _rebuild_model_fingerprint(s)
             _atomic_write_bytes(
                 os.path.join(staging_dir, fname),
-                lambda f, model=s: _new_fory().dump(
-                    _snapshot_rebuild_model(model), f),
+                lambda f, state=snapshot: _new_fory().dump(state, f),
                 timing=timing,
             )
         model_files[sname] = fname
