@@ -146,6 +146,7 @@ def add_decomp_args(cfg):
     cfg.sep_rho_args()
     cfg.coeff_rho_args()
     cfg.sensi_rho_args()
+    cfg.w_hat_rho_args()
     cfg.reduced_costs_rho_args()
     cfg.timed_mipgap_args()
 

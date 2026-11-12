@@ -464,7 +464,7 @@ class TestConfigChecker(unittest.TestCase):
         # Rho-setter keys checked by checker() via get() -- keep in sync with
         # the condition in Config.checker()
         rho_keys = ["grad_rho", "sensi_rho", "coeff_rho",
-                    "reduced_costs_rho", "sep_rho"]
+                    "reduced_costs_rho", "sep_rho", "w_hat_rho"]
         dynamic_keys = ["dynamic_rho_primal_crit", "dynamic_rho_dual_crit"]
         other_keys = ["ph_primal_hub", "ph_dual", "relaxed_ph",
                       "rc_fixer", "reduced_costs"]
@@ -480,6 +480,11 @@ class TestConfigChecker(unittest.TestCase):
 
     def test_two_rho_setters_raises(self):
         cfg = self._make_rho_cfg(grad_rho=True, sensi_rho=True)
+        with self.assertRaises(ValueError):
+            cfg.checker()
+
+    def test_w_hat_rho_with_grad_rho_raises(self):
+        cfg = self._make_rho_cfg(grad_rho=True, w_hat_rho=True)
         with self.assertRaises(ValueError):
             cfg.checker()
 

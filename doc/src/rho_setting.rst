@@ -16,7 +16,7 @@ check this (except within a proper bundle), and a run that breaks it is
 ill-defined: PH's dual weights no longer sum to zero over the scenarios, which
 is what makes a Lagrangian bound computed from them a bound. See issue #887.
 
-- ``--default-rho``, ``--grad-rho`` and ``--sensi-rho`` always meet it.
+- ``--default-rho``, ``--grad-rho``, ``--sensi-rho`` and ``--w-hat-rho`` always meet it.
 - The norm and primal-dual rho updaters scale every scenario's rho by the
   same factor, so they keep it if it held before. The ``--dynamic-rho-*``
   options only decide when ``--sep-rho``, ``--sensi-rho`` or ``--grad-rho``
@@ -108,6 +108,15 @@ A detailed example is in ``examples.farmer.CI.farmer_rho_demo.py``.
 
 The ``--grad-rho-multiplier`` option provides a cumulative multiplier
 applied when rho is set or updated.
+
+W-hat Rho (``--w-hat-rho``)
+----------------------------
+
+Two-stage. Once, after iteration 0:
+:math:`\rho_i \propto |\widehat W_i| / |x_i - \bar x_i|`, with
+:math:`\widehat W` from the NAC duals of the LP-relaxed EF
+(:math:`x_s = \bar x`). Options ``--w-hat-rho-multiplier``,
+``--w-hat-rho-order-stat``.
 
 Dynamic Rho Updates
 -------------------

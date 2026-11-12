@@ -36,6 +36,7 @@ command-line flags:
 - ``--user-defined-extensions <module>`` -- attaches the extension classes
   defined in a module (see :ref:`user_defined_extensions`)
 - ``--grad-rho`` -- activates gradient-based rho (see :ref:`rho_setting`)
+- ``--w-hat-rho`` -- iter0 rho from EF NAC duals (see :ref:`rho_setting`)
 - ``--use-norm-rho-updater`` -- activates the norm rho updater
 - ``--use-primal-dual-rho-updater`` -- activates the primal-dual rho updater
 - ``--xhat-feasibility-cuts-count <N>`` -- feasibility cuts from the
