@@ -50,8 +50,9 @@ def _restore_integers(saved):
         v.setub(ub)
 
 
-def pinned_lp_w_hat(scens, xhat, solver_name="gurobi", solver_options=None):
-    """{sname: -(duals of x_s == xhat)} for the LP-relaxed scenarios (uncentered).
+def pinned_lp_neg_duals(scens, xhat, solver_name="gurobi", solver_options=None):
+    """{sname: -(duals of x_s == xhat)} for the LP-relaxed scenarios.
+    Not a W-hat: uncentered (W-hat is this minus its probability mean).
     Restores the models; nonant values are left at xhat."""
     solver = pyo.SolverFactory(solver_name.replace("_persistent", "_direct"))
     for k, v in (solver_options or {}).items():
@@ -190,13 +191,13 @@ class WHatRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                 xhat = self._ef()[3]
         xhat = ph.mpicomm.bcast(xhat, root=0)
         ph._save_nonants()
-        w = pinned_lp_w_hat(ph.local_scenarios, xhat, solver_name=self.cfg.solver_name)
+        g = pinned_lp_neg_duals(ph.local_scenarios, xhat, solver_name=self.cfg.solver_name)
         ph._restore_nonants()
-        loc = sum(s._mpisppy_data.prob_coeff["ROOT"] * w[sn]
+        loc = sum(s._mpisppy_data.prob_coeff["ROOT"] * g[sn]
                   for sn, s in ph.local_scenarios.items())
         mean = np.zeros_like(loc)
         ph.comms["ROOT"].Allreduce([loc, MPI.DOUBLE], [mean, MPI.DOUBLE], op=MPI.SUM)
-        return {sn: v - mean for sn, v in w.items()}
+        return {sn: v - mean for sn, v in g.items()}
 
     def _w_hat(self):
         """Full/pin: {sname: W-hat}. Small: order stat of |W-hat| (array)."""

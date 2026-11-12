@@ -16,7 +16,7 @@ import numpy as np
 
 import mpisppy.tests.examples.farmer as farmer
 import mpisppy.utils.cfg_vanilla as vanilla
-from mpisppy.extensions.w_hat_rho import WHatRho, nac_ef_w_hat, pinned_lp_w_hat
+from mpisppy.extensions.w_hat_rho import WHatRho, nac_ef_w_hat, pinned_lp_neg_duals
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.tests.utils import get_solver
 from mpisppy.utils import config
@@ -56,13 +56,12 @@ class Test_w_hat_rho_farmer(unittest.TestCase):
         self.assertGreater(np.abs(W).max(), 1e-3)
 
     def test_pinned_lp_at_ef_xbar(self):
-        # duals of x_s == xbar give xhat-optimal W-hat; centered = EF NAC W-hat
-        # up to degeneracy, so check only shape, size and that EF's xbar is
-        # the pin the solve was at.
+        # raw pin duals (not a W-hat: uncentered); degenerate, so check only
+        # keys, size, and that the model is restored.
         _, xbar = nac_ef_w_hat(self.names, farmer.scenario_creator, self.kw,
                                solver_name=solver_name, return_xbar=True)
         scens = {n: farmer.scenario_creator(n, **self.kw) for n in self.names}
-        w = pinned_lp_w_hat(scens, xbar, solver_name=solver_name)
+        w = pinned_lp_neg_duals(scens, xbar, solver_name=solver_name)
         self.assertEqual(set(w), set(self.names))
         self.assertGreater(max(np.abs(v).max() for v in w.values()), 1e-3)
         for s in scens.values():
