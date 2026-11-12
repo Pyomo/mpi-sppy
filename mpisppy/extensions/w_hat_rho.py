@@ -60,7 +60,7 @@ def nac_ef_w_hat(scenario_names, scenario_creator, scenario_creator_kwargs=None,
     pyo.TransformationFactory("core.relax_integer_vars").apply_to(ef)
     ef.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
 
-    solver = pyo.SolverFactory(solver_name.replace("_persistent", ""))
+    solver = pyo.SolverFactory(solver_name.replace("_persistent", "_direct"))
     for k, v in (solver_options or {}).items():
         solver.options[k] = v
     res = solver.solve(ef)
