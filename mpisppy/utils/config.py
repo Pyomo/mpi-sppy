@@ -992,6 +992,14 @@ class Config(pyofig.ConfigDict):
                            description="w_hat_rho: EF on first N scenarios (default all)",
                            domain=int,
                            default=None)
+        self.add_to_config("w_hat_rho_pin",
+                           description="w_hat_rho: W-hat from scenario LPs pinned at xhat (default xhat: EF xbar)",
+                           domain=bool,
+                           default=False)
+        self.add_to_config("w_hat_rho_xhat_path",
+                           description="w_hat_rho: xhat .npy for the pin (implies --w-hat-rho-pin)",
+                           domain=str,
+                           default=None)
         self.add_to_config("w_hat_rho_relative_bound",
                            description="w_hat_rho denominator floor, fraction of |x| (default 1e-6)",
                            domain=float,

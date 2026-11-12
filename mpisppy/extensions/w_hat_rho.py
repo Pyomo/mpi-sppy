@@ -10,6 +10,9 @@
 
 Two-stage only. With w_hat_rho_ef_num_scens=N the EF uses the first N
 scenarios and the order stat of |W-hat| over them replaces |W-hat_s|.
+Pin mode (w_hat_rho_pin, or w_hat_rho_xhat_path): W-hat_s from the duals
+of x_s == xhat in each (LP-relaxed) local scenario, centered; xhat from
+the npy file, else the xbar of the (first-N) LP-EF.
 """
 
 import numpy as np
@@ -28,8 +31,56 @@ def _order_stat(vmin, vmean, vmax, a):
     return (2.0 * vmean - vmax) + 2.0 * a * (vmax - vmean)
 
 
+def _relax_integers(m):
+    saved = []
+    for v in m.component_data_objects(pyo.Var, descend_into=True):
+        if v.is_integer() and not v.fixed:
+            lb, ub = v.bounds
+            saved.append((v, v.domain, v.lower, v.upper))
+            v.domain = pyo.Reals
+            v.setlb(lb)
+            v.setub(ub)
+    return saved
+
+
+def _restore_integers(saved):
+    for v, dom, lb, ub in saved:
+        v.domain = dom
+        v.setlb(lb)
+        v.setub(ub)
+
+
+def pinned_lp_w_hat(scens, xhat, solver_name="gurobi", solver_options=None):
+    """{sname: -(duals of x_s == xhat)} for the LP-relaxed scenarios (uncentered).
+    Restores the models; nonant values are left at xhat."""
+    solver = pyo.SolverFactory(solver_name.replace("_persistent", "_direct"))
+    for k, v in (solver_options or {}).items():
+        solver.options[k] = v
+    w = {}
+    for sn, s in scens.items():
+        vl = s._mpisppy_node_list[0].nonant_vardata_list
+        s._w_hat_rho_pin = pyo.Constraint(
+            range(len(vl)), rule=lambda m, j: vl[j] == float(xhat[j]))
+        had_dual = s.component("dual") is not None
+        if not had_dual:
+            s.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
+        saved = _relax_integers(s)
+        try:
+            tc = solver.solve(s).solver.termination_condition
+            if tc != pyo.TerminationCondition.optimal:
+                raise RuntimeError(f"w_hat_rho: pinned LP for {sn} terminated with {tc}")
+            w[sn] = np.array([-s.dual[s._w_hat_rho_pin[j]] for j in range(len(vl))])
+        finally:
+            _restore_integers(saved)
+            s.del_component("_w_hat_rho_pin")
+            if not had_dual:
+                s.del_component("dual")
+    return w
+
+
 def nac_ef_w_hat(scenario_names, scenario_creator, scenario_creator_kwargs=None,
-                 solver_name="gurobi", solver_options=None, return_probs=False):
+                 solver_name="gurobi", solver_options=None, return_probs=False,
+                 return_xbar=False):
     """{sname: W-hat array} from the LP-EF with x_s == xbar.
     Probabilities are renormalized over scenario_names."""
     kwargs = scenario_creator_kwargs or {}
@@ -80,7 +131,12 @@ def nac_ef_w_hat(scenario_names, scenario_creator, scenario_creator_kwargs=None,
 
     w = {sn: np.array([-ef.dual[ef.nac[sn, j]] / probs[sn] for j in range(n)])
          for sn in scenario_names}
-    return (w, probs) if return_probs else w
+    out = (w,)
+    if return_probs:
+        out += (probs,)
+    if return_xbar:
+        out += (np.array([pyo.value(ef.xbar[j]) for j in range(n)]),)
+    return out if len(out) > 1 else w
 
 
 class WHatRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
@@ -96,6 +152,8 @@ class WHatRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         self.alpha = cfg.get("w_hat_rho_order_stat", 0.5)
         self.rel_bound = cfg.get("w_hat_rho_relative_bound", 1e-6)
         self.ef_num_scens = cfg.get("w_hat_rho_ef_num_scens", None)
+        self.xhat_path = cfg.get("w_hat_rho_xhat_path", None)
+        self.pin = bool(cfg.get("w_hat_rho_pin", False)) or self.xhat_path is not None
         if not 0.0 <= self.alpha <= 1.0:
             raise ValueError("w_hat_rho_order_stat must be in [0, 1]")
         self._fallback_rho = opt.options["defaultPHrho"]
@@ -103,24 +161,51 @@ class WHatRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
     def _small(self):
         N = self.ef_num_scens
-        return N is not None and N < len(self.ph.all_scenario_names)
+        return (not self.pin) and N is not None and N < len(self.ph.all_scenario_names)
+
+    def _ef(self):
+        names = self.ph.all_scenario_names
+        kw = dict(self.creator_kwargs or {})
+        N = self.ef_num_scens
+        if N is not None and N < len(names):
+            if N < 1:
+                raise ValueError("w_hat_rho_ef_num_scens must be >= 1")
+            names = names[:N]
+            if "num_scens" in kw:
+                kw["num_scens"] = N
+        w, probs, xbar = nac_ef_w_hat(names, self.ph.scenario_creator, kw,
+                                      solver_name=self.cfg.solver_name,
+                                      return_probs=True, return_xbar=True)
+        return names, w, probs, xbar
+
+    def _pin_w_hat(self):
+        """{local sname: centered pinned-LP W-hat}."""
+        ph = self.ph
+        xhat = None
+        if ph.cylinder_rank == 0:
+            if self.xhat_path is not None:
+                from mpisppy.confidence_intervals.ciutils import read_xhat
+                xhat = np.asarray(read_xhat(self.xhat_path)["ROOT"], dtype=float)
+            else:
+                xhat = self._ef()[3]
+        xhat = ph.mpicomm.bcast(xhat, root=0)
+        ph._save_nonants()
+        w = pinned_lp_w_hat(ph.local_scenarios, xhat, solver_name=self.cfg.solver_name)
+        ph._restore_nonants()
+        loc = sum(s._mpisppy_data.prob_coeff["ROOT"] * w[sn]
+                  for sn, s in ph.local_scenarios.items())
+        mean = np.zeros_like(loc)
+        ph.comms["ROOT"].Allreduce([loc, MPI.DOUBLE], [mean, MPI.DOUBLE], op=MPI.SUM)
+        return {sn: v - mean for sn, v in w.items()}
 
     def _w_hat(self):
-        """Full: {sname: W-hat}. Small: order stat of |W-hat| (array)."""
+        """Full/pin: {sname: W-hat}. Small: order stat of |W-hat| (array)."""
         ph = self.ph
+        if self.pin:
+            return self._pin_w_hat()
         out = None
         if ph.cylinder_rank == 0:
-            names = ph.all_scenario_names
-            kw = dict(self.creator_kwargs or {})
-            if self._small():
-                if self.ef_num_scens < 1:
-                    raise ValueError("w_hat_rho_ef_num_scens must be >= 1")
-                names = names[:self.ef_num_scens]
-                if "num_scens" in kw:
-                    kw["num_scens"] = self.ef_num_scens
-            w, probs = nac_ef_w_hat(names, ph.scenario_creator, kw,
-                                    solver_name=self.cfg.solver_name,
-                                    return_probs=True)
+            names, w, probs, _ = self._ef()
             if self._small():
                 A = np.abs(np.array([w[sn] for sn in names]))
                 pv = np.array([probs[sn] for sn in names])

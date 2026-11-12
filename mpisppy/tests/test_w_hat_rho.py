@@ -8,13 +8,15 @@
 ###############################################################################
 """WHatRho / nac_ef_w_hat on farmer."""
 
+import os
+import tempfile
 import unittest
 
 import numpy as np
 
 import mpisppy.tests.examples.farmer as farmer
 import mpisppy.utils.cfg_vanilla as vanilla
-from mpisppy.extensions.w_hat_rho import WHatRho, nac_ef_w_hat
+from mpisppy.extensions.w_hat_rho import WHatRho, nac_ef_w_hat, pinned_lp_w_hat
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.tests.utils import get_solver
 from mpisppy.utils import config
@@ -53,11 +55,37 @@ class Test_w_hat_rho_farmer(unittest.TestCase):
         self.assertTrue(np.all(np.abs(W.mean(axis=0)) < 1e-6))
         self.assertGreater(np.abs(W).max(), 1e-3)
 
+    def test_pinned_lp_at_ef_xbar(self):
+        # duals of x_s == xbar give xhat-optimal W-hat; centered = EF NAC W-hat
+        # up to degeneracy, so check only shape, size and that EF's xbar is
+        # the pin the solve was at.
+        _, xbar = nac_ef_w_hat(self.names, farmer.scenario_creator, self.kw,
+                               solver_name=solver_name, return_xbar=True)
+        scens = {n: farmer.scenario_creator(n, **self.kw) for n in self.names}
+        w = pinned_lp_w_hat(scens, xbar, solver_name=solver_name)
+        self.assertEqual(set(w), set(self.names))
+        self.assertGreater(max(np.abs(v).max() for v in w.values()), 1e-3)
+        for s in scens.values():
+            self.assertIsNone(s.component("_w_hat_rho_pin"))
+
     def test_rho_installed(self):
         self._check_rho(None)
 
     def test_rho_installed_small_ef(self):
         self._check_rho(2)
+
+    def test_rho_installed_pin(self):
+        self.cfg.w_hat_rho_pin = True
+        self._check_rho(2)
+
+    def test_rho_installed_xhat_path(self):
+        _, xbar = nac_ef_w_hat(self.names, farmer.scenario_creator, self.kw,
+                               solver_name=solver_name, return_xbar=True)
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "xhat.npy")
+            np.save(path, 0.9 * xbar)
+            self.cfg.w_hat_rho_xhat_path = path
+            self._check_rho(None)
 
     def _check_rho(self, ef_num_scens):
         self.cfg.w_hat_rho_ef_num_scens = ef_num_scens

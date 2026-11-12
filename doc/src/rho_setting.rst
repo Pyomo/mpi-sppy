@@ -118,6 +118,9 @@ Two-stage. Once, after iteration 0:
 (:math:`x_s = \bar x`). Options ``--w-hat-rho-multiplier``,
 ``--w-hat-rho-order-stat``, ``--w-hat-rho-ef-num-scens N`` (EF on the first
 N scenarios; numerator is the order stat of :math:`|\widehat W|` over them).
+``--w-hat-rho-pin``: :math:`\widehat W_s` from the duals of
+:math:`x_s = \hat x` in each scenario LP, centered; :math:`\hat x` from
+``--w-hat-rho-xhat-path`` (``.npy``), else the (first-N) EF :math:`\bar x`.
 
 Dynamic Rho Updates
 -------------------
