@@ -189,7 +189,7 @@ SPOKE_BUILD_ORDER = (
 
 # A hub flag selects WHICH hub runs; it does not add a cylinder.
 HUB_FLAGS = frozenset({
-    "--APH", "--subgradient-hub", "--fwph-hub", "--fwph-objgap-hub",
+    "--APH", "--subgradient-hub", "--fwph-hub", "--fwph-objgap-hub", "--aphfw-hub",
     "--ph-primal-hub", "--lshaped-hub", "--cg-hub", "--dualcg-hub",
 })
 DECOMPOSITION_FLAGS = SPOKE_FLAGS | HUB_FLAGS

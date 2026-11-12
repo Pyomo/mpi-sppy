@@ -1,0 +1,20 @@
+{
+  "scenarioData": {
+    "name": "scen0",
+    "scenProb": 0.5
+  },
+  "treeData": {
+    "globalNodeCount": 1,
+    "nodes": {
+      "ROOT": {
+        "serialNumber": 0,
+        "condProb": 1.0,
+        "nonAnts": [
+          "X1",
+          "X2",
+          "X3"
+        ]
+      }
+    }
+  }
+}

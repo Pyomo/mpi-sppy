@@ -8,7 +8,8 @@
 ###############################################################################
 """ Extension to write an lp file for each scenario and a json file for
 the nonant structure for each scenario (yes, for two stage problems this
-json file will be the same for all scenarios.)
+json file will be the same for all scenarios.) The FW-APH hub calls
+write_scenario_files directly, without the extension.
 """
 import contextlib
 import json
@@ -66,6 +67,54 @@ def _write_checked(s, fname):
                            f" constraint or objective: {missing}")
 
 
+def write_scenario_files(ph, dirname, cfg=None, write_lp=True):
+    """Write the files that describe ph's scenarios on this rank to the
+    existing directory dirname. cfg supplies default_rho when the scenarios
+    have no rhos.
+    """
+    for k, s in ph.local_scenarios.items():
+        with _fixed_nonants_as_bounds(s):
+            if write_lp:
+                _write_checked(s, os.path.join(dirname, f"{k}.lp"))
+            _write_checked(s, os.path.join(dirname, f"{k}.mps"))
+        scenData = {"name": s.name, "scenProb": s._mpisppy_probability} 
+        scenDict = {"scenarioData": scenData}
+        treeData = {"globalNodeCount": len(ph.all_nodenames)}
+        treeData["nodes"] = dict()
+        rhoList = list()
+        for nd in s._mpisppy_node_list:
+            treeData["nodes"][nd.name] = {"serialNumber": ph.all_nodenames.index(nd.name),
+                                          "condProb": nd.cond_prob}
+            treeData["nodes"][nd.name].update({"nonAnts": [lpize(var.name) for var in nd.nonant_vardata_list]})
+            have_rho = hasattr(s, "_mpisppy_model") and hasattr(s._mpisppy_model, "rho")
+
+            # If no rhos exist on the scenarios, require cfg.default_rho
+            if (not have_rho) and (cfg is None or cfg.default_rho is None):
+                raise RuntimeError(
+                    "write_scenario_files: no rho values found on scenarios and "
+                    "--default-rho was not provided. Please specify --default-rho."
+                )
+
+            default_rho = None if have_rho else cfg.default_rho
+
+            for i, var in enumerate(nd.nonant_vardata_list):
+                if have_rho:
+                    rho_val = s._mpisppy_model.rho[(nd.name, i)]._value
+                else:
+                    rho_val = default_rho
+                rhoList.append((lpize(var.name), rho_val))
+
+
+        scenDict["treeData"] = treeData
+        with open(os.path.join(dirname, f"{k}_nonants.json"), "w") as jfile:
+            json.dump(scenDict, jfile, indent=2)
+        # Note that for two stage problems, all rho files will be the same
+        with open(os.path.join(dirname, f"{k}_rho.csv"), "w") as rfile:
+            rfile.write("varname,rho\n")
+            for name, rho in rhoList:
+                rfile.write(f"{name},{rho}\n")
+
+
 class Scenario_lp_mps_files(mpisppy.extensions.extension.Extension):
 
     # Nothing to carry across a resume. Writes files at one hook and
@@ -98,47 +147,7 @@ class Scenario_lp_mps_files(mpisppy.extensions.extension.Extension):
 
 
     def pre_iter0(self):
-        dn = self.dirname  # typing aid
-        for k, s in self.ph.local_scenarios.items():
-            with _fixed_nonants_as_bounds(s):
-                _write_checked(s, os.path.join(dn, f"{k}.lp"))
-                _write_checked(s, os.path.join(dn, f"{k}.mps"))
-            scenData = {"name": s.name, "scenProb": s._mpisppy_probability} 
-            scenDict = {"scenarioData": scenData}
-            treeData = {"globalNodeCount": len(self.ph.all_nodenames)}
-            treeData["nodes"] = dict()
-            rhoList = list()
-            for nd in s._mpisppy_node_list:
-                treeData["nodes"][nd.name] = {"serialNumber": self.ph.all_nodenames.index(nd.name),
-                                              "condProb": nd.cond_prob}
-                treeData["nodes"][nd.name].update({"nonAnts": [lpize(var.name) for var in nd.nonant_vardata_list]})
-                have_rho = hasattr(s, "_mpisppy_model") and hasattr(s._mpisppy_model, "rho")
-
-                # If no rhos exist on the scenarios, require cfg.default_rho
-                if (not have_rho) and (self.cfg is None or self.cfg.default_rho is None):
-                    raise RuntimeError(
-                        "Scenario_lp_mps_files: no rho values found on scenarios and "
-                        "--default-rho was not provided. Please specify --default-rho."
-                    )
-
-                default_rho = None if have_rho else self.cfg.default_rho
-
-                for i, var in enumerate(nd.nonant_vardata_list):
-                    if have_rho:
-                        rho_val = s._mpisppy_model.rho[(nd.name, i)]._value
-                    else:
-                        rho_val = default_rho
-                    rhoList.append((lpize(var.name), rho_val))
-
-
-            scenDict["treeData"] = treeData
-            with open(os.path.join(dn, f"{k}_nonants.json"), "w") as jfile:
-                json.dump(scenDict, jfile, indent=2)
-            # Note that for two stage problems, all rho files will be the same
-            with open(os.path.join(dn, f"{k}_rho.csv"), "w") as rfile:
-                rfile.write("varname,rho\n")
-                for name, rho in rhoList:
-                    rfile.write(f"{name},{rho}\n")
+        write_scenario_files(self.ph, self.dirname, self.cfg)
 
     def post_iter0(self):
         return

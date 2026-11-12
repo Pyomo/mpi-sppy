@@ -1,0 +1,19 @@
+{
+  "scenarioData": {
+    "name": "knapsack",
+    "scenProb": 1.0
+  },
+  "treeData": {
+    "globalNodeCount": 1,
+    "nodes": {
+      "ROOT": {
+        "serialNumber": 0,
+        "condProb": 1.0,
+        "nonAnts": [
+          "X1",
+          "X2"
+        ]
+      }
+    }
+  }
+}

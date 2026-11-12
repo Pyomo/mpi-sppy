@@ -2,10 +2,27 @@ coverage:
   status:
     project:
       default:
+        flags: [python]
         threshold: 0.5%
+      cpp:
+        flags: [cpp]
+        informational: true
     patch:
       default:
+        flags: [python]
         threshold: 0%
+      cpp:
+        flags: [cpp]
+        informational: true
+
+# gcovr reports branches on any line with an exception path; a line that ran
+# counts as covered, as it does in the Python report.
+parsers:
+  cobertura:
+    partials_as_hits: true
+
+comment:
+  layout: "condensed_header, flags, condensed_files, condensed_footer"
 
 ignore:
   - "examples/**"
