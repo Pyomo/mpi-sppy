@@ -988,6 +988,10 @@ class Config(pyofig.ConfigDict):
                            description="w_hat_rho: 0 min, 0.5 mean, 1 max (default 0.5)",
                            domain=float,
                            default=0.5)
+        self.add_to_config("w_hat_rho_ef_num_scens",
+                           description="w_hat_rho: EF on first N scenarios (default all)",
+                           domain=int,
+                           default=None)
         self.add_to_config("w_hat_rho_relative_bound",
                            description="w_hat_rho denominator floor, fraction of |x| (default 1e-6)",
                            domain=float,

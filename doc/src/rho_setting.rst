@@ -116,7 +116,8 @@ Two-stage. Once, after iteration 0:
 :math:`\rho_i \propto |\widehat W_i| / |x_i - \bar x_i|`, with
 :math:`\widehat W` from the NAC duals of the LP-relaxed EF
 (:math:`x_s = \bar x`). Options ``--w-hat-rho-multiplier``,
-``--w-hat-rho-order-stat``.
+``--w-hat-rho-order-stat``, ``--w-hat-rho-ef-num-scens N`` (EF on the first
+N scenarios; numerator is the order stat of :math:`|\widehat W|` over them).
 
 Dynamic Rho Updates
 -------------------

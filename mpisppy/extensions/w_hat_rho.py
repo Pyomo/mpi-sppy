@@ -8,7 +8,8 @@
 ###############################################################################
 """rho_i ~ |W-hat_i| / |x_i - xbar_i|, W-hat from symmetric-NAC LP-EF duals.
 
-Two-stage only.
+Two-stage only. With w_hat_rho_ef_num_scens=N the EF uses the first N
+scenarios and the order stat of |W-hat| over them replaces |W-hat_s|.
 """
 
 import numpy as np
@@ -21,9 +22,16 @@ from mpisppy.utils.rho_utils import assign_rho_with_fallback
 from mpisppy.utils.sputils import find_active_objective
 
 
+def _order_stat(vmin, vmean, vmax, a):
+    if a <= 0.5:
+        return vmin + 2.0 * a * (vmean - vmin)
+    return (2.0 * vmean - vmax) + 2.0 * a * (vmax - vmean)
+
+
 def nac_ef_w_hat(scenario_names, scenario_creator, scenario_creator_kwargs=None,
-                 solver_name="gurobi", solver_options=None):
-    """{sname: W-hat array} from the LP-EF with x_s == xbar."""
+                 solver_name="gurobi", solver_options=None, return_probs=False):
+    """{sname: W-hat array} from the LP-EF with x_s == xbar.
+    Probabilities are renormalized over scenario_names."""
     kwargs = scenario_creator_kwargs or {}
     scens = {sn: scenario_creator(sn, **kwargs) for sn in scenario_names}
     S = len(scens)
@@ -31,6 +39,8 @@ def nac_ef_w_hat(scenario_names, scenario_creator, scenario_creator_kwargs=None,
     for sn, s in scens.items():
         p = getattr(s, "_mpisppy_probability", "uniform")
         probs[sn] = 1.0 / S if p in (None, "uniform") else float(p)
+    tot = sum(probs.values())
+    probs = {sn: p / tot for sn, p in probs.items()}
 
     ef = pyo.ConcreteModel()
     obj = 0.0
@@ -68,8 +78,9 @@ def nac_ef_w_hat(scenario_names, scenario_creator, scenario_creator_kwargs=None,
     if tc != pyo.TerminationCondition.optimal:
         raise RuntimeError(f"w_hat_rho: LP-EF terminated with {tc}")
 
-    return {sn: np.array([-ef.dual[ef.nac[sn, j]] / probs[sn] for j in range(n)])
-            for sn in scenario_names}
+    w = {sn: np.array([-ef.dual[ef.nac[sn, j]] / probs[sn] for j in range(n)])
+         for sn in scenario_names}
+    return (w, probs) if return_probs else w
 
 
 class WHatRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
@@ -84,23 +95,44 @@ class WHatRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         self.multiplier = cfg.get("w_hat_rho_multiplier", 1.0)
         self.alpha = cfg.get("w_hat_rho_order_stat", 0.5)
         self.rel_bound = cfg.get("w_hat_rho_relative_bound", 1e-6)
+        self.ef_num_scens = cfg.get("w_hat_rho_ef_num_scens", None)
         if not 0.0 <= self.alpha <= 1.0:
             raise ValueError("w_hat_rho_order_stat must be in [0, 1]")
         self._fallback_rho = opt.options["defaultPHrho"]
         self._rho_report_state = {}
 
+    def _small(self):
+        N = self.ef_num_scens
+        return N is not None and N < len(self.ph.all_scenario_names)
+
     def _w_hat(self):
+        """Full: {sname: W-hat}. Small: order stat of |W-hat| (array)."""
         ph = self.ph
-        w = None
+        out = None
         if ph.cylinder_rank == 0:
-            w = nac_ef_w_hat(ph.all_scenario_names, ph.scenario_creator,
-                             self.creator_kwargs,
-                             solver_name=self.cfg.solver_name)
-        return ph.mpicomm.bcast(w, root=0)
+            names = ph.all_scenario_names
+            kw = dict(self.creator_kwargs or {})
+            if self._small():
+                if self.ef_num_scens < 1:
+                    raise ValueError("w_hat_rho_ef_num_scens must be >= 1")
+                names = names[:self.ef_num_scens]
+                if "num_scens" in kw:
+                    kw["num_scens"] = self.ef_num_scens
+            w, probs = nac_ef_w_hat(names, ph.scenario_creator, kw,
+                                    solver_name=self.cfg.solver_name,
+                                    return_probs=True)
+            if self._small():
+                A = np.abs(np.array([w[sn] for sn in names]))
+                pv = np.array([probs[sn] for sn in names])
+                out = _order_stat(A.min(axis=0), pv @ A, A.max(axis=0), self.alpha)
+            else:
+                out = w
+        return ph.mpicomm.bcast(out, root=0)
 
     def compute_and_update_rho(self):
         ph = self.ph
         w = self._w_hat()
+        small = self._small()
         n = None
         loc_min = loc_max = loc_mean = None
         for sn, s in ph.local_scenarios.items():
@@ -112,7 +144,7 @@ class WHatRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             dmax = d.max() if d.max() > 0 else 1.0
             floor = self.rel_bound * np.abs(x)
             d = np.where(d <= floor, np.maximum(dmax, floor), d)
-            r = np.abs(w[sn]) / d
+            r = (w if small else np.abs(w[sn])) / d
             p = s._mpisppy_data.prob_coeff["ROOT"]
             if n is None:
                 n = len(r)
@@ -128,12 +160,7 @@ class WHatRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         comm.Allreduce([loc_min, MPI.DOUBLE], [gmin, MPI.DOUBLE], op=MPI.MIN)
         comm.Allreduce([loc_max, MPI.DOUBLE], [gmax, MPI.DOUBLE], op=MPI.MAX)
         comm.Allreduce([loc_mean, MPI.DOUBLE], [gmean, MPI.DOUBLE], op=MPI.SUM)
-        a = self.alpha
-        if a <= 0.5:
-            rho = gmin + 2.0 * a * (gmean - gmin)
-        else:
-            rho = (2.0 * gmean - gmax) + 2.0 * a * (gmax - gmean)
-        rho = self.multiplier * rho
+        rho = self.multiplier * _order_stat(gmin, gmean, gmax, self.alpha)
 
         assign_rho_with_fallback(ph, self._fallback_rho, self.__class__.__name__,
                                  self._rho_report_state,

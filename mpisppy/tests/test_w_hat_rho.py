@@ -54,6 +54,13 @@ class Test_w_hat_rho_farmer(unittest.TestCase):
         self.assertGreater(np.abs(W).max(), 1e-3)
 
     def test_rho_installed(self):
+        self._check_rho(None)
+
+    def test_rho_installed_small_ef(self):
+        self._check_rho(2)
+
+    def _check_rho(self, ef_num_scens):
+        self.cfg.w_hat_rho_ef_num_scens = ef_num_scens
         beans = (self.cfg, farmer.scenario_creator, farmer.scenario_denouement,
                  self.names)
         hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=self.kw)
