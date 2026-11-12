@@ -846,6 +846,14 @@ class Config(pyofig.ConfigDict):
                            domain=str,
                            default="dill-reload")
 
+        self.add_to_config("checkpoint_component_fingerprint_cache",
+                           description="cache pyfory-rebuild component graph "
+                           "fingerprints between writes; callers that edit a "
+                           "model component must mark it dirty through the "
+                           "checkpointing API (default False)",
+                           domain=bool,
+                           default=False)
+
         self.add_to_config("checkpoint_every_iterations",
                            description="write a checkpoint every K completed "
                            "iterations instead of every one, trading up to "

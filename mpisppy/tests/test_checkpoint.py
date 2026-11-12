@@ -4655,6 +4655,30 @@ class TestPyforyRebuildProbeClone(unittest.TestCase):
 
 
 class TestPyforyRebuildFingerprint(unittest.TestCase):
+    def test_marking_indexed_data_invalidates_its_component(self):
+        import pyomo.environ as pyo
+
+        model = pyo.ConcreteModel(name="model-name")
+        model.x = pyo.Var([1], bounds=(0, 10))
+        opt = types.SimpleNamespace(
+            options={"checkpoint_component_fingerprint_cache": True},
+            local_scenarios={"scenario-key": model},
+        )
+        cache = {}
+        checkpointing._rebuild_model_fingerprint_with_cache(model, cache)
+
+        for lower, component in ((1, model.x[1]), (2, "x[1]")):
+            model.x[1].setlb(lower)
+            checkpointing.mark_rebuild_model_fingerprint_dirty(
+                opt, model, component)
+            self.assertEqual(
+                opt._pyfory_rebuild_fingerprint_dirty["scenario-key"], {"x"})
+            self.assertEqual(
+                checkpointing._rebuild_model_fingerprint_with_cache(
+                    model, cache,
+                    opt._pyfory_rebuild_fingerprint_dirty["scenario-key"]),
+                checkpointing._rebuild_model_fingerprint_with_cache(model, {}))
+
     def test_empty_set_with_unknown_dimension(self):
         import pyomo.environ as pyo
 

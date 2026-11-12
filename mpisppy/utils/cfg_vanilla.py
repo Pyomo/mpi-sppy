@@ -980,6 +980,8 @@ def add_checkpointing(cylinder_dict, cfg, role="hub"):
             {"checkpoint_dir": cfg.get("checkpoint_dir", None),
              "checkpoint_backend": cfg.checkpoint_backend,
              "checkpoint_every_iterations": cfg.checkpoint_every_iterations,
+             "checkpoint_component_fingerprint_cache":
+                 cfg.checkpoint_component_fingerprint_cache,
              # Forwarded to the spokes too, which ignore it: they write
              # whenever they have something new, so there is nothing for a
              # deadline to anticipate.

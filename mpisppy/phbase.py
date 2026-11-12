@@ -914,10 +914,17 @@ class PHBase(mpisppy.spopt.SPOpt):
                     # No solve has given this nonant a value yet: the prox
                     # term is on in iteration 0 because WXBarReader supplied
                     # xbar. Cut around xbar, where the prox term is centered.
-                    prox_approx_manager.add_cuts(prox_approx_manager.xbar.value,
-                                                 tol, persistent_solver)
+                    cuts_added = prox_approx_manager.add_cuts(
+                        prox_approx_manager.xbar.value, tol, persistent_solver)
+                    if cuts_added:
+                        checkpointing.mark_rebuild_model_fingerprint_dirty(
+                            self, sn, s._mpisppy_model.xsqvar_cuts)
                     continue
-                prox_approx_manager.check_tol_add_cut(tol, persistent_solver)
+                cuts_added = prox_approx_manager.check_tol_add_cut(
+                    tol, persistent_solver)
+                if cuts_added:
+                    checkpointing.mark_rebuild_model_fingerprint_dirty(
+                        self, sn, s._mpisppy_model.xsqvar_cuts)
                 prox_approx_manager.xvarsqrd._value = prox_approx_manager.xvar.value**2
 
 
