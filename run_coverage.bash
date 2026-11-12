@@ -264,6 +264,7 @@ run_phase "serial unit tests (serial)" \
         mpisppy/tests/test_nice_join.py \
         mpisppy/tests/test_solver_spec.py \
         mpisppy/tests/test_extensions.py \
+        mpisppy/tests/test_xhat_eval_solve_loop.py \
         mpisppy/tests/test_xhatxbar.py \
         mpisppy/tests/test_final_xhat.py \
         mpisppy/tests/test_aph_hub.py \
@@ -273,6 +274,7 @@ run_phase "serial unit tests (serial)" \
         mpisppy/tests/test_comm_lor_check.py \
         mpisppy/tests/test_ciutils.py \
         mpisppy/tests/test_lshaped_cuts.py \
+        mpisppy/tests/test_mpi_progress.py \
         mpisppy/tests/test_prox_approx.py \
         mpisppy/tests/test_sep_rho.py \
         mpisppy/tests/test_reduced_costs_fixer.py \
@@ -281,6 +283,12 @@ run_phase "serial unit tests (serial)" \
         mpisppy/tests/test_certified_outer_bound.py \
         mpisppy/tests/test_mvapich_rma_guard.py \
         mpisppy/tests/test_window_distribution.py
+
+# Exercise the opt-in worker in one MPI process so mpi_progress.py contributes
+# executed lines to the local report. CI also tests the installed C worker.
+run_phase "test_mpi_progress (single-process enabled worker)" \
+    env -u MVAPICH_ASYNC_PROGRESS MPISPPY_MPI_PROGRESS_THREAD=1 \
+        coverage run --rcfile="$PROJ_DIR/.coveragerc" -m pytest mpisppy/tests/test_mpi_progress.py -v
 
 run_phase "test_certified_outer_bound (mpiexec -np 2)" \
     mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py -m pytest mpisppy/tests/test_certified_outer_bound.py -v
@@ -360,6 +368,12 @@ run_phase "test_cg_main (serial)" \
 
 run_phase "test_cg_with_cylinders (mpiexec -np 2)" \
     mpiexec -np 2 coverage run --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py mpisppy/tests/test_cg_with_cylinders.py
+
+# Exercise the enabled worker while another rank performs passive-target RMA.
+run_phase "mpi_one_sided_test (mpiexec -np 2, progress enabled)" \
+    timeout 90s env -u MVAPICH_ASYNC_PROGRESS MPISPPY_MPI_PROGRESS_THREAD=1 \
+        mpiexec -np 2 $OVERSUBSCRIBE coverage run \
+        --rcfile="$PROJ_DIR/.coveragerc" -m mpi4py -m mpi_one_sided_test
 
 # A CG hub spanning two ranks (one hub + one spoke at np=4) covers the
 # convergence-path broadcast that used to deadlock a multi-rank hub (#729).

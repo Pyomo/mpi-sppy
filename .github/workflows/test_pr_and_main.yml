@@ -1350,7 +1350,7 @@ jobs:
           conda-remove-defaults: "true"
       - name: Install dependencies
         run: |
-          conda install ${{ matrix.mpi }} "${{ matrix.mpi4py }}" "numpy" setuptools
+          conda install ${{ matrix.mpi }} "${{ matrix.mpi4py }}" "numpy" setuptools c-compiler
           pip install cplex "xpress<10"
 
       - name: setup the program
@@ -1419,6 +1419,87 @@ jobs:
           MPISPPY_REQUIRE_MPIEXEC: "1"
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_mpi_abort.py -v
+
+      # Reuse this matrix's MPI, mpi4py, and solver setup. Check an installation
+      # without the optional extension, then exercise the native worker.
+      - name: Build and inspect MPI progress source distribution
+        if: matrix.mpi4py == 'mpi4py'
+        timeout-minutes: 5
+        run: |
+          python -m pip install build wheel
+          python -m build --sdist --no-isolation --outdir "$RUNNER_TEMP/sdist"
+          tar -tzf "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz > "$RUNNER_TEMP/sdist-files.txt"
+          grep -q '/mpisppy/_mpi_progress_worker.c$' "$RUNNER_TEMP/sdist-files.txt"
+
+      - name: Check MPI builds without the optional native worker
+        if: matrix.mpi == 'mpich' && matrix.mpi4py == 'mpi4py'
+        timeout-minutes: 5
+        run: |
+          mkdir -p "$RUNNER_TEMP/no-progress-wheels"
+          python -m pip wheel --verbose --no-deps --no-cache-dir \
+            -w "$RUNNER_TEMP/no-progress-wheels" "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz \
+            > "$RUNNER_TEMP/no-progress-build.log" 2>&1
+          python -c "import glob,zipfile; p=glob.glob('$RUNNER_TEMP/no-progress-wheels/*.whl'); assert len(p)==1; z=zipfile.ZipFile(p[0]); assert not any('_mpi_progress_worker' in n and n.endswith('.so') for n in z.namelist())"
+
+          mkdir -p "$RUNNER_TEMP/no-native-mpi-wheels"
+          CC=false python -m pip wheel --verbose --no-deps --no-build-isolation \
+            --no-cache-dir -w "$RUNNER_TEMP/no-native-mpi-wheels" \
+            "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz \
+            > "$RUNNER_TEMP/failed-probe-build.log" 2>&1
+          python -c "import glob,zipfile; p=glob.glob('$RUNNER_TEMP/no-native-mpi-wheels/*.whl'); assert len(p)==1; z=zipfile.ZipFile(p[0]); assert not any('_mpi_progress_worker' in n and n.endswith('.so') for n in z.namelist())"
+
+          mkdir -p "$RUNNER_TEMP/no-compiler-mpi-wheels"
+          if CC="$RUNNER_TEMP/no-such-mpicc" python -m pip wheel --no-deps \
+            --no-build-isolation --no-cache-dir -w "$RUNNER_TEMP/no-compiler-mpi-wheels" \
+            "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz \
+            > "$RUNNER_TEMP/missing-cc-build.log" 2>&1; then
+            cat "$RUNNER_TEMP/missing-cc-build.log"
+            exit 1
+          fi
+          grep -q 'MPI compiler command .* was not found' "$RUNNER_TEMP/missing-cc-build.log"
+
+      - name: Install wheel without native progress extension
+        if: matrix.mpi == 'mpich' && matrix.mpi4py == 'mpi4py'
+        timeout-minutes: 5
+        run: |
+          python -m pip uninstall -y mpi-sppy
+          python -m pip install --no-deps "$RUNNER_TEMP"/no-native-mpi-wheels/*.whl
+
+      - name: Reject progress without native extension
+        if: matrix.mpi == 'mpich' && matrix.mpi4py == 'mpi4py'
+        timeout-minutes: 5
+        env:
+          MPISPPY_MPI_PROGRESS_THREAD: "1"
+        run: |
+          cd "$RUNNER_TEMP"
+          env -u MPISPPY_MPI_PROGRESS_THREAD python -c 'from mpisppy import MPI; assert MPI.haveMPI'
+          if python -c 'from mpisppy import MPI' > "$RUNNER_TEMP/missing-progress.log" 2>&1; then
+            cat "$RUNNER_TEMP/missing-progress.log"
+            echo "progress startup unexpectedly succeeded without the native extension"
+            exit 1
+          fi
+          grep -q 'requires the native MPI progress extension' "$RUNNER_TEMP/missing-progress.log"
+
+      - name: Install matching native progress worker
+        if: matrix.mpi4py == 'mpi4py'
+        timeout-minutes: 5
+        run: |
+          mkdir -p "$RUNNER_TEMP/native-wheels"
+          CC=mpicc python -m pip wheel --verbose --no-deps \
+            --no-build-isolation --no-cache-dir -w "$RUNNER_TEMP/native-wheels" \
+            "$RUNNER_TEMP"/sdist/mpi_sppy-*.tar.gz
+          python -c "import glob,zipfile; p=glob.glob('$RUNNER_TEMP/native-wheels/*.whl'); assert len(p)==1; z=zipfile.ZipFile(p[0]); assert any('mpisppy/_mpi_progress_worker' in n and n.endswith('.so') for n in z.namelist())"
+          python -m pip install --force-reinstall --no-deps "$RUNNER_TEMP"/native-wheels/*.whl
+          cd "$RUNNER_TEMP"
+          python -c 'from mpi4py import MPI; import mpisppy._mpi_progress_worker'
+
+      - name: Check native MPI progress worker
+        if: matrix.mpi4py == 'mpi4py'
+        timeout-minutes: 8
+        env:
+          MPISPPY_MPI_PROGRESS_THREAD: "1"
+          MPISPPY_CHECKOUT: ${{ github.workspace }}
+        run: bash "$GITHUB_WORKSPACE/.github/workflows/run_mpi_progress_checks.sh"
 
       - name: Upload coverage data
         if: always()
@@ -1583,14 +1664,16 @@ jobs:
           python-version: 3.11
       - name: Install dependencies
         run: |
-          conda install mpi4py pandas setuptools
+          conda install -c conda-forge mpi4py mpich pandas "setuptools>=68" wheel c-compiler
 
       - name: setup the program
         run: |
-          pip install -e ".[test]"
+          CC=mpicc python -m pip install --no-build-isolation -e ".[test]"
+          MPISPPY_MPI_PROGRESS_THREAD=1 python -c 'from mpisppy import MPI; assert MPI._progress_controller.thread.is_alive()'
 
       - name: run unit tests
         run: |
+          set -e
           coverage run $COV_ARGS -m pytest -v \
             mpisppy/tests/test_sputils.py \
             mpisppy/tests/test_config.py \
@@ -1630,12 +1713,16 @@ jobs:
             mpisppy/tests/test_flex_xhat_assembly.py \
             mpisppy/tests/test_ciutils.py \
             mpisppy/tests/test_lshaped_cuts.py \
+            mpisppy/tests/test_mpi_progress.py \
             mpisppy/tests/test_prox_approx.py \
             mpisppy/tests/test_sep_rho.py \
             mpisppy/tests/test_reduced_costs_fixer.py \
             mpisppy/tests/test_slammer.py \
             mpisppy/tests/test_dual_certificate.py \
             mpisppy/tests/test_certified_outer_bound.py
+
+          env -u MVAPICH_ASYNC_PROGRESS MPISPPY_MPI_PROGRESS_THREAD=1 \
+            coverage run $COV_ARGS -m pytest -q mpisppy/tests/test_mpi_progress.py
 
       - name: Upload coverage data
         if: always()

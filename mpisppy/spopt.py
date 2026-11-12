@@ -491,14 +491,15 @@ class SPOpt(SPBase):
                 solve_keyword_args = (
                     execution.subproblem_solve.solve_keyword_args)
                 solve_keyword_args["tee"] = True
-                with sputils.solver_log_stream(
-                        execution.subproblem_solve.log_stream_path,
-                        solve_keyword_args):
-                    s._solver_plugin.solve(
-                        s,
-                        **solve_keyword_args,
-                        load_solutions=False,
-                    )
+                with MPI.progress_active():
+                    with sputils.solver_log_stream(
+                        execution.subproblem_solve.log_stream_path, solve_keyword_args
+                    ):
+                        s._solver_plugin.solve(
+                            s,
+                            **solve_keyword_args,
+                            load_solutions=False,
+                        )
             else:
                 print("no results object")
 
@@ -747,16 +748,18 @@ class SPOpt(SPBase):
                             "mechanism")
                 assert not disable_pyomo_signal_handling, "Not thinking about agnostic APH yet"
                 kws = {"s": s, "solve_keyword_args": solve_keyword_args, "gripe": gripe, "tee": tee, "need_solution": need_solution}
-                Ag.callout_agnostic(kws)  # not going to use the return values
+                with MPI.progress_active():
+                    Ag.callout_agnostic(kws)  # not going to use the return values
             else:
                 #  didcallout = False  (returned true by the callout, but not used)
-                execution = self._run_subproblem_solve(
-                    s,
-                    solve_keyword_args=solve_keyword_args,
-                    log_stream_path=log_stream_path,
-                    outer_bound_only=outer_bound_only,
-                    need_solution=need_solution,
-                )
+                with MPI.progress_active():
+                    execution = self._run_subproblem_solve(
+                        s,
+                        solve_keyword_args=solve_keyword_args,
+                        log_stream_path=log_stream_path,
+                        outer_bound_only=outer_bound_only,
+                        need_solution=need_solution,
+                    )
                 results = execution.results
 
                 # Record this before raising a deferred classification or loading

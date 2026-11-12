@@ -78,6 +78,32 @@ def _report_window_distribution(fullcomm, strata_comm, cylinder_comm,
     if global_rank == 0:
         global_toc(message, True)
 
+
+def _require_multinode_progress(comm):
+    """Stop a multi-node wheel unless every rank has MPI progress enabled."""
+    if comm.Get_size() <= 1:
+        return
+
+    hosts = comm.allgather(MPI.Get_processor_name())
+    if len(set(hosts)) <= 1:
+        return
+
+    ready = comm.allreduce(int(MPI.progress_available), op=MPI.MIN)
+    if ready:
+        return
+
+    message = (
+        "mpi-sppy: MPI ranks span multiple nodes, but MPI progress is not "
+        "enabled on every rank. Set MPISPPY_MPI_PROGRESS_THREAD=1, or use "
+        "MVAPICH_ASYNC_PROGRESS=1 with MVAPICH newer than 2.3.7."
+    )
+    if comm.Get_rank() == 0:
+        print(message, flush=True)
+    comm.Barrier()
+    comm.Abort(1)
+    raise RuntimeError(message)  # For communicators whose Abort returns.
+
+
 class WheelSpinner:
 
     def __init__(self, hub_dict, list_of_spoke_dict):
@@ -128,6 +154,10 @@ class WheelSpinner:
         if self._ran:
             raise RuntimeError("WheelSpinner can only be run once")
 
+        if comm_world is None:
+            comm_world = MPI.COMM_WORLD
+        _require_multinode_progress(comm_world)
+
         hub_dict = self.hub_dict
         list_of_spoke_dict = self.list_of_spoke_dict
         # Confirm that the provided dictionaries specifying
@@ -161,9 +191,6 @@ class WheelSpinner:
                 spoke_dict["spoke_kwargs"] = dict()
             if "opt_kwargs" not in spoke_dict:
                 spoke_dict["opt_kwargs"] = dict()
-
-        if comm_world is None:
-            comm_world = MPI.COMM_WORLD
 
         _key_conversion = {
             "hub_class" : "spcomm_class",
