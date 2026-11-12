@@ -12,6 +12,7 @@ mpiexec -np 2 python -m mpi4py test_with_cylinders.py
 
 """
 
+import math
 import time
 import unittest
 from unittest.mock import patch
@@ -154,6 +155,28 @@ class Test_farmer_with_cylinders(unittest.TestCase):
                 # print("idx = ", idx, "    v = ", v)
                 self.assertNotEqual(v[0], v[1], f"xhatshuffle does not seem to change things for {idx} (and maybe others)")
 
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_xhatspecific_sends_bound(self):
+        # Issue #891: the xhatspecific spoke cached its incumbent twice, so
+        # the second update compared the objective with itself and the bound
+        # never reached the hub.
+        FARMER_OPT = -108390.0
+        self.cfg.xhatspecific_args()
+        scenario_creator_kwargs, beans, hub_dict = self._create_stuff()
+        xhatspecific_spoke = vanilla.xhatspecific_spoke(
+            *beans, {"ROOT": "scen0"},
+            scenario_creator_kwargs=scenario_creator_kwargs)
+        wheel = WheelSpinner(hub_dict, [xhatspecific_spoke])
+        wheel.spin()
+        if wheel.global_rank == 0:
+            self.assertTrue(math.isfinite(wheel.BestInnerBound))
+            self.assertGreaterEqual(wheel.BestInnerBound, FARMER_OPT - 1.0)
+        if wheel.global_rank == 1:
+            spoke = wheel.spcomm
+            self.assertEqual(spoke.best_inner_bound,
+                             spoke.opt.best_solution_obj_val)
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
