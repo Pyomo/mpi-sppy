@@ -188,7 +188,8 @@ class Config(pyofig.ConfigDict):
             _bad_options("Only one hub can be active.")
 
         # remember that True is 1 and False is 0
-        if (self.get("grad_rho") + self.get("sensi_rho") + self.get("coeff_rho") + self.get("sep_rho")) > 1:
+        if (self.get("grad_rho") + self.get("sensi_rho") + self.get("coeff_rho") + self.get("sep_rho")
+                + self.get("w_hat_rho", False)) > 1:
 
             _bad_options("Only one rho setter can be active.")
         if not (self.get("grad_rho")
@@ -972,6 +973,37 @@ class Config(pyofig.ConfigDict):
                            description="multiplier for SensiRho (default 1.0)",
                            domain=float,
                            default=1.0)
+
+
+    def w_hat_rho_args(self):
+        self.add_to_config("w_hat_rho",
+                           description="iter0 rho from LP-EF NAC duals (two-stage)",
+                           domain=bool,
+                           default=False)
+        self.add_to_config("w_hat_rho_multiplier",
+                           description="w_hat_rho scale (default 1.0)",
+                           domain=float,
+                           default=1.0)
+        self.add_to_config("w_hat_rho_order_stat",
+                           description="w_hat_rho: 0 min, 0.5 mean, 1 max (default 0.5)",
+                           domain=float,
+                           default=0.5)
+        self.add_to_config("w_hat_rho_ef_num_scens",
+                           description="w_hat_rho: EF on first N scenarios (default all)",
+                           domain=int,
+                           default=None)
+        self.add_to_config("w_hat_rho_pin",
+                           description="w_hat_rho: W-hat from scenario LPs pinned at xhat (default xhat: EF xbar)",
+                           domain=bool,
+                           default=False)
+        self.add_to_config("w_hat_rho_xhat_path",
+                           description="w_hat_rho: xhat .npy for the pin (implies --w-hat-rho-pin)",
+                           domain=str,
+                           default=None)
+        self.add_to_config("w_hat_rho_relative_bound",
+                           description="w_hat_rho denominator floor, fraction of |x| (default 1e-6)",
+                           domain=float,
+                           default=1e-6)
 
 
     def coeff_rho_args(self):

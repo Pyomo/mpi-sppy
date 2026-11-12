@@ -96,7 +96,7 @@ def _get_rho_setter(module, cfg):
             "Progressive Hedging requires rho > 0."
         )
     if cfg.default_rho is None and rho_setter is None and not cfg.lshaped_hub:
-        if cfg.sep_rho or cfg.coeff_rho or cfg.sensi_rho:
+        if cfg.sep_rho or cfg.coeff_rho or cfg.sensi_rho or getattr(cfg, "w_hat_rho", False):
             cfg.default_rho = 1
         elif _needs_rho(cfg):
             raise RuntimeError("No rho_setter so a default must be specified via --default-rho")

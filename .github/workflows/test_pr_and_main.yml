@@ -1231,6 +1231,7 @@ jobs:
           cd mpisppy/tests
           conda run -n test_env --no-capture-output coverage run $COV_ARGS test_gradient_rho.py
           conda run -n test_env --no-capture-output coverage run $COV_ARGS test_xbar_w_reader_writer.py
+          conda run -n test_env --no-capture-output coverage run $COV_ARGS test_w_hat_rho.py
 
       - name: Upload coverage data
         if: always()

@@ -821,6 +821,14 @@ def add_sensi_rho(hub_dict, cfg):
     hub_dict = extension_adder(hub_dict,SensiRho)
     hub_dict["opt_kwargs"]["options"]["sensi_rho_options"] = {"multiplier" : cfg.sensi_rho_multiplier, "cfg": cfg}
 
+def add_w_hat_rho(hub_dict, cfg):
+    from mpisppy.extensions.w_hat_rho import WHatRho
+    hub_dict = extension_adder(hub_dict, WHatRho)
+    hub_dict["opt_kwargs"]["options"]["w_hat_rho_options"] = {
+        "cfg": cfg,
+        "scenario_creator_kwargs": hub_dict["opt_kwargs"].get("scenario_creator_kwargs"),
+    }
+
 def add_cross_scenario_cuts(hub_dict,
                             cfg,
                             ):

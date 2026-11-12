@@ -230,6 +230,9 @@ def configure_extensions(hub_dict, module, cfg):
     if cfg.sensi_rho:
         vanilla.add_sensi_rho(hub_dict, cfg)
 
+    if cfg.get("w_hat_rho", False):
+        vanilla.add_w_hat_rho(hub_dict, cfg)
+
     # reduced_costs_rho was deprecated and removed; Config.checker() rejects it.
 
     # Compose with whatever is already attached (the Checkpointer, say) rather
