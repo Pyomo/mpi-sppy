@@ -61,7 +61,10 @@ class XhatSpecificInnerBound(_PreLoopXhatMixin, XhatInnerBoundBase):
 
                 innerbound = xhatter.xhat_tryit(xhat_scenario_dict, restore_nonants=False)
 
-                self.update_if_improving(innerbound)
+                # xhat_tryit already cached the solution via _try_one, so a
+                # second cache update would compare obj with itself and
+                # never send the bound (#891).
+                self.update_if_improving(innerbound, update_best_solution_cache=False)
 
             self.maybe_checkpoint()
 
