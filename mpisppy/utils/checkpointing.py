@@ -920,32 +920,84 @@ def _rebuild_model_fingerprint(scenario):
 
 def validate_rebuild_model_fingerprints(opt, snapshots):
     """Refuse a rebuild whose Pyomo graph or restored state differs."""
-    for sname, scenario in opt.local_scenarios.items():
-        snapshot = snapshots[sname]
-        expected = snapshot.get("model_fingerprint")
-        if not isinstance(expected, str) or not re.fullmatch(
-                r"[0-9a-f]{64}", expected):
-            raise CheckpointMismatch(
-                f"The pyfory-rebuild checkpoint for scenario '{sname}' has "
-                "no valid model fingerprint.")
-        actual = _rebuild_model_fingerprint(scenario)
-        if actual != expected:
-            raise CheckpointMismatch(
-                f"The rebuilt pyomo model for scenario '{sname}' does not "
-                "match its checkpoint fingerprint "
-                f"(expected {expected}, got {actual}).")
-        saved_state = {key: value for key, value in snapshot.items()
-                       if key != "model_fingerprint"}
-        current_state = _snapshot_rebuild_model(scenario)
-        if not _checkpoint_state_equal(saved_state, current_state):
-            section = next((key for key in sorted(
-                saved_state.keys() | current_state.keys())
-                if key not in saved_state or key not in current_state or
-                not _checkpoint_state_equal(saved_state[key],
-                                            current_state[key])), "unknown")
-            raise CheckpointMismatch(
-                f"The rebuilt state for scenario '{sname}' does not match "
-                f"its pyfory-rebuild checkpoint snapshot ({section}).")
+    timed = bool((getattr(opt, "options", None) or {}).get(
+        "display_timing", False))
+    rank = int(getattr(opt, "cylinder_rank", 0))
+    started = time.perf_counter() if timed else None
+    snapshot_s = snapshot_cpu_s = 0.0
+    fingerprint_s = fingerprint_cpu_s = 0.0
+    comparison_s = comparison_cpu_s = 0.0
+    try:
+        for sname, scenario in opt.local_scenarios.items():
+            snapshot = snapshots[sname]
+            expected = snapshot.get("model_fingerprint")
+            if not isinstance(expected, str) or not re.fullmatch(
+                    r"[0-9a-f]{64}", expected):
+                raise CheckpointMismatch(
+                    f"The pyfory-rebuild checkpoint for scenario '{sname}' "
+                    "has no valid model fingerprint.")
+            if timed:
+                phase_started = time.perf_counter()
+                phase_cpu_started = time.thread_time()
+            try:
+                actual = _rebuild_model_fingerprint(scenario)
+            finally:
+                if timed:
+                    fingerprint_s += time.perf_counter() - phase_started
+                    fingerprint_cpu_s += (
+                        time.thread_time() - phase_cpu_started)
+            if actual != expected:
+                raise CheckpointMismatch(
+                    f"The rebuilt pyomo model for scenario '{sname}' does "
+                    f"not match its checkpoint fingerprint "
+                    f"(expected {expected}, got {actual}).")
+            saved_state = {key: value for key, value in snapshot.items()
+                           if key != "model_fingerprint"}
+            if timed:
+                phase_started = time.perf_counter()
+                phase_cpu_started = time.thread_time()
+            try:
+                current_state = _snapshot_rebuild_model(scenario)
+            finally:
+                if timed:
+                    snapshot_s += time.perf_counter() - phase_started
+                    snapshot_cpu_s += (
+                        time.thread_time() - phase_cpu_started)
+            if timed:
+                phase_started = time.perf_counter()
+                phase_cpu_started = time.thread_time()
+            try:
+                state_matches = _checkpoint_state_equal(saved_state,
+                                                        current_state)
+            finally:
+                if timed:
+                    comparison_s += time.perf_counter() - phase_started
+                    comparison_cpu_s += (
+                        time.thread_time() - phase_cpu_started)
+            if not state_matches:
+                section = next((key for key in sorted(
+                    saved_state.keys() | current_state.keys())
+                    if key not in saved_state or key not in current_state or
+                    not _checkpoint_state_equal(saved_state[key],
+                                                current_state[key])), "unknown")
+                raise CheckpointMismatch(
+                    f"The rebuilt state for scenario '{sname}' does not "
+                    f"match its pyfory-rebuild checkpoint snapshot "
+                    f"({section}).")
+    finally:
+        if timed:
+            print(
+                f"checkpoint_timing event=validate "
+                f"backend={PYFORY_REBUILD_BACKEND} rank={rank} "
+                f"scenarios={len(opt.local_scenarios)} "
+                f"snapshot_s={snapshot_s:.6f} "
+                f"snapshot_cpu_s={snapshot_cpu_s:.6f} "
+                f"graph_fingerprint_s={fingerprint_s:.6f} "
+                f"graph_fingerprint_cpu_s={fingerprint_cpu_s:.6f} "
+                f"comparison_s={comparison_s:.6f} "
+                f"comparison_cpu_s={comparison_cpu_s:.6f} "
+                f"rank_elapsed_s={time.perf_counter() - started:.6f}",
+                flush=True)
 
 
 def finalize_and_validate_rebuild_model_state(opt, snapshots):
@@ -1311,6 +1363,10 @@ def _spoke_filename(cylinder, ordinal, rank):
 class _FileWriteTiming:
     """Time spent in the parts of a durable file write, summed over files."""
 
+    snapshot_s: float = 0.0
+    snapshot_cpu_s: float = 0.0
+    graph_fingerprint_s: float = 0.0
+    graph_fingerprint_cpu_s: float = 0.0
     callback_s: float = 0.0
     callback_cpu_s: float = 0.0
     flush_s: float = 0.0
@@ -1895,6 +1951,10 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
     timed = bool(opt.options.get("display_timing", False))
     probe_started = time.perf_counter() if timed else None
     encode_s = decode_s = encode_cpu_s = decode_cpu_s = 0.0
+    snapshot_s = snapshot_cpu_s = 0.0
+    fingerprint_s = fingerprint_cpu_s = 0.0
+    clone_s = clone_cpu_s = 0.0
+    overlay_s = overlay_cpu_s = 0.0
     failure = None
     for extension_name, model_state in extension_state.items():
         try:
@@ -1927,7 +1987,14 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
         if failure is not None:
             break
         try:
-            state = _snapshot_rebuild_model(scenario)
+            started = time.perf_counter() if timed else None
+            cpu_started = time.thread_time() if timed else None
+            try:
+                state = _snapshot_rebuild_model(scenario)
+            finally:
+                if timed:
+                    snapshot_s += time.perf_counter() - started
+                    snapshot_cpu_s += time.thread_time() - cpu_started
             started = time.perf_counter() if timed else None
             cpu_started = time.thread_time() if timed else None
             payload = _new_fory().serialize(state)
@@ -1948,15 +2015,50 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
             # Pyomo's clone is the closest safe startup check for the overlay:
             # extension hooks may add structure, so the clone begins with the
             # same already-configured structure as the live scenario.
-            clone = _clone_rebuild_probe_model(scenario)
-            _restore_rebuild_model_values(clone, restored)
-            clone_state = _snapshot_rebuild_model(clone)
+            started = time.perf_counter() if timed else None
+            cpu_started = time.thread_time() if timed else None
+            try:
+                clone = _clone_rebuild_probe_model(scenario)
+            finally:
+                if timed:
+                    clone_s += time.perf_counter() - started
+                    clone_cpu_s += time.thread_time() - cpu_started
+            started = time.perf_counter() if timed else None
+            cpu_started = time.thread_time() if timed else None
+            try:
+                _restore_rebuild_model_values(clone, restored)
+            finally:
+                if timed:
+                    overlay_s += time.perf_counter() - started
+                    overlay_cpu_s += time.thread_time() - cpu_started
+            started = time.perf_counter() if timed else None
+            cpu_started = time.thread_time() if timed else None
+            try:
+                clone_state = _snapshot_rebuild_model(clone)
+            finally:
+                if timed:
+                    snapshot_s += time.perf_counter() - started
+                    snapshot_cpu_s += time.thread_time() - cpu_started
             if not _checkpoint_state_equal(clone_state, restored):
                 raise RuntimeError(
                     "the decoded snapshot could not be overlaid on a clone "
                     "of the configured scenario")
-            original_fingerprint = _rebuild_model_fingerprint(scenario)
-            clone_fingerprint = _rebuild_model_fingerprint(clone)
+            started = time.perf_counter() if timed else None
+            cpu_started = time.thread_time() if timed else None
+            try:
+                original_fingerprint = _rebuild_model_fingerprint(scenario)
+            finally:
+                if timed:
+                    fingerprint_s += time.perf_counter() - started
+                    fingerprint_cpu_s += time.thread_time() - cpu_started
+            started = time.perf_counter() if timed else None
+            cpu_started = time.thread_time() if timed else None
+            try:
+                clone_fingerprint = _rebuild_model_fingerprint(clone)
+            finally:
+                if timed:
+                    fingerprint_s += time.perf_counter() - started
+                    fingerprint_cpu_s += time.thread_time() - cpu_started
             if clone_fingerprint != original_fingerprint:
                 raise RuntimeError(
                     "the decoded snapshot changed the pyomo model "
@@ -1982,6 +2084,12 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
             f"serialize_cpu_s={encode_cpu_s:.6f} "
             f"deserialize_s={decode_s:.6f} "
             f"deserialize_cpu_s={decode_cpu_s:.6f} "
+            f"snapshot_s={snapshot_s:.6f} "
+            f"snapshot_cpu_s={snapshot_cpu_s:.6f} "
+            f"graph_fingerprint_s={fingerprint_s:.6f} "
+            f"graph_fingerprint_cpu_s={fingerprint_cpu_s:.6f} "
+            f"clone_s={clone_s:.6f} clone_cpu_s={clone_cpu_s:.6f} "
+            f"overlay_s={overlay_s:.6f} overlay_cpu_s={overlay_cpu_s:.6f} "
             f"agreement_s={time.perf_counter() - agreement_started:.6f} "
             f"rank_elapsed_s={time.perf_counter() - probe_started:.6f}",
             flush=True)
@@ -2507,6 +2615,11 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
             f"rank={rank} scenarios={len(opt.local_scenarios)} "
             f"model_bytes={model_io.bytes_written} "
             f"model_s={phase['model_s']:.6f} "
+            f"snapshot_s={model_io.snapshot_s:.6f} "
+            f"snapshot_cpu_s={model_io.snapshot_cpu_s:.6f} "
+            f"graph_fingerprint_s={model_io.graph_fingerprint_s:.6f} "
+            f"graph_fingerprint_cpu_s="
+            f"{model_io.graph_fingerprint_cpu_s:.6f} "
             f"model_dump_s={model_io.callback_s:.6f} "
             f"model_dump_cpu_s={model_io.callback_cpu_s:.6f} "
             f"model_flush_s={model_io.flush_s:.6f} "
@@ -2744,8 +2857,26 @@ def _write_models(opt, staging_dir, rank, backend, write_id=None,
                 if solver_plugin is not None:
                     s._solver_plugin = solver_plugin
         else:
-            snapshot = _snapshot_rebuild_model(s)
-            snapshot["model_fingerprint"] = _rebuild_model_fingerprint(s)
+            started = time.perf_counter() if timing is not None else None
+            cpu_started = time.thread_time() if timing is not None else None
+            try:
+                snapshot = _snapshot_rebuild_model(s)
+            finally:
+                if timing is not None:
+                    timing.snapshot_s += time.perf_counter() - started
+                    timing.snapshot_cpu_s += (
+                        time.thread_time() - cpu_started)
+            started = time.perf_counter() if timing is not None else None
+            cpu_started = time.thread_time() if timing is not None else None
+            try:
+                fingerprint = _rebuild_model_fingerprint(s)
+            finally:
+                if timing is not None:
+                    timing.graph_fingerprint_s += (
+                        time.perf_counter() - started)
+                    timing.graph_fingerprint_cpu_s += (
+                        time.thread_time() - cpu_started)
+            snapshot["model_fingerprint"] = fingerprint
             _atomic_write_bytes(
                 os.path.join(staging_dir, fname),
                 lambda f, state=snapshot: _new_fory().dump(state, f),
