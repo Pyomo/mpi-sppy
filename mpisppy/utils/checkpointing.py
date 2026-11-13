@@ -68,6 +68,8 @@ DILL_RELOAD_BACKEND = "dill-reload"
 PYFORY_REBUILD_BACKEND = "pyfory-rebuild"
 PYFORY_RELOAD_BACKEND = "pyfory-reload"
 LEAF_BACKEND = "leaf"
+GRAPH_FINGERPRINT_METHOD = "graph"
+NL_FINGERPRINT_METHOD = "nl-sha256"
 
 
 def _is_pyfory_backend(backend):
@@ -122,6 +124,7 @@ NON_STRUCTURAL_CFG_KEYS = frozenset({
     # what problem the checkpoint describes.
     "checkpoint_dir", "checkpoint_backend", "checkpoint_every_iterations",
     "checkpoint_before_seconds", "checkpoint_component_fingerprint_cache",
+    "checkpoint_nl_fingerprint",
     "resume_from",
     # Display, logging and output destinations.
     "verbose", "display_progress", "display_timing",
@@ -239,6 +242,16 @@ def require_checkpoint_structural_cfg(options):
         raise RuntimeError(
             "checkpoint_component_fingerprint_cache requires the "
             "pyfory-rebuild checkpoint backend.")
+    if options.get("checkpoint_nl_fingerprint", False):
+        if options.get("checkpoint_backend", DILL_RELOAD_BACKEND) != \
+                PYFORY_REBUILD_BACKEND:
+            raise RuntimeError(
+                "checkpoint_nl_fingerprint requires the pyfory-rebuild "
+                "checkpoint backend.")
+        if options.get("checkpoint_component_fingerprint_cache", False):
+            raise RuntimeError(
+                "checkpoint_nl_fingerprint cannot be combined with "
+                "checkpoint_component_fingerprint_cache.")
     if not isinstance(options["checkpoint_structural_cfg"], dict):
         raise RuntimeError(
             "options['checkpoint_structural_cfg'] must be a dict of stable "
@@ -303,6 +316,11 @@ def _model_filename(rank, sname, backend=DILL_RELOAD_BACKEND):
         raise ValueError(f"Unknown checkpoint backend '{backend}'.")
     return (f"hub_rank_{rank:04d}_scen_"
             f"{sanitize_for_filename(sname)}.{suffix}")
+
+
+def _nl_fingerprint_filename(rank, sname):
+    return (f"hub_rank_{rank:04d}_scen_"
+            f"{sanitize_for_filename(sname)}.nl.sha256")
 
 
 def require_backend_dependency(backend):
@@ -933,6 +951,67 @@ def _rebuild_model_fingerprint(scenario):
     return digest.hexdigest()
 
 
+class _HashingTextStream(io.TextIOBase):
+    """Hash UTF-8 text as an NL writer emits it, without retaining the file."""
+
+    def __init__(self, timing=None):
+        self._hasher = hashlib.sha256()
+        self._timing = timing
+
+    def write(self, text):
+        if not isinstance(text, str):
+            raise TypeError("NLWriter must write text")
+        started = time.perf_counter() if self._timing is not None else None
+        cpu_started = time.thread_time() if self._timing is not None else None
+        self._hasher.update(text.encode("utf-8"))
+        if self._timing is not None:
+            self._timing.nl_digest_s += time.perf_counter() - started
+            self._timing.nl_digest_cpu_s += (
+                time.thread_time() - cpu_started)
+        return len(text)
+
+    def tell(self):
+        raise io.UnsupportedOperation("tell")
+
+    def writable(self):
+        return True
+
+    def flush(self):
+        return None
+
+    def digest(self):
+        return self._hasher.hexdigest()
+
+
+def _rebuild_model_nl_fingerprint(scenario, timing=None):
+    """Hash Pyomo's deterministic NL text for the active scenario model."""
+    from pyomo.repn.plugins.nl_writer import FileDeterminism, NLWriter
+
+    stream = _HashingTextStream(timing)
+    started = time.perf_counter() if timing is not None else None
+    cpu_started = time.thread_time() if timing is not None else None
+    try:
+        NLWriter().write(
+            scenario,
+            stream,
+            file_determinism=FileDeterminism.SORT_SYMBOLS,
+            symbolic_solver_labels=True,
+            linear_presolve=False,
+            skip_trivial_constraints=False,
+            show_section_timing=False,
+            scale_model=True,
+            export_nonlinear_variables=None,
+            row_order=None,
+            column_order=None,
+            export_defined_variables=True,
+        )
+    finally:
+        if timing is not None:
+            timing.nl_write_s += time.perf_counter() - started
+            timing.nl_write_cpu_s += time.thread_time() - cpu_started
+    return stream.digest()
+
+
 def _rebuild_model_fingerprint_with_cache(scenario, component_cache,
                                           dirty_components=None):
     """Fingerprint the graph from cached per-component digests.
@@ -1018,66 +1097,88 @@ def mark_rebuild_model_fingerprint_dirty(opt, scenario, component_name=None):
     dirty_by_scenario.setdefault(scenario_name, set()).add(component_name)
 
 
-def validate_rebuild_model_fingerprints(opt, snapshots):
-    """Refuse a rebuild whose Pyomo graph or restored state differs."""
+def validate_rebuild_model_fingerprints(
+        opt, snapshots, fingerprint_method=GRAPH_FINGERPRINT_METHOD,
+        nl_fingerprints=None):
+    """Refuse a rebuild whose saved formulation or restored state differs."""
     timed = bool((getattr(opt, "options", None) or {}).get(
         "display_timing", False))
     rank = int(getattr(opt, "cylinder_rank", 0))
     started = time.perf_counter() if timed else None
     snapshot_s = snapshot_cpu_s = 0.0
     fingerprint_s = fingerprint_cpu_s = 0.0
+    nl_timing = _FileWriteTiming() if timed else None
     comparison_s = comparison_cpu_s = 0.0
+    if fingerprint_method not in (GRAPH_FINGERPRINT_METHOD,
+                                  NL_FINGERPRINT_METHOD):
+        raise CheckpointMismatch(
+            f"The pyfory-rebuild checkpoint has unsupported model "
+            f"fingerprint method {fingerprint_method!r}.")
     try:
         for sname, scenario in opt.local_scenarios.items():
             snapshot = snapshots[sname]
-            expected = snapshot.get("model_fingerprint")
-            if not isinstance(expected, str) or not re.fullmatch(
-                    r"[0-9a-f]{64}", expected):
-                raise CheckpointMismatch(
-                    f"The pyfory-rebuild checkpoint for scenario '{sname}' "
-                    "has no valid model fingerprint.")
-            fingerprint_version = snapshot.get(
-                "model_fingerprint_version", 1)
-            if type(fingerprint_version) is not int or \
-                    fingerprint_version not in (1, 2):
-                raise CheckpointMismatch(
-                    f"The pyfory-rebuild checkpoint for scenario '{sname}' "
-                    f"has unsupported model fingerprint version "
-                    f"{fingerprint_version!r}.")
-            if timed:
-                phase_started = time.perf_counter()
-                phase_cpu_started = time.thread_time()
-            try:
-                if fingerprint_version == 1:
-                    actual = _rebuild_model_fingerprint(scenario)
-                else:
-                    use_cache = bool((getattr(opt, "options", None) or {}).get(
-                        "checkpoint_component_fingerprint_cache", False))
-                    caches = getattr(
-                        opt, "_pyfory_rebuild_fingerprint_cache", None)
-                    if caches is None:
-                        caches = {}
-                        opt._pyfory_rebuild_fingerprint_cache = caches
-                    cache = caches.setdefault(sname, {}) if use_cache else {}
-                    dirty_by_scenario = getattr(
-                        opt, "_pyfory_rebuild_fingerprint_dirty", {})
-                    dirty = dirty_by_scenario.setdefault(sname, set()) \
-                        if use_cache else set()
-                    if use_cache:
-                        # Resume validation always starts from the rebuilt
-                        # graph. Seed later writes only with this fresh walk.
-                        dirty.add(None)
-                    actual = _rebuild_model_fingerprint_with_cache(
-                        scenario, cache, dirty)
-            finally:
+            if fingerprint_method == NL_FINGERPRINT_METHOD:
+                expected = (nl_fingerprints or {}).get(sname)
+                if not isinstance(expected, str) or not re.fullmatch(
+                        r"[0-9a-f]{64}", expected):
+                    raise CheckpointMismatch(
+                        f"The pyfory-rebuild checkpoint for scenario "
+                        f"'{sname}' has no valid NL fingerprint.")
+                actual = _rebuild_model_nl_fingerprint(
+                    scenario, timing=nl_timing)
+            else:
+                expected = snapshot.get("model_fingerprint")
+                if not isinstance(expected, str) or not re.fullmatch(
+                        r"[0-9a-f]{64}", expected):
+                    raise CheckpointMismatch(
+                        f"The pyfory-rebuild checkpoint for scenario "
+                        f"'{sname}' has no valid model fingerprint.")
+                fingerprint_version = snapshot.get(
+                    "model_fingerprint_version", 1)
+                if type(fingerprint_version) is not int or \
+                        fingerprint_version not in (1, 2):
+                    raise CheckpointMismatch(
+                        f"The pyfory-rebuild checkpoint for scenario "
+                        f"'{sname}' has unsupported model fingerprint "
+                        f"version {fingerprint_version!r}.")
                 if timed:
-                    fingerprint_s += time.perf_counter() - phase_started
-                    fingerprint_cpu_s += (
-                        time.thread_time() - phase_cpu_started)
+                    phase_started = time.perf_counter()
+                    phase_cpu_started = time.thread_time()
+                try:
+                    if fingerprint_version == 1:
+                        actual = _rebuild_model_fingerprint(scenario)
+                    else:
+                        use_cache = bool((getattr(opt, "options", None) or {}).get(
+                            "checkpoint_component_fingerprint_cache", False))
+                        caches = getattr(
+                            opt, "_pyfory_rebuild_fingerprint_cache", None)
+                        if caches is None:
+                            caches = {}
+                            opt._pyfory_rebuild_fingerprint_cache = caches
+                        cache = caches.setdefault(sname, {}) if use_cache else {}
+                        dirty_by_scenario = getattr(
+                            opt, "_pyfory_rebuild_fingerprint_dirty", {})
+                        dirty = dirty_by_scenario.setdefault(sname, set()) \
+                            if use_cache else set()
+                        if use_cache:
+                            # Resume validation always starts from the rebuilt
+                            # graph. Seed later writes only with this fresh walk.
+                            dirty.add(None)
+                        actual = _rebuild_model_fingerprint_with_cache(
+                            scenario, cache, dirty)
+                finally:
+                    if timed:
+                        fingerprint_s += time.perf_counter() - phase_started
+                        fingerprint_cpu_s += (
+                            time.thread_time() - phase_cpu_started)
             if actual != expected:
+                if fingerprint_method == NL_FINGERPRINT_METHOD:
+                    what = "NL formulation"
+                else:
+                    what = "pyomo model"
                 raise CheckpointMismatch(
-                    f"The rebuilt pyomo model for scenario '{sname}' does "
-                    f"not match its checkpoint fingerprint "
+                    f"The rebuilt {what} for scenario '{sname}' does not "
+                    f"match its checkpoint fingerprint "
                     f"(expected {expected}, got {actual}).")
             saved_state = {
                 key: value for key, value in snapshot.items()
@@ -1124,13 +1225,21 @@ def validate_rebuild_model_fingerprints(opt, snapshots):
                 f"snapshot_cpu_s={snapshot_cpu_s:.6f} "
                 f"graph_fingerprint_s={fingerprint_s:.6f} "
                 f"graph_fingerprint_cpu_s={fingerprint_cpu_s:.6f} "
+                f"nl_write_s={nl_timing.nl_write_s if timed else 0.0:.6f} "
+                f"nl_write_cpu_s="
+                f"{nl_timing.nl_write_cpu_s if timed else 0.0:.6f} "
+                f"nl_digest_s={nl_timing.nl_digest_s if timed else 0.0:.6f} "
+                f"nl_digest_cpu_s="
+                f"{nl_timing.nl_digest_cpu_s if timed else 0.0:.6f} "
                 f"comparison_s={comparison_s:.6f} "
                 f"comparison_cpu_s={comparison_cpu_s:.6f} "
                 f"rank_elapsed_s={time.perf_counter() - started:.6f}",
                 flush=True)
 
 
-def finalize_and_validate_rebuild_model_state(opt, snapshots):
+def finalize_and_validate_rebuild_model_state(
+        opt, snapshots, fingerprint_method=GRAPH_FINGERPRINT_METHOD,
+        nl_fingerprints=None):
     """Restore Pyomo's stale flags after setup, then check the rebuilt model."""
     for sname, scenario in opt.local_scenarios.items():
         for name, _, stale, _, _, _ in snapshots[sname]["variables"]:
@@ -1139,7 +1248,9 @@ def finalize_and_validate_rebuild_model_state(opt, snapshots):
                 raise CheckpointMismatch(
                     f"The rebuilt scenario '{sname}' has no variable '{name}'.")
             var.stale = stale
-    validate_rebuild_model_fingerprints(opt, snapshots)
+    validate_rebuild_model_fingerprints(
+        opt, snapshots, fingerprint_method=fingerprint_method,
+        nl_fingerprints=nl_fingerprints)
 
 
 def restore_rebuild_solve_state(opt, snapshots):
@@ -1497,6 +1608,10 @@ class _FileWriteTiming:
     snapshot_cpu_s: float = 0.0
     graph_fingerprint_s: float = 0.0
     graph_fingerprint_cpu_s: float = 0.0
+    nl_write_s: float = 0.0
+    nl_write_cpu_s: float = 0.0
+    nl_digest_s: float = 0.0
+    nl_digest_cpu_s: float = 0.0
     callback_s: float = 0.0
     callback_cpu_s: float = 0.0
     flush_s: float = 0.0
@@ -2079,6 +2194,9 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
     require_extension_rebuild_contract(opt)
     extension_state = gather_extension_model_state(opt)
     timed = bool(opt.options.get("display_timing", False))
+    use_nl_fingerprint = bool(opt.options.get(
+        "checkpoint_nl_fingerprint", False))
+    nl_timing = _FileWriteTiming() if timed else None
     probe_started = time.perf_counter() if timed else None
     encode_s = decode_s = encode_cpu_s = decode_cpu_s = 0.0
     snapshot_s = snapshot_cpu_s = 0.0
@@ -2173,29 +2291,42 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
                 raise RuntimeError(
                     "the decoded snapshot could not be overlaid on a clone "
                     "of the configured scenario")
-            started = time.perf_counter() if timed else None
-            cpu_started = time.thread_time() if timed else None
-            try:
-                original_fingerprint = _rebuild_model_fingerprint(scenario)
-            finally:
-                if timed:
-                    fingerprint_s += time.perf_counter() - started
-                    fingerprint_cpu_s += time.thread_time() - cpu_started
-            started = time.perf_counter() if timed else None
-            cpu_started = time.thread_time() if timed else None
-            try:
-                clone_fingerprint = _rebuild_model_fingerprint(clone)
-            finally:
-                if timed:
-                    fingerprint_s += time.perf_counter() - started
-                    fingerprint_cpu_s += time.thread_time() - cpu_started
+            if use_nl_fingerprint:
+                original_fingerprint = _rebuild_model_nl_fingerprint(
+                    scenario, timing=nl_timing)
+                clone_fingerprint = _rebuild_model_nl_fingerprint(
+                    clone, timing=nl_timing)
+            else:
+                started = time.perf_counter() if timed else None
+                cpu_started = time.thread_time() if timed else None
+                try:
+                    original_fingerprint = _rebuild_model_fingerprint(
+                        scenario)
+                finally:
+                    if timed:
+                        fingerprint_s += time.perf_counter() - started
+                        fingerprint_cpu_s += (
+                            time.thread_time() - cpu_started)
+                started = time.perf_counter() if timed else None
+                cpu_started = time.thread_time() if timed else None
+                try:
+                    clone_fingerprint = _rebuild_model_fingerprint(clone)
+                finally:
+                    if timed:
+                        fingerprint_s += time.perf_counter() - started
+                        fingerprint_cpu_s += (
+                            time.thread_time() - cpu_started)
             if clone_fingerprint != original_fingerprint:
+                what = "NL" if use_nl_fingerprint else "pyomo model"
                 raise RuntimeError(
-                    "the decoded snapshot changed the pyomo model "
-                    "fingerprint when overlaid on a clone")
+                    f"the decoded snapshot changed the {what} fingerprint "
+                    "when overlaid on a clone")
         except Exception as exc:
+            failure_reason = ("write its NL fingerprint for" if
+                              use_nl_fingerprint else "encode")
             failure = RuntimeError(
-                "Checkpointing is enabled, but pyfory-rebuild cannot encode "
+                "Checkpointing is enabled, but pyfory-rebuild cannot "
+                f"{failure_reason} "
                 f"scenario '{sname}': {type(exc).__name__}: {exc}"
             )
             failure.__cause__ = exc
@@ -2218,6 +2349,12 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
             f"snapshot_cpu_s={snapshot_cpu_s:.6f} "
             f"graph_fingerprint_s={fingerprint_s:.6f} "
             f"graph_fingerprint_cpu_s={fingerprint_cpu_s:.6f} "
+            f"nl_write_s={nl_timing.nl_write_s if timed else 0.0:.6f} "
+            f"nl_write_cpu_s="
+            f"{nl_timing.nl_write_cpu_s if timed else 0.0:.6f} "
+            f"nl_digest_s={nl_timing.nl_digest_s if timed else 0.0:.6f} "
+            f"nl_digest_cpu_s="
+            f"{nl_timing.nl_digest_cpu_s if timed else 0.0:.6f} "
             f"clone_s={clone_s:.6f} clone_cpu_s={clone_cpu_s:.6f} "
             f"overlay_s={overlay_s:.6f} overlay_cpu_s={overlay_cpu_s:.6f} "
             f"agreement_s={time.perf_counter() - agreement_started:.6f} "
@@ -2608,6 +2745,9 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
              if timed else None)
     model_io = _FileWriteTiming() if timed else None
     leaf_io = _FileWriteTiming() if timed else None
+    nl_hash_io = _FileWriteTiming() if timed else None
+    if model_io is not None:
+        model_io.nl_hash_file_io = nl_hash_io
     comm = _cylinder_comm(opt)
     rank = int(opt.cylinder_rank)
     is_publisher = rank == 0
@@ -2662,6 +2802,11 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
         # the guarded region rather than ahead of the barrier.
         check_filename_collisions(opt.local_scenarios)
         started = time.perf_counter() if timed else None
+        nl_hash_files = {
+            sname: _nl_fingerprint_filename(rank, sname)
+            for sname in opt.local_scenarios
+        } if opt.options.get("checkpoint_nl_fingerprint", False) and \
+            backend == PYFORY_REBUILD_BACKEND else {}
         model_files = _write_models(opt, staging_dir, rank, backend,
                                     write_id=write_id, timing=model_io)
         if timed:
@@ -2687,6 +2832,12 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
         if _is_pyfory_backend(backend):
             leaf["write_id"] = write_id
         if backend == PYFORY_REBUILD_BACKEND:
+            leaf["model_fingerprint_method"] = (
+                NL_FINGERPRINT_METHOD if opt.options.get(
+                    "checkpoint_nl_fingerprint", False)
+                else GRAPH_FINGERPRINT_METHOD)
+            if leaf["model_fingerprint_method"] == NL_FINGERPRINT_METHOD:
+                leaf["nl_fingerprint_files"] = nl_hash_files
             leaf["extension_model_state"] = gather_extension_model_state(opt)
         _atomic_write_bytes(
             os.path.join(staging_dir, _leaf_filename(rank)),
@@ -2750,11 +2901,19 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
             f"graph_fingerprint_s={model_io.graph_fingerprint_s:.6f} "
             f"graph_fingerprint_cpu_s="
             f"{model_io.graph_fingerprint_cpu_s:.6f} "
+            f"nl_write_s={model_io.nl_write_s:.6f} "
+            f"nl_write_cpu_s={model_io.nl_write_cpu_s:.6f} "
+            f"nl_digest_s={model_io.nl_digest_s:.6f} "
+            f"nl_digest_cpu_s={model_io.nl_digest_cpu_s:.6f} "
             f"model_dump_s={model_io.callback_s:.6f} "
             f"model_dump_cpu_s={model_io.callback_cpu_s:.6f} "
             f"model_flush_s={model_io.flush_s:.6f} "
             f"model_fsync_s={model_io.fsync_s:.6f} "
             f"model_replace_s={model_io.replace_s:.6f} "
+            f"nl_hash_bytes={nl_hash_io.bytes_written} "
+            f"nl_hash_file_s={nl_hash_io.callback_s:.6f} "
+            f"nl_hash_file_fsync_s={nl_hash_io.fsync_s:.6f} "
+            f"nl_hash_file_replace_s={nl_hash_io.replace_s:.6f} "
             f"leaf_bytes={leaf_io.bytes_written} "
             f"leaf_s={phase['leaf_s']:.6f} "
             f"leaf_pickle_s={leaf_io.callback_s:.6f} "
@@ -2960,6 +3119,12 @@ def _write_models(opt, staging_dir, rank, backend, write_id=None,
                   timing=None):
     """Write each local scenario using the selected model-state codec."""
     require_backend_dependency(backend)
+    use_nl_fingerprint = bool(
+        backend == PYFORY_REBUILD_BACKEND and
+        (getattr(opt, "options", None) or {}).get(
+            "checkpoint_nl_fingerprint", False))
+    nl_hash_file_timing = (getattr(timing, "nl_hash_file_io", None)
+                           if timing is not None else None)
     if backend == PYFORY_RELOAD_BACKEND:
         from mpisppy.utils import pyfory_model_codec
     model_files = {}
@@ -2996,39 +3161,49 @@ def _write_models(opt, staging_dir, rank, backend, write_id=None,
                     timing.snapshot_s += time.perf_counter() - started
                     timing.snapshot_cpu_s += (
                         time.thread_time() - cpu_started)
-            use_component_cache = bool(
-                (getattr(opt, "options", None) or {}).get(
-                    "checkpoint_component_fingerprint_cache", False))
-            started = time.perf_counter() if timing is not None else None
-            cpu_started = time.thread_time() if timing is not None else None
-            try:
-                if use_component_cache:
-                    caches = getattr(
-                        opt, "_pyfory_rebuild_fingerprint_cache", None)
-                    if caches is None:
-                        caches = {}
-                        opt._pyfory_rebuild_fingerprint_cache = caches
-                    dirty_by_scenario = getattr(
-                        opt, "_pyfory_rebuild_fingerprint_dirty", None)
-                    if dirty_by_scenario is None:
-                        dirty_by_scenario = {}
-                        opt._pyfory_rebuild_fingerprint_dirty = \
-                            dirty_by_scenario
-                    fingerprint = _rebuild_model_fingerprint_with_cache(
-                        s,
-                        caches.setdefault(sname, {}),
-                        dirty_by_scenario.setdefault(sname, set()),
-                    )
-                    snapshot["model_fingerprint_version"] = 2
-                else:
-                    fingerprint = _rebuild_model_fingerprint(s)
-            finally:
-                if timing is not None:
-                    timing.graph_fingerprint_s += (
-                        time.perf_counter() - started)
-                    timing.graph_fingerprint_cpu_s += (
-                        time.thread_time() - cpu_started)
-            snapshot["model_fingerprint"] = fingerprint
+            if use_nl_fingerprint:
+                fingerprint = _rebuild_model_nl_fingerprint(s, timing=timing)
+                hash_fname = _nl_fingerprint_filename(rank, sname)
+                _atomic_write_bytes(
+                    os.path.join(staging_dir, hash_fname),
+                    lambda f, digest=fingerprint: f.write(
+                        (digest + "\n").encode("ascii")),
+                    timing=nl_hash_file_timing,
+                )
+            else:
+                use_component_cache = bool(
+                    (getattr(opt, "options", None) or {}).get(
+                        "checkpoint_component_fingerprint_cache", False))
+                started = time.perf_counter() if timing is not None else None
+                cpu_started = time.thread_time() if timing is not None else None
+                try:
+                    if use_component_cache:
+                        caches = getattr(
+                            opt, "_pyfory_rebuild_fingerprint_cache", None)
+                        if caches is None:
+                            caches = {}
+                            opt._pyfory_rebuild_fingerprint_cache = caches
+                        dirty_by_scenario = getattr(
+                            opt, "_pyfory_rebuild_fingerprint_dirty", None)
+                        if dirty_by_scenario is None:
+                            dirty_by_scenario = {}
+                            opt._pyfory_rebuild_fingerprint_dirty = \
+                                dirty_by_scenario
+                        fingerprint = _rebuild_model_fingerprint_with_cache(
+                            s,
+                            caches.setdefault(sname, {}),
+                            dirty_by_scenario.setdefault(sname, set()),
+                        )
+                        snapshot["model_fingerprint_version"] = 2
+                    else:
+                        fingerprint = _rebuild_model_fingerprint(s)
+                finally:
+                    if timing is not None:
+                        timing.graph_fingerprint_s += (
+                            time.perf_counter() - started)
+                        timing.graph_fingerprint_cpu_s += (
+                            time.thread_time() - cpu_started)
+                snapshot["model_fingerprint"] = fingerprint
             _atomic_write_bytes(
                 os.path.join(staging_dir, fname),
                 lambda f, state=snapshot: _new_fory().dump(state, f),
@@ -3264,6 +3439,44 @@ def load_checkpoint(opt, ckpt_dir):
             f"The checkpoint state '{leaf_path}' does not have exactly the "
             "model files this rank's scenarios require, so it is stale or "
             "has been damaged.")
+
+    fingerprint_method = GRAPH_FINGERPRINT_METHOD
+    if backend == PYFORY_REBUILD_BACKEND:
+        fingerprint_method = leaf.get(
+            "model_fingerprint_method", GRAPH_FINGERPRINT_METHOD)
+        if fingerprint_method not in (GRAPH_FINGERPRINT_METHOD,
+                                      NL_FINGERPRINT_METHOD):
+            raise CheckpointMismatch(
+                f"The checkpoint state '{leaf_path}' has unsupported model "
+                f"fingerprint method {fingerprint_method!r}.")
+        if fingerprint_method == NL_FINGERPRINT_METHOD:
+            expected_nl_files = {
+                sname: _nl_fingerprint_filename(rank, sname)
+                for sname in opt.local_scenarios
+            }
+            if leaf.get("nl_fingerprint_files") != expected_nl_files:
+                raise CheckpointMismatch(
+                    f"The checkpoint state '{leaf_path}' does not have "
+                    "exactly the NL fingerprint files this rank's scenarios "
+                    "require, so it is stale or has been damaged.")
+            nl_fingerprints = {}
+            for sname, fname in expected_nl_files.items():
+                path = os.path.join(gen_dir, fname)
+                try:
+                    with open(path, "rb") as f:
+                        contents = f.read()
+                except OSError as exc:
+                    raise CheckpointMismatch(
+                        f"The checkpoint in '{ckpt_dir}' is missing or "
+                        f"cannot read NL fingerprint file '{fname}' for "
+                        f"scenario '{sname}': {exc}") from exc
+                if not re.fullmatch(rb"[0-9a-f]{64}\n", contents):
+                    raise CheckpointMismatch(
+                        f"The NL fingerprint file '{fname}' for scenario "
+                        f"'{sname}' must contain exactly one lowercase "
+                        "64-character SHA-256 digest followed by a newline.")
+                nl_fingerprints[sname] = contents[:-1].decode("ascii")
+            leaf["nl_fingerprints"] = nl_fingerprints
 
     models = {}
     if backend == PYFORY_RELOAD_BACKEND:

@@ -1081,6 +1081,9 @@ class TestPyforyRebuildBackend(unittest.TestCase):
                   "rb") as stream:
             leaf = pickle.load(stream)
         self.assertEqual(leaf["write_id"], manifest["write_id"])
+        self.assertEqual(leaf["model_fingerprint_method"],
+                         checkpointing.GRAPH_FINGERPRINT_METHOD)
+        self.assertNotIn("nl_fingerprint_files", leaf)
         self.assertTrue(all(name.endswith(".fory")
                             for name in leaf["model_files"].values()))
 
@@ -1405,6 +1408,254 @@ class TestPyforyRebuildBackend(unittest.TestCase):
         saved_relaxation = relaxer.checkpoint_model_state()
         relaxer.restore_checkpoint_model_state(saved_relaxation)
         self.assertTrue(relaxer._integers_relaxed)
+
+
+class TestRebuildNLFingerprint(unittest.TestCase):
+    def test_streamed_digest_matches_pinned_nl_writer_output(self):
+        import hashlib
+        import io
+
+        import pyomo.environ as pyo
+        from pyomo.repn.plugins.nl_writer import NLWriter
+        from pyomo.repn.util import FileDeterminism
+
+        model = pyo.ConcreteModel(name="nl-fingerprint-model")
+        model.x = pyo.Var(bounds=(0, 10))
+        model.c = pyo.Constraint(expr=model.x >= 1)
+        model.obj = pyo.Objective(expr=2 * model.x)
+        writer_options = {
+            "file_determinism": FileDeterminism.SORT_SYMBOLS,
+            "symbolic_solver_labels": True,
+            "linear_presolve": False,
+            "skip_trivial_constraints": False,
+            "show_section_timing": False,
+            "scale_model": True,
+            "export_nonlinear_variables": None,
+            "row_order": None,
+            "column_order": None,
+            "export_defined_variables": True,
+        }
+
+        stream = io.StringIO()
+        NLWriter().write(model, stream, **writer_options)
+        expected = hashlib.sha256(stream.getvalue().encode("utf-8")).hexdigest()
+        digest = checkpointing._rebuild_model_nl_fingerprint(model)
+        self.assertEqual(digest, expected)
+        self.assertEqual(
+            digest,
+            checkpointing._rebuild_model_nl_fingerprint(model.clone()))
+
+        model.x.setub(9)
+        self.assertNotEqual(
+            digest, checkpointing._rebuild_model_nl_fingerprint(model))
+        model.x.setub(10)
+        model.c.set_value(2 * model.x >= 2)
+        self.assertNotEqual(
+            digest, checkpointing._rebuild_model_nl_fingerprint(model))
+        model.c.set_value(model.x >= 1)
+        model.obj.set_value(3 * model.x)
+        self.assertNotEqual(
+            digest, checkpointing._rebuild_model_nl_fingerprint(model))
+
+    def test_option_requires_rebuild_and_rejects_component_cache(self):
+        options = {
+            "checkpoint_structural_cfg": {},
+            "checkpoint_backend": checkpointing.PYFORY_REBUILD_BACKEND,
+            "checkpoint_nl_fingerprint": True,
+        }
+        checkpointing.require_checkpoint_structural_cfg(options)
+
+        options["checkpoint_backend"] = checkpointing.DILL_RELOAD_BACKEND
+        with self.assertRaisesRegex(RuntimeError, "requires the pyfory-rebuild"):
+            checkpointing.require_checkpoint_structural_cfg(options)
+
+        options["checkpoint_backend"] = checkpointing.PYFORY_REBUILD_BACKEND
+        options["checkpoint_component_fingerprint_cache"] = True
+        with self.assertRaisesRegex(RuntimeError, "cannot be combined"):
+            checkpointing.require_checkpoint_structural_cfg(options)
+
+
+@unittest.skipIf(not solver_available,
+                 "no solver is available for checkpoint resume tests")
+@unittest.skipUnless(checkpointing.pyfory_available,
+                     "pyfory is an optional checkpoint dependency")
+class TestPyforyRebuildNLFingerprint(unittest.TestCase):
+    """Exercise NL digest publication and validation through a PH resume."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.ckpt_dir = os.path.join(self._tmp.name, "ckpt")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _options(self, max_iters, **overrides):
+        return _options(
+            max_iters,
+            ckpt_dir=self.ckpt_dir,
+            checkpoint_backend=checkpointing.PYFORY_REBUILD_BACKEND,
+            checkpoint_nl_fingerprint=True,
+            **overrides,
+        )
+
+    def _write_checkpoint(self, include_unused_state=False):
+        writer = _make_ph(self._options(1))
+        if include_unused_state:
+            import pyomo.environ as pyo
+
+            for scenario in writer.local_scenarios.values():
+                scenario.nl_unused_checkpoint_state = pyo.Param(
+                    mutable=True, initialize=1.0)
+        writer.ph_main()
+        return writer
+
+    def _read_leaf(self, generation=1):
+        generation_dir = os.path.join(
+            self.ckpt_dir, "hub", f"gen_{generation:04d}")
+        with open(os.path.join(generation_dir, "hub_rank_0000.pkl"),
+                  "rb") as stream:
+            return generation_dir, pickle.load(stream)
+
+    def test_hash_files_are_published_and_saved_method_drives_fresh_resume(self):
+        writer = self._write_checkpoint()
+        generation_dir, leaf = self._read_leaf()
+        expected_files = {
+            sname: checkpointing._nl_fingerprint_filename(0, sname)
+            for sname in writer.local_scenarios
+        }
+        self.assertEqual(leaf["model_fingerprint_method"],
+                         checkpointing.NL_FINGERPRINT_METHOD)
+        self.assertEqual(leaf["nl_fingerprint_files"], expected_files)
+        self.assertEqual(
+            sum(name.endswith(".nl.sha256")
+                for name in os.listdir(generation_dir)),
+            len(writer.local_scenarios))
+        for sname, filename in expected_files.items():
+            with open(os.path.join(generation_dir, filename), "rb") as stream:
+                contents = stream.read()
+            self.assertRegex(contents.decode("ascii"), r"^[0-9a-f]{64}\n$")
+
+        loaded_leaf, snapshots = checkpointing.load_checkpoint(
+            writer, self.ckpt_dir)
+        expected_digests = {}
+        for sname, filename in expected_files.items():
+            with open(os.path.join(generation_dir, filename), "rb") as stream:
+                expected_digests[sname] = stream.read()[:-1].decode("ascii")
+        self.assertEqual(loaded_leaf["nl_fingerprints"], expected_digests)
+        self.assertEqual(set(snapshots), set(writer.local_scenarios))
+        for snapshot in snapshots.values():
+            self.assertNotIn("model_fingerprint", snapshot)
+            self.assertNotIn("model_fingerprint_version", snapshot)
+
+        # The runtime flag is off in the child. Restore must still validate by
+        # the method saved in the checkpoint leaf.
+        out_path = os.path.join(self._tmp.name, "nl-resumed.json")
+        call_args = json.dumps([
+            self.ckpt_dir, 0, out_path,
+            checkpointing.PYFORY_REBUILD_BACKEND,
+            {"checkpoint_nl_fingerprint": False},
+        ])
+        result = subprocess.run(
+            [sys.executable, "-c",
+             "import json, mpisppy.tests.test_checkpoint as t; "
+             f"t._resume_and_dump(*json.loads({call_args!r}))"],
+            capture_output=True, text=True, timeout=900, check=False,
+            env=subprocess_env(),
+        )
+        self.assertEqual(result.returncode, 0,
+                         msg=f"fresh-process NL resume failed:\n{result.stderr}")
+        with open(out_path) as stream:
+            resumed = json.load(stream)
+        self.assertTrue(resumed["resumed"])
+        self.assertEqual(resumed["resume_iteration"], 1)
+
+    def test_missing_malformed_and_misnamed_hash_files_are_refused(self):
+        writer = self._write_checkpoint()
+        generation_dir, leaf = self._read_leaf()
+        filename = leaf["nl_fingerprint_files"][SCENARIO_NAMES[0]]
+        path = os.path.join(generation_dir, filename)
+        with open(path, "rb") as stream:
+            valid_contents = stream.read()
+
+        os.unlink(path)
+        with self.assertRaisesRegex(checkpointing.CheckpointMismatch,
+                                    "NL fingerprint file"):
+            checkpointing.load_checkpoint(writer, self.ckpt_dir)
+
+        with open(path, "wb") as stream:
+            stream.write(b"not-a-digest\n")
+        with self.assertRaisesRegex(checkpointing.CheckpointMismatch,
+                                    "exactly one lowercase"):
+            checkpointing.load_checkpoint(writer, self.ckpt_dir)
+
+        with open(path, "wb") as stream:
+            stream.write(valid_contents)
+        leaf["nl_fingerprint_files"][SCENARIO_NAMES[0]] = "unexpected.sha256"
+        with open(os.path.join(generation_dir, "hub_rank_0000.pkl"),
+                  "wb") as stream:
+            pickle.dump(leaf, stream)
+        with self.assertRaisesRegex(checkpointing.CheckpointMismatch,
+                                    "exactly the NL fingerprint files"):
+            checkpointing.load_checkpoint(writer, self.ckpt_dir)
+
+    def test_final_validation_checks_nl_formulation_and_snapshot_values(self):
+        import pyomo.environ as pyo
+
+        writer = self._write_checkpoint(include_unused_state=True)
+        leaf, snapshots = checkpointing.load_checkpoint(
+            writer, self.ckpt_dir)
+        scenario = writer.local_scenarios[SCENARIO_NAMES[0]]
+        objective = next(scenario.component_data_objects(
+            pyo.Objective, active=True))
+        objective_expr = objective.expr
+        objective.set_value(objective_expr + 1)
+        with self.assertRaisesRegex(checkpointing.CheckpointMismatch,
+                                    "NL formulation.*does not match"):
+            checkpointing.validate_rebuild_model_fingerprints(
+                writer, snapshots,
+                fingerprint_method=leaf["model_fingerprint_method"],
+                nl_fingerprints=leaf["nl_fingerprints"])
+
+        objective.set_value(objective_expr)
+        unused_param = scenario.nl_unused_checkpoint_state
+        saved_digest = leaf["nl_fingerprints"][SCENARIO_NAMES[0]]
+        unused_param.set_value(2.0)
+        self.assertEqual(
+            checkpointing._rebuild_model_nl_fingerprint(scenario),
+            saved_digest,
+            "an unused mutable Param should not affect the NL formulation")
+        with self.assertRaisesRegex(
+                checkpointing.CheckpointMismatch,
+                r"checkpoint snapshot \(mutable_param_values\)"):
+            checkpointing.validate_rebuild_model_fingerprints(
+                writer, snapshots,
+                fingerprint_method=leaf["model_fingerprint_method"],
+                nl_fingerprints=leaf["nl_fingerprints"])
+
+    def test_failed_hash_write_keeps_the_previous_generation(self):
+        writer = self._write_checkpoint()
+        original_manifest = checkpointing._read_manifest(self.ckpt_dir)
+        original_atomic_write = checkpointing._atomic_write_bytes
+
+        def fail_nl_hash(path, callback, timing=None):
+            if path.endswith(".nl.sha256"):
+                raise OSError("injected NL hash write failure")
+            return original_atomic_write(path, callback, timing=timing)
+
+        with mock.patch.object(checkpointing, "_atomic_write_bytes",
+                               side_effect=fail_nl_hash):
+            with self.assertRaisesRegex(
+                    (OSError, RuntimeError), "injected NL hash write failure"):
+                checkpointing.write_checkpoint(
+                    writer, self.ckpt_dir, 2,
+                    backend=checkpointing.PYFORY_REBUILD_BACKEND)
+
+        self.assertEqual(checkpointing._read_manifest(self.ckpt_dir),
+                         original_manifest)
+        self.assertTrue(os.path.isdir(os.path.join(
+            self.ckpt_dir, "hub", "gen_0001")))
+        self.assertFalse(os.path.exists(os.path.join(
+            self.ckpt_dir, "hub", "gen_0002.tmp")))
 
 
 @unittest.skipUnless(_pyfory_reload_runtime_available(),

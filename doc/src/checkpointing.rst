@@ -67,7 +67,7 @@ timeout`_).
 The options
 ~~~~~~~~~~~
 
-There are six, and they are the whole interface:
+There are seven, and they are the whole interface:
 
 ``--checkpoint-dir DIR``
    Where checkpoints are written. Giving it is what turns writing on. Without
@@ -109,6 +109,12 @@ There are six, and they are the whole interface:
    named PH state plus proximal cuts. It requires an exact pyfory version match
    between checkpoint and resume, and every attached extension must explicitly
    implement the model-state rebuild hooks. See `pyfory-rebuild`_.
+
+``--checkpoint-nl-fingerprint``
+   For ``pyfory-rebuild``, save a SHA-256 digest of each scenario's active NL
+   solver formulation and compare it after rebuilding on resume. The method is
+   saved with the checkpoint, so resume follows the saved method. This option
+   cannot be combined with ``--checkpoint-component-fingerprint-cache``.
 
 pyfory-reload
 ~~~~~~~~~~~~~
@@ -189,6 +195,15 @@ component's expressions, bounds, domains, active state, or data require dirty
 marking. The option changes the saved graph fingerprint format; readers accept
 both the original and cached formats. Leave the option disabled when all graph
 edits cannot be tracked. Resume always recomputes the full graph fingerprint.
+
+``--checkpoint-nl-fingerprint`` stores one ``.nl.sha256`` file per scenario.
+It is an alternative to the graph fingerprint and cannot be combined with the
+component fingerprint cache. The digest covers Pyomo's active NL solver
+formulation, written with sorted symbols and symbolic labels. This check can
+miss changes to inactive components, Sets that do not affect active
+expressions, unused named expressions, and the integer-relaxation undo map.
+Use it as a narrower formulation check alongside the existing state snapshot
+comparison, not as a complete Pyomo graph comparison.
 
 The codec uses bounded pyfory graph limits (depth 10,000 and a 1 GiB graph
 budget). The state-only payload is designed to reduce model-file size and

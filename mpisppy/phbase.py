@@ -1981,7 +1981,12 @@ class PHBase(mpisppy.spopt.SPOpt):
             checkpointing.run_agreed(
                 self,
                 lambda: checkpointing.finalize_and_validate_rebuild_model_state(
-                    self, self._checkpoint_rebuild_states),
+                    self, self._checkpoint_rebuild_states,
+                    fingerprint_method=self._checkpoint_leaf_state.get(
+                        "model_fingerprint_method",
+                        checkpointing.GRAPH_FINGERPRINT_METHOD),
+                    nl_fingerprints=self._checkpoint_leaf_state.get(
+                        "nl_fingerprints")),
                 "validate their rebuilt pyfory models, so none of them "
                 "resumes with a changed model")
 

@@ -224,6 +224,14 @@ class Config(pyofig.ConfigDict):
             _bad_options("--checkpoint-before-seconds requires "
                          "--checkpoint-dir (there is nowhere to write)")
 
+        if self.get("checkpoint_nl_fingerprint", False):
+            if self.get("checkpoint_backend") != "pyfory-rebuild":
+                _bad_options("--checkpoint-nl-fingerprint requires "
+                             "--checkpoint-backend pyfory-rebuild")
+            if self.get("checkpoint_component_fingerprint_cache", False):
+                _bad_options("--checkpoint-nl-fingerprint cannot be used "
+                             "with --checkpoint-component-fingerprint-cache")
+
         # Slamming options other than the directives file are meaningless
         # without it; require the file so that a run with no slamming options
         # behaves exactly as it does today (total backward compatibility).
@@ -851,6 +859,15 @@ class Config(pyofig.ConfigDict):
                            "fingerprints between writes; callers that edit a "
                            "model component must mark it dirty through the "
                            "checkpointing API (default False)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("checkpoint_nl_fingerprint",
+                           description="compare the active Pyomo NL solver "
+                           "formulation with the checkpoint when rebuilding "
+                           "scenarios (pyfory-rebuild only; this omits inactive "
+                           "components and other structure outside NL; "
+                           "default False)",
                            domain=bool,
                            default=False)
 
