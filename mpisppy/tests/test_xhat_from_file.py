@@ -236,6 +236,49 @@ class TestFileXhatHappyPath(unittest.TestCase):
         finally:
             os.remove(path)
 
+    def test_caches_file_values_not_restored_ones(self):
+        """Issue #884: update_if_improving caches whatever is on the
+        nonants when it runs. The restore puts back the xhat_prep cache,
+        taken before any solve (None -> NaN), so the update has to see the
+        file's values, not the restored ones."""
+        path = _write_npy([1.0, 0.0, 1.0])
+        try:
+            sp = _make_sp(options={"xhat_from_file": path})
+            helper = _make_helper(sp, evaluate_result=42.0)
+
+            def _evaluate(nonant_cache):  # like Xhat_Eval: fixes the nonants
+                for s in sp.local_scenarios.values():
+                    for v, val in zip(s._mpisppy_data.nonant_indices.values(),
+                                      nonant_cache["ROOT"]):
+                        v.fix(val)
+                return 42.0
+
+            def _restore():  # the pre-solve cache: no values yet
+                for s in sp.local_scenarios.values():
+                    for v in s._mpisppy_data.nonant_indices.values():
+                        v.unfix()
+                        v.set_value(None)
+
+            seen = []
+
+            def _update(eobj):
+                seen.append([[v.value for v in
+                              s._mpisppy_data.nonant_indices.values()]
+                             for s in sp.local_scenarios.values()])
+                return True
+
+            helper.opt.evaluate = _evaluate
+            helper.opt._restore_nonants = _restore
+            helper.update_if_improving = _update
+            helper._try_file_xhat()
+            self.assertEqual(seen, [[[1, 0, 1], [1, 0, 1]]])
+            # and the main loop still starts from the restored state
+            for s in sp.local_scenarios.values():
+                for v in s._mpisppy_data.nonant_indices.values():
+                    self.assertIsNone(v.value)
+        finally:
+            os.remove(path)
+
     def test_infeasible_like_eobj_does_not_update_but_still_restores(self):
         """When evaluate reports a non-finite objective (some scenario
         was infeasible), the helper must NOT call update_if_improving —

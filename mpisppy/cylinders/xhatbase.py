@@ -175,13 +175,16 @@ class XhatInnerBoundBase(spoke.InnerBoundNonantSpoke):
                 print(f"[xhat-from-file] candidate infeasible "
                       f"(infeasP={infeasP}); feasibility cut {tag}")
             Eobj = None
-        # Restore nonants so the main loop starts from clean state.
-        self.opt._restore_nonants()
+        # Cache while the file's values are still on the variables: the
+        # restore below puts back the cache from xhat_prep, taken before
+        # any solve, so caching after it pairs Eobj with NaN values.
         if Eobj is not None and math.isfinite(Eobj):
             self.update_if_improving(Eobj)
         elif self.cylinder_rank == 0:
             print(f"[xhat-from-file] candidate gave Eobj={Eobj!r}; not "
                   f"updating inner bound")
+        # Restore nonants so the main loop starts from clean state.
+        self.opt._restore_nonants()
 
     def _read_xhat_csv(self, path):
         """Read a canonical by-name xhat CSV into a ``{node: ndarray}``
