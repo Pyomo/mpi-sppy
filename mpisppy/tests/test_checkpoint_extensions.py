@@ -48,7 +48,11 @@ import mpisppy.tests.examples.farmer as farmer
 import mpisppy.tests.examples.sizes.sizes as sizes
 import mpisppy.utils.checkpointing as checkpointing
 from mpisppy.extensions.checkpointer import Checkpointer
-from mpisppy.extensions.extension import Extension, MultiExtension
+from mpisppy.extensions.extension import (
+    Extension,
+    MultiExtension,
+    RebuildSafeNoModelChanges,
+)
 from mpisppy.opt.ph import PH
 from mpisppy.tests.utils import get_solver
 
@@ -2100,7 +2104,10 @@ class TestShippedExtensionsAnswerTheQuestion(unittest.TestCase):
         return found
 
     def _all_extension_classes(self):
-        return self._all_classes(Extension, (Extension, MultiExtension))
+        return self._all_classes(
+            Extension,
+            (Extension, MultiExtension, RebuildSafeNoModelChanges),
+        )
 
     def test_every_shipped_converger_answers(self):
         from mpisppy.convergers.converger import Converger
