@@ -869,6 +869,23 @@ class TestPyforyRebuildNLFingerprint(unittest.TestCase):
 
 
 class TestPyforyRebuildDependency(unittest.TestCase):
+    def test_pyfory_minimum_version_is_accepted(self):
+        with mock.patch.object(checkpointing, "pyfory_available", True):
+            for version in ("1.7.7", "1.7.8", "2.0.0"):
+                with self.subTest(version=version), mock.patch.object(
+                        checkpointing, "_pyfory_version", return_value=version):
+                    checkpointing.require_backend_dependency(
+                        checkpointing.PYFORY_REBUILD_BACKEND)
+
+    def test_older_or_unrecognized_pyfory_version_is_refused(self):
+        with mock.patch.object(checkpointing, "pyfory_available", True):
+            for version in ("1.7.6", "1.7.7rc1", "unknown"):
+                with self.subTest(version=version), mock.patch.object(
+                        checkpointing, "_pyfory_version", return_value=version):
+                    with self.assertRaises(RuntimeError):
+                        checkpointing.require_backend_dependency(
+                            checkpointing.PYFORY_REBUILD_BACKEND)
+
     def test_pyfory_backend_is_refused_at_setup_when_dependency_is_missing(self):
         opt = _make_ph(_options(1))
         with tempfile.TemporaryDirectory() as checkpoint_dir:

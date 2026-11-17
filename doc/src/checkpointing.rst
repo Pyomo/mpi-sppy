@@ -102,9 +102,7 @@ There are seven, and they are the whole interface:
 
 ``--checkpoint-backend``
    How hub scenario state is stored. ``dill-reload`` is the default and stores
-   each complete Pyomo model. ``pyfory-reload`` also stores complete Pyomo
-   models and requires pyfory 1.7.7; see `pyfory-reload`_.
-   ``pyfory-rebuild`` is an experimental state-only
+   each complete Pyomo model. ``pyfory-rebuild`` is a state-only
    backend that recreates models through the scenario creator and restores
    named PH state plus proximal cuts. It requires an exact pyfory version match
    between checkpoint and resume, and every attached extension must explicitly
@@ -115,50 +113,13 @@ There are seven, and they are the whole interface:
    solver formulation and compare it after rebuilding on resume. The method is
    saved with the checkpoint, so resume follows the saved method.
 
-pyfory-reload
-~~~~~~~~~~~~~
-
-Install ``mpi-sppy[pyfory]`` to enable this opt-in full-model backend on
-CPython 3.13.2 with Pyomo 6.10.1 and pyfory 1.7.7. Each model file contains
-a versioned type table so a fresh reader can restore the saved graph without
-running the saved iterations. The manifest records the backend, reload schema,
-adapter, and pyfory versions; incompatible versions are refused. Earlier
-experimental reload files are not readable by this schema.
-Like dill checkpoints, these model files must come from a trusted source.
-The backend preserves extension changes carried on scenario models and uses
-the same PH model-splicing repairs as ``dill-reload``. It retains the rank
-leaf and spoke files in their existing pickle formats.
-
-The codec preserves live keys, values, and items views of exact dictionaries,
-Pyomo ``Bunch`` objects, ``PyomoConfig`` objects, ``OrderedDict``, and
-``defaultdict``, including cycles and views whose backing dictionary is
-otherwise unreachable. ``OrderedDict`` entry order and ``defaultdict`` default
-factories are restored. Bunch, PyomoConfig, and OrderedDict instance-dictionary
-views also retain their owner. Other mapping subclasses and unsupported
-instance-dictionary views are refused with a graph path. Standard
-``datetime.datetime`` and ``datetime.time`` wall times and timezone references,
-paths, fractions, UUIDs, slot attributes, and importable container subclasses
-with reconstructible constructors are preserved. Cyclic tuple and frozenset
-subclasses are refused at setup. Local callback code, closure cells, names,
-documentation, and the globals they use are saved;
-callbacks defined in ``__main__`` are saved by value for a fresh reader;
-callbacks that inspect their globals dynamically are refused.
-
-The codec uses a 10,000-level depth limit and a 1 GiB graph-memory budget.
-Checkpoint setup round-trips every local scenario with an independent codec;
-unsupported or unimportable model classes, including classes defined in
-``__main__``, and local rules that inspect their
-module globals dynamically are refused. Benchmark with the
-actual model and solver before choosing this backend for a large run: the
-additional type table and reference tracking can affect memory and time.
-
 pyfory-rebuild
 ~~~~~~~~~~~~~~
 
-Install the pinned optional dependency with ``pip install mpi-sppy[pyfory]``.
-Setup requires pyfory 1.7.7. The checkpoint records pyfory's exact version and
-refuses to load with a different version. The codec stores only plain state
-data; it does not encode Pyomo objects.
+Install the optional dependency with ``pip install mpi-sppy[pyfory]``.
+Setup requires pyfory 1.7.7 or newer. The checkpoint records pyfory's version
+and refuses to load with a different version. The codec stores only plain
+state data; it does not encode Pyomo objects.
 
 The backend recreates each scenario with the current ``scenario_creator``,
 then restores variable values, fixedness, bounds and domains, mutable
@@ -681,9 +642,9 @@ needs the optional ``dill`` package::
 
   pip install mpi-sppy[extras]
 
-The experimental ``pyfory-rebuild`` backend requires its pinned optional
-dependency, installed with ``pip install mpi-sppy[pyfory]``. It does not
-serialize Pyomo models and follows the state-only limitations described in
+The ``pyfory-rebuild`` backend requires its optional dependency, installed
+with ``pip install mpi-sppy[pyfory]``. It does not serialize Pyomo models and
+follows the state-only limitations described in
 `pyfory-rebuild`_.
 
 **Your scenario models must be serializable.** A model can be made

@@ -82,17 +82,6 @@ _STOCH_DISTR = "mpisppy.tests.examples.stoch_distr.stoch_distr"
 mpiexec_available = shutil.which("mpiexec") is not None
 
 
-def _pyfory_reload_runtime_available():
-    if not checkpointing.pyfory_available:
-        return False
-    from mpisppy.utils import pyfory_model_codec
-    try:
-        pyfory_model_codec.require_supported_runtime()
-    except RuntimeError:
-        return False
-    return True
-
-
 def _as_if_written_with_objective(state, objective):
     """Give a spoke file another objective the way a real write would: its
     write_id is computed from the objective and the cursor, so a file from a
@@ -380,36 +369,6 @@ class TestPyforyRebuildMultiRankHub(_MultiRankABMixin, unittest.TestCase):
     def test_every_rank_leaf_matches_the_manifest_write(self):
         manifest = _published_generation(self.ckpt_dir)
         self.assertEqual(manifest["backend"], "pyfory-rebuild")
-        self.assertTrue(manifest["write_id"])
-        generation_dir = os.path.join(
-            self.ckpt_dir, "hub", f"gen_{self.STOP:04d}")
-        for rank in range(self.HUB_RANKS):
-            with open(os.path.join(
-                    generation_dir, f"hub_rank_{rank:04d}.pkl"), "rb") as f:
-                leaf = pickle.load(f)
-            self.assertEqual(leaf["write_id"], manifest["write_id"])
-            self.assertTrue(all(name.endswith(".fory")
-                                for name in leaf["model_files"].values()))
-
-
-@unittest.skipIf(not solver_available, "no solver is available")
-@unittest.skipIf(not mpiexec_available, "mpiexec is not available")
-@unittest.skipUnless(_pyfory_reload_runtime_available(),
-                     "pyfory-reload's tested runtime is unavailable")
-class TestPyforyReloadMultiRankHub(_MultiRankABMixin, unittest.TestCase):
-    """Fresh-process multi-rank resume through the full-model codec."""
-
-    MODULE = _FARMER
-    MODEL_ARGS = ("--num-scens", "6", "--default-rho", "1")
-    CHECKPOINT_ARGS = ("--checkpoint-backend", "pyfory-reload")
-
-    def test_every_rank_leaf_matches_the_manifest_write(self):
-        from mpisppy.utils import pyfory_model_codec
-
-        manifest = _published_generation(self.ckpt_dir)
-        self.assertEqual(manifest["backend"], "pyfory-reload")
-        self.assertEqual(manifest["reload_schema_version"],
-                         pyfory_model_codec.SCHEMA_VERSION)
         self.assertTrue(manifest["write_id"])
         generation_dir = os.path.join(
             self.ckpt_dir, "hub", f"gen_{self.STOP:04d}")

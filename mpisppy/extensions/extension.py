@@ -280,7 +280,7 @@ class Extension:
     def checkpoint_model_state(self):
         """Return plain data needed to reconstruct model changes on a rebuild.
 
-        Used only by the experimental ``pyfory-rebuild`` checkpoint backend.
+        Used only by the ``pyfory-rebuild`` checkpoint backend.
         The default implementation cannot attest that arbitrary changes made
         by an extension can be reproduced.
         """

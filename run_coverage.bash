@@ -235,9 +235,6 @@ run_phase "test_checkpoint_pyfory_rebuild (serial)" \
 run_phase "test_checkpoint_extensions (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_checkpoint_extensions.py -v
 
-run_phase "test_pyfory_model_codec (serial)" \
-    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_pyfory_model_codec.py -v
-
 run_phase "test_checkpoint_spoke_cursor (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_checkpoint_spoke_cursor.py -v
 

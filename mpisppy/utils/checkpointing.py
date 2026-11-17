@@ -18,8 +18,7 @@ See ``doc/designs/checkpointing_design.md``. The division of labor is:
   happen in the middle of startup (the reloaded models must be in place before
   solvers are created).
 
-The ``dill-reload`` and ``pyfory-reload`` backends save each mid-run scenario
-model, which brings back
+The ``dill-reload`` backend saves each mid-run scenario model, which brings back
 the dual weights, rho, nonant values and fixedness, the recourse values that
 serve as a MIP warm start, and the proximal-approximation cuts, all mutually
 consistent. Everything that does *not* live on a scenario model -- the global
@@ -61,13 +60,12 @@ FORMAT_VERSION = 2
 
 DILL_RELOAD_BACKEND = "dill-reload"
 PYFORY_REBUILD_BACKEND = "pyfory-rebuild"
-PYFORY_RELOAD_BACKEND = "pyfory-reload"
 LEAF_BACKEND = "leaf"
 NL_FINGERPRINT_METHOD = "nl-sha256"
 
 
 def _is_pyfory_backend(backend):
-    return backend in (PYFORY_REBUILD_BACKEND, PYFORY_RELOAD_BACKEND)
+    return backend == PYFORY_REBUILD_BACKEND
 
 
 def _is_rebuild_backend(backend):
@@ -75,18 +73,18 @@ def _is_rebuild_backend(backend):
 
 
 def _uses_write_id(backend):
-    return backend == PYFORY_RELOAD_BACKEND or _is_rebuild_backend(backend)
+    return _is_rebuild_backend(backend)
 
 
 def _uses_codec_version(backend):
-    return backend == PYFORY_RELOAD_BACKEND or _is_rebuild_backend(backend)
+    return _is_rebuild_backend(backend)
 
 
 # The rebuild codecs carry a plain-data state snapshot rather than a Pyomo
 # graph. Pyfory's limits bound malformed or unexpectedly deep payloads.
 PYFORY_MAX_DEPTH = 10000
 PYFORY_MAX_GRAPH_MEMORY_BYTES = 1 << 30
-PYFORY_SUPPORTED_VERSION = "1.7.7"
+PYFORY_MIN_VERSION = "1.7.7"
 REBUILD_STATE_VERSION = 2
 
 MANIFEST_NAME = "manifest.json"
@@ -307,7 +305,6 @@ def _model_filename(rank, sname, backend=DILL_RELOAD_BACKEND):
     suffix = {
         DILL_RELOAD_BACKEND: "dill",
         PYFORY_REBUILD_BACKEND: "fory",
-        PYFORY_RELOAD_BACKEND: "fory",
     }.get(backend)
     if suffix is None:
         raise ValueError(f"Unknown checkpoint backend '{backend}'.")
@@ -337,17 +334,23 @@ def require_backend_dependency(backend):
                 "installed. Install it with 'pip install mpi-sppy[pyfory]' "
                 "or choose a different --checkpoint-backend.".format(backend)
             )
+        from packaging.version import InvalidVersion, Version
+
         installed_version = _pyfory_version()
-        if installed_version != PYFORY_SUPPORTED_VERSION:
+        try:
+            parsed_version = Version(installed_version)
+        except InvalidVersion as exc:
             raise RuntimeError(
-                f"The '{backend}' checkpoint backend supports pyfory "
-                f"{PYFORY_SUPPORTED_VERSION}, but this run has pyfory "
-                f"{installed_version}. Install the supported version with "
+                f"The '{backend}' checkpoint backend cannot determine the "
+                f"installed pyfory version ({installed_version!r})."
+            ) from exc
+        if parsed_version < Version(PYFORY_MIN_VERSION):
+            raise RuntimeError(
+                f"The '{backend}' checkpoint backend requires pyfory "
+                f">={PYFORY_MIN_VERSION}, but this run has pyfory "
+                f"{installed_version}. Install a supported version with "
                 "'pip install mpi-sppy[pyfory]'."
             )
-        if backend == PYFORY_RELOAD_BACKEND:
-            from mpisppy.utils import pyfory_model_codec
-            pyfory_model_codec.require_supported_runtime()
     else:
         require_implemented_backend(backend)
 
@@ -1513,12 +1516,11 @@ def require_implemented_backend(backend):
     branch in PHBase), because a resume need not have a Checkpointer
     attached.
     """
-    if backend not in (DILL_RELOAD_BACKEND, PYFORY_REBUILD_BACKEND,
-                       PYFORY_RELOAD_BACKEND):
+    if backend not in (DILL_RELOAD_BACKEND, PYFORY_REBUILD_BACKEND):
         raise RuntimeError(
             f"--checkpoint-backend '{backend}' is not implemented. "
-            f"Supported backends are '{DILL_RELOAD_BACKEND}', "
-            f"'{PYFORY_REBUILD_BACKEND}', and '{PYFORY_RELOAD_BACKEND}'."
+            f"Supported backends are '{DILL_RELOAD_BACKEND}' "
+            f"and '{PYFORY_REBUILD_BACKEND}'."
         )
 
 def agree_spoke_restore(opt, state):
@@ -1798,8 +1800,6 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
     if backend == DILL_RELOAD_BACKEND:
         # Keep dill's serialize-only probe exactly as it has always worked.
         return probe_model_is_dillable(opt)
-    if backend == PYFORY_RELOAD_BACKEND:
-        return _probe_pyfory_reload_models(opt)
     if not _is_rebuild_backend(backend):
         raise ValueError(f"Unknown checkpoint backend '{backend}'.")
 
@@ -1956,121 +1956,6 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
         "Checkpointing is enabled, but pyfory-rebuild cannot encode a "
         f"scenario on rank {failing_rank}. See that rank's message."
     )
-
-
-def _validate_reloaded_model(model, expected, sname):
-    """Check the graph relationships required before splicing a model."""
-    if not hasattr(model, "component_data_objects") or \
-            getattr(model, "name", None) != expected.name:
-        raise CheckpointMismatch(
-            f"The reloaded model for scenario '{sname}' has the wrong type "
-            "or name.")
-    data = getattr(model, "_mpisppy_data", None)
-    fresh_data = getattr(expected, "_mpisppy_data", None)
-    nodes = getattr(model, "_mpisppy_node_list", None)
-    fresh_nodes = getattr(expected, "_mpisppy_node_list", None)
-    if data is None or fresh_data is None or nodes is None or \
-            fresh_nodes is None or len(nodes) != len(fresh_nodes):
-        raise CheckpointMismatch(
-            f"The reloaded model for scenario '{sname}' has no valid "
-            "nonanticipative nodes.")
-    if tuple(data.nonant_indices) != tuple(fresh_data.nonant_indices):
-        raise CheckpointMismatch(
-            f"The reloaded model for scenario '{sname}' has different "
-            "nonanticipative indices.")
-    for node, fresh_node in zip(nodes, fresh_nodes):
-        if node.name != fresh_node.name or len(node.nonant_vardata_list) != \
-                len(fresh_node.nonant_vardata_list):
-            raise CheckpointMismatch(
-                f"The reloaded model for scenario '{sname}' has different "
-                "nonanticipative node structure.")
-        for var in node.nonant_vardata_list:
-            if var.model() is not model or model.find_component(var.name) is not var:
-                raise CheckpointMismatch(
-                    f"The reloaded model for scenario '{sname}' has a "
-                    "nonanticipative variable with broken ownership.")
-    for var in data.nonant_indices.values():
-        if var.model() is not model:
-            raise CheckpointMismatch(
-                f"The reloaded model for scenario '{sname}' has a "
-                "nonanticipative index pointing outside the model.")
-    managers = getattr(data, "xsqvar_prox_approx", {})
-    if managers is False or managers is None:
-        managers = {}
-    if not isinstance(managers, dict):
-        raise CheckpointMismatch(
-            f"The reloaded model for scenario '{sname}' has invalid "
-            "proximal approximation state.")
-    for key, manager in managers.items():
-        if manager.xvar.model() is not model or \
-                manager.W is not model._mpisppy_model.W[key] or \
-                manager.rho is not model._mpisppy_model.rho[key] or \
-                manager.cuts is not model._mpisppy_model.xsqvar_cuts:
-            raise CheckpointMismatch(
-                f"The reloaded model for scenario '{sname}' has broken "
-                "proximal approximation references.")
-
-
-def _probe_pyfory_reload_models(opt):
-    """Round-trip each local scenario with a reader built from its file."""
-    from mpisppy.utils import pyfory_model_codec
-
-    timed = bool(opt.options.get("display_timing", False))
-    probe_started = time.perf_counter() if timed else None
-    encode_s = decode_s = encode_cpu_s = decode_cpu_s = 0.0
-    failure = None
-    for sname, scenario in opt.local_scenarios.items():
-        solver_plugin = getattr(scenario, "_solver_plugin", None)
-        if solver_plugin is not None:
-            del scenario._solver_plugin
-        try:
-            stream = io.BytesIO()
-            started = time.perf_counter() if timed else None
-            cpu_started = time.thread_time() if timed else None
-            pyfory_model_codec.dump(scenario, stream, scenario_name=sname)
-            if timed:
-                encode_s += time.perf_counter() - started
-                encode_cpu_s += time.thread_time() - cpu_started
-            started = time.perf_counter() if timed else None
-            cpu_started = time.thread_time() if timed else None
-            restored = pyfory_model_codec.load(io.BytesIO(stream.getvalue()),
-                                               scenario_name=sname)
-            _validate_reloaded_model(restored, scenario, sname)
-            if timed:
-                decode_s += time.perf_counter() - started
-                decode_cpu_s += time.thread_time() - cpu_started
-        except Exception as exc:
-            failure = RuntimeError(
-                "Checkpointing is enabled, but pyfory-reload cannot round "
-                f"trip scenario '{sname}': {type(exc).__name__}: {exc}")
-            failure.__cause__ = exc
-            break
-        finally:
-            if solver_plugin is not None:
-                scenario._solver_plugin = solver_plugin
-
-    comm = _cylinder_comm(opt)
-    agreement_started = time.perf_counter() if timed else None
-    failing_rank = _first_failing_rank(comm, int(opt.cylinder_rank),
-                                       failure is not None)
-    if timed:
-        print(
-            f"checkpoint_timing event=probe backend={PYFORY_RELOAD_BACKEND} "
-            f"rank={int(opt.cylinder_rank)} "
-            f"scenarios={len(opt.local_scenarios)} "
-            f"serialize_s={encode_s:.6f} "
-            f"serialize_cpu_s={encode_cpu_s:.6f} "
-            f"deserialize_s={decode_s:.6f} "
-            f"deserialize_cpu_s={decode_cpu_s:.6f} "
-            f"agreement_s={time.perf_counter() - agreement_started:.6f} "
-            f"rank_elapsed_s={time.perf_counter() - probe_started:.6f}",
-            flush=True)
-    if failure is not None:
-        raise failure
-    if failing_rank is not None:
-        raise RuntimeError(
-            "Checkpointing is enabled, but pyfory-reload cannot round trip "
-            f"a scenario on rank {failing_rank}. See that rank's message.")
 
 
 def geometry(opt):
@@ -2621,12 +2506,6 @@ def _publish_generation(opt, ckpt_dir, hub_dir, final_dir, staging_dir,
         manifest["write_id"] = write_id
     if _uses_codec_version(backend):
         manifest["codec_version"] = _codec_version(backend)
-    if backend == PYFORY_RELOAD_BACKEND:
-        from mpisppy.utils import pyfory_model_codec
-        manifest["reload_schema_version"] = \
-            pyfory_model_codec.SCHEMA_VERSION
-        manifest["reload_adapter_version"] = \
-            pyfory_model_codec.ADAPTER_VERSION
     started = time.perf_counter() if timing is not None else None
     _publish_manifest(ckpt_dir, manifest)
     if timing is not None:
@@ -2708,27 +2587,18 @@ def _write_models(opt, staging_dir, rank, backend, write_id=None,
             "checkpoint_nl_fingerprint", False))
     nl_hash_file_timing = (getattr(timing, "nl_hash_file_io", None)
                            if timing is not None else None)
-    if backend == PYFORY_RELOAD_BACKEND:
-        from mpisppy.utils import pyfory_model_codec
     model_files = {}
     for sname, s in opt.local_scenarios.items():
         fname = _model_filename(rank, sname, backend)
-        if backend in (DILL_RELOAD_BACKEND, PYFORY_RELOAD_BACKEND):
+        if backend == DILL_RELOAD_BACKEND:
             # Keep the historic model bytes and plugin removal dance intact.
             solver_plugin = getattr(s, "_solver_plugin", None)
             if solver_plugin is not None:
                 del s._solver_plugin
             try:
-                if backend == DILL_RELOAD_BACKEND:
-                    dump_model = dill.dump
-                else:
-                    dump_model = lambda model, stream, name=sname: \
-                        pyfory_model_codec.dump(
-                            model, stream, scenario_name=name,
-                            write_id=write_id)
                 _atomic_write_bytes(
                     os.path.join(staging_dir, fname),
-                    lambda f, model=s: dump_model(model, f),
+                    lambda f, model=s: dill.dump(model, f),
                     timing=timing,
                 )
             finally:
@@ -2890,16 +2760,6 @@ def load_checkpoint(opt, ckpt_dir):
                 f"{current_version}. "
                 f"{backend} requires an exact codec version match."
             )
-    if backend == PYFORY_RELOAD_BACKEND:
-        from mpisppy.utils import pyfory_model_codec
-        if manifest.get("reload_schema_version") != \
-                pyfory_model_codec.SCHEMA_VERSION or \
-                manifest.get("reload_adapter_version") != \
-                pyfory_model_codec.ADAPTER_VERSION:
-            raise CheckpointMismatch(
-                "The pyfory-reload manifest has an unsupported model "
-                "schema or adapter version.")
-
     expected_fp = structural_fingerprint(opt.options)
     if manifest.get("structural_fingerprint") != expected_fp:
         raise CheckpointMismatch(
@@ -3028,8 +2888,6 @@ def load_checkpoint(opt, ckpt_dir):
             leaf["nl_fingerprints"] = nl_fingerprints
 
     models = {}
-    if backend == PYFORY_RELOAD_BACKEND:
-        from mpisppy.utils import pyfory_model_codec
     for sname, fname in leaf["model_files"].items():
         if not os.path.isfile(os.path.join(gen_dir, fname)):
             raise CheckpointMismatch(
@@ -3040,11 +2898,6 @@ def load_checkpoint(opt, ckpt_dir):
         with open(path, "rb") as f:
             if backend == DILL_RELOAD_BACKEND:
                 models[sname] = dill.load(f)
-            elif backend == PYFORY_RELOAD_BACKEND:
-                models[sname] = pyfory_model_codec.load(
-                    f, scenario_name=sname, write_id=manifest["write_id"])
-                _validate_reloaded_model(
-                    models[sname], opt.local_scenarios[sname], sname)
             else:
                 models[sname] = _new_rebuild_codec(backend).deserialize(
                     f.read())
