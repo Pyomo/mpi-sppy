@@ -69,12 +69,25 @@ NL_FINGERPRINT_METHOD = "nl-sha256"
 def _is_pyfory_backend(backend):
     return backend in (PYFORY_REBUILD_BACKEND, PYFORY_RELOAD_BACKEND)
 
-# The rebuild codec carries a plain-data state snapshot rather than a Pyomo
-# graph. Its explicit limits bound malformed or unexpectedly deep payloads.
+
+def _is_rebuild_backend(backend):
+    return backend in (PYFORY_REBUILD_BACKEND,)
+
+
+def _uses_write_id(backend):
+    return backend == PYFORY_RELOAD_BACKEND or _is_rebuild_backend(backend)
+
+
+def _uses_codec_version(backend):
+    return backend == PYFORY_RELOAD_BACKEND or _is_rebuild_backend(backend)
+
+
+# The rebuild codecs carry a plain-data state snapshot rather than a Pyomo
+# graph. Pyfory's limits bound malformed or unexpectedly deep payloads.
 PYFORY_MAX_DEPTH = 10000
 PYFORY_MAX_GRAPH_MEMORY_BYTES = 1 << 30
 PYFORY_SUPPORTED_VERSION = "1.7.7"
-PYFORY_STATE_VERSION = 2
+REBUILD_STATE_VERSION = 2
 
 MANIFEST_NAME = "manifest.json"
 HUB_SUBDIR = "hub"
@@ -231,8 +244,8 @@ def require_checkpoint_structural_cfg(options):
             "creator and its structural inputs. The generic-cylinder path "
             "sets it automatically.")
     if options.get("checkpoint_nl_fingerprint", False):
-        if options.get("checkpoint_backend", DILL_RELOAD_BACKEND) != \
-                PYFORY_REBUILD_BACKEND:
+        if not _is_rebuild_backend(options.get(
+                "checkpoint_backend", DILL_RELOAD_BACKEND)):
             raise RuntimeError(
                 "checkpoint_nl_fingerprint requires the pyfory-rebuild "
                 "checkpoint backend.")
@@ -349,6 +362,20 @@ def _new_fory():
         max_depth=PYFORY_MAX_DEPTH,
         max_graph_memory_bytes=PYFORY_MAX_GRAPH_MEMORY_BYTES,
     )
+
+
+def _new_rebuild_codec(backend):
+    """Return a fresh snapshot codec with serialize, deserialize, and dump."""
+    if backend == PYFORY_REBUILD_BACKEND:
+        return _new_fory()
+    raise ValueError(f"Unknown rebuild backend '{backend}'.")
+
+
+def _codec_version(backend):
+    """Return the version recorded for a backend's model-file codec."""
+    if _is_pyfory_backend(backend):
+        return _pyfory_version()
+    raise ValueError(f"Backend '{backend}' has no versioned model codec.")
 
 
 _CHECKPOINT_SCALAR_TAG = "__mpisppy_checkpoint_scalar__"
@@ -603,7 +630,7 @@ def _prox_approx_snapshot(scenario):
 
 
 def _snapshot_rebuild_model(scenario):
-    """Capture plain PH/scenario state for the pyfory-rebuild backend.
+    """Capture plain PH/scenario state for a rebuild backend.
 
     The scenario structure is rebuilt from the creator and approved extension
     hooks. Variable values/fixedness, mutable Params, and proximal cuts are
@@ -657,7 +684,7 @@ def _snapshot_rebuild_model(scenario):
                 f"'{component.name}' index {safe_index!r}"))
 
     return {
-        "state_version": PYFORY_STATE_VERSION,
+        "state_version": REBUILD_STATE_VERSION,
         "scenario_name": str(scenario.name),
         "component_layout": _component_layout(scenario),
         "variables": variables,
@@ -741,7 +768,7 @@ def _rebuild_model_nl_fingerprint(scenario, timing=None):
 
 def validate_rebuild_model_state(
         opt, snapshots, fingerprint_method=None,
-        nl_fingerprints=None):
+        nl_fingerprints=None, backend=PYFORY_REBUILD_BACKEND):
     """Check the restored state and any requested NL formulation digest."""
     timed = bool((getattr(opt, "options", None) or {}).get(
         "display_timing", False))
@@ -807,7 +834,7 @@ def validate_rebuild_model_state(
         if timed:
             print(
                 f"checkpoint_timing event=validate "
-                f"backend={PYFORY_REBUILD_BACKEND} rank={rank} "
+                f"backend={backend} rank={rank} "
                 f"scenarios={len(opt.local_scenarios)} "
                 f"snapshot_s={snapshot_s:.6f} "
                 f"snapshot_cpu_s={snapshot_cpu_s:.6f} "
@@ -825,7 +852,7 @@ def validate_rebuild_model_state(
 
 def finalize_and_validate_rebuild_model_state(
         opt, snapshots, fingerprint_method=None,
-        nl_fingerprints=None):
+        nl_fingerprints=None, backend=PYFORY_REBUILD_BACKEND):
     """Restore Pyomo's stale flags after setup, then check the rebuilt model."""
     for sname, scenario in opt.local_scenarios.items():
         for name, _, stale, _, _, _ in snapshots[sname]["variables"]:
@@ -836,7 +863,7 @@ def finalize_and_validate_rebuild_model_state(
             var.stale = stale
     validate_rebuild_model_state(
         opt, snapshots, fingerprint_method=fingerprint_method,
-        nl_fingerprints=nl_fingerprints)
+        nl_fingerprints=nl_fingerprints, backend=backend)
 
 
 def restore_rebuild_solve_state(opt, snapshots):
@@ -884,11 +911,11 @@ def _restore_rebuild_model_values(scenario, snapshot):
         NonNegativeReals, NonPositiveIntegers, NonPositiveReals, Reals, \
         UnitInterval
 
-    if snapshot.get("state_version") != PYFORY_STATE_VERSION:
+    if snapshot.get("state_version") != REBUILD_STATE_VERSION:
         raise CheckpointMismatch(
-            f"Scenario '{scenario.name}' has pyfory state version "
+            f"Scenario '{scenario.name}' has rebuild state version "
             f"{snapshot.get('state_version')!r}; this mpi-sppy reads "
-            f"version {PYFORY_STATE_VERSION}."
+            f"version {REBUILD_STATE_VERSION}."
         )
     if snapshot.get("scenario_name") != str(scenario.name):
         raise CheckpointMismatch(
@@ -1773,7 +1800,7 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
         return probe_model_is_dillable(opt)
     if backend == PYFORY_RELOAD_BACKEND:
         return _probe_pyfory_reload_models(opt)
-    if backend != PYFORY_REBUILD_BACKEND:
+    if not _is_rebuild_backend(backend):
         raise ValueError(f"Unknown checkpoint backend '{backend}'.")
 
     require_extension_rebuild_contract(opt)
@@ -1793,13 +1820,13 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
             hook_payload = {extension_name: model_state}
             started = time.perf_counter() if timed else None
             cpu_started = time.thread_time() if timed else None
-            hook_bytes = _new_fory().serialize(hook_payload)
+            hook_bytes = _new_rebuild_codec(backend).serialize(hook_payload)
             if timed:
                 encode_s += time.perf_counter() - started
                 encode_cpu_s += time.thread_time() - cpu_started
             started = time.perf_counter() if timed else None
             cpu_started = time.thread_time() if timed else None
-            hook_restored = _new_fory().deserialize(hook_bytes)
+            hook_restored = _new_rebuild_codec(backend).deserialize(hook_bytes)
             if timed:
                 decode_s += time.perf_counter() - started
                 decode_cpu_s += time.thread_time() - cpu_started
@@ -1829,13 +1856,13 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
                     snapshot_cpu_s += time.thread_time() - cpu_started
             started = time.perf_counter() if timed else None
             cpu_started = time.thread_time() if timed else None
-            payload = _new_fory().serialize(state)
+            payload = _new_rebuild_codec(backend).serialize(state)
             if timed:
                 encode_s += time.perf_counter() - started
                 encode_cpu_s += time.thread_time() - cpu_started
             started = time.perf_counter() if timed else None
             cpu_started = time.thread_time() if timed else None
-            restored = _new_fory().deserialize(payload)
+            restored = _new_rebuild_codec(backend).deserialize(payload)
             if timed:
                 decode_s += time.perf_counter() - started
                 decode_cpu_s += time.thread_time() - cpu_started
@@ -2313,12 +2340,12 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
     rank = int(opt.cylinder_rank)
     is_publisher = rank == 0
     write_id = None
-    if _is_pyfory_backend(backend):
+    if _uses_write_id(backend):
         proposed_id = uuid.uuid4().hex if is_publisher else None
         write_id = proposed_id if comm is None else comm.bcast(
             proposed_id, root=0)
         if not isinstance(write_id, str) or not write_id:
-            raise RuntimeError("Could not agree on the pyfory write identity.")
+            raise RuntimeError("Could not agree on the checkpoint write identity.")
     hub_dir = os.path.join(ckpt_dir, HUB_SUBDIR)
     final_dir = os.path.join(hub_dir, _generation_dirname(generation))
     staging_dir = f"{final_dir}.tmp"
@@ -2367,7 +2394,7 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
             sname: _nl_fingerprint_filename(rank, sname)
             for sname in opt.local_scenarios
         } if opt.options.get("checkpoint_nl_fingerprint", False) and \
-            backend == PYFORY_REBUILD_BACKEND else {}
+            _is_rebuild_backend(backend) else {}
         model_files = _write_models(opt, staging_dir, rank, backend,
                                     write_id=write_id, timing=model_io)
         if timed:
@@ -2390,9 +2417,9 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
                 getattr(opt, "best_solution_obj_val", None)),
             "best_outer_bound": _hub_best_outer_bound(opt),
         }
-        if _is_pyfory_backend(backend):
+        if _uses_write_id(backend):
             leaf["write_id"] = write_id
-        if backend == PYFORY_REBUILD_BACKEND:
+        if _is_rebuild_backend(backend):
             if opt.options.get("checkpoint_nl_fingerprint", False):
                 leaf["model_fingerprint_method"] = NL_FINGERPRINT_METHOD
                 leaf["nl_fingerprint_files"] = nl_hash_files
@@ -2588,17 +2615,18 @@ def _publish_generation(opt, ckpt_dir, hub_dir, final_dir, staging_dir,
         "n_proc": int(opt.n_proc),
         "structural_fingerprint": structural_fingerprint(opt.options),
     }
-    if _is_pyfory_backend(backend):
+    if _uses_write_id(backend):
         if not write_id:
             raise RuntimeError(f"{backend} publication requires write_id.")
         manifest["write_id"] = write_id
-        manifest["codec_version"] = _pyfory_version()
-        if backend == PYFORY_RELOAD_BACKEND:
-            from mpisppy.utils import pyfory_model_codec
-            manifest["reload_schema_version"] = \
-                pyfory_model_codec.SCHEMA_VERSION
-            manifest["reload_adapter_version"] = \
-                pyfory_model_codec.ADAPTER_VERSION
+    if _uses_codec_version(backend):
+        manifest["codec_version"] = _codec_version(backend)
+    if backend == PYFORY_RELOAD_BACKEND:
+        from mpisppy.utils import pyfory_model_codec
+        manifest["reload_schema_version"] = \
+            pyfory_model_codec.SCHEMA_VERSION
+        manifest["reload_adapter_version"] = \
+            pyfory_model_codec.ADAPTER_VERSION
     started = time.perf_counter() if timing is not None else None
     _publish_manifest(ckpt_dir, manifest)
     if timing is not None:
@@ -2675,7 +2703,7 @@ def _write_models(opt, staging_dir, rank, backend, write_id=None,
     """Write each local scenario using the selected model-state codec."""
     require_backend_dependency(backend)
     use_nl_fingerprint = bool(
-        backend == PYFORY_REBUILD_BACKEND and
+        _is_rebuild_backend(backend) and
         (getattr(opt, "options", None) or {}).get(
             "checkpoint_nl_fingerprint", False))
     nl_hash_file_timing = (getattr(timing, "nl_hash_file_io", None)
@@ -2727,7 +2755,8 @@ def _write_models(opt, staging_dir, rank, backend, write_id=None,
                 )
             _atomic_write_bytes(
                 os.path.join(staging_dir, fname),
-                lambda f, state=snapshot: _new_fory().dump(state, f),
+                lambda f, state=snapshot: _new_rebuild_codec(backend).dump(
+                    state, f),
                 timing=timing,
             )
         model_files[sname] = fname
@@ -2774,7 +2803,7 @@ def _read_manifest(ckpt_dir, missing_ok=False):
 def _generation_copy_for_manifest(hub_dir, generation, backend, write_id,
                                   rank):
     """Find the final or retiring directory identified by the manifest."""
-    if _is_pyfory_backend(backend) and not write_id:
+    if _uses_write_id(backend) and not write_id:
         raise CheckpointMismatch(
             f"The {backend} manifest has no write_id, so its generation "
             "cannot be selected safely."
@@ -2796,7 +2825,7 @@ def _generation_copy_for_manifest(hub_dir, generation, backend, write_id,
             continue
         if leaf.get("backend") != backend:
             continue
-        if _is_pyfory_backend(backend) and \
+        if _uses_write_id(backend) and \
                 leaf.get("write_id") != write_id:
             continue
         matches.append(path)
@@ -2846,28 +2875,30 @@ def load_checkpoint(opt, ckpt_dir):
 
     backend = manifest.get("backend")
     require_backend_dependency(backend)
-    if _is_pyfory_backend(backend):
+    if _uses_codec_version(backend):
         saved_version = manifest.get("codec_version")
         if not isinstance(saved_version, str) or not saved_version:
             raise CheckpointMismatch(
                 f"The {backend} manifest has no codec_version metadata."
             )
-        current_version = _pyfory_version()
+        current_version = _codec_version(backend)
         if saved_version != current_version:
+            codec_name = backend.partition("-")[0]
             raise CheckpointMismatch(
-                f"This checkpoint was written with pyfory {saved_version}, "
-                f"but this run has pyfory {current_version}. "
+                f"This checkpoint was written with {codec_name} "
+                f"{saved_version}, but this run has {codec_name} "
+                f"{current_version}. "
                 f"{backend} requires an exact codec version match."
             )
-        if backend == PYFORY_RELOAD_BACKEND:
-            from mpisppy.utils import pyfory_model_codec
-            if manifest.get("reload_schema_version") != \
-                    pyfory_model_codec.SCHEMA_VERSION or \
-                    manifest.get("reload_adapter_version") != \
-                    pyfory_model_codec.ADAPTER_VERSION:
-                raise CheckpointMismatch(
-                    "The pyfory-reload manifest has an unsupported model "
-                    "schema or adapter version.")
+    if backend == PYFORY_RELOAD_BACKEND:
+        from mpisppy.utils import pyfory_model_codec
+        if manifest.get("reload_schema_version") != \
+                pyfory_model_codec.SCHEMA_VERSION or \
+                manifest.get("reload_adapter_version") != \
+                pyfory_model_codec.ADAPTER_VERSION:
+            raise CheckpointMismatch(
+                "The pyfory-reload manifest has an unsupported model "
+                "schema or adapter version.")
 
     expected_fp = structural_fingerprint(opt.options)
     if manifest.get("structural_fingerprint") != expected_fp:
@@ -2914,10 +2945,10 @@ def load_checkpoint(opt, ckpt_dir):
             f"The checkpoint state '{leaf_path}' is not a dictionary, so it "
             "was not written by this mpi-sppy or has been damaged.")
     missing = [key for key in LEAF_KEYS_READ_ON_RESUME if key not in leaf]
-    if _is_pyfory_backend(backend):
+    if _uses_write_id(backend):
         missing.extend(key for key in ("write_id",)
                        if key not in leaf)
-    if backend == PYFORY_REBUILD_BACKEND and \
+    if _is_rebuild_backend(backend) and \
             "extension_model_state" not in leaf:
         missing.append("extension_model_state")
     if missing:
@@ -2935,7 +2966,7 @@ def load_checkpoint(opt, ckpt_dir):
     }
     mismatched = [key for key, value in expected_leaf.items()
                   if leaf[key] != value]
-    if _is_pyfory_backend(backend) and \
+    if _uses_write_id(backend) and \
             leaf.get("write_id") != manifest.get("write_id"):
         mismatched.append("write_id")
     if mismatched:
@@ -2961,7 +2992,7 @@ def load_checkpoint(opt, ckpt_dir):
             "model files this rank's scenarios require, so it is stale or "
             "has been damaged.")
 
-    if backend == PYFORY_REBUILD_BACKEND:
+    if _is_rebuild_backend(backend):
         fingerprint_method = leaf.get("model_fingerprint_method")
         if fingerprint_method not in (None, NL_FINGERPRINT_METHOD):
             raise CheckpointMismatch(
@@ -3015,11 +3046,12 @@ def load_checkpoint(opt, ckpt_dir):
                 _validate_reloaded_model(
                     models[sname], opt.local_scenarios[sname], sname)
             else:
-                models[sname] = _new_fory().deserialize(f.read())
-        if backend == PYFORY_REBUILD_BACKEND:
+                models[sname] = _new_rebuild_codec(backend).deserialize(
+                    f.read())
+        if _is_rebuild_backend(backend):
             state = models[sname]
             if not isinstance(state, dict) or \
-                    state.get("state_version") != PYFORY_STATE_VERSION:
+                    state.get("state_version") != REBUILD_STATE_VERSION:
                 raise CheckpointMismatch(
                     f"The pyfory model file '{fname}' for scenario "
                     f"'{sname}' has an unsupported state format."

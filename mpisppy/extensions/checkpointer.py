@@ -311,7 +311,7 @@ class Checkpointer(Extension):
         ckpt.require_checkpoint_structural_cfg(opt.options)
         if not self.spoke_mode and not self.dual_spoke_mode:
             ckpt.require_backend_dependency(self.backend)
-            if self.backend == ckpt.PYFORY_REBUILD_BACKEND:
+            if ckpt._is_rebuild_backend(self.backend):
                 ckpt.require_extension_rebuild_contract(opt)
 
         # Two scenario names that sanitize to the same file name would

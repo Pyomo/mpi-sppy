@@ -1606,7 +1606,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         """
         leaf, models = checkpointing.load_checkpoint(self, ckpt_dir)
 
-        rebuild = leaf["backend"] == checkpointing.PYFORY_REBUILD_BACKEND
+        rebuild = checkpointing._is_rebuild_backend(leaf["backend"])
         if rebuild:
             # These are plain per-scenario snapshots. The fresh models remain
             # in place. Restore solve results before pre_iter0 callbacks; the
@@ -1730,8 +1730,8 @@ class PHBase(mpisppy.spopt.SPOpt):
             self.extobject.pre_iter0()
 
         if (self._resumed_from_checkpoint
-                and self._checkpoint_leaf_state["backend"]
-                == checkpointing.PYFORY_REBUILD_BACKEND):
+                and checkpointing._is_rebuild_backend(
+                    self._checkpoint_leaf_state["backend"])):
             self._checkpoint_rebuild_pending = checkpointing.run_agreed(
                 self,
                 lambda: checkpointing.prepare_rebuild_model_state(
@@ -1739,7 +1739,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                     self._checkpoint_rebuild_states,
                     self._checkpoint_leaf_state.get(
                         "extension_model_state")),
-                "rebuild their pyfory scenario state before solver creation, "
+                "rebuild their scenario state before solver creation, "
                 "so none of them resumes")
 
         # After pre_iter0 rather than inside the hook that asked for it:
@@ -1952,14 +1952,14 @@ class PHBase(mpisppy.spopt.SPOpt):
             self._attach_PH_to_objective_after_iter0()
 
         if (self._resumed_from_checkpoint
-                and self._checkpoint_leaf_state["backend"]
-                == checkpointing.PYFORY_REBUILD_BACKEND):
+                and checkpointing._is_rebuild_backend(
+                    self._checkpoint_leaf_state["backend"])):
             checkpointing.run_agreed(
                 self,
                 lambda: checkpointing.restore_rebuild_model_state(
                     self, self._checkpoint_rebuild_states,
                     self._checkpoint_rebuild_pending),
-                "replay their pyfory proximal state, so none of them resumes")
+                "replay their proximal state, so none of them resumes")
 
         self.reenable_W_and_prox()
 
@@ -1969,8 +1969,8 @@ class PHBase(mpisppy.spopt.SPOpt):
         self._restore_extension_state_if_resuming()
 
         if (self._resumed_from_checkpoint
-                and self._checkpoint_leaf_state["backend"]
-                == checkpointing.PYFORY_REBUILD_BACKEND):
+                and checkpointing._is_rebuild_backend(
+                    self._checkpoint_leaf_state["backend"])):
             checkpointing.run_agreed(
                 self,
                 lambda: checkpointing.finalize_and_validate_rebuild_model_state(
@@ -1978,8 +1978,9 @@ class PHBase(mpisppy.spopt.SPOpt):
                     fingerprint_method=self._checkpoint_leaf_state.get(
                         "model_fingerprint_method"),
                     nl_fingerprints=self._checkpoint_leaf_state.get(
-                        "nl_fingerprints")),
-                "validate their rebuilt pyfory models, so none of them "
+                        "nl_fingerprints"),
+                    backend=self._checkpoint_leaf_state["backend"]),
+                "validate their rebuilt models, so none of them "
                 "resumes with a changed model")
 
         # Clear the dynamic-overrides overlay at the iter0→iterk
