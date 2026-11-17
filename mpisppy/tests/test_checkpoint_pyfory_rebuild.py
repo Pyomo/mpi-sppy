@@ -6,7 +6,7 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-"""Tests for pyfory-rebuild checkpoint cloning, fingerprints, and resume."""
+"""Tests for pyfory-rebuild checkpoint cloning, NL digests, and resume."""
 
 import copy
 import json
@@ -27,7 +27,7 @@ from mpisppy.tests.test_checkpoint import (
     CheckpointPayloadExtension, SCENARIO_NAMES, _flat_snapshot, _make_ph,
     _options, solver_available,
 )
-from mpisppy.tests.utils import REPO_ROOT, subprocess_env
+from mpisppy.tests.utils import subprocess_env
 
 
 class RebuildSafeStateExtension(Extension):
@@ -170,83 +170,6 @@ class TestPyforyRebuildProbeClone(unittest.TestCase):
             self.assertIsInstance(copied._init_values._init.val, tuple)
 
 
-class TestPyforyRebuildFingerprint(unittest.TestCase):
-    def test_marking_indexed_data_invalidates_its_component(self):
-        import pyomo.environ as pyo
-
-        model = pyo.ConcreteModel(name="model-name")
-        model.x = pyo.Var([1], bounds=(0, 10))
-        opt = types.SimpleNamespace(
-            options={"checkpoint_component_fingerprint_cache": True},
-            local_scenarios={"scenario-key": model},
-        )
-        cache = {}
-        checkpointing._rebuild_model_fingerprint_with_cache(model, cache)
-
-        for lower, component in ((1, model.x[1]), (2, "x[1]")):
-            model.x[1].setlb(lower)
-            checkpointing.mark_rebuild_model_fingerprint_dirty(
-                opt, model, component)
-            self.assertEqual(
-                opt._pyfory_rebuild_fingerprint_dirty["scenario-key"], {"x"})
-            self.assertEqual(
-                checkpointing._rebuild_model_fingerprint_with_cache(
-                    model, cache,
-                    opt._pyfory_rebuild_fingerprint_dirty["scenario-key"]),
-                checkpointing._rebuild_model_fingerprint_with_cache(model, {}))
-
-    def test_empty_set_with_unknown_dimension(self):
-        import pyomo.environ as pyo
-
-        model = pyo.ConcreteModel()
-        model.indices = pyo.Set(initialize=[])
-        fingerprint = checkpointing._rebuild_model_fingerprint(model)
-        self.assertEqual(
-            fingerprint,
-            checkpointing._rebuild_model_fingerprint(model.clone()))
-
-        model.del_component(model.indices)
-        model.indices = pyo.Set(dimen=1, initialize=[])
-        self.assertNotEqual(
-            fingerprint,
-            checkpointing._rebuild_model_fingerprint(model))
-
-    @unittest.skipUnless(os.path.isfile(os.path.join(
-        REPO_ROOT, "_egret-int", "egret", "__init__.py")),
-        "local Egret checkout is unavailable")
-    def test_constructed_uc_scenario_graph(self):
-        import importlib.util
-        import pyomo.environ as pyo
-
-        # Use the same scenario creator and data as the UC checkpoint job,
-        # but construct and fingerprint one model in this process.
-        sys.path.insert(0, os.path.join(REPO_ROOT, "_egret-int"))
-        try:
-            spec = importlib.util.spec_from_file_location(
-                "checkpoint_uc_fingerprint_creator",
-                os.path.join(REPO_ROOT, "examples", "uc", "uc_funcs.py"))
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            model = module.scenario_creator(
-                "Scenario1", num_scens=25,
-                path=os.path.join(REPO_ROOT, "examples", "uc",
-                                  "25scenarios_r1"))
-        finally:
-            sys.path.pop(0)
-
-        components = tuple(model.component_objects(active=None))
-        self.assertTrue(any(isinstance(c, pyo.BuildAction)
-                            for c in components))
-        self.assertTrue(any(isinstance(c, pyo.BuildCheck)
-                            for c in components))
-        fingerprint = checkpointing._rebuild_model_fingerprint(model)
-        clone = checkpointing._clone_rebuild_probe_model(model)
-        self.assertIsNotNone(clone.Contingencies._init_values)
-        self.assertEqual(
-            fingerprint,
-            checkpointing._rebuild_model_fingerprint(clone))
-
-
 @unittest.skipUnless(checkpointing.pyfory_available,
                      "pyfory is an optional checkpoint dependency")
 @unittest.skipUnless(solver_available,
@@ -301,8 +224,6 @@ class TestPyforyRebuildBackend(unittest.TestCase):
                   "rb") as stream:
             leaf = pickle.load(stream)
         self.assertEqual(leaf["write_id"], manifest["write_id"])
-        self.assertEqual(leaf["model_fingerprint_method"],
-                         checkpointing.GRAPH_FINGERPRINT_METHOD)
         self.assertNotIn("nl_fingerprint_files", leaf)
         self.assertTrue(all(name.endswith(".fory")
                             for name in leaf["model_files"].values()))
@@ -327,29 +248,6 @@ class TestPyforyRebuildBackend(unittest.TestCase):
         self.assertTrue(resumed["resumed"])
         self.assertEqual(resumed["resume_iteration"], self.STOP)
         self.assertEqual(resumed["state"], _flat_snapshot(reference))
-
-    def test_component_fingerprint_cache_is_used_for_write_and_resume(self):
-        writer = _make_ph(self._options(
-            1, checkpoint_component_fingerprint_cache=True))
-        writer.ph_main()
-
-        leaf, snapshots = checkpointing.load_checkpoint(writer, self.ckpt_dir)
-        self.assertEqual(leaf["backend"],
-                         checkpointing.PYFORY_REBUILD_BACKEND)
-        for snapshot in snapshots.values():
-            self.assertEqual(snapshot["model_fingerprint_version"], 2)
-        self.assertTrue(writer._pyfory_rebuild_fingerprint_cache)
-
-        resumed = _make_ph(self._options(
-            0, resume_from=self.ckpt_dir,
-            checkpoint_component_fingerprint_cache=True))
-        resumed.PH_Prep()
-        resumed.Iter0()
-        self.assertEqual(resumed._resume_iteration, 1)
-        self.assertTrue(resumed._pyfory_rebuild_fingerprint_cache)
-        self.assertTrue(all(
-            resumed._pyfory_rebuild_fingerprint_cache.get(sname)
-            for sname in SCENARIO_NAMES))
 
     def test_cross_backend_writes_decode_from_the_manifest(self):
         dill_run = _make_ph(_options(
@@ -788,10 +686,6 @@ class TestRebuildNLFingerprint(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "requires the pyfory-rebuild"):
             checkpointing.require_checkpoint_structural_cfg(options)
 
-        options["checkpoint_backend"] = checkpointing.PYFORY_REBUILD_BACKEND
-        options["checkpoint_component_fingerprint_cache"] = True
-        with self.assertRaisesRegex(RuntimeError, "cannot be combined"):
-            checkpointing.require_checkpoint_structural_cfg(options)
 
 
 @unittest.skipIf(not solver_available,
@@ -862,9 +756,6 @@ class TestPyforyRebuildNLFingerprint(unittest.TestCase):
                 expected_digests[sname] = stream.read()[:-1].decode("ascii")
         self.assertEqual(loaded_leaf["nl_fingerprints"], expected_digests)
         self.assertEqual(set(snapshots), set(writer.local_scenarios))
-        for snapshot in snapshots.values():
-            self.assertNotIn("model_fingerprint", snapshot)
-            self.assertNotIn("model_fingerprint_version", snapshot)
 
         # The runtime flag is off in the child. Restore must still validate by
         # the method saved in the checkpoint leaf.
@@ -930,7 +821,7 @@ class TestPyforyRebuildNLFingerprint(unittest.TestCase):
         objective.set_value(objective_expr + 1)
         with self.assertRaisesRegex(checkpointing.CheckpointMismatch,
                                     "NL formulation.*does not match"):
-            checkpointing.validate_rebuild_model_fingerprints(
+            checkpointing.validate_rebuild_model_state(
                 writer, snapshots,
                 fingerprint_method=leaf["model_fingerprint_method"],
                 nl_fingerprints=leaf["nl_fingerprints"])
@@ -946,7 +837,7 @@ class TestPyforyRebuildNLFingerprint(unittest.TestCase):
         with self.assertRaisesRegex(
                 checkpointing.CheckpointMismatch,
                 r"checkpoint snapshot \(mutable_param_values\)"):
-            checkpointing.validate_rebuild_model_fingerprints(
+            checkpointing.validate_rebuild_model_state(
                 writer, snapshots,
                 fingerprint_method=leaf["model_fingerprint_method"],
                 nl_fingerprints=leaf["nl_fingerprints"])
@@ -993,44 +884,3 @@ class TestPyforyRebuildDependency(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "requires pyfory"):
                 checkpointing.require_backend_dependency(
                     checkpointing.PYFORY_REBUILD_BACKEND)
-
-
-class TestIntegerRelaxThenEnforceRebuildFingerprint(unittest.TestCase):
-    def _model(self):
-        import pyomo.environ as pyo
-
-        model = pyo.ConcreteModel()
-        model.x = pyo.Var(domain=pyo.NonNegativeIntegers, bounds=(0, 10))
-        model.obj = pyo.Objective(expr=model.x)
-        model._solver_plugin = None
-        return model
-
-    def _extension(self, scenarios, resumed):
-        from mpisppy.extensions.integer_relax_then_enforce import (
-            IntegerRelaxThenEnforce,
-        )
-
-        opt = types.SimpleNamespace(
-            options={"integer_relax_then_enforce_options": {"ratio": 0.5}},
-            local_scenarios=scenarios,
-            cylinder_rank=0,
-            _resumed_from_checkpoint=resumed,
-        )
-        return IntegerRelaxThenEnforce(opt)
-
-    def test_relaxation_undo_map_has_a_stable_model_fingerprint(self):
-        import pyomo.environ as pyo
-
-        m = self._model()
-        self._extension({"s": m}, resumed=False).pre_iter0()
-        original = checkpointing._rebuild_model_fingerprint(m)
-
-        rebuilt = m.clone()
-        self.assertEqual(original,
-                         checkpointing._rebuild_model_fingerprint(rebuilt))
-
-        undo_map = rebuilt._relaxed_integer_vars[None]
-        key, (var, _) = next(iter(undo_map.items()))
-        undo_map[key] = (var, pyo.Binary)
-        self.assertNotEqual(original,
-                            checkpointing._rebuild_model_fingerprint(rebuilt))

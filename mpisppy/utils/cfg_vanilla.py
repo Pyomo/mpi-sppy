@@ -980,8 +980,6 @@ def add_checkpointing(cylinder_dict, cfg, role="hub"):
             {"checkpoint_dir": cfg.get("checkpoint_dir", None),
              "checkpoint_backend": cfg.checkpoint_backend,
              "checkpoint_every_iterations": cfg.checkpoint_every_iterations,
-             "checkpoint_component_fingerprint_cache":
-                 cfg.checkpoint_component_fingerprint_cache,
              "checkpoint_nl_fingerprint":
                  cfg.checkpoint_nl_fingerprint,
              # Forwarded to the spokes too, which ignore it: they write

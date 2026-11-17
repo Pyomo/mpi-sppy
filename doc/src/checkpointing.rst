@@ -113,8 +113,7 @@ There are seven, and they are the whole interface:
 ``--checkpoint-nl-fingerprint``
    For ``pyfory-rebuild``, save a SHA-256 digest of each scenario's active NL
    solver formulation and compare it after rebuilding on resume. The method is
-   saved with the checkpoint, so resume follows the saved method. This option
-   cannot be combined with ``--checkpoint-component-fingerprint-cache``.
+   saved with the checkpoint, so resume follows the saved method.
 
 pyfory-reload
 ~~~~~~~~~~~~~
@@ -179,31 +178,16 @@ and before solver creation. The regular ``checkpoint_state()`` and
 contract is needed because rebuilding a model cannot recover arbitrary cuts,
 constraints, or objective edits made during a previous run.
 
-For models whose graph changes are explicitly tracked, the opt-in
-``--checkpoint-component-fingerprint-cache`` reuses unchanged component
-fingerprints between writes. PH marks its linearized proximal-cut component
-dirty when it adds cuts. Any user or extension code that edits a fingerprinted
-component must call
-``mpisppy.utils.checkpointing.mark_rebuild_model_fingerprint_dirty(opt,
-scenario, component_name)`` after the edit. Pass ``None`` as
-``component_name`` to invalidate the scenario's full cache. ``scenario`` may
-be the model or its key in ``opt.local_scenarios``. Marking a Set invalidates
-the full scenario because other components may use it as a domain; use
-``None`` for other edits that affect multiple components. Component additions
-and removals are detected during the component scan; edits to an existing
-component's expressions, bounds, domains, active state, or data require dirty
-marking. The option changes the saved graph fingerprint format; readers accept
-both the original and cached formats. Leave the option disabled when all graph
-edits cannot be tracked. Resume always recomputes the full graph fingerprint.
+By default, the backend compares the saved state snapshot with the rebuilt
+model after restoration. It does not fingerprint the full Pyomo model graph.
 
 ``--checkpoint-nl-fingerprint`` stores one ``.nl.sha256`` file per scenario.
-It is an alternative to the graph fingerprint and cannot be combined with the
-component fingerprint cache. The digest covers Pyomo's active NL solver
-formulation, written with sorted symbols and symbolic labels. This check can
-miss changes to inactive components, Sets that do not affect active
-expressions, unused named expressions, and the integer-relaxation undo map.
-Use it as a narrower formulation check alongside the existing state snapshot
-comparison, not as a complete Pyomo graph comparison.
+The digest covers Pyomo's active NL solver formulation, written with sorted
+symbols and symbolic labels. This check can miss changes to inactive
+components, Sets that do not affect active expressions, unused named
+expressions, and the integer-relaxation undo map.
+Use it as a formulation check alongside the existing state snapshot
+comparison.
 
 The codec uses bounded pyfory graph limits (depth 10,000 and a 1 GiB graph
 budget). The state-only payload is designed to reduce model-file size and

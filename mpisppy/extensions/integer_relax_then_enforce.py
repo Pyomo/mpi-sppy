@@ -65,11 +65,9 @@ class IntegerRelaxThenEnforce(RebuildSafeNoModelChanges):
                 if self._integers_relaxed:
                     # Recreate Pyomo's undo Suffix before the rest of the
                     # rebuilt model is overlaid and before the solver is made.
-                    for sname, scenario in self.opt.local_scenarios.items():
+                    for scenario in self.opt.local_scenarios.values():
                         if not hasattr(scenario, "_relaxed_integer_vars"):
                             self.integer_relaxer.apply_to(scenario)
-                            checkpointing.mark_rebuild_model_fingerprint_dirty(
-                                self.opt, sname)
                     global_toc(
                         f"{self.__class__.__name__}: resuming with "
                         "integrality still relaxed",
@@ -111,10 +109,8 @@ class IntegerRelaxThenEnforce(RebuildSafeNoModelChanges):
                            self.opt.cylinder_rank == 0)
             return
         global_toc(f"{self.__class__.__name__}: relaxing integrality constraints", self.opt.cylinder_rank == 0)
-        for sname, s in self.opt.local_scenarios.items():
+        for s in self.opt.local_scenarios.values():
             self.integer_relaxer.apply_to(s)
-            checkpointing.mark_rebuild_model_fingerprint_dirty(
-                self.opt, sname)
         self._integers_relaxed = True
 
     def checkpoint_model_state(self):
@@ -145,14 +141,12 @@ class IntegerRelaxThenEnforce(RebuildSafeNoModelChanges):
         self._integers_relaxed = state["integers_relaxed"]
 
     def _unrelax_integers(self):
-        for sname, sub in self.opt.local_scenarios.items():
+        for sub in self.opt.local_scenarios.values():
             subproblem_solver = sub._solver_plugin
             vlist = None
             if is_persistent(subproblem_solver):
                 vlist = [v for v,d in sub._relaxed_integer_vars[None].values()]
             self.integer_relaxer.apply_to(sub, options={"undo":True})
-            checkpointing.mark_rebuild_model_fingerprint_dirty(
-                self.opt, sname)
             if is_persistent(subproblem_solver):
                 for v in vlist:
                     subproblem_solver.update_var(v)

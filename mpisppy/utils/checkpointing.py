@@ -35,7 +35,6 @@ import os
 import pickle
 import re
 import shutil
-import struct
 import time
 import uuid
 import numbers
@@ -46,10 +45,6 @@ from decimal import Decimal, InvalidOperation
 
 import numpy as np
 from pyomo.common.dependencies import attempt_import
-from pyomo.core.base.set import RangeSet, Set, UnknownSetDimen
-from pyomo.core.expr.numvalue import NumericConstant
-from pyomo.core.expr.numeric_expr import (
-    ExternalFunctionExpression, UnaryFunctionExpression)
 
 import mpisppy.MPI as MPI
 import mpisppy.utils.pickle_bundle as pickle_bundle
@@ -68,7 +63,6 @@ DILL_RELOAD_BACKEND = "dill-reload"
 PYFORY_REBUILD_BACKEND = "pyfory-rebuild"
 PYFORY_RELOAD_BACKEND = "pyfory-reload"
 LEAF_BACKEND = "leaf"
-GRAPH_FINGERPRINT_METHOD = "graph"
 NL_FINGERPRINT_METHOD = "nl-sha256"
 
 
@@ -123,7 +117,7 @@ NON_STRUCTURAL_CFG_KEYS = frozenset({
     # cadence knob like the iteration limit: it changes what a stop costs, not
     # what problem the checkpoint describes.
     "checkpoint_dir", "checkpoint_backend", "checkpoint_every_iterations",
-    "checkpoint_before_seconds", "checkpoint_component_fingerprint_cache",
+    "checkpoint_before_seconds",
     "checkpoint_nl_fingerprint",
     "resume_from",
     # Display, logging and output destinations.
@@ -236,22 +230,12 @@ def require_checkpoint_structural_cfg(options):
             "options['checkpoint_structural_cfg'] to describe the model "
             "creator and its structural inputs. The generic-cylinder path "
             "sets it automatically.")
-    if options.get("checkpoint_component_fingerprint_cache", False) and \
-            options.get("checkpoint_backend", DILL_RELOAD_BACKEND) != \
-            PYFORY_REBUILD_BACKEND:
-        raise RuntimeError(
-            "checkpoint_component_fingerprint_cache requires the "
-            "pyfory-rebuild checkpoint backend.")
     if options.get("checkpoint_nl_fingerprint", False):
         if options.get("checkpoint_backend", DILL_RELOAD_BACKEND) != \
                 PYFORY_REBUILD_BACKEND:
             raise RuntimeError(
                 "checkpoint_nl_fingerprint requires the pyfory-rebuild "
                 "checkpoint backend.")
-        if options.get("checkpoint_component_fingerprint_cache", False):
-            raise RuntimeError(
-                "checkpoint_nl_fingerprint cannot be combined with "
-                "checkpoint_component_fingerprint_cache.")
     if not isinstance(options["checkpoint_structural_cfg"], dict):
         raise RuntimeError(
             "options['checkpoint_structural_cfg'] must be a dict of stable "
@@ -694,263 +678,6 @@ def _snapshot_rebuild_model(scenario):
     }
 
 
-def _fingerprint_field(digest, tag, payload=b""):
-    """Add one length-delimited field to a canonical state fingerprint."""
-    digest.update(tag)
-    digest.update(len(payload).to_bytes(8, "big"))
-    digest.update(payload)
-
-
-def _fingerprint_snapshot_value(digest, value):
-    """Hash the plain-data snapshot without relying on dict insertion order."""
-    if isinstance(value, np.ndarray):
-        if value.dtype.hasobject:
-            raise TypeError("Object arrays cannot be fingerprinted safely")
-        array_value = np.ascontiguousarray(value)
-        metadata = (value.dtype.str + ":" +
-                    ",".join(str(size) for size in value.shape)).encode(
-                        "ascii")
-        _fingerprint_field(digest, b"A", metadata)
-        _fingerprint_field(digest, b"a", array_value.tobytes(order="C"))
-    elif isinstance(value, np.generic):
-        _fingerprint_snapshot_value(digest, value.item())
-    elif value is None:
-        _fingerprint_field(digest, b"N")
-    elif isinstance(value, bool):
-        _fingerprint_field(digest, b"B", b"1" if value else b"0")
-    elif isinstance(value, int):
-        _fingerprint_field(digest, b"I", str(value).encode("ascii"))
-    elif isinstance(value, float):
-        _fingerprint_field(digest, b"F", struct.pack("!d", value))
-    elif isinstance(value, Decimal):
-        _fingerprint_field(digest, b"D", str(value).encode("ascii"))
-    elif isinstance(value, str):
-        _fingerprint_field(digest, b"S", value.encode("utf-8"))
-    elif isinstance(value, bytes):
-        _fingerprint_field(digest, b"Y", value)
-    elif isinstance(value, (tuple, list)):
-        _fingerprint_field(
-            digest, b"T" if isinstance(value, tuple) else b"L",
-            len(value).to_bytes(8, "big"))
-        for item in value:
-            _fingerprint_snapshot_value(digest, item)
-    elif isinstance(value, dict):
-        _fingerprint_field(digest, b"M", len(value).to_bytes(8, "big"))
-        # Snapshot mapping keys are strings, integers, or safe index tuples.
-        # Their repr is stable and avoids comparing unlike key types.
-        for key in sorted(
-                value,
-                key=lambda item: (type(item).__module__,
-                                  type(item).__qualname__, repr(item))):
-            _fingerprint_snapshot_value(digest, key)
-            _fingerprint_snapshot_value(digest, value[key])
-    else:
-        raise TypeError(
-            "Unsupported value in pyfory-rebuild model fingerprint: "
-            f"{type(value).__module__}.{type(value).__qualname__}")
-
-
-def _fingerprint_graph_value(digest, value):
-    """Hash an expression tree without evaluating mutable references."""
-    if isinstance(value, NumericConstant):
-        _fingerprint_field(digest, b"constant")
-        _fingerprint_snapshot_value(digest, value.value)
-    elif getattr(value, "is_component_type", lambda: False)():
-        _fingerprint_field(digest, b"reference", value.name.encode("utf-8"))
-    elif getattr(value, "is_expression_type", lambda: False)():
-        cls = type(value)
-        if isinstance(value, ExternalFunctionExpression):
-            raise TypeError(
-                "External functions cannot be fingerprinted by "
-                "pyfory-rebuild")
-        if (isinstance(value, UnaryFunctionExpression)
-                and getattr(value._fcn, "__module__", None)
-                not in ("math", "builtins")):
-            raise TypeError(
-                "Custom expression functions cannot be fingerprinted by "
-                "pyfory-rebuild")
-        if cls.__module__.startswith("pyomo.core.expr."):
-            _fingerprint_field(
-                digest, b"expression",
-                f"{cls.__module__}.{cls.__qualname__}".encode("utf-8"))
-            # UnaryFunctionExpression stores the operation outside its args.
-            if isinstance(value, UnaryFunctionExpression):
-                _fingerprint_field(
-                    digest, b"operation", value.getname().encode("utf-8"))
-            args = value.args
-            _fingerprint_field(digest, b"arity", len(args).to_bytes(8, "big"))
-            for arg in args:
-                _fingerprint_graph_value(digest, arg)
-        else:
-            raise TypeError(
-                "Unsupported expression in pyfory-rebuild fingerprint: "
-                f"{cls.__module__}.{cls.__qualname__}")
-    elif isinstance(value, (tuple, list)):
-        _fingerprint_field(digest, b"tuple" if isinstance(value, tuple)
-                           else b"list", len(value).to_bytes(8, "big"))
-        for item in value:
-            _fingerprint_graph_value(digest, item)
-    else:
-        _fingerprint_snapshot_value(digest, value)
-
-
-def _fingerprint_domain(digest, domain):
-    """Include custom finite domain members, not just the domain name."""
-    cls = type(domain)
-    _fingerprint_graph_value(digest, (
-        f"{cls.__module__}.{cls.__qualname__}", domain.name))
-    if domain.isfinite():
-        members = [_safe_index(item, domain.name) for item in domain]
-        if not domain.isordered():
-            members.sort(key=repr)
-        _fingerprint_graph_value(digest, tuple(members))
-
-
-def _add_pyomo_component_fingerprint(scenario, component, digest, pyo=None):
-    """Hash one supported Pyomo component, including inactive expressions."""
-    if pyo is None:
-        import pyomo.environ as pyo
-
-    name = component.name
-    _fingerprint_field(digest, b"component", name.encode("utf-8"))
-    cls = type(component)
-    _fingerprint_field(digest, b"type", f"{cls.__module__}."
-                       f"{cls.__qualname__}".encode("utf-8"))
-    _fingerprint_graph_value(digest, bool(component.active))
-    if isinstance(component, (pyo.BuildAction, pyo.BuildCheck)):
-        # These rules run during construction and store no model data.
-        # Fingerprint their effects through the components they created.
-        return
-    if isinstance(component, pyo.Suffix):
-        _fingerprint_graph_value(
-            digest, (int(component.direction),
-                     None if component.datatype is None else
-                     int(component.datatype)))
-        if name == "_relaxed_integer_vars" or name.endswith(
-                "._relaxed_integer_vars"):
-            # Pyomo stores the undo map at key None. Its inner keys are
-            # id(var), which change across a rebuild or model clone.
-            suffix_entries = list(component.items())
-            if (len(suffix_entries) != 1 or
-                    suffix_entries[0][0] is not None or
-                    not isinstance(suffix_entries[0][1], dict)):
-                raise TypeError(
-                    f"Unexpected integer-relaxation suffix '{name}'")
-            undo_map = suffix_entries[0][1]
-            relaxed = []
-            for entry in undo_map.values():
-                if not isinstance(entry, tuple) or len(entry) != 2:
-                    raise TypeError(
-                        f"Unexpected integer-relaxation entry in '{name}'")
-                var, original_domain = entry
-                if (not getattr(var, "is_variable_type", lambda: False)()
-                        or scenario.find_component(var.name) is not var):
-                    raise TypeError(
-                        f"Integer-relaxation suffix '{name}' refers to "
-                        "a variable outside its scenario")
-                relaxed.append((var.name, original_domain))
-            relaxed.sort(key=lambda entry: entry[0])
-            _fingerprint_field(digest, b"entries",
-                               len(relaxed).to_bytes(8, "big"))
-            for var_name, original_domain in relaxed:
-                _fingerprint_graph_value(digest, var_name)
-                _fingerprint_domain(digest, original_domain)
-        elif component.export_enabled():
-            entries = sorted(component.items(), key=lambda pair:
-                             pair[0].name)
-            _fingerprint_field(digest, b"entries",
-                               len(entries).to_bytes(8, "big"))
-            for key, value in entries:
-                _fingerprint_graph_value(digest, key)
-                _fingerprint_graph_value(digest, value)
-        else:
-            # IMPORT values are solver results, not part of the problem.
-            raise TypeError(
-                f"Non-export Suffix '{name}' may acquire state "
-                "that pyfory-rebuild does not restore")
-        return
-    if isinstance(component, (pyo.Set, pyo.RangeSet)):
-        # RangeSet is a scalar SetData component, not a pyo.Set, and
-        # does not expose the indexed component items() interface.
-        entries = ([(None, component)] if isinstance(component, pyo.RangeSet)
-                   else sorted(component.items(), key=lambda pair:
-                               repr(_safe_index(pair[0], name))))
-        for index, data in entries:
-            if not data.isfinite():
-                raise TypeError(f"Cannot fingerprint infinite Set '{name}'")
-            _fingerprint_graph_value(digest, _safe_index(index, name))
-            dimen = data.dimen
-            if dimen is UnknownSetDimen:
-                _fingerprint_field(digest, b"set-dimen-unknown")
-            else:
-                _fingerprint_graph_value(digest, dimen)
-            ordered = data.isordered()
-            _fingerprint_graph_value(digest, ordered)
-            members = [_safe_index(item, name) for item in data]
-            if not ordered:
-                members.sort(key=repr)
-            _fingerprint_graph_value(digest, tuple(members))
-        return
-    if not isinstance(component, (pyo.Block, pyo.Var, pyo.Param,
-                                  pyo.Constraint, pyo.Objective,
-                                  pyo.Expression, pyo.SOSConstraint)):
-        raise TypeError(
-            f"Unsupported Pyomo component in pyfory-rebuild "
-            f"fingerprint: '{name}' ({type(component).__name__})")
-    if isinstance(component, pyo.Param):
-        _fingerprint_graph_value(digest, bool(component.mutable))
-        _fingerprint_domain(digest, component.domain)
-    entries = sorted(component.items(), key=lambda pair: repr(
-        _safe_index(pair[0], name)))
-    _fingerprint_field(digest, b"entries",
-                       len(entries).to_bytes(8, "big"))
-    for index, data in entries:
-        _fingerprint_graph_value(digest, _safe_index(index, name))
-        if isinstance(component, pyo.Param):
-            # Immutable indexed Params yield native scalars, not ParamData.
-            if component.mutable:
-                _fingerprint_graph_value(digest, data.name)
-            else:
-                _fingerprint_snapshot_value(digest, pyo.value(data))
-            continue
-        _fingerprint_graph_value(digest, data.name)
-        _fingerprint_graph_value(
-            digest, bool(getattr(data, "active", True)))
-        if isinstance(component, pyo.Var):
-            _fingerprint_domain(digest, data.domain)
-            _fingerprint_graph_value(digest, data.lower)
-            _fingerprint_graph_value(digest, data.upper)
-        elif isinstance(component, pyo.Constraint):
-            _fingerprint_graph_value(digest, data.expr)
-        elif isinstance(component, pyo.Objective):
-            _fingerprint_graph_value(digest, int(data.sense))
-            _fingerprint_graph_value(digest, data.expr)
-        elif isinstance(component, pyo.Expression):
-            _fingerprint_graph_value(digest, data.expr)
-        elif isinstance(component, pyo.SOSConstraint):
-            _fingerprint_graph_value(digest, int(data.level))
-            _fingerprint_graph_value(digest, tuple(data.get_items()))
-
-
-def _add_pyomo_graph_fingerprint(scenario, digest):
-    """Hash supported Pyomo components, including inactive expressions."""
-    import pyomo.environ as pyo
-
-    components = sorted(
-        scenario.component_objects(descend_into=True, active=None),
-        key=lambda component: component.name)
-    for component in components:
-        _add_pyomo_component_fingerprint(scenario, component, digest, pyo)
-
-
-def _rebuild_model_fingerprint(scenario):
-    """Fingerprint the supported Pyomo graph."""
-    digest = hashlib.sha256()
-    digest.update(b"mpi-sppy pyfory-rebuild graph v1\0")
-    _add_pyomo_graph_fingerprint(scenario, digest)
-    return digest.hexdigest()
-
-
 class _HashingTextStream(io.TextIOBase):
     """Hash UTF-8 text as an NL writer emits it, without retaining the file."""
 
@@ -1012,105 +739,18 @@ def _rebuild_model_nl_fingerprint(scenario, timing=None):
     return stream.digest()
 
 
-def _rebuild_model_fingerprint_with_cache(scenario, component_cache,
-                                          dirty_components=None):
-    """Fingerprint the graph from cached per-component digests.
-
-    Component digests use the same canonical encoding as the uncached
-    fingerprint, then a versioned root hash combines the named component
-    digests. Callers that opt into caching must mark a component dirty whenever
-    any fingerprinted property of that component changes.
-    """
-    components = sorted(
-        scenario.component_objects(descend_into=True, active=None),
-        key=lambda component: component.name)
-    import pyomo.environ as pyo
-
-    dirty_components = dirty_components or set()
-    recompute_all = None in dirty_components
-    current_cache = {}
-    digest = hashlib.sha256()
-    digest.update(b"mpi-sppy pyfory-rebuild graph v2\0")
-    for component in components:
-        name = component.name
-        cached = component_cache.get(name)
-        if (not recompute_all and name not in dirty_components
-                and cached is not None and cached[0] is component):
-            component_digest = cached[1]
-        else:
-            component_hasher = hashlib.sha256()
-            _add_pyomo_component_fingerprint(
-                scenario, component, component_hasher, pyo)
-            component_digest = component_hasher.digest()
-        current_cache[name] = (component, component_digest)
-        _fingerprint_field(digest, b"component", name.encode("utf-8"))
-        _fingerprint_field(digest, b"digest", component_digest)
-    component_cache.clear()
-    component_cache.update(current_cache)
-    if isinstance(dirty_components, set):
-        dirty_components.clear()
-    return digest.hexdigest()
-
-
-def mark_rebuild_model_fingerprint_dirty(opt, scenario, component_name=None):
-    """Invalidate cached graph digests after changing a Pyomo component.
-
-    This API is for callers that explicitly enable
-    ``checkpoint_component_fingerprint_cache``. Omitting ``component_name``
-    invalidates every component in the named scenario. A changed Set also
-    invalidates the full scenario because Var and Param domain fingerprints
-    can include its members. Component data invalidates its parent component.
-    """
-    options = getattr(opt, "options", None) or {}
-    if not options.get("checkpoint_component_fingerprint_cache", False):
-        return
-    local_scenarios = opt.local_scenarios
-    if isinstance(scenario, str):
-        if scenario not in local_scenarios:
-            raise ValueError(f"Unknown local scenario '{scenario}'")
-        scenario_name = scenario
-        scenario_model = local_scenarios[scenario]
-    else:
-        scenario_name = next((name for name, model in
-                              local_scenarios.items() if model is scenario),
-                             None)
-        if scenario_name is None:
-            raise ValueError("Scenario is not in opt.local_scenarios")
-        scenario_model = scenario
-    if component_name is not None:
-        component = (scenario_model.find_component(component_name)
-                     if isinstance(component_name, str) else component_name)
-        if component is None or not hasattr(component, "parent_component"):
-            raise ValueError(f"Unknown Pyomo component {component_name!r}")
-        component = component.parent_component()
-        if (component is None or
-                scenario_model.find_component(component.name) is not component):
-            raise ValueError("Component is not in the scenario")
-        component_name = component.name
-        if isinstance(component, (Set, RangeSet)):
-            component_name = None
-    dirty_by_scenario = getattr(
-        opt, "_pyfory_rebuild_fingerprint_dirty", None)
-    if dirty_by_scenario is None:
-        dirty_by_scenario = {}
-        opt._pyfory_rebuild_fingerprint_dirty = dirty_by_scenario
-    dirty_by_scenario.setdefault(scenario_name, set()).add(component_name)
-
-
-def validate_rebuild_model_fingerprints(
-        opt, snapshots, fingerprint_method=GRAPH_FINGERPRINT_METHOD,
+def validate_rebuild_model_state(
+        opt, snapshots, fingerprint_method=None,
         nl_fingerprints=None):
-    """Refuse a rebuild whose saved formulation or restored state differs."""
+    """Check the restored state and any requested NL formulation digest."""
     timed = bool((getattr(opt, "options", None) or {}).get(
         "display_timing", False))
     rank = int(getattr(opt, "cylinder_rank", 0))
     started = time.perf_counter() if timed else None
     snapshot_s = snapshot_cpu_s = 0.0
-    fingerprint_s = fingerprint_cpu_s = 0.0
     nl_timing = _FileWriteTiming() if timed else None
     comparison_s = comparison_cpu_s = 0.0
-    if fingerprint_method not in (GRAPH_FINGERPRINT_METHOD,
-                                  NL_FINGERPRINT_METHOD):
+    if fingerprint_method not in (None, NL_FINGERPRINT_METHOD):
         raise CheckpointMismatch(
             f"The pyfory-rebuild checkpoint has unsupported model "
             f"fingerprint method {fingerprint_method!r}.")
@@ -1126,64 +766,12 @@ def validate_rebuild_model_fingerprints(
                         f"'{sname}' has no valid NL fingerprint.")
                 actual = _rebuild_model_nl_fingerprint(
                     scenario, timing=nl_timing)
-            else:
-                expected = snapshot.get("model_fingerprint")
-                if not isinstance(expected, str) or not re.fullmatch(
-                        r"[0-9a-f]{64}", expected):
+                if actual != expected:
                     raise CheckpointMismatch(
-                        f"The pyfory-rebuild checkpoint for scenario "
-                        f"'{sname}' has no valid model fingerprint.")
-                fingerprint_version = snapshot.get(
-                    "model_fingerprint_version", 1)
-                if type(fingerprint_version) is not int or \
-                        fingerprint_version not in (1, 2):
-                    raise CheckpointMismatch(
-                        f"The pyfory-rebuild checkpoint for scenario "
-                        f"'{sname}' has unsupported model fingerprint "
-                        f"version {fingerprint_version!r}.")
-                if timed:
-                    phase_started = time.perf_counter()
-                    phase_cpu_started = time.thread_time()
-                try:
-                    if fingerprint_version == 1:
-                        actual = _rebuild_model_fingerprint(scenario)
-                    else:
-                        use_cache = bool((getattr(opt, "options", None) or {}).get(
-                            "checkpoint_component_fingerprint_cache", False))
-                        caches = getattr(
-                            opt, "_pyfory_rebuild_fingerprint_cache", None)
-                        if caches is None:
-                            caches = {}
-                            opt._pyfory_rebuild_fingerprint_cache = caches
-                        cache = caches.setdefault(sname, {}) if use_cache else {}
-                        dirty_by_scenario = getattr(
-                            opt, "_pyfory_rebuild_fingerprint_dirty", {})
-                        dirty = dirty_by_scenario.setdefault(sname, set()) \
-                            if use_cache else set()
-                        if use_cache:
-                            # Resume validation always starts from the rebuilt
-                            # graph. Seed later writes only with this fresh walk.
-                            dirty.add(None)
-                        actual = _rebuild_model_fingerprint_with_cache(
-                            scenario, cache, dirty)
-                finally:
-                    if timed:
-                        fingerprint_s += time.perf_counter() - phase_started
-                        fingerprint_cpu_s += (
-                            time.thread_time() - phase_cpu_started)
-            if actual != expected:
-                if fingerprint_method == NL_FINGERPRINT_METHOD:
-                    what = "NL formulation"
-                else:
-                    what = "pyomo model"
-                raise CheckpointMismatch(
-                    f"The rebuilt {what} for scenario '{sname}' does not "
-                    f"match its checkpoint fingerprint "
-                    f"(expected {expected}, got {actual}).")
-            saved_state = {
-                key: value for key, value in snapshot.items()
-                if key not in ("model_fingerprint",
-                               "model_fingerprint_version")}
+                        f"The rebuilt NL formulation for scenario '{sname}' "
+                        f"does not match its checkpoint fingerprint "
+                        f"(expected {expected}, got {actual}).")
+            saved_state = snapshot
             if timed:
                 phase_started = time.perf_counter()
                 phase_cpu_started = time.thread_time()
@@ -1223,8 +811,6 @@ def validate_rebuild_model_fingerprints(
                 f"scenarios={len(opt.local_scenarios)} "
                 f"snapshot_s={snapshot_s:.6f} "
                 f"snapshot_cpu_s={snapshot_cpu_s:.6f} "
-                f"graph_fingerprint_s={fingerprint_s:.6f} "
-                f"graph_fingerprint_cpu_s={fingerprint_cpu_s:.6f} "
                 f"nl_write_s={nl_timing.nl_write_s if timed else 0.0:.6f} "
                 f"nl_write_cpu_s="
                 f"{nl_timing.nl_write_cpu_s if timed else 0.0:.6f} "
@@ -1238,7 +824,7 @@ def validate_rebuild_model_fingerprints(
 
 
 def finalize_and_validate_rebuild_model_state(
-        opt, snapshots, fingerprint_method=GRAPH_FINGERPRINT_METHOD,
+        opt, snapshots, fingerprint_method=None,
         nl_fingerprints=None):
     """Restore Pyomo's stale flags after setup, then check the rebuilt model."""
     for sname, scenario in opt.local_scenarios.items():
@@ -1248,7 +834,7 @@ def finalize_and_validate_rebuild_model_state(
                 raise CheckpointMismatch(
                     f"The rebuilt scenario '{sname}' has no variable '{name}'.")
             var.stale = stale
-    validate_rebuild_model_fingerprints(
+    validate_rebuild_model_state(
         opt, snapshots, fingerprint_method=fingerprint_method,
         nl_fingerprints=nl_fingerprints)
 
@@ -1606,8 +1192,6 @@ class _FileWriteTiming:
 
     snapshot_s: float = 0.0
     snapshot_cpu_s: float = 0.0
-    graph_fingerprint_s: float = 0.0
-    graph_fingerprint_cpu_s: float = 0.0
     nl_write_s: float = 0.0
     nl_write_cpu_s: float = 0.0
     nl_digest_s: float = 0.0
@@ -2200,7 +1784,6 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
     probe_started = time.perf_counter() if timed else None
     encode_s = decode_s = encode_cpu_s = decode_cpu_s = 0.0
     snapshot_s = snapshot_cpu_s = 0.0
-    fingerprint_s = fingerprint_cpu_s = 0.0
     clone_s = clone_cpu_s = 0.0
     overlay_s = overlay_cpu_s = 0.0
     failure = None
@@ -2296,31 +1879,10 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
                     scenario, timing=nl_timing)
                 clone_fingerprint = _rebuild_model_nl_fingerprint(
                     clone, timing=nl_timing)
-            else:
-                started = time.perf_counter() if timed else None
-                cpu_started = time.thread_time() if timed else None
-                try:
-                    original_fingerprint = _rebuild_model_fingerprint(
-                        scenario)
-                finally:
-                    if timed:
-                        fingerprint_s += time.perf_counter() - started
-                        fingerprint_cpu_s += (
-                            time.thread_time() - cpu_started)
-                started = time.perf_counter() if timed else None
-                cpu_started = time.thread_time() if timed else None
-                try:
-                    clone_fingerprint = _rebuild_model_fingerprint(clone)
-                finally:
-                    if timed:
-                        fingerprint_s += time.perf_counter() - started
-                        fingerprint_cpu_s += (
-                            time.thread_time() - cpu_started)
-            if clone_fingerprint != original_fingerprint:
-                what = "NL" if use_nl_fingerprint else "pyomo model"
-                raise RuntimeError(
-                    f"the decoded snapshot changed the {what} fingerprint "
-                    "when overlaid on a clone")
+                if clone_fingerprint != original_fingerprint:
+                    raise RuntimeError(
+                        "the decoded snapshot changed the NL fingerprint "
+                        "when overlaid on a clone")
         except Exception as exc:
             failure_reason = ("write its NL fingerprint for" if
                               use_nl_fingerprint else "encode")
@@ -2347,8 +1909,6 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
             f"deserialize_cpu_s={decode_cpu_s:.6f} "
             f"snapshot_s={snapshot_s:.6f} "
             f"snapshot_cpu_s={snapshot_cpu_s:.6f} "
-            f"graph_fingerprint_s={fingerprint_s:.6f} "
-            f"graph_fingerprint_cpu_s={fingerprint_cpu_s:.6f} "
             f"nl_write_s={nl_timing.nl_write_s if timed else 0.0:.6f} "
             f"nl_write_cpu_s="
             f"{nl_timing.nl_write_cpu_s if timed else 0.0:.6f} "
@@ -2832,11 +2392,8 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
         if _is_pyfory_backend(backend):
             leaf["write_id"] = write_id
         if backend == PYFORY_REBUILD_BACKEND:
-            leaf["model_fingerprint_method"] = (
-                NL_FINGERPRINT_METHOD if opt.options.get(
-                    "checkpoint_nl_fingerprint", False)
-                else GRAPH_FINGERPRINT_METHOD)
-            if leaf["model_fingerprint_method"] == NL_FINGERPRINT_METHOD:
+            if opt.options.get("checkpoint_nl_fingerprint", False):
+                leaf["model_fingerprint_method"] = NL_FINGERPRINT_METHOD
                 leaf["nl_fingerprint_files"] = nl_hash_files
             leaf["extension_model_state"] = gather_extension_model_state(opt)
         _atomic_write_bytes(
@@ -2898,9 +2455,6 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
             f"model_s={phase['model_s']:.6f} "
             f"snapshot_s={model_io.snapshot_s:.6f} "
             f"snapshot_cpu_s={model_io.snapshot_cpu_s:.6f} "
-            f"graph_fingerprint_s={model_io.graph_fingerprint_s:.6f} "
-            f"graph_fingerprint_cpu_s="
-            f"{model_io.graph_fingerprint_cpu_s:.6f} "
             f"nl_write_s={model_io.nl_write_s:.6f} "
             f"nl_write_cpu_s={model_io.nl_write_cpu_s:.6f} "
             f"nl_digest_s={model_io.nl_digest_s:.6f} "
@@ -3170,40 +2724,6 @@ def _write_models(opt, staging_dir, rank, backend, write_id=None,
                         (digest + "\n").encode("ascii")),
                     timing=nl_hash_file_timing,
                 )
-            else:
-                use_component_cache = bool(
-                    (getattr(opt, "options", None) or {}).get(
-                        "checkpoint_component_fingerprint_cache", False))
-                started = time.perf_counter() if timing is not None else None
-                cpu_started = time.thread_time() if timing is not None else None
-                try:
-                    if use_component_cache:
-                        caches = getattr(
-                            opt, "_pyfory_rebuild_fingerprint_cache", None)
-                        if caches is None:
-                            caches = {}
-                            opt._pyfory_rebuild_fingerprint_cache = caches
-                        dirty_by_scenario = getattr(
-                            opt, "_pyfory_rebuild_fingerprint_dirty", None)
-                        if dirty_by_scenario is None:
-                            dirty_by_scenario = {}
-                            opt._pyfory_rebuild_fingerprint_dirty = \
-                                dirty_by_scenario
-                        fingerprint = _rebuild_model_fingerprint_with_cache(
-                            s,
-                            caches.setdefault(sname, {}),
-                            dirty_by_scenario.setdefault(sname, set()),
-                        )
-                        snapshot["model_fingerprint_version"] = 2
-                    else:
-                        fingerprint = _rebuild_model_fingerprint(s)
-                finally:
-                    if timing is not None:
-                        timing.graph_fingerprint_s += (
-                            time.perf_counter() - started)
-                        timing.graph_fingerprint_cpu_s += (
-                            time.thread_time() - cpu_started)
-                snapshot["model_fingerprint"] = fingerprint
             _atomic_write_bytes(
                 os.path.join(staging_dir, fname),
                 lambda f, state=snapshot: _new_fory().dump(state, f),
@@ -3440,12 +2960,9 @@ def load_checkpoint(opt, ckpt_dir):
             "model files this rank's scenarios require, so it is stale or "
             "has been damaged.")
 
-    fingerprint_method = GRAPH_FINGERPRINT_METHOD
     if backend == PYFORY_REBUILD_BACKEND:
-        fingerprint_method = leaf.get(
-            "model_fingerprint_method", GRAPH_FINGERPRINT_METHOD)
-        if fingerprint_method not in (GRAPH_FINGERPRINT_METHOD,
-                                      NL_FINGERPRINT_METHOD):
+        fingerprint_method = leaf.get("model_fingerprint_method")
+        if fingerprint_method not in (None, NL_FINGERPRINT_METHOD):
             raise CheckpointMismatch(
                 f"The checkpoint state '{leaf_path}' has unsupported model "
                 f"fingerprint method {fingerprint_method!r}.")

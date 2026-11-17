@@ -228,9 +228,6 @@ class Config(pyofig.ConfigDict):
             if self.get("checkpoint_backend") != "pyfory-rebuild":
                 _bad_options("--checkpoint-nl-fingerprint requires "
                              "--checkpoint-backend pyfory-rebuild")
-            if self.get("checkpoint_component_fingerprint_cache", False):
-                _bad_options("--checkpoint-nl-fingerprint cannot be used "
-                             "with --checkpoint-component-fingerprint-cache")
 
         # Slamming options other than the directives file are meaningless
         # without it; require the file so that a run with no slamming options
@@ -853,14 +850,6 @@ class Config(pyofig.ConfigDict):
                            "requires pyfory==1.7.7 and extension opt-in)",
                            domain=str,
                            default="dill-reload")
-
-        self.add_to_config("checkpoint_component_fingerprint_cache",
-                           description="cache pyfory-rebuild component graph "
-                           "fingerprints between writes; callers that edit a "
-                           "model component must mark it dirty through the "
-                           "checkpointing API (default False)",
-                           domain=bool,
-                           default=False)
 
         self.add_to_config("checkpoint_nl_fingerprint",
                            description="compare the active Pyomo NL solver "
