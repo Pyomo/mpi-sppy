@@ -1,17 +1,14 @@
-# Pyfory reload review scripts
+# Pyfory checkpoint review scripts
 
 Run these scripts from the repository root with the local virtual environment.
 They use a single process; no MPI launcher is needed.
 
 ```sh
-.venv/bin/python pyfory_review_models.py
-.venv/bin/python mpisppy/tests/pyfory/pyfory_review_models.py
 .venv/bin/python mpisppy/tests/pyfory/pyfory_time_case.py
 ```
 
-The first two commands run the same maintained model probe. The time case
-compares pyfory with dill and asserts that the full `datetime.time` value is
-restored.
+The time case compares pyfory with dill and asserts that the full
+`datetime.time` value is restored.
 
 The callback case uses two separate Python processes and a shared temporary
 directory. The reader asserts that both backends restore a callback defined

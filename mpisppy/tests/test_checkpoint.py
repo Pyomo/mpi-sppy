@@ -201,6 +201,36 @@ class RebuildSafeStateExtension(Extension):
         self.restored_model_state = state
 
 
+class RebuildMissingModelStateHooksExtension(Extension):
+    """Declare rebuild support without implementing its model-state hooks."""
+
+    checkpoint_rebuild_safe = True
+
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
+
+
+class RebuildUnencodableModelStateExtension(Extension):
+    """Return model state outside the plain pyfory checkpoint format."""
+
+    checkpoint_rebuild_safe = True
+
+    def checkpoint_state(self):
+        return None
+
+    def restore_state(self, state):
+        pass
+
+    def checkpoint_model_state(self):
+        return object()
+
+    def restore_checkpoint_model_state(self, state):
+        pass
+
+
 class CheckpointPayloadExtension(Extension):
     """A nested extension-object state payload used by backend tests."""
 
@@ -472,6 +502,10 @@ def _extension_class(name):
         return StateRecorder
     if name == "rebuild_safe":
         return RebuildSafeStateExtension
+    if name == "rebuild_missing_model_state_hooks":
+        return RebuildMissingModelStateHooksExtension
+    if name == "rebuild_unencodable_model_state":
+        return RebuildUnencodableModelStateExtension
     if name == "checkpoint_payload":
         return CheckpointPayloadExtension
     if name == "coeff_rho":
@@ -494,7 +528,7 @@ def _extension_class(name):
 
 
 def _make_ph(options, scenario_names=None, extension_name=None,
-             extra_names=()):
+             extra_names=(), scenario_creator_kwargs=None):
     classes = []
     if "checkpoint_dir" in options:
         classes.append(Checkpointer)
@@ -517,7 +551,9 @@ def _make_ph(options, scenario_names=None, extension_name=None,
             scenario_names if scenario_names is not None else SCENARIO_NAMES,
             farmer.scenario_creator,
             farmer.scenario_denouement,
-            scenario_creator_kwargs=CREATOR_KWARGS,
+            scenario_creator_kwargs=(CREATOR_KWARGS
+                                     if scenario_creator_kwargs is None
+                                     else scenario_creator_kwargs),
             extensions=extensions,
             extension_kwargs=extension_kwargs,
         )
@@ -526,7 +562,9 @@ def _make_ph(options, scenario_names=None, extension_name=None,
         scenario_names if scenario_names is not None else SCENARIO_NAMES,
         farmer.scenario_creator,
         farmer.scenario_denouement,
-        scenario_creator_kwargs=CREATOR_KWARGS,
+        scenario_creator_kwargs=(CREATOR_KWARGS
+                                 if scenario_creator_kwargs is None
+                                 else scenario_creator_kwargs),
         extensions=extensions,
     )
 
@@ -1108,6 +1146,29 @@ class TestPyforyRebuildBackend(unittest.TestCase):
         self.assertEqual(resumed["resume_iteration"], self.STOP)
         self.assertEqual(resumed["state"], _flat_snapshot(reference))
 
+    def test_component_fingerprint_cache_is_used_for_write_and_resume(self):
+        writer = _make_ph(self._options(
+            1, checkpoint_component_fingerprint_cache=True))
+        writer.ph_main()
+
+        leaf, snapshots = checkpointing.load_checkpoint(writer, self.ckpt_dir)
+        self.assertEqual(leaf["backend"],
+                         checkpointing.PYFORY_REBUILD_BACKEND)
+        for snapshot in snapshots.values():
+            self.assertEqual(snapshot["model_fingerprint_version"], 2)
+        self.assertTrue(writer._pyfory_rebuild_fingerprint_cache)
+
+        resumed = _make_ph(self._options(
+            0, resume_from=self.ckpt_dir,
+            checkpoint_component_fingerprint_cache=True))
+        resumed.PH_Prep()
+        resumed.Iter0()
+        self.assertEqual(resumed._resume_iteration, 1)
+        self.assertTrue(resumed._pyfory_rebuild_fingerprint_cache)
+        self.assertTrue(all(
+            resumed._pyfory_rebuild_fingerprint_cache.get(sname)
+            for sname in SCENARIO_NAMES))
+
     def test_cross_backend_writes_decode_from_the_manifest(self):
         dill_run = _make_ph(_options(
             2, ckpt_dir=self.ckpt_dir,
@@ -1258,6 +1319,43 @@ class TestPyforyRebuildBackend(unittest.TestCase):
         resumed.Iter0()
         self.assertEqual(cut_state(resumed), before)
 
+    def test_discrete_prox_cuts_are_replayed(self):
+        creator_kwargs = {"use_integer": True, "crops_multiplier": 1}
+        structural_cfg = {
+            "model": "test-farmer",
+            "creator_kwargs": dict(creator_kwargs),
+        }
+        writer = _make_ph(
+            self._options(
+                2, linearize_proximal_terms=True,
+                checkpoint_structural_cfg=structural_cfg),
+            scenario_creator_kwargs=creator_kwargs)
+        writer.ph_main()
+
+        before = {
+            sname: checkpointing._prox_approx_snapshot(scenario)
+            for sname, scenario in writer.local_scenarios.items()
+        }
+        self.assertTrue(any(
+            state["kind"] == "discrete" and state["cut_indices"]
+            for scenario in before.values()
+            for state in scenario.values()),
+            "the integer test run did not generate any discrete proximal cuts")
+
+        resumed = _make_ph(_options(
+            0, resume_from=self.ckpt_dir,
+            checkpoint_backend=checkpointing.PYFORY_REBUILD_BACKEND,
+            linearize_proximal_terms=True,
+            checkpoint_structural_cfg=structural_cfg),
+            scenario_creator_kwargs=creator_kwargs)
+        resumed.PH_Prep()
+        resumed.Iter0()
+        after = {
+            sname: checkpointing._prox_approx_snapshot(scenario)
+            for sname, scenario in resumed.local_scenarios.items()
+        }
+        self.assertEqual(after, before)
+
     def test_extension_must_opt_in_and_restore_model_state(self):
         unsafe = _make_ph(
             self._options(1), extension_name="recorder")
@@ -1282,6 +1380,24 @@ class TestPyforyRebuildBackend(unittest.TestCase):
         self.assertEqual(
             extension.restored_model_state["variable_name"],
             "rebuild_extension_marker")
+
+    def test_extension_rebuild_opt_in_requires_both_model_state_hooks(self):
+        unsafe = _make_ph(
+            self._options(1),
+            extension_name="rebuild_missing_model_state_hooks")
+        with self.assertRaisesRegex(
+                RuntimeError,
+                "does not implement both checkpoint model-state hooks"):
+            unsafe.ph_main()
+
+    def test_extension_model_state_must_be_encodable_by_pyfory(self):
+        unencodable = _make_ph(
+            self._options(1),
+            extension_name="rebuild_unencodable_model_state")
+        with self.assertRaisesRegex(
+                RuntimeError,
+                "cannot encode model state from extension '"):
+            unencodable.ph_main()
 
     def test_late_extension_structure_and_values_restore_in_a_fresh_process(
             self):
@@ -1347,6 +1463,27 @@ class TestPyforyRebuildBackend(unittest.TestCase):
                 f"scenario '{scenario.name}'.*mutable Param "
                 "'checkpoint_unsupported' index None.*builtins.object"):
             checkpointing._snapshot_rebuild_model(scenario)
+
+    def test_malformed_rebuild_snapshots_are_rejected(self):
+        ph = _make_ph(self._options(1))
+        ph.PH_Prep()
+        scenario = next(iter(ph.local_scenarios.values()))
+        snapshot = checkpointing._snapshot_rebuild_model(scenario)
+
+        bad_version = copy.deepcopy(snapshot)
+        bad_version["state_version"] += 1
+        with self.assertRaisesRegex(
+                checkpointing.CheckpointMismatch, "state version"):
+            checkpointing._restore_rebuild_model_values(
+                scenario, bad_version)
+
+        bad_values = copy.deepcopy(snapshot)
+        bad_values["variable_values"]["kinds"] = []
+        with self.assertRaisesRegex(
+                checkpointing.CheckpointMismatch,
+                "inconsistent variable state"):
+            checkpointing._restore_rebuild_model_values(
+                scenario, bad_values)
 
     def test_extension_object_payload_is_restored(self):
         writer = _make_ph(

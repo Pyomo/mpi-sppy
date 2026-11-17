@@ -52,6 +52,11 @@ class _SlottedPayload:
         self.value = value
 
 
+class _CustomReductionPayload:
+    def __reduce_ex__(self, protocol):
+        return type(self), ()
+
+
 class _ListPayload(list):
     pass
 
@@ -116,6 +121,23 @@ class TestPyforyModelCodec(unittest.TestCase):
         self.assertNotIn("new", saved_keys)
         owner["new"] = 9
         self.assertEqual(list(owner)[-1], "new")
+
+    def test_pyomo_global_set_uses_its_registered_identity(self):
+        model = pyo.ConcreteModel()
+        model.x = pyo.Var(domain=pyo.NonNegativeReals)
+        stream = io.BytesIO()
+        codec.dump(model, stream)
+
+        restored = codec.load(io.BytesIO(stream.getvalue()))
+
+        self.assertIs(restored.x.domain, pyo.NonNegativeReals)
+
+    def test_custom_reduce_ex_is_rejected(self):
+        model = pyo.ConcreteModel()
+        model.custom_payload = _CustomReductionPayload()
+
+        with self.assertRaisesRegex(TypeError, "uses custom __reduce_ex__"):
+            codec.dump(model, io.BytesIO())
 
     def test_view_first_and_view_only_owners(self):
         for kind in ("keys", "values", "items"):

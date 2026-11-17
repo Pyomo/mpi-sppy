@@ -232,6 +232,18 @@ run_phase "test_checkpoint (serial)" \
 run_phase "test_checkpoint_extensions (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_checkpoint_extensions.py -v
 
+run_phase "test_pyfory_model_codec (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_pyfory_model_codec.py -v
+
+run_phase "pyfory time case (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/pyfory/pyfory_time_case.py
+
+run_phase "pyfory main-module callback roundtrip (serial)" \
+    bash -c 'case_dir=$(mktemp -d "${TMPDIR:-/tmp}/mpi-sppy-pyfory-main-XXXXXX") && trap '\''rm -rf "$case_dir"'\'' EXIT && coverage run --rcfile=.coveragerc mpisppy/tests/pyfory/pyfory_main_writer.py "$case_dir" && coverage run --rcfile=.coveragerc mpisppy/tests/pyfory/pyfory_main_reader.py "$case_dir"'
+
+run_phase "pyfory power CEP checkpoint resume (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/pyfory/pyfory_power_cep_resume.py
+
 run_phase "test_checkpoint_spoke_cursor (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_checkpoint_spoke_cursor.py -v
 

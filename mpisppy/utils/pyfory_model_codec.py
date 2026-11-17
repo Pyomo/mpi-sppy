@@ -17,6 +17,7 @@ import marshal
 import pathlib
 import struct
 import sys
+import time
 import types
 import uuid
 from collections import OrderedDict, defaultdict
@@ -139,6 +140,22 @@ def _restore_state(obj, state):
             raise TypeError(f"Cannot restore slot state of {type(obj)!r}")
         for name, value in slots.items():
             setattr(obj, name, value)
+
+
+def _reject_custom_reduction(cls, path, ignored_owners=()):
+    """Refuse classes whose pickle reduction behavior this codec would skip."""
+    methods = []
+    for name in ("__reduce__", "__reduce_ex__"):
+        owner = next((base for base in cls.__mro__ if name in base.__dict__),
+                     None)
+        if owner is None or owner is object or owner in ignored_owners or \
+                owner.__module__ == "builtins":
+            continue
+        methods.append(name)
+    if methods:
+        raise TypeError(
+            f"{path}: {cls!r} uses custom {', '.join(methods)}; "
+            "pyfory-reload does not support custom reduction methods")
 
 
 def _resolve(module, name):
@@ -722,6 +739,11 @@ def _discover(root, tables):
                     visit(obj.__dict__, path + ".__dict__")
             elif isinstance(obj, (tuple, list, set, frozenset)):
                 if cls not in (tuple, list, set, frozenset):
+                    # struct_time is a tuple subclass with a custom reduce
+                    # method, but its sequence data is sufficient for the
+                    # container adapter to recreate it.
+                    if cls is not time.struct_time:
+                        _reject_custom_reduction(cls, path)
                     classes.setdefault(cls, obj)
                     if hasattr(obj, "__dict__"):
                         instance_dicts[id(obj.__dict__)] = path
@@ -731,6 +753,8 @@ def _discover(root, tables):
             elif isinstance(obj, (Enum, logging.Logger,
                                   functools._lru_cache_wrapper,
                                   TrivialRelationalExpression)):
+                if isinstance(obj, Enum):
+                    _reject_custom_reduction(cls, path, (Enum,))
                 if cls is functools._lru_cache_wrapper and not _importable(obj):
                     raise TypeError("Local cached callable has no supported "
                                     "checkpoint adapter")
@@ -745,6 +769,11 @@ def _discover(root, tables):
                     cls.__module__.startswith("numpy"):
                 if native_types.get_type_info(cls, create=False) is not None:
                     return
+                # Explicit adapters may intentionally replace pickle's
+                # reduction protocol. GlobalSet's adapter preserves its
+                # singleton identity through Pyomo's global-set registry.
+                if _descriptor(cls, obj)["kind"] == "state":
+                    _reject_custom_reduction(cls, path)
                 classes.setdefault(cls, obj)
                 if hasattr(obj, "__dict__"):
                     instance_dicts[id(obj.__dict__)] = path
