@@ -1761,10 +1761,11 @@ def _clone_rebuild_probe_model(scenario):
 def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
     """Probe each local model codec before the run starts writing.
 
-    For pyfory-rebuild, the clone check proves that the core snapshot can be
-    decoded and overlaid on an equivalent Pyomo model. It does not prove that
-    future extension behavior is captured; rebuild hooks are checked for
-    encodable state here and their component layout is checked on resume.
+    For pyfory-rebuild, check that the snapshot survives a codec round trip.
+    With NL validation enabled, also check its overlay on a model clone.
+    This does not prove that future extension behavior is captured; rebuild
+    hooks are checked for encodable state here and their component layout is
+    checked on resume.
     """
     require_backend_dependency(backend)
     if backend == DILL_RELOAD_BACKEND:
@@ -1843,38 +1844,38 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
                     "pyfory changed the plain scenario state during a "
                     "fresh-reader round trip")
 
-            # Pyomo's clone is the closest safe startup check for the overlay:
-            # extension hooks may add structure, so the clone begins with the
-            # same already-configured structure as the live scenario.
-            started = time.perf_counter() if timed else None
-            cpu_started = time.thread_time() if timed else None
-            try:
-                clone = _clone_rebuild_probe_model(scenario)
-            finally:
-                if timed:
-                    clone_s += time.perf_counter() - started
-                    clone_cpu_s += time.thread_time() - cpu_started
-            started = time.perf_counter() if timed else None
-            cpu_started = time.thread_time() if timed else None
-            try:
-                _restore_rebuild_model_values(clone, restored)
-            finally:
-                if timed:
-                    overlay_s += time.perf_counter() - started
-                    overlay_cpu_s += time.thread_time() - cpu_started
-            started = time.perf_counter() if timed else None
-            cpu_started = time.thread_time() if timed else None
-            try:
-                clone_state = _snapshot_rebuild_model(clone)
-            finally:
-                if timed:
-                    snapshot_s += time.perf_counter() - started
-                    snapshot_cpu_s += time.thread_time() - cpu_started
-            if not _checkpoint_state_equal(clone_state, restored):
-                raise RuntimeError(
-                    "the decoded snapshot could not be overlaid on a clone "
-                    "of the configured scenario")
             if use_nl_fingerprint:
+                # Pyomo's clone is the closest safe startup check for the
+                # overlay: extension hooks may add structure, so the clone
+                # begins with the same configured structure as the scenario.
+                started = time.perf_counter() if timed else None
+                cpu_started = time.thread_time() if timed else None
+                try:
+                    clone = _clone_rebuild_probe_model(scenario)
+                finally:
+                    if timed:
+                        clone_s += time.perf_counter() - started
+                        clone_cpu_s += time.thread_time() - cpu_started
+                started = time.perf_counter() if timed else None
+                cpu_started = time.thread_time() if timed else None
+                try:
+                    _restore_rebuild_model_values(clone, restored)
+                finally:
+                    if timed:
+                        overlay_s += time.perf_counter() - started
+                        overlay_cpu_s += time.thread_time() - cpu_started
+                started = time.perf_counter() if timed else None
+                cpu_started = time.thread_time() if timed else None
+                try:
+                    clone_state = _snapshot_rebuild_model(clone)
+                finally:
+                    if timed:
+                        snapshot_s += time.perf_counter() - started
+                        snapshot_cpu_s += time.thread_time() - cpu_started
+                if not _checkpoint_state_equal(clone_state, restored):
+                    raise RuntimeError(
+                        "the decoded snapshot could not be overlaid on a "
+                        "clone of the configured scenario")
                 original_fingerprint = _rebuild_model_nl_fingerprint(
                     scenario, timing=nl_timing)
                 clone_fingerprint = _rebuild_model_nl_fingerprint(
