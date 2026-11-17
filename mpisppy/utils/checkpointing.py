@@ -536,6 +536,8 @@ def _safe_index(index, context=None):
 
 def _component_layout(scenario):
     """Describe model structure that scenario_creator/extensions rebuild."""
+    from pyomo.environ import Constraint
+
     layout = []
     for component in scenario.component_objects(descend_into=True,
                                                 active=None):
@@ -549,6 +551,9 @@ def _component_layout(scenario):
             type(component).__qualname__,
             int(size),
             bool(component.active),
+            tuple(sorted(data.name for data in component.values()
+                         if not data.active))
+            if isinstance(component, Constraint) else (),
         ))
     return sorted(layout)
 
@@ -1803,8 +1808,6 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
     if not _is_rebuild_backend(backend):
         raise ValueError(f"Unknown checkpoint backend '{backend}'.")
 
-    require_extension_rebuild_contract(opt)
-    extension_state = gather_extension_model_state(opt)
     timed = bool(opt.options.get("display_timing", False))
     use_nl_fingerprint = bool(opt.options.get(
         "checkpoint_nl_fingerprint", False))
@@ -1815,6 +1818,15 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
     clone_s = clone_cpu_s = 0.0
     overlay_s = overlay_cpu_s = 0.0
     failure = None
+    extension_state = {}
+    try:
+        require_extension_rebuild_contract(opt)
+        extension_state = gather_extension_model_state(opt)
+    except Exception as exc:
+        failure = RuntimeError(
+            "Checkpointing is enabled, but pyfory-rebuild cannot gather "
+            f"extension model state: {type(exc).__name__}: {exc}")
+        failure.__cause__ = exc
     for extension_name, model_state in extension_state.items():
         try:
             hook_payload = {extension_name: model_state}

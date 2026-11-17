@@ -170,6 +170,63 @@ class TestPyforyRebuildProbeClone(unittest.TestCase):
             self.assertIsInstance(copied._init_values._init.val, tuple)
 
 
+class TestRebuildConstraintActivity(unittest.TestCase):
+    def test_changed_indexed_constraint_activity_refuses_resume(self):
+        import pyomo.environ as pyo
+
+        def scenario():
+            model = pyo.ConcreteModel(name="scenario")
+            model.x = pyo.Var()
+            model.rows = pyo.Constraint(
+                [1, 2], rule=lambda m, index: m.x >= index)
+            model._mpisppy_data = types.SimpleNamespace(
+                inner_bound=None, outer_bound=None)
+            return model
+
+        saved = scenario()
+        saved.rows[2].deactivate()
+        snapshot = checkpointing._snapshot_rebuild_model(saved)
+        rebuilt = scenario()
+        opt = types.SimpleNamespace(local_scenarios={"scenario": rebuilt})
+
+        self.assertTrue(saved.rows.active)
+        self.assertTrue(rebuilt.rows.active)
+        with self.assertRaisesRegex(
+                checkpointing.CheckpointMismatch,
+                "does not have the same component structure"):
+            checkpointing.restore_rebuild_model_state(
+                opt, {"scenario": snapshot})
+
+        rebuilt.rows[2].deactivate()
+        checkpointing.restore_rebuild_model_state(
+            opt, {"scenario": snapshot})
+
+
+class TestRebuildProbeFailureAgreement(unittest.TestCase):
+    def test_extension_state_hook_failure_reaches_rank_agreement(self):
+        class RecordingComm:
+            agreed = False
+
+            def Allreduce(self, send, receive, op=None):
+                self.agreed = True
+                receive[:] = send
+
+        comm = RecordingComm()
+        opt = types.SimpleNamespace(
+            options={}, cylinder_rank=0, n_proc=2, mpicomm=comm,
+            local_scenarios={}, extobject=None)
+        with mock.patch.object(checkpointing, "require_backend_dependency"):
+            with mock.patch.object(
+                    checkpointing, "gather_extension_model_state",
+                    side_effect=ValueError("injected hook failure")):
+                with self.assertRaisesRegex(
+                        RuntimeError,
+                        "cannot gather extension model state.*injected hook failure"):
+                    checkpointing.probe_model_checkpointable(
+                        opt, checkpointing.PYFORY_REBUILD_BACKEND)
+        self.assertTrue(comm.agreed)
+
+
 @unittest.skipUnless(checkpointing.pyfory_available,
                      "pyfory is an optional checkpoint dependency")
 @unittest.skipUnless(solver_available,
