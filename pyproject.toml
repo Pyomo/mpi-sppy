@@ -67,8 +67,6 @@ extras = [
     "matplotlib",   # plotting in convergers, extensions, and examples
     "dill",         # pickled scenario bundles
     "mip",          # MPS/LP/SMPS file input (problem_io)
-]
-pyfory = [
     "pyfory>=1.7.7", # PH state snapshots
     "packaging",     # pyfory version comparison
 ]

@@ -331,7 +331,7 @@ def require_backend_dependency(backend):
         if not pyfory_available:
             raise RuntimeError(
                 "The '{}' checkpoint backend requires pyfory, which is not "
-                "installed. Install it with 'pip install mpi-sppy[pyfory]' "
+                "installed. Install it with 'pip install mpi-sppy[extras]' "
                 "or choose a different --checkpoint-backend.".format(backend)
             )
         from packaging.version import InvalidVersion, Version
@@ -349,7 +349,7 @@ def require_backend_dependency(backend):
                 f"The '{backend}' checkpoint backend requires pyfory "
                 f">={PYFORY_MIN_VERSION}, but this run has pyfory "
                 f"{installed_version}. Install a supported version with "
-                "'pip install mpi-sppy[pyfory]'."
+                "'pip install mpi-sppy[extras]'."
             )
     else:
         require_implemented_backend(backend)

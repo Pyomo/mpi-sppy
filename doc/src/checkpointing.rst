@@ -116,7 +116,7 @@ There are seven, and they are the whole interface:
 pyfory-rebuild
 ~~~~~~~~~~~~~~
 
-Install the optional dependency with ``pip install mpi-sppy[pyfory]``.
+Install the optional dependency with ``pip install mpi-sppy[extras]``.
 Setup requires pyfory 1.7.7 or newer. The checkpoint records pyfory's version
 and refuses to load with a different version. The codec stores only plain
 state data; it does not encode Pyomo objects.
@@ -643,7 +643,7 @@ needs the optional ``dill`` package::
   pip install mpi-sppy[extras]
 
 The ``pyfory-rebuild`` backend requires its optional dependency, installed
-with ``pip install mpi-sppy[pyfory]``. It does not serialize Pyomo models and
+with ``pip install mpi-sppy[extras]``. It does not serialize Pyomo models and
 follows the state-only limitations described in
 `pyfory-rebuild`_.
 
