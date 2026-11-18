@@ -910,10 +910,10 @@ class TestPyforyRebuildNLFingerprint(unittest.TestCase):
         original_manifest = checkpointing._read_manifest(self.ckpt_dir)
         original_atomic_write = checkpointing._atomic_write_bytes
 
-        def fail_nl_hash(path, callback, timing=None):
+        def fail_nl_hash(path, callback):
             if path.endswith(".nl.sha256"):
                 raise OSError("injected NL hash write failure")
-            return original_atomic_write(path, callback, timing=timing)
+            return original_atomic_write(path, callback)
 
         with mock.patch.object(checkpointing, "_atomic_write_bytes",
                                side_effect=fail_nl_hash):

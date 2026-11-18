@@ -35,11 +35,9 @@ import os
 import pickle
 import re
 import shutil
-import time
 import uuid
 from array import array
 from collections.abc import KeysView
-from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 import numpy as np
@@ -717,20 +715,13 @@ def _snapshot_rebuild_model(scenario):
 class _HashingTextStream(io.TextIOBase):
     """Hash UTF-8 text as an NL writer emits it, without retaining the file."""
 
-    def __init__(self, timing=None):
+    def __init__(self):
         self._hasher = hashlib.sha256()
-        self._timing = timing
 
     def write(self, text):
         if not isinstance(text, str):
             raise TypeError("NLWriter must write text")
-        started = time.perf_counter() if self._timing is not None else None
-        cpu_started = time.thread_time() if self._timing is not None else None
         self._hasher.update(text.encode("utf-8"))
-        if self._timing is not None:
-            self._timing.nl_digest_s += time.perf_counter() - started
-            self._timing.nl_digest_cpu_s += (
-                time.thread_time() - cpu_started)
         return len(text)
 
     def tell(self):
@@ -746,122 +737,69 @@ class _HashingTextStream(io.TextIOBase):
         return self._hasher.hexdigest()
 
 
-def _rebuild_model_nl_fingerprint(scenario, timing=None):
+def _rebuild_model_nl_fingerprint(scenario):
     """Hash Pyomo's deterministic NL text for the active scenario model."""
     from pyomo.repn.plugins.nl_writer import FileDeterminism, NLWriter
 
-    stream = _HashingTextStream(timing)
-    started = time.perf_counter() if timing is not None else None
-    cpu_started = time.thread_time() if timing is not None else None
-    try:
-        NLWriter().write(
-            scenario,
-            stream,
-            file_determinism=FileDeterminism.SORT_SYMBOLS,
-            symbolic_solver_labels=True,
-            linear_presolve=False,
-            skip_trivial_constraints=False,
-            show_section_timing=False,
-            scale_model=True,
-            export_nonlinear_variables=None,
-            row_order=None,
-            column_order=None,
-            export_defined_variables=True,
-        )
-    finally:
-        if timing is not None:
-            timing.nl_write_s += time.perf_counter() - started
-            timing.nl_write_cpu_s += time.thread_time() - cpu_started
+    stream = _HashingTextStream()
+    NLWriter().write(
+        scenario,
+        stream,
+        file_determinism=FileDeterminism.SORT_SYMBOLS,
+        symbolic_solver_labels=True,
+        linear_presolve=False,
+        skip_trivial_constraints=False,
+        show_section_timing=False,
+        scale_model=True,
+        export_nonlinear_variables=None,
+        row_order=None,
+        column_order=None,
+        export_defined_variables=True,
+    )
     return stream.digest()
 
 
 def validate_rebuild_model_state(
         opt, snapshots, fingerprint_method=None,
-        nl_fingerprints=None, backend=PYFORY_REBUILD_BACKEND):
+        nl_fingerprints=None):
     """Check the restored state and any requested NL formulation digest."""
-    timed = bool((getattr(opt, "options", None) or {}).get(
-        "display_timing", False))
-    rank = int(getattr(opt, "cylinder_rank", 0))
-    started = time.perf_counter() if timed else None
-    snapshot_s = snapshot_cpu_s = 0.0
-    nl_timing = _FileWriteTiming() if timed else None
-    comparison_s = comparison_cpu_s = 0.0
     if fingerprint_method not in (None, NL_FINGERPRINT_METHOD):
         raise CheckpointMismatch(
             f"The pyfory-rebuild checkpoint has unsupported model "
             f"fingerprint method {fingerprint_method!r}.")
-    try:
-        for sname, scenario in opt.local_scenarios.items():
-            snapshot = snapshots[sname]
-            if fingerprint_method == NL_FINGERPRINT_METHOD:
-                expected = (nl_fingerprints or {}).get(sname)
-                if not isinstance(expected, str) or not re.fullmatch(
-                        r"[0-9a-f]{64}", expected):
-                    raise CheckpointMismatch(
-                        f"The pyfory-rebuild checkpoint for scenario "
-                        f"'{sname}' has no valid NL fingerprint.")
-                actual = _rebuild_model_nl_fingerprint(
-                    scenario, timing=nl_timing)
-                if actual != expected:
-                    raise CheckpointMismatch(
-                        f"The rebuilt NL formulation for scenario '{sname}' "
-                        f"does not match its checkpoint fingerprint "
-                        f"(expected {expected}, got {actual}).")
-            saved_state = snapshot
-            if timed:
-                phase_started = time.perf_counter()
-                phase_cpu_started = time.thread_time()
-            try:
-                current_state = _snapshot_rebuild_model(scenario)
-            finally:
-                if timed:
-                    snapshot_s += time.perf_counter() - phase_started
-                    snapshot_cpu_s += (
-                        time.thread_time() - phase_cpu_started)
-            if timed:
-                phase_started = time.perf_counter()
-                phase_cpu_started = time.thread_time()
-            try:
-                state_matches = _checkpoint_state_equal(saved_state,
-                                                        current_state)
-            finally:
-                if timed:
-                    comparison_s += time.perf_counter() - phase_started
-                    comparison_cpu_s += (
-                        time.thread_time() - phase_cpu_started)
-            if not state_matches:
-                section = next((key for key in sorted(
-                    saved_state.keys() | current_state.keys())
-                    if key not in saved_state or key not in current_state or
-                    not _checkpoint_state_equal(saved_state[key],
-                                                current_state[key])), "unknown")
+    for sname, scenario in opt.local_scenarios.items():
+        snapshot = snapshots[sname]
+        if fingerprint_method == NL_FINGERPRINT_METHOD:
+            expected = (nl_fingerprints or {}).get(sname)
+            if not isinstance(expected, str) or not re.fullmatch(
+                    r"[0-9a-f]{64}", expected):
                 raise CheckpointMismatch(
-                    f"The rebuilt state for scenario '{sname}' does not "
-                    f"match its pyfory-rebuild checkpoint snapshot "
-                    f"({section}).")
-    finally:
-        if timed:
-            print(
-                f"checkpoint_timing event=validate "
-                f"backend={backend} rank={rank} "
-                f"scenarios={len(opt.local_scenarios)} "
-                f"snapshot_s={snapshot_s:.6f} "
-                f"snapshot_cpu_s={snapshot_cpu_s:.6f} "
-                f"nl_write_s={nl_timing.nl_write_s if timed else 0.0:.6f} "
-                f"nl_write_cpu_s="
-                f"{nl_timing.nl_write_cpu_s if timed else 0.0:.6f} "
-                f"nl_digest_s={nl_timing.nl_digest_s if timed else 0.0:.6f} "
-                f"nl_digest_cpu_s="
-                f"{nl_timing.nl_digest_cpu_s if timed else 0.0:.6f} "
-                f"comparison_s={comparison_s:.6f} "
-                f"comparison_cpu_s={comparison_cpu_s:.6f} "
-                f"rank_elapsed_s={time.perf_counter() - started:.6f}",
-                flush=True)
+                    f"The pyfory-rebuild checkpoint for scenario "
+                    f"'{sname}' has no valid NL fingerprint.")
+            actual = _rebuild_model_nl_fingerprint(scenario)
+            if actual != expected:
+                raise CheckpointMismatch(
+                    f"The rebuilt NL formulation for scenario '{sname}' "
+                    f"does not match its checkpoint fingerprint "
+                    f"(expected {expected}, got {actual}).")
+        saved_state = snapshot
+        current_state = _snapshot_rebuild_model(scenario)
+        state_matches = _checkpoint_state_equal(saved_state, current_state)
+        if not state_matches:
+            section = next((key for key in sorted(
+                saved_state.keys() | current_state.keys())
+                if key not in saved_state or key not in current_state or
+                not _checkpoint_state_equal(saved_state[key],
+                                            current_state[key])), "unknown")
+            raise CheckpointMismatch(
+                f"The rebuilt state for scenario '{sname}' does not "
+                f"match its pyfory-rebuild checkpoint snapshot "
+                f"({section}).")
 
 
 def finalize_and_validate_rebuild_model_state(
         opt, snapshots, fingerprint_method=None,
-        nl_fingerprints=None, backend=PYFORY_REBUILD_BACKEND):
+        nl_fingerprints=None):
     """Restore Pyomo's stale flags after setup, then check the rebuilt model."""
     for sname, scenario in opt.local_scenarios.items():
         for name, _, stale, _, _, _ in snapshots[sname]["variables"]:
@@ -872,7 +810,7 @@ def finalize_and_validate_rebuild_model_state(
             var.stale = stale
     validate_rebuild_model_state(
         opt, snapshots, fingerprint_method=fingerprint_method,
-        nl_fingerprints=nl_fingerprints, backend=backend)
+        nl_fingerprints=nl_fingerprints)
 
 
 def restore_rebuild_solve_state(opt, snapshots):
@@ -1230,47 +1168,14 @@ def _spoke_filename(cylinder, ordinal, rank):
             f"_ordinal_{int(ordinal):02d}_rank_{int(rank):04d}.pkl")
 
 
-@dataclass
-class _FileWriteTiming:
-    """Time spent in the parts of a durable file write, summed over files."""
-
-    snapshot_s: float = 0.0
-    snapshot_cpu_s: float = 0.0
-    nl_write_s: float = 0.0
-    nl_write_cpu_s: float = 0.0
-    nl_digest_s: float = 0.0
-    nl_digest_cpu_s: float = 0.0
-    callback_s: float = 0.0
-    callback_cpu_s: float = 0.0
-    flush_s: float = 0.0
-    fsync_s: float = 0.0
-    replace_s: float = 0.0
-    bytes_written: int = 0
-
-
-def _atomic_write_bytes(path, write_callback, timing=None):
+def _atomic_write_bytes(path, write_callback):
     """Write via a temp file in the same directory, then rename into place."""
     tmp = f"{path}.tmp"
     with open(tmp, "wb") as f:
-        started = time.perf_counter() if timing is not None else None
-        cpu_started = time.thread_time() if timing is not None else None
         write_callback(f)
-        if timing is not None:
-            timing.callback_s += time.perf_counter() - started
-            timing.callback_cpu_s += time.thread_time() - cpu_started
-            timing.bytes_written += f.tell()
-        started = time.perf_counter() if timing is not None else None
         f.flush()
-        if timing is not None:
-            timing.flush_s += time.perf_counter() - started
-        started = time.perf_counter() if timing is not None else None
         os.fsync(f.fileno())
-        if timing is not None:
-            timing.fsync_s += time.perf_counter() - started
-    started = time.perf_counter() if timing is not None else None
     os.replace(tmp, path)
-    if timing is not None:
-        timing.replace_s += time.perf_counter() - started
 
 
 def _fsync_dir(path):
@@ -1726,22 +1631,13 @@ def probe_model_is_dillable(opt):
     no message. Every rank therefore learns that some rank failed and raises,
     naming the one that has the real diagnosis.
     """
-    timed = bool(opt.options.get("display_timing", False))
-    probe_started = time.perf_counter() if timed else None
-    serialize_s = 0.0
-    serialize_cpu_s = 0.0
     failure = None
     for sname, s in opt.local_scenarios.items():
         solver_plugin = getattr(s, "_solver_plugin", None)
         if solver_plugin is not None:
             del s._solver_plugin
         try:
-            started = time.perf_counter() if timed else None
-            cpu_started = time.thread_time() if timed else None
             dill.dumps(s)
-            if timed:
-                serialize_s += time.perf_counter() - started
-                serialize_cpu_s += time.thread_time() - cpu_started
         except Exception as exc:
             failure = RuntimeError(
                 "Checkpointing is enabled, but no checkpoint could ever be "
@@ -1756,19 +1652,8 @@ def probe_model_is_dillable(opt):
                 s._solver_plugin = solver_plugin
 
     comm = _cylinder_comm(opt)
-    agreement_started = time.perf_counter() if timed else None
     failing_rank = _first_failing_rank(comm, int(opt.cylinder_rank),
                                        failure is not None)
-    if timed:
-        print(
-            f"checkpoint_timing event=probe backend={DILL_RELOAD_BACKEND} "
-            f"rank={int(opt.cylinder_rank)} "
-            f"scenarios={len(opt.local_scenarios)} "
-            f"serialize_s={serialize_s:.6f} "
-            f"serialize_cpu_s={serialize_cpu_s:.6f} "
-            f"agreement_s={time.perf_counter() - agreement_started:.6f} "
-            f"rank_elapsed_s={time.perf_counter() - probe_started:.6f}",
-            flush=True)
     if failing_rank is None:
         return
     if failure is not None:
@@ -1817,15 +1702,8 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
     if not _is_rebuild_backend(backend):
         raise ValueError(f"Unknown checkpoint backend '{backend}'.")
 
-    timed = bool(opt.options.get("display_timing", False))
     use_nl_fingerprint = bool(opt.options.get(
         "checkpoint_nl_fingerprint", False))
-    nl_timing = _FileWriteTiming() if timed else None
-    probe_started = time.perf_counter() if timed else None
-    encode_s = decode_s = encode_cpu_s = decode_cpu_s = 0.0
-    snapshot_s = snapshot_cpu_s = 0.0
-    clone_s = clone_cpu_s = 0.0
-    overlay_s = overlay_cpu_s = 0.0
     failure = None
     extension_state = {}
     try:
@@ -1839,18 +1717,8 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
     for extension_name, model_state in extension_state.items():
         try:
             hook_payload = {extension_name: model_state}
-            started = time.perf_counter() if timed else None
-            cpu_started = time.thread_time() if timed else None
             hook_bytes = _new_rebuild_codec(backend).serialize(hook_payload)
-            if timed:
-                encode_s += time.perf_counter() - started
-                encode_cpu_s += time.thread_time() - cpu_started
-            started = time.perf_counter() if timed else None
-            cpu_started = time.thread_time() if timed else None
             hook_restored = _new_rebuild_codec(backend).deserialize(hook_bytes)
-            if timed:
-                decode_s += time.perf_counter() - started
-                decode_cpu_s += time.thread_time() - cpu_started
             if not _checkpoint_state_equal(hook_restored, hook_payload):
                 raise RuntimeError(
                     "pyfory changed model state during a fresh-reader "
@@ -1867,26 +1735,9 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
         if failure is not None:
             break
         try:
-            started = time.perf_counter() if timed else None
-            cpu_started = time.thread_time() if timed else None
-            try:
-                state = _snapshot_rebuild_model(scenario)
-            finally:
-                if timed:
-                    snapshot_s += time.perf_counter() - started
-                    snapshot_cpu_s += time.thread_time() - cpu_started
-            started = time.perf_counter() if timed else None
-            cpu_started = time.thread_time() if timed else None
+            state = _snapshot_rebuild_model(scenario)
             payload = _new_rebuild_codec(backend).serialize(state)
-            if timed:
-                encode_s += time.perf_counter() - started
-                encode_cpu_s += time.thread_time() - cpu_started
-            started = time.perf_counter() if timed else None
-            cpu_started = time.thread_time() if timed else None
             restored = _new_rebuild_codec(backend).deserialize(payload)
-            if timed:
-                decode_s += time.perf_counter() - started
-                decode_cpu_s += time.thread_time() - cpu_started
             if not _checkpoint_state_equal(restored, state):
                 raise RuntimeError(
                     "pyfory changed the plain scenario state during a "
@@ -1896,38 +1747,15 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
                 # Pyomo's clone is the closest safe startup check for the
                 # overlay: extension hooks may add structure, so the clone
                 # begins with the same configured structure as the scenario.
-                started = time.perf_counter() if timed else None
-                cpu_started = time.thread_time() if timed else None
-                try:
-                    clone = _clone_rebuild_probe_model(scenario)
-                finally:
-                    if timed:
-                        clone_s += time.perf_counter() - started
-                        clone_cpu_s += time.thread_time() - cpu_started
-                started = time.perf_counter() if timed else None
-                cpu_started = time.thread_time() if timed else None
-                try:
-                    _restore_rebuild_model_values(clone, restored)
-                finally:
-                    if timed:
-                        overlay_s += time.perf_counter() - started
-                        overlay_cpu_s += time.thread_time() - cpu_started
-                started = time.perf_counter() if timed else None
-                cpu_started = time.thread_time() if timed else None
-                try:
-                    clone_state = _snapshot_rebuild_model(clone)
-                finally:
-                    if timed:
-                        snapshot_s += time.perf_counter() - started
-                        snapshot_cpu_s += time.thread_time() - cpu_started
+                clone = _clone_rebuild_probe_model(scenario)
+                _restore_rebuild_model_values(clone, restored)
+                clone_state = _snapshot_rebuild_model(clone)
                 if not _checkpoint_state_equal(clone_state, restored):
                     raise RuntimeError(
                         "the decoded snapshot could not be overlaid on a "
                         "clone of the configured scenario")
-                original_fingerprint = _rebuild_model_nl_fingerprint(
-                    scenario, timing=nl_timing)
-                clone_fingerprint = _rebuild_model_nl_fingerprint(
-                    clone, timing=nl_timing)
+                original_fingerprint = _rebuild_model_nl_fingerprint(scenario)
+                clone_fingerprint = _rebuild_model_nl_fingerprint(clone)
                 if clone_fingerprint != original_fingerprint:
                     raise RuntimeError(
                         "the decoded snapshot changed the NL fingerprint "
@@ -1944,31 +1772,8 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
             break
 
     comm = _cylinder_comm(opt)
-    agreement_started = time.perf_counter() if timed else None
     failing_rank = _first_failing_rank(comm, int(opt.cylinder_rank),
                                        failure is not None)
-    if timed:
-        print(
-            f"checkpoint_timing event=probe backend={backend} "
-            f"rank={int(opt.cylinder_rank)} "
-            f"scenarios={len(opt.local_scenarios)} "
-            f"serialize_s={encode_s:.6f} "
-            f"serialize_cpu_s={encode_cpu_s:.6f} "
-            f"deserialize_s={decode_s:.6f} "
-            f"deserialize_cpu_s={decode_cpu_s:.6f} "
-            f"snapshot_s={snapshot_s:.6f} "
-            f"snapshot_cpu_s={snapshot_cpu_s:.6f} "
-            f"nl_write_s={nl_timing.nl_write_s if timed else 0.0:.6f} "
-            f"nl_write_cpu_s="
-            f"{nl_timing.nl_write_cpu_s if timed else 0.0:.6f} "
-            f"nl_digest_s={nl_timing.nl_digest_s if timed else 0.0:.6f} "
-            f"nl_digest_cpu_s="
-            f"{nl_timing.nl_digest_cpu_s if timed else 0.0:.6f} "
-            f"clone_s={clone_s:.6f} clone_cpu_s={clone_cpu_s:.6f} "
-            f"overlay_s={overlay_s:.6f} overlay_cpu_s={overlay_cpu_s:.6f} "
-            f"agreement_s={time.perf_counter() - agreement_started:.6f} "
-            f"rank_elapsed_s={time.perf_counter() - probe_started:.6f}",
-            flush=True)
     if failing_rank is None:
         return
     if failure is not None:
@@ -2224,8 +2029,6 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
     (``Checkpointer.maybe_checkpoint``) warns and carries on with the previous
     generation still published and still resumable.
     """
-    timed = bool(opt.options.get("display_timing", False))
-    rank_started = time.perf_counter() if timed else None
     run_agreed(
         opt, lambda: require_checkpoint_structural_cfg(opt.options),
         "describe their checkpoint's structural model configuration, so none "
@@ -2235,13 +2038,6 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
     # reaches the same verdict before any rank-local filesystem work.
     require_backend_dependency(backend)
 
-    phase = ({"validation_s": time.perf_counter() - rank_started}
-             if timed else None)
-    model_io = _FileWriteTiming() if timed else None
-    leaf_io = _FileWriteTiming() if timed else None
-    nl_hash_io = _FileWriteTiming() if timed else None
-    if model_io is not None:
-        model_io.nl_hash_file_io = nl_hash_io
     comm = _cylinder_comm(opt)
     rank = int(opt.cylinder_rank)
     is_publisher = rank == 0
@@ -2261,7 +2057,6 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
     # would never reach the barrier below and every other rank would wait at
     # it for the rest of the job.
     failure = None
-    started = time.perf_counter() if timed else None
     if is_publisher:
         try:
             # A failed publish can leave a published-but-uncommitted
@@ -2274,16 +2069,10 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
             os.makedirs(staging_dir, exist_ok=True)
         except Exception as exc:
             failure = exc
-    if timed:
-        phase["prepare_s"] = time.perf_counter() - started
     # No rank may write into the staging directory until rank 0 has cleared
     # and recreated it, or its files are deleted out from under it.
-    started = time.perf_counter() if timed else None
     _barrier(comm)
-    if timed:
-        phase["prepare_wait_s"] = time.perf_counter() - started
 
-    local_started = time.perf_counter() if timed else None
     try:
         if failure is not None:
             raise failure
@@ -2295,17 +2084,13 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
         # change during a run -- but it is per-rank data, so it belongs inside
         # the guarded region rather than ahead of the barrier.
         check_filename_collisions(opt.local_scenarios)
-        started = time.perf_counter() if timed else None
         nl_hash_files = {
             sname: _nl_fingerprint_filename(rank, sname)
             for sname in opt.local_scenarios
         } if opt.options.get("checkpoint_nl_fingerprint", False) and \
             _is_rebuild_backend(backend) else {}
         model_files = _write_models(opt, staging_dir, rank, backend,
-                                    write_id=write_id, timing=model_io)
-        if timed:
-            phase["model_s"] = time.perf_counter() - started
-        started = time.perf_counter() if timed else None
+                                    write_id=write_id)
         leaf = {
             "format_version": FORMAT_VERSION,
             "backend": backend,
@@ -2333,25 +2118,14 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
         _atomic_write_bytes(
             os.path.join(staging_dir, _leaf_filename(rank)),
             lambda f: pickle.dump(leaf, f),
-            timing=leaf_io,
         )
-        if timed:
-            phase["leaf_s"] = time.perf_counter() - started
-        started = time.perf_counter() if timed else None
         _fsync_dir(staging_dir)
-        if timed:
-            phase["stage_dir_sync_s"] = time.perf_counter() - started
     except Exception as exc:
         failure = exc
-    if timed:
-        phase["local_s"] = time.perf_counter() - local_started
 
     # Collective, and therefore also the barrier that says every rank has
     # finished writing. Nothing below may run before it.
-    started = time.perf_counter() if timed else None
     failing_rank = _first_failing_rank(comm, rank, failure is not None)
-    if timed:
-        phase["write_wait_s"] = time.perf_counter() - started
     if failing_rank is not None:
         if is_publisher:
             # Leave no half-written generation behind; the previous checkpoint
@@ -2365,63 +2139,15 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
     # the next checkpoint point retries if the run gets that far.
     if is_publisher:
         try:
-            started = time.perf_counter() if timed else None
             _publish_generation(opt, ckpt_dir, hub_dir, final_dir,
                                 staging_dir, generation, backend,
-                                write_id=write_id, timing=phase)
-            if timed:
-                phase["publish_s"] = time.perf_counter() - started
+                                write_id=write_id)
         except Exception:
             # The manifest still names the previous generation (or nothing),
             # so everything else is garbage; give the disk back now rather
             # than at the next checkpoint point.
             _sweep_uncommitted_generations(ckpt_dir, hub_dir)
             raise
-
-    if timed:
-        # One parseable line per rank. Non-publishers report zero for the
-        # publication fields; their elapsed time ends at the write agreement.
-        print(
-            f"checkpoint_timing event=write backend={backend} "
-            f"generation={int(generation)} "
-            f"rank={rank} scenarios={len(opt.local_scenarios)} "
-            f"model_bytes={model_io.bytes_written} "
-            f"model_s={phase['model_s']:.6f} "
-            f"snapshot_s={model_io.snapshot_s:.6f} "
-            f"snapshot_cpu_s={model_io.snapshot_cpu_s:.6f} "
-            f"nl_write_s={model_io.nl_write_s:.6f} "
-            f"nl_write_cpu_s={model_io.nl_write_cpu_s:.6f} "
-            f"nl_digest_s={model_io.nl_digest_s:.6f} "
-            f"nl_digest_cpu_s={model_io.nl_digest_cpu_s:.6f} "
-            f"model_dump_s={model_io.callback_s:.6f} "
-            f"model_dump_cpu_s={model_io.callback_cpu_s:.6f} "
-            f"model_flush_s={model_io.flush_s:.6f} "
-            f"model_fsync_s={model_io.fsync_s:.6f} "
-            f"model_replace_s={model_io.replace_s:.6f} "
-            f"nl_hash_bytes={nl_hash_io.bytes_written} "
-            f"nl_hash_file_s={nl_hash_io.callback_s:.6f} "
-            f"nl_hash_file_fsync_s={nl_hash_io.fsync_s:.6f} "
-            f"nl_hash_file_replace_s={nl_hash_io.replace_s:.6f} "
-            f"leaf_bytes={leaf_io.bytes_written} "
-            f"leaf_s={phase['leaf_s']:.6f} "
-            f"leaf_pickle_s={leaf_io.callback_s:.6f} "
-            f"leaf_pickle_cpu_s={leaf_io.callback_cpu_s:.6f} "
-            f"leaf_flush_s={leaf_io.flush_s:.6f} "
-            f"leaf_fsync_s={leaf_io.fsync_s:.6f} "
-            f"leaf_replace_s={leaf_io.replace_s:.6f} "
-            f"stage_dir_sync_s={phase['stage_dir_sync_s']:.6f} "
-            f"local_s={phase['local_s']:.6f} "
-            f"validation_s={phase['validation_s']:.6f} "
-            f"prepare_s={phase['prepare_s']:.6f} "
-            f"prepare_wait_s={phase['prepare_wait_s']:.6f} "
-            f"write_wait_s={phase['write_wait_s']:.6f} "
-            f"publish_s={phase.get('publish_s', 0.0):.6f} "
-            f"publish_swap_s={phase.get('publish_swap_s', 0.0):.6f} "
-            f"publish_hub_sync_s={phase.get('publish_hub_sync_s', 0.0):.6f} "
-            f"publish_manifest_s={phase.get('publish_manifest_s', 0.0):.6f} "
-            f"publish_cleanup_s={phase.get('publish_cleanup_s', 0.0):.6f} "
-            f"rank_elapsed_s={time.perf_counter() - rank_started:.6f}",
-            flush=True)
 
     return final_dir
 
@@ -2475,7 +2201,7 @@ def _pyfory_version():
 
 
 def _publish_generation(opt, ckpt_dir, hub_dir, final_dir, staging_dir,
-                        generation, backend, write_id=None, timing=None):
+                        generation, backend, write_id=None):
     """Commit the staged generation. Rank 0 only, once every rank has written.
 
     Publishing order matters. The manifest is the commit point, so the
@@ -2485,7 +2211,6 @@ def _publish_generation(opt, ckpt_dir, hub_dir, final_dir, staging_dir,
     Writing the same generation number twice therefore lands in a scratch
     directory first rather than deleting the live one.
     """
-    started = time.perf_counter() if timing is not None else None
     scratch_dir = f"{final_dir}.incoming"
     if os.path.isdir(scratch_dir):
         shutil.rmtree(scratch_dir)
@@ -2507,12 +2232,7 @@ def _publish_generation(opt, ckpt_dir, hub_dir, final_dir, staging_dir,
             shutil.rmtree(retiring_dir, ignore_errors=True)
         os.replace(final_dir, retiring_dir)
     os.replace(scratch_dir, final_dir)
-    if timing is not None:
-        timing["publish_swap_s"] = time.perf_counter() - started
-    started = time.perf_counter() if timing is not None else None
     _fsync_dir(hub_dir)
-    if timing is not None:
-        timing["publish_hub_sync_s"] = time.perf_counter() - started
 
     manifest = {
         "format_version": FORMAT_VERSION,
@@ -2527,19 +2247,13 @@ def _publish_generation(opt, ckpt_dir, hub_dir, final_dir, staging_dir,
         manifest["write_id"] = write_id
     if _uses_codec_version(backend):
         manifest["codec_version"] = _codec_version(backend)
-    started = time.perf_counter() if timing is not None else None
     _publish_manifest(ckpt_dir, manifest)
-    if timing is not None:
-        timing["publish_manifest_s"] = time.perf_counter() - started
 
     # Sweep everything the manifest does not name, rather than only the
     # generation the previous manifest did. A kill between any two steps above
     # can leave a directory behind, and deleting just the known predecessor
     # would let those accumulate for the life of the run.
-    started = time.perf_counter() if timing is not None else None
     _sweep_uncommitted_generations(ckpt_dir, hub_dir)
-    if timing is not None:
-        timing["publish_cleanup_s"] = time.perf_counter() - started
 
 
 def _sweep_uncommitted_generations(ckpt_dir, hub_dir):
@@ -2598,16 +2312,13 @@ def _sweep_stale_generations(hub_dir, keep, keep_copy=None):
             shutil.rmtree(path, ignore_errors=True)
 
 
-def _write_models(opt, staging_dir, rank, backend, write_id=None,
-                  timing=None):
+def _write_models(opt, staging_dir, rank, backend, write_id=None):
     """Write each local scenario using the selected model-state codec."""
     require_backend_dependency(backend)
     use_nl_fingerprint = bool(
         _is_rebuild_backend(backend) and
         (getattr(opt, "options", None) or {}).get(
             "checkpoint_nl_fingerprint", False))
-    nl_hash_file_timing = (getattr(timing, "nl_hash_file_io", None)
-                           if timing is not None else None)
     model_files = {}
     for sname, s in opt.local_scenarios.items():
         fname = _model_filename(rank, sname, backend)
@@ -2620,35 +2331,24 @@ def _write_models(opt, staging_dir, rank, backend, write_id=None,
                 _atomic_write_bytes(
                     os.path.join(staging_dir, fname),
                     lambda f, model=s: dill.dump(model, f),
-                    timing=timing,
                 )
             finally:
                 if solver_plugin is not None:
                     s._solver_plugin = solver_plugin
         else:
-            started = time.perf_counter() if timing is not None else None
-            cpu_started = time.thread_time() if timing is not None else None
-            try:
-                snapshot = _snapshot_rebuild_model(s)
-            finally:
-                if timing is not None:
-                    timing.snapshot_s += time.perf_counter() - started
-                    timing.snapshot_cpu_s += (
-                        time.thread_time() - cpu_started)
+            snapshot = _snapshot_rebuild_model(s)
             if use_nl_fingerprint:
-                fingerprint = _rebuild_model_nl_fingerprint(s, timing=timing)
+                fingerprint = _rebuild_model_nl_fingerprint(s)
                 hash_fname = _nl_fingerprint_filename(rank, sname)
                 _atomic_write_bytes(
                     os.path.join(staging_dir, hash_fname),
                     lambda f, digest=fingerprint: f.write(
                         (digest + "\n").encode("ascii")),
-                    timing=nl_hash_file_timing,
                 )
             _atomic_write_bytes(
                 os.path.join(staging_dir, fname),
                 lambda f, state=snapshot: _new_rebuild_codec(backend).dump(
                     state, f),
-                timing=timing,
             )
         model_files[sname] = fname
     return model_files

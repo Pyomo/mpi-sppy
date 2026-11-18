@@ -1978,8 +1978,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                     fingerprint_method=self._checkpoint_leaf_state.get(
                         "model_fingerprint_method"),
                     nl_fingerprints=self._checkpoint_leaf_state.get(
-                        "nl_fingerprints"),
-                    backend=self._checkpoint_leaf_state["backend"]),
+                        "nl_fingerprints")),
                 "validate their rebuilt models, so none of them "
                 "resumes with a changed model")
 
