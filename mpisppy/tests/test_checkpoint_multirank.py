@@ -1694,6 +1694,8 @@ class TestEveryCheckpointStepOnThosePathsIsAgreed(unittest.TestCase):
     AGREE_THEMSELVES = frozenset({
         "run_agreed",
         "probe_model_is_dillable",
+        # The rebuild probe gathers rank-local model failures before raising.
+        "probe_model_checkpointable",
         "agree_spoke_restore",
         "agree_dual_spoke_restore",
     })
