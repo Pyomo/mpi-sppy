@@ -9,6 +9,7 @@
 """Tests for pyfory-rebuild checkpoint cloning, NL digests, and resume."""
 
 import copy
+import io
 import json
 import os
 import pickle
@@ -173,6 +174,56 @@ class TestPyforyRebuildProbeClone(unittest.TestCase):
             self.assertIsNotNone(copied._init_values)
             self.assertEqual(tuple(source), tuple(copied))
             self.assertIsInstance(copied._init_values._init.val, tuple)
+
+    def test_rebuild_helpers_reject_malformed_values_and_backends(self):
+        with self.subTest(helper="model filename"):
+            with self.assertRaises(ValueError):
+                checkpointing._model_filename(0, "scenario", "unknown")
+
+        with self.subTest(helper="rebuild codec"):
+            with self.assertRaises(ValueError):
+                checkpointing._new_rebuild_codec("unknown")
+
+        with self.subTest(helper="codec version"):
+            with self.assertRaises(ValueError):
+                checkpointing._codec_version(
+                    checkpointing.DILL_RELOAD_BACKEND)
+
+        self.assertIs(type(checkpointing._safe_index(np.int64(3))), int)
+        with self.assertRaises(TypeError):
+            checkpointing._safe_index(object())
+
+        tag = checkpointing._CHECKPOINT_SCALAR_TAG
+        with self.assertRaises(checkpointing.CheckpointMismatch):
+            checkpointing._restore_plain_checkpoint_value(
+                {tag: "unknown", "value": "1"})
+        with self.assertRaises(checkpointing.CheckpointMismatch):
+            checkpointing._restore_plain_checkpoint_value(
+                {tag: "decimal", "value": "not-a-decimal"})
+
+        with self.assertRaises(checkpointing.CheckpointMismatch):
+            checkpointing._unpack_checkpoint_value({"kinds": []}, 0)
+        with self.assertRaises(checkpointing.CheckpointMismatch):
+            checkpointing._unpack_checkpoint_value({"kinds": [255]}, 0)
+
+    def test_packed_values_preserve_boolean_and_large_integer_types(self):
+        values = [True, 2**70]
+        packed = checkpointing._pack_checkpoint_values(values)
+        restored = [checkpointing._unpack_checkpoint_value(packed, index)
+                    for index in range(len(values))]
+
+        self.assertIs(type(restored[0]), bool)
+        self.assertIs(type(restored[1]), int)
+        self.assertEqual(restored, values)
+
+    def test_hashing_text_stream_rejects_non_text_and_is_non_seekable(self):
+        stream = checkpointing._HashingTextStream()
+
+        with self.assertRaises(TypeError):
+            stream.write(b"NL output")
+        with self.assertRaises(io.UnsupportedOperation):
+            stream.tell()
+        self.assertTrue(stream.writable())
 
 
 class TestRebuildConstraintActivity(unittest.TestCase):
@@ -932,6 +983,15 @@ class TestPyforyRebuildNLFingerprint(unittest.TestCase):
 
 
 class TestPyforyRebuildDependency(unittest.TestCase):
+    def test_missing_dill_and_unknown_backend_are_refused(self):
+        with mock.patch.object(checkpointing, "dill_available", False):
+            with self.assertRaisesRegex(RuntimeError, "requires dill"):
+                checkpointing.require_backend_dependency(
+                    checkpointing.DILL_RELOAD_BACKEND)
+
+        with self.assertRaisesRegex(RuntimeError, "not implemented"):
+            checkpointing.require_backend_dependency("unknown")
+
     def test_pyfory_minimum_version_is_accepted(self):
         with mock.patch.object(checkpointing, "pyfory_available", True):
             for version in ("1.7.7", "1.7.8", "2.0.0"):
