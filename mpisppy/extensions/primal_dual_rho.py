@@ -9,9 +9,9 @@
 
 import numpy as np
 
-from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 import mpisppy.MPI as MPI
 from mpisppy import global_toc
+from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 
 
 class PrimalDualRho(RebuildSafeNoModelChanges):

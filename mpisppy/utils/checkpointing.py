@@ -30,13 +30,13 @@ import hashlib
 import io
 import json
 import math
+import numbers
 import os
 import pickle
 import re
 import shutil
 import time
 import uuid
-import numbers
 from array import array
 from collections.abc import KeysView
 from dataclasses import dataclass
@@ -322,17 +322,17 @@ def require_backend_dependency(backend):
     if backend == DILL_RELOAD_BACKEND:
         if not dill_available:
             raise RuntimeError(
-                "The '{}' checkpoint backend requires dill, which is not "
+                f"The '{backend}' checkpoint backend requires dill, which is not "
                 "installed. Install the optional dependencies with "
                 "'pip install mpi-sppy[extras]' (or 'pip install dill'), or "
-                "choose a different --checkpoint-backend.".format(backend)
+                "choose a different --checkpoint-backend."
             )
     elif _is_pyfory_backend(backend):
         if not pyfory_available:
             raise RuntimeError(
-                "The '{}' checkpoint backend requires pyfory, which is not "
+                f"The '{backend}' checkpoint backend requires pyfory, which is not "
                 "installed. Install it with 'pip install mpi-sppy[extras]' "
-                "or choose a different --checkpoint-backend.".format(backend)
+                "or choose a different --checkpoint-backend."
             )
         from packaging.version import InvalidVersion, Version
 
@@ -645,7 +645,8 @@ def _snapshot_rebuild_model(scenario):
     overlaid by stable component names and indices. Solver result flags and
     bounds are saved separately so resume hooks see the completed iterate.
     """
-    from pyomo.environ import Param, Var, value as pyo_value
+    from pyomo.environ import Param, Var
+    from pyomo.environ import value as pyo_value
 
     variables = []
     variable_values = []
@@ -915,9 +916,16 @@ def restore_rebuild_solve_state(opt, snapshots):
 def _restore_rebuild_model_values(scenario, snapshot):
     """Overlay saved values onto an already rebuilt scenario model."""
     import pyomo.environ as pyo
-    from pyomo.environ import Binary, Integers, NonNegativeIntegers, \
-        NonNegativeReals, NonPositiveIntegers, NonPositiveReals, Reals, \
-        UnitInterval
+    from pyomo.environ import (
+        Binary,
+        Integers,
+        NonNegativeIntegers,
+        NonNegativeReals,
+        NonPositiveIntegers,
+        NonPositiveReals,
+        Reals,
+        UnitInterval,
+    )
 
     if snapshot.get("state_version") != REBUILD_STATE_VERSION:
         raise CheckpointMismatch(
@@ -1025,6 +1033,7 @@ def _replay_prox_approx(opt, scenario, snapshot):
     if not prox:
         return {}
     from pyomo.core.expr.numeric_expr import LinearExpression
+
     from mpisppy.utils.sputils import is_persistent
 
     managers = getattr(scenario._mpisppy_data, "xsqvar_prox_approx", {})
@@ -1844,7 +1853,7 @@ def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
                 decode_cpu_s += time.thread_time() - cpu_started
             if not _checkpoint_state_equal(hook_restored, hook_payload):
                 raise RuntimeError(
-                    f"pyfory changed model state during a fresh-reader "
+                    "pyfory changed model state during a fresh-reader "
                     "round trip")
         except Exception as exc:
             failure = RuntimeError(

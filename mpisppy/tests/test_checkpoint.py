@@ -38,8 +38,8 @@ import types
 import unittest
 from unittest import mock
 
-import mpisppy.utils.checkpointing as checkpointing
 import mpisppy.tests.examples.farmer as farmer
+import mpisppy.utils.checkpointing as checkpointing
 from mpisppy.cylinders.hub import PHHub
 from mpisppy.extensions.checkpointer import Checkpointer
 from mpisppy.extensions.extension import Extension

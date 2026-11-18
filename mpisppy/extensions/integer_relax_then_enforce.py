@@ -11,9 +11,8 @@ import time
 
 import pyomo.environ as pyo
 
-from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 from mpisppy import global_toc
-from mpisppy.utils import checkpointing
+from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 from mpisppy.utils.sputils import is_persistent
 
 

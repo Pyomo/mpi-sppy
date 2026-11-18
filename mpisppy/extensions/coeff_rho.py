@@ -7,8 +7,8 @@
 # full copyright and license information.
 ###############################################################################
 
-from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 from mpisppy import global_toc
+from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 from mpisppy.utils.rho_utils import assign_rho_with_fallback
 from mpisppy.utils.sputils import nonant_cost_coeffs
 

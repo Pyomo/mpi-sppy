@@ -15,8 +15,8 @@ import warnings
 
 import numpy as np
 
-from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 import mpisppy.MPI as MPI
+from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 from mpisppy.utils.w_utils.wtracker import WTracker
 
 

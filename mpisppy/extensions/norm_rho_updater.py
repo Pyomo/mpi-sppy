@@ -14,8 +14,8 @@ import math
 
 import numpy as np
 
-from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 import mpisppy.MPI as MPI
+from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 
 _norm_rho_defaults = {'convergence_tolerance' : 1e-4,
                       'rho_decrease_multiplier' : 2.0,

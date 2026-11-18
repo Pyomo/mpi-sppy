@@ -20,12 +20,17 @@ import unittest
 from unittest import mock
 
 import numpy as np
+
 import mpisppy.utils.checkpointing as checkpointing
 from mpisppy.extensions.checkpointer import Checkpointer
 from mpisppy.extensions.extension import Extension
 from mpisppy.tests.test_checkpoint import (
-    CheckpointPayloadExtension, SCENARIO_NAMES, _flat_snapshot, _make_ph,
-    _options, solver_available,
+    SCENARIO_NAMES,
+    CheckpointPayloadExtension,
+    _flat_snapshot,
+    _make_ph,
+    _options,
+    solver_available,
 )
 from mpisppy.tests.utils import subprocess_env
 
@@ -575,6 +580,7 @@ class TestPyforyRebuildBackend(unittest.TestCase):
 
     def test_decimal_snapshot_values_keep_type_and_report_context(self):
         from decimal import Decimal
+
         import pyomo.environ as pyo
 
         ph = _make_ph(_options(1))
