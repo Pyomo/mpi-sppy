@@ -1,0 +1,1031 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
+"""Tests for the optional C++ FW-APH hub (--aphfw-hub).
+
+The hub needs the compiled aphfw_cpp module, which a normal install does not
+build, so most of this file checks that mpi-sppy is unaffected when it is
+missing. The end-to-end run, and the MPI integration tests (the
+aphfw_*_driver.py scripts, each run under mpiexec), are skipped unless
+aphfw_cpp can be imported.
+
+The Pyomo solver (for whatever is solved on the Python side) is the one
+get_solver() finds, unless $MPISPPY_APHFW_TEST_SOLVER names one; the driver
+scripts use that variable too, else Pyomo's gurobi.  A solver named there that
+is not available is an error, not a skip.
+"""
+import contextlib
+import importlib.util
+import io
+import json
+import os
+import re
+import runpy
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+from unittest.mock import patch
+
+import numpy as np
+import pyomo.environ as pyo
+
+import mpisppy.utils.config as config
+from mpisppy.generic.parsing import add_driver_args
+from mpisppy.opt.aphfw import APHFWOpt
+from mpisppy.tests.utils import (
+    APHFW_TEST_SOLVER_VAR,
+    aphfw_test_solver,
+    get_solver,
+    subprocess_env,
+)
+from mpisppy.utils import sputils
+
+if os.environ.get(APHFW_TEST_SOLVER_VAR):
+    solver_name = aphfw_test_solver()
+    solver_available = pyo.SolverFactory(solver_name).available(exception_flag=False)
+    if not solver_available:
+        raise RuntimeError(f"{APHFW_TEST_SOLVER_VAR}={solver_name}, but Pyomo "
+                           "cannot use that solver here")
+else:
+    solver_available, solver_name, _, _ = get_solver()
+aphfw_cpp_available = importlib.util.find_spec("aphfw_cpp") is not None
+mpiexec_available = shutil.which("mpiexec") is not None
+
+
+def _cfg(**values):
+    cfg = config.Config()
+    add_driver_args(cfg)
+    for name, value in values.items():
+        cfg[name] = value
+    return cfg
+
+
+def _final_bound_and_incumbent(output):
+    """From the last line of the table a run prints at termination."""
+    last = output.split("Statistics at termination")[-1].splitlines()[2]
+    # Iter. [tag] bound incumbent rel_gap abs_gap
+    fields = last.split()
+    return float(fields[-4]), float(fields[-3])
+
+
+class TestAphfwOptional(unittest.TestCase):
+    """Without the C++ build, nothing but --aphfw-hub notices."""
+
+    def test_import_does_not_load_aphfw_cpp(self):
+        code = ("import sys; import mpisppy.opt.aphfw, mpisppy.generic.hub, "
+                "mpisppy.cylinders.hub, mpisppy.utils.cfg_vanilla; "
+                "print('aphfw_cpp' in sys.modules)")
+        out = subprocess.run([sys.executable, "-c", code], check=True,
+                             capture_output=True, text=True,
+                             env=dict(os.environ))
+        self.assertEqual(out.stdout.strip().splitlines()[-1], "False")
+
+    def test_flag_is_registered(self):
+        cfg = _cfg()
+        self.assertIn("aphfw_hub", cfg)
+        self.assertFalse(cfg.aphfw_hub)
+        self.assertIn("aphfw_hub", config.Config.HUBS)
+
+    def test_missing_build_gives_build_instructions(self):
+        from mpisppy.opt.aphfw import _import_aphfw_cpp
+        # A None entry makes the import fail whether or not it is built.
+        with patch.dict(sys.modules, {"aphfw_cpp": None}):
+            with self.assertRaisesRegex(RuntimeError, "python -m mpisppy.aphfw_cpp.build"):
+                _import_aphfw_cpp()
+
+    def test_module_without_solver_name_is_refused(self):
+        # A module built before it reported its solver.
+        from types import SimpleNamespace
+
+        from mpisppy.opt.aphfw import _import_aphfw_cpp
+        old = SimpleNamespace(__file__="old_aphfw_cpp.so")
+        with patch.dict(sys.modules, {"aphfw_cpp": old}):
+            with self.assertRaisesRegex(RuntimeError, "old_aphfw_cpp.so.*Rebuild"):
+                _import_aphfw_cpp()
+
+    def test_report_cpp_solver(self):
+        import mpisppy.opt.aphfw as aphfw_module
+        for cpp_solver, name, warns in (
+                ("gurobi", "gurobi", False),
+                ("gurobi", "gurobi_persistent", False),
+                ("highs", "appsi_highs", False),
+                ("xpress", "xpress_persistent", False),
+                ("highs", "xpress_persistent", True),
+                ("cplex", "gurobi", True),
+                ("cplex", None, False)):
+            with self.subTest(cpp_solver=cpp_solver, name=name):
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out), \
+                        patch.object(aphfw_module.logger, "warning") as warning:
+                    aphfw_module._report_cpp_solver(cpp_solver, name)
+                self.assertIn(f"built for {cpp_solver}", out.getvalue())
+                self.assertEqual(warning.called, warns)
+                if warns:
+                    self.assertIn(name, warning.call_args[0][0])
+
+    def test_highs_home_library_directories(self):
+        # A HiGHS install's library directory depends on the platform.
+        from mpisppy.aphfw_cpp.build import BuildError, check_solver_home
+
+        def prefix(root, libdir, config=True, lib=True, header=True):
+            files = []
+            if header:
+                files.append(os.path.join("include", "highs", "Highs.h"))
+            if config:
+                files.append(os.path.join(libdir, "cmake", "highs",
+                                          "highs-config.cmake"))
+            if lib:
+                files.append(os.path.join(libdir, "libhighs.so"))
+            for f in files:
+                path = os.path.join(root, f)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                open(path, "w").close()
+            return root
+
+        arch = os.path.join("lib", "x86_64-linux-gnu")
+        for libdir in ("lib", "lib64", arch):
+            with self.subTest(libdir=libdir), tempfile.TemporaryDirectory() as d:
+                check_solver_home("highs", prefix(d, libdir))
+        for kwargs, message in (({"config": False}, "highs-config.cmake"),
+                                ({"lib": False}, "libhighs"),
+                                ({"header": False}, "Highs.h")):
+            with self.subTest(**kwargs), tempfile.TemporaryDirectory() as d:
+                with self.assertRaisesRegex(BuildError, message):
+                    check_solver_home("highs", prefix(d, "lib64", **kwargs))
+
+    def test_build_help_without_sources(self):
+        # A pip-installed mpi-sppy has no aphfw_cpp sources to build from.
+        from mpisppy.opt.aphfw import _build_help
+        msg = _build_help(src_dir=os.path.join(os.sep, "no", "such", "dir"))
+        self.assertIn("clone of the mpi-sppy repository", msg)
+        self.assertNotIn("--solver-home", msg)
+
+    def test_one_hub_only(self):
+        cfg = _cfg(aphfw_hub=True, fwph_hub=True)
+        with self.assertRaisesRegex(ValueError, "Only one hub"):
+            cfg.checker()
+
+    def test_rejects_integer_relax_then_enforce(self):
+        from mpisppy.utils.cfg_vanilla import _check_aphfw_compat
+        with self.assertRaisesRegex(RuntimeError, "integer-relax-then-enforce"):
+            _check_aphfw_compat(_cfg(aphfw_hub=True,
+                                     integer_relax_then_enforce=True))
+
+
+class _FakeCpp:
+    """Stands in for aphfw_cpp.APHFWLibrary in the Python-side tests."""
+
+    def __init__(self, n, w=0.0):
+        self.n, self.w, self.bounds = n, w, None
+        self.final_lagrangian_solves = 0
+
+    def set_all_local_nonant_bounds(self, lb, ub):
+        self.bounds = (lb.copy(), ub.copy())
+
+    def compute_final_lagrangian_bound(self):
+        self.final_lagrangian_solves += 1
+        return -100.0
+
+    def get_all_local_w(self, buf):
+        buf[:] = self.w
+
+    def _fill(self, buf):
+        buf[:] = 1.0
+
+    get_all_local_prox_x = get_all_local_xbar = get_all_local_rho = _fill
+    get_all_local_nonants = _fill
+
+    def get_current_cycle(self):
+        return 1
+
+
+def _fake_opt(cfg=None, nonants=()):
+    """An object with what the APHFWOpt methods under test read."""
+    from types import SimpleNamespace
+
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(range(len(nonants)))
+    for i, (lb, ub) in enumerate(nonants):
+        m.x[i].setlb(lb)
+        m.x[i].setub(ub)
+    idx = [("ROOT", i) for i in range(len(nonants))]
+    m._mpisppy_data = SimpleNamespace(
+        nonant_indices={ndn_i: m.x[ndn_i[1]] for ndn_i in idx})
+    m._mpisppy_model = SimpleNamespace(
+        **{name: pyo.Param(idx, mutable=True, initialize=0.0)
+           for name in ("W", "xbars", "rho")})
+    for name in ("W", "xbars", "rho"):
+        m.add_component("_" + name, getattr(m._mpisppy_model, name))
+    opt = SimpleNamespace(options={"cfg": cfg, "PHIterLimit": 5},
+                          local_scenarios={"s": m},
+                          _local_nonant_length=len(nonants),
+                          _scenario_dir="scen")
+    opt._cpp = _FakeCpp(len(nonants))
+    from mpisppy import MPI
+    opt.mpicomm = MPI.COMM_WORLD
+    for name in ("_get_option", "_bound_is_valid", "_no_fw"):
+        setattr(opt, name, getattr(APHFWOpt, name).__get__(opt))
+    return opt, m
+
+
+def _non_default(name):
+    """A value of APH option name that differs from its registered default
+    and is not a "not set" sentinel."""
+    default = config._aph_registrations()[1][name]
+    if isinstance(default, bool):
+        return not default
+    if isinstance(default, str):
+        return default + "x"
+    return abs(default) * 2 + 1
+
+
+class TestAphfwPythonSide(unittest.TestCase):
+    """The hub's Python side, with the C++ library stubbed out."""
+
+    def test_rejects_variable_probability(self):
+        from mpisppy.utils.cfg_vanilla import aphfw_hub
+        with self.assertRaisesRegex(RuntimeError, "variable_probability"):
+            aphfw_hub(_cfg(aphfw_hub=True), None, None, ["s"],
+                      variable_probability=lambda s: None)
+
+    def test_zero_float_options(self):
+        # 0 for an option whose C++ default is 0 is left to that default; for
+        # one the C++ requires positive it is an error, not the default.
+        cfg = _cfg(aphfw_hub=True, aphfw_fw_tau=0.0,
+                   aph_iter0_w_multiplier=0.0)
+        opt, _ = _fake_opt(cfg)
+        d = APHFWOpt._make_cpp_config(opt)
+        self.assertNotIn("FW-tau", d)
+        self.assertNotIn("iter0-w-multiplier", d)
+        cfg.aph_primal_term_thresh = 0.0
+        with self.assertRaisesRegex(ValueError, "--aph-primal-term-thresh"):
+            APHFWOpt._make_cpp_config(opt)
+
+    def test_aph_options_reach_cpp(self):
+        # The APH options shared with --APH: gamma goes over as its
+        # reciprocal, frac_needed as the solve fraction.
+        opt, _ = _fake_opt(_cfg(aphfw_hub=True, aph_gamma=4.0,
+                                aph_frac_needed=0.5, aph_nu=1.5))
+        d = APHFWOpt._make_cpp_config(opt)
+        self.assertEqual(d["gamma-inverse"], 0.25)
+        self.assertEqual(d["solve-fraction"], 0.5)
+        self.assertEqual(d["nu"], 1.5)
+        opt.options["cfg"].aph_gamma = 0.0
+        with self.assertRaisesRegex(ValueError, "--aph-gamma must be positive"):
+            APHFWOpt._make_cpp_config(opt)
+
+    def test_refuses_python_aph_only_options(self):
+        # Derived: the aph_args options the hub does not pass to the C++.
+        from mpisppy.opt.aphfw import _python_aph_only_options
+        python_only = _python_aph_only_options()
+        self.assertIn("aph_dispatch_frac", python_only)
+        self.assertIn("aph_sleep_seconds", python_only)
+        for name in python_only:
+            value = _non_default(name)
+            with self.subTest(name=name):
+                opt, _ = _fake_opt(_cfg(aphfw_hub=True, **{name: value}))
+                with self.assertRaisesRegex(
+                        ValueError, "--" + name.replace("_", "-") + " is used only by --APH"):
+                    APHFWOpt._make_cpp_config(opt)
+
+    def test_python_aph_refuses_aphfw_hub_only_options(self):
+        # The APH options only the compiled hub reads would do nothing under
+        # --APH, so it refuses them (and takes them at their defaults).
+        from mpisppy.utils.cfg_vanilla import aph_hub
+        aph_hub(_cfg(APH=True, default_rho=1.0), None, None, ["s"])
+        # --aph-omicron-all <= 0 means "no override" to both hubs
+        for value in (-2.0, 0.0):
+            aph_hub(_cfg(APH=True, default_rho=1.0, aph_omicron_all=value),
+                    None, None, ["s"])
+        for name in config.aphfw_hub_only_options():
+            value = _non_default(name)
+            with self.subTest(name=name):
+                cfg = _cfg(APH=True, default_rho=1.0, **{name: value})
+                with self.assertRaisesRegex(
+                        ValueError, "--" + name.replace("_", "-") + " is used only by --aphfw-hub"):
+                    aph_hub(cfg, None, None, ["s"])
+
+    def test_aphfw_hub_only_options_derived(self):
+        # The list comes from the registrations, so a new aph_* option in
+        # aphfw_args is covered without anyone editing a list.  Spot-check it.
+        only = set(config.aphfw_hub_only_options())
+        self.assertIn("aph_primal_term_thresh", only)
+        self.assertIn("aph_omicron_csv", only)
+        for shared in ("aph_gamma", "aph_nu", "aph_frac_needed",
+                       "aph_dispatch_frac", "aph_sleep_seconds"):
+            self.assertNotIn(shared, only)
+        self.assertTrue(all(name.startswith("aph_") for name in only))
+
+    def test_options_reach_the_cpp(self):
+        # The other direction: every aph_* option the hub claims (so --APH
+        # refuses it) must be in the map the hub passes to the C++, or it
+        # would work in neither hub.
+        from mpisppy.opt.aphfw import _CPP_OPTION_NAMES
+        self.assertLessEqual(set(config.aphfw_hub_only_options()),
+                             set(_CPP_OPTION_NAMES))
+
+    def test_unset_sentinel_is_numeric_only(self):
+        # A text value (e.g. from a hand-built options dict) is not taken as
+        # the "no override" sentinel, and does not raise a TypeError.
+        self.assertTrue(config.aph_value_means_unset("aph_omicron_all", -2.0))
+        self.assertFalse(config.aph_value_means_unset("aph_omicron_all", "-1"))
+        self.assertFalse(config.aph_value_means_unset("aph_omicron_all", 0.5))
+        self.assertTrue(config.aph_value_means_unset("aph_omicron_all", 0.0))
+        self.assertTrue(config.aph_value_means_unset("aph_omicron_all",
+                                                     np.int64(-1)))
+
+    def test_registered_defaults_are_read_only(self):
+        # The cached defaults are shared by every check in the process.
+        defaults = config._aph_registrations()[1]
+        with self.assertRaises(TypeError):
+            defaults["aph_gamma"] = 5.0
+
+    def test_aphfw_args_registers_aph_args(self):
+        # The hub reads aph_gamma, aph_nu and aph_frac_needed, so a driver
+        # that calls only aphfw_args still has them.
+        cfg = config.Config()
+        cfg.aphfw_args()
+        for name in ("aph_gamma", "aph_nu", "aph_frac_needed"):
+            self.assertIn(name, cfg)
+
+    def test_no_fw_config(self):
+        # --aphfw-no-fw: the C++ gets no-fw and prox.json, and none of the
+        # Frank-Wolfe settings or parameter files.
+        opt, _ = _fake_opt(_cfg(aphfw_hub=True, aphfw_no_fw=True))
+        d = APHFWOpt._make_cpp_config(opt)
+        self.assertIs(d["no-fw"], True)
+        files = APHFWOpt._scenario_file_config(opt)
+        self.assertEqual(files["prox-json"], os.path.join("scen", "prox.json"))
+        self.assertNotIn("nl-json", files)
+        self.assertNotIn("grad-json", files)
+        for key in ("FW-tmax", "FW-tau", "FW-obj-cutoff"):
+            self.assertNotIn(key, d)
+        # and without it, nothing changes
+        opt, _ = _fake_opt(_cfg(aphfw_hub=True))
+        self.assertNotIn("no-fw", APHFWOpt._make_cpp_config(opt))
+        d = APHFWOpt._scenario_file_config(opt)
+        self.assertNotIn("prox-json", d)
+        self.assertIn("nl-json", d)
+
+    def test_warmstart_subproblems_reaches_prox_only(self):
+        # The flag reaches the C++ only with --aphfw-no-fw, whose C++ option
+        # is refused without --no-fw.
+        for no_fw, warmstart, expected in ((True, True, True),
+                                           (True, False, False),
+                                           (False, True, False)):
+            with self.subTest(no_fw=no_fw, warmstart=warmstart):
+                opt, _ = _fake_opt(_cfg(aphfw_hub=True, aphfw_no_fw=no_fw,
+                                        warmstart_subproblems=warmstart))
+                d = APHFWOpt._make_cpp_config(opt)
+                self.assertEqual("prox-warm-start" in d, expected)
+
+    def test_no_fw_refuses_fw_only_options(self):
+        for name, value in (("aphfw_fw_tmax", 3), ("aphfw_fw_tau", 0.5),
+                            ("aphfw_obj_cutoff", True)):
+            with self.subTest(name=name):
+                opt, _ = _fake_opt(_cfg(aphfw_hub=True, aphfw_no_fw=True,
+                                        **{name: value}))
+                with self.assertRaisesRegex(ValueError,
+                                            "--" + name.replace("_", "-")):
+                    APHFWOpt._make_cpp_config(opt)
+                # the same value is fine with Frank-Wolfe
+                opt, _ = _fake_opt(_cfg(aphfw_hub=True, **{name: value}))
+                APHFWOpt._make_cpp_config(opt)
+
+    def test_no_fw_needs_hub(self):
+        from mpisppy.generic.hub import build_hub_dict
+        with self.assertRaisesRegex(RuntimeError, "--aphfw-no-fw needs --aphfw-hub"):
+            build_hub_dict(_cfg(aphfw_no_fw=True), None, None, None, None, None)
+
+    def test_max_iterations_sets_cycle_limit(self):
+        opt, _ = _fake_opt(_cfg(aphfw_hub=True))
+        self.assertEqual(APHFWOpt._make_cpp_config(opt)["aph-max-cycles"], 5)
+        opt.options["PHIterLimit"] = 0
+        with self.assertRaisesRegex(ValueError, "--max-iterations"):
+            APHFWOpt._make_cpp_config(opt)
+
+    def test_fixed_nonants_pushed_as_bounds(self):
+        opt, m = _fake_opt(nonants=[(0, 10), (None, None), (0, 10)])
+        m.x[2].fix(4.0)
+        APHFWOpt._push_bounds_to_cpp(opt)
+        lb, ub = opt._cpp.bounds
+        np.testing.assert_array_equal(lb, [0, -np.inf, 4.0])
+        np.testing.assert_array_equal(ub, [10, np.inf, 4.0])
+
+    def test_sync_keeps_fixed_values(self):
+        # The C++ prox x of a fixed nonant must not overwrite the value it is
+        # fixed at, which _push_bounds_to_cpp then sends as both bounds.
+        opt, m = _fake_opt(nonants=[(0, 10), (0, 10)])
+        m.x[1].fix(4.0)
+        APHFWOpt._sync_cpp_to_pyomo(opt)
+        self.assertEqual((m.x[0].value, m.x[1].value), (1.0, 4.0))
+
+    def test_write_back_keeps_fixed_values(self):
+        opt, m = _fake_opt(nonants=[(0, 10), (0, 10)])
+        m.x[1].fix(4.0)
+        APHFWOpt._write_back_to_pyomo(opt)
+        self.assertEqual((m.x[0].value, m.x[1].value), (1.0, 4.0))
+
+    def test_final_lagrangian_not_published_with_fixed_nonants(self):
+        from types import SimpleNamespace
+        published = []
+        opt, _ = _fake_opt(nonants=[(0, 1)])
+        opt.spcomm = SimpleNamespace(publish_outer_bound=published.append)
+        opt.best_bound_obj_val = None
+        opt._can_update_best_bound = lambda: False
+        self.assertIsNone(APHFWOpt._do_final_lagrangian(opt))
+        self.assertEqual((published, opt.best_bound_obj_val), ([], None))
+        self.assertEqual(opt._cpp.final_lagrangian_solves, 0)  # not solved
+        opt._can_update_best_bound = lambda: True
+        self.assertEqual(APHFWOpt._do_final_lagrangian(opt), -100.0)
+        self.assertEqual(published, [-100.0])
+
+    def test_rejects_converger(self):
+        from mpisppy.generic.hub import build_hub_dict
+        with self.assertRaisesRegex(RuntimeError, "converger"):
+            build_hub_dict(_cfg(aphfw_hub=True), None, None, None, None,
+                           ph_converger=object)
+
+    def test_write_scenario_files(self):
+        import json
+        from types import SimpleNamespace
+
+        from mpisppy.extensions.scenario_lp_mps_files import write_scenario_files
+        from mpisppy.tests.examples.farmer import scenario_creator
+        s = scenario_creator("scen0", num_scens=3)
+        ph = SimpleNamespace(local_scenarios={"scen0": s},
+                             all_nodenames=["ROOT"])
+        cfg = SimpleNamespace(default_rho=2.0)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            write_scenario_files(ph, tmpdir, cfg)
+            self.assertEqual(sorted(os.listdir(tmpdir)),
+                             ["scen0.lp", "scen0.mps", "scen0_nonants.json",
+                              "scen0_rho.csv"])
+            with open(os.path.join(tmpdir, "scen0_nonants.json")) as f:
+                nonants = json.load(f)["treeData"]["nodes"]["ROOT"]["nonAnts"]
+            with open(os.path.join(tmpdir, "scen0.lp")) as f:
+                self.assertIn(nonants[0], f.read())
+            with open(os.path.join(tmpdir, "scen0_rho.csv")) as f:
+                self.assertEqual(f.readlines()[1], f"{nonants[0]},2.0\n")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            write_scenario_files(ph, tmpdir, cfg, write_lp=False)
+            self.assertEqual(sorted(os.listdir(tmpdir)),
+                             ["scen0.mps", "scen0_nonants.json", "scen0_rho.csv"])
+
+    def test_scenario_dir_must_exist(self):
+        from mpisppy.opt.aphfw import _make_rank_scenario_dir
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = _make_rank_scenario_dir(0, tmpdir)
+            self.assertEqual(os.path.dirname(path), tmpdir)
+            with self.assertRaisesRegex(RuntimeError, "--aphfw-scenario-dir"):
+                _make_rank_scenario_dir(0, os.path.join(tmpdir, "no_such"))
+
+
+@unittest.skipIf(not aphfw_cpp_available, "aphfw_cpp is not built")
+@unittest.skipIf(not solver_available, "no MIP solver available")
+class TestAphfwHubRun(unittest.TestCase):
+
+    def _farmer_argv(self, *extra):
+        return ["generic_cylinders",
+                "--module-name", "mpisppy.tests.examples.farmer",
+                "--num-scens", "3",
+                "--solver-name", solver_name,
+                "--aphfw-hub",
+                "--default-rho", "1",
+                *extra]
+
+    def test_scenario_dir_used_and_removed(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            argv = self._farmer_argv("--max-iterations", "2",
+                                     "--aphfw-scenario-dir", tmpdir)
+            written = []
+            real_config = APHFWOpt._scenario_file_config
+
+            def record(self):
+                written.append(self._scenario_dir)
+                return real_config(self)
+
+            with patch.object(sys, "argv", argv), \
+                    patch.object(APHFWOpt, "_scenario_file_config", record):
+                runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
+            self.assertTrue(written[0].startswith(tmpdir), written)
+            # the hub finalizes the C++ side, which removes the files
+            self.assertEqual(os.listdir(tmpdir), [])
+
+    def test_keep_scenario_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            argv = self._farmer_argv("--max-iterations", "2",
+                                     "--aphfw-scenario-dir", tmpdir,
+                                     "--aphfw-keep-scenario-files")
+            with patch.object(sys, "argv", argv):
+                runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
+            kept = os.listdir(tmpdir)
+            self.assertEqual(len(kept), 1, kept)
+            self.assertIn("solver.log", os.listdir(os.path.join(tmpdir, kept[0])))
+
+    def test_bad_option_found_before_scenario_files_are_written(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            argv = self._farmer_argv("--max-iterations", "0",
+                                     "--aphfw-scenario-dir", tmpdir)
+            with patch.object(sys, "argv", argv), \
+                    self.assertRaisesRegex(ValueError, "--max-iterations"):
+                runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
+            self.assertEqual(os.listdir(tmpdir), [])
+
+    def test_extension_hooks(self):
+        # The hub calls every PH extension hook, so that, e.g., the reduced
+        # costs fixer gets its per-iteration target and WTracker its Ws.
+        from mpisppy.extensions.extension import Extension
+        from mpisppy.spin_the_wheel import WheelSpinner
+        from mpisppy.tests.examples.farmer import (
+            scenario_creator,
+            scenario_denouement,
+        )
+        from mpisppy.utils.cfg_vanilla import aphfw_hub
+
+        called = {}
+        hooks = ("pre_iter0", "iter0_post_solver_creation", "post_iter0",
+                 "post_iter0_after_sync", "miditer", "enditer",
+                 "enditer_after_sync", "post_everything")
+
+        class Recorder(Extension):
+            pass
+
+        for hook in hooks:
+            setattr(Recorder, hook, lambda self, hook=hook:
+                    called.setdefault(hook, self.opt._PHIter))
+
+        # A fixing made before iteration 0 must be in the C++ for its
+        # startup solves: read the C++ bounds after the first cycle.
+        def fix_first(self):
+            called.setdefault("iter0_post_solver_creation", self.opt._PHIter)
+            s = next(iter(self.opt.local_scenarios.values()))
+            next(iter(s._mpisppy_data.nonant_indices.values())).fix(123.0)
+
+        def bounds_after_cycle_1(self):
+            called.setdefault("post_iter0", self.opt._PHIter)
+            n = self.opt._local_nonant_length
+            lb, ub = np.empty(n), np.empty(n)
+            self.opt._cpp.get_all_local_nonant_bounds(lb, ub)
+            x = np.empty(n)
+            self.opt._cpp.get_all_local_nonants(x)  # what the solves gave
+            called["first_bounds"] = (lb[0], ub[0], x[0])
+
+        # Fixers (reduced costs, Fixer, relaxed PH) read each scenario's
+        # _solver_plugin to decide whether to update a persistent solver; the
+        # hub has none, and the attribute used to be missing (AttributeError).
+        def persistent_plugins(self):
+            called.setdefault("enditer_after_sync", self.opt._PHIter)
+            called["persistent"] = {sputils.is_persistent(s._solver_plugin)
+                                    for s in self.opt.local_scenarios.values()}
+
+        Recorder.iter0_post_solver_creation = fix_first
+        Recorder.post_iter0 = bounds_after_cycle_1
+        Recorder.enditer_after_sync = persistent_plugins
+
+        cfg = _cfg(aphfw_hub=True, solver_name=solver_name, default_rho=1.0,
+                   max_iterations=3)
+        hub_dict = aphfw_hub(cfg, scenario_creator, scenario_denouement,
+                             [f"scen{i}" for i in range(3)],
+                             scenario_creator_kwargs={"num_scens": 3},
+                             ph_extensions=Recorder)
+        WheelSpinner(hub_dict, []).spin()
+        self.assertEqual(called.pop("first_bounds"), (123.0, 123.0, 123.0))
+        self.assertEqual(called.pop("persistent"), {False})
+        self.assertEqual(set(called), set(hooks))
+        # the iteration-0 hooks see iteration 0, as under PH
+        for hook in ("pre_iter0", "iter0_post_solver_creation", "post_iter0",
+                     "post_iter0_after_sync"):
+            self.assertEqual(called[hook], 0, hook)
+
+    def test_rho_survives_spoke_convergence(self):
+        # rho an extension sets in the last cycle reaches the C++ before the
+        # loop ends on the spokes' convergence, so the final sync keeps it.
+        from mpisppy.cylinders.hub import APHFWHub
+        from mpisppy.extensions.extension import Extension
+        from mpisppy.spin_the_wheel import WheelSpinner
+        from mpisppy.tests.examples.farmer import (
+            scenario_creator,
+            scenario_denouement,
+        )
+        from mpisppy.utils.cfg_vanilla import aphfw_hub
+        seen = []
+
+        class SetRho(Extension):
+            def enditer_after_sync(self):
+                for s in self.opt.local_scenarios.values():
+                    for p in s._mpisppy_model.rho.values():
+                        p.value = 7.5
+
+            def post_everything(self):
+                seen.extend(pyo.value(p) for s in self.opt.local_scenarios.values()
+                            for p in s._mpisppy_model.rho.values())
+
+        cfg = _cfg(aphfw_hub=True, solver_name=solver_name, default_rho=1.0,
+                   max_iterations=5)
+        hub_dict = aphfw_hub(cfg, scenario_creator, scenario_denouement,
+                             [f"scen{i}" for i in range(3)],
+                             scenario_creator_kwargs={"num_scens": 3},
+                             ph_extensions=SetRho)
+        with patch.object(APHFWHub, "is_converged", lambda self: True):
+            wheel = WheelSpinner(hub_dict, [])
+            wheel.spin()
+        # it ended on the spokes' convergence, after one cycle of five
+        self.assertEqual(wheel.spcomm.current_iteration(), 1)
+        self.assertTrue(seen)
+        self.assertEqual(set(seen), {7.5})
+
+    def test_refuses_maximization(self):
+        from mpisppy.tests.examples.farmer import (
+            scenario_creator,
+            scenario_denouement,
+        )
+        from mpisppy.utils.cfg_vanilla import aphfw_hub
+        cfg = _cfg(aphfw_hub=True, solver_name=solver_name, default_rho=1.0)
+        hub_dict = aphfw_hub(cfg, scenario_creator, scenario_denouement,
+                             [f"scen{i}" for i in range(3)],
+                             scenario_creator_kwargs={"num_scens": 3,
+                                                      "sense": pyo.maximize})
+        opt = APHFWOpt(**hub_dict["opt_kwargs"])
+        with self.assertRaisesRegex(RuntimeError, "only minimization"):
+            opt.aphfw_main()
+
+    def test_initial_outer_bound_reaches_hub(self):
+        from mpisppy.utils.cfg_vanilla import aphfw_hub
+        cfg = _cfg(aphfw_hub=True)
+        cfg.quick_assign("initial_outer_bound", float, -1234.5)
+        hub_dict = aphfw_hub(cfg, None, None, ["s"])
+        self.assertEqual(
+            hub_dict["hub_kwargs"]["options"]["initial_outer_bound"], -1234.5)
+
+    def test_false_flag_reaches_cpp(self):
+        # check-omicron-invariant defaults to true in C++; the bindings used to
+        # drop a false bool, which left it on.  verbosity 1 echoes the options.
+        argv = [sys.executable, "-m", "mpisppy.generic_cylinders",
+                *self._farmer_argv("--max-iterations", "1",
+                                   "--aphfw-verbosity", "1",
+                                   "--disable-aph-check-omicron-invariant")[1:]]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = subprocess.run(argv, capture_output=True, text=True,
+                                    timeout=300, check=False,
+                                    env=subprocess_env(), cwd=tmpdir)
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out[-3000:])
+        self.assertIn("check-omicron-invariant: false", out)
+
+    def test_cpp_and_python_times_share_a_start(self):
+        # The C++ freezes omicron after the iteration 1 row is printed, so
+        # the time it prints for that cannot be earlier.  Before the C++
+        # clock started at mpi-sppy's elapsed time, it was earlier by the
+        # time from import to the C++ init.  0.01 allows for the rounding
+        # of the two printed times.
+        argv = [sys.executable, "-m", "mpisppy.generic_cylinders",
+                *self._farmer_argv("--max-iterations", "2",
+                                   "--aphfw-verbosity", "1")[1:]]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = subprocess.run(argv, capture_output=True, text=True,
+                                    timeout=300, check=False,
+                                    env=subprocess_env(), cwd=tmpdir)
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out[-3000:])
+        cpp = re.search(r"^\[r0; ([0-9.]+)s\] omicron frozen", out, re.M)
+        row1 = re.search(r"^\[\s*([0-9.]+)\]\s+1\s", out, re.M)
+        self.assertIsNotNone(cpp, out[-3000:])
+        self.assertIsNotNone(row1, out[-3000:])
+        self.assertGreaterEqual(float(cpp.group(1)),
+                                float(row1.group(1)) - 0.01, out[-3000:])
+
+    def test_farmer_hub_only(self):
+        argv = [
+            "generic_cylinders",
+            "--module-name", "mpisppy.tests.examples.farmer",
+            "--num-scens", "3",
+            "--solver-name", solver_name,
+            "--aphfw-hub",
+            "--default-rho", "1",
+            "--max-iterations", "5",
+        ]
+        with patch.object(sys, "argv", argv):
+            runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
+
+    def test_run_prints_the_built_solver(self):
+        import aphfw_cpp
+        argv = [
+            "generic_cylinders",
+            "--module-name", "mpisppy.tests.examples.farmer",
+            "--num-scens", "3",
+            "--solver-name", solver_name,
+            "--aphfw-hub",
+            "--default-rho", "1",
+            "--max-iterations", "1",
+        ]
+        out = io.StringIO()
+        with patch.object(sys, "argv", argv), contextlib.redirect_stdout(out):
+            runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
+        self.assertIn(f"aphfw_cpp was built for {aphfw_cpp.solver_name}",
+                      out.getvalue())
+
+    def test_no_fw_writes_prox_json(self):
+        # Under --aphfw-no-fw the hub writes prox.json (the --iterk-mipgap
+        # settings) in place of nl.json and grad.json.
+        import json
+
+        import mpisppy.opt.aphfw as aphfw_module
+        written = {}
+        real_dump = json.dump
+
+        def capture(obj, f, *args, **kwargs):
+            written[os.path.basename(f.name)] = dict(obj)
+            return real_dump(obj, f, *args, **kwargs)
+
+        argv = self._farmer_argv("--aphfw-no-fw", "--max-iterations", "2",
+                                 "--max-solver-threads", "2",
+                                 "--aphfw-solve-time-limit", "77")
+        with patch.object(sys, "argv", argv), \
+                patch.object(aphfw_module.json, "dump", capture):
+            runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
+        param_files = {name for name in written
+                       if name in ("iter0.json", "prox.json", "nl.json", "grad.json")}
+        self.assertEqual(param_files, {"iter0.json", "prox.json"})
+        self.assertEqual(written["prox.json"],
+                         {"timeLimit": 77.0, "threads": 2, "mipGap": 1e-4})
+
+    def test_no_fw_closes_gap(self):
+        # With a Lagrangian and an xhatshuffle spoke, --aphfw-no-fw closes
+        # farmer's gap to 0.1% near its optimum (-108390).  (Comparing with the
+        # Python APH hub, --APH, would fit here, but Pyomo's appsi_highs cannot
+        # solve APH's subproblems, and CI runs this file with it.  The FW hub
+        # is no reference either: on this run its incumbent stays 0.65% off.)
+        def incumbent(hub_args):
+            argv = ["mpiexec", "-np", "3", sys.executable, "-m", "mpi4py",
+                    "-m", "mpisppy.generic_cylinders",
+                    "--module-name", "mpisppy.tests.examples.farmer",
+                    "--num-scens", "3", "--solver-name", solver_name,
+                    "--default-rho", "1", "--max-iterations", "100",
+                    "--lagrangian", "--xhatshuffle", "--rel-gap", "0.001",
+                    "--aphfw-hub", *hub_args]
+            with tempfile.TemporaryDirectory() as tmpdir:  # for solver logs
+                result = subprocess.run(
+                    argv, capture_output=True, text=True, timeout=600,
+                    check=False, env=subprocess_env(), cwd=tmpdir)
+            out = result.stdout + result.stderr
+            self.assertEqual(result.returncode, 0, out[-3000:])
+            self.assertIn("Terminating based on inter-cylinder relative gap",
+                          out, out[-3000:])
+            return _final_bound_and_incumbent(out)[1]
+
+        no_fw = incumbent(["--aphfw-no-fw"])
+        self.assertAlmostEqual(no_fw, -108390.0, delta=0.002 * 108390)
+
+    def _aircond_run(self, *args, np=3):
+        """Run four-scenario aircond, whose tree has three nodes; return output."""
+        argv = ["mpiexec", "-np", str(np), sys.executable, "-m", "mpi4py",
+                "-m", "mpisppy.generic_cylinders",
+                "--module-name", "mpisppy.tests.examples.aircond",
+                "--branching-factors", "2,2",
+                "--solver-name", solver_name, *args]
+        with tempfile.TemporaryDirectory() as tmpdir:  # for solver logs
+            result = subprocess.run(
+                argv, capture_output=True, text=True, timeout=600,
+                check=False, env=subprocess_env(), cwd=tmpdir)
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out[-3000:])
+        return out
+
+    def _assert_hub_finds_aircond_optimum(self, *hub_args):
+        ef = self._aircond_run("--EF", "--EF-solver-name", solver_name, np=1)
+        optimum = float(ef.split("EF objective:")[1].split()[0])
+        out = self._aircond_run("--aphfw-hub", "--default-rho", "1",
+                                "--max-iterations", "100", "--lagrangian",
+                                "--xhatshuffle", "--rel-gap", "0.001", *hub_args)
+        self.assertIn("Terminating based on inter-cylinder relative gap",
+                      out, out[-3000:])
+        bound, incumbent = _final_bound_and_incumbent(out)
+        tol = 0.002 * abs(optimum)
+        self.assertLessEqual(bound, optimum + tol)
+        self.assertGreaterEqual(incumbent, optimum - tol)
+        self.assertAlmostEqual(incumbent, optimum, delta=tol)
+
+    def test_multistage_finds_the_ef_optimum(self):
+        self._assert_hub_finds_aircond_optimum()
+
+    def test_obj_cutoff_finds_the_ef_optimum(self):
+        self._assert_hub_finds_aircond_optimum("--aphfw-obj-cutoff")
+
+    def test_W_trace_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            prefix = os.path.join(tmpdir, "wt")
+            argv = self._farmer_argv("--max-iterations", "3",
+                                     "--aphfw-W-trace-prefix", prefix)
+            with patch.object(sys, "argv", argv):
+                runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
+            with open(prefix + "_rank0.json") as f:
+                records = json.load(f)
+        by_scenario = {}
+        for record in records:
+            by_scenario.setdefault(record["scenario"], []).append(record)
+        self.assertEqual(len(by_scenario), 3, list(by_scenario))
+        times = [r["time"] for r in records]
+        self.assertEqual(times, sorted(times))
+        for trace in by_scenario.values():
+            self.assertGreater(len(trace), 1)
+            self.assertTrue(all(len(r["W"]) == 3 for r in trace))
+            # W starts at zero and the run moves it
+            self.assertEqual(trace[0]["W"], [0.0, 0.0, 0.0])
+            self.assertGreater(max(abs(w) for w in trace[-1]["W"]), 0.0)
+        # The scenarios are equally likely, so their latest Ws sum to zero.
+        latest = np.array([trace[-1]["W"] for trace in by_scenario.values()])
+        np.testing.assert_allclose(latest.sum(axis=0), 0.0, atol=1e-6)
+
+    def test_max_iterations_caps_cycles(self):
+        # The hub stops at --max-iterations cycles, as other hubs stop at
+        # that many iterations.  Farmer needs about 70 to converge.  Run it as
+        # a subprocess so that a hang fails the test instead of stalling it.
+        argv = [sys.executable, "-m", "mpisppy.generic_cylinders",
+                *self._farmer_argv("--max-iterations", "7")[1:]]
+        with tempfile.TemporaryDirectory() as tmpdir:  # for solver logs
+            try:
+                result = subprocess.run(
+                    argv, capture_output=True, text=True, timeout=300,
+                    check=False, env=subprocess_env(), cwd=tmpdir)
+            except subprocess.TimeoutExpired:
+                self.fail("the hub did not finish")
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out[-3000:])
+        # the iteration count on the last line of the termination table
+        lines = out.split("Statistics at termination")[-1].splitlines()
+        last_iter = int(lines[2].split("]")[1].split()[0])
+        self.assertEqual(last_iter, 7, out[-3000:])
+
+    def test_time_limit_stops_the_hub(self):
+        # --time-limit is checked after each cycle, as PH checks it after
+        # each iteration, so a limit of 0 stops the hub after cycle 1.
+        argv = [sys.executable, "-m", "mpisppy.generic_cylinders",
+                *self._farmer_argv("--max-iterations", "50",
+                                   "--time-limit", "0")[1:]]
+        with tempfile.TemporaryDirectory() as tmpdir:  # for solver logs
+            try:
+                result = subprocess.run(
+                    argv, capture_output=True, text=True, timeout=300,
+                    check=False, env=subprocess_env(), cwd=tmpdir)
+            except subprocess.TimeoutExpired:
+                self.fail("the hub did not finish")
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out[-3000:])
+        self.assertIn("Time limit 0", out, out[-3000:])
+        lines = out.split("Statistics at termination")[-1].splitlines()
+        last_iter = int(lines[2].split("]")[1].split()[0])
+        self.assertEqual(last_iter, 1, out[-3000:])
+
+    def test_slurm_buffer_stops_the_hub(self):
+        # A job already past its end time stops the hub after cycle 1, as
+        # --time-limit 0 does in the test above.
+        argv = [sys.executable, "-m", "mpisppy.generic_cylinders",
+                *self._farmer_argv("--max-iterations", "50",
+                                   "--slurm-buffer-seconds", "0")[1:]]
+        env = dict(subprocess_env(), SLURM_JOB_END_TIME=str(time.time() - 1))
+        with tempfile.TemporaryDirectory() as tmpdir:  # for solver logs
+            try:
+                result = subprocess.run(
+                    argv, capture_output=True, text=True, timeout=300,
+                    check=False, env=env, cwd=tmpdir)
+            except subprocess.TimeoutExpired:
+                self.fail("the hub did not finish")
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out[-3000:])
+        self.assertIn("Slurm shutdown buffer of 0 seconds reached", out, out[-3000:])
+        lines = out.split("Statistics at termination")[-1].splitlines()
+        last_iter = int(lines[2].split("]")[1].split()[0])
+        self.assertEqual(last_iter, 1, out[-3000:])
+
+    def test_solver_options_reach_cpp(self):
+        # The C++ solves read mipGap, timeLimit and threads from JSON files the
+        # hub writes; capture what it writes for each.
+        import json
+
+        import mpisppy.opt.aphfw as aphfw_module
+        written = {}
+        real_dump = json.dump
+
+        def capture(obj, f, *args, **kwargs):
+            written[os.path.basename(f.name)] = dict(obj)
+            return real_dump(obj, f, *args, **kwargs)
+
+        # sizes, not farmer: the mipgap options exist only for a model whose
+        # inparser_adder calls cfg.mip_options().
+        argv = [
+            "generic_cylinders",
+            "--module-name", "mpisppy.tests.examples.sizes.sizes",
+            "--num-scens", "3",
+            "--solver-name", solver_name,
+            "--aphfw-hub",
+            "--default-rho", "1",
+            "--max-iterations", "2",
+            "--iter0-mipgap", "0.02",
+            "--iterk-mipgap", "0.003",
+            "--max-solver-threads", "2",
+            "--aphfw-solve-time-limit", "77",
+            "--solver-options", "mipgap=0.5",
+        ]
+        with patch.object(sys, "argv", argv), \
+                patch.object(aphfw_module.json, "dump", capture), \
+                self.assertLogs(aphfw_module.logger, "WARNING") as logs:
+            runpy.run_module("mpisppy.generic_cylinders", run_name="__main__")
+        self.assertEqual(written["iter0.json"],
+                         {"timeLimit": 77.0, "threads": 2, "mipGap": 0.02})
+        self.assertEqual(written["grad.json"],
+                         {"timeLimit": 77.0, "threads": 2, "mipGap": 0.003})
+        self.assertEqual(written["nl.json"], {"timeLimit": 77.0, "threads": 2})
+        self.assertIn("--solver-options does not reach", "\n".join(logs.output))
+
+
+# The MPI integration tests, ported from aph-fw's tests/: each is a driver
+# script with a fixed rank count, run as its own mpiexec job.
+_DRIVERS = {
+    "aphfw_hub_only_driver": 3,
+    "aphfw_wheelspinner_hub_only_driver": 3,
+    "aphfw_wheelspinner_with_spokes_driver": 6,
+    "aphfw_export_feed_rho_driver": 3,
+    "aphfw_rho_from_python_driver": 3,
+    "aphfw_omicron_in_opt_driver": 3,
+    "aphfw_dynamic_rho_driver": 3,
+    "aphfw_final_lagrangian_driver": 3,
+    "aphfw_rank_dirs_driver": 3,
+}
+
+
+@unittest.skipUnless(aphfw_cpp_available, "aphfw_cpp is not built")
+@unittest.skipUnless(mpiexec_available, "mpiexec is not available")
+class TestAphfwDrivers(unittest.TestCase):
+
+    def _run_driver(self, name, np, args=()):
+        """Run one driver under mpiexec; return its stdout."""
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              name + ".py")
+        with tempfile.TemporaryDirectory() as tmpdir:  # for solver logs
+            result = subprocess.run(
+                ["mpiexec", "-np", str(np), sys.executable, "-m", "mpi4py",
+                 script, *args],
+                capture_output=True, text=True, timeout=1800, check=False,
+                env=subprocess_env(), cwd=tmpdir)
+        tail = (result.stdout + result.stderr)[-3000:]
+        self.assertEqual(result.returncode, 0, f"{name} failed:\n{tail}")
+        self.assertIn("PASS", result.stdout, f"{name} did not pass:\n{tail}")
+        return result.stdout
+
+    def test_cpp_prints_once_at_verbosity_0(self):
+        # Lines that are the same on every hub rank are printed by rank 0
+        # only, or not at all at verbosity 0.  farmer converges on its own
+        # long before 2000 cycles.
+        argv = ["mpiexec", "-np", "3", sys.executable, "-m", "mpi4py",
+                "-m", "mpisppy.generic_cylinders",
+                "--module-name", "mpisppy.tests.examples.farmer",
+                "--num-scens", "3", "--solver-name", solver_name,
+                "--aphfw-hub", "--default-rho", "1",
+                "--max-iterations", "2000"]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = subprocess.run(argv, capture_output=True, text=True,
+                                    timeout=600, check=False,
+                                    env=subprocess_env(), cwd=tmpdir)
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out[-3000:])
+        self.assertEqual(re.findall(r"^\[r(\d+);.*Convergence Detected",
+                                    out, re.M), ["0"], out[-3000:])
+        self.assertNotIn("Iter0 Lagrangian bound is", out)
+        self.assertNotIn("omicron frozen", out)
+
+    def test_final_lagrangian_flag(self):
+        # --aphfw-final-lagrangian runs the termination Lagrangian, and its
+        # bound only competes with the published one, so it cannot lower it.
+        def best_outer(out):
+            line = [ln for ln in out.splitlines()
+                    if ln.startswith("FINAL_LAGRANGIAN_RESULT")][-1]
+            return float(line.split("best_outer=")[1])
+        off = self._run_driver("aphfw_final_lagrangian_driver", 3)
+        on = self._run_driver("aphfw_final_lagrangian_driver", 3,
+                              ["--final-lagrangian"])
+        # The driver checks that the final solve ran; at verbosity 0 the
+        # hub reports its bound without the C++ printing it on every rank.
+        for out in (off, on):
+            self.assertNotIn("Iter0 Lagrangian bound is", out)
+            self.assertNotIn("Termination Lagrangian bound is", out)
+        self.assertGreaterEqual(best_outer(on), best_outer(off) - 1e-6)
+
+
+
+for _name, _np in _DRIVERS.items():
+    def _test(self, name=_name, np=_np):
+        self._run_driver(name, np)
+    setattr(TestAphfwDrivers, "test_" + _name.removesuffix("_driver"), _test)
+
+
+if __name__ == "__main__":
+    unittest.main()
